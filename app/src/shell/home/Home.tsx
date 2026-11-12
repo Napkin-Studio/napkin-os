@@ -12,11 +12,10 @@
 // exists is ink; one whose tool comes in a later phase is dashed, as the
 // shell draws what cannot run yet.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { DoorEntry, HomeView } from '../../host/http'
-import type { JobNeed, LibraryItem } from '../../host/types'
-import { doorIsLive, doorLabel, firstNeeds, hello, homeEyebrow, needsLine, needsRows } from './model'
-import { changedBriefs } from '../gate/words'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { markNeedDone, undoNeedDone, type DoorEntry, type HomeView } from '../../host/http'
+import type { JobNeed, LibraryItem, NextDeadline } from '../../host/types'
+import { doorIsLive, doorLabel, emptyLine, firstNeeds, hello, homeEyebrow, needsLine, needsRows, orderNeeds, UNDO_MS, type NeedRow } from './model'
 import { Ask } from '../../timesheet/Ask'
 import { SetupCard } from '../setup/SetupCard'
 import { useConsent } from '../../timesheet/consent'
@@ -28,6 +27,10 @@ interface Props {
   items: readonly LibraryItem[]
   /** What the job index asks of this person, by deadline. */
   jobNeeds?: readonly JobNeed[]
+  /** The next deadline on this person's jobs, for the empty list; undefined from an older host. */
+  nextDeadline?: NextDeadline | null
+  /** Asks the server for the list again at once: after a Done or an Undo. */
+  onNeedsChanged?: () => void
   /** The person's first name, for the greeting. */
   first: string | null
   /** App ids installed here: which doors have a tool. */
@@ -45,7 +48,7 @@ interface Props {
   onSwitch: (role: string | null) => void
 }
 
-export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDocument, onMap, onTimesheet, onSetup, onAdmin, onSwitch }: Props) {
+export function Home({ view, items, jobNeeds = [], nextDeadline, onNeedsChanged, first, apps, onDoor, onOpenDocument, onMap, onTimesheet, onSetup, onAdmin, onSwitch }: Props) {
   // Asked once, here, at the person's first sign-in: only a signed-in person has a timesheet to ask about.
   const consent = useConsent()
   const top = useRef<HTMLDivElement>(null)
@@ -56,8 +59,43 @@ export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDo
   // The last word keeps the period dot with it, so the dot never wraps alone onto a line.
   const greet = hello(first)
   const cut = greet.lastIndexOf(' ')
-  const needs = useMemo(() => needsRows(items, jobNeeds), [items, jobNeeds])
+  const served = useMemo(() => needsRows(items, jobNeeds), [items, jobNeeds])
+  // A Done leaves the row in place for five seconds with Undo; the server has the mark already, so the row is held here
+  // (and a restored row too, until the server's list has it back).
+  const [held, setHeld] = useState<Record<string, { row: NeedRow; state: 'done' | 'back' }>>({})
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  useEffect(() => () => { Object.values(timers.current).forEach(clearTimeout) }, [])
+  const drop = useCallback((id: string) => {
+    clearTimeout(timers.current[id]); delete timers.current[id]
+    setHeld(h => { const { [id]: _gone, ...rest } = h; return rest })
+  }, [])
+  const done = (row: NeedRow) => {
+    const id = row.id
+    if (!id) return
+    setHeld(h => ({ ...h, [id]: { row, state: 'done' } }))
+    clearTimeout(timers.current[id])
+    timers.current[id] = setTimeout(() => drop(id), UNDO_MS)
+    void markNeedDone(id).then(ok => { if (!ok) drop(id); onNeedsChanged?.() })
+  }
+  const undo = (id: string) => {
+    clearTimeout(timers.current[id]); delete timers.current[id]
+    setHeld(h => (h[id] ? { ...h, [id]: { ...h[id], state: 'back' } } : h))
+    // a restored row is held until the server's list has it again, and no longer than the undo window
+    timers.current[id] = setTimeout(() => drop(id), UNDO_MS)
+    void undoNeedDone(id).then(() => { onNeedsChanged?.() })
+  }
+  const needs = useMemo(
+    () => orderNeeds<NeedRow>([...served, ...Object.values(held).map(h => h.row).filter(r => !served.some(x => x.id === r.id))]),
+    [served, held],
+  )
+  const remaining = needs.filter(n => !(n.id && held[n.id]?.state === 'done')).length
   const { shown } = firstNeeds(needs, all)
+  const open = (n: NeedRow) => {
+    if (n.kind === 'timesheet') onTimesheet?.()
+    else if (n.path) onOpenDocument(n.path)
+    else if (n.job) window.location.assign(n.job.href)
+    else onDoor({ id: 'approvals', name: 'Approvals' })
+  }
 
   return (
     <div className="nui nui-page" ref={top} data-testid="home" data-role={view.viewing ?? view.roles.join(' ')}>
@@ -66,7 +104,7 @@ export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDo
           <div className="app-head-text">
             <div className="eyebrow" data-testid="home-eyebrow">{homeEyebrow(view).toUpperCase()}</div>
             <h1 className="hero-title" tabIndex={-1} data-testid="home-title">{greet.slice(0, cut + 1)}<span className="hm-nb">{greet.slice(cut + 1)}<span className="period-dot" aria-hidden /></span></h1>
-            <p className="hero-sub" data-testid="home-sub">{needsLine(needs.length)}</p>
+            <p className="hero-sub" data-testid="home-sub">{needsLine(remaining)}</p>
           </div>
           <div className="hm-tools">
             {view.switcher && (
@@ -92,27 +130,34 @@ export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDo
         <main className="hm-main">
           {consent === 'not_asked' && <Ask variant="card" onTimesheet={onTimesheet} />}
           {onSetup && view.roles.includes('admin') && !view.viewing && <SetupCard onOpen={onSetup} />}
-          {changedBriefs(items).map(i => (
-            <div key={i.path} className="gate-alert" role="status" data-testid="alert">
-              <i aria-hidden />
-              <span><b>Changed brief</b> {i.title}{i.client ? `, ${i.client.name}` : ''}. The signed version stays as it was; the new one needs signing.</span>
-              <button type="button" className="ch-btn" onClick={() => onOpenDocument(i.path)}>Open the brief</button>
-            </div>
-          ))}
           <section className="hm-sec" aria-labelledby="hm-needs">
             <h2 className="hm-h" id="hm-needs">Needs you</h2>
             {needs.length === 0 ? (
-              <p className="nui-empty hm-none" data-testid="needs-empty">Nothing needs you now. No deadline is set on any job.</p>
+              <p className="nui-empty hm-none" data-testid="needs-empty">{emptyLine(nextDeadline)}</p>
             ) : (
               <ul className="hm-needs" data-testid="needs-you">
-                {shown.map(n => (
-                  <li key={n.id ?? n.path} className="hm-need" data-testid="need" data-kind={n.id ? n.id.split(':')[3] : undefined}>
-                    <span className="hm-need-what"><b>{n.title}</b>
-                      <small>{n.job ? <><a className="side-link" href={n.job.href} data-testid="need-job">{n.job.number}</a>{n.sub.slice(n.job.number.length)}</> : n.sub}</small></span>
-                    <span className="hm-need-state">{n.state}</span>
-                    <button type="button" className="btn-rect" onClick={() => (n.path ? onOpenDocument(n.path) : onDoor({ id: 'approvals', name: 'Approvals' }))}>{n.action}</button>
-                  </li>
-                ))}
+                {shown.map(n => {
+                  const h = n.id ? held[n.id] : undefined
+                  if (h?.state === 'done') {
+                    return (
+                      <li key={n.id} className="hm-need hm-need-done" data-testid="need-done" data-done-id={n.id}>
+                        <span className="hm-need-what"><b>Done</b><small>{n.title}</small></span>
+                        <span className="hm-need-acts"><button type="button" className="btn-rect" onClick={() => undo(n.id!)}>Undo</button></span>
+                      </li>
+                    )
+                  }
+                  return (
+                    <li key={n.id ?? n.path} className="hm-need" data-testid="need" data-id={n.id} data-kind={n.kind} data-due={n.due ?? ''} data-urgent={n.urgent || undefined}>
+                      <span className="hm-need-what"><b>{n.title}</b>
+                        <small>{n.job ? <><a className="side-link" href={n.job.href} data-testid="need-job">{n.job.number}</a>{n.sub.slice(n.job.number.length)}</> : n.sub}</small></span>
+                      <span className="hm-need-state">{n.state}</span>
+                      <span className="hm-need-acts">
+                        <button type="button" className="btn-rect" onClick={() => open(n)}>{n.action}</button>
+                        {n.canDone && n.id && <button type="button" className="side-link hm-done" aria-label={`Done: ${n.title}`} onClick={() => done(n)}>Done</button>}
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
             )}
             {!all && needs.length > shown.length && (

@@ -21,6 +21,7 @@
 //! binds the same table to HTTP.
 
 pub mod agency;
+pub mod alerts;
 pub mod audit;
 pub mod clients;
 pub mod config;

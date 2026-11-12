@@ -460,6 +460,38 @@ fn splice_text(doc: &Document, attachments: Option<&mut Value>, key: &str) {
 /// A document the brief tasks run on that carries research also gets
 /// `upstream_payload`: the research as the brief engine takes it
 /// ([`upstream_payload`], `napkin.middleware/1` §1, §10.13).
+/// What a client typed into a link, left out of what a model reads. A comment's text and the words of
+/// an answer that came through a review link are an outsider's: they stay in the chain, in the
+/// client's vault, and the agency reads them there, but they are never put into a prompt
+/// (features/client-review-full.clan). A route that is pinned to the EU and asks for them would be
+/// the one way in; none exists yet.
+fn without_outsider_text(mut chain: Value) -> Value {
+    let Some(list) = chain.get_mut("decisions").and_then(Value::as_array_mut) else {
+        return chain;
+    };
+    for d in list {
+        if d.get("kind").and_then(Value::as_str) != Some("client_review") {
+            continue;
+        }
+        let action = d.get("action").and_then(Value::as_str).unwrap_or("");
+        let by_link = d.get("channel").and_then(Value::as_str) == Some("link");
+        let outsider = matches!(
+            action,
+            "client_comment" | "client_comment_withdraw" | "client_advice"
+        ) || (action == "client_answer" && by_link);
+        if !outsider {
+            continue;
+        }
+        if let Some(o) = d.as_object_mut() {
+            o.remove("said");
+            if let Some(c) = o.get_mut("comment").and_then(Value::as_object_mut) {
+                c.remove("text");
+            }
+        }
+    }
+    chain
+}
+
 pub fn clan_context_for_agent(doc: &Document) -> Value {
     let clan = doc.clan();
     let yaml_to_json = |p: &str| -> Value {
@@ -481,7 +513,7 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         "app": m.app.as_ref().map(|a| serde_json::json!({ "name": a.name, "app_id": a.app_id, "version": a.version })),
         "schema": schema,
         "data": with_upstream_index(clan, yaml_to_json("shared/data.yaml")),
-        "decision_chain": yaml_to_json("agent/decision-chain.yaml"),
+        "decision_chain": without_outsider_text(yaml_to_json("agent/decision-chain.yaml")),
         "context": clan.read_entry_string("agent/context.md").unwrap_or_default(),
         "lineage": m.lineage.as_ref().map(|l| serde_json::json!({ "parent_id": l.parent_id, "delta": l.delta })),
         "id": clan.document_id(),

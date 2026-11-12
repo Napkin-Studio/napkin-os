@@ -22,7 +22,7 @@ import type {
   LegacyName,
   ClientRecord,
   DashboardView,
-  JobNeed,
+  NeedsAnswer,
   JobEntry,
   JobPatch,
   JobRights,
@@ -34,6 +34,8 @@ import type {
   ClientReviewReply,
   DecisionsView,
   ClientLinkMade,
+  ClientRoundMade,
+  ClientRoundView,
   ClientLinkRow,
   GateView,
   VersionParts,
@@ -116,8 +118,19 @@ export async function barSearch(q: string, signal?: AbortSignal): Promise<Search
 }
 
 /** What the signed-in person is asked to do next, by deadline (`GET /needs`); empty where there is no server answer. */
-export async function jobNeeds(): Promise<JobNeed[]> {
-  try { return (await json<{ items: JobNeed[] }>('/needs')).items } catch { return [] }
+export async function jobNeeds(): Promise<NeedsAnswer> {
+  // the timesheet reminder is from 16:00 where the person is: minutes east of UTC, as the timesheet routes take it
+  try { return await json<NeedsAnswer>(`/needs?tz=${-new Date().getTimezoneOffset()}`) } catch { return { items: [] } }
+}
+
+/** Mark one of the signed-in person's own notices done (`POST /needs/{id}/done`); false when the server refuses. Private to them. */
+export async function markNeedDone(id: string): Promise<boolean> {
+  try { return (await fetch(`${await base()}/needs/${encodeURIComponent(id)}/done?tz=${-new Date().getTimezoneOffset()}`, { method: 'POST', credentials: 'same-origin' })).ok } catch { return false }
+}
+
+/** Take the mark back (Undo). */
+export async function undoNeedDone(id: string): Promise<boolean> {
+  try { return (await fetch(`${await base()}/needs/${encodeURIComponent(id)}/done`, { method: 'DELETE', credentials: 'same-origin' })).ok } catch { return false }
 }
 
 /** Every job as the index has it, with its route and who holds it (`GET /jobs`); null when the server does not answer. */
@@ -133,6 +146,31 @@ export async function jobView(number: string): Promise<JobView | 'missing' | 'fo
     if (r.status === 403) return 'forbidden'
     return r.ok ? ((await r.json()) as JobView) : null
   } catch { return null }
+}
+
+// ── the client review round (features/client-review-full.clan) ──────────────
+
+const docApi = (doc?: string) => `/d/${encodeURIComponent(doc ?? requireDoc())}`
+
+/** Send the locked version to several people, one the approver: one link each, shown once. */
+export async function makeRound(reviewers: { name: string; email: string; approver: boolean }[], code: boolean, doc?: string): Promise<ClientRoundMade> {
+  return json<ClientRoundMade>(`${docApi(doc)}/client-link/round`, postJson({ reviewers, code }))
+}
+
+/** The round last sent, merged; `null` when none has been sent, or when this person may not read it. */
+export async function readRound(doc?: string): Promise<ClientRoundView | null> {
+  try {
+    const r = await fetch(`${await base()}${docApi(doc)}/client-review/round`, { credentials: 'same-origin' })
+    return r.ok ? ((await r.json()) as ClientRoundView) : null
+  } catch { return null }
+}
+
+/** Whether the server can mail a code: the option is offered only when it can. */
+export async function roundOptions(doc?: string): Promise<{ code: boolean }> {
+  try {
+    const r = await fetch(`${await base()}${docApi(doc)}/client-review/options`, { credentials: 'same-origin' })
+    return r.ok ? ((await r.json()) as { code: boolean }) : { code: false }
+  } catch { return { code: false } }
 }
 
 /** What a job write came to: done, or why not, with the server's own sentence. */

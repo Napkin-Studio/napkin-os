@@ -258,3 +258,70 @@ fn a_document_removed_or_added_is_seen() {
     assert!(titles(&index).contains(&("doc-new".into(), "Added by task two".into())));
     assert_eq!(index, JobIndex::build(&store, now()).unwrap());
 }
+
+/// Needs you in full (features/needs-you-full.clan) runs its alert rules inside the index, from what the cache
+/// holds per document. With a deadline inside 48 hours (a notice made by the rule) and three hundred
+/// unchanged documents, asking for a person's list, their next deadline and the job's people reads no
+/// document and hashes none, as the plain index does not.
+#[test]
+fn the_alert_rules_cost_no_read_on_an_unchanged_tenant() {
+    let dir = tempfile::tempdir().unwrap();
+    let (store, _) = tenant(dir.path(), 300);
+    let me = Ctx::new(Actor::human("niamh@wk").unwrap());
+    jobs::update_job(
+        &store,
+        &me,
+        "J001",
+        jobs::JobPatch {
+            due: Some(Some("2026-11-13".into())),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let counted = Counted {
+        inner: &store,
+        reads: AtomicUsize::new(0),
+        hashes: AtomicUsize::new(0),
+    };
+    let cache = IndexCache::new();
+    let first = cache.get(&counted, now()).unwrap();
+    assert!(
+        first.needs.iter().any(|n| n.kind == "deadline"),
+        "the rule made its notice on the first build"
+    );
+    counted.reads.store(0, Ordering::Relaxed);
+    counted.hashes.store(0, Ordering::Relaxed);
+    let owner = first.job("J001").unwrap().owner.clone();
+    for _ in 0..3 {
+        let index = cache.get(&counted, now()).unwrap();
+        assert!(index
+            .needs_visible(Some(owner.as_str()), &["planning".to_string()], &|_| vec![])
+            .iter()
+            .any(|n| n.kind == "deadline"));
+        assert!(index
+            .next_deadline(
+                Some(owner.as_str()),
+                &["planning".to_string()],
+                now().date_naive()
+            )
+            .is_some());
+    }
+    assert_eq!(
+        (
+            counted.reads.load(Ordering::Relaxed),
+            counted.hashes.load(Ordering::Relaxed)
+        ),
+        (0, 0),
+        "the alert rules read nothing on an unchanged tenant"
+    );
+    // a document that moved is read again alone: the rules still run from per-document facts
+    let before = counted.reads.load(Ordering::Relaxed);
+    write_from_another_task(dir.path(), &doc_id("d0007"), bytes("Moved", "x", "J001"));
+    cache.get(&counted, now()).unwrap();
+    // the one document, and the three registries a rebuild reads (jobs, clients, the route history): not three hundred
+    let reads = counted.reads.load(Ordering::Relaxed) - before;
+    assert!(
+        (1..10).contains(&reads),
+        "{reads} reads for one moved document"
+    );
+}

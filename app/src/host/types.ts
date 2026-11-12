@@ -162,6 +162,60 @@ export interface ClientLinkRow {
   made: string
 }
 
+/** One reviewer in a round, as the agency sees them. */
+export interface RoundReviewer {
+  id: string
+  name: string
+  email: string
+  role: 'approver' | 'reviewer'
+  /** `open`, `answered`, `withdrawn`, `expired` or `superseded`. */
+  state: string
+  answer: string | null
+  answered: string | null
+  /** Only the approver's answer is the client's decision. */
+  counts: boolean
+}
+
+/** A reviewer's comment, with the flags two fixed rules gave it (`split`, `same spot`). */
+export interface RoundComment {
+  id: string
+  link: string
+  piece: number
+  pin: { x?: number; y?: number; t_ms?: number } | null
+  tag: string
+  text: string
+  at: string
+  by: { name: string; email: string }
+  role: 'approver' | 'reviewer'
+  flags: string[]
+}
+
+export interface RoundPiece { n: number; label: string; kind: string; ai: string; approved_by: string[]; changes_by: string[]; split: boolean }
+
+/** `GET /d/{doc}/client-review/round`: the round last sent for the locked version, merged. */
+export interface ClientRoundView {
+  review: string
+  round: number
+  /** How many rounds the job's route gives, when it says. */
+  rounds_in_scope: number | null
+  version: string
+  /** False when the document has moved on since the round was sent. */
+  current: boolean
+  code: boolean
+  pieces: RoundPiece[]
+  reviewers: RoundReviewer[]
+  comments: RoundComment[]
+  approver_answer: string | null
+}
+
+/** What `POST /d/{doc}/client-link/round` returns: one link a reviewer, shown once. */
+export interface ClientRoundMade {
+  review: string
+  round: number
+  expires: string
+  links: { id: string; name: string; email: string; role: 'approver' | 'reviewer'; path: string }[]
+}
+
 export interface GateView {
   enforced: boolean
   items: GateItem[]
@@ -294,8 +348,8 @@ export interface LibraryItem {
 export interface JobNeed {
   /** Stable, `{job}:{stage}:{role}:{kind}`. Absent from an older host. */
   id?: string
-  /** `gate`, `approval` or `approval-chase`. Absent from an older host. */
-  kind?: 'gate' | 'approval' | 'approval-chase'
+  /** A task (`gate`, `approval`, `approval-chase`) or a notice (`brief-changed`, `client-change`, `deadline`, `timesheet`). Absent from an older host. */
+  kind?: 'gate' | 'approval' | 'approval-chase' | 'brief-changed' | 'client-change' | 'deadline' | 'timesheet'
   stage?: string
   /** An approval: whole days past the step's due date, 0 until the day after; null on a gate need. */
   days_late?: number | null
@@ -308,9 +362,21 @@ export interface JobNeed {
   action: string
   /** The document the action opens. */
   path: string
-  /** The job's deadline (`YYYY-MM-DD`): what the list is ordered by. */
+  /** The need's own deadline (`YYYY-MM-DD`): what the list is ordered by. */
   due: string | null
+  /** Where `due` came from: the approval route's stage deadline, the job's, or a day's own reminder. */
+  due_source?: 'stage' | 'job' | 'day'
+  /** Due within 48 hours, or past. */
+  urgent?: boolean
+  /** A notice may be marked done; a task leaves when the work is done. */
+  can_done?: boolean
 }
+
+/** The soonest deadline on the person's own jobs: what an empty Needs you names. */
+export interface NextDeadline { job: string; client: string; client_id: string; due: string }
+
+/** What `GET /needs` answers: the person's items, and the next deadline (null: none set; undefined: an older host). */
+export interface NeedsAnswer { items: JobNeed[]; next_deadline?: NextDeadline | null }
 
 /** One stage's approval: who approves it and by when (napkin-host `jobs::RouteStep`). */
 export interface RouteStep {

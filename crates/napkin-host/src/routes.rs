@@ -536,6 +536,36 @@ pub fn dispatch(
             ),
             Err(e) => e.into(),
         },
+        // A review round: several reviewers, one locked version (ops::client_link, client_pieces).
+        "/client-link/issue-round" => review(session, ctx, |c, d| {
+            crate::ops::client_link::issue_round(
+                c,
+                d,
+                crate::ops::client_link::IssueRound::parse(&req.body_str())?,
+            )
+        }),
+        "/client-review/round" => match session.read(crate::ops::client_link::round_view) {
+            Ok(v) => HostResponse::json(200, &v),
+            Err(e) => e.into(),
+        },
+        "/client-link/comment" => review(session, ctx, |c, d| {
+            crate::ops::client_link::comment(
+                c,
+                d,
+                crate::ops::client_link::Comment::parse(&req.body_str())?,
+            )
+        }),
+        "/client-link/comment-withdraw" => review(session, ctx, |c, d| {
+            let (id, comment) = crate::ops::client_link::parse_comment_withdraw(&req.body_str())?;
+            crate::ops::client_link::comment_withdraw(c, d, &id, &comment)
+        }),
+        "/client-link/piece" => match session.read(|d| {
+            let (id, n) = crate::ops::client_link::parse_piece(&req.body_str())?;
+            crate::ops::client_link::piece_bytes(d, &id, n)
+        }) {
+            Ok((ctype, bytes)) => HostResponse::new(200, &ctype, bytes),
+            Err(e) => e.into(),
+        },
         "/client-link/answer" => review(session, ctx, |c, d| {
             crate::ops::client_link::answer(
                 c,

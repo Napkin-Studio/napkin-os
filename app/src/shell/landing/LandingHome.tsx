@@ -217,7 +217,9 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
       <Home
         view={homed}
         items={data.items}
-        jobNeeds={jobNeeds}
+        jobNeeds={jobNeeds.items}
+        nextDeadline={jobNeeds.next}
+        onNeedsChanged={jobNeeds.reload}
         first={who.first}
         apps={data.apps}
         onDoor={d => go(d.id === 'clients' ? { level: 'clients' } : { level: 'door', door: d.id })}

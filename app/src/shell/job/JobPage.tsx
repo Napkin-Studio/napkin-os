@@ -22,6 +22,7 @@ import { ChangedBrief, Empty, FailedSave, Loading, MissingAccess, Normal } from 
 import { dueWords } from '../home/model'
 import { useLiveRead } from '../home/useLiveRead'
 import { RouteStrip } from '../approvals/RouteStrip'
+import { ClientRound } from '../clientReview/RoundView'
 import type { Route } from '../route'
 import { budgetLine, changedBriefOf, docLine, dueLine, formOf, formProblem, nextNeed, patchOf, saveOutcome, stageLine, waitingLine, type JobForm } from './jobModel'
 import './job.css'
@@ -89,6 +90,9 @@ export function JobBody({ number, value, ready, go, onOpenDocument, back, reload
   )
 }
 
+/** The documents a client reviews through a link (their clean specs, crates/napkin-host/src/ops/client_pieces.rs). */
+const CLIENT_REVIEWED = ['ie.napkin.brief-maker', 'ie.napkin.visual-brief', 'ie.napkin.script-editor']
+
 function JobFile({ view, go, onOpenDocument, reload, save }: { view: JobView; go: (r: Route) => void; onOpenDocument: (path: string) => void; reload: () => void; save: Save }) {
   const { job, needs, can } = view
   const [editing, setEditing] = useState(false)
@@ -144,6 +148,12 @@ function JobFile({ view, go, onOpenDocument, reload, save }: { view: JobView; go
           </ul>
         )}
       </section>
+
+      {job.documents.filter(d => d.locked && !d.changed_since_lock && CLIENT_REVIEWED.includes(d.app_id ?? '')).map(d => (
+        <section key={d.path} className="jp-sec" aria-label={`Client review of ${d.title || 'Untitled'}`} data-testid="job-client-round">
+          <ClientRound doc={d.path} />
+        </section>
+      ))}
 
       {can.manage && (editing
         ? <JobEditor job={job} mayBudget={can.budget} save={save} onDone={() => { setEditing(false); reload() }} onCancel={() => setEditing(false)} />

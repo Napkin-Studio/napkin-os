@@ -31,6 +31,8 @@ export const PEOPLE = {
   // The agency has no directory until its admin imports people; the roster stands in for the control list (stage 4).
   newAgencyAdmin: { username: 'cara@cr', name: 'Cara Test', roles: ['admin'] },
   newAgencyAdmin2: { username: 'cara@cs', name: 'Cara Test', roles: ['admin'] },
+  // needs-you-full: a person with nothing waiting, who is on a job (they write one decision in it), so the empty Needs you names a next deadline
+  needsQuiet: { username: 'brid@wk', name: 'Brid Test', roles: ['art-director'] },
   // an agency that never has a job, for the Live jobs Empty state (job-page)
   emptyAgency: { username: 'fia@empty', name: 'Fia Test', roles: ['account-service'] },
 }

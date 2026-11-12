@@ -113,6 +113,12 @@ pub struct AppCtx {
     /// Signs the client's links (`links`); the session secret's child, or a key for this run.
     pub link_key: Vec<u8>,
     pub limiter: crate::links::Limiter,
+    /// Signs the emailed code and the cookie that proves it (`links`), under its own label.
+    pub code_key: Vec<u8>,
+    /// The only way mail leaves the server (`mail`): off unless a sender is configured.
+    pub mail: crate::mail::Mail,
+    /// Unix seconds, for the code's window; a test sets it.
+    pub code_clock: Arc<dyn Fn() -> u64 + Send + Sync>,
     pub events: EventBus,
     pub exports: ExportStore,
     pub meter: Meter,
@@ -125,6 +131,8 @@ pub struct AppCtx {
     pub roles_dir: Option<PathBuf>,
     /// Each person's work sessions and days (features/timesheet-sessions.clan).
     pub timesheets: crate::timesheet::Timesheets,
+    /// What each person has marked done on Needs you, private to them (features/needs-you-full.clan).
+    pub done: Arc<dyn crate::needs::DoneStore>,
     /// Who works in each agency and with which roles (features/agency-setup.clan).
     pub directory: Arc<dyn crate::directory::Directory>,
     /// What no document's chain holds: exports, links, sign-ins and copies of permission changes.
@@ -142,6 +150,7 @@ impl AppCtx {
     ) -> Self {
         Self {
             timesheets: crate::timesheet::Timesheets::new(root.clone()),
+            done: Arc::new(crate::needs::FileDone::new(root.join("needs-done"))),
             directory: Arc::new(crate::directory::RegistryDirectory::new(root.clone())),
             audit: Arc::new(crate::audit::FileAudit::new(root.clone())),
             root,
@@ -150,6 +159,9 @@ impl AppCtx {
             tokens: TokenStore::default(),
             link_key: crate::links::fresh_key(),
             limiter: crate::links::Limiter::default(),
+            code_key: crate::links::fresh_key(),
+            mail: crate::mail::Mail::off(),
+            code_clock: Arc::new(crate::links::unix_now),
             events: EventBus::default(),
             exports: ExportStore::default(),
             meter: Meter::new(agent_cap),
@@ -168,7 +180,31 @@ impl AppCtx {
     pub fn with_link_secret(mut self, secret: Option<&[u8]>) -> Self {
         if let Some(s) = secret.filter(|s| s.len() >= crate::links::MIN_SECRET) {
             self.link_key = crate::links::key_from(s);
+            self.code_key = crate::links::code_key_from(s);
         }
+        self
+    }
+
+    /// Mail goes through `mailer`, at most `cap` a tenant a day (`mail.rs`).
+    pub fn with_mailer(mut self, mailer: Arc<dyn crate::mail::Mailer>, cap: u32) -> Self {
+        self.mail = crate::mail::Mail::new(mailer, cap);
+        self
+    }
+
+    /// The sender `NAPKIN_MAIL`, `NAPKIN_MAIL_OUTBOX` and `NAPKIN_MAIL_DAILY_CAP` ask for; off when unset.
+    pub fn with_mailer_from_env(self) -> Self {
+        let get = |k: &str| std::env::var(k).ok();
+        let (m, cap) = crate::mail::from_env(
+            get("NAPKIN_MAIL").as_deref(),
+            get("NAPKIN_MAIL_OUTBOX").as_deref(),
+            get("NAPKIN_MAIL_DAILY_CAP").as_deref(),
+        );
+        self.with_mailer(m, cap)
+    }
+
+    /// A clock for the emailed code's window, in Unix seconds, so a test moves past ten minutes.
+    pub fn with_code_clock(mut self, clock: impl Fn() -> u64 + Send + Sync + 'static) -> Self {
+        self.code_clock = Arc::new(clock);
         self
     }
 

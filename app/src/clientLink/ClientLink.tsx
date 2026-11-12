@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react'
 import { applyAgencyLook } from '../shell/agency/look'
 import type { AgencyLook } from '../shell/agency/look'
+import ReviewLink, { CodeScreen, type Review } from './ReviewLink'
 import './clientLink.css'
 
 interface Open {
@@ -26,6 +27,8 @@ interface Open {
 type Seen =
   | { kind: 'loading' }
   | { kind: 'open'; page: Open }
+  | { kind: 'review'; page: Review }
+  | { kind: 'code'; agency: { name: string | null; logo?: string | null } }
   | { kind: 'gone'; state: string; agency?: string }
   | { kind: 'unknown' }
   | { kind: 'trouble' }
@@ -63,12 +66,24 @@ export default function ClientLink({ token }: { token: string }) {
     return () => { meta.remove(); robots.remove() }
   }, [])
 
+  // a review link may be on the emailed code: bump this to read the page again once it is in
+  const [again, setAgain] = useState(0)
+
   useEffect(() => {
     let live = true
-    fetch(`/c/${token}/view`, { credentials: 'omit', cache: 'no-store' }).then(async r => {
+    fetch(`/c/${token}/view`, { credentials: 'same-origin', cache: 'no-store' }).then(async r => {
       const body = (await r.json().catch(() => ({}))) as Record<string, unknown>
       if (!live) return
-      if (r.ok) {
+      if (r.ok && body.mode === 'review') {
+        const page = body as unknown as Review
+        applyAgencyLook({ logo: page.agency.logo ?? undefined, accent: page.agency.accent ?? undefined })
+        document.title = `Please review: ${page.title}`
+        setSeen({ kind: 'review', page })
+      } else if (r.status === 401 && body.state === 'code') {
+        const ag = (body.agency ?? {}) as { name?: string | null; logo?: string | null; accent?: AgencyLook['accent'] | null }
+        applyAgencyLook({ logo: ag.logo ?? undefined, accent: ag.accent ?? undefined })
+        setSeen({ kind: 'code', agency: { name: ag.name ?? null, logo: ag.logo } })
+      } else if (r.ok) {
         const page = body as unknown as Open
         applyAgencyLook({ logo: page.agency.logo ?? undefined, accent: page.agency.accent ?? undefined })
         document.title = `Please confirm: ${page.title}`
@@ -78,7 +93,7 @@ export default function ClientLink({ token }: { token: string }) {
       else setSeen({ kind: 'trouble' })
     }, () => { if (live) setSeen({ kind: 'trouble' }) })
     return () => { live = false }
-  }, [token])
+  }, [token, again])
 
   const send = (answer: 'confirm' | 'changes') => {
     setBusy(true); setProblem(null)
@@ -97,6 +112,24 @@ export default function ClientLink({ token }: { token: string }) {
 
   if (seen.kind === 'loading') {
     return <main className="cl-page" aria-busy="true"><div className="cl-wrap"><p className="cl-sub">Opening the brief</p></div></main>
+  }
+
+  if (seen.kind === 'code') {
+    return <CodeScreen token={token} agency={seen.agency} onIn={() => setAgain(n => n + 1)} onGone={state => setSeen({ kind: 'gone', state })} />
+  }
+
+  if (seen.kind === 'review') {
+    if (done) {
+      return (
+        <main className="cl-page" data-testid="client-link-done">
+          <div className="cl-wrap">
+            <h1 className="cl-title">{done.answer === 'confirm' ? 'Thank you, it is approved' : 'Thank you, we have your changes'}</h1>
+            <p className="cl-sub">{done.answer === 'confirm' ? 'The agency has your answer.' : 'The agency will come back to you with a new version.'} You can close this page.</p>
+          </div>
+        </main>
+      )
+    }
+    return <ReviewLink token={token} page={seen.page} onGone={state => setSeen({ kind: 'gone', state })} onDone={answer => setDone({ answer })} />
   }
 
   if (seen.kind !== 'open') {

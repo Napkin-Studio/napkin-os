@@ -851,7 +851,12 @@ email, attached as a file, or noted from a call.
    `client:<email>`, the client who opened their own link (§7.5.9). The host
    accepts it on `client_review` only: a context with a client actor reaches
    exactly `POST /client-link/state` and `POST /client-link/answer`, and every
-   other route answers `403` before it is read.
+   other route answers `403` before it is read. *Amended 2026-11-12
+   (features/client-review-full.clan; needs the OS layer owner's approval):* the
+   exact list (`client_link::CLIENT_ROUTES`) is five routes, not two:
+   `/client-link/state`, `/client-link/answer`, `/client-link/comment`,
+   `/client-link/comment-withdraw` and `/client-link/piece` (§7.5.10). Nothing
+   else is added to it.
 6. **Confidential is not a filter here** (owner, 2026-09-29: confidential
    means only "kept out of RAG and the corpus"). Clients see everything, so
    nothing in client review — the records, `/decisions`, the extract's
@@ -1248,6 +1253,103 @@ person marked confidential, and the whole field if the key names it, is not
 shown to the client, in the sheet or the summary. A default taken on
 2026-11-11 until the owner confirms it
 (`features/client-confirm-link.clan`, decisions).
+
+#### 7.5.10 The client's review link: rounds, reviewers, pieces, comments
+
+*Added 2026-11-12 (`features/client-review-full.clan`). **Needs the OS layer
+owner's (Shrey's) approval** before it is pushed: it widens the client actor from
+two routes to five and adds a decision action.* The Phase 1 link (§7.5.9) is
+kept whole. A review link is the same link, once per reviewer per round.
+
+**Records.** All `kind: client_review` on the document's chain, tied by the
+link's id, written through the host and nowhere else.
+
+- `issue_link`, one per reviewer, written together by `POST /client-link/issue-round`
+  `{review, reviewers: [{id, name, email, approver}], expires, code}` (a person).
+  `extra.link` is the Phase 1 block with `scope: review` and: `review` (the round's
+  id, shared by every reviewer of it), `round` (counted here, from the chain: the
+  number of distinct locks a review was sent for, this one included), `role`
+  (`approver` or `reviewer`), `pieces` and `code` (an emailed code is needed).
+  Exactly one reviewer is the approver (`400` for none or two); 1 to 12 reviewers,
+  each with their own address and link id. The body never carries `round`,
+  `pieces`, `lock`, `version` or a hash: they are the host's. `409` as §7.5.9.
+- `pieces`: what a reviewer looks at, one at a time, worked out from the document
+  by its **clean spec** (`ops/client_pieces.rs`, an allow list by app id) and
+  hashed by the host: `{address, kind: text|image|film|audio, label, sha256, ai,
+  duration_ms?}`. A page of words is hashed by the document's content; an asset
+  (`human/assets/<name>`) by its bytes. A document type with no spec gets no link
+  (`400`). At most 40 pieces. `ai` is `ai`, `none` or `not_recorded`; nothing is
+  called AI-free without a record.
+- `client_comment`, by `client:<email>` (`POST /client-link/comment`
+  `{id, piece, pin?: {x, y} | {t_ms}, tag, text}`): `extra.comment` holds the
+  piece number and address, the pin (x and y are fractions of the piece's own
+  box, from 0 to 1, three decimals; `t_ms` is milliseconds and may not pass the
+  piece's length), a `tag` that is `preference` or a point of the brief the spec
+  shows and the document has not marked confidential, and the `text` (at most
+  2,000 characters). At most 100 per link (withdrawn ones count). Allowed only
+  while the link is open. `client_comment_withdraw` takes back one's own.
+- `client_answer`, as §7.5.9, by the round's **approver**; the answer of any other
+  reviewer is `client_advice` (same fields). Only `client_answer` is read by the
+  Brief gate, the decision view and the approval route's client step, so a
+  reviewer's answer is recorded, shown, and counts for nothing. An answer may carry
+  `pieces: [{piece, answer: approve|changes}]`, recorded as `piece_answers`.
+  `confirm` cannot hold a piece that asks for changes.
+
+**State** is derived from the chain as in §7.5.9, with one addition: a review link
+is also `superseded` when any piece's current bytes hash to something else than
+the issue recorded (an image swapped without a change to the data).
+
+**The routes** a client actor reaches, each only for its own link id and only
+while the link is open: state, answer, comment, comment withdrawal and
+`/client-link/piece {id, n}` (the bytes of piece `n` from 1, only when they hash
+to what the issue recorded, with a content type from a fixed list by the recorded
+kind and never from the file). The agency reads one merged view,
+`GET /client-review/round`: every reviewer and where they stand, every comment
+ordered by piece then position, and two fixed flags, `split` (one reviewer approved
+a piece and another asked for changes) and `same spot` (two reviewers' pins within
+5 percent of the piece, or 2 seconds on a film). No model is called.
+
+**Never in a prompt.** What a client typed into a link (a comment's text, the
+words of an answer by link, a reviewer's advice) stays in the chain, in the
+client's vault. `clan_context_for_agent` removes it from the `decision_chain` it
+sends to the middleware; no EU-pinned route asks for it yet.
+
+**The web layer** (`crates/napkin-web/src/links.rs`, `mail.rs`) is where the
+token, the emailed code and the mail live; none of it is in `napkin-host`
+(which stays wasm32-clean).
+
+##### Security properties, and the test that proves each
+
+Each holds per link, so it holds for several reviewers and for every round. Tests
+are in `crates/napkin-host/tests/client_review_round.rs` (host),
+`crates/napkin-web/tests/client_review.rs` (web) and
+`app/e2e/j001-p2-client-review-full.spec.ts` (e2e, tests 36 to 38).
+
+| Property | Test |
+|---|---|
+| Token signed under its own label, no personal data, a short secret does not sign | web `a_token_carries_no_personal_data_and_the_keys_are_separate`, `a_short_session_secret_does_not_sign_links` |
+| Shape 1 is `confirm` and shape 2 is `review`, no other pairing | web `a_token_of_each_shape_verifies_with_its_own_scope_and_no_other`, unit tests in `links.rs` |
+| Tenant and document come from the signed token | web `wrong_expired_withdrawn_used_and_superseded_links_say_so` (a flipped byte, a confirm token on a review route) |
+| One answer per reviewer, others unaffected | host `each_reviewer_answers_once_as_themselves_and_the_others_stay_open`; web `two_reviewers_answering_at_once_each_land_one_record` |
+| Expiry at most 30 days | host `zero_or_two_approvers_and_other_bad_rounds_are_refused` (31 days is 400); web (expired token is 410) |
+| Withdrawal | web `wrong_expired_withdrawn_used_and_superseded_links_say_so` |
+| Dead after a change (edit, unlock, relock, reopen, a swapped asset) | host `rounds_are_counted_from_the_file_and_an_old_link_is_superseded`, `a_piece_is_served_only_as_the_version_the_link_names`; web `wrong_expired_withdrawn_used_and_superseded_links_say_so` |
+| A round 1 reviewer cannot use their link in round 2 | web `wrong_expired_withdrawn_used_and_superseded_links_say_so` |
+| Client actor confined to `CLIENT_ROUTES`, exact match, before dispatch; confined to its own link | host `a_client_actor_reaches_the_client_routes_and_no_others`, `a_client_actor_writes_only_the_answer_and_the_comment`, `a_reviewer_has_their_own_link_and_cannot_use_anothers` |
+| Clean copy is an allow list per document type; every schema key seeded; a new key must be placed | web `the_brief_wall_shows_the_allow_listed_fields_and_nothing_else`, `the_visual_brief_wall_...`, `the_script_wall_...`, `every_key_of_every_schema_is_shown_or_named_as_never_shown`, `every_clean_spec_has_a_wall_test` |
+| A document type with no spec gets no link | host `zero_or_two_approvers_and_other_bad_rounds_are_refused`; web `a_link_to_a_document_with_no_clean_spec_is_refused` |
+| `confidential_fields` hidden | web the three wall tests (a hidden field per type) |
+| No Judge score, internal note, idea card or Banned list | web `the_clients_replies_never_name_...`, the script wall (checks never shown); e2e 38 |
+| Reviewers do not see each other | host `a_reviewers_own_state_holds_nothing_of_another`; web `a_reviewer_sees_nothing_of_another_reviewer` |
+| Request body is the answer and words only; who, version, round, channel from the link | host `a_comment_is_pinned_tagged_and_written_on_the_links_version` (actor, round refused); web `each_reviewer_opens_their_own_link_...` |
+| A comment is escaped, capped, and never in a prompt | caps: host `a_link_holds_at_most_a_hundred_comments`, web `bodies_and_texts_are_capped_and_a_link_is_rate_limited`; prompt: host `a_comment_never_reaches_the_agent_context`; escaping: the agency's screens draw it as React text (`RoundView.tsx`, no `dangerouslySetInnerHTML`) |
+| A served piece cannot run script (fixed type list, nosniff, sandbox CSP, no-store) | web `a_piece_is_served_as_data_from_a_fixed_list_with_the_headers_that_stop_script` |
+| Rate limits per link and a pool for bad tokens; code tries and sends limited | web `bodies_and_texts_are_capped_and_a_link_is_rate_limited`, `a_brute_forced_code_is_stopped_after_five_tries_and_the_sends_are_capped` |
+| Emailed code: nothing shown before it, one mail, cookie bound to the link, not logged | web `with_the_code_on_a_link_shows_nothing_until_the_emailed_code_is_entered`, `a_code_works_for_ten_minutes_and_not_for_twenty` |
+| No sender, no code option | web `with_no_sender_the_code_is_not_offered_anywhere`, `the_daily_cap_refuses_a_mail_with_one_plain_line` |
+| Public replies are no-store, no-referrer, noindex; the service worker never caches `/c/` | web `private_headers` checks in the round tests, `the_client_page_is_never_cached_by_the_service_worker` |
+| Only the approver's answer counts for the gate and the route | host `only_the_approvers_answer_counts_for_the_gate_and_the_route` |
+| Rollback: older code reads a chain with the new actions | host `a_chain_with_the_new_actions_reads_under_the_phase_one_state_function` |
 
 ### 7.6 Unlocking the whole document: `/unapprove`
 
@@ -2254,6 +2356,42 @@ verification measured 10 ms a document in the debug server just to hash them, ab
 - **If a stamp change were missed** (a filesystem reporting the same stat for different bytes), the index
   would show that document as it last read it until the next write to it. The index writes nothing, so
   nothing is lost; `IndexCache::delete` or a restart of the server clears it. There is no route for it.
+
+### 13.4 Needs you in full (features/needs-you-full.clan)
+
+`GET /api/t/{tenant}/needs[?tz=<minutes east of UTC>]` answers the signed-in person `{total, items, next_deadline}`.
+`total` counts what is left after the person's done marks. `next_deadline` is `{job, client, client_id, due}` for the
+soonest job deadline (today or later) on a job the person is on, or `null`; an older host sends no key.
+
+- **A need** (sent by the allow list `NEED_KEYS` in `jobview.rs`, never with its audience): `id`, `kind`, `stage`, `days_late`,
+  `job`, `client`, `client_id`, `text`, `action`, `path`, `due`, `due_source` (`stage`, the Approval route's date for the stage,
+  else `job`, or `day` for a day's own reminder), `urgent` (due within 48 hours, or past) and `can_done`. `GET /jobs/{number}` sends
+  the same items for that job.
+- **Kinds.** Tasks leave when the work is done and have no Done (`can_done: false`): `gate` (the Brief gate's asks),
+  `approval`, `approval-chase`. Notices have one: `brief-changed`, `client-change`, `deadline`, `timesheet`. An approver on a
+  stage the gate also asks about sees one row: the approval's, with the gate's row for the same person on the same stage folded in.
+- **The alerts table** is `ALERTS` in `crates/napkin-host/src/alerts.rs`, the eight rows of v2 section 4, each `Live(rule)` or
+  `Waiting(record)`. Live: Brief changes version (everyone on the job), Client comment or change request (account service),
+  Approval overdue (the approver, then whoever set the route; every stage, since the route names them), Deadline within 48 hours
+  (the job owner), Today's timesheet not confirmed (that person). Waiting: Work scores under 24 (`judge`), Request out of scope
+  and Job hours near budget (Phase 3). The rules are pure functions of a job's facts and the date, run inside the index from
+  what the cache holds per document (a document's decision writers, its newest edit after the lock, the client's newest answer
+  that asks for changes), so an index read on an unchanged tenant reads and hashes nothing (`job_index_stamp.rs`). A need's text is
+  built from a job number, a client name, a document title, a stage label and a date; it never quotes a document or a comment.
+- **Ids are stable.** `{job}:{stage}:{who}:{kind}` for a task; for a notice, the same with `:{FNV-1a hash of job, kind, document
+  and cause}` where the cause is the newest edit after the lock, the client's answer, or the deadline's date. The same event
+  keeps its id across rebuilds and a new event has a new one.
+- **Whose list.** A person with no name and no role, an admin and a demo see every item, as before. Anyone else sees items of the
+  jobs they are on (owner, a signer of its brief, an agency approver on its route, anyone who has written a decision in one of its
+  documents), addressed to them by name, to everyone on the job, or to a role they hold. A role's item on a job where nobody known
+  to hold the role is on the job (the agency's `Directory`, when it has one; an agency without a directory knows no one's roles)
+  reaches everyone with the role: nothing is orphaned. `JobEntry.people` feeds this and is sent to nobody.
+- **Done and Undo.** `POST /needs/{id}/done` marks a notice done for the signed-in person (`404` for an id that is not theirs,
+  `409` for a task, `403` without a sign-in); `DELETE` on the same path takes it back. A mark is one person's own, kept in one small
+  file each (`needs-done/<person>.json` beside the timesheets, behind `trait DoneStore`, at most 2,000 per person), read by nobody
+  else and counted by nothing. The shell shows Done and Undo for five seconds, then the row is gone. A write to `/needs` itself is `405`.
+- **The timesheet reminder** is built per request for the caller alone, from their own consent and their own day (never another's),
+  from 16:00 at the caller's `tz`, once a day (its id carries the date), only to a person who has answered the consent question.
 
 ## 14. The agency directory (features/agency-setup.clan)
 

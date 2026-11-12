@@ -68,7 +68,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/jobs/{number}", get(get_job).patch(update_job))
         .route("/t/{tenant}/jobs/{number}/stage", get(job_stage))
         .route("/t/{tenant}/jobs/{number}/route", put(set_route))
-        .route("/t/{tenant}/needs", get(needs))
         .route("/t/{tenant}/dashboard", get(dashboard))
         .route(
             "/t/{tenant}/agency/look",
@@ -87,6 +86,13 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/d/{doc}/jobs/{job}/settle", post(settle_job))
         .route("/t/{tenant}/d/{doc}/client-link", post(make_client_link))
         .route("/t/{tenant}/d/{doc}/client-links", get(client_links))
+        // a review round: several reviewers, one locked version (features/client-review-full.clan)
+        .route("/t/{tenant}/d/{doc}/client-link/round", post(make_round))
+        .route("/t/{tenant}/d/{doc}/client-review/round", get(read_round))
+        .route(
+            "/t/{tenant}/d/{doc}/client-review/options",
+            get(round_options),
+        )
         .route(
             "/t/{tenant}/d/{doc}/client-link/{link}/withdraw",
             post(withdraw_client_link),
@@ -98,6 +104,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/agent/prompt", post(agent_prompt))
         .route("/t/{tenant}/events", get(events))
         .merge(crate::timesheet::router())
+        .merge(crate::needs::router())
         .merge(crate::agency::router())
         .merge(crate::audit::router())
         .merge(crate::search::router())
@@ -472,14 +479,13 @@ async fn get_job(
         .job(&number)
         .ok_or_else(|| napkin_host::HostError::not_found(format!("no such job: {number}")))?;
     let roles = roles_of(&user);
-    let needs: Vec<_> = index
-        .needs_for(
-            user.as_ref().map(|Extension(a)| a.username.as_str()),
-            &roles,
-        )
-        .into_iter()
-        .filter(|n| n.job == number)
-        .collect();
+    let needs = crate::needs::job_items(
+        &ctx,
+        &index,
+        user.as_ref().map(|Extension(a)| a),
+        &number,
+        ctx.workspace(&tenant).now().date_naive(),
+    );
     Ok(Json(serde_json::json!({
         "job": crate::jobview::job_view(job, &roles),
         "needs": needs,
@@ -522,24 +528,6 @@ async fn job_stage(
     Ok(Json(serde_json::json!({
         "job": job.number, "stage": job.stage, "status": job.status, "waiting_on": job.waiting_on,
     })))
-}
-
-/// What the signed-in person is asked to do next, by deadline. Everyone's own list:
-/// two people on one job see different lines. An anonymous visitor sees them all.
-async fn needs(
-    State(ctx): Ctx,
-    Tenant(tenant): Tenant,
-    user: Option<Extension<crate::auth::Account>>,
-) -> ApiResult<Json<Value>> {
-    let index = job_index(&ctx.workspace(&tenant))?;
-    let user = user.map(|Extension(a)| a);
-    let items = index.needs_for(
-        user.as_ref().map(|a| a.username.as_str()),
-        user.as_ref().map(|a| a.roles.as_slice()).unwrap_or(&[]),
-    );
-    Ok(Json(
-        serde_json::json!({ "total": items.len(), "items": items }),
-    ))
 }
 
 /// The six tiles. Management's: the route is behind the role check.
@@ -906,6 +894,134 @@ async fn make_client_link(
         "ok": true, "id": id, "path": format!("/c/{token}"), "expires": expires,
         "version": claims.version, "client": { "name": body.name.trim(), "email": body.email.trim().to_lowercase() },
     })))
+}
+
+#[derive(Deserialize)]
+struct RoundReviewer {
+    name: String,
+    email: String,
+    #[serde(default)]
+    approver: bool,
+}
+
+#[derive(Deserialize)]
+struct RoundBody {
+    reviewers: Vec<RoundReviewer>,
+    /// Ask each reviewer for an emailed code first: only when the server can send mail.
+    #[serde(default)]
+    code: bool,
+}
+
+/// `POST /d/{doc}/client-link/round`: send the locked version to several named reviewers, one of them
+/// the approver, one link each. The tokens are in the answer once; the chain keeps the rest.
+async fn make_round(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc)): Path<(String, String)>,
+    Json(body): Json<RoundBody>,
+) -> ApiResult<Json<Value>> {
+    if body.code && !ctx.mail.enabled() {
+        return Err(ApiError::new(
+            400,
+            "the email code is not available: no mail is set up for this server",
+        ));
+    }
+    if body.reviewers.len() > 12 {
+        return Err(ApiError::new(400, "a round has at most 12 reviewers"));
+    }
+    let review = uuid::Uuid::new_v4().simple().to_string();
+    let (expires, exp) = crate::links::ends();
+    let ids: Vec<String> = body
+        .reviewers
+        .iter()
+        .map(|_| uuid::Uuid::new_v4().simple().to_string())
+        .collect();
+    let reviewers: Vec<Value> = body
+        .reviewers
+        .iter()
+        .zip(&ids)
+        .map(|(r, id)| serde_json::json!({ "id": id, "name": r.name, "email": r.email, "approver": r.approver }))
+        .collect();
+    let made = client_link_call(
+        &ctx,
+        &tenant,
+        &person,
+        &doc,
+        "/client-link/issue-round",
+        serde_json::json!({ "review": review, "reviewers": reviewers, "expires": expires, "code": body.code }),
+    )?;
+    let text = |k: &str| made[k].as_str().unwrap_or_default().to_string();
+    let (version, hash) = (text("version"), text("doc_hash"));
+    let links: Vec<Value> = made["links"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|l| {
+            let id = l["id"].as_str().unwrap_or_default().to_string();
+            let claims = crate::links::Claims {
+                v: 2,
+                id: id.clone(),
+                tenant: tenant.to_string(),
+                doc: doc.clone(),
+                scope: crate::links::SCOPE_REVIEW.into(),
+                targets: vec![doc.clone()],
+                version: version.clone(),
+                hash: hash.clone(),
+                agency: crate::tenant::agency_of(&person),
+                exp,
+            };
+            let token = crate::links::sign(&ctx.link_key, &claims);
+            serde_json::json!({
+                "id": id, "name": l["name"], "email": l["email"], "role": l["role"],
+                "path": format!("/c/{token}"),
+            })
+        })
+        .collect();
+    crate::audit::note(
+        &ctx,
+        &tenant,
+        crate::audit::NewLine {
+            who: person.clone(),
+            kind: crate::audit::LINK,
+            what: format!("Sent a review to {} people.", links.len()),
+            doc: Some(doc.clone()),
+            version: Some(version.clone()).filter(|v| !v.is_empty()),
+            ..Default::default()
+        },
+    );
+    Ok(Json(serde_json::json!({
+        "ok": true, "review": review, "round": made["round"], "links": links,
+        "expires": expires, "version": version, "code": body.code,
+    })))
+}
+
+/// `GET /d/{doc}/client-review/round`: every reviewer, every comment ordered by piece then position, the
+/// likely contradictions flagged, and how many rounds the job's route gives (when it says).
+async fn read_round(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    let mut v = client_link_call(
+        &ctx,
+        &tenant,
+        &person,
+        &doc,
+        "/client-review/round",
+        serde_json::json!({}),
+    )?;
+    let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
+    v["rounds_in_scope"] =
+        serde_json::json!(crate::links::rounds_in_scope(&ctx, &tenant, &session));
+    Ok(Json(v))
+}
+
+/// What the issue form may offer: the emailed code, only when this server can mail one.
+async fn round_options(State(ctx): Ctx) -> Json<Value> {
+    Json(serde_json::json!({ "ok": true, "code": ctx.mail.enabled() }))
 }
 
 async fn client_links(

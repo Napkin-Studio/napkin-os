@@ -15,6 +15,7 @@ export const PEOPLE: {
   readonly planningAndCopywriter: { username: string; name: string; roles: string[] }
   readonly otherAgency: { username: string; name: string; roles: string[] }
   readonly otherAgencyAdmin: { username: string; name: string; roles: string[] }
+  readonly needsQuiet: { username: string; name: string; roles: string[] }
   readonly emptyAgency: { username: string; name: string; roles: string[] }
 }
 export const ROSTER_LINES: string[]
