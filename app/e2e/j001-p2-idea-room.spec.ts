@@ -330,8 +330,11 @@ for (const size of SIZES) {
     const { ctx, page } = await open(browser, size)
     const job = await signedBrief(page)
     expect((await gateOf(page, job.brief)).open, 'the brief has passed, is signed and confirmed').toBe(true)
-    // A brief that is not confirmed makes no room.
+    // A brief that is not confirmed makes no room. A planner opens its job (a creative director may not open one: job-page),
+    // and the creative director asks for the room.
+    await signIn(page, PEOPLE.planning)
     const early = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.creativeDirector)
     const refused = await page.request.post(`${early.api}/d/${encodeURIComponent(early.brief.path)}/spinoff`, { data: { app_id: IDEA_ROOM, title: 'Too early' } })
     expect(refused.status(), 'a brief that has not passed the gate makes no idea room').toBe(409)
     const room = await makeRoom(page, job)
