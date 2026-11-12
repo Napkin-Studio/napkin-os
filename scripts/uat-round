@@ -67,6 +67,11 @@ if [[ $deploy -eq 1 ]]; then
   fi
 fi
 
+if [[ $deploy -eq 0 ]]; then  # report what UAT runs, not the ref asked for
+  sha=$(image_sha web); ref="(running on UAT)"
+  echo "UAT runs ${sha:0:8}"
+fi
+
 [[ $dry -eq 1 ]] && { echo "+ playwright test -c uat/uat.config.ts ${grep:+-g \"$grep\"}"; echo "+ uat-watch over the round's jobs"; exit 0; }
 
 mkdir -p "$out"

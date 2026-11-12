@@ -7,9 +7,9 @@ import { addClient, appFrame, BUDGET, dialButton, driveRun, measure, openTool, s
 const ACCOUNT = 'plu@pluto' as const
 const client = `UAT ${stamp()}`
 /** The finished Research document, for the journeys that read it after the run. */
-let researchUrl = ''
+let researchUrl = process.env.UAT_RESEARCH_URL || ''
 
-test.describe.configure({ mode: 'serial' })
+// In order on one worker (uat.config.ts), but not 'serial': one failure must not skip the rest.
 
 test('sign in, the desk, a new client', async ({ page }) => {
   await signIn(page, ACCOUNT)
@@ -64,11 +64,25 @@ test('a Research run reaches a report with sources and pins (paid)', async ({ pa
   // Reopening the finished document is a separate open: it must be fast too.
   const href = page.url()
   researchUrl = href
+  measure('research-doc', 0, undefined, { url: href.replace(/^https?:\/\/[^/]+/, '') })
   await page.goto('/')
   const t1 = Date.now()
   await page.goto(href)
   await appFrame(page, t1, 'reopen-research', '.rp-band')
 })
+
+/** Select the first finding on the map and open it. The map remembers its selection, so a
+ *  click on an already-selected finding deselects it: click again when Open did not appear. */
+async function openFindingFromMap(app: import('@playwright/test').FrameLocator) {
+  await app.locator('[data-view="map"]').click()
+  const node = app.locator('#mapview [data-node*="fi_"]').first()
+  const open = app.locator('[data-act="pv-mapopen"]').first()
+  await node.click()
+  const shown = await open.waitFor({ state: 'visible', timeout: 2_000 }).then(() => true, () => false)
+  if (!shown) await node.click()
+  await open.click()
+  await expect(app.locator('.pv-crumb .cur').first()).toContainText(/Finding/)
+}
 
 /** The finished Research report, open. */
 async function openReport(page: import('@playwright/test').Page) {
@@ -83,20 +97,30 @@ test('evidence map: open it, follow a finding, switch to the report and back', a
   const app = await openReport(page)
   const t0 = Date.now()
   await app.locator('[data-view="map"]').click()
-  await expect(app.locator('#mapview svg')).toBeVisible()
+  await expect(app.locator('#mapview .pv-canvas')).toBeVisible()
   measure('open-map', Date.now() - t0, 3_000)
   // A finding on the map opens in the inspector with what it rests on.
-  const finding = app.locator('#mapview [data-map^="fi"], #mapview [data-map*="fi_"]').first()
-  await finding.click()
-  await app.locator('[data-act="pv-mapopen"]').click()
-  await expect(app.locator('#insp-sel .crumbs [data-crumb]').first()).toBeVisible()
-  // Away to the report: the map goes, the report is whole.
+  await openFindingFromMap(app)
+  await expect(app.locator('button.pv-row[data-pv^="f_"]').first()).toBeVisible()
+  // Away to the report: the map goes, the report is whole (owner's round-3 question).
   await app.locator('[data-view="report"]').click()
-  await expect(app.locator('#mapview svg')).toBeHidden()
+  await expect(app.locator('#mapview .pv-canvas')).toBeHidden()
   await expect(app.locator('.rp-band')).toBeVisible()
-  // And back: the map draws again.
+  // And back: the map draws again, with the finding it had open (each tab remembers, PR #177).
   await app.locator('[data-view="map"]').click()
-  await expect(app.locator('#mapview svg')).toBeVisible()
+  await expect(app.locator('.pv-crumb .cur').first(), 'the map tab comes back to its open finding').toContainText(/Finding/)
+  // A finding opened on the Report tab is still open after a visit to the map.
+  await app.locator('.pv-crumb [data-pv-pop="0"]').first().click()
+  await app.locator('[data-view="report"]').click()
+  await app.locator('#mapview .pv-canvas').waitFor({ state: 'hidden' })
+  const call = app.locator('#pv [data-pv^="fi_"]').first()
+  if (await call.isVisible().catch(() => false)) {
+    await call.click()
+    await expect(app.locator('.pv-crumb .cur').first()).toContainText(/Finding/)
+    await app.locator('[data-view="map"]').click()
+    await app.locator('[data-view="report"]').click()
+    await expect(app.locator('.pv-crumb .cur').first(), 'the report tab comes back to its open finding').toContainText(/Finding/)
+  }
 })
 
 test('a read-only look at the map writes nothing to the document', async ({ page }) => {
@@ -104,7 +128,7 @@ test('a read-only look at the map writes nothing to the document', async ({ page
   const saved = page.getByText(/saved .* ago|saved just now/).first()
   const before = await saved.innerText()
   await app.locator('[data-view="map"]').click()
-  await app.locator('#mapview [data-map]').first().click()
+  await app.locator('#mapview [data-node]').first().click()
   await page.waitForTimeout(3_000)
   // Round 1: looking at the map turned "saved 19m ago" into "saved just now".
   await expect(saved).toHaveText(before)
@@ -123,19 +147,23 @@ test('ask the research: the answer appears in the report (paid)', async ({ page 
 
 test('ask about a fact: the answer shows where it was asked, about that fact (paid)', async ({ page }) => {
   const app = await openReport(page)
-  await app.locator('[data-view="map"]').click()
-  await app.locator('#mapview [data-map^="fi"], #mapview [data-map*="fi_"]').first().click()
-  await app.locator('[data-act="pv-mapopen"]').click()
+  await openFindingFromMap(app)
   // The first fact the finding rests on.
-  await app.locator('#insp-sel [data-sel^="f_"]').first().click()
+  await app.locator('button.pv-row[data-pv^="f_"]').first().click()
   const q = app.locator('#pv-askq')
   await expect(q).toBeVisible()
   await q.fill('What year is this from, and how sure are we of it?')
   const t0 = Date.now()
   await app.locator('[data-act="pv-ask"]').click()
   // Round 1: the answer went to a report section out of sight, and the ask did not carry the fact.
-  await expect(app.locator('#insp .rq-a:not(.busy)').first(), 'answer shown in the inspector where it was asked').toBeVisible({ timeout: 120_000 })
+  const card = app.locator('.pv-answers .rq-a.pv-fa:not(.busy)').first()
+  await expect(card, 'answer shown under the fact where it was asked').toBeVisible({ timeout: 120_000 })
   measure('ask-fact', Date.now() - t0, 60_000)
+  // The approved mock (research-fact-answer-v1): not in the report until added; Add, then Take out.
+  await card.locator('[data-act="pvq-add"]').click()
+  await expect(card.locator('[data-act="pvq-out"]')).toBeVisible({ timeout: 15_000 })
+  await card.locator('[data-act="pvq-out"]').click()
+  await expect(card.locator('[data-act="pvq-add"]')).toBeVisible({ timeout: 15_000 })
 })
 
 test('leave a Research run mid-way and come back: it carries on and finishes (paid)', async ({ page }) => {
@@ -189,22 +217,18 @@ test('ask about a fact, click away, come back: it kept going and the answer is t
   // Owner, 2026-11-12: clicking away must not stop the ask; the agent on top shows it working,
   // or the answer shows when the fact is opened again.
   const app = await openReport(page)
-  await app.locator('[data-view="map"]').click()
-  await app.locator('#mapview [data-map^="fi"], #mapview [data-map*="fi_"]').first().click()
-  await app.locator('[data-act="pv-mapopen"]').click()
-  const fact = app.locator('#insp-sel [data-sel^="f_"]').first()
-  const ref = await fact.getAttribute('data-sel')
+  await openFindingFromMap(app)
+  const fact = app.locator('button.pv-row[data-pv^="f_"]').first()
+  const ref = await fact.getAttribute('data-pv')
   await fact.click()
   await app.locator('#pv-askq').fill('Which source says this, and how recent is it?')
   await app.locator('[data-act="pv-ask"]').click()
   // Away at once: another fact, then the report.
-  await app.locator('[data-sel-back]').first().click()
+  await app.locator('.pv-crumb [data-pv-pop="0"]').first().click()
   await app.locator('[data-view="report"]').click()
   await expect(app.locator('#sideAgent'), 'the agent on top shows the ask working').toContainText(/answering|asking|Research agent/i, { timeout: 10_000 })
   // Back to the same fact: the answer is there (or still coming, then lands).
-  await app.locator('[data-view="map"]').click()
-  await app.locator('#mapview [data-map^="fi"], #mapview [data-map*="fi_"]').first().click()
-  await app.locator('[data-act="pv-mapopen"]').click()
-  await app.locator(`#insp-sel [data-sel="${ref}"]`).first().click()
-  await expect(app.locator('#insp .rq-a:not(.busy)').first(), 'answer shown on returning to the fact').toBeVisible({ timeout: 120_000 })
+  await openFindingFromMap(app)
+  await app.locator(`button.pv-row[data-pv="${ref}"]`).first().click()
+  await expect(app.locator('.pv-answers .rq-a.pv-fa:not(.busy)').first(), 'answer shown on returning to the fact').toBeVisible({ timeout: 120_000 })
 })
