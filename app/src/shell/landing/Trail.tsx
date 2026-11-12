@@ -41,6 +41,7 @@ export function Trail({ route, agency, client, inDocument, noAgency, onGo }: Pro
       case 'setup': return { route: r, label: 'Set up', disc: mini('pearl', 'S') }
       case 'people': return { route: r, label: 'People', disc: mini('pearl', 'P') }
       case 'audit': return { route: r, label: 'Audit', disc: mini('pearl', 'A') }
+      case 'job': return { route: r, label: r.number, disc: mini('pearl', 'J') }
       case 'tool': {
         const t = toolById(r.tool)
         return { route: r, label: t?.full ?? 'Tool', disc: mini('pearl', t?.name.slice(0, 1) ?? '') }

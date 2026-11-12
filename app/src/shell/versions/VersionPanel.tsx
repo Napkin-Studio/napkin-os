@@ -27,9 +27,11 @@ interface Props {
   undo: BriefUndo
   /** After a write: the app reads the document again. */
   onChanged: () => void
+  /** What the document is called in the list's sentences: a brief, or a script. */
+  noun?: string
 }
 
-export default function VersionPanel({ undo, onChanged }: Props) {
+export default function VersionPanel({ undo, onChanged, noun = 'brief' }: Props) {
   const [view, setView] = useState<VersionsView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<Pick[]>([])
@@ -89,7 +91,7 @@ export default function VersionPanel({ undo, onChanged }: Props) {
 
   return (
     <div className="vh" data-testid="version-history">
-      <ul className="vh-rows" aria-label="Versions of this brief">
+      <ul className="vh-rows" aria-label={`Versions of this ${noun}`}>
         {draft && (
           <li className="vh-row vh-draft" data-testid="version-row" data-kind="draft">
             <div className="vh-main">
@@ -120,7 +122,7 @@ export default function VersionPanel({ undo, onChanged }: Props) {
           </li>
         ))}
       </ul>
-      {view && view.versions.length === 0 && <p className="vh-mid">Nothing is signed yet. Each time the brief is signed and locked it becomes a version here.</p>}
+      {view && view.versions.length === 0 && <p className="vh-mid">Nothing is signed yet. Each time the {noun} is signed and locked it becomes a version here.</p>}
       {picked.length === 1 && <p className="vh-mid">Pick one more to compare it with {nameOf(picked[0])}.</p>}
       {picked.length === 2 && diffs && (
         <section className="vh-compare" data-testid="version-compare" aria-label={`${nameOf(diffs.left)} and ${nameOf(diffs.right)}, side by side`}>

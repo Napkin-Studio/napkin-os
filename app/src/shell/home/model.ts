@@ -12,7 +12,7 @@ import type { DoorEntry, HomeView, MapCircle } from '../../host/http'
 import type { JobNeed, LibraryItem } from '../../host/types'
 import { toolOfApp } from '../landing/tools'
 import { callsIn, clientName, stateWords } from '../nui/deskData'
-import type { ToolId } from '../route'
+import { formatRoute, isJobNumber, type ToolId } from '../route'
 import { greeting } from '../when'
 import { doorTarget } from './doorTargets'
 
@@ -45,6 +45,8 @@ export interface NeedRow {
   action: string
   /** The job's deadline, when the row is a job's: what the list is ordered by. */
   due?: string | null
+  /** A job's row: its number, and the hash of its page (the number in the row is a link). */
+  job?: { number: string; href: string }
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -59,7 +61,10 @@ export function dueWords(due: string): string {
 export function jobNeedRow(n: JobNeed): NeedRow {
   const late = n.kind === 'approval' || n.kind === 'approval-chase' ? n.days_late ?? 0 : 0
   const state = late > 0 ? `${late} ${late === 1 ? 'day' : 'days'} late` : n.due ? `Due ${dueWords(n.due)}` : 'No deadline'
-  return { id: n.id, path: n.path, title: n.text, sub: `${n.job}, ${n.client}`, state, action: n.action, due: n.due }
+  return {
+    id: n.id, path: n.path, title: n.text, sub: `${n.job}, ${n.client}`, state, action: n.action, due: n.due,
+    ...(isJobNumber(n.job) ? { job: { number: n.job, href: formatRoute({ level: 'job', number: n.job }) } } : {}),
+  }
 }
 
 /** By deadline, soonest first, a row with none last; rows with the same deadline keep the order they came in. */

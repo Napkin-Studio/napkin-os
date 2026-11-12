@@ -35,7 +35,7 @@ type Entry = {
 type NeedItem = { job: string; kind?: string; stage?: string; days_late?: number | null; due: string | null; action: string }
 
 const putRoute = (page: Page, job: Job, route: Step[]) => page.request.put(`${job.api}/jobs/${job.job}/route`, { data: { route } })
-const entryOf = async (page: Page, job: Job) => (await (await page.request.get(`${job.api}/jobs/${job.job}`)).json()) as Entry
+const entryOf = async (page: Page, job: Job) => ((await (await page.request.get(`${job.api}/jobs/${job.job}`)).json()) as { job: Entry }).job // the job page's answer: { job, needs, can }
 const needsOf = async (page: Page, job: Job) => ((await (await page.request.get(`${job.api}/needs`)).json()) as { items: NeedItem[] }).items.filter(n => n.job === job.job)
 
 /** A planner's fresh job in the agency's workspace: the planner opens it, then the one who acts next signs in. */

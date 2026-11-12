@@ -1339,6 +1339,31 @@ The shell's undo is not a host route: it keeps the person's own edits this
 session, and Cmd or Ctrl Z writes the inverse through `/patch-data` as a new
 attributed edit, only while the part still holds what that person last wrote.
 
+### 7.9 Tracked changes on a script (features/script-editor.clan)
+
+*Added 2026-11-12.* A script (`ie.napkin.script-editor`) is a list of beats with
+stable ids, and `script.proposals` holds every suggested change to one beat.
+
+1. **`POST /script/propose {beat, text, note?}`**: a person suggests new words for
+   one beat. The beat is unchanged. The proposal records `was`, the words it
+   replaces, and `by`, the session's actor, never the body's. One attributed
+   `/patch-data` of `script` (action `mark up beat <id>`), so it keeps its inverse.
+2. **`POST /script/answer {proposal, answer: "accept" | "reject"}`**: an accept
+   writes the proposal's words into its beat and marks it `accepted` in one
+   attributed write (`accept proposal <id> on beat <id>`); a reject marks it
+   `rejected` and leaves the beat. `409` when the proposal is already answered,
+   or, for an accept, when the beat no longer says `was` (the proposal stays
+   open). `403` for the person who marked it up, and for any actor that is not a
+   person: only the writer's answer puts a proposal's words on the page.
+3. **A proposal is a plain patch, not an appending write.** An append keeps no
+   inverse (§7.8 item 4) and would leave a gap in the version list. Nothing here
+   needs the lease today; the host has none yet, and when it does §6 gets one
+   line for these two routes.
+4. **An approved script is locked like a visual brief**, by the same creative
+   director rule. It takes the record of where it was sent (`handoffs`, `film`)
+   and nothing else; those two keys are not part of what a version says and the
+   shell's undo leaves them alone.
+
 ## 8. Routes — contract v1
 
 `/capabilities` reports `contract: 1`. A document is shown with the installed
@@ -2058,10 +2083,10 @@ The agents keep their spheres from the one agent engine
   confirmed). Phase 1 reads only the Brief; the later steps of the eleven are named and wait for their
   tools' decisions. The index is read-only, disposable and rebuilt from the documents when any document's
   version moves (`IndexCache`); a rebuilt index equals the live one (tested).
-- **Routes**, all under `/api/t/{tenant}`: `GET /jobs`, `GET /jobs/{number}`, `GET /jobs/{number}/stage`,
+- **Routes**, all under `/api/t/{tenant}`: `GET /jobs`, `GET /jobs/{number}`, `PATCH /jobs/{number}`, `GET /jobs/{number}/stage`,
   `GET /needs` (the signed-in person's lines, by deadline) and `GET /dashboard` (the six tiles;
-  Management, an admin or a demo, else 403 from `roles.rs`). `POST /jobs` opens a job in the registry.
-  A write of any kind to the index routes is 405.
+  Management, an admin or a demo, else 403 from `roles.rs`). `POST /jobs` opens a job in the registry and
+  `PATCH /jobs/{number}` changes it (13.2). A write of any kind to the index routes is 405.
 - **Never scores people.** The index and the dashboard hold jobs, stages and what each person is asked
   to do next. They hold no ranking or score of a person.
 
@@ -2127,6 +2152,41 @@ decisions and the clock. There is no scheduler and no stored reminder state. `ne
 - **Stage 2, not built.** An hourly email digest of a person's open approval items, through
   client-review-full's mailer, with a per-person-per-day marker file as its only state. In-app reminders stay stateless.
 
+### 13.2 The job page (features/job-page.clan)
+
+One screen opens one job. It draws the job index and nothing else: it holds no state of its own.
+
+- **The route `#job-<number>`.** `number` is `J` and three to six digits (`jobs::is_job_number`;
+  `isJobNumber` in `app/src/shell/route.ts`); anything else falls back to `#agency`. It is the one address of
+  a job: the dashboard's numbers, a Needs you row, Live jobs and, later, the bar link to it. A job that is not
+  in this agency is the Empty state with a way to Live jobs. Escape and the trail go up to the agency.
+- **Every job write is an attributed decision.** `jobs::create_job` records `open_job`, `jobs::update_job`
+  records `update_job` (or `move_deadline` when only the deadline moved), each as **one decision on the
+  registry's chain** by the person (`agent` and `actor` the sign-in name, `targets` the number,
+  `fields_changed` `<number>/<fields>`, `rationale` the change in words: `Moved the deadline of J001 from
+  2026-11-20 to 2026-11-27.`). A non-person actor is `403`; nothing is written for a bad value (`400`), an
+  unknown job (`404`) or a registry that moved under the write (`409`); a change that changes nothing writes
+  nothing. `write_registry` takes the decision, so no registry write can leave it out.
+- **`PATCH /api/t/{tenant}/jobs/{number}`** `{title?, owner?, due?, budget_hours?}`; `due: null` clears the
+  deadline, an absent key leaves it. Replies `200` with the `JobRecord`. `POST /jobs` and `PATCH` are for
+  planning, account service, management and producers (`roles::may_manage_jobs`; an admin, a demo and a
+  person with no role are unrestricted, as everywhere); others get `403`. A role outside the Money group that
+  sends `budget_hours` gets `403` on either (`roles::may_set_budget`).
+- **The role view (an allow list).** `GET /jobs` and `GET /jobs/{number}` send each role only the fields
+  `crates/napkin-web/src/jobview.rs` names, never "everything but": `JOB_KEYS` to everyone, plus
+  `budget_hours` for the Money group (producer, account service, management, traffic); `STEP_KEYS` on each route
+  step, plus `contact` and `rounds` (a client's email and rounds) for the Approvals group (account service,
+  management). The nested objects (client, stage, holder, each document) are listed the same way. A field added
+  to `JobEntry` is sent to nobody until it is added to a list; the unit test builds a `JobEntry` by struct
+  literal and an API test seeds every field and checks the keys role by role. **Default taken, not yet
+  decided by the owner:** budget in hours is money.
+- **`GET /jobs/{number}`** answers `{job, needs, can}`: `job` as above, `needs` the signed-in person's needs
+  on that job (the `GET /needs` items for it), `can` `{manage, budget}` what this person may do. `GET
+  /doors` carries the same `jobs: {manage, budget}` for Live jobs. `GET /jobs` keeps its shape (a list).
+- **`JobDoc`** gains `version` (a gated brief's newest signed version, else `null`) and `changed_since_lock`:
+  the page's Changed brief reads them (`Update to brief v2` opens the brief, where the new version is signed).
+- **Linking to a job from another record:** `<a href="#job-J001">`, or `go({ level: 'job', number })`
+  (`formatRoute`). A document opened from the page returns to it through the document's client chip.
 ## 14. The agency directory (features/agency-setup.clan)
 
 An agency's people are a third registry (after clients and jobs): one CLAN document per tenant,

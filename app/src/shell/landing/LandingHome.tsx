@@ -25,6 +25,7 @@ import { Desk } from '../nui/Desk'
 import { Home } from '../home/Home'
 import { TheO } from '../home/TheO'
 import { DoorPage } from '../home/DoorPage'
+import { JobPage } from '../job/JobPage'
 import { useJobNeeds } from '../home/useJobNeeds'
 import type { HomeView } from '../../host/http'
 import type { AgencyLogo } from '../agency/palette'
@@ -186,6 +187,18 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     body = <PeoplePage go={go} />
   } else if (route.level === 'audit') {
     body = <AuditPage go={go} />
+  } else if (route.level === 'job') {
+    // One job's page, for any signed-in person: what they see of it is the server's (features/job-page.clan).
+    // Back is Live jobs where there is a home to hold the door, the client desk where there is not.
+    body = (
+      <JobPage
+        key={route.number}
+        number={route.number}
+        go={go}
+        onOpenDocument={onOpenDocument}
+        back={homed ? { route: { level: 'door', door: 'live-jobs' }, label: 'Back to Live jobs' } : { route: { level: 'clients' }, label: 'Back to the clients' }}
+      />
+    )
   } else if (homed && route.level === 'map') {
     body = (
       <TheO
@@ -198,7 +211,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     )
   } else if (homed && route.level === 'door') {
     const entry = [...homed.doors, ...homed.more].find(d => d.id === route.door)
-    body = <DoorPage door={route.door} name={entry?.name ?? null} clients={data.clients} items={data.items} apps={data.apps} go={go} />
+    body = <DoorPage door={route.door} name={entry?.name ?? null} clients={data.clients} items={data.items} apps={data.apps} rights={home?.jobs ?? null} go={go} />
   } else if (homed && (route.level === 'agency' || route.level === 'home')) {
     body = (
       <Home

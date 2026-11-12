@@ -13,6 +13,7 @@
 //   #home-<role>            another role's home, for the role switcher and the O
 //   #timesheet              the person's own day (features/timesheet-sessions.clan)
 //   #setup #people #audit   setting the agency up, its people and roles, and its audit view (features/agency-setup.clan)
+//   #job-<number>           one job: its page (features/job-page.clan), `J` and three to six digits
 //
 // For a person with a role, `#agency` is their home; with none it is the desk, as before.
 //
@@ -26,7 +27,7 @@
 // The shell (App.tsx) owns the screen and writes the hash from it; a hashchange
 // only reads. This module is pure, so it is table-tested without a browser.
 
-export const TOOL_IDS = ['brief', 'research', 'idea', 'deck', 'prod', 'ads', 'territories'] as const
+export const TOOL_IDS = ['brief', 'research', 'idea', 'deck', 'prod', 'ads', 'territories', 'script'] as const
 export type ToolId = (typeof TOOL_IDS)[number]
 
 export type Route =
@@ -41,6 +42,7 @@ export type Route =
   | { level: 'setup' }
   | { level: 'people' }
   | { level: 'audit' }
+  | { level: 'job'; number: string }
 
 export const AGENCY: Route = { level: 'agency' }
 
@@ -49,6 +51,10 @@ const CLIENT_ID = /^cli_[0-9a-f]{8}$/
 // A door or a role is a lowercase word with hyphens, nothing a hash could use to point elsewhere.
 const WORD = /^[a-z][a-z0-9-]{0,39}$/
 export const isWord = (s: string): boolean => WORD.test(s)
+
+// A job number: J and three to six digits, the shape the job registry accepts (jobs.rs is_job_number).
+const JOB_NUMBER = /^J\d{3,6}$/
+export const isJobNumber = (s: string): boolean => JOB_NUMBER.test(s)
 
 export const isClientId = (s: string): boolean => CLIENT_ID.test(s)
 export const isToolId = (s: string): s is ToolId => (TOOL_IDS as readonly string[]).includes(s)
@@ -68,6 +74,10 @@ export function parseRoute(hash: string): Route {
   if (h.startsWith('home-')) {
     const as = h.slice('home-'.length)
     return isWord(as) ? { level: 'home', as } : AGENCY
+  }
+  if (h.startsWith('job-')) {
+    const number = h.slice('job-'.length)
+    return isJobNumber(number) ? { level: 'job', number } : AGENCY
   }
   if (h.startsWith('client-')) {
     const client = h.slice('client-'.length)
@@ -98,6 +108,7 @@ export function formatRoute(r: Route): string {
     case 'setup': return '#setup'
     case 'people': return '#people'
     case 'audit': return '#audit'
+    case 'job': return `#job-${r.number}`
   }
 }
 
@@ -116,7 +127,8 @@ export function ancestry(r: Route): Route[] {
     case 'setup':
     case 'people':
     case 'audit':
-    case 'timesheet': return [AGENCY]
+    case 'timesheet':
+    case 'job': return [AGENCY]
   }
 }
 
@@ -133,7 +145,8 @@ export function up(r: Route): Route {
     case 'setup':
     case 'people':
     case 'audit':
-    case 'timesheet': return AGENCY
+    case 'timesheet':
+    case 'job': return AGENCY
   }
 }
 

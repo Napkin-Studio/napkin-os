@@ -94,3 +94,25 @@ test('a route is corrected to what is here: an unknown client is #clients, a Soo
   ]
   for (const [r, want] of table) assert.equal(formatRoute(correctRoute(r, here)), want, formatRoute(r))
 })
+
+// features/job-page.clan: #job-<number>, J and three to six digits, nothing a hash could use to point elsewhere.
+test('a job hash parses, round-trips, and has the agency above it', () => {
+  for (const n of ['J001', 'J042', 'J1234', 'J999999']) {
+    assert.deepEqual(parseRoute(`#job-${n}`), { level: 'job', number: n })
+    assert.equal(formatRoute({ level: 'job', number: n }), `#job-${n}`)
+  }
+  const r = parseRoute('#job-J001')
+  assert.deepEqual(ancestry(r), [{ level: 'agency' }])
+  assert.deepEqual(up(r), { level: 'agency' })
+  assert.ok(sameRoute(r, { level: 'job', number: 'J001' }))
+  assert.deepEqual(correctRoute(r, { client: () => false, tool: () => false }), r)
+})
+
+test('a malformed job hash is the landing', () => {
+  const hostile = [
+    '#job-', '#job-J', '#job-J1', '#job-J12', '#job-J1234567', '#job-j001', '#job-001', '#job-JOO1', '#job-J001 ', '#job- J001',
+    '#job-J001/', '#job-J001?x=1', '#job-../x', '#job-J001/../x', '#job-J%30001', '#job-J001%00', '#job-J001\n', '#job-<script>',
+    '#job-J١٢٣', '#job-J０１２', '#job--J001', '#jobs-J001', '#job-J001-brief',
+  ]
+  for (const h of hostile) assert.deepEqual(parseRoute(h), { level: 'agency' }, JSON.stringify(h))
+})

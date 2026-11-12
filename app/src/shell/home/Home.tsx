@@ -107,7 +107,8 @@ export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDo
               <ul className="hm-needs" data-testid="needs-you">
                 {shown.map(n => (
                   <li key={n.id ?? n.path} className="hm-need" data-testid="need" data-kind={n.id ? n.id.split(':')[3] : undefined}>
-                    <span className="hm-need-what"><b>{n.title}</b><small>{n.sub}</small></span>
+                    <span className="hm-need-what"><b>{n.title}</b>
+                      <small>{n.job ? <><a className="side-link" href={n.job.href} data-testid="need-job">{n.job.number}</a>{n.sub.slice(n.job.number.length)}</> : n.sub}</small></span>
                     <span className="hm-need-state">{n.state}</span>
                     <button type="button" className="btn-rect" onClick={() => (n.path ? onOpenDocument(n.path) : onDoor({ id: 'approvals', name: 'Approvals' }))}>{n.action}</button>
                   </li>

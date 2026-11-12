@@ -39,7 +39,15 @@ pub const RESTORE_PREFIX: &str = "restore v";
 
 /// Top-level keys that are not the brief's words: the host's own, and the
 /// document's records of who signs and what is held. A version holds the rest.
-const NOT_CONTENT: &[&str] = &["projection", "upstream", "signers", "locked_fields"];
+const NOT_CONTENT: &[&str] = &[
+    "projection",
+    "upstream",
+    "signers",
+    "locked_fields",
+    // A script's record of where a version was sent (features/script-editor.clan).
+    "handoffs",
+    "film",
+];
 
 /// What each of `keys` holds in the stored data now (null when it holds nothing):
 /// the inverse of a write that patches exactly these keys.
@@ -85,6 +93,13 @@ fn approvals(chain: &DecisionChain, doc_id: &str) -> Vec<usize> {
         })
         .map(|(i, _)| i)
         .collect()
+}
+
+/// How many versions of this document have been approved: the number of the newest (0 before the first).
+pub fn approved_count(doc: &Document) -> usize {
+    review::chain_of(doc)
+        .map(|chain| approvals(&chain, &doc.clan().document_id().to_string()).len())
+        .unwrap_or(0)
 }
 
 fn person_of(d: &Decision) -> String {

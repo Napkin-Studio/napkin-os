@@ -29,6 +29,9 @@ export const TOOLS: readonly Tool[] = [
   { id: 'prod', name: 'Prod', full: 'Production Tool', appId: null, noun: ['production', 'productions'] },
   // Advertising Studio's id is the one it has always carried (examples/make_advertising_studio.rs).
   { id: 'ads', name: 'Ads', full: 'Advertising Studio', appId: 'ie.napkin.film', noun: ['ad', 'ads'] },
+  // The copywriter's tool (features/script-editor.clan). It has a door and a page of a client's scripts, not a
+  // place on the circle, which keeps its six.
+  { id: 'script', name: 'Script', full: 'Script editor', appId: 'ie.napkin.script-editor', noun: ['script', 'scripts'] },
 ]
 
 export const toolById = (id: string): Tool | undefined => TOOLS.find(t => t.id === id)

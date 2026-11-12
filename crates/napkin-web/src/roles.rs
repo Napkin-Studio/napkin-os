@@ -324,6 +324,25 @@ pub struct HomeView {
     pub map: Map,
     /// Every role's home, for admins and demos; none for anyone else.
     pub switcher: Option<Vec<RoleInfo>>,
+    /// What this person may do with jobs; the shell draws a control only when it is true, and the
+    /// server refuses the write in any case (features/job-page.clan).
+    pub jobs: JobRights,
+}
+
+/// What a person may do with jobs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct JobRights {
+    /// Open a job; change its title, owner and deadline.
+    pub manage: bool,
+    /// Set the budget in hours.
+    pub budget: bool,
+}
+
+pub fn job_rights(roles: &[String]) -> JobRights {
+    JobRights {
+        manage: may_manage_jobs(roles),
+        budget: may_set_budget(roles),
+    }
 }
 
 pub fn is_switcher(roles: &[String]) -> bool {
@@ -510,6 +529,7 @@ impl Table {
             more,
             map: self.map_for(roles),
             switcher,
+            jobs: job_rights(roles),
         }
     }
 
@@ -633,6 +653,32 @@ pub fn allowed(roles: &[String], route: &str, _client: Option<&str>) -> bool {
         return true;
     }
     group == Group::Open || roles.iter().any(|r| group.roles().contains(&r.as_str()))
+}
+
+/// Is a person with `roles` in `group`? Used to decide which fields of a job they are sent. A person with
+/// no roles is unrestricted; an admin or a demo is in every group.
+pub fn in_group(roles: &[String], group: Group) -> bool {
+    roles.is_empty()
+        || is_switcher(roles)
+        || roles.iter().any(|r| group.roles().contains(&r.as_str()))
+}
+
+/// The roles that may open a job and change its title, owner and deadline (features/job-page.clan):
+/// planning (the planner opens the job at step 1 of v2 section 3), account service, management and
+/// producers. Creative roles, the Agency Brain and traffic may not. An allow list: a role added later is
+/// left out until it is named here. A person with no role is unrestricted, as everywhere; an admin too.
+pub const JOB_MANAGERS: &[&str] = &["planning", "account-service", "management", "producer"];
+
+pub fn may_manage_jobs(roles: &[String]) -> bool {
+    roles.is_empty()
+        || is_switcher(roles)
+        || roles.iter().any(|r| JOB_MANAGERS.contains(&r.as_str()))
+}
+
+/// The budget in hours is money (the owner's answer is open; the design's default): only the Money roles
+/// set it, and only those of them who manage jobs.
+pub fn may_set_budget(roles: &[String]) -> bool {
+    may_manage_jobs(roles) && in_group(roles, Group::Money)
 }
 
 /// The middleware: a signed-in person's roles against the route. 403 when the

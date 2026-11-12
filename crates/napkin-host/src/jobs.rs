@@ -48,6 +48,10 @@ const MAX_ROUNDS: u32 = 20;
 pub const SET_ROUTE: &str = "set_route";
 /// The action a moved deadline records.
 pub const MOVE_DEADLINE: &str = "move_deadline";
+/// The action opening a job records.
+pub const OPEN_JOB: &str = "open_job";
+/// The action a change to a job's title, owner or budget records (a deadline alone is `move_deadline`).
+pub const UPDATE_JOB: &str = "update_job";
 
 /// The two parties of a step.
 pub const AGENCY: &str = "agency";
@@ -248,6 +252,7 @@ pub fn get(store: &dyn DocStore, number: &str) -> HostResult<JobRecord> {
 /// Open a job for a client. A number already in the registry is a `409`; an
 /// unknown or archived client is a `404` or `409` as for new work.
 pub fn create_job(store: &dyn DocStore, ctx: &Ctx, new: NewJob) -> HostResult<JobRecord> {
+    let who = person_of(ctx)?;
     let client: ClientRecord = clients::get(store, new.client_id.trim())?;
     if client.is_archived() {
         return Err(HostError::conflict(format!(
@@ -320,7 +325,154 @@ pub fn create_job(store: &dyn DocStore, ctx: &Ctx, new: NewJob) -> HostResult<Jo
         route: Vec::new(),
     };
     reg.jobs.push(record.clone());
-    write_registry(store, &reg, base, None)?;
+    let decision = registry_decision(
+        ctx,
+        &who,
+        OPEN_JOB,
+        &record.number,
+        "number",
+        format!(
+            "Opened {} for {}{}.",
+            record.number,
+            client.name,
+            record
+                .due
+                .as_deref()
+                .map(|d| format!(", due {d}"))
+                .unwrap_or_default()
+        ),
+        now,
+    );
+    write_registry(store, &reg, base, Some(decision))?;
+    Ok(record)
+}
+
+/// What a person may change on a job after it is opened. A field left out is not touched.
+#[derive(Deserialize, Default, Debug)]
+pub struct JobPatch {
+    pub title: Option<String>,
+    pub owner: Option<String>,
+    /// `null` clears the deadline; absent leaves it.
+    #[serde(default, deserialize_with = "some_or_null")]
+    pub due: Option<Option<String>>,
+    pub budget_hours: Option<f64>,
+}
+
+fn some_or_null<'de, D, T>(d: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(d).map(Some)
+}
+
+/// Change a job's title, owner, deadline or budget in hours, as a person, recording one decision on the
+/// registry's chain: who, what (`Moved the deadline of J001 from 2026-11-20 to 2026-11-27.`), when. A bad
+/// value is a `400`, an unknown job a `404`, a registry that moved under the write a `409`, no person a `403`.
+pub fn update_job(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    number: &str,
+    patch: JobPatch,
+) -> HostResult<JobRecord> {
+    let who = person_of(ctx)?;
+    let title = match patch.title {
+        Some(t) => {
+            let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
+            if t.is_empty() || t.chars().count() > MAX_TITLE {
+                return Err(HostError::bad_request(format!(
+                    "a job's title is one to {MAX_TITLE} characters"
+                )));
+            }
+            Some(t)
+        }
+        None => None,
+    };
+    let owner = match patch.owner {
+        Some(o) => {
+            let o = o.split_whitespace().collect::<Vec<_>>().join(" ");
+            if o.is_empty() || o.chars().count() > MAX_NAME {
+                return Err(HostError::bad_request(format!(
+                    "an owner is one to {MAX_NAME} characters"
+                )));
+            }
+            Some(o)
+        }
+        None => None,
+    };
+    if let Some(Some(d)) = &patch.due {
+        if !is_date(d) {
+            return Err(HostError::bad_request("due is a date, YYYY-MM-DD"));
+        }
+    }
+    if patch
+        .budget_hours
+        .is_some_and(|h| !h.is_finite() || !(0.0..=MAX_HOURS).contains(&h))
+    {
+        return Err(HostError::bad_request(
+            "budget_hours is a number of hours, not below zero",
+        ));
+    }
+    let _guard = WRITE.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut reg, base) = read_registry(store)?;
+    let job = reg
+        .jobs
+        .iter_mut()
+        .find(|j| j.number == number)
+        .ok_or_else(|| HostError::not_found(format!("no such job: {number}")))?;
+    let mut said: Vec<String> = Vec::new();
+    let mut fields: Vec<&str> = Vec::new();
+    if let Some(t) = title.filter(|t| *t != job.title) {
+        said.push(format!(
+            "Renamed {number} from \"{}\" to \"{t}\".",
+            job.title
+        ));
+        job.title = t;
+        fields.push("title");
+    }
+    if let Some(o) = owner.filter(|o| *o != job.owner) {
+        said.push(format!("Moved {number} from {} to {o}.", job.owner));
+        job.owner = o;
+        fields.push("owner");
+    }
+    if let Some(due) = patch.due.filter(|d| *d != job.due) {
+        said.push(format!(
+            "Moved the deadline of {number} from {} to {}.",
+            job.due.as_deref().unwrap_or("none"),
+            due.as_deref().unwrap_or("none")
+        ));
+        job.due = due;
+        fields.push("due");
+    }
+    if let Some(h) = patch.budget_hours.filter(|h| Some(*h) != job.budget_hours) {
+        said.push(format!(
+            "Set the budget of {number} from {} to {h} hours.",
+            job.budget_hours
+                .map(|b| format!("{b} hours"))
+                .unwrap_or_else(|| "none".into())
+        ));
+        job.budget_hours = Some(h);
+        fields.push("budget_hours");
+    }
+    let record = job.clone();
+    if fields.is_empty() {
+        return Ok(record);
+    }
+    let action = if fields == ["due"] {
+        MOVE_DEADLINE
+    } else {
+        UPDATE_JOB
+    };
+    let decision = registry_decision(
+        ctx,
+        &who,
+        action,
+        number,
+        &fields.join(","),
+        said.join(" "),
+        chrono::Utc::now(),
+    );
+    write_registry(store, &reg, base, Some(decision))?;
     Ok(record)
 }
 
@@ -368,7 +520,7 @@ fn person_of(ctx: &Ctx) -> HostResult<String> {
         return Err(HostError::new(
             403,
             format!(
-                "only a person can change a job's route or deadline; {} is not one",
+                "only a person can open or change a job; {} is not one",
                 ctx.actor
             ),
         ));

@@ -114,7 +114,7 @@ export function StepPage({ step, status, agency, onStep, onRead, onName, onFinis
         )}
         {step === 'jobs' && (
           <CsvImport kind="jobs" agency={agency} onImported={() => void onRead()}
-            help={<p>The first line names the columns. <b>client</b> is the only one you need, and it must match a client you have added. Optional: <b>title</b>, <b>number</b> (like J012), <b>owner</b>, <b>opened_on</b>, <b>due</b> and <b>budget_hours</b>. Dates read as 2026-12-18 or 18/12/2026.</p>} />
+            help={<p>The first line names the columns. <b>client</b> is the only one you need, and it must match a client you have added. Optional: <b>title</b>, <b>number</b> (like J012), <b>owner</b>, <b>opened_on</b>, <b>due</b> and <b>hours</b> (the hours the job may take). Dates read as 2026-12-18 or 18/12/2026.</p>} />
         )}
         <div className="su-footer">
           {prev && <button type="button" className="ch-btn ch-btn-quiet su-btn" onClick={() => onStep(prev)}>Back</button>}

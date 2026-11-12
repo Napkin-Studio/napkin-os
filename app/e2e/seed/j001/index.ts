@@ -69,10 +69,11 @@ export async function seedJ001(page: Page, opts: { ready?: boolean; fresh?: bool
     clientName = name
     ordinal = n
   }
-  // The job: J001 for Client A, J002 for Client A2 ... It holds a deadline and a budget in hours, and the
-  // three documents are filed under it. A tenant that already has the job (a later test, the same Client A) reuses it.
+  // The job: J001 for Client A, J002 for Client A2 ... It holds a deadline, and the three documents are filed under it.
+  // The budget in hours is money (features/job-page.clan): the planner who opens the job cannot set it, so a test that
+  // needs one sets it as account service (PATCH /jobs/J001 {budget_hours}). A tenant that already has the job (a later test, the same Client A) reuses it.
   const job = `J${String(ordinal).padStart(3, '0')}`
-  const opened = await page.request.post(`${api}/jobs`, { data: { number: job, client_id: client, title: JOB.title, due: '2026-12-18', budget_hours: 120 } })
+  const opened = await page.request.post(`${api}/jobs`, { data: { number: job, client_id: client, title: JOB.title, due: '2026-12-18' } })
   expect([201, 409], `open ${job}`).toContain(opened.status())
   const brief = await make(page, api, BRIEF_APP, JOB.title, client, job, opts.ready ? READY_BRIEF : MESSY_BRIEF)
   const research = await make(page, api, RESEARCH_APP, RESEARCH_TITLE, client, job)

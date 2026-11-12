@@ -22,7 +22,8 @@ import ClientReviewBand from './clientReview/ClientReviewBand'
 import BriefGateBand from './gate/BriefGateBand'
 import { useGate } from './gate/useGate'
 import { useBriefUndo } from './versions/useBriefUndo'
-import { BRIEF_MAKER, VISUAL_BRIEF, briefMoved } from './gate/words'
+import VersionBand from './versions/VersionBand'
+import { BRIEF_MAKER, SCRIPT_EDITOR, VISUAL_BRIEF, briefMoved } from './gate/words'
 import { ChangedBrief } from '../components/states/ScreenStates'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
@@ -236,8 +237,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     reload()
     refreshApp()
   }, [reload])
-  // Undo and redo of this person's own edits to the open brief (features/brief-versions-undo.clan).
-  const briefUndo = useBriefUndo(docPath, open.manifest.app?.app_id === BRIEF_MAKER && !open.is_template && !clientOn, changed)
+  // Undo and redo of this person's own edits to the open brief or script (features/brief-versions-undo.clan; the Script
+  // editor adopts the same stack, features/script-editor.clan).
+  const briefUndo = useBriefUndo(docPath, (open.manifest.app?.app_id === BRIEF_MAKER || open.manifest.app?.app_id === SCRIPT_EDITOR) && !open.is_template && !clientOn, changed)
 
   // What it was made from, and taking that document's newer version (a
   // spin-off may, owner 2026-11-09). A refusal is said where the bar is.
@@ -449,8 +451,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         </div>
       )}
       <StateStrip queue={writes} app={appState} onAction={barAction} onRefresh={refreshApp} />
-      {/* A visual brief answers one brief version: when the brief moves on, say so, and take the new one only into a version that is open. */}
-      {!clientOn && appId === VISUAL_BRIEF && !open.is_template && (() => {
+      {/* A visual brief or a script answers one brief version: when the brief moves on, say so, and take the new one only into a version that is open. */}
+      {!clientOn && (appId === VISUAL_BRIEF || appId === SCRIPT_EDITOR) && !open.is_template && (() => {
         const moved = briefMoved(upstream)
         if (!moved) return null
         const sealed = !!decisions.view?.lock.locked
@@ -478,6 +480,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         <main className="ch-work-main">
           {!clientOn && gate.view && (
             <BriefGateBand gate={gate} client={client?.name ?? 'the client'} onChanged={changed} undo={briefUndo} docPath={docPath} />
+          )}
+          {!clientOn && appId === SCRIPT_EDITOR && !open.is_template && (
+            <VersionBand undo={briefUndo} docPath={docPath} onChanged={changed} />
           )}
           {!clientOn && decisions.view && (
             <ClientReviewBand
