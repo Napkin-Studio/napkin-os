@@ -306,7 +306,7 @@
     if(rep > R.repetition_flag) say('repetition', null, { ratio: Math.round(rep * 100) });
     if(FORMATS[format] && FORMATS[format].timed && doc.slot_s){
       var n = spokenWords(beats, format), target = targetWords(doc.slot_s);
-      if(n > 0 && Math.abs(n - target) / Math.max(1, target) > R.length_tolerance) say('length_off', null, { words: n, target: target });
+      if(n > 0 && Math.abs(n - target) / Math.max(1, target) > R.length_tolerance){ var over = n > target; say('length_off', null, { words: n, target: target, over: over, advice: R.advice[over ? 'length_long' : 'length_short'] }); }
       if(n === 0 && beats.some(function(b){ return String(b.text).trim(); })) say('no_spoken_lines', null);
     }
     if(format === 'radio' || format === 'tv'){
@@ -668,7 +668,7 @@
         h += '<ul class="found" aria-label="Findings">' + body.map(function(f){
           var at = f.beat ? c.beats.findIndex(function(b){ return b.id === f.beat; }) + 1 : 0;
           return '<li data-testid="finding" data-rule="' + esc(f.rule) + '"><b>' + esc(wordsFound(f) || ruleName(f)) + '</b> \u00b7 ' + esc(f.advice)
-            + (f.rule === 'length_off' ? ' ' + f.words + ' words, about ' + f.target + ' fit.' : '') + (f.rule === 'repetition' ? ' ' + f.ratio + ' percent repeats.' : '')
+            + (f.rule === 'length_off' ? ' ' + f.words + ' words, about ' + f.target + (f.over ? ' fit.' : ' fill it.') : '') + (f.rule === 'repetition' ? ' ' + f.ratio + ' percent repeats.' : '')
             + (at ? ' <button type="button" class="jump" data-jump="' + esc(f.beat) + '">Line ' + at + '</button>' : '') + '</li>';
         }).join('') + '</ul>';
       } else h += '<p class="good" data-testid="check-clear">Nothing else to flag.</p>';

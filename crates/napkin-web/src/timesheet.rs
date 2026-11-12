@@ -23,7 +23,7 @@
 //! The store is an interface (`Store`: record, list, confirm) with a file store behind it
 //! so the agency database can replace the files without touching the routes.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -528,13 +528,16 @@ impl Timesheets {
 
 // ── the day for a person ─────────────────────────────────────────────────────
 
+/// The person's own edits by document, within `[from, to)`, read only from the documents in `only`.
+type Edits<'a> = dyn Fn(&str, i64, i64, &BTreeSet<String>) -> BTreeMap<String, usize> + 'a;
+
 /// The day `date` as `person` has it. Nothing here reads anyone else.
 pub fn day_for(
     ts: &Timesheets,
     person: &str,
     date: &str,
     tz_min: i64,
-    edits: &dyn Fn(&str, i64, i64) -> BTreeMap<String, usize>,
+    edits: &Edits<'_>,
 ) -> ApiResult<Day> {
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d")
         .map_err(|_| ApiError::new(400, "date must be YYYY-MM-DD"))?;
@@ -562,7 +565,10 @@ pub fn day_for(
     } else {
         vec![]
     };
-    let counted = edits(person, from, to);
+    // Only a line's own documents are counted: the day reads the documents its sessions name, not every
+    // document of the agency.
+    let worked: BTreeSet<String> = sessions.iter().map(|s| s.doc.clone()).collect();
+    let counted = edits(person, from, to, &worked);
     let mut lines = lines_from(&sessions, &counted, &state.overrides);
     let taken: Vec<i64> = state.added.iter().filter_map(|a| a.from).collect();
     for a in &state.added {
@@ -684,15 +690,8 @@ async fn post_event(
     if ts.store.consent(&me) != Consent::Yes {
         return Ok(Json(serde_json::json!({ "ok": true, "captured": false })));
     }
-    let index = crate::api::job_index(&ctx.workspace(&tenant))?;
-    let resolve = |doc: &str| {
-        index.jobs.iter().find_map(|j| {
-            j.documents
-                .iter()
-                .find(|d| d.path == doc)
-                .map(|d| (j.number.clone(), d.title.clone()))
-        })
-    };
+    let ws = ctx.workspace(&tenant);
+    let resolve = |doc: &str| job_of(&*ws.store, doc);
     let kept = ts.store.record(&me, b.event, &b.doc, ts.now(), &resolve)?;
     Ok(Json(serde_json::json!({ "ok": true, "captured": kept })))
 }
@@ -720,24 +719,33 @@ async fn get_sessions(
     Ok(Json(ctx.timesheets.store.sessions(&me, from, to)))
 }
 
+/// The job a document is filed under, and its title, read from that document's own manifest: `None` for a
+/// document that names no job, or a job the registry does not hold. One document and the registry are read,
+/// not every document of the agency, so an event costs the same however many documents the agency has.
+fn job_of(store: &dyn napkin_host::DocStore, doc: &str) -> Option<(String, String)> {
+    let bytes = store.read(&DocId::new(doc)).ok()?;
+    let clan = clan_sdk::ClanFile::from_bytes(bytes).ok()?;
+    let m = clan.manifest();
+    let job = m.job.clone()?;
+    napkin_host::jobs::list(store)
+        .ok()?
+        .iter()
+        .any(|r| r.number == job)
+        .then(|| (job, m.title.clone()))
+}
+
 /// The person's own decisions in each document, within a time range: what a line is "built from".
+/// Read from the documents in `only` (the day's sessions name them, and each was filed under a job
+/// when its session was kept), so a day reads its own documents and no others.
 fn edits_in(
     ctx: &AppCtx,
     tenant: &crate::tenant::TenantId,
-) -> impl Fn(&str, i64, i64) -> BTreeMap<String, usize> {
+) -> impl Fn(&str, i64, i64, &BTreeSet<String>) -> BTreeMap<String, usize> {
     let ws = ctx.workspace(tenant);
-    let docs: Vec<String> = crate::api::job_index(&ws)
-        .map(|i| {
-            i.jobs
-                .iter()
-                .flat_map(|j| j.documents.iter().map(|d| d.path.clone()))
-                .collect()
-        })
-        .unwrap_or_default();
-    move |person: &str, from: i64, to: i64| {
+    move |person: &str, from: i64, to: i64, only: &BTreeSet<String>| {
         let me = format!("human:{person}");
         let mut out = BTreeMap::new();
-        for doc in &docs {
+        for doc in only {
             let Ok(s) = ws.session(&DocId::new(doc)) else {
                 continue;
             };
@@ -999,8 +1007,41 @@ mod tests {
         ev(t, p, EventKind::Close, doc, to);
     }
 
-    fn no_edits(_: &str, _: i64, _: i64) -> BTreeMap<String, usize> {
+    fn no_edits(_: &str, _: i64, _: i64, _: &BTreeSet<String>) -> BTreeMap<String, usize> {
         BTreeMap::new()
+    }
+
+    #[test]
+    fn a_day_counts_edits_only_in_the_documents_its_sessions_name() {
+        // The edits behind a line are read from that line's documents, not from every document of the agency:
+        // the day asks about exactly the documents its sessions name (and nothing for a person with none).
+        let dir = tempfile::tempdir().unwrap();
+        let t = ts(dir.path());
+        let asked = std::cell::RefCell::new(Vec::<BTreeSet<String>>::new());
+        let edits = |_: &str, _: i64, _: i64, only: &BTreeSet<String>| {
+            asked.borrow_mut().push(only.clone());
+            only.iter()
+                .map(|d| (d.clone(), 2))
+                .collect::<BTreeMap<_, _>>()
+        };
+        day_for(&t, "p", "2025-11-11", 0, &edits).unwrap();
+        assert_eq!(
+            asked.borrow_mut().pop().unwrap(),
+            BTreeSet::new(),
+            "no sessions, no document read"
+        );
+        t.store.set_consent("p", "p", true, T0).unwrap();
+        work(&t, "p", "doc-brief", T0, T0 + 3_600_000);
+        let day = day_for(&t, "p", "2025-11-11", 0, &edits).unwrap();
+        assert_eq!(
+            asked.borrow_mut().pop().unwrap(),
+            BTreeSet::from(["doc-brief".to_string()])
+        );
+        assert_eq!(day.lines.len(), 1);
+        assert_eq!(
+            day.lines[0].edits, 2,
+            "the line still carries its document's edits"
+        );
     }
 
     #[test]

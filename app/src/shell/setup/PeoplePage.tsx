@@ -131,7 +131,7 @@ function AddForm({ roles, busy, onAdd }: { roles: RoleOption[]; busy: boolean; o
         <label className="su-lab">Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} data-testid="add-email" /></label>
       </div>
       <Roles roles={roles} picked={picked} onToggle={toggle} idp="add" />
-      <div className="su-actions"><button type="submit" className="ch-btn su-btn" disabled={busy || !ok} data-testid="add-submit">Add person</button></div>
+      <div className="su-actions"><button type="submit" className="ch-btn su-btn" disabled={busy || !ok} data-testid="add-submit" data-primary>Add person</button></div>
     </form>
   )
 }

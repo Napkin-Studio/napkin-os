@@ -147,7 +147,7 @@ function JobFile({ view, go, onOpenDocument, reload, save }: { view: JobView; go
 
       {can.manage && (editing
         ? <JobEditor job={job} mayBudget={can.budget} save={save} onDone={() => { setEditing(false); reload() }} onCancel={() => setEditing(false)} />
-        : <div className="jp-act"><button type="button" className="ch-btn" data-testid="job-edit" onClick={() => setEditing(true)}>Change this job</button></div>)}
+        : <div className="jp-act"><button type="button" className="ch-btn" data-testid="job-edit" data-primary onClick={() => setEditing(true)}>Change this job</button></div>)}
     </div>
   )
 

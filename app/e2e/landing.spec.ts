@@ -283,8 +283,8 @@ test('a client route for a client that is not here is corrected to the desk', as
   await expect(page).toHaveURL(/#clients$/)
   await page.goto('/')
   const { a } = await seed(page)
-  // A tool that is Soon is its client's page; a live one is the tool's own page.
-  await page.goto(`/#tool-${a}-idea`)
+  // A tool that is Soon is its client's page; a live one is the tool's own page. (Idea is live since idea-room; Prod has no app yet.)
+  await page.goto(`/#tool-${a}-prod`)
   await page.reload()
   await expect(page.getByTestId('client-page')).toBeVisible()
   await expect(page).toHaveURL(new RegExp(`#client-${a}$`))

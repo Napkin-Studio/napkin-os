@@ -127,7 +127,8 @@ async function shot(page: Page, name: string, size: Size, at?: string) {
   if (await page.locator('iframe').count()) await frameOf(page).locator('body').evaluate((_b, sel) => { const el = sel ? document.querySelector(sel) : null; window.scrollTo(0, el ? el.getBoundingClientRect().top + window.scrollY - 12 : 0) }, at ?? '')
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.waitForTimeout(600)
-  await page.screenshot({ path: join(SHOTS, `${name}-${size.tag}.png`), fullPage: size.width < 1000 })
+  // The roster agency wears a real agency's name: it is masked, never shown.
+  await page.screenshot({ path: join(SHOTS, `${name}-${size.tag}.png`), fullPage: size.width < 1000, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
 }
 
 for (const size of SIZES) {
@@ -330,8 +331,11 @@ for (const size of SIZES) {
     const { ctx, page } = await open(browser, size)
     const job = await signedBrief(page)
     expect((await gateOf(page, job.brief)).open, 'the brief has passed, is signed and confirmed').toBe(true)
-    // A brief that is not confirmed makes no room.
+    // A brief that is not confirmed makes no room. A planner opens its job (a creative director may not open one: job-page),
+    // and the creative director asks for the room.
+    await signIn(page, PEOPLE.planning)
     const early = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.creativeDirector)
     const refused = await page.request.post(`${early.api}/d/${encodeURIComponent(early.brief.path)}/spinoff`, { data: { app_id: IDEA_ROOM, title: 'Too early' } })
     expect(refused.status(), 'a brief that has not passed the gate makes no idea room').toBe(409)
     const room = await makeRoom(page, job)

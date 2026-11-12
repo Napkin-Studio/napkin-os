@@ -57,7 +57,7 @@ const DOORS = {
 } as const
 const MODES = ['white', 'grey', 'black'] as const
 
-type Decision = { id?: string; kind?: string; agent?: string; action?: string; edited_by?: string; version?: string; actor?: string; source?: string }
+type Decision = { id?: string; kind?: string; agent?: string; action?: string; version?: string; actor?: string; source?: string }
 
 /**
  * The role tests sign people in, and a server has one auth mode per process: the existing specs run on
@@ -472,14 +472,24 @@ for (const size of SIZES) {
     // Only the brief is written to by the seed; the research and the deck are made and left empty, so their
     // chains hold nothing to check yet. Whatever any of them holds must be attributed.
     expect((await chainOf(page, job.brief.token)).length, 'the seed left a chain on the brief').toBeGreaterThan(0)
+    // A person's own edit, so the chain holds a human decision to check (the seed's writes are the seed agent's).
+    const edit = await page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: { famous: 'A bar that closes its doors for one song, once a night.' }, agent: 'human', action: 'edit the famous line' } })
+    expect(edit.status()).toBe(200)
+    const humans: Decision[] = []
     for (const doc of [job.brief, job.research, job.deck]) {
       const chain = await chainOf(page, doc.token)
       for (const d of chain) {
         expect(d.agent, 'a write with no agent').toBeTruthy()
         expect(d.action, 'a write with no action').toBeTruthy()
-        if (d.agent === 'human') expect(d.edited_by).toBe('human')
+        // What the host records for a person's edit: agent `human`, kind `edit`, and the person as its actor.
+        if (d.agent === 'human') {
+          expect(d.kind).toBe('edit')
+          expect(d.actor ?? '', 'a human edit names the person who made it').toMatch(/^human:.+/)
+          humans.push(d)
+        }
       }
     }
+    expect(humans.map(d => d.action), 'the chain holds the human edit').toContain('edit the famous line')
     // The host refuses an unattributed write.
     const bare = await page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: { audience: 'x' }, agent: '' } })
     expect(bare.status()).toBe(400)

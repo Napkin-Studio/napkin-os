@@ -67,7 +67,7 @@ export function LiveJobsBody({ jobs, ready, clients, rights, go, reload, open }:
       <ul className="jp-list" data-testid="live-job-list">
         {orderLive(jobs).map(j => (
           <li key={j.number} data-job={j.number} data-stage={j.stage.id} data-testid="live-job">
-            <a className="jp-row" href={formatRoute({ level: 'job', number: j.number })} data-testid="live-job-link" aria-label={`${j.number}, ${j.title}, ${j.client.name}. ${stageLine(j)} ${dueLine(j)}. Opens the job page`}>
+            <a className="jp-row" href={formatRoute({ level: 'job', number: j.number })} data-testid="live-job-link">
               <span className="jp-row-id">{j.number}</span>
               <span className="jp-row-what"><b>{j.title}</b><small>{j.client.name}</small></span>
               <span className="jp-row-stage">{stageLine(j)}</span>
@@ -78,7 +78,7 @@ export function LiveJobsBody({ jobs, ready, clients, rights, go, reload, open }:
         ))}
       </ul>
       {form}
-      {may && !opening && <div className="jp-act"><button type="button" className="ch-btn" data-testid="open-a-job" onClick={() => setOpening(true)}>Open a job</button></div>}
+      {may && !opening && <div className="jp-act"><button type="button" className="ch-btn" data-testid="open-a-job" data-primary onClick={() => setOpening(true)}>Open a job</button></div>}
       {!may && rights && <p className="jp-note" data-testid="live-no-open">Planning, account service, management and producers open jobs.</p>}
     </div>
   )
