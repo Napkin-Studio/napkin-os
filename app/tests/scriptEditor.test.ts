@@ -418,3 +418,22 @@ test('no interface string holds an em dash, and every primary button is a pill',
   assert.match(css, /@media \(max-width:640px\)\{[^\n]*\.btn\.primary\{width:100%\}/)
   assert.match(css, /min-height:44px/)
 })
+
+// ── the seed holds every field of the schema ─────────────────────────────────────────────────────────
+
+test('the e2e seed carries every key of the schema, so a test never runs on a minimal document', async () => {
+  const seed = await import('../e2e/seed/j001/p2/script-editor.mjs') as { FULL_SCRIPT: Json; RADIO_SCRIPT: Json }
+  const schema = JSON.parse(read('templates/script-editor/schema.json')) as Json
+  const props = schema.properties as Json
+  for (const k of Object.keys(props)) assert.ok(k in seed.FULL_SCRIPT, `the seed lacks ${k}`)
+  const s = props.script.properties as Json
+  for (const k of Object.keys(s)) assert.ok(k in seed.FULL_SCRIPT.script, `script.${k}`)
+  for (const k of Object.keys(s.beats.items.properties)) assert.ok(k in seed.FULL_SCRIPT.script.beats[0], `a beat lacks ${k}`)
+  for (const k of Object.keys(s.proposals.items.properties)) assert.ok(k in seed.FULL_SCRIPT.script.proposals[0], `a proposal lacks ${k}`)
+  for (const k of Object.keys(props.handoffs.properties)) assert.ok(k in seed.FULL_SCRIPT.handoffs, `handoffs.${k}`)
+  for (const k of Object.keys(props.checks.properties)) assert.ok(k in seed.FULL_SCRIPT.checks, `checks.${k}`)
+  // and the page opens it
+  const p = await page({ data: seed.FULL_SCRIPT })
+  assert.equal(p.all('.beat').length, 1)
+  assert.match(p.text('[data-testid="sent-judge"]')!, /Judge is not open yet/)
+})

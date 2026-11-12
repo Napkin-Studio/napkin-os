@@ -1339,6 +1339,31 @@ The shell's undo is not a host route: it keeps the person's own edits this
 session, and Cmd or Ctrl Z writes the inverse through `/patch-data` as a new
 attributed edit, only while the part still holds what that person last wrote.
 
+### 7.9 Tracked changes on a script (features/script-editor.clan)
+
+*Added 2026-11-12.* A script (`ie.napkin.script-editor`) is a list of beats with
+stable ids, and `script.proposals` holds every suggested change to one beat.
+
+1. **`POST /script/propose {beat, text, note?}`**: a person suggests new words for
+   one beat. The beat is unchanged. The proposal records `was`, the words it
+   replaces, and `by`, the session's actor, never the body's. One attributed
+   `/patch-data` of `script` (action `mark up beat <id>`), so it keeps its inverse.
+2. **`POST /script/answer {proposal, answer: "accept" | "reject"}`**: an accept
+   writes the proposal's words into its beat and marks it `accepted` in one
+   attributed write (`accept proposal <id> on beat <id>`); a reject marks it
+   `rejected` and leaves the beat. `409` when the proposal is already answered,
+   or, for an accept, when the beat no longer says `was` (the proposal stays
+   open). `403` for the person who marked it up, and for any actor that is not a
+   person: only the writer's answer puts a proposal's words on the page.
+3. **A proposal is a plain patch, not an appending write.** An append keeps no
+   inverse (§7.8 item 4) and would leave a gap in the version list. Nothing here
+   needs the lease today; the host has none yet, and when it does §6 gets one
+   line for these two routes.
+4. **An approved script is locked like a visual brief**, by the same creative
+   director rule. It takes the record of where it was sent (`handoffs`, `film`)
+   and nothing else; those two keys are not part of what a version says and the
+   shell's undo leaves them alone.
+
 ## 8. Routes — contract v1
 
 `/capabilities` reports `contract: 1`. A document is shown with the installed

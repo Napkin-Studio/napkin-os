@@ -64,6 +64,8 @@ example('make_brief_maker', join(seed, 'brief-maker.app.clan'), join(scratch, 'r
 example('make_deck_maker', join(seed, 'deck-maker.app.clan'), join(scratch, 'deck.example.clan'))
 example('make_visual_brief', join(seed, 'visual-brief.app.clan'), join(scratch, 'visual-brief.example.clan'))
 example('make_script_editor', join(seed, 'script-editor.app.clan'), join(scratch, 'script-editor.example.clan'))
+// Send to Film (features/script-editor.clan) spins a script off into Advertising Studio, so the stack installs it.
+example('make_advertising_studio', join(seed, 'advertising-studio.app.clan'))
 run('cargo', ['build', '-q', '-p', 'napkin-web'])
 
 // A stand-in middleware, local and free (standin.mjs): it answers every task as one job whose state the test sets

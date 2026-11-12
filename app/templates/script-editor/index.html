@@ -667,7 +667,7 @@
       if(body.length){
         h += '<ul class="found" aria-label="Findings">' + body.map(function(f){
           var at = f.beat ? c.beats.findIndex(function(b){ return b.id === f.beat; }) + 1 : 0;
-          return '<li data-testid="finding" data-rule="' + esc(f.rule) + '"><b>' + esc(wordsFound(f) || ruleName(f)) + '</b> ' + esc(f.advice)
+          return '<li data-testid="finding" data-rule="' + esc(f.rule) + '"><b>' + esc(wordsFound(f) || ruleName(f)) + '</b> \u00b7 ' + esc(f.advice)
             + (f.rule === 'length_off' ? ' ' + f.words + ' words, about ' + f.target + ' fit.' : '') + (f.rule === 'repetition' ? ' ' + f.ratio + ' percent repeats.' : '')
             + (at ? ' <button type="button" class="jump" data-jump="' + esc(f.beat) + '">Line ' + at + '</button>' : '') + '</li>';
         }).join('') + '</ul>';

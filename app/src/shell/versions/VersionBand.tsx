@@ -32,7 +32,7 @@ export default function VersionBand({ undo, docPath, onChanged }: Props) {
         </div>
         {undo.note && <p className="bg-note-line" role="status" data-testid="undo-note">{undo.note}</p>}
       </div>
-      {versions && <VersionPanel key={docPath} undo={undo} onChanged={onChanged} />}
+      {versions && <VersionPanel key={docPath} undo={undo} onChanged={onChanged} noun="script" />}
     </section>
   )
 }

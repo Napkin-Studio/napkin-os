@@ -13,6 +13,10 @@ export function labelOf(path: string): string {
   return w ? w[0].toUpperCase() + w.slice(1) : path
 }
 
+/** A beat of a script or a suggestion on one, as one line: who speaks or what it is, then the words. */
+const lineOf = (x: Record<string, unknown>): string =>
+  [typeof x.role === 'string' ? x.role : typeof x.status === 'string' ? `${x.status} suggestion` : typeof x.kind === 'string' ? x.kind : '', x.text].filter(Boolean).join(': ')
+
 /** Each leaf of the parts, by its path; a list is its items one to a line. */
 export function flatten(parts: Record<string, unknown>): Map<string, string> {
   const out = new Map<string, string>()
@@ -21,7 +25,8 @@ export function flatten(parts: Record<string, unknown>): Map<string, string> {
     if (typeof v === 'string') out.set(path, v)
     else if (typeof v === 'number' || typeof v === 'boolean') out.set(path, String(v))
     else if (Array.isArray(v)) {
-      out.set(path, v.every(x => typeof x === 'string') ? v.join('\n') : JSON.stringify(v))
+      const lines = v.every(x => x && typeof x === 'object' && typeof (x as Record<string, unknown>).text === 'string')
+      out.set(path, v.every(x => typeof x === 'string') ? v.join('\n') : lines ? v.map(x => lineOf(x as Record<string, unknown>)).join('\n') : JSON.stringify(v))
     } else if (typeof v === 'object') {
       for (const [k, x] of Object.entries(v as Record<string, unknown>)) put(`${path}.${k}`, x)
     }
