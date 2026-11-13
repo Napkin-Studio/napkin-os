@@ -170,3 +170,34 @@ frontend, desktop, engine, middleware, mock-backend, terraform, production-tool)
 5. Then: the per-client AI switch as a small record; agency-setup stages 4 and 5; idea-room slices 2 and 3; the Script editor's AI margin (held until the spend cap is decided).
 6. Held until their outside accounts exist, unless Sai says otherwise: `sso`, `timesheet-signals`, `voice`.
 7. Write the Phase 2 close, then design Phases 3 and 4 (not started).
+
+
+## 2026-11-13 · Phase 2 alignment, Phase 3 and 4 designs · session 4
+
+**Run settings.** Fable 5.2 directing, and for designs; Sonnet 5.5 for the merge, audits and builders, three at once. CI now runs on push to `spike/fabletest`; the first run passed.
+
+**Owner's rules this session (Sai, in chat).** Develop is the model for how the product looks and behaves, from the landing page to working in a tool. Alignment is built before new records. Cmd K stays; the bar has no search field. The Idea room's AI ideas and the Script editor's AI margin leave Phase 2 until the spend cap is decided. All the designers' recommended picks were taken for the alignment and for Phase 3. Release #229 (develop into main) was merged by the agent on Sai's word, as a one-off.
+
+**Done.**
+- Develop is merged in up to 34235abb (`chore/merge-develop`). All check suites green. Full e2e: 212 passed, 18 failed: the nine known older ones; `shots.spec.ts:44` (a seeding tie, every time); and pilot 18, Judge 59 and six Visual Brief tests, which passed when run alone. The server log showed 4 to 12 s waits on the view lock in the full run.
+- Five alignment designs approved: `align-landing-look`, `align-booth`, `align-needs-lock-people`, `align-confidential-prices`, `ask-nap` (amended). The audit behind them is `docs/build-handoff/develop-alignment-audit.md`.
+- Phase 3 designed and approved: 35 records, about 98 builder-hours, in 13 waves (the order is in `j001-phase3-suite`). Wave 0 is `production-line-merge`: Shrey's `feat/make-and-edit` merged into this branch.
+- Phase 4 designed, NOT yet approved in the records: 14 records, about 31.5 builder-hours. Its ten picks were reported to Sai; he paused before answering.
+- `docs/build-handoff/` holds the briefs, audits and a README for a teammate.
+- Pushed to origin at 3b0fcf7e. Later commits (the Phase 3 and 4 designs and approvals) are local.
+
+**Stopped part-way when Sai paused (work kept in each worktree, some of it uncommitted).**
+- `feat/align-confidential-prices` (`napkin-b-align-confidential-prices`): the host change is committed; 41 files uncommitted; it was about to run the Phase 2 tests.
+- `feat/align-landing-look` (`napkin-b-align-landing-look`): five commits, three files uncommitted; it had merged the branch and was re-running tests.
+- `fix/store-scan-under-lock` (`napkin-b-store-scan`): two commits, five files uncommitted; it was on its last e2e checks.
+None is verified or merged.
+
+**Could not verify.** That the eight run-alone failures are the slow-server fault; the fix is not merged and the full run was not repeated. Nothing in Phase 3 or 4 was run. Staging runs release #229 (confirmed in AWS: both services on the image from 614ee59b).
+
+**Next action.**
+1. Finish the three stopped builders (resume each in its worktree: read `git status`, finish, run its own tests, merge `spike/fabletest`, report). Merge them, then one full e2e on several workers and a Fable security review of the confidential change.
+2. Then `align-needs-lock-people` beside `align-booth` (split the Booth move across three builders once its shared snippet lands), then `ask-nap`.
+3. Get Sai's answer on the ten Phase 4 picks, then approve those 14 records.
+4. Phase 3 wave 0 (`production-line-merge`, with `j001-phase3-suite` beside it) can start as soon as a builder slot is free; `align-confidential-prices` must be merged before Phase 3 wave 1.
+5. Then `first-day`, `napkin-brain`, the per-client AI switch, the Phase 2 close, and the Phase 3 and 4 waves.
+6. Push `spike/fabletest` after each wave; merge `origin/develop` at the start of each.
