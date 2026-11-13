@@ -67,10 +67,16 @@ test('each look is complete and reads: tokens, action colour, desk tint and mark
     const pill = pillOf(c)
     assert.deepEqual([by['Text on the pill'].bg, by['Text on the pill'].fg], [pill.bg, pill.ink], `${id}: ink on the pill`)
     for (const theme of ['light', 'dark'] as const) {
-      const t = tokens(css, theme), k = by[theme === 'light' ? 'Text on the base (buttons, light)' : 'Text on the accent (buttons, dark)']
+      // the buttons' rows, named for the colour they are (an outline-only look's dark buttons are its base)
+      const t = tokens(css, theme), k = checks[theme === 'light' ? 1 : 2]
+      assert.match(k.label, new RegExp(`^Text on the ${t['--ag-act'] === c.accent.toUpperCase() ? 'accent' : 'base'} \\(buttons, ${theme}\\)$`), `${id} ${theme}: ${k.label}`)
       assert.deepEqual([k.bg, k.fg], [t['--ag-act'], t['--ag-act-ink']], `${id} ${theme}: ${t['--ag-act-ink']} on the action colour ${t['--ag-act']}`)
     }
-    if (tokens(css, 'light')['--needs']) assert.ok(by['What needs you'], `${id}: the needs count`)
+    if (tokens(css, 'light')['--needs']) assert.ok(by['Text on the accent (needs badge)'], `${id}: the needs count`)
+    // a base pill or outline-only buttons draw the accent as a hairline on the base: it is checked as an outline, at 3:1
+    const outline = checks.find(k => k.line)
+    if (c.pill === 'base' || c.accentUse === 'line') assert.deepEqual([outline?.bg, outline?.fg, outline?.need], [c.base.toUpperCase(), c.accent.toUpperCase(), 3], `${id}: the accent outline`)
+    else assert.equal(outline, undefined, `${id}: no outline`)
     for (const l of ['Logo on the pill', 'Logo on a light ground (sign-in card)', 'Logo on a dark ground (recoloured white)']) assert.ok(by[l], `${id}: ${l}`)
     for (const tok of ['--ag-act', '--ag-act-ink', '--desk', '--paper', '--line', '--ag-base', '--ag-acc'])
       assert.equal(css.split(`${tok}:`).length - 1, 2, `${id}: ${tok} in both themes`)

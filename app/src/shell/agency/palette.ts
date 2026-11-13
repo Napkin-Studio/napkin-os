@@ -125,7 +125,29 @@ export const AGENCY_ALIASES: Readonly<Record<string, string>> = {
  * wordmark (`logo`, a data: URI); an agency in code carries only a published
  * display `name` (its look stays the code's).
  */
-export interface AgencyLook { id: string; name?: string; base?: string; accent?: string; aliases?: string[]; logo?: string | null; rev?: number }
+export interface AgencyLook extends WireStyle { id: string; name?: string; base?: string; accent?: string; aliases?: string[]; logo?: string | null; rev?: number }
+
+/**
+ * A basic look's style on the wire (features/agency-style.clan), snake_case as
+ * napkin-web serves it: absent (or null) is the default, today's look (the
+ * accent pill, the accent as a fill, warm paper, automatic ink on the accent).
+ */
+export interface WireStyle {
+  pill?: 'accent' | 'base' | null
+  accent_use?: 'fill' | 'line' | null
+  surface?: 'warm' | 'mono' | null
+  accent_ink?: string | null
+}
+
+/** A wire style as AgencyColours fields: only what is not the default, so a default look is exactly today's. */
+export function styleOfWire(w: WireStyle): Pick<AgencyColours, 'pill' | 'accentUse' | 'surface' | 'accentInk'> {
+  const out: Pick<AgencyColours, 'pill' | 'accentUse' | 'surface' | 'accentInk'> = {}
+  if (w.pill === 'base') out.pill = 'base'
+  if (w.accent_use === 'line') out.accentUse = 'line'
+  if (w.surface === 'mono') out.surface = 'mono'
+  if (typeof w.accent_ink === 'string' && rgb(w.accent_ink)) out.accentInk = w.accent_ink.trim().toUpperCase()
+  return out
+}
 
 // The People page's published looks (features/people-admin.clan, agency-looks-admin.clan): basic agencies
 // after the code registry, and display names laid onto code entries (AGENCY_COLOURS itself never changes).
@@ -146,17 +168,18 @@ export function svgOfUri(uri: unknown): string | null {
 }
 
 /**
- * A basic agency's look from its name, two colours and its one wordmark (SVG
- * text or an SVG data: URI): every other token is derived as for any agency
+ * A basic agency's look from its name, two colours, its style (pill, accent
+ * use, surface, ink on the accent; absent is the default) and its one wordmark
+ * (SVG text or an SVG data: URI): every other token is derived as for any agency
  * (paletteOf, surfaceCss), and the dark-ground wordmark is the same SVG
  * recoloured white. The wordmark goes through sanitiseSvg again (idempotent on
  * the server's output); one that does not survive is dropped, the name stands
  * in. Null without a name or with a colour that is not #rrggbb.
  */
-export function basicLook(l: { name?: string; base?: string; accent?: string; logo?: string | null }): AgencyColours | null {
+export function basicLook(l: { name?: string; base?: string; accent?: string; logo?: string | null } & WireStyle): AgencyColours | null {
   const name = typeof l.name === 'string' ? l.name.trim() : ''
   if (!name || typeof l.base !== 'string' || typeof l.accent !== 'string' || !rgb(l.base) || !rgb(l.accent)) return null
-  const c: AgencyColours = { name, base: l.base.trim().toUpperCase(), accent: l.accent.trim().toUpperCase() }
+  const c: AgencyColours = { name, base: l.base.trim().toUpperCase(), accent: l.accent.trim().toUpperCase(), ...styleOfWire(l) }
   const raw = typeof l.logo === 'string' ? (svgOfUri(l.logo) ?? (l.logo.trimStart().startsWith('<') ? l.logo : null)) : null
   if (raw) {
     try {
@@ -415,7 +438,11 @@ export function surfaceTokens(colours: AgencyColours | null | undefined, theme: 
 }
 
 /** One readability check: `fg` on `bg` reads at `ratio`, and needs `need` (text 4.5:1, a logo 3:1). */
-export interface LookCheck { label: string; bg: string; fg: string; ratio: number; need: number }
+export interface LookCheck {
+  label: string; bg: string; fg: string; ratio: number; need: number
+  /** An outline (the accent's hairline on the base), not text or a logo. */
+  line?: boolean
+}
 
 /** The chrome's own ink over the agency's wash (hovers, selected rows), light and dark. */
 export const CHROME_INK = { light: '#14161B', dark: '#F2F3F5' } as const
@@ -430,19 +457,29 @@ export function logoFill(uri: string | null | undefined): string | null {
 /**
  * Whether a look reads (the People page's "Does it read?" panel, and the
  * tests for every look in code): text on the pill, on the light action colour
- * and on the dark one at 4.5:1, and, for a look with a wordmark, the wordmark
- * on the pill, on a light card and on a dark card at 3:1. `every` adds the
- * pairs the editor does not list but the tests hold every code look to: the
- * accent's own ink, the chrome's ink on the wash, and the needs count.
+ * and on the dark one at 4.5:1 (each named for the colour it is: an
+ * outline-only look's buttons are the base in dark too); for an outline-only
+ * look, the text on the accent where it is the needs badge; for a look that
+ * draws the accent as a hairline on the base (a base pill, outline-only
+ * buttons), that outline at 3:1; and, for a look with a wordmark, the
+ * wordmark on the pill, on a light card and on a dark card at 3:1. `every`
+ * adds the pairs the editor does not list but the tests hold every code look
+ * to: the accent's own ink and the chrome's ink on the wash.
  */
 export function lookChecks(colours: AgencyColours, every = false): LookCheck[] {
   const out: LookCheck[] = []
-  const add = (label: string, bg: string, fg: string, need: number) => out.push({ label, bg, fg, ratio: contrast(bg, fg), need })
+  const add = (label: string, bg: string, fg: string, need: number, line = false) =>
+    out.push({ label, bg, fg, ratio: contrast(bg, fg), need, ...(line ? { line } : {}) })
   const pill = pillOf(colours)
   const light = surfaceTokens(colours, 'light'), dark = surfaceTokens(colours, 'dark')
+  const base = colours.base.toUpperCase(), accent = colours.accent.toUpperCase()
+  const which = (bg: string) => (bg === accent && bg !== base ? 'accent' : 'base')
+  const lineUse = colours.accentUse === 'line'
   add('Text on the pill', pill.bg, pill.ink, 4.5)
-  add('Text on the base (buttons, light)', light['--ag-act'], light['--ag-act-ink'], 4.5)
-  add('Text on the accent (buttons, dark)', dark['--ag-act'], dark['--ag-act-ink'], 4.5)
+  add(`Text on the ${which(light['--ag-act'])} (buttons, light)`, light['--ag-act'], light['--ag-act-ink'], 4.5)
+  add(`Text on the ${which(dark['--ag-act'])} (buttons, dark)`, dark['--ag-act'], dark['--ag-act-ink'], 4.5)
+  if (light['--needs']) add('Text on the accent (needs badge)', light['--needs'], light['--needs-ink'], 4.5)
+  if (pill.line || lineUse) add(`Accent outline on the base (${pill.line && lineUse ? 'pill, buttons' : pill.line ? 'pill' : 'buttons'})`, base, accent, 3, true)
   if (colours.logo || colours.logoOnDark) {
     const onPill = logoFill(pillLogoOf(colours).wordmark)
     if (onPill) add('Logo on the pill', pill.bg, onPill, 3)
@@ -456,7 +493,6 @@ export function lookChecks(colours: AgencyColours, every = false): LookCheck[] {
     add('Ink on the accent', colours.accent.toUpperCase(), accentInkOf(colours), 4.5)
     add('Ink on the wash, light', p.light.soft, CHROME_INK.light, 4.5)
     add('Ink on the wash, dark', p.dark.soft, CHROME_INK.dark, 4.5)
-    if (light['--needs']) add('What needs you', light['--needs'], light['--needs-ink'], 4.5)
   }
   return out
 }
