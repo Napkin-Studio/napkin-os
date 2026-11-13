@@ -145,6 +145,8 @@ export default function App() {
   // Not before the first read settles: until then the boot screen's layer (brand/bootLook.ts, the agency
   // this browser last signed in to) stays, so a reload never shows Napkin's kit on the way to the agency's.
   const personKnown = personId != null || landing.state !== 'loading' || (device && !serverless)
+  // An agency added on the People page joins the registry there; closing the page puts its look on again.
+  const [looksSeen, setLooksSeen] = useState(0)
   useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown, looksSeen])
   // The accent sampled from the agency's logo (shell/agency/look.ts), once the server says whose it is.
   useEffect(() => { if (personKnown && hasServer && !device) void getAgencyLook().then(applyAgencyLook) }, [personId, personKnown, device, looksSeen])
