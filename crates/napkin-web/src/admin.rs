@@ -22,8 +22,8 @@ use serde_json::{json, Value};
 
 use crate::auth::{Account, Provider};
 use crate::people::{
-    code_name, is_admin, Book, DraftEdit, NewAgency, NewPerson, People, Publish, Refusal, Wordmark,
-    CODE_AGENCIES, CODE_ALIASES, PEOPLE_ADMINS,
+    code_name, is_admin, AccentUse, Book, DraftEdit, NewAgency, NewPerson, People, Pill, Publish,
+    Refusal, Surface, Wordmark, CODE_AGENCIES, CODE_ALIASES, PEOPLE_ADMINS,
 };
 use crate::state::AppCtx;
 use crate::svg_sanitise::{self, svg_uri, Refused};
@@ -117,6 +117,30 @@ fn acct(w: &Who) -> Option<&Account> {
     w.as_ref().map(|Extension(a)| a)
 }
 
+/// Add the style switches that are not the default to a look's JSON
+/// (features/agency-style.clan): absent is the default, so an agency without
+/// them reads exactly as before.
+fn put_style(
+    v: &mut Value,
+    pill: Option<Pill>,
+    accent_use: Option<AccentUse>,
+    surface: Option<Surface>,
+    accent_ink: Option<&str>,
+) {
+    if let Some(p) = pill {
+        v["pill"] = json!(p);
+    }
+    if let Some(u) = accent_use {
+        v["accent_use"] = json!(u);
+    }
+    if let Some(s) = surface {
+        v["surface"] = json!(s);
+    }
+    if let Some(i) = accent_ink {
+        v["accent_ink"] = json!(i);
+    }
+}
+
 /// A kept wordmark as the shell takes it (`data:image/svg+xml,...`); None when the file is missing.
 fn wordmark_uri(people: &People, id: &str, w: Option<&Wordmark>) -> Option<String> {
     w.and_then(|w| people.wordmark_svg(id, w))
@@ -152,15 +176,23 @@ fn agency_row(people: &People, book: &Book, id: &str) -> Option<Value> {
     }
     let a = book.agency(id)?;
     let draft = a.drafted().map(|d| {
-        json!({
+        let mut v = json!({
             "name": d.name,
             "aliases": d.aliases,
             "base": d.base,
             "accent": d.accent,
             "wordmark": wordmark_uri(people, id, d.wordmark.as_ref()),
-        })
+        });
+        put_style(
+            &mut v,
+            d.pill,
+            d.accent_use,
+            d.surface,
+            d.accent_ink.as_deref(),
+        );
+        v
     });
-    Some(json!({
+    let mut row = json!({
         "id": a.id,
         "kind": "basic",
         "name": a.name,
@@ -178,7 +210,15 @@ fn agency_row(people: &People, book: &Book, id: &str) -> Option<Value> {
         "changed_at": a.changed_at,
         "published_by": a.published_by,
         "published_at": a.published_at,
-    }))
+    });
+    put_style(
+        &mut row,
+        a.pill,
+        a.accent_use,
+        a.surface,
+        a.accent_ink.as_deref(),
+    );
+    Some(row)
 }
 
 fn agencies_of(people: &People) -> Vec<Value> {
@@ -520,6 +560,19 @@ async fn export_agency(Extension(identity): Id, who: Who, Path(id): Path<String>
         ts_str(&a.base),
         ts_str(&a.accent)
     );
+    // the style switches, only where not the default, as palette.ts names them
+    if a.pill == Some(Pill::Base) {
+        palette.push_str(" pill: 'base',");
+    }
+    if a.accent_use == Some(AccentUse::Line) {
+        palette.push_str(" accentUse: 'line',");
+    }
+    if a.surface == Some(Surface::Mono) {
+        palette.push_str(" surface: 'mono',");
+    }
+    if let Some(ink) = &a.accent_ink {
+        palette.push_str(&format!(" accentInk: {},", ts_str(ink)));
+    }
     if svg.is_some() {
         palette.push_str(&format!(
             "\n    logo: svgUri(WORDMARK_SVG{member}),\n    logoOnDark: svgUri(recolourSvg(WORDMARK_SVG{member}, '#FFFFFF')),"
@@ -578,6 +631,13 @@ async fn agency_looks(Extension(identity): Id) -> Json<Vec<Value>> {
             if let Some(uri) = wordmark_uri(people, &a.id, a.wordmark.as_ref()) {
                 look["logo"] = Value::String(uri);
             }
+            put_style(
+                &mut look,
+                a.pill,
+                a.accent_use,
+                a.surface,
+                a.accent_ink.as_deref(),
+            );
             look
         })
         .collect();
