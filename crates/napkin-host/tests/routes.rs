@@ -1533,8 +1533,10 @@ mod upstream {
             Some(&acme),
         )
         .unwrap();
-        Doc::open(&store, theirs.clone())
-            .post("/patch-data", r#"{"patch":{"note":"x"},"agent":"human"}"#);
+        Doc::open(&store, theirs.clone()).post(
+            "/patch-data",
+            r#"{"patch":{"note":"x"},"agent":"human","action":"edit"}"#,
+        );
         clients::update_client(
             &*store,
             &ctx,
