@@ -96,10 +96,13 @@ export const AGENCY_COLOURS: Readonly<Record<string, AgencyColours>> = {
     name: 'Pluto', base: '#000047', accent: '#B2F257', accentInk: '#000047',
     logo: svgUri(WORDMARK_SVG.pluto), logoOnDark: svgUri(recolourSvg(WORDMARK_SVG.pluto, '#FFFFFF')),
   },
-  // ACNE (a Deloitte business; deloittedigital.com/ie/en/acne.html, owner 2026-11-13): a black mark,
-  // white on dark, so the Boys+Girls treatment. No wordmark yet (their site has PNGs only); the name
-  // and initials stand in until an SVG goes through scripts/agency-logos.mjs.
-  acne: { name: 'ACNE', base: '#000000', accent: '#FFFFFF', pill: 'base', surface: 'mono' },
+  // ACNE (a Deloitte business; deloittedigital.com/ie/en/acne.html, owner 2026-11-13): black, with a hint
+  // of Deloitte green (#86BC25, their page's progress bar) as Catapult has its crimson: a hairline on
+  // actions and the pill, and the needs colour; never a big fill. The mark traced from their site.
+  acne: {
+    name: 'ACNE', base: '#000000', accent: '#86BC25', pill: 'base', accentUse: 'line', surface: 'mono',
+    logo: svgUri(WORDMARK_SVG.acne), logoOnDark: svgUri(recolourSvg(WORDMARK_SVG.acne, '#FFFFFF')),
+  },
 }
 
 /**
