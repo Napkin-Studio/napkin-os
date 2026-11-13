@@ -139,6 +139,25 @@ export function feedbackNote(on: string, thumb: 'up' | 'down', note: string, ext
   recorder.flush(false)
 }
 
+/**
+ * The note line a thumb opens, by its placeholder; null when it opens none. On
+ * an agent's result only 👎 asks (the mock's state 5: "What was off?").
+ */
+export function noteFor(noteOn: 'any' | 'down', thumb: 'up' | 'down' | null): string | null {
+  if (!thumb) return null
+  if (noteOn === 'down') return thumb === 'down' ? 'What was off? (optional)' : null
+  return 'Anything to add? (optional)'
+}
+
+/**
+ * Feedback by pointing at it (pointer.ts; features/feedback-point.clan): what
+ * was picked as `name`, the note and its context as `data`; sent at once.
+ */
+export function feedbackPoint(name: string, data: Record<string, unknown>) {
+  record('feedback-point', name.slice(0, 160), data)
+  recorder.flush(false)
+}
+
 /** Ask the server whether this build records; on the desktop and offline it does not. */
 export async function loadDogfood(): Promise<DogfoodState> {
   try {

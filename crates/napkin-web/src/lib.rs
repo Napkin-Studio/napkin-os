@@ -13,6 +13,7 @@
 //!
 //! Everything else is the built React app.
 
+pub mod admin;
 pub mod agency;
 pub mod api;
 pub mod audit;
@@ -30,6 +31,7 @@ pub mod look;
 pub mod mail;
 pub mod meter;
 pub mod needs;
+pub mod people;
 pub mod roles;
 pub mod sandbox;
 pub mod search;
@@ -37,6 +39,7 @@ pub mod state;
 pub mod store;
 pub mod tenant;
 pub mod timesheet;
+pub mod timing;
 pub mod tokens;
 
 use std::path::Path;
@@ -172,6 +175,8 @@ pub fn router_with(
             links::router().layer(DefaultBodyLimit::max(32 * 1024)),
         )
         .merge(shell_service(static_dir))
+        // one timing line per routed request, by route template (timing.rs)
+        .route_layer(axum::middleware::from_fn(timing::layer))
         .layer(compression())
         // The request's span names the method and the path, never the query string: a search's words, a
         // document's path and a token ride in the query, and none of them belongs in a log. A path that

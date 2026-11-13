@@ -132,7 +132,7 @@
     },
     "locked_fields": { "type": "array", "items": { "type": "string" } },
     "confidential_fields": {
-      "description": "Parts a person marked Confidential (features/brief-new-ui.clan): kept in the agency's copies with a hatch and a tag, left out of the client copy. Keyed by the part's data path. Written by a person only.",
+      "description": "Parts a person marked Confidential (owner, 2026-11-13): Napkin's systems never learn from them (no knowledge layer, RAG, harvest, eval, golden set or training). The agency and the client see them in full: the agency copy hatches and tags them, the client copy prints them plain. Keyed by the part's data path. Written by a person only.",
       "type": "array",
       "items": { "type": "string" }
     },

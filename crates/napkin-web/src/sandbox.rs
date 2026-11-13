@@ -96,8 +96,10 @@ async fn dispatch(
         }
     }
 
+    crate::timing::note_who(grant.tenant.as_str(), &grant.person);
+    crate::timing::note_op(&path);
     let workspace = ctx.workspace(&grant.tenant);
-    let session = match workspace.session(&grant.doc) {
+    let session = match crate::timing::phase("session", || workspace.session(&grant.doc)) {
         Ok(s) => s,
         Err(e) => return refuse(status_of(e.status), &e.message),
     };
@@ -116,6 +118,7 @@ async fn dispatch(
         req,
     )
     .await;
+    crate::timing::add_ms("dispatch", started);
     // An app that builds its own export (`clan://export`) gets back a temp file
     // on this server. The browser cannot fetch a server path, so it is stashed
     // behind a handle. The event goes to every tab of the tenant (in accounts
@@ -198,15 +201,21 @@ async fn document(
     let Some(grant) = ctx.tokens.resolve(&token) else {
         return stale_token();
     };
-    let session = match ctx.workspace(&grant.tenant).session(&grant.doc) {
+    crate::timing::note_who(grant.tenant.as_str(), &grant.person);
+    let ws = ctx.workspace(&grant.tenant);
+    let session = match crate::timing::phase("session", || ws.session(&grant.doc)) {
         Ok(s) => s,
         Err(e) => return refuse(status_of(e.status), &e.message),
     };
     let started = std::time::Instant::now();
     let origin = frame_origin(ctx.sandbox_origin.as_deref(), &headers, &token);
-    let response = match session.frame_page(query.as_deref().unwrap_or(""), Reach::Origin(origin)) {
+    let page = crate::timing::phase("compose", || {
+        session.frame_page(query.as_deref().unwrap_or(""), Reach::Origin(origin))
+    });
+    let response = match page {
         Ok(page) => {
-            let tag = crate::etag::tag_of(page.as_bytes());
+            crate::timing::note_bytes(page.len());
+            let tag = crate::timing::phase("etag", || crate::etag::tag_of(page.as_bytes()));
             let held = headers
                 .get(header::IF_NONE_MATCH)
                 .and_then(|v| v.to_str().ok())

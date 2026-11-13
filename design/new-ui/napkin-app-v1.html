@@ -8154,7 +8154,7 @@ Specifically: check whether out-of-home treat occasions are planned or spontaneo
         const p = data.parts[selIdx]; if (!p) return;
         const acts = host.querySelector('.sp-acts');
         if (acts && p.as !== 'cell') acts.insertAdjacentHTML('beforeend', `<button type="button" class="sp-btn sp-keep ${p.keep ? 'on' : ''}" data-p33-keep aria-pressed="${!!p.keep}" title="${p.keep ? 'Kept as it is. Click to let it change.' : 'Keep this part as it is when the brief is drafted again'}">${LOCK}${p.keep ? 'Kept' : 'Keep as is'}</button>`);
-        if (acts && p.as !== 'cell') acts.insertAdjacentHTML('beforeend', `<button type="button" class="sp-btn sp-conf ${p.conf ? 'on' : ''}" data-p35-conf aria-pressed="${!!p.conf}" title="${p.conf ? 'Confidential: left out of the client copy. Click to share it.' : 'Mark confidential: kept in the agency copy, left out of the client copy'}">${p.conf ? '● Confidential' : 'Confidential'}</button>`);
+        if (acts && p.as !== 'cell') acts.insertAdjacentHTML('beforeend', `<button type="button" class="sp-btn sp-conf ${p.conf ? 'on' : ''}" data-p35-conf aria-pressed="${!!p.conf}" title="${p.conf ? 'Confidential: Napkin never learns from this part. Click to unmark it.' : 'Mark confidential: Napkin never learns from this part. The client still sees it.'}">${p.conf ? '● Confidential' : 'Confidential'}</button>`);
         const why = briefLocked ? LOCKED_WHY : p.keep ? 'Kept as it is. Click "Kept" to let it change.' : '';
         if (acts) {
           $$('[data-sp-act="edit"], [data-sp-act="redraft"]', acts).forEach(b => { if (why) { b.setAttribute('aria-disabled', 'true'); b.title = why; } });
@@ -8999,7 +8999,7 @@ Specifically: check whether out-of-home treat occasions are planned or spontaneo
       const conf = (BRIEF_DATA[curBriefKey] || { parts: [] }).parts.filter(p => p.conf).length;
       return `<div class="pp-h">Share</div>
         <button type="button" class="p36-mi" data-p36="link"><b>Copy link</b><small>People in your agency open it in Napkin Studio</small></button>
-        <button type="button" class="p36-mi" data-p36="client"><b>Send the client copy</b><small>${activeTool === 'brief' ? (conf ? conf + ' confidential part' + (conf > 1 ? 's' : '') + ' left out' : 'Nothing marked confidential') : 'Confidential pins left out'}${activeTool === 'brief' && !briefLocked ? ' · lock it first' : ''}</small></button>
+        <button type="button" class="p36-mi" data-p36="client"><b>Send the client copy</b><small>The locked version, every part in it${activeTool === 'brief' && !briefLocked ? ' · lock it first' : ''}</small></button>
         <button type="button" class="p36-mi" data-p36="crew"><b>Invite to the crew</b><small>They can edit and answer calls</small></button>`;
     };
     document.addEventListener('click', e => {

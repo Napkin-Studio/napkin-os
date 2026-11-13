@@ -36,7 +36,7 @@ from napkin.config import Settings
 from napkin.model import ModelPort, Usage, build_wire
 
 # DRAFT_SYSTEM as it stood before this feature (fb67036), the baseline's prompt.
-OLD_DRAFT_SYSTEM = planned.DRAFT_SYSTEM.replace(
+OLD_DRAFT_SYSTEM = planned.DRAFT_SYSTEM.replace(planned.REDRAFT_RULE, "").replace(
     "Cite the cap_ ids\n  of the client's words (client_words) it rests on.", "Cite nothing.").replace(
     "Use their\n  numbers exactly as given.",
     "Use their\n  numbers exactly as given; never a number that is not in a cited fact.")

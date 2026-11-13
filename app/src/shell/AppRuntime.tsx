@@ -10,10 +10,13 @@ import { getTheme, onThemeChange } from '../theme'
 import { setExportFrame } from './appExport'
 import { barFrom, type BarItem } from './appBar'
 import { jobsMessage } from './openJobs'
+import { editModeMessage } from './editMode'
+import { boothFrom, boothKey, boothMessage, readBooth, writeBooth } from './booth'
 import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, record, subscribe as onDogfood } from '../dogfood/recorder'
 import { activity as markActivity } from '../components/markStore'
 import { writeFrom, type SaveQueue } from '../components/states/saveQueue'
+import { fromFrame as feedbackFromFrame, setFeedbackFrame } from '../dogfood/pointer'
 
 interface Props {
   hasHumanView: boolean
@@ -61,6 +64,11 @@ interface Props {
    * (`clan:jobs`) on every load and whenever they change, so a run still going resumes on open.
    */
   jobs?: readonly string[]
+  /**
+   * Who is signed in: the Booth's hidden or shown is kept per person and tool
+   * (`clan:booth`, booth.ts), and posted to the page on every load.
+   */
+  person?: string | null
 }
 
 /**
@@ -76,18 +84,24 @@ export const DOC_LOADED = 'napkin:doc-loaded'
 
 export default function AppRuntime({
   hasHumanView, version, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, onBar, writes, insets, jobs, onSaved, onUndoKey, onBarKey,
+  onChrome, onBar, writes, insets, jobs, person, onSaved, onUndoKey, onBarKey,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
 
-  useEffect(() => { editModeRef.current = editMode }, [editMode])
-
-  const sendEditMode = useCallback((active: boolean) => {
-    host.setEditMode(active).catch(console.error)
+  // Edit mode goes to the host (its record of the session) and to the page
+  // itself, on every change and again on every load (`clan:edit-mode`). The
+  // page's bridge used to ask clan://edit-mode every 0.4 s instead
+  // (features/edit-mode-pushed.clan).
+  const postEditMode = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage(editModeMessage(editModeRef.current), '*')
   }, [])
 
-  useEffect(() => { sendEditMode(editMode) }, [editMode, sendEditMode])
+  useEffect(() => {
+    editModeRef.current = editMode
+    host.setEditMode(editMode).catch(console.error)
+    postEditMode()
+  }, [editMode, postEditMode])
 
   // Legacy views save HTML-fragment patches; the backend echoes a
   // clan-patch-saved event. The edit is already in the DOM — don't reload.
@@ -230,6 +244,11 @@ export default function AppRuntime({
         record(typeof kind === 'string' ? kind : 'click', typeof name === 'string' ? name.slice(0, 120) : 'page', { in: 'app' })
       }
       else if (m?.type === 'clan:bar') handlers.current.onBar?.(barFrom(m))
+      // feedback by pointing at it, inside the page (dogfood/pointer.ts): what was picked, or F
+      else if (m?.type === 'clan:feedback-picked' || m?.type === 'clan:feedback-key') {
+        const r = iframeRef.current?.getBoundingClientRect()
+        feedbackFromFrame(m, { x: r?.left ?? 0, y: r?.top ?? 0 })
+      }
       else if (m?.type === 'clan:write') {
         const w = writeFrom(m)
         if (w) { handlers.current.writes?.report(w); if (w.state === 'saved') handlers.current.onSaved?.() }
@@ -244,7 +263,7 @@ export default function AppRuntime({
       }
     }
     window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
+    return () => { window.removeEventListener('message', onMessage); setFeedbackFrame(null) }
   }, [])
 
   // What the glass chrome covers, sent whenever it changes (and on load).
@@ -264,6 +283,24 @@ export default function AppRuntime({
   }, [])
   // `jobs` is a new array only when its ids changed (AppHost keys it by them).
   useEffect(() => { jobsRef.current = jobs ?? []; postJobs() }, [jobs, postJobs])
+
+  // The Booth hidden or shown (features/booth.clan): the page says it when the person changes it, and
+  // hears the stored choice on every load. Kept per person and per tool, never in the frame (sandboxed).
+  const boothAt = boothKey(person, manifest.app?.app_id)
+  const boothRef = useRef(boothAt)
+  useEffect(() => { boothRef.current = boothAt }, [boothAt])
+  const postBooth = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage(boothMessage(readBooth(boothRef.current)), '*')
+  }, [])
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (!iframeRef.current?.contentWindow || e.source !== iframeRef.current.contentWindow) return
+      const open = boothFrom(e.data)
+      if (open !== null) writeBooth(boothRef.current, open)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
 
   // The dogfood build listens inside the frame too, once the person has agreed.
   const dogfood = useSyncExternalStore(onDogfood, dogfoodState, dogfoodState)
@@ -320,14 +357,17 @@ export default function AppRuntime({
       title={manifest.title}
       onLoad={() => {
         postScheme(getTheme())
+        postEditMode()
         postClientMode()
         postInsets()
         postJobs()
+        postBooth()
         // An app that declared its parts before the shell heard says them again.
         iframeRef.current?.contentWindow?.postMessage({ type: 'clan:parts?' }, '*')
         // Likewise the tabs and buttons it wants in the OS bar.
         iframeRef.current?.contentWindow?.postMessage({ type: 'clan:bar?' }, '*')
         setExportFrame(iframeRef.current?.contentWindow ?? null)
+        setFeedbackFrame(iframeRef.current?.contentWindow ?? null)
         // The page is in: the shell's background reads (the desk's facts) may start (App.tsx).
         window.dispatchEvent(new Event(DOC_LOADED))
       }}

@@ -552,7 +552,8 @@ html[data-theme="dark"] .bm-meta:where(.nui, .nui *) dt { color: #B8A47A; }
 .tb-app:where(.nui, .nui *) { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 .tba-acts:where(.nui, .nui *) { flex: none; }
 .tba-name:where(.nui, .nui *) { min-width: 0; }
-@media (max-width: 1500px) { .tba-name:where(.nui, .nui *) b { max-width: 180px; } }
+/* The links are one chip now (linked-research-bar): the title takes the room they left. */
+@media (max-width: 1500px) { .tba-name:where(.nui, .nui *) b { max-width: clamp(200px, 24vw, 360px); } }
 .m1-medallion:where(.nui, .nui *) { width: 64px !important; height: 64px !important; top: 4px !important; }
 .tba-cont:where(.nui, .nui *) { border: 1px solid var(--line); }
 .tba-menu:where(.nui, .nui *) { min-width: 300px; }
@@ -588,6 +589,7 @@ button.side-link:hover:where(.nui, .nui *) { text-decoration-color: var(--ag-act
 .p33-pop:where(.nui, .nui *) > button small,
 .p33-pop:where(.nui, .nui *) .pp-sub { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .p33-pop:where(.nui, .nui *) hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+.p33-pop:where(.nui, .nui *) .mi-key { justify-self: end; font: 11px var(--font-mono, ui-monospace, monospace); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
 .p33-pop:where(.nui, .nui *) .pp-h { font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 4px; }
 .p33-pop:where(.nui, .nui *) .pp-me { display: flex; gap: 10px; align-items: center; padding: 10px 10px 8px; }
 .p33-pop:where(.nui, .nui *) .pp-av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--ag-base, #1E22AA); color: #fff; font: 700 12px var(--font-mono); flex: none; }
@@ -607,11 +609,9 @@ button.side-link:hover:where(.nui, .nui *) { text-decoration-color: var(--ag-act
 .m-form:where(.nui, .nui *) { display: grid; gap: 10px; max-width: 360px; }
 .m-form:where(.nui, .nui *) label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
 .m-form:where(.nui, .nui *) input { border: 1px solid var(--line); border-radius: 7px; padding: 9px 11px; background: var(--card); color: var(--ink); font-size: 14px; }
-.tb-beta:where(.nui, .nui *) { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 99px; border: 1px dashed var(--line); color: var(--muted); font: 600 10px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
-.tb-beta:where(.nui, .nui *) i { width: 6px; height: 6px; border-radius: 50%; background: var(--alert); animation: p33pulse 1.6s ease-in-out infinite; }
 .tba-name:where(.nui, .nui *) { cursor: pointer; border-radius: 7px; padding: 2px 6px 2px 4px; margin-left: -4px; flex-shrink: 0; min-width: 0; }
 .tba-name:hover:where(.nui, .nui *) { background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.tba-name:where(.nui, .nui *) b { font-family: var(--font-serif) !important; font-weight: 600 !important; font-size: 16px !important; letter-spacing: 0 !important; text-transform: none !important; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.tba-name:where(.nui, .nui *) b { font-family: var(--font-serif) !important; font-weight: 600 !important; font-size: 16px !important; letter-spacing: 0 !important; text-transform: none !important; max-width: clamp(240px, 26vw, 440px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .tba-n2:where(.nui, .nui *) { display: grid; line-height: 1.1; min-width: 0; }
 .tba-saved:where(.nui, .nui *) { font: 500 10px var(--font-mono); color: var(--muted); letter-spacing: .03em; white-space: nowrap; }
 .tba-caret:where(.nui, .nui *) { font-style: normal; color: var(--muted); font-size: 10px; margin-left: 2px; }
@@ -681,8 +681,6 @@ button.side-link:hover:where(.nui, .nui *) { text-decoration-color: var(--ag-act
 @media (max-width: 900px) { .p33-search:where(.nui, .nui *) { min-width: 0; flex: 1; } }
 .tb-locked:where(.nui, .nui *) { max-width: 1440px !important; }
 .tb-trail:where(.nui, .nui *) { flex: none !important; }
-@media (max-width: 1320px) { .tb-beta:where(.nui, .nui *) .bt { display: none; } }
-@media (max-width: 1320px) { .tb-beta:where(.nui, .nui *) { padding: 0 8px; } }
 @media (max-width: 1320px) { .tba-saved:where(.nui, .nui *) { display: none; } }
 .cp-box:where(.nui, .nui *) > .cp-row { padding-left: 18px !important; }
 html[data-theme="dark"] .cl-track:where(.nui, .nui *) { stroke: rgba(255,253,248,.32) !important; }
@@ -714,7 +712,6 @@ html[data-theme="dark"] .p33-stale:where(.nui, .nui *) { color: #F2B86A; }
 @media (max-width: 1300px) { .tba-line:where(.nui, .nui *) { display: none; } }
 .tba-menu:where(.nui, .nui *) .p36-mi { display: grid !important; grid-template-columns: 1fr !important; min-width: 280px; }
 .tba-menu:where(.nui, .nui *) .pp-h { font: 700 10px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 4px; }
-@keyframes p33pulse { 50% { opacity: .35; } }
 /* The tool page can open before the landing styles load: its screen-reader line stays visually hidden. */
 .lc-sr:where(.nui, .nui *) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 

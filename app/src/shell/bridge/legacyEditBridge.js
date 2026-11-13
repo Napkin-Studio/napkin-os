@@ -121,19 +121,9 @@
       fetch(clanScheme + '/snapshot', { method: 'POST', body: snap }).catch(function() {});
     }
 
-    fetch(clanScheme + '/edit-mode')
-      .then(function(res) { return res.text(); })
-      .then(function(text) {
-        var active = text === 'true';
-        if (active !== window.__clan_edit_mode) {
-          window.__clan_edit_mode = active;
-          if (active) activateEditing();
-          else deactivateEditing();
-        } else if (active) {
-          activateEditing();
-        }
-      })
-      .catch(function() {});
+    // Edit mode arrives from the shell (clan:edit-mode, below); while it is on,
+    // elements the page drew since are wired too.
+    if (window.__clan_edit_mode) activateEditing();
   }, 300);
   // ── Colour scheme, pushed by the shell ────────────────────────────────────
   // Cosmetic only, and one-way: the shell tells the app what it is wearing.
@@ -151,5 +141,17 @@
     if (e.source !== window.parent) return;
     var m = e.data;
     if (m && m.type === 'clan:colorscheme') applyColorScheme(m.scheme);
+    // Edit mode, pushed by the shell on every load and change
+    // (features/edit-mode-pushed.clan); the page no longer asks clan://edit-mode.
+    if (m && m.type === 'clan:edit-mode') {
+      var active = m.active === true;
+      if (active !== window.__clan_edit_mode) {
+        window.__clan_edit_mode = active;
+        if (active) activateEditing();
+        else deactivateEditing();
+      } else if (active) {
+        activateEditing();
+      }
+    }
   });
 })();

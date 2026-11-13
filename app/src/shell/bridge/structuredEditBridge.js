@@ -346,16 +346,42 @@
     });
   }
 
-  setInterval(function() {
-    fetch(clanScheme + '/edit-mode').then(function(r) { return r.text(); }).then(function(t) {
-      var active = t === 'true';
-      if (active !== window.__clan_edit_mode) {
-        window.__clan_edit_mode = active;
-        window.dispatchEvent(new CustomEvent('clan:editmode', { detail: { active: active } }));
-        if (active) activate(); else deactivate();
-      } else if (active) {
-        activate();
-      }
-    }).catch(function() {});
-  }, 400);
+  // ── Edit mode, pushed by the shell ───────────────────────────────────────
+  // The shell posts { type: 'clan:edit-mode', active } on every load and on
+  // every change (features/edit-mode-pushed.clan); the page no longer asks
+  // clan://edit-mode on a timer. While on, fields the app draws later are
+  // wired as they appear, as the old poll's every-tick activate() did.
+  var fieldWatch = null;
+  var fieldWatchDue = false;
+  function watchFields(on) {
+    if (!on) {
+      if (fieldWatch) { fieldWatch.disconnect(); fieldWatch = null; }
+      return;
+    }
+    if (fieldWatch || typeof MutationObserver === 'undefined') return;
+    fieldWatch = new MutationObserver(function() {
+      if (fieldWatchDue) return;
+      fieldWatchDue = true;
+      setTimeout(function() {
+        fieldWatchDue = false;
+        if (window.__clan_edit_mode) activate();
+      }, 0);
+    });
+    fieldWatch.observe(document.documentElement, { childList: true, subtree: true });
+  }
+  function applyEditMode(active) {
+    if (active !== window.__clan_edit_mode) {
+      window.__clan_edit_mode = active;
+      window.dispatchEvent(new CustomEvent('clan:editmode', { detail: { active: active } }));
+      if (active) activate(); else deactivate();
+    } else if (active) {
+      activate();
+    }
+    watchFields(active);
+  }
+  window.addEventListener('message', function(e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (m && m.type === 'clan:edit-mode') applyEditMode(m.active === true);
+  });
 })();

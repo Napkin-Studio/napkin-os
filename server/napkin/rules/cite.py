@@ -60,15 +60,16 @@ def wrong_share_word(text: str, cites: list, pins: dict) -> str | None:
     return None
 
 
-def clean_claim(text: str, cites: list, pins: dict, findings: dict, names=()) -> tuple[dict | None, str | None]:
-    """-> ({text, cites} with only real cites, None) or (None, why it was dropped)."""
+def clean_claim(text: str, cites: list, pins: dict, findings: dict, names=(), more=None) -> tuple[dict | None, str | None]:
+    """-> ({text, cites} with only real cites, None) or (None, why it was dropped). `more`: the numbers a
+    claim citing an id may state besides that pin's own (see figures.allowed_numbers_for)."""
     if not isinstance(text, str) or not text.strip():
         return None, "empty text"
     real = [c for c in dict.fromkeys(cites or []) if c in pins or
             (c in findings and findings[c].get("status") not in ("rejected", "superseded"))]
     if not real:
         return None, "cites nothing the document holds"
-    bad = unsourced_figures(text, real, pins, findings, names)
+    bad = unsourced_figures(text, real, pins, findings, names, more)
     if bad:
         return None, f"states {', '.join(sorted(set(bad)))}, which no cited pin or finding holds"
     why = wrong_share_word(text, real, pins)

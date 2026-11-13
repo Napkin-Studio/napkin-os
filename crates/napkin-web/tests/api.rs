@@ -1505,7 +1505,7 @@ fn roster_server(roster: &str) -> Server {
     let identity = napkin_web::tenant::Identity {
         mode: napkin_web::tenant::Mode::Accounts {
             provider: napkin_web::auth::Provider::Roster(
-                napkin_web::auth::Roster::new(path).unwrap(),
+                napkin_web::auth::Roster::open(dir.path().join("_people"), &path).unwrap(),
             ),
             // the same key as accounts_server(): one deployment, switched
             sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
@@ -1648,7 +1648,7 @@ fn dogfood_server_with(
     let identity = napkin_web::tenant::Identity {
         mode: napkin_web::tenant::Mode::Accounts {
             provider: napkin_web::auth::Provider::Roster(
-                napkin_web::auth::Roster::new(roster).unwrap(),
+                napkin_web::auth::Roster::open(dir.path().join("_people"), &roster).unwrap(),
             ),
             sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
         },

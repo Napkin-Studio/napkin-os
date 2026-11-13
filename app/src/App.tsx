@@ -10,6 +10,8 @@ import DeviceHome from './offline/DeviceHome'
 import OfflineDialog from './offline/OfflineDialog'
 import AgencyLookPanel from './shell/agency/AgencyLookPanel'
 import { applyAgencyLook, getAgencyLook } from './shell/agency/look'
+import PeoplePage from './shell/people/PeoplePage'
+import { peopleEntryFor } from './shell/people/model'
 import { isClanFile, keepOffline, pickFile, type DeviceSource } from './offline/actions'
 import { copyBytes, type OfflineCopy } from './offline/store'
 import { useFileDrop } from './offline/useFileDrop'
@@ -117,7 +119,9 @@ export default function App() {
   const [device, setDevice] = useState(onDevice)
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
-const [lookOpen, setLookOpen] = useState(false)
+  const [lookOpen, setLookOpen] = useState(false)
+  // The People page (features/people-admin.clan): an admin's, from the account menu.
+  const [peopleOpen, setPeopleOpen] = useState(false)
   const updateReady = useUpdateReady()
   // The landing's data, read through the host. Not on the device's own home.
   // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
@@ -141,9 +145,9 @@ const [lookOpen, setLookOpen] = useState(false)
   // Not before the first read settles: until then the boot screen's layer (brand/bootLook.ts, the agency
   // this browser last signed in to) stays, so a reload never shows Napkin's kit on the way to the agency's.
   const personKnown = personId != null || landing.state !== 'loading' || (device && !serverless)
-  useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown])
+  useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown, looksSeen])
   // The accent sampled from the agency's logo (shell/agency/look.ts), once the server says whose it is.
-  useEffect(() => { if (personKnown && hasServer && !device) void getAgencyLook().then(applyAgencyLook) }, [personId, personKnown, device])
+  useEffect(() => { if (personKnown && hasServer && !device) void getAgencyLook().then(applyAgencyLook) }, [personId, personKnown, device, looksSeen])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
   // The agency's wordmark on its pill (and its icon on a narrow bar), where the registry has them.
@@ -593,6 +597,8 @@ const [lookOpen, setLookOpen] = useState(false)
     // The agency's name, and the person's role where the session carries one (the role an admin is viewing as is not theirs).
     line: home.view?.restricted && !home.view.viewing && home.view.title ? `${agency} · ${home.view.title}` : agency,
     ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null, onLook: () => setLookOpen(true) } : {}),
+    // Only for an admin: the server refuses everyone else's calls with 403 too.
+    ...(hasServer && !device ? { onPeople: peopleEntryFor(user, () => setPeopleOpen(true)) } : {}),
   }
 
   // Share ▾ "Copy link": the web's link to a document (`?open=`, host/http.ts takeLaunchFile).
@@ -708,6 +714,8 @@ const [lookOpen, setLookOpen] = useState(false)
       <BarMount enabled={barOn} home={home.view} go={go} openPath={openPath} recent={recentDocs} signedIn={!!user} onSignOut={onSignOut} />
       {lookOpen && <AgencyLookPanel onClose={() => setLookOpen(false)} />}
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
+
+      {peopleOpen && <PeoplePage user={user} onClose={() => { setPeopleOpen(false); setLooksSeen(n => n + 1) }} />}
 
       {dragging && (
         <div className="dv-drop" aria-hidden>

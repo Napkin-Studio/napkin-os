@@ -980,6 +980,8 @@ export interface AttachTarget {
   many: boolean
   /** The open document is locked, so a link would be refused. */
   locked: boolean
+  /** Who it is for, as the library names it (the registry's id and name); null when it has no client. */
+  client: { id: string; name: string } | null
 }
 
 /** `POST /attach`, `/attach/update` or `/attach/detach`: what was written. */

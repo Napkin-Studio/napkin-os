@@ -1516,6 +1516,57 @@ mod upstream {
         );
     }
 
+    // Each target names its client as the library does (features/linked-research-bar.clan):
+    // the registry's current name, and `null` for a document with no client.
+    #[test]
+    fn attach_targets_carry_each_targets_client() {
+        use napkin_host::clients;
+        let store = Arc::new(MemStore::default());
+        let research = research(&store);
+        install_linking_brief(&*store);
+        let ctx = Ctx::local();
+        let acme = clients::create_client(&*store, &ctx, "Acme", None).unwrap();
+        let theirs = library::create_instance_for(
+            &*store,
+            RESEARCH,
+            Some("Acme audience".into()),
+            Some(&acme),
+        )
+        .unwrap();
+        Doc::open(&store, theirs.clone())
+            .post("/patch-data", r#"{"patch":{"note":"x"},"agent":"human"}"#);
+        clients::update_client(
+            &*store,
+            &ctx,
+            &acme.id,
+            clients::ClientPatch {
+                name: Some("Acme Group".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let id = library::create_instance(&*store, BRIEF, Some("Spring brief".into())).unwrap();
+        let brief = Doc::open(&store, id);
+
+        let targets = brief.get("/attach-targets");
+        let by = |doc: &str| {
+            targets
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|t| t["path"] == doc || t["document_id"] == doc)
+                .cloned()
+                .unwrap_or_else(|| panic!("{doc} offered: {targets}"))
+        };
+        let t = by(theirs.as_str());
+        assert_eq!(t["client"]["id"], acme.id.as_str(), "{t}");
+        assert_eq!(
+            t["client"]["name"], "Acme Group",
+            "renamed in the registry: {t}"
+        );
+        assert!(by(&research.doc)["client"].is_null(), "{targets}");
+    }
+
     #[test]
     fn a_locked_brief_refuses_a_link_with_a_reason() {
         let store = Arc::new(MemStore::default());

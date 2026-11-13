@@ -218,7 +218,10 @@ Every issue raised, and how it was resolved: Appendix A.
 - **"Keep it private"** (`clan-fields.html:816-828`): *our agents may read it*
   and *it may go in files you send out* are ticked by default, *other
   campaigns may learn from it* is not, so the default mark is `{model: true,
-  export: true, corpus: false}`. Its words are the owner's rule: "Private
+  export: true, corpus: false}`. *Changed 2026-11-13* (os-layer §4 C4): the
+  form offers only *our agents may read it on this document*; it always sends
+  `export: true, corpus: false`, and its words say Napkin never learns from
+  it while the agency and the client see it in every copy and export. Its words are the owner's rule: "Private
   keeps it out of the agency's shared memory, so work for other clients never
   learns from it. The client still sees it, and our agents still use it on
   this document." With no mark, the view shows a pin as private when its own
@@ -4067,7 +4070,9 @@ inputs, which only the withdrawn `hidden_inputs` flag needed) and **P11**
 
 - **A1.** Contract 4 §4, "Confidential (C4)": a mark's destinations are the
   corpus and the model; it is not an export filter, and `compose_export` does
-  not read it as one (OD1).
+  not read it as one (OD1). *Applied 2026-11-13* (fix/confidential-means-napkin-never-sees):
+  C4 now defines Confidential as "Napkin's systems never see it; the client
+  sees everything".
 - **A2.** Contract 4 §7.5.8: "no filter by confidentiality" holds for the
   agent version and for every view a client sees; in the corpus version a
   marked value, and its exact occurrences, are replaced (§5.8).

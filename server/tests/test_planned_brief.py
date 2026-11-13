@@ -732,3 +732,49 @@ def test_answer_question_is_routed_to_a_brief_job_and_refused_for_one_that_is_no
         post(s, "cancel_job", {"job_id": jid}, host.clan())
     finally:
         s.stop()
+
+
+def test_a_redraft_gives_the_plan_and_the_draft_the_parts_as_they_stand_and_who_wrote_them(tmp_path):
+    """Draft it again (features/brief-redraft-in-place): the plan and the Brief agent see every open part as
+    it stands, with who wrote it last; a part a person wrote last still comes back as a proposal; a locked
+    part is neither sent nor touched."""
+    seen = {}
+    s = Server(tmp_path, model=planned_model(seen), retrieval=retrieval(), settings_kw={"brief_flow": "planned"})
+    try:
+        host = Host()
+        run(s, host, inp={"prompt": THIN, "attachments": []})
+        assert "current" not in seen["draft"] and "current" not in seen["plan"], "a first draft has nothing to keep"
+        # a person rewrites the insight; the background is locked
+        host.data["insight"] = "A person's insight, " + "long " * 400
+        host.data["locked_fields"] = ["background"]
+        host.chain.insert(0, {"id": "d_HUMAN00009", "kind": "edit", "actor": "human:shrey", "agent": "human:shrey",
+                              "action": "edit", "targets": [f"{DOC}#insight"], "timestamp": "2026-11-12T10:00:00Z"})
+        written, before = host.data["tone_and_world"], len(host.changes)
+        replies = run(s, host, inp={"prompt": THIN, "attachments": [], "intake": False, "redraft": True})
+    finally:
+        s.stop()
+    cur = seen["draft"]["current"]
+    assert cur["insight"]["by"] == "person" and cur["insight"]["text"].startswith("A person's insight")
+    assert len(cur["insight"]["text"]) <= 900, "capped like the other payload parts"
+    assert cur["tone_and_world"] == {"text": written, "by": "agent"}
+    assert "background" not in cur and "background" not in seen["draft"]["parts"], "locked: not sent"
+    assert seen["plan"]["current"] == cur, "the plan sees the brief as it stands too"
+    last = replies[-1]
+    assert last["job"]["state"] == "done"
+    f = last["result"]["fields"]
+    assert f["insight"]["state"] == "proposed" and f["background"]["state"] == "kept"
+    assert host.data["insight"].startswith("A person's insight"), "a person's part is proposed, never written"
+    props = {p["field"]: p for p in last["result"]["proposals"]}
+    assert "insight" in props
+    assert host.changes[before:], "the redraft landed"
+    for ch in host.changes[before:]:
+        assert "background" not in ch["data_patch"]
+
+
+def test_input_redraft_must_be_a_boolean(tmp_path):
+    s = Server(tmp_path, model=planned_model({}), retrieval=retrieval(), settings_kw={"brief_flow": "planned"})
+    try:
+        st, body = post(s, "draft_brief", {"prompt": THIN, "attachments": [], "redraft": "yes"}, Host().clan())
+    finally:
+        s.stop()
+    assert st == 400, body

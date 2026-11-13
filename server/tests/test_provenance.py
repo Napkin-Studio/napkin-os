@@ -763,7 +763,8 @@ def test_prompt_snapshot():
     assert "Cite the cap_ ids\n  of the client's words (client_words) it rests on." in d
     assert "Cite nothing." not in d.split('basis "research"')[0]
     # nothing else in DRAFT_SYSTEM moved: the Brief agent's prompt, as before but for the listed edits
-    before = d.replace("Cite the cap_ ids\n  of the client's words (client_words) it rests on.", "Cite nothing.") \
+    assert planned.REDRAFT_RULE in d  # the redraft rule (features/brief-redraft-in-place), the one other listed edit
+    before = d.replace(planned.REDRAFT_RULE, "").replace("Cite the cap_ ids\n  of the client's words (client_words) it rests on.", "Cite nothing.") \
         .replace("Use their\n  numbers exactly as given.", "Use their\n  numbers exactly as given; never a number that "
                                                            "is not in a cited fact.")
     assert before.count("Cite nothing.") == 1 and OLD_DRAFT_RESEARCH in before and OLD_CLIENT in before

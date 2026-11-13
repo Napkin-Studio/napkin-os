@@ -20,3 +20,9 @@ export function setEditFor(e: EditState, docPath: string, v: boolean | ((was: bo
 export function afterLock(e: EditState, docPath: string, wasLocked: boolean, locked: boolean): EditState {
   return locked && !wasLocked && editOn(e, docPath) ? { docPath, on: false } : e
 }
+
+/**
+ * What the shell posts to the open page on every load and every change
+ * (features/edit-mode-pushed.clan); the page's edit bridge applies it.
+ */
+export const editModeMessage = (active: boolean) => ({ type: 'clan:edit-mode' as const, active })

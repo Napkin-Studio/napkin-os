@@ -11,8 +11,9 @@
 //   Reopen a part… in the OS bar, every part's Edit gone (a part shows "Reopen this part…").
 // - There is no client link and no client account: a client is data, never an actor (os-layer §7.5
 //   item 5). What the client gets is the client copy, a PDF from the brief's "Client copy · PDF"
-//   (the document menu): the sheet without the parts marked Confidential. The Share menu's
-//   "Send the client copy" is shown disabled.
+//   (the document menu, and Share's "Send the client copy" on a locked brief): the whole locked
+//   sheet. Confidential keeps a part from Napkin's systems, never from the client (owner,
+//   2026-11-13), so the client copy prints the confidential part too.
 // - The client's answer is recorded by the agency person it reached (POST /client-review): the
 //   brief's "Record the client's answer" (#crOpen) or the OS bar's Client review. The shell shows it
 //   above the brief (section.cr-band); a part the client said no to is offered under Reopen a part…
@@ -26,7 +27,8 @@ import { addClient, appFrame, BUDGET, driveRun, measure, newDocApp, openTool, si
 const ACCOUNT = 'plu@pluto' as const
 // This file's own client for the round; not a prefix of the other files' clients (the dial is matched by a regex on the name).
 const client = (process.env.UAT_CLIENT || `UAT ${stamp()}`).replace(/^UAT\b/, 'UAT review')
-const STATE = process.env.UAT_STATE || ''
+// One state file per test file, so files running side by side never overwrite each other's keys.
+const STATE = process.env.UAT_STATE ? `${process.env.UAT_STATE}.review` : ''
 const readState = (): Record<string, string> => { try { return JSON.parse(readFileSync(STATE, 'utf8')) } catch { return {} } }
 const keep = (k: string, v: string) => { if (STATE) writeFileSync(STATE, JSON.stringify({ ...readState(), [k]: v })) }
 const got = (k: string) => readState()[k] || ''
@@ -79,9 +81,25 @@ async function needsCount(app: FrameLocator) {
   return Number((/·\s*(\d+)/.exec(await h.innerText()) || [])[1] ?? NaN)
 }
 
+/** What is left to settle: one per Needs you row, except the open questions' row, which counts each question
+ *  ("Open questions · 8 open questions" is eight to answer; round 10: answering one leaves the row). */
+async function needsLeft(app: FrameLocator) {
+  if (!await needsCount(app)) return 0
+  const rows = await app.locator('#lockList:not([hidden]) .lkitem').allInnerTexts()
+  return rows.reduce((n, t) => n + (Number((/(\d+)\s+open questions/i.exec(t) || [])[1]) || 1), 0)
+}
+
 /** A part of the sheet, by the heading it carries (Single-minded proposition, Budget & scope). */
 const partRow = (app: FrameLocator, head: string) =>
   app.locator('#fields .row').filter({ has: app.locator('.lab > span:first-child', { hasText: new RegExp(`^${head.replace(/[.*+?^${}()|[\]\\&]/g, '\\$&')}$`) }) }).first()
+
+/** The audience part, by whichever heading this brief carries (round 12: "Who we are talking to", not "Audience"). */
+async function audienceHead(app: FrameLocator) {
+  for (const h of ['Audience', 'Who we are talking to', 'The audience']) {
+    if (await partRow(app, h).isVisible().catch(() => false)) return h
+  }
+  throw new Error('no audience part on this brief (looked for Audience, Who we are talking to)')
+}
 
 async function selectPart(app: FrameLocator, head: string) {
   await partRow(app, head).locator('.lab > span:first-child').click()
@@ -144,17 +162,26 @@ test('review: Needs you is settled part by part, and only then can the brief loc
   const app = await openBrief(page, 'open-review-brief')
   const lock = app.locator('#lockBtn')
   const done: string[] = []
+  // Round 11: Needs you first showed only the open questions; the host's lock list (Review agent items) arrived
+  // seconds later. Count once it holds steady for 3 s.
+  let prev = -1, still = 0
+  for (let i = 0; i < 20 && still < 2; i++) {
+    const now = await needsLeft(app)
+    still = now === prev ? still + 1 : 0
+    prev = now
+    if (still < 2) await page.waitForTimeout(1500)
+  }
   let n = await needsCount(app)
-  measure('needs-you', 0, undefined, { count: n })
-  for (let round = 0; n > 0 && round < 25; round++) {
+  measure('needs-you', 0, undefined, { count: n, items: prev })
+  for (let round = 0; n > 0 && round < 40; round++) {
     expect.soft(await lock.isDisabled(), `Lock the brief stays off while Needs you holds ${n}`).toBe(true)
     if (await lock.isDisabled()) {
       await expect.soft(app.locator('#lockWhy'), 'the lock says why it waits').toHaveText(/Settle \d+ first|has to be settled first/)
     }
     const t0 = Date.now()
+    const before = await needsLeft(app) || n
     done.push(await settleFirst(app, page))
-    const before = n
-    await expect.poll(() => needsCount(app), { timeout: 60_000, message: `settling "${done[done.length - 1]}" takes one off Needs you (was ${before})` }).toBeLessThan(before)
+    await expect.poll(() => needsLeft(app), { timeout: 60_000, message: `settling "${done[done.length - 1]}" takes one off what Needs you holds (was ${before})` }).toBeLessThan(before)
     n = await needsCount(app)
     measure('settle-needs-item', Date.now() - t0, 15_000, { item: done[done.length - 1], left: n })
   }
@@ -167,7 +194,7 @@ test('review: Needs you is settled part by part, and only then can the brief loc
 
 test('review: lock: the brief says it is locked and its parts cannot be edited', async ({ page }) => {
   const app = await openBrief(page, 'open-review-brief')
-  // One part confidential before the lock, so the client copy can be checked for leaving it out.
+  // One part confidential before the lock, so the client copy can be checked for keeping it.
   for (const head of ['Budget & scope', 'Mandatories', 'Competitor context']) {
     const val = partRow(app, head).locator('.val:not(.empty)')
     if (!await val.isVisible().catch(() => false)) continue
@@ -196,11 +223,12 @@ test('review: lock: the brief says it is locked and its parts cannot be edited',
   await expect(bar.getByRole('button', { name: /^(Client review|New client answer)$/ }), 'the OS bar offers Client review on a locked brief').toBeVisible()
 
   // No part can be edited: the part view offers "Reopen this part…" in place of Edit and Redraft.
-  await selectPart(app, 'Audience')
+  const AUD = await audienceHead(app)
+  await selectPart(app, AUD)
   await expect(app.locator('#selPart [data-sp="reopen"]'), 'a locked part offers only Reopen this part…').toBeVisible()
   await expect(app.locator('#selPart [data-sp="edit"]'), 'a locked part has no Edit').toHaveCount(0)
   await expect(app.locator('#selPart [data-sp="regen"]'), 'a locked part has no Redraft').toHaveCount(0)
-  await partRow(app, 'Audience').locator('.val').dblclick()
+  await partRow(app, AUD).locator('.val').dblclick()
   await page.waitForTimeout(1_000)
   await expect(app.locator('#fields .ined'), 'a double-click does not open the editor on a locked part').toHaveCount(0)
   await backToBrief(app, page)
@@ -213,27 +241,26 @@ test('review: lock: the brief says it is locked and its parts cannot be edited',
   await expect(again.locator('#lockedBadge'), 'the brief is still locked when opened again').toBeVisible({ timeout: 30_000 })
 })
 
-test('review: the client copy leaves out the agency\'s chrome and the confidential part', async ({ page, browser }) => {
+test('review: the client copy leaves out the agency\'s chrome and keeps the confidential part', async ({ page, browser }) => {
   const app = await openBrief(page, 'open-review-brief')
   await expect(app.locator('#lockedBadge'), 'the client copy is made from the locked brief').toBeVisible({ timeout: 30_000 })
 
-  // Share first, as a person would look for it.
+  // The brief's own client copy is in the document menu: "Client copy · PDF".
+  await page.getByTestId('doc-name').click()
+  await expect(page.getByRole('menuitem', { name: /^Client copy · PDF/ }), 'a locked brief offers its client copy in the document menu').toBeVisible()
+  await page.keyboard.press('Escape')
+
+  // Share, as a person would look for it: "Send the client copy" runs that same export.
   await page.locator('[data-p36-share]').click()
   const send = page.getByTestId('share-menu').getByRole('menuitem', { name: /Send the client copy/ })
   await expect(send, 'Share lists the client copy').toBeVisible()
   const sendOff = await send.getAttribute('aria-disabled')
   measure('share-client-copy', 0, undefined, { disabled: sendOff === 'true', says: (await send.innerText()).replace(/\s+/g, ' ') })
-  expect.soft(sendOff, 'on a locked brief, Share offers "Send the client copy"').not.toBe('true')
-  await page.keyboard.press('Escape')
-
-  // The brief's own client copy: the document menu's "Client copy · PDF".
-  await page.getByTestId('doc-name').click()
-  const item = page.getByRole('menuitem', { name: /^Client copy · PDF/ })
-  await expect(item, 'a locked brief offers its client copy in the document menu').toBeVisible()
+  expect(sendOff, 'on a locked brief, Share offers "Send the client copy"').not.toBe('true')
   const t0 = Date.now()
   const pushed = page.waitForRequest(r => r.method() === 'POST' && /\/export$/.test(new URL(r.url()).pathname), { timeout: 60_000 })
   const download = page.waitForEvent('download', { timeout: 90_000 })
-  await item.click()
+  await send.click()
   const req = await pushed.catch(async () => { throw new Error('no client copy was made; the brief said: ' + await app.locator('#toast').textContent()) })
   const sent = req.postDataJSON() as { kind: string; filename: string; html: string }
   const file = await download
@@ -258,7 +285,8 @@ test('review: the client copy leaves out the agency\'s chrome and the confidenti
     }
     const confHead = got('confHead'), confText = got('confText').replace(/\s+/g, ' ')
     if (confHead) {
-      expect.soft(text, `the part marked Confidential (${confHead}) is left out of the client copy`).not.toContain(confText.slice(0, 25))
+      // Confidential means Napkin never learns from it; the client gave it, and sees it.
+      expect(text, `the part marked Confidential (${confHead}) is in the client copy`).toContain(confText.slice(0, 25))
       expect.soft(text, 'nothing in the client copy is labelled Confidential').not.toMatch(/\bConfidential\b/)
     }
   } finally {
@@ -321,7 +349,8 @@ test('review: back at the agency, the answer is on the brief and the part reopen
   await expect(app.locator('#spRat'), 'a change to a reopened part asks why').toBeVisible()
   await app.locator('#selPart [data-sp="cancel"]').click()
   await backToBrief(app, page)
-  await selectPart(app, 'Audience')
+  const AUD = await audienceHead(app)
+  await selectPart(app, AUD)
   await expect(app.locator('#selPart [data-sp="edit"]'), 'every other part stays locked').toHaveCount(0)
   await expect(app.locator('#selPart [data-sp="reopen"]')).toBeVisible()
 })

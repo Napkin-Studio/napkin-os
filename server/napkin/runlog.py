@@ -31,12 +31,14 @@ Costs: a model call's cost is estimated from its tokens and the price table belo
 it); `cost_src` says "est". A web search's cost is the research service's own report when it
 gives one ("reported"), else unknown (null).
 
-What a call sent and got back, what a search returned and a decision's words are NOT written unless
+What a call sent and got back, what a search returned or was asked, a question's words and a decision's words are NOT written unless
 NAPKIN_RUNLOG_BODIES=1: client material is confidential, so by default a call is logged by its sizes,
 a search by its urls and counts, a decision by its ids, kinds and counts. The policy (owner, 2026-10-19):
 bodies are on for staging only, where NAPKIN_RUNLOG_BODIES=1 is set on the middleware's task, the run
 log is readable only by Napkin accounts (/api/dogfood/runlog) and the dogfood purge empties it; never in
-production. Locally, turn bodies on for test prompts.
+production. Locally, turn bodies on for test prompts. Open for the owner (2026-11-13, os-layer §4 C4: Napkin
+keeps no confidential material): bodies on staging/UAT keep client material in a Napkin-side store with no
+expiry but the purge.
 
 `python -m napkin.runlog [file | dir | --latest]` prints a run as tables.
 """
@@ -353,9 +355,13 @@ class RunLog:
             t["search_cost"] += cost or 0.0
             t["search_s"] += secs
             t["errors"] += 1 if error else 0
-        self._write("research", stage=self.stage_name, lens=lens, market=market, query=query, secs=round(secs, 2),
-                    sources=sources, urls=urls, cost=cost, cost_src="reported" if cost is not None else None,
-                    cached=cached, error=error, queries=queries,
+        # A query names the client's own material (Confidential: Napkin keeps none of it; os-layer §4 C4),
+        # so its words are a body: written only with bodies on.
+        body = _cfg["bodies"]
+        self._write("research", stage=self.stage_name, lens=lens, market=market, query=query if body else None,
+                    secs=round(secs, 2), sources=sources, urls=urls, cost=cost,
+                    cost_src="reported" if cost is not None else None,
+                    cached=cached, error=error, queries=queries if body else None,
                     results=[{**{k: r.get(k) for k in ("url", "title", "published_at")},
                               "text": str(r.get("text") or "")[:RESULT_CHARS]} for r in results or []]
                     if _cfg["bodies"] and results else None,
@@ -411,7 +417,10 @@ class RunLog:
         self._write("gap", stage=stage, reason=reason, detail=detail)
 
     def question(self, stage, text, options=None):
-        self._write("question", stage=stage, text=text, options=options)
+        # A question's words can carry the client's confidential material: a body, like an answer.
+        body = _cfg["bodies"]
+        self._write("question", stage=stage, text=text if body else None, options=options if body else None,
+                    chars=len(text or ""))
 
     def answer(self, stage, answer, skipped=False):
         self._write("answer", stage=stage, answer=answer if _cfg["bodies"] else "(answered)",

@@ -39,7 +39,7 @@ from . import capture as cap_stage
 from . import provenance as prov
 from .clientcat import plan_category
 from .drafters import _query
-from .fields import ARRAY_KEYS, KEYS, LABELS, bare, clean, filled, get, last_writer, put
+from .fields import ARRAY_KEYS, KEYS, LABELS, _is_human, bare, clean, filled, get, last_writer, put
 from .job import BriefJob, log
 from . import checks, intake
 from .questions import dedupe, without_answered
@@ -51,6 +51,8 @@ REVIEW_MAX_TOKENS = 24000
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
 FACTS_MAX = prov.FACTS_MAX
+# A part as it stands, on a redraft (`current`): its words up to this many characters, a list's items each.
+CURRENT_MAX, CURRENT_ITEM_MAX = 900, 220
 # jev's "the facts held already answer the need" at or above this: the planned search is skipped.
 HELD = 0.6
 
@@ -142,6 +144,8 @@ Plan:
   or none.
 - category: the category code from the list that fits the brief best, or null.
 - ask_client: the questions only the client can answer, each with the part it serves.
+On a redraft, `current` is the brief as it stands, each part with who wrote it last (person or agent): plan
+from it, keep what a person wrote unless the facts contradict it, and build on the rest.
 Never restate the person's request ("make me a brief") as content. Plain British English."""
 
 
@@ -162,6 +166,11 @@ def plan_schema(keys, lens_codes, cat_codes):
 
 
 # -- draft -----------------------------------------------------------------------------------
+# Draft it again (features/brief-redraft-in-place): the parts as they stand come as `current`.
+REDRAFT_RULE = """On a redraft, `current` is the brief as it stands, each part with who wrote it last. Keep what a person wrote
+(by "person") unless the facts contradict it, and say so in `why` when they do. Build on what an agent wrote
+(by "agent") with the facts, new ones included; do not start it from scratch.
+"""
 DRAFT_SYSTEM = """You are a senior strategic planner writing a complete creative brief, every part at once, so
 the parts make one argument: the objectives, the audience, the insight, the proposition and its proof all
 serve the plan's strategy.
@@ -184,7 +193,7 @@ Lists (reasons to believe, tone, mandatories, open questions) are arrays of shor
 believe you cannot prove from a fact starts with "To confirm:". Budget and scope: deliverables, channels and
 timing only, no budget figure the client did not give. Open questions: what only the client can answer.
 Return null for a part only when nothing sensible can be said. Never restate the person's request as content.
-Write in plain British English, specific and vivid, no category jargon."""
+""" + REDRAFT_RULE + """Write in plain British English, specific and vivid, no category jargon."""
 
 
 # Every rewrite (the Review agent's revise, the check loop's, fix_parts') carries each part's claims as they stand.
@@ -287,8 +296,10 @@ class PlannedBriefJob(BriefJob):
     """draft_brief, planned (module docstring)."""
 
     def __init__(self, *a, research_max: int = 3, judge: str = "review", intake_wait: float = 0,
-                 intake_max: int = 3, **kw):
+                 intake_max: int = 3, redraft: bool = False, **kw):
         super().__init__(*a, **kw)
+        # Draft it again (the template says so); whether parts are written is read from the data (_current)
+        self.redraft = bool(redraft)
         # intake (brief/intake.py): off unless the request asked and the wait is above 0
         self.intake_wait, self.intake_max = max(0, float(intake_wait)), max(0, int(intake_max))
         self.intake_skipped, self.intake_answered = [], {}  # questions left open; {key: the words it was asked in}
@@ -350,6 +361,29 @@ class PlannedBriefJob(BriefJob):
         out = prov.prior_claims(self.chain, self.doc, [k for k in keys if k not in self.whole])
         out.update({k: self.whole[k].get("claims") or [] for k in keys if k in self.whole})
         return out
+
+    def _current(self, keys):
+        """The brief as it stands, on a redraft: every open part that holds words, with who wrote it last
+        ("person" or "agent"). Locked parts are not open, so never here. A part with words no decision
+        wrote is a person's (fields.holder reads it the same way). Empty on a first draft, so a redraft
+        is read from the data, whichever way it started."""
+        chain = {d.get("id"): d for d in self.chain}
+        out = {}
+        for k in keys:
+            v = clean(k, get(self.data0, k))
+            if not filled(v):
+                continue
+            last = chain.get(last_writer(self.doc, self.chain, k))
+            by = "person" if last is None or _is_human(last) else "agent"
+            text = [_short(x, CURRENT_ITEM_MAX) for x in v] if isinstance(v, list) else _short(v, CURRENT_MAX)
+            out[k] = {"text": text, "by": by}
+        return out
+
+    def _with_current(self, payload, keys):
+        cur = self._current(keys)
+        if cur:
+            payload["current"] = cur
+        return payload
 
     def _library(self, n=12):
         """The library's passages for the Brief and Review agents, capped at n. The gated ones (the award library) are
@@ -449,6 +483,9 @@ class PlannedBriefJob(BriefJob):
                                for pid, p in list(self.lib.items())[:8]],
                    "lenses": LENSES if leaves else [], "categories": leaves,
                    "research_budget": self.research_max if leaves else 0}
+        self._with_current(payload, keys)
+        if self.redraft or payload.get("current"):
+            rl.note("redraft", flagged=self.redraft, current={k: v["by"] for k, v in (payload.get("current") or {}).items()})
         plan = self.caps.model.structured("plan_brief", PLAN_SYSTEM, payload,
                                           plan_schema(keys, LENSES, [x["code"] for x in leaves]), max_tokens=8000)
         self.plan_out = plan
@@ -689,6 +726,7 @@ class PlannedBriefJob(BriefJob):
                    "library": self._library(12),
                    "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in keys},
                    "who_handles": {k: who for k, (_, who) in getattr(self, "routing", {}).items()}}
+        self._with_current(payload, keys)
         out = self.caps.model.structured("draft_brief_whole", DRAFT_SYSTEM, payload, draft_schema(keys),
                                          max_tokens=16000)
         self.whole = self._clean(out, ev, "draft", keys=keys)
