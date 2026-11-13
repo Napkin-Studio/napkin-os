@@ -23,13 +23,18 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   [[ "$local_sha" == "$zero" ]] && continue          # deleting a remote ref
   if [[ ( "$remote_ref" == refs/heads/main || "$remote_ref" == refs/heads/develop ) && "${NAPKIN_ALLOW_MAIN:-}" != 1 ]]; then
     echo "pre-push: ${remote_ref#refs/heads/} is reached only by a PR (develop by feature PRs, main by"
-    echo "  a release PR from develop; a merge to main deploys staging)."
+    echo "  a release PR from develop or a hotfix/* PR; a merge to main deploys staging)."
     echo "  Push a branch instead: git switch -c feat/<slug> && git push -u origin feat/<slug>"
     status=1
     continue
   fi
   if [[ "$remote_sha" == "$zero" ]] || ! git cat-file -e "$remote_sha" 2>/dev/null; then
-    trunk="$(git rev-parse -q --verify origin/develop >/dev/null && echo origin/develop || echo origin/main)"
+    # A hotfix/* branch is cut from main (CLAUDE.md, Branches); every other branch from develop.
+    if [[ "$remote_ref" == refs/heads/hotfix/* ]]; then
+      trunk=origin/main
+    else
+      trunk="$(git rev-parse -q --verify origin/develop >/dev/null && echo origin/develop || echo origin/main)"
+    fi
     base="$(git merge-base "$trunk" "$local_sha" 2>/dev/null || git rev-list --max-parents=0 "$local_sha" | tail -1)"
   else
     base="$remote_sha"
