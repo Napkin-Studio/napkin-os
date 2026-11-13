@@ -9,7 +9,7 @@
 // but the registry's offers. The Launcher stays as the app library and the
 // fallback.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ToolPage } from './ToolPage'
 import { TerritoriesGate } from './TerritoriesGate'
 import { host } from '../../host'
@@ -112,6 +112,8 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const homed = home?.restricted ? home : null
   // The tools the role is offered; null offers all (a person with no role).
   const offered = useMemo(() => (homed ? new Set(homed.tools) : null), [homed])
+  // Territories is the Brief gate's page, not a tool of the table: whoever may see the client sees whether it is open.
+  const allowedTool = useCallback((id: string) => id === 'territories' || !offered || offered.has(id), [offered])
   const consent = useConsent()
   const isAdmin = !!homed && homed.roles.includes('admin') && !homed.viewing
   // Pages the shell itself adds to More: the person's own timesheet once they have answered, and an admin's audit view.
@@ -138,7 +140,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   useEffect(() => {
     if (!clientId) return
     if (client) {
-      const fixed = correctRoute(route, { client: () => true, tool: id => live.has(id) && (!offered || offered.has(id)) })
+      const fixed = correctRoute(route, { client: () => true, tool: id => live.has(id) && allowedTool(id) })
       if (!sameRoute(fixed, route)) go(fixed, true)
       return
     }
@@ -149,7 +151,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     let fresh = true
     void onRefresh().finally(() => { if (fresh) setChecked(clientId) })
     return () => { fresh = false }
-  }, [clientId, client, route, go, checked, onRefresh, live, offered])
+  }, [clientId, client, route, go, checked, onRefresh, live, allowedTool])
 
   // What the live region says: the level arrived at, or a word about a tool that is not here yet.
   const [soon, setSoon] = useState<{ key: string; text: string; n: number } | null>(null)
@@ -213,7 +215,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   } else if (homed && route.level === 'door') {
     const entry = [...homed.pages, ...homed.more].find(d => d.id === route.door)
     body = <DoorPage door={route.door} name={entry?.name ?? null} clients={data.clients} rights={homed.jobs} go={go} />
-  } else if (clientId && client && route.level === 'tool' && tool && live.has(tool.id) && (!offered || offered.has(tool.id))) {
+  } else if (clientId && client && route.level === 'tool' && tool && live.has(tool.id) && allowedTool(tool.id)) {
     body = (
       <ToolPage
         client={client}
@@ -261,16 +263,18 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
           <>
             {isAdmin && <SetupCard onOpen={() => go({ level: 'setup' })} />}
             <PagesRow view={pagesView} onOpen={openPage} />
-            <NeedsYou
-              items={data.items}
-              jobNeeds={jobNeeds.items}
-              nextDeadline={jobNeeds.next}
-              onNeedsChanged={jobNeeds.reload}
-              onOpenDocument={onOpenDocument}
-              onTimesheet={() => go({ level: 'timesheet' })}
-              onApprovals={() => go({ level: 'door', door: 'approvals' })}
-            />
           </>
+        )}
+        needsSlot={pagesView && (
+          <NeedsYou
+            items={data.items}
+            jobNeeds={jobNeeds.items}
+            nextDeadline={jobNeeds.next}
+            onNeedsChanged={jobNeeds.reload}
+            onOpenDocument={onOpenDocument}
+            onTimesheet={() => go({ level: 'timesheet' })}
+            onApprovals={() => go({ level: 'door', door: 'approvals' })}
+          />
         )}
         manage={manage}
         onAdd={onAdd}

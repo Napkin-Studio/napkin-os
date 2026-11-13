@@ -1,5 +1,5 @@
-// The one bar, drawn open, for the suite's axe, 44 px and em dash checks (tests 72 and 73) in all three modes. The bar is on every screen, so
-// the Phase 1 pages the suite lists already carry its field; these show the panel: with results, with none, with the empty bar's doors,
+// The one bar, drawn open, for the suite's axe, 44 px and em dash checks (tests 72 and 73) in light and dark. The bar has no field (Cmd K and the account
+// menu open it); these show the panel: with results, with none, with the empty bar's doors,
 // a person's card is left to the Rust suite (no directory in the roster stack), and the shortcuts sheet.
 import { expect } from '@playwright/test'
 import { PEOPLE } from './seed/j001'
@@ -8,12 +8,11 @@ import type { Phase2Page } from './phase2/pages'
 type Pg = import('@playwright/test').Page
 const phone = (page: Pg) => (page.viewportSize()?.width ?? 1440) <= 720
 const loaded = async (page: Pg) => {
-  await page.goto('/'); await expect(page.getByTestId('home')).toBeVisible()
+  await page.goto('/'); await expect(page.getByTestId('desk')).toBeVisible()
   await expect(page.getByTestId('os-bar')).toBeVisible()
 }
 const openBar = async (page: Pg) => {
-  if (phone(page)) await page.getByTestId('bar-search-button').click()
-  else await page.keyboard.press('Meta+k')
+  await page.keyboard.press('Meta+k')
   await expect(page.getByTestId('bar-search-input')).toBeFocused()
 }
 

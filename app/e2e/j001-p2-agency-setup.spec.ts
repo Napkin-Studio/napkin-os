@@ -59,7 +59,7 @@ for (const size of SIZES) {
     await expect(page.getByTestId('import-done')).toBeVisible()
     await page.getByTestId('setup-finish').click()
     // Home: no more setup card, and the jobs are in the job index.
-    await expect(page.getByTestId('home')).toBeVisible()
+    await expect(page.getByTestId('desk')).toBeVisible()
     await expect(page.getByTestId('setup-card')).toHaveCount(0)
     const { tenant } = (await (await page.request.get('/api/session')).json()) as { tenant: string }
     const jobs = (await (await page.request.get(`/api/t/${tenant}/jobs`)).json()) as unknown[]
@@ -68,8 +68,8 @@ for (const size of SIZES) {
     const imported = await open(browser, size, 'white', { roster: true })
     await signIn(imported.page, { username: person(1) })
     await imported.page.goto('/')
-    await expect(imported.page.getByTestId('home')).toBeVisible()
-    await expect(imported.page.getByTestId('home-eyebrow')).toContainText(/creative director/i)
+    await expect(imported.page.getByTestId('desk')).toBeVisible()
+    await expect(imported.page.getByTestId('door').filter({ hasText: 'Ready for review' })).toBeVisible() // a creative director's page
     await imported.ctx.close()
     await ctx.close()
   })

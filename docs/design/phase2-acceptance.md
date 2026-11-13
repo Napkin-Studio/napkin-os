@@ -18,8 +18,8 @@ the gate.
 
 | No. | Record | The fact |
 | --- | --- | --- |
-| 19 | remaining-homes | Art director, Copywriter, Producer, Agency Brain and Traffic each see their own five doors and More tools, as in the v2 doors table. |
-| 20 | remaining-homes | A copywriter opening the Proprietary data address gets 403. A person with a Phase 1 role and a Phase 2 role gets one merged home of five doors. |
+| 19 | remaining-homes | Art director, Copywriter, Producer, Agency Brain and Traffic each see their own page doors in the desk's Your pages row, and the rest under More, as in the v2 doors table; a door that opens a client's document is a tool on the dial. |
+| 20 | remaining-homes | A copywriter opening the Proprietary data address gets 403. A person with a Phase 1 role and a Phase 2 role gets one merged Your pages row of five. |
 | 21 | job-page | Open J001 from Live jobs. One job page shows its stage, its documents, who holds it and its deadline. Each tool opens inside the job. |
 | 22 | job-page | The brief gets a new version after work has started. The job page shows Changed brief with two lines and one button, Update to brief vN. |
 | 23 | needs-you-full | Needs you shows only that person's items, soonest deadline first, five and then Show all. An empty list names the next deadline. |
@@ -111,7 +111,7 @@ the gate.
 | --- | --- | --- |
 | 70 | idea-room | J001 from brief to chosen route, in one run: signed and confirmed brief, five team cards, three routes, three scores, one pick by the creative director. The job page shows the chosen route. |
 | 71 | j001-phase2-suite | Every write in every Phase 2 J001 document names an agent and an action, and every human edit is marked as a person's. |
-| 72 | j001-phase2-suite | axe finds nothing serious on every Phase 2 page in all three modes. At 390 px each primary button is 44 px tall. No interface text holds an em dash. |
+| 72 | j001-phase2-suite | axe finds nothing serious on every Phase 2 page in light and dark. At 390 px each primary button is 44 px tall. No interface text holds an em dash. |
 | 73 | j001-phase2-suite | A canary key set on the server reaches no Phase 2 response. No retrieval trace holds a hit from Cannes, Effie or WARC. The run log shows no model event. |
 
 ## What these tests cannot prove

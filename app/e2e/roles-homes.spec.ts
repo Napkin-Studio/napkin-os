@@ -1,6 +1,7 @@
-// Roles and homes (features/roles-and-homes.clan): the doors each role lands on, the merged home of a
-// person with two roles, the role switcher, the O as a map, a later-phase door opening its Empty state,
-// and a person with no role keeping the desk. Run on the roster server (stack.mjs: the placeholder
+// Roles on the desk (features/roles-and-homes.clan, reshaped by features/align-landing-look.clan): the Your pages
+// row each role adds to the one desk, the merged row of a person with two roles, View as, the old home and map
+// addresses falling to the desk, a door with no page opening its card, the dial offering a role its tools only,
+// and a person with no role keeping the whole desk. Run on the roster server (stack.mjs: the placeholder
 // people of seed/j001/people.mjs, with their roles), at 390 and 1440 px. Clients are placeholders.
 //
 // With NAPKIN_E2E_SHOTS=<dir> it also writes a screenshot of each home, the O and a later-phase door:
@@ -29,76 +30,73 @@ const names = (page: Page, id: string) => page.getByTestId(id).allInnerTexts()
 for (const size of SIZES) {
   const at = (title: string) => `${title}, ${size.tag} px`
 
-  test(at('a person with two roles gets one merged home of five doors, the rest under More tools'), async ({ browser }) => {
+  test(at('a person with two roles gets one Your pages row of five, the rest under More'), async ({ browser }) => {
     const { ctx, page } = await signedIn(browser, size, PEOPLE.planningAndCreative)
     await page.goto('/')
     await expect(page.getByTestId('door')).toHaveCount(5)
-    expect(await names(page, 'door')).toEqual(['Brief', 'Ideas', 'Research', 'Ready for review', 'Territories'])
+    expect(await names(page, 'door')).toEqual(['Ready for review', 'Judge scores', 'Client brains', 'Approved work', 'Direction notes'])
     const more = await names(page, 'more-tool')
-    for (const left of ['Judge scores', 'Client brains', 'Presentations', 'Approved work', 'Direction notes']) expect(more).toContain(left)
-    await expect(page.getByTestId('home-eyebrow')).toHaveText('PLANNING AND CREATIVE DIRECTOR · HOME')
+    for (const left of ['Case study builder (read only)', 'Traffic board (read only)']) expect(more).toContain(left)
+    // the tools are not doors: Brief, Research, Ideas, Territories and Presentations are on the dial
+    expect(await names(page, 'door')).not.toContain('Brief')
     await ctx.close()
   })
 
-  test(at('no home draws more than five doors, and Needs you opens each home'), async ({ browser }) => {
+  test(at('no desk draws more than five page doors, and Needs you sits under them'), async ({ browser }) => {
     for (const who of [PEOPLE.planning, PEOPLE.creativeDirector, PEOPLE.accountService, PEOPLE.management, PEOPLE.planningAndCreative, PEOPLE.admin]) {
       const { ctx, page } = await signedIn(browser, size, who)
       await page.goto('/')
-      await expect(page.getByTestId('home')).toBeVisible()
+      await expect(page.getByTestId('desk')).toBeVisible()
+      await expect(page.getByTestId('pages-row')).toBeVisible()
       expect(await page.getByTestId('door').count(), who.username).toBeLessThanOrEqual(5)
+      await expect(page.getByRole('heading', { name: 'Your pages' })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Needs you' })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'More tools' })).toBeVisible()
       await ctx.close()
     }
   })
 
-  test(at('the role switcher shows for an admin and not for Planning'), async ({ browser }) => {
+  test(at('View as is in an admin\'s account menu, changes the row, and a planner has none'), async ({ browser }) => {
     const planner = await signedIn(browser, size, PEOPLE.planning)
     await planner.page.goto('/')
-    await expect(planner.page.getByTestId('home')).toBeVisible()
-    await expect(planner.page.getByTestId('role-switcher')).toHaveCount(0)
+    await expect(planner.page.getByTestId('desk')).toBeVisible()
+    await planner.page.getByTestId('account-button').click()
+    await expect(planner.page.getByRole('menuitem', { name: /View as/ })).toHaveCount(0)
     await planner.ctx.close()
 
     const { ctx, page } = await signedIn(browser, size, PEOPLE.admin)
     await page.goto('/')
-    await expect(page.getByTestId('role-switcher')).toBeVisible()
-    await page.getByTestId('role-switcher').selectOption('copywriter')
-    await expect(page.getByTestId('door')).toHaveText(['Ideas', 'Script editor', 'Radio', 'Video and motion', 'Formats and in situ'])
-    await expect(page).toHaveURL(/#home-copywriter$/)
-    await page.getByTestId('role-switcher').selectOption('')
-    await expect(page.getByTestId('door')).toHaveText(['Agency dashboard', 'Live jobs', 'Time and money', 'Clients', 'Traffic board'])
+    await expect(page.getByTestId('door')).toHaveText(['Agency dashboard', 'Live jobs', 'Time and money', 'Traffic board', 'Agency Brain (read only)'])
+    await page.getByTestId('account-button').click()
+    await page.getByRole('menuitem', { name: /^View as/ }).click()
+    await expect(page.getByTestId('door')).toHaveText(['Client brains', 'Case study builder (read only)'])
+    await expect(page).toHaveURL(/#agency$/)
     await ctx.close()
   })
 
-  test(at('the O: with seven departments open to an admin, five circles render and two are in Other departments'), async ({ browser }) => {
+  test(at('#map and #home-<role> are not routes: each is the desk'), async ({ browser }) => {
     const { ctx, page } = await signedIn(browser, size, PEOPLE.admin)
-    await page.goto('/#map')
-    await expect(page.getByTestId('the-o')).toBeVisible()
-    await expect(page.getByTestId('o-circle')).toHaveCount(5)
-    await expect(page.getByTestId('other-department')).toHaveCount(2)
-    expect(await names(page, 'o-circle')).toEqual(['Management', 'Clients', 'Account service', 'Planning', 'Creative'])
-    expect(await names(page, 'other-department')).toEqual(['Production', 'Agency Brain'])
-    await expect(page.getByTestId('o-circle').first()).toHaveAttribute('data-mine', 'true') // the person's own first
-    await expect(page.getByTestId('o-logo')).toBeVisible()
-    // a circle opens that department's home
-    await page.getByTestId('o-circle').filter({ hasText: 'Creative' }).click()
-    await expect(page.getByTestId('door')).toHaveText(['Ideas', 'Ready for review', 'Judge scores', 'Approved work', 'Direction notes'])
+    for (const old of ['#map', '#home-copywriter']) {
+      await page.goto('/' + old)
+      await page.reload()
+      await expect(page.getByTestId('desk')).toBeVisible()
+      await expect(page.getByTestId('the-o')).toHaveCount(0)
+      await expect(page.getByTestId('role-switcher')).toHaveCount(0)
+    }
     await ctx.close()
   })
 
-  test(at('the O is a map, not the landing: a planner lands on a home and finds one circle'), async ({ browser }) => {
+  test(at('a planner lands on the desk, with one row of pages and no home of its own'), async ({ browser }) => {
     const { ctx, page } = await signedIn(browser, size, PEOPLE.planning)
     await page.goto('/')
-    await expect(page.getByTestId('home')).toBeVisible()
+    await expect(page.getByTestId('desk')).toBeVisible()
+    await expect(page.getByTestId('home-title')).toHaveCount(0)
     await expect(page.getByTestId('the-o')).toHaveCount(0)
-    await page.getByTestId('open-map').click()
-    await expect(page.getByTestId('o-circle')).toHaveCount(1)
-    await expect(page.getByTestId('o-circle')).toHaveText('Planning')
-    await expect(page.getByTestId('other-department')).toHaveCount(0)
+    await expect(page.getByTestId('open-map')).toHaveCount(0)
+    expect(await names(page, 'door')).toEqual(['Client brains', 'Case study builder (read only)'])
     await ctx.close()
   })
 
-  test(at('Client brains, whose tool comes in a later phase, opens an Empty state and not an error'), async ({ browser }) => {
+  test(at('Client brains, which has no page yet, opens a card with its own example and not an error'), async ({ browser }) => {
     const { ctx, page } = await signedIn(browser, size, PEOPLE.planning)
     await page.goto('/')
     await page.getByTestId('door').filter({ hasText: 'Client brains' }).click()
@@ -107,27 +105,38 @@ for (const size of SIZES) {
     await expect(page.locator('[data-state="empty"]')).toContainText('What the agency knows about one client goes here.')
     await expect(page.locator('.ch-banner')).toHaveCount(0)
     await expect(page.getByRole('alert')).toHaveCount(0)
-    await page.getByTestId('to-home').click()
-    await expect(page.getByTestId('home')).toBeVisible()
+    await page.getByTestId('to-desk').click()
+    await expect(page.getByTestId('desk')).toBeVisible()
     await ctx.close()
   })
 
-  test(at('Brief, whose tool exists, asks which client and opens that client\'s tool'), async ({ browser }) => {
+  test(at('a tool is on the dial for the role that has it and absent for the role that has not'), async ({ browser }) => {
     const { ctx, page } = await signedIn(browser, size, PEOPLE.planning)
     const job = await seedJ001(page)
     await page.goto('/')
-    await page.getByTestId('door').filter({ hasText: /^Brief$/ }).click()
-    await expect(page.getByTestId('door-client').first()).toBeVisible()
-    await page.getByTestId('door-client').filter({ hasText: 'Client A' }).first().click()
+    await page.getByTestId('client-circle').first().click()
+    await expect(page.getByTestId('quadrant-brief')).toBeVisible()
+    await page.getByTestId('quadrant-brief').click()
     await expect(page).toHaveURL(new RegExp(`#tool-${job.client}-brief$`))
     await ctx.close()
+    // Management is offered Presentations only (the v2 doors table): no Brief on its dial, and its address falls back to the client
+    const mgr = await signedIn(browser, size, PEOPLE.management)
+    const j2 = await seedJ001(mgr.page)
+    await mgr.page.goto('/')
+    await mgr.page.getByTestId('client-circle').first().click()
+    await expect(mgr.page.getByTestId('quadrant-deck')).toBeVisible()
+    await expect(mgr.page.getByTestId('quadrant-brief')).toHaveCount(0)
+    await mgr.page.goto(`/#tool-${j2.client}-brief`)
+    await mgr.page.reload()
+    await expect(mgr.page).toHaveURL(new RegExp(`#client-${j2.client}$`))
+    await mgr.ctx.close()
   })
 
-  test(at('a person with no role keeps the desk, and the server refuses them nothing'), async ({ browser }) => {
+  test(at('a person with no role keeps the whole desk, and the server refuses them nothing'), async ({ browser }) => {
     const { ctx, page } = await signedIn(browser, size, PEOPLE.noRole)
     await page.goto('/')
     await expect(page.getByTestId('desk')).toBeVisible()
-    await expect(page.getByTestId('home')).toHaveCount(0)
+    await expect(page.getByTestId('pages-row')).toHaveCount(0)
     const { tenant } = await (await page.request.get('/api/session')).json() as { tenant: string }
     expect((await page.request.get(`/api/t/${tenant}/jobs/J001/scope`)).status()).not.toBe(403)
     await ctx.close()
@@ -140,7 +149,7 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test(at('screenshots of each home, the O and a later-phase door'), async ({ browser }) => {
+  test(at('screenshots of each desk and a later-phase door'), async ({ browser }) => {
     test.skip(!shots, 'set NAPKIN_E2E_SHOTS=<dir> to write them')
     const seed = await signedIn(browser, size, PEOPLE.management)
     const job = await seedJ001(seed.page)
@@ -163,9 +172,6 @@ for (const size of SIZES) {
     await take(PEOPLE.management, '', 'home-management')
     await take(PEOPLE.planningAndCreative, '', 'home-merged-planning-creative')
     await take(PEOPLE.admin, '', 'home-admin-switcher')
-    await take(PEOPLE.admin, '#map', 'the-o-admin')
-    await take(PEOPLE.planning, '#map', 'the-o-planning')
-    await take(PEOPLE.planning, '#door-client-brains', 'door-client-brains-empty')
-    await take(PEOPLE.planning, '#door-brief', 'door-brief-clients')
+    await take(PEOPLE.planning, '#door-client-brains', 'door-client-brains-soon')
   })
 }

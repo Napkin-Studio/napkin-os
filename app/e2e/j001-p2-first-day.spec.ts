@@ -23,7 +23,7 @@ for (const size of SIZES) {
     const job = await seedJ001(admin.page, { ready: true, fresh: true })
     await signIn(admin.page, PEOPLE.copywriter) // ADJUST(first-day): the invitation is the record's; the roster's copywriter stands in for the invited person
     await admin.page.goto('/'); await admin.page.reload()
-    await expect(admin.page.getByTestId('home')).toBeVisible() // lands in their own home
+    await expect(admin.page.getByTestId('desk')).toBeVisible() // lands in their own home
     const pointers = admin.page.getByTestId('pointer') // ADJUST(first-day)
     await expect(pointers).toHaveCount(POINTERS) // three pointers, once
     await pointers.first().getByRole('button', { name: 'Got it' }).click()

@@ -9,6 +9,7 @@
 
 import type { DoorEntry, HomeView } from '../../host/http'
 import { doorIsLive } from '../home/doorTargets'
+import '../home/home.css'
 
 interface Props {
   view: HomeView

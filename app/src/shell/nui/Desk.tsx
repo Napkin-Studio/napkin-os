@@ -53,6 +53,8 @@ interface Props {
   onSay: (words: string) => void
   /** What a role adds under the greeting: the Your pages row (shell/nui/PagesRow.tsx). Absent for a person with no role. */
   roleSlot?: ReactNode
+  /** What a role adds under the client circles, before Pick up where you left off: Needs you, until align-needs-lock-people replaces it. */
+  needsSlot?: ReactNode
   /**
    * The tools the person's role is offered (the server's list); null offers all, as for a person with no role. A tool
    * not in it is absent from the dial. The dial's quadrants are Brief, Research, Deck and Production.
@@ -74,7 +76,7 @@ function placeOf(row: HTMLElement, circle: HTMLElement): { left: number; top: nu
   return { left, top, origin: `${cx - left}px ${dr.height / 2 + 12}px` }
 }
 
-export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay, roleSlot, offered = null, onTimesheet }: Props) {
+export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay, roleSlot, needsSlot, offered = null, onTimesheet }: Props) {
   // Asked once, at the person's first sign-in: only a signed-in person has a timesheet to ask about.
   const consent = useConsent()
   const [query, setQuery] = useState('')
@@ -271,6 +273,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
             )}
             {adding && <AddForm onAdd={onAdd} onClose={() => setAdding(false)} />}
 
+            {needsSlot}
             {none && consent === 'not_asked' && (
               <section className="p33-desk" id="p33-desk"><div><h3>Worth a look</h3><div className="p33-worth-list" data-testid="worth-a-look"><Ask variant="card" onTimesheet={onTimesheet} /></div></div></section>
             )}

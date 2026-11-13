@@ -37,5 +37,5 @@ export const PAGES: Phase2Page[] = [
       await expect(page.getByTestId('audit-list').or(page.getByTestId('audit-none')).or(page.getByTestId('audit-page').getByText(/Nothing has been signed/))).toBeVisible()
     },
   },
-  { name: 'home of an admin, with the setup card', as: PEOPLE.admin, show: async page => { await page.goto('/'); await expect(page.getByTestId('home')).toBeVisible() } },
+  { name: 'home of an admin, with the setup card', as: PEOPLE.admin, show: async page => { await page.goto('/'); await expect(page.getByTestId('desk')).toBeVisible() } },
 ]

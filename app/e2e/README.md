@@ -87,7 +87,7 @@ people in, and a server has one auth mode per process, so the stack also starts 
 mode on `NAPKIN_E2E_ROSTER_PORT` (default 18082) beside the anonymous one: the placeholder people and their roles
 are in `seed/j001/people.mjs`, and a spec opens its context with `open(browser, size, 'white', { roster: true })`
 (features/roles-and-homes.clan, decision "the e2e stack serves both auth modes"). `roles-homes.spec.ts` covers the
-homes, the O and the switcher; `NAPKIN_E2E_SHOTS=<dir>` also writes a screenshot of each.
+desks, View as and the old home and map addresses; `NAPKIN_E2E_SHOTS=<dir>` also writes a screenshot of each.
 
 ## The visual brief (feature `visual-brief`)
 

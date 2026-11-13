@@ -9,7 +9,7 @@ import { asMe, lockBrief, PEOPLE, signBrief, type SeededJob } from './seed/j001'
 
 export type Size = { tag: string; width: number; height: number }
 export const SIZES: Size[] = [{ tag: '390', width: 390, height: 844 }, { tag: '1440', width: 1440, height: 900 }]
-export const MODES = ['white', 'grey', 'black'] as const
+export const MODES = ['light', 'dark'] as const
 
 export type Decision = { id?: string; kind?: string; agent?: string; action?: string; version?: string; actor?: string; source?: string }
 export type Person = { username: string; name?: string; roles?: string[] }
@@ -19,7 +19,7 @@ export const rosterURL = `http://127.0.0.1:${process.env.NAPKIN_E2E_ROSTER_PORT 
 /** The stand-in middleware's control address: POST {state, stage, fail, variant}, GET /log. */
 export const mwControl = `http://127.0.0.1:${process.env.NAPKIN_E2E_MW_PORT || '18081'}/control`
 
-export async function open(browser: Browser, size: Size, mode: string = 'white', opts: { roster?: boolean } = {}): Promise<{ ctx: BrowserContext; page: Page }> {
+export async function open(browser: Browser, size: Size, mode: string = 'light', opts: { roster?: boolean } = {}): Promise<{ ctx: BrowserContext; page: Page }> {
   const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, ...(opts.roster ? { baseURL: rosterURL } : {}) })
   await ctx.addInitScript(m => { try { localStorage.setItem('napkin.theme', m) } catch { /* not kept */ } }, mode)
   return { ctx, page: await ctx.newPage() }

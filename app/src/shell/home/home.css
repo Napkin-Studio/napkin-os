@@ -49,3 +49,4 @@
 .pg-soon:where(.nui, .nui *) { display: grid; gap: 18px; justify-items: start; max-width: 520px; }
 @media (max-width: 760px) { .pg-door:where(.nui, .nui *) { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .pg-door:where(.nui, .nui *) { transition: none; } }
+.cl-row-wrap:where(.nui, .nui *) > .hm-sec { margin: 30px 0 6px; }

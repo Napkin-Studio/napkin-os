@@ -1,6 +1,6 @@
 // Phase 2 acceptance, record `one-bar-search` (features/j001-phase2-suite.clan): tests 26 and 27 of docs/design/phase2-acceptance.md, run at 390 and 1440 px.
-// The bar is the shell's one field (app/src/shell/bar): a combobox in the OS bar above a phone's width (Cmd K opens it), one 44 px button
-// below it (data-testid bar-search-button) that opens a full-width sheet. Facts read through the API do not move with the screen and are
+// The bar carries no search field (owner, 13 Nov 2026, features/align-landing-look.clan): the search is one panel (app/src/shell/bar) that
+// Cmd or Ctrl K opens at every width, and the account menu's Search entry opens too. Facts read through the API do not move with the screen and are
 // the walls part of test 27 (the Rust suite crates/napkin-web/tests/search.rs checks every role and agency; this is the same wall through the real stack).
 // No model and no paid provider: the stand-in middleware answers from seed/j001/p2/answers/ and the bar calls none.
 
@@ -23,10 +23,9 @@ async function search(page: Page, q: string): Promise<Found> {
 }
 const titles = (f: Found) => f.groups.flatMap(g => g.items.map(i => i.title))
 
-/** Open the bar the way this width does: Cmd K above a phone's width, the bar's button at 390. */
-async function openBar(page: Page, phone: boolean) {
-  if (phone) await page.getByTestId('bar-search-button').click()
-  else await page.keyboard.press('Meta+k')
+/** Open the bar: Cmd K, at every width. */
+async function openBar(page: Page) {
+  await page.keyboard.press('Meta+k')
   await expect(page.getByTestId('bar-search-input')).toBeFocused()
 }
 
@@ -39,21 +38,29 @@ for (const size of SIZES) {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
     await signIn(page, PEOPLE.planning)
     const job = await seedJ001(page, { ready: true, fresh: true })
-    for (const from of ['/', '/#clients', `/#client-${job.client}`, '/#map', '/#timesheet', `/#job-${job.job}`]) { // from any screen
+    for (const from of ['/', '/#clients', `/#client-${job.client}`, '/#door-client-brains', '/#timesheet', `/#job-${job.job}`]) { // from any screen
       await page.goto('/'); await page.goto(from); await page.reload()
       await expect(page.getByTestId('os-bar')).toBeVisible()
       await page.waitForLoadState('networkidle') // a page moves focus to its own heading when its data lands: the person types after that
-      const field = phone ? page.getByTestId('bar-search-button') : page.getByTestId('bar-search-input')
-      await expect(field).toBeVisible()
-      await expect(field).toHaveAccessibleName('Search or type a command') // the same name on every screen
-      // Esc puts focus back where it was: the medallion with a keyboard (Cmd K), the bar's own button at 390 (what was pressed).
+      // No field in the bar, on any screen: it looks as develop's bar does.
+      await expect(page.getByTestId('bar-field')).toHaveCount(0)
+      await expect(page.getByTestId('bar-search-button')).toHaveCount(0)
+      await expect(page.getByTestId('bar-search-input')).toHaveCount(0)
+      // Esc puts focus back where it was: the medallion with a keyboard (Cmd K).
       await page.getByTestId('medallion').focus()
-      await openBar(page, phone)
+      await openBar(page)
+      await expect(page.getByTestId('bar-search-input')).toHaveAccessibleName('Search or type a command') // the same name on every screen
       await page.keyboard.press('Escape')
       await expect(page.getByTestId('bar-panel')).toHaveCount(0)
-      await expect(phone ? page.getByTestId('bar-search-button') : page.getByTestId('medallion')).toBeFocused()
-      // Cmd K (the bar's button at 390), type "J001 brief", Enter: the brief opens.
-      await openBar(page, phone)
+      await expect(page.getByTestId('medallion')).toBeFocused()
+      // The account menu's Search entry opens the same panel.
+      await page.getByTestId('account-button').click()
+      await page.getByRole('menuitem', { name: /^Search/ }).click()
+      await expect(page.getByTestId('bar-search-input')).toBeFocused()
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('bar-panel')).toHaveCount(0)
+      // Cmd K, type "J001 brief", Enter: the brief opens.
+      await openBar(page)
       const input = page.getByTestId('bar-search-input')
       await input.fill(queryOf(job))
       await expect(page.getByTestId('bar-result').first()).toBeVisible()
@@ -64,7 +71,7 @@ for (const size of SIZES) {
     }
     // Inside the brief: the key works with focus in the tool's frame; Esc returns focus to the frame.
     await expect(page.locator('[data-where="document"]')).toBeVisible()
-    if (!phone) {
+    {
       // At once, one press: the frame is drawn only with its page, and the page forwards the key from its first line
       // (the host's bar key forwarder, shell/bridge/barKeyForwarder.js), so a person pressing Cmd K while the brief still loads is not ignored.
       await page.frameLocator('iframe').first().locator('body').click({ position: { x: 5, y: 5 } })
@@ -73,12 +80,12 @@ for (const size of SIZES) {
       await page.keyboard.press('Escape')
       await expect(page.getByTestId('bar-panel')).toHaveCount(0)
     }
-    // The ? key lists the shortcuts (a keyboard); at 390 the list is on the bar's own panel.
+    // The ? key lists the shortcuts (a keyboard); the same list is on the bar's own panel.
     if (!phone) {
       await page.getByTestId('medallion').focus() // a key typed in the tool's frame stays the frame's: the shell's own page takes the question mark
       await page.keyboard.press('?')
     } else {
-      await openBar(page, phone)
+      await openBar(page)
       await page.getByTestId('bar-shortcuts-link').click()
     }
     const sheet = page.getByTestId('shortcuts')
@@ -89,12 +96,10 @@ for (const size of SIZES) {
     await expect(sheet).toHaveCount(0)
     // A question mark typed in a text field is a question mark: the sheet stays shut.
     await page.goto('/'); await page.goto('/#agency'); await page.reload()
-    if (!phone) {
-      await page.getByTestId('bar-search-input').click()
-      await page.keyboard.type('what?')
-      await expect(page.getByTestId('shortcuts')).toHaveCount(0)
-      await expect(page.getByTestId('bar-search-input')).toHaveValue('what?')
-    }
+    await openBar(page)
+    await page.keyboard.type('what?')
+    await expect(page.getByTestId('shortcuts')).toHaveCount(0)
+    await expect(page.getByTestId('bar-search-input')).toHaveValue('what?')
     await ctx.close()
   })
 
