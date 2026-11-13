@@ -2,8 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The six tools a client's circle carries, and the one table that says which
-// installed app each is. Idea and Prod are dimmed "Soon": Idea is not built,
+// The tools of a client, and the one table that says which installed app each is (a role's tool doors are
+// entries of this table, offered or not by the server's list: features/align-landing-look.clan). Idea and Prod are dimmed "Soon": Idea is not built,
 // and the Production Tool has its own stack and no client link yet.
 
 import type { InstalledApp } from '../../host'
@@ -32,6 +32,8 @@ export const TOOLS: readonly Tool[] = [
   // The copywriter's tool (features/script-editor.clan). It has a door and a page of a client's scripts, not a
   // place on the circle, which keeps its six.
   { id: 'script', name: 'Script', full: 'Script editor', appId: 'ie.napkin.script-editor', noun: ['script', 'scripts'] },
+  // The visual brief the Territories page spins off a signed brief (features/visual-brief.clan).
+  { id: 'visual', name: 'Visual', full: 'Visual brief', appId: 'ie.napkin.visual-brief', noun: ['visual brief', 'visual briefs'] },
 ]
 
 export const toolById = (id: string): Tool | undefined => TOOLS.find(t => t.id === id)

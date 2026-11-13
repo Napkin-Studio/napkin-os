@@ -78,8 +78,6 @@ interface Props {
   agency: string
   /** The agency's marks for the pill (palette.ts pillLogoOf). */
   agencyLogo?: AgencyLogo
-  /** The one bar's field (shell/bar), drawn in the toolbar. */
-  barField?: ReactNode
   onAgency: () => void
   /** Who is signed in, and the way out (the slot's More menu). */
   user?: string | null
@@ -103,7 +101,7 @@ interface Props {
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
 const NO_ITEMS: BarItem[] = []
 
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, barField, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
   const docPath = open.path
@@ -414,8 +412,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       <Toolbar
         agency={agency}
         agencyLogo={agencyLogo}
-        barField={barField}
-        mark={mark}
+                mark={mark}
         onAgency={onAgency}
         onHome={onHome}
         client={client}

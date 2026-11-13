@@ -20,7 +20,7 @@ import { ToolIcon } from './icons'
 import { Pop } from './Pop'
 import { usePop } from './popKit'
 
-const GROUPS = [
+const ALL_GROUPS = [
   { tool: 'brief', label: 'Briefs', kind: 'Brief', icon: 'brief' },
   { tool: 'research', label: 'Research', kind: 'Research', icon: 'research' },
   { tool: 'deck', label: 'Decks', kind: 'Deck', icon: 'deck' },
@@ -43,6 +43,8 @@ interface Props {
   items: LibraryItem[]
   facts: Facts
   live: ReadonlySet<string>
+  /** The tools the person's role is offered; null offers all. A tool not in it has no group here. */
+  offered?: ReadonlySet<string> | null
   onOpenItem: (path: string) => void
   /** Start a document of a live tool for this client. */
   onNew: (tool: Tool) => void
@@ -56,8 +58,9 @@ interface Props {
   onArchive?: () => Promise<string | null>
 }
 
-export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive }: Props) {
+export function ClientView({ client: c, items, facts, live, offered = null, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive }: Props) {
   const pop = usePop<'more' | 'deck'>()
+  const GROUPS = offered ? ALL_GROUPS.filter(g => offered.has(g.tool)) : ALL_GROUPS
   const [mode, setMode] = useState<'idle' | 'rename' | 'archive'>('idle')
   const look = clientLook(c.id, c.name)
   // The registry's display name where it shows; Rename still edits the stored name.
@@ -78,7 +81,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
   const pick = useRef<(i: number) => void>(() => {})
   useEffect(() => {
     pick.current = (i: number) => {
-      const t = toolById(GROUPS[i].tool)
+      const t = GROUPS[i] ? toolById(GROUPS[i].tool) : undefined
       if (!t) return
       if (live.has(t.id)) onOpenTool(t)
       else onSoon(t)

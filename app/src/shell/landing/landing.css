@@ -167,8 +167,8 @@
 .lc-trail li + li::before { content: '\203A'; color: var(--ink3); font-size: 18px; line-height: 1; }
 .lc-crumb { appearance: none; background: none; border: 0; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; justify-content: center; padding: 0 6px; border-radius: var(--r-card); cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink2); }
 .lc-crumb:hover { color: var(--ink); }
-.lc-crumb[aria-current='page'] { color: var(--ink); font-weight: 600; cursor: default; box-shadow: inset 0 -2px 0 var(--agency-accent, transparent); }
-.lc-crumb:focus-visible { outline: 3px solid var(--agency-accent, var(--accent)); outline-offset: 2px; }
+.lc-crumb[aria-current='page'] { color: var(--ink); font-weight: 600; cursor: default; }
+.lc-crumb:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .lc-cn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lc-crumb .lc-cir { flex: none; }
 

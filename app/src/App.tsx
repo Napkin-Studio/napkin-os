@@ -8,8 +8,6 @@ import type { InstalledApp, OpenResult } from './host'
 import DeviceBanner from './offline/DeviceBanner'
 import DeviceHome from './offline/DeviceHome'
 import OfflineDialog from './offline/OfflineDialog'
-import AgencyLookPanel from './shell/agency/AgencyLookPanel'
-import { applyAgencyLook, getAgencyLook } from './shell/agency/look'
 import PeoplePage from './shell/people/PeoplePage'
 import { peopleEntryFor } from './shell/people/model'
 import { isClanFile, keepOffline, pickFile, type DeviceSource } from './offline/actions'
@@ -40,7 +38,8 @@ import { useRoute } from './shell/useRoute'
 import { useHomeView } from './shell/home/useHomeView'
 import { formatRoute, type Route } from './shell/route'
 import AppHost from './shell/AppHost'
-import { BarField, BarMount } from './shell/bar'
+import { BarMount, openBar } from './shell/bar'
+import { setOfferedTools } from './shell/offeredTools'
 import InstallPrompt from './shell/InstallPrompt'
 import type { RunningApp, Screen } from './shell/types'
 import StudioShell from './studio/StudioShell'
@@ -48,7 +47,6 @@ import { LogoSpinnerFill, LogoSpinnerVeil } from './brand/LogoSpinner'
 import './index.css'
 import './components/chrome.css'
 import './shell/nui/tokens.css'
-import './shell/nui/modes.css'
 import './shell/nui/nui.css'
 import './shell/nui/shell.css'
 import { roles } from './shell/agents/engine'
@@ -119,7 +117,8 @@ export default function App() {
   const [device, setDevice] = useState(onDevice)
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
-  const [lookOpen, setLookOpen] = useState(false)
+  // An admin trying a role (account menu, View as): what the desk offers changes, what the server allows does not.
+  const [viewAs, setViewAs] = useState<string | null>(null)
   // The People page (features/people-admin.clan): an admin's, from the account menu.
   const [peopleOpen, setPeopleOpen] = useState(false)
   const updateReady = useUpdateReady()
@@ -127,8 +126,11 @@ export default function App() {
   // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
   const landing = useLanding(host, screen === 'home' || screen === 'app', !(device && !serverless),
     screen === 'app' ? running?.artifactPath ?? null : null)
-  // The person's home, from the roles in their session; none for a person with no role, who keeps the desk.
-  const home = useHomeView(hasServer && !(device && !serverless), route.level === 'home' ? route.as : null)
+  // What the person's role adds to the desk, from the roles in their session; none for a person with no role.
+  const home = useHomeView(hasServer && !(device && !serverless), viewAs)
+  // The tools the role is offered, for the one place outside the desk that lists tools (Continue in).
+  const offeredTools = home.view?.restricted ? home.view.tools : null
+  useEffect(() => { setOfferedTools(offeredTools) }, [offeredTools])
   // On a server with accounts: who is signed in, for the bar's way out.
   const [user, setUser] = useState<string | null>(null)
   // Who the history entries the shell writes are for (lastOpen.ts).
@@ -148,8 +150,6 @@ export default function App() {
   // An agency added on the People page joins the registry there; closing the page puts its look on again.
   const [looksSeen, setLooksSeen] = useState(0)
   useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown, looksSeen])
-  // The accent sampled from the agency's logo (shell/agency/look.ts), once the server says whose it is.
-  useEffect(() => { if (personKnown && hasServer && !device) void getAgencyLook().then(applyAgencyLook) }, [personId, personKnown, device, looksSeen])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
   // The agency's wordmark on its pill (and its icon on a narrow bar), where the registry has them.
@@ -534,8 +534,6 @@ export default function App() {
       onOffline={hasServer && !device ? () => setOfflineOpen(true) : undefined}
       onDecisions={() => setDeskDecisions(true)}
       home={home.view}
-      agencyName={agencyNameOf(landing.data.person?.id, whoIs(landing.data.person ?? null).agency)}
-      agencyLogo={agencyLogo}
     />
   ) : landing.state === 'loading' || (landing.state === 'ready' && home.state === 'loading') ? (
     <LogoSpinnerFill label="Opening the studio…" />
@@ -586,9 +584,8 @@ export default function App() {
   // 9 Nov 2026). It never lights the medallion; only an open document does.
   const deskNeeds = landing.data ? landing.data.items.reduce((n, i) => n + callsIn(i), 0) : 0
   const toAgency = () => go({ level: 'agency' })
-  // The one bar (shell/bar): its field in every Toolbar, its panel mounted once below. Only where there is a server to ask.
+  // The one bar (shell/bar): no field in the toolbar; Cmd or Ctrl K and the account menu's Search open its panel, mounted once below. Only where there is a server to ask.
   const barOn = hasServer && !(device && !serverless)
-  const barField = barOn ? <BarField /> : undefined
   const recentDocs = (landing.data?.items ?? []).slice().sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5).map(i => ({ path: i.path, title: i.title }))
   const onSignOut = user ? () => { void signOut() } : undefined
   // The account menu on the avatar (owner, 2026-11-11): who you are, Offline copies, Sign out.
@@ -598,7 +595,10 @@ export default function App() {
     initials: initialsOf(personName),
     // The agency's name, and the person's role where the session carries one (the role an admin is viewing as is not theirs).
     line: home.view?.restricted && !home.view.viewing && home.view.title ? `${agency} · ${home.view.title}` : agency,
-    ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null, onLook: () => setLookOpen(true) } : {}),
+    ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null } : {}),
+    ...(barOn ? { onSearch: () => openBar() } : {}),
+    // Only for an admin, who has the switcher; the server serves it to nobody else.
+    ...(home.view?.switcher ? { onViewAs: { current: viewAs, roles: home.view.switcher, set: setViewAs } } : {}),
     // Only for an admin: the server refuses everyone else's calls with 403 too.
     ...(hasServer && !device ? { onPeople: peopleEntryFor(user, () => setPeopleOpen(true)) } : {}),
   }
@@ -652,7 +652,6 @@ export default function App() {
           } : null}
           agency={agency}
           agencyLogo={agencyLogo}
-          barField={barField}
           mark={mark}
           onAgency={() => leaveTo({ level: 'agency' })}
           onCopyLink={hasServer && !device ? copyLink : undefined}
@@ -695,8 +694,7 @@ export default function App() {
               user={user}
               onSignOut={onSignOut}
               account={account}
-              barField={barField}
-            />
+                />
           )}
         >
           {apps}
@@ -714,7 +712,6 @@ export default function App() {
       )}
 
       <BarMount enabled={barOn} home={home.view} go={go} openPath={openPath} recent={recentDocs} signedIn={!!user} onSignOut={onSignOut} />
-      {lookOpen && <AgencyLookPanel onClose={() => setLookOpen(false)} />}
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
 
       {peopleOpen && <PeoplePage user={user} onClose={() => { setPeopleOpen(false); setLooksSeen(n => n + 1) }} />}

@@ -58,7 +58,7 @@ test('the desk: medallion, the agency pill back to the desk, the client chip, th
   assert.match(html, /id="p33-cswitch"[^>]*title="Switch client"/)
   assert.match(html, />Offline</, 'a caller\'s own tools still have a place')
   assert.doesNotMatch(html, /tb-beta|>Beta</, 'no Beta chip in the bar (owner, 2026-11-13)')
-  assert.match(html, /Switch to (White|Grey|Black)/, 'ThemeToggle')
+  assert.match(html, /Switch to (light|dark) mode/, 'ThemeToggle')
   assert.match(html, /aria-description="3 need your call"/)
   assert.match(html, /data-testid="needs-count">3</)
   assert.doesNotMatch(html, />More </, 'no More ▾ on the desk: its actions are in the account and desk menus')

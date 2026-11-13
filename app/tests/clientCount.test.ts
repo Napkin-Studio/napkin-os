@@ -3,14 +3,13 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // The count beside a tool's name on a client's page (`.cp-h small`, "4" next to Brief) is text, so it
-// reads at 4.5 to 1 on the papers in White, Grey and Black. --faint did not on a tinted white paper
+// reads at 4.5 to 1 on the papers in light and dark. --faint did not on a tinted white paper
 // (#736859 on #ece8e8 measured 4.48 to 1, which axe reports as color-contrast); the count uses --muted.
 
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
-import { MODE_SURFACES } from '../src/shell/agency/accent.ts'
 import { contrast } from '../src/shell/agency/palette.ts'
 
 let root = new URL('.', import.meta.url)
@@ -28,17 +27,18 @@ function token(css: string, selector: string, name: string): string {
 }
 
 const tokens = read('src/shell/nui/tokens.css')
-const modes = read('src/shell/nui/modes.css')
 const muted = {
   white: token(tokens, ':root,\n:root[data-theme=\'light\'] {', '--muted'),
-  grey: token(modes, ':root[data-theme=\'light\'][data-mode=\'grey\']', '--muted'),
   black: token(tokens, ':root[data-theme=\'dark\'] {', '--muted'),
 }
 // Papers a count can sit on: the three of the mode, and the tinted white paper axe measured it on.
+const SURFACES = {
+  white: ['#F6F1E7', '#FFFDF8', '#FFFFFF'],
+  black: ['#121110', '#1B1A18', '#201E1B'],
+} as const
 const sit: Record<keyof typeof muted, string[]> = {
-  white: [...MODE_SURFACES.white, '#ece8e8'],
-  grey: [...MODE_SURFACES.grey],
-  black: [...MODE_SURFACES.black],
+  white: [...SURFACES.white, '#ece8e8'],
+  black: [...SURFACES.black],
 }
 
 test('the stylesheet colours the count with --muted, not --faint', () => {
@@ -47,7 +47,7 @@ test('the stylesheet colours the count with --muted, not --faint', () => {
   assert.match(rule, /color: var\(--muted\)/)
 })
 
-for (const mode of ['white', 'grey', 'black'] as const) {
+for (const mode of ['white', 'black'] as const) {
   test(`the count reads at 4.5 to 1 on every paper in ${mode}`, () => {
     for (const paper of sit[mode]) {
       assert.ok(contrast(muted[mode], paper) >= 4.5, `${muted[mode]} on ${paper} in ${mode}: ${contrast(muted[mode], paper).toFixed(2)}`)

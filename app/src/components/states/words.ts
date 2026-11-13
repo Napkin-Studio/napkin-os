@@ -106,7 +106,8 @@ export const J001_BRIEF_EXAMPLE: Example = {
 }
 
 /** The three modes every screen reads in (v2 section 8). */
-export const MODES = ['white', 'grey', 'black'] as const
+/** The two themes the gallery draws (the shell's own, features/align-landing-look.clan). */
+export const MODES = ['light', 'dark'] as const
 export type Mode = (typeof MODES)[number]
 
 /** The ids the shell sends the app (clan:bar-action) when a state's button is pressed. */

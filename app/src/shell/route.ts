@@ -8,17 +8,16 @@
 //   #clients                the clients page: one circle per client
 //   #client-<id>            one client, with its tools around it
 //   #tool-<id>-<tool>       one tool, for that client
-//   #map                    the O: the map of the agency (features/roles-and-homes.clan)
-//   #door-<door>            one door of a home, e.g. #door-client-brains
-//   #home-<role>            another role's home, for the role switcher and the O
+//   #door-<door>            one page door of the desk's Your pages row, e.g. #door-live-jobs
 //   #timesheet              the person's own day (features/timesheet-sessions.clan)
 //   #setup #people #audit   setting the agency up, its people and roles, and its audit view (features/agency-setup.clan)
 //   #job-<number>           one job: its page (features/job-page.clan), `J` and three to six digits
 //
-// For a person with a role, `#agency` is their home; with none it is the desk, as before.
+// `#agency` is the desk for everyone. A role adds a row of page doors to it and filters its tools; it has no home
+// of its own (features/align-landing-look.clan). `#map` and `#home-<role>` no longer exist and fall to the desk.
 //
 // `<id>` is a client id (`cli_` and eight lowercase hex digits) and `<tool>`
-// one of `brief research idea deck prod ads territories` (Territories is a page, not a
+// one of `brief research idea deck prod ads territories script visual` (Territories is a page, not a
 // circle: it sits behind the Brief gate, features/brief-gate.clan). Both are ASCII by construction:
 // a client's name never goes in a URL, so non-ASCII names, renames and hostile
 // hashes cannot make a link that points somewhere else. Anything that is not
@@ -27,7 +26,7 @@
 // The shell (App.tsx) owns the screen and writes the hash from it; a hashchange
 // only reads. This module is pure, so it is table-tested without a browser.
 
-export const TOOL_IDS = ['brief', 'research', 'idea', 'deck', 'prod', 'ads', 'territories', 'script'] as const
+export const TOOL_IDS = ['brief', 'research', 'idea', 'deck', 'prod', 'ads', 'territories', 'script', 'visual'] as const
 export type ToolId = (typeof TOOL_IDS)[number]
 
 export type Route =
@@ -35,9 +34,7 @@ export type Route =
   | { level: 'clients' }
   | { level: 'client'; client: string }
   | { level: 'tool'; client: string; tool: ToolId }
-  | { level: 'map' }
   | { level: 'door'; door: string }
-  | { level: 'home'; as: string }
   | { level: 'timesheet' }
   | { level: 'setup' }
   | { level: 'people' }
@@ -64,16 +61,11 @@ export function parseRoute(hash: string): Route {
   const h = hash.startsWith('#') ? hash.slice(1) : hash
   if (h === 'agency') return AGENCY
   if (h === 'clients') return { level: 'clients' }
-  if (h === 'map') return { level: 'map' }
   if (h === 'timesheet') return { level: 'timesheet' }
   if (h === 'setup' || h === 'people' || h === 'audit') return { level: h }
   if (h.startsWith('door-')) {
     const door = h.slice('door-'.length)
     return isWord(door) ? { level: 'door', door } : AGENCY
-  }
-  if (h.startsWith('home-')) {
-    const as = h.slice('home-'.length)
-    return isWord(as) ? { level: 'home', as } : AGENCY
   }
   if (h.startsWith('job-')) {
     const number = h.slice('job-'.length)
@@ -101,9 +93,7 @@ export function formatRoute(r: Route): string {
     case 'clients': return '#clients'
     case 'client': return `#client-${r.client}`
     case 'tool': return `#tool-${r.client}-${r.tool}`
-    case 'map': return '#map'
     case 'door': return `#door-${r.door}`
-    case 'home': return `#home-${r.as}`
     case 'timesheet': return '#timesheet'
     case 'setup': return '#setup'
     case 'people': return '#people'
@@ -121,9 +111,7 @@ export function ancestry(r: Route): Route[] {
     case 'clients': return [AGENCY]
     case 'client': return [AGENCY, { level: 'clients' }]
     case 'tool': return [AGENCY, { level: 'clients' }, { level: 'client', client: r.client }]
-    case 'map':
     case 'door':
-    case 'home':
     case 'setup':
     case 'people':
     case 'audit':
@@ -139,9 +127,7 @@ export function up(r: Route): Route {
     case 'clients': return AGENCY
     case 'client': return { level: 'clients' }
     case 'tool': return { level: 'client', client: r.client }
-    case 'map':
     case 'door':
-    case 'home':
     case 'setup':
     case 'people':
     case 'audit':

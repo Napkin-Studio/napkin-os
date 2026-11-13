@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { FailedSave, Loading, MissingAccess } from '../../components/states/ScreenStates'
 import type { Route } from '../route'
-import { applyAgencyLook, getAgencyLook, lookFromFile, saveAgencyLook, type AgencyLook } from '../agency/look'
+import { getAgencyLogo, logoFromFile, saveAgencyLogo, type AgencyLogo } from '../agency/agencyLogo'
 import { CsvImport } from './CsvImport'
 import { readSettings, readSetup, saveSettings, type SetupStatus } from './api'
 import { firstUnfinished, isDone, nextStep, numberOf, prevStep, STEPS, stepOf, type StepId } from './model'
@@ -131,20 +131,18 @@ export function StepPage({ step, status, agency, onStep, onRead, onName, onFinis
 // ── the steps ───────────────────────────────────────────────────────────────
 
 function LogoStep({ onSaved }: { onSaved: () => Promise<void> }) {
-  const [look, setLook] = useState<AgencyLook | null>(null)
+  const [look, setLook] = useState<AgencyLogo | null>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null)
-  useEffect(() => { void getAgencyLook().then(setLook) }, [])
+  useEffect(() => { void getAgencyLogo().then(setLook) }, [])
 
   async function pick(file: File | undefined) {
     if (!file) return
     setNote(null); setBusy(true)
     try {
-      const next = await lookFromFile(file)
-      const saved = await saveAgencyLook(next)
+      const saved = await saveAgencyLogo(await logoFromFile(file))
       setLook(saved)
-      applyAgencyLook(saved)
-      setNote({ text: saved.accent ? 'Saved. The studio now wears your colour.' : 'Saved. Your logo has only black, white and grey, so there is no accent colour.' })
+      setNote({ text: 'Saved.' })
       await onSaved()
     } catch (e) {
       setNote({ text: e instanceof Error && e.message ? e.message : 'That logo could not be read. Try an SVG or a PNG.', bad: true })

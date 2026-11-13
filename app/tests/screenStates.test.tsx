@@ -70,18 +70,18 @@ test('there are nine states, each named, in the order v2 lists them', () => {
   assert.deepEqual(STATES.map(s => STATE_NAMES[s]), ['Normal', 'Empty', 'Loading', 'Failed save', 'Missing access', 'Changed brief', 'Run failed', 'Not right', 'Long run'])
 })
 
-test('the gallery draws all nine in White, Grey and Black', () => {
+test('the gallery draws all nine in light and dark', () => {
   const html = renderToStaticMarkup(createElement(Gallery))
   const page = new JSDOM(html).window.document
-  assert.deepEqual([...page.querySelectorAll('section[data-mode]')].map(m => m.getAttribute('data-mode')), [...MODES])
+  assert.deepEqual([...page.querySelectorAll('section[data-tone]')].map(m => m.getAttribute('data-tone')), [...MODES])
   for (const mode of MODES) {
-    const inMode = [...page.querySelectorAll(`section[data-mode="${mode}"] [data-state]`)].map(e => e.getAttribute('data-state'))
+    const inMode = [...page.querySelectorAll(`section[data-tone="${mode}"] [data-state]`)].map(e => e.getAttribute('data-state'))
     assert.deepEqual(inMode, [...STATES], `${mode} shows the nine, once each`)
   }
 })
 
-test('axe finds nothing in the gallery, in any of the three modes', async () => {
-  for (const modes of [['white'], ['grey'], ['black'], [...MODES]] as const) {
+test('axe finds nothing in the gallery, in either theme', async () => {
+  for (const modes of [['light'], ['dark'], [...MODES]] as const) {
     const page = new JSDOM(`<!doctype html><html lang="en"><head><title>The nine screen states</title></head><body>${renderToStaticMarkup(createElement(Gallery, { modes }))}</body></html>`, { runScripts: 'outside-only' })
     page.window.eval(axeSource)
     // Contrast needs real layout and real CSS; jsdom has neither, so the tokens are measured in the next test.
@@ -102,10 +102,10 @@ function contrast(a: string, b: string): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
 }
 
-test('ink and muted text read on the paper and the grey rectangles in every mode (4.5 to 1)', () => {
+test('ink and muted text read on the paper and the grey rectangles in both themes (4.5 to 1)', () => {
   const css = read('src/components/states/states.css')
   for (const mode of MODES) {
-    const block = new RegExp(`\\.ns-mode\\[data-mode='${mode}'\\][^{]*\\{([^}]*)\\}`).exec(css)?.[1] ?? ''
+    const block = new RegExp(`\\.ns-mode\\[data-tone='${mode}'\\][^{]*\\{([^}]*)\\}`).exec(css)?.[1] ?? ''
     const v = (name: string) => new RegExp(`--${name}: (#[0-9a-fA-F]{6})`).exec(block)?.[1] ?? ''
     for (const [name, on] of [['ink', 'paper'], ['muted', 'paper'], ['ink', 'paper-2'], ['muted', 'paper-2']] as const) {
       assert.ok(v(name) && v(on), `${mode} defines ${name} and ${on}`)

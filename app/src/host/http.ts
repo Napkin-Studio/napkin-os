@@ -68,24 +68,22 @@ interface SessionInfo {
   roles?: string[]
 }
 
-/** A door, or a line under More tools (napkin-web/src/roles.rs `Entry`). */
+/** A page door, or a line under More (napkin-web/src/roles.rs `Entry`). */
 export interface DoorEntry { id: string; name: string }
-/** A circle on the O: a department, and the role whose home it opens (none: the client desk). */
-export interface MapCircle { id: string; name: string; mine: boolean; opens: string | null }
 /**
- * The person's home, as the server serves it (`GET /api/t/{tenant}/doors`): the doors,
- * More tools and the O's circles, from the roles in the session. `restricted` is false
- * for a person with no roles, who keeps the desk.
+ * What a role adds to the desk (`GET /api/t/{tenant}/doors`, napkin-web/src/roles.rs `view`): the page doors of the
+ * "Your pages" row (at most five), the rest as a text list, and the tools the role is offered (landing/tools.ts ids).
+ * `restricted` is false for a person with no roles, who keeps the whole desk.
  */
 export interface HomeView {
   roles: string[]
   restricted: boolean
   title: string
   viewing: string | null
-  doors: DoorEntry[]
+  pages: DoorEntry[]
   more: DoorEntry[]
-  map: { circles: MapCircle[]; other: MapCircle[] }
-  /** Every role's home, for admins and demos; null for everyone else. */
+  tools: string[]
+  /** Every role, for admins and demos (View as); null for everyone else. */
   switcher: { id: string; title: string }[] | null
   /** What this person may do with jobs (open one, change it, set its budget). */
   jobs: JobRights

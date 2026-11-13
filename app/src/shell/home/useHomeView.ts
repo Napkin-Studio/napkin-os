@@ -2,8 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The person's home in React: read once for the roles in the session, and again
-// when the role switcher asks for another role's home. A server with no accounts,
+// What the person's role adds to the desk, in React: read once for the roles in the session, and again
+// when an admin's View as asks for another role's. A server with no accounts,
 // the desktop and the serverless build have none, and keep the desk.
 
 import { useEffect, useState } from 'react'

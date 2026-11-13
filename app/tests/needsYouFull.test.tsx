@@ -15,9 +15,8 @@ import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import type { HomeView } from '../src/host/http.ts'
 import type { JobNeed } from '../src/host/types.ts'
-import { Home } from '../src/shell/home/Home.tsx'
+import { NeedsYou } from '../src/shell/home/NeedsYou.tsx'
 import { emptyLine, jobNeedRow, UNDO_MS } from '../src/shell/home/model.ts'
 
 const need = (over: Partial<JobNeed>): JobNeed => ({
@@ -25,10 +24,9 @@ const need = (over: Partial<JobNeed>): JobNeed => ({
   text: 'J001 brief: the brief has a new version since it was signed.', action: 'Open the brief', path: 'documents/b.clan', due: '2026-12-18', due_source: 'job',
   urgent: false, can_done: true, ...over,
 })
-const view: HomeView = { roles: ['planning'], restricted: true, title: 'Planning', viewing: null, doors: [], more: [], map: { circles: [], other: [] }, switcher: null }
 const noop = () => {}
 const home = (jobNeeds: JobNeed[], nextDeadline?: JobNeed extends never ? never : { job: string; client: string; client_id: string; due: string } | null) =>
-  renderToStaticMarkup(createElement(Home, { view, items: [], jobNeeds, nextDeadline, first: 'Aoife', apps: [], onDoor: noop, onOpenDocument: noop, onMap: noop, onSwitch: noop }))
+  renderToStaticMarkup(createElement(NeedsYou, { items: [], jobNeeds, nextDeadline, onOpenDocument: noop, onApprovals: noop }))
 
 test('an empty list names the next deadline, or says none is set, or says only that nothing needs you', () => {
   assert.equal(emptyLine({ job: 'J001', client: 'Client A', client_id: 'c', due: '2026-12-18' }), 'Nothing needs you now. Next deadline: J001, Client A, 18 Dec.')

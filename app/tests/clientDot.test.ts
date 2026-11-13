@@ -12,11 +12,11 @@ import './domFakes.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { MIN_CONTRAST, readableInk } from '../src/shell/agency/accent.ts'
+import { MIN_CONTRAST, readableInk } from '../src/shell/agency/ink.ts'
 import { CLIENT_REGISTRY, setClientAgency } from '../src/shell/agency/clients.ts'
 import { contrast } from '../src/shell/agency/palette.ts'
 import { CLIENT_LOOKS, clientLook, hashLook } from '../src/shell/nui/deskData.ts'
-import { MODES } from '../src/theme.ts'
+const MODES = ['light', 'dark'] as const
 
 const every: { id: string; cl: string; ink: string }[] = [
   ...CLIENT_LOOKS.map((l, i) => ({ id: `palette ${i}`, ...l })),
@@ -24,7 +24,7 @@ const every: { id: string; cl: string; ink: string }[] = [
     Object.entries(clients).map(([slug, c]) => ({ id: `${agency}/${slug}`, cl: c.base, ink: c.accent }))),
 ]
 
-test('every client colour, as the shell draws it, reads: monogram ink on the fill, in all three modes', () => {
+test('every client colour, as the shell draws it, reads: monogram ink on the fill, in light and dark', () => {
   assert.ok(every.length >= 8)
   for (const mode of MODES) {
     for (const c of every) {

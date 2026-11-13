@@ -2,53 +2,60 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// One door of a home, opened. Every tool opens inside a job file (v2 section 4),
-// so a door whose tool exists (Brief, Research, Presentations) asks which client's
-// and opens that client's tool page. A door whose tool comes in a later phase
-// opens that tool's Empty state: one line on what goes here, a finished example
-// and its starting verb, never an error and never a blank box (v2 section 8).
+// One page door of the desk's "Your pages" row, opened (features/align-landing-look.clan). A page door opens an
+// agency-wide page of the shell: the dashboard, Live jobs, Approvals, Judge scores. A door whose page is not built yet
+// opens develop's SoonCard, carrying that door's own example line (components/states/doors.ts), with one way back.
+// Tools are not doors: they are landing/tools.ts entries, offered on the desk by the role.
 
 import { useEffect, useRef } from 'react'
-import type { ClientRecord, JobRights, LibraryItem } from '../../host/types'
-import { Empty } from '../../components/states/ScreenStates'
+import type { ClientRecord, JobRights } from '../../host/types'
+import { SoonCard } from '../SoonCard'
+import type { Teaser } from '../comingSoon'
 import { doorById } from '../../components/states/doors'
-import { clientLook, clientName, monogramOf } from '../nui/deskData'
-import { toolById } from '../landing/tools'
 import type { Route } from '../route'
-import { doorTarget } from './doorTargets'
-import { doorIsLive, doorTool } from './model'
+import { doorIsLive, doorTarget } from './doorTargets'
 import { Dashboard } from './Dashboard'
 import { ApprovalsPage } from '../approvals/ApprovalsPage'
 import { LiveJobs } from '../job/LiveJobs'
 import { JudgeScoresPage } from '../judge/JudgeScoresPage'
 import './home.css'
 
+/** The card for a door with no page yet: the door's own line, example and verb. */
+const MARK = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><circle cx="22" cy="22" r="14" fill="none" stroke="black" stroke-width="3"/></svg>'
+function teaserOf(door: string, title: string, content: ReturnType<typeof doorById>): Teaser {
+  return {
+    app_id: door,
+    name: title,
+    job: content?.verb ?? 'Open the J001 job',
+    line: content?.line ?? `${title} goes here.`,
+    colour: '#6B665C',
+    mark: MARK,
+    example: content?.example ?? { title: 'Example · Client A, an Irish whiskey', lines: [`${title} will list the J001 work here.`] },
+  }
+}
+
 interface Props {
   door: string
   /** The door's words as the home gave them (`Brief (read and sign)`), else the Empty content's name. */
   name: string | null
   clients: readonly ClientRecord[]
-  items: readonly LibraryItem[]
-  apps: readonly string[]
   /** What this person may do with jobs (the home view's): who gets the Open a job button. */
   rights?: JobRights | null
   go: (r: Route) => void
 }
 
-export function DoorPage({ door, name, clients, items, apps, rights = null, go }: Props) {
+export function DoorPage({ door, name, clients, rights = null, go }: Props) {
   const top = useRef<HTMLDivElement>(null)
   useEffect(() => { top.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true }) }, [door])
   const content = doorById(door)
   const title = name ?? content?.name ?? door.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase())
-  const toolId = doorTool(door)
-  const tool = toolId ? toolById(toolId) : undefined
-  const live = doorIsLive(door, apps)
+  const live = doorIsLive(door)
   const target = doorTarget(door)
-  const page = live && target && 'page' in target ? target.page : null
+  const page = live && target ? target.page : null
 
   let body
   if (page === 'agency-dashboard') {
-    // The dashboard reads the job index, behind the server's role check (a door of Management's home).
+    // The dashboard reads the job index, behind the server's role check (a door of Management's row).
     body = <Dashboard go={go} />
   } else if (page === 'approvals') {
     // Who approves each stage and by when, who holds each job and for how long: read from the job index.
@@ -59,38 +66,12 @@ export function DoorPage({ door, name, clients, items, apps, rights = null, go }
   } else if (page === 'judge-scores') {
     // Each piece of work and its score, by job: counts of pieces, never of people (record judge).
     body = <JudgeScoresPage go={go} />
-  } else if (page === 'clients') {
-    // The client desk is the Clients door: the desk page itself, not a second list of clients.
-    body = <Empty line="The desk lists your clients." verb="Open the desk" example={{ title: 'Example · Client A, an Irish whiskey', lines: ['Client A, an Irish whiskey. One live job, J001.'] }} onStart={() => go({ level: 'clients' })} />
-  } else if (tool && live && clients.length > 0) {
-    body = (
-      <section className="cl-row-wrap" aria-label={`Clients for ${title}`}>
-        <div className="cl-row" role="group" aria-label="Pick a client" data-testid="door-clients">
-          {clients.map(c => {
-            const n = items.filter(i => i.client?.id === c.id && i.app_id === tool.appId).length
-            const look = clientLook(c.id, c.name)
-            return (
-              <button key={c.id} type="button" className="cl-circle" data-testid="door-client" onClick={() => go({ level: 'tool', client: c.id, tool: tool.id })}
-                aria-label={`${clientName(c)}: ${n === 0 ? `no ${tool.noun[1]} yet` : `${n} ${n === 1 ? tool.noun[0] : tool.noun[1]}`}. Opens ${title}`}>
-                <span className="cl-disc" style={{ ['--cl' as string]: look.cl, ['--cl-ink' as string]: look.ink }}><b>{monogramOf(c)}</b></span>
-                <span className="cl-name">{clientName(c)}</span>
-                <span className="cl-line">{n === 0 ? `No ${tool.noun[1]} yet` : `${n} ${n === 1 ? tool.noun[0] : tool.noun[1]}`}</span>
-              </button>
-            )
-          })}
-        </div>
-      </section>
-    )
-  } else if (tool && live) {
-    body = <Empty line={content?.line ?? `${title} goes here.`} verb="Add a client" example={content?.example} onStart={() => go({ level: 'clients' })} />
   } else {
     body = (
-      <Empty
-        line={content?.line ?? `${title} goes here.`}
-        example={content?.example ?? { title: 'Example · Client A, an Irish whiskey', lines: [`${title} will list the J001 work here.`] }}
-        verb={content?.verb ?? 'Open the J001 job'}
-        reason="This tool comes in a later phase. Its place here is kept."
-      />
+      <div className="pg-soon" data-testid="door-soon">
+        <SoonCard teaser={teaserOf(door, title, content)} />
+        <button type="button" className="side-link" data-testid="to-desk" onClick={() => go({ level: 'agency' })}>Back to the desk</button>
+      </div>
     )
   }
 
@@ -99,10 +80,10 @@ export function DoorPage({ door, name, clients, items, apps, rights = null, go }
       <div className="studio-shell">
         <section className="app-head">
           <div className="app-head-text">
-            <div className="eyebrow">DOOR</div>
+            <div className="eyebrow">YOUR PAGES</div>
             <h1 className="hero-title" tabIndex={-1} data-testid="door-title">{title}<span className="period-dot" aria-hidden /></h1>
           </div>
-          <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to your home</button></div>
+          <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to the desk</button></div>
         </section>
         <main className="hm-main">{body}</main>
       </div>

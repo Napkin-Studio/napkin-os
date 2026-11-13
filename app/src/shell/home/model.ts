@@ -2,32 +2,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// What a home is made of, as plain functions (features/roles-and-homes.clan).
-// The server sends the doors, More tools and the O's circles from the roles in
-// the session (napkin-web/src/roles.rs); this file only reads them: which tool
-// a door opens, which doors have a tool at all, what Needs you holds, and the
-// words said about it. Nothing here fetches.
+// What Needs you is made of, as plain functions (features/roles-and-homes.clan): what holds a person's
+// attention, in what order, and the words said about it. Nothing here fetches.
 
-import type { DoorEntry, HomeView, MapCircle } from '../../host/http'
 import type { JobNeed, LibraryItem, NextDeadline } from '../../host/types'
-import { toolOfApp } from '../landing/tools'
 import { callsIn, clientName, stateWords } from '../nui/deskData'
-import { formatRoute, isJobNumber, type ToolId } from '../route'
+import { formatRoute, isJobNumber } from '../route'
 import { greeting } from '../when'
-import { doorTarget } from './doorTargets'
-
-/** The tool of the landing a door opens, when its target is an app that has one. */
-export function doorTool(id: string): ToolId | null {
-  const t = doorTarget(id)
-  return t && 'app' in t ? toolOfApp(t.app)?.id ?? null : null
-}
-
-/** A door is live when its page is built, or its app is installed. The table is doorTargets.ts. */
-export function doorIsLive(id: string, apps: readonly string[]): boolean {
-  const t = doorTarget(id)
-  if (!t) return false
-  return 'page' in t ? t.built : apps.includes(t.app)
-}
 
 /** The five rows Needs you shows before Show all. */
 export const NEEDS_FIRST = 5
@@ -137,20 +118,3 @@ export function hello(first: string | null, now = new Date()): string {
   const g = greeting(now).replace(/\.$/, '')
   return first ? `${g}, ${first}` : g
 }
-
-/** The home's label above its name: `PLANNING · HOME`. */
-export const homeEyebrow = (view: HomeView): string => `${view.title || 'Your'} · home`
-
-/** Where a circle on the O opens: the home of a role, or the client desk. */
-export const circleHome = (c: MapCircle): { as: string } | { desk: true } => (c.opens ? { as: c.opens } : { desk: true })
-
-/** The label on a door in a screen reader: its words, and where it stands. */
-export const doorLabel = (d: DoorEntry, live: boolean): string => `${d.name}${live ? '' : ', comes in a later phase'}`
-
-/** Where circle `i` of `n` sits, in percent of the map: the first at the top, the rest clockwise. */
-export function placeOf(i: number, n: number, radius = 37): { left: string; top: string } {
-  const a = (2 * Math.PI * i) / Math.max(n, 1)
-  const pct = (n: number) => `${Number(n.toFixed(2))}%`
-  return { left: pct(50 + radius * Math.sin(a)), top: pct(50 - radius * Math.cos(a)) }
-}
-

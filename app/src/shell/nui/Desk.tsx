@@ -13,7 +13,7 @@
 // Keyboard: the circles are one tab stop (arrows, Home and End rove them),
 // Enter opens a circle's dial, 1 to 4 pick a quadrant, Escape closes it.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { ClientRecord, LegacyName } from '../../host'
 import { ACTIVITY_WORD, adoptLabel, agencySummary, countsLine, matches, pageOf } from '../landing/model'
 import type { Tool } from '../landing/tools'
@@ -27,6 +27,8 @@ import { ToolIcon, SearchIcon } from './icons'
 import { Pop } from './Pop'
 import { usePop } from './popKit'
 import { changedBriefs } from '../gate/words'
+import { Ask } from '../../timesheet/Ask'
+import { useConsent } from '../../timesheet/consent'
 import '../gate/gate.css'
 
 interface Props {
@@ -49,6 +51,15 @@ interface Props {
   offlineCount?: number | null
   /** Said in the polite live region (a restore, an adoption). */
   onSay: (words: string) => void
+  /** What a role adds under the greeting: the Your pages row (shell/nui/PagesRow.tsx). Absent for a person with no role. */
+  roleSlot?: ReactNode
+  /**
+   * The tools the person's role is offered (the server's list); null offers all, as for a person with no role. A tool
+   * not in it is absent from the dial. The dial's quadrants are Brief, Research, Deck and Production.
+   */
+  offered?: ReadonlySet<string> | null
+  /** Opens the person's own timesheet day (the consent card's "What is captured"). */
+  onTimesheet?: () => void
 }
 
 type PopKey = 'archived' | 'more'
@@ -63,7 +74,9 @@ function placeOf(row: HTMLElement, circle: HTMLElement): { left: number; top: nu
   return { left, top, origin: `${cx - left}px ${dr.height / 2 + 12}px` }
 }
 
-export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
+export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay, roleSlot, offered = null, onTimesheet }: Props) {
+  // Asked once, at the person's first sign-in: only a signed-in person has a timesheet to ask about.
+  const consent = useConsent()
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -103,11 +116,14 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
 
   // Whether the dial was opened from the keyboard (a click with no pointer): then its first quadrant takes the focus.
   const [byKey, setByKey] = useState(false)
+  const dialTools = useMemo(() => (offered ? ['brief', 'research', 'deck', 'prod'].filter(t => offered.has(t)) : null), [offered])
   const openDial = useCallback((id: string, el: HTMLElement, key = false) => {
+    // A role offered none of the dial's tools goes straight to the client's page, which lists what it may open.
+    if (dialTools && dialTools.length === 0) { onOpenClient(id); return }
     setByKey(key)
     setDial(d => (d === id ? null : id))
     if (row.current) setPlace(placeOf(row.current, el))
-  }, [])
+  }, [dialTools, onOpenClient])
   // Escape closes the dial and gives the focus back to its circle.
   const dialRef = useRef<string | null>(null)
   useEffect(() => { dialRef.current = dial })
@@ -174,6 +190,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
         </section>
 
         <main id="view-desk">
+          {roleSlot}
           {data.registryError && (
             <p className="nui-banner" role="alert" data-testid="registry-error">
               The client list could not be read, so names shown are the documents’ own. {data.registryError}
@@ -229,6 +246,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                   client={{ id: open.id, name: open.name, sector: sectorOf(open.id), look: open.look }}
                   items={data.items.filter(i => i.client?.id === open.id)}
                   live={live}
+                  offered={offered}
                   place={place}
                   onOpenTool={t => { setDial(null); onOpenTool(open.id, t) }}
                   onSoon={onSoon}
@@ -253,6 +271,9 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
             )}
             {adding && <AddForm onAdd={onAdd} onClose={() => setAdding(false)} />}
 
+            {none && consent === 'not_asked' && (
+              <section className="p33-desk" id="p33-desk"><div><h3>Worth a look</h3><div className="p33-worth-list" data-testid="worth-a-look"><Ask variant="card" onTimesheet={onTimesheet} /></div></div></section>
+            )}
             {!none && (
               <section className="p33-desk" id="p33-desk">
                 <div>
@@ -280,12 +301,13 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                 <div>
                   <h3>Worth a look</h3>
                   <div className="p33-worth-list" id="p33-worth" data-testid="worth-a-look">
+                    {consent === 'not_asked' && <Ask variant="card" onTimesheet={onTimesheet} />}
                     {worth.map(w => (
                       <button key={w.key} type="button" className="p33-wl" onClick={() => onOpenDocument(w.path)}>
                         <b>{w.title}</b><small>{w.sub}</small>
                       </button>
                     ))}
-                    {worth.length === 0 && <p className="nui-empty">Nothing new since you last looked.</p>}
+                    {worth.length === 0 && consent !== 'not_asked' && <p className="nui-empty">Nothing new since you last looked.</p>}
                   </div>
                 </div>
               </section>

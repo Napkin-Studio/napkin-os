@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The gallery: all nine screen states in White, Grey and Black, with the words
+// The gallery: all nine screen states in light and dark, with the words
 // Laurence judges (features/screen-states.clan). Served as /states.html. The
 // states are drawn with sample content only, de-identified (Client A, an Irish
 // whiskey); nothing here calls a host.
@@ -12,7 +12,7 @@ import {
 } from './ScreenStates'
 import { RECTS_AFTER_MS } from './loading'
 import { MODES, STATES, STATE_NAMES, type Mode, type StateName } from './words'
-const MODE_NAMES: Record<Mode, string> = { white: 'White mode', grey: 'Grey mode', black: 'Black mode' }
+const MODE_NAMES: Record<Mode, string> = { light: 'Light', dark: 'Dark' }
 
 /** One state with its sample content. */
 export function Sample({ name }: { name: StateName }) {
@@ -41,17 +41,17 @@ export function Sample({ name }: { name: StateName }) {
   }
 }
 
-/** The gallery page. `modes` limits it to some of the three (a screenshot of one). */
+/** The gallery page. `modes` limits it to one of the two (a screenshot of one). */
 export function Gallery({ modes = MODES }: { modes?: readonly Mode[] }) {
   return (
-    <main className="ns-gallery" data-mode={modes.length === 1 ? modes[0] : 'white'}>
+    <main className="ns-gallery" data-tone={modes.length === 1 ? modes[0] : 'light'}>
       <header className="ns-head">
         <p className="eyebrow">Napkin OS · Screen states</p>
         <h1>The nine screen states</h1>
-        <p className="ns-small">Every tool has all nine. Each is shown here in White, Grey and Black, with sample content for Client A, an Irish whiskey.</p>
+        <p className="ns-small">Every tool has all nine. Each is shown here in light and dark, with sample content for Client A, an Irish whiskey.</p>
       </header>
       {modes.map(mode => (
-        <section key={mode} className="ns-mode" data-mode={mode} aria-labelledby={`ns-mode-${mode}`}>
+        <section key={mode} className="ns-mode" data-tone={mode} aria-labelledby={`ns-mode-${mode}`}>
           <h2 id={`ns-mode-${mode}`} className="eyebrow">{MODE_NAMES[mode]}</h2>
           <div className="ns-grid">
             {STATES.map(name => (

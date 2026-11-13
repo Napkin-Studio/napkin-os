@@ -21,6 +21,7 @@ const MAKER: Record<string, string> = {
   idea: 'make_idea_room.rs',
   ads: 'make_advertising_studio.rs',
   script: 'make_script_editor.rs',
+  visual: 'make_visual_brief.rs',
 }
 
 test('every tool with an app names an id its maker really builds', () => {

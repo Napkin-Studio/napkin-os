@@ -10,6 +10,7 @@
 // Pure: everything it needs comes in as the environment, so a test builds the list for any role.
 
 import type { HomeView } from '../../host/http'
+import { toolById } from '../landing/tools'
 import type { Route } from '../route'
 
 export interface Command {
@@ -52,17 +53,23 @@ export const fold = (s: string): string[] =>
 /**
  * Every command, available or not. The bar offers the available ones; the shortcuts sheet prints every one
  * that has a key. A door the person does not have is not here at all (an allow list: only the doors of
- * their own home and its More tools).
+ * their own Your pages row and its More list).
  */
 export function commandsFor(env: BarEnv): Command[] {
   const out: Command[] = []
-  const doors = [...(env.home?.doors ?? []), ...(env.home?.more ?? [])]
+  const doors = [...(env.home?.pages ?? []), ...(env.home?.more ?? [])]
   for (const d of doors) {
     const name = d.name.replace(/\s*\(.*\)\s*$/, '')
     out.push({ id: `door-${d.id}`, title: `Open ${d.name}`, keywords: ['open', 'door', 'tool', name, d.id], undoable: true, available: true, run: () => env.go(doorRoute(d.id)) })
   }
+  // A tool is not a door: it opens for a client. The command takes the person to the desk to pick one (the dial offers
+  // exactly the tools their role is offered).
+  for (const id of env.home?.tools ?? []) {
+    const name = id === 'territories' ? 'Territories' : toolById(id)?.name
+    if (!name) continue
+    out.push({ id: `door-${id}`, title: `Open ${name}`, keywords: ['open', 'tool', name, id], undoable: true, available: true, run: () => env.go({ level: 'agency' }) })
+  }
   out.push({ id: 'home', title: 'Home', keywords: ['home', 'desk', 'studio', 'back'], undoable: true, available: true, run: () => env.go({ level: 'agency' }) })
-  if (env.home?.restricted) out.push({ id: 'map', title: 'The map', keywords: ['map', 'agency', 'departments', 'the o'], undoable: true, available: true, run: () => env.go({ level: 'map' }) })
   if (env.signedIn) out.push({ id: 'timesheet', title: 'Your timesheet', keywords: ['timesheet', 'time', 'hours', 'day'], undoable: true, available: true, run: () => env.go({ level: 'timesheet' }) })
   out.push({ id: 'search', title: 'Search or type a command', keywords: ['bar', 'find'], shortcut: 'mod K', undoable: true, available: false, run: env.openBar })
   out.push({ id: 'undo', title: 'Undo', keywords: ['undo', 'back', 'revert'], shortcut: 'mod Z', undoable: true, available: !!env.undo, run: () => env.undo?.() })

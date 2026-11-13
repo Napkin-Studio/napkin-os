@@ -29,7 +29,7 @@ function arcD(r: number, a0: number, a1: number): string {
 }
 
 /** The dial's four tools, in the mock's order round from the top. */
-const QUADRANTS = [
+const ALL_QUADRANTS = [
   { id: 'brief', name: 'Brief', noun: ['brief', 'briefs'] },
   { id: 'research', name: 'Research', noun: ['question', 'questions'] },
   { id: 'deck', name: 'Deck', noun: ['deck', 'decks'] },
@@ -50,6 +50,8 @@ interface Props {
   /** This client's work. */
   items: readonly LibraryItem[]
   live: ReadonlySet<string>
+  /** The tools the person's role is offered; null offers all. A tool not in it is not a quadrant. */
+  offered?: ReadonlySet<string> | null
   /** Where the dial sits in the row (the mock's openClient placement). */
   place: { left: number; top: number; origin: string }
   onOpenTool: (tool: Tool) => void
@@ -60,14 +62,15 @@ interface Props {
   focusFirst?: boolean
 }
 
-export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenClient, onClose, focusFirst }: Props) {
+export function Dial({ client, items, live, offered = null, place, onOpenTool, onSoon, onOpenClient, onClose, focusFirst }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   // One tab stop for the four quadrants (roving): the arrows move it, and it starts on the first.
   const [at, setAt] = useState(0)
   const quads = useRef<(SVGGElement | null)[]>([])
+  const QUADRANTS = offered ? ALL_QUADRANTS.filter(q => offered.has(q.id)) : ALL_QUADRANTS
   const n = QUADRANTS.length, span = (2 * Math.PI) / n, start = -Math.PI / 2 - span / 2
   const choose = (i: number) => {
-    const t = toolById(QUADRANTS[i].id)
+    const t = QUADRANTS[i] ? toolById(QUADRANTS[i].id) : undefined
     if (!t) return
     if (live.has(t.id)) onOpenTool(t)
     else onSoon(t)

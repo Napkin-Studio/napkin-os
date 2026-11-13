@@ -19,7 +19,6 @@ import { barKeyOf } from './keys'
 import { commandsFor, isMac, matchCommands, type Command } from './commands'
 import { closeBar, closeShortcuts, openBar, openShortcuts, setActiveId, setCard, setKeyHandler, useBar } from './barStore'
 import { barProviders, commandResult, GROUP_LABEL, runProviders, type BarGroup } from './providers'
-import { usePhone } from './usePhone'
 
 export interface RecentDoc { path: string; title: string }
 
@@ -60,7 +59,8 @@ function usePlace(on: boolean, phone: boolean) {
 
 export function BarMount({ enabled, home, go, openPath, recent, signedIn, onSignOut, panelSlot }: Props) {
   const bar = useBar()
-  const phone = usePhone()
+  // The bar carries no field (owner, 13 Nov): the search is one panel at every width, opened by Cmd or Ctrl K or the account menu.
+  const phone = true
   const mac = isMac()
   const commands = useMemo(() => commandsFor({
     home, go, signedIn,

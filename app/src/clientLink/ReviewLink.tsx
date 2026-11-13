@@ -9,7 +9,6 @@
 // buttons are 48 px tall and nothing scrolls sideways.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgencyLook } from '../shell/agency/look'
 import {
   aiWords, answerBody, nextUnmarked, pinFromPoint, pinStyle, roundWords, versionWords, whereWords,
   type Mark, type Piece, type Pin, type Remark,
@@ -18,7 +17,7 @@ import {
 export interface Review {
   title: string
   client: { name: string }
-  agency: { name: string | null; logo?: string | null; accent?: AgencyLook['accent'] | null }
+  agency: { name: string | null; logo?: string | null }
   version: string
   /** The Nth signed version of the document, or null when the host could not count it. */
   version_n: number | null
@@ -111,7 +110,7 @@ export default function ReviewLink({ token, page, onGone, onDone }: Props) {
   const last = page.pieces.length
 
   return (
-    <main className="cl-page" data-testid="client-link-page" data-mode="review">
+    <main className="cl-page" data-testid="client-link-page" data-view="review">
       <div className="cl-wrap cl-review" ref={top}>
         <header className="cl-head">
           <p className="cl-mark" aria-label={agency}>

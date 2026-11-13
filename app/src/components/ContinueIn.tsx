@@ -2,11 +2,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 
 import { host } from '../host'
 import type { SpinoffTarget, UpstreamView } from '../host'
 import { linksRead, madeFromOf, type LinksRead } from './barMenus'
+import { offeredTools, subscribeOffered } from '../shell/offeredTools'
+import { toolOfApp } from '../shell/landing/tools'
 
 /**
  * A count that goes up when the page comes back into view or the window is
@@ -50,7 +52,10 @@ export function useSpinoffTargets(docPath: string): SpinoffTarget[] {
     return () => { live = false }
   }, [docPath])
 
-  return got?.docPath === docPath ? got.targets : []
+  // A tool the person's role is not offered is not a place to continue in (the same one list as the dial).
+  const offered = useSyncExternalStore(subscribeOffered, offeredTools, offeredTools)
+  const mine = got?.docPath === docPath ? got.targets : []
+  return offered ? mine.filter(t => { const tool = toolOfApp(t.app_id); return !tool || offered.has(tool.id) }) : mine
 }
 
 /**

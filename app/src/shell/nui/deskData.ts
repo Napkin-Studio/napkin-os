@@ -24,7 +24,7 @@ import { initialsOf, needsYou, ordered, summarise, type ClientSummary } from '..
 import { toolOfApp } from '../landing/tools'
 import type { ToolId } from '../route'
 import { clientBrand } from '../agency/clients'
-import { readableInk } from '../agency/accent'
+import { readableInk } from '../agency/ink'
 
 /** A client's colour on the desk: the disc's fill and the ink of its monogram. */
 export interface ClientLook { cl: string; ink: string }

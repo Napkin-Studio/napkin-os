@@ -22,13 +22,14 @@ import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
 import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
 import { Desk } from '../nui/Desk'
-import { Home } from '../home/Home'
-import { TheO } from '../home/TheO'
+import { NeedsYou } from '../home/NeedsYou'
+import { PagesRow } from '../nui/PagesRow'
+import { SetupCard } from '../setup/SetupCard'
+import { useConsent } from '../../timesheet/consent'
 import { DoorPage } from '../home/DoorPage'
 import { JobPage } from '../job/JobPage'
 import { useJobNeeds } from '../home/useJobNeeds'
-import type { HomeView } from '../../host/http'
-import type { AgencyLogo } from '../agency/palette'
+import type { DoorEntry, HomeView } from '../../host/http'
 import { ClientView } from '../nui/ClientView'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
@@ -59,14 +60,11 @@ interface Props {
   onOffline?: () => void
   /** The Decisions drawer (the client page's record line opens it). */
   onDecisions?: () => void
-  /** The person's home, from the roles in the session; absent or unrestricted keeps the desk (features/roles-and-homes.clan). */
+  /** What the person's role adds to the desk: its page doors and tools. Absent or unrestricted: the desk as it is (features/align-landing-look.clan). */
   home?: HomeView | null
-  /** The agency's name and marks, for the centre of the O. */
-  agencyName?: string
-  agencyLogo?: AgencyLogo
 }
 
-export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions, home = null, agencyName, agencyLogo }: Props) {
+export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions, home = null }: Props) {
   const top = useRef<HTMLDivElement>(null)
   const [registryNote, setRegistryNote] = useState<string | null>(null)
 
@@ -110,6 +108,23 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   // Territories is a page behind the gate, not a circle: it is here whenever the client is.
   const live = useMemo(() => new Set([...TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string), 'territories']), [installed])
 
+  // A role adds one row to the desk and filters the one tool list; it has no landing of its own.
+  const homed = home?.restricted ? home : null
+  // The tools the role is offered; null offers all (a person with no role).
+  const offered = useMemo(() => (homed ? new Set(homed.tools) : null), [homed])
+  const consent = useConsent()
+  const isAdmin = !!homed && homed.roles.includes('admin') && !homed.viewing
+  // Pages the shell itself adds to More: the person's own timesheet once they have answered, and an admin's audit view.
+  const pagesView = useMemo(() => homed && ({
+    ...homed,
+    more: [
+      ...homed.more,
+      ...(consent !== null ? [{ id: 'timesheet', name: 'Your timesheet' }] : []),
+      ...(isAdmin ? [{ id: 'audit', name: 'The audit view' }] : []),
+    ],
+  }), [homed, consent, isAdmin])
+  const openPage = (d: DoorEntry) => go(d.id === 'timesheet' ? { level: 'timesheet' } : d.id === 'audit' ? { level: 'audit' } : { level: 'door', door: d.id })
+
   const clientId = route.level === 'client' || route.level === 'tool' ? route.client : null
   const client = clientId ? data.clients.find(c => c.id === clientId) : undefined
 
@@ -123,7 +138,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   useEffect(() => {
     if (!clientId) return
     if (client) {
-      const fixed = correctRoute(route, { client: () => true, tool: id => live.has(id) })
+      const fixed = correctRoute(route, { client: () => true, tool: id => live.has(id) && (!offered || offered.has(id)) })
       if (!sameRoute(fixed, route)) go(fixed, true)
       return
     }
@@ -134,7 +149,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     let fresh = true
     void onRefresh().finally(() => { if (fresh) setChecked(clientId) })
     return () => { fresh = false }
-  }, [clientId, client, route, go, checked, onRefresh, live])
+  }, [clientId, client, route, go, checked, onRefresh, live, offered])
 
   // What the live region says: the level arrived at, or a word about a tool that is not here yet.
   const [soon, setSoon] = useState<{ key: string; text: string; n: number } | null>(null)
@@ -147,10 +162,6 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const say = soon?.key === key ? soon.text + (soon.n % 2 ? '' : ' ') : arrival(route, {
     agency: who.agency, client: client?.name, tool: tool?.full, tools: 4, open: inTool.length,
   })
-
-  // A person with a role lands on their home; the O, a door and another role's home are its pages.
-  // The desk is the Clients door then (`#clients`). A person with no role keeps the desk, as before.
-  const homed = home?.restricted ? home : null
 
   // A territory chosen (typed by hand until the Territory tool lands) spins the signed, confirmed brief off into a
   // visual brief and opens it. The territory is written as one attributed decision that names the brief version.
@@ -199,39 +210,10 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         back={homed ? { route: { level: 'door', door: 'live-jobs' }, label: 'Back to Live jobs' } : { route: { level: 'clients' }, label: 'Back to the clients' }}
       />
     )
-  } else if (homed && route.level === 'map') {
-    body = (
-      <TheO
-        view={homed}
-        agency={agencyName ?? who.agency}
-        logo={agencyLogo}
-        onHome={() => go({ level: 'agency' })}
-        onOpen={c => go(c.mine ? { level: 'agency' } : c.opens ? { level: 'home', as: c.opens } : { level: 'clients' })}
-      />
-    )
   } else if (homed && route.level === 'door') {
-    const entry = [...homed.doors, ...homed.more].find(d => d.id === route.door)
-    body = <DoorPage door={route.door} name={entry?.name ?? null} clients={data.clients} items={data.items} apps={data.apps} rights={home?.jobs ?? null} go={go} />
-  } else if (homed && (route.level === 'agency' || route.level === 'home')) {
-    body = (
-      <Home
-        view={homed}
-        items={data.items}
-        jobNeeds={jobNeeds.items}
-        nextDeadline={jobNeeds.next}
-        onNeedsChanged={jobNeeds.reload}
-        first={who.first}
-        apps={data.apps}
-        onDoor={d => go(d.id === 'clients' ? { level: 'clients' } : { level: 'door', door: d.id })}
-        onOpenDocument={onOpenDocument}
-        onMap={() => go({ level: 'map' })}
-        onTimesheet={() => go({ level: 'timesheet' })}
-        onSetup={() => go({ level: 'setup' })}
-        onAdmin={page => go({ level: page })}
-        onSwitch={role => go(role ? { level: 'home', as: role } : { level: 'agency' })}
-      />
-    )
-  } else if (clientId && client && route.level === 'tool' && tool && live.has(tool.id)) {
+    const entry = [...homed.pages, ...homed.more].find(d => d.id === route.door)
+    body = <DoorPage door={route.door} name={entry?.name ?? null} clients={data.clients} rights={homed.jobs} go={go} />
+  } else if (clientId && client && route.level === 'tool' && tool && live.has(tool.id) && (!offered || offered.has(tool.id))) {
     body = (
       <ToolPage
         client={client}
@@ -251,6 +233,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         items={mine}
         facts={facts}
         live={live}
+        offered={offered}
         onOpenItem={onOpenDocument}
         onNew={t => { if (t.appId) onStart(t.appId, client.id) }}
         onOpenTool={t => go({ level: 'tool', client: client.id, tool: t.id })}
@@ -271,7 +254,24 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         data={data}
         facts={facts}
         live={live}
+        offered={offered}
         first={who.first}
+        onTimesheet={() => go({ level: 'timesheet' })}
+        roleSlot={pagesView && (
+          <>
+            {isAdmin && <SetupCard onOpen={() => go({ level: 'setup' })} />}
+            <PagesRow view={pagesView} onOpen={openPage} />
+            <NeedsYou
+              items={data.items}
+              jobNeeds={jobNeeds.items}
+              nextDeadline={jobNeeds.next}
+              onNeedsChanged={jobNeeds.reload}
+              onOpenDocument={onOpenDocument}
+              onTimesheet={() => go({ level: 'timesheet' })}
+              onApprovals={() => go({ level: 'door', door: 'approvals' })}
+            />
+          </>
+        )}
         manage={manage}
         onAdd={onAdd}
         onOpenClient={id => go({ level: 'client', client: id })}

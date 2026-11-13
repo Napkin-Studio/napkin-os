@@ -104,8 +104,10 @@ export interface Account {
   /** "Strategy lead · TBWA\Dublin": role (when known) and the agency's name. */
   line: string
   onOffline?: () => void
-  /** The agency's logo and accent (shell/agency/AgencyLookPanel.tsx); where the server keeps them. */
-  onLook?: () => void
+  /** Open the search (also Cmd or Ctrl K): the bar carries no field, so this is the way in by pointer. */
+  onSearch?: () => void
+  /** An admin's way to try a role: it changes the desk's Your pages row and the offered tools, nothing else. */
+  onViewAs?: { current: string | null; roles: { id: string; title: string }[]; set: (role: string | null) => void }
   /** How many offline copies are on this device, when known. */
   offlineCount?: number | null
   /** Open the People page: who can sign in (features/people-admin.clan). Present for an admin only. */
@@ -354,7 +356,25 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
 
 
 /**
- * The account menu on the avatar (owner, 2026-11-11): People (an admin's), Agency look,
+ * View as: one line per role for an admin, the role in view ticked; the first puts the admin's own desk back.
+ * It changes what the desk offers (the Your pages row and the tools), never what the server allows.
+ */
+function viewAsItems(account: Account | undefined): MenuItem[] {
+  const v = account?.onViewAs
+  if (!v) return []
+  const here = v.roles.find(r => r.id === v.current)
+  return [{
+    label: here ? `View as ${here.title}` : 'View as',
+    hint: here ? 'Click for the next role; the last one puts your own desk back' : 'Try a role: its pages and tools on the desk',
+    run: () => {
+      const i = here ? v.roles.findIndex(r => r.id === here.id) : -1
+      v.set(i + 1 < v.roles.length ? v.roles[i + 1].id : null)
+    },
+  }]
+}
+
+/**
+ * The account menu on the avatar (owner, 2026-11-11): Search, People (an admin's), View as (an admin's),
  * Offline copies, then Feedback (F) and About this beta (a recording build only; owner,
  * 2026-11-13, mock feedback-point-v1), then Sign out, last. The agency pill
  * only goes to the desk.
@@ -362,12 +382,13 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
 export function accountItems(account: Account | undefined, user?: string | null, onSignOut?: () => void, onBetaNotice?: () => void, onFeedback?: () => void): MenuItem[] {
   const n = account?.offlineCount
   return [
+    ...(account?.onSearch ? [{ label: 'Search', hint: 'Jobs, clients, people and commands · Cmd K', run: account.onSearch }] : []),
     ...(account?.onPeople ? [{ label: 'People', hint: 'Who can sign in, by agency', run: account.onPeople }] : []),
-    ...(account?.onLook ? [{ label: 'Agency look', hint: 'Its logo, and the accent taken from it', run: account.onLook }] : []),
+    ...viewAsItems(account),
     ...(account?.onOffline ? [{ label: 'Offline copies', hint: `${n != null ? `${n} on this device · ` : ''}present without a connection`, run: account.onOffline }] : []),
     ...(onFeedback ? [{ label: 'Feedback', hint: 'Point at what it is about, and tell us', key: 'F', run: onFeedback }] : []),
     ...(onBetaNotice ? [{ label: 'About this beta', hint: 'What this beta records, and why', run: onBetaNotice }] : []),
-    ...(user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: !!(account?.onOffline || account?.onLook || account?.onPeople || onBetaNotice || onFeedback) }] : []),
+    ...(user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: !!(account?.onOffline || account?.onSearch || account?.onPeople || onBetaNotice || onFeedback) }] : []),
   ]
 }
 
