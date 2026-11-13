@@ -121,6 +121,51 @@ fn research_chain_keeps_every_field_through_patch_data() {
     assert_eq!(newest.extra["future_field"], serde_yaml::Value::from(true));
 }
 
+/// The research template's Confirm (campaign.<field> via the host's patch-data, a person's pinned
+/// decision with no typed fields of its own) keeps every earlier entry's id, kind, targets and cites:
+/// the old "Heads up, until W1P-I5" warning no longer holds.
+#[test]
+fn a_confirm_through_patch_data_keeps_every_typed_entry() {
+    let base = doc();
+    let clan = rebuilt(&base, CHAIN, RESEARCH_CHAIN.as_bytes(), |_| {});
+    let before = chain_of(&clan).decisions;
+    assert!(
+        before
+            .iter()
+            .any(|d| d.id.is_some() && d.kind.is_some() && !d.targets.is_empty()),
+        "the fixture carries typed entries"
+    );
+    let next = open(
+        patch_data_with(
+            &clan,
+            &json!({"campaign": {"client_org": {"value": {"name": "Guinness"}, "origin": "confirmed", "by": "human:tia@tbwa"}}}),
+            PatchDataOptions {
+                append_keys: vec![],
+                decision: Some(DecisionEntry {
+                    agent_name: "human".into(),
+                    action: "confirm".into(),
+                    rationale: "Confirmed the client — it is Guinness.".into(),
+                    pinned: true,
+                    fields_changed: None,
+                    typed: None,
+                }),
+            },
+            None,
+        )
+        .unwrap(),
+    );
+    let after = chain_of(&next).decisions;
+    assert_eq!(after.len(), before.len() + 1);
+    for (a, b) in after[1..].iter().zip(before.iter()) {
+        assert_eq!(
+            (&a.id, &a.kind, &a.targets, &a.cites),
+            (&b.id, &b.kind, &b.targets, &b.cites)
+        );
+    }
+    assert_eq!(after[0].action, "confirm");
+    assert!(after[0].pinned);
+}
+
 #[test]
 fn every_new_decision_gets_a_stable_id() {
     let clan = doc();

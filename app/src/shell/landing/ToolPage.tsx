@@ -2,14 +2,19 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// One tool, for one client: the client's documents of that tool, newest first,
-// and the way to start another. The circle was the door; this is the room
-// before the work. Given its data; it fetches nothing.
+// One tool, for one client: its home, as the approved mock draws it ("Tool
+// homes", phase 2 and 33). Each tool in its own identity: Brief Maker's
+// dog-eared sheets with a manila tab and serif titles, Research's ink band and
+// lens dots on sans titles, Deck and the rest as plain cards; then the card
+// that starts a new one, already the client's. Given its data; the lens dots
+// are read from each research's own selection.
 
 import type { ClientRecord, LibraryItem } from '../../host'
-import { needsYou } from './model'
-import { lastTouched } from '../when'
 import type { Tool } from './tools'
+import { initialsOf } from './model'
+import { clientName, ago, stateWords } from '../nui/deskData'
+import { ToolIcon } from '../nui/icons'
+import type { Cov } from '../nui/lenses'
 
 interface Props {
   client: ClientRecord
@@ -20,52 +25,80 @@ interface Props {
   onNew: () => void
   onOpenItem: (path: string) => void
   onBack: () => void
+  /** Each research's lens dots, read from its own selection (useLensDots). */
+  lenses?: Readonly<Record<string, Cov[]>>
 }
 
-export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack }: Props) {
+/** What each tool says under its name (the mock's tool headers). */
+const LINE: Record<string, string> = {
+  brief: 'Turn client notes, call transcripts, and verified research into a structured creative brief on a single sheet of paper.',
+  research: 'Ask one sharp question. Napkin searches the open web, reads your files, pins every fact with a source, and puts every call on the record.',
+  deck: 'A board deck from a brief and its facts.',
+}
+
+const STATE_CLASS = (s: ReturnType<typeof stateWords>) => (s.needs ? 'needs' : s.working ? 'working' : s.text === 'Done' ? 'done' : 'draft')
+
+export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lenses = {} }: Props) {
   const [one, many] = tool.noun
+  const name = clientName(client)
+  const kind = tool.id === 'brief' ? 'brief' : tool.id === 'research' ? 'research' : 'other'
+  const card = (i: LibraryItem) => {
+    const st = stateWords(i)
+    const words = st.needs && st.text !== 'Failed' ? 'Needs your call' : st.text
+    const updated = `${ago(i.updated_at)}${i.last_editor ? ` · ${i.last_editor.split('@')[0].replace(/^./, c => c.toUpperCase())}` : ''}`
+    const title = i.title || 'Untitled'
+    if (kind === 'brief') {
+      return (
+        <button key={i.path} type="button" className="home-card bm-card" data-testid="work-item" onClick={() => onOpenItem(i.path)}>
+          <span className="bm-tab">{initialsOf(title)}</span><span className="bm-peek" aria-hidden />
+          <b>{title}</b>
+          <span className={`home-st ${STATE_CLASS(st)}`}>{words}</span>
+          <dl className="bm-meta"><div><dt>Updated</dt><dd>{updated}</dd></div></dl>
+        </button>
+      )
+    }
+    if (kind === 'research') {
+      const d = lenses[i.path] ?? []
+      return (
+        <button key={i.path} type="button" className="home-card rs-card" data-testid="work-item" onClick={() => onOpenItem(i.path)}>
+          <span className="rs-band"><ToolIcon tool="research" />{initialsOf(title)}</span>
+          <b>{title}</b>
+          {d.length > 0 && <span className="lens" aria-label={`${d.filter(x => x === 'filled').length} lenses run, ${d.filter(x => x === 'none').length} skipped`}>{d.map((c, k) => <i key={k} className={`cov ${c}`} />)}</span>}
+          <span className={`home-st ${STATE_CLASS(st)}`}>{words} · {updated}</span>
+        </button>
+      )
+    }
+    return (
+      <button key={i.path} type="button" className="home-card" data-testid="work-item" onClick={() => onOpenItem(i.path)}>
+        <small>{initialsOf(title)}</small><b>{title}</b><span className={`home-st ${STATE_CLASS(st)}`}>{words} · {updated}</span>
+      </button>
+    )
+  }
   return (
-    <div className="lc-page" data-testid="tool-page" data-client={client.id} data-tool={tool.id}>
-      <header className="lc-phead">
-        <div className="lc-phl">
-          <p className="eyebrow">{tool.full}</p>
-          <h1 className="lc-h1 lc-h1-left" tabIndex={-1}>{tool.full}</h1>
-          <p className="lc-lede">
-            <span className="lc-chip">Client: {client.name}</span>{' '}
-            {items.length === 0 ? `No ${many} for ${client.name} yet.` : `${items.length} ${items.length === 1 ? one : many} for ${client.name}.`}
-          </p>
-        </div>
-        <div className="lc-phr">
-          <button className="ch-btn ch-btn-primary" data-testid="new-doc" onClick={onNew}>
-            New {one} for {client.name}
-          </button>
-        </div>
-      </header>
-
-      <section className="lc-work" aria-label={`${tool.full} documents for ${client.name}`}>
-        <h2 className="lc-strip-h">Open {many}{items.length > 0 && <span className="lc-n">{items.length}</span>}</h2>
-        {items.length === 0 ? (
-          <p className="lc-nothing">Nothing yet. Start the first {one} for {client.name}; it is attached to them from the start.</p>
-        ) : (
-          <ul className="lc-cards">
-            {items.map(i => (
-              <li key={i.path}>
-                <button className="lc-card" data-testid="work-item" onClick={() => onOpenItem(i.path)}>
-                  <span className="lc-card-t">{i.title || 'Untitled'}</span>
-                  {needsYou(i) && <span className="lc-tag lc-tag-need">Needs you</span>}
-                  {!needsYou(i) && i.run?.state === 'working' && <span className="lc-tag lc-tag-run">{i.run.label}</span>}
-                  {!needsYou(i) && i.run?.state === 'failed' && <span className="lc-tag lc-tag-fail">Failed</span>}
-                  <span className="lc-card-m">{lastTouched(i.updated_at)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <p className="lc-backrow">
-        <button className="ch-btn ch-btn-quiet" onClick={onBack}>Back to {client.name}</button>
-      </p>
+    <div className="nui nui-page" data-testid="tool-page" data-client={client.id} data-tool={tool.id}>
+      <div className="studio-shell">
+        <section className="app-head">
+          <div className="app-head-text">
+            <div className="eyebrow" id="hero-eyebrow">{name} · {many.charAt(0).toUpperCase() + many.slice(1)}</div>
+            <h1 className="hero-title" id="hero-title" tabIndex={-1}>{tool.id === 'research' ? tool.name : tool.full}<span className="period-dot" aria-hidden /></h1>
+            <p className="hero-sub" id="hero-sub">{LINE[tool.id] ?? ''}</p>
+          </div>
+        </section>
+        <section className="section-block"
+          aria-label={`${tool.full} documents for ${name}`}>
+          <div className="sec-num lc-sr">Client: {name} · {items.length === 0 ? `No ${many} for ${name} yet.` : `${items.length} ${items.length === 1 ? one : many} for ${name}.`}</div>
+          <h2 className="sec-title">Pick one to open, or start a new {one === 'research' ? 'research question' : one}</h2>
+          <div className={`home-grid ${kind === 'brief' ? 'bm-homes' : kind === 'research' ? 'rs-homes' : ''}`}>
+            {items.map(card)}
+            <button type="button" className="home-card home-new" data-testid="new-doc" onClick={onNew} aria-label={`New ${one} for ${name}`}>
+              <small>NEW</small><b>+ New {one === 'research' ? 'research question' : one}</b>
+              <span>{kind === 'brief' ? 'From notes, calls and decks' : kind === 'research' ? 'Sources pinned to every fact' : `For ${name}, theirs from the start`}</span>
+            </button>
+          </div>
+          {items.length === 0 && <p className="nui-empty">Nothing yet. Start the first {one} for {name}; it is theirs from the start.</p>}
+          <p className="nui-more"><button type="button" className="side-link" onClick={onBack}>Back to {name}</button></p>
+        </section>
+      </div>
     </div>
   )
 }

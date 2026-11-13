@@ -12,8 +12,8 @@
 
 import { useId, useState } from 'react'
 import type { ClientPartRef, ClientWho } from '../../host'
-import { AgentFigure } from '../../studio/AgentFigure'
-import { AGENTS } from '../../studio/model'
+import AgentSphere from '../agents/AgentSphere'
+import { roles } from '../agents/engine'
 import {
   ANSWERS, EVIDENCE_TYPES, REASONS, isEvidenceFile, modeLine, problemOf, strengthLine, evidenceOf,
 } from './review'
@@ -37,13 +37,12 @@ interface Props {
   onSave: () => void
 }
 
-/** A crew member speaking, as the apps draw it: the figure, then the bubble. */
+/** An agent speaking, as the apps draw it: its sphere, then the bubble. */
 export function Speak({ say }: { say: Say }) {
-  const a = AGENTS[say.agent]
   return (
     <div className="cr-speak" aria-live="polite">
-      <AgentFigure agent={say.agent} size={44} state={say.state} />
-      <p className="cr-say"><span className="cr-who">{a.given}</span>{say.text}</p>
+      <AgentSphere agent={say.agent} size={44} state={say.state} />
+      <p className="cr-say"><span className="cr-who">{roles.name(say.agent)}</span>{say.text}</p>
     </div>
   )
 }
@@ -140,7 +139,7 @@ export default function ClientReviewPanel({ draft, onDraft, parts, marked, known
                   value={draft.pasted}
                   disabled={busy}
                   onChange={e => set({ pasted: e.target.value })}
-                  placeholder={`Paste the client’s reply. It stays in the document, word for word, and ${AGENTS.extract.given} looks in it for the parts it names.`}
+                  placeholder={`Paste the client’s reply. It stays in the document, word for word, and ${roles.the('knowledge')} looks in it for the parts it names.`}
                 />
               </div>
             )}
@@ -213,7 +212,7 @@ export default function ClientReviewPanel({ draft, onDraft, parts, marked, known
 
             <p className="cr-hint">
               {parts.length
-                ? <>Know which parts? Mark them on the {noun}. If not, leave it: {AGENTS.extract.given} will look for the parts their words name.
+                ? <>Know which parts? Mark them on the {noun}. If not, leave it: {roles.The('knowledge')} will look for the parts their words name.
                   {marked > 0 && <b> {marked} part{marked === 1 ? '' : 's'} marked.</b>}</>
                 : <>This {noun} names no parts, so the answer is for the whole of it.</>}
             </p>

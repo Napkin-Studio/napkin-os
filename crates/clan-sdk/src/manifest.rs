@@ -156,6 +156,10 @@ pub struct AppInfo {
     /// knows its own schema — a caller should not have to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spinoff: Option<SpinoffSpec>,
+    /// What this app lets be linked to (attached to) an existing document of
+    /// it (`os-layer.md` §5.7). Absent, nothing attaches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attach: Option<AttachSpec>,
     /// How the app presents itself on the OS home (Napkin Studio OS
     /// extension). Absent, the home shows the app's name and "Start".
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -186,7 +190,7 @@ pub struct AppHome {
     /// What one document is called, and many: `["brief", "briefs"]`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub noun: Vec<String>,
-    /// A new document's name until it has its own: "Untitled brief".
+    /// A new document's name until it has its own: "New brief".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub untitled: Option<String>,
     /// The app's own name as the OS bar says it after "Napkin Studio":
@@ -234,6 +238,77 @@ pub struct SpinoffSpec {
     /// `map`. Off by default, so an app that does not opt in grafts as before.
     #[serde(default, skip_serializing_if = "is_false")]
     pub upstream: bool,
+    /// How a source of one particular app is carried, when it differs from
+    /// the rest (`source app_id -> carry`): Advertising Studio grafts a brief
+    /// at `brief` but carries a research whole under `upstream` (owner,
+    /// 2026-11-09). Each key is accepted besides `accepts`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub by_source: BTreeMap<String, SourceCarry>,
+}
+
+/// How a spin-off from one source app is carried: [`SpinoffSpec`]'s `map`,
+/// `lift` and `upstream`, for that source only.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SourceCarry {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub map: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lift: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub upstream: bool,
+}
+
+impl SpinoffSpec {
+    /// Whether a source of `app_id` is accepted: an empty `accepts` with no
+    /// `by_source` takes anything.
+    pub fn accepts_source(&self, app_id: Option<&str>) -> bool {
+        if self.accepts.is_empty() && self.by_source.is_empty() {
+            return true;
+        }
+        app_id.is_some_and(|id| {
+            self.accepts.iter().any(|a| a == id) || self.by_source.contains_key(id)
+        })
+    }
+
+    /// The spec a source of `app_id` is carried by: `by_source`'s entry for
+    /// it in place of `map`, `lift` and `upstream`, when it has one.
+    pub fn for_source(&self, app_id: Option<&str>) -> SpinoffSpec {
+        let mut spec = self.clone();
+        if let Some(c) = app_id.and_then(|id| self.by_source.get(id)) {
+            spec.map = c.map.clone();
+            spec.lift = c.lift.clone();
+            spec.upstream = c.upstream;
+            if let Some(id) = app_id {
+                if !spec.accepts.iter().any(|a| a == id) {
+                    spec.accepts.push(id.to_string());
+                }
+            }
+        }
+        spec
+    }
+}
+
+/// Declares what may be linked to an existing document of this app: another
+/// document carried in whole, frozen under `data.upstream.<id>`, beside the
+/// document's own work (`os-layer.md` §5.7). It is the spin-off carry applied
+/// to a document that already exists. `accepts` names app ids; nothing here
+/// names one app.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct AttachSpec {
+    /// Source `app_id`s this app lets be attached. Empty attaches nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accepts: Vec<String>,
+    /// `source dotted key -> this document's dotted key`: seeds, copied from
+    /// the frozen source. A seed lands only where the field is still empty,
+    /// and an update re-seeds only a field that still holds the value the
+    /// previous copy seeded, so a person's edit is never overwritten.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lift: BTreeMap<String, String>,
+    /// Source `app_id`s of which a document may hold more than one at once
+    /// (several research in one brief, owner 2026-11-09). Any other app is
+    /// one per document: attaching another of it replaces the first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub many: Vec<String>,
 }
 
 // Hand-written so an absent `spinoff:` block and a declared one that omits
@@ -247,6 +322,7 @@ impl Default for SpinoffSpec {
             lift: BTreeMap::new(),
             pin_source_decisions: true,
             upstream: false,
+            by_source: BTreeMap::new(),
         }
     }
 }
@@ -278,6 +354,37 @@ pub struct Lineage {
     /// Absent on every other file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub carried: Option<Carried>,
+    /// The documents linked (attached) to this one (`os-layer.md` §5.7), one
+    /// record per source, so a host can tell later whether a source has
+    /// moved on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attached: Vec<Attached>,
+}
+
+/// One attached document: what [`Carried`] records for a spin-off parent, plus
+/// which app it is and the version it was at.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attached {
+    /// The source's `app_id`.
+    pub app_id: String,
+    /// The source's `kit.version` when it declares one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<u64>,
+    /// When it was attached or last updated, RFC 3339.
+    pub at: String,
+    /// The source's title when it was attached or last updated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The source's revision id taken (`manifest.id`): the version kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<String>,
+    /// How many times this document has taken it: 1 on attach, one more on
+    /// each update.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taken: Option<u64>,
+    /// The source's `document_id` and the hashes taken, as for a spin-off.
+    #[serde(flatten)]
+    pub carried: Carried,
 }
 
 /// The state of the direct parent an upstream spin-off was taken from
@@ -417,6 +524,11 @@ impl Manifest {
     /// keeps it: it describes the document, not the last write.
     pub fn carried(&self) -> Option<&Carried> {
         self.lineage.as_ref().and_then(|l| l.carried.as_ref())
+    }
+
+    /// The documents attached to this one (`os-layer.md` §5.7).
+    pub fn attached(&self) -> &[Attached] {
+        self.lineage.as_ref().map_or(&[], |l| l.attached.as_slice())
     }
 
     /// Turn this (cloned) manifest into the next revision of the same

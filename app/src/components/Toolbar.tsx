@@ -2,336 +2,669 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import { useEffect, useRef, useState } from 'react'
-import { StudioLogo } from '../brand/StudioMark'
+// The one OS bar, as the approved mock draws it (design/new-ui
+// napkin-app-v1.html, phases 26 to 36; gaps.md §3 and §13.1, §13.4). Left,
+// who and where: the medallion (the way home, and the one mark that changes
+// when the document you are IN needs you), the agency's pill (back to the
+// desk, as the medallion), and the client chip (back to the client, or on the
+// client page a switcher). Then the document, left-aligned (phase 36): its
+// tool's icon and its name in serif with "saved · valid ✓" under it and the
+// document menu on it, what it was made from, Continue in ▾ and Share. Right:
+// the app's own chips and buttons, Client review, the beta badge, the theme,
+// the crew in the document, your avatar (its menu: who you are, Offline
+// copies, Sign out; owner, 2026-11-11), and Decisions, the bar's one needs-your-call
+// signal (amber with the count). No state pill (phase 26: state lives in the
+// app's own side tab).
+//
+// Pure: everything it shows comes in as props, so a test can draw every state
+// with no host.
+
+import { Fragment, useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
-import { host } from '../host'
-import { useSpinoffTargets } from './ContinueIn'
+import { accountItems, continueItems, docMenuItems, linkList, linkedChip, linkedRows, plural, pressContinue, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type LinkRow, type LinkedRow, type MenuItem } from './barMenus'
+import { DeepOMark } from '../brand/DeepOMark'
+import type { MarkTarget } from './medallionMotion'
+import { modeOf } from '../shell/appBar'
+import { useEngaged } from './markStore'
+import { markOf, type AgencyLogo } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
+import { roles } from '../shell/agents/engine'
 import { DogfoodBadge } from '../dogfood/Dogfood'
-import { signedInUser } from '../host/http'
-import { signOut } from '../shell/signOut'
-import { overflowButtons, type BarItem } from '../shell/appBar'
-import { BarButtons, BarChips, BarTabs } from './AppBarItems'
+import { dogfoodState, subscribe as subscribeDogfood } from '../dogfood/recorder'
+import { betaNoticeOpener } from '../dogfood/notice'
+import { feedbackOpener } from '../dogfood/pointer'
+import { BarButtons, BarChips } from './AppBarItems'
+import { Pop } from '../shell/nui/Pop'
+import { usePop } from '../shell/nui/popKit'
+import { ToolIcon } from '../shell/nui/icons'
+import { gateOf } from '../shell/appBar'
 import './chrome.css'
 
+export type { Account, ClientChip, Crew, DocBar, DocState, MenuItem, ToolBrand } from './barMenus'
+
 interface Props {
-  /** The open document's tool: "Napkin Studio <name>" in the tool's colour and face. */
-  tool?: ToolBrand | null
-  title?: string
-  /** What the app asked the bar to show: its tabs, buttons and chips (shell/appBar.ts). */
-  bar?: BarItem[]
-  /** A tab or button of the app's was pressed: tell the app which. */
-  onBarAction?: (id: string) => void
-  isTemplate?: boolean
-  trusted?: boolean
+  /** The signed-in agency's name, on the pill. */
+  agency: string
+  /** The agency's marks for the pill (palette.ts pillLogoOf): its wordmark instead of the name, its icon on a narrow bar. */
+  agencyLogo?: AgencyLogo
+  /** The agency pill: back to the desk (owner, 2026-11-11); else the medallion's way home. */
+  onAgency?: () => void
+  /** The medallion: back to the studio. */
   onHome: () => void
-  onOpenFile: () => void
-  onToggleSidebar: () => void
-  onWorkspace: () => void
-  onSave: () => void
-  /** Keep a copy on this device for presenting offline. Absent where it makes no sense. */
-  onKeepOffline?: () => void
-  onExport: (kind: 'html' | 'pdf') => void
-  /** Identifies the open document, so "Continue in…" refetches when it changes. */
-  docPath: string
-  onSpinoff: (appId: string) => void
-  sidebarOpen: boolean
-  /** Edit mode, for every app: its fields become editable, each change a person's pinned decision. */
-  editMode?: boolean
-  onToggleEdit?: () => void
+  /** The medallion's colours: the agency's base and accent (shell/agency/palette.ts), else Napkin's. */
+  mark?: { base: string; accent: string }
   /**
-   * Client review (OS-layer contract §7.5): given only while the document is
-   * locked with no part reopened — the bar then offers it where Edit is.
+   * The medallion's state: the app the person is IN needs them (the open
+   * document has something blocking its lock). Never shown on the desk, and
+   * never from another client's work: that is the Decisions count's job.
    */
-  onClientReview?: () => void
-  /**
-   * The client has answered this locked version already: the bar's button is
-   * quiet then ("New client answer"), so the band's next step leads.
-   */
-  clientAnswered?: boolean
-  /**
-   * Client review is on: the bar is tinted and says so, and Cancel leaves it,
-   * dropping whatever was not saved. The document's other actions wait.
-   */
-  clientMode?: { onCancel: () => void; busy?: boolean }
-  loading: boolean
-  /**
-   * Where the document sits, as a trail of circles (Agency > Client > Tool). It
-   * takes the place of the studio-home button and stands before the title; the
-   * agency circle is the way home.
-   */
-  trail?: React.ReactNode
-  validation?: string
-  /**
-   * The document lives in a store that keeps each change as it is made (the
-   * studio, the desktop's files), so "Saved" is true. False on the device,
-   * where changes stay in the tab.
-   */
-  saved?: boolean
+  attention?: boolean
+  /** What the medallion is told (the host owns its state); else asleep until the person engages, then awake. */
+  markTarget?: MarkTarget
+  /** The client chip after the pill: in a document, back to its client; on the client page, the switcher. */
+  client?: ClientChip | null
+  /** The needs-your-call count beside Decisions. Desk: across all clients; document: needsOf(view) less what was set aside. */
+  needs: number
+  /** Decisions: the drawer in a document; on the desk, the calls across clients. */
+  onDecisions?: () => void
+  decisionsOpen?: boolean
+  /** Extra tools at the end of the bar (the desk's, when a caller has any). */
+  tools?: ReactNode
+  /** Who is signed in, and the way out; absent where there are no accounts. */
+  user?: string | null
+  onSignOut?: () => void
+  /** Who is signed in: the avatar at the right, and its menu. */
+  account?: Account
+  /** The open document; absent on the desk. */
+  doc?: DocBar
+  /** A tool's home for the client (no document): named in the app slot, as the mock's "Briefs". */
+  place?: BarPlace | null
 }
 
-/** One thing the More menu can do. */
-interface MenuItem {
-  label: string
-  hint?: string
-  run: () => void
-  /** A rule above this item. */
-  apart?: boolean
+type PopKey = 'account' | 'client' | 'doc' | 'cont' | 'share' | 'linked' | 'link'
+
+/** A popover's rows: a button per item, with its hint; a rule above `apart`; disabled ones say why. */
+function Rows({ items, close }: { items: MenuItem[]; close: (refocus: boolean) => void }) {
+  return <>{items.map(item => (
+    <Fragment key={item.label}>
+      {item.apart && <hr />}
+      <button
+        type="button"
+        role="menuitem"
+        aria-disabled={item.disabled || undefined}
+        data-dogfood={`menu: ${item.label}`}
+        onClick={() => { if (item.disabled) return; close(true); item.run() }}
+      >
+        {item.label}{item.key && <kbd className="mi-key">{item.key}</kbd>}
+        {item.hint && <small>{item.hint}</small>}
+      </button>
+    </Fragment>
+  ))}</>
+}
+
+/** The tba-menu's rows (Continue in, Share): an icon disc, then the name and what it does. */
+function TbaRows({ items, close, icon }: { items: MenuItem[]; close: (refocus: boolean) => void; icon?: (i: MenuItem) => ReactNode }) {
+  return <>{items.map(item => (
+    <button
+      key={item.label}
+      type="button"
+      role="menuitem"
+      className={icon ? undefined : 'p36-mi'}
+      aria-disabled={item.disabled || undefined}
+      data-dogfood={`menu: ${item.label}`}
+      onClick={() => { if (item.disabled) return; close(true); item.run() }}
+    >
+      {icon ? <><span className="tba-mi">{icon(item)}</span><span><b>{item.label}</b>{item.hint && <small>{item.hint}</small>}</span></>
+        : <><b>{item.label}</b>{item.hint && <small>{item.hint}</small>}</>}
+    </button>
+  ))}</>
+}
+
+/** The medallion: the mock's satin mark in a raised circle; it warms and rings when the app you are in needs you. */
+function Medallion({ onHome, attention, mark, target }: { onHome: () => void; attention?: boolean; mark: { base: string; accent: string }; target?: MarkTarget }) {
+  const engaged = useEngaged()
+  const told: MarkTarget = target ?? (attention ? { state: 'needs', progress: 0.85 } : { state: engaged ? 'awake' : 'sleep', progress: 0 })
+  return (
+    <button
+      type="button"
+      className="m1-medallion"
+      id="header-medallion"
+      data-attention={attention || undefined}
+      data-testid="medallion"
+      onClick={onHome}
+      title={attention ? 'Back to the studio. This document needs you.' : 'Back to the studio'}
+      aria-label={attention ? 'Back to the studio (this document needs you)' : 'Back to the studio'}
+    >
+      <DeepOMark size={54} palette={mark} shared state={told.state} progress={told.progress} kind={told.kind} stage={told.stage} testId="medallion-mark" />
+    </button>
+  )
 }
 
 /**
- * "Saved", with the green dot. Only shown where it is true by construction
- * (see Props.saved); the time of the last change the host confirmed goes in
- * the tooltip. The shell is not told of a write that fails; the app is.
+ * Beside the document's name: what it was made from, what was made from it,
+ * and one chip for everything linked with it ("↔ 2 linked ▾", with the dot
+ * when one changed since it was taken), which opens their list
+ * (features/linked-research-bar.clan). One chip, so the name keeps its room.
  */
-function SaveStatus({ docPath }: { docPath: string }) {
-  const [last, setLast] = useState<{ docPath: string; at: Date } | null>(null)
-  useEffect(() => {
-    const note = () => setLast({ docPath, at: new Date() })
-    const subs = [host.on('clan-data-changed', note), host.on('clan-patch-saved', note)]
-    subs.forEach(s => s.catch(() => {}))
-    return () => { subs.forEach(s => s.then(f => f()).catch(() => {})) }
-  }, [docPath])
-  const at = last?.docPath === docPath ? last.at : null
-  const time = at?.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+function Lineage({ doc, linkedOpen, onLinked }: { doc: DocBar; linkedOpen: boolean; onLinked: (el: HTMLElement) => void }) {
+  const from = doc.madeFrom
+  const open = (path?: string) => (path && doc.onOpenDocument ? () => doc.onOpenDocument!(path) : undefined)
+  const chips: ReactNode[] = []
+  if (from) {
+    const go = open(from.path)
+    chips.push(
+      <button key="from" type="button" className="tba-line" onClick={go} disabled={!go} data-testid="lineage-from"
+        title={from.changed ? `Made from ${from.title}, which has changed since` : `Made from ${from.title}`}>
+        from <b>{from.title}</b>{from.changed && <i className="ch-line-dot" aria-label="changed since" />}
+      </button>,
+    )
+  }
+  if (doc.madeInto && doc.madeInto.count > 0) {
+    const n = doc.madeInto.count, noun = doc.madeInto.noun ?? 'document'
+    const go = open(doc.madeInto.path)
+    chips.push(
+      <button key="into" type="button" className="tba-line" onClick={go} disabled={!go} data-testid="lineage-into"
+        title={`${n} ${n === 1 ? noun : noun + 's'} made from this`}>
+        → <b>{n} {n === 1 ? noun : `${noun}s`}</b>
+      </button>,
+    )
+  }
+  const chip = linkedChip(doc.linked)
+  if (chip) {
+    const said = `${chip.count} linked${chip.changed ? '; one has changed since it was taken' : ''}`
+    chips.push(
+      <button key="linked" type="button" className="tba-line tba-line-link" data-testid="lineage-linked" title={said}
+        aria-haspopup="menu" aria-expanded={linkedOpen} aria-label={said}
+        onClick={e => onLinked(e.currentTarget)}
+        onKeyDown={e => { if (e.key === 'ArrowDown') { e.preventDefault(); onLinked(e.currentTarget) } }}>
+        ↔ <b>{chip.count} linked</b>{chip.changed && <i className="ch-line-dot" aria-label="changed since" />} <span aria-hidden>▾</span>
+      </button>,
+    )
+  }
+  return chips.length ? <>{chips}</> : null
+}
+
+/** What the open document is, as the linked list's heading says it. */
+const DOC_NOUN: Record<string, string> = { brief: 'brief', research: 'research', deck: 'deck', prod: 'production' }
+
+/** The linked chip's list: each linked document with Update (when it changed), Open and Unlink, then "Link another…". */
+export function LinkedList({ doc, close, onLinkAnother }: { doc: DocBar; close: (refocus: boolean) => void; onLinkAnother: () => void }) {
+  const { into, out } = linkedRows(doc)
+  const here = DOC_NOUN[doc.toolKey ?? ''] ?? 'document'
+  const targets = doc.linkTargets ?? []
+  const noun = targets.length ? linkList(doc).noun : null
+  const row = (r: LinkedRow) => (
+    <div key={`${r.doc.dir}:${r.doc.documentId}`} className="pp-link" data-testid="linked-row" data-dir={r.doc.dir}>
+      <span className="pp-link-t"><b>{r.doc.title}</b><small>{r.sub}</small></span>
+      {r.actions.map(a => (
+        <button key={a.label} type="button" role="menuitem" title={a.hint} className={a.label === 'Update' ? 'pp-act pp-act-up' : 'pp-act'}
+          aria-label={`${a.label} ${r.doc.title}`} data-dogfood={`menu: linked ${a.label}`}
+          onClick={() => { close(true); a.run() }}>{a.label}</button>
+      ))}
+    </div>
+  )
+  return <>
+    {into.length > 0 && <><div className="pp-h">Linked into this {here}</div>{into.map(row)}</>}
+    {out.length > 0 && <><div className="pp-h">This {here} is linked into</div>{out.map(row)}</>}
+    {noun && doc.onLink && (
+      <button type="button" role="menuitem" className="pp-more" data-testid="link-another" onClick={onLinkAnother}>＋ Link another {noun}…</button>
+    )}
+  </>
+}
+
+/**
+ * The Link list (Continue in ▾ › Link, and the chip's "Link another…"): this
+ * client's documents, newest first, a search that finds any client's, and
+ * all clients grouped by client, this client first.
+ */
+export function LinkPicker({ doc, close, startQuery = '', startAll = false }: {
+  doc: DocBar; close: (refocus: boolean) => void; startQuery?: string; startAll?: boolean
+}) {
+  const [query, setQuery] = useState(startQuery)
+  const [all, setAll] = useState(startAll)
+  const list = linkList(doc, query)
+  const many = plural(list.noun)
+  const row = (r: LinkRow) => (
+    <div key={r.target.document_id} className="pp-link" data-testid="link-row" data-state={r.state}>
+      <span className="pp-link-t"><b>{r.target.title}</b><small>{r.sub}</small></span>
+      {r.state === 'linked'
+        ? <span className="pp-linked">Linked</span>
+        : <button type="button" role="menuitem" className="pp-act" aria-label={`Link ${r.target.title}`}
+            aria-disabled={r.state === 'locked' || undefined} title={r.state === 'locked' ? list.locked ?? undefined : `Link ${r.target.title} into this one`}
+            data-dogfood="menu: link research"
+            onClick={() => { if (r.state === 'locked') return; close(true); r.run() }}>Link</button>}
+    </div>
+  )
+  const search = (placeholder: string) => (
+    <label className="pp-search">
+      <span aria-hidden>⌕</span>
+      <input type="search" value={query} placeholder={placeholder} aria-label={placeholder} data-testid="link-search"
+        onChange={e => setQuery(e.target.value)}
+        onKeyDown={e => { if (e.key !== 'Escape' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') e.stopPropagation() }} />
+    </label>
+  )
+  const empty = (said: string) => <p className="tba-empty">{said}</p>
+  return <>
+    {list.locked && <p className="tba-gate" data-testid="link-locked">{list.locked}</p>}
+    {all ? <>
+      <div className="pp-h">Link {list.noun} · all clients</div>
+      {search('Search by name or client')}
+      {list.groups.length ? list.groups.map(g => (
+        <div key={g.name} role="group" aria-label={g.name} data-testid="link-group">
+          <div className="pp-h">{g.name}{g.here && ' · this client'}</div>
+          {g.rows.map(row)}
+        </div>
+      )) : empty(`No ${many} match “${query.trim()}”.`)}
+      <button type="button" role="menuitem" className="pp-more" data-testid="link-only-here" onClick={() => setAll(false)}>Only this client</button>
+    </> : <>
+      <div className="pp-h">Link {list.noun} · {list.here}</div>
+      {list.mine.length ? list.mine.map(row) : empty(`No ${many} for ${list.here} yet.`)}
+      {search(`Search ${many} for other clients`)}
+      <button type="button" role="menuitem" className="pp-more" data-testid="link-all" onClick={() => setAll(true)}>Show {many} for all clients</button>
+      {query.trim() && <>
+        <div className="pp-h">Other clients</div>
+        {list.others.length ? list.others.map(row) : empty(`No other client’s ${list.noun} matches “${query.trim()}”.`)}
+      </>}
+    </>}
+  </>
+}
+
+/** Colours for a person's avatar, from their name: the mock's crew reds and greens. */
+const CREW_COLOURS = ['#C9462A', '#2F6B3A', '#1E3A8A', '#7A1E1E', '#5B2A86']
+const crewColour = (name: string) => CREW_COLOURS[[...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % CREW_COLOURS.length]
+
+/** Who is in the document: the people only. An agent shows in one place, on
+ * the run stage or in the document's side panel, never here (owner, 2026-11-09);
+ * that one works is the bar's working chip ({@link JobChip}). */
+function CrewHere({ crew, mine }: { crew: Crew; mine?: boolean }) {
+  // Your own circle is the avatar beside it (its menu is yours); the crew here is everyone else.
+  const shown = mine ? crew.people.filter(p => !p.you) : crew.people
+  if (mine && !shown.length) return null
+  const names = crew.people.map(p => (p.you ? `${p.name} (you)` : p.name))
+  const who = crew.agent ? roles.the(crew.agent) : 'an agent'
+  const said = `In this document: ${names.join(', ') || 'nobody yet'}${crew.working ? `; ${who} is ${crew.working}` : ''}`
   return (
-    <span className="ch-saved" title={`Every change is kept as you make it.${time ? ` Last change kept at ${time}.` : ''}`}>
-      Saved
+    <span className="tb-crew" id="tb-crew" role="group" aria-label={said} title={said} data-testid="crew">
+      {shown.map(p => <i key={p.name} className="cw" style={{ ['--c' as string]: p.you ? '#C9462A' : crewColour(p.name) }} aria-hidden>{p.initials}</i>)}
     </span>
   )
 }
 
-/** The menu's items, in order, and focus on the i-th (wrapping round). */
-const entries = (menu: HTMLElement | null) =>
-  Array.from(menu?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])
-function focusAt(menu: HTMLElement | null, i: number) {
-  const els = entries(menu)
-  if (els.length) els[(i + els.length) % els.length].focus()
-}
-
-/**
- * "More ▾": everything the bar does that is not Share, in plain words. A menu
- * button: arrows move through it, Home and End jump, Escape or Tab or a click
- * anywhere else closes it. Clicks inside the app frame never reach this page,
- * so leaving the window (a click into the frame) closes it too.
- */
-function MoreMenu({ items }: { items: MenuItem[] }) {
-  const [open, setOpen] = useState(false)
-  const anchor = useRef<HTMLDivElement>(null)
-  const button = useRef<HTMLButtonElement>(null)
-  const menu = useRef<HTMLDivElement>(null)
-  // Which item takes focus when the menu opens: the first, or the last (ArrowUp).
-  const startAt = useRef(0)
-
-  const close = (refocus: boolean) => {
-    setOpen(false)
-    if (refocus) button.current?.focus()
-  }
-
-  useEffect(() => {
-    if (!open) return
-    focusAt(menu.current, startAt.current < 0 ? entries(menu.current).length - 1 : startAt.current)
-    const outside = (e: PointerEvent) => {
-      if (!anchor.current?.contains(e.target as Node)) setOpen(false)
-    }
-    const left = () => setOpen(false)
-    document.addEventListener('pointerdown', outside)
-    window.addEventListener('blur', left)
-    return () => {
-      document.removeEventListener('pointerdown', outside)
-      window.removeEventListener('blur', left)
-    }
-  }, [open])
-
-  const openAt = (i: number) => { startAt.current = i; setOpen(true) }
-
-  const onButtonKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); openAt(0) }
-    if (e.key === 'ArrowUp') { e.preventDefault(); openAt(-1) }
-  }
-
-  const onMenuKey = (e: React.KeyboardEvent) => {
-    const els = entries(menu.current)
-    const i = els.indexOf(document.activeElement as HTMLButtonElement)
-    switch (e.key) {
-      case 'ArrowDown': e.preventDefault(); focusAt(menu.current, i + 1); break
-      case 'ArrowUp': e.preventDefault(); focusAt(menu.current, i - 1); break
-      case 'Home': e.preventDefault(); focusAt(menu.current, 0); break
-      case 'End': e.preventDefault(); focusAt(menu.current, els.length - 1); break
-      case 'Escape': e.preventDefault(); close(true); break
-      case 'Tab': close(false); break
-    }
-  }
-
+/** The agency's pill: back to the desk, no menu (owner, 2026-11-11). */
+export function AgencyPill({ agency, logo, onDesk }: { agency: string; logo?: AgencyLogo; onDesk: () => void }) {
+  // Napkin's own people see "Napkin Studio" once, not "Napkin" over "Napkin Studio" (owner, 2026-11-11).
+  const own = /^napkin(\s+studio)?$/i.test(agency.trim())
   return (
-    <div className="ch-menu-anchor" ref={anchor}>
-      <button
-        ref={button}
-        className="ch-btn"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? 'ch-more-menu' : undefined}
-        onClick={() => (open ? close(false) : openAt(0))}
-        onKeyDown={onButtonKey}
-      >
-        More <span aria-hidden>▾</span>
-      </button>
-      {open && (
-        <div className="ch-menu" role="menu" id="ch-more-menu" aria-label="More" ref={menu} onKeyDown={onMenuKey}>
-          {items.map(item => (
-            <div key={item.label} role="none" className={item.apart ? 'ch-menu-apart' : undefined}>
-              <button
-                className="ch-menu-item"
-                role="menuitem"
-                data-dogfood={`menu: ${item.label}`}
-                tabIndex={-1}
-                onClick={() => { close(true); item.run() }}
-              >
-                {item.label}
-                {item.hint && <small>{item.hint}</small>}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      className="name-pill pill-accent"
+      id="header-name-pill"
+      title={`${agency}: back to the desk`}
+      aria-label="Back to the desk"
+      data-testid="agency-pill"
+      onClick={onDesk}
+    >
+      <span className="stacked-lockup" id="header-lockup">
+        {own
+          ? <span className="sl-big">Napkin Studio</span>
+          : logo?.wordmark
+          ? <span className={`sl-big sl-logo${logo.icon ? ' has-icon' : ''}`} data-testid="agency-wordmark"><img className="sl-wordmark" src={logo.wordmark} alt={agency} />{logo.icon && <img className="sl-icon" src={logo.icon} alt="" aria-hidden />}</span>
+          : <span className="sl-big">{agency}</span>}
+        {!own && <span className="sl-mono"><i className="ag-dot" aria-hidden />Napkin Studio</span>}
+      </span>
+    </button>
   )
 }
 
-/**
- * The document bar: studio home, the title, and "Saved · Share · More". A
- * badge only when something is wrong with the file; "Done editing" in the bar
- * itself whenever edit mode is on, so it is never hidden while it is.
- */
-/** A tool as the bar names it: its own name, colour and face (its app.home). */
-export interface ToolBrand {
-  name: string
-  colour?: string | null
-  font?: string | null
+/** You, at the bar's right: your initials; the menu has who you are, Offline copies and Sign out. */
+function AccountButton({ account, open, onMenu }: { account: Account; open: boolean; onMenu: (el: HTMLElement) => void }) {
+  return (
+    <button
+      type="button"
+      className="tb-me"
+      id="tb-me"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-label={`${account.name}: your account`}
+      title={`${account.name} · ${account.line}`}
+      data-testid="account-button"
+      onClick={e => onMenu(e.currentTarget)}
+      onKeyDown={e => { if (e.key === 'ArrowDown') { e.preventDefault(); onMenu(e.currentTarget) } }}
+    >
+      <i className="cw" aria-hidden>{account.initials}</i>
+    </button>
+  )
 }
 
-/** "Napkin Studio" in the OS's face, then the tool's name in the tool's own. */
-function BarBrand({ tool, compact }: { tool?: ToolBrand | null; compact?: boolean }) {
-  if (!tool) return <StudioLogo size={15} compact={compact} />
+/** A job runs on the open document while you're on its sheet: the mock's status
+ * chip, with the step while the run says it. The agent itself is in the side panel. */
+function JobChip({ crew }: { crew: Crew }) {
+  const p = crew.progress
+  const word = crew.working ? crew.working.charAt(0).toUpperCase() + crew.working.slice(1) : 'Working'
+  const label = p ? `${word} · step ${p[0]}/${p[1]}` : word
+  const who = crew.agent ? roles.name(crew.agent) : 'An agent'
+  return <span className="tb-status" data-testid="agent-working" data-st="working" title={`${who} is ${crew.working}`}><i className="sdot" aria-hidden />{label}</span>
+}
+
+/** Decisions, with the needs-your-call count. */
+function DecisionsButton({ needs, onDecisions, open, waiting }: { needs: number; onDecisions?: () => void; open?: boolean; waiting?: boolean }) {
+  // A question the crew stopped on is answered in the document; it counts as one call here (gaps.md X8).
+  const count = needs + (waiting ? 1 : 0)
+  const asked = waiting ? 'the crew is waiting on your answer in the document' : ''
+  const said = needs ? `${needs} need${needs === 1 ? 's' : ''} your call${asked ? `, and ${asked}` : ''}` : asked || 'nothing needs your call'
   return (
-    <span className="ch-brand">
-      <StudioLogo size={15} label="Napkin Studio" />
-      <span className="ch-brand-tool" style={{
-        ...(tool.colour ? { ['--tool' as string]: tool.colour } : {}),
-        ...(tool.font ? { fontFamily: tool.font } : {}),
-      }}>{tool.name}</span>
+    <button
+      type="button"
+      id="tb-decisions-btn"
+      className={count ? 'tb-decisions-btn has-needs' : 'tb-decisions-btn'}
+      onClick={onDecisions}
+      disabled={!onDecisions}
+      aria-expanded={open}
+      aria-label={`Decisions: ${said}`}
+      title={said}
+      data-testid="decisions"
+    >
+      <span>Decisions</span>
+      <span className="cnt" id="tb-decisions-cnt" data-testid="needs-count">{count}</span>
+    </button>
+  )
+}
+
+/** The doc's name: its tool's icon, the name in serif, "saved · valid ✓" under it, the menu on it; double-click renames. */
+function DocName({ doc, onMenu, open, renaming, setRenaming }: {
+  doc: DocBar; onMenu: (el: HTMLElement) => void; open: boolean; renaming: boolean; setRenaming: (on: boolean) => void
+}) {
+  const input = useRef<HTMLInputElement>(null)
+  const title = doc.loading ? null : (doc.title ?? 'No file open')
+  const finish = (ok: boolean) => {
+    const v = input.current?.value.trim() ?? ''
+    setRenaming(false)
+    if (ok && v && v !== title) doc.onRename?.(v)
+  }
+  const invalid = !!doc.validation && doc.validation !== 'OK'
+  const check = invalid ? 'not valid' : doc.trusted ? 'signed ✓' : 'valid ✓'
+  // Before there is a document to act on (the prompt, the crew at work): the name alone, as the mock.
+  const pre = !!modeOf(doc.bar ?? [])
+  return (
+    <span
+      className={`tba-name tba-${doc.toolKey ?? 'brief'}`}
+      role="button"
+      tabIndex={0}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      title="Document menu · double-click to rename"
+      data-testid="doc-name"
+      onClick={e => { if (!renaming && !(e.target as HTMLElement).closest('input')) onMenu(e.currentTarget) }}
+      onKeyDown={e => { if (!renaming && (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown')) { e.preventDefault(); onMenu(e.currentTarget) } }}
+      onDoubleClick={() => { if (doc.onRename) setRenaming(true) }}
+    >
+      <ToolIcon tool={doc.toolKey} />
+      <span className="tba-n2">
+        {renaming ? (
+          <input
+            ref={input}
+            className="tba-rename"
+            defaultValue={title ?? ''}
+            aria-label="New name"
+            autoFocus
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false) }}
+            onBlur={() => finish(true)}
+          />
+        ) : <b title={title ?? undefined}>{title ?? <LogoSpinner size="xs" label="Loading…" />}</b>}
+        {!pre && <small className="tba-saved" data-testid="saved-line">{doc.saved ? <>{doc.saved} · {check}</> : check}</small>}
+      </span>
+      {!pre && <i className="tba-caret" aria-hidden>▾</i>}
     </span>
   )
 }
 
 export default function Toolbar({
-  title, bar, onBarAction, tool, isTemplate, trusted, onHome, onOpenFile, onToggleSidebar, onWorkspace, onSave, onKeepOffline, onExport, editMode, onToggleEdit,
-  onClientReview, clientAnswered, clientMode, docPath, onSpinoff, sidebarOpen, loading, trail, validation, saved,
+  agency, agencyLogo, onAgency, onHome, mark = markOf(null), attention, markTarget, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place,
 }: Props) {
-  const invalid = !!validation && validation !== 'OK'
-  const targets = useSpinoffTargets(docPath)
-  // On a server with accounts: who is signed in, and a way out.
-  const [user, setUser] = useState<string | null>(null)
-  useEffect(() => { signedInUser().then(u => setUser(u ? u.username : null)) }, [])
+  const pop = usePop<PopKey>()
+  const appRef = useRef<HTMLDivElement>(null)
+  // Renaming the document in place: the name's double-click, or Rename in its menu.
+  const [renaming, setRenaming] = useState(false)
+  // The tba-menu sits 40px under the app slot, at the button's own left (the mock's .tba-menu).
+  const underSlot = useCallback((r: DOMRect) => {
+    const slot = appRef.current?.getBoundingClientRect()
+    return { top: (slot?.top ?? r.top) + 40, left: r.left }
+  }, [])
 
-  // The app's own buttons past the two the bar has room for are in More, at the top, in the app's order.
-  const overflow = overflowButtons(bar ?? [])
-
-  const items: MenuItem[] = [
-    ...overflow.map(b => ({ label: b.label, hint: b.title || undefined, run: () => onBarAction?.(b.id) })),
-    ...(onToggleEdit && !editMode
-      ? [{ label: 'Edit', hint: 'Change it yourself. Every change is kept as yours.', run: onToggleEdit }]
-      : []),
-    { label: 'Open…', hint: 'Open another .clan file', run: onOpenFile },
-    { label: 'Save as…', hint: 'Keep a copy of this file', run: onSave },
-    ...(onKeepOffline
-      ? [{ label: 'Present offline', hint: 'Keep it on this device, to show with no internet', run: onKeepOffline }]
-      : []),
-    { label: 'Export', hint: 'Make a PDF of it', run: () => onExport('pdf') },
-    { label: 'Where it came from', hint: 'What it was made from, step by step', run: onWorkspace },
-    ...targets.map((t, i) => ({
-      label: `Continue in ${t.name}`,
-      hint: t.map ? `Takes this along, into ${t.map}` : 'Takes its data and decisions along',
-      run: () => onSpinoff(t.app_id),
-      apart: i === 0,
-    })),
-    {
-      label: sidebarOpen ? 'Hide the file’s details' : 'Show the file’s details',
-      run: onToggleSidebar,
-      apart: true,
-    },
-    ...(user ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: () => { void signOut() }, apart: true }] : []),
-  ]
-
-  if (clientMode) {
-    return (
-      <div className="ch-bar ch-bar-mode" role="region" aria-label="Client review">
-  {trail ?? (
-          <button className="ch-bar-home" onClick={onHome} title="Back to the studio">
-            <BarBrand tool={tool} compact />
+  const dogfood = useSyncExternalStore(subscribeDogfood, dogfoodState, dogfoodState)
+  const recording = dogfood.on
+  const acct = accountItems(account, user, onSignOut, betaNoticeOpener(recording), feedbackOpener(dogfood.on && dogfood.consented))
+  const me = account ? <AccountButton account={account} open={pop.open?.key === 'account'} onMenu={el => pop.toggle('account', el)} /> : null
+  const lead = (
+    <>
+      <div className="dock-connected">
+        <Medallion onHome={onHome} attention={!!doc && attention} mark={mark} target={doc ? markTarget : undefined} />
+        <AgencyPill agency={agency} logo={agencyLogo} onDesk={onAgency ?? onHome} />
+      </div>
+      {/* Only between the pill and a client: with no client the document's own rule follows the
+          pill, and two rules around an empty gap read as something missing (owner, 2026-11-12). */}
+      {client && <span className="tb-vsep" aria-hidden />}
+      <nav className="tb-trail" id="tb-trail" aria-label="Where you are">
+        {client && (
+          <button
+            type="button"
+            className="tb-client"
+            id={client.switcher ? 'p33-cswitch' : undefined}
+            title={client.switcher ? 'Switch client' : `Back to ${client.name}`}
+            aria-label={client.switcher ? `Switch client: ${client.name}` : client.name}
+            aria-current={client.current ? 'page' : undefined}
+            aria-haspopup={client.switcher ? 'menu' : undefined}
+            aria-expanded={client.switcher ? pop.open?.key === 'client' : undefined}
+            data-testid="client-chip"
+            onClick={e => { if (client.switcher) pop.toggle('client', e.currentTarget); else client.onOpen?.() }}
+          >
+            <span className="tb-cdot" style={{ background: client.look.cl, color: client.look.ink }}>{client.mono}</span>
+            <span className="tb-cname">{client.name}</span>
+            {client.switcher && <span style={{ color: 'var(--muted)', fontSize: 10, marginLeft: 2 }} aria-hidden>▾</span>}
           </button>
         )}
-        <span className="ch-bar-title">{title ?? 'No file open'}</span>
-        <span className="ch-modetag"><span className="ch-modetag-dot" aria-hidden />Client review</span>
-        <span className="ch-bar-sep" />
-        <button className="ch-btn" onClick={clientMode.onCancel} disabled={clientMode.busy} title="Leave client review. Nothing you have not saved is kept.">
-          Cancel
-        </button>
-        <ThemeToggle />
+      </nav>
+    </>
+  )
+
+  const popovers = (
+    <>
+      {pop.open?.key === 'account' && account && (
+        <Pop anchor={pop.open.anchor} align="right" onClose={pop.close} label="Your account" testid="account-menu">
+          <div className="pp-me">
+            <span className="pp-av" aria-hidden>{account.initials}</span>
+            <span><b>{account.name}</b><small>{account.line}</small></span>
+          </div>
+          {acct.length > 0 && <hr />}
+          <Rows items={acct} close={pop.close} />
+        </Pop>
+      )}
+      {pop.open?.key === 'client' && client?.switcher && (
+        <Pop anchor={pop.open.anchor} onClose={pop.close} label="Switch client" testid="client-switcher">
+          <div className="pp-h">Switch client</div>
+          {client.switcher.map(c => (
+            <button key={c.id} type="button" role="menuitem" onClick={() => { pop.close(false); client.onSwitch?.(c.id) }}>
+              {c.name}{c.sub && <small>{c.sub}</small>}
+            </button>
+          ))}
+        </Pop>
+      )}
+    </>
+  )
+
+  const right = (
+    <>
+      <DogfoodBadge variant="nui" />
+      <ThemeToggle variant="nui" />
+    </>
+  )
+
+  // ── the desk and the client page: no document ─────────────────────────────
+  if (!doc) {
+    return (
+      <div className="nui ch-bar-os" data-testid="os-bar" data-where="desk">
+        <div className="topbar-outer">
+          <header className="tb-locked" aria-label="Napkin Studio Top Bar">
+            {lead}
+            <div className="tb-app" id="tb-app" aria-label="App">
+              {place && (
+                <span className={`tba-name tba-static tba-${place.tool}`} data-testid="bar-place">
+                  <ToolIcon tool={place.tool} /><span className="tba-n2"><b>{place.label}</b></span>
+                </span>
+              )}
+            </div>
+            <span className="tb-spacer" />
+            {tools}
+            {right}
+            {me}
+            <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} />
+          </header>
+        </div>
+        {popovers}
       </div>
     )
   }
 
+  const invalid = !!doc.validation && doc.validation !== 'OK'
+
+  // ── client review: the bar is the mode's ──────────────────────────────────
+  if (doc.clientMode) {
+    return (
+      <div className="nui ch-bar-os ch-bar-mode" role="region" aria-label="Client review" data-testid="os-bar" data-where="client-review">
+        <div className="topbar-outer">
+          <header className="tb-locked" aria-label="Napkin Studio Top Bar">
+            {lead}
+            <div className="tb-app" id="tb-app" aria-label="App">
+              <span className={`tba-name tba-static tba-${doc.toolKey ?? 'brief'}`}>
+                <ToolIcon tool={doc.toolKey} />
+                <span className="tba-n2"><b title={doc.title ?? undefined}>{doc.title ?? 'No file open'}</b></span>
+              </span>
+              <span className="ch-modetag"><span className="ch-modetag-dot" aria-hidden />Client review</span>
+            </div>
+            <span className="tb-spacer" />
+            <button type="button" className="tba-btn tba-cont" onClick={doc.clientMode.onCancel} disabled={doc.clientMode.busy}
+              title="Leave client review. Nothing you have not saved is kept.">
+              Cancel
+            </button>
+            <ThemeToggle variant="nui" />
+          </header>
+        </div>
+        {popovers}
+      </div>
+    )
+  }
+
+  // Continue in ▾ › Link opens the Link list where Continue in was.
+  const contAnchor = pop.open?.key === 'cont' ? pop.open.anchor : null
+  const cont = continueItems(doc, () => { if (contAnchor) pop.setOpen({ key: 'link', anchor: contAnchor }) })
+  const fresh = cont.fresh
+  // The research's gate line ("Not brief-ready yet: …"), first in Continue in, when the app sends one.
+  const gate = gateOf(doc.bar ?? [])?.label ?? null
+  const contIcon = (i: MenuItem) => {
+    if (i.label.startsWith('↔')) return '↔'
+    if (i.label.startsWith('New ')) return '+'
+    if (i.label.startsWith('Update ') || i.label.startsWith('Unlink ')) return '↻'
+    const l = i.label.toLowerCase()
+    return <ToolIcon tool={/research/.test(l) ? 'research' : /deck/.test(l) ? 'deck' : /brief/.test(l) ? 'brief' : 'production'} />
+  }
+  const mode = modeOf(doc.bar ?? [])
   return (
-    <div className="ch-bar">
-      {trail ?? (
-        <button className="ch-bar-home" onClick={onHome} title="Back to the studio">
-          <BarBrand tool={tool} compact />
-        </button>
+    <div className="nui ch-bar-os" data-testid="os-bar" data-where="document">
+      <div className="topbar-outer">
+        <header className="tb-locked" aria-label="Napkin Studio Top Bar">
+          {lead}
+          <div className="tb-app" id="tb-app" aria-label="App" ref={appRef}>
+            <DocName doc={doc} open={pop.open?.key === 'doc'} onMenu={el => pop.toggle('doc', el)} renaming={renaming} setRenaming={setRenaming} />
+            {!mode && <Lineage doc={doc} linkedOpen={pop.open?.key === 'linked'} onLinked={el => pop.toggle('linked', el)} />}
+            {!mode && <span className="tba-acts">
+              <button type="button" className="tba-btn tba-cont" data-tba="b-cont" aria-haspopup="menu" aria-expanded={pop.open?.key === 'cont'}
+                onClick={e => { const el = e.currentTarget; pressContinue(doc, pop.open?.key === 'cont', () => pop.toggle('cont', el)) }}>Continue in ▾</button>
+              <button type="button" className="tba-btn tba-share" data-p36-share aria-haspopup="menu" aria-expanded={pop.open?.key === 'share'}
+                onClick={e => pop.toggle('share', e.currentTarget)}>Share</button>
+            </span>}
+          </div>
+          <span className="tb-spacer" />
+          <span className="tb-tools">
+            {mode?.mode === 'working'
+              ? <span className="tb-status" data-testid="working-chip" data-st="working" title={`Agents: ${mode.label || 'Working'}`}><i className="sdot" aria-hidden />{mode.label || 'Working'}</span>
+              : doc.crew?.working ? <JobChip crew={doc.crew} /> : null}
+            {doc.isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
+            {doc.trusted && (
+              <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">Trusted</span>
+            )}
+            {invalid && (
+              <span className="ch-chip ch-chip-warn" title={doc.validation}>
+                <span className="ch-chip-dot" />Something’s wrong with this file
+              </span>
+            )}
+            <BarChips bar={doc.bar ?? []} />
+            <BarButtons bar={doc.bar ?? []} onAction={doc.onBarAction} />
+            {doc.onClientReview && !doc.editMode && (
+              <button
+                type="button"
+                className={doc.clientAnswered ? 'tba-btn tba-cont' : 'tba-btn tba-cont tba-primary'}
+                onClick={doc.onClientReview}
+                title={doc.clientAnswered ? 'Record another answer from the client about the locked version' : 'Record what the client said about the locked version'}
+              >
+                {doc.clientAnswered ? 'New client answer' : 'Client review'}
+              </button>
+            )}
+            {doc.onToggleEdit && doc.editMode && (
+              <button type="button" className="tba-btn tba-cont tba-primary" onClick={doc.onToggleEdit} aria-pressed title="Stop editing">
+                Done editing
+              </button>
+            )}
+          </span>
+          {right}
+          {doc.crew && <CrewHere crew={doc.crew} mine={!!account} />}
+          {me}
+          <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} waiting={!!doc.crew?.waiting} />
+        </header>
+      </div>
+      {popovers}
+      {pop.open?.key === 'doc' && (
+        <Pop anchor={pop.open.anchor} onClose={pop.close} label="Document" testid="doc-menu">
+          <div className="pp-h">{doc.title ?? 'This document'}</div>
+          <Rows items={docMenuItems(doc, () => setRenaming(true))} close={pop.close} />
+        </Pop>
       )}
-      <span className="ch-bar-title">{loading ? <LogoSpinner size="xs" label="Loading…" /> : (title ?? 'No file open')}</span>
-      {isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
-      {trusted && (
-        <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">
-          Trusted
-        </span>
+      {pop.open?.key === 'cont' && (
+        <Pop anchor={pop.open.anchor} onClose={pop.close} label="Continue in" className="tba-menu" at={underSlot} testid="continue-menu">
+          {gate && <p className="tba-gate" data-testid="continue-gate">{gate}</p>}
+          <div className="tba-mh">Turn it into</div>
+          {cont.spin.length ? <TbaRows items={cont.spin} close={pop.close} icon={contIcon} /> : <p className="tba-empty">No app here takes this as a source yet.</p>}
+          <div className="tba-mh">Link to an existing one</div>
+          {cont.link.length ? <TbaRows items={cont.link} close={pop.close} icon={contIcon} /> : <p className="tba-empty">Nothing in this workspace to link this to yet.</p>}
+          {doc.madeFrom && <>
+            <div className="tba-mh">Made from</div>
+            {cont.update.length ? <TbaRows items={cont.update} close={pop.close} icon={contIcon} />
+              : <p className="tba-empty">{doc.madeFrom.changed
+                ? `${doc.madeFrom.title} changed. A locked version keeps what it was made from.`
+                : `Up to date with ${doc.madeFrom.title}.`}</p>}
+          </>}
+          {fresh.length > 0 && <>
+            <div className="tba-mh">Start fresh</div>
+            <TbaRows items={fresh} close={pop.close} icon={contIcon} />
+          </>}
+        </Pop>
       )}
-      {invalid && (
-        <span className="ch-chip ch-chip-warn" title={validation}>
-          <span className="ch-chip-dot" />Something’s wrong with this file
-        </span>
+      {pop.open?.key === 'linked' && (
+        <Pop anchor={pop.open.anchor} onClose={pop.close} label="Linked" className="p33-pop pp-links" testid="linked-menu">
+          <LinkedList doc={doc} close={pop.close} onLinkAnother={() => { const a = pop.open?.anchor; if (a) pop.setOpen({ key: 'link', anchor: a }) }} />
+        </Pop>
       )}
-      <BarChips bar={bar ?? []} />
-      <span className="ch-bar-sep" />
-      <BarTabs bar={bar ?? []} onAction={onBarAction} />
-      <BarButtons bar={bar ?? []} onAction={onBarAction} />
-      {onClientReview && !editMode && (
-        <button
-          className={clientAnswered ? 'ch-btn ch-btn-big' : 'ch-btn ch-btn-primary ch-btn-big'}
-          onClick={onClientReview}
-          title={clientAnswered ? 'Record another answer from the client about the locked version' : 'Record what the client said about the locked version'}
-        >
-          {clientAnswered ? 'New client answer' : 'Client review'}
-        </button>
+      {pop.open?.key === 'link' && (
+        <Pop anchor={pop.open.anchor} onClose={pop.close} label="Link" className="p33-pop pp-links" testid="link-menu">
+          <LinkPicker doc={doc} close={pop.close} />
+        </Pop>
       )}
-      {onToggleEdit && editMode && (
-        <button
-          className="ch-btn ch-btn-editing"
-          onClick={onToggleEdit}
-          aria-pressed
-          title="Stop editing"
-        >
-          Done editing
-        </button>
+      {pop.open?.key === 'share' && (
+        <Pop anchor={pop.open.anchor} onClose={pop.close} label="Share" className="tba-menu" at={underSlot} testid="share-menu">
+          <div className="pp-h">Share</div>
+          <TbaRows items={shareItems(doc)} close={pop.close} />
+        </Pop>
       )}
-      {saved && <SaveStatus docPath={docPath} />}
-      <button className="ch-btn" onClick={onSave} title="Download a copy to send. It opens in Napkin with everything in it.">
-        Share
-      </button>
-      <MoreMenu items={items} />
-      <DogfoodBadge />
-      <ThemeToggle />
     </div>
   )
 }

@@ -82,6 +82,8 @@ else
         want[rust]=1 ;;
       app/src-tauri/*)
         want[desktop]=1 ;;
+      app/src/shell/bridge/*)  # the frame scripts napkin-host compiles in (frame.rs)
+        want[frontend]=1; want[rust]=1; want[wasm]=1; want[desktop]=1 ;;
       app/*)
         want[frontend]=1 ;;
       engine/*|mock-agent/*)

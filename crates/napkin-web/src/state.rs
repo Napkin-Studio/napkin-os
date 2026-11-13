@@ -14,7 +14,9 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use napkin_host::{Ctx, DocId, DocStore, HostConfig, HostResult, LibraryCache, Session};
+use napkin_host::{
+    Ctx, DocId, DocStore, HostConfig, HostResult, LibraryCache, OpenResult, Session,
+};
 
 use crate::events::EventBus;
 use crate::exports::ExportStore;
@@ -57,20 +59,40 @@ impl Workspace {
 
     /// The session for one document, opening it if this is the first request.
     pub fn session(&self, doc: &DocId) -> HostResult<Arc<Session>> {
+        Ok(self.cached_or_open(doc)?.0)
+    }
+
+    /// The session for one document, with the document read as it stands now
+    /// and described. A cached session re-reads it (under its view lock, as
+    /// [`Session::open`] always does); a session opened just now has read it
+    /// already, and that one read is used, not repeated.
+    pub fn open(&self, doc: &DocId) -> HostResult<(Arc<Session>, OpenResult)> {
+        let (session, opened) = self.cached_or_open(doc)?;
+        let open = match opened {
+            Some(open) => open,
+            None => crate::timing::open(&session, doc.clone())?,
+        };
+        Ok((session, open))
+    }
+
+    /// The cached session, or a new one with what its open described.
+    fn cached_or_open(&self, doc: &DocId) -> HostResult<(Arc<Session>, Option<OpenResult>)> {
+        crate::timing::note_doc(doc);
         if let Some(s) = self.sessions.lock().unwrap().open.get(doc) {
-            return Ok(s.clone());
+            return Ok((s.clone(), None));
         }
         // Open outside the lock: reading and validating an archive is real work
         // and must not block every other document of this tenant.
         let session = Arc::new(
             Session::with_ctx(self.store.clone(), self.ctx.clone()).with_runs(self.library.runs()),
         );
-        session.open(doc.clone())?;
+        let opened = crate::timing::open(&session, doc.clone())?;
 
         let mut cache = self.sessions.lock().unwrap();
-        // A concurrent request may have won the race; its session is as good.
+        // A concurrent request may have won the race; its session is as good,
+        // but what it holds is its own read, so ours does not describe it.
         if let Some(existing) = cache.open.get(doc) {
-            return Ok(existing.clone());
+            return Ok((existing.clone(), None));
         }
         cache.open.insert(doc.clone(), session.clone());
         cache.order.push_back(doc.clone());
@@ -79,7 +101,7 @@ impl Workspace {
                 cache.open.remove(&oldest);
             }
         }
-        Ok(session)
+        Ok((session, Some(opened)))
     }
 }
 
@@ -134,6 +156,13 @@ impl AppCtx {
         self
     }
 
+    /// Give `tenant` a workspace on `store` (tests that count what reaches it).
+    #[cfg(test)]
+    pub(crate) fn put_workspace(&self, tenant: &TenantId, store: Arc<dyn DocStore>) {
+        let ws = Arc::new(Workspace::new(store, tenant.ctx()));
+        self.workspaces.lock().unwrap().insert(tenant.clone(), ws);
+    }
+
     pub fn workspace(&self, tenant: &TenantId) -> Arc<Workspace> {
         let mut workspaces = self.workspaces.lock().unwrap();
         if let Some(existing) = workspaces.get(tenant) {
@@ -170,5 +199,129 @@ fn seed_library(store: &dyn DocStore, dir: &Path) {
             Ok(app) => tracing::info!(app = %app.app_id, "seeded"),
             Err(e) => tracing::warn!(file = %path.display(), error = %e, "seed skipped"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use axum::body::Body;
+    use axum::http::{header, Request, StatusCode};
+    use napkin_host::{Change, Library, NoConfig, PartStore, Version};
+    use tower::ServiceExt;
+
+    use super::*;
+
+    /// A tenant's store that counts the reads of one document, as #220's
+    /// `HeldRead` stands between a session and its store.
+    struct Counting {
+        inner: TenantStore,
+        watched: DocId,
+        reads: AtomicUsize,
+    }
+
+    impl PartStore for Counting {
+        fn read(&self, id: &DocId) -> HostResult<Vec<u8>> {
+            if id == &self.watched {
+                self.reads.fetch_add(1, Ordering::SeqCst);
+            }
+            self.inner.read(id)
+        }
+        fn exists(&self, id: &DocId) -> bool {
+            self.inner.exists(id)
+        }
+        fn apply(&self, change: &Change) -> HostResult<Version> {
+            self.inner.apply(change)
+        }
+    }
+
+    impl Library for Counting {
+        fn app_candidates(&self) -> Vec<DocId> {
+            self.inner.app_candidates()
+        }
+        fn app_template(&self, app_id: &str) -> DocId {
+            self.inner.app_template(app_id)
+        }
+        fn documents(&self) -> Vec<DocId> {
+            self.inner.documents()
+        }
+        fn new_document(&self, app_id: &str, id_short: &str) -> HostResult<DocId> {
+            self.inner.new_document(app_id, id_short)
+        }
+        fn home(&self, version_tag: &str) -> HostResult<DocId> {
+            self.inner.home(version_tag)
+        }
+        fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
+            self.inner.fork_branch(parent, agent)
+        }
+    }
+
+    // UAT round 12: on a cache miss, GET /d/<doc> opened the document in
+    // `Workspace::session` and then again in `open_view` — two reads, parses
+    // and signature checks of the same archive on a 256-unit CPU.
+    #[tokio::test]
+    async fn a_cold_open_reads_the_archive_once_and_a_warm_one_reads_it_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Arc::new(AppCtx::new(
+            dir.path().to_path_buf(),
+            Arc::new(NoConfig),
+            None,
+            0,
+        ));
+        let app = crate::router(ctx.clone(), None, false);
+
+        let first = app
+            .clone()
+            .oneshot(Request::get("/api/session").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let cookie = first.headers()[header::SET_COOKIE]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_string();
+        let tenant = TenantId::parse(cookie.split_once('=').unwrap().1).unwrap();
+
+        let doc = DocId::new("doc-cold-open");
+        let inner = TenantStore::new(dir.path().join(tenant.as_str()));
+        let bytes = clan_sdk::create(clan_sdk::CreateOptions {
+            title: "Cold Open".into(),
+            brief: "test brief".into(),
+            document_type: None,
+            no_render: false,
+            schema: None,
+        })
+        .unwrap();
+        inner.apply(&Change::create(doc.clone(), bytes)).unwrap();
+        let store = Arc::new(Counting {
+            inner,
+            watched: doc.clone(),
+            reads: AtomicUsize::new(0),
+        });
+        ctx.put_workspace(&tenant, store.clone());
+
+        let open = || {
+            app.clone().oneshot(
+                Request::get(format!("/api/t/{tenant}/d/{}", doc.as_str()))
+                    .header(header::COOKIE, &cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        };
+        assert_eq!(open().await.unwrap().status(), StatusCode::OK);
+        assert_eq!(
+            store.reads.load(Ordering::SeqCst),
+            1,
+            "a cold open reads the archive once"
+        );
+        assert_eq!(open().await.unwrap().status(), StatusCode::OK);
+        assert_eq!(
+            store.reads.load(Ordering::SeqCst),
+            2,
+            "a warm open re-reads it as it stands now"
+        );
     }
 }

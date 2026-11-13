@@ -1,0 +1,111 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Patterns · Napkin new UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>:root{--desk:#F6F1E7;--paper:#FFFDF8;--card:#fff;--ink:#141413;--ink-soft:#2A2620;--muted:#6D655A;--faint:#9A9082;--line:#E2D9C8;--warn:#B45309;--warn-soft:#FEF3DC;--ok:#1D8A4E;--ok-soft:#E6F6EC;--alert:#C9462A;--alert-soft:#FFF1EE;--acc:#515BFF;--hl:#F6E36B;
+--ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;--serif:"Newsreader",Georgia,serif;--mono:"Geist Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--desk:#121110;--paper:#1B1A18;--card:#201E1B;--ink:#EFE9DE;--ink-soft:#D6CEC0;--muted:#A49B8D;--faint:#7B7367;--line:#34302A;--warn:#E09A4B;--warn-soft:#3A2A18;--ok:#5DBB83;--ok-soft:#1C2E23;--alert-soft:#3a1f19;--acc:#C8CBFF}}
+:root[data-theme=dark]{--desk:#121110;--paper:#1B1A18;--card:#201E1B;--ink:#EFE9DE;--ink-soft:#D6CEC0;--muted:#A49B8D;--faint:#7B7367;--line:#34302A;--warn:#E09A4B;--warn-soft:#3A2A18;--ok:#5DBB83;--ok-soft:#1C2E23;--alert-soft:#3a1f19;--acc:#C8CBFF}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--desk);color:var(--ink);font:15px/1.55 var(--ui)}
+a{color:inherit;text-decoration-color:color-mix(in srgb,var(--acc) 55%,transparent);text-underline-offset:3px}
+code{font:12.5px var(--mono);background:color-mix(in srgb,var(--ink) 6%,transparent);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+pre{font:12px/1.5 var(--mono);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto}
+.top{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 24px;background:color-mix(in srgb,var(--desk) 94%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .home{font-weight:800;letter-spacing:-.01em;text-decoration:none}.top .ver{font:11px var(--mono);color:var(--muted)}
+.wrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:40px;max-width:1360px;margin:0 auto;padding:0 24px}
+.side{position:sticky;top:58px;align-self:start;max-height:calc(100vh - 70px);overflow:auto;padding:26px 0;display:grid;gap:2px;font-size:13.5px}
+.side a{display:flex;gap:10px;padding:6px 10px;border-radius:7px;text-decoration:none;color:var(--ink-soft)}
+.side a span{font:600 11px/1.9 var(--mono);color:var(--faint)}
+.side a:hover{background:color-mix(in srgb,var(--ink) 5%,transparent)}
+.side a[aria-current]{background:var(--ink);color:var(--paper)}.side a[aria-current] span{color:inherit;opacity:.7}
+.toc{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:grid;gap:1px}.toc b{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:0 10px 6px}.toc a{padding:4px 10px;font-size:12.5px}
+main{min-width:0;padding:34px 0 80px}
+.eyebrow{font:600 11.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px}
+h1{font-size:clamp(36px,5vw,56px);font-weight:800;letter-spacing:-.04em;line-height:1;margin:0 0 18px}
+h1 .dot{display:inline-block;width:.17em;height:.17em;border-radius:50%;background:var(--muted);margin-left:.04em}
+h2{font-size:28px;font-weight:800;letter-spacing:-.025em;line-height:1.15;margin:56px 0 14px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:32px 0 10px}
+h4{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+p,li{max-width:76ch}.lede{font-size:17px;color:var(--ink-soft);max-width:66ch}
+.fig{margin:22px 0 28px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 1px 2px rgba(20,20,19,.05),0 8px 24px -12px rgba(50,38,18,.18)}
+.fig .shot{position:relative;line-height:0;border-radius:6px;overflow:hidden;border:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.fig img{width:100%;height:auto;display:block}
+.co{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;background:#E8462A;color:#fff;font:700 12px/24px var(--mono);text-align:center;box-shadow:0 0 0 2px #fff,0 3px 8px rgba(0,0,0,.35);pointer-events:none}
+figcaption{font-size:13px;color:var(--muted);padding:10px 4px 2px}
+.legend{list-style:none;margin:8px 0 0;padding:0 4px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px 18px;font-size:13px}
+.legend li{display:flex;gap:9px;align-items:baseline}.legend .cn{flex:none;width:20px;height:20px;border-radius:50%;background:#E8462A;color:#fff;font:700 11px/20px var(--mono);text-align:center}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.two .fig,.three .fig{margin:8px 0}
+.grid-sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin:14px 0}
+.sw{display:flex;gap:12px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px}
+.sw .chips{display:flex;flex:none}.sw .chips i{width:38px;height:38px;border-radius:6px;border:1px solid rgba(0,0,0,.12)}.sw .chips i+i{margin-left:-8px;box-shadow:-2px 0 0 var(--paper)}
+.sw code{background:none;padding:0;font-weight:600}.sw small{display:block;font:11.5px var(--mono);color:var(--muted)}.sw p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:12px 0 20px;background:var(--paper);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:block;overflow-x:auto}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font:600 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:color-mix(in srgb,var(--ink) 3%,transparent)}
+td code{font-size:11.5px}
+.dd{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 22px}.dd>div{border-radius:10px;padding:12px 14px;border:1px solid var(--line);background:var(--paper)}
+.dd h5{margin:0 0 6px;font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase}.do{border-top:4px solid var(--ok)!important}.do h5{color:var(--ok)}.dont{border-top:4px solid var(--alert)!important}.dont h5{color:var(--alert)}
+.dd p{margin:4px 0;font-size:13.5px}.dd .fig{margin:6px 0 0;padding:6px}
+.note{border-left:3px solid var(--acc);background:var(--paper);border-radius:0 8px 8px 0;padding:10px 14px;margin:14px 0;font-size:13.5px}
+.note.mm{border-left-color:var(--warn);background:var(--warn-soft)}.note.ok{border-left-color:var(--ok)}
+.miss{padding:20px;border:1.5px dashed var(--line);border-radius:10px;color:var(--muted);font-size:13px;margin:14px 0}
+.spec{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:4px 16px;margin:12px 0}
+.spec>div{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--line)}.spec>div:last-child{border:0}
+.spec small{font:11.5px/1.5 var(--mono);color:var(--muted)}
+.states{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin:14px 0}
+.st{flex:1 1 140px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;justify-items:center;gap:6px;text-align:center;font-size:12.5px}
+.st b{font-size:13px}.st small{color:var(--muted);font-size:11.5px;line-height:1.35}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0;font-size:13px}
+.flow .n{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-weight:600}.flow .n.hot{background:var(--ink);color:var(--paper);border-color:var(--ink)}.flow .a{color:var(--faint);font:12px var(--mono)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin:16px 0}
+.card{display:block;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;text-decoration:none;transition:border-color .15s}.card:hover{border-color:var(--ink)}
+.card small{font:700 10.5px var(--mono);letter-spacing:.1em;color:var(--muted)}.card b{display:block;font-size:17px;letter-spacing:-.02em;margin:4px 0}.card span{font-size:13px;color:var(--muted)}
+.rule{counter-increment:r;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0}
+.rule h3{margin:0 0 6px}.rule h3::before{content:counter(r,decimal-leading-zero);font:700 12px var(--mono);color:var(--muted);margin-right:10px}
+.pn{display:flex;justify-content:space-between;margin-top:70px;padding-top:20px;border-top:1px solid var(--line);font-weight:600}
+.k{display:inline-block;font:600 11px var(--mono);border:1px solid var(--line);border-radius:4px;padding:1px 6px;background:var(--paper)}
+.diag{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;margin:14px 0;overflow:auto}
+.diag svg{display:block;max-width:100%;height:auto}
+.marks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:14px 0}
+.mk{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 10px 10px;display:grid;justify-items:center;gap:6px;text-align:center}
+.mk b{font-size:13px}.mk small{font-size:11.5px;color:var(--muted);line-height:1.35}.mk .row{display:flex;align-items:center;gap:14px}
+.ag{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin:16px 0}
+.agc{background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.agc .hd{display:flex;align-items:center;gap:12px;padding:14px}.agc .hd b{font-size:16px}.agc .hd small{display:block;font:11px var(--mono);color:var(--muted)}
+.agc .pill{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:999px;font:800 13px var(--ui);white-space:nowrap}
+.agc .bd{padding:0 14px 14px;font-size:12.5px}.agc table{font-size:11.5px;margin:6px 0 0}.agc td,.agc th{padding:5px 7px}
+.surf{display:grid;grid-template-columns:1fr 1fr}.surf>div{padding:12px;display:grid;gap:6px;font:11px var(--mono)}
+.surf .paper{border-radius:6px;padding:10px;border:1px solid}.surf .btn{display:inline-block;padding:6px 10px;border-radius:4px;font:600 12px var(--ui)}
+@media (max-width:900px){.wrap{grid-template-columns:1fr;gap:0;padding:0 16px}.side{position:static;max-height:none;padding:14px 0;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.toc{display:none}.two,.three,.dd{grid-template-columns:1fr}.spec>div{grid-template-columns:1fr}.top{padding:10px 16px}}
+</style></head><body>
+<header class="top"><a href="index.html" class="home">Napkin Studio · new UI guide</a><span class="ver">feat/new-ui · captured 2026-11-11</span></header>
+<div class="wrap"><nav class="side" aria-label="Pages"><a href="01-principles.html"><span>01</span>Principles</a><a href="02-foundations.html"><span>02</span>Foundations</a><a href="03-agency-looks.html"><span>03</span>Agency looks</a><a href="04-deep-o.html"><span>04</span>The Deep O logo</a><a href="05-agents.html"><span>05</span>Agents</a><a href="06-shell.html"><span>06</span>The shell</a><a href="07-brief.html"><span>07</span>Brief</a><a href="08-research.html"><span>08</span>Research</a><a href="09-patterns.html" aria-current="page"><span>09</span>Patterns</a><a href="10-copy.html"><span>10</span>Copy rules</a><a href="11-gaps.html"><span>11</span>Known gaps and open decisions</a><div class="toc"><b>On this page</b><a href="#source">Source cards</a><a href="#crumbs">Crumbs</a><a href="#call">Your call</a><a href="#needs">Needs you</a><a href="#empty">Empty</a><a href="#loading">Loading</a><a href="#dark">Dark</a><a href="#resp">Breakpoints</a></div></nav>
+<main><p class="eyebrow">09 · Source cards, crumbs, Your call, empty, loading, dark, phone</p><h1>Patterns<span class="dot"></span></h1><p class="lede">These are the pieces that repeat across tools. Build them once (most already exist in <code>app/templates/shared/</code>) and reuse them.</p>
+<h2 id="source">Source cards between tools</h2>
+<p>When work moves from one tool to another (Continue in → a new brief from research, or Link to an existing one), the receiving tool shows the source as a <b>source card</b> (<code>shared/source-card.html</code>): a tab with the kind (RESEARCH), the title, confidence and counts, and "Open the research ↗". The lineage chip in the bar ("from Guinness Responsibility") and the drawer's Lineage tab name the same link. When the parent changes, an update notice appears in the banner row under the bar.</p>
+<figure class="fig"><div class="shot"><img src="img/p-src.jpg" width="780" height="180" alt="Source card on the Brief prompt." loading="lazy"></div><figcaption>Source card on the Brief prompt.</figcaption></figure>
+<h2 id="crumbs">Crumbs and drill-down</h2>
+<p>Every panel uses the same crumb. Brief: <code>.sp-crumb</code>, mono 12px, "← Brief › Part". Research: <code>.pv-crumb</code>, 12.5px, parts clickable, clipping with an ellipsis at 180px, × always shown. There are at most two levels. Esc, ← or a click on empty paper go back, and Back restores the scroll.</p>
+<div class="dd"><div class="do"><h5>Do</h5><p>"← Report › ◗ Finding 1 › ◆ Fact ×", with the fact lit on the page.</p></div><div class="dont"><h5>Don't</h5><p>A third level, a modal, or a drawer opened from inside the panel.</p></div></div>
+<h2 id="call">Your call</h2>
+<p>A call is a decision only a person can make. It appears in three places, which must count the same thing: the amber tag on the part or line (paper), the <b>Your call · n open</b> box in the panel (Brief: <code>.needs-box</code>; Research: <code>.pv-box.call</code> with one dot per check), and the call card at the top of the Decisions drawer. Its actions are secondary buttons (Keep / Cut, Fix with the agents / Keep them as they are, and say why). After an answer it moves on to the next call.</p>
+<h2 id="needs">Needs you</h2>
+<p>Amber (<code>--warn</code>) is used only for this. On the desk it is the circle badge and "n CALLS". In the bar the Decisions button turns amber with a count. In the panel it is "Needs you · n". The medallion turns <code>needs</code> only when the app you are in needs you. For an agency with <code>accentUse:'line'</code> (Catapult), <code>--needs</code> is the accent.</p>
+<h2 id="empty">Empty states</h2>
+<div class="two"><figure class="fig"><div class="shot"><img src="img/p-empty-desk.jpg" width="720" height="300" alt="An empty desk (Pluto): just New client." loading="lazy"></div><figcaption>An empty desk (Pluto): just New client.</figcaption></figure><figure class="fig"><div class="shot"><img src="img/p-empty-brief.jpg" width="720" height="450" alt="An empty brief: every part reads &quot;Nothing here yet. Tap the pencil to write it.&quot;" loading="lazy"></div><figcaption>An empty brief: every part reads "Nothing here yet. Tap the pencil to write it."</figcaption></figure></div>
+<p>Write empty states as a sentence that says what to do. A panel section with nothing in it is not drawn at all.</p>
+<h2 id="loading">Loading</h2>
+<p>Loading is the Deep O in <code>working</code>: with real progress when known, otherwise the indeterminate arc. It shows only after 400ms (<a href="04-deep-o.html#boot">late show</a>). In a document, a run shows the stage and then the 44px side job line. Buttons that write say "Saving…" and are disabled while busy.</p>
+<h2 id="dark">Dark mode</h2>
+<p>Dark is set by <code>data-theme="dark"</code> on <code>html</code> (<code>localStorage napkin.theme</code>, toggled by the bar's theme button). The tokens are the dark column on <a href="02-foundations.html">Foundations</a>. The primary fill turns to the agency's accent (except with <code>accentUse:'line'</code>). The sheet keeps its paper character with a deeper shadow. Templates read <code>data-color-scheme</code> and use their <code>--nd-*</code> copies of the tokens.</p>
+<div class="two"><figure class="fig"><div class="shot"><img src="img/p-dark-desk.jpg" width="720" height="450" alt="Boys+Girls dark: mono black surfaces." loading="lazy"></div><figcaption>Boys+Girls dark: mono black surfaces.</figcaption></figure><figure class="fig"><div class="shot"><img src="img/p-dark-res.jpg" width="720" height="450" alt="Research dark." loading="lazy"></div><figcaption>Research dark.</figcaption></figure></div>
+<h2 id="resp">Responsive breakpoints</h2>
+<table><tr><th>Width</th><th>What changes</th><th>Where</th></tr>
+<tr><td>≤ 1500px</td><td>document name in the bar capped at 180px</td><td>nui.css</td></tr>
+<tr><td>≤ 1180px</td><td>the job chip hides</td><td>shell.css</td></tr>
+<tr><td>&lt; 900px</td><td>Research panel becomes a bottom sheet</td><td>campaign-research</td></tr>
+<tr><td>≤ 760px</td><td>app head stacks</td><td>nui.css</td></tr>
+<tr><td>≤ 720px</td><td>bar: no separators or NAPKIN STUDIO line, 44px targets, Decisions label hidden, lineage chip and job chip hidden, a document's bar scrolls sideways in itself; desk gutter 16px; client rows drop the age</td><td>shell.css, nui.css</td></tr>
+<tr><td>≤ 400px</td><td>medallion 52px; the pill shows the agency icon instead of the wordmark</td><td>shell.css</td></tr>
+<tr><td>≤ 360px</td><td>medallion 46px, bar buttons 40px</td><td>shell.css</td></tr></table>
+<div class="three"><figure class="fig"><div class="shot"><img src="img/p-w390.jpg" width="390" height="844" alt="390px" loading="lazy"></div><figcaption>390px</figcaption></figure><figure class="fig"><div class="shot"><img src="img/p-w720.jpg" width="520" height="650" alt="720px" loading="lazy"></div><figcaption>720px</figcaption></figure><figure class="fig"><div class="shot"><img src="img/p-w1024.jpg" width="620" height="545" alt="1024px" loading="lazy"></div><figcaption>1024px</figcaption></figure></div>
+
+<footer class="pn"><a href="08-research.html">← Research</a><a href="10-copy.html">Copy rules →</a></footer></main></div></body></html>

@@ -3,26 +3,40 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import Toolbar, { type ToolBrand } from '../components/Toolbar'
+import Toolbar, { type Account, type ClientChip, type Crew, type ToolBrand } from '../components/Toolbar'
+import SaveStatus from '../components/SaveStatus'
+import { useLinks, useMadeFrom, useSpinoffTargets, useWakeTick } from '../components/ContinueIn'
+import { linksOf } from '../components/barMenus'
 import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
-import WorkspaceView from './WorkspaceView'
-import DecisionPanel from './decisions/DecisionPanel'
+import { DecisionsDrawer, type DrawerView } from './nui/DecisionsDrawer'
+import { openInApp, setBeforeOpen } from './appExport'
+import { refOfAddress } from './decisions/words'
+import { lockWords } from './nui/drawerData'
 import { setScreen } from '../dogfood/recorder'
-import { useDecisions } from './decisions/useDecisions'
+import { setFeedbackDoc } from '../dogfood/pointer'
+import { docStateOf, needsOf, useDecisions } from './decisions/useDecisions'
+import { splitAside } from './decisions/needs'
+import { useSetAside } from './decisions/useSetAside'
 import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
-import type { BarItem } from './appBar'
+import { modeOf, statusOf, type BarItem } from './appBar'
 import { host } from '../host'
-import type { ClientPartRef, ClientWho, InstalledApp } from '../host'
+import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
+import { useEngaged } from '../components/markStore'
+import type { AgencyLogo } from './agency/palette'
+import { isProductApp, markTarget, pageRunOf } from '../components/medallionMotion'
+import { listedTitle, othersStamp, listedUpdated } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import type { RunningApp } from './types'
 import { docTitle } from './docTitle'
+import { openDocJobs } from './openJobs'
 import '../components/chrome.css'
 import './clientReview/ClientReview.css'
+import { afterLock, editOn, setEditFor, type EditState } from './editMode'
 
 interface Props {
   /** The installed tool this document belongs to, when it is one (its app.home names it). */
@@ -36,25 +50,92 @@ interface Props {
   banner?: ReactNode
   onExport: (kind: 'html' | 'pdf') => void
   onSpinoff: (appId: string) => void
-  /** Where the document sits (Agency > Client > Tool), drawn in the bar before the title; absent for a document with no client. */
-  trail?: ReactNode
+  /** The document's client, after the agency's pill: the way back to its page; absent for a document with no client. */
+  client?: ClientChip | null
+  /** The account menu on the pill. */
+  account?: Account
+  /** The tool's key, for its icon and face in the bar. */
+  toolKey?: string | null
+  /** Continue in › Start fresh: a new document of this app for this client. */
+  onStartFresh?: () => void
+  /** The document menu's way to its tool's page for its client. */
+  onToolPage?: { label: string; run: () => void } | null
+  /** The signed-in agency, on the bar's pill, and its page. */
+  agency: string
+  /** The agency's marks for the pill (palette.ts pillLogoOf). */
+  agencyLogo?: AgencyLogo
+  onAgency: () => void
+  /** Who is signed in, and the way out (the slot's More menu). */
+  user?: string | null
+  onSignOut?: () => void
   /** Each change is kept as it is made, so the bar may say "Saved" (Toolbar). */
   saved?: boolean
-  /** Open another document of the store (the sidebar's "Made from" link). */
+  /** Open another document of the store (the sidebar's "Made from" link, the bar's lineage chips). */
   onOpenDocument?: (path: string) => void
+  /** The medallion's colours (the agency's base and accent). */
+  mark?: { base: string; accent: string }
+  /** Share ▾ "Copy link"; absent where there is no server to open a link from. */
+  onCopyLink?: () => void
+  /** Who is in the document (the bar's crew). */
+  crew?: Crew
+  /** The library as the shell last read it: the document's current name, and when others changed. */
+  library?: LibraryItem[] | null
+  /** The open document's run, as the host tracks it: what the medallion shows while it works. */
+  run?: RunInfo | null
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail }: Props) {
-  const [workspaceOpen, setWorkspaceOpen] = useState(false)
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
-  // Edit mode is the OS's: the app's fields become editable while it is on.
-  const [editMode, setEditMode] = useState(running.editMode)
   const { open } = running
   const docPath = open.path
+  // Edit mode is the OS's: the app's fields become editable while it is on.
+  // It is kept with the document it was turned on in: another document (a
+  // spin-off, a link) opens out of it, and a lock ends it.
+  const [edit, setEdit] = useState<EditState>({ docPath, on: running.editMode })
+  const editMode = editOn(edit, docPath)
+  const setEditMode = useCallback((v: boolean | ((was: boolean) => boolean)) => {
+    setEdit(e => setEditFor(e, docPath, v))
+  }, [docPath])
   // The host's view of the document, read once: the panel renders it, and
   // the bar and client review read the lock and the client's answers from it.
   const decisions = useDecisions(docPath)
+  // The needs-your-call count, from the one selector the drawer lists from,
+  // less what this person set aside (it still blocks the lock).
+  const aside = useSetAside(docPath)
+  const needs = useMemo(() => splitAside(needsOf(decisions.view), aside.keys).open.length, [decisions.view, aside.keys])
+  // The medallion (the mock's headerMark): working during this document's run, done once a run
+  // ended here with nothing open, needs when it needs you, else awake (or asleep before you engage).
+  const runState = run?.state ?? null
+  const [runSeen, setRunSeen] = useState({ docPath, last: runState, finished: false })
+  if (runSeen.docPath !== docPath || runSeen.last !== runState) {
+    const same = runSeen.docPath === docPath
+    const ended = same && runSeen.last === 'working' && (runState === null || runState === 'idle' || runState === 'done')
+    setRunSeen({ docPath, last: runState, finished: ended || (same && runSeen.finished && runState !== 'working') })
+  }
+  const engaged = useEngaged()
+  // Only a product's document (Brief, Research, Deck, Production) moves the mark; any other app keeps it at rest.
+  const product = isProductApp(open.manifest.app?.app_id)
+  // The Decisions drawer, opened from the bar. Kept with the document it was opened on.
+  const [drawer, setDrawer] = useState<{ docPath: string; open: boolean }>({ docPath, open: false })
+  const decisionsOpen = drawer.docPath === docPath && drawer.open
+  const setDecisionsOpen = useCallback((o: boolean | ((was: boolean) => boolean)) => {
+    setDrawer(d => {
+      const was = d.docPath === docPath && d.open
+      return { docPath, open: typeof o === 'function' ? o(was) : o }
+    })
+  }, [docPath])
+  // Showing an item in the document (Open, Show in document, a source or fact chip) closes the drawer:
+  // the document shows it in its own side panel.
+  useEffect(() => { setBeforeOpen(() => setDecisionsOpen(false)); return () => setBeforeOpen(null) }, [setDecisionsOpen])
+  // "Approve all and lock": the document's own /approve, refused in the host's words while its lock list holds.
+  const approveDoc = useCallback(async () => {
+    if (typeof host.docOps !== 'function') throw new Error('Lock it from the document itself here.')
+    await (await host.docOps(docPath)).approve('Approved every open call in Decisions')
+  }, [docPath])
+  // Which view the drawer shows: Graph, By part, By time or Lineage.
+  const [drawerView, setDrawerView] = useState<DrawerView>('graph')
+  const targets = useSpinoffTargets(docPath)
   const noun = nounOf(open.manifest.app?.app_id)
   // The tool, as its manifest names it (app.home.brand, else its name); a
   // document made before tools named themselves still finds its tool.
@@ -63,13 +144,29 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     colour: tool?.home?.colour ?? null,
     font: tool?.home?.brand_font ?? null,
   } : null
+  // The name the library has now: the app may have renamed it since it opened.
   const barTitle = open.is_template ? open.manifest.title
-    : docTitle(open.manifest.title, open.manifest.app?.app_id, open.manifest.app?.name).text
+    : docTitle(listedTitle(library, docPath) ?? open.manifest.title, open.manifest.app?.app_id, open.manifest.app?.name, tool?.home?.untitled).text
+  // Read links and the source again when another document changes, or the page is back in view.
+  const wake = useWakeTick()
+  const others = othersStamp(library, docPath)
+  // The document's runs the host has not seen finish, for its page to pick up (clan:jobs). The list
+  // is keyed by its contents, so a re-read listing with the same jobs posts nothing new.
+  const jobsKey = openDocJobs(library, docPath).join('\n')
+  const openJobs = useMemo(() => (jobsKey ? jobsKey.split('\n') : []), [jobsKey])
+  const stamp = `${wake}:${others}`
   // The tab says it too: "Napkin Studio Research — Bulmers · Ireland".
   const brandName = brand?.name
   // the dogfood build records where people go (a no-op elsewhere)
   const appId = open.manifest.app?.app_id ?? null
   useEffect(() => { setScreen({ screen: 'app', doc: docPath, app: appId }) }, [docPath, appId])
+  // What feedback by pointing at it says about the open document (dogfood/pointer.ts).
+  const appVersion = open.manifest.app?.version ?? null
+  const docVersion = open.manifest.sha256
+  useEffect(() => {
+    setFeedbackDoc({ path: docPath, title: barTitle, appId, tool: brandName ?? null, toolVersion: appVersion, version: docVersion, noun, jobs: openJobs })
+  }, [docPath, barTitle, appId, brandName, appVersion, docVersion, noun, openJobs])
+  useEffect(() => () => setFeedbackDoc(null), [])
   useEffect(() => {
     document.title = brandName ? `Napkin Studio ${brandName} — ${barTitle}` : `${barTitle} — Napkin Studio`
     return () => { document.title = 'Napkin Studio' }
@@ -103,6 +200,12 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const clientOn = review?.docPath === docPath
   const parts = useMemo(() => (declared.docPath === docPath ? declared.parts : []), [declared, docPath])
   const reviewable = canReview(decisions.view)
+  // Locked (nothing reopened): there is nothing left to edit, so edit mode ends.
+  const [lockSeen, setLockSeen] = useState(reviewable)
+  if (lockSeen !== reviewable) {
+    setLockSeen(reviewable)
+    setEdit(e => afterLock(e, docPath, lockSeen, reviewable))
+  }
 
   const startReview = useCallback(() => {
     setEditMode(false)
@@ -111,7 +214,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     const known = knownClients(decisions.view, [...lastWho.current.values()])
     const who = lastWho.current.get(docPath) ?? decisions.view?.client?.answer?.client ?? known[0] ?? null
     setReview({ docPath, draft: emptyDraft(who), marks: {}, known })
-  }, [docPath, decisions.view])
+  }, [docPath, decisions.view, setEditMode])
 
   const endReview = useCallback(() => {
     setReview(null)
@@ -136,6 +239,23 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     reload()
     refreshApp()
   }, [reload])
+
+  // What it was made from, and taking that document's newer version (a
+  // spin-off may, owner 2026-11-09). A refusal is said where the bar is.
+  const [upError, setUpError] = useState<{ docPath: string; message: string } | null>(null)
+  const onUpError = useCallback((message: string) => setUpError({ docPath, message }), [docPath])
+  const onUpTaken = useCallback(() => { setUpError(null); changed() }, [changed])
+  const { madeFrom, update: updateFromUpstream, upstream } = useMadeFrom(docPath, onUpTaken, onUpError, stamp)
+
+  // Links (os-layer §5.7): link an existing document, take a linked one's
+  // newer version, let go of one. A refusal (a locked document) is said where
+  // the bar is, in the host's words.
+  const [linkError, setLinkError] = useState<{ docPath: string; message: string } | null>(null)
+  const onLinkError = useCallback((message: string) => setLinkError({ docPath, message }), [docPath])
+  const onLinked = useCallback(() => { setLinkError(null); changed() }, [changed])
+  const links = useLinks(docPath, onLinked, onLinkError, stamp)
+  const { linked, madeInto } = linksOf(links.related)
+  const changedLinks = linked.filter(l => l.dir === 'in' && l.changed)
 
   const save = useCallback(async () => {
     if (!review || review.docPath !== docPath || problemOf(review.draft)) return
@@ -170,7 +290,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const onEditRequest = useCallback(() => {
     setReview(null)
     setEditMode(true)
-  }, [])
+  }, [setEditMode])
 
   const marked = review ? markedOf(review.draft, parts, review.marks).length : 0
   const authored = open.render_model === 'authored'
@@ -197,6 +317,12 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const [barState, setBarState] = useState<{ doc: string | null; items: BarItem[] }>({ doc: null, items: [] })
   const onBar = useCallback((items: BarItem[]) => setBarState({ doc: docRef.current, items }), [])
   const barItems = barState.doc === docPath && !clientOn ? barState.items : []
+  // The app's own word for its state wins over the shell's, where it sends one.
+  const appStatus = statusOf(barItems)
+  // The page says its agents are at work (the bar's working chip) before the host's run catches up:
+  // the medallion follows the same signal as the chip, with the step it names (owner, 2026-11-10).
+  const pageRun = pageRunOf(modeOf(barItems))
+  const mark_ = markTarget({ inDoc: product, needs, run: run?.state === 'working' || !pageRun ? run : pageRun, finished: runSeen.finished, engaged })
   const asked = chrome.doc === docPath
   const glass = asked && chrome.mode === 'glass' && !clientOn
   const glassTint = asked ? chrome.tint : null
@@ -211,8 +337,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       const bottom = footRef.current?.getBoundingClientRect().height ?? 0
       // The rail (or the open panel) on the right; on a narrow screen it floats
       // in the footer instead, and covers nothing.
-      const side = workRef.current?.querySelector(':scope > .dp-rail, :scope > .dp-panel') as HTMLElement | null
-      const right = side && getComputedStyle(side).position === 'absolute' ? side.getBoundingClientRect().width : 0
+      const side = workRef.current?.querySelector(DRAWER_SEL) as HTMLElement | null
+      const pos = side ? getComputedStyle(side).position : ''
+      const right = side && (pos === 'absolute' || pos === 'fixed') ? side.getBoundingClientRect().width : 0
       setInsets(i => (i && i.top === Math.round(top) && i.right === Math.round(right) && i.bottom === Math.round(bottom)
         ? i : { top: Math.round(top), right: Math.round(right), bottom: Math.round(bottom) }))
     }
@@ -223,10 +350,10 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     if (workRef.current) ro.observe(workRef.current)
     const mo = new MutationObserver(() => {
       measure()
-      workRef.current?.querySelectorAll(':scope > .dp-rail, :scope > .dp-panel').forEach(el => ro.observe(el))
+      workRef.current?.querySelectorAll(DRAWER_SEL).forEach(el => ro.observe(el))
     })
     if (workRef.current) mo.observe(workRef.current, { childList: true })
-    workRef.current?.querySelectorAll(':scope > .dp-rail, :scope > .dp-panel').forEach(el => ro.observe(el))
+    workRef.current?.querySelectorAll(DRAWER_SEL).forEach(el => ro.observe(el))
     window.addEventListener('resize', measure)
     return () => { cancelAnimationFrame(first); ro.disconnect(); mo.disconnect(); window.removeEventListener('resize', measure) }
   }, [glass])
@@ -241,35 +368,92 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       {/* Accent strip — recolors with a trusted app's theme (clan://set-theme). */}
       <div className="ch-strip" />
       <Toolbar
-        title={barTitle}
-        bar={barItems}
-        onBarAction={barAction}
-        tool={brand}
-        isTemplate={open.is_template}
-        trusted={open.trusted}
+        agency={agency}
+        agencyLogo={agencyLogo}
+        mark={mark}
+        onAgency={onAgency}
         onHome={onHome}
-        onOpenFile={onOpenFile}
-        onToggleSidebar={() => setSidebarOpen(o => !o)}
-        sidebarOpen={sidebarOpen}
-        onWorkspace={() => setWorkspaceOpen(true)}
-        onSave={onSave}
-        onKeepOffline={onKeepOffline}
-        onExport={onExport}
-        docPath={open.path}
-        onSpinoff={onSpinoff}
-        loading={false}
-        trail={trail}
-        validation={open.validation}
-        saved={saved}
-        editMode={editMode}
-        // A locked document with nothing reopened takes no edit: Client
-        // review stands where Edit was.
-        onToggleEdit={authored && (editMode || !reviewable) ? () => setEditMode(e => !e) : undefined}
-        onClientReview={reviewable && !open.is_template ? startReview : undefined}
-        clientAnswered={!!decisions.view?.client?.answer?.current}
-        clientMode={clientOn ? { onCancel: endReview, busy: saving !== 'no' } : undefined}
+        client={client}
+        account={account}
+        // The medallion lights only for the document the person is IN (owner, 9 Nov 2026).
+        attention={product && (needs > 0 || !!crew?.waiting)}
+        markTarget={mark_}
+        needs={needs}
+        onDecisions={clientOn ? undefined : () => setDecisionsOpen(o => !o)}
+        decisionsOpen={decisionsOpen && !clientOn}
+        user={user}
+        onSignOut={onSignOut}
+        doc={{
+          title: barTitle,
+          tool: brand,
+          state: appStatus ?? docStateOf(decisions.view),
+          bar: barItems,
+          onBarAction: barAction,
+          isTemplate: open.is_template,
+          trusted: open.trusted,
+          validation: open.validation,
+          onOpenFile,
+          onToggleSidebar: () => setSidebarOpen(o => !o),
+          sidebarOpen,
+          onLineage: () => { setDrawerView('lineage'); setDecisionsOpen(true) },
+          toolKey,
+          onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
+          onStartFresh,
+          onToolPage,
+          onSave,
+          onCopyLink: open.is_template ? undefined : onCopyLink,
+          locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
+          onOpenDocument,
+          crew,
+          onKeepOffline,
+          onExport,
+          targets,
+          onSpinoff,
+          madeFrom,
+          madeInto,
+          linked,
+          linkTargets: links.targets,
+          client: open.manifest.client ?? null,
+          onContinueOpen: links.refresh,
+          onLink: open.is_template ? undefined : links.link,
+          onUpdateLinked: decisions.view?.lock.locked || open.is_template ? undefined : links.update,
+          onUnlink: decisions.view?.lock.locked || open.is_template ? undefined : links.unlink,
+          // A locked version keeps what it was made from; the host refuses it too.
+          onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
+          loading: false,
+          saved: saved ? <SaveStatus updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
+          editMode,
+          // A locked document with nothing reopened takes no edit: Client
+          // review stands where Edit was.
+          onToggleEdit: authored && (editMode || !reviewable) ? () => setEditMode(e => !e) : undefined,
+          onClientReview: reviewable && !open.is_template ? startReview : undefined,
+          clientAnswered: !!decisions.view?.client?.answer?.current,
+          clientMode: clientOn ? { onCancel: endReview, busy: saving !== 'no' } : undefined,
+        }}
       />
       {banner}
+      {upError?.docPath === docPath && (
+        <div className="ch-banner" role="alert">
+          <span className="ch-banner-dot" aria-hidden />
+          <span className="ch-banner-text"><strong>Could not update from {madeFrom?.title ?? 'what it was made from'}.</strong>{upError.message}</span>
+          <button type="button" className="ch-link" onClick={() => setUpError(null)}>Dismiss</button>
+        </div>
+      )}
+      {linkError?.docPath === docPath && (
+        <div className="ch-banner" role="alert" data-testid="link-error">
+          <span className="ch-banner-dot" aria-hidden />
+          <span className="ch-banner-text"><strong>Could not change the link.</strong>{linkError.message}</span>
+          <button type="button" className="ch-link" onClick={() => setLinkError(null)}>Dismiss</button>
+        </div>
+      )}
+      {!decisions.view?.lock.locked && !open.is_template && changedLinks.map(l => (
+        <div key={l.documentId} className="ch-banner ch-banner-note" role="status" data-testid="link-changed">
+          <span className="ch-banner-dot" aria-hidden />
+          <span className="ch-banner-text"><strong>Linked {l.noun ?? ''}{l.noun ? ' ' : ''}{l.title}{l.taken ? ` · v${l.taken}` : ''} · changed.</strong>It changed since this took it. Your own work here stays when you update.</span>
+          <button type="button" className="ch-link" onClick={() => links.update(l.documentId)}>Update</button>
+          <button type="button" className="ch-link" onClick={() => links.unlink(l.documentId)}>Unlink</button>
+        </div>
+      ))}
       </div>
       <div className={`ch-work ${clientOn ? 'ch-work-review' : ''}`} ref={workRef}>
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}
@@ -283,8 +467,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             />
           )}
           <AppRuntime
-            htmlContent={running.htmlContent}
             hasHumanView={open.has_human_view}
+            version={open.view_version ? `${open.manifest.sha256}:${open.view_version}` : open.manifest.sha256}
             manifest={open.manifest}
             renderModel={authored ? 'authored' : 'legacy'}
             editMode={editMode}
@@ -295,6 +479,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onChrome={onChrome}
             onBar={onBar}
             insets={shown}
+            jobs={openJobs}
+            person={user}
           />
         </main>
         {clientOn ? (
@@ -309,17 +495,50 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             error={saveError}
             onSave={save}
           />
-        ) : (
-          <DecisionPanel decisions={decisions} />
-        )}
+        ) : decisionsOpen ? (
+          <DecisionsDrawer
+            title={`${client?.name ? `${client.name} · ` : ''}${barTitle}`}
+            groups={[{
+              key: docPath,
+              title: barTitle,
+              noun,
+              calls: needsOf(decisions.view),
+              aside: aside.keys,
+              onToggleAside: aside.toggle,
+              locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
+              verify: async finding => { await host.verify(finding, 'Looks right (from the Decisions card)'); refreshApp() },
+              approve: async () => { await approveDoc(); refreshApp() },
+              open: item => openInApp(refOfAddress(item.address), String(item.address ?? '').split('#')[1]),
+              lock: lockWords(decisions.view),
+            }]}
+            focus={{
+              title: barTitle,
+              noun,
+              view: decisions.view,
+              error: decisions.error,
+              related: links.related,
+              onShow: (ref, path) => openInApp(ref, path),
+              onOpenPath: onOpenDocument,
+              acknowledge: id => host.acknowledge(id),
+              manifest: open.manifest,
+              upstream: upstream?.upstream ?? null,
+            }}
+            view={drawerView}
+            onView={setDrawerView}
+            onClose={() => setDecisionsOpen(false)}
+            onChanged={changed}
+          />
+        ) : null}
       </div>
       <footer className="ch-footer" ref={footRef}>
         <PoweredByClan />
       </footer>
-      {workspaceOpen && <WorkspaceView manifest={open.manifest} onClose={() => setWorkspaceOpen(false)} />}
     </div>
   )
 }
+
+/** The Decisions drawer over the document: what the glass insets keep clear on the right. */
+const DRAWER_SEL = ':scope > .nui > .dtree-drawer'
 
 /** Whether the chrome's own ink reads on `hex` (WCAG contrast 4.5:1 or more). */
 function readsWithChromeInk(hex: string): boolean {

@@ -8,6 +8,8 @@ import type { InstalledApp, OpenResult } from './host'
 import DeviceBanner from './offline/DeviceBanner'
 import DeviceHome from './offline/DeviceHome'
 import OfflineDialog from './offline/OfflineDialog'
+import PeoplePage from './shell/people/PeoplePage'
+import { peopleEntryFor } from './shell/people/model'
 import { isClanFile, keepOffline, pickFile, type DeviceSource } from './offline/actions'
 import { copyBytes, type OfflineCopy } from './offline/store'
 import { useFileDrop } from './offline/useFileDrop'
@@ -15,11 +17,24 @@ import { applyUpdate, onLaunchFiles, useUpdateReady } from './pwa/pwa'
 import { askAppToExport } from './shell/appExport'
 import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
-import { Trail } from './shell/landing/Trail'
 import { useLanding } from './shell/landing/useLanding'
-import { initialsOf, routeOfDocument, whoIs } from './shell/landing/model'
+import { initialsOf, jobOf, routeOfDocument, whoIs } from './shell/landing/model'
+import { toolById, toolOfApp } from './shell/landing/tools'
+import Toolbar from './components/Toolbar'
+import { signedInUser } from './host/http'
+import { signOut } from './shell/signOut'
+import { docEntry, isDocEntryState, isNotFound, launchIsMine } from './shell/lastOpen'
+import { spinoffTitle } from './shell/docTitle'
+import { agencyIdOf, agencyNameOf, applyAgency, coloursOf, markOf, pillLogoOf } from './shell/agency/palette'
+import { rememberAgency } from './shell/agency/lastAgency'
+import { DeskDrawer } from './shell/nui/DeskDrawer'
+import { useDeskFacts } from './shell/nui/useDeskFacts'
+import { callsIn, clientLook, clientName, monogramOf, sectorOf, setSector } from './shell/nui/deskData'
+import { setClientAgency } from './shell/agency/clients'
+import type { Account, ClientChip } from './components/barMenus'
+import { useOfflineCopies } from './offline/useOfflineCopies'
 import { useRoute } from './shell/useRoute'
-import { type Route } from './shell/route'
+import { formatRoute, type Route } from './shell/route'
 import AppHost from './shell/AppHost'
 import InstallPrompt from './shell/InstallPrompt'
 import type { RunningApp, Screen } from './shell/types'
@@ -27,6 +42,11 @@ import StudioShell from './studio/StudioShell'
 import { LogoSpinnerFill, LogoSpinnerVeil } from './brand/LogoSpinner'
 import './index.css'
 import './components/chrome.css'
+import './shell/nui/tokens.css'
+import './shell/nui/nui.css'
+import './shell/nui/shell.css'
+import { roles } from './shell/agents/engine'
+import { DOC_LOADED } from './shell/AppRuntime'
 
 // Theme keys an immersive app may recolor → CSS variables on the shell root.
 // These are the design tokens; the legacy names (--bg, --surface, --text,
@@ -50,17 +70,27 @@ function resetTheme() {
 }
 
 /** The history entry an open document stands on, so Back leaves it and lands where it was opened. */
-const DOC_ENTRY = { napkinDoc: true }
-const isDocEntry = () => (window.history.state as { napkinDoc?: boolean } | null)?.napkinDoc === true
+const isDocEntry = () => isDocEntryState(window.history.state)
+/**
+ * The URL of an open studio document: `?open=<path>` (what Share's Copy link
+ * gives, read back by host/http.ts takeLaunchFile), so a reload reopens it, and
+ * the hash of its own client and tool, so the URL says where it belongs after
+ * a spin-off. A document on the device has no such link.
+ */
+function docUrl(path: string | null, hash: string | null): string {
+  const params = new URLSearchParams(window.location.search)
+  if (path) params.set('open', path)
+  else params.delete('open')
+  const q = params.toString()
+  return window.location.pathname + (q ? `?${q}` : '') + (hash ?? window.location.hash)
+}
 /** The document's entry becomes the page it leaves to: no stale entry left to Back into. */
-const retireDocEntry = () => { if (isDocEntry()) window.history.replaceState(null, '', window.location.href) }
+const retireDocEntry = () => { if (isDocEntry()) window.history.replaceState(null, '', docUrl(null, null)) }
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
-  // Where the landing is (the URL hash), and whether the person asked for the
-  // plain list of tools instead of it.
+  // Where the landing is (the URL hash).
   const [route, go] = useRoute()
-  const [allTools, setAllTools] = useState(false)
   const [running, setRunning] = useState<RunningApp | null>(null)
   const [installed, setInstalled] = useState<InstalledApp[]>([])
   const [pendingLaunch, setPendingLaunch] = useState<OpenResult | null>(null)
@@ -79,9 +109,51 @@ export default function App() {
   const [device, setDevice] = useState(onDevice)
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
+  // The People page (features/people-admin.clan): an admin's, from the account menu.
+  const [peopleOpen, setPeopleOpen] = useState(false)
   const updateReady = useUpdateReady()
   // The landing's data, read through the host. Not on the device's own home.
-  const landing = useLanding(host, screen === 'home' && !allTools, !(device && !serverless))
+  // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
+  const landing = useLanding(host, screen === 'home' || screen === 'app', !(device && !serverless),
+    screen === 'app' ? running?.artifactPath ?? null : null)
+  // On a server with accounts: who is signed in, for the bar's way out.
+  const [user, setUser] = useState<string | null>(null)
+  // Who the history entries the shell writes are for (lastOpen.ts).
+  const person = useRef<string | null>(null)
+  // A read from the server: the state is set when it answers.
+  useEffect(() => { void signedInUser().then(u => { person.current = u ? u.username : null; setUser(person.current) }) }, [])
+  // The agency's admin-set colours on the chrome (shell/agency/palette.ts), or
+  // the neutral pair; a layer of its own that resetTheme never clears.
+  const personId = landing.data?.person?.id ?? null
+  // Whose client registry applies (agency/clients.ts): set before anything below reads a client's look.
+  setClientAgency(personId)
+  // Not before the first read settles: until then the boot screen's layer (brand/bootLook.ts, the agency
+  // this browser last signed in to) stays, so a reload never shows Napkin's kit on the way to the agency's.
+  const personKnown = personId != null || landing.state !== 'loading' || (device && !serverless)
+  // An agency added on the People page joins the registry there; closing the page puts its look on again.
+  const [looksSeen, setLooksSeen] = useState(0)
+  useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown, looksSeen])
+  // The medallion in the agency's own base and accent, else Napkin's.
+  const mark = markOf(personId)
+  // The agency's wordmark on its pill (and its icon on a narrow bar), where the registry has them.
+  const agencyLogo = pillLogoOf(coloursOf(agencyIdOf(personId)))
+  // Decisions on the desk: every call across the documents it has read.
+  const [deskDecisions, setDeskDecisions] = useState(false)
+  // What the desk reads of recent documents' own chains: last editor, calls, thin findings, upstream changes.
+  // While a document opens, the desk's reads wait for its page: they load whole documents on the server and
+  // held the one being opened behind them (UAT, 2026-11-12: 5-7.6 s opens). The desk is not on screen then.
+  const openDocPath = screen === 'app' ? running?.artifactPath ?? null : null
+  const [docIn, setDocIn] = useState<string | null>(null)
+  useEffect(() => {
+    if (!openDocPath) return
+    const on = () => setDocIn(openDocPath)
+    window.addEventListener(DOC_LOADED, on)
+    return () => window.removeEventListener(DOC_LOADED, on)
+  }, [openDocPath])
+  const deskMayRead = !openDocPath || docIn === openDocPath
+  const { facts, refresh: refreshFacts } = useDeskFacts(landing.data?.items ?? null,
+    landing.state === 'ready' && !(device && !serverless) && deskMayRead)
+  const offlineCopies = useOfflineCopies()
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
     setToast({ title, body })
@@ -141,14 +213,17 @@ export default function App() {
   }, [refreshApps])
 
   const runArtifact = useCallback(async (n: number, open: OpenResult, source?: DeviceSource) => {
-    const html = open.has_human_view ? await host.getHumanHtml() : ''
     if (!isLatest(n)) return
     resetTheme() // clear any prior app's theme before this one (re)applies its own
-    setRunning({ artifactPath: open.path, open, htmlContent: html, editMode: false, source })
+    setRunning({ artifactPath: open.path, open, editMode: false, source })
     setScreen('app')
     // The browser's Back leaves the document for where it was opened from: the
     // document takes one history entry of its own (once, however many it opens).
-    if (!isDocEntry()) window.history.pushState(DOC_ENTRY, '', window.location.href)
+    const route = routeOfDocument(open.manifest)
+    const url = hasServer && !source && !open.is_template && !onDevice()
+      ? docUrl(open.path, route ? formatRoute(route) : null) : window.location.href
+    if (!isDocEntry()) window.history.pushState(docEntry(person.current), '', url)
+    else window.history.replaceState(docEntry(person.current), '', url)
   }, [])
 
   // A .clan from this device — dropped, chosen, handed over by the OS, or an
@@ -201,7 +276,9 @@ export default function App() {
   }, [openHome])
 
   // Open a .clan path: templates → install prompt; documents → run.
-  const openPath = useCallback(async (path: string) => {
+  // `remembered`: the document the page's URL named on load. One that is not
+  // there (another person's, or gone) is let go quietly, and home stays.
+  const openPathAs = useCallback(async (path: string, remembered: boolean) => {
     const n = nextOpen()
     setLoading(true); setError(null)
     try {
@@ -209,8 +286,12 @@ export default function App() {
       if (!isLatest(n)) return
       if (result.is_template) setPendingLaunch(result)
       else await runArtifact(n, result)
-    } catch (e) { setError(String(e)) } finally { setLoading(false) }
+    } catch (e) {
+      if (remembered && isNotFound(e)) retireDocEntry()
+      else setError(String(e))
+    } finally { setLoading(false) }
   }, [runArtifact])
+  const openPath = useCallback((path: string) => openPathAs(path, false), [openPathAs])
 
   const handleOpenFile = useCallback(async () => {
     // On the device, "Open" never means upload.
@@ -228,22 +309,31 @@ export default function App() {
     } catch (e) { setError(String(e)) } finally { setLoading(false) }
   }, [runArtifact])
 
+  // The latest running app, for callbacks registered once.
+  const runningRef = useRef<RunningApp | null>(null)
+  useEffect(() => { runningRef.current = running }, [running])
+
   // Branch the open document into another app. The source is untouched — this
   // opens a new document that carries its data and its decisions.
   const spinOff = useCallback(async (appId: string) => {
     const n = nextOpen()
     setLoading(true); setError(null)
     try {
-      const result = await host.spinoffDocument(appId, null, null)
+      const src = runningRef.current?.open.manifest
+      const result = await host.spinoffDocument(appId, spinoffTitle(src?.title, src?.app?.app_id, appId), null)
       await runArtifact(n, result)
     } catch (e) { setError(String(e)) } finally { setLoading(false) }
   }, [runArtifact])
 
+  // Continue in › Start fresh: the same app, for the same client, from new notes.
+  const startFresh = useCallback(() => {
+    const m = runningRef.current?.open.manifest
+    if (m?.app?.app_id) void launchApp(m.app.app_id, m.client?.id)
+  }, [launchApp])
+
   // Save/export the open .clan. Shared by the toolbar Save As button and the
   // in-app "lock also saves" request. Reads the latest running app via a ref so
-  // the once-registered event listener never goes stale.
-  const runningRef = useRef<RunningApp | null>(null)
-  useEffect(() => { runningRef.current = running }, [running])
+  // the once-registered event listener never goes stale (runningRef).
   const saveCurrent = useCallback(async () => {
     const r = runningRef.current
     if (!r) return
@@ -299,8 +389,12 @@ export default function App() {
     // rule explicitly allows, not derived state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     openHome()
-    host.takeLaunchFile().then(p => { if (p) openPath(p) }).catch(() => {})
-  }, [openHome, openPath])
+    // Read before the launch file is taken (taking it rewrites the entry).
+    const entry = window.history.state as unknown
+    void Promise.all([host.takeLaunchFile(), hasServer ? signedInUser() : Promise.resolve(null)]).then(([p, u]) => {
+      if (p && launchIsMine(entry, u ? u.username : null)) void openPathAs(p, true)
+    }).catch(() => {})
+  }, [openHome, openPathAs])
 
   useEffect(() => {
     // Re-subscribed whenever the page changes host (`device`): events come
@@ -340,13 +434,11 @@ export default function App() {
     return () => { subs.forEach(s => s.then(f => f()).catch(() => {})) }
   }, [device, openPath, handleOpenFile, saveCurrent])
 
-  const goHome = useCallback(() => { retireDocEntry(); setAllTools(false); openHome() }, [openHome])
 
   // A level of the trail, chosen from inside a document: leave the document for it.
   const leaveTo = useCallback((r: Route) => {
     retireDocEntry()
     go(r, true)
-    setAllTools(false)
     openHome()
   }, [go, openHome])
 
@@ -354,7 +446,7 @@ export default function App() {
   const screenRef = useRef(screen)
   useEffect(() => { screenRef.current = screen }, [screen])
   useEffect(() => {
-    const leave = () => { if (screenRef.current === 'app' && !isDocEntry()) { setAllTools(false); openHome() } }
+    const leave = () => { if (screenRef.current === 'app' && !isDocEntry()) openHome() }
     window.addEventListener('popstate', leave)
     window.addEventListener('hashchange', leave)
     return () => { window.removeEventListener('popstate', leave); window.removeEventListener('hashchange', leave) }
@@ -385,6 +477,19 @@ export default function App() {
 
   // Home: the device's own on the device; elsewhere the launcher, once the
   // first open has settled.
+  // A sector typed with a new client: kept in this browser once the client exists (deskData.setSector).
+  const addClient = useCallback(async (name: string, sector: string) => {
+    const before = new Set((landing.data?.clients ?? []).map(c => c.id))
+    const refused = await landing.add(name)
+    if (!refused && sector.trim()) {
+      const made = (await host.clients.list(false).catch(() => [])).find(c => !before.has(c.id) && c.name === name)
+      if (made) setSector(made.id, sector)
+    }
+    return refused
+  }, [landing])
+
+  // The studio is opening: the loading sign alone, on the desk, with no bar half filled in round it.
+  const opening = !(device && !serverless) && (!booted || landing.state === 'loading')
   const apps = device && !serverless ? (
     <DeviceHome
       onChooseFile={chooseDeviceFile}
@@ -394,19 +499,22 @@ export default function App() {
     />
   ) : !booted ? (
     <LogoSpinnerFill label="Opening the studio…" />
-  ) : landing.state === 'ready' && landing.data && !allTools ? (
+  ) : landing.state === 'ready' && landing.data ? (
     <LandingHome
       route={route}
       data={landing.data}
       go={go}
-      onAdd={name => landing.add(name)}
+      onAdd={addClient}
       manage={landing.manage}
       onStart={launchApp}
       onOpenDocument={openPath}
-      onAllTools={() => setAllTools(true)}
       onRefresh={landing.reload}
+      facts={facts}
+      onOpenFile={handleOpenFile}
+      onOffline={hasServer && !device ? () => setOfflineOpen(true) : undefined}
+      onDecisions={() => setDeskDecisions(true)}
     />
-  ) : landing.state === 'loading' && !allTools ? (
+  ) : landing.state === 'loading' ? (
     <LogoSpinnerFill label="Opening the studio…" />
   ) : (
     // Where the host cannot list the library, the Launcher is the home as it was.
@@ -416,34 +524,76 @@ export default function App() {
       onLaunchApp={launchApp}
       onOpenFile={handleOpenFile}
       onOpenDocument={openPath}
-      onLanding={landing.state === 'ready' ? () => setAllTools(false) : undefined}
     />
   )
 
-  // The trail of circles, while the studio shows one of its landing screens.
-  const onLanding = landing.state === 'ready' && landing.data && !allTools && !(device && !serverless)
-  const trailClient = landing.data && (route.level === 'client' || route.level === 'tool')
+  // Where you are, after the agency's pill: the client chip on a client's page (a switcher) and in its documents (the way back).
+  const onLanding = landing.state === 'ready' && landing.data && !(device && !serverless)
+  const who = whoIs(landing.data?.person ?? null)
+  const agency = agencyNameOf(landing.data?.person?.id, who.agency)
+  const chipOf = (c: { id?: string; name: string; initials?: string }): Omit<ClientChip, 'onOpen'> => ({
+    name: c.id ? clientName({ id: c.id, name: c.name }) : c.name, mono: monogramOf({ name: c.name, initials: c.initials ?? '' }), look: clientLook(c.id ?? c.name, c.name),
+  })
+  const pageClient = onLanding && landing.data && (route.level === 'client' || route.level === 'tool')
     ? landing.data.clients.find(c => c.id === route.client) ?? null
     : null
-  const trail = onLanding && landing.data ? (
-    <Trail
-      route={route}
-      agency={whoIs(landing.data.person).agency}
-      client={trailClient}
-      onGo={go}
-    />
-  ) : undefined
+  const deskChip: ClientChip | null = pageClient && landing.data ? {
+    ...chipOf(pageClient),
+    ...(route.level === 'tool' ? { onOpen: () => go({ level: 'client', client: pageClient.id }) } : {
+      switcher: landing.data.clients.map(c => ({ id: c.id, name: clientName(c), sub: sectorOf(c.id) ?? `${landing.data!.items.filter(i => i.client?.id === c.id).length} open` })),
+      onSwitch: (id: string) => go({ level: 'client', client: id }),
+      current: true,
+    }),
+  } : null
 
-  // The same trail in the bar of an open document, from the document's own client
-  // and tool (so it is right for a document opened from a strip, and after a spin-off).
+  // The same chip in the bar of an open document, from the document's own client
+  // (so it is right for a document opened from the desk, and after a spin-off).
   const docRoute = running && !device ? routeOfDocument(running.open.manifest) : null
-  const docClient = docRoute && running?.open.manifest.client
-    ? landing.data?.clients.find(c => c.id === running.open.manifest.client!.id)
-      ?? { name: running.open.manifest.client.name, initials: initialsOf(running.open.manifest.client.name), material: 'pearl' }
+  const docClientRef = running?.open.manifest.client ?? null
+  const docClient = docRoute && docClientRef
+    ? landing.data?.clients.find(c => c.id === docClientRef.id) ?? { id: docClientRef.id, name: docClientRef.name, initials: initialsOf(docClientRef.name) }
     : null
-  const docTrail = docRoute && landing.state === 'ready' && landing.data ? (
-    <Trail route={docRoute} agency={whoIs(landing.data.person).agency} client={docClient} inDocument onGo={leaveTo} />
-  ) : undefined
+  const docChip: ClientChip | null = docClient ? { ...chipOf(docClient), onOpen: () => leaveTo({ level: 'client', client: docClient.id }) } : null
+
+  // The desk's needs-your-call count: across all the agency's clients (owner,
+  // 9 Nov 2026). It never lights the medallion; only an open document does.
+  const deskNeeds = landing.data ? landing.data.items.reduce((n, i) => n + callsIn(i), 0) : 0
+  const toAgency = () => go({ level: 'agency' })
+  const onSignOut = user ? () => { void signOut() } : undefined
+  // The account menu on the avatar (owner, 2026-11-11): who you are, Offline copies, Sign out.
+  const personName = landing.data?.person?.name ?? who.first ?? user ?? 'You'
+  const account: Account = {
+    name: personName,
+    initials: initialsOf(personName),
+    // No role is served yet (gaps.md §12): the agency's name alone.
+    line: agency,
+    ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null } : {}),
+    // Only for an admin: the server refuses everyone else's calls with 403 too.
+    ...(hasServer && !device ? { onPeople: peopleEntryFor(user, () => setPeopleOpen(true)) } : {}),
+  }
+
+  // Share ▾ "Copy link": the web's link to a document (`?open=`, host/http.ts takeLaunchFile).
+  const copyLink = useCallback(async () => {
+    const r = runningRef.current
+    if (!r) return
+    const url = `${window.location.origin}${window.location.pathname}?open=${encodeURIComponent(r.open.path)}`
+    try {
+      await navigator.clipboard.writeText(url)
+      notify('Link copied', 'People in your agency open it in Napkin Studio.')
+    } catch {
+      notify('Could not copy the link', url, 9000)
+    }
+  }, [notify])
+
+  // Who is in the open document: the person signed in, and an agent while its run works.
+  const docItem = running && landing.data ? landing.data.items.find(i => i.path === running.open.path) ?? null : null
+  const crew = running && !device ? {
+    people: user ? [{ name: whoIs(landing.data?.person ?? null).first ?? user, initials: initialsOf(whoIs(landing.data?.person ?? null).first ?? user), you: true }] : [],
+    working: docItem?.run?.state === 'working' ? jobOf(docItem.run).verb : null,
+    agent: docItem?.run?.state === 'working' ? roles.forStage(docItem.app_id ?? running.open.manifest.app?.app_id, docItem.run.stage) : null,
+    progress: docItem?.run?.state === 'working' ? jobOf(docItem.run).step : null,
+    waiting: docItem?.run?.state === 'waiting',
+  } : undefined
 
   return (
     <>
@@ -460,8 +610,25 @@ export default function App() {
           running={running}
           tool={installed.find(a => a.app_id === running.open.manifest.app?.app_id) ?? null}
           onOpenDocument={openPath}
-          onHome={goHome}
-          trail={docTrail}
+          // The medallion and the agency pill both go to the desk (owner, 2026-11-11).
+          onHome={() => leaveTo({ level: 'agency' })}
+          client={docChip}
+          account={account}
+          toolKey={toolOfApp(running.open.manifest.app?.app_id)?.id ?? null}
+          onToolPage={docRoute?.level === 'tool' && docClient ? {
+            label: `${toolById(docRoute.tool)?.full ?? 'Its tool'} for ${clientName({ id: docClient.id, name: docClient.name })}`,
+            run: () => leaveTo(docRoute),
+          } : null}
+          agency={agency}
+          agencyLogo={agencyLogo}
+          mark={mark}
+          onAgency={() => leaveTo({ level: 'agency' })}
+          onCopyLink={hasServer && !device ? copyLink : undefined}
+          crew={crew}
+          run={docItem?.run ?? null}
+          library={landing.data?.items ?? null}
+          user={user}
+          onSignOut={onSignOut}
           onOpenFile={handleOpenFile}
           onSave={saveCurrent}
           onKeepOffline={!device && hasServer && !running.open.is_template ? keepCurrentOffline : undefined}
@@ -473,24 +640,49 @@ export default function App() {
           ) : undefined}
           onExport={exportCurrent}
           onSpinoff={spinOff}
+          onStartFresh={startFresh}
           // In the studio (or the desktop's files) each change is kept as it
           // is made; on the device it stays in the tab (DeviceBanner says so).
           saved={!device && !running.open.is_template}
         />
       ) : (
         <StudioShell
-          trail={trail}
-          tools={hasServer && !device ? (
-            <button className="ch-btn" onClick={() => setOfflineOpen(true)} title="Documents kept on this device">
-              Offline
-            </button>
-          ) : undefined}
+          bar={opening ? null : (
+            <Toolbar
+              agency={agency}
+              agencyLogo={agencyLogo}
+              mark={mark}
+              onAgency={toAgency}
+              onHome={toAgency}
+              client={deskChip}
+              place={onLanding && route.level === 'tool' ? { tool: route.tool, label: (toolById(route.tool)?.noun[1] ?? '').replace(/^./, c => c.toUpperCase()) } : null}
+              needs={deskNeeds}
+              // On the desk, Decisions opens the calls across every client.
+              onDecisions={onLanding ? () => setDeskDecisions(o => !o) : undefined}
+              decisionsOpen={onLanding ? deskDecisions : undefined}
+              user={user}
+              onSignOut={onSignOut}
+              account={account}
+            />
+          )}
         >
           {apps}
+          {onLanding && deskDecisions && landing.data && (
+            <DeskDrawer
+              items={landing.data.items}
+              facts={facts}
+              agency={agency}
+              onOpen={path => { setDeskDecisions(false); void openPath(path) }}
+              onClose={() => setDeskDecisions(false)}
+              onChanged={path => { refreshFacts(path); void landing.reload() }}
+            />
+          )}
         </StudioShell>
       )}
 
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
+
+      {peopleOpen && <PeoplePage user={user} onClose={() => { setPeopleOpen(false); setLooksSeen(n => n + 1) }} />}
 
       {dragging && (
         <div className="dv-drop" aria-hidden>

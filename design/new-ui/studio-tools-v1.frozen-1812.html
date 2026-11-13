@@ -1,0 +1,4452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Napkin Studio — OS Desk, Brief Maker, Research Tool & Decision Tree</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --desk: #F6F1E7;
+  --paper: #FFFDF8;
+  --paper-2: #F3ECDC;
+  --card: #FFFFFF;
+  --ink: #141413;
+  --ink-soft: #2A2620;
+  --muted: #6D655A;
+  --faint: #9A9082;
+  --line: #E2D9C8;
+  --line-strong: #2A2620;
+  --accent: #515BFF;
+  --accent-line: #C8CBFF;
+  --go: #2F6FED;
+  --ok: #1D8A4E;
+  --ok-soft: #E6F6EC;
+  --warn: #B45309;
+  --warn-soft: #FEF3DC;
+  --alert: #C9462A;
+  --alert-soft: #FFF1EE;
+  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Newsreader", Georgia, "Iowan Old Style", serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --shadow-paper: 0 1px 0 rgba(255,255,255,.75) inset, 0 8px 24px -8px rgba(50,38,18,.10), 0 1px 3px rgba(50,38,18,.08);
+  --shadow-card: 0 1px 2px rgba(20,20,19,.06), 0 4px 12px -4px rgba(20,20,19,.08);
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 14px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; background: var(--desk); color: var(--ink); }
+body {
+  font: 15px/1.55 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: 96px;
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: none; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ═══ STUDIO TOP HEADER (Outdoor Maker reference + Round 5 Deep O) ═══ */
+.studio-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+.topbar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.tool-hero, .action-strip, .intake-grid, .brief-workspace, .research-sheet, .proc-topbar, .proc-footer {
+  position: relative;
+  z-index: 15;
+}
+.brand-cluster {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.deep-o-slot {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.wordmark {
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  color: var(--ink);
+  display: flex;
+  align-items: baseline;
+}
+.wordmark .dot {
+  color: var(--accent);
+}
+.tool-tabs {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  padding: 3px;
+  gap: 3px;
+  margin-left: 8px;
+}
+.tool-tab {
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: background .15s, color .15s;
+}
+.tool-tab:hover { color: var(--ink); }
+.tool-tab[aria-selected="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Screen step bar (01 Prompt -> 02 Loading -> 03 Output) */
+.step-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.step-btn .num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.7;
+}
+.step-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.step-btn[aria-current="step"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.step-sep {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.meta-cluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 8px 3px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.swatch-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--paper);
+  box-shadow: 0 0 0 1px var(--line);
+  transition: transform .12s;
+}
+.swatch-btn[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--ink);
+  transform: scale(1.1);
+}
+.studio-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+
+/* ═══ TOP BAR v2: Napkin Studio + underline tool tabs + status + agency chip ═══ */
+.topbar { padding: 0; height: 60px; flex-wrap: nowrap; }
+.topbar .brand-cluster { gap: 12px; align-self: stretch; }
+.topbar .deep-o-slot { width: 38px; height: 38px; }
+.wm-studio {
+  font: 700 18px/1 var(--font-ui);
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.bar-sep { width: 1px; height: 20px; background: var(--line); margin: 0 6px 0 4px; }
+.tool-underline { display: flex; gap: 22px; align-self: stretch; }
+.tool-underline .tool-tab {
+  min-height: 0; padding: 0; border-radius: 0; background: none;
+  font: 600 14px var(--font-ui); color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tool-underline .tool-tab:hover { color: var(--ink); }
+.tool-underline .tool-tab[aria-selected="true"] { background: none; color: var(--ink); border-bottom-color: var(--ink); }
+.bar-status {
+  font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase;
+  color: var(--muted); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+}
+.bar-status .sdot { width: 6px; height: 6px; border-radius: 50%; background: #C9BFA9; }
+.bar-status[data-kind="work"] .sdot { background: var(--accent); animation: sdp 1.2s infinite ease-in-out; }
+.bar-status[data-kind="ready"] .sdot { background: var(--accent); }
+.bar-status[data-kind="need"] .sdot { background: #C99550; }
+.bar-status[data-kind="done"] .sdot { background: var(--ok); }
+@keyframes sdp { 50% { opacity: .25; } }
+.agency-chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 5px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--paper);
+  font: 600 13px var(--font-ui); color: var(--ink); white-space: nowrap;
+}
+.agency-chip .chev { color: var(--muted); font-size: 10px; }
+.agency-mono {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
+  font: 800 10.5px var(--font-ui); background: var(--brand-base, #515BFF); color: var(--brand-acc, #C8CBFF);
+}
+.mock-controls {
+  position: fixed; right: 14px; bottom: 14px; z-index: 60; background: var(--paper);
+  border: 1px dashed var(--muted); border-radius: 10px; padding: 8px 10px; box-shadow: var(--shadow-card);
+  max-width: 330px;
+}
+.mc-title { display: block; font: 700 9.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.mc-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch-pair { display: inline-flex; align-items: center; gap: 0; padding: 3px 8px 3px 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); font: 600 11px var(--font-ui); color: var(--muted); }
+.swatch-pair i { width: 14px; height: 14px; border-radius: 50%; display: block; box-shadow: 0 0 0 1px var(--line); }
+.swatch-pair i + i { margin-left: -4px; }
+.swatch-pair span { margin-left: 6px; }
+.swatch-pair[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+@media (max-width: 760px) { .tool-underline { gap: 14px; } .wm-studio { font-size: 16px; } .bar-status { display: none; } }
+
+/* ═══ HERO HEADER (Outdoor Maker style) ═══ */
+.tool-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 36px 0 28px;
+  border-bottom: 1px solid var(--line);
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.hero-title {
+  font-size: clamp(44px, 6vw, 68px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.96;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+.hero-title .period-dot {
+  display: inline-block;
+  width: 0.17em;
+  height: 0.17em;
+  border-radius: 50%;
+  background: var(--muted);
+  margin-left: 0.04em;
+  vertical-align: baseline;
+}
+.hero-sub {
+  font-size: 16.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  max-width: 54ch;
+}
+/* Circles choose, rectangles hold work */
+.hero-circle-btn {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 24px -8px rgba(20,20,19,.35);
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1), background .15s;
+}
+.hero-circle-btn:hover {
+  transform: translateY(-3px) scale(1.03);
+  background: var(--accent);
+}
+.hero-circle-btn svg {
+  width: 34px;
+  height: 34px;
+}
+
+/* ═══ COMMON RECTANGULAR CONTROLS & SECTIONS (Outdoor Maker style) ═══ */
+.action-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.action-left, .action-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-rect {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.btn-rect:hover {
+  border-color: var(--ink);
+}
+.btn-rect.primary, .btn-rect[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.btn-rect.accent {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.btn-rect.ghost {
+  background: transparent;
+}
+.status-line {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 10px 0 0;
+}
+
+.section-block {
+  padding: 28px 0;
+}
+.sec-num {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.sec-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin-bottom: 16px;
+}
+
+/* ═══ SCREEN 1: INITIAL PROMPT (PAPER INTAKE) ═══ */
+.intake-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(290px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 880px) {
+  .intake-grid { grid-template-columns: 1fr; }
+}
+.paper-composer {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-paper);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.meta-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 640px) {
+  .meta-fields { grid-template-columns: 1fr; }
+}
+.field-box label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.field-box input, .field-box select {
+  width: 100%;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  font-size: 14px;
+  font-weight: 500;
+}
+.upstream-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  background: var(--ok-soft);
+  border: 1px solid color-mix(in srgb, var(--ok) 28%, transparent);
+  font-size: 13px;
+  color: var(--ink);
+}
+.upstream-banner .dot-ok {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  display: inline-block;
+  margin-right: 6px;
+}
+.prompt-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.prompt-ta {
+  width: 100%;
+  min-height: 190px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  padding: 16px;
+  font: 17px/1.6 var(--font-serif);
+  color: var(--ink);
+  resize: vertical;
+}
+.prompt-ta::placeholder {
+  color: var(--faint);
+  font-style: italic;
+}
+.composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+/* Circle button for choosing/attaching + rectangular button for creating */
+.circle-attach {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--muted);
+  display: inline-grid;
+  place-items: center;
+  font-size: 18px;
+  color: var(--muted);
+  transition: border-color .15s, color .15s, background .15s;
+}
+.circle-attach:hover {
+  border-style: solid;
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--desk);
+}
+.attached-slips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.file-slip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  background: var(--desk);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.file-slip button {
+  color: var(--muted);
+  font-size: 12px;
+}
+.file-slip button:hover { color: var(--alert); }
+
+.side-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.side-card h3 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preset-item {
+  text-align: left;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  transition: border-color .15s, background .15s;
+}
+.preset-item:hover, .preset-item[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--desk);
+}
+.preset-item b {
+  display: block;
+  font-size: 13.5px;
+  margin-bottom: 2px;
+}
+.preset-item small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  display: block;
+}
+
+/* ═══ SCREEN 2: AGENT LOADING / PROCESSING STAGE (3D Orb Agents + Paper Desk) ═══ */
+.processing-wrap {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-paper);
+  overflow: hidden;
+}
+.proc-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  flex-wrap: wrap;
+}
+.agent-step-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.agent-pill {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-pill .mat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.agent-pill[aria-current="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.agent-pill.done {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.sphere-stage {
+  position: relative;
+  min-height: 540px;
+  background: var(--desk);
+  display: grid;
+  grid-template-columns: minmax(240px, 310px) minmax(320px, 440px) minmax(240px, 310px);
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 20px 18px;
+}
+@media (max-width: 980px) {
+  .sphere-stage {
+    grid-template-columns: 1fr;
+  }
+}
+.rail {
+   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 4;
+  max-height: 480px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.stage-core {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.agent-gl-box {
+  width: 360px;
+  height: 340px;
+  position: relative;
+  cursor: grab;
+}
+.agent-gl-box:active { cursor: grabbing; }
+.sphere-caption {
+  text-align: center;
+  margin-top: 6px;
+  min-height: 64px;
+  z-index: 4;
+}
+.sphere-caption .agent-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 3px;
+}
+.sphere-caption .l1 {
+   display: block;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+.sphere-caption .l2 {
+  display: block;
+  font-size: 13.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.proc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  flex-wrap: wrap;
+}
+
+/* Desk paper slips during processing */
+.wsec {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+.wsec-h {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-left: 8px;
+  border-left: 2px solid var(--ink);
+}
+.wcard {
+  position: relative;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 8px 11px;
+  box-shadow: var(--shadow-card);
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+  cursor: pointer;
+}
+.wcard:hover {
+  transform: translateY(-1.5px);
+  border-color: var(--ink);
+}
+.wcard .wlab {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wcard .wsnip {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--ink);
+  margin-top: 3px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.wcard .wsnip.struck {
+  text-decoration: line-through;
+  opacity: 0.45;
+  -webkit-line-clamp: 1;
+}
+.wcard .wchk {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ok);
+}
+.wtag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  text-transform: lowercase;
+}
+.fid-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 0 7px;
+  color: var(--ink);
+}
+#thread-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ═══ SCREEN 3A: BRIEF FINAL OUTPUT (brief-grid-v3 12-col paper sheet + v8 "why?" provenance) ═══ */
+.brief-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  align-items: start;
+}
+.brief-workspace.full-width {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 980px) {
+  .brief-workspace { grid-template-columns: 1fr; }
+}
+.brief-page {
+  --b-bg: #FFFDF8;
+  --b-bg2: #F3ECDC;
+  --b-text: #2A2620;
+  --b-accent: #2F6FED;
+  --b-muted: #6D655A;
+  --b-head: "Newsreader", Georgia, serif;
+  --b-body: "Geist", system-ui, sans-serif;
+  --b-scale: 1;
+  position: relative;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  background: var(--b-bg);
+  color: var(--b-text);
+  font-family: var(--b-body);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-paper);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  font-size: calc(15px * var(--b-scale));
+  line-height: 1.55;
+  transition: background .25s, color .25s, max-width .25s;
+}
+.brief-page.phone { max-width: 400px; }
+.brief-page.pdf { max-width: 680px; border-radius: 2px; }
+.brief-page.grad { background: linear-gradient(180deg, var(--b-bg), var(--b-bg2)); }
+
+.b-cover {
+  padding: 38px 44px 26px;
+  border-bottom: 3px solid var(--b-accent);
+}
+.b-cover.band {
+  background: var(--b-accent);
+  color: #fff;
+  border-bottom: 0;
+  padding: 32px 44px;
+}
+.b-cover.sheetcv {
+  padding: 0;
+  border: 0;
+  margin: 36px 44px 0;
+  background: none;
+}
+.b-cover .eyebrow-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font: 11px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.72;
+  margin-bottom: 8px;
+}
+.b-cover h2 {
+  font: 600 calc(34px * var(--b-scale))/1.08 var(--b-head);
+  letter-spacing: -0.015em;
+  margin: 4px 0 6px;
+}
+.b-cover .sub {
+  opacity: 0.78;
+  font-size: 14.5px;
+}
+.banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 4px;
+  background: var(--b-bg);
+  color: var(--b-bg);
+}
+.banner > div {
+  background: var(--b-text);
+  padding: 14px 20px;
+}
+.banner .wm { font: 800 24px/1 var(--b-head); letter-spacing: -0.02em; text-transform: uppercase; }
+.banner .bt b { display: block; font: 700 22px/1.1 var(--b-head); }
+.banner .bt small { display: block; opacity: 0.8; font-size: 12px; margin-top: 4px; }
+.banner .bn { text-align: center; min-width: 90px; }
+.banner .bn small { display: block; letter-spacing: 0.14em; font-size: 10px; opacity: 0.8; }
+.banner .bn b { display: block; font: 800 26px/1.1 var(--b-head); }
+
+/* 12-column brief grid */
+.b-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: 22px;
+  row-gap: 0;
+  padding: 8px 44px 32px;
+}
+.brief-page.boxed .b-grid {
+  column-gap: 0;
+  padding: 0;
+  margin: 0 44px 28px;
+}
+.gi {
+  position: relative;
+  align-self: start;
+  padding: 16px 8px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--b-text) 14%, transparent);
+  border-radius: 5px;
+  min-width: 0;
+}
+.gi.r1 { border-top-color: transparent; }
+.brief-page.boxed .gi {
+  align-self: stretch;
+  border-top: 0;
+  border-radius: 0;
+  outline: 2px solid var(--b-text);
+  outline-offset: -1px;
+  padding: 16px 18px;
+}
+.gi.hastab { padding-top: 46px; }
+.gi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.gi h3 {
+  font: 700 calc(11px * var(--b-scale))/1.2 var(--b-body);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--b-accent);
+  margin: 0;
+}
+.gi h3.tab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--b-text);
+  color: var(--b-bg);
+  padding: 6px 12px;
+  font: 800 10.5px/1.2 var(--b-body);
+  letter-spacing: 0.14em;
+}
+.gi.lay-cell h3 {
+  color: var(--b-muted);
+  font: 600 10.5px/1.2 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+.gi.lay-cell .cv {
+  font-weight: 600;
+  font-size: 0.96em;
+}
+.lay-callout .txt {
+  font: italic 400 calc(21px * var(--b-scale))/1.32 var(--b-head);
+  border-left: 3.5px solid var(--b-accent);
+  padding: 4px 0 4px 16px;
+  margin: 4px 0;
+}
+.lay-statement .stmt {
+  font: 600 calc(28px * var(--b-scale))/1.16 var(--b-head);
+  letter-spacing: -0.015em;
+  margin: 4px 0;
+}
+.gi.tone-inverse {
+  background: var(--b-text) !important;
+  color: var(--b-bg);
+  padding: 18px 20px;
+}
+.gi.tone-inverse h3 { color: var(--b-bg); opacity: 0.85; }
+.gi.tone-tint {
+  background: color-mix(in srgb, var(--b-accent) 9%, var(--b-bg));
+  padding: 16px 18px;
+}
+.gi ul { padding-left: 18px; }
+.gi li { margin: 4px 0; }
+
+/* Inline "why?" provenance pills & unfolding decision block (from v8) */
+.prov-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--b-text) 18%, transparent);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font: 500 10.5px/1.3 var(--font-mono);
+  color: var(--b-muted);
+  background: color-mix(in srgb, var(--b-bg) 90%, #fff);
+  transition: border-color .15s, color .15s;
+}
+.prov-pill:hover, .prov-pill[aria-expanded="true"] {
+  border-color: var(--b-text);
+  color: var(--b-text);
+}
+.prov-pill .q {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  color: var(--b-accent);
+}
+.prov-pill.needs {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+}
+.why-drawer {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-left: 2.5px solid var(--b-accent);
+  background: color-mix(in srgb, var(--b-text) 4%, var(--b-bg));
+  border-radius: 0 6px 6px 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--b-text);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.why-drawer[hidden] { display: none; }
+.why-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.why-row .rl {
+  font: 700 10px/1.2 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--b-muted);
+  min-width: 82px;
+  flex-shrink: 0;
+}
+.why-quote {
+  font: italic 13.5px/1.45 var(--b-head);
+  border-left: 2px solid var(--line);
+  padding-left: 10px;
+  color: var(--b-muted);
+}
+
+/* Arrange chrome on brief blocks */
+.chrome-bar {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+.brief-page.edit .gi:hover .chrome-bar,
+.brief-page.edit .gi.sel .chrome-bar {
+  display: flex;
+}
+.brief-page.edit .gi:hover,
+.brief-page.edit .gi.sel {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--b-accent) 65%, transparent);
+}
+.chrome-bar select, .chrome-bar button {
+  height: 24px;
+  font-size: 11px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.b-foot {
+  padding: 16px 44px;
+  border-top: 1px solid color-mix(in srgb, var(--b-text) 14%, transparent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font: 11.5px var(--font-mono);
+  color: var(--b-muted);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Inspector side panel for Brief Look & Layout */
+.look-inspector {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 18px;
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.look-inspector h4 {
+  font: 700 11px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.seg-row {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--card);
+}
+.seg-row button {
+  flex: 1;
+  min-height: 32px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.seg-row button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* ═══ SCREEN 3B: RESEARCH TOOL FINAL OUTPUT (PAPER EVIDENCE REPORT) ═══ */
+.research-sheet {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-paper);
+  padding: 36px 42px;
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+@media (max-width: 680px) {
+  .research-sheet { padding: 22px 18px; }
+}
+.r-header {
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.r-question {
+  font: 500 32px/1.15 var(--font-serif);
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  max-width: 38ch;
+  margin: 6px 0 8px;
+}
+.needs-review-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--warn-soft);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  border-radius: var(--r-sm);
+  flex-wrap: wrap;
+}
+.finding-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.finding-card.proposed {
+  border-style: dashed;
+  border-color: var(--warn);
+}
+.finding-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.finding-stmt {
+  font: 500 20px/1.35 var(--font-serif);
+  color: var(--ink);
+  max-width: 58ch;
+}
+.badge-pill {
+  font: 700 10.5px/1.2 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.badge-pill.verified { background: var(--ok-soft); color: var(--ok); }
+.badge-pill.proposed { background: var(--warn-soft); color: var(--warn); }
+.finding-quote {
+  font: italic 15px/1.5 var(--font-serif);
+  color: var(--ink-soft);
+  border-left: 2.5px solid var(--line);
+  padding-left: 14px;
+}
+.facts-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  overflow-x: auto;
+  background: var(--card);
+}
+table.facts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.facts-table th {
+  font: 700 10.5px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-align: left;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--desk);
+}
+.facts-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.facts-table tr:last-child td { border-bottom: 0; }
+.facts-table tr:hover td { background: var(--paper); }
+
+.decision-tl {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--line);
+  margin-left: 10px;
+  padding-left: 20px;
+  gap: 16px;
+}
+.decision-tl li {
+  position: relative;
+}
+.decision-tl li::before {
+  content: "";
+  position: absolute;
+  left: -26px;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 3px var(--paper);
+}
+.decision-tl li.ok::before { background: var(--ok); }
+.decision-tl li.warn::before { background: var(--warn); }
+.decision-tl li.contest::before { background: var(--alert); }
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 10px 18px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .22s, transform .22s;
+  z-index: 99;
+}
+.toast.on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+[hidden] { display: none !important; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOCKED TOP BAR: H1 3D-FEEL MEDALLION + OPTION 3 CONNECTED ACCENT PILL DOCK
+   System bar surface (#FFFFFF) + Accent selected buttons + Hover-only gaze
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --ag-base: #1E22AA;
+  --ag-acc: #FFB800;
+  --ag-acc-ink: #101114;
+}
+
+.topbar-outer {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 253, 248, 0.94);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.tb-locked {
+  max-width: 1240px;
+  margin: 0 auto;
+  height: 62px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+}
+/* Connected Medallion + Accent Pill Dock (Option 3) */
+.dock-connected {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  flex-shrink: 0;
+}
+.m1-medallion {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 22px -6px rgba(16,17,20,0.20), 0 2px 6px rgba(16,17,20,0.08);
+  display: grid;
+  place-items: center;
+  position: relative;
+  top: 9px;
+  z-index: 6;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  transition: transform .18s cubic-bezier(.2,.9,.2,1), box-shadow .18s;
+}
+.m1-medallion:hover {
+  transform: scale(1.03);
+  box-shadow: 0 14px 26px -6px rgba(16,17,20,0.26), 0 3px 8px rgba(16,17,20,0.12);
+}
+.name-pill.pill-accent {
+  height: 40px;
+  margin-left: -22px;
+  padding: 0 18px 0 30px;
+  border-radius: 999px;
+  background: var(--ag-acc);
+  color: var(--ag-acc-ink);
+  border: 1px solid rgba(16,17,20,0.12);
+  box-shadow: 0 4px 12px -4px rgba(16,17,20,0.14);
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  z-index: 4;
+  transition: background .2s, color .2s;
+}
+.stacked-lockup {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.05;
+}
+.stacked-lockup .sl-big {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--ag-acc-ink);
+  white-space: nowrap;
+}
+.stacked-lockup .sl-mono {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ag-acc-ink);
+  opacity: 0.84;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.stacked-lockup .sl-mono .ag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ag-base);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.35);
+  display: inline-block;
+}
+/* Napkin Default single centered line rule */
+.stacked-lockup.single-center .sl-big {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.tb-vsep {
+  width: 1px;
+  height: 22px;
+  background: var(--line);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Tool Navigation Pills on System Bar — Selected = Accent Color */
+.tb-nav-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--desk);
+  border: 1px solid var(--line);
+}
+.tb-nav-pills button {
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: background .15s, color .15s, box-shadow .15s;
+  white-space: nowrap;
+}
+.tb-nav-pills button:hover {
+  color: var(--ink);
+}
+.tb-nav-pills button[aria-selected="true"] {
+  background: var(--ag-acc);
+  color: var(--ag-acc-ink);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(16,17,20,0.14);
+}
+
+.tb-spacer { flex: 1; }
+
+.tb-crumb {
+  font-size: 12.5px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.tb-crumb b {
+  color: var(--ink);
+  font-weight: 600;
+}
+@media (max-width: 980px) {
+  .tb-crumb { display: none; }
+}
+
+.tb-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--desk);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.tb-status .sdot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ag-base);
+}
+.tb-status[data-st="sleep"] .sdot { background: #9A9082; opacity: 0.55; }
+.tb-status[data-st="working"] .sdot,
+.tb-status[data-st="handoff"] .sdot {
+  background: var(--ag-acc);
+  box-shadow: 0 0 0 2px var(--ag-base);
+}
+.tb-status[data-st="needs"] {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+}
+.tb-status[data-st="needs"] .sdot { background: #D9822B; }
+.tb-status[data-st="done"] .sdot { background: var(--ok); }
+
+.tb-decisions-btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: all .15s;
+}
+.tb-decisions-btn:hover {
+  border-color: var(--ink);
+}
+.tb-decisions-btn .cnt {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font: 700 10px/1.2 var(--font-mono);
+  background: var(--ag-acc);
+  color: var(--ag-acc-ink);
+}
+.tb-decisions-btn[aria-expanded="true"] {
+  background: var(--ag-acc);
+  color: var(--ag-acc-ink);
+  border-color: rgba(16,17,20,0.18);
+  font-weight: 700;
+}
+.tb-decisions-btn[aria-expanded="true"] .cnt {
+  background: rgba(16,17,20,0.16);
+  color: var(--ag-acc-ink);
+}
+
+/* ═══ SLIM DEMO BAR (Test Agency Co-Brand & Deep O States Live) ═══ */
+.demo-strip {
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line);
+  padding: 7px 24px;
+  font-size: 11.5px;
+}
+.demo-strip-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.demo-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.demo-lbl {
+  font: 700 10px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.d-chip {
+  height: 25px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font: 600 11px var(--font-ui);
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all .12s;
+}
+.d-chip:hover { border-color: var(--ink); color: var(--ink); }
+.d-chip[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.d-sw {
+  display: inline-flex;
+  align-items: center;
+}
+.d-sw i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(0,0,0,0.15);
+}
+.d-sw i + i { margin-left: -3px; }
+
+/* ═══ VIEW 00: OS CLIENT DESK (OUTDOOR MAKER + SPLAT CIRCULAR GAUGES) ═══ */
+.desk-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+@media (max-width: 860px) {
+  .desk-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+}
+.kpi-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: var(--shadow-card);
+}
+.kpi-meta small {
+  display: block;
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.kpi-meta b {
+  font: 800 26px/1 var(--font-ui);
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.kpi-meta span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+/* Splat-inspired circular ring gauge */
+.splat-gauge {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.splat-gauge svg {
+  width: 52px;
+  height: 52px;
+  transform: rotate(-90deg);
+}
+.splat-gauge .g-val {
+  position: absolute;
+  font: 700 10.5px var(--font-mono);
+  color: var(--ink);
+}
+
+.client-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+@media (max-width: 880px) {
+  .client-grid { grid-template-columns: 1fr; }
+}
+.client-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-paper);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: border-color .15s, transform .15s;
+}
+.client-card:hover {
+  border-color: var(--ink);
+  transform: translateY(-2px);
+}
+.cc-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+.cc-eyebrow {
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.cc-title {
+  font: 800 22px/1.15 var(--font-ui);
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+.cc-sub {
+  font: 400 14.5px/1.4 var(--font-serif);
+  color: var(--ink-soft);
+  margin-top: 3px;
+}
+.cc-artifacts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.cc-art {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 9px 11px;
+  text-align: left;
+  transition: border-color .15s, background .15s;
+}
+.cc-art:hover {
+  border-color: var(--ink);
+  background: var(--desk);
+}
+.cc-art small {
+  display: block;
+  font: 700 9.5px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.cc-art b {
+  display: block;
+  font-size: 12.5px;
+  margin-top: 2px;
+  color: var(--ink);
+}
+.cc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 6px;
+  flex-wrap: wrap;
+}
+
+/* ═══ VIEW 03: DECK STUDIO (6-SLIDE STORYBOARD FROM BRIEF & FACTS) ═══ */
+.deck-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+@media (max-width: 920px) {
+  .deck-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 620px) {
+  .deck-grid { grid-template-columns: 1fr; }
+}
+.slide-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-paper);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 240px;
+  gap: 14px;
+  position: relative;
+}
+.slide-card.hero-slide {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.slide-card.hero-slide .slide-num,
+.slide-card.hero-slide .slide-foot {
+  color: rgba(255,253,248,0.68);
+}
+.slide-num {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font: 700 10.5px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slide-h {
+  font: 600 22px/1.2 var(--font-serif);
+  letter-spacing: -0.015em;
+}
+.slide-p {
+  font-size: 13.5px;
+  line-height: 1.45;
+  opacity: 0.88;
+  margin-top: 6px;
+}
+.slide-foot {
+  border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font: 11px var(--font-mono);
+  color: var(--muted);
+}
+
+/* ═══ SLIDE-OVER DECISION TREE & PROVENANCE INSPECTOR (Reference 5 "Sheets and routes") ═══ */
+.dtree-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 19, 0.28);
+  backdrop-filter: blur(2px);
+  z-index: 80;
+}
+.dtree-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(540px, 94vw);
+  background: var(--paper);
+  border-left: 1px solid var(--line-strong);
+  box-shadow: -16px 0 40px rgba(20, 20, 19, 0.18);
+  z-index: 85;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dtree-head {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--card);
+}
+.dtree-body {
+  padding: 20px 22px 32px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.dtree-call-card {
+  background: var(--warn-soft);
+  border: 1px solid color-mix(in srgb, var(--warn) 38%, transparent);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dtree-call-card.resolved {
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+}
+.dtree-graph {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dt-node {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-size: 12.5px;
+  position: relative;
+}
+.dt-node + .dt-node::before {
+  content: "↓";
+  position: absolute;
+  top: -13px;
+  left: 36px;
+  font: 700 11px var(--font-mono);
+  color: var(--muted);
+}
+.dt-node .dt-stage {
+  font: 700 10px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.dt-node .dt-main b {
+  display: block;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+.dt-node .dt-main span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ═══ ART DIRECTOR FLOATING BOTTOM COMMAND BAR (Reference 5) ═══ */
+.cmd-dock-wrap {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 95vw;
+}
+.cmd-circles {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(20, 20, 19, 0.92);
+  backdrop-filter: blur(10px);
+  padding: 6px 8px;
+  border-radius: 999px;
+  box-shadow: 0 10px 28px -6px rgba(20,20,19,0.35);
+}
+.cmd-circle-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: rgba(255,253,248,0.78);
+  font: 700 10px/1 var(--font-mono);
+  letter-spacing: 0.03em;
+  display: grid;
+  place-items: center;
+  transition: background .15s, color .15s, transform .15s;
+}
+.cmd-circle-btn:hover {
+  color: #fff;
+  transform: translateY(-1px);
+}
+.cmd-circle-btn[aria-pressed="true"] {
+  background: var(--ag-acc);
+  color: var(--ag-acc-ink);
+}
+.cmd-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 253, 248, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 5px 6px 5px 14px;
+  box-shadow: 0 10px 28px -6px rgba(20,20,19,0.22);
+}
+.cmd-bar input {
+  border: 0;
+  background: transparent;
+  width: 290px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.cmd-bar input:focus { outline: none; }
+@media (max-width: 760px) {
+  .cmd-bar input { width: 150px; }
+}
+.cmd-apply {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--ag-acc);
+  color: var(--ag-acc-ink);
+  font: 700 12px var(--font-ui);
+}
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     LOCKED TOP BAR: H1 (C1×C4 3D SATIN CUT) + OPTION 3 (CONNECTED ACCENT PILL)
+     System bar surface + Accent selected buttons + Hover-only pointer tracking
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div class="topbar-outer">
+  <header class="tb-locked" aria-label="Napkin Studio Top Bar">
+    <div class="dock-connected">
+      <div class="m1-medallion" id="header-medallion" title="H1 Satin 3D Swiss Cut — Hover directly on the mark to move the inner circle; click to cycle state">
+        <span id="header-h1-slot"></span>
+      </div>
+      <div class="name-pill pill-accent" id="header-name-pill">
+        <div class="stacked-lockup" id="header-lockup">
+          <span class="sl-big">Wieden+Kennedy</span>
+          <span class="sl-mono"><i class="ag-dot"></i>NAPKIN STUDIO</span>
+        </div>
+      </div>
+    </div>
+
+    <span class="tb-vsep" aria-hidden="true"></span>
+
+    <nav class="tb-nav-pills" role="tablist" aria-label="Napkin Studio Tools">
+      <button type="button" class="tool-tab" role="tab" aria-selected="false" data-tool="desk">Desk</button>
+      <button type="button" class="tool-tab" role="tab" aria-selected="true" data-tool="brief">Brief</button>
+      <button type="button" class="tool-tab" role="tab" aria-selected="false" data-tool="research">Research</button>
+      <button type="button" class="tool-tab" role="tab" aria-selected="false" data-tool="deck">Deck</button>
+    </nav>
+
+    <span class="tb-spacer"></span>
+
+    <span class="tb-crumb" id="tb-crumb">McDonald's Ireland <span>/</span> <b id="tb-crumb-doc">Summer McFlurry</b></span>
+
+    <span class="tb-vsep" aria-hidden="true"></span>
+
+    <span class="tb-status" id="bar-status" data-st="sleep">
+      <i class="sdot"></i>
+      <span id="bar-status-text">Sleeping · Idle</span>
+    </span>
+
+    <button type="button" class="tb-decisions-btn" id="tb-decisions-btn" aria-expanded="false">
+      <span>Decisions</span>
+      <span class="cnt" id="tb-decisions-cnt">2</span>
+    </button>
+    <span id="studio-code" hidden></span>
+  </header>
+
+  <!-- ═══ SLIM INTERACTIVE BAR TO TEST AGENCIES (INCLUDING NAPKIN DEFAULT) & DEEP O STATES ═══ -->
+  <div class="demo-strip" aria-label="Interactive Brand & State Switcher">
+    <div class="demo-strip-inner">
+      <div class="demo-group">
+        <span class="demo-lbl">Brand Skin:</span>
+        <button type="button" class="d-chip" data-ag="wk" aria-pressed="true">
+          <span class="d-sw"><i style="background:#1E22AA"></i><i style="background:#FFB800"></i></span>
+          <span>Wieden+Kennedy</span>
+        </button>
+        <button type="button" class="d-chip" data-ag="tbwa" aria-pressed="false">
+          <span class="d-sw"><i style="background:#16181D"></i><i style="background:#FFD400"></i></span>
+          <span>TBWA\Dublin</span>
+        </button>
+        <button type="button" class="d-chip" data-ag="ogilvy" aria-pressed="false">
+          <span class="d-sw"><i style="background:#E4002B"></i><i style="background:#FFD6DD"></i></span>
+          <span>Ogilvy</span>
+        </button>
+        <button type="button" class="d-chip" data-ag="harbour" aria-pressed="false">
+          <span class="d-sw"><i style="background:#0F6B5C"></i><i style="background:#9FE6D8"></i></span>
+          <span>Harbour &amp; Co</span>
+        </button>
+        <button type="button" class="d-chip" data-ag="droga" aria-pressed="false">
+          <span class="d-sw"><i style="background:#16181D"></i><i style="background:#C6F432"></i></span>
+          <span>Droga5</span>
+        </button>
+        <button type="button" class="d-chip" data-ag="napkin" aria-pressed="false">
+          <span class="d-sw"><i style="background:#515BFF"></i><i style="background:#C8CBFF"></i></span>
+          <span>Napkin Default (Single Centered Title)</span>
+        </button>
+      </div>
+
+      <div class="demo-group">
+        <span class="demo-lbl">H1 Mark State:</span>
+        <button type="button" class="d-chip" data-st="sleep" aria-pressed="true">Sleep</button>
+        <button type="button" class="d-chip" data-st="awake" aria-pressed="false">Awake</button>
+        <button type="button" class="d-chip" data-st="working" aria-pressed="false">Working</button>
+        <button type="button" class="d-chip" data-st="handoff" aria-pressed="false">Handoff</button>
+        <button type="button" class="d-chip" data-st="needs" aria-pressed="false">Needs You</button>
+        <button type="button" class="d-chip" data-st="done" aria-pressed="false">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="studio-shell">
+  <!-- ═══ HERO SECTION (Outdoor Maker editorial style: "Circles choose, rectangles hold work") ═══ -->
+  <section class="tool-hero">
+    <div>
+      <div class="eyebrow" id="hero-eyebrow">STUDIO TOOL / 01 · CAMPAIGN STUDIO</div>
+      <h1 class="hero-title" id="hero-title">Brief Maker<span class="period-dot"></span></h1>
+      <p class="hero-sub" id="hero-sub">Turn client notes, call transcripts, and verified research into a structured creative brief on a single sheet of paper.</p>
+    </div>
+    <button type="button" class="hero-circle-btn" id="hero-cta-circle" title="Advance to next step">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="7" y1="7" x2="17" y2="17"></line>
+        <polyline points="17 7 17 17 7 17"></polyline>
+      </svg>
+    </button>
+  </section>
+
+  <!-- ═══ PERSISTENT QUICK-SWITCH RIBBON (Directly below Hero so all views & screens are 1 click away) ═══ -->
+  <div class="action-strip" id="screen-switcher-strip" style="background:var(--paper);padding:12px 18px;border:1px solid var(--line);border-radius:var(--r-md);margin-top:18px;box-shadow:var(--shadow-card)">
+    <div class="action-left">
+      <span style="font:700 11px var(--font-mono);text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-right:4px">Workspace:</span>
+      <button type="button" class="btn-rect" data-qtool="desk" aria-pressed="false" style="min-height:32px;padding:0 12px;font-size:12.5px">00 · Client Desk (OS)</button>
+      <button type="button" class="btn-rect" data-qtool="brief" aria-pressed="true" style="min-height:32px;padding:0 12px;font-size:12.5px">01 · Brief Maker</button>
+      <button type="button" class="btn-rect" data-qtool="research" aria-pressed="false" style="min-height:32px;padding:0 12px;font-size:12.5px">02 · Research Tool</button>
+      <button type="button" class="btn-rect" data-qtool="deck" aria-pressed="false" style="min-height:32px;padding:0 12px;font-size:12.5px">03 · Deck Studio</button>
+    </div>
+    <div class="action-right" id="step-switcher-group">
+      <span style="font:700 11px var(--font-mono);text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-right:4px">Screen:</span>
+      <button type="button" class="btn-rect" data-qstep="all" aria-pressed="true" style="min-height:32px;padding:0 12px;font-size:12.5px">All 3 Stacked</button>
+      <button type="button" class="btn-rect" data-qstep="prompt" aria-pressed="false" style="min-height:32px;padding:0 12px;font-size:12.5px">01 / Initial Prompt</button>
+      <button type="button" class="btn-rect" data-qstep="loading" aria-pressed="false" style="min-height:32px;padding:0 12px;font-size:12.5px">02 / Agent Loading (Orbs)</button>
+      <button type="button" class="btn-rect" data-qstep="output" aria-pressed="false" style="min-height:32px;padding:0 12px;font-size:12.5px">03 / Final Output</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       VIEW 00: OS CLIENT DESK (Outdoor Maker + Splat Circular Gauges)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <main id="view-desk" hidden>
+    <div class="desk-kpi-strip">
+      <div class="kpi-card">
+        <div class="kpi-meta">
+          <small>ACTIVE ACCOUNTS</small>
+          <b>4 Clients</b>
+          <span>7 live tools running</span>
+        </div>
+        <div class="splat-gauge" title="100% accounts synced">
+          <svg viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="21" fill="none" stroke="var(--line)" stroke-width="4.5"/>
+            <circle cx="26" cy="26" r="21" fill="none" stroke="var(--ag-base)" stroke-width="4.5" stroke-dasharray="131.9 131.9" stroke-linecap="round"/>
+          </svg>
+          <span class="g-val">4/4</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-meta">
+          <small>VERIFIED FACTS</small>
+          <b>38 Facts</b>
+          <span>Pinned across 24 sources</span>
+        </div>
+        <div class="splat-gauge" title="92% high confidence">
+          <svg viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="21" fill="none" stroke="var(--line)" stroke-width="4.5"/>
+            <circle cx="26" cy="26" r="21" fill="none" stroke="var(--ok)" stroke-width="4.5" stroke-dasharray="121.3 131.9" stroke-linecap="round"/>
+          </svg>
+          <span class="g-val">92%</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-meta">
+          <small>NEEDS YOUR CALL</small>
+          <b>2 Open</b>
+          <span>McDonald's Ireland</span>
+        </div>
+        <div class="splat-gauge" title="2 decisions waiting for human sign-off">
+          <svg viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="21" fill="none" stroke="var(--line)" stroke-width="4.5"/>
+            <circle cx="26" cy="26" r="21" fill="none" stroke="var(--warn)" stroke-width="4.5" stroke-dasharray="88 131.9" stroke-linecap="round"/>
+          </svg>
+          <span class="g-val" style="color:var(--warn)">2</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-meta">
+          <small>DECISION RECORD</small>
+          <b>45 Calls</b>
+          <span>Every "why?" auditable</span>
+        </div>
+        <div class="splat-gauge">
+          <svg viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="21" fill="none" stroke="var(--line)" stroke-width="4.5"/>
+            <circle cx="26" cy="26" r="21" fill="none" stroke="var(--ag-acc)" stroke-width="4.5" stroke-dasharray="115 131.9" stroke-linecap="round"/>
+          </svg>
+          <span class="g-val">100%</span>
+        </div>
+      </div>
+    </div>
+
+    <section class="section-block">
+      <div class="sec-num">01 / CLIENT ACCOUNTS &amp; ACTIVE WORKSTREAMS</div>
+      <h2 class="sec-title">Pick a client desk or jump straight into a sheet</h2>
+
+      <div class="client-grid">
+        <!-- Client 1: McDonald's Ireland -->
+        <article class="client-card">
+          <div class="cc-head">
+            <div>
+              <div class="cc-eyebrow">QSR &amp; RETAIL · REPUBLIC OF IRELAND</div>
+              <h3 class="cc-title">McDonald's Ireland</h3>
+              <p class="cc-sub">Summer McFlurry — Turn unplanned 16–24 summer treat stops into a two-spoon sharing ritual.</p>
+            </div>
+            <span class="badge-pill proposed">2 need your call</span>
+          </div>
+
+          <div class="cc-artifacts">
+            <button type="button" class="cc-art" data-goto-tool="brief" data-goto-step="output">
+              <small>01 · BRIEF SHEET</small>
+              <b>Summer McFlurry v1.3</b>
+            </button>
+            <button type="button" class="cc-art" data-goto-tool="research" data-goto-step="output">
+              <small>02 · RESEARCH</small>
+              <b>Irish Treats (12 facts)</b>
+            </button>
+            <button type="button" class="cc-art" data-goto-tool="deck" data-goto-step="output">
+              <small>03 · PITCH DECK</small>
+              <b>Q3 Board Narrative</b>
+            </button>
+          </div>
+
+          <div class="cc-foot">
+            <span style="font:11.5px var(--font-mono);color:var(--muted)">Updated 4m ago · 15 blocks · 6 decisions on record</span>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="btn-rect" data-open-dtree style="min-height:32px;padding:0 12px;font-size:12px">Inspect Decision Tree (2)</button>
+              <button type="button" class="btn-rect primary" data-goto-tool="brief" data-goto-step="output" style="min-height:32px;padding:0 14px;font-size:12px">Open Brief →</button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Client 2: Ballymaloe Foods -->
+        <article class="client-card">
+          <div class="cc-head">
+            <div>
+              <div class="cc-eyebrow">FMCG &amp; PANTRY · CORK &amp; NATIONAL</div>
+              <h3 class="cc-title">Ballymaloe Foods</h3>
+              <p class="cc-sub">Better With Ballymaloe — Recruit under-35 renters around quick Tuesday cheese toasties &amp; weeknight meals.</p>
+            </div>
+            <span class="badge-pill verified">Verified ✓</span>
+          </div>
+
+          <div class="cc-artifacts">
+            <button type="button" class="cc-art" data-load-ballymaloe="brief">
+              <small>01 · BRIEF SHEET</small>
+              <b>Better With Ballymaloe</b>
+            </button>
+            <button type="button" class="cc-art" data-load-ballymaloe="research">
+              <small>02 · RESEARCH</small>
+              <b>Under-35 Condiments</b>
+            </button>
+            <button type="button" class="cc-art" data-goto-tool="brief" data-goto-step="loading">
+              <small>03 · LIVE ORBS</small>
+              <b>Replay 4-Agent Run</b>
+            </button>
+          </div>
+
+          <div class="cc-foot">
+            <span style="font:11.5px var(--font-mono);color:var(--muted)">Updated 2h ago · €150k TV &amp; Social</span>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="btn-rect primary" data-load-ballymaloe="brief" style="min-height:32px;padding:0 14px;font-size:12px">Open Ballymaloe Brief →</button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Client 3: Diageo · Guinness -->
+        <article class="client-card">
+          <div class="cc-head">
+            <div>
+              <div class="cc-eyebrow">BEVERAGE · ST. JAMES'S GATE</div>
+              <h3 class="cc-title">Diageo · Guinness 0.0</h3>
+              <p class="cc-sub">Midweek Pint Ritual — Normalising draught Guinness 0.0 on Wednesday evening pub rounds across Dublin &amp; Galway.</p>
+            </div>
+            <span class="badge-pill verified">In Strategy</span>
+          </div>
+
+          <div class="cc-artifacts">
+            <button type="button" class="cc-art" data-goto-tool="brief" data-goto-step="prompt">
+              <small>01 · BRIEF INTAKE</small>
+              <b>Autumn Pub Draught</b>
+            </button>
+            <button type="button" class="cc-art" data-goto-tool="research" data-goto-step="loading">
+              <small>02 · AGENT STAGE</small>
+              <b>On-Trade Draught Tap</b>
+            </button>
+            <button type="button" class="cc-art" data-goto-tool="deck" data-goto-step="output">
+              <small>03 · PITCH DECK</small>
+              <b>Pub Trade Sell-In</b>
+            </button>
+          </div>
+
+          <div class="cc-foot">
+            <span style="font:11.5px var(--font-mono);color:var(--muted)">9 on-trade sources indexed · Strategy Agent active</span>
+            <button type="button" class="btn-rect" data-goto-tool="brief" data-goto-step="loading" style="min-height:32px;padding:0 12px;font-size:12px">Watch Live Agent Orbs →</button>
+          </div>
+        </article>
+
+        <!-- Client 4: Bord Bia -->
+        <article class="client-card">
+          <div class="cc-head">
+            <div>
+              <div class="cc-eyebrow">PUBLIC &amp; EXPORT · IRISH FOOD BOARD</div>
+              <h3 class="cc-title">Bord Bia · Origin Green</h3>
+              <p class="cc-sub">European Export Proof — Evidence-led narrative for Irish dairy &amp; grass-fed beef buyers in Germany and France.</p>
+            </div>
+            <span class="badge-pill verified">14 Facts Pinned</span>
+          </div>
+
+          <div class="cc-artifacts">
+            <button type="button" class="cc-art" data-goto-tool="research" data-goto-step="output">
+              <small>01 · RESEARCH</small>
+              <b>EU Retail Buyers</b>
+            </button>
+            <button type="button" class="cc-art" data-goto-tool="brief" data-goto-step="output">
+              <small>02 · BRIEF SHEET</small>
+              <b>DACH Trade Brief</b>
+            </button>
+            <button type="button" class="cc-art" data-open-dtree>
+              <small>03 · AUDIT TRAIL</small>
+              <b>Zero Contests</b>
+            </button>
+          </div>
+
+          <div class="cc-foot">
+            <span style="font:11.5px var(--font-mono);color:var(--muted)">All claims cross-checked against CSO &amp; Eurostat</span>
+            <button type="button" class="btn-rect" data-goto-tool="research" data-goto-step="output" style="min-height:32px;padding:0 12px;font-size:12px">Open Evidence Sheet →</button>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       TOOL 1: BRIEF MAKER (SCREENS 1, 2, 3)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <main id="view-brief">
+
+    <!-- ─── BRIEF SCREEN 1: INITIAL PROMPT ─── -->
+    <section id="brief-screen-prompt" class="section-block">
+      <div class="sec-num">01 / INTAKE & ASK</div>
+      <h2 class="sec-title">Give it everything you have</h2>
+
+      <div class="intake-grid">
+        <div class="paper-composer">
+          <div class="meta-fields">
+            <div class="field-box">
+              <label for="b-client-inp">Client</label>
+              <input id="b-client-inp" type="text" value="McDonald's Ireland">
+            </div>
+            <div class="field-box">
+              <label for="b-proj-inp">Project / Campaign</label>
+              <input id="b-proj-inp" type="text" value="Summer McFlurry">
+            </div>
+            <div class="field-box">
+              <label for="b-scope-inp">Budget & Format</label>
+              <input id="b-scope-inp" type="text" value="€140k · OOH, Social & Film">
+            </div>
+          </div>
+
+          <div class="upstream-banner" id="b-upstream-banner">
+            <div>
+              <span class="dot-ok"></span>
+              <b>Connected from Research Tool:</b> Irish summer treats · 12 verified facts travel with this brief
+            </div>
+            <button type="button" class="btn-rect" id="view-research-btn" style="min-height:28px;padding:0 10px;font-size:11.5px">Inspect research ↗</button>
+          </div>
+
+          <div>
+            <div class="prompt-label">
+              <span>Raw notes, client call, or direction</span>
+              <span id="b-word-count">74 words</span>
+            </div>
+            <textarea id="b-prompt-ta" class="prompt-ta" placeholder="Paste what the client said, drop in the call notes, or write what you need…">We need McFlurry to own summer in Ireland for 16–24s. Volume has been flat for two summers while Fanta Frozen and delivery desserts grew +23%. The product is loved, but nobody plans to go for a McFlurry—they just end up getting one.
+
+Commercial target: +12% unit growth June–August with no price promotion. Must feature both Flake and Oreo, no "limited time" language, €140k production budget.</textarea>
+          </div>
+
+          <div>
+            <div class="prompt-label" style="margin-bottom:8px"><span>Attached files on the desk</span></div>
+            <div class="attached-slips" id="b-files-list">
+              <span class="file-slip">📄 client-call-notes.pdf <button type="button" aria-label="Remove">×</button></span>
+              <span class="file-slip">📊 summer-treats-research.clan <button type="button" aria-label="Remove">×</button></span>
+              <span class="file-slip">📑 last-summer-recap.key <button type="button" aria-label="Remove">×</button></span>
+            </div>
+          </div>
+
+          <div class="composer-footer">
+            <div style="display:flex;align-items:center;gap:10px">
+              <button type="button" class="circle-attach" id="b-add-file" title="Attach file">+</button>
+              <span style="font-size:12.5px;color:var(--muted)">Drop decks, PDFs, brand books, or voice notes.</span>
+            </div>
+            <button type="button" class="btn-rect primary" id="b-start-run" style="min-height:44px;padding:0 24px;font-size:15px">
+              Write the brief →
+            </button>
+          </div>
+        </div>
+
+        <aside class="side-card">
+          <h3>Sample asks (click to load)</h3>
+          <div class="preset-list">
+            <button type="button" class="preset-item" data-bpreset="mcflurry" aria-pressed="true">
+              <b>McDonald's Ireland · Summer McFlurry</b>
+              <small>Turn unplanned 16–24 summer treat occasions into a shared two-spoon ritual. Includes 12 verified facts.</small>
+            </button>
+            <button type="button" class="preset-item" data-bpreset="ballymaloe" aria-pressed="false">
+              <b>Ballymaloe Relish · Better With Ballymaloe</b>
+              <small>Recruit under-35 households in Ireland who see the relish as their parents' pantry jar. €150k TV & social.</small>
+            </button>
+          </div>
+          <hr style="border:0;border-top:1px solid var(--line)">
+          <h3>How Brief Maker works</h3>
+          <p style="font-size:13px;color:var(--muted);line-height:1.5">
+            Four specialist orb agents work in sequence: <b>Knowledge</b> reads your files, <b>Strategy</b> maps the sheet, <b>Brief</b> drafts every block, and <b>Review</b> checks every claim against your evidence.
+          </p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ─── BRIEF SCREEN 2: LOADING / PROCESSING (WITH NEW ORB AGENTS) ─── -->
+    <section id="brief-screen-loading" class="section-block" hidden>
+      <div class="sec-num">02 / LIVE AGENT STAGE</div>
+      <h2 class="sec-title">The desk fills while the agents work</h2>
+
+      <div class="processing-wrap">
+        <div class="proc-topbar">
+          <div class="agent-step-pills" id="proc-agent-pills"></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button type="button" class="btn-rect" id="proc-handoff-btn" style="min-height:32px;font-size:12px">Trigger Handoff Pour</button>
+            <button type="button" class="btn-rect" id="proc-needs-btn" style="min-height:32px;font-size:12px">Simulate "Needs You"</button>
+            <button type="button" class="btn-rect" id="proc-replay-btn" style="min-height:32px;font-size:12px">↻ Replay run</button>
+          </div>
+        </div>
+
+        <div class="sphere-stage" id="sphere-stage">
+          <div class="rail" id="rail-left"></div>
+          <div class="stage-core">
+            <div class="agent-gl-box" id="agent-gl-box" title="Drag or poke the 3D agent sphere"></div>
+            <div class="sphere-caption">
+              <span class="agent-badge" id="cap-agent">KNOWLEDGE AGENT · ONYX</span>
+              <span class="l1" id="cap-l1">Reading what you sent</span>
+              <span class="l2" id="cap-l2">Step 1 of 4 · 3 files and your note</span>
+            </div>
+          </div>
+          <div class="rail" id="rail-right"></div>
+          <svg id="thread-svg" aria-hidden="true"></svg>
+        </div>
+
+        <div class="proc-footer">
+          <span style="font-size:12.5px;color:var(--muted)">
+            Hover any paper slip to trace its thread to the active orb. Click or drag the orb to interact with its surface.
+          </span>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="btn-rect" id="proc-back-btn">← Back to prompt</button>
+            <button type="button" class="btn-rect primary" id="proc-open-output-btn">Open finished brief →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── BRIEF SCREEN 3: FINAL OUTPUT (brief-grid-v3 paper sheet + v8 "why?" pills) ─── -->
+    <section id="brief-screen-output" class="section-block" hidden>
+      <div class="action-strip">
+        <div class="action-left">
+          <button type="button" class="btn-rect" id="b-toggle-arrange" aria-pressed="true">Arrange on page</button>
+          <button type="button" class="btn-rect" id="b-toggle-inspector" aria-pressed="true">Look & Layout panel</button>
+          <button type="button" class="btn-rect" id="b-expand-all-why" aria-pressed="false">Show all "why?" provenance</button>
+          <button type="button" class="btn-rect" id="b-redraft-btn">↻ Redraft Insight</button>
+        </div>
+        <div class="action-right">
+          <button type="button" class="btn-rect" id="b-reset-layout">Reset default</button>
+          <button type="button" class="btn-rect primary" id="b-print-pdf">Save on this device / PDF</button>
+        </div>
+      </div>
+      <p class="status-line">
+        Every block sits on a 12-column paper grid. Click <b>why?</b> on any field to see the decision chain and cited facts, or drag <b>⋮⋮</b> to rearrange the page.
+      </p>
+
+      <div class="brief-workspace" id="brief-workspace" style="margin-top:20px">
+        <div>
+          <article class="brief-page edit" id="brief-page"></article>
+        </div>
+
+        <aside class="look-inspector" id="look-inspector">
+          <div>
+            <h4>Preview format</h4>
+            <div class="seg-row" id="b-view-seg">
+              <button type="button" data-view="screen" aria-pressed="true">Screen</button>
+              <button type="button" data-view="pdf" aria-pressed="false">PDF Sheet</button>
+              <button type="button" data-view="phone" aria-pressed="false">Phone</button>
+            </div>
+          </div>
+
+          <div>
+            <h4>Brief look preset</h4>
+            <div class="preset-list" id="b-look-presets">
+              <button type="button" class="preset-item" data-look="warm" aria-pressed="true">
+                <b>Warm Editorial Paper (Default)</b>
+                <small>Newsreader serif + Geist, soft warm paper #FFFDF8, open rules.</small>
+              </button>
+              <button type="button" class="preset-item" data-look="boxed" aria-pressed="false">
+                <b>Boxed Agency Sheet</b>
+                <small>High-contrast boxed 12-column cells, tab headers, sheet banner.</small>
+              </button>
+              <button type="button" class="preset-item" data-look="harbour" aria-pressed="false">
+                <b>Harbour Clan Kit (#0F6B5C)</b>
+                <small>Tinted band cover with brand accent and crisp editorial rules.</small>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <h4>Cover style</h4>
+            <div class="seg-row" id="b-cover-seg">
+              <button type="button" data-cover="plain" aria-pressed="true">Plain</button>
+              <button type="button" data-cover="band" aria-pressed="false">Band</button>
+              <button type="button" data-cover="sheet" aria-pressed="false">Banner</button>
+            </div>
+          </div>
+
+          <div>
+            <h4>Grid frame & headings</h4>
+            <div class="seg-row" id="b-frame-seg" style="margin-bottom:8px">
+              <button type="button" data-frame="open" aria-pressed="true">Open rules</button>
+              <button type="button" data-frame="boxed" aria-pressed="false">Boxed cells</button>
+            </div>
+            <div class="seg-row" id="b-heads-seg">
+              <button type="button" data-heads="label" aria-pressed="true">Small label</button>
+              <button type="button" data-heads="tab" aria-pressed="false">Filled tab</button>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--line);padding-top:12px">
+            <h4>How arrangement works</h4>
+            <p style="font-size:12.5px;color:var(--muted);line-height:1.45">
+              Use <b>Show as</b> on any block to switch between Prose, Bullets, Callout, Statement, or Cell. Use <b>Span</b> to put blocks side by side across the 12 columns.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       TOOL 2: RESEARCH TOOL (SCREENS 1, 2, 3)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <main id="view-research" hidden>
+
+    <!-- ─── RESEARCH SCREEN 1: INITIAL PROMPT ─── -->
+    <section id="research-screen-prompt" class="section-block">
+      <div class="sec-num">01 / QUESTION & SCOPE</div>
+      <h2 class="sec-title">Ask a sharp question</h2>
+
+      <div class="intake-grid">
+        <div class="paper-composer">
+          <div class="meta-fields">
+            <div class="field-box">
+              <label for="r-client-inp">Client</label>
+              <input id="r-client-inp" type="text" value="McDonald's Ireland">
+            </div>
+            <div class="field-box">
+              <label for="r-market-inp">Market / Geography</label>
+              <select id="r-market-inp">
+                <option>Republic of Ireland (IE)</option>
+                <option>UK & Ireland</option>
+                <option>Europe</option>
+                <option>Global</option>
+              </select>
+            </div>
+            <div class="field-box">
+              <label for="r-window-inp">Time Window</label>
+              <select id="r-window-inp">
+                <option>Since 2024 (Last 24 months)</option>
+                <option>Last 12 months</option>
+                <option>All available years</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div class="prompt-label">
+              <span>Research question & hypothesis to test</span>
+              <span>Every claim will be cited</span>
+            </div>
+            <textarea id="r-prompt-ta" class="prompt-ta" placeholder="What do you need to find out?">What makes 16–24s choose a treat on an Irish summer day?
+
+Specifically: check whether out-of-home treat occasions are planned or spontaneous, compare delivery frozen-dessert growth against in-store visits, and check if "two-spoon sharing" of McFlurrys on Irish TikTok is a real behaviour or just a small niche.</textarea>
+          </div>
+
+          <div>
+            <div class="prompt-label" style="margin-bottom:8px"><span>Sources to search & cross-check</span></div>
+            <div class="action-left" id="r-source-toggles">
+              <button type="button" class="btn-rect" aria-pressed="true" data-src="panel">Panel & Trade (Bord Bia, Kantar, CSO)</button>
+              <button type="button" class="btn-rect" aria-pressed="true" data-src="web">Irish Press & Trade News</button>
+              <button type="button" class="btn-rect" aria-pressed="true" data-src="social">TikTok & Social UGC</button>
+              <button type="button" class="btn-rect" aria-pressed="true" data-src="deck">Uploaded Client Deck</button>
+            </div>
+          </div>
+
+          <div class="composer-footer">
+            <div style="display:flex;align-items:center;gap:10px">
+              <button type="button" class="circle-attach" title="Upload client data">+</button>
+              <span style="font-size:12.5px;color:var(--muted)">1 client deck attached: <b>mcd-qsr-dessert-recap.pdf</b></span>
+            </div>
+            <button type="button" class="btn-rect primary" id="r-start-run" style="min-height:44px;padding:0 24px;font-size:15px">
+              Run research →
+            </button>
+          </div>
+        </div>
+
+        <aside class="side-card">
+          <h3>Sample research questions</h3>
+          <div class="preset-list">
+            <button type="button" class="preset-item" data-rpreset="treats" aria-pressed="true">
+              <b>Irish summer treats (16–24s)</b>
+              <small>Spontaneous social occasions, delivery dessert growth, and TikTok sharing habits.</small>
+            </button>
+            <button type="button" class="preset-item" data-rpreset="relish" aria-pressed="false">
+              <b>Under-35 condiment & relish habits</b>
+              <small>Why younger Irish renters skip heritage condiments for Heinz or supermarket own-label.</small>
+            </button>
+          </div>
+          <hr style="border:0;border-top:1px solid var(--line)">
+          <h3>Evidence standard</h3>
+          <p style="font-size:13px;color:var(--muted);line-height:1.5">
+            When two sources disagree, Napkin puts the contest on the record and states why it picked one figure over the other. Thin evidence is flagged as <b>Proposed</b> for human review.
+          </p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ─── RESEARCH SCREEN 3: FINAL OUTPUT (PAPER REPORT) ─── -->
+    <section id="research-screen-output" class="section-block" hidden>
+      <div class="action-strip">
+        <div class="action-left">
+          <button type="button" class="btn-rect" data-rfilter="all" aria-pressed="true">All findings (3)</button>
+          <button type="button" class="btn-rect" data-rfilter="verified" aria-pressed="false">Verified only (2)</button>
+          <button type="button" class="btn-rect" data-rfilter="proposed" aria-pressed="false">Needs review (1)</button>
+        </div>
+        <div class="action-right">
+          <button type="button" class="btn-rect" onclick="window.print()">Download PDF</button>
+          <button type="button" class="btn-rect primary" id="r-spin-brief">Spin off a brief with these facts →</button>
+        </div>
+      </div>
+
+      <article class="research-sheet" style="margin-top:20px">
+        <header class="r-header">
+          <div>
+            <div class="eyebrow">RESEARCH REPORT · MCDONALD'S IRELAND</div>
+            <h2 class="r-question">What makes 16–24s choose a treat on an Irish summer day?</h2>
+            <p style="font-size:13.5px;color:var(--muted)">Finished just now · 9 sources read · 6 core facts pinned · 6 decisions on the record</p>
+          </div>
+          <span class="badge-pill verified" style="font-size:11.5px;padding:6px 12px">2 Verified · 1 Proposed</span>
+        </header>
+
+        <div class="needs-review-banner" id="r-needs-banner">
+          <div>
+            <b style="color:var(--warn)">1 finding needs your review.</b>
+            <span style="font-size:13.5px;color:var(--ink-soft);margin-left:6px">Finding #3 ("Two-spoon sharing on Irish TikTok") rests on 2 clips only.</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="btn-rect primary" id="r-approve-finding" style="min-height:32px;font-size:12.5px">Keep as working hypothesis</button>
+            <button type="button" class="btn-rect" id="r-drop-finding" style="min-height:32px;font-size:12.5px">Cut finding</button>
+          </div>
+        </div>
+
+        <!-- 01 / FINDINGS -->
+        <div>
+          <div class="sec-num">01 / SYNTHESISED FINDINGS</div>
+          <h3 class="sec-title" style="font-size:22px">What the evidence says</h3>
+
+          <div style="display:flex;flex-direction:column;gap:14px" id="r-findings-list">
+            <div class="finding-card" data-status="verified">
+              <div class="finding-top">
+                <p class="finding-stmt">1. 16–24s plan food stops around social moments, not meals — the treat is the excuse to stay out.</p>
+                <span class="badge-pill verified">Verified</span>
+              </div>
+              <blockquote class="finding-quote">
+                "Among Irish 16–24s, 68% of out-of-home treat occasions were unplanned and social, up from 61% in 2024."
+                <div style="font:11px var(--font-mono);color:var(--muted);font-style:normal;margin-top:4px">Bord Bia Consumer Insights, Jun 2026 · Republic of Ireland sample (n=1,400)</div>
+              </blockquote>
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <span class="fid-chip">f_003 · unplanned occasions 68%</span>
+                  <span class="fid-chip">f_004 · social context +7 pts</span>
+                </div>
+                <button type="button" class="prov-pill" onclick="toggleWhy(this)" aria-expanded="true">
+                  <span>Napkin · verified ✓</span> <span class="q">why?</span>
+                </button>
+              </div>
+              <div class="why-drawer">
+                <div class="why-row"><span class="rl">Decided</span><span>Kept as the primary finding grounding the brief's spontaneity insight.</span></div>
+                <div class="why-row"><span class="rl">Because</span><span>Two independent sources agree within 3 points; the upward trend holds across 2024–2026.</span></div>
+                <div class="why-row"><span class="rl">Certainty</span><span><b style="color:var(--ok)">High</b> — National representative panel, published methodology.</span></div>
+              </div>
+            </div>
+
+            <div class="finding-card" data-status="verified">
+              <div class="finding-top">
+                <p class="finding-stmt">2. Frozen desserts through delivery apps grew 23.4% year on year in Ireland — indulgence is moving home.</p>
+                <span class="badge-pill verified">Verified</span>
+              </div>
+              <blockquote class="finding-quote">
+                "Frozen dessert delivery orders in the Republic of Ireland rose 23.4% against the prior 12 months."
+                <div style="font:11px var(--font-mono);color:var(--muted);font-style:normal;margin-top:4px">Kantar Worldpanel, Aug 2026 · ROI Out-of-Home & Delivery Tracker</div>
+              </blockquote>
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <span class="fid-chip">f_007 · delivery growth +23.4% YoY</span>
+                </div>
+                <button type="button" class="prov-pill" onclick="toggleWhy(this)" aria-expanded="false">
+                  <span>Napkin · resolved conflict ✓</span> <span class="q">why?</span>
+                </button>
+              </div>
+              <div class="why-drawer" hidden>
+                <div class="why-row"><span class="rl">Decided</span><span>Used Kantar's 23.4% figure over the client deck's 31%.</span></div>
+                <div class="why-row"><span class="rl">Rejected</span><span>Client internal deck (31%) — no stated methodology and likely blends Northern Ireland with ROI.</span></div>
+                <div class="why-row"><span class="rl">Certainty</span><span><b style="color:var(--ok)">High</b> — Like-for-like Republic of Ireland panel definition.</span></div>
+              </div>
+            </div>
+
+            <div class="finding-card proposed" data-status="proposed" id="finding-3-card">
+              <div class="finding-top">
+                <p class="finding-stmt">3. Two-spoon sharing is already a recognisable McFlurry behaviour on Irish TikTok.</p>
+                <span class="badge-pill proposed" id="finding-3-badge">Proposed · Thin evidence</span>
+              </div>
+              <blockquote class="finding-quote">
+                "the two spoons thing is so real, nobody orders their own mcflurry"
+                <div style="font:11px var(--font-mono);color:var(--muted);font-style:normal;margin-top:4px">TikTok Irish UGC sample, Oct 2026 · 2 clips, 4.1k combined likes</div>
+              </blockquote>
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <span class="fid-chip">f_011 · two-spoon UGC (2 clips)</span>
+                  <span class="fid-chip">f_009 · #McFlurry IE 11.2M views</span>
+                </div>
+                <button type="button" class="prov-pill needs" onclick="toggleWhy(this)" aria-expanded="true">
+                  <span>Needs you</span> <span class="q">why?</span>
+                </button>
+              </div>
+              <div class="why-drawer">
+                <div class="why-row"><span class="rl">Decided</span><span>Held as Proposed only — not auto-verified.</span></div>
+                <div class="why-row"><span class="rl">Because</span><span>The cultural signal is vivid, but 2 clips is too small a sample to state as a national norm without your sign-off.</span></div>
+                <div class="why-row"><span class="rl">Certainty</span><span><b style="color:var(--warn)">Low / Thin</b> — Needs human judgement: keep as creative hook or drop.</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 02 / FACTS ON THE RECORD -->
+        <div>
+          <div class="sec-num">02 / FACTS ON THE RECORD</div>
+          <h3 class="sec-title" style="font-size:22px">Pinned facts table</h3>
+          <div class="facts-table-wrap">
+            <table class="facts-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Fact</th>
+                  <th>Value</th>
+                  <th>As of</th>
+                  <th>Confidence</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="font-family:var(--font-mono);color:var(--muted)">f_003</td>
+                  <td><b>Unplanned treat occasions (16–24s)</b></td>
+                  <td style="font-family:var(--font-mono);font-weight:600">68%</td>
+                  <td style="font-family:var(--font-mono)">Jun 2026</td>
+                  <td><span class="badge-pill verified">High</span></td>
+                  <td>Bord Bia Consumer Insights</td>
+                </tr>
+                <tr>
+                  <td style="font-family:var(--font-mono);color:var(--muted)">f_004</td>
+                  <td><b>Social context vs prior period</b></td>
+                  <td style="font-family:var(--font-mono);font-weight:600">Up from 61% (2024)</td>
+                  <td style="font-family:var(--font-mono)">Jun 2026</td>
+                  <td><span class="badge-pill verified">High</span></td>
+                  <td>Bord Bia Consumer Insights</td>
+                </tr>
+                <tr>
+                  <td style="font-family:var(--font-mono);color:var(--muted)">f_007</td>
+                  <td><b>Delivery frozen-dessert growth, ROI</b></td>
+                  <td style="font-family:var(--font-mono);font-weight:600">+23.4% YoY</td>
+                  <td style="font-family:var(--font-mono)">Aug 2026</td>
+                  <td><span class="badge-pill verified">High</span></td>
+                  <td>Kantar Worldpanel</td>
+                </tr>
+                <tr>
+                  <td style="font-family:var(--font-mono);color:var(--muted)">f_009</td>
+                  <td><b>#McFlurry tag views in Ireland</b></td>
+                  <td style="font-family:var(--font-mono);font-weight:600">11.2M views</td>
+                  <td style="font-family:var(--font-mono)">Oct 2026</td>
+                  <td><span class="badge-pill verified">High</span></td>
+                  <td>TikTok Ireland</td>
+                </tr>
+                <tr>
+                  <td style="font-family:var(--font-mono);color:var(--muted)">f_011</td>
+                  <td><b>Two-spoon sharing UGC clips</b></td>
+                  <td style="font-family:var(--font-mono);font-weight:600">2 clips · 4.1k likes</td>
+                  <td style="font-family:var(--font-mono)">Oct 2026</td>
+                  <td><span class="badge-pill proposed">Thin</span></td>
+                  <td>TikTok comment sample</td>
+                </tr>
+                <tr>
+                  <td style="font-family:var(--font-mono);color:var(--muted)">f_014</td>
+                  <td><b>Warm spell days vs 2024 summer</b></td>
+                  <td style="font-family:var(--font-mono);font-weight:600">+18% days &gt; 20°C</td>
+                  <td style="font-family:var(--font-mono)">Sep 2026</td>
+                  <td><span class="badge-pill verified">High</span></td>
+                  <td>Met Éireann</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 03 / DECISION LOG -->
+        <div>
+          <div class="sec-num">03 / AUDIT TRAIL</div>
+          <h3 class="sec-title" style="font-size:22px">Every decision, on the record</h3>
+          <ol class="decision-tl">
+            <li>
+              <div style="font-size:13.5px"><b>Knowledge Agent</b> extracted 14 candidate facts from 9 sources <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">· d_041</span></div>
+            </li>
+            <li class="ok">
+              <div style="font-size:13.5px"><b>Review Agent</b> verified <code>f_003</code> (68% unplanned occasions) across Bord Bia & CSO <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">· d_042</span></div>
+            </li>
+            <li class="contest">
+              <div style="font-size:13.5px"><b>Review Agent</b> flagged a source disagreement on delivery growth (<code>23.4%</code> Kantar vs <code>31%</code> client deck) <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">· d_043</span></div>
+            </li>
+            <li class="ok">
+              <div style="font-size:13.5px"><b>Review Agent</b> resolved <code>f_007</code> in favour of Kantar's 23.4% (documented ROI panel method) <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">· d_044</span></div>
+            </li>
+            <li class="warn">
+              <div style="font-size:13.5px"><b>Review Agent</b> marked Finding #3 (<code>f_011</code> two-spoon sharing) as <b>Proposed</b> — requires human sign-off <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">· d_045</span></div>
+            </li>
+          </ol>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       VIEW 03: DECK STUDIO (6-Slide Pitch Storyboard Built From Brief + Facts)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <main id="view-deck" hidden>
+    <section class="section-block">
+      <div class="action-strip" style="margin-bottom:18px">
+        <div class="action-left">
+          <span class="sec-num" style="margin:0">01 / PITCH STORYBOARD · 6 SLIDES LINKED TO BRIEF v1.3</span>
+        </div>
+        <div class="action-right">
+          <button type="button" class="btn-rect" data-open-dtree>Inspect Decision Tree (2)</button>
+          <button type="button" class="btn-rect primary" data-goto-tool="brief" data-goto-step="output">← Back to Brief Sheet</button>
+        </div>
+      </div>
+
+      <div class="deck-grid">
+        <article class="slide-card hero-slide">
+          <div class="slide-num"><span>SLIDE 01 · COVER</span><span>MCDONALD'S IRELAND</span></div>
+          <div>
+            <h3 class="slide-h" style="font-size:28px">The best summers are measured in spoons.</h3>
+            <p class="slide-p">Summer McFlurry 2026 · Turning unplanned 16–24 hangout extensions into Ireland's shared summer ritual.</p>
+          </div>
+          <div class="slide-foot">
+            <span>Linked to Brief Block: SMP</span>
+            <span>d_046 ✓</span>
+          </div>
+        </article>
+
+        <article class="slide-card">
+          <div class="slide-num"><span>SLIDE 02 · COMMERCIAL TENSION</span><span>CITES f_007</span></div>
+          <div>
+            <h3 class="slide-h">Loved, but invisible between May and September.</h3>
+            <p class="slide-p">In-store McFlurry units held flat for two summers while frozen drinks and home-delivery desserts (+23.4% YoY in ROI) captured the planned treat.</p>
+          </div>
+          <div class="slide-foot">
+            <span>Kantar ROI Panel (Aug 2026)</span>
+            <button type="button" class="prov-pill" data-open-dtree><span>verified ✓</span> <span class="q">why?</span></button>
+          </div>
+        </article>
+
+        <article class="slide-card">
+          <div class="slide-num"><span>SLIDE 03 · HUMAN INSIGHT</span><span>CITES f_003, f_004</span></div>
+          <div>
+            <h3 class="slide-h">“The best summer moments happen in the 20 minutes after ‘will we just…’.”</h3>
+            <p class="slide-p">68% of Irish 16–24 out-of-home treat occasions are unplanned and social — up 7 pts since 2024. The treat is the excuse to stay out.</p>
+          </div>
+          <div class="slide-foot">
+            <span>Bord Bia Consumer Insights</span>
+            <button type="button" class="prov-pill" data-open-dtree><span>verified ✓</span> <span class="q">why?</span></button>
+          </div>
+        </article>
+
+        <article class="slide-card">
+          <div class="slide-num"><span>SLIDE 04 · THE RITUAL</span><span>CITES f_011 · NEEDS CALL</span></div>
+          <div>
+            <h3 class="slide-h">Two spoons on request — built for the seafront wall.</h3>
+            <p class="slide-p">Nobody orders a McFlurry to eat alone in a booth. We make the two-spoon ask the centre of OOH, TikTok creator seeding, and counter theatre.</p>
+          </div>
+          <div class="slide-foot">
+            <span>2 TikTok UGC clips (4.1k likes)</span>
+            <button type="button" class="prov-pill needs" data-open-dtree><span>needs you</span> <span class="q">why?</span></button>
+          </div>
+        </article>
+
+        <article class="slide-card">
+          <div class="slide-num"><span>SLIDE 05 · CREATIVE WORLD</span><span>TONE &amp; MANDATORIES</span></div>
+          <div>
+            <h3 class="slide-h">Sun-bleached, handheld, mid-laugh.</h3>
+            <p class="slide-p">Shot on real Irish seafronts, canal banks, and car parks. Both Flake and Oreo featured across all formats — zero studio pack-shots, no "limited time" copy.</p>
+          </div>
+          <div class="slide-foot">
+            <span>Client Call Notes · p.2</span>
+            <span>d_041 ✓</span>
+          </div>
+        </article>
+
+        <article class="slide-card">
+          <div class="slide-num"><span>SLIDE 06 · ROLLOUT &amp; BUDGET</span><span>€140K PROD · OMD</span></div>
+          <div>
+            <h3 class="slide-h">+12% unit growth across June–August with zero price promo.</h3>
+            <p class="slide-p">Dynamic warm-spell OOH triggered at &gt;20°C (Met Éireann feed f_014), paired with 15s social cutdowns and in-store crew prompt.</p>
+          </div>
+          <div class="slide-foot">
+            <span>1 open OMD NI media question</span>
+            <button type="button" class="prov-pill needs" data-open-dtree><span>needs you</span> <span class="q">why?</span></button>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SLIDE-OVER DECISION TREE & PROVENANCE INSPECTOR (Reference 5 "Sheets and routes")
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div class="dtree-backdrop" id="dtree-backdrop" hidden></div>
+<aside class="dtree-drawer" id="dtree-drawer" aria-label="Decision Tree and Provenance" hidden>
+  <header class="dtree-head">
+    <div>
+      <div class="sec-num" style="margin:0">DECISION TREE &amp; PROVENANCE RECORD</div>
+      <h3 style="font:800 18px/1.2 var(--font-ui)">McDonald's Ireland · Summer McFlurry</h3>
+    </div>
+    <button type="button" class="btn-rect" id="dtree-close-btn" style="min-height:32px;padding:0 12px;font-size:12px">Close ✕</button>
+  </header>
+
+  <div class="dtree-body">
+    <div class="dtree-call-card" id="dtree-open-calls-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <b style="color:var(--warn);font-size:13.5px" id="dtree-call-title">2 open calls need your sign-off</b>
+        <span class="badge-pill proposed" id="dtree-call-badge">H1 Mark: Needs You</span>
+      </div>
+      <p style="font-size:12.5px;color:var(--ink-soft);line-height:1.45" id="dtree-call-desc">
+        1. <b>Finding #3 (f_011 · Two-spoon sharing on Irish TikTok):</b> Rests on 2 clips (4.1k likes). Keep as the creative hook?<br>
+        2. <b>Operations &amp; NI OOH check:</b> Confirm counter staff can offer two spoons on request and whether OMD booking covers NI.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="dtree-call-actions">
+        <button type="button" class="btn-rect primary" id="dtree-approve-all" style="min-height:32px;padding:0 14px;font-size:12px">Approve both &amp; lock brief ✓</button>
+        <button type="button" class="btn-rect" id="dtree-goto-research" style="min-height:32px;padding:0 12px;font-size:12px">Inspect in Research →</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-num">LIVE PROVENANCE GRAPH (SOURCES → FACTS → DECISIONS → BRIEF)</div>
+      <div class="dtree-graph">
+        <div class="dt-node">
+          <span class="dt-stage">01 · SOURCES</span>
+          <div class="dt-main">
+            <b>9 Sources Read by Knowledge Agent</b>
+            <span>Bord Bia (Jun 2026), Kantar ROI (Aug 2026), TikTok IE, Met Éireann, Client Call Notes PDF</span>
+          </div>
+          <span class="badge-pill verified">9 read</span>
+        </div>
+
+        <div class="dt-node">
+          <span class="dt-stage">02 · CONTEST</span>
+          <div class="dt-main">
+            <b>d_044 · Delivery Growth Disagreement Resolved</b>
+            <span>Chose Kantar's <b>+23.4% YoY</b> (f_007) over Client Deck's <b>+31%</b> (blended NI + ROI without method).</span>
+          </div>
+          <span class="badge-pill verified">Resolved</span>
+        </div>
+
+        <div class="dt-node">
+          <span class="dt-stage">03 · INSIGHT</span>
+          <div class="dt-main">
+            <b>d_042 · Spontaneous Hangout Extension (f_003, f_004)</b>
+            <span>68% of 16–24 treat stops are unplanned &amp; social. Rejected nostalgia framing ("the McFlurry you grew up with").</span>
+          </div>
+          <span class="badge-pill verified">High</span>
+        </div>
+
+        <div class="dt-node">
+          <span class="dt-stage">04 · REWRITE</span>
+          <div class="dt-main">
+            <b>d_046 · Review Agent Rewrote Single-Minded Proposition</b>
+            <span>Cut v1 <s>"Summer tastes better shared"</s> → Locked <b>"The best summers are measured in spoons."</b></span>
+          </div>
+          <span class="badge-pill verified">Rewritten</span>
+        </div>
+
+        <div class="dt-node" id="dt-node-f011">
+          <span class="dt-stage">05 · HUMAN</span>
+          <div class="dt-main">
+            <b>d_045 · Two-Spoon Sharing Ritual (f_011)</b>
+            <span>2 TikTok clips (4.1k likes) + #McFlurry 11.2M IE views (f_009). Flagged for your sign-off.</span>
+          </div>
+          <span class="badge-pill proposed" id="dt-node-f011-badge">Needs You</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     ART DIRECTOR FLOATING BOTTOM COMMAND DOCK (Reference 5)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div class="cmd-dock-wrap" aria-label="Quick Studio Command Bar">
+  <div class="cmd-circles" role="group" aria-label="Quick tool switch">
+    <button type="button" class="cmd-circle-btn" data-dock-tool="desk" aria-pressed="false" title="Client Desk (OS)">Desk</button>
+    <button type="button" class="cmd-circle-btn" data-dock-tool="brief" aria-pressed="true" title="Brief Maker">Brief</button>
+    <button type="button" class="cmd-circle-btn" data-dock-tool="research" aria-pressed="false" title="Research Tool">Rsrch</button>
+    <button type="button" class="cmd-circle-btn" data-dock-tool="deck" aria-pressed="false" title="Deck Studio">Deck</button>
+    <button type="button" class="cmd-circle-btn" id="dock-tree-btn" aria-pressed="false" title="Open Decision Tree">Tree</button>
+  </div>
+  <form class="cmd-bar" id="cmd-form">
+    <input type="text" id="cmd-input" placeholder="Ask Napkin to sharpen the proposition, test a claim, or switch agency skin…" aria-label="Studio prompt">
+    <button type="submit" class="cmd-apply">Apply</button>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- ═══ SHARED WEBGL SCRIPTS (DeepO Grammar + AgencyTint + 3D Satin Agent Spheres) ═══ -->
+<script src="identity-v4/agents/lib/finish.js"></script>
+<script src="identity-v4/mark/deep-o-grammar.js"></script>
+<script src="identity-v4/agency/agency-tint.js"></script>
+<script src="identity-v4/agents/lib/scene.js"></script>
+<script src="identity-v4/agents/lib/agent-view.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  function showToast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('on');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('on'), 2600);
+  }
+  window.toggleWhy = function (btn) {
+    const card = btn.closest('.gi, .finding-card');
+    if (!card) return;
+    const drawer = card.querySelector('.why-drawer');
+    if (!drawer) return;
+    const open = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!open));
+    drawer.hidden = open;
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     1. EXTEND NAPKIN 3D AGENTS WITH KNOWLEDGE, COPY & REVIEW GEOMETRIES
+     ═══════════════════════════════════════════════════════════════════════ */
+  if (window.NapkinAgents) {
+    const EXTRA_RAW = [
+      { "n": 9, "name": "Copy", "arcs": [[0.0001, 0.0, 0.7941, -2.0945, 1.9375, 0.0941, 1.0], [-0.0001, -0.0, 0.3235, -1.5706, 1.0647, 0.0441, 0.4]], "circs": [[0.0, 0.0, 0.2353, 0.0588, 0, 1.0]], "role": "Crafts words" },
+      { "n": 23, "name": "Review", "arcs": [[-0.0001, 0.0, 0.7941, 2.6877, 1.7108, 0.0941, 1.0], [-0.0, -0.0001, 0.4706, 0.5938, 2.8794, 0.0735, 1.0], [0.0002, -0.0018, 0.2647, -3.1139, 3.1907, 0.0735, 1.0]], "circs": [[0.3824, 0.2941, 0.0882, 0.0353, 0, 1.0]], "role": "Checks every claim" },
+      { "n": 26, "name": "Knowledge", "arcs": [[0.0001, -0.0001, 0.7941, 0.1223, 1.2566, 0.0941, 1.0], [-0.0059, -0.0002, 0.4118, 1.5916, 3.1701, 0.0971, 1.0], [-0.0001, 0.0002, 0.5588, -2.9843, 0.8377, 0.0471, 0.4]], "circs": [[0.2647, -0.1765, 0.1176, 0.0471, 0, 1.0]], "role": "Reads sources" }
+    ];
+    const { AG, ORDER, MATS, MAT_OF, TYPE_OF } = window.NapkinAgents;
+    const TYPES = {
+      scan: { wob: [0, .006, 0, .004], breath: .004 },
+      unfold: { wob: [.012, .014, .006, 0], breath: .022 },
+      sweep: { wob: [0, .008, .012, .006], breath: .006 },
+      hold: { wob: [.003, .002, 0, 0], breath: .004 },
+      align: { wob: [.005, 0, .005, 0], breath: .008 },
+      pulse: { wob: [.006, 0, .004, 0], breath: .028 }
+    };
+    const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
+    for (const a of EXTRA_RAW) {
+      a.key = a.name.toLowerCase();
+      if (AG[a.key]) continue;
+      const m = MATS[MAT_OF[a.name]];
+      a.matName = MAT_OF[a.name];
+      a.base = rgb(m.base); a.ink = rgb(m.ink); a.mat = [m.gloss, m.metal, m.glass];
+      a.type = TYPE_OF[a.name]; a.t = TYPES[a.type]; a.sp = .8 + ((a.n * 37) % 11) / 20;
+      a.arcs.sort((x, y) => y[2] - x[2]); a.circs.sort((x, y) => y[2] - x[2]);
+      a.na = a.arcs.length; a.nc = a.circs.length;
+      a.arcF = new Float32Array(28); a.arcs.forEach((r, i) => a.arcF.set(r, i * 7));
+      a.cirF = new Float32Array(12); a.circs.forEach((r, i) => a.cirF.set(r, i * 6));
+      AG[a.key] = a; ORDER.push(a.key);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     2. LOCKED H1 MERGED MARK (C1×C4 SATIN 3D CUT) + OPTION 3 ACCENT PILL
+     Hover-only inner-circle tracking + 3D DeepO.createModel outer boundary
+     ═══════════════════════════════════════════════════════════════════════ */
+  const D = window.DeepO;
+  const AT = window.AgencyTint;
+  const S = window.NapkinScene;
+  const A = window.NapkinAgents;
+  if (S && S.canvas) {
+    S.canvas.style.zIndex = '10';
+  }
+
+  const AGENCIES = {
+    wk:      { name: 'Wieden+Kennedy', short: 'WK', base: '#1E22AA', acc: '#FFB800', ring: '#1E22AA', isDefault: false },
+    tbwa:    { name: 'TBWA\\Dublin',   short: 'TB', base: '#16181D', acc: '#FFD400', ring: '#C49F00', isDefault: false },
+    ogilvy:  { name: 'Ogilvy',         short: 'Og', base: '#E4002B', acc: '#FFD6DD', ring: '#E4002B', isDefault: false },
+    harbour: { name: 'Harbour & Co',   short: 'H',  base: '#0F6B5C', acc: '#9FE6D8', ring: '#0F6B5C', isDefault: false },
+    droga:   { name: 'Droga5',         short: 'D5', base: '#16181D', acc: '#C6F432', ring: '#16181D', isDefault: false },
+    napkin:  { name: 'Napkin Studio',  short: 'N',  base: '#515BFF', acc: '#C8CBFF', ring: '#515BFF', isDefault: true }
+  };
+
+  const STATE_LABELS = {
+    sleep:   'Sleeping · Idle',
+    awake:   'Awake · Ready',
+    working: 'Working · Step 3/4',
+    handoff: 'Handing over → Strategy',
+    needs:   '2 need your call',
+    done:    'Done · Verified'
+  };
+
+  let curBrand = 'wk';
+  let curBase = AGENCIES.wk.base;
+  let curAcc = AGENCIES.wk.acc;
+  let curState = 'sleep';
+  let stageAgent = null;
+
+  const sharedModel = D.createModel({ state: 'sleep', agent: 'Brief', progress: 0.68 });
+  sharedModel.snap(false);
+
+  // Adapter so existing code calling headerMark.set(...) drives our H1 3D-feel mark & topbar state pill
+  const headerMark = {
+    set(opts) {
+      if (opts.handoff) {
+        curState = 'handoff';
+        sharedModel.set({ state: 'working', progress: 1.0 });
+        sharedModel.snap(false);
+        sharedModel.handoff(opts.handoff);
+      } else if (opts.state) {
+        curState = opts.state;
+        sharedModel.set({
+          state: opts.state,
+          progress: opts.progress !== undefined ? opts.progress : 0.68,
+          kind: opts.kind || 'write'
+        });
+      }
+      syncDemoStateChips();
+    },
+    setBrand(base, acc) {
+      curBase = base;
+      curAcc = acc;
+      mountH1Mark();
+    },
+    setFollow() {}
+  };
+
+  function syncDemoStateChips() {
+    document.querySelectorAll('[data-st]').forEach(b => {
+      if (b.classList.contains('d-chip')) {
+        b.setAttribute('aria-pressed', String(b.dataset.st === curState));
+      }
+    });
+    const stEl = $('bar-status');
+    if (stEl) {
+      stEl.dataset.st = curState;
+      $('bar-status-text').textContent = STATE_LABELS[curState] || 'Ready';
+    }
+  }
+
+  let h1Inst = null;
+  let ptrX = null, ptrY = null;
+  window.addEventListener('pointermove', e => { ptrX = e.clientX; ptrY = e.clientY; }, { passive: true });
+  document.addEventListener('pointerleave', () => { ptrX = ptrY = null; });
+
+  function buildWavePath(t, amp, yBase, xShift, fillBottom) {
+    const pts = [];
+    const steps = 18;
+    const x0 = -44, x1 = 54;
+    for (let i = 0; i <= steps; i++) {
+      const x = x0 + (x1 - x0) * (i / steps);
+      const nx = (x - xShift) / 17.5;
+      const w1 = Math.sin(nx * 2.45 - t * 2.5);
+      const w2 = Math.sin(nx * 4.20 + t * 1.8 + 1.3);
+      const y = yBase - amp * (0.70 * w1 + 0.30 * w2);
+      pts.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(2)} ${y.toFixed(2)}`);
+    }
+    if (fillBottom) pts.push(`L ${x1} 48 L ${x0} 48 Z`);
+    return pts.join(' ');
+  }
+
+  function mountH1Mark() {
+    const slot = $('header-h1-slot');
+    if (!slot) return;
+    const size = 48;
+    const uid = 'h1m';
+
+    const shellHi  = D.mix(curBase, '#FFFFFF', 0.34);
+    const shellMid = D.mix(curBase, '#FFFFFF', 0.06);
+    const shellLo  = D.mix(curBase, '#050609', 0.52);
+
+    const wallTopShadow = D.mix(curBase, '#020305', 0.76);
+    const wallMid       = D.mix(curBase, '#06070B', 0.56);
+    const wallBounce    = D.mix(D.mix(curBase, '#06070B', 0.45), curAcc, 0.18);
+
+    slot.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="-50 -50 100 100" style="display:block;overflow:visible">
+      <defs>
+        <radialGradient id="${uid}sphere" cx="30%" cy="24%" r="76%" fx="26%" fy="20%">
+          <stop offset="0%" stop-color="${shellHi}"/>
+          <stop offset="46%" stop-color="${shellMid}"/>
+          <stop offset="100%" stop-color="${shellLo}"/>
+        </radialGradient>
+        <linearGradient id="${uid}fresnel" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.42"/>
+          <stop offset="50%" stop-color="${curBase}" stop-opacity="0"/>
+          <stop offset="100%" stop-color="${curAcc}" stop-opacity="0.28"/>
+        </linearGradient>
+        <linearGradient id="${uid}wall" x1="0.15" y1="0" x2="0.85" y2="1">
+          <stop offset="0%" stop-color="${wallTopShadow}"/>
+          <stop offset="55%" stop-color="${wallMid}"/>
+          <stop data-k="wall-bounce" offset="100%" stop-color="${wallBounce}"/>
+        </linearGradient>
+        <linearGradient id="${uid}sky" x1="0" y1="0" x2="0" y2="1">
+          <stop data-k="sky-top" offset="0%" stop-color="${curBase}"/>
+          <stop data-k="sky-bot" offset="100%" stop-color="${curBase}"/>
+        </linearGradient>
+        <linearGradient id="${uid}sea" x1="0" y1="0" x2="0" y2="1">
+          <stop data-k="sea-top" offset="0%" stop-color="${shellLo}"/>
+          <stop data-k="sea-bot" offset="100%" stop-color="#040508"/>
+        </linearGradient>
+        <filter id="${uid}cavity-sh" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="-2.2" dy="2.8" stdDeviation="2.4" flood-color="#000000" flood-opacity="0.52"/>
+        </filter>
+        <clipPath id="${uid}cut">
+          <circle data-k="cut-clip" cx="7.5" cy="-6.5" r="33"/>
+        </clipPath>
+        <clipPath id="${uid}win">
+          <circle data-k="win-clip" cx="10.5" cy="-8.5" r="28.2"/>
+        </clipPath>
+      </defs>
+      <ellipse cx="1" cy="44" rx="28" ry="4.5" fill="rgba(10,12,18,0.22)"/>
+      <circle r="47" fill="url(#${uid}sphere)" stroke="rgba(255,255,255,0.14)" stroke-width="1.1"/>
+      <circle r="46.4" fill="none" stroke="url(#${uid}fresnel)" stroke-width="1.3"/>
+      <g clip-path="url(#${uid}cut)">
+        <circle data-k="wall-fill" cx="7.5" cy="-6.5" r="33" fill="url(#${uid}wall)"/>
+        <circle data-k="cavity-rim-sh" cx="9.5" cy="-4.5" r="34" fill="none" stroke="#000000" stroke-width="5.5" stroke-opacity="0.48"/>
+      </g>
+      <g clip-path="url(#${uid}win)" filter="url(#${uid}cavity-sh)">
+        <rect x="-50" y="-50" width="100" height="100" fill="url(#${uid}sky)"/>
+        <path data-k="bloom" d="" fill="none" stroke="${curAcc}" stroke-width="10" stroke-linecap="round" opacity="0.28"/>
+        <path data-k="sea" d="" fill="url(#${uid}sea)"/>
+        <path data-k="wave" d="" fill="none" stroke="${curAcc}" stroke-width="4.3" stroke-linecap="round"/>
+        <circle data-k="win-ao" cx="10.5" cy="-8.5" r="28.5" fill="none" stroke="#020306" stroke-width="4.2" stroke-opacity="0.42"/>
+      </g>
+      <circle data-k="lip" cx="10.5" cy="-8.5" r="28.2" fill="none" stroke="${curAcc}" stroke-width="1.25" stroke-opacity="0.48"/>
+      <circle data-k="arc-halo" r="44.2" fill="none" stroke="${curAcc}" stroke-width="8.5" stroke-linecap="round" opacity="0" transform="rotate(-90)"/>
+      <circle data-k="arc" r="44.2" fill="none" stroke="${curAcc}" stroke-width="5.2" stroke-linecap="round" opacity="0" transform="rotate(-90)"/>
+    </svg>`;
+
+    h1Inst = {
+      el: slot,
+      skyTop: slot.querySelector('[data-k="sky-top"]'),
+      skyBot: slot.querySelector('[data-k="sky-bot"]'),
+      seaTop: slot.querySelector('[data-k="sea-top"]'),
+      cutClip: slot.querySelector('[data-k="cut-clip"]'),
+      wallFill: slot.querySelector('[data-k="wall-fill"]'),
+      cavitySh: slot.querySelector('[data-k="cavity-rim-sh"]'),
+      winClip: slot.querySelector('[data-k="win-clip"]'),
+      winAo: slot.querySelector('[data-k="win-ao"]'),
+      lip: slot.querySelector('[data-k="lip"]'),
+      sea: slot.querySelector('[data-k="sea"]'),
+      wave: slot.querySelector('[data-k="wave"]'),
+      bloom: slot.querySelector('[data-k="bloom"]'),
+      arcHalo: slot.querySelector('[data-k="arc-halo"]'),
+      arc: slot.querySelector('[data-k="arc"]'),
+      lx: 0, ly: 0, vx: 0, vy: 0
+    };
+  }
+
+  function applyBrandSkin(brandKey) {
+    curBrand = brandKey;
+    const ag = AGENCIES[brandKey] || AGENCIES.wk;
+    curBase = ag.base;
+    curAcc = ag.acc;
+
+    const rgb = AT.rgb(curAcc);
+    const accLum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+    const accInk = accLum > 0.34 ? '#101114' : '#FFFFFF';
+
+    document.documentElement.style.setProperty('--ag-base', curBase);
+    document.documentElement.style.setProperty('--ag-acc', curAcc);
+    document.documentElement.style.setProperty('--ag-acc-ink', accInk);
+    document.documentElement.style.setProperty('--accent', curBase);
+
+    // Update Connected Name Pill:
+    // If Napkin Default -> Just put "Napkin Studio" in centre instead of two names!
+    // If Agency -> Agency Name as main text, "● NAPKIN STUDIO" as subtext!
+    const lockupEl = $('header-lockup');
+    if (ag.isDefault) {
+      lockupEl.className = 'stacked-lockup single-center';
+      lockupEl.innerHTML = `<span class="sl-big">Napkin Studio</span>`;
+    } else {
+      lockupEl.className = 'stacked-lockup';
+      lockupEl.innerHTML = `
+        <span class="sl-big">${ag.name}</span>
+        <span class="sl-mono"><i class="ag-dot"></i>NAPKIN STUDIO</span>
+      `;
+    }
+
+    document.querySelectorAll('[data-ag]').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.ag === brandKey));
+    });
+
+    mountH1Mark();
+    if (stageAgent) stageAgent.setAccent(ag.ring, ag.base);
+  }
+
+  let lastT = performance.now();
+  function tickH1Mark(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    const t = now / 1000;
+
+    sharedModel.step(dt, false);
+    const c = sharedModel.c;
+    const M = sharedModel.S;
+
+    if (h1Inst && h1Inst.el.isConnected) {
+      const warmC = '#EBCB9E';
+      const lineC = D.mix(curAcc, warmC, c.warm);
+      const awakeSky = D.mix(curBase, '#FFFFFF', 0.45);
+      const warmSky = D.mix(awakeSky, warmC, 0.35);
+      const daySky = D.mix(awakeSky, warmSky, c.warm);
+      const nightSky = D.mix(curBase, '#07080C', 0.62);
+      const skyBotCol = D.mix(daySky, nightSky, c.night);
+      const skyTopCol = D.mix(D.mix(daySky, lineC, 0.20), D.mix(curBase, '#040507', 0.76), c.night);
+      const seaTopCol = D.mix(D.mix(curBase, '#090B10', 0.36), D.mix(curBase, '#040507', 0.72), c.night);
+
+      const waveActivity = Math.max(0, 1 - c.night * 0.92);
+      const amp = 0.25 + 3.70 * waveActivity;
+      const yBase = 2.0 * c.night - 1.8 * (1 - c.night) - 2.2 * c.lift;
+
+      const CIRC = 2 * Math.PI * 44.2;
+      const arcAlpha = Math.min(1, c.arcOn) * c.pulse;
+      const arcLenPx = Math.max(0.1, Math.min(0.9999, c.len)) * CIRC;
+      const arcRotDeg = -90 + (M.arcTail * 360);
+      const haloAlpha = arcAlpha * (0.16 * c.halo + 0.28 * c.warm * c.halo + 0.25 * c.swell);
+
+      const restX = 10.5 * (1 - c.warm);
+      const restY = -8.5 * (1 - c.warm);
+      const wallRestX = 7.5 * (1 - c.warm);
+      const wallRestY = -6.5 * (1 - c.warm);
+
+      // HOVER-ONLY POINTER TRACKING: only moves when pointer is directly over the medallion!
+      const pointerWake = Math.max(0, 1 - Math.max(0, (c.night - 0.3) / 0.7));
+      let tx = 0, ty = 0;
+      if (pointerWake > 0.01 && ptrX !== null && ptrY !== null) {
+        const medEl = $('header-medallion');
+        const r = medEl.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        const rawDx = ptrX - cx;
+        const rawDy = ptrY - cy;
+        const distPx = Math.hypot(rawDx, rawDy);
+        const hoverRadius = Math.max(r.width, r.height) * 0.56;
+        if (distPx <= hoverRadius) {
+          const dx = rawDx / hoverRadius;
+          const dy = rawDy / hoverRadius;
+          const centerPullX = -restX * 0.65;
+          const centerPullY = -restY * 0.65;
+          const travel = 11.5;
+          tx = (centerPullX + dx * travel) * pointerWake;
+          ty = (centerPullY + dy * travel) * pointerWake;
+        }
+      }
+
+      const w = 18;
+      h1Inst.vx += (-w * w * (h1Inst.lx - tx) - 2 * w * h1Inst.vx) * dt;
+      h1Inst.vy += (-w * w * (h1Inst.ly - ty) - 2 * w * h1Inst.vy) * dt;
+      h1Inst.lx += h1Inst.vx * dt;
+      h1Inst.ly += h1Inst.vy * dt;
+
+      let wxNum = restX + h1Inst.lx;
+      let wyNum = restY + h1Inst.ly;
+      const maxOffset = 14.2;
+      const mag = Math.hypot(wxNum, wyNum);
+      if (mag > maxOffset) {
+        wxNum = (wxNum / mag) * maxOffset;
+        wyNum = (wyNum / mag) * maxOffset;
+      }
+
+      const cxWall = (wallRestX + h1Inst.lx * 0.62).toFixed(2);
+      const cyWall = (wallRestY + h1Inst.ly * 0.62).toFixed(2);
+      const wxStr = wxNum.toFixed(2);
+      const wyStr = wyNum.toFixed(2);
+
+      const seaPath = buildWavePath(t, amp, yBase + h1Inst.ly * 0.28, h1Inst.lx * 0.45, true);
+      const wavePath = buildWavePath(t, amp, yBase + h1Inst.ly * 0.28, h1Inst.lx * 0.45, false);
+
+      if (h1Inst.skyTop) h1Inst.skyTop.setAttribute('stop-color', skyTopCol);
+      if (h1Inst.skyBot) h1Inst.skyBot.setAttribute('stop-color', skyBotCol);
+      if (h1Inst.seaTop) h1Inst.seaTop.setAttribute('stop-color', seaTopCol);
+
+      if (h1Inst.cutClip) { h1Inst.cutClip.setAttribute('cx', cxWall); h1Inst.cutClip.setAttribute('cy', cyWall); }
+      if (h1Inst.wallFill) { h1Inst.wallFill.setAttribute('cx', cxWall); h1Inst.wallFill.setAttribute('cy', cyWall); }
+      if (h1Inst.cavitySh) {
+        h1Inst.cavitySh.setAttribute('cx', (parseFloat(cxWall) + 2.2).toFixed(2));
+        h1Inst.cavitySh.setAttribute('cy', (parseFloat(cyWall) + 2.2).toFixed(2));
+      }
+      if (h1Inst.winClip) { h1Inst.winClip.setAttribute('cx', wxStr); h1Inst.winClip.setAttribute('cy', wyStr); }
+      if (h1Inst.winAo)   { h1Inst.winAo.setAttribute('cx', wxStr);   h1Inst.winAo.setAttribute('cy', wyStr); }
+      if (h1Inst.lip) {
+        h1Inst.lip.setAttribute('cx', wxStr);
+        h1Inst.lip.setAttribute('cy', wyStr);
+        h1Inst.lip.setAttribute('stroke', lineC);
+        h1Inst.lip.setAttribute('stroke-opacity', (0.24 + 0.36 * (1 - c.night)).toFixed(2));
+      }
+      if (h1Inst.sea) h1Inst.sea.setAttribute('d', seaPath);
+      if (h1Inst.wave) {
+        h1Inst.wave.setAttribute('d', wavePath);
+        h1Inst.wave.setAttribute('stroke', lineC);
+        h1Inst.wave.setAttribute('opacity', (0.55 + 0.45 * (1 - c.night)).toFixed(2));
+      }
+      if (h1Inst.bloom) {
+        h1Inst.bloom.setAttribute('d', wavePath);
+        h1Inst.bloom.setAttribute('stroke', lineC);
+        h1Inst.bloom.setAttribute('opacity', ((0.12 + 0.24 * (1 - c.night)) * c.breath).toFixed(2));
+      }
+      if (h1Inst.arc) {
+        h1Inst.arc.setAttribute('stroke', lineC);
+        h1Inst.arc.setAttribute('opacity', arcAlpha.toFixed(3));
+        h1Inst.arc.setAttribute('stroke-dasharray', `${arcLenPx.toFixed(1)} ${CIRC.toFixed(1)}`);
+        h1Inst.arc.setAttribute('transform', `rotate(${arcRotDeg.toFixed(1)})`);
+      }
+      if (h1Inst.arcHalo) {
+        h1Inst.arcHalo.setAttribute('stroke', lineC);
+        h1Inst.arcHalo.setAttribute('opacity', haloAlpha.toFixed(3));
+        h1Inst.arcHalo.setAttribute('stroke-dasharray', `${arcLenPx.toFixed(1)} ${CIRC.toFixed(1)}`);
+        h1Inst.arcHalo.setAttribute('transform', `rotate(${arcRotDeg.toFixed(1)})`);
+      }
+    }
+    requestAnimationFrame(tickH1Mark);
+  }
+
+  applyBrandSkin('wk');
+  requestAnimationFrame(tickH1Mark);
+
+  // Interactive Brand & State demo strip bindings
+  document.querySelectorAll('[data-ag]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyBrandSkin(btn.dataset.ag);
+      showToast('Brand skin updated: ' + btn.textContent.trim());
+    });
+  });
+  document.querySelectorAll('.d-chip[data-st]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const st = btn.dataset.st;
+      if (st === 'handoff') headerMark.set({ handoff: 'Strategy' });
+      else headerMark.set({ state: st, progress: st === 'done' ? 1 : 0.68 });
+    });
+  });
+  $('header-medallion').addEventListener('click', () => {
+    const order = ['sleep', 'awake', 'working', 'handoff', 'needs', 'done'];
+    const nxt = order[(order.indexOf(curState) + 1) % order.length];
+    if (nxt === 'handoff') headerMark.set({ handoff: 'Strategy' });
+    else headerMark.set({ state: nxt, progress: nxt === 'done' ? 1 : 0.68 });
+  });
+
+  function ensureStageAgent() {
+    if (stageAgent || !S || !A) return stageAgent;
+    try {
+      const ag = AGENCIES[curBrand] || AGENCIES.wk;
+      stageAgent = A.create(S, $('agent-gl-box'), {
+        level: 4, // Horizonless 3D agent sphere
+        accent: ag.ring,
+        inkAccent: ag.base,
+        bg: '#F6F1E7',
+        dark: false,
+        rFrac: [0.27, 0.24],
+        cyFrac: 0.45
+      });
+    } catch (err) {
+      console.warn('Agent Sphere WebGL fallback:', err);
+    }
+    return stageAgent;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     3. NAVIGATION: DESK / BRIEF / RESEARCH / DECK & 3 SCREENS
+     ═══════════════════════════════════════════════════════════════════════ */
+  const params = new URLSearchParams(location.search);
+  let activeTool = params.get('tool') || 'brief';
+  if (!['desk', 'brief', 'research', 'deck'].includes(activeTool)) activeTool = 'brief';
+  let activeStep = params.get('step') || 'all';
+
+  const HERO_META = {
+    desk: {
+      code: 'NAPKIN STUDIO OS / 00',
+      eyebrow: 'NAPKIN STUDIO OS · CLIENT WORKSPACE',
+      title: 'Client Desk<span class="period-dot"></span>',
+      sub: 'Four active client accounts, 38 pinned research facts, and live brief sheets — with every agent call and human decision on the record.',
+      doc: '4 active accounts'
+    },
+    brief: {
+      code: 'STUDIO TOOL / 01',
+      eyebrow: 'STUDIO TOOL / 01 · CAMPAIGN STUDIO',
+      title: 'Brief Maker<span class="period-dot"></span>',
+      sub: 'Turn client notes, call transcripts, and verified research into a structured creative brief on a single sheet of paper.',
+      doc: 'Summer McFlurry'
+    },
+    research: {
+      code: 'STUDIO TOOL / 02',
+      eyebrow: 'STUDIO TOOL / 02 · EVIDENCE & STRATEGY',
+      title: 'Research Tool<span class="period-dot"></span>',
+      sub: 'Ask one sharp question. Napkin searches the open web, reads your files, pins every fact with a source, and puts every call on the record.',
+      doc: 'Irish Summer Treats'
+    },
+    deck: {
+      code: 'STUDIO TOOL / 03',
+      eyebrow: 'STUDIO TOOL / 03 · NARRATIVE STORYBOARD',
+      title: 'Deck Studio<span class="period-dot"></span>',
+      sub: 'Six board-ready pitch slides generated directly from your verified creative brief and pinned research facts.',
+      doc: 'Q3 Board Pitch'
+    }
+  };
+
+  let engaged = false;
+  function wakeMark() {
+    if (engaged) return;
+    engaged = true;
+    if (curState === 'sleep') headerMark.set({ state: 'awake', progress: 0 });
+  }
+  ['brief-screen-prompt', 'research-screen-prompt', 'view-desk'].forEach(id => {
+    const el = $(id);
+    if (el) ['input', 'focusin', 'click'].forEach(ev => el.addEventListener(ev, wakeMark));
+  });
+
+  function setBarStatus(kind, text) {
+    const map = { idle: 'sleep', ready: 'awake', work: 'working', need: 'needs', done: 'done' };
+    if (map[kind]) curState = map[kind];
+    syncDemoStateChips();
+    if (text) $('bar-status-text').textContent = text;
+  }
+
+  function syncNavigation() {
+    document.querySelectorAll('.tool-tab').forEach(t => {
+      t.setAttribute('aria-selected', String(t.dataset.tool === activeTool));
+    });
+    document.querySelectorAll('[data-qtool]').forEach(t => {
+      t.setAttribute('aria-pressed', String(t.dataset.qtool === activeTool));
+    });
+    document.querySelectorAll('[data-dock-tool]').forEach(t => {
+      t.setAttribute('aria-pressed', String(t.dataset.dockTool === activeTool));
+    });
+
+    const hm = HERO_META[activeTool] || HERO_META.brief;
+    $('studio-code').textContent = hm.code;
+    $('hero-eyebrow').textContent = hm.eyebrow;
+    $('hero-title').innerHTML = hm.title;
+    $('hero-sub').textContent = hm.sub;
+    $('tb-crumb-doc').textContent = hm.doc;
+
+    const isStepTool = (activeTool === 'brief' || activeTool === 'research');
+    $('step-switcher-group').style.display = isStepTool ? 'flex' : 'none';
+
+    document.querySelectorAll('[data-qstep]').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.qstep === activeStep));
+    });
+
+    $('view-desk').hidden = activeTool !== 'desk';
+    $('view-brief').hidden = activeTool !== 'brief';
+    $('view-research').hidden = activeTool !== 'research';
+    $('view-deck').hidden = activeTool !== 'deck';
+
+    if (!isStepTool) {
+      stopAgentStageRun();
+      if (activeTool === 'desk') {
+        headerMark.set({ state: engaged ? 'awake' : 'sleep', progress: 0 });
+      } else if (activeTool === 'deck') {
+        headerMark.set({ state: 'needs', progress: 0.85 });
+      }
+      return;
+    }
+
+    if (activeTool === 'research') {
+      $('research-screen-prompt').after($('brief-screen-loading'));
+    } else {
+      $('brief-screen-prompt').after($('brief-screen-loading'));
+    }
+
+    const runPlan = (activeTool === 'research') ? 'research' : 'brief';
+
+    if (activeStep === 'all') {
+      $('brief-screen-prompt').hidden = activeTool !== 'brief';
+      $('brief-screen-loading').hidden = false;
+      $('brief-screen-output').hidden = activeTool !== 'brief';
+      $('research-screen-prompt').hidden = activeTool !== 'research';
+      $('research-screen-output').hidden = activeTool !== 'research';
+      startAgentStageRun(runPlan);
+    } else if (activeStep === 'loading') {
+      $('brief-screen-prompt').hidden = true;
+      $('brief-screen-loading').hidden = false;
+      $('brief-screen-output').hidden = true;
+      $('research-screen-prompt').hidden = true;
+      $('research-screen-output').hidden = true;
+      startAgentStageRun(runPlan);
+    } else {
+      stopAgentStageRun();
+      $('brief-screen-prompt').hidden = !(activeTool === 'brief' && activeStep === 'prompt');
+      $('brief-screen-loading').hidden = true;
+      $('brief-screen-output').hidden = !(activeTool === 'brief' && activeStep === 'output');
+      $('research-screen-prompt').hidden = !(activeTool === 'research' && activeStep === 'prompt');
+      $('research-screen-output').hidden = !(activeTool === 'research' && activeStep === 'output');
+
+      if (activeStep === 'output') {
+        if (!$('r-needs-banner').hidden) headerMark.set({ state: 'needs', progress: 0.85 });
+        else headerMark.set({ state: 'done', progress: 1 });
+      } else {
+        headerMark.set({ state: engaged ? 'awake' : 'sleep', progress: 0 });
+      }
+    }
+    if (S) S.wake(true);
+  }
+
+  document.querySelectorAll('.tool-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTool = btn.dataset.tool;
+      syncNavigation();
+    });
+  });
+  document.querySelectorAll('[data-qtool]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTool = btn.dataset.qtool;
+      syncNavigation();
+    });
+  });
+  document.querySelectorAll('[data-dock-tool]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTool = btn.dataset.dockTool;
+      syncNavigation();
+    });
+  });
+  document.querySelectorAll('[data-qstep]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeStep = btn.dataset.qstep;
+      syncNavigation();
+    });
+  });
+  $('hero-cta-circle').addEventListener('click', () => {
+    if (activeTool === 'desk') { activeTool = 'brief'; activeStep = 'all'; }
+    else if (activeTool === 'deck') { activeTool = 'brief'; activeStep = 'output'; }
+    else {
+      activeStep = activeStep === 'prompt' ? 'loading' : activeStep === 'loading' ? 'output' : 'prompt';
+    }
+    syncNavigation();
+  });
+
+  // Desk card deep links
+  document.querySelectorAll('[data-goto-tool]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTool = btn.dataset.gotoTool;
+      activeStep = btn.dataset.gotoStep || 'output';
+      syncNavigation();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+  document.querySelectorAll('[data-load-ballymaloe]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTool = btn.dataset.loadBallymaloe;
+      const bPresetBtn = document.querySelector('[data-bpreset="ballymaloe"]');
+      if (bPresetBtn) bPresetBtn.click();
+      activeTool = targetTool;
+      activeStep = 'output';
+      syncNavigation();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  // Buttons that transition between screens
+  $('b-start-run').addEventListener('click', () => { activeTool = 'brief'; activeStep = 'loading'; syncNavigation(); });
+  $('r-start-run').addEventListener('click', () => { activeTool = 'research'; activeStep = 'loading'; syncNavigation(); });
+  $('proc-back-btn').addEventListener('click', () => { activeStep = 'prompt'; syncNavigation(); });
+  $('proc-open-output-btn').addEventListener('click', () => { activeStep = 'output'; syncNavigation(); });
+  $('view-research-btn').addEventListener('click', () => { activeTool = 'research'; activeStep = 'output'; syncNavigation(); });
+  $('r-spin-brief').addEventListener('click', () => {
+    activeTool = 'brief';
+    activeStep = 'prompt';
+    $('b-upstream-banner').hidden = false;
+    syncNavigation();
+    showToast('12 verified facts from Research attached to your new brief.');
+  });
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     4. SCREEN 2: LIVE 3D AGENT SPHERE + PAPER DESK SIMULATION
+     ═══════════════════════════════════════════════════════════════════════ */
+  const RUN_PLANS = {
+    brief: [
+      {
+        agent: 'knowledge', mat: 'ONYX', kind: 'read',
+        label: 'Reading what you sent', sub: 'Step 1 of 4 · 3 files + 12 research facts',
+        left: [
+          { sec: 'Inputs on the desk', items: [
+            { lab: 'File · PDF', text: 'client-call-notes.pdf — Commercial target +12%, no price promo', chk: true },
+            { lab: 'Research · .clan', text: 'summer-treats-research.clan — 12 verified facts (f_003, f_007…)', chk: true },
+            { lab: 'Deck · Keynote', text: 'last-summer-recap.key — Flat volume across June–August', chk: true }
+          ]}
+        ],
+        right: [
+          { sec: 'Extracted constraints', items: [
+            { lab: 'Mandatory', text: 'Flake and Oreo variants both featured; no "limited time" copy', chk: true },
+            { lab: 'Budget', text: '€140k production · Media booked via OMD', chk: true }
+          ]}
+        ]
+      },
+      {
+        agent: 'strategy', mat: 'GRAPHITE', kind: 'think',
+        label: 'Planning the whole brief', sub: 'Step 2 of 4 · Mapping 12-column sheet & territory',
+        left: [
+          { sec: 'Core territory', items: [
+            { lab: 'Where we are', text: 'McFlurry is loved but invisible between May and September: turn accident into intention.' },
+            { lab: 'The barrier', text: 'Frozen drinks own refreshment; delivery apps own sofa indulgence.' },
+            { lab: 'Audience', text: '16–24s in Ireland who treat food stops as unplanned social hangouts.' }
+          ]}
+        ],
+        right: [
+          { sec: 'Strategic thesis', items: [
+            { lab: 'Insight (f_003)', text: 'The best summer moments happen in the 20 minutes after "will we just…".' },
+            { lab: 'Direction', text: 'Build on spontaneous sharing, not childhood nostalgia.' }
+          ]}
+        ]
+      },
+      {
+        agent: 'brief', mat: 'PEARL', kind: 'write',
+        label: 'Writing every part on the sheet', sub: 'Step 3 of 4 · Drafting 15 blocks across 6 sections',
+        left: [
+          { sec: 'Identity & Objectives', items: [
+            { lab: 'Commercial', text: 'Grow McFlurry units +12% June–August without price discounting.' },
+            { lab: 'Behavioural', text: 'Make 16–24s add a McFlurry on unplanned warm-day visits.' },
+            { lab: 'Attitudinal', text: 'Move from "the thing I get" to "the thing that makes it summer".' }
+          ]}
+        ],
+        right: [
+          { sec: 'Proposition & Response', items: [
+            { lab: 'Single-minded proposition (v1)', text: 'Summer tastes better shared.', tag: 'draft v1' },
+            { lab: 'Reasons to believe', text: 'Two spoons on request · Flake & Oreo all summer · Made right now.' },
+            { lab: 'Tone & world', text: 'Sun-bleached, handheld, seafronts and kerbs — never a studio.' }
+          ]}
+        ]
+      },
+      {
+        agent: 'review', mat: 'PEARL', kind: 'check',
+        label: 'Checking every part against evidence', sub: 'Step 4 of 4 · 14 hold · 1 rewritten for sharpness',
+        left: [
+          { sec: 'Verified against research', items: [
+            { lab: 'Background', text: 'Checked against f_007 (+23.4% delivery) and f_003 (68% unplanned).', chk: true },
+            { lab: 'Insight', text: 'Grounded in Bord Bia 16–24 panel data.', chk: true },
+            { lab: 'Objectives', text: 'Aligned with client call notes (no price promo).', chk: true }
+          ]}
+        ],
+        right: [
+          { sec: 'Self-critique & rewrite', items: [
+            { lab: 'Proposition rewritten', struck: 'Summer tastes better shared.', text: 'The best summers are measured in spoons.', tag: 'rewritten ✓', chk: true },
+            { lab: 'Open questions', text: '2 items flagged for your confirmation (ops & NI OOH).', tag: 'needs you' }
+          ]}
+        ]
+      }
+    ],
+    research: [
+      {
+        agent: 'strategy', mat: 'GRAPHITE', kind: 'think',
+        label: 'Scoping the question', sub: 'Step 1 of 4 · Narrowing to IE 16–24s, 2024–2026',
+        left: [
+          { sec: 'Research question', items: [
+            { lab: 'Primary ask', text: 'What makes 16–24s choose a treat on an Irish summer day?' },
+            { lab: 'Scope tags', text: 'Republic of Ireland · 2024–2026 · Panel + Trade + TikTok UGC' }
+          ]}
+        ],
+        right: [
+          { sec: 'Sub-questions queued', items: [
+            { lab: 'Q1 · Occasion', text: 'Are summer treat stops planned or spontaneous social moments?' },
+            { lab: 'Q2 · Channel', text: 'How fast is home delivery growing vs in-store?' },
+            { lab: 'Q3 · Culture', text: 'Is two-spoon McFlurry sharing a real behaviour on Irish TikTok?' }
+          ]}
+        ]
+      },
+      {
+        agent: 'research', mat: 'GLASS', kind: 'search',
+        label: 'Searching the open web & panels', sub: 'Step 2 of 4 · 9 sources found · Pinging queries',
+        left: [
+          { sec: 'Sources discovered', items: [
+            { lab: 'bordbia.ie', text: 'Consumer Insights: Out-of-home treats 2026', chk: true },
+            { lab: 'kantar.com', text: 'Worldpanel: Frozen dessert delivery ROI', chk: true },
+            { lab: 'tiktok.com', text: '#McFlurry Irish creator & comment sample', chk: true },
+            { lab: 'met.ie + cso.ie', text: 'Summer warm-spell index & food service retail', chk: true }
+          ]}
+        ],
+        right: [
+          { sec: 'Early signals', items: [
+            { lab: 'f_003 · bordbia.ie', text: '68% of 16–24 treat occasions are unplanned & social' },
+            { lab: 'f_007 · kantar.com', text: '+23.4% YoY frozen dessert delivery orders in ROI' }
+          ]}
+        ]
+      },
+      {
+        agent: 'knowledge', mat: 'ONYX', kind: 'read',
+        label: 'Reading sources & pinning facts', sub: 'Step 3 of 4 · 6 facts pinned with exact quotes',
+        left: [
+          { sec: '9 sources read (compressed)', items: [
+            { lab: 'Panel reports', text: 'Bord Bia (Jun 2026), Kantar Worldpanel (Aug 2026), CSO', chk: true },
+            { lab: 'Social & Weather', text: 'TikTok IE (#McFlurry 11.2M views), Met Éireann (+18% warm days)', chk: true }
+          ]}
+        ],
+        right: [
+          { sec: 'Pinned facts on the record', items: [
+            { lab: 'f_003 · High', text: '68% unplanned social occasions (up from 61% in 2024)', chk: true },
+            { lab: 'f_007 · High', text: '+23.4% YoY delivery growth (ROI panel)', chk: true },
+            { lab: 'f_009 · High', text: '11.2M views on #McFlurry in Ireland', chk: true },
+            { lab: 'f_011 · Thin', text: '2 clips (4.1k likes) showing two-spoon sharing', tag: 'thin sample' }
+          ]}
+        ]
+      },
+      {
+        agent: 'review', mat: 'PEARL', kind: 'check',
+        label: 'Checking every fact & resolving conflicts', sub: 'Step 4 of 4 · 2 findings verified · 1 proposed for you',
+        left: [
+          { sec: 'Conflict resolution (d_044)', items: [
+            { lab: 'Contest · f_007', struck: 'Client deck claims +31% delivery growth', text: 'Chose Kantar +23.4% (stated ROI methodology; deck blends NI).', chk: true }
+          ]}
+        ],
+        right: [
+          { sec: 'Synthesised findings', items: [
+            { lab: 'Finding 1 · Verified', text: '16–24s plan stops around social moments, not meals (cites f_003, f_004).', chk: true },
+            { lab: 'Finding 2 · Verified', text: 'Delivery frozen desserts grew 23.4% YoY (cites f_007).', chk: true },
+            { lab: 'Finding 3 · Proposed', text: 'Two-spoon sharing on Irish TikTok (cites f_011 — 2 clips only).', tag: 'needs you' }
+          ]}
+        ]
+      }
+    ]
+  };
+
+  const MAT_COLORS = { ONYX: '#16191D', GRAPHITE: '#3B4254', PEARL: '#D8D4CA', GLASS: '#93B4E8' };
+  let procTimer = null;
+  let curStageIdx = 0;
+
+  function renderStageStep(tool, idx, isHandoff) {
+    const plan = RUN_PLANS[tool] || RUN_PLANS.brief;
+    curStageIdx = idx;
+    const step = plan[idx];
+    const nextStep = plan[idx + 1];
+
+    const pillsHost = $('proc-agent-pills');
+    pillsHost.innerHTML = plan.map((s, i) => `
+      <button type="button" class="agent-pill ${i < idx ? 'done' : ''}" aria-current="${i === idx}" data-sidx="${i}">
+        <span class="mat-dot" style="background:${MAT_COLORS[s.mat] || '#515BFF'}"></span>
+        <span>${i + 1}. ${s.agent.charAt(0).toUpperCase() + s.agent.slice(1)} (${s.kind})</span>
+      </button>
+    `).join('');
+    pillsHost.querySelectorAll('[data-sidx]').forEach(b => {
+      b.addEventListener('click', () => {
+        clearInterval(procTimer);
+        renderStageStep(tool, +b.dataset.sidx, false);
+      });
+    });
+
+    const ag = ensureStageAgent();
+    if (ag) {
+      ag.setEnvelope({
+        agentKey: step.agent,
+        nextAgentKey: nextStep ? nextStep.agent : step.agent,
+        phase: isHandoff && nextStep ? 'handoff' : 'run',
+        steps: plan.map(x => ({ label: x.label, kind: x.kind })),
+        step: { index: idx },
+        stepStartedAt: Date.now(),
+        streaming: true,
+        queries: step.kind === 'search' ? idx + 3 : 0
+      });
+    }
+    if (isHandoff && nextStep) {
+      headerMark.set({ handoff: nextStep.agent.charAt(0).toUpperCase() + nextStep.agent.slice(1) });
+    } else {
+      headerMark.set({ state: 'working', progress: (idx + 1) / plan.length, kind: step.kind });
+    }
+
+    $('cap-agent').textContent = `${step.agent.toUpperCase()} AGENT · ${step.mat} SPHERE`;
+    $('cap-l1').textContent = isHandoff && nextStep ? `Handing over to ${nextStep.agent}…` : step.label;
+    $('cap-l2').textContent = step.sub;
+    $('proc-open-output-btn').textContent = tool === 'brief' ? 'Open finished brief →' : 'Open research report →';
+
+    const renderRail = (host, secs) => {
+      host.innerHTML = secs.map(sec => `
+        <div class="wsec">
+          <div class="wsec-h">${sec.sec}</div>
+          ${sec.items.map(it => `
+            <div class="wcard">
+              <div class="wlab">
+                <span>${it.lab}</span>
+                ${it.tag ? `<span class="wtag">${it.tag}</span>` : ''}
+              </div>
+              ${it.struck ? `<div class="wsnip struck">${it.struck}</div>` : ''}
+              <div class="wsnip">${it.text}</div>
+              ${it.chk ? `<span class="wchk">✓</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+    };
+    renderRail($('rail-left'), step.left);
+    renderRail($('rail-right'), step.right);
+
+    const stageEl = $('sphere-stage');
+    const threadSvg = $('thread-svg');
+    stageEl.querySelectorAll('.wcard').forEach(card => {
+      card.addEventListener('pointerenter', () => {
+        const sr = stageEl.getBoundingClientRect();
+        const cr = card.getBoundingClientRect();
+        const ar = $('agent-gl-box').getBoundingClientRect();
+        const cx = ar.left - sr.left + ar.width / 2;
+        const cy = ar.top - sr.top + ar.height * 0.45;
+        const x1 = (cr.left + cr.width / 2 < ar.left + ar.width / 2) ? (cr.right - sr.left) : (cr.left - sr.left);
+        const y1 = cr.top - sr.top + cr.height / 2;
+        const ang = Math.atan2(y1 - cy, x1 - cx);
+        const x2 = cx + Math.cos(ang) * 95;
+        const y2 = cy + Math.sin(ang) * 95;
+        threadSvg.innerHTML = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--ag-base)" stroke-width="1.5" stroke-dasharray="4 3" />`;
+      });
+      card.addEventListener('pointerleave', () => {
+        threadSvg.innerHTML = '';
+      });
+    });
+  }
+
+  const HANDOFF_MS = 2600;
+  function scheduleNextStage(tool) {
+    procTimer = setTimeout(() => {
+      const plan = RUN_PLANS[tool] || RUN_PLANS.brief;
+      if (curStageIdx >= plan.length - 1) {
+        if (stageAgent) stageAgent.setComplete();
+        headerMark.set({ state: 'done', progress: 1 });
+        $('cap-l1').textContent = tool === 'brief' ? 'Brief drafted and checked' : 'Research report assembled';
+        return;
+      }
+      const nxt = curStageIdx + 1;
+      if (plan[nxt].agent !== plan[curStageIdx].agent) {
+        renderStageStep(tool, curStageIdx, true);
+        procTimer = setTimeout(() => {
+          renderStageStep(tool, nxt, false);
+          scheduleNextStage(tool);
+        }, HANDOFF_MS);
+      } else {
+        renderStageStep(tool, nxt, false);
+        scheduleNextStage(tool);
+      }
+    }, 3800);
+  }
+
+  function startAgentStageRun(tool) {
+    clearTimeout(procTimer);
+    renderStageStep(tool, 0, false);
+    scheduleNextStage(tool);
+  }
+  function stopAgentStageRun() {
+    clearTimeout(procTimer);
+  }
+
+  $('proc-handoff-btn').addEventListener('click', () => {
+    clearTimeout(procTimer);
+    const planKey = activeTool === 'research' ? 'research' : 'brief';
+    const plan = RUN_PLANS[planKey];
+    const nextIdx = (curStageIdx + 1) % plan.length;
+    renderStageStep(planKey, curStageIdx, true);
+    procTimer = setTimeout(() => renderStageStep(planKey, nextIdx, false), HANDOFF_MS);
+  });
+  $('proc-needs-btn').addEventListener('click', () => {
+    clearInterval(procTimer);
+    const ag = ensureStageAgent();
+    if (ag) {
+      ag.setEnvelope({
+        agentKey: 'review',
+        phase: 'run',
+        steps: [{ label: 'Waiting for your call on 2 open questions', kind: 'human' }],
+        step: { index: 0 },
+        stepStartedAt: Date.now()
+      });
+    }
+    headerMark.set({ state: 'needs', progress: 0.75 });
+    $('cap-agent').textContent = 'REVIEW AGENT · NEEDS YOU';
+    $('cap-l1').textContent = 'Needs your call on 2 questions';
+    $('cap-l2').textContent = 'The ring warms to champagne and the H1 mark centers to look at you';
+  });
+  $('proc-replay-btn').addEventListener('click', () => startAgentStageRun(activeTool === 'research' ? 'research' : 'brief'));
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     5. BRIEF MAKER SCREEN 3: 12-COLUMN PAPER SHEET + INLINE "WHY?" PROVENANCE
+     ═══════════════════════════════════════════════════════════════════════ */
+  const BRIEF_DATA = {
+    mcflurry: {
+      title: 'Summer McFlurry',
+      sub: "McDonald's Ireland · v1.3 · 28 Oct 2026",
+      foot: "McDonald's Ireland · Creative Brief · Built on Napkin",
+      parts: [
+        { k: 'client', n: 'Client', who: 'from your notes', as: 'cell', span: 3, items: ["McDonald's Ireland"] },
+        { k: 'project', n: 'Project', who: 'Napkin · checked ✓', as: 'cell', span: 3, items: ['Summer McFlurry'] },
+        { k: 'budget', n: 'Budget & Scope', who: 'from your notes', as: 'cell', span: 3, items: ['€140k prod · OOH, Social, Film'] },
+        { k: 'version', n: 'Version', who: 'Napkin', as: 'cell', span: 3, items: ['v1.3 · 12 facts attached'] },
+
+        { k: 'smp', n: 'Single-minded proposition', who: 'Napkin · checked ✓', as: 'statement', span: 12, tone: 'plain',
+          items: ['The best summers are measured in spoons.'],
+          why: {
+            decided: '"The best summers are measured in spoons."',
+            because: 'Carries the two-spoon sharing ritual (f_011) without explaining the joke, and ladders directly from spontaneous summer moments (f_003).',
+            rejected: 'v1 "Summer tastes better shared" (too generic — any food brand could say it); v2 "Count the summer in spoons" (imperative tone fights the brand voice).',
+            certainty: 'High · Verified by Review Agent'
+          }
+        },
+
+        { k: 'background', n: 'Where we are', who: 'Napkin · checked ✓', as: 'prose', span: 6,
+          items: ['McFlurry volume has been flat for two summers while Fanta Frozen and home-delivery desserts (+23.4% YoY) grew. The product is loved but invisible between May and September: nobody decides to have one, they just end up having one.'],
+          why: {
+            decided: 'Frame the problem as summer invisibility, not brand decline.',
+            because: 'In-restaurant volume is flat, while delivery desserts rose +23.4% (f_007) and 68% of 16–24 treat occasions are unplanned (f_003).',
+            rejected: 'Decline framing — overstates the problem and contradicts flat store units.',
+            certainty: 'High · Cites f_003, f_007'
+          }
+        },
+        { k: 'barrier', n: 'The barrier', who: 'Napkin · checked ✓', as: 'prose', span: 6,
+          items: ['Frozen drinks own refreshment; delivery apps own indulgence on the sofa at home. Nobody currently owns the small shared treat eaten on a seafront wall or kerb in the sun.']
+        },
+
+        { k: 'insight', n: 'Consumer insight', who: 'Napkin · checked ✓', as: 'callout', span: 12,
+          items: ['“The best summer moments aren’t planned. They happen in the twenty minutes after someone says ‘will we just…’.”'],
+          why: {
+            decided: 'Anchor the insight in spontaneous social extension rather than childhood nostalgia.',
+            because: 'Bord Bia data shows 68% of 16–24 out-of-home treat occasions are unplanned and social (f_003), up 7 pts since 2024 (f_004).',
+            rejected: 'Nostalgia ("the McFlurry you grew up with") — skews 30+ and misses 16–24 social feeds.',
+            certainty: 'High · Cites Bord Bia Jun 2026 (f_003, f_004)'
+          }
+        },
+
+        { k: 'obj_comm', n: 'Objective · Commercial', who: 'from your notes', as: 'prose', span: 4,
+          items: ['Grow McFlurry units +12% across June–August against last summer, with no price promotion.']
+        },
+        { k: 'obj_beh', n: 'Objective · Behavioural', who: 'Napkin · checked ✓', as: 'prose', span: 4,
+          items: ["Make 16–24s order a McFlurry on warm-day visits where they hadn't planned dessert."]
+        },
+        { k: 'obj_att', n: 'Objective · Attitudinal', who: 'Napkin · checked ✓', as: 'prose', span: 4,
+          items: ['Move the McFlurry from "the thing I get" to "the thing that makes it summer".']
+        },
+
+        { k: 'audience', n: 'Who we are talking to', who: 'Napkin · checked ✓', as: 'prose', span: 6,
+          items: ["16–24s in Ireland who treat food stops as social glue. They buy on impulse, share what looks effortless, and trust each other's feeds (#McFlurry 11.2M IE views) over polished ads."]
+        },
+        { k: 'rtb', n: 'Reasons to believe', who: 'Napkin · checked ✓', as: 'bullets', span: 6,
+          items: [
+            'Two spoons in every McFlurry order on request — built for sharing.',
+            'Flake and Oreo both on the menu all summer, no supply gaps.',
+            'Made in the restaurant you are already walking past.'
+          ]
+        },
+
+        { k: 'resp_think', n: 'Response · Think', who: 'Napkin · checked ✓', as: 'prose', span: 4,
+          items: ['"A McFlurry is the easiest way to keep this afternoon going."']
+        },
+        { k: 'resp_feel', n: 'Response · Feel', who: 'Napkin · checked ✓', as: 'prose', span: 4,
+          items: ['That small, specific joy of an unplanned treat on a warm Irish evening.']
+        },
+        { k: 'resp_do', n: 'Response · Do', who: 'Napkin · checked ✓', as: 'prose', span: 4,
+          items: ['Grab two spoons, split a McFlurry outside, and post the moment.']
+        },
+
+        { k: 'tone', n: 'Tone & World', who: 'Napkin · checked ✓', as: 'bullets', span: 6,
+          items: ['Sun-bleached, handheld, mid-laugh', 'Real Irish places: seafronts, canal banks, car parks', 'Never a studio pack-shot']
+        },
+        { k: 'open_q', n: 'Open questions & Mandatories', who: 'needs you', as: 'bullets', span: 6, needs: true,
+          items: [
+            'Confirm with operations: can counter staff offer two spoons on request?',
+            'Confirm with OMD: does outdoor media include Northern Ireland?',
+            'Mandatory: Golden Arches end-frame; no "limited time" copy.'
+          ],
+          why: {
+            decided: 'Flagged 2 operational questions before locking the brief.',
+            because: 'The two-spoon proposition relies on restaurant crew readiness and f_011 is based on 2 TikTok clips.',
+            rejected: 'Auto-locking the brief without operational sign-off.',
+            certainty: 'Needs human sign-off'
+          }
+        }
+      ]
+    },
+    ballymaloe: {
+      title: 'Better With Ballymaloe',
+      sub: 'Ballymaloe Relish · Launch Brief v1.2 · 25 Oct 2026',
+      foot: 'Ballymaloe Foods · Creative Brief · Built on Napkin',
+      parts: [
+        { k: 'client', n: 'Client', who: 'from your notes', as: 'cell', span: 3, items: ['Ballymaloe Foods'] },
+        { k: 'project', n: 'Project', who: 'from your notes', as: 'cell', span: 3, items: ['Better With Ballymaloe'] },
+        { k: 'budget', n: 'Budget & Scope', who: 'from your notes', as: 'cell', span: 3, items: ['€150k · 30s TV & Social'] },
+        { k: 'version', n: 'Version', who: 'Napkin', as: 'cell', span: 3, items: ['v1.2 · 25 Oct 2026'] },
+        { k: 'smp', n: 'Single-minded proposition', who: 'Napkin · checked ✓', as: 'statement', span: 12,
+          items: ['The Irish relish that makes Tuesday’s tea taste like you tried.'],
+          why: {
+            decided: '"The Irish relish that makes Tuesday’s tea taste like you tried."',
+            because: 'Turns a heritage condiment into an everyday weeknight upgrade for under-35 renters.',
+            rejected: '"Ireland’s favourite family recipe since 1990" — reinforces the "mum’s cupboard" barrier.',
+            certainty: 'High · Checked against shopper insight'
+          }
+        },
+        { k: 'background', n: 'Where we are', who: 'Napkin · checked ✓', as: 'prose', span: 6,
+          items: ['Ballymaloe Relish is trusted as an Irish pantry staple, but younger shoppers see it as their parents’ jar. We are launching a 30s TV and social campaign to recruit under-35 households.']
+        },
+        { k: 'barrier', n: 'The barrier', who: 'Napkin · checked ✓', as: 'prose', span: 6,
+          items: ['Under-35s default to Heinz out of habit or supermarket own-label chutney for price, assuming Ballymaloe is for weekend roast dinners at their mum’s house.']
+        },
+        { k: 'insight', n: 'Consumer insight', who: 'Napkin · checked ✓', as: 'callout', span: 12,
+          items: ['“I want to feel I’m looking after myself, not just getting fed, but by Tuesday night all my effort has gone into the main bit and the one small thing that would lift it is the thing I skip.”'],
+          why: {
+            decided: 'Focus on the weeknight cheese toastie / sausage meal occasion.',
+            because: 'High frequency occasion where a €3 jar earns its keep immediately.',
+            rejected: 'Christmas cheeseboard occasion — once-a-year usage.',
+            certainty: 'High'
+          }
+        },
+        { k: 'audience', n: 'Who we are talking to', who: 'Napkin · checked ✓', as: 'prose', span: 6,
+          items: ['25–34 renters in Dublin, Cork, and Galway cooking quick weeknight meals for one or two: sausages, burgers, cheese toasties.']
+        },
+        { k: 'tone', n: 'Tone & World', who: 'Napkin · checked ✓', as: 'bullets', span: 6,
+          items: ['Warm, witty, appetising Irish voice without farmhouse cliché', 'Real rented kitchens and Tuesday meals', 'Close, generous food photography']
+        }
+      ]
+    }
+  };
+
+  let curBriefKey = 'mcflurry';
+  let briefEditMode = true;
+  let briefView = 'screen';
+  let briefCover = 'plain';
+  let briefFrame = 'open';
+  let briefHeads = 'label';
+  let briefAccent = '#2F6FED';
+  let briefBg = '#FFFDF8';
+  let briefText = '#2A2620';
+
+  function renderBriefPage() {
+    const data = BRIEF_DATA[curBriefKey];
+    const pg = $('brief-page');
+    pg.style.setProperty('--b-accent', briefAccent);
+    pg.style.setProperty('--b-bg', briefBg);
+    pg.style.setProperty('--b-text', briefText);
+    pg.classList.toggle('edit', briefEditMode);
+    pg.classList.toggle('phone', briefView === 'phone');
+    pg.classList.toggle('pdf', briefView === 'pdf');
+    pg.classList.toggle('boxed', briefFrame === 'boxed');
+
+    const coverHtml = briefCover === 'sheet'
+      ? `<header class="b-cover sheetcv"><div class="banner"><div><span class="wm">napkin.</span></div><div class="bt"><b>CREATIVE BRIEF</b><small>${data.title} · ${data.sub}</small></div><div class="bn"><small>SHEET</small><b>1/1</b></div></div></header>`
+      : `<header class="b-cover ${briefCover === 'band' ? 'band' : ''}">
+          <div class="eyebrow-row"><span>CREATIVE BRIEF · NAPKIN STUDIO</span><span>${data.sub}</span></div>
+          <h2>${data.title}</h2>
+          <p class="sub">Single-sheet arrangable record · Click "why?" on any block to inspect the decision chain</p>
+        </header>`;
+
+    const blocksHtml = data.parts.map((p, idx) => {
+      const span = briefView === 'phone' ? 12 : (p.span || 12);
+      const isTab = briefHeads === 'tab' && p.as !== 'cell';
+      const toneCls = p.tone && p.tone !== 'plain' ? `tone-${p.tone}` : '';
+      let bodyHtml = '';
+      if (p.as === 'cell') bodyHtml = `<div class="cv">${p.items.join('<br>')}</div>`;
+      else if (p.as === 'statement') bodyHtml = p.items.map(x => `<div class="stmt">${x}</div>`).join('');
+      else if (p.as === 'callout') bodyHtml = p.items.map(x => `<div class="txt">${x}</div>`).join('');
+      else if (p.as === 'bullets') bodyHtml = `<ul>${p.items.map(x => `<li>${x}</li>`).join('')}</ul>`;
+      else bodyHtml = p.items.map(x => `<p>${x}</p>`).join('');
+
+      const provHtml = p.as === 'cell' ? '' : p.why
+        ? `<button type="button" class="prov-pill ${p.needs ? 'needs' : ''}" onclick="toggleWhy(this)" aria-expanded="false">
+            <span>${p.who}</span><span class="q">why?</span>
+          </button>`
+        : `<span class="prov-pill ${p.needs ? 'needs' : ''}">${p.who}</span>`;
+
+      const whyHtml = p.why ? `
+        <div class="why-drawer" hidden>
+          <div class="why-row"><span class="rl">Decided</span><span><b>${p.why.decided}</b></span></div>
+          <div class="why-row"><span class="rl">Because</span><span>${p.why.because}</span></div>
+          <div class="why-row"><span class="rl">Rejected</span><span>${p.why.rejected}</span></div>
+          <div class="why-row"><span class="rl">Certainty</span><span>${p.why.certainty}</span></div>
+        </div>
+      ` : '';
+
+      const chromeHtml = briefEditMode && p.as !== 'cell' ? `
+        <div class="chrome-bar">
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);padding:0 4px">⋮⋮</span>
+          <select data-bidx="${idx}" data-prop="as" aria-label="Show block as">
+            ${['prose','bullets','callout','statement','cell'].map(opt => `<option value="${opt}" ${p.as === opt ? 'selected' : ''}>As: ${opt}</option>`).join('')}
+          </select>
+          <select data-bidx="${idx}" data-prop="span" aria-label="Column width">
+            ${[4,6,8,12].map(sp => `<option value="${sp}" ${p.span === sp ? 'selected' : ''}>Width: ${sp}/12</option>`).join('')}
+          </select>
+          <select data-bidx="${idx}" data-prop="tone" aria-label="Tone">
+            ${['plain','tint','inverse'].map(tn => `<option value="${tn}" ${(p.tone || 'plain') === tn ? 'selected' : ''}>Tone: ${tn}</option>`).join('')}
+          </select>
+          <button type="button" data-move="${idx}" data-dir="-1" title="Move up">↑</button>
+          <button type="button" data-move="${idx}" data-dir="1" title="Move down">↓</button>
+        </div>
+      ` : '';
+
+      return `
+        <div class="gi lay-${p.as} ${isTab ? 'hastab' : ''} ${toneCls} ${idx < 4 ? 'r1' : ''}" style="grid-column: span ${span}">
+          ${chromeHtml}
+          <div class="gi-head">
+            <h3 class="${isTab ? 'tab' : ''}" ${briefEditMode ? 'contenteditable="true" spellcheck="false"' : ''}>${p.n}</h3>
+            ${provHtml}
+          </div>
+          ${bodyHtml}
+          ${whyHtml}
+        </div>
+      `;
+    }).join('');
+
+    const footHtml = `<footer class="b-foot">
+      <span>${data.foot}</span>
+      <span>12-column paper layout · Export ready</span>
+    </footer>`;
+
+    pg.innerHTML = coverHtml + `<div class="b-grid">${blocksHtml}</div>` + footHtml;
+
+    // Bind block arrangement controls
+    pg.querySelectorAll('select[data-bidx]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const item = data.parts[+sel.dataset.bidx];
+        item[sel.dataset.prop] = sel.dataset.prop === 'span' ? +sel.value : sel.value;
+        renderBriefPage();
+      });
+    });
+    pg.querySelectorAll('button[data-move]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = +btn.dataset.move;
+        const j = i + (+btn.dataset.dir);
+        if (j < 0 || j >= data.parts.length) return;
+        const tmp = data.parts[i];
+        data.parts[i] = data.parts[j];
+        data.parts[j] = tmp;
+        renderBriefPage();
+      });
+    });
+  }
+
+  // Brief toolbar bindings
+  $('b-toggle-arrange').addEventListener('click', function () {
+    briefEditMode = !briefEditMode;
+    this.setAttribute('aria-pressed', String(briefEditMode));
+    renderBriefPage();
+  });
+  $('b-toggle-inspector').addEventListener('click', function () {
+    const insp = $('look-inspector');
+    const hide = !insp.hidden;
+    insp.hidden = hide;
+    $('brief-workspace').classList.toggle('full-width', hide);
+    this.setAttribute('aria-pressed', String(!hide));
+  });
+  $('b-expand-all-why').addEventListener('click', function () {
+    const expand = this.getAttribute('aria-pressed') !== 'true';
+    this.setAttribute('aria-pressed', String(expand));
+    $('brief-page').querySelectorAll('.why-drawer').forEach(d => { d.hidden = !expand; });
+    $('brief-page').querySelectorAll('.prov-pill[aria-expanded]').forEach(b => b.setAttribute('aria-expanded', String(expand)));
+  });
+  $('b-redraft-btn').addEventListener('click', () => {
+    const data = BRIEF_DATA[curBriefKey];
+    const ins = data.parts.find(p => p.k === 'insight');
+    if (ins) {
+      ins.items = ['“Nobody plans a summer memory. It starts when someone says ‘stay out for twenty more minutes’ and hands you a second spoon.”'];
+      ins.who = 'Napkin · redrafted just now ✓';
+      renderBriefPage();
+      showToast('Insight redrafted by Brief Agent. Your 12-column page layout stayed intact.');
+    }
+  });
+  $('b-reset-layout').addEventListener('click', () => {
+    briefView = 'screen'; briefCover = 'plain'; briefFrame = 'open'; briefHeads = 'label';
+    briefAccent = '#2F6FED'; briefBg = '#FFFDF8'; briefText = '#2A2620';
+    renderBriefPage();
+    showToast('Reset brief sheet to default warm paper.');
+  });
+  $('b-print-pdf').addEventListener('click', () => {
+    showToast('Opening print dialog — saves only the clean brief sheet.');
+    setTimeout(() => window.print(), 300);
+  });
+
+  // Inspector segment controls
+  $('b-view-seg').querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      briefView = b.dataset.view;
+      $('b-view-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      renderBriefPage();
+    });
+  });
+  $('b-cover-seg').querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      briefCover = b.dataset.cover;
+      $('b-cover-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      renderBriefPage();
+    });
+  });
+  $('b-frame-seg').querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      briefFrame = b.dataset.frame;
+      $('b-frame-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      renderBriefPage();
+    });
+  });
+  $('b-heads-seg').querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      briefHeads = b.dataset.heads;
+      $('b-heads-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      renderBriefPage();
+    });
+  });
+  $('b-look-presets').querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      $('b-look-presets').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      const lk = b.dataset.look;
+      if (lk === 'warm') {
+        briefAccent = '#2F6FED'; briefBg = '#FFFDF8'; briefText = '#2A2620';
+        briefCover = 'plain'; briefFrame = 'open'; briefHeads = 'label';
+      } else if (lk === 'boxed') {
+        briefAccent = '#141413'; briefBg = '#FFFFFF'; briefText = '#141413';
+        briefCover = 'sheet'; briefFrame = 'boxed'; briefHeads = 'tab';
+      } else if (lk === 'harbour') {
+        briefAccent = '#0F6B5C'; briefBg = '#FBF8F1'; briefText = '#16302B';
+        briefCover = 'band'; briefFrame = 'open'; briefHeads = 'label';
+      }
+      renderBriefPage();
+    });
+  });
+
+  // Sample presets on Brief Screen 1
+  document.querySelectorAll('[data-bpreset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-bpreset]').forEach(x => x.setAttribute('aria-pressed', String(x === btn)));
+      curBriefKey = btn.dataset.bpreset;
+      if (curBriefKey === 'ballymaloe') {
+        $('b-client-inp').value = 'Ballymaloe Foods';
+        $('b-proj-inp').value = 'Better With Ballymaloe';
+        $('b-scope-inp').value = '€150k · 30s TV & Social';
+        $('b-prompt-ta').value = 'Ballymaloe Relish is trusted as an Irish pantry staple, but shoppers under 35 see it as their parents’ jar and grab Heinz or own-label chutney instead. We have €150k for a 30s TV spot and social campaign to recruit under-35 renters in Dublin, Cork, and Galway around quick weeknight meals.';
+      } else {
+        $('b-client-inp').value = "McDonald's Ireland";
+        $('b-proj-inp').value = 'Summer McFlurry';
+        $('b-scope-inp').value = '€140k · OOH, Social & Film';
+        $('b-prompt-ta').value = 'We need McFlurry to own summer in Ireland for 16–24s. Volume has been flat for two summers while Fanta Frozen and delivery desserts grew +23%. Commercial target: +12% unit growth June–August with no price promotion.';
+      }
+      renderBriefPage();
+      showToast('Loaded sample ask: ' + $('b-proj-inp').value);
+    });
+  });
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     6. RESEARCH TOOL SCREEN 1 & 3 INTERACTIONS
+     ═══════════════════════════════════════════════════════════════════════ */
+  document.querySelectorAll('[data-rpreset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-rpreset]').forEach(x => x.setAttribute('aria-pressed', String(x === btn)));
+      if (btn.dataset.rpreset === 'relish') {
+        $('r-client-inp').value = 'Ballymaloe Foods';
+        $('r-prompt-ta').value = 'Why do under-35 Irish renters skip heritage condiments like Ballymaloe Relish for Heinz or supermarket own-label?\n\nSpecifically: check chilled vs. ambient aisle shopping habits, weeknight sandwich/toastie occasions, and price-sensitivity thresholds in Dunnes and Tesco.';
+      } else {
+        $('r-client-inp').value = "McDonald's Ireland";
+        $('r-prompt-ta').value = 'What makes 16–24s choose a treat on an Irish summer day?\n\nSpecifically: check whether out-of-home treat occasions are planned or spontaneous, compare delivery frozen-dessert growth against in-store visits, and check if "two-spoon sharing" of McFlurrys on Irish TikTok is a real behaviour or just a small niche.';
+      }
+      showToast('Loaded research preset: ' + $('r-client-inp').value);
+    });
+  });
+
+  document.querySelectorAll('[data-src]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = btn.getAttribute('aria-pressed') === 'true';
+      btn.setAttribute('aria-pressed', String(!p));
+    });
+  });
+
+  document.querySelectorAll('[data-rfilter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const f = btn.dataset.rfilter;
+      document.querySelectorAll('[data-rfilter]').forEach(x => x.setAttribute('aria-pressed', String(x === btn)));
+      document.querySelectorAll('#r-findings-list .finding-card').forEach(c => {
+        c.hidden = f !== 'all' && c.dataset.status !== f;
+      });
+    });
+  });
+
+  $('r-approve-finding').addEventListener('click', () => {
+    const card = $('finding-3-card');
+    card.classList.remove('proposed');
+    card.dataset.status = 'verified';
+    const badge = $('finding-3-badge');
+    badge.className = 'badge-pill verified';
+    badge.textContent = 'Verified by you';
+    $('r-needs-banner').hidden = true;
+    setBarStatus('done', 'Finished just now');
+    if (headerMark) headerMark.set({ state: 'done', progress: 1 });
+    showToast('Finding #3 confirmed and added to verified record.');
+  });
+
+  $('r-drop-finding').addEventListener('click', () => {
+    $('finding-3-card').hidden = true;
+    $('r-needs-banner').hidden = true;
+    setBarStatus('done', 'Finished just now');
+    if (headerMark) headerMark.set({ state: 'done', progress: 1 });
+    showToast('Finding #3 cut from the report.');
+  });
+
+  
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     7. DECISION TREE DRAWER & BOTTOM ART-DIRECTOR COMMAND BAR
+     ═══════════════════════════════════════════════════════════════════════ */
+  function setDecisionTreeOpen(open) {
+    $('dtree-backdrop').hidden = !open;
+    $('dtree-drawer').hidden = !open;
+    $('tb-decisions-btn').setAttribute('aria-expanded', String(open));
+    $('dock-tree-btn').setAttribute('aria-pressed', String(open));
+  }
+  $('tb-decisions-btn').addEventListener('click', () => {
+    const open = $('dtree-drawer').hidden;
+    setDecisionTreeOpen(open);
+  });
+  $('dock-tree-btn').addEventListener('click', () => {
+    const open = $('dtree-drawer').hidden;
+    setDecisionTreeOpen(open);
+  });
+  $('dtree-close-btn').addEventListener('click', () => setDecisionTreeOpen(false));
+  $('dtree-backdrop').addEventListener('click', () => setDecisionTreeOpen(false));
+  document.querySelectorAll('[data-open-dtree]').forEach(btn => {
+    btn.addEventListener('click', () => setDecisionTreeOpen(true));
+  });
+  $('dtree-goto-research').addEventListener('click', () => {
+    setDecisionTreeOpen(false);
+    activeTool = 'research';
+    activeStep = 'output';
+    syncNavigation();
+  });
+  $('dtree-approve-all').addEventListener('click', () => {
+    $('dtree-open-calls-box').classList.add('resolved');
+    $('dtree-call-title').style.color = 'var(--ok)';
+    $('dtree-call-title').textContent = 'All 2 human calls approved & on the record ✓';
+    $('dtree-call-badge').className = 'badge-pill verified';
+    $('dtree-call-badge').textContent = 'H1 Mark: Done';
+    $('dtree-call-actions').hidden = true;
+    $('dt-node-f011-badge').className = 'badge-pill verified';
+    $('dt-node-f011-badge').textContent = 'Approved ✓';
+    $('tb-decisions-cnt').textContent = '0';
+    if ($('r-approve-finding')) $('r-approve-finding').click();
+    headerMark.set({ state: 'done', progress: 1 });
+    showToast('Both open calls approved — H1 Mark ring closed to 360° Done.');
+  });
+
+  $('cmd-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const val = $('cmd-input').value.trim();
+    if (!val) return;
+    $('cmd-input').value = '';
+    headerMark.set({ state: 'working', progress: 0.72 });
+    showToast('Applying instruction across brief & provenance: "' + val + '"');
+    setTimeout(() => {
+      headerMark.set({ state: 'done', progress: 1 });
+    }, 1400);
+  });
+
+  renderBriefPage();
+  syncNavigation();
+  const urlBrand = params.get('brand');
+  if (urlBrand && AGENCIES[urlBrand]) applyBrandSkin(urlBrand);
+})();
+</script>
+</body>
+</html>

@@ -133,8 +133,22 @@ pub struct ViewState {
     pub open: Option<Document>,
     /// Whether the edit bridge is live (`clan://edit-mode`).
     pub edit_mode: bool,
-    /// The legacy preview the shell last rendered (`clan://document`).
-    pub preview_html: String,
+}
+
+/// Where [`Session::open_observed`] has got to: each step of an open, as it
+/// ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenMark {
+    /// The view lock is held (the wait for it is over).
+    Locked,
+    /// The archive is read from the store.
+    Read { bytes: usize },
+    /// The archive is parsed and its app signature checked.
+    Verified,
+    /// The installed app's view is chosen (it may read the template).
+    Resolved,
+    /// What the shell is told about the document is worked out.
+    Described,
 }
 
 /// The thin wrapper the desktop and browser shells use: a store, the context
@@ -303,12 +317,38 @@ impl Session {
     /// Read `id` as it stands now and make it the open snapshot, shown with
     /// the installed app's view when the library has one of the same major
     /// ([`crate::view`]).
+    ///
+    /// The view lock is held from the read until the snapshot is in place, as
+    /// [`Self::perform`] holds it across a write. Read outside it, a reopen
+    /// racing a write could read the bytes from before the write and put them
+    /// back over the snapshot the write had moved on: the open document went
+    /// back a version, and the reply to the write carried the old data (UAT
+    /// round 12: the desk re-read a Research document while its report was
+    /// being written, and the page was handed the document without it).
     pub fn open(&self, id: DocId) -> HostResult<OpenResult> {
+        self.open_observed(id, &mut |_| {})
+    }
+
+    /// [`Self::open`], telling `mark` as each step ends, so a server can time
+    /// where an open spends its time. The host keeps no clock (wasm32 has
+    /// none it may use); the caller measures between marks.
+    pub fn open_observed(
+        &self,
+        id: DocId,
+        mark: &mut dyn FnMut(OpenMark),
+    ) -> HostResult<OpenResult> {
+        let mut state = self.view.lock().unwrap();
+        mark(OpenMark::Locked);
         // One read: the snapshot holds the bytes it was built from (#10).
-        let doc = Document::load(self.store.parts(), id)?;
+        let bytes = self.store.parts().read(&id)?;
+        mark(OpenMark::Read { bytes: bytes.len() });
+        let doc = Document::from_bytes(id, bytes)?;
+        mark(OpenMark::Verified);
         let doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
+        mark(OpenMark::Resolved);
         let result = read::describe(&doc);
-        self.view.lock().unwrap().open = Some(doc);
+        mark(OpenMark::Described);
+        state.open = Some(doc);
         Ok(result)
     }
 
@@ -322,6 +362,12 @@ impl Session {
 
     pub fn human_html(&self) -> HostResult<String> {
         self.read(read::human_html)
+    }
+
+    /// The page the app frame loads (`clan://document?model=&capture=&theme=`),
+    /// composed from the open view for the frame's `reach` ([`crate::frame`]).
+    pub fn frame_page(&self, query: &str, reach: crate::frame::Reach) -> HostResult<String> {
+        self.read(|d| read::frame_page(d, query, reach))
     }
 
     /// `GET /assets/<rel>` — serve a binary asset from inside the artifact ZIP.
@@ -397,14 +443,6 @@ impl Session {
 
     pub fn edit_mode(&self) -> bool {
         self.view.lock().unwrap().edit_mode
-    }
-
-    pub fn set_preview_html(&self, html: String) {
-        self.view.lock().unwrap().preview_html = html;
-    }
-
-    pub fn preview_html(&self) -> String {
-        self.view.lock().unwrap().preview_html.clone()
     }
 
     // ── Writing ─────────────────────────────────────────────────────────────
@@ -540,7 +578,8 @@ impl Session {
     /// applied here, by the host, and the app gets the envelope back with
     /// `change` replaced by `{applied: true, version, base_stale, applied_fields,
     /// contested_fields, contests}` or
-    /// `{applied: false, reason}`. When a change landed, the envelope also
+    /// `{applied: false, reason}`. When a change landed, or was `already
+    /// applied` by another poll, the envelope also
     /// carries `clan: {id, revision, version, data}` — the document as it now stands —
     /// so the view can refresh without writing anything. The app never writes
     /// middleware output itself; what it is handed is informational. Returns
@@ -587,6 +626,10 @@ impl Session {
         };
         let landed = settled.get("applied").and_then(Value::as_bool) == Some(true)
             && settled.get("noop").is_none();
+        // Someone else's poll (the shell's job watcher, another tab) applied
+        // this change first: the page asking now holds data from before it,
+        // so it is handed the document too, or it never redraws.
+        let caught_up = settled.get("reason").and_then(Value::as_str) == Some("already applied");
         envelope["data"]["change"] = settled;
         // The view holds its own copy of the data (`window.__CLAN__.data`) and
         // nothing re-reads the archive into it after a host-side write — a
@@ -595,7 +638,7 @@ impl Session {
         // in the same shape the request's `clan` had, for the bridge to swap
         // in and announce with `clan:dataupdated`. Outside `data`: that is the
         // middleware's body, and this is the host's.
-        if landed {
+        if landed || caught_up {
             if let Some(clan) = self.document_now() {
                 envelope["clan"] = clan;
             }
@@ -896,5 +939,135 @@ mod tests {
         let err = session.chain_json().unwrap_err();
         assert_eq!(err.status, 409);
         assert_eq!(err.to_string(), "no file open");
+    }
+
+    /// A store that, when armed, holds its next read open after taking the
+    /// bytes: it says the read is done and waits (a short while at most) for
+    /// a write to land, so a test can put a write between a reopen's read and
+    /// its snapshot.
+    struct HeldRead {
+        inner: FsStore,
+        armed: std::sync::atomic::AtomicBool,
+        read_done: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+        write_done: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+    }
+
+    impl crate::store::PartStore for HeldRead {
+        fn read(&self, id: &DocId) -> HostResult<Vec<u8>> {
+            let bytes = self.inner.read(id)?;
+            if self.armed.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                if let Some(tx) = self.read_done.lock().unwrap().take() {
+                    tx.send(()).unwrap();
+                }
+                if let Some(rx) = self.write_done.lock().unwrap().take() {
+                    let _ = rx.recv_timeout(std::time::Duration::from_millis(300));
+                }
+            }
+            Ok(bytes)
+        }
+        fn exists(&self, id: &DocId) -> bool {
+            self.inner.exists(id)
+        }
+        fn apply(&self, change: &Change) -> HostResult<Version> {
+            self.inner.apply(change)
+        }
+    }
+
+    impl crate::store::Library for HeldRead {
+        fn app_candidates(&self) -> Vec<DocId> {
+            self.inner.app_candidates()
+        }
+        fn app_template(&self, app_id: &str) -> DocId {
+            self.inner.app_template(app_id)
+        }
+        fn documents(&self) -> Vec<DocId> {
+            self.inner.documents()
+        }
+        fn new_document(&self, app_id: &str, id_short: &str) -> HostResult<DocId> {
+            self.inner.new_document(app_id, id_short)
+        }
+        fn home(&self, version_tag: &str) -> HostResult<DocId> {
+            self.inner.home(version_tag)
+        }
+        fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
+            self.inner.fork_branch(parent, agent)
+        }
+    }
+
+    #[test]
+    fn an_observed_open_marks_each_step_in_order() {
+        let (_dir, session, id) = open_temp_clan();
+        let mut marks = Vec::new();
+        session.open_observed(id, &mut |m| marks.push(m)).unwrap();
+        assert_eq!(marks.len(), 5);
+        assert_eq!(marks[0], OpenMark::Locked);
+        assert!(matches!(marks[1], OpenMark::Read { bytes } if bytes > 0));
+        assert_eq!(
+            &marks[2..],
+            &[OpenMark::Verified, OpenMark::Resolved, OpenMark::Described]
+        );
+    }
+
+    // UAT round 12: the desk reopened a Research document (GET /d/<path>)
+    // while the run's last reply was writing the report into it. The reopen
+    // read the bytes from before the write and put them back over the
+    // snapshot the write had moved on, so the reply carried the document
+    // without its report and the page never showed it.
+    #[test]
+    fn a_reopen_racing_a_write_never_puts_the_old_document_back() {
+        use crate::store::PartStore;
+        let dir = tempfile::tempdir().unwrap();
+        let id = DocId::from(dir.path().join("test.clan"));
+        let bytes = clan_sdk::create(clan_sdk::CreateOptions {
+            title: "Race Test".into(),
+            brief: "test brief".into(),
+            document_type: None,
+            no_render: false,
+            schema: None,
+        })
+        .unwrap();
+        std::fs::write(id.as_str(), bytes).unwrap();
+        let (read_tx, read_rx) = std::sync::mpsc::channel();
+        let (write_tx, write_rx) = std::sync::mpsc::channel();
+        let store = Arc::new(HeldRead {
+            inner: FsStore::new(dir.path().to_path_buf()),
+            armed: std::sync::atomic::AtomicBool::new(false),
+            read_done: Mutex::new(Some(read_tx)),
+            write_done: Mutex::new(Some(write_rx)),
+        });
+        let session = Arc::new(Session::new(store.clone()));
+        session.open(id.clone()).unwrap();
+
+        // The reopen reads, then waits for the write.
+        store.armed.store(true, std::sync::atomic::Ordering::SeqCst);
+        let reopen = {
+            let (session, id) = (session.clone(), id.clone());
+            std::thread::spawn(move || session.open(id).unwrap())
+        };
+        read_rx.recv().unwrap();
+        // The write, while the reopen holds the bytes from before it.
+        let write = {
+            let session = session.clone();
+            std::thread::spawn(move || {
+                session.set_context("the report is in", false).unwrap();
+                let _ = write_tx.send(());
+            })
+        };
+        reopen.join().unwrap();
+        write.join().unwrap();
+
+        let on_disk = store.version(&id).unwrap();
+        assert_eq!(
+            session.current_version().unwrap(),
+            on_disk,
+            "the open snapshot is the document as the store holds it"
+        );
+        assert!(
+            session
+                .entry_string("agent/context.md")
+                .unwrap()
+                .contains("the report is in"),
+            "the write is in what the session reads back"
+        );
     }
 }

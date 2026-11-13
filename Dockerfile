@@ -31,6 +31,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY spec/ ./spec/
 COPY app/templates/ ./app/templates/
+# The frame scripts napkin-host compiles in (crates/napkin-host/src/frame.rs).
+COPY app/src/shell/bridge/ ./app/src/shell/bridge/
 RUN sed -i 's#, "app/src-tauri"##' Cargo.toml
 # The CLI must be the exact version the crate pins, or the bindings are
 # rejected at load.
@@ -67,6 +69,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY spec/ ./spec/
 COPY app/templates/ ./app/templates/
+# The frame scripts napkin-host compiles in (crates/napkin-host/src/frame.rs).
+COPY app/src/shell/bridge/ ./app/src/shell/bridge/
 # The Tauri app is a workspace member that needs GTK/WebKit to build. It is not
 # part of this image, so drop it rather than resolve its whole dependency tree.
 RUN sed -i 's#, "app/src-tauri"##' Cargo.toml
@@ -91,7 +95,9 @@ COPY --from=device /out/apps/ /srv/napkin/seed/
 RUN rm -f /srv/napkin/seed/*.example.clan
 COPY --from=shell /src/app/dist/ /srv/napkin/dist/
 # Who may sign in when NAPKIN_AUTH=roster (staging): user@agency<TAB>Display name.
-COPY infra/scripts/accounts.napkin.tsv /srv/napkin/accounts.tsv
+# UAT's deploy passes ROSTER=accounts.uat.tsv: the studio's accounts and a mock sign-in per agency.
+ARG ROSTER=accounts.napkin.tsv
+COPY infra/scripts/${ROSTER} /srv/napkin/accounts.tsv
 
 ENV NAPKIN_WEB_DATA=/data \
     NAPKIN_WEB_STATIC=/srv/napkin/dist \

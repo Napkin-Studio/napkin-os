@@ -98,3 +98,25 @@ def test_review_writes_no_middleware_task():
     from napkin import registry
     for task in ("verify_finding", "correct_fact"):
         assert task not in registry.TASKS and task not in registry.REGISTRY
+
+
+def _template_pipeline(name):
+    """The template's pipeline as a document carries it: {tasks: {task: {handler}}}, read with the
+    middleware's own parser."""
+    path = Path(__file__).resolve().parents[2] / "app" / "templates" / name / "app" / "pipeline.yaml"
+    return {"tasks": {t: {"handler": h} for t, h in registry.parse_pipeline(path.read_text()).items()}}
+
+
+@pytest.mark.parametrize("template,task", [("brief-maker", "draft_brief"), ("campaign-research", "start_campaign")])
+def test_every_template_can_answer_the_questions_its_jobs_ask(template, task):
+    # UAT round 4 (2026-11-12): Brief Maker asks intake questions, but its pipeline did not declare
+    # answer_question, so every answer was refused as unknown_task and the job waited out its 90 s.
+    pipe = _template_pipeline(template)
+    assert task in pipe["tasks"]
+    assert registry.resolve("answer_question", {"pipeline": pipe})[1] == "answer_question@1.0"
+
+
+def test_a_brief_made_before_answer_question_was_declared_can_still_answer():
+    old = _template_pipeline("brief-maker")
+    old["tasks"].pop("answer_question", None)
+    assert registry.resolve("answer_question", {"pipeline": old})[1] == "answer_question@1.0"

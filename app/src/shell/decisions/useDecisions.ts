@@ -9,6 +9,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { host } from '../../host'
 import type { DecisionsView } from '../../host'
+import { isFor } from './needs'
+
+// The selectors are pure (needs.ts) so the bar's tests can use them with no host.
+export { needsOf, docStateOf, isFor } from './needs'
 
 export interface Decisions {
   view: DecisionsView | null
@@ -32,15 +36,18 @@ export function useDecisions(docPath: string): Decisions {
 
   useEffect(() => { reload() }, [reload])
 
-  // Every write the host fans out can change the chain.
+  // Every write the host fans out can change the chain: this document's
+  // writes, that is. The events come on one stream for the whole workspace and
+  // name their document (os-layer.md §8.4).
   useEffect(() => {
+    const mineOnly = (p: { path?: unknown } | null) => { if (isFor(p, docPath)) reload() }
     const offs = [
-      host.on('clan-data-changed', reload),
-      host.on('clan-patch-saved', reload),
+      host.on('clan-data-changed', mineOnly),
+      host.on('clan-patch-saved', mineOnly),
       host.on('clan-title-changed', reload),
     ]
     return () => { for (const off of offs) off.then(f => f()).catch(() => {}) }
-  }, [reload])
+  }, [reload, docPath])
 
   const mine = got.docPath === docPath
   return { view: mine ? got.view : null, error: mine ? got.error : null, reload }

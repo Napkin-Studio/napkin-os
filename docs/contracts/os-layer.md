@@ -136,7 +136,7 @@ one Postgres transaction. This is the single write funnel — the version check
 | `superseded_by` | The decision that replaced this one |
 | `actor`, `handler`, `backend`, `scope` | Copied from `Ctx` — never from the body |
 | `polarity`, `reason_code`, `taxonomy_version`, `reviewer_role` | Verdicts |
-| `licence` | Classify: `{model, export, corpus}` per C2 |
+| `licence` | Classify: `{model, export, corpus}` per C2; `export` is always `true` and not read (C4) |
 | `rationale` | Required for `resolve`, `verdict` with polarity bad, `lease` force-take, and `approve`. The plain one-line summary older readers show: with `reasoning`, `decided` + its first `because` point, unless the writer supplied one |
 | `reasoning` | Why, in the shape of the foundation spec's decisions (below). Optional in the format — a person's edit has none. Required of the middleware on every `pin`, `contest`, `finding` and `verdict` and every proposal, and on what the document's app declares in the `reasoning` block of its `app/pipeline.yaml` (`kinds`, and `edits`: the data paths an edit must say why it wrote) — the layer applies the declaration and knows no app's fields (`napkin.middleware/1` §3). Never rewritten by compression |
 | `#[serde(flatten)] rest` | Unknown fields survive a read-modify-write |
@@ -214,15 +214,35 @@ predates it.
 
 ### Confidential (C4)
 
-A `classify` decision setting the three C2 destinations: may it reach the
-model, may it appear in an export, may it enter the corpus.
+**What Confidential means** (owner, 2026-11-13; it replaces every earlier
+reading). There are three players: Napkin, the ad agency and the client. The
+client owns the confidential material and shares it with the agency; the
+agency makes something with it and shares that with the client. The only
+party that must not see it is **Napkin's own systems**. So a part, fact or
+material marked Confidential (a `classify` mark with `corpus: false`, a brief
+part in `confidential_fields`, or a source or material whose licence is
+`client-confidential`) **is shown in full to the agency and to the client**:
+in the document, the client copy, the PDF and every other export, and Share.
+It is **never** written to Napkin's shared knowledge layers (brand or
+category) or to RAG, never harvested into a layer (client-accepted harvest
+included), never used for evals, golden sets or training, and never kept in
+any Napkin-side store that outlives the agency's own documents (run logs
+with bodies included). Confidential is not an export filter: nothing a client
+sees is filtered by it.
+
+A `classify` decision records the mark. Its licence keeps the C2 shape
+`{model, export, corpus}`: `corpus: false` is the mark; `model` says whether
+the agency's own agents may read it on this document (a person's call, kept);
+`export` is always `true` and is not read (the client copy hides nothing).
 
 - On a field backed by a pinned fact, the mark supersedes the **fact's
   licence in the layer**, with the decision behind it. A document-only mark
   would still leak through the layer into the next campaign.
 - On authored text, it is a licence on the field in the document.
-- Enforced at gate G4 (prompt selection), `compose_export` (this layer), and
-  the dossier promotion check (W5-Z2).
+- Enforced at gate G4 (prompt selection, `model: false` only), at every
+  Napkin-side write (layer writes, harvest, the corpus extract
+  (`clan-extract.md` §5), evals and run logs), and at the dossier promotion
+  check (W5-Z2). `compose_export` does not read it.
 
 ### Good and bad (L4)
 
@@ -456,12 +476,15 @@ on append-only rows, and `GET /upstream` (§8) compares them with the parent.
 - Open items travel open. They show at the field if the target app shows that
   address, otherwise in the decision tree under **open items carried from
   upstream**, and they are on the target's lock list (§7).
-- **When the parent changes, the carried copy stays frozen.** The child shows
-  "The research has changed since this brief started" (each app in its own
-  nouns) and lists what changed — pins, findings, contests, and findings
-  rejected upstream — from `GET /upstream`. Taking the newer upstream is an
-  explicit, later action; it is not built. (Owner default, 2026-09-29; may be
-  reversed.)
+- **When the parent changes, the carried copy stays frozen until a person
+  takes the newer one.** The child shows "The research has changed since
+  this brief started" (each app in its own nouns) and lists what changed —
+  pins, findings, contests, and findings rejected upstream — from
+  `GET /upstream`. *Changed 2026-11-09 (owner, reversing the 2026-09-29
+  default for spin-offs):* taking the newer upstream is an explicit action,
+  `POST /upstream/update` (§8.1, item 8), offered in Continue in ▾ under
+  **Made from**. It is refused on a locked document: a locked version keeps
+  what it was made from.
 - No address is ever remapped: a carried decision on
   `<campaign>#selection.contested[ct_…]` means the same contest in the brief
   and in the deck.
@@ -485,6 +508,15 @@ pub struct Lineage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub carried: Option<Carried>,
 }
+
+pub struct AttachSpec {                       // §5.7
+    pub accepts: Vec<String>,
+    pub lift: BTreeMap<String, String>,
+    pub many: Vec<String>,
+}
+// AppInfo gains `attach: Option<AttachSpec>`; SpinoffSpec gains
+// `by_source: BTreeMap<String, SourceCarry {map, lift, upstream}>`; Lineage
+// gains `attached: Vec<Attached>`, copied by every rewrite as `carried` is.
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Carried {
@@ -515,6 +547,66 @@ record for an upstream `spinoff()`. `Lineage` in `pack.rs`, `render.rs` and
 a document keeps the record of its hop on every later write, or the first
 edit would erase it and `GET /upstream` and backrefs (§7.4) would have
 nothing to compare or address.
+
+### 5.7 Linking an existing document (attach)
+
+*Added 2026-11-09 (features/spinoff-and-links.clan).* A spin-off makes a new
+document; a **link** carries a document into one that already exists, beside
+its own work: a research into a brief, a brief into a research, either into a
+deck or a production. It is the same carry (§5.2) applied to an existing
+document, so the rules of this section hold for it, and it is the mechanism
+the Brand Clan uses (`docs/contracts/brand-clan.md` on feat/brand-clan); the
+names and shapes below are that branch's, so it merges onto them.
+
+1. **Opting in: `app.attach`**, declared by the *target* app:
+   `{accepts: [app_id…], lift: {from: to}, many: [app_id…]}`. `accepts` names
+   the source apps; empty takes nothing. `many` names the apps a document may
+   hold several of at once (several research in one brief, owner
+   2026-11-09); any other app is one at a time and linking another of it
+   **replaces** the first. One research may feed many briefs: nothing limits
+   how many documents link the same source. `lift` seeds a field only where
+   it is empty, or still holds what the previous copy seeded.
+2. **What lands** (`clan_sdk::attach`): the source's data frozen at
+   `data.upstream.<source document_id>` (less `projection`; its own
+   `upstream` hoisted beside it), its pins, findings and sources merged by id
+   into the document's own, its assets and branches copied, its decisions
+   carried pinned after a boundary entry, and one record in
+   `lineage.attached[]`: `{app_id, version?, at, title, revision, taken,
+   document_id, data_sha256, facts_sha256?, findings_sha256?,
+   sources_sha256?, last_decision?}`. `revision` is the source's revision
+   taken — the version kept — and `taken` counts how many times this document
+   took it (1 on link, one more on each update); `version` is the source's
+   `kit.version` when it declares one, else `taken`.
+3. **Versions and the update notice.** The frozen copy never moves by
+   itself. `GET /upstream` lists each linked document with `how: linked` and
+   `status: current | changed`, compared as for the direct parent (§8.1 item
+   6); the shell shows the notice and offers **Update**, which takes the
+   newer version (`POST /attach/update`, or `POST /upstream/update
+   {document_id}`). An update replaces the frozen copy and adds only what the
+   document does not hold yet. A linked entry in the store also says what the
+   link brought in: `holds: {facts, findings}`, how many of the source's
+   facts and findings this document holds now (merged by id). Brief Maker
+   says it in its "Research linked" notice. *Added 2026-11-12
+   (features/brief-link-redraft.clan).*
+4. **Decisions on both sides.** The document gets one decision per hop,
+   `action: attach | update_from_<source noun> | replace | detach`, kind
+   `edit`, as the person in `Ctx`, targeting `<this id>#upstream.<source
+   id>`. The source gets a backref (§7.4): `linked` (on link and update) or
+   `unlinked` (on detach), targeting the source's id, `from` naming the
+   document and its decision.
+5. **Refused**: a context that is not a person (`403`), a locked document
+   (`409`, with the reason: a locked version keeps what it holds), another
+   workspace's source (`403`), a source app not in `accepts` (`422`),
+   linking what is linked already or updating what has not moved (`409`).
+6. **Detach** lets go of one source: its frozen copy, its record and the
+   seeds still holding the seeded value go; pins, findings and assets already
+   merged stay as the document's own.
+7. **A spin-off target may carry one source app its own way**
+   (`app.spinoff.by_source: {<app_id>: {map?, lift, upstream}}`). Advertising
+   Studio grafts a brief at `brief` and carries a research whole under
+   `upstream` with `campaign.name.value → project.name` and
+   `campaign.client_org.value → project.client` (owner, 2026-11-09: research
+   to production is upstream + lift). Each `by_source` key is accepted.
 
 ---
 
@@ -629,7 +721,7 @@ child holds has nothing for `/resolve` to take.
 | A contest carried open in a frozen copy, none of whose values is a pin this document holds or carries a frozen `pin` (*added 2026-09-30*) | 1 | `<id>#selection.contested[<ct>]` |
 
 1. Each is merged or revised in the document it came from, and reaches the
-   child only when it takes the newer upstream (§5.5, not built). Until then
+   child only when it takes the newer upstream (§5.5, §8.1 item 8). Until then
    a person may **set it aside with a written reason**:
    `/acknowledge {target, rationale}` (§8.1, item 7). `/decisions` marks each
    such item `can_set_aside: true`, with its address.
@@ -700,13 +792,15 @@ else: a `backref` is the only thing a child ever writes to a parent.
    | `/approve` | every document in `data.upstream` | `used` | `["<parent id>"]` |
    | `/resolve` of a carried contest | the document the contest is on | `resolved` | `["<parent id>#selection.contested[<ct>]"]` |
    | `/verify` of a finding the direct parent holds | the direct parent | `verified` | `["<parent id>#findings[<fi>]"]` |
+   | `/attach`, `/attach/update` (§5.7) | the linked document | `linked` | `["<source id>"]` |
+   | `/attach/detach` (§5.7) | the unlinked document | `unlinked` | `["<source id>"]` |
 
 2. **Shape.**
 
    ```yaml
    - id: d_…
      kind: backref
-     action: used | resolved | verified
+     action: used | resolved | verified | linked | unlinked
      agent: napkin-host
      actor: human:<id>             # the person in the child's Ctx
      targets: [ … as above … ]
@@ -759,15 +853,16 @@ email, attached as a file, or noted from a call.
    `recorded_by` is refused `400`. The client is data — a name and an email
    the recorder typed — and nothing checks that the client is that person;
    the record states its evidence (§7.5.2), never more.
-6. **Confidential is not a filter here** (owner, 2026-09-29: confidential
-   means only "kept out of RAG and the corpus"). Clients see everything, so
+6. **Confidential is not a filter here** (owner, 2026-09-29, restated
+   2026-11-13: confidential means only that Napkin's systems never see it,
+   §4 C4). Clients see everything, so
    nothing in client review — the records, `/decisions`, the extract's
    rendering (§7.5.8) — filters by a `classify` mark. Nothing in client review
    reaches a model or the middleware (*2026-09-30*: the parts are found by the
    host's own word match, §7.5.2a), so `model: false` has nothing to
    withhold here.
-7. **Ellis, shown; the host, recorded.** The shell shows the suggestions as
-   Ellis's (the crew member who reads what people send). The chain records the
+7. **The Knowledge agent, shown; the host, recorded.** The shell shows the suggestions as
+   the Knowledge agent's (the agent that reads what people send). The chain records the
    process that made them: `actor: process:host`, `handler:
    client_parts_match@1` (§7.5.2a).
 
@@ -836,7 +931,7 @@ dismissal. "Make this change" writes an `unlock` (§7.5.6).
     - { address: "3f2a…#audience", label: Audience, aliases: [who it is for], part_hash: "sha256:…" }
   rationale: Jane Murphy rejected the document (off brief, tone), from an attached file; recorded by aoife.
 
-# A suggestion — the host's word match (§7.5.2a), shown as Ellis's; counts for nothing until a person confirms it
+# A suggestion — the host's word match (§7.5.2a), shown as the Knowledge agent's; counts for nothing until a person confirms it
 - id: d_01K…S
   kind: client_review
   action: suggest_part
@@ -903,7 +998,7 @@ dismissal. "Make this change" writes an `unlock` (§7.5.6).
 | `seen` | `{version, doc_hash, parts[]}` on the document answer; `{version, doc_hash, part_hash}` on a part record | `version` is the one the lock's `approve` names: every answer is tied to the locked version. `parts[]` is `{address, label, part_hash}` for every part the app declared |
 | `review` | decision id | Part records: the document answer they belong to |
 | `label` | string | Part records: the part's label as the app declared it |
-| `found_by` | `person` \| `agent` | Part answers and suggestions. `agent` on a part answer means a person confirmed a suggestion (the match's, shown as Ellis's): the part answer is itself the confirming decision, and `suggestion` names what it confirmed. The value keeps its name from when a model suggested; it means "suggested", not "a model" |
+| `found_by` | `person` \| `agent` | Part answers and suggestions. `agent` on a part answer means a person confirmed a suggestion (the match's, shown as the Knowledge agent's): the part answer is itself the confirming decision, and `suggestion` names what it confirmed. The value keeps its name from when a model suggested; it means "suggested", not "a model" |
 | `suggestion` | decision id | A part answer with `found_by: agent`, and a dismissal |
 | `quote` | string | Suggestions, and part answers confirming one: the sentence the match found, a verbatim substring of the proof (§7.5.2a, item 5), at most 500 characters. Never compressed |
 | `matched` | `{name, cue?}` | Suggestions: the part name the sentence holds (label, alias or the label's last word) and the change cue that set `accepted_with_changes`, when one did — what the match read, so a person can see why |
@@ -1007,7 +1102,7 @@ from the moment it is recorded, so the view shows what the next lock needs.
   (`client_rejected_parts_unknown`, blocks)
 - `accepted_with_changes` **never blocks.** Until answered it is attention:
   "Jane Murphy asked for a change to Audience." (`client_change_asked`)
-- An open suggestion is attention, not a blocker: "Ellis thinks Jane Murphy's
+- An open suggestion is attention, not a blocker: "The Knowledge agent thinks Jane Murphy's
   answer is about Audience. Confirm or dismiss it." (`client_part_suggested`)
 - A client's `accepted` is never required to lock.
 
@@ -1055,8 +1150,8 @@ nothing else:
    sends backrefs as any `/approve` does (§7.4). The newest unsuperseded
    `approve` is the lock; the older one is not rewritten. The new `approve`
    closes every reopened part, edited or not.
-4. **Nothing else changes.** §7.1 is unchanged; there is no whole-document
-   unlock (what unsealing means stays W5-Z1's).
+4. **Nothing else changes.** §7.1 is unchanged. The whole-document unlock is
+   §7.6, a separate route.
 
 Why this, and not an `/edit` permitted on a locked document for a part with
 an open request:
@@ -1074,8 +1169,9 @@ an open request:
   the next lock (item 6a) until it is edited; an `accepted_with_changes` part
   does not, and the next lock closes it.
 
-Rejected: unlocking the whole document (superseding the `approve`). It reopens
-every part, including those the client accepted, for a request about one.
+Rejected for a client's request: unlocking the whole document. It reopens
+every part, including those the client accepted, for a request about one. A
+person who means to unlock the whole document uses §7.6.
 
 #### 7.5.7 Spin-off
 
@@ -1119,6 +1215,37 @@ words reach the match (§7.5.2a) only when the recorder pastes them as `said`.
 
 ---
 
+
+### 7.6 Unlocking the whole document: `/unapprove`
+
+Owner, 2026-11-09: a person can unlock a locked document (settles W5-Z1's
+whole-document unlock; what an exported seal means is unchanged).
+
+```yaml
+- id: d_01K…X
+  kind: unlock
+  action: unlock_document
+  agent: human:aoife
+  actor: human:aoife
+  targets: ["3f2a…"]                    # the document id, no part
+  cites: [d_01K…LOCK]
+  lock: d_01K…LOCK                      # the approve it ends
+  unlocks_version: "v3"                 # the version that lock accepted
+  rationale: "The client moved the launch."
+```
+
+1. `POST /unapprove {rationale}`: a person, holding the lease (§6), on a
+   locked document, with a non-empty reason. Not locked is `409`; no reason
+   is `400`.
+2. **The lock predicate (§7.1) gains one clause:** the newest unsuperseded
+   decision targeting the document that is an `approve` or an
+   `unlock_document` decides. An `approve` locks; an `unlock_document` means
+   nothing holds. The `approve` is never rewritten or superseded.
+3. After it every write is allowed again, as on a document never locked.
+   Parts reopened under the ended lock (§7.5.6) stop counting as reopened.
+   Client answers stay in the chain, on the version they answered.
+4. The next `/approve` runs the whole §7.2 list and is a new lock.
+
 ## 8. Routes — contract v1
 
 `/capabilities` reports `contract: 1`. A document is shown with the installed
@@ -1129,6 +1256,8 @@ the `.clan` is what export, handoff and the offline presenter use, and old
 majors still run, so the route surface is a contract apps depend on: add
 freely, never redefine.
 
+- `/document` is the frame's page, composed from the view for the query's
+  options (§8.4); it no longer serves a page the shell stored.
 - Existing routes stay as they are: `/patch`, `/patch-data`, `/fork`,
   `/upload-asset`, `/assets/*`, `/chain`, `/api-proxy`, `/spinoff`,
   `/spinoff-targets`, `/set-title`, `/set-context`, `/export`, `/notify`,
@@ -1136,9 +1265,9 @@ freely, never redefine.
 - A body `agent` field on `/patch-data` is kept as `claimed_agent` on the
   decision. The actor always comes from `Ctx`.
 - New in v1: `/verdict`, `/classify`, `/contest`, `/resolve`, `/finding`,
-  `/verify`, `/approve`, `/history`, `/timeline`, `/open`, `/stale`,
-  `/upstream` (§8.1), and `/client-review`, `/client-review/confirm` and
-  `/client-review/reopen` (§8.2).
+  `/verify`, `/approve`, `/unapprove` (§7.6), `/history`, `/timeline`, `/open`, `/stale`,
+  `/upstream` (§8.1), `/client-review`, `/client-review/confirm` and
+  `/client-review/reopen` (§8.2), and `/cite` (§8.3).
 - Landed (2026-09-28), each a person's decision — a process is refused `403` —
   recording one decision as the person in `Ctx` with what it changes, in one
   generation; refused `409` once the document is locked (a reopened part's
@@ -1155,6 +1284,7 @@ freely, never redefine.
     may stay empty. Neither holds: `404`, as before.
   - `/classify {target, model, export, corpus, rationale}` — the mark is
     recorded; taking it to the fact's licence in the layer (§4) is not built.
+    The view always sends `export: true, corpus: false` (§4 C4).
   - `/resolve {contest, chosen, rationale}` — the contest resolved; a chosen
     value not yet pinned is pinned from the copy the research froze beside it,
     and a pin of the same identity it replaces is kept, marked `replaced_by`.
@@ -1187,6 +1317,9 @@ freely, never redefine.
   - `/approve {rationale?}` — refused while anything on the §7 list is open;
     otherwise one `approve` decision naming the exact version accepted. What
     locking does to other writes (`/patch-data`, a job) is W5-Z1's.
+  - `/unapprove {rationale}` — a person, on a locked document, with a reason:
+    one `unlock` decision (`action: unlock_document`) that ends the lock
+    (§7.6). `409` when not locked, `400` without a reason.
 - `/decisions` (landed): every decision, newest first, with who made it, its
   targets as labels, its cites resolved, and what needs a person — derived by
   the host from the chain, the members and the data: `reasoning.attention`,
@@ -1324,6 +1457,66 @@ body or reply changes meaning.
      when false), and a target `kind` gains `branch` (`<id>#agents[…]`); a
      merge conflict's address is labelled `Merge conflict · <key>`, kind
      `contest`.
+8. **`POST /upstream/update`** — take the direct parent's newer version
+   (§5.5, *added 2026-11-09*). Body ignored; any actor that may write.
+   - `409` when the document has no `lineage.carried` ("not made from another
+     one"), when it is locked (an `approve` not superseded targets it: a
+     locked version keeps what it was made from; a new version takes the
+     update), or when `GET /upstream` says the direct parent is `current`.
+   - `404` when the store does not hold the parent for `Ctx`.
+   - Otherwise one write (`clan_sdk::take_upstream`): `data.upstream.<parent>`
+     is the parent's data now (less `projection` and `upstream`; the
+     parent's own upstream entries replace the hoisted siblings it holds);
+     the parent's facts, findings and sources replace the child's copies by
+     id, **except an entry the child reviewed itself** (a decision of its own
+     targets `<this id>#facts[…]`, `#findings[…]` or `#sources[…]`) and the
+     child's own entries, which stay; the parent's decisions above
+     `carried.last_decision` that the child does not hold are carried,
+     pinned; new branches, merge reports and assets are copied;
+     `lineage.carried` moves on to what was taken; the projection is rebuilt.
+     The child's own fields are not touched and no address is remapped.
+   - The decision, newest of all, as the person in `Ctx`:
+
+     ```yaml
+     - id: d_…
+       kind: edit
+       agent: napkin-host
+       action: update_from_<parent noun>   # app.home.noun[0], else the app's name, snake_case
+       version: <the parent's version taken>
+       targets: ["<this id>#upstream.<parent id>"]
+       cites: [<the parent's newest decision id>]
+       rationale: Took the newer research "<title>" (<version>): N decision(s) since this was made from it.
+       was: { data_sha256: <carried before>, last_decision: <carried before> }
+     ```
+
+   - Reply: `{ok, decision, action, document_id, version, decisions_taken,
+     clan}`. No backref (the parent is not changed).
+   - *Added 2026-11-09:* with `{document_id}` naming a document linked to
+     this one (§5.7), it takes that one's newer version instead: the reply
+     and refusals of `/attach/update`.
+9. **Links** (§5.7, *added 2026-11-09*). Writes as the person in `Ctx`; the
+   reply carries `clan` and `backrefs` as the review routes do.
+   - `GET /attach-targets` — `[{app_id, app_name, document_id, title,
+     version, path, updated_at, attached, many, locked, client}]`, by title:
+     this tenant's documents the open document's app accepts, never a fork, a
+     template, itself or what it was made from. `locked` says a link would be
+     refused, so the shell says why instead of offering it. `client` is
+     `{id, name} | null`, named as the library names it (the registry's name,
+     else the manifest's); the shell's Link list filters and groups by it
+     (*added 2026-11-12*, features/linked-research-bar.clan).
+   - `POST /attach {document_id}` — link it. Reply `{ok, verb: attached |
+     replaced, decision, action, document_id, attached: <record>, seeded,
+     kept, carried_decisions, backrefs, clan}`.
+   - `POST /attach/update {document_id}` — take its newer version; `verb:
+     updated`, `action: update_from_<noun>`.
+   - `POST /attach/detach {document_id}` (or `{app_id}` naming the one source
+     of that app) — let go. Reply `{ok, decision, action: detach,
+     document_id, detached, unseeded, backrefs, clan}`.
+   - `GET /related` — `{document_id, upstream: [{document_id, title, app_id,
+     path, how: made_from | linked, version, taken, status}], downstream:
+     [{document_id, title, app_id, noun, path, how: made_into | linked_in,
+     updated_at}]}`, downstream newest first. A read of the store's
+     manifests; the shell's lineage chips draw it.
 
 ### 8.2 Client review routes
 
@@ -1465,14 +1658,127 @@ process), records as the person in `Ctx`, and writes one change.
      when none were typed; the part's popover shows it.
    - `client.suggestions`: suggestions nobody has confirmed or dismissed yet,
      oldest first.
-   - A suggestion's block in `decisions` names its maker `Ellis` (`who`:
-     `{kind: agent, id: client_parts_match, name: Ellis}`); the decision says
+   - A suggestion's block in `decisions` names its maker `Knowledge agent` (`who`:
+     `{kind: agent, id: client_parts_match, name: Knowledge agent, you: false}`); the decision says
      `process:host`.
    - The §7.5.4 items are in `attention` with their codes, `address` the
      part's, `decision` the answer's; an open suggestion's item names the
      suggestion.
 
+### 8.3 The source card: `/cite`
+
+One answer to "where did this come from?" for any ref a page shows, whichever
+app shows it (feature `os-source-card`, 2026-11-09). A read, for any actor,
+locked or not; every host answers it from the same routing table.
+
+- `GET /cite?ref=<ref>` — one card. `400` without a ref; `404` when the
+  document holds nothing by that ref.
+- `POST /cite {refs: [<ref>, ...]}` — `{cites: {<ref>: card}}`, at most 500
+  refs a call (`400` beyond). A ref the document does not hold is in the map
+  with `kind: unknown`. A page asks for a section's cards in one call.
+
+A ref is anything `/decisions` resolves in `cites`: a pin, finding or source
+id, a material, passage or capture id, a decision id, `human:<id>`, or an
+address. A card is that `Cite` — the same resolver, so the same words — with:
+
+- `ref` — as asked.
+- `origin` — `research`, `client`, `brand`, `layer`, `person` or `document`.
+  The writer's marker is `origin_kind` on the member entry (a pin, finding,
+  source, material, capture item or passage); `origin` itself is already
+  taken (a pin's layer row `fact://…`, Contract campaign-clan §4; a field
+  envelope's `extracted|proposed|confirmed|stated`). Without a marker only
+  what the kind settles is said — a client's material or what was read from
+  it is `client` (a typed prompt is `person`), a library passage is `layer`,
+  `human:` is `person` — and anything else is `document`, never a guess.
+  *Writers (2026-11-09, `server/napkin/origin.py`):* the middleware sets it
+  on each new pin and finding — `research` for a pin a research lens found
+  and filed (`pipeline/research.py`) and every synthesised or reworked
+  finding (`synthesise.py`, `reconsider.py`); `layer` for a row the layers
+  already held, pinned as it was (a reused row, a roster row in
+  `campaign.py`). A client's material and a typed prompt carry no marker:
+  the kind settles them. `brand` is written by the Brand Clan's copy
+  (feat/brand-clan). The engine writes no member entries. The member
+  schemas (`facts.schema.json`, `findings.schema.json`) take the key.
+- `from {document_id, title?, app_id?, version?, path?}` — for something
+  carried from an ancestor: a pin or finding a carried decision names on that
+  ancestor, material or a passage found only in a frozen copy, an address on
+  an ancestor. `title` and `app_id` come from the store's copy when it holds
+  one (else the frozen copy's name); `version` is the revision carried, for
+  the direct parent; `path` is what `POST /open` takes.
+- `review {verdict, by, actor?, at?, decision?, note?}` — the newest review
+  verdict that still stands: `verified` (a `verify`, a good `verdict`),
+  `rejected` (a bad `verdict`) or `set_aside`. `history` holds every one,
+  newest first, each `superseded` when replaced; with none in the chain, the
+  record's own `review`, `verification` or `rejection`. "Looks right" is not
+  a review of a fact.
+
+### 8.4 Events name their document
+
+A route's `HostEvent`s reach the shell as events of the same name: Tauri
+events on the desktop, SSE frames on napkin-web's per-tenant stream
+(`/api/t/{tenant}/events`), and straight back from the call in the browser
+host (`napkin-wasm`). The web stream is the whole tenant's (in accounts mode,
+the whole agency's), so every shell hears every document's writes.
+
+`clan-data-changed` and `clan-patch-saved` therefore carry `path`: the id of
+the document the request was about, as the shell opened it
+(`OpenResult.path`; the document's id in its store, a file path on the
+desktop). The host adds it to the payload in one place
+(`napkin_host::routes::dispatch` and `dispatch_async`), on every host alike;
+what the payload said before stays (a payload that was not an object moves
+under `value`). A listener acts only on events whose `path` is its own
+document, and ignores one without a `path`
+(`app/src/shell/decisions/needs.ts isFor`). *Added 2026-11-12.*
+
 ---
+
+### 8.4 The frame's page: `/document` and `napkin_host::frame`
+
+*Landed 2026-11-12 (features/doc-open-direct.clan).* The page an app frame
+loads is composed by the host, on request, from the open document's view —
+one composer, `napkin_host::frame::compose(human_html, FrameOptions)`, for
+every host. It is pure string work (wasm32-clean):
+
+- the edit bridge for the render model (`authored`: structured, writes the
+  data layer; `legacy`: contenteditable) at the view's **last** `</body>`
+  (an app's script may hold an earlier one in a string), or at the end when
+  there is none; a fragment (no `<!doctype html` or `<html` first) gets the
+  studio's page around it;
+- the dogfood frame listener after the bridge when `capture` is on;
+- `data-color-scheme="light|dark"` stamped on the first `<html>`, unless the
+  page set its own (the shell still posts `clan:colorscheme` after load);
+- the host's last pass, `Reach`: **Origin** (the web) rewrites the literal
+  `clan://localhost` and `http://clan.localhost` bases to the frame's token
+  URL and puts a fetch shim first in `<head>`; **Scheme** (the desktop)
+  leaves the page alone; **Device** (the WebAssembly host) puts the frame CSP
+  first and an rpc shim that routes every `clan://` call to the shell.
+
+The scripts are browser code and live with the shell,
+`app/src/shell/bridge/*.js` (linted there); napkin-host compiles them in with
+`include_str!`, without their leading `//` lines.
+`crates/napkin-host/tests/frame_golden.rs` holds the composer to the 120 pages
+the shell's TypeScript made before it moved, byte for byte.
+
+The options travel as one query string, `model=&capture=0|1&theme=&v=`: a
+missing or unknown `model` is the document's own render model, a missing theme
+light, `capture` on only for `1`; `v` (the document's sha256, and its view's
+version when the library's) is not read — it makes a changed document a new
+address.
+
+| Host | The frame loads | Composed by |
+|---|---|---|
+| web | `GET /s/{token}/document?…` (src) | napkin-web, `Reach::Origin` (the sandbox origin, else `Host` and `X-Forwarded-Proto`, then `/s/{token}`); weak ETag of the page, `Cache-Control: private, no-cache`, `304` when unchanged; compressed |
+| desktop | `clan://localhost/document?…` (src) | the `/document` route, `Reach::Scheme` |
+| device | `srcdoc` | `NapkinHost.framePage(query)`, `Reach::Device` |
+
+`Host` (`app/src/host/types.ts`) names the page with `frameSrc(opts)` on a
+host whose `frameLoad` is `url`, and gets it with `compose(opts)` on the
+`srcdoc` one. Gone, with nothing stored in their place: `updatePreviewHtml`,
+`getHumanHtml` and `prepareAppHtml` on `Host`; `Session::{set_,}preview_html`;
+the Tauri commands `update_preview_html` and `get_human_html`; the wasm
+exports `setPreviewHtml` and `humanHtml`. `POST /api/t/{t}/d/{doc}/preview-html`
+answers `410` with the reason for one release, then goes.
+`GET /api/t/{t}/d/{doc}/human-html` stays (the view as stored, for tools).
 
 ## 9. Retrieval scope
 
@@ -1697,46 +2003,51 @@ The shell serves all four levels:
   move, `1` to `6` pick a tool, Enter opens it; a live region says each level on
   arrival and "coming soon" for a Soon tool (`app/src/shell/landing/keys.ts`).
 
-### 12.6 The circles in 3D: the Orbs module (read by the shell; later by the templates)
+### 12.6 The circles are flat
 
-Feature `landing-circles`, phase 4. **Not final until Shrey signs off** (open questions
-in the feature record). The sphere + ring shader is Shrey's and is not changed here.
+Owner, 2026-11-11: "We only need flat circles." The desk and the client page draw
+each client as a flat colour disc (`app/src/shell/nui/Desk.tsx`,
+`app/src/shell/landing/Circle.tsx`): plain SVG and CSS, no WebGL, no canvas and
+no switch. The 3D client-circle engine (`app/src/orbs/`), its "Flat circles"
+setting (`napkin.circles.flat`) and the `<html data-orbs…>` attributes are gone.
+The agents keep their spheres from the one agent engine
+(`app/templates/shared/agent-sphere`, `app/src/shell/agents/AgentSphere.tsx`).
 
-`app/src/orbs/` is the shell's source of truth for the engine that the Deck Maker
-template also carries inline (its `Orbs` block). The template keeps its own copy,
-because a sandboxed single file cannot import a shell module; `app/tests/orbsDrift.test.ts`
-reads the template's block and fails on any difference in the shader, the tables or the
-pose maths that is not marked `PORT` on the shell's side.
+## 13. People and agencies (napkin-web only)
 
-- `engine.ts`: `createOrbs()` (and `shared()`, the shell's one). `attach({wrap, canvas}, spec)`
-  returns a handle (`update`, `kick`, `press`, `detach`) or `null` when the circle must stay
-  flat; `scan(root, stateFor)` does the same for every `[data-orb-host]` under a root;
-  `kick(el)` is the keyboard press. One WebGL context for the page: circles are drawn into
-  one atlas and each cell copied to the circle's own 2D canvas. The circle's markup is the
-  caller's (React): the flat `<svg>` is the fallback and stays; the engine never moves a node.
-- A circle's state is kept by **slot** (where it lives, never its size), so a re-render or a
-  new size does not reset its ring or turn. Two live circles never share a slot.
-- **Flat SVG stays** whenever: no WebGL, a shader that will not compile, reduced data
-  (`prefers-reduced-data`, `saveData`), the context is lost (3D returns on restore), an
-  unknown material, more than `MAX_LIVE` (40) circles, or the person's "Flat circles"
-  (`prefs.ts`, kept in this browser only). `<html data-orbs="gl|flat" data-orbs-gl="1|0"
-  data-orbs-why="...">` says which, for people and the smoke test.
-- **Client, tool and studio circles are pseudo-agents** (`agents.ts`): a blank sphere in one
-  of the materials in `tables.ts` (the client's `material`, stored on its record), no arcs and
-  no emblem circles, the initials as DOM text over it. The clan's agents are not changed.
-- **The ring** is the shader's travelling arc, in the landing's `--lc-ring-*` tokens read from
-  the circle's own element (light and dark follow the page). Length says activity, not
-  progress the shell does not have: needs you a quarter, failed 0.62 with a broken end,
-  working/thinking/reading/checking a fixed 0.34 arc (several jobs or none reporting steps),
-  idle a whole thin still ring. Priority across a client's work is the shell's `strongest`
-  (needs you, failed, working, thinking, reading, checking, idle).
-- **Budget:** only visible circles draw (IntersectionObserver); idle, untouched ones redraw about
-  15 times a second; a software renderer (SwiftShader, llvmpipe) draws at 1 pixel per CSS pixel,
-  any other at the device ratio capped at 2 and eased down when frames run long.
-- **Pointer:** every 3D circle leans toward the pointer across the whole window, with no click
-  and no distance limit. A press squishes and ripples; the click that goes on follows about
-  250 ms after the press (at least 100 ms after a release, so press, drag and release is play)
-  (`gate.ts`). Enter and Space go straight on with the ripple. Flat circles, no WebGL and
-  reduced motion get the plain click.
-- **Reduced motion:** the sphere and ring are still pictures (no turn, wobble or breath), redrawn
-  only when something changes; the flat-to-3D cross-fade is the only motion.
+Who may sign in under `NAPKIN_AUTH=roster`, changed from the shell's People
+page (features/people-admin.clan). Not tenant-addressed: under `/api`, on the
+cookie session. Errors keep the `{ok:false, error:"message"}` shape.
+
+**Store.** `<NAPKIN_WEB_DATA>/_people/people.json` (`{people, agencies}`) on the
+web data volume, replaced whole (tmp + rename) and re-read when its mtime or
+length changes (checked at most every 2 s, so a second web task sees a change
+within that). `_people/changes.jsonl` keeps one line per change: `at`, `by`,
+`what` and the detail; each change is on the server log too
+(`napkin_web::people`), and a consenting account's calls on the dogfood record.
+Seeded once, from the roster file `NAPKIN_AUTH_ROSTER`, the first time a server
+starts without the store; after that the file is not read.
+
+**Admins.** `crates/napkin-web/src/people.rs` `PEOPLE_ADMINS` (`engineer@napkin`).
+Every `/admin/*` route is `403` for anyone else (`401` with no session), and `404`
+on a server without the roster. The shell's `PEOPLE_ADMINS`
+(`app/src/shell/people/model.ts`) only hides the menu entry.
+
+**Recognising an agency.** An id, a name or an alias, any case: the shell
+registry's (`palette.ts` `AGENCY_COLOURS`, `AGENCY_ALIASES`, mirrored as
+`CODE_AGENCIES`, `CODE_ALIASES`; `app/tests/peopleAdmin.test.tsx` keeps them the
+same), then the added agencies'.
+
+| Route | Does |
+|---|---|
+| `GET /admin/people` | `{people: [Person], agencies: [Agency], admins: [id]}`. `people` includes the removed (`removed_at` set). |
+| `POST /admin/people {name, agency, username?}` | `201` + the Person. `agency` is recognised as above (`400` when nothing matches: add the agency first). `username` defaults to `firstname@agency`; its agency must be the recognised id (`400`). `409` when they can already sign in; a removed person is brought back. |
+| `PATCH /admin/people/{id} {name}` | The Person, renamed (the sign-in name stays). `404`. |
+| `DELETE /admin/people/{id}` | The Person with `removed_at`. They cannot sign in, and a session they hold is answered `401` at its next request; their documents and decisions stay. `409` for an admin, `404`. |
+| `GET /admin/agencies` | `[Agency]`: the registry's (`source: "code"`) and the added (`"added"`), each with `people`, the number who can sign in. |
+| `POST /admin/agencies {name, base, accent, id?, aliases?}` | `201` + the added agency. `base`, `accent` `#rrggbb` (`400`); `id` defaults to the name, lower case, `+`/`&` as "and", letters and digits only. `409` when the id, name or an alias is an agency already. |
+| `GET /agency-looks` | Public (no session). `[{id, name, base, accent, aliases}]` of the added agencies; the shell registers them (`palette.ts` `registerAgencyLooks`) before the sign-in card or the studio shows, so their people wear their look. |
+
+`Person` is `{id, name?, agency, admin, added_by, added_at, removed_at?}`
+(`added_by` is `roster` for the seed). `Agency` (admin list) is `{id, name, base,
+accent, aliases, source, people}`.

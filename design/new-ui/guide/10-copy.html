@@ -1,0 +1,98 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Copy rules · Napkin new UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>:root{--desk:#F6F1E7;--paper:#FFFDF8;--card:#fff;--ink:#141413;--ink-soft:#2A2620;--muted:#6D655A;--faint:#9A9082;--line:#E2D9C8;--warn:#B45309;--warn-soft:#FEF3DC;--ok:#1D8A4E;--ok-soft:#E6F6EC;--alert:#C9462A;--alert-soft:#FFF1EE;--acc:#515BFF;--hl:#F6E36B;
+--ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;--serif:"Newsreader",Georgia,serif;--mono:"Geist Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--desk:#121110;--paper:#1B1A18;--card:#201E1B;--ink:#EFE9DE;--ink-soft:#D6CEC0;--muted:#A49B8D;--faint:#7B7367;--line:#34302A;--warn:#E09A4B;--warn-soft:#3A2A18;--ok:#5DBB83;--ok-soft:#1C2E23;--alert-soft:#3a1f19;--acc:#C8CBFF}}
+:root[data-theme=dark]{--desk:#121110;--paper:#1B1A18;--card:#201E1B;--ink:#EFE9DE;--ink-soft:#D6CEC0;--muted:#A49B8D;--faint:#7B7367;--line:#34302A;--warn:#E09A4B;--warn-soft:#3A2A18;--ok:#5DBB83;--ok-soft:#1C2E23;--alert-soft:#3a1f19;--acc:#C8CBFF}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--desk);color:var(--ink);font:15px/1.55 var(--ui)}
+a{color:inherit;text-decoration-color:color-mix(in srgb,var(--acc) 55%,transparent);text-underline-offset:3px}
+code{font:12.5px var(--mono);background:color-mix(in srgb,var(--ink) 6%,transparent);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+pre{font:12px/1.5 var(--mono);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto}
+.top{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 24px;background:color-mix(in srgb,var(--desk) 94%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .home{font-weight:800;letter-spacing:-.01em;text-decoration:none}.top .ver{font:11px var(--mono);color:var(--muted)}
+.wrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:40px;max-width:1360px;margin:0 auto;padding:0 24px}
+.side{position:sticky;top:58px;align-self:start;max-height:calc(100vh - 70px);overflow:auto;padding:26px 0;display:grid;gap:2px;font-size:13.5px}
+.side a{display:flex;gap:10px;padding:6px 10px;border-radius:7px;text-decoration:none;color:var(--ink-soft)}
+.side a span{font:600 11px/1.9 var(--mono);color:var(--faint)}
+.side a:hover{background:color-mix(in srgb,var(--ink) 5%,transparent)}
+.side a[aria-current]{background:var(--ink);color:var(--paper)}.side a[aria-current] span{color:inherit;opacity:.7}
+.toc{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:grid;gap:1px}.toc b{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:0 10px 6px}.toc a{padding:4px 10px;font-size:12.5px}
+main{min-width:0;padding:34px 0 80px}
+.eyebrow{font:600 11.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px}
+h1{font-size:clamp(36px,5vw,56px);font-weight:800;letter-spacing:-.04em;line-height:1;margin:0 0 18px}
+h1 .dot{display:inline-block;width:.17em;height:.17em;border-radius:50%;background:var(--muted);margin-left:.04em}
+h2{font-size:28px;font-weight:800;letter-spacing:-.025em;line-height:1.15;margin:56px 0 14px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:32px 0 10px}
+h4{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+p,li{max-width:76ch}.lede{font-size:17px;color:var(--ink-soft);max-width:66ch}
+.fig{margin:22px 0 28px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 1px 2px rgba(20,20,19,.05),0 8px 24px -12px rgba(50,38,18,.18)}
+.fig .shot{position:relative;line-height:0;border-radius:6px;overflow:hidden;border:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.fig img{width:100%;height:auto;display:block}
+.co{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;background:#E8462A;color:#fff;font:700 12px/24px var(--mono);text-align:center;box-shadow:0 0 0 2px #fff,0 3px 8px rgba(0,0,0,.35);pointer-events:none}
+figcaption{font-size:13px;color:var(--muted);padding:10px 4px 2px}
+.legend{list-style:none;margin:8px 0 0;padding:0 4px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px 18px;font-size:13px}
+.legend li{display:flex;gap:9px;align-items:baseline}.legend .cn{flex:none;width:20px;height:20px;border-radius:50%;background:#E8462A;color:#fff;font:700 11px/20px var(--mono);text-align:center}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.two .fig,.three .fig{margin:8px 0}
+.grid-sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin:14px 0}
+.sw{display:flex;gap:12px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px}
+.sw .chips{display:flex;flex:none}.sw .chips i{width:38px;height:38px;border-radius:6px;border:1px solid rgba(0,0,0,.12)}.sw .chips i+i{margin-left:-8px;box-shadow:-2px 0 0 var(--paper)}
+.sw code{background:none;padding:0;font-weight:600}.sw small{display:block;font:11.5px var(--mono);color:var(--muted)}.sw p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:12px 0 20px;background:var(--paper);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:block;overflow-x:auto}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font:600 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:color-mix(in srgb,var(--ink) 3%,transparent)}
+td code{font-size:11.5px}
+.dd{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 22px}.dd>div{border-radius:10px;padding:12px 14px;border:1px solid var(--line);background:var(--paper)}
+.dd h5{margin:0 0 6px;font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase}.do{border-top:4px solid var(--ok)!important}.do h5{color:var(--ok)}.dont{border-top:4px solid var(--alert)!important}.dont h5{color:var(--alert)}
+.dd p{margin:4px 0;font-size:13.5px}.dd .fig{margin:6px 0 0;padding:6px}
+.note{border-left:3px solid var(--acc);background:var(--paper);border-radius:0 8px 8px 0;padding:10px 14px;margin:14px 0;font-size:13.5px}
+.note.mm{border-left-color:var(--warn);background:var(--warn-soft)}.note.ok{border-left-color:var(--ok)}
+.miss{padding:20px;border:1.5px dashed var(--line);border-radius:10px;color:var(--muted);font-size:13px;margin:14px 0}
+.spec{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:4px 16px;margin:12px 0}
+.spec>div{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--line)}.spec>div:last-child{border:0}
+.spec small{font:11.5px/1.5 var(--mono);color:var(--muted)}
+.states{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin:14px 0}
+.st{flex:1 1 140px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;justify-items:center;gap:6px;text-align:center;font-size:12.5px}
+.st b{font-size:13px}.st small{color:var(--muted);font-size:11.5px;line-height:1.35}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0;font-size:13px}
+.flow .n{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-weight:600}.flow .n.hot{background:var(--ink);color:var(--paper);border-color:var(--ink)}.flow .a{color:var(--faint);font:12px var(--mono)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin:16px 0}
+.card{display:block;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;text-decoration:none;transition:border-color .15s}.card:hover{border-color:var(--ink)}
+.card small{font:700 10.5px var(--mono);letter-spacing:.1em;color:var(--muted)}.card b{display:block;font-size:17px;letter-spacing:-.02em;margin:4px 0}.card span{font-size:13px;color:var(--muted)}
+.rule{counter-increment:r;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0}
+.rule h3{margin:0 0 6px}.rule h3::before{content:counter(r,decimal-leading-zero);font:700 12px var(--mono);color:var(--muted);margin-right:10px}
+.pn{display:flex;justify-content:space-between;margin-top:70px;padding-top:20px;border-top:1px solid var(--line);font-weight:600}
+.k{display:inline-block;font:600 11px var(--mono);border:1px solid var(--line);border-radius:4px;padding:1px 6px;background:var(--paper)}
+.diag{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;margin:14px 0;overflow:auto}
+.diag svg{display:block;max-width:100%;height:auto}
+.marks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:14px 0}
+.mk{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 10px 10px;display:grid;justify-items:center;gap:6px;text-align:center}
+.mk b{font-size:13px}.mk small{font-size:11.5px;color:var(--muted);line-height:1.35}.mk .row{display:flex;align-items:center;gap:14px}
+.ag{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin:16px 0}
+.agc{background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.agc .hd{display:flex;align-items:center;gap:12px;padding:14px}.agc .hd b{font-size:16px}.agc .hd small{display:block;font:11px var(--mono);color:var(--muted)}
+.agc .pill{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:999px;font:800 13px var(--ui);white-space:nowrap}
+.agc .bd{padding:0 14px 14px;font-size:12.5px}.agc table{font-size:11.5px;margin:6px 0 0}.agc td,.agc th{padding:5px 7px}
+.surf{display:grid;grid-template-columns:1fr 1fr}.surf>div{padding:12px;display:grid;gap:6px;font:11px var(--mono)}
+.surf .paper{border-radius:6px;padding:10px;border:1px solid}.surf .btn{display:inline-block;padding:6px 10px;border-radius:4px;font:600 12px var(--ui)}
+@media (max-width:900px){.wrap{grid-template-columns:1fr;gap:0;padding:0 16px}.side{position:static;max-height:none;padding:14px 0;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.toc{display:none}.two,.three,.dd{grid-template-columns:1fr}.spec>div{grid-template-columns:1fr}.top{padding:10px 16px}}
+</style></head><body>
+<header class="top"><a href="index.html" class="home">Napkin Studio · new UI guide</a><span class="ver">feat/new-ui · captured 2026-11-11</span></header>
+<div class="wrap"><nav class="side" aria-label="Pages"><a href="01-principles.html"><span>01</span>Principles</a><a href="02-foundations.html"><span>02</span>Foundations</a><a href="03-agency-looks.html"><span>03</span>Agency looks</a><a href="04-deep-o.html"><span>04</span>The Deep O logo</a><a href="05-agents.html"><span>05</span>Agents</a><a href="06-shell.html"><span>06</span>The shell</a><a href="07-brief.html"><span>07</span>Brief</a><a href="08-research.html"><span>08</span>Research</a><a href="09-patterns.html"><span>09</span>Patterns</a><a href="10-copy.html" aria-current="page"><span>10</span>Copy rules</a><a href="11-gaps.html"><span>11</span>Known gaps and open decisions</a><div class="toc"><b>On this page</b><a href="#rules">Rules</a><a href="#glossary">Glossary</a></div></nav>
+<main><p class="eyebrow">10 · Plain words and the glossary</p><h1>Copy rules<span class="dot"></span></h1><p class="lede">Napkin's people are planners and strategists, not engineers. Every word on the surface is plain, short and in sentence case. These rules come from the owner's decisions in the feature records and the glossary in <code>rsidebar/final.md</code>.</p>
+<h2 id="rules">Rules</h2>
+<ol><li><b>Plain words.</b> Say what it is ("Couldn't find", "Left out"), not what the system calls it.</li>
+<li><b>No ids, codes, keys, contract names or "pins".</b> <code>src_…</code>, <code>f_012</code>, <code>roster.categories.primary</code>, <code>process:middleware</code> and <code>clan:bar</code> never appear. They live in History → Full record and in Technical details, with Copy.</li>
+<li><b>Role names, not persona names.</b> "the Review agent", from <code>NapkinRoles.the()</code>. Captions are "REVIEW AGENT". The material ("pearl") is never shown (owner, 10 Nov).</li>
+<li><b>Sentence case everywhere.</b> Mono caps only for eyebrows, labels and counts.</li>
+<li><b>Name, don't quote.</b> "Finding 3 in §2", "line 3 of 7", "The job".</li>
+<li><b>Numbers as small pictures</b> where they can be: dots for calls, bars for confidence, pips for used against found.</li>
+<li><b>One word for one thing.</b> "lock" only for "Lock the brief" and "Lock the report". "Keep as is" for a protected part.</li>
+<li><b>Client review never names "Client"</b> as an actor in the decisions log. Irregular past verbs read correctly ("wrote", "kept").</li></ol>
+<div class="dd"><div class="do"><h5>Do</h5><p>"Uses 30 of 57 sources · 50 of 196 facts"</p><p>"The Review agent found a problem across background, audience and mandatories."</p><p>"Settle 6 first"</p></div><div class="dont"><h5>Don't</h5><p>"USED/PINNED 50/196 · pri 12 sec 9"</p><p>"judge@2 verdict on f_011 (d_031)"</p><p>"Jude flagged 6 fields"</p></div></div>
+<h2 id="glossary">Glossary: what we used to say, what we say now</h2>
+<table><tr><th>Today / old</th><th>Say</th></tr><tr><td>pin</td><td><b>fact</b></td></tr><tr><td>lens; &quot;Consumer &amp; Culture&quot;</td><td><b>section, by its report title everywhere (&quot;§3 Who it is for&quot;)</b></td></tr><tr><td>USED / PINNED 8 / 47</td><td><b>pip bar; &quot;8 of 47 used&quot; on hover</b></td></tr><tr><td>feed, feeds the report</td><td><b>used</b></td></tr><tr><td>pri / sec / ter</td><td><b>First-hand / Research firm / Press and web</b></td></tr><tr><td>considered, not chosen</td><td><b>Left out</b></td></tr><tr><td>not used</td><td><b>Found, not used</b></td></tr><tr><td>gaps</td><td><b>Couldn't find</b></td></tr><tr><td>contests</td><td><b>Sources disagree</b></td></tr><tr><td>PROPOSED · NEEDS YOU</td><td><b>● Needs you</b></td></tr><tr><td>derived from 2 pins</td><td><b>rests on 2 facts</b></td></tr><tr><td>Frozen pin</td><td><b>Kept as it was on 9 Nov</b></td></tr><tr><td>retrieved_at, Learned</td><td><b>Read on</b></td></tr><tr><td>client-confidential / open</td><td><b>Client's own: don't quote outside / Free to quote</b></td></tr><tr><td>Lock and accept · 7</td><td><b>Lock the report</b></td></tr><tr><td>Refresh</td><td><b>Rewrite from the facts</b></td></tr><tr><td>Run again…</td><td><b>Research again…</b></td></tr><tr><td>Find the points</td><td><b>Work out the findings again</b></td></tr><tr><td>Confirm before the brief</td><td><b>Check before the brief</b></td></tr><tr><td>.clan copy</td><td><b>Napkin file (.clan)</b></td></tr><tr><td>Pin &amp; lock this field</td><td><b>(removed: it was Keep as is)</b></td></tr><tr><td>SELECTED PART / Done</td><td><b>← Brief (the crumb) and Esc</b></td></tr><tr><td>Certainty / Confidence / LOW·THIN</td><td><b>confidence bars ▮▮▯</b></td></tr><tr><td>Ellis, Dara, Jude…</td><td><b>Knowledge agent, Brief agent, Review agent</b></td></tr><tr><td>src_, f_, fi_, d_ ids, dotted keys</td><td><b>never on the surface; Full record only</b></td></tr></table>
+<h3>Line kinds (Research)</h3>
+<table><tr><th>The line rests on</th><th>It reads</th></tr><tr><td>one finding</td><td>◗ Restates Finding n</td></tr><tr><td>two or more findings</td><td>◗◗ Draws on Findings 2 and 4</td></tr><tr><td>a number, quoted</td><td>◆ Quotes a figure</td></tr><tr><td>a number, paraphrased</td><td>◆ A figure, in our words</td></tr><tr><td>a text fact, paraphrased</td><td>◆ A source's point, in our words</td></tr><tr><td>a code or roster fact</td><td>◆ From the client's record</td></tr><tr><td>nothing cited</td><td>? Our reading, nothing cited (bars capped at ▮▮▯)</td></tr></table>
+<div class="note mm"><b>Live differs from the design.</b> Live copy that still breaks these rules: "pins", "facts pinned" and "gaps" in the research band and stat row; "n pinned facts" under Made from in the Brief tab; "LOW · THIN" as a text chip in the Brief part view (the design moves it to the shared bars).</div>
+
+<footer class="pn"><a href="09-patterns.html">← Patterns</a><a href="11-gaps.html">Known gaps and open decisions →</a></footer></main></div></body></html>

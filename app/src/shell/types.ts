@@ -14,7 +14,6 @@ export type { InstalledApp } from '../host'
 export interface RunningApp {
   artifactPath: string
   open: OpenResult
-  htmlContent: string
   editMode: boolean
   /** Set when the document is open on the device rather than on the server. */
   source?: DeviceSource

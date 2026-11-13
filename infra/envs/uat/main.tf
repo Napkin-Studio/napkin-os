@@ -1,0 +1,331 @@
+# UAT: a second copy of the staging stack that we deploy any branch to by hand
+# (features/uat-environment.clan). Nothing deploys it automatically, and it
+# shares no data or network with staging, which testers use. Same modules; the
+# differences are the env name, the VPC range, the deploy role's trust
+# (develop and main runs, this stack only) and the OIDC provider, which staging already owns.
+#
+# Napkin's data plane, stage 1: the stores the knowledge layers and the RAG
+# need, before any service that uses them.
+#
+#   network   VPC, private subnets, one NAT, S3 endpoint, napkin.internal
+#   kms       one customer key for everything at rest
+#   aurora    the knowledge layers' cluster — Postgres, pauses when idle
+#   rag       the RAG host: a shared read-only house store + one learnings
+#             store per agency, each its own Qdrant, disk and key (S8)
+#   databases napkin_category + napkin_agency_<slug> in the cluster (S3)
+#   storage   S3: corpus (ingestion input), blobs, backups
+#   admin     an SSM-only host to run migrations, ingestion and psql
+#   identity  the Cognito user pool people sign in with (user@agency)
+#   services  stage 2: ECS Fargate (napkin-web behind a load balancer, the
+#             middleware on a private address), ECR, EFS, the deploy role
+#
+# Services (web, middleware, layers, retrieval) come in stage 2 and join the
+# `data_clients` security group to reach Aurora and Qdrant.
+
+terraform {
+  required_version = ">= 1.10"
+  required_providers {
+    aws    = { source = "hashicorp/aws", version = "~> 6.0" }
+    random = { source = "hashicorp/random", version = "~> 3.6" }
+  }
+  # Partial configuration: `terraform init -backend-config=backend.hcl`.
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.region
+  default_tags {
+    tags = { Project = "napkin", Env = var.env, ManagedBy = "terraform" }
+  }
+}
+
+data "aws_caller_identity" "me" {}
+
+locals {
+  name = "napkin-${var.env}"
+}
+
+# Who can sign in: accounts `user@agency`, made by an admin (scripts/create-users.sh).
+module "identity" {
+  source      = "../../modules/identity"
+  name        = local.name
+  kms_key_arn = aws_kms_key.data.arn
+}
+
+module "network" {
+  source = "../../modules/network"
+  name   = local.name
+  region = var.region
+  cidr   = var.vpc_cidr
+}
+
+resource "aws_kms_key" "data" {
+  description             = "${local.name}: data at rest (Aurora, Qdrant volume, S3, secrets)"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+}
+
+resource "aws_kms_alias" "data" {
+  name          = "alias/${local.name}-data"
+  target_key_id = aws_kms_key.data.key_id
+}
+
+# Membership in this group is what grants network access to Aurora and Qdrant.
+# It has no rules of its own; the stores' groups reference it.
+resource "aws_security_group" "data_clients" {
+  name        = "${local.name}-data-clients"
+  description = "Members may reach Aurora (5432) and Qdrant (6333/6334)"
+  vpc_id      = module.network.vpc_id
+}
+
+module "storage" {
+  source      = "../../modules/storage"
+  name        = local.name
+  account_id  = data.aws_caller_identity.me.account_id
+  kms_key_arn = aws_kms_key.data.arn
+}
+
+module "aurora" {
+  source                   = "../../modules/aurora"
+  name                     = local.name
+  vpc_id                   = module.network.vpc_id
+  subnet_ids               = module.network.private_subnet_ids
+  client_security_group_id = aws_security_group.data_clients.id
+  kms_key_arn              = aws_kms_key.data.arn
+  engine_version           = var.aurora_engine_version
+  min_acu                  = var.aurora_min_acu
+  max_acu                  = var.aurora_max_acu
+  seconds_until_auto_pause = var.aurora_seconds_until_auto_pause
+  deletion_protection      = var.deletion_protection
+}
+
+resource "aws_route53_record" "db" {
+  zone_id = module.network.internal_zone_id
+  name    = "db.${module.network.internal_domain}"
+  type    = "CNAME"
+  ttl     = 60
+  records = [module.aurora.endpoint]
+}
+
+module "rag" {
+  source                   = "../../modules/rag-host"
+  name                     = local.name
+  region                   = var.region
+  vpc_id                   = module.network.vpc_id
+  subnet_id                = module.network.private_subnet_ids[0]
+  client_security_group_id = aws_security_group.data_clients.id
+  kms_key_arn              = aws_kms_key.data.arn
+  internal_zone_id         = module.network.internal_zone_id
+  internal_domain          = module.network.internal_domain
+  instance_type            = var.rag_instance_type
+  qdrant_version           = var.qdrant_version
+  house_volume_gb          = var.house_volume_gb
+  agencies                 = var.agencies
+}
+
+# S3: the shared category database and one database per agency, in the cluster.
+# Retired agencies keep their database until it is dropped by hand
+# (offboarding, infra/README.md).
+module "databases" {
+  source            = "../../modules/tenant-databases"
+  name              = local.name
+  agencies          = keys(var.agencies)
+  host              = module.aurora.endpoint
+  port              = module.aurora.port
+  master_secret_arn = module.aurora.master_secret_arn
+  kms_key_arn       = aws_kms_key.data.arn
+}
+
+# provision-databases.sh as an SSM document, so it runs on the admin host with
+# one `aws ssm send-command` and nobody copies scripts around.
+resource "aws_ssm_document" "provision_databases" {
+  name            = "${local.name}-provision-databases"
+  document_type   = "Command"
+  document_format = "JSON"
+  content = jsonencode({
+    schemaVersion = "2.2"
+    description   = "Create napkin_category and the per-agency databases and roles"
+    mainSteps = [{
+      action = "aws:runShellScript"
+      name   = "provision"
+      inputs = {
+        runCommand = concat(
+          ["set -- ${local.name}"],
+          split("\n", file("${path.module}/../../scripts/provision-databases.sh")),
+        )
+      }
+    }]
+  })
+}
+
+# Claude through Amazon Bedrock (peripherals.md §1.3a): the middleware and the
+# seeding job sign their calls with their role. One policy, attached to the
+# admin host now (it runs seeding) and to the stage 2 services later.
+#
+#   runtime (default)  bedrock:InvokeModel on the Claude inference profiles in
+#                      this region (eu. and global.) and on the Claude models
+#                      they route to, in any region (global. can land anywhere;
+#                      its models have no region in their ARN)
+#   mantle (option)    bedrock-mantle:CreateInference; no per-model resource type
+#                      in IAM yet, so the request region is the limit
+#
+# Model access itself is a Marketplace agreement per model, accepted once per
+# account (infra/README.md).
+resource "aws_iam_policy" "model_invoke" {
+  name        = "${local.name}-model-invoke"
+  description = "Call Claude on Amazon Bedrock from ${var.region}"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ClaudeInferenceProfiles"
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream", "bedrock:GetInferenceProfile"]
+        Resource = [
+          "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.me.account_id}:inference-profile/eu.anthropic.claude-*",
+          "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.me.account_id}:inference-profile/global.anthropic.claude-*",
+        ]
+      },
+      {
+        Sid      = "ClaudeModelsBehindTheProfiles"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = ["arn:aws:bedrock:*::foundation-model/anthropic.claude-*", "arn:aws:bedrock:::foundation-model/anthropic.claude-*"]
+      },
+      {
+        Sid       = "ClaudeOnMantle"
+        Effect    = "Allow"
+        Action    = "bedrock-mantle:CreateInference"
+        Resource  = "*"
+        Condition = { StringEquals = { "aws:RequestedRegion" = var.region } }
+      },
+    ]
+  })
+}
+
+module "admin" {
+  source                   = "../../modules/admin-host"
+  name                     = local.name
+  vpc_id                   = module.network.vpc_id
+  vpc_cidr                 = module.network.vpc_cidr
+  subnet_id                = module.network.private_subnet_ids[0]
+  extra_security_group_ids = [aws_security_group.data_clients.id]
+  secret_arns = concat(
+    [module.aurora.master_secret_arn],
+    module.rag.store_secret_arns,
+    values(module.databases.secret_arns),
+  )
+  parameter_arns    = [module.databases.list_parameter_arn]
+  kms_key_arn       = aws_kms_key.data.arn
+  corpus_bucket_arn = module.storage.bucket_arns["corpus"]
+  policy_arns       = { model_invoke = aws_iam_policy.model_invoke.arn }
+}
+
+# Two account-wide budgets (see variables.tf). Account-wide: a tag filter would
+# read $0 until the Env tag is activated for cost allocation in Billing, which
+# is exactly when an alert is needed most.
+locals {
+  budgets = length(var.budget_emails) == 0 ? {} : {
+    burn = { limit = var.monthly_budget_usd, include_credit = false }
+    card = { limit = var.monthly_card_budget_usd, include_credit = true }
+  }
+}
+
+resource "aws_budgets_budget" "monthly" {
+  for_each     = local.budgets
+  name         = "${local.name}-monthly-${each.key}"
+  budget_type  = "COST"
+  limit_amount = tostring(each.value.limit)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  # include_credit = true: credits count against the cost, so this reads what
+  # the card pays. false: the gross cost, what the credits are paying for.
+  cost_types {
+    include_credit = each.value.include_credit
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = var.budget_emails
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = var.budget_emails
+  }
+}
+
+# Stage 2: the services the pipeline deploys (napkin-web, the middleware).
+module "services" {
+  source                         = "../../modules/services"
+  name                           = local.name
+  region                         = var.region
+  vpc_id                         = module.network.vpc_id
+  public_subnet_ids              = module.network.public_subnet_ids
+  private_subnet_ids             = module.network.private_subnet_ids
+  data_clients_security_group_id = aws_security_group.data_clients.id
+  kms_key_arn                    = aws_kms_key.data.arn
+  session_secret_arn             = module.identity.session_secret_arn
+  cognito_client_id              = module.identity.client_id
+  # No passwords on UAT, as on staging: a user name and agency on the roster is enough
+  # (owner, 2026-10-05; features/no-password-sign-in.clan). Anyone who knows a
+  # roster name can sign in as that person; sign-ins are logged with their IP.
+  # The user pool stays, so `cognito` here undoes it.
+  web_auth = "roster"
+  # The dogfood build: everything consenting accounts do is recorded, bodies
+  # included, until the dogfood ends and it is purged (owner, 2026-10-05;
+  # features/dogfood-telemetry.clan). Kept as on staging so UAT tests what staging runs.
+  web_dogfood = true
+  # The middleware's run log beside the record (features/dogfood-log-quality.clan),
+  # with what every model call and search saw, so a brief can be traced claim
+  # by claim (owner, 2026-10-19; features/brief-fact-provenance.clan). Napkin
+  # accounts only read it, and the dogfood purge empties it. Staging only.
+  middleware_runlog        = true
+  middleware_runlog_bodies = true
+  # The Deploy workflow is run from develop (or main) and builds the branch
+  # given as its ref input, so the role trusts only those two refs.
+  deploy_refs              = ["refs/heads/develop", "refs/heads/main"]
+  github_oidc_provider_arn = var.github_oidc_provider_arn
+  github_repository        = var.github_repository
+  github_repository_ids    = var.github_repository_ids
+  certificate_arn          = var.certificate_arn
+  middleware_count         = var.middleware_count
+  middleware_env = {
+    NAPKIN_RESEARCH_WEB = "tavily" # Tavily, Nova grounding when it fails (server/napkin/websearch.py)
+    # Until the middleware takes its scope from the signed-in person's agency,
+    # it works as our own test tenant, whose database exists (agencies.sandbox).
+    NAPKIN_DEV_ORG      = "org/sandbox"
+    NAPKIN_MODEL_ROUTES = "/srv/napkin/server/model-routes.json"
+    # As the local stack runs it (napkin-os-wt/stack/start-integrate.sh)
+    NAPKIN_BRIEF_JUDGE        = "jev"
+    NAPKIN_BRIEF_RESEARCH_MAX = "6"
+  }
+  # The knowledge layers, in process (pg.py): the shared category database and each agency's own,
+  # staging's while layers_from_staging is on (staging-layers.tf). Each secret is the JSON the database module wrote.
+  middleware_secrets = merge({
+    NAPKIN_TAVILY_API_KEY = aws_secretsmanager_secret.tavily.arn
+    NAPKIN_JEV_API_KEY    = aws_secretsmanager_secret.jev.arn
+  }, local.layer_secrets)
+  extra_kms_key_arns = distinct([for s in data.aws_secretsmanager_secret.staging_db : s.kms_key_id])
+}
+
+# jev (TypeSafe), the checker research, asks and briefs rely on. Value put by hand:
+#   aws secretsmanager put-secret-value --secret-id napkin-uat/research/jev-api-key --secret-string ...
+resource "aws_secretsmanager_secret" "jev" {
+  name       = "${local.name}/research/jev-api-key"
+  kms_key_id = aws_kms_key.data.arn
+}
+
+# Research's web search. Its value is put by hand, never in Terraform state:
+#   aws secretsmanager put-secret-value --secret-id napkin-uat/research/tavily-api-key --secret-string tvly-...
+resource "aws_secretsmanager_secret" "tavily" {
+  name       = "${local.name}/research/tavily-api-key"
+  kms_key_id = aws_kms_key.data.arn
+}

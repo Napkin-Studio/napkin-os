@@ -1,17 +1,17 @@
 """draft_brief, planned: the brief is written as a whole, not one field at a time.
 
-  extract   Ellis captures the client's own words (unchanged: the capture and its scorecard).
-  context   Sam plans the whole brief in one call: the strategy in a line; for every part what it
+  extract   The Knowledge agent captures the client's own words (unchanged: the capture and its scorecard).
+  context   The Strategy agent plans the whole brief in one call: the strategy in a line; for every part what it
             must say and what it rests on (the client, the research, the library, or an assumption);
             what research it needs and what only the client can answer. Then the research the plan
             asks for runs (at most `research_max` lens x market units, the Research Tool's own units:
             searched, quote-checked, pinned into the brief with their sources).
-  draft     Dara writes every part in one call, from the plan, the client's words, the facts (pins,
+  draft     The Brief agent writes every part in one call, from the plan, the client's words, the facts (pins,
             findings, the research upstream) and the library's passages. Each part says what it
             rests on and cites it.
-  judge     Jude reviews the brief as a whole, once: the BetterBriefs dimensions, the chain from
+  judge     The Review agent reviews the brief as a whole, once: the BetterBriefs dimensions, the chain from
             objective to insight to proposition to proof, and every researched claim against the
-            fact it cites. What he says to fix goes back to Dara once; then he scores again.
+            fact it cites. What it says to fix goes back to the Brief agent once; then it scores again.
             One note per issue, naming the parts it touches, never the same note on every box.
 
 Why (the owner, 2026-10-01): field writers that each see their own slice wrote a sharp insight
@@ -24,6 +24,8 @@ Every call, search, decision and stage is in the job's run log (napkin.runlog).
 from __future__ import annotations
 
 import copy
+import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from .. import reasoning as rsn
@@ -31,27 +33,35 @@ from .. import runlog
 from ..doc import ISO_3166, LENSES, ctx_facts, lens_of_key
 from ..jev import JevError, noul
 from ..rules import merge as merge_rules
+from ..model import ModelError
 from ..util import iso
 from . import capture as cap_stage
 from . import provenance as prov
+from .clientcat import plan_category
 from .drafters import _query
-from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, last_writer, put
+from .fields import ARRAY_KEYS, KEYS, LABELS, _is_human, bare, clean, filled, get, last_writer, put
 from .job import BriefJob, log
-from . import checks
-from .questions import dedupe
+from . import checks, intake
+from .questions import dedupe, without_answered
+
+# The Review agent's whole-brief review: a full brief's dimensions, claims and notes run past 8000 output
+# tokens (thinking counts against the cap), and a cut-off review writes only half the parts.
+REVIEW_MAX_TOKENS = 24000
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
 FACTS_MAX = prov.FACTS_MAX
+# A part as it stands, on a redraft (`current`): its words up to this many characters, a list's items each.
+CURRENT_MAX, CURRENT_ITEM_MAX = 900, 220
 # jev's "the facts held already answer the need" at or above this: the planned search is skipped.
 HELD = 0.6
 
 # Who handles a part, from what the plan says it rests on (the owner, 2026-10-01: mix and match,
 # decided part by part on what the brief receives, steered by one plan).
-WHO = {"client": "Ellis keeps the client's words; Dara writes them out",
-       "research": "Sam researches it; Dara writes it citing the facts",
-       "library": "Dara writes it from the library's precedents",
-       "assumption": "Dara proposes it, marked to confirm with the client",
-       "ask_client": "a question for the client; Dara proposes a starting point, marked to confirm"}
+WHO = {"client": "The Knowledge agent keeps the client's words; the Brief agent writes them out",
+       "research": "The Strategy agent researches it; the Brief agent writes it citing the facts",
+       "library": "The Brief agent writes it from the library's precedents",
+       "assumption": "The Brief agent proposes it, marked to confirm with the client",
+       "ask_client": "a question for the client; the Brief agent proposes a starting point, marked to confirm"}
 
 DIMS = ["objectives_quality", "audience_vividness", "single_minded_message", "evaluation_criteria",
         "budget_interlock", "strategic_clarity", "language"]
@@ -133,6 +143,8 @@ Plan:
   or none.
 - category: the category code from the list that fits the brief best, or null.
 - ask_client: the questions only the client can answer, each with the part it serves.
+On a redraft, `current` is the brief as it stands, each part with who wrote it last (person or agent): plan
+from it, keep what a person wrote unless the facts contradict it, and build on the rest.
 Never restate the person's request ("make me a brief") as content. Plain British English."""
 
 
@@ -153,6 +165,11 @@ def plan_schema(keys, lens_codes, cat_codes):
 
 
 # -- draft -----------------------------------------------------------------------------------
+# Draft it again (features/brief-redraft-in-place): the parts as they stand come as `current`.
+REDRAFT_RULE = """On a redraft, `current` is the brief as it stands, each part with who wrote it last. Keep what a person wrote
+(by "person") unless the facts contradict it, and say so in `why` when they do. Build on what an agent wrote
+(by "agent") with the facts, new ones included; do not start it from scratch.
+"""
 DRAFT_SYSTEM = """You are a senior strategic planner writing a complete creative brief, every part at once, so
 the parts make one argument: the objectives, the audience, the insight, the proposition and its proof all
 serve the plan's strategy.
@@ -175,10 +192,10 @@ Lists (reasons to believe, tone, mandatories, open questions) are arrays of shor
 believe you cannot prove from a fact starts with "To confirm:". Budget and scope: deliverables, channels and
 timing only, no budget figure the client did not give. Open questions: what only the client can answer.
 Return null for a part only when nothing sensible can be said. Never restate the person's request as content.
-Write in plain British English, specific and vivid, no category jargon."""
+""" + REDRAFT_RULE + """Write in plain British English, specific and vivid, no category jargon."""
 
 
-# Every rewrite (Jude's revise, the check loop's, fix_parts') carries each part's claims as they stand.
+# Every rewrite (the Review agent's revise, the check loop's, fix_parts') carries each part's claims as they stand.
 REWRITE_NOTE = """
 
 Rewrite ONLY the parts in `rewrite`, following each instruction, keeping the rest of the brief in mind.
@@ -215,8 +232,8 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
 4. notes: what should change, ONE note per issue, naming every part it touches (never the same note per part).
    severity "fix" (the brief is wrong or weaker without it) or "consider". Something only the client can
    supply (a budget, success measures) is a question, not a fix.
-5. revise: the parts Dara should rewrite, each with one clear instruction. Only parts a rewrite can improve
-   from what the brief already holds; never ask her to invent client facts. Never name a part only because a
+5. revise: the parts the Brief agent should rewrite, each with one clear instruction. Only parts a rewrite can improve
+   from what the brief already holds; never ask it to invent client facts. Never name a part only because a
    claim in it is worked out or marked to confirm.
 6. questions: what only the client can answer.
 7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary. It is "multiple" when the
@@ -265,15 +282,31 @@ def _short(s, n=220):
     return s if len(s) <= n else s[:n - 1] + "…"
 
 
+_IDS = re.compile(r"\s*\((?:(?:see |cites? )?(?:f|fi|fnd|src|cap|psg|d)_[0-9A-Za-z]{2,}(?:,\s*|\s+and\s+)?)+\)")
+
+
+def _no_ids(s) -> str:
+    """The Review agent's words as people read them: "… 1.2% ABV (f_RPH5UFCVDCUV)" loses the id. What a
+    note rests on is in its cites, not its sentence."""
+    return re.sub(r"\s+([.,;:])", r"\1", _IDS.sub("", str(s or "")))
+
+
 class PlannedBriefJob(BriefJob):
     """draft_brief, planned (module docstring)."""
 
-    def __init__(self, *a, research_max: int = 3, judge: str = "review", **kw):
+    def __init__(self, *a, research_max: int = 3, judge: str = "review", intake_wait: float = 0,
+                 intake_max: int = 3, redraft: bool = False, **kw):
         super().__init__(*a, **kw)
+        # Draft it again (the template says so); whether parts are written is read from the data (_current)
+        self.redraft = bool(redraft)
+        # intake (brief/intake.py): off unless the request asked and the wait is above 0
+        self.intake_wait, self.intake_max = max(0, float(intake_wait)), max(0, int(intake_max))
+        self.intake_skipped, self.intake_answered = [], {}  # questions left open; {key: the words it was asked in}
         self.research_max = max(0, int(research_max))
-        self.judge_mode = judge  # "review": Jude reviews the whole brief; "jev": the check loop (checkloop.py)
+        self.judge_mode = judge  # "review": the Review agent reviews the whole brief; "jev": the check loop (checkloop.py)
         self.plan_out, self.plan_dec = None, None
         self.lib = {}           # psg id -> passage record (the library's)
+        self.lib_gated = set()  # the ids in `lib` that came from a gated pack (the award library), added after the plan
         self.new_pins, self.new_sources = [], []
         self.unpinned = []      # facts outside the measure list an older brief cannot keep: suggestions only
         self.whole = {}         # key -> {value, basis, cites, builds_on_client, why}
@@ -310,7 +343,7 @@ class PlannedBriefJob(BriefJob):
                         self.caps.runlog)
 
     def _clean(self, out, ev, stage, keys=None, prior=None):
-        """Dara's parts with what each rests on (provenance.clean_parts): the one cleaner of every path.
+        """The Brief agent's parts with what each rests on (provenance.clean_parts): the one cleaner of every path.
         An assumption says it is one first, so every sentence and the claim read from it are the same text."""
         if isinstance(out, dict):
             marked = checks.mark_assumptions(out, self.whole.get("insight"))
@@ -328,8 +361,59 @@ class PlannedBriefJob(BriefJob):
         out.update({k: self.whole[k].get("claims") or [] for k in keys if k in self.whole})
         return out
 
+    def _current(self, keys):
+        """The brief as it stands, on a redraft: every open part that holds words, with who wrote it last
+        ("person" or "agent"). Locked parts are not open, so never here. A part with words no decision
+        wrote is a person's (fields.holder reads it the same way). Empty on a first draft, so a redraft
+        is read from the data, whichever way it started."""
+        chain = {d.get("id"): d for d in self.chain}
+        out = {}
+        for k in keys:
+            v = clean(k, get(self.data0, k))
+            if not filled(v):
+                continue
+            last = chain.get(last_writer(self.doc, self.chain, k))
+            by = "person" if last is None or _is_human(last) else "agent"
+            text = [_short(x, CURRENT_ITEM_MAX) for x in v] if isinstance(v, list) else _short(v, CURRENT_MAX)
+            out[k] = {"text": text, "by": by}
+        return out
+
+    def _with_current(self, payload, keys):
+        cur = self._current(keys)
+        if cur:
+            payload["current"] = cur
+        return payload
+
     def _library(self, n=12):
-        return [{"id": pid, "citation": p["citation"], "text": p["text"][:900]} for pid, p in list(self.lib.items())[:n]]
+        """The library's passages for the Brief and Review agents, capped at n. The gated ones (the award library) are
+        few and arrive last, so they keep their places and the rest fill what is left."""
+        items = list(self.lib.items())
+        gated = [x for x in items if x[0] in self.lib_gated][:n]
+        chosen = [x for x in items if x[0] not in self.lib_gated][:max(0, n - len(gated))] + gated
+        return [{"id": pid, "citation": p["citation"], "text": p["text"][:900]} for pid, p in chosen]
+
+    def _gated_precedent(self):
+        """Once the plan has named the brief's category: the gated precedent for it (the award library),
+        one request in the insight loop. The library lookups at the start of the context stage run before
+        the plan, so they cannot send a category; this is the lookup that can."""
+        rl = self.caps.runlog
+        try:
+            cat = plan_category(self.plan_out)
+            ctx = getattr(self, "ctx", None)
+            if not cat or ctx is None:
+                return
+            ctx.category = cat
+            q, cq = _query("loop4_insight", ctx.gist(), None, "plan")
+            got, notes = ctx.retrieve("loop4_insight", q, cq, only_gated=True)
+            new = {k: v for k, v in got.items() if k not in self.lib}
+            self.lib.update(new)
+            self.lib_gated |= set(new)
+            for n in notes:
+                rl.note("library", detail=n)
+            if new:
+                rl.note("library", detail=f"award library: {len(new)} precedent(s) for {cat}")
+        except Exception as e:  # noqa: BLE001 - the brief is written without it
+            rl.note("library", error=f"{type(e).__name__}: {str(e)[:200]}")
 
     def _already_held(self, asks):
         """The planned research the brief's facts already answer: jev reads the facts held for each
@@ -359,7 +443,7 @@ class PlannedBriefJob(BriefJob):
         return run, skipped
 
     # =========================================================================================
-    # context: Sam plans, then the research the plan asks for
+    # context: the Strategy agent plans, then the research the plan asks for
     # =========================================================================================
     def stage_context(self):
         rl = self.caps.runlog
@@ -387,6 +471,9 @@ class PlannedBriefJob(BriefJob):
             leaves = [{"code": x["code"], "name": x.get("name")} for x in self.caps.layers.leaves()]
         except Exception as e:  # noqa: BLE001 - no research to run, the plan still stands
             rl.note("leaves", error=f"{type(e).__name__}: {str(e)[:200]}")
+        self._intake()  # the one pause: the lookups above have finished, so the person is asked after them, not alongside
+        if self.caps.jobs.cancelled:
+            return
         ev = self._evidence()
         payload = {"client_said": self._said(), "captured": self._captured(),
                    "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in keys},
@@ -395,13 +482,17 @@ class PlannedBriefJob(BriefJob):
                                for pid, p in list(self.lib.items())[:8]],
                    "lenses": LENSES if leaves else [], "categories": leaves,
                    "research_budget": self.research_max if leaves else 0}
+        self._with_current(payload, keys)
+        if self.redraft or payload.get("current"):
+            rl.note("redraft", flagged=self.redraft, current={k: v["by"] for k, v in (payload.get("current") or {}).items()})
         plan = self.caps.model.structured("plan_brief", PLAN_SYSTEM, payload,
                                           plan_schema(keys, LENSES, [x["code"] for x in leaves]), max_tokens=8000)
         self.plan_out = plan
+        self._gated_precedent()
         rests = {}
         for k, p in (plan.get("parts") or {}).items():
             rests.setdefault(p.get("rests_on"), []).append(k)
-        self.routing = {k: (p.get("rests_on"), WHO.get(p.get("rests_on"), "Dara")) for k, p in
+        self.routing = {k: (p.get("rests_on"), WHO.get(p.get("rests_on"), "the Brief agent")) for k, p in
                         (plan.get("parts") or {}).items()}
         rl.note("routing", parts={k: who for k, (_, who) in self.routing.items()})
         rl.note("plan", rests_on=rests, research=plan.get("research"), category=plan.get("category"),
@@ -420,6 +511,65 @@ class PlannedBriefJob(BriefJob):
         self.plan_dec = self.dec(("plan",), "edit", "plan", [], mat_ids, r, "synthesise")
         decisions = [self.plan_dec] + self._research_asked(plan)
         self.add_chunk("context", {}, decisions, facts=self.new_pins, sources=self.new_sources)
+
+    def _intake(self):
+        """Ask the person what the capture leaves open, once, before the plan (brief/intake.py). Zero model
+        calls; zero seconds when nothing is askable. What is answered becomes client words, what is skipped or
+        not answered in time changes nothing and says so."""
+        rl = self.caps.runlog
+        if self.task != "draft_brief" or self.intake_wait <= 0 or self.capture is None:
+            return
+        items = {**((self.W.get("capture") or {}).get("items") or {}), **self.capture["items"]}
+        asked = intake.questions(items, self.capture.get("named"), self.intake_max,
+                                 intake.answer_materials(self.W.get("materials")))
+        if not asked:
+            return
+        t0 = time.monotonic()
+        rl.waiting("a person's answers to the intake questions", budget_s=self.intake_wait, asked=len(asked))
+        with rl.busy("person", "intake answers"):
+            answers, timed_out = self.ask(asked, self.intake_wait)
+        if self.caps.jobs.cancelled:
+            return
+        mat, new, done, skipped = intake.answer_items(asked, answers)
+        rl.note("intake_wait", secs=round(time.monotonic() - t0, 1), asked=[q["key"] for q in asked],
+                outcome="unanswered" if timed_out else "answered" if done else "skipped")
+        self.intake_skipped = skipped
+        self.intake_answered = {q["key"]: q["text"] for q in done}
+        patch, decisions = {}, []
+        if mat is not None:
+            self.mats.insert(0, mat)  # first: _said() is cut at its limit, and the answers must not be what goes
+            self.capture["items"].update(new)
+            patch = {"materials": {mat.id: mat.entry(iso())}, "capture": {"items": new}}
+            pts = [rsn.point(f"The answer to “{q['text']}”: “{_short(answers[q['id']].strip(), 160)}”", mat.id)
+                   for q in done]
+            r = rsn.make(f"A person answered {len(done)} question(s) before the draft: "
+                         f"{', '.join(q['key'] for q in done)}.", pts,
+                         rsn.certainty("high", "typed by the person and kept verbatim; the planner, not the client, "
+                                               "gave it"),
+                         "the client says otherwise, or a person edits the capture",
+                         only_option="an answer is the client's word as the planner gave it",
+                         attention="Answered by the planner at intake, as the planner gave it: not read from the "
+                                   "client's own material.")
+            decisions.append(self.dec(("intake", "answered"), "edit", "capture",
+                                      ["capture", f"materials[{mat.id}]"], [mat.id], r, "extract",
+                                      material_read=[mat.id]))
+        if skipped:
+            why = "nobody answered within the wait" if timed_out else "a person chose to skip them"
+            rl.note("intake_unanswered" if timed_out else "intake_skipped", keys=[q["key"] for q in skipped])
+            r = rsn.make(f"Went on without an answer to {len(skipped)} intake question(s): {why}.",
+                         # The question's key, not its wording: a planner's question may hold a digit ("Is the 2025
+                         # date fixed?"), and an uncited point with a digit is refused as a figure.
+                         [rsn.point(f"The {q['key'].replace('_', ' ')} question was asked and not answered: {why}")
+                          for q in skipped],
+                         rsn.certainty("high", "the questions were asked and no answer came"),
+                         "the client answers, or a person edits the part",
+                         only_option="nothing is invented to stand for an answer",
+                         attention="The parts these feed are assumptions marked To confirm, and the questions stay "
+                                   "open.")
+            decisions.append(self.dec(("intake", "unanswered" if timed_out else "skipped"), "edit", "capture", [], [],
+                                      r, "extract"))
+        if decisions:
+            self.add_chunk("context", patch, decisions)
 
     def _research_asked(self, plan):
         """The research `plan` asks for, less what the brief already holds, capped: its decisions."""
@@ -562,7 +712,7 @@ class PlannedBriefJob(BriefJob):
         return kept
 
     # =========================================================================================
-    # draft: Dara writes the whole brief
+    # draft: the Brief agent writes the whole brief
     # =========================================================================================
     def stage_draft(self):
         keys = [k for k in self._open_keys()]
@@ -575,6 +725,7 @@ class PlannedBriefJob(BriefJob):
                    "library": self._library(12),
                    "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in keys},
                    "who_handles": {k: who for k, (_, who) in getattr(self, "routing", {}).items()}}
+        self._with_current(payload, keys)
         out = self.caps.model.structured("draft_brief_whole", DRAFT_SYSTEM, payload, draft_schema(keys),
                                          max_tokens=16000)
         self.whole = self._clean(out, ev, "draft", keys=keys)
@@ -585,8 +736,22 @@ class PlannedBriefJob(BriefJob):
                               uncited_research=[k for k, v in self.whole.items() if v.get("downgraded")])
 
     # =========================================================================================
-    # judge: Jude reviews the whole brief, Dara revises once, Jude scores again
+    # judge: the Review agent reviews the whole brief, the Brief agent revises once, the Review agent scores again
     # =========================================================================================
+    def _judge_call(self, purpose, payload):
+        """The Review agent's review of the whole brief, with room for every part of it (21 parts, a dimension
+        each, notes and claims: 8000 tokens cut a full brief off, and only half its parts were
+        written). A reply still cut off is asked for once more with twice the room."""
+        schema = review_schema(list(KEYS))
+        try:
+            return self.caps.model.structured(purpose, REVIEW_SYSTEM, payload, schema, max_tokens=REVIEW_MAX_TOKENS)
+        except ModelError as e:
+            if getattr(e, "kind", None) != "truncated":
+                raise
+            self.caps.runlog.note("review_cut_off", purpose=purpose, max_tokens=REVIEW_MAX_TOKENS)
+            return self.caps.model.structured(purpose, REVIEW_SYSTEM, payload, schema,
+                                              max_tokens=REVIEW_MAX_TOKENS * 2)
+
     def _review(self, ev, purpose):
         brief = {k: prov.brief_entry(v) for k, v in self.whole.items()}
         earlier = prov.prior_claims(self.chain, self.doc, [k for k in KEYS if k not in brief])
@@ -598,15 +763,13 @@ class PlannedBriefJob(BriefJob):
         payload = {"brief": brief, "strategy": (self.plan_out or {}).get("strategy"), "facts": ev["facts"],
                    "findings": ev["findings"], "client_said": self._said(),
                    "part_checks": checks.facts(self.whole), "tests": checks.tests(list(self.whole))}
-        rv = self.caps.model.structured(purpose, REVIEW_SYSTEM, payload, review_schema(list(KEYS)), max_tokens=8000)
-        if purpose == "review_brief":  # what code can measure goes back with Jude's own list, once
-            named = {x["part"] for x in rv.get("revise") or []}
-            extra = [x for x in checks.revisions(self.whole) if x["part"] not in named]
+        rv = self._judge_call(purpose, payload)
+        if purpose == "review_brief":  # what code can measure goes back with the Review agent's own list, once
+            extra = self._code_sent_back({x["part"] for x in rv.get("revise") or []})
             if extra:
                 rv["revise"] = list(rv.get("revise") or []) + extra
-                self.caps.runlog.note("checks_sent_back", parts=[x["part"] for x in extra])
-        # Jude grades a worked-out claim on its working: one that recomputes is supported whatever he says;
-        # code's own verdicts join his. None of them is a reason to rewrite.
+        # The Review agent grades a worked-out claim on its working: one that recomputes is supported whatever it says;
+        # code's own verdicts join its. None of them is a reason to rewrite.
         rv["claims"] = prov.judge_claims(self.whole, rv.get("claims") or [])
         dims = {d["dimension"]: d for d in rv.get("dimensions") or []}
         rv["dimensions"] = [dims.get(d) or {"dimension": d, "verdict": "missing", "evidence": "-", "fix": "-"}
@@ -622,30 +785,48 @@ class PlannedBriefJob(BriefJob):
                               revise=[x["part"] for x in rv["revise"]])
         return rv
 
+    def judge_path(self):
+        """Which judge reviews a whole draft: "jev" (the check loop) or "review" (the Review agent). Both send back
+        what code measures (_code_sent_back)."""
+        return "jev" if self.judge_mode == "jev" and self.caps.jev.configured else "review"
+
     def stage_judge(self):
         if not self.whole:
             return super().stage_judge()  # nothing drafted as a whole: the field-by-field judge reviews what there is
-        rl = self.caps.runlog
         keys = list(self.whole)
         self.set_state(keys, "judging", "judge")
         ev = self._evidence()
-        if self.judge_mode == "jev" and self.caps.jev.configured:
+        if self.judge_path() == "jev":
             return self._judge_by_jev(ev)
+        return self._judge_by_review(ev)
+
+    def _code_sent_back(self, named=(), note="checks_sent_back"):
+        """What code measures (checks.revisions) that the judge's own list does not name: each part with the check's
+        instruction, noted on the run log. Both judges send these back: what code can measure is never left to a
+        review or a probability (the owner, 2026-11-12)."""
+        out = [x for x in checks.revisions(self.whole) if x["part"] not in named]
+        if out:
+            self.caps.runlog.note(note, parts=[x["part"] for x in out])
+        return out
+
+    def _judge_by_review(self, ev):
+        """The Review agent reviews the whole brief (code's send-backs join its list), the Brief agent revises once, the
+        Review agent reads it again; what code still measures goes back once more."""
         rv = self._review(ev, "review_brief")
         revise = [x for x in rv.get("revise") or [] if x["part"] in self.whole]
         if revise:
             rv = self._rewrite(revise, rv, ev, "review_brief_again") or rv
-        # what code can still measure after the one rewrite goes back once more, then Jude reads it again
-        left = checks.revisions(self.whole)
+        # what code can still measure after the one rewrite goes back once more, then the Review agent reads it again
+        left = self._code_sent_back(note="checks_sent_back_again")
         if left:
-            rl.note("checks_sent_back_again", parts=[x["part"] for x in left])
             rv = self._rewrite(left, rv, ev, "review_brief_again") or rv
         self.review_out = rv
         self._place(rv, ev)
 
     def _rewrite(self, revise, rv, ev, purpose):
-        """Dara rewrites the parts named in `revise`, Jude reads the brief again. -> his new review, or None
-        when the rewrite failed and the review before it stands."""
+        """The Brief agent rewrites the parts named in `revise`, the Review agent reads the brief again. -> its new review, or None
+        when the rewrite failed and the review before it stands. `purpose` None: no second review (the check
+        loop's own reading stands), -> `rv` as it was."""
         rl = self.caps.runlog
         parts = [x["part"] for x in revise]
         before = dict(self.whole)  # the brief the review in hand was written about
@@ -669,7 +850,7 @@ class PlannedBriefJob(BriefJob):
                 self.whole[k] = v
             rl.note("revised", parts=sorted(got))
             self.set_state(parts, "judging", "judge")
-            return self._review(ev, purpose)
+            return self._review(ev, purpose) if purpose else rv
         except Exception as e:  # noqa: BLE001 - the review before stands, so does the brief it read
             self.whole.clear()
             self.whole.update(before)
@@ -677,17 +858,20 @@ class PlannedBriefJob(BriefJob):
             return None
 
     def _judge_by_jev(self, ev):
-        """The check loop on the whole draft: jev flags, Jude says why, Dara rewrites; then the
-        brief is placed with jev's reading as the review."""
+        """The check loop on the whole draft: jev flags, the Review agent says why (and judges the skill's tests),
+        code sends back what it measures, the Brief agent rewrites; what code still measures goes back once more;
+        then the brief is placed with jev's reading as the review."""
         from . import checkloop
         values = {k: v["value"] for k, v in self.whole.items()}
         for k in KEYS:
             if k not in values and filled(get(self.W, k)):
                 values[k] = get(self.W, k)
         keys = self._open_keys()
+        code = {x["part"]: x["instruction"] for x in self._code_sent_back()}
         res = checkloop.run(self, values, self._said(), keys, ev, self._library(12), self.plan_out,
                             clean=lambda out, ks: self._clean(out, ev, "check", keys=ks, prior=self._prior(ks)),
-                            claims={k: v.get("claims") or [] for k, v in self.whole.items()})
+                            claims={k: v.get("claims") or [] for k, v in self.whole.items()},
+                            code=code, tests=checks.tests(list(self.whole)), part_checks=checks.facts(self.whole))
         if res["rewritten"]:
             self.set_state(list(res["rewritten"]), "revising", "drafter")
         for k, v in res["rewritten"].items():
@@ -696,8 +880,13 @@ class PlannedBriefJob(BriefJob):
             self.whole[k] = v
         self.set_state(list(self.whole), "judging", "judge")
         read = res["after"] or res["before"]
-        if read is None:  # jev did not answer: Jude reviews the whole brief as before
-            return self._place(self._review(ev, "review_brief"), ev)
+        if read is None:  # jev did not answer: the Review agent reviews the whole brief as before
+            return self._judge_by_review(ev)
+        # what code can still measure after the loop's rewrite goes back once more, as in the review path
+        left = self._code_sent_back(note="checks_sent_back_again")
+        if left:
+            self._rewrite(left, {}, ev, None)
+            self.set_state(list(self.whole), "judging", "judge")
         chain = (res["jude"] or {}).get("chain") or {}
         notes = [{"parts": [p for p in chain.get("parts") or [] if p in KEYS], "severity": "fix",
                   "note": chain["issue"]}] if chain.get("issue") and chain.get("parts") and self._note_stands(res) else []
@@ -707,22 +896,39 @@ class PlannedBriefJob(BriefJob):
                                                        else "jev doubts the argument holds")},
               "claims": prov.code_verdicts(self.whole), "notes": notes, "revise": [],
               "questions": res["questions"],
-              "single_mindedness": {"verdict": "single", "split_into": []},
+              "single_mindedness": self._single_minded(res),
               "summary": (f"A quick check read every part and flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)}"
-                          f"; Jude sent {len(res['todo'])} back to Dara, who rewrote {len(res['rewritten'])}.")
+                          f"; the Review agent and code's checks sent {len(res['todo'])} back to the Brief agent, who rewrote "
+                          f"{len(res['rewritten'])}" + (f"; code sent {len(left)} back again" if left else "") + ".")
               if res["before"] else "Checked."}
         self.scores = [x["score"] for x in (res["before"], res["after"]) if x]
         self._place(rv, ev)
 
+    def _single_minded(self, res):
+        """single_mindedness under jev: "multiple" when code still finds a standalone 'and' or several sentences in
+        the proposition after the rewrites; else the Review agent's verdict when the loop asked it; else "unchecked"
+        (nothing judged it: jev flagged nothing and code sent nothing back, so no Review agent call was made)."""
+        f = checks.facts(self.whole).get("single_minded_proposition") or {}
+        if f.get("standalone_and") or f.get("sentences", 0) > 1:
+            out = {"verdict": "multiple", "split_into": []}
+        else:
+            sm = (res.get("jude") or {}).get("single_mindedness") or {}
+            out = ({"verdict": sm["verdict"], "split_into": [str(x) for x in sm.get("split_into") or []]}
+                   if sm.get("verdict") in ("single", "multiple") else {"verdict": "unchecked", "split_into": []})
+        self.caps.runlog.note("single_mindedness", verdict=out["verdict"],
+                              by="code" if f.get("standalone_and") or f.get("sentences", 0) > 1
+                              else "review" if out["verdict"] != "unchecked" else "none")
+        return out
+
     # -- the loop as it happened -----------------------------------------------------------------
     def _sent_back(self, k, v, instruction, why):
-        """Mark a part Dara rewrote on Jude's note with what placing records of the loop: the
-        draft Jude sent back (`first`, when this job drafted it) and his note (`sent_back`).
+        """Mark a part the Brief agent rewrote on the Review agent's note with what placing records of the loop: the
+        draft the Review agent sent back (`first`, when this job drafted it) and its note (`sent_back`).
         The first draft stays in the chain, superseded by this one; nothing is collapsed."""
         v["revised"] = True
         prev = self.whole.get(k)
         if prev is not None:
-            # sent back twice (Jude's note, then what code measured): the chain keeps the first draft and both asks
+            # sent back twice (the Review agent's note, then what code measured): the chain keeps the first draft and both asks
             v["first"] = prev.get("first") or prev
             before = prev.get("sent_back") or {}
             if before.get("instruction"):
@@ -732,15 +938,15 @@ class PlannedBriefJob(BriefJob):
 
     @staticmethod
     def _note_on(rv, k):
-        """Jude's fix note naming part `k` in a review, in his words."""
+        """The Review agent's fix note naming part `k` in a review, in its words."""
         return next((n["note"] for n in rv.get("notes") or []
                      if k in (n.get("parts") or []) and n.get("severity") == "fix"), "")
 
     def _wrote(self, k, v, answers=None):
-        """What a draft decision says it did, and what steered it: Jude's note it answers, and
+        """What a draft decision says it did, and what steered it: the Review agent's note it answers, and
         the planner's ask (a redraft comes with one). The line is the history's, so it names
         the person's part in it, not only the crew's."""
-        on = (["Jude's note"] if answers else []) + (["your ask"] if self.guidance else [])
+        on = (["the Review agent's note"] if answers else []) + (["your ask"] if self.guidance else [])
         return (f"{'Rewrote' if answers else 'Wrote'} the {LABELS.get(k, k)}"
                 + (f" on {' and '.join(on)}" if on else "") + ".")
 
@@ -750,24 +956,24 @@ class PlannedBriefJob(BriefJob):
 
     def _steer_points(self, v, answers):
         """The points that say what steered a draft, each cited: the planner's ask in their own
-        words, and Jude's note this draft answers."""
+        words, and the Review agent's note this draft answers."""
         pts = []
         if self.guidance:
             pts.append(rsn.point(f"Your ask: “{_short(self.guidance, 300)}”", self._ask_cites()))
         if answers:
             told = v.get("sent_back") or {}
-            pts.append(rsn.point(f"Jude's note: {_short(told.get('instruction') or told.get('why') or 'rewrite it', 300)}",
+            pts.append(rsn.point(f"The Review agent's note: {_short(told.get('instruction') or told.get('why') or 'rewrite it', 300)}",
                                  [answers]))
         return pts
 
     def _draft_decision(self, k, idparts, v, client, claim_bad, passages_out, answers=None):
-        """Dara's decision for one cleaned part: a proposal when a person holds the part, else
+        """The Brief agent's decision for one cleaned part: a proposal when a person holds the part, else
         the write. `answers` is the verdict this draft answers: cited, and named in the line."""
         bad = claim_bad.get(k)
         extra = ["Check: " + " ".join(_short(f"{c['claim']} — {c['note']}", 200) for c in bad[:2])] if bad else []
         pts, cert, attn = prov.because(v, client, extra_attention=extra)
         if bad and v["basis"] in ("research", "library"):
-            cert = rsn.certainty("low", "Jude found a claim its fact does not fully support")
+            cert = rsn.certainty("low", "The Review agent found a claim its fact does not fully support")
         pts += self._steer_points(v, answers)
         cites = list(v["cites"]) + ([answers] if answers else [])
         r = rsn.make(self._wrote(k, v, answers), pts, cert,
@@ -783,27 +989,27 @@ class PlannedBriefJob(BriefJob):
         return self.dec(idparts, "edit", "draft", [k], cites, r, "drafter", basis=v["basis"], **claims)
 
     def _sent_back_verdict(self, k, told, prior):
-        """Jude's note on the draft he sent back, as the verdict it was: bad, citing that draft
+        """The Review agent's note on the draft it sent back, as the verdict it was: bad, citing that draft
         (or what wrote the part before this job, when the job did not draft it)."""
-        why = _short(told.get("why") or told.get("instruction") or "Jude sent it back.", 300)
+        why = _short(told.get("why") or told.get("instruction") or "The Review agent sent it back.", 300)
         cites = [prior] if prior else [f"{self.doc}#{k}"]
         r = rsn.make(why, [rsn.point(_short(told.get("instruction") or why, 400), cites)],
                      rsn.certainty("medium", "a model judged the brief as a whole"),
                      "the part is rewritten", only_option="one note on one part",
-                     attention="Jude sent it back to Dara, who rewrote it.")
+                     attention="The Review agent sent it back to the Brief agent, who rewrote it.")
         return self.dec(("sent-back", k, "whole"), "verdict", "judge", [k], cites, r, "judge", polarity="bad",
                         taxonomy_version="reason-codes/1", reason_code="brief_review")
 
     def _answered(self, rv):
-        """Jude's pass on a part he sent back that the final review no longer flags: a good
-        verdict with a reason, so his note is answered on the record and not only by a draft."""
+        """The Review agent's pass on a part it sent back that the final review no longer flags: a good
+        verdict with a reason, so its note is answered on the record and not only by a draft."""
         flagged = {p for n in rv.get("notes") or [] if n.get("severity") == "fix" for p in n.get("parts") or []}
         out = []
         for k, v in self.whole.items():
             if not v.get("sent_back") or k in flagged or k not in self.writer:
                 continue
-            r = rsn.make(f"Checked the new {LABELS.get(k, k)}: it answers the note.",
-                         [rsn.point("Jude reviewed the brief again and left no note on it", [self.writer[k]])],
+            r = rsn.make(f"Checked the new {bare(k)}: it answers the note.",
+                         [rsn.point("The Review agent reviewed the brief again and left no note on it", [self.writer[k]])],
                          rsn.certainty("medium", "a model judged the brief as a whole"),
                          "the part changes again", only_option="the rewrite passed the review")
             out.append(self.dec(("answered", k, "whole"), "verdict", "judge", [k], [self.writer[k]], r, "judge",
@@ -812,19 +1018,21 @@ class PlannedBriefJob(BriefJob):
 
     # -- placing ---------------------------------------------------------------------------------
     def _question_seed(self):
-        """The client questions placing starts from: the plan's."""
-        return [q["question"] for q in (self.plan_out or {}).get("ask_client") or []]
+        """The client questions placing starts from: intake's that were skipped (their wording stands), then the
+        plan's."""
+        return [intake.worded(q) for q in self.intake_skipped] + \
+            [q["question"] for q in (self.plan_out or {}).get("ask_client") or []]
 
     def _unwritten_outcome(self, k):
         """The review's entry for a part this job did not write."""
         return {"outcome": "absent", "checks": []}
 
     def _passed(self, decisions):
-        """Verdicts placing adds once Jude's notes are placed: none here."""
+        """Verdicts placing adds once the Review agent's notes are placed: none here."""
         return []
 
     def _note_stands(self, res):
-        """Whether Jude's chain issue from the check loop is placed as a note."""
+        """Whether the Review agent's chain issue from the check loop is placed as a note."""
         return True
 
     def _place(self, rv, ev):
@@ -834,7 +1042,7 @@ class PlannedBriefJob(BriefJob):
         passages_out = {}
         claim_bad = {}
         for c in rv.get("claims") or []:
-            # Jude's verdicts that a claim is not fully supported; code's own are in the claims already
+            # The Review agent's verdicts that a claim is not fully supported; code's own are in the claims already
             if c["verdict"] != "supported" and c.get("by") != "code":
                 claim_bad.setdefault(c["part"], []).append(c)
         assumed = []
@@ -844,8 +1052,8 @@ class PlannedBriefJob(BriefJob):
                 continue
             if v["basis"] == "assumption":
                 assumed.append(k)
-            # The loop as it happened, when Jude sent the part back: the draft he sent back,
-            # his note on it as the verdict it was, then this draft, which answers the note.
+            # The loop as it happened, when the Review agent sent the part back: the draft it sent back,
+            # its note on it as the verdict it was, then this draft, which answers the note.
             first, back, sent = v.get("first"), None, None
             if first is not None:
                 back = self._draft_decision(k, ("first", k, "whole"), first, client, {}, passages_out)
@@ -868,33 +1076,34 @@ class PlannedBriefJob(BriefJob):
             self.basis[k] = v["basis"]
             decisions.append(d)
         decisions += self._answered(rv)
-        # Jude: one note per issue, naming the parts it touches
+        # The Review agent: one note per issue, naming the parts it touches
         for i, n in enumerate(rv.get("notes") or []):
             parts = [p for p in n["parts"] if p in KEYS and p not in self.locked]
             if not parts:
                 continue
             cites = [self.writer[p] for p in parts if p in self.writer] or [f"{self.doc}#{parts[0]}"]
             fix = n["severity"] == "fix"
-            r = rsn.make(_short(n["note"], 300), [rsn.point(_short(n["note"], 400), cites)],
+            said = _no_ids(n["note"])
+            r = rsn.make(_short(said, 300), [rsn.point(_short(said, 400), cites)],
                          rsn.certainty("medium", "a model judged the brief as a whole"),
                          "the parts it names change", only_option="one note for one issue",
-                         attention=("Jude suggests a change." if fix else None))
+                         attention=("The Review agent suggests a change." if fix else None))
             decisions.append(self.dec(("note", i), "verdict", "judge", parts, cites, r, "judge",
                                       polarity="bad" if fix else "good", taxonomy_version="reason-codes/1",
                                       **({"reason_code": "brief_review"} if fix else {})))
         decisions += self._passed(decisions)
-        # the open questions: the plan's, the draft's and Jude's, once each
+        # the open questions: the plan's, the draft's and the Review agent's, once each
         qs = self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
         qs += checks.figure_questions(self.whole, lambda k: LABELS.get(k, k))  # a figure left unmarked is still to confirm
-        oq, merged = dedupe(qs)
+        oq, merged = dedupe(without_answered(qs, self.intake_answered))
         if merged:
             self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])
         oq = clean("open_questions", oq[:12])
         if oq and oq != clean("open_questions", get(self.W, "open_questions")) and "open_questions" not in self.locked:
             r = rsn.make(f"Gathered {len(oq)} question(s) only the client can answer.",
-                         [rsn.point("From the plan, the draft and Jude's review", [plan_id] if plan_id else mat_ids)],
+                         [rsn.point("From the plan, the draft and the Review agent's review", [plan_id] if plan_id else mat_ids)],
                          rsn.certainty("high", "each is something the brief cannot settle without the client"),
                          "the client answers", only_option="the questions follow from what is missing")
             if self.held.get("open_questions"):
@@ -931,7 +1140,7 @@ class PlannedBriefJob(BriefJob):
                              ("failed" if any(n["severity"] == "fix" for n in ns) else "passed"),
                              "checks": [{"check": "whole_brief_review", "method": "llm",
                                          "status": "review" if n["severity"] == "fix" else "pass",
-                                         "note": _short(n["note"], 300)} for n in ns[:3]]
+                                         "note": _short(_no_ids(n["note"]), 300)} for n in ns[:3]]
                              + [{"check": "claim_supported", "method": "auto" if c.get("by") == "code" else "llm",
                                  "status": "pass" if c["verdict"] == "supported" else "review",
                                  "note": _short(f"{c['claim']}: {c['note']}", 300)}
@@ -963,7 +1172,7 @@ class PlannedBriefJob(BriefJob):
             pts.append(rsn.point("Assumed, to confirm with the client: " + ", ".join(LABELS.get(k, k) for k in assumed),
                                  [self.writer[k] for k in assumed if k in self.writer]))
         if len(self.scores) > 1:
-            pts.append(rsn.point(f"Score before Dara's revision {self.scores[0]}, after {self.scores[-1]}, of 14",
+            pts.append(rsn.point(f"Score before the Brief agent's revision {self.scores[0]}, after {self.scores[-1]}, of 14",
                                  vids or [f"{self.doc}#review"]))
         r = rsn.make(f"Reviewed the brief as a whole: {_short(rv['summary'], 200)}", pts,
                      rsn.certainty("medium", "a model judged the whole brief against the rubric and its sources"),

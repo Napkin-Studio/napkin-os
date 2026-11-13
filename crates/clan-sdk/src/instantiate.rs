@@ -30,21 +30,21 @@ use crate::manifest::{
 };
 use crate::merge::MERGE_REPORT_PATH;
 
-const DATA_PATH: &str = "shared/data.yaml";
+pub(crate) const DATA_PATH: &str = "shared/data.yaml";
 const APP_MANIFEST_PATH: &str = "app/manifest.yaml";
-const CHAIN_PATH: &str = "agent/decision-chain.yaml";
-const ASSET_PREFIX: &str = "human/assets/";
+pub(crate) const CHAIN_PATH: &str = "agent/decision-chain.yaml";
+pub(crate) const ASSET_PREFIX: &str = "human/assets/";
 const BRANCH_PREFIX: &str = "agents/";
-const UPSTREAM_PREFIX: &str = "upstream/";
+pub(crate) const UPSTREAM_PREFIX: &str = "upstream/";
 
 /// The data key an upstream spin-off freezes its sources under (Contract 4
 /// §5.2), and the host-owned key it leaves behind.
-const UPSTREAM_KEY: &str = "upstream";
-const PROJECTION_KEY: &str = "projection";
+pub(crate) const UPSTREAM_KEY: &str = "upstream";
+pub(crate) const PROJECTION_KEY: &str = "projection";
 
 /// The list members an upstream spin-off merges by id: role, the path a file
 /// that does not register it keeps it at, and the key its list sits under.
-const MEMBERS: [(&str, &str, &str); 3] = [
+pub(crate) const MEMBERS: [(&str, &str, &str); 3] = [
     ("pinned-facts", "shared/facts.yaml", "facts"),
     ("findings", "shared/findings.yaml", "findings"),
     ("sources", "shared/sources.yaml", "sources"),
@@ -152,6 +152,7 @@ pub fn instantiate(template: &ClanFile, opts: InstantiateOptions) -> Result<Vec<
         parents: Vec::new(),
         merge: false,
         carried: None,
+        attached: Vec::new(),
     });
     manifest.view = Some(ViewState {
         present: true,
@@ -329,12 +330,14 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
     let app = tpl_manifest.app.clone().ok_or_else(|| {
         Error::OutputRejected("target template has no `app` block in its manifest".into())
     })?;
-    let spec = app.spinoff.clone().unwrap_or_default();
+    let declared = app.spinoff.clone().unwrap_or_default();
 
     let src_manifest = source.manifest();
     let src_app_id = src_manifest.app.as_ref().map(|a| a.app_id.as_str());
-    if !spec.accepts.is_empty() {
-        let ok = src_app_id.is_some_and(|id| spec.accepts.iter().any(|a| a == id));
+    // A source app with its own carry (`by_source`) is carried by it.
+    let spec = declared.for_source(src_app_id);
+    {
+        let ok = declared.accepts_source(src_app_id);
         if !ok {
             return Err(Error::OutputRejected(format!(
                 "{} accepts a spin-off from {:?}, but the source is {}",
@@ -418,6 +421,8 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
             if let Some(v) = get_dotted(&src_data, from).filter(|v| !v.is_null()) {
                 set_dotted(&mut data, to, v.clone());
                 seeds.push(seed_decision(
+                    SPINOFF_AGENT,
+                    "process:spinoff",
                     &id,
                     &src_doc,
                     &src_manifest.title,
@@ -556,6 +561,7 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
         // Not a `clan merge` product — two origins, one of them an app.
         merge: false,
         carried: None,
+        attached: Vec::new(),
     });
     manifest.view = Some(ViewState {
         present: true,
@@ -583,7 +589,11 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
             &src_doc,
             src_data_bytes.as_deref().unwrap_or_default(),
             last_decision,
+            false,
         )?);
+        // What the source had linked rides along with its hoisted upstream,
+        // so the new document can tell later whether any of it moved on.
+        lineage.attached = src_manifest.attached().to_vec();
     } else {
         // Mood boards, logos, reference stills — the material the decisions
         // were made about travels with them. The template's own assets win a
@@ -604,6 +614,241 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
     builder.build()
 }
 
+/// What [`take_upstream`] wrote.
+#[derive(Debug, Clone)]
+pub struct TakenUpstream {
+    /// The child's next revision.
+    pub bytes: Vec<u8>,
+    /// How many of the parent's decisions were new to the child.
+    pub decisions_taken: usize,
+}
+
+/// Take the direct parent's newer version into a document spun off from it
+/// with `upstream` (Contract 4 §5.5, reversed for spin-offs on 2026-11-09).
+///
+/// The frozen copy at `data.upstream.<parent>` is replaced by the parent's
+/// data as it is now (less its `projection` and its `upstream`, whose entries
+/// replace the hoisted siblings the parent holds), the parent's facts,
+/// findings and sources replace the child's copies by id, except an entry the
+/// child reviewed itself (a pin it corrected, a finding it verified or
+/// rejected stays as it is) and the child's own entries, which are kept;
+/// the parent's decisions the child has not seen are carried, pinned,
+/// under `marker`, new branches, merge reports and assets are copied, and
+/// `lineage.carried` is moved on to what was taken. The child's own fields,
+/// chain and lock are not touched: no address is remapped.
+///
+/// `marker` is the decision that records the update; the caller (the host)
+/// attributes it. Refused when `child` was not spun off with `upstream`, or
+/// `parent` is not the document it carried.
+pub fn take_upstream(
+    child: &ClanFile,
+    parent: &ClanFile,
+    marker: Decision,
+) -> Result<TakenUpstream> {
+    let carried = child.manifest().carried().cloned().ok_or_else(|| {
+        Error::OutputRejected(
+            "this document was not spun off with upstream, so it has no parent to update from"
+                .into(),
+        )
+    })?;
+    let parent_doc = parent.manifest().document_id().to_string();
+    if parent_doc != carried.document_id {
+        return Err(Error::OutputRejected(format!(
+            "this document carries {}, not {parent_doc}",
+            carried.document_id
+        )));
+    }
+
+    // ── the data: the frozen copy, replaced; the child's own fields kept ──
+    let mut data: Value = child
+        .read_entry(DATA_PATH)
+        .ok()
+        .and_then(|b| serde_yaml::from_slice(&b).ok())
+        .filter(|v: &Value| v.is_mapping())
+        .unwrap_or_else(|| Value::Mapping(Mapping::new()));
+    let parent_data_bytes = parent.read_entry(DATA_PATH).unwrap_or_default();
+    let mut parent_data: Value = serde_yaml::from_slice(&parent_data_bytes)
+        .ok()
+        .filter(|v: &Value| v.is_mapping())
+        .unwrap_or_else(|| Value::Mapping(Mapping::new()));
+    let hoisted = parent_data.as_mapping_mut().and_then(|m| {
+        m.remove(PROJECTION_KEY);
+        m.remove(UPSTREAM_KEY)
+    });
+    let mut upstream = match get_dotted(&data, UPSTREAM_KEY) {
+        Some(Value::Mapping(m)) => m.clone(),
+        _ => Mapping::new(),
+    };
+    upstream.insert(Value::String(parent_doc.clone()), parent_data);
+    if let Some(Value::Mapping(older)) = hoisted {
+        // The parent's own copy of what it carried is the newer one.
+        for (k, v) in older {
+            upstream.insert(k, v);
+        }
+    }
+    set_dotted(&mut data, UPSTREAM_KEY, Value::Mapping(upstream));
+    let data_bytes = serde_yaml::to_string(&data)
+        .map_err(|e| Error::OutputRejected(format!("failed to serialise the updated data: {e}")))?
+        .into_bytes();
+
+    // ── the chain: the parent's decisions the child has not seen ──────────
+    let child_chain = match child.read_entry(CHAIN_PATH) {
+        Ok(b) => DecisionChain::from_yaml(&b)?,
+        Err(_) => DecisionChain::default(),
+    };
+    let parent_chain = match parent.read_entry(CHAIN_PATH) {
+        Ok(b) => DecisionChain::from_yaml(&b).map_err(|e| {
+            Error::OutputRejected(format!(
+                "the parent's decision chain does not parse, so it cannot be carried: {e}"
+            ))
+        })?,
+        Err(_) => DecisionChain::default(),
+    };
+    let held: std::collections::BTreeSet<&str> = child_chain
+        .decisions
+        .iter()
+        .filter_map(|d| d.id.as_deref())
+        .collect();
+    // Newest first: everything above the last decision carried, less any the
+    // child holds already. Without a recorded last decision, every id the
+    // child does not hold.
+    let above = carried
+        .last_decision
+        .as_deref()
+        .and_then(|last| {
+            parent_chain
+                .decisions
+                .iter()
+                .position(|d| d.id.as_deref() == Some(last))
+        })
+        .unwrap_or(parent_chain.decisions.len());
+    let mut taken: Vec<Decision> = parent_chain.decisions[..above]
+        .iter()
+        .filter(|d| d.id.as_deref().is_some_and(|id| !held.contains(id)))
+        .cloned()
+        .collect();
+    for d in &mut taken {
+        d.pinned = true;
+    }
+    let decisions_taken = taken.len();
+    // The member entries this document reviewed itself (a decision of its own
+    // targets `<here>#facts[…]`, `#findings[…]` or `#sources[…]`): its copy
+    // stands. Every other entry takes the parent's newer copy.
+    let here = child.manifest().document_id().to_string();
+    let reviewed: std::collections::BTreeSet<String> = child_chain
+        .decisions
+        .iter()
+        .flat_map(|d| d.targets.iter())
+        .filter_map(|t| t.strip_prefix(&format!("{here}#")).map(str::to_string))
+        .filter_map(|p| {
+            ["facts[", "findings[", "sources["]
+                .iter()
+                .find_map(|k| p.strip_prefix(k))
+                .and_then(|r| r.split(']').next())
+                .map(str::to_string)
+        })
+        .collect();
+    let mut chain = DecisionChain::default();
+    chain.decisions.push(marker);
+    chain.decisions.extend(taken);
+    chain.decisions.extend(child_chain.decisions);
+    let chain_bytes = chain.to_yaml()?;
+
+    // ── the entries: members merged, new carried paths copied ─────────────
+    let mut manifest = child.manifest().clone();
+    let mut entries: Vec<(String, Vec<u8>)> = child
+        .read_all_entries()?
+        .into_iter()
+        .filter(|(p, _)| p != MANIFEST_PATH && p != DATA_PATH && p != CHAIN_PATH)
+        .collect();
+    let parent_entries = parent.read_all_entries()?;
+    let mut next = Carried {
+        document_id: parent_doc.clone(),
+        data_sha256: sha256_prefixed(&parent_data_bytes),
+        facts_sha256: None,
+        findings_sha256: None,
+        sources_sha256: None,
+        last_decision: parent_chain.decisions.iter().find_map(|d| d.id.clone()),
+    };
+    let pm = parent.manifest();
+    for (role, default_path, key) in MEMBERS {
+        let path = pm
+            .files_with_role(role)
+            .next()
+            .map_or(default_path, |f| f.path.as_str());
+        let Some((_, src)) = parent_entries.iter().find(|(p, _)| p == path) else {
+            continue;
+        };
+        let hash = Some(sha256_prefixed(src));
+        match role {
+            "pinned-facts" => next.facts_sha256 = hash,
+            "findings" => next.findings_sha256 = hash,
+            _ => next.sources_sha256 = hash,
+        }
+        let own = entries.iter().position(|(p, _)| p == path);
+        let merged = refresh_member(
+            own.map(|i| entries[i].1.as_slice()),
+            src,
+            key,
+            path,
+            &reviewed,
+        )?;
+        match own {
+            Some(i) => entries[i].1 = merged,
+            None => entries.push((path.to_string(), merged)),
+        }
+        register_carried(
+            &mut manifest.files,
+            pm,
+            path,
+            Some(yaml_entry(role, path, role)),
+        );
+    }
+    if let Some((_, bytes)) = parent_entries.iter().find(|(p, _)| p == MERGE_REPORT_PATH) {
+        let path = format!("{UPSTREAM_PREFIX}{parent_doc}/{MERGE_REPORT_PATH}");
+        match entries.iter().position(|(p, _)| *p == path) {
+            Some(i) => entries[i].1 = bytes.clone(),
+            None => entries.push((path.clone(), bytes.clone())),
+        }
+        let id = format!("upstream-merge-report-{parent_doc}");
+        register_carried(
+            &mut manifest.files,
+            pm,
+            &path,
+            Some(yaml_entry(&id, &path, "upstream-merge-report")),
+        );
+    }
+    for (path, bytes) in &parent_entries {
+        let carries = path.starts_with(BRANCH_PREFIX)
+            || path.starts_with(UPSTREAM_PREFIX)
+            || path.starts_with(ASSET_PREFIX);
+        if !carries || entries.iter().any(|(p, _)| p == path) {
+            continue;
+        }
+        entries.push((path.clone(), bytes.clone()));
+        register_carried(&mut manifest.files, pm, path, None);
+    }
+
+    // ── the manifest: the next revision, carrying what was taken ──────────
+    manifest.next_revision();
+    manifest.updated_at = Utc::now().to_rfc3339();
+    if let Some(lineage) = manifest.lineage.as_mut() {
+        lineage.parent_id = pm.id.clone();
+        lineage.parent_sha256 = Some(parent.sha256());
+        lineage.carried = Some(next);
+    }
+    let mut builder = ClanBuilder::new(manifest);
+    for (path, bytes) in entries {
+        builder.add_entry(path, bytes);
+    }
+    builder.add_entry(DATA_PATH, data_bytes);
+    builder.add_entry(CHAIN_PATH, chain_bytes);
+    Ok(TakenUpstream {
+        bytes: builder.build()?,
+        decisions_taken,
+    })
+}
+
 /// Carry what an upstream spin-off takes besides the data and the chain
 /// (Contract 4 §5.2) into the new document's `entries` and `files`, and say
 /// what was taken (§5.3).
@@ -611,7 +856,8 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
 /// `entries` holds the target's own entries on the way in; the target keeps
 /// every path it already has except a member, which it shares with the source
 /// by merging.
-fn carry_upstream(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn carry_upstream(
     files: &mut Vec<FileEntry>,
     entries: &mut Vec<(String, Vec<u8>)>,
     source: &ClanFile,
@@ -619,6 +865,7 @@ fn carry_upstream(
     src_doc: &str,
     src_data_bytes: &[u8],
     last_decision: Option<String>,
+    source_wins: bool,
 ) -> Result<Carried> {
     let src_manifest = source.manifest();
     let mut carried = Carried {
@@ -664,7 +911,7 @@ fn carry_upstream(
     // at the root, so it goes beside the frozen copy.
     if let Some((_, bytes)) = src_entries.iter().find(|(p, _)| p == MERGE_REPORT_PATH) {
         let path = format!("{UPSTREAM_PREFIX}{src_doc}/{MERGE_REPORT_PATH}");
-        entries.push((path.clone(), bytes.clone()));
+        put_entry(entries, &path, bytes, true);
         let id = format!("upstream-merge-report-{src_doc}");
         register_carried(
             files,
@@ -680,13 +927,38 @@ fn carry_upstream(
         let carries = path.starts_with(BRANCH_PREFIX)
             || path.starts_with(UPSTREAM_PREFIX)
             || path.starts_with(ASSET_PREFIX);
-        if !carries || entries.iter().any(|(p, _)| p == path) {
+        if !carries {
             continue;
         }
-        entries.push((path.clone(), bytes.clone()));
+        if !put_entry(entries, path, bytes, source_wins) {
+            continue;
+        }
         register_carried(files, src_manifest, path, None);
     }
     Ok(carried)
+}
+
+/// Put `bytes` at `path` in `entries`. A path already there is replaced when
+/// `overwrite` is set and kept otherwise. Returns whether the entry is new,
+/// so the caller registers a new path once.
+fn put_entry(
+    entries: &mut Vec<(String, Vec<u8>)>,
+    path: &str,
+    bytes: &[u8],
+    overwrite: bool,
+) -> bool {
+    match entries.iter().position(|(p, _)| p == path) {
+        Some(i) => {
+            if overwrite {
+                entries[i].1 = bytes.to_vec();
+            }
+            false
+        }
+        None => {
+            entries.push((path.to_string(), bytes.to_vec()));
+            true
+        }
+    }
 }
 
 /// Merge the source's copy of a list member into the target's: the target's
@@ -731,6 +1003,55 @@ fn merge_member(own: Option<&[u8]>, src: &[u8], key: &str, path: &str) -> Result
         .map_err(|e| Error::OutputRejected(format!("failed to serialise merged {path}: {e}")))
 }
 
+/// [`merge_member`] for a later update: the parent's entries in its order,
+/// each replaced by the child's copy when the child `reviewed` it, then the
+/// child's own entries the parent does not hold.
+fn refresh_member(
+    own: Option<&[u8]>,
+    src: &[u8],
+    key: &str,
+    path: &str,
+    reviewed: &std::collections::BTreeSet<String>,
+) -> Result<Vec<u8>> {
+    let parse = |bytes: &[u8]| -> Mapping {
+        match serde_yaml::from_slice::<Value>(bytes) {
+            Ok(Value::Mapping(m)) => m,
+            _ => Mapping::new(),
+        }
+    };
+    let list = |doc: &Mapping| match doc.get(key) {
+        Some(Value::Sequence(items)) => items.clone(),
+        _ => Vec::new(),
+    };
+    let mut doc = own.map(parse).unwrap_or_default();
+    let mine = list(&doc);
+    if mine.is_empty() {
+        return Ok(src.to_vec());
+    }
+    let theirs = list(&parse(src));
+    let id_of = |v: &Value| v.get("id").and_then(Value::as_str).map(str::to_string);
+    let theirs_ids: std::collections::BTreeSet<String> = theirs.iter().filter_map(id_of).collect();
+    let mut items: Vec<Value> = theirs
+        .into_iter()
+        .map(|t| match id_of(&t) {
+            Some(id) if reviewed.contains(&id) => mine
+                .iter()
+                .find(|m| id_of(m).as_deref() == Some(id.as_str()))
+                .cloned()
+                .unwrap_or(t),
+            _ => t,
+        })
+        .collect();
+    items.extend(
+        mine.into_iter()
+            .filter(|m| id_of(m).map_or(true, |id| !theirs_ids.contains(&id))),
+    );
+    doc.insert(Value::String(key.to_string()), Value::Sequence(items));
+    serde_yaml::to_string(&doc)
+        .map(String::into_bytes)
+        .map_err(|e| Error::OutputRejected(format!("failed to serialise refreshed {path}: {e}")))
+}
+
 /// Register a carried entry in the new document's `files[]` under the
 /// source's own registration, or `fallback` when the source had none. The
 /// target's registration of the path wins; a source id the target already
@@ -769,7 +1090,10 @@ fn yaml_entry(id: &str, path: &str, role: &str) -> FileEntry {
 /// The edit decision that records one lift of an upstream spin-off (Contract
 /// 4 §5.4): the seeded field, the upstream address it was copied from, and why
 /// there was nothing else to do.
-fn seed_decision(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn seed_decision(
+    agent: &str,
+    actor: &str,
     doc: &str,
     src_doc: &str,
     src_title: &str,
@@ -782,7 +1106,7 @@ fn seed_decision(
     let cite = format!("{src_doc}#{from}");
     Decision {
         kind: Some("edit".into()),
-        actor: Some("process:spinoff".into()),
+        actor: Some(actor.into()),
         targets: vec![format!("{doc}#{to}")],
         cites: vec![cite.clone()],
         fields_changed: vec![to.split('.').next().unwrap_or(to).to_string()],
@@ -808,12 +1132,12 @@ fn seed_decision(
             ),
             ..Default::default()
         }),
-        ..Decision::new(SPINOFF_AGENT, "seed", decided, now)
+        ..Decision::new(agent, "seed", decided, now)
     }
 }
 
 /// Descend a dotted path, creating mappings as needed, and set a value.
-fn set_dotted(root: &mut Value, path: &str, value: Value) {
+pub(crate) fn set_dotted(root: &mut Value, path: &str, value: Value) {
     let keys: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
     let Some((last, parents)) = keys.split_last() else {
         *root = value;
@@ -840,7 +1164,7 @@ fn set_dotted(root: &mut Value, path: &str, value: Value) {
 }
 
 /// The value at a dotted path, if it is there.
-fn get_dotted<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
+pub(crate) fn get_dotted<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
     let keys: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
     if keys.is_empty() {
         return None;
@@ -851,7 +1175,7 @@ fn get_dotted<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
 }
 
 /// Remove and return the value at a dotted path, if it is there.
-fn take_dotted(root: &mut Value, path: &str) -> Option<Value> {
+pub(crate) fn take_dotted(root: &mut Value, path: &str) -> Option<Value> {
     let keys: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
     let (last, parents) = keys.split_last()?;
     let mut cur = root;
@@ -893,6 +1217,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         };
         let tpl = make_template(&clan, app, MakeTemplateOptions::default()).unwrap();
         ClanFile::from_bytes(tpl).unwrap()
@@ -980,6 +1305,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         };
         let tpl = ClanFile::from_bytes(
             make_template(&clan, app, MakeTemplateOptions::default()).unwrap(),
@@ -1039,6 +1365,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         });
         let mut chain = DecisionChain::default();
         chain.decisions.push(Decision::new(
@@ -1084,6 +1411,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: spec,
+            attach: None,
         };
         let bytes = make_template(&source, app, MakeTemplateOptions::default()).unwrap();
         ClanFile::from_bytes(bytes).unwrap()
@@ -1098,6 +1426,7 @@ mod tests {
                 .collect(),
             pin_source_decisions: true,
             upstream: false,
+            by_source: Default::default(),
         }
     }
 

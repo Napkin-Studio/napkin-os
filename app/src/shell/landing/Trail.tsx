@@ -20,12 +20,14 @@ interface Props {
   client?: { name: string; initials?: string; material: string } | null
   /** An open document is under the trail: no level is "here", all of them lead back. */
   inDocument?: boolean
+  /** In the OS bar the agency is its own pill: the trail starts at Clients. */
+  noAgency?: boolean
   onGo: (r: Route) => void
 }
 
 interface Crumb { route: Route; label: string; disc: React.ReactNode }
 
-export function Trail({ route, agency, client, inDocument, onGo }: Props) {
+export function Trail({ route, agency, client, inDocument, noAgency, onGo }: Props) {
   const mini = (material: string, initials: string) => <Circle size={26} material={material} initials={initials} />
   const crumbOf = (r: Route): Crumb => {
     switch (r.level) {
@@ -38,7 +40,8 @@ export function Trail({ route, agency, client, inDocument, onGo }: Props) {
       }
     }
   }
-  const crumbs = [...ancestry(route), route].map(crumbOf)
+  const crumbs = [...ancestry(route), route].filter(r => !(noAgency && r.level === 'agency')).map(crumbOf)
+  if (crumbs.length === 0) return null
   return (
     <nav className="lc-trail" aria-label="Where you are">
       <ol>
@@ -51,7 +54,7 @@ export function Trail({ route, agency, client, inDocument, onGo }: Props) {
                 data-level={c.route.level}
                 aria-current={here ? 'page' : undefined}
                 aria-label={c.label}
-                title={c.route.level === 'agency' ? 'Back to the studio' : undefined}
+                title={c.route.level === 'agency' ? 'Back to the studio' : c.label}
                 onClick={() => { if (!here) onGo(c.route) }}
               >
                 {c.disc}

@@ -40,9 +40,10 @@ test('enter and space are left to the button; escape and numbers are not stolen 
 
 test('the live region says where you are at each level, in words', () => {
   const names = { agency: 'Studio A', client: 'Client A', tool: 'Brief Maker', tools: 6, open: 2 }
-  assert.match(arrival({ level: 'agency' }, names), /^Studio A\./)
-  assert.match(arrival({ level: 'clients' }, names), /^Clients\./)
-  assert.match(arrival({ level: 'client', client: 'cli_00000001' }, names), /Client A opened with 6 tools\. Arrow keys move, 1 to 6 pick a tool, Enter opens it, Escape goes back to all clients\./)
+  // #agency and #clients are the one desk now (gaps.md §11): arrows rove the circles, the numbers pick on the dial.
+  assert.match(arrival({ level: 'agency' }, names), /^Studio A: your desk\. Arrow keys move between clients, Enter opens one's dial, 1 to 6 pick a tool on it, Escape closes it\./)
+  assert.equal(arrival({ level: 'clients' }, names), arrival({ level: 'agency' }, names))
+  assert.match(arrival({ level: 'client', client: 'cli_00000001' }, names), /Client A opened with 6 tools\. 1 to 6 open a tool, Escape goes back to the desk\./)
   assert.match(arrival({ level: 'tool', client: 'cli_00000001', tool: 'brief' }, names), /Brief Maker for Client A\. 2 open\./)
   assert.match(arrival({ level: 'tool', client: 'cli_00000001', tool: 'brief' }, { ...names, open: 0 }), /Nothing open yet\./)
 })

@@ -211,6 +211,7 @@ pub async fn layer(
                 .and_then(TenantId::parse);
             let is_new = existing.is_none();
             let tenant = existing.unwrap_or_else(TenantId::mint);
+            crate::timing::note_who(tenant.as_str(), tenant.as_str());
             parts.extensions.insert(tenant.clone());
             parts.extensions.insert(Person(tenant.to_string()));
             let mut response = next
@@ -227,15 +228,23 @@ pub async fn layer(
             response
         }
         Mode::Accounts { sessions, provider } => {
-            let account = cookie_value(&parts, SESSION_COOKIE).and_then(|c| sessions.read(&c));
+            // A person removed from the People page is signed out at their next request.
+            let account = cookie_value(&parts, SESSION_COOKIE)
+                .and_then(|c| sessions.read(&c))
+                .filter(|a| provider.still_allowed(&a.username));
             let path = parts.uri.path().to_string();
             match account {
                 Some(a) => {
-                    parts.extensions.insert(TenantId::of_agency(&a.agency));
+                    let tenant = TenantId::of_agency(&a.agency);
+                    crate::timing::note_who(tenant.as_str(), &a.username);
+                    parts.extensions.insert(tenant);
                     parts.extensions.insert(Person(a.username.clone()));
                     parts.extensions.insert(a);
                 }
-                None if path.starts_with("/auth/") || path == "/healthz" => {}
+                // the agencies' looks are public: the sign-in card wears them before anyone signs in
+                None if path.starts_with("/auth/")
+                    || path == "/healthz"
+                    || path == "/agency-looks" => {}
                 None => {
                     // `password` tells the sign-in screen whether to ask for one
                     let body = serde_json::json!({

@@ -4,41 +4,43 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
-    "project_name": { "type": "string" },
-    "client": { "type": "string" },
-    "background": { "type": "string" },
+    "project_name": { "title": "Project name", "type": "string" },
+    "client": { "title": "Client", "type": "string" },
+    "background": { "title": "Background", "type": "string" },
     "objectives": {
+      "title": "Objectives",
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "commercial": { "type": "string" },
-        "behavioural": { "type": "string" },
-        "attitudinal": { "type": "string" }
+        "commercial": { "title": "Commercial objective", "type": "string" },
+        "behavioural": { "title": "Behavioural objective", "type": "string" },
+        "attitudinal": { "title": "Attitudinal objective", "type": "string" }
       }
     },
-    "audience": { "type": "string" },
-    "competitor_context": { "type": "string" },
-    "insight": { "type": "string" },
-    "single_minded_proposition": { "type": "string" },
-    "job": { "type": "string" },
-    "barrier": { "type": "string" },
-    "objection": { "type": "string" },
-    "reasons_to_believe": { "type": "array", "items": { "type": "string" } },
+    "audience": { "title": "Audience", "type": "string" },
+    "competitor_context": { "title": "Competitor context", "type": "string" },
+    "insight": { "title": "Insight", "type": "string" },
+    "single_minded_proposition": { "title": "Single-minded proposition", "type": "string" },
+    "job": { "title": "Job", "type": "string" },
+    "barrier": { "title": "Barrier", "type": "string" },
+    "objection": { "title": "Objection to beat", "type": "string" },
+    "reasons_to_believe": { "title": "Reasons to believe", "type": "array", "items": { "type": "string" } },
     "desired_response": {
+      "title": "Desired response",
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "think": { "type": "string" },
-        "feel": { "type": "string" },
-        "do": { "type": "string" }
+        "think": { "title": "What they should think", "type": "string" },
+        "feel": { "title": "What they should feel", "type": "string" },
+        "do": { "title": "What they should do", "type": "string" }
       }
     },
-    "tone_and_world": { "type": "array", "items": { "type": "string" } },
-    "budget_and_scope": { "type": "string" },
-    "media_roles": { "type": "array", "items": { "type": "string" } },
-    "measurement": { "type": "array", "items": { "type": "string" } },
-    "mandatories": { "type": "array", "items": { "type": "string" } },
-    "open_questions": { "type": "array", "items": { "type": "string" } },
+    "tone_and_world": { "title": "Tone & world", "type": "array", "items": { "type": "string" } },
+    "budget_and_scope": { "title": "Budget & scope", "type": "string" },
+    "media_roles": { "title": "Role of each medium", "type": "array", "items": { "type": "string" } },
+    "measurement": { "title": "How we will know it worked", "type": "array", "items": { "type": "string" } },
+    "mandatories": { "title": "Mandatories", "type": "array", "items": { "type": "string" } },
+    "open_questions": { "title": "Open questions", "type": "array", "items": { "type": "string" } },
     "reference_assets": {
       "type": "array",
       "items": {
@@ -79,7 +81,61 @@
         }
       }
     },
+    "layout": {
+      "x-clan-appearance": true,
+      "description": "How the brief sits on its A4 sheet (features/brief-new-ui.clan): the frame, the headings, and each part's cell on a 12-column grid. Written by a person only; the crew never writes it, so a redraft keeps it. A part with no entry sits at its default place.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "frame": { "type": "string", "enum": ["open", "boxed"] },
+        "headings": { "type": "string", "enum": ["label", "tab"] },
+        "logosHidden": { "description": "The stand-in logos (the client's or the agency's initials, shown while no picture is on the sheet) a person took off the sheet.", "type": "array", "uniqueItems": true, "items": { "type": "string", "enum": ["client", "agency"] } },
+        "model": { "description": "rows: each part's row and col in parts are its place (parts sharing a row number sit side by side). Absent (written before 2026-11-11): parts holds a flow, its order packed into rows on read.", "type": "string", "enum": ["rows"] },
+        "parts": {
+          "description": "Keyed by the part's data path (e.g. objectives.commercial).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "col": { "type": "integer", "minimum": 1, "maximum": 12 },
+              "row": { "type": "integer", "minimum": 1 },
+              "w": { "type": "integer", "minimum": 1, "maximum": 12 },
+              "h": { "type": "integer", "minimum": 1 },
+              "order": { "type": "integer", "minimum": 0 },
+              "as": { "description": "How the part is shown: prose, bullets, callout, statement or cell (a ruled field row). Absent: the part's default.", "type": "string", "enum": ["prose", "bullets", "callout", "statement", "cell"] },
+              "tone": { "description": "What sits behind the part: plain, a soft tint, or inverse (ink with paper words).", "type": "string", "enum": ["plain", "tint", "inverse"] }
+            }
+          }
+        }
+      }
+    },
+    "logos": {
+      "x-clan-appearance": true,
+      "description": "The logos on the brief's sheet and its exports. ref is {asset} for a picture uploaded to this document, or {brand, asset} for one in an attached Brand Clan (an agency kit is another brand document).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["slot", "ref"],
+        "properties": {
+          "slot": { "type": "string", "enum": ["client", "agency", "partner"] },
+          "ref": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["asset"],
+            "properties": { "asset": { "type": "string" }, "brand": { "type": "string" } }
+          },
+          "label": { "type": "string" }
+        }
+      }
+    },
     "locked_fields": { "type": "array", "items": { "type": "string" } },
+    "confidential_fields": {
+      "description": "Parts a person marked Confidential (owner, 2026-11-13): Napkin's systems never learn from them (no knowledge layer, RAG, harvest, eval, golden set or training). The agency and the client see them in full: the agency copy hatches and tags them, the client copy prints them plain. Keyed by the part's data path. Written by a person only.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "locked": { "type": "boolean", "$comment": "kept for older briefs: the lock is an approve on this document (middleware-api.md §10.5, os-layer.md §7.1), not this flag" },
     "materials": { "$ref": "#/definitions/materials", "$comment": "written only by the middleware (middleware-api.md §10.4)" },
     "capture": { "$ref": "#/definitions/capture", "$comment": "written only by the middleware (middleware-api.md §10.4)" },
@@ -492,7 +548,8 @@
                   "type": "string",
                   "enum": [
                     "single",
-                    "multiple"
+                    "multiple",
+                    "unchecked"
                   ]
                 },
                 "split_into": {

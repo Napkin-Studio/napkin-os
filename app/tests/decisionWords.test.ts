@@ -2,16 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The decision panel names the crew the way the apps do: by the name each
-// agent introduces itself by, read from model.ts, never a role label. These
-// pin that, so a renamed agent is renamed in the panel too.
+// The decision panel names agents the way the apps do: by role ("Review
+// agent"), through the one lookup (shell/agents/engine.ts, roles.js), however an
+// older record named them. These pin that.
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { DecisionBlock, DecisionsView } from '../src/host/types.ts'
 import { didWhat, plain, redoOf, runsOf, signOf, whereOf, whoOf } from '../src/shell/decisions/words.ts'
-import { AGENTS } from '../src/studio/model.ts'
 
 function block(over: Partial<DecisionBlock['decision']>, who: DecisionBlock['who']): DecisionBlock {
   return {
@@ -24,15 +23,15 @@ const agent = (id: string): DecisionBlock['who'] => ({ kind: 'agent', id, name: 
 
 test('an agent is signed with its own name and job', () => {
   const w = whoOf(block({ kind: 'verdict', polarity: 'bad' }, agent('napkin/brief/judge')))
-  assert.equal(w.agent, 'judge')
-  assert.equal(w.name, AGENTS.judge.given)
-  assert.equal(signOf(w), `${AGENTS.judge.given} · ${AGENTS.judge.job}`)
+  assert.equal(w.agent, 'review')
+  assert.equal(w.name, 'Review agent')
+  assert.equal(signOf(w), 'Review agent')
 })
 
 test('a lens researcher is named, not called by its lens', () => {
   const w = whoOf(block({ action: 'research_run', targets: ['lenses_run[media_spend/IE]'] }, agent('research_lens')))
-  assert.equal(w.agent, 'media')
-  assert.equal(w.name, AGENTS.media.given)
+  assert.equal(w.agent, 'research')
+  assert.equal(w.name, 'Research agent')
 })
 
 test('a person is "You", a name, or "Someone" for an opaque id', () => {
@@ -46,9 +45,14 @@ test('a person is "You", a name, or "Someone" for an opaque id', () => {
 
 test('asking again asks the agent who does that work, by name', () => {
   const r = redoOf(block({ action: 'synthesise_finding', kind: 'finding' }, agent('synthesise_findings')))
-  assert.equal(r?.label, `Ask ${AGENTS.synthesis.given} again`)
+  // The research's findings are the Synthesis agent's (the mock's "Synthesis agent found 3 points").
+  assert.equal(r?.label, 'Ask the Synthesis agent again')
+  const aud = redoOf(block({ action: 'propose_audience' }, agent('synthesise_findings')))
+  assert.equal(aud?.label, 'Ask the Strategy agent to redo the audience', 'the audience stays the Strategy agent’s')
+  const rep = redoOf(block({ action: 'compose_report' }, agent('compose_report')))
+  assert.equal(rep?.label, 'Ask the Synthesis agent to write the report again')
   const lens = redoOf(block({ action: 'research_run', targets: ['lenses_run[rhythm_moments/IE]'] }, agent('research_lens')))
-  assert.equal(lens?.label, `Ask ${AGENTS.rhythm.given} to look again`)
+  assert.equal(lens?.label, 'Ask the Research agent to look again at timing')
 })
 
 test('a run is titled by who worked in it, in the order they started', () => {
@@ -61,12 +65,12 @@ test('a run is titled by who worked in it, in the order they started', () => {
     ],
   }
   const [run] = runsOf(view)
-  assert.equal(run.title, `${AGENTS.extract.given} and ${AGENTS.synthesis.given}`)
+  assert.equal(run.title, 'Knowledge agent and Synthesis agent')
 })
 
 test('where a decision landed reads in words, never an id', () => {
   assert.equal(whereOf('Intake › Messages · msg_01M3MAWD3BMYKN002'), 'Your request')
-  assert.equal(whereOf('Selection › Lenses run · consumer_culture/IE'), `${AGENTS.culture.given} · ${AGENTS.culture.job}`)
+  assert.equal(whereOf('Selection › Lenses run · consumer_culture/IE'), 'Research agent · Consumer culture')
   assert.equal(whereOf('Fact · Private label share · IE'), 'Fact · Private label share · Ireland')
   const long = whereOf(`Finding · ${'word '.repeat(30)}`)!
   assert.ok(long.length <= 60 && long.endsWith('…'))
@@ -77,7 +81,7 @@ test('a person’s typed name reads as the name again', () => {
   assert.equal(whoOf(block({}, { kind: 'person', id: '.5f20.4f1f', name: '.5f20.4f1f' })).name, '张伟')
 })
 
-test('the crew’s working words are said plainly', () => {
+test('the agents’ working words are said plainly', () => {
   assert.equal(plain('Proposed a consumer_culture finding for a person to verify'), 'Proposed a consumer culture point for you to check')
   const view: DecisionsView = { document_id: 'd', version: 'v', attention: [], cites: {}, lock: { can_lock: true, blockers: 0 }, decisions: [] }
   const b = block({ action: 'edit_field' }, { kind: 'person', id: 'x', name: 'x', you: true })
@@ -91,9 +95,11 @@ test('a run of look changes reads as one line', () => {
   assert.equal(didWhat(b, view), 'changed the look: Studio brief, Dark with orange palette')
 })
 
-// A redraft of a part a person holds (redraft-provenance): Dara's drafts are
-// proposals, Jude's note sends the first back, and the person's accept is
-// credited to Dara. No line carries a decision's id.
+// A redraft of a part a person holds (redraft-provenance): the Brief agent's
+// drafts are proposals, the Review agent's note sends the first back, and the
+// person's accept is credited to the Brief agent. These records are OLDER ones,
+// written while agents had crew names: they must read by role. No line carries
+// a decision's id.
 const smp = [{ address: 'd#single_minded_proposition', path: 'single_minded_proposition', label: 'Single-minded proposition', kind: 'field' as const, here: true }]
 const VIEW0: DecisionsView = { document_id: 'd', version: 'v', attention: [], cites: {}, lock: { can_lock: true, blockers: 0 }, decisions: [] }
 const me = { kind: 'person' as const, id: 'x', name: 'x', you: true }
@@ -105,13 +111,13 @@ test('accepting a proposal is credited to whoever proposed it, never by its id',
     reasoning: { decided: 'Accepted it.', because: [{ point: 'Dara proposed it.', cites: ['d_P2'] }], rejected: [], certainty: { level: 'high', why: 'read' }, would_change_if: 'never' } }, me)
   acc.targets = smp
   const view = { ...VIEW0, decisions: [acc, prop] }
-  assert.equal(didWhat(acc, view), `accepted ${AGENTS.drafter.given}’s new version of single-minded proposition`)
+  assert.equal(didWhat(acc, view), 'accepted the Brief agent’s new version of single-minded proposition')
   // An older brief named the proposal's id in the rationale, with no cites.
   const old = block({ id: 'd_O', rationale: 'Accepted d_P2: Dara’s proposal for single-minded proposition.' }, me)
   old.targets = smp
-  assert.equal(didWhat(old, { ...VIEW0, decisions: [old, prop] }), `accepted ${AGENTS.drafter.given}’s new version of single-minded proposition`)
+  assert.equal(didWhat(old, { ...VIEW0, decisions: [old, prop] }), 'accepted the Brief agent’s new version of single-minded proposition')
   // Even when the proposal has left the chain, the drafter is credited.
-  assert.equal(didWhat(old, VIEW0), `accepted ${AGENTS.drafter.given}’s new version of single-minded proposition`)
+  assert.equal(didWhat(old, VIEW0), 'accepted the Brief agent’s new version of single-minded proposition')
   assert.equal(plain('Accepted d_P2: Dara’s proposal for single-minded proposition.'), 'Accepted Dara’s proposal for single-minded proposition.')
   assert.equal(plain('Used proposal d_P2'), 'Used the proposal.')
 })
@@ -122,12 +128,85 @@ test('a proposal reads as a first or a new version, steered as its reason says',
   assert.equal(didWhat(first, VIEW0), 'proposed a first single-minded proposition on your ask')
   const second = block({ id: 'd_P2', action: 'propose', rationale: 'Rewrote the single-minded proposition on Jude’s note and your ask.' }, agent('draft_brief@1.0/drafter'))
   second.targets = smp
-  assert.equal(didWhat(second, VIEW0), `proposed a new single-minded proposition on ${AGENTS.judge.given}’s note and your ask`)
-  // The judge by the crew's name, whatever the record spelt; no steer, no tail.
+  assert.equal(didWhat(second, VIEW0), 'proposed a new single-minded proposition on the Review agent’s note and your ask')
+  // The reviewer by its role, whatever the record spelt; no steer, no tail.
   const plainNote = block({ id: 'd_P3', action: 'propose', rationale: "Rewrote the single-minded proposition on Jude's note." }, agent('draft_brief@1.0/drafter'))
   plainNote.targets = smp
-  assert.equal(didWhat(plainNote, VIEW0), `proposed a new single-minded proposition on ${AGENTS.judge.given}’s note`)
+  assert.equal(didWhat(plainNote, VIEW0), 'proposed a new single-minded proposition on the Review agent’s note')
+  // A record written since the roles: the same words, never the role named twice.
+  const roleNote = block({ id: 'd_P4', action: 'propose', rationale: 'Rewrote the single-minded proposition on the Review agent\'s note.' }, agent('draft_brief@1.0/drafter'))
+  roleNote.targets = smp
+  assert.equal(didWhat(roleNote, VIEW0), 'proposed a new single-minded proposition on the Review agent’s note')
   const bare = block({ id: 'd_P4', action: 'propose', rationale: 'Wrote the single-minded proposition.' }, agent('draft_brief@1.0/drafter'))
   bare.targets = smp
   assert.equal(didWhat(bare, VIEW0), 'proposed a new single-minded proposition')
+})
+
+test('an agent’s own line in an irregular past reads as done, not “decided to …”', () => {
+  const said = (rationale: string) => didWhat(block({ id: 'd_X', action: 'draft_field', rationale }, agent('draft_brief@1.0/drafter')), VIEW0)
+  assert.equal(said('Rewrote the audience on your ask.'), 'rewrote the audience on your ask')
+  assert.equal(said('Went on without the judge stage.'), 'went on without the judge stage')
+  assert.equal(said('Keep the audience as written.'), 'decided to keep the audience as written')
+})
+
+test('a line that is not a verb phrase reads as it is, never “decided to the …”', () => {
+  const said = (rationale: string) => didWhat(block({ id: 'd_X', action: 'judge_field', rationale }, agent('draft_brief@1.0/judge')), VIEW0)
+  assert.equal(said('The audience section turns into a product pitch.'), 'the audience section turns into a product pitch')
+  assert.equal(said('Ferryman Light answers the doubt.'), 'Ferryman Light answers the doubt')
+  assert.equal(said('Two parts disagree on the budget.'), 'two parts disagree on the budget')
+  assert.equal(said('Use the research’s audience.'), 'decided to use the research’s audience')
+})
+
+test('a link, its update and its unlink each say what they did, to which document', () => {
+  const you = { kind: 'person', id: 'x', name: 'x', you: true } as DecisionBlock['who']
+  const at = ['d1#upstream.fd7f207f-af73-4c24-9d1e-000000000001']
+  const attach = block({ id: 'a', action: 'attach', targets: at, rationale: 'Took "Guinness 0.0 · Ireland" (ie.napkin.campaign-research) at v1: its data frozen …' }, you)
+  const update = block({ id: 'u', action: 'update_from_research', targets: at, rationale: 'Took "Guinness 0.0 · Ireland" (ie.napkin.campaign-research) at v2: …' }, you)
+  const detach = block({ id: 'x', action: 'detach', targets: at, rationale: 'Let go of ie.napkin.campaign-research fd7f207f-af73: its frozen copy removed.' }, you)
+  const view = { ...VIEW0, decisions: [detach, update, attach] }
+  assert.equal(didWhat(attach, view), 'linked “Guinness 0.0 · Ireland”')
+  assert.equal(didWhat(update, view), 'took the newer “Guinness 0.0 · Ireland”')
+  assert.equal(didWhat(detach, view), 'unlinked “Guinness 0.0 · Ireland”', 'the unlink finds the title its link named')
+  assert.equal(didWhat(detach, { ...VIEW0, decisions: [detach] }), 'unlinked a linked document')
+})
+
+// B4 leftovers (final retest): handlers read as the agents, keys and ids as words.
+test('a step no one agent owns is the agents’, never its job’s name', () => {
+  assert.equal(whoOf(block({ action: 'reconsider' }, agent('reconsider'))).name, 'The agents')
+  // The research report is composed by the Synthesis agent (the mock's answer card); a brief stays the Brief agent's.
+  assert.equal(whoOf(block({ action: 'report' }, agent('start_campaign'))).name, 'Synthesis agent')
+  assert.equal(whoOf(block({ action: 'draft' }, agent('draft_brief'))).name, 'Brief agent')
+  const contest = whoOf(block({ action: 'open_contest', kind: 'contest' }, agent('start_campaign')))
+  assert.equal(contest.name, 'Research agent')
+  assert.equal(contest.person, false)
+})
+
+test('a contest’s key, a spin-off and a reconsider read as sentences without ids', () => {
+  const view = { document_id: 'd', version: 'v', attention: [], cites: {}, lock: { can_lock: true, blockers: 0 }, decisions: [] } as unknown as DecisionsView
+  assert.equal(plain('Opened a contest on category/alcohol.cider:market.export_value@IE; nothing is picked'),
+    'Opened a contest on the export value in Ireland; nothing is picked')
+  const spin = block({
+    action: 'spin off "Dry Run" into Research Tool',
+    rationale: 'Carried its data, frozen under upstream.a3eba7f3-def2-499a-bcb9-24df86b92c25, its facts, findings, sources, branches and assets, and 90 decision(s) from "Dry Run" (a3eba7f3). Everything below this entry was decided in that document.',
+  }, agent('napkin-spinoff'))
+  const said = didWhat(spin, view)
+  assert.equal(said, 'started this from “Dry Run”, carrying in its facts, findings and sources and 90 decisions made there')
+  const why = plain(spin.decision.rationale)
+  assert.doesNotMatch(why, /upstream|a3eba7f3/)
+  const rec = block({
+    action: 'reconsider',
+    rationale: "Brought the document in step with a person's review: 1 review(s): 0 finding(s) checked, 0 still stand, 0 superseded by what they were worked out again as, 0 no longer stand. Because: A person verified it",
+  }, agent('reconsider'))
+  assert.equal(didWhat(rec, view), 'went over the findings after a person’s review; none of them needed changing')
+  const rec2 = block({ ...rec.decision, rationale: "Brought the document in step with a person's review: 2 review(s): 3 finding(s) checked, 2 still stand, 1 superseded by what they were worked out again as, 0 no longer stand." }, agent('reconsider'))
+  assert.equal(didWhat(rec2, view), 'went over the findings after 2 reviews by a person: 3 findings checked again, 2 findings still stand, 1 finding was worked out again')
+})
+
+test('a part named by its key reads by the label the host gives it', () => {
+  const parts = { budget_and_scope: 'budget & scope', background: 'background', competitor_context: 'competitor context' }
+  assert.equal(plain('budget_and_scope asks legal which sections apply', parts), 'budget & scope asks legal which sections apply')
+  assert.equal(plain('Over length: background 99/70, competitor_context 120/70', parts),
+    'Too long: background (99 words, 70 at most), competitor context (120 words, 70 at most)')
+  assert.equal(plain('Checked the new the barrier: it answers the note.'), 'Checked the new barrier: it answers the note.')
+  assert.equal(plain('Proposed a effectiveness_evidence finding for a person to verify'), 'Proposed an effectiveness point for you to check')
 })

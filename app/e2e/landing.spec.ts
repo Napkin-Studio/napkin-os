@@ -1,5 +1,5 @@
-// The landing, end to end: the real shell, the real napkin-web, real documents.
-// Landing -> clients -> add a client -> reload -> open a client -> start work for
+// The desk, end to end: the real shell, the real napkin-web, real documents.
+// Desk -> add a client -> reload -> the dial -> open a client -> start work for
 // it. Every client name here is a placeholder (Client A, Client B...).
 //
 //   npm run e2e            (in app/; starts the stack, see stack.mjs)
@@ -29,39 +29,39 @@ async function seed(page: Page): Promise<Seeded> {
   return { tenant, a, b }
 }
 
-test('landing, clients, add a client, reload, open a client, start work', async ({ page }) => {
+test('the desk, add a client, reload, open a client, start work', async ({ page }) => {
   await page.goto('/')
 
-  // The home is the landing, with nothing yet.
-  await expect(page.getByTestId('landing')).toBeVisible()
-  await expect(page.getByTestId('counts')).toHaveText('No clients yet')
+  // The home is the desk (#agency and #clients are the one desk now), with nothing yet.
+  await expect(page.getByTestId('desk')).toBeVisible()
+  await expect(page.getByTestId('counts')).toHaveText('YOUR DESK · NO CLIENTS YET')
   await expect(page).toHaveURL(/#agency$/)
 
-  // Two clients and their work exist on the server; the landing says so from the server.
+  // Two clients and their work exist on the server; the desk says so from the server.
   const { a } = await seed(page)
   await page.reload()
-  await expect(page.getByTestId('counts')).toHaveText('2 clients · 2 open')
-  await expect(page.getByText('Nothing is waiting on you.')).toBeVisible()
+  await expect(page.getByTestId('counts')).toHaveText('YOUR DESK · 2 CLIENTS · 2 OPEN')
+  await expect(page.getByTestId('needs-count')).toHaveText('0') // nothing is waiting on you
 
-  // The agency circle opens the clients page.
-  await page.getByTestId('agency-circle').click()
-  await expect(page).toHaveURL(/#clients$/)
+  // The clients are circles on the desk itself, each saying its work in words.
+  await page.goto('/#clients')
+  await expect(page.getByTestId('desk')).toBeVisible()
   await expect(page.getByTestId('client-circle')).toHaveCount(2)
-  await expect(page.getByRole('button', { name: /^Client A, 1 brief/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Client B, 1 brief/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Client A: Spring brief for Client A · draft/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Client B: Launch brief for Client B · draft/ })).toBeVisible()
 
   // Add a client: a real record, through the host.
-  await page.getByRole('button', { name: 'Add client', exact: true }).first().click()
+  await page.getByTestId('add-client').click()
   await expect(page.getByTestId('add-form')).toBeVisible()
   await page.getByLabel('Client name').fill('Client C')
-  await page.getByRole('button', { name: 'Add client', exact: true }).last().click()
+  await page.getByRole('button', { name: 'Add client', exact: true }).click()
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
-  await expect(page.getByRole('button', { name: /^Client C, No work yet, idle/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Client C: No work yet, idle/ })).toBeVisible()
 
   // The same name again is refused in the host's words and makes nothing.
-  await page.getByRole('button', { name: 'Add client', exact: true }).first().click()
+  await page.getByTestId('add-client').click()
   await page.getByLabel('Client name').fill('client  c')
-  await page.getByRole('button', { name: 'Add client', exact: true }).last().click()
+  await page.getByRole('button', { name: 'Add client', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('already a client called')
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
   await page.getByRole('button', { name: 'Cancel' }).click()
@@ -71,38 +71,50 @@ test('landing, clients, add a client, reload, open a client, start work', async 
   await expect(page).toHaveURL(/#clients$/)
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
 
-  // Open a client: its tools around it, Idea and Prod Soon, its work listed.
-  await page.getByRole('button', { name: /^Client A,/ }).click()
+  // A client's circle opens the dial in place: four apps round the client's hub; the URL stays.
+  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await expect(page.getByTestId('dial-hub')).toBeVisible()
+  await expect(page).toHaveURL(/#clients$/)
+  for (const t of ['brief', 'research', 'deck', 'prod']) await expect(page.getByTestId(`quadrant-${t}`)).toBeVisible()
+  await expect(page.getByTestId('quadrant-prod')).toHaveAttribute('aria-disabled', 'true')
+  // Open a client: its tools are its groups' headings, Idea and Prod Soon, its work listed.
+  await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
   const client = page.getByTestId('client-page')
-  await expect(client.getByRole('heading', { name: 'Client A' })).toBeVisible()
-  for (const t of ['brief', 'research', 'idea', 'deck', 'prod', 'ads']) await expect(page.getByTestId(`tool-${t}`)).toBeVisible()
-  await expect(page.getByTestId('tool-idea')).toHaveAttribute('aria-disabled', 'true')
-  await expect(page.getByTestId('tool-prod')).toHaveAttribute('aria-disabled', 'true')
+  await expect(client.getByRole('heading', { name: 'Client A', level: 1 })).toBeVisible()
+  for (const t of ['brief', 'research']) await expect(page.getByTestId(`tool-${t}`)).toBeVisible()
   await expect(page.getByTestId('tool-brief')).not.toHaveAttribute('aria-disabled', 'true')
+  await page.keyboard.press('4') // Production: Soon, said, and the page stays
+  await expect(page.getByTestId('live')).toContainText('Production Tool is coming soon')
+  await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
   await expect(page.getByTestId('work-item')).toHaveCount(1)
   await expect(page.getByTestId('work-item')).toContainText('Spring brief for Client A')
 
-  // The trail shows where we are, and goes back.
+  // The bar shows where we are after the agency's pill: the client's chip, a switcher, this page.
   const trail = page.getByRole('navigation', { name: 'Where you are' })
-  await expect(trail.getByRole('button')).toHaveCount(3)
+  await expect(trail.getByRole('button')).toHaveCount(1)
   await expect(trail.getByRole('button', { name: 'Client A' })).toHaveAttribute('aria-current', 'page')
 
   // Reload and back/forward land in the same place.
   await page.reload()
   await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
-  await expect(client.getByRole('heading', { name: 'Client A' })).toBeVisible()
+  await expect(client.getByRole('heading', { name: 'Client A', level: 1 })).toBeVisible()
   await page.goBack()
   await expect(page).toHaveURL(/#clients$/)
-  await expect(page.getByTestId('clients')).toBeVisible()
+  await expect(page.getByTestId('desk')).toBeVisible()
   await page.goForward()
   await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
-  await trail.getByRole('button', { name: 'Clients' }).click()
-  await expect(page).toHaveURL(/#clients$/)
+  // The switcher goes to another client; the medallion goes back to the desk.
+  await trail.getByRole('button', { name: 'Client A' }).click()
+  await page.getByRole('menuitem', { name: /^Client B/ }).click()
+  await expect(client.getByRole('heading', { name: 'Client B', level: 1 })).toBeVisible()
+  await page.getByTestId('medallion').click()
+  await expect(page).toHaveURL(/#agency$/)
+  await expect(page.getByTestId('desk')).toBeVisible()
 
   // Start work for a client: the tool's page, then a document that is already theirs.
-  await page.getByRole('button', { name: /^Client C,/ }).click()
-  await page.getByTestId('tool-brief').click()
+  await page.getByRole('button', { name: /^Client C:/ }).click()
+  await page.getByTestId('quadrant-brief').click() // straight from the dial to the tool
   await expect(page.getByTestId('tool-page')).toBeVisible()
   await page.getByTestId('new-doc').click()
   await expect(page.locator('iframe').first()).toBeVisible({ timeout: 30_000 })
@@ -110,26 +122,29 @@ test('landing, clients, add a client, reload, open a client, start work', async 
   const recent = await page.request.get(`/api/t/${tenant}/library?app=ie.napkin.brief-maker`)
   // A blank is not work yet: still only the two that were made.
   expect((await recent.json() as { items: unknown[] }).items).toHaveLength(2)
-  // The trail in the bar is the way back: the client's circle goes to the client.
+  // The client's chip in the bar is the way back to the client.
   await page.getByRole('navigation', { name: 'Where you are' }).getByRole('button', { name: 'Client C' }).click()
   await expect(page.getByTestId('client-page')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Client C' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Client C', level: 1 })).toBeVisible()
 })
 
-test('a hostile or unknown hash is the landing, and an unknown client shows the clients', async ({ page }) => {
+test('a hostile or unknown hash is the desk, and an unknown client is corrected to it', async ({ page }) => {
   await page.goto('/#client-Ólafsson')
-  await expect(page.getByTestId('landing')).toBeVisible()
+  await expect(page.getByTestId('desk')).toBeVisible()
   await expect(page).toHaveURL(/#agency$/)
   await page.goto('/#client-cli_00000000')
-  await expect(page.getByTestId('clients')).toBeVisible()
+  await expect(page.getByTestId('desk')).toBeVisible()
+  await expect(page).toHaveURL(/#clients$/)
 })
 
 test('beyond eight clients there is search and Show all, and the empty state is welcoming', async ({ page }) => {
   await page.goto('/#clients')
-  await expect(page.getByTestId('empty')).toBeVisible()
-  await page.getByRole('button', { name: 'Add your first client' }).click()
+  await expect(page.getByTestId('desk')).toBeVisible()
+  await expect(page.getByTestId('greeting')).toContainText('Add your first client to start their desk.')
+  await expect(page.getByTestId('client-circle')).toHaveCount(0)
+  await page.getByRole('button', { name: /^Add your first client/ }).click()
   await page.getByLabel('Client name').fill('Client A')
-  await page.getByRole('button', { name: 'Add client', exact: true }).last().click()
+  await page.getByRole('button', { name: 'Add client', exact: true }).click()
   await expect(page.getByTestId('client-circle')).toHaveCount(1)
 
   const { tenant } = await (await page.request.get('/api/session')).json() as { tenant: string }
@@ -141,7 +156,7 @@ test('beyond eight clients there is search and Show all, and the empty state is 
   await expect(page.getByRole('button', { name: 'Show all 11' })).toBeVisible()
   await page.getByRole('button', { name: 'Show all 11' }).click()
   await expect(page.getByTestId('client-circle')).toHaveCount(11)
-  await page.getByPlaceholder('Search clients').fill('client k')
+  await page.getByPlaceholder('Find a client').fill('client k')
   await expect(page.getByTestId('client-circle')).toHaveCount(1)
 })
 
@@ -151,7 +166,7 @@ test('another tenant sees none of it', async ({ browser, page }) => {
   const other = await browser.newContext()
   const p2 = await other.newPage()
   await p2.goto('/')
-  await expect(p2.getByTestId('counts')).toHaveText('No clients yet')
+  await expect(p2.getByTestId('counts')).toHaveText('YOUR DESK · NO CLIENTS YET')
   await other.close()
 })
 
@@ -159,32 +174,53 @@ test('a host with no library route keeps the Launcher as home', async ({ page })
   await page.route('**/api/t/*/library**', r => r.fulfill({ status: 404, body: '' }))
   await page.goto('/')
   await expect(page.getByText('What shall we work on?')).toBeVisible()
-  await expect(page.getByTestId('landing')).toHaveCount(0)
+  await expect(page.getByTestId('desk')).toHaveCount(0)
 })
 
 test('the keyboard reaches the circles and Enter opens one', async ({ page }) => {
   await page.goto('/')
   await seed(page)
   await page.reload()
-  await page.getByTestId('agency-circle').focus()
-  await page.keyboard.press('Enter')
-  await expect(page).toHaveURL(/#clients$/)
+  // One tab stop for the circles: the arrows move between them.
+  await expect(page.getByTestId('client-circle').first()).toHaveAttribute('tabindex', '0')
+  await expect(page.getByTestId('client-circle').nth(1)).toHaveAttribute('tabindex', '-1')
   await page.getByTestId('client-circle').first().focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByTestId('client-circle').nth(1)).toBeFocused()
+  await page.keyboard.press('ArrowRight') // wraps round
+  await expect(page.getByTestId('client-circle').first()).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(page.getByTestId('client-circle').nth(1)).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(page.getByTestId('client-circle').first()).toBeFocused()
   await page.keyboard.press('Enter')
-  await expect(page.getByTestId('client-page')).toBeVisible()
+  // Enter opens the dial with the focus on its first quadrant; Escape closes it and gives the focus back.
+  await expect(page.getByTestId('quadrant-brief')).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByTestId('quadrant-research')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('dial')).toHaveCount(0)
+  await expect(page.getByTestId('client-circle').first()).toBeFocused()
+  await expect(page).toHaveURL(/#agency$/)
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('1') // the number keys pick a quadrant: Brief
+  await expect(page.getByTestId('tool-page')).toBeVisible()
 })
 
-// Phase 4 (3D circles): reduced motion alone no longer means flat (the approved mock shows still
-// 3D spheres; circles.spec.ts covers that). This test is about its other half, no WebGL at all, so
-// it starts its own browser without WebGL, as its name says. The assertions are unchanged.
+// The circles are always flat (owner, 2026-11-11). This test starts its own browser with reduced
+// motion and no WebGL, as its name says, so nothing could draw a sphere or animate if it tried.
 test('reduced motion and no WebGL: the circles are flat SVG, nothing animates', async () => {
   const browser = await chromium.launch({ args: ['--disable-webgl', '--disable-webgl2', '--disable-3d-apis', '--disable-gpu'] })
   const ctx = await browser.newContext({ reducedMotion: 'reduce', baseURL: test.info().project.use.baseURL })
   const page = await ctx.newPage()
   await page.goto('/')
-  await expect(page.getByTestId('landing')).toBeVisible()
+  await seed(page)
+  await page.reload()
+  await expect(page.getByTestId('desk')).toBeVisible()
   expect(await page.locator('canvas').count()).toBe(0)
-  expect(await page.locator('svg.lc-cir').count()).toBeGreaterThan(0)
+  // the flat circle: the client's colour disc and its monogram, drawn by CSS
+  expect(await page.locator('[data-testid="client-circle"] .cl-disc > b').count()).toBe(2)
+  expect(await page.evaluate(() => document.getAnimations().filter(a => a instanceof CSSAnimation).length)).toBe(0)
   await ctx.close()
   await browser.close()
 })
@@ -193,34 +229,31 @@ test('reduced motion and no WebGL: the circles are flat SVG, nothing animates', 
 
 const noSideScroll = (page: Page) =>
   page.evaluate(() => {
-    const el = document.querySelector('.lc')!
+    const el = document.querySelector('.nui-home')!
     return { page: document.documentElement.scrollWidth - window.innerWidth, lc: el.scrollWidth - el.clientWidth }
   })
 
-test('on a phone every crumb has a name and a 44px target', async ({ page }) => {
+test('on a phone the client chip has a name and a 44px target', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 })
   await page.goto('/')
   const { a } = await seed(page)
   await page.goto(`/#client-${a}`)
   await page.reload()
   const trail = page.getByRole('navigation', { name: 'Where you are' })
-  await expect(trail.getByRole('button')).toHaveCount(3)
-  for (const name of ['Clients', 'Client A']) await expect(trail.getByRole('button', { name })).toBeVisible()
-  for (const b of await trail.getByRole('button').all()) {
+  await expect(trail.getByRole('button')).toHaveCount(1)
+  // the way back up is the medallion, and it is a target too
+  for (const b of [trail.getByRole('button', { name: 'Client A' }), page.getByTestId('medallion'), page.getByTestId('agency-pill')]) {
+    await expect(b).toBeVisible()
     const box = (await b.boundingBox())!
-    expect(box.width, 'crumb width').toBeGreaterThanOrEqual(43.5)
-    expect(box.height, 'crumb height').toBeGreaterThanOrEqual(43.5)
-    expect(((await b.getAttribute('aria-label')) ?? '').length, 'crumb has a name').toBeGreaterThan(0)
-  }
-  // None is clipped by the bar: every crumb lies inside the window, and the one you are on shows its name.
-  for (const b of await trail.getByRole('button').all()) {
-    const box = (await b.boundingBox())!
-    expect(box.x, 'crumb left edge').toBeGreaterThanOrEqual(0)
-    expect(box.x + box.width, 'crumb right edge').toBeLessThanOrEqual(390 + 0.5)
+    expect(box.width, 'target width').toBeGreaterThanOrEqual(43.5)
+    expect(box.height, 'target height').toBeGreaterThanOrEqual(43.5)
+    expect(((await b.getAttribute('aria-label')) ?? '').length, 'it has a name').toBeGreaterThan(0)
+    // None is clipped by the bar: it lies inside the window.
+    expect(box.x, 'left edge').toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width, 'right edge').toBeLessThanOrEqual(390 + 0.5)
   }
   const here = trail.getByRole('button', { name: 'Client A' })
-  const label = here.locator('.lc-cn')
-  expect((await label.boundingBox())!.width, 'the current level shows its name').toBeGreaterThan(20)
+  expect((await here.locator('.tb-cname').boundingBox())!.width, 'the client shows its name').toBeGreaterThan(20)
   const bar = (await page.locator('header.studio-top').boundingBox())!
   expect((await here.boundingBox())!.y + 44, 'inside the bar').toBeLessThanOrEqual(bar.y + bar.height + 0.5)
 })
@@ -233,17 +266,20 @@ test('no sideways scroll at 320, 390 and 760 on the clients and client pages', a
     for (const hash of ['#agency', '#clients', `#client-${a}`]) {
       await page.goto(`/${hash}`)
       await page.reload()
-      await expect(page.getByTestId('landing').or(page.getByTestId('clients')).or(page.getByTestId('client-page'))).toBeVisible()
+      await expect(page.getByTestId('desk').or(page.getByTestId('client-page'))).toBeVisible()
       const o = await noSideScroll(page)
       expect(o.page, `${width}px ${hash} page`).toBeLessThanOrEqual(0)
-      expect(o.lc, `${width}px ${hash} .lc`).toBeLessThanOrEqual(0)
+      expect(o.lc, `${width}px ${hash} .nui-home`).toBeLessThanOrEqual(0)
+      // and the bar keeps every piece inside the window
+      const right = await page.evaluate(() => Math.max(...[...document.querySelectorAll('.tb-locked > *')].map(e => e.getBoundingClientRect().right)))
+      expect(right, `${width}px ${hash} bar`).toBeLessThanOrEqual(width + 0.5)
     }
   }
 })
 
-test('a client route for a client that is not here is corrected to the clients page', async ({ page }) => {
+test('a client route for a client that is not here is corrected to the desk', async ({ page }) => {
   await page.goto('/#client-cli_00000000')
-  await expect(page.getByTestId('clients')).toBeVisible()
+  await expect(page.getByTestId('desk')).toBeVisible()
   await expect(page).toHaveURL(/#clients$/)
   await page.goto('/')
   const { a } = await seed(page)
@@ -252,7 +288,7 @@ test('a client route for a client that is not here is corrected to the clients p
   await page.reload()
   await expect(page.getByTestId('client-page')).toBeVisible()
   await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
-  await expect(page.getByRole('navigation', { name: 'Where you are' }).getByRole('button', { name: 'Tool' })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Where you are' }).getByRole('button')).toHaveCount(1) // the client's chip, no tool
   await page.goto(`/#tool-${a}-brief`)
   await page.reload()
   await expect(page.getByTestId('tool-page')).toBeVisible()

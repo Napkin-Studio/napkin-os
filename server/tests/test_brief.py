@@ -94,7 +94,7 @@ def run(server, host, task="draft_brief", inp=None, on_reply=None, timeout=30):
     replies = [body]
     jid = body["job"]["id"]
     t0 = time.time()
-    while body["job"]["state"] in ("queued", "running"):
+    while body["job"]["state"] in ("queued", "running", "needs_input"):  # needs_input: intake waits for `on_reply`
         assert time.time() - t0 < timeout, "the job did not finish"
         if on_reply:
             on_reply(body)
@@ -306,16 +306,16 @@ def test_judge_failure_gets_one_revision(tmp_path):
     draft = next(d for d in host.chain if d.get("action") == "draft" and f"{DOC}#insight" in d["targets"])
     assert draft["reasoning"]["certainty"]["level"] == "medium"  # passed after one revision: not low
     assert host.data["review"]["judge"]["fields"]["insight"]["outcome"] == "revised"
-    # the loop is recorded as it happened (redraft-provenance): the draft Jude sent back, kept and
-    # superseded; his verdict on it; the rewrite citing that verdict and saying what it answers
+    # the loop is recorded as it happened (redraft-provenance): the draft the Review agent sent back, kept and
+    # superseded; its verdict on it; the rewrite citing that verdict and saying what it answers
     first = next(d for d in host.chain if d.get("action") == "draft" and f"{DOC}#insight" in d["targets"]
                  and d.get("superseded_by"))
     assert first["superseded_by"] == draft["id"] and not draft.get("superseded_by")
     assert first["reasoning"]["decided"] == "Drafted the insight." and first["reasoning"]["certainty"]["level"] == "low"
     sent = next(d for d in host.chain if d["kind"] == "verdict" and first["id"] in d["cites"])
     assert sent["polarity"] == "bad" and sent["reasoning"]["decided"].startswith("The insight fails the rubric (is_tension)")
-    assert sent["id"] in draft["cites"] and draft["reasoning"]["decided"] == "Rewrote the insight on Jude's note."
-    assert any(p["point"].startswith("Jude's note: is_tension") and p["cites"] == [sent["id"]]
+    assert sent["id"] in draft["cites"] and draft["reasoning"]["decided"] == "Rewrote the insight on the Review agent's note."
+    assert any(p["point"].startswith("The Review agent's note: is_tension") and p["cites"] == [sent["id"]]
                for p in draft["reasoning"]["because"])
     assert v["id"] != sent["id"], "the pass after the revision is its own verdict"
     check_change_rules(host)
@@ -392,7 +392,7 @@ def test_failing_twice_keeps_the_best_draft_flagged(tmp_path):
     assert replies[-1]["result"]["fields"]["single_minded_proposition"]["state"] == "done"
     w = next(d for d in host.chain if d.get("action") == "draft" and f"{DOC}#single_minded_proposition" in d["targets"])
     assert w["reasoning"]["certainty"]["level"] == "low"
-    assert "Jude's checks still fail" in w["reasoning"]["attention"] and "not_a_tagline" in w["reasoning"]["attention"]
+    assert "The Review agent's checks still fail" in w["reasoning"]["attention"] and "not_a_tagline" in w["reasoning"]["attention"]
     v = next(d for d in host.chain if d["kind"] == "verdict" and f"{DOC}#single_minded_proposition" in d["targets"]
              and d.get("action") == "judge" and d["polarity"] == "bad")
     assert v["reason_code"] == "cliche" and "best draft is kept" in v["reasoning"]["attention"]
@@ -666,15 +666,18 @@ def test_errors_and_concurrency(tmp_path):
 def test_the_pipeline_declaration_resolves():
     from napkin import registry
     path = REPO / "app/templates/brief-maker/app/pipeline.yaml"
+    # answer_question: the intake's answers (UAT round 4, features/brief-intake-answers.clan).
     assert registry.parse_pipeline(path.read_text()) == {"draft_brief": "draft_brief@1",
+                                                         "answer_question": "answer_question@1",
                                                          "regenerate_field": "regenerate_field@1",
                                                          "fix_parts": "fix_parts@1"}
     resolved = registry.resolve_at_startup([str(path)])
-    assert set(resolved.values()) == {"draft_brief@1.0", "regenerate_field@1.0", "fix_parts@1.0"}
+    assert set(resolved.values()) == {"draft_brief@1.0", "answer_question@1.0", "regenerate_field@1.0",
+                                      "fix_parts@1.0"}
 
 
 def test_what_the_client_leaves_empty_is_filled_from_the_research_or_assumed(tmp_path):
-    # A thin brief: Sam writes a part from the research, citing its facts; Dara proposes
+    # A thin brief: the Strategy agent writes a part from the research, citing its facts; the Brief agent proposes
     # what the research does not cover, marked as an assumption; a "research" value that
     # cites nothing the brief holds is kept as an assumption. Nothing is the client's words.
     model = FakeModel()

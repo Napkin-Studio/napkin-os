@@ -40,7 +40,7 @@
 //! here too: each part's current answer, whether it went stale (its own value
 //! changed since), whether an edit answered it, whether it is reopened; and
 //! what it asks of a person — an unanswered rejection blocks locking again, a
-//! change asked or one of Ellis's suggestions is attention.
+//! change asked or one of the Knowledge agent's suggestions is attention.
 //!
 //! A read of one snapshot: nothing here writes.
 
@@ -179,6 +179,10 @@ pub struct Cite {
     pub published_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
+    /// An address on a line that cites (a report line, a paragraph): what it
+    /// cites, by id.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub cites: Vec<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -213,7 +217,7 @@ pub struct ClientView {
     pub answers: Vec<ClientAnswer>,
     /// One per address with a current answer, by address.
     pub parts: Vec<ClientPart>,
-    /// Ellis's suggestions nobody has confirmed or dismissed, oldest first.
+    /// The Knowledge agent's suggestions nobody has confirmed or dismissed, oldest first.
     pub suggestions: Vec<ClientSuggestion>,
 }
 
@@ -308,45 +312,26 @@ pub fn decisions_for(doc: &Document, viewer: Option<&str>) -> HostResult<Decisio
         problem: None,
     };
 
-    let chain = if clan.has_entry(CHAIN_PATH) {
-        match clan
-            .read_entry(CHAIN_PATH)
-            .map_err(|e| e.to_string())
-            .and_then(|b| DecisionChain::from_yaml(&b).map_err(|e| e.to_string()))
-        {
-            Ok(c) => c,
-            Err(e) => {
-                view.problem = Some(format!("the decision chain does not read: {e}"));
-                return Ok(view);
-            }
+    let chain = match read_chain(clan) {
+        Ok(c) => c,
+        Err(e) => {
+            view.problem = Some(format!("the decision chain does not read: {e}"));
+            return Ok(view);
         }
-    } else {
-        DecisionChain::default()
     };
 
     let data = read::data_json(doc);
-    let schema: Value = clan
-        .read_entry(SCHEMA_PATH)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(Value::Null);
-    let by_id = |m: members::Member| -> BTreeMap<String, Value> {
-        let Value::Array(items) = members::list_for_agent(clan, m) else {
-            return BTreeMap::new();
-        };
-        items
-            .into_iter()
-            .filter_map(|v| Some((v.get("id")?.as_str()?.to_string(), v)))
-            .collect()
-    };
+    let schema = read_schema(clan);
     let ctx = Lookup {
         doc_id: &doc_id,
         data: &data,
         schema: &schema,
-        facts: by_id(members::FACTS),
-        findings: by_id(members::FINDINGS),
-        sources: by_id(members::SOURCES),
+        facts: members_by_id(clan, members::FACTS),
+        findings: members_by_id(clan, members::FINDINGS),
+        sources: members_by_id(clan, members::SOURCES),
         chain: &chain,
+        carried: carried_home(clan, &chain),
+        titles: upstream_titles(clan),
     };
 
     // Newest first, as the chain is written. A stamp is shown, never used to
@@ -424,6 +409,34 @@ pub fn decisions_for(doc: &Document, viewer: Option<&str>) -> HostResult<Decisio
     Ok(view)
 }
 
+/// The document's decision chain; empty when it has none.
+fn read_chain(clan: &clan_sdk::ClanFile) -> Result<DecisionChain, String> {
+    if !clan.has_entry(CHAIN_PATH) {
+        return Ok(DecisionChain::default());
+    }
+    clan.read_entry(CHAIN_PATH)
+        .map_err(|e| e.to_string())
+        .and_then(|b| DecisionChain::from_yaml(&b).map_err(|e| e.to_string()))
+}
+
+fn read_schema(clan: &clan_sdk::ClanFile) -> Value {
+    clan.read_entry(SCHEMA_PATH)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(Value::Null)
+}
+
+/// A list member's entries, by id.
+fn members_by_id(clan: &clan_sdk::ClanFile, m: members::Member) -> BTreeMap<String, Value> {
+    let Value::Array(items) = members::list_for_agent(clan, m) else {
+        return BTreeMap::new();
+    };
+    items
+        .into_iter()
+        .filter_map(|v| Some((v.get("id")?.as_str()?.to_string(), v)))
+        .collect()
+}
+
 /// What every derivation reads from the snapshot.
 struct Lookup<'a> {
     doc_id: &'a str,
@@ -433,6 +446,49 @@ struct Lookup<'a> {
     findings: BTreeMap<String, Value>,
     sources: BTreeMap<String, Value>,
     chain: &'a DecisionChain,
+    /// A document spun off with its upstream carries the parent's chain under
+    /// its own: the parent's document id and the index of its newest decision
+    /// (`lineage.carried.last_decision`). A bare path on a decision from there
+    /// is the parent's, not this document's.
+    carried: Option<(String, usize)>,
+    /// What each document this one carries or links is called, by document
+    /// id: a link's title as taken (`lineage.attached`), the spun-off-from
+    /// title the hop recorded. An address under `upstream.<id>` reads by it.
+    titles: BTreeMap<String, String>,
+}
+
+/// [`Lookup::titles`] from the manifest.
+fn upstream_titles(clan: &clan_sdk::ClanFile) -> BTreeMap<String, String> {
+    let m = clan.manifest();
+    let mut out = BTreeMap::new();
+    if let (Some(c), Some(l)) = (m.carried(), m.lineage.as_ref()) {
+        // `spun off from "<title>" into …`, as the SDK writes the hop.
+        if let Some(t) = l
+            .delta
+            .strip_prefix("spun off from \"")
+            .and_then(|r| r.split_once("\" into").map(|(t, _)| t))
+            .filter(|t| !t.trim().is_empty())
+        {
+            out.insert(c.document_id.clone(), t.to_string());
+        }
+    }
+    for a in m.attached() {
+        if let Some(t) = a.title.as_deref().filter(|t| !t.trim().is_empty()) {
+            out.insert(a.carried.document_id.clone(), t.to_string());
+        }
+    }
+    out
+}
+
+/// Where the parent's decisions start in `chain`, for [`Lookup::carried`].
+fn carried_home(clan: &clan_sdk::ClanFile, chain: &DecisionChain) -> Option<(String, usize)> {
+    let c = clan.manifest().carried()?;
+    let last = c.last_decision.as_deref()?;
+    let at = chain
+        .decisions
+        .iter()
+        .position(|d| d.id.as_deref() == Some(last))?;
+    Some((c.document_id.clone(), at))
 }
 
 impl<'a> Lookup<'a> {
@@ -459,6 +515,38 @@ impl<'a> Lookup<'a> {
             None if self.data_for(address).is_some() => format!("{address}#"),
             None => format!("{}#{address}", self.doc_id),
         }
+    }
+
+    /// [`Self::qualify`], for an address decision `i` names: a bare path on a
+    /// decision carried from the parent is on the parent (its edit of
+    /// `mandatories` answered its own verdict, not one here).
+    fn qualify_in(&self, i: usize, address: &str) -> String {
+        match &self.carried {
+            Some((parent, at))
+                if i >= *at
+                    && !address.contains('#')
+                    && self.data_for(address).is_none()
+                    && self.data_for(parent).is_some() =>
+            {
+                format!("{parent}#{address}")
+            }
+            _ => self.qualify(address),
+        }
+    }
+
+    /// Does this document have the field `address` is about? A carried call
+    /// on a part the child does not have (a brief's mandatories, in research
+    /// spun off from it) is the parent's to settle, never a need here.
+    fn has_field_here(&self, address: &str) -> bool {
+        let path = address.split_once('#').map_or(address, |(_, p)| p);
+        let top = path.split(['.', '[']).next().unwrap_or(path);
+        !top.is_empty()
+            && (self.data.get(top).is_some()
+                || self
+                    .schema
+                    .get("properties")
+                    .and_then(|p| p.get(top))
+                    .is_some())
     }
 
     /// The data an address on `doc` is read from: this document's, or the
@@ -512,7 +600,7 @@ impl<'a> Lookup<'a> {
             .flatten()
             .filter_map(|v| v.as_str().map(String::from));
         let named = aims(d).cloned().chain(flags).any(|t| {
-            let t = self.qualify(&t);
+            let t = self.qualify_in(i, &t);
             t == address
                 || t.strip_prefix(address)
                     .is_some_and(|rest| rest.starts_with(['.', '[']))
@@ -569,6 +657,27 @@ impl<'a> Lookup<'a> {
         if let Some(id) = whole("agents") {
             return (format!("Agent branch · {id}"), "branch");
         }
+        // A linked or carried document as a whole: by its title, never its id.
+        if let Some(id) = path.strip_prefix(&format!("{UPSTREAM_KEY}.")) {
+            if !id.contains(['.', '[']) {
+                // Its frozen copy names it too: a brief's project, a research's campaign.
+                let frozen = self.data_for(id).and_then(|d| {
+                    d.get("project_name")
+                        .and_then(Value::as_str)
+                        .or_else(|| d.pointer("/campaign/name/value").and_then(Value::as_str))
+                        .filter(|t| !t.trim().is_empty())
+                        .map(String::from)
+                });
+                let name = self
+                    .titles
+                    .get(id)
+                    .cloned()
+                    .or(frozen)
+                    .map(|t| format!("“{t}”"))
+                    .unwrap_or_else(|| "the document it rests on".to_string());
+                return (format!("Linked · {name}"), "field");
+            }
+        }
         let segs = segments(path);
         match segs.as_slice() {
             [] => ("The document".into(), "document"),
@@ -591,7 +700,7 @@ impl<'a> Lookup<'a> {
             [Seg::Name("selection"), Seg::Name("contested"), Seg::Key(id)] => {
                 let key = data
                     .and_then(|d| contest_entry(d, id))
-                    .and_then(|c| c.get("key")?.as_str().map(String::from))
+                    .and_then(|c| c.get("key")?.as_str().map(contest_label))
                     .unwrap_or_else(|| id.to_string());
                 (format!("Contest · {key}"), "contest")
             }
@@ -614,7 +723,7 @@ impl<'a> Lookup<'a> {
             [Seg::Name(id)] if id.starts_with(clan_sdk::decision::DECISION_ID_PREFIX) => {
                 (self.decision_label(id), "decision")
             }
-            _ => (self.field_label(&segs), "field"),
+            _ => (self.field_label(data, &segs), "field"),
         }
     }
 
@@ -627,14 +736,17 @@ impl<'a> Lookup<'a> {
 
     /// `campaign.success_measures[sm_x]` → "Campaign › Success measures ·
     /// sm_x", each name taken from the schema's `title` when it has one.
-    fn field_label(&self, segs: &[Seg]) -> String {
+    fn field_label(&self, data: Option<&Value>, segs: &[Seg]) -> String {
         let mut out = String::new();
         let mut schema = Some(self.schema);
+        // The entry itself, followed along the path, so a keyed entry can be named by what it
+        // says rather than its id ("Asks · Oatly ASAI ruling timing", not "Asks · ask_01M…").
+        let mut node = data;
         for s in segs {
             match s {
                 Seg::Name(n) => {
-                    let node = schema.and_then(|v| v.get("properties")?.get(*n));
-                    let title = node
+                    let sn = schema.and_then(|v| v.get("properties")?.get(*n));
+                    let title = sn
                         .and_then(|v| v.get("title")?.as_str())
                         .map(String::from)
                         .unwrap_or_else(|| humanise(n));
@@ -642,11 +754,29 @@ impl<'a> Lookup<'a> {
                         out.push_str(" › ");
                     }
                     out.push_str(&title);
-                    schema = node;
+                    schema = sn;
+                    node = node.and_then(|v| v.get(*n));
                 }
                 Seg::Key(k) => {
+                    node = node.and_then(|v| match v {
+                        Value::Array(a) => a.iter().find(|e| str_of(e, "id") == Some(*k)),
+                        _ => v.get(*k),
+                    });
+                    let named = node.and_then(|e| {
+                        [
+                            "topic",
+                            "name",
+                            "title",
+                            "label",
+                            "question",
+                            "statement",
+                            "text",
+                        ]
+                        .iter()
+                        .find_map(|f| str_of(e, f))
+                    });
                     out.push_str(" · ");
-                    out.push_str(k);
+                    out.push_str(&named.map_or_else(|| k.to_string(), |n| clip(n, 60)));
                     schema = schema.and_then(|v| {
                         v.get("additionalProperties")
                             .or_else(|| v.get("items"))
@@ -867,6 +997,7 @@ impl<'a> Lookup<'a> {
                 label: t.label,
                 detail,
                 quote,
+                cites: node.map(cites_of).unwrap_or_default(),
                 ..Default::default()
             };
         }
@@ -900,6 +1031,8 @@ pub(crate) fn fields_citing(
         findings: BTreeMap::new(),
         sources: BTreeMap::new(),
         chain: &chain,
+        carried: carried_home(clan, &chain),
+        titles: upstream_titles(clan),
     };
     let wanted: BTreeMap<&str, &Value> = findings
         .iter()
@@ -1260,14 +1393,22 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
                 .filter(|d| ctx.index_of(d).is_some())
                 .map(String::from)
         };
+        // A finding by what it says, never its id (people read this).
+        let said = |x: &str| {
+            ctx.findings
+                .get(x)
+                .and_then(|f| str_of(f, "statement"))
+                .map(|t| format!("the finding “{}”", clip_words(t, 80)))
+                .unwrap_or_else(|| "a finding".to_string())
+        };
         match f.pointer("/superseded_by/finding").and_then(Value::as_str) {
             Some(to) if str_of(f, "status") == Some("superseded") => (
                 by("superseded_by"),
-                format!("finding {id}, which a review superseded with {to}"),
+                format!("{}, which a review replaced with {}", said(id), said(to)),
             ),
             _ => (
                 by("rejection"),
-                format!("finding {id}, which a reviewer rejected"),
+                format!("{}, which a reviewer rejected", said(id)),
             ),
         }
     };
@@ -1329,9 +1470,14 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
             continue;
         }
         for t in &d.targets {
-            let address = ctx.qualify(t);
+            let address = ctx.qualify_in(i, t);
             let target = ctx.target(&address);
             if target.kind == "finding" {
+                continue;
+            }
+            // A call carried from the parent on a part this document does
+            // not have is the parent's (and settled there or not, there).
+            if !target.here && !ctx.has_field_here(&target.path) {
                 continue;
             }
             let answered = ctx.later(i, &address, |e| is_edit(e) || reasoned_good_verdict(e));
@@ -1673,7 +1819,7 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
         attention.push(item(
             "client_part_suggested",
             format!(
-                "Ellis thinks {who}'s answer is about {}. Confirm or dismiss it.",
+                "The Knowledge agent thinks {who}'s answer is about {}. Confirm or dismiss it.",
                 s.label
             ),
             false,
@@ -1842,7 +1988,7 @@ fn asked_for(ctx: &Lookup) -> Vec<Attention> {
     let mut out = Vec::new();
     for (i, d) in ctx.chain.decisions.iter().enumerate() {
         let Some(r) = &d.reasoning else { continue };
-        // Ellis's suggestions ask for a person as client review does
+        // The Knowledge agent's suggestions ask for a person as client review does
         // (`client_part_suggested`), once.
         if d.superseded_by.is_some() || d.kind.as_deref() == Some(cr::KIND) {
             continue;
@@ -1868,7 +2014,7 @@ fn asked_for(ctx: &Lookup) -> Vec<Attention> {
         // finding: D1 wants a person to verify those.
         let bad_verdict = d.is_verdict() && d.polarity.as_deref() == Some("bad");
         let answered = |t: &String| {
-            let address = ctx.qualify(t);
+            let address = ctx.qualify_in(i, t);
             ctx.later(i, &address, is_person)
                 || (bad_verdict
                     && ctx.target(&address).kind != "finding"
@@ -1879,7 +2025,17 @@ fn asked_for(ctx: &Lookup) -> Vec<Attention> {
         if named || every {
             continue;
         }
-        let first = aims(d).next().map(|t| ctx.qualify(t));
+        // What the parent's crew flagged on parts this document does not
+        // have stays with the parent.
+        let carried_away = |t: &String| {
+            let target = ctx.target(&ctx.qualify_in(i, t));
+            !target.here && target.kind != "finding" && !ctx.has_field_here(&target.path)
+        };
+        let mut all_away = aims(d).peekable();
+        if all_away.peek().is_some() && all_away.all(carried_away) {
+            continue;
+        }
+        let first = aims(d).next().map(|t| ctx.qualify_in(i, t));
         let label = first.as_deref().map(|a| ctx.target(a).label);
         let item = |code, text: String| Attention {
             code,
@@ -1981,10 +2137,10 @@ fn who(d: &Decision) -> Who {
     let id = raw.split(['@', '/']).next().unwrap_or(raw).to_string();
     Who {
         kind: "agent",
-        // The host's word match over a client's words is shown as Ellis, the
-        // crew member who reads what people send (Contract 4 §7.5.2a).
+        // The host's word match over a client's words is shown as the Knowledge
+        // agent, the agent that reads what people send (Contract 4 §7.5.2a).
         name: if id == cr::MATCHER {
-            "Ellis".to_string()
+            "Knowledge agent".to_string()
         } else {
             humanise(&id)
         },
@@ -2024,7 +2180,8 @@ fn segments(path: &str) -> Vec<Seg<'_>> {
 }
 
 /// The value at an entity-keyed path: a map by key, a list by the `id`,
-/// `ref` or `key` of its entries.
+/// `ref` or `key` of its entries, else by position (`report.summary[2]`, a
+/// list part's line `mandatories[0]`).
 fn lookup<'v>(data: &'v Value, path: &str) -> Option<&'v Value> {
     segments(path).into_iter().try_fold(data, |v, s| {
         let k = match s {
@@ -2032,11 +2189,14 @@ fn lookup<'v>(data: &'v Value, path: &str) -> Option<&'v Value> {
         };
         match v {
             Value::Object(m) => m.get(k),
-            Value::Array(items) => items.iter().find(|x| {
-                ["id", "ref", "key"]
-                    .iter()
-                    .any(|f| x.get(f).and_then(Value::as_str) == Some(k))
-            }),
+            Value::Array(items) => items
+                .iter()
+                .find(|x| {
+                    ["id", "ref", "key"]
+                        .iter()
+                        .any(|f| x.get(f).and_then(Value::as_str) == Some(k))
+                })
+                .or_else(|| k.parse::<usize>().ok().and_then(|i| items.get(i))),
             _ => None,
         }
     })
@@ -2126,6 +2286,9 @@ pub(crate) fn fact_label(f: &Value) -> String {
             [.., last] if parts.len() > 1 && last.contains('_') => last.to_string(),
             _ => parts.join(" "),
         };
+        // A key the writer made unique with a short hash ("…_moderate_t_72b215",
+        // "rhythm.key_moment_dry_january_cd35c8") reads without it.
+        let leaf = strip_hash_suffix(&leaf);
         let mut w = leaf.replace('_', " ");
         if let Some(c) = w.get(..1) {
             w = c.to_uppercase() + &w[1..];
@@ -2146,19 +2309,54 @@ pub(crate) fn fact_label(f: &Value) -> String {
     }
 }
 
+/// A contest as a person names it: the fact it is about, as [`fact_label`]
+/// names one. Its key is `<scope>:<fact key>@<market>`
+/// (`category/alcohol.cider:market.export_value@IE` → "Export value · IE").
+fn contest_label(key: &str) -> String {
+    let (rest, market) = match key.rsplit_once('@') {
+        Some((r, m)) if !m.is_empty() => (r, Some(m)),
+        _ => (key, None),
+    };
+    let fact = rest.rsplit_once(':').map_or(rest, |(_, k)| k);
+    let mut f = serde_json::json!({ "key": fact });
+    if let Some(m) = market {
+        f["market"] = Value::String(m.to_string());
+    }
+    let label = fact_label(&f);
+    if label.is_empty() || label == "fact" {
+        key.to_string()
+    } else {
+        label
+    }
+}
+
+/// `leaf` without a trailing `_` and six or more hex digits that holds a digit
+/// (a uniqueness hash, never a word such as `_decade`).
+fn strip_hash_suffix(leaf: &str) -> &str {
+    match leaf.rsplit_once('_') {
+        Some((head, tail))
+            if !head.is_empty()
+                && tail.len() >= 6
+                && tail
+                    .chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+                && tail.chars().any(|c| c.is_ascii_digit()) =>
+        {
+            head
+        }
+        _ => leaf,
+    }
+}
+
 fn fact_detail(f: &Value) -> String {
     let value = f.get("value").map(|v| format_value(v, str_of(f, "unit")));
+    // How many sources it rests on; each is its own card, never a bare id here.
     let sources = f
         .get("sources")
         .and_then(Value::as_array)
-        .map(|s| {
-            s.iter()
-                .filter_map(Value::as_str)
-                .collect::<Vec<_>>()
-                .join(", ")
-        })
-        .filter(|s| !s.is_empty())
-        .map(|s| format!("sources {s}"));
+        .map(|s| s.iter().filter_map(Value::as_str).count())
+        .filter(|n| *n > 0)
+        .map(|n| format!("{n} source{}", if n == 1 { "" } else { "s" }));
     let parts = [
         value,
         str_of(f, "as_of").map(|a| format!("as of {a}")),
@@ -2221,9 +2419,26 @@ fn preview(node: &Value) -> Option<String> {
     match v {
         Value::String(s) => Some(clip(s, 160)),
         Value::Number(_) | Value::Bool(_) => Some(v.to_string()),
-        Value::Object(m) => m.get("name").and_then(Value::as_str).map(String::from),
+        // A line of the report (`{text, cites}`), else a named thing.
+        Value::Object(m) => m
+            .get("text")
+            .or_else(|| m.get("name"))
+            .and_then(Value::as_str)
+            .map(|s| clip(s, 160)),
         _ => None,
     }
+}
+
+/// What a line in the data cites (`report.summary[i].cites`, a paragraph's
+/// `cites`): the ids its card links on to.
+fn cites_of(node: &Value) -> Vec<String> {
+    node.get("cites")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(String::from)
+        .collect()
 }
 
 fn str_of<'v>(v: &'v Value, key: &str) -> Option<&'v str> {
@@ -2271,5 +2486,19 @@ fn clip(s: &str, max: usize) -> String {
     out
 }
 
+mod card;
+pub use card::{source_cards, CarriedFrom, Review, SourceCard, ORIGINS};
+
 #[cfg(test)]
 mod tests;
+
+/// `s` cut at a word to at most `n` characters, with an ellipsis when cut.
+fn clip_words(s: &str, n: usize) -> String {
+    let s = s.trim();
+    if s.chars().count() <= n {
+        return s.to_string();
+    }
+    let cut: String = s.chars().take(n).collect();
+    let cut = cut.rsplit_once(' ').map_or(cut.as_str(), |(a, _)| a);
+    format!("{}…", cut.trim_end_matches([',', ';', ':', '.']))
+}

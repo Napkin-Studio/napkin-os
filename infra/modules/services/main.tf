@@ -101,7 +101,7 @@ data "aws_iam_policy_document" "execution_secrets" {
   }
   statement {
     actions   = ["kms:Decrypt"]
-    resources = [var.kms_key_arn]
+    resources = concat([var.kms_key_arn], var.extra_kms_key_arns)
   }
 }
 
@@ -560,7 +560,7 @@ resource "aws_ecs_service" "middleware" {
   depends_on = [aws_ecs_cluster_capacity_providers.this]
 }
 
-# ── the pipeline's way in: GitHub OIDC, main branch only ──────────────────────
+# ── the pipeline's way in: GitHub OIDC, the deploy_refs branches (main) ───────
 
 resource "aws_iam_openid_connect_provider" "github" {
   count          = var.github_oidc_provider_arn == "" ? 1 : 0
@@ -584,14 +584,15 @@ data "aws_iam_policy_document" "deploy_trust" {
       variable = "token.actions.githubusercontent.com:aud"
       values   = ["sts.amazonaws.com"]
     }
-    # main only: a push to main, or a run of a workflow on main. GitHub names
-    # the repository by its ids in the subject (immutable subjects), by name
-    # in older repositories; either form is accepted.
+    # The refs in var.deploy_refs (main by default): a push to main, or a run of
+    # a workflow on main. GitHub names the repository by its ids in the subject
+    # (immutable subjects), by name in older repositories; either form is
+    # accepted.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values = [for r in compact([var.github_repository, var.github_repository_ids]) :
-      "repo:${r}:ref:refs/heads/main"]
+      values = flatten([for r in compact([var.github_repository, var.github_repository_ids]) :
+      [for ref in var.deploy_refs : "repo:${r}:ref:${ref}"]])
     }
   }
 }

@@ -35,6 +35,8 @@ from __future__ import annotations
 import copy
 import re
 
+from .. import origin
+
 from ..doc import CONF, LENSES, ctx_data, ctx_decisions, ctx_facts, ctx_findings, decision, field_value, \
     lens_of_key, out_of_use, read_of
 from ..jev import JevError, noul
@@ -242,7 +244,8 @@ class Reconsider:
             nid = uid("fi_", doc, lens, cites)
             ndid = uid("d_", doc, self.base, "rework", old["id"], nid)
             fi = {"id": nid, "statement": statement, "cites": cites, "method": "synthesis", "status": "proposed",
-                  "derived_by": handler, "confidence": finding_confidence(cited), "derived_at": t, "decision": ndid}
+                  "derived_by": handler, "confidence": finding_confidence(cited), "derived_at": t, "decision": ndid,
+                  origin.KEY: origin.RESEARCH}
             if lens in LENSES:
                 fi["lens"] = lens
             mk = sorted({p["market"] for p in cited if p.get("market")})
@@ -356,7 +359,8 @@ class Reconsider:
             if not isinstance(a, dict) or not {c for s in a.get("answer") or [] if isinstance(s, dict)
                                                for c in s.get("cites") or []} & touched:
                 continue
-            asker = Asker(doc, self.base, clan3, handler, self.caps, a.get("question") or "", a.get("lens"), self.settings)
+            asker = Asker(doc, self.base, clan3, handler, self.caps, a.get("question") or "", a.get("lens"), self.settings,
+                          about=a.get("about"))
             asker.aid = aid
             pb, fb = asker.evidence(a.get("lens"))
             try:

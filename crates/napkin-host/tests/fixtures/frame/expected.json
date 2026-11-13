@@ -1,0 +1,485 @@
+{
+  "origin": "https://napkin.test/s/no-token",
+  "cases": {
+    "brief/web/authored/plain/light": {
+      "sha256": "9db6d9e68588299719a0e86fc1eccfed942f57e1b498691256a2183a266bc298",
+      "len": 862715
+    },
+    "brief/web/authored/plain/dark": {
+      "sha256": "dc59eb7bc8b9589cf09bd12edcc32cf74f046672cb857447bd3b7e2bf4cc350f",
+      "len": 862714
+    },
+    "brief/web/authored/capture/light": {
+      "sha256": "9ded7f0fb4ae00b481b7d22a3153ab927374a72fe1b369c5dde1c35a057377b3",
+      "len": 864433
+    },
+    "brief/web/authored/capture/dark": {
+      "sha256": "88917683fe5494b1747b9fca0d310129dc6c0114c66a8eac4fe0a879efa97826",
+      "len": 864432
+    },
+    "brief/web/legacy/plain/light": {
+      "sha256": "f6618b27d24172329a0334c4333c4193c9f00b5a373595d013de400376e7bd44",
+      "len": 856049
+    },
+    "brief/web/legacy/plain/dark": {
+      "sha256": "09371440263bacde27cd67aa0c8fb05341abacfc5bd931b9c959178602851f34",
+      "len": 856048
+    },
+    "brief/web/legacy/capture/light": {
+      "sha256": "30d3c130424832383edb6aa3773dfea86eeff8d985e96cc2b2793c1944dfb9ba",
+      "len": 857767
+    },
+    "brief/web/legacy/capture/dark": {
+      "sha256": "83dd84b96c1ef93eb9ec912863f6f863c9e63c652657e034abc15cf1b37469c5",
+      "len": 857766
+    },
+    "brief/desktop/authored/plain/light": {
+      "sha256": "29ee783a26aa5df0200c9dfd8cb11b853571431571a84d96cae188c34fcd30b1",
+      "len": 860617
+    },
+    "brief/desktop/authored/plain/dark": {
+      "sha256": "9e5c1572529d79261aeb443fd8e23e536d632af41d502e90ba1c094b6a03ab24",
+      "len": 860616
+    },
+    "brief/desktop/authored/capture/light": {
+      "sha256": "f8ecb4ac69cc8d4a00e7116746340fd7e8b490e8dee861b6caea907d9f026954",
+      "len": 862335
+    },
+    "brief/desktop/authored/capture/dark": {
+      "sha256": "a8c51f5fb9e8268d124db90409d5eb808112a3ed3af840564d4d4c7c918a7cb5",
+      "len": 862334
+    },
+    "brief/desktop/legacy/plain/light": {
+      "sha256": "d95845a71bbdefe01fa49ce1602652fb1d2846cce8668fcaad07d455a19fa8af",
+      "len": 853951
+    },
+    "brief/desktop/legacy/plain/dark": {
+      "sha256": "f8d6f73484004518d62646da25733d65a77c2e1b6c1fe48c54d948d2593b2c24",
+      "len": 853950
+    },
+    "brief/desktop/legacy/capture/light": {
+      "sha256": "4130c1c2e5b534ff5fd2e7a16506bf882ffab4aa8cf71b5b1716ca0a6ab9370b",
+      "len": 855669
+    },
+    "brief/desktop/legacy/capture/dark": {
+      "sha256": "b6f88d6ae655007bdcfc6808a58fad4c5e2366e1ede8565692932dce25f350c7",
+      "len": 855668
+    },
+    "brief/device/authored/plain/light": {
+      "sha256": "afb10be64198456a067c00aa6d1652687cd01c87fc22b60e26d6a5576beb934f",
+      "len": 863292
+    },
+    "brief/device/authored/plain/dark": {
+      "sha256": "e710d13b76e2f4d5d054aa81a6c638e239d38feae5ba9deeab101f7a414a485b",
+      "len": 863291
+    },
+    "brief/device/authored/capture/light": {
+      "sha256": "a18a122ab43de4c2910044d5af7143ddecda56f04440a75795ce4f4943afbbb3",
+      "len": 865010
+    },
+    "brief/device/authored/capture/dark": {
+      "sha256": "7ea6644056719b8f698a938d2b714916570800b9b475f33870db0990e37c07b2",
+      "len": 865009
+    },
+    "brief/device/legacy/plain/light": {
+      "sha256": "13a2974fcb11bfe045787127984c0e7f7be3da07bcd8c67e32857d4a21205b78",
+      "len": 856626
+    },
+    "brief/device/legacy/plain/dark": {
+      "sha256": "418f595d2130f838dc0ac6098de858ac395e113d80c565a256d531af0552a448",
+      "len": 856625
+    },
+    "brief/device/legacy/capture/light": {
+      "sha256": "f84ac5015dc45ab7275f6e0f538393120f342ec32a45b7dbc86fb7dada56f995",
+      "len": 858344
+    },
+    "brief/device/legacy/capture/dark": {
+      "sha256": "0b64c5de997c728c7b584ee52234bb529959cb3eaabd6f163508d354bf8dcbdf",
+      "len": 858343
+    },
+    "edge/web/authored/plain/light": {
+      "sha256": "6f8767827506a0d88fd515147cfa2ffd81d89481930d4ac5884680eb049efa92",
+      "len": 14581
+    },
+    "edge/web/authored/plain/dark": {
+      "sha256": "6f8767827506a0d88fd515147cfa2ffd81d89481930d4ac5884680eb049efa92",
+      "len": 14581
+    },
+    "edge/web/authored/capture/light": {
+      "sha256": "96bc19ef58b7abc013bf8ce12c12a4ad3a869d2d1a122bdb979a81f22f612d1c",
+      "len": 16299
+    },
+    "edge/web/authored/capture/dark": {
+      "sha256": "96bc19ef58b7abc013bf8ce12c12a4ad3a869d2d1a122bdb979a81f22f612d1c",
+      "len": 16299
+    },
+    "edge/web/legacy/plain/light": {
+      "sha256": "4000d16c2ce592990c5e0c7ed50e71643af7108fd29de0315bfe5b205cf92ac2",
+      "len": 7915
+    },
+    "edge/web/legacy/plain/dark": {
+      "sha256": "4000d16c2ce592990c5e0c7ed50e71643af7108fd29de0315bfe5b205cf92ac2",
+      "len": 7915
+    },
+    "edge/web/legacy/capture/light": {
+      "sha256": "ea9d6d39d2627cb0cab9422c501a2c08c58eb661ce4854fe43df994b030fc88f",
+      "len": 9633
+    },
+    "edge/web/legacy/capture/dark": {
+      "sha256": "ea9d6d39d2627cb0cab9422c501a2c08c58eb661ce4854fe43df994b030fc88f",
+      "len": 9633
+    },
+    "edge/desktop/authored/plain/light": {
+      "sha256": "57214ed37ef4c6d926d54aab3e12b82dfade0e58b35d7b78d5ee2e0228f1a69e",
+      "len": 12529
+    },
+    "edge/desktop/authored/plain/dark": {
+      "sha256": "57214ed37ef4c6d926d54aab3e12b82dfade0e58b35d7b78d5ee2e0228f1a69e",
+      "len": 12529
+    },
+    "edge/desktop/authored/capture/light": {
+      "sha256": "73eda8e74c8788fc57fa5edbb95a83b0ffe4e56650f590930fcb9fe942e0d373",
+      "len": 14247
+    },
+    "edge/desktop/authored/capture/dark": {
+      "sha256": "73eda8e74c8788fc57fa5edbb95a83b0ffe4e56650f590930fcb9fe942e0d373",
+      "len": 14247
+    },
+    "edge/desktop/legacy/plain/light": {
+      "sha256": "196008d770cdaf26cf53e9f4abd825350dbe7211d01ac79c6134190b72773895",
+      "len": 5863
+    },
+    "edge/desktop/legacy/plain/dark": {
+      "sha256": "196008d770cdaf26cf53e9f4abd825350dbe7211d01ac79c6134190b72773895",
+      "len": 5863
+    },
+    "edge/desktop/legacy/capture/light": {
+      "sha256": "e58781eddcbf102886e8c96ade7aba4594886b7330c708b3a149a497b957106f",
+      "len": 7581
+    },
+    "edge/desktop/legacy/capture/dark": {
+      "sha256": "e58781eddcbf102886e8c96ade7aba4594886b7330c708b3a149a497b957106f",
+      "len": 7581
+    },
+    "edge/device/authored/plain/light": {
+      "sha256": "647c181d2610493af35fe1875486b9279054ac2bd6ed32b3912f25f81f6ae041",
+      "len": 15204
+    },
+    "edge/device/authored/plain/dark": {
+      "sha256": "647c181d2610493af35fe1875486b9279054ac2bd6ed32b3912f25f81f6ae041",
+      "len": 15204
+    },
+    "edge/device/authored/capture/light": {
+      "sha256": "6cc87e361badc1f4f7dc0ee864b988ce70c2a69696bc21679f2211c166404619",
+      "len": 16922
+    },
+    "edge/device/authored/capture/dark": {
+      "sha256": "6cc87e361badc1f4f7dc0ee864b988ce70c2a69696bc21679f2211c166404619",
+      "len": 16922
+    },
+    "edge/device/legacy/plain/light": {
+      "sha256": "ad42165e19f86494051bcdc8199451360fa6853a6962e500232c7555b9a1ebc5",
+      "len": 8538
+    },
+    "edge/device/legacy/plain/dark": {
+      "sha256": "ad42165e19f86494051bcdc8199451360fa6853a6962e500232c7555b9a1ebc5",
+      "len": 8538
+    },
+    "edge/device/legacy/capture/light": {
+      "sha256": "03800018497517d9be8d32b6e093159c46b1805844fd4ffc760e7d8716f0511f",
+      "len": 10256
+    },
+    "edge/device/legacy/capture/dark": {
+      "sha256": "03800018497517d9be8d32b6e093159c46b1805844fd4ffc760e7d8716f0511f",
+      "len": 10256
+    },
+    "fragment/web/authored/plain/light": {
+      "sha256": "1ba0e5b8d5b8220a99703b33eb564b94d73aac451141376911f67d8663380b33",
+      "len": 15703
+    },
+    "fragment/web/authored/plain/dark": {
+      "sha256": "be198099a9782801e2ba9113dfcbd1068f9cf193b00c5ba0c5386cf1478bba7d",
+      "len": 15702
+    },
+    "fragment/web/authored/capture/light": {
+      "sha256": "3d3ed6c9f803e4bddc2a0ec28d0524ea47d8b3166eb908369d0ba4562a90a879",
+      "len": 17421
+    },
+    "fragment/web/authored/capture/dark": {
+      "sha256": "1e2da2462161ee5cb48c6d09381886cc02a44145b16009d602e96c75cd99bba4",
+      "len": 17420
+    },
+    "fragment/web/legacy/plain/light": {
+      "sha256": "103702a9484bf225b13b4362872604ba9bd3e40f9c45f6c0304a73bf63659d4c",
+      "len": 9037
+    },
+    "fragment/web/legacy/plain/dark": {
+      "sha256": "59e4162da63564d820e43e9fe3e40f8613aa807c7c16fb32b6ea9aebe8bb64e0",
+      "len": 9036
+    },
+    "fragment/web/legacy/capture/light": {
+      "sha256": "f2b6d83a618c90f28214404b15530dd4ae91b2aa012da18820033bf46694dc9b",
+      "len": 10755
+    },
+    "fragment/web/legacy/capture/dark": {
+      "sha256": "818c608a9bfe71e2e13a472c4fd0f9be4544e4f53a169c1167d0bc876888ad79",
+      "len": 10754
+    },
+    "fragment/desktop/authored/plain/light": {
+      "sha256": "8bec3b9af6c95e8c678b24d3ef1b0d0139a10e3ca3234336344f8f2fd44d4fb3",
+      "len": 13628
+    },
+    "fragment/desktop/authored/plain/dark": {
+      "sha256": "656bedf090243745abe9222eab8772c0d69a397dae3677fea20ab1be98640835",
+      "len": 13627
+    },
+    "fragment/desktop/authored/capture/light": {
+      "sha256": "0cb93774039cfaf518e1d2c7ef6aba4b5f56dc51c84485fc88acc8ce91a82eee",
+      "len": 15346
+    },
+    "fragment/desktop/authored/capture/dark": {
+      "sha256": "c3376906bd0c86daca8fe4f41fc29f7d299bf61de951babc85ada71bcfb80303",
+      "len": 15345
+    },
+    "fragment/desktop/legacy/plain/light": {
+      "sha256": "f7b179f7b0418f905d64e9006a07ed67086fbe731784cc86a8c97b74555bd5f2",
+      "len": 6962
+    },
+    "fragment/desktop/legacy/plain/dark": {
+      "sha256": "fa6dc72cd6cd213757d5d365fadb4af6f9e5d52c3ec1e1a176eb8ab0fffe695d",
+      "len": 6961
+    },
+    "fragment/desktop/legacy/capture/light": {
+      "sha256": "53bdf52cc4e36c163099a4660fe9f40cc178a896ae534b5de3eb19af600e4f15",
+      "len": 8680
+    },
+    "fragment/desktop/legacy/capture/dark": {
+      "sha256": "393c2b1278c6c3a2eec2cf5cb097a0d75a14864795b251a06cdc64a538561b22",
+      "len": 8679
+    },
+    "fragment/device/authored/plain/light": {
+      "sha256": "d3ea9ddaa3efdc45a3cd3146b97d68d1640db77f3284bf2ce8effb52599a651b",
+      "len": 16303
+    },
+    "fragment/device/authored/plain/dark": {
+      "sha256": "1b9fa67e8d8036a3e872fd954a380728f3267f4d6d46ab3f463e010b39d2831f",
+      "len": 16302
+    },
+    "fragment/device/authored/capture/light": {
+      "sha256": "767205531f6ae103f41adddd2e1f803e4c38eb447c92e6e70632fe7e3cbef64a",
+      "len": 18021
+    },
+    "fragment/device/authored/capture/dark": {
+      "sha256": "082fbb550466757afbddb5efbc925732f841a700cf64f6bd03e733ad404e43b9",
+      "len": 18020
+    },
+    "fragment/device/legacy/plain/light": {
+      "sha256": "05498c854852413e34b4cd5a71e10473d79705ae9a8affd2c5c13859dcee3730",
+      "len": 9637
+    },
+    "fragment/device/legacy/plain/dark": {
+      "sha256": "cd47567502a8b314d806f5fc0acfb2a76a7251d677a16631641e56ecd283671a",
+      "len": 9636
+    },
+    "fragment/device/legacy/capture/light": {
+      "sha256": "228bc328ea250a67689c4f50ce200573c8cee1fc73f273ead38db132721e0b42",
+      "len": 11355
+    },
+    "fragment/device/legacy/capture/dark": {
+      "sha256": "8464608b004c4c70230f9d45611f53b60882a5b7eaa06aac89233adb7633b711",
+      "len": 11354
+    },
+    "nobody/web/authored/plain/light": {
+      "sha256": "c247ab89b78748c3a437a508858bfa04f455222ebfb03da6171ca58615b141ea",
+      "len": 14298
+    },
+    "nobody/web/authored/plain/dark": {
+      "sha256": "d0d45e8eda7d121a1fa3af49e7de750d9d7b297913899b96968472221b006783",
+      "len": 14297
+    },
+    "nobody/web/authored/capture/light": {
+      "sha256": "d879773f9b83d1fbc4667466192cff55ac3ec2add28972fe318c0a57fd9cff96",
+      "len": 16016
+    },
+    "nobody/web/authored/capture/dark": {
+      "sha256": "05a61294144d2e05977b98049d91fe12ea98f538a456b58f99136fbce5ccde0a",
+      "len": 16015
+    },
+    "nobody/web/legacy/plain/light": {
+      "sha256": "a72549ddaf43f145d0b47f27930f93faf7f4b7bf5525050bb6098f01963d3e87",
+      "len": 7632
+    },
+    "nobody/web/legacy/plain/dark": {
+      "sha256": "d047eb4a458286b8bd894b8e0482c7b1c517603808032cd909244b42fedf29ee",
+      "len": 7631
+    },
+    "nobody/web/legacy/capture/light": {
+      "sha256": "6c9263b628b8f0d25797bb04846d123c03c6bdeac0daea8d2ed55ae84e54f6ed",
+      "len": 9350
+    },
+    "nobody/web/legacy/capture/dark": {
+      "sha256": "1dcb1b1d278e47155c5585990f94c549fabc15029b5a6714342dfa6f558ac165",
+      "len": 9349
+    },
+    "nobody/desktop/authored/plain/light": {
+      "sha256": "fce4972736fdc66357b218f68af24c3c9c85ced53fd26615799e31be309eb8df",
+      "len": 12260
+    },
+    "nobody/desktop/authored/plain/dark": {
+      "sha256": "e948f2e8e31e8e79997c64dd1e9e341ea30990ac73aaa2c9ffa52ff0aa6ab7a7",
+      "len": 12259
+    },
+    "nobody/desktop/authored/capture/light": {
+      "sha256": "3c5137370ff7e10bb92dff3829248afebf127784722e7eeebfced8d296eb9460",
+      "len": 13978
+    },
+    "nobody/desktop/authored/capture/dark": {
+      "sha256": "b1859021255d29958b9ef5fbe088dad896568d2353c7751984db9a855a2bcb1f",
+      "len": 13977
+    },
+    "nobody/desktop/legacy/plain/light": {
+      "sha256": "8c2f0a5578b48ae70b7888944706f31acb638880d3c88b1c296f58e321be0386",
+      "len": 5594
+    },
+    "nobody/desktop/legacy/plain/dark": {
+      "sha256": "2e822be4fedf5b215f1fae6c272ce90edcd8d530f5a24a1211bfeac078bd8019",
+      "len": 5593
+    },
+    "nobody/desktop/legacy/capture/light": {
+      "sha256": "be325a8f8840671a98bfa18f7346941fb9aa8597d55ba8ddc1cc40f6b09d317e",
+      "len": 7312
+    },
+    "nobody/desktop/legacy/capture/dark": {
+      "sha256": "18ced0dc3685b5df1eb6d897ee489a679de112bcdf9c5bdc921fc797459e58e5",
+      "len": 7311
+    },
+    "nobody/device/authored/plain/light": {
+      "sha256": "78e89073f463a1bda1ab41a9def1debb8dcfaf84aa2e0851715447d3dcd2ad0e",
+      "len": 14935
+    },
+    "nobody/device/authored/plain/dark": {
+      "sha256": "d64fcbd6bd154948f0f25f353031b66d4475b09d9cae3e4a20c973e77b61eb5f",
+      "len": 14934
+    },
+    "nobody/device/authored/capture/light": {
+      "sha256": "0f35215097c49875f57d418cd0461062a8af068a8b904c03d061b2a847373cef",
+      "len": 16653
+    },
+    "nobody/device/authored/capture/dark": {
+      "sha256": "20a6f04ce9eed123d86810330ee2383f82860b48e3e026a30a3a282c0d1ad9b4",
+      "len": 16652
+    },
+    "nobody/device/legacy/plain/light": {
+      "sha256": "e8bf0b899bbda9c947642f72ed7b5e3cb3592363d991f85ef67c4862bff5747b",
+      "len": 8269
+    },
+    "nobody/device/legacy/plain/dark": {
+      "sha256": "6be95c4cf923c5628bc31cbecff490749326e68a049221153c52cbf524a63dec",
+      "len": 8268
+    },
+    "nobody/device/legacy/capture/light": {
+      "sha256": "76e5458737ce685de9227d2d856847dd744e231ef42725b1242a492345b74a7a",
+      "len": 9987
+    },
+    "nobody/device/legacy/capture/dark": {
+      "sha256": "2a303ed628f296a973fd2873f8c9610438f2739cf4c01ebc5ebeec99e9de3356",
+      "len": 9986
+    },
+    "research/web/authored/plain/light": {
+      "sha256": "1cebd65d9aaefd9cdaa144e36098cbff8689d956a2a71a9faa2934cff324e4e6",
+      "len": 1018683
+    },
+    "research/web/authored/plain/dark": {
+      "sha256": "ae3af348128319eb43979f198bf948ee1f3eefd2e583a27e8069a4e67fe87a02",
+      "len": 1018682
+    },
+    "research/web/authored/capture/light": {
+      "sha256": "ff8e63bc626350ca0cce98ba068c3ea2661682cfc1ec45887da81b5c48940cca",
+      "len": 1020401
+    },
+    "research/web/authored/capture/dark": {
+      "sha256": "4f99fc392311a280ed852354e42c9bc9a3475cf738f919426f55f45d6cc7bfe9",
+      "len": 1020400
+    },
+    "research/web/legacy/plain/light": {
+      "sha256": "2e2b5aa6361cad3b8430c802fa436d1bce13783cdb9ef753bb7a37e8a7af2cd4",
+      "len": 1012017
+    },
+    "research/web/legacy/plain/dark": {
+      "sha256": "f8c42378c67a35523e410b4613539ba2395541f8c147dec14ebaa3a2310cb68c",
+      "len": 1012016
+    },
+    "research/web/legacy/capture/light": {
+      "sha256": "2ffdc643ca19641659072db6ff910dc613e80ee060162d861cecd3610c9658ab",
+      "len": 1013735
+    },
+    "research/web/legacy/capture/dark": {
+      "sha256": "91338124be8a5043437656ef52a2e46c1da5397aa259b404b8c2f267c82e4950",
+      "len": 1013734
+    },
+    "research/desktop/authored/plain/light": {
+      "sha256": "2d845db85ac21053ec50d67867fe79f46607722df30ebbedc3678cd466d519a1",
+      "len": 1016585
+    },
+    "research/desktop/authored/plain/dark": {
+      "sha256": "c0debbed0e38cf0152739d89897175426ac80e67a14c72f9f0531fd4f274f431",
+      "len": 1016584
+    },
+    "research/desktop/authored/capture/light": {
+      "sha256": "afe9cc6ed6f95f4bc86ef9d0723008d5344bd66fd0b7c82c9f8a587bd94c8ce0",
+      "len": 1018303
+    },
+    "research/desktop/authored/capture/dark": {
+      "sha256": "862deec7cc9e8d9f74fb66e75b1a9beeab1f412d39c81ce24ce8841133ac651e",
+      "len": 1018302
+    },
+    "research/desktop/legacy/plain/light": {
+      "sha256": "9ef04bf04a1ce3fd6e59fe01e5be1504f18f83538a7dd07b4b95104db4ee4e4a",
+      "len": 1009919
+    },
+    "research/desktop/legacy/plain/dark": {
+      "sha256": "c0134d4c1f61a35a1c6140f5b3818eb9015a4e53a199dd24558d55b5a12ad235",
+      "len": 1009918
+    },
+    "research/desktop/legacy/capture/light": {
+      "sha256": "88ea5bb6216595b471490d8480a5452df598786358561e5a95f6616131a36610",
+      "len": 1011637
+    },
+    "research/desktop/legacy/capture/dark": {
+      "sha256": "36dd526e8588d1a99b05e770ddbb107a1026e5b5566de50ffcfed246e7402d81",
+      "len": 1011636
+    },
+    "research/device/authored/plain/light": {
+      "sha256": "d692bd55c74646840f1f7975b0793da36907676d15e4f7d0f792c3c25fa4827f",
+      "len": 1019260
+    },
+    "research/device/authored/plain/dark": {
+      "sha256": "67fc2198fdd52c02bb84447cadc91fbf736bcae188a1fd2f7439212704bc2121",
+      "len": 1019259
+    },
+    "research/device/authored/capture/light": {
+      "sha256": "615c32da915e2caa79427b9d0293c9660fac30c0819311d96aea2eed62dda320",
+      "len": 1020978
+    },
+    "research/device/authored/capture/dark": {
+      "sha256": "5644cd80379c91e51a4b805bf2842732d5b81f3ab4f33e0e31a9ff918e5a619d",
+      "len": 1020977
+    },
+    "research/device/legacy/plain/light": {
+      "sha256": "a486e64a15fd10447d5a41a2a77561d3a796edd54f60770ca3670a2c45bea242",
+      "len": 1012594
+    },
+    "research/device/legacy/plain/dark": {
+      "sha256": "d615555438abaf7feb1c75188630ea420753f7b5822b1f3d14d1c85c41bd6154",
+      "len": 1012593
+    },
+    "research/device/legacy/capture/light": {
+      "sha256": "fc789520d319e12a3cc36937a8c5c7dc0abdb3f5ca19be52d67dd480282eb5a7",
+      "len": 1014312
+    },
+    "research/device/legacy/capture/dark": {
+      "sha256": "6418c07bbeea74f709be876c4bc682e990ac37d155106c27f3f58dbf675da429",
+      "len": 1014311
+    }
+  }
+}

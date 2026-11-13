@@ -14,7 +14,6 @@
 
 import { httpHost } from './http'
 import { tauriHost } from './tauri'
-import { prepareFrameHtml } from './wasmFrame'
 import type { Host, OpenResult } from './types'
 
 export const isDesktop = '__TAURI_INTERNALS__' in window
@@ -45,7 +44,6 @@ function loadWasm(): Promise<WasmModule> {
 // The members a component reads synchronously, answered without the module.
 const deviceSync: Partial<Host> = {
   clanOrigin: () => 'clan://localhost',
-  prepareAppHtml: prepareFrameHtml,
   frameLoad: 'srcdoc',
 }
 

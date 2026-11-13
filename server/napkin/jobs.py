@@ -20,6 +20,7 @@ cancelled job stops spending.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 import time
@@ -55,9 +56,10 @@ def abandoned() -> bool:
     return getattr(threading.current_thread(), "napkin_abandoned", False)
 
 
-def bounded(fn, seconds, name, stop=None):
+def bounded(fn, seconds, name, stop=None, stalled=None):
     """Run `fn()` in its own thread for at most `seconds`, or until `stop()`
-    says the job was cancelled.
+    says the job was cancelled, or `stalled()` says it has made no progress
+    for too long (the caller tells which by asking `stalled` again).
 
     -> (value, error, left): `error` is what it raised (None when it returned);
     `left` is the thread still running after `seconds` (None when it finished),
@@ -77,11 +79,12 @@ def bounded(fn, seconds, name, stop=None):
     t = threading.Thread(target=go, name=name, daemon=True)
     t.start()
     end = time.monotonic() + seconds
-    while t.is_alive() and not (stop is not None and stop()):
+    poll = stop is not None or stalled is not None
+    while t.is_alive() and not (stop is not None and stop()) and not (stalled is not None and stalled()):
         left = end - time.monotonic()
         if left <= 0:
             break
-        t.join(min(left, 0.5) if stop is not None else left)
+        t.join(min(left, 0.5) if poll else left)
     if t.is_alive():
         return None, None, t
     return box.get("value"), box.get("error"), None
@@ -125,8 +128,20 @@ class LongJob:
             if self.state == "cancelled":
                 return
             self.state = "running"
+        rl = getattr(self.caps, "runlog", None)
+        if rl is not None:
+            rl.start(self.task, self.doc, [self.task], runs=self.caps.jobs.total)
         try:
-            out = self.work()
+            self._work(rl)
+        finally:
+            if rl is not None:
+                rl.end(self.state, error=self.error)
+
+    def _work(self, rl):
+        stage = rl.stage(self.task) if rl is not None else contextlib.nullcontext()
+        try:
+            with stage:  # what the work raises is the stage's error in the run log
+                out = self.work()
             with self._lock:
                 if self.state == "cancelled":
                     return  # what it computed after the person cancelled it is dropped
@@ -139,6 +154,7 @@ class LongJob:
         except TaskError as e:
             if self.state == "cancelled":
                 return
+            log.warning("%s %s failed: %s: %s", self.handler, self.id, e.etype, e.message)
             self.error, self.finished_at, self.state = {"type": e.etype, "message": e.message}, iso(), "failed"
         except Exception as e:
             if self.state == "cancelled":
@@ -184,6 +200,11 @@ class JobStore:
         with self._lock:
             return [j for j in self._jobs.values() if getattr(j, "task", None) in tasks and j.doc == doc
                     and j.scope == scope and _blocking(j)]
+
+    def running(self) -> list:
+        """Every job still unfinished, whatever its tenant or document (the shutdown's account)."""
+        with self._lock:
+            return [j for j in self._jobs.values() if getattr(j, "state", None) in UNFINISHED]
 
     def unfinished_campaign(self, scope: dict, doc: str):
         with self._lock:

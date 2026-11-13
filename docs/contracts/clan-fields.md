@@ -61,6 +61,29 @@ What the new refs show:
 | `mat_…` | `data.materials` | Its name and kind | When it arrived, its licence, whether it was read or transcribed | Confidential… (`/classify` on `materials[<id>]`) |
 | `ct_…` | `data.selection.contested`, then each `data.upstream.<id>.selection.contested` | As before | A carried contest says **carried from upstream** | Use this value: `/resolve`, which settles it in this document (Contract 4 §8.1) |
 
+### 2.2 Lines as fields
+
+*Added 2026-11-09 (owner: every line has a source, and every one is clickable).*
+A line of a document is a field too. The app draws its words inside
+`<clan-field ref as keep>`; the field leaves them and makes them a target
+(hover wash, pointer, Enter). Without `keep` it draws the record's words.
+
+| Ref | Kind | The line |
+|---|---|---|
+| `report.headline` | `answer` | the report's headline and summary as one answer |
+| `report.summary[i]`, `report.sections[<id>].blocks[i]` | `line` | one summary line, one paragraph |
+| `<path>[i]` | `item` | one line of a list part (`mandatories[0]`) |
+| `chart:<ref>,<ref>` | `chart` | a `<clan-chart>` clicked off its bars; a bar is its pin |
+| a `selection.gaps` id, any prefix | `gap` | a gap (research writes `g_…`) |
+
+`ClanFields.card(ref, el)` draws the line's view (the mock's `vAnswer`,
+`vClaim`, `vFinding`) for these kinds and for a finding: what it cites, its
+kind and certainty, both derived from the cites (a finding restated, a
+figure quoted as written or contested then resolved, an inference no source
+says), never asked of a model. Links in a view are `data-clf-go`; an app that
+shows them itself cancels `clan:cardgo {ref, drawer}`. The host's `/cite`
+reads an address by position as well as by id, and answers a line's `cites`.
+
 Every element opens the evidence drawer: the value, the verbatim quote with the
 figure marked, the source's record and link, the decisions recorded on it, and
 the element the agent wrote. A pin whose source record is not in the document
@@ -77,7 +100,7 @@ now stands, which replaces `window.__CLAN__.data` and fires `clan:dataupdated`.
 | Verify (a finding) | `/verify` — recorded in this document; shared with the agency once the client accepts the work |
 | Reject (a finding) | `/verdict` bad on `findings[id]` (reason required) |
 | Use this value (a contest) | `/resolve` (reason required) |
-| Confidential… | `/classify` — model, export, corpus, and why |
+| Confidential… | `/classify` — model, and why; `corpus: false` and `export: true` always (Napkin never learns from it; the client sees it: os-layer §4 C4) |
 | Use the proposal (a data path, §6) | `/edit {path, value: <proposed_value>, rationale: "Used proposal <decision id>"}` |
 | Lock <noun> (the tray) | `/approve` — disabled while the tray lists anything |
 
@@ -109,6 +132,19 @@ The layout vocabulary: `cl-report` (the page), `cl-head` (`compact`),
 `ClanFields.mount(el, html)` sanitises and mounts a layout; `.refresh()`
 re-renders every element from the record; `.reload()` re-reads the decision
 view first; `.open(ref)` opens the drawer; `.format(pin)`, `.label(pin)`.
+
+The source card (Contract 4 §8.3): `.card(ref, el)` renders the card for
+`ref` into `el` and resolves with what the host said (null when it could not
+be asked); `.cards(refs)` is the same lookup without the markup. Every ref
+asked for in one tick goes in one `POST /cite`, and a card is kept per ref
+until the document's version changes. The card shows the kind, the origin,
+the latest review verdict, the value and words, where it was carried from,
+the source's link, publisher, date and tier, and every review under
+**Record**; its buttons open the drawer and, for a carried item, the original
+document (`POST /open`). The drawer shows the same card, compact (no value or
+words, which it shows itself), at its top: one renderer. `.stack()` is the
+drawer's trail, oldest first, as `[{ref, label}]`, for an inspector's
+breadcrumbs.
 
 ## 6. Edit mode
 
@@ -177,22 +213,29 @@ bar of its own (`app/src/shell/appBar.ts`, features/app-bar-actions.clan):
 
 - `clan:bar {v: 1, items}` (app → shell, also on `clan:bar?`) — the whole list,
   each time it changes; the shell draws it and keeps nothing else. An item is
-  `{kind: 'tab', id, label, current?, disabled?}` (one screen or section, at
-  most one current), `{kind: 'button', id, label, primary?, disabled?, title?}`
-  or `{kind: 'chip', label, tone?: 'ok' | 'warn', title?}` (a read-only fact).
-  Text only, never markup; a label is at most 28 characters; at most 6 tabs, 6
-  buttons and 4 chips; ids are unique strings. An item the bar would refuse, or
-  a kind it does not know, is left out and the rest are drawn, so a kind added
-  later does not break an older shell. The bar draws the first two buttons and
-  puts any more in More. The list belongs to the document that sent it and is
-  dropped when another opens.
+  `{kind: 'button', id, label, primary?, disabled?, title?, menu?}` (`menu`: up to
+  6 `{id, label, title?}` choices the button opens, "Save · PDF ▾"; a choice sends
+  its own id, ids unique across the bar; past the two shown, choices go into More),
+  `{kind: 'chip', label, tone?: 'ok' | 'warn', title?}` (a read-only fact) or
+  `{kind: 'status', label, tone?: 'ok' | 'warn', locked?}` (the document's
+  state in the app's own words: "Draft", "Ready to lock"; the OS bar's app slot
+  shows it in its pill, in place of the one the shell words from the lock).
+  Text only, never markup; a label is at most 28 characters; at most 10
+  buttons, 4 chips and 1 status; ids are unique strings. An item the bar would
+  refuse, or a kind it does not know, is left out and the rest are drawn, so a
+  kind added later does not break an older shell. The bar draws the first two
+  buttons and puts any more in the slot's More. The list belongs to the
+  document that sent it and is dropped when another opens.
+  The `tab` kind is retired (owner removal of top tabs, features/new-ui-shell.clan,
+  2026-11-09): the shell drops a tab like any unknown kind, and an app keeps its
+  steps or sections in its own page.
 - `clan:bar?` (shell → app, on every frame load) — send it again.
-- `clan:bar-action {id}` (shell → app) — a tab or button was pressed. The app
+- `clan:bar-action {id}` (shell → app) — a button was pressed. The app
   does what its own button did; the shell runs nothing.
 
-An app in the shell (its frame has a parent) draws no bar of its own; on its
-own it keeps one. Deck Maker is the first to use this; Research and Brief Maker
-keep their bars until they adopt it.
+An app in the shell (its frame has a parent) draws no second bar of its own;
+on its own it keeps one. Deck Maker sends its chips and keeps its steps at the
+top of its page; Research and Brief Maker keep their bars until they adopt it.
 
 Judging a value is the drawer's; who did what and why is the panel's. The
 panel's "Needs you" only points at where to settle an item.

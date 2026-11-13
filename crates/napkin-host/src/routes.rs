@@ -27,6 +27,10 @@ use crate::library::{
 use crate::proxy::api_proxy;
 use crate::session::{Applied, Session, TRUSTED_CAPABILITIES};
 
+/// The most refs one `POST /cite` resolves: a page's section, never the
+/// whole document a ref at a time.
+pub const MAX_CITE_REFS: usize = 500;
+
 pub struct HostRequest {
     pub path: String,
     pub query: String,
@@ -227,10 +231,12 @@ pub async fn dispatch_async(
 ) -> HostResponse {
     #[cfg(feature = "native")]
     if req.path == "/api-proxy" {
-        return match api_proxy(ctx, session, cfg, &req.body_str()).await {
+        let doc = session.current_id();
+        let resp = match api_proxy(ctx, session, cfg, &req.body_str()).await {
             Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
             Err(e) => e.into(),
         };
+        return name_document(resp, doc.as_ref());
     }
     dispatch(ctx, session, cfg, req)
 }
@@ -294,6 +300,30 @@ pub fn dispatch(
     cfg: &dyn HostConfig,
     req: HostRequest,
 ) -> HostResponse {
+    let doc = session.current_id();
+    name_document(route(ctx, session, cfg, req), doc.as_ref())
+}
+
+/// Each `clan-data-changed` and `clan-patch-saved` names the document it is
+/// about: `path`, the id the shell opened it by (`OpenResult.path`). Every
+/// shell gets these on one stream for the whole workspace (the server's SSE is
+/// per tenant), so a listener acts only on its own document's
+/// (os-layer.md §8.4). The document is the one the request was about, read
+/// before the route ran.
+fn name_document(mut resp: HostResponse, doc: Option<&crate::store::DocId>) -> HostResponse {
+    let Some(doc) = doc else { return resp };
+    for e in &mut resp.events {
+        if let HostEvent::DataChanged(v) | HostEvent::PatchSaved(v) = e {
+            if !v.is_object() {
+                *v = serde_json::json!({ "value": v.take() });
+            }
+            v["path"] = Value::String(doc.as_str().to_string());
+        }
+    }
+    resp
+}
+
+fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -> HostResponse {
     let path = req.path.as_str();
     match path {
         #[cfg(feature = "native")]
@@ -313,7 +343,13 @@ pub fn dispatch(
             },
         ),
 
-        "/document" => HostResponse::new(200, "text/html", session.preview_html().into_bytes()),
+        // The app frame's page, composed on request from the open view
+        // (features/doc-open-direct.clan). Over `clan://` the scheme is real,
+        // so nothing is rewritten; napkin-web answers its own /document.
+        "/document" => match session.frame_page(&req.query, crate::frame::Reach::Scheme) {
+            Ok(page) => HostResponse::new(200, "text/html", page.into_bytes()),
+            Err(e) => HostResponse::error(e.status, &e.message),
+        },
 
         "/snapshot" => {
             if let Ok(html) = String::from_utf8(req.body.clone()) {
@@ -427,6 +463,13 @@ pub fn dispatch(
                 &crate::ops::review::parse_acknowledge(&req.body_str())?,
             )
         }),
+        "/unapprove" => review(session, ctx, |c, d| {
+            crate::ops::review::unapprove(
+                c,
+                d,
+                &crate::ops::review::parse_approve(&req.body_str())?,
+            )
+        }),
         "/approve" => review_then(
             session,
             ctx,
@@ -491,6 +534,105 @@ pub fn dispatch(
             Ok(v) => HostResponse::json(200, &v),
             Err(e) => e.into(),
         },
+        // Take the direct parent's newer version into this spin-off (Contract 4
+        // §5.5, reversed for spin-offs 2026-11-09; §8.1 item 8). One
+        // decision, `update_from_<noun>`; refused on a locked document.
+        // With `{document_id}` naming a linked document, its newer version
+        // instead (the same carry as `/attach/update`).
+        "/upstream/update" => {
+            let store = session.store().clone();
+            let id = req
+                .body_json()
+                .get("document_id")
+                .and_then(|x| x.as_str())
+                .filter(|s| !s.is_empty())
+                .map(String::from);
+            review_then(
+                session,
+                ctx,
+                |c, d| crate::library::update_from_upstream_of(&*store, c, d, id.as_deref()),
+                |reply| {
+                    if reply["verb"] == "updated" {
+                        let source = reply["document_id"].as_str().unwrap_or("").to_string();
+                        with_backrefs(session, ctx, reply, &Backref::Linked { source });
+                    }
+                },
+            )
+        }
+
+        // Links (os-layer §5.7): carry another existing document in beside
+        // this one's own work. A person's write like the review routes, so it
+        // is refused on a locked document and for a process. Each writes one
+        // decision here and a `linked`/`unlinked` backref on the source.
+        "/attach-targets" => {
+            let store = session.store().clone();
+            match session.read(|d| Ok(crate::library::attach_targets(&*store, ctx, d))) {
+                Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
+                Err(e) => e.into(),
+            }
+        }
+        "/attach" | "/attach/update" => {
+            let id = req
+                .body_json()
+                .get("document_id")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
+            if id.is_empty() {
+                return HostResponse::error(400, "missing document_id");
+            }
+            let mode = if path == "/attach" {
+                crate::library::AttachMode::Attach
+            } else {
+                crate::library::AttachMode::Update
+            };
+            let store = session.store().clone();
+            review_then(
+                session,
+                ctx,
+                |c, d| {
+                    let (change, reply) = crate::library::attach_change(&*store, c, d, &id, mode)?;
+                    Ok(crate::ops::Outcome::changed(reply, change))
+                },
+                |reply| {
+                    let source = id.clone();
+                    with_backrefs(session, ctx, reply, &Backref::Linked { source });
+                },
+            )
+        }
+        "/attach/detach" => {
+            let body = req.body_json();
+            let which = body
+                .get("document_id")
+                .or_else(|| body.get("app_id"))
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
+            if which.is_empty() {
+                return HostResponse::error(400, "missing document_id");
+            }
+            review_then(
+                session,
+                ctx,
+                |c, d| {
+                    let (change, reply) = crate::library::detach_change(c, d, &which)?;
+                    Ok(crate::ops::Outcome::changed(reply, change))
+                },
+                |reply| {
+                    let source = reply["document_id"].as_str().unwrap_or("").to_string();
+                    with_backrefs(session, ctx, reply, &Backref::Unlinked { source });
+                },
+            )
+        }
+        // What it was made from and what is linked into it, and what was made
+        // from it or links it (os-layer §8.1 item 9). A read.
+        "/related" => {
+            let store = session.store().clone();
+            match session.read(|d| Ok(crate::library::related(&*store, ctx, d))) {
+                Ok(v) => HostResponse::json(200, &v),
+                Err(e) => e.into(),
+            }
+        }
 
         // The decision view the shell's OS layer renders: every decision,
         // newest first, with what needs a person — derived here, not by the app.
@@ -500,6 +642,45 @@ pub fn dispatch(
             Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
             Err(e) => e.into(),
         },
+
+        // The source card for one ref (`GET /cite?ref=`) or many at once
+        // (`POST /cite {refs}`), so a page renders a section's cards in one
+        // call (OS-layer contract §8.3). Any app, any actor: a read.
+        "/cite" => {
+            let body = req.body_json();
+            let batch = body.get("refs");
+            let refs: Vec<String> = match batch {
+                Some(Value::Array(rs)) => rs
+                    .iter()
+                    .filter_map(|r| r.as_str().map(String::from))
+                    .collect(),
+                Some(_) => return HostResponse::error(400, "refs must be a list of strings"),
+                None => match query_param(&req.query, "ref").filter(|r| !r.trim().is_empty()) {
+                    Some(r) => vec![r],
+                    None => return HostResponse::error(400, "missing ref"),
+                },
+            };
+            if refs.len() > MAX_CITE_REFS {
+                return HostResponse::error(
+                    400,
+                    &format!("at most {MAX_CITE_REFS} refs in one call"),
+                );
+            }
+            let store = session.store().clone();
+            match session.read(|d| crate::library::source_cards(&*store, ctx, d, &refs)) {
+                Ok(mut cards) if batch.is_none() => {
+                    let card = cards.pop_first().map(|(_, c)| c);
+                    match card {
+                        Some(c) if c.cite.kind != "unknown" => {
+                            HostResponse::json(200, &serde_json::json!(c))
+                        }
+                        _ => HostResponse::error(404, "this document holds nothing by that ref"),
+                    }
+                }
+                Ok(cards) => HostResponse::json(200, &serde_json::json!({ "cites": cards })),
+                Err(e) => e.into(),
+            }
+        }
 
         // Launcher routes — let a home CLAN app list and launch apps.
         "/apps" => HostResponse::json(200, &serde_json::json!(scan_apps(&**session.store()))),

@@ -1810,7 +1810,7 @@ impl<'a> Doc<'a> {
     }
 
     /// A client's answer to the research, or to one part of it (§3.6): the
-    /// client's words verbatim; Ellis's suggestions and the host's own
+    /// client's words verbatim; the Knowledge agent's suggestions and the host's own
     /// records are not rows.
     fn client_row(&self, d: &Decision, as_of: Option<String>, hider: &Hider) -> Option<(u8, Json)> {
         let extra = |k: &str| d.extra.get(k);
@@ -2234,18 +2234,20 @@ mod tests {
     fn an_accepted_proposal_is_a_default_text_in_both_forms() {
         // The brief maker before redraft-provenance named the decision's id.
         assert!(is_default_text(
-            "Accepted d_TADM3ZN6NXTU: Dara\u{2019}s proposal for single-minded proposition."
+            "Accepted d_TADM3ZN6NXTU: the Brief agent\u{2019}s proposal for single-minded proposition."
         ));
         // Now it names the drafter, with either apostrophe.
         assert!(is_default_text(
-            "Accepted Dara\u{2019}s new version of the single-minded proposition."
+            "Accepted the Brief agent\u{2019}s new version of the single-minded proposition."
         ));
         assert!(is_default_text(
-            "Accepted Dara's new version of the single-minded proposition."
+            "Accepted the Brief agent's new version of the single-minded proposition."
         ));
         // A person's own words that happen to start the same way are theirs.
         assert!(!is_default_text("Accepted, though the tone is still off."));
-        assert!(!is_default_text("Accepted Dara's point about the tone."));
+        assert!(!is_default_text(
+            "Accepted the Brief agent's point about the tone."
+        ));
     }
 
     fn hider_of(values: &[(Yaml, Option<&str>)]) -> Hider {

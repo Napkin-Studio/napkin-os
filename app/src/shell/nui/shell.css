@@ -1,0 +1,146 @@
+/* What the new shell needs beyond the mock's own rules (nui.css): the frame
+   the screens sit in, states the mock never shows (empty desk, errors, a
+   refusal), and the guard that keeps the OS bar from overflowing. The mock's
+   rules that its generator only wrote into JS or never needed a scene for are
+   copied here word for word, with the line they come from. */
+
+/* The studio frame takes the desk colour, and the home scrolls under the bar. */
+.studio { background: var(--desk); }
+.nui-home { flex: 1; min-height: 0; overflow: auto; background: var(--desk); padding-bottom: 48px; }
+.nui-page { color: var(--ink); font: 15px/1.55 var(--font-ui); }
+/* napkin-app-v1.html:56 */
+.nui .studio-shell { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+/* The bar sits in the frame's top row, and in a document's .ch-top. */
+.ch-top .nui .topbar-outer, .studio-top .nui .topbar-outer { position: relative; }
+
+/* The bar never overflows: the document slot gives way first (its name
+   truncates), everything to its right keeps its size (gaps.md B8). */
+.nui .tb-locked > * { flex-shrink: 0; }
+.nui .tb-locked > .tb-app { flex: 1 1 auto !important; min-width: 0; overflow: hidden !important; }
+.nui .tb-locked > .tb-spacer { flex: 1 1 0; min-width: 0; }
+.nui .tb-app > * { flex-shrink: 0; }
+.nui .tb-app > .tba-name { flex-shrink: 1; min-width: 72px; }
+/* The name's column shrinks with it: its title and saved line end in an
+   ellipsis inside the column, so neither runs under the caret, and the caret
+   keeps its own room before Continue in. */
+.nui .tba-name .tba-n2 { min-width: 0; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+.nui .tba-name b { min-width: 0; }
+.nui .tba-name .tba-saved { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nui .tba-name > svg, .nui .tba-name > .tba-caret { flex: none; }
+.nui .tb-tools { display: inline-flex; align-items: center; gap: 8px; }
+.nui .tb-tools:empty { display: none; }
+.nui .tba-primary { background: var(--ag-act) !important; color: var(--ag-act-ink) !important; border-color: var(--ag-act-line, var(--ag-act)) !important; }
+.nui .tba-static { cursor: default; }
+.nui .tba-line[disabled] { cursor: default; }
+@media (max-width: 1180px) { .nui .tb-tools .ch-chip { display: none; } }
+
+/* The agent at work in the crew: its own sphere (the one engine, agents/AgentSphere), not a grey ball. */
+.nui .tb-crew .cw.ag { background: var(--desk); position: relative; overflow: visible; }
+
+/* You, at the bar's right (owner, 2026-11-11): your initials, the account menu on them. */
+.nui .tb-me { flex: none; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
+.nui .tb-me .cw { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--ag-base, #1E22AA); color: #fff; font: 700 10.5px var(--font-ui); font-style: normal; box-shadow: 0 0 0 2px var(--desk); }
+.nui .tb-me:hover .cw, .nui .tb-me[aria-expanded="true"] .cw { box-shadow: 0 0 0 2px var(--desk), 0 0 0 4px color-mix(in srgb, var(--ag-base, #1E22AA) 40%, transparent); }
+.nui .tb-me:focus-visible { outline: 2px solid var(--ag-base, #1E22AA); outline-offset: 2px; }
+
+/* napkin-app-v1.html:3516, 3519 */
+.nui .p33-pop > button[aria-disabled="true"], .nui .p33-pop button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.nui .tba-menu button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.nui .tba-empty { padding: 4px 10px 8px; font-size: 12px; color: var(--muted); }
+.nui .tba-menu, .nui .p33-pop { position: fixed; }
+
+/* States the mock does not draw. */
+.nui .nui-empty { padding: 10px 12px; font-size: 13px; color: var(--muted); }
+.nui .nui-more { margin-top: 14px; }
+.nui .nui-banner { margin: 18px 0 0; padding: 10px 14px; border-radius: var(--r-md); background: var(--warn-soft); color: var(--warn); font-size: 13px; }
+.nui .nui-panel { margin: 0 0 18px; padding: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-md); }
+.nui .cl-add-err { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }
+.nui .cl-add-err[role="alert"] { color: var(--alert); }
+.nui .cl-add-msg { flex-basis: 100%; font-size: 13.5px; color: var(--ink-soft); }
+.nui .cp-head + .cl-add-form { margin-top: 18px; }
+.nui .cp-none { margin-top: 24px; font-size: 13.5px; color: var(--muted); }
+.nui .cp-plus[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.nui #cp-kit[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+.nui .p33-drow.old { opacity: .6; }
+.nui .p33-drow details > code { display: block; margin: 6px 0; }
+.nui .p33-drow details .dp-ex { padding: 8px 0 0; }
+.nui .dial .dz[aria-disabled="true"] { opacity: .55; }
+
+/* The drawer sits over the document as it does over the desk. */
+.nui .dtree-drawer .dp-err { margin: 0; }
+
+/* A heading takes focus on arrival for screen readers; it draws no ring for it. */
+.nui h1[tabindex="-1"]:focus { outline: none; }
+
+/* SaveStatus inside the saved line is plain words (chrome.css draws it as a chip elsewhere). */
+.nui .tba-saved .ch-saved { display: inline; padding: 0; gap: 0; font: inherit; color: inherit; }
+.nui .tba-saved .ch-saved::before { content: none; }
+
+/* napkin-app-v1.html:2349: the badge's ring is var(--bg, #F6F1E7); the mock has no --bg, so the fallback. */
+.nui .cl-badge { box-shadow: 0 0 0 3px #F6F1E7; }
+
+/* The drawer's Close is outlined in ink (gaps.md §13.7: 1px solid ink). */
+.nui #dtree-close-btn { border-color: var(--ink); }
+.nui .p33-pop:focus, .nui .tba-menu:focus { outline: none; }
+.nui #dtree-approve-all:disabled { opacity: .55; cursor: not-allowed; }
+.nui .dial-hub { z-index: 1; }
+/* The group heading is its tool's door: drawn exactly as the heading it sits in. */
+.nui .cp-tool { display: inline-flex; align-items: center; gap: 10px; font: inherit; color: inherit; letter-spacing: inherit; cursor: pointer; padding: 0; }
+.nui .cp-tool[aria-disabled="true"] { cursor: default; }
+.nui .dtree-call-card .dp-lock { padding: 0; border: 0; font-size: 12px; color: var(--muted); }
+
+/* The bar on a phone: the same pieces, smaller; every target 44px; nothing past the window. */
+.nui .tb-cname { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 720px) {
+  .nui .tb-locked { padding: 0 10px; gap: 8px !important; }
+  .nui .tb-vsep { display: none; }
+  .nui .stacked-lockup .sl-mono { display: none; }
+  .nui .name-pill.pill-accent { padding: 0 12px 0 28px; min-height: 44px; }
+  .nui .stacked-lockup .sl-big { font-size: 12.5px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+  .nui .tb-client { min-height: 44px; max-width: 132px; }
+  .nui .tb-theme, .nui .tb-decisions-btn, .nui .tb-me { min-height: 44px; min-width: 44px; margin-right: 0; }
+  .nui .tb-decisions-btn > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .nui .tb-decisions-btn { justify-content: center; }
+  .nui .tb-app .tba-line, .nui .tb-tools .ch-chip { display: none; }
+  .nui .studio-shell { padding: 0 16px; }
+  .nui .p33-desk-tools { flex-wrap: wrap; }
+  /* a document's bar holds more than a phone is wide: it scrolls sideways in itself, never the page */
+  .nui.ch-bar-os[data-where='document'] .tb-locked { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+}
+@media (max-width: 400px) {
+  .nui .m1-medallion { width: 52px !important; height: 52px !important; top: 2px !important; }
+  .nui .tb-client { max-width: 110px; }
+  .nui .stacked-lockup .sl-big { max-width: 64px; }
+  .nui .stacked-lockup .sl-logo.has-icon { height: 24px; }
+  .nui .stacked-lockup .sl-logo.has-icon .sl-wordmark { display: none; }
+  .nui .stacked-lockup .sl-logo.has-icon .sl-icon { display: block; }
+}
+@media (max-width: 360px) {
+  .nui .tb-locked { padding: 0 6px; gap: 5px !important; }
+  .nui .m1-medallion { width: 46px !important; height: 46px !important; top: 2px !important; }
+  .nui .name-pill.pill-accent { margin-left: -16px; padding: 0 8px 0 20px; }
+  .nui .stacked-lockup .sl-big { max-width: 44px; }
+  .nui .tb-client { max-width: 84px; padding-right: 8px; }
+  .nui .tb-theme, .nui .tb-decisions-btn, .nui .tb-me { min-width: 40px; min-height: 40px; width: 40px; height: 40px; padding: 0; }
+}
+
+/* The linked chip's list and the Link list (features/linked-research-bar.clan,
+   mock brief-links-bar-v1): a row is the title over its line, then its actions. */
+.nui .p33-pop.pp-links { width: 380px; max-width: calc(100vw - 16px); max-height: calc(100vh - 96px); overflow-y: auto; }
+.nui .pp-links .pp-link { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 7px; }
+.nui .pp-links .pp-link:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.nui .pp-links .pp-link-t { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.nui .pp-links .pp-link-t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nui .pp-links .pp-link-t small { font-size: 12px; color: var(--muted); }
+.nui .pp-links .pp-act { all: unset; cursor: pointer; font-size: 12px; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.nui .pp-links .pp-act:hover, .nui .pp-links .pp-act:focus-visible { color: var(--ink); }
+.nui .pp-links .pp-act-up { color: var(--status-amber); }
+.nui .pp-links .pp-linked { font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.nui .pp-links .pp-more { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 13px; color: var(--muted); }
+.nui .pp-links .pp-more:hover, .nui .pp-links .pp-more:focus-visible { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+.nui .pp-links .pp-search { display: flex; align-items: center; gap: 8px; margin: 6px 4px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); }
+.nui .pp-links .pp-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: 13px var(--font-ui); }
+.nui .pp-links .tba-gate { margin: 2px 2px 4px; }
+/* The changed-since dot on a lineage chip: the chip is `all: unset` (inline), so the dot needs its own box. */
+.nui .tba-line .ch-line-dot { display: inline-block; margin-left: 6px; vertical-align: 2px; }

@@ -60,6 +60,13 @@
   --ok-border: #a7d8ba;
   --warn-bg: #fdf3e3;
   --warn-border: #e0b473;
+
+  /* The agency layer (shell/agency/palette.ts): the neutral pair until the
+     signed-in agency's admin-set colours are applied over it. Chrome only;
+     never --create, never the document. */
+  --agency: #14161B;
+  --agency-fg: #FFFFFF;
+  --agency-soft: #F2F3F6;
 }
 
 /* Dark inverts the ink/paper axis: Plan and Desk (which are ink) go light,
@@ -93,6 +100,10 @@
   --ok-border: #166534;
   --warn-bg: #3a2a1e;
   --warn-border: #92400e;
+
+  --agency: #F2F3F5;
+  --agency-fg: #14161B;
+  --agency-soft: #22262D;
 }
 
 :root {

@@ -10,8 +10,16 @@ name: Deploy
 #   AWS_REGION                       eu-west-1 by default
 #   AWS_DEPLOY_ROLE_ARN_STAGING      terraform output deploy_role_arn (staging)
 #   AWS_DEPLOY_ROLE_ARN_PRODUCTION   the same, from the production stack
+#   AWS_DEPLOY_ROLE_ARN_UAT          the same, from the UAT stack (infra/envs/uat)
 # Without the role for an environment the images are built and checked, and
 # nothing is pushed or deployed.
+#
+# UAT (features/uat-environment.clan) is our own copy of the stack for trying a
+# branch on AWS before it merges; staging is used by testers. It deploys only
+# by hand: run this workflow from develop (Actions → Deploy → Run workflow →
+# uat) and name the branch, tag or commit to build in `ref`. Its role trusts
+# develop and main only, and `ref` is refused for staging and production, so
+# those two still build exactly what is on main.
 
 on:
   push:
@@ -28,8 +36,12 @@ on:
       environment:
         description: Where to deploy
         type: choice
-        options: [ staging, production ]
+        options: [ staging, production, uat ]
         default: staging
+      ref:
+        description: uat only. Branch, tag or commit to build (the default is the branch this run is on)
+        type: string
+        default: ''
 
 concurrency:
   group: deploy-${{ inputs.environment || 'staging' }}
@@ -42,7 +54,8 @@ permissions:
 env:
   TARGET: ${{ inputs.environment || 'staging' }}
   AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
-  ROLE: ${{ (inputs.environment || 'staging') == 'production' && vars.AWS_DEPLOY_ROLE_ARN_PRODUCTION || vars.AWS_DEPLOY_ROLE_ARN_STAGING }}
+  # Each environment's own role; one that is not set is empty (build only), never another environment's.
+  ROLE: ${{ fromJSON(format('{{"staging":"{0}","production":"{1}","uat":"{2}"}}', vars.AWS_DEPLOY_ROLE_ARN_STAGING, vars.AWS_DEPLOY_ROLE_ARN_PRODUCTION, vars.AWS_DEPLOY_ROLE_ARN_UAT))[inputs.environment || 'staging'] }}
 
 jobs:
   images:
@@ -51,8 +64,31 @@ jobs:
     outputs:
       registry: ${{ steps.ecr.outputs.registry }}
       pushed: ${{ steps.mode.outputs.push }}
+      sha: ${{ steps.sha.outputs.sha }}
     steps:
+      # A ref other than the run's own may be built for UAT only: staging and
+      # production take main's code, whatever is typed here.
+      - name: Only UAT builds another ref
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          if [ -n "$REF" ] && [ "$TARGET" != "uat" ]; then
+            echo "::error::ref is for uat only; $TARGET deploys the code this run is on."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      # The commit being built: the image tag, and what a person reads in AWS
+      # to know what UAT is running.
+      - id: sha
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "### Building $TARGET from $(git rev-parse --short HEAD) (${REF:-$GITHUB_REF_NAME})" >> "$GITHUB_STEP_SUMMARY"
 
       - id: mode
         name: Push, or only build
@@ -80,10 +116,12 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          # UAT carries its own roster, with a mock sign-in per agency; staging and production never do.
+          build-args: ROSTER=${{ env.TARGET == 'uat' && 'accounts.uat.tsv' || 'accounts.napkin.tsv' }}
           push: ${{ steps.mode.outputs.push == 'true' }}
-          tags: ${{ steps.ecr.outputs.registry || 'local' }}/napkin-${{ env.TARGET }}/web:${{ github.sha }}
+          tags: ${{ steps.ecr.outputs.registry || 'local' }}/napkin-${{ env.TARGET }}/web:${{ steps.sha.outputs.sha }}
           cache-from: type=gha,scope=web
-          cache-to: type=gha,scope=web,mode=max
+          cache-to: type=gha,scope=web,mode=max,ignore-error=true
 
       - name: Middleware
         uses: docker/build-push-action@v6
@@ -91,9 +129,9 @@ jobs:
           context: .
           file: server/Dockerfile
           push: ${{ steps.mode.outputs.push == 'true' }}
-          tags: ${{ steps.ecr.outputs.registry || 'local' }}/napkin-${{ env.TARGET }}/middleware:${{ github.sha }}
+          tags: ${{ steps.ecr.outputs.registry || 'local' }}/napkin-${{ env.TARGET }}/middleware:${{ steps.sha.outputs.sha }}
           cache-from: type=gha,scope=middleware
-          cache-to: type=gha,scope=middleware,mode=max
+          cache-to: type=gha,scope=middleware,mode=max,ignore-error=true
 
   deploy:
     name: Deploy ${{ inputs.environment || 'staging' }}
@@ -121,7 +159,7 @@ jobs:
         with:
           task-definition: task.json
           container-name: ${{ matrix.service }}
-          image: ${{ needs.images.outputs.registry }}/napkin-${{ env.TARGET }}/${{ matrix.service }}:${{ github.sha }}
+          image: ${{ needs.images.outputs.registry }}/napkin-${{ env.TARGET }}/${{ matrix.service }}:${{ needs.images.outputs.sha }}
 
       # A new revision, rolled out; ECS rolls back by itself when the new tasks
       # do not come up healthy (the services' deployment circuit breaker).

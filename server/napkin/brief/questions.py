@@ -1,5 +1,5 @@
 """The client questions, each gap asked once (brief/planned.py gathers them from the plan, the
-draft and Jude; job.py from the capture and the verdicts).
+draft and the Review agent; job.py from the capture and the verdicts).
 
 Two questions that ask for the same thing in different words ("What is the launch budget?",
 "What budget has been set for this?") are one question. The check is by rule, not by a model
@@ -10,6 +10,8 @@ budget" stay two questions. The first one keeps its wording and its place."""
 from __future__ import annotations
 
 import re
+
+from .intake import ANCHORS
 
 # Words that do not say what is being asked: question words, glue, and the words every
 # question to a client about a brief carries.
@@ -106,3 +108,19 @@ def dedupe(questions: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
             kept.append(" and ".join(f[0].lower() + f[1:] if i else f for i, f in enumerate(f.rstrip("?") for f in fresh)) + "?")
         asked.extend(fresh)
     return kept, merged
+
+
+def without_answered(questions: list[str], answered: dict[str, str]) -> list[str]:
+    """The questions with those the person already answered at intake taken out (brief/intake.py).
+    `answered` maps an intake key to the words it was asked in. A question goes when everything it is about
+    sits inside what that key is about (its anchor words and the intake question's own): "What is the launch
+    budget?" goes after a budget answer, "What is the media budget split?" stays, as it asks something more.
+    This is a filter on the key, not `same_ask`: a one-word question only matches an identical one there."""
+    known = [terms(ANCHORS.get(k, k)) | terms(asked) for k, asked in answered.items()]
+    out = []
+    for q in questions:
+        t = terms(q)
+        if t and any(t <= k for k in known):
+            continue
+        out.append(q)
+    return out

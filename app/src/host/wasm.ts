@@ -16,7 +16,7 @@
 // module never stores anything.)
 
 import init, { NapkinHost } from '../wasm/napkin_wasm'
-import { prepareFrameHtml } from './wasmFrame'
+import { frameQuery } from './frame'
 import type {
   Adopted,
   LegacyName,
@@ -34,7 +34,12 @@ import type {
   SpinoffTarget,
   Unlisten,
   UploadedAsset,
+  UpstreamUpdateReply,
   UpstreamView,
+  AttachTarget,
+  AttachReply,
+  RelatedView,
+  SourceCard,
 } from './types'
 
 /** Bytes out of wasm arrive as an Array unless they already are a view. */
@@ -242,7 +247,6 @@ export const wasmHost: Host = {
   // one. Nothing to take.
   takeLaunchFile: async () => null,
 
-  getHumanHtml: async () => (await boot()).humanHtml(),
   getData: async () => (await boot()).entry('shared/data.yaml'),
   getDecisions: async () => {
     const resp = (await boot()).handle('/decisions', '', new Uint8Array()) as RawResponse
@@ -256,7 +260,16 @@ export const wasmHost: Host = {
     dispatch(resp)
   },
 
+  verify: async (finding, rationale) => { await post<unknown>('/verify', { finding, rationale }) },
+
   upstream: () => route<UpstreamView>('/upstream', '', new Uint8Array()),
+  updateFromUpstream: () => post<UpstreamUpdateReply>('/upstream/update', {}),
+  attachTargets: () => route<AttachTarget[]>('/attach-targets', '', new Uint8Array()),
+  attach: documentId => post<AttachReply>('/attach', { document_id: documentId }),
+  updateLinked: documentId => post<AttachReply>('/upstream/update', { document_id: documentId }),
+  detach: documentId => post<AttachReply>('/attach/detach', { document_id: documentId }),
+  related: () => route<RelatedView>('/related', '', new Uint8Array()),
+  cites: async refs => (await post<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   // Answered by the route table in the page, as on every host: the parts
   // the client's words name are found by the host's own matcher, in the
@@ -267,8 +280,6 @@ export const wasmHost: Host = {
   uploadAsset: (name, bytes) => route<UploadedAsset>('/upload-asset', `name=${encodeURIComponent(name)}`, bytes),
 
   setEditMode: async active => { (await boot()).setEditMode(active) },
-  // The frame is loaded from srcdoc, so there is no document slot to fill.
-  updatePreviewHtml: async () => {},
   savePatch: async (id, content) => {
     const h = await boot()
     const body = new TextEncoder().encode(JSON.stringify({ id, content }))
@@ -279,7 +290,10 @@ export const wasmHost: Host = {
   clanOrigin: () => 'clan://localhost',
   frameLoad: 'srcdoc',
 
-  prepareAppHtml: prepareFrameHtml,
+  // No server to serve the page from: the host in this tab composes it, with
+  // the CSP and the shim that routes the frame's calls back here.
+  frameSrc: () => { throw new Error('the frame is loaded from srcdoc in this build') },
+  compose: async opts => (await boot()).framePage(frameQuery(opts)),
 
   handleFromFrame: async (path, query, body) => {
     const resp = (await boot()).handle(path, query, body) as RawResponse

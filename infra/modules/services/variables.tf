@@ -31,6 +31,12 @@ variable "kms_key_arn" {
   type        = string
 }
 
+variable "extra_kms_key_arns" {
+  description = "Other keys the tasks' secrets are encrypted with (UAT reading staging's layer secrets)"
+  type        = list(string)
+  default     = []
+}
+
 variable "session_secret_arn" {
   description = "NAPKIN_SESSION_SECRET (Secrets Manager), from the identity module"
   type        = string
@@ -49,6 +55,12 @@ variable "github_repository_ids" {
   description = "The same repository as GitHub's immutable OIDC subject names it, owner@id/repo@id (gh api repos/OWNER/REPO/actions/oidc/customization/sub); empty when it uses the name"
   type        = string
   default     = ""
+}
+
+variable "deploy_refs" {
+  description = "Git refs whose workflow runs may assume the deploy role. Staging and production: main only. The UAT stack also takes develop, where its deploy workflow is run from; the branch to build is a workflow input."
+  type        = list(string)
+  default     = ["refs/heads/main"]
 }
 
 variable "github_oidc_provider_arn" {

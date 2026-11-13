@@ -36,6 +36,8 @@ see any of it.
   NAPKIN_RETRIEVAL_URL         retrieval service root; unset = drafters get no passages
   NAPKIN_RETRIEVAL_TOKEN       its bearer token
   NAPKIN_RETRIEVAL_TIMEOUT     seconds per retrieval call (120)
+  NAPKIN_BRIEF_INTAKE_WAIT     seconds a draft_brief with input.intake waits for the person's answers (90; 0 = never ask)
+  NAPKIN_BRIEF_INTAKE_MAX      the most questions intake asks (3)
   NAPKIN_BRIEF_ENGINE_URL      the brief engine's agent server (engine/agent-server); set, draft_brief
                                is drafted by it (middleware-api.md §10.14); unset = the middleware's drafters
   NAPKIN_LAYERS_URL            the layers service root; set, the layers are that service (HttpLayers)
@@ -105,6 +107,8 @@ class Settings:
     brief_flow: str = "planned"
     brief_research_max: int = 3
     brief_judge: str = "review"
+    brief_intake_wait: float = 90.0  # seconds a draft_brief that asked for intake waits for answers
+    brief_intake_max: int = 3  # questions intake may ask
     runlog_bodies: bool = False
     brief_engine_loops37: bool = True
     layers_url: str | None = None
@@ -166,6 +170,8 @@ class Settings:
                    brief_flow=(e("NAPKIN_BRIEF_FLOW") or "planned").strip().lower(),
                    brief_research_max=int(e("NAPKIN_BRIEF_RESEARCH_MAX") or 3),
                    brief_judge=(e("NAPKIN_BRIEF_JUDGE") or "review").strip().lower(),
+                   brief_intake_wait=float(e("NAPKIN_BRIEF_INTAKE_WAIT") or 90),
+                   brief_intake_max=int(e("NAPKIN_BRIEF_INTAKE_MAX") or 3),
                    runlog_bodies=(e("NAPKIN_RUNLOG_BODIES") or "0").strip().lower() in ("1", "true", "yes", "on"),
                    brief_engine_loops37=(e("NAPKIN_BRIEF_ENGINE_LOOPS37") or "1").strip().lower()
                    not in ("0", "false", "off", "no"),

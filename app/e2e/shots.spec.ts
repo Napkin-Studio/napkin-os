@@ -53,30 +53,34 @@ test('what needs you and what is running come from the documents', async ({ page
   await page.reload()
 
   const counts = page.getByTestId('counts')
-  await expect(counts).toHaveText('6 clients · 7 open · 2 need you · 1 running · 1 failed')
-  await expect(page.getByText('1 piece of work is not attached to a client yet.')).toBeVisible()
-  const needs = page.getByRole('region', { name: 'Needs you' })
-  await expect(needs.getByRole('button')).toHaveCount(2)
-  await expect(needs).toContainText('Brief · Client A')
-  await expect(needs).toContainText('Brief · Client D')
-  const running = page.getByRole('region', { name: 'Running' })
-  await expect(running.getByRole('button')).toHaveCount(1)
-  await expect(running).toContainText('Deck · Client C')
-  await expect(running).toContainText('Building: Layout')
+  await expect(counts).toHaveText('YOUR DESK · 6 CLIENTS · 7 OPEN · 2 NEED YOU · 1 RUNNING · 1 FAILED')
+  await expect(page.getByTestId('unassigned')).toHaveText('1 piece of work is not attached to a client yet.')
+  await expect(page.getByTestId('needs-count')).toHaveText('2')
+  // What needs you: the desk's Decisions lists the calls themselves, with whose they are.
+  await page.getByTestId('decisions').click()
+  const drawer = page.getByTestId('decisions-drawer')
+  await expect(drawer.getByTestId('call-row')).toHaveCount(2)
+  await expect(drawer).toContainText('Client A · Spring brief')
+  await expect(drawer).toContainText('Client D · Review brief')
+  await page.getByRole('button', { name: 'Close decisions' }).click()
+  // What is running: its client's circle says what and how.
+  await expect(page.getByRole('button', { name: /^Client C: Pitch deck · agents working, working/ })).toBeVisible()
   await shot(page, 'p1-01-landing')
 
-  await page.getByTestId('agency-circle').click()
   await expect(page.getByTestId('client-circle')).toHaveCount(6)
   // urgency first: needs you (A, D), then failed (E), then running (C), then the rest
   const order = await page.getByTestId('client-circle').evaluateAll(els => els.map(e => e.getAttribute('data-client')))
   expect(order.slice(0, 5)).toEqual([ids['Client A'], ids['Client D'], ids['Client E'], ids['Client C'], ids['Client B']])
-  await expect(page.getByRole('button', { name: /^Client A, 2 briefs · needs you/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Client E, 1 piece of work · 1 failed/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Client C, 1 piece of work · 1 running/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Client A: Spring brief · 1 needs you/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Client E: Board deck · failed/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Client C: Pitch deck · agents working/ })).toBeVisible()
   await shot(page, 'p1-02-clients')
 
-  await page.getByRole('button', { name: /^Client A,/ }).click()
-  await expect(page.getByTestId('work-item')).toHaveCount(2)
+  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await shot(page, 'p1-02b-dial')
+  await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
+  await expect(page.getByTestId('work-item')).toHaveCount(3) // the one that needs you on top, then each in its group
+  await expect(page.getByTestId('client-needs').getByTestId('work-item')).toHaveCount(1)
   await expect(page.getByTestId('work-item').first()).toContainText(/brief/i)
   await expect(page.getByTestId('tool-brief')).toHaveAccessibleName(/Brief Maker for Client A, 2 open, needs you/)
   await shot(page, 'p1-03-client')
@@ -85,7 +89,8 @@ test('what needs you and what is running come from the documents', async ({ page
 test('screens: empty, many clients, phone, dark', async ({ page }) => {
   test.skip(!shots, 'set NAPKIN_E2E_SHOTS=<dir> to write screenshots')
   await page.goto('/#clients')
-  await expect(page.getByTestId('empty')).toBeVisible()
+  await expect(page.getByTestId('desk')).toBeVisible()
+  await expect(page.getByTestId('greeting')).toContainText('Add your first client')
   await shot(page, 'p1-04-empty-clients')
   await page.goto('/#agency')
   await shot(page, 'p1-05-empty-landing')
@@ -102,9 +107,9 @@ test('screens: empty, many clients, phone, dark', async ({ page }) => {
   await expect(page.getByTestId('client-circle')).toHaveCount(20)
   await shot(page, 'p1-07-clients-20-show-all')
 
-  await page.getByRole('button', { name: 'Add client', exact: true }).first().click()
+  await page.getByTestId('add-client').click()
   await page.getByLabel('Client name').fill('client a')
-  await page.getByRole('button', { name: 'Add client', exact: true }).last().click()
+  await page.getByRole('button', { name: 'Add client', exact: true }).click()
   await expect(page.getByRole('alert')).toBeVisible()
   await shot(page, 'p1-08-add-client-refused')
 
@@ -113,7 +118,8 @@ test('screens: empty, many clients, phone, dark', async ({ page }) => {
   await shot(page, 'p1-09-phone-landing')
   await page.goto('/#clients'); await page.reload()
   await shot(page, 'p1-10-phone-clients')
-  await page.getByRole('button', { name: /^Client B,/ }).click()
+  await page.getByRole('button', { name: /^Client B:/ }).click()
+  await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await shot(page, 'p1-11-phone-client')
 
   await page.setViewportSize({ width: 1280, height: 900 })
@@ -122,11 +128,12 @@ test('screens: empty, many clients, phone, dark', async ({ page }) => {
   await shot(page, 'p1-12-dark-landing')
   await page.goto('/#clients'); await page.reload()
   await shot(page, 'p1-13-dark-clients')
-  await page.getByRole('button', { name: /^Client B,/ }).click()
+  await page.getByRole('button', { name: /^Client B:/ }).click()
+  await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await shot(page, 'p1-14-dark-client')
 })
 
-test('phase 2 screens: the wheel, a tool page, the trail in a document', async ({ page }) => {
+test('phase 2 screens: the client’s tools, a tool page, the bar in a document', async ({ page }) => {
   test.skip(!shots, 'set NAPKIN_E2E_SHOTS=<dir> to write screenshots')
   const { work, ids } = await setup(page, ['Client A', 'Client B'])
   await work(BRIEF, 'Spring brief for Client A', 'Client A')
@@ -139,10 +146,11 @@ test('phase 2 screens: the wheel, a tool page, the trail in a document', async (
   await expect(page.getByTestId('tool-brief')).toBeVisible()
   await page.getByTestId('tool-brief').focus()
   await page.keyboard.press('ArrowRight')
-  await page.keyboard.press('ArrowRight')
-  await shot(page, 'p2-01-wheel-focus-idea')
-  await page.keyboard.press('3')
-  await shot(page, 'p2-02-wheel-soon-said')
+  await expect(page.getByTestId('tool-research')).toBeFocused()
+  await shot(page, 'p2-01-tools-focus-research')
+  await page.keyboard.press('4')
+  await expect(page.getByTestId('live')).toContainText('Production Tool is coming soon')
+  await shot(page, 'p2-02-tools-soon-said')
 
   await page.goto(`/#tool-${a}-brief`); await page.reload()
   await expect(page.getByTestId('tool-page')).toBeVisible()
@@ -153,7 +161,8 @@ test('phase 2 screens: the wheel, a tool page, the trail in a document', async (
   await page.goto(`/#tool-${a}-brief`); await page.reload()
   await page.getByTestId('work-item').first().click()
   await expect(page.locator('iframe').first()).toBeVisible({ timeout: 30_000 })
-  await expect(trail.getByRole('button')).toHaveCount(4)
+  await expect(trail.getByRole('button')).toHaveCount(1) // the client's chip; the agency is the bar's pill
+  await expect(trail.getByRole('button', { name: 'Client A' })).toBeVisible()
   await page.waitForTimeout(800)
   await shot(page, 'p2-05-document-trail-in-bar')
 
@@ -164,12 +173,12 @@ test('phase 2 screens: the wheel, a tool page, the trail in a document', async (
   await expect(page.getByTestId('tool-page')).toBeVisible()
   await shot(page, 'p2-07-phone-tool-page')
   await page.goto(`/#client-${a}`); await page.reload()
-  await shot(page, 'p2-08-phone-wheel')
+  await shot(page, 'p2-08-phone-client')
 
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.evaluate(() => localStorage.setItem('napkin.theme', 'dark'))
   await page.goto(`/#tool-${a}-brief`); await page.reload()
   await shot(page, 'p2-09-dark-tool-page')
   await page.goto(`/#client-${a}`); await page.reload()
-  await shot(page, 'p2-10-dark-wheel')
+  await shot(page, 'p2-10-dark-client')
 })

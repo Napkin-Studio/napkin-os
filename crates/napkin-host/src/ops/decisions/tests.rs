@@ -129,10 +129,7 @@ fn the_example_lists_what_blocks_its_lock() {
     assert_eq!(cto.who.kind, "agent");
     assert_eq!(cto.who.name, "Start campaign");
     assert_eq!(cto.targets[0].kind, "contest");
-    assert_eq!(
-        cto.targets[0].label,
-        "Contest · brand/orchard-hill:product.abv"
-    );
+    assert_eq!(cto.targets[0].label, "Contest · Product abv");
 }
 
 #[test]
@@ -149,6 +146,10 @@ fn cites_resolve_to_what_they_name() {
     );
     let detail = fact.detail.as_deref().unwrap();
     assert!(detail.starts_with("47% · as of 2026-06-30"), "{detail}");
+    assert!(
+        !detail.contains("src_"),
+        "a source is counted, never named by its id: {detail}"
+    );
 
     let created = v
         .decisions
@@ -186,7 +187,7 @@ fn cites_resolve_to_what_they_name() {
 
     let address = &v.cites[&format!("{DOC}#selection.contested[ct_orchard_hill_abv]")];
     assert_eq!(address.kind, "address");
-    assert_eq!(address.label, "Contest · brand/orchard-hill:product.abv");
+    assert_eq!(address.label, "Contest · Product abv");
 }
 
 const CHAIN: &str = "decisions:
@@ -770,7 +771,7 @@ unresolved: 1
     );
     assert_eq!(
         contest.label.as_deref(),
-        Some("Contest · brand/orchard-hill:product.abv@IE"),
+        Some("Contest · Product abv · IE"),
         "labelled from the frozen copy"
     );
     assert!(v.attention[1].text.contains("settled there, in the parent"));
@@ -966,6 +967,12 @@ fn a_field_whose_writing_decision_cites_a_rejected_finding_is_flagged() {
 /// [`doc_with`], spun off from `UP` with its upstream: the manifest records
 /// the hop (`lineage.carried`), as the SDK writes it.
 fn spun_off(entries: &[(&str, &str)]) -> Document {
+    spun_off_after(entries, None)
+}
+
+/// [`spun_off`], the parent's chain carried under this one's, its newest
+/// decision `last` (`lineage.carried.last_decision`).
+fn spun_off_after(entries: &[(&str, &str)], last: Option<&str>) -> Document {
     let plain = doc_with(entries);
     let clan = plain.clan();
     let mut manifest = clan.manifest().clone();
@@ -982,8 +989,9 @@ fn spun_off(entries: &[(&str, &str)]) -> Document {
             facts_sha256: None,
             findings_sha256: None,
             sources_sha256: None,
-            last_decision: None,
+            last_decision: last.map(String::from),
         }),
+        attached: Vec::new(),
     });
     let mut b = ClanBuilder::new(manifest);
     for (path, bytes) in clan.read_all_entries().unwrap() {
@@ -1292,5 +1300,317 @@ fn a_projection_built_without_its_sources_is_served_with_them() {
     assert_eq!(
         doc.clan().read_entry_string("shared/data.yaml").unwrap(),
         data
+    );
+}
+
+// ── the source card (`/cite`, OS-layer contract §8.3) ──────────────────────
+
+fn cards(doc: &Document, refs: &[&str]) -> BTreeMap<String, SourceCard> {
+    let refs: Vec<String> = refs.iter().map(|r| r.to_string()).collect();
+    source_cards(doc, &refs, |_| None).unwrap()
+}
+
+#[test]
+fn a_card_is_the_decision_views_cite_with_the_latest_review() {
+    let doc = example();
+    let view = decisions(&doc).unwrap();
+    let c = cards(
+        &doc,
+        &["fi_01JA0F5E", "fi_01JA0F1A", "fi_01JA0F2B", "f_NOPE"],
+    );
+
+    // The same resolver as the decision view: the same words.
+    let rej = &c["fi_01JA0F5E"];
+    assert_eq!(Some(&rej.cite), view.cites.get("fi_01JA0F5E"));
+    assert_eq!(rej.reference, "fi_01JA0F5E");
+    let r = rej.review.as_ref().unwrap();
+    assert_eq!(r.verdict, "rejected");
+    assert_eq!(r.decision.as_deref(), Some("d_01JA0D07REJ"));
+    assert_eq!(rej.history.len(), 1);
+
+    assert_eq!(
+        c["fi_01JA0F1A"].review.as_ref().unwrap().verdict,
+        "verified"
+    );
+    // Proposed: nobody has reviewed it.
+    assert!(c["fi_01JA0F2B"].review.is_none());
+    assert!(c["fi_01JA0F2B"].history.is_empty());
+
+    // Not in the document: said so, never guessed.
+    assert_eq!(c["f_NOPE"].cite.kind, "unknown");
+    assert_eq!(c["f_NOPE"].origin, "document");
+
+    // Nothing here is carried, and no pin says where it came from.
+    assert!(c
+        .values()
+        .all(|c| c.from.is_none() && c.origin == "document"));
+
+    // Serialised flat: the cite's fields beside ref, origin, review.
+    let v = serde_json::to_value(rej).unwrap();
+    assert_eq!(v["ref"], "fi_01JA0F5E");
+    assert_eq!(v["kind"], "finding");
+    assert_eq!(v["origin"], "document");
+    assert_eq!(v["review"]["verdict"], "rejected");
+}
+
+#[test]
+fn a_report_line_is_an_address_that_says_its_words_and_cites() {
+    let doc = example();
+    let id = doc.clan().document_id().to_string();
+    let line = format!("{id}#report.summary[0]");
+    let para = format!("{id}#report.sections[s_market].blocks[0]");
+    let c = cards(&doc, &[&line, &para, &format!("{id}#report.summary[9]")]);
+    let l = &c[&line];
+    assert_eq!(l.cite.kind, "address");
+    assert_eq!(
+        l.cite.detail.as_deref(),
+        Some("No/low value is growing about twice as fast in Ireland as in GB.")
+    );
+    assert_eq!(
+        l.cite.cites,
+        ["f_01JA0B4A1B", "f_01JA0B4A2C", "fi_01JA0F3C"]
+    );
+    // A section's paragraph, by the section's id and the block's place.
+    assert_eq!(c[&para].cite.cites, ["f_01JA0B4A1B", "f_01JA0B4A2C"]);
+    // Past the end: nothing to say, and no cites.
+    let past = &c[&format!("{id}#report.summary[9]")];
+    assert!(past.cite.detail.is_none() && past.cite.cites.is_empty());
+}
+
+#[test]
+fn origin_is_what_the_record_says_or_what_its_kind_settles_never_a_guess() {
+    let facts = r#"facts:
+  - id: f_01BRAND1
+    entity: brand/acme
+    key: tone
+    value: warm
+    origin_kind: brand
+  - id: f_01LAYER1
+    entity: brand/acme
+    key: awareness
+    value: 0.4
+    origin: fact://brand/acme/awareness@3
+  - id: f_01ODD001
+    entity: brand/acme
+    key: odd
+    value: 1
+    origin_kind: rumour
+  - id: f_01RVW001
+    entity: brand/acme
+    key: share
+    value: 0.2
+    review: { verdict: verified, by: "human:mary", at: "2026-11-01T10:00:00Z", decision: d_X }
+"#;
+    let data = r#"materials:
+  mat_deck: { name: Client deck.pdf, kind: pdf }
+  mat_ask: { name: prompt, kind: prompt, text: "Make it warm" }
+capture:
+  items:
+    cap_1: { material_id: mat_deck, key: audience, value: "Young parents", status: fact, quote: "young parents" }
+    cap_2: { material_id: mat_ask, key: tone, value: "Warm", status: fact }
+passages:
+  psg_1: { citation: "Binet & Field, 2013", text: "Long and short", scope: house }
+"#;
+    let doc = doc_with(&[(members::FACTS_PATH, facts), ("shared/data.yaml", data)]);
+    let c = cards(
+        &doc,
+        &[
+            "f_01BRAND1",
+            "f_01LAYER1",
+            "f_01ODD001",
+            "f_01RVW001",
+            "mat_deck",
+            "mat_ask",
+            "cap_1",
+            "cap_2",
+            "psg_1",
+            "human:mary",
+        ],
+    );
+    let o = |r: &str| c[r].origin;
+    assert_eq!(o("f_01BRAND1"), "brand");
+    // A pin's `origin` is the layer row's address, not this marker.
+    assert_eq!(o("f_01LAYER1"), "document");
+    assert_eq!(o("f_01ODD001"), "document");
+    assert_eq!(o("mat_deck"), "client");
+    assert_eq!(o("mat_ask"), "person");
+    assert_eq!(o("cap_1"), "client");
+    assert_eq!(o("cap_2"), "person");
+    assert_eq!(o("psg_1"), "layer");
+    assert_eq!(o("human:mary"), "person");
+    assert_eq!(c["cap_1"].cite.kind, "capture");
+
+    // No review in the chain: the pin's own record of one.
+    let r = c["f_01RVW001"].review.as_ref().unwrap();
+    assert_eq!((r.verdict, r.by.as_str()), ("verified", "mary"));
+    assert_eq!(r.at.as_deref(), Some("2026-11-01T10:00:00Z"));
+}
+
+#[test]
+fn a_fact_key_reads_without_its_uniqueness_hash() {
+    let f = |key: &str| super::fact_label(&serde_json::json!({"key": key, "market": "IE"}));
+    assert_eq!(
+        f("consumer.trend.18_24s_more_likely_to_moderate_t_72b215"),
+        "18 24s more likely to moderate t · IE"
+    );
+    assert_eq!(
+        f("rhythm.key_moment_dry_january_cd35c8"),
+        "Key moment dry january · IE"
+    );
+    // a word is never taken for a hash
+    assert_eq!(f("category.sales_decade"), "Sales decade · IE");
+    assert_eq!(f("category.share_2024"), "Share 2024 · IE");
+}
+
+// N4: a research spun off a brief carries the brief's chain. A call the brief
+// settled stays settled (its edit's bare path is the brief's, not the
+// research's), and a call on a part the research does not have is not a need
+// here at all.
+#[test]
+fn a_childs_carried_needs_are_its_own_fields_and_never_what_the_parent_settled() {
+    let chain = format!(
+        "decisions:
+- id: d_mine
+  kind: edit
+  agent: human
+  actor: human:u_a
+  action: edit tone
+  fields_changed: [notes]
+  rationale: notes
+  timestamp: 2026-11-09T03:00:00Z
+- id: d_edit_aud
+  kind: edit
+  agent: human
+  actor: human:u_a
+  action: edit audience
+  fields_changed: [audience]
+  rationale: Changed the audience
+  timestamp: 2026-11-09T02:28:00Z
+- id: d_bad_aud
+  kind: verdict
+  agent: draft_brief@1.0/judge
+  actor: process:middleware
+  action: judge
+  polarity: bad
+  targets: ['{UP}#audience']
+  rationale: Too long.
+  timestamp: 2026-11-09T02:20:00Z
+- id: d_bad_mand
+  kind: verdict
+  agent: draft_brief@1.0/judge
+  actor: process:middleware
+  action: judge
+  polarity: bad
+  targets: ['{UP}#mandatories']
+  rationale: The descriptor is wrong.
+  timestamp: 2026-11-09T02:19:00Z
+- id: d_bad_tone
+  kind: verdict
+  agent: draft_brief@1.0/judge
+  actor: process:middleware
+  action: judge
+  polarity: bad
+  targets: ['{UP}#tone']
+  rationale: Off brand.
+  timestamp: 2026-11-09T02:18:00Z
+"
+    );
+    let data = format!(
+        "audience: Shoppers
+tone: Warm
+notes: n
+upstream:
+  {UP}:
+    audience: Urban drinkers
+    mandatories: ABV 0.5%
+    tone: Dry
+"
+    );
+    let doc = spun_off_after(
+        &[(CHAIN_PATH, &chain), ("shared/data.yaml", &data)],
+        Some("d_edit_aud"),
+    );
+    let v = decisions(&doc).unwrap();
+    let bad: Vec<_> = v
+        .attention
+        .iter()
+        .filter(|a| a.code == "bad_verdict")
+        .map(|a| a.decision.as_deref())
+        .collect();
+    assert_eq!(
+        bad,
+        [Some("d_bad_tone")],
+        "the settled audience and the mandatories the child lacks are not needs: {:?}",
+        v.attention
+    );
+}
+
+// B4: a link's address is `<doc>#upstream.<id>`; it reads by the linked
+// document's name, never as "Upstream › 9dcfb8d6 09a8…".
+#[test]
+fn a_linked_document_reads_by_its_name_never_its_id() {
+    let chain = format!(
+        "decisions:
+- id: d_attach
+  kind: edit
+  agent: human
+  actor: human:u_a
+  action: attach
+  targets: ['{DOC}#upstream.{UP}']
+  rationale: Took it at v1.
+  timestamp: 2026-11-09T02:00:00Z
+"
+    );
+    let data = format!("upstream:\n  {UP}:\n    project_name: Ferryman Light launch\n");
+    let doc = doc_with(&[(CHAIN_PATH, &chain), ("shared/data.yaml", &data)]);
+    let v = decisions(&doc).unwrap();
+    assert_eq!(
+        v.decisions[0].targets[0].label,
+        "Linked · “Ferryman Light launch”"
+    );
+    assert!(!v.decisions[0].targets[0].label.contains(UP));
+}
+
+/// UAT round 4 (2026-11-12): the desk read "Asks · ask_01M77D6TJWPA7S001". A keyed entry is
+/// named by what it says (its topic, name, title, question…); its id only when it says nothing.
+#[test]
+fn a_keyed_entry_is_named_by_what_it_says_not_its_id() {
+    let data = "asks:
+  ask_01M77D6TJWPA7S001: { topic: Oatly ASAI ruling timing, question: When was the ruling? }
+  ask_02: { status: answered }
+intake:
+  messages:
+    msg_01M77J3VPZQL64002: { role: user, text: Win back lapsed buyers in Dublin and Cork this spring }
+";
+    let chain = "decisions:
+- id: d_1
+  kind: edit
+  agent: ask_research@1
+  actor: process:middleware
+  handler: ask_research@1
+  action: ask_research
+  targets: ['7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#asks[ask_01M77D6TJWPA7S001]', '7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#asks[ask_02]', '7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#intake.messages[msg_01M77J3VPZQL64002]']
+  rationale: Answered.
+  timestamp: 2026-11-12T08:00:00Z
+";
+    let v = decisions(&doc_with(&[
+        ("shared/data.yaml", data),
+        (CHAIN_PATH, chain),
+    ]))
+    .unwrap();
+    let labels: Vec<&str> = v.decisions[0]
+        .targets
+        .iter()
+        .map(|t| t.label.as_str())
+        .collect();
+    assert_eq!(
+        labels[..2],
+        ["Asks · Oatly ASAI ruling timing", "Asks · ask_02"]
+    );
+    // A message is named by its words (round 4: "Intake › Messages · msg_01M77J3VPZQL64002").
+    assert!(
+        labels[2].ends_with("Messages · Win back lapsed buyers in Dublin and Cork this spring"),
+        "{}",
+        labels[2]
     );
 }

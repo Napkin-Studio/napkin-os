@@ -107,10 +107,14 @@ export function activityOfItem(item: LibraryItem): Activity {
   return 'idle'
 }
 
-/** "3 briefs · 1 needs you · 1 running · 1 failed": nothing said about a zero. */
+/** "3 briefs · 2 research · 1 needs you · 1 running · 1 failed": each tool's work by its own noun, nothing said about a zero. */
 export function statusLine(perTool: Record<ToolId, Tally>, total: Tally): string {
-  const briefs = perTool.brief.open
-  const parts = [briefs ? plural(briefs, 'brief') : total.open ? plural(total.open, 'piece of work', 'pieces of work') : 'No work yet']
+  const byTool = TOOLS.filter(t => perTool[t.id].open).map(t => plural(perTool[t.id].open, t.noun[0], t.noun[1]))
+  const known = TOOLS.reduce((n, t) => n + perTool[t.id].open, 0)
+  const rest = total.open - known
+  const parts = byTool.length
+    ? [...byTool, ...(rest > 0 ? [`${rest} other`] : [])]
+    : [total.open ? plural(total.open, 'piece of work', 'pieces of work') : 'No work yet']
   if (total.needsYou) parts.push(total.needsYou === 1 ? 'needs you' : `${total.needsYou} need you`)
   if (total.failed) parts.push(`${total.failed} failed`)
   if (total.running) parts.push(`${total.running} running`)
@@ -133,11 +137,20 @@ export function summarise(client: ClientRecord, items: readonly LibraryItem[]): 
 
 const URGENCY: Record<Activity, number> = { human: 4, error: 3, work: 2, think: 2, read: 2, check: 2, idle: 0 }
 
-/** Urgency first (needs you, failed, running), then the order the clients were made in. */
+/** When a client last saw activity: its newest piece of work, or its making. */
+const recentOf = (s: ClientSummary): string => (s.latest > s.client.created_at ? s.latest : s.client.created_at) || ''
+
+/**
+ * Urgency first (needs you, failed, running), then the most recent activity, then the order
+ * the clients were made in. A client just added, or just worked on, is always on the first
+ * page; untouched ones drift behind Show all (owner, 2026-11-12: a new client was hidden).
+ */
 export function ordered(clients: readonly ClientRecord[], items: readonly LibraryItem[]): ClientSummary[] {
   return clients
     .map((c, i) => ({ s: summarise(c, items), i }))
-    .sort((a, b) => URGENCY[b.s.activity] - URGENCY[a.s.activity] || a.i - b.i)
+    .sort((a, b) => URGENCY[b.s.activity] - URGENCY[a.s.activity]
+      || (recentOf(b.s) > recentOf(a.s) ? 1 : recentOf(b.s) < recentOf(a.s) ? -1 : 0)
+      || a.i - b.i)
     .map(x => x.s)
 }
 
@@ -236,6 +249,22 @@ export function needsReason(item: LibraryItem): string {
 export const runWords = (item: LibraryItem): string =>
   item.run?.label || (item.run?.state === 'failed' ? 'Failed' : 'Running')
 
+/**
+ * A running job as the bar's chip says it (the mock's "Working · step 1/3"):
+ * a clean verb, never the run's stage key or its "(0 of 3)", and the step being
+ * worked, 1-based for people (the run counts steps done, so 0 of 3 is step 1).
+ * The verb is the label's own first word when that is a plain "-ing" verb with
+ * nothing after it ("Rewriting"); otherwise "working".
+ */
+export function jobOf(run: { label?: string | null; progress?: readonly [number, number] | null } | null | undefined): { verb: string; step: readonly [number, number] | null } {
+  const label = String(run?.label ?? '').trim()
+  const m = /^([A-Za-z]+ing)(?:\s+(?:again|it|the \w+(?: again)?))?\.?$/.exec(label)
+  const verb = m ? m[1].toLowerCase() : 'working'
+  const p = run?.progress
+  const step = p && p[1] > 0 ? [Math.min(Math.max(0, p[0]) + 1, p[1]), p[1]] as const : null
+  return { verb, step }
+}
+
 /** Which tool a document belongs to, for a strip's second line. */
 export const toolName = (item: LibraryItem): Tool | undefined => toolOfApp(item.app_id)
 
@@ -250,19 +279,23 @@ export function initialsOf(name: string): string {
 
 const titleCase = (s: string): string => s.replace(/(^|[\s._-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase())
 
+/** With no agency (anonymous, the desktop, a local server) the studio is Napkin Studio itself, named
+ *  once: the agency pill shows "Napkin Studio" alone, never a placeholder over it (owner, 2026-11-12). */
+const STUDIO = 'Napkin Studio'
+
 /** Who is signed in, from the host's `Person`: a first name for the greeting and the agency's name. */
 export function whoIs(person: { id: string; name: string | null } | null): { first: string | null; agency: string } {
-  if (!person) return { first: null, agency: 'Your studio' }
+  if (!person) return { first: null, agency: STUDIO }
   const at = person.id.indexOf('@')
   if (at < 0) {
     // Anonymous or the desktop: the id is a tenant or "local", not someone's name.
-    return { first: person.name ? person.name.split(/\s+/)[0] : null, agency: 'Your studio' }
+    return { first: person.name ? person.name.split(/\s+/)[0] : null, agency: STUDIO }
   }
   const local = person.id.slice(0, at)
   const agency = person.id.slice(at + 1)
   return {
     first: person.name ? person.name.split(/\s+/)[0] : titleCase(local),
-    agency: agency ? titleCase(agency) : 'Your studio',
+    agency: agency ? titleCase(agency) : STUDIO,
   }
 }
 

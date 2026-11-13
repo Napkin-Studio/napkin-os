@@ -14,7 +14,7 @@
         "confirmed",
         "stated"
       ],
-      "description": "extracted: read from supplied material, cites a span. proposed: derived from layer facts, cites fact ids. confirmed: a human accepted or corrected it; re-extraction never overwrites it without asking. stated: a human supplied it directly."
+      "description": "extracted: read from supplied material, cites a span. proposed: derived, to confirm: from layer facts (fact_ids), the brief a research started from (upstream_refs) or the client the document belongs to (workspace_ref, client_org only). confirmed: a human accepted or corrected it; re-extraction never overwrites it without asking. stated: a human supplied it directly."
     },
     "gate": {
       "type": "string",
@@ -230,8 +230,22 @@
             ]
           },
           "then": {
-            "required": [
-              "fact_ids"
+            "anyOf": [
+              {
+                "required": [
+                  "fact_ids"
+                ]
+              },
+              {
+                "required": [
+                  "upstream_refs"
+                ]
+              },
+              {
+                "required": [
+                  "workspace_ref"
+                ]
+              }
             ]
           }
         },
@@ -391,6 +405,20 @@
           "additionalProperties": {
             "$ref": "#/definitions/item_provenance"
           }
+        },
+        "upstream_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/upstream_ref"
+          },
+          "description": "origin proposed, from a carried document rather than layer facts: the upstream addresses the value was proposed from (extract_ask from the brief a research started from)."
+        },
+        "workspace_ref": {
+          "type": "string",
+          "pattern": "^cli_[0-9a-z]+$",
+          "description": "origin proposed, client_org only: the client this document belongs to (its manifest.client id), when nothing else names one. identify proposes it from clan.workspace_client (middleware-api.md §1)."
         }
       },
       "allOf": [
@@ -667,7 +695,7 @@
     },
     "answer": {
       "type": "object",
-      "description": "The person's answer to a question: an option id, or free text. Exactly one.",
+      "description": "The person's answer to a question: an option id, free text, or skipped (the person chose not to answer; the field stays open). Exactly one.",
       "additionalProperties": false,
       "required": [
         "question_id"
@@ -682,6 +710,9 @@
         "text": {
           "type": "string",
           "minLength": 1
+        },
+        "skipped": {
+          "const": true
         }
       },
       "oneOf": [
@@ -693,6 +724,11 @@
         {
           "required": [
             "text"
+          ]
+        },
+        {
+          "required": [
+            "skipped"
           ]
         }
       ]
@@ -944,6 +980,39 @@
           }
         }
       ]
+    },
+    "uuid_v4": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    },
+    "upstream_ref": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}#.+$",
+      "description": "An address in a document this one carries: '<document_id>#<path>' into data.upstream.<document_id> (Contract 4 §5, §8.1). Written when a value is proposed from the brief a research started from."
+    },
+    "upstream": {
+      "type": "object",
+      "description": "HOST-WRITTEN, READ-ONLY (docs/contracts/os-layer.md §5.2). The frozen data of every document upstream, keyed by its document_id: the source's shared/data.yaml less its projection and its upstream, whose entries are hoisted here as siblings. Each copy is in its own app's shape and was validated there, so only the freeze is checked here. No patch writes it: /patch-data, /edit and a middleware data_patch naming it are refused.",
+      "propertyNames": {
+        "$ref": "#/definitions/uuid_v4"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "projection"
+              ]
+            },
+            {
+              "required": [
+                "upstream"
+              ]
+            }
+          ]
+        }
+      }
     }
   },
   "properties": {
@@ -976,6 +1045,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1007,6 +1077,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1037,6 +1108,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1067,6 +1139,8 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
+              "workspace_ref",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1102,6 +1176,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1138,6 +1213,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1175,6 +1251,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1206,6 +1283,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1237,6 +1315,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1268,6 +1347,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1359,6 +1439,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1393,6 +1474,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1428,6 +1510,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1474,6 +1557,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1517,6 +1601,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1552,6 +1637,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1588,6 +1674,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1646,6 +1733,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -1690,6 +1778,7 @@
               "gate",
               "source",
               "fact_ids",
+              "upstream_refs",
               "finding_ids",
               "by",
               "confirmed_from",
@@ -2584,6 +2673,24 @@
               }
             }
           }
+        }
+      }
+    },
+    "upstream": {
+      "$ref": "#/definitions/upstream",
+      "$comment": "written only by the host, on a spin-off from a brief, or when it takes the brief's newer version; read-only (os-layer.md §5.2, §8.1 item 8)"
+    },
+    "asks": {
+      "type": "object",
+      "description": "A person's questions about the research and their answers, by ask id (middleware-api.md §1, ask_research). The middleware writes each answer; a person writes only in_report, in_report_by and in_report_at.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "about": { "type": ["string", "null"], "description": "The fact (f_…) or finding (fi_…) the question was asked from; null for a general question." },
+          "in_report": { "type": "boolean", "description": "Whether the answer is in the report. A general question's is; one asked from a fact or finding is shown under it until a person adds it." },
+          "in_report_by": { "type": ["string", "null"] },
+          "in_report_at": { "type": ["string", "null"] }
         }
       }
     }

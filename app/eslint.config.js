@@ -30,4 +30,20 @@ export default defineConfig([
       ],
     },
   },
+  // The scripts the host puts in an app frame (napkin-host frame.rs). Plain
+  // browser scripts, not modules; their bytes are held by the frame golden, so
+  // a rule they break is turned off here rather than fixed in place.
+  {
+    files: ['src/shell/bridge/*.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      sourceType: 'script',
+      globals: globals.browser,
+    },
+    rules: {
+      'no-empty': ['error', { allowEmptyCatch: true }],
+      // getByPath: the structured bridge's helper, kept beside setByPath.
+      'no-unused-vars': ['error', { caughtErrorsIgnorePattern: '^_', varsIgnorePattern: '^getByPath$' }],
+    },
+  },
 ])

@@ -748,60 +748,12 @@ def _merge_rows(rows: list, more: list, cap: int) -> list:
 #                      the index holds fewer than RAG_AWARDLIB_THIN_MAX (default 30) cases of
 #                      its own in that category. Merged before the validator orders the lot.
 #   RAG_AWARDLIB=on    no gate: the library competes everywhere (what the experiments ran).
-AWARDLIB_SOURCE = "awardlib"
-AWARDLIB_MODES = ("off", "thin", "on")
-AWARDLIB_THIN_MAX_DEFAULT = 30
-# Sources that are served as cases (a parent chunk per case). D&AD is excluded: its parents
-# are discipline groups, and it is stage=production, which the brief never reads.
-AWARDLIB_BASELINE_SOURCES = ("ipa", "effie", "cannes")
-_COUNTS_TTL_S = 600
-_counts_cache: dict = {}
-
-
-def awardlib_mode() -> str:
-    """RAG_AWARDLIB as one of AWARDLIB_MODES; unset or empty means off. An unknown value
-    raises: a typo must not silently leave the gate in the wrong state."""
-    raw = (os.environ.get("RAG_AWARDLIB") or "off").strip().lower()
-    if raw not in AWARDLIB_MODES:
-        raise ValueError(f"RAG_AWARDLIB={raw!r}: expected one of {', '.join(AWARDLIB_MODES)}")
-    return raw
-
-
-def awardlib_thin_max() -> int:
-    """RAG_AWARDLIB_THIN_MAX: a category is thin when the index holds fewer cases than this."""
-    raw = (os.environ.get("RAG_AWARDLIB_THIN_MAX") or "").strip()
-    if not raw:
-        return AWARDLIB_THIN_MAX_DEFAULT
-    try:
-        n = int(raw)
-    except ValueError:
-        n = 0
-    if n < 1:
-        raise ValueError(f"RAG_AWARDLIB_THIN_MAX={raw!r}: expected a positive integer")
-    return n
-
-
-def category_case_counts(store) -> dict | None:
-    """{category: cases the index holds of its own}, counted from the store (cached for
-    _COUNTS_TTL_S), or None when the store cannot count or fails. None makes the gate
-    withhold the library: not knowing a category is thin is not a reason to add to it."""
-    import time
-    import contract
-    count_where = getattr(store, "count_where", None)
-    if count_where is None:
-        return None
-    hit = _counts_cache.get(id(store))
-    if hit and hit[0] is store and time.time() - hit[1] < _COUNTS_TTL_S:
-        return hit[2]
-    try:
-        counts = {c: int(count_where({"source": {"in": list(AWARDLIB_BASELINE_SOURCES)},
-                                      "level": "parent", "status": {"ne": "superseded"},
-                                      "category": c}))
-                  for c in contract.SCHEMA.enum_values("category")}
-    except Exception:                       # a store that cannot answer is "unknown", never "thin"
-        return None
-    _counts_cache[id(store)] = (store, time.time(), counts)
-    return counts
+# The gate's rule lives in awardlib_gate.py, shared with the Brief Maker's retrieval service
+# (features/award-in-brief-maker). The names stay importable from here: the tests and any
+# caller that learned them from this module keep working, and _counts_cache is the same dict.
+from awardlib_gate import (  # noqa: E402,F401
+    AWARDLIB_SOURCE, AWARDLIB_MODES, AWARDLIB_THIN_MAX_DEFAULT, AWARDLIB_BASELINE_SOURCES,
+    _COUNTS_TTL_S, _counts_cache, awardlib_mode, awardlib_thin_max, category_case_counts, decide as awardlib_decide)
 
 
 def _awardlib_fill(store, qvec, search_text: str, where: dict, filters: dict, rows: list,
@@ -814,16 +766,9 @@ def _awardlib_fill(store, qvec, search_text: str, where: dict, filters: dict, ro
     union as one list; the pool stays the same size."""
     import rag
     cat = filters.get("category")
-    if not cat:
-        notes.append("awardlib: withheld, the brief has no category")
-        return rows
-    counts = category_case_counts(store)
-    if counts is None:
-        notes.append("awardlib: withheld, the store cannot count cases")
-        return rows
-    have, limit = counts.get(cat, 0), awardlib_thin_max()
-    if have >= limit:
-        notes.append(f"awardlib: not needed, {cat} has {have} cases (limit {limit})")
+    decision = awardlib_decide(store, cat, mode="thin")
+    if not decision.admit:
+        notes.append(decision.note)
         return rows
     lib_where = {k: v for k, v in where.items() if k not in ("source", "effectiveness_type")}
     lib_where["source"] = AWARDLIB_SOURCE
@@ -831,7 +776,7 @@ def _awardlib_fill(store, qvec, search_text: str, where: dict, filters: dict, ro
     seen = {r.get("id") for _, r in rows}
     merged = rows + [(sc, r) for sc, r in more if r.get("id") not in seen]
     merged.sort(key=lambda x: x[0], reverse=True)               # stable: ties keep baseline first
-    notes.append(f"awardlib: admitted for {cat} ({have} cases < {limit}), {len(more)} candidates")
+    notes.append(f"{decision.note}, {len(more)} candidates")
     return merged[:candidates]
 
 

@@ -137,8 +137,9 @@ class DraftContext:
     pins, the retrieval and model capabilities. Never raw material."""
 
     def __init__(self, caps, working: dict, capture_items: dict, clan: dict, guidance: str | None = None,
-                 current: dict | None = None):
+                 current: dict | None = None, category: str | None = None):
         self.caps, self.working, self.guidance = caps, working, guidance
+        self.category = category   # the client category (clientcat.py), or None: gated packs need one
         self.current = current or {}  # every field's value as the document holds it (the SMP's insight, the ladder)
         self.capture = [{"id": cid, "key": it["key"], "value": it["value"], "status": it["status"]}
                         for cid, it in list((capture_items or {}).items())[:40]]
@@ -155,8 +156,10 @@ class DraftContext:
         return {"problem": w.get("background") or "", "objective": objs, "audience": w.get("audience") or "",
                 "competitors": w.get("competitor_context") or ""}
 
-    def retrieve(self, loop: str, query: str, case_query: str | None) -> tuple[dict, list[str]]:
-        """Passages for a loop: {psg id: record} and notes on what failed."""
+    def retrieve(self, loop: str, query: str, case_query: str | None,
+                 only_gated: bool = False) -> tuple[dict, list[str]]:
+        """Passages for a loop: {psg id: record} and notes on what failed. `only_gated` asks the gated
+        packs alone (the planned flow does, once the plan has named the category)."""
         ret = self.caps.retrieval
         if not ret.configured:
             return {}, ["no retrieval service is configured: drafted without precedent passages"]
@@ -164,15 +167,27 @@ class DraftContext:
         try:
             packs = ret.packs()
             general = [p["tag"] for p in packs if p.get("kind") != "case" and (not p.get("loops") or loop in p["loops"])]
+            if only_gated:
+                general = []
             asks = []
             if general:
-                asks.append((query, 5, general))
+                asks.append((query, 5, general, None))
             if loop in CASE_LOOPS:
                 for p in packs:
                     if p.get("kind") == "case" and (not p.get("loops") or loop in p["loops"]):
-                        asks.append((case_query or query, int(p.get("k") or 2), [p["tag"]]))
-            for q, k, tags in asks:
-                r = ret.retrieve(q, k, packs=tags, purpose=loop)
+                        if p.get("gated"):
+                            # A gated pack (the award library) is asked only with a category, as its own
+                            # request, so no other pack's request changes and it is never asked blindly.
+                            if self.category:
+                                asks.append((case_query or query, int(p.get("k") or 2), [p["tag"]],
+                                             {"category": self.category}))
+                            continue
+                        if not only_gated:
+                            asks.append((case_query or query, int(p.get("k") or 2), [p["tag"]], None))
+            if only_gated and not asks:
+                return {}, []       # nothing gated to ask (flag off, no category, loop not eligible): say nothing
+            for q, k, tags, where in asks:
+                r = ret.retrieve(q, k, packs=tags, where=where, purpose=loop)
                 t = iso()
                 for p in r["passages"]:
                     ver = r["trace"]["packs"].get(p["pack"])

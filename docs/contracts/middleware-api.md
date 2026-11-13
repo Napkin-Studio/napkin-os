@@ -37,7 +37,8 @@ name the stand-in, its port, or branch on which implementation answered.
             "app": { "app_id": "...", "version": "..." },
             "schema": {}, "data": {}, "facts": [], "findings": [], "pipeline": {},
             "decision_chain": {}, "context": "...", "lineage": {},
-            "upstream_payload"?: {}, "upstream_skipped"?: [] }
+            "upstream_payload"?: {}, "upstream_skipped"?: [], "upstream_ask"?: {},
+            "workspace_client"?: { "id": "cli_…", "name": "..." } }
 }
 ```
 
@@ -70,6 +71,33 @@ name the stand-in, its port, or branch on which implementation answered.
   document's own members and arrive in `clan.facts` and `clan.findings`. The
   frozen data reaches a model only as §10.13 says. `upstream` is read-only:
   a `data_patch` that names it is refused (Contract 4 §8.1).
+- **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
+  whose pipeline declares `extract_ask`, the ask of the brief it carries:
+  `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from
+  `project_name`, `client`, `audience`, `background` and
+  `objectives.{commercial,behavioural,attitudinal}` (a field's text, or its
+  `value`; empty ones left out). Nothing the brief's agents drafted (insight,
+  proposition, reasons to believe) is sent. `extract_ask@1` proposes
+  `client_org`, `audience_stated`, `problem` and `objective` from it where
+  the material and the roster gave nothing: origin `proposed`, citing
+  `upstream_refs: ["<brief id>#<path>"]`, never over a `stated`, `confirmed`
+  or `extracted` field. With no prompt or attachment, the brief is read
+  alone and no model is called. `start_campaign`'s identify reads the same
+  ask beside the material (2026-11-09): its one model call is given each
+  path as a text `brief:<path>`, and a brand, client or category read only
+  from the brief is proposed with `upstream_refs`, never extracted. When the
+  material names no brand and the model read none from the brief, the
+  brief's `client` paragraph becomes a name (the workspace client's name if
+  the paragraph names it, else its first proper-noun phrase) and is
+  proposed as the brand and the client. The material always wins; the
+  confirm step gates every proposal.
+- **`workspace_client`** (2026-11-09, features/research-new-ui): the client
+  the document belongs to, its manifest's `client` (`{id, name}`, `id` is
+  `cli_` and eight hex digits). Absent when the document has no client.
+  `start_campaign`'s identify proposes `campaign.client_org` from it when
+  neither the roster, the material nor a carried brief names one: origin
+  `proposed`, with `workspace_ref: "<id>"` in place of `fact_ids` /
+  `upstream_refs` (Contract 3, client_org only).
 - **`upstream_payload`** (2026-09-30): the research a brief carries, as Sai's
   brief engine takes it — exactly the engine's `upstream` object,
   `{brand?, category?, competitors, facts, decisions}` — printed by the
@@ -132,11 +160,12 @@ name the stand-in, its port, or branch on which implementation answered.
 | `research_lens` | `{ "lenses"?: [lens ids], "markets"?: [ISO 3166-1 alpha-2] }` | Defaults: all eight lenses × `campaign.markets`. One run per lens × market (N4), merged by entity + key + market. `UK` is not a code (the UK is `GB`). Research with no markets or no categories is `400 invalid_input` (gate `research`) |
 | `synthesise_findings` | `{ "lenses"?: [lens ids], "redo"?: "audience" }` | Reads `clan.facts` (pins only). Never proposes a finding the document already holds, a rejected one included, and sends the rejected ones (statement, reason) to the model. `redo: "audience"` proposes `campaign.audience` again without rejected findings, replacing only an audience the agent proposed, and writes nothing else |
 | `start_campaign` | `{ "prompt": "...", "attachments": [{ "material_id", "name", "sha256", "text"? }] }` | The chat intake (§8). Long. Each `material_id` must be a key of `clan.data.materials` with that `sha256` (the view indexes the file first). Nothing to read at all is `400 invalid_input`, as for `extract_ask` |
-| `answer_question` | `{ "job_id": "...", "question_id": "...", "option_id"?: "...", "text"?: "..." }` | Exactly one of `option_id` / `text` (§8.3) |
+| `answer_question` | `{ "job_id": "...", "question_id": "...", "option_id"?: "...", "text"?: "...", "skip"?: true }` | Exactly one of `option_id` / `text` / `skip` (§8.3; *`skip` added 2026-11-12*). For a `draft_brief` job waiting at intake it is `{ "job_id", "questions_id", "answers": { "<question id>": "<text>" \| null } }` instead (§10.3) |
 | `compose_report` | `{}` | Short. Re-composes `data.report` from the document as it stands (§8.5) |
-| `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }] }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). Nothing to read at all is `400 invalid_input` |
+| `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }], "intake"?: true, "redraft"?: true }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). `intake: true` lets the job stop once for a few questions (§10.3). Nothing to read at all is `400 invalid_input` |
 | `regenerate_field` | `{ "field": "<dotted field key>", "guidance"?: "..." }` | Brief Maker (§10.10). Long. `field` one of the eighteen keys of §10.4 |
 | `fix_parts` | `{ "verdict": "<decision id>", "guidance"?: "..." }` | Brief Maker (§10.15). Long. `verdict` a bad verdict still standing on the brief |
+| `ask_research` | `{ "question": "...", "lens"?: "<lens id>", "about"?: "f_…" \| "fi_…", "attachments"?: [{ "name", "sha256", "text"? }] }` | Research Tool. Long. `question` up to 1000 characters. `lens` puts the answer after that lens's section; without it the answer gets a section of its own. `about` is the fact or finding the question was asked from: it must be in the document and in use (a fact not superseded, excluded or rejected; a finding `proposed` or `verified` that cites no fact out of use), else `400 invalid_input`. It leads the evidence, and the prompt says the question is about it. The answer is written to `data.asks[<id>]`, which records `about` (`null` when none was given) and `in_report`: `true` for a general question, `false` for one with `about`, whose answer the view shows under that item until a person adds it to the report (their attributed write of `in_report: true`, `in_report_by`, `in_report_at`; Take out writes `false`). Needs markets and categories, as `research_lens` does (*`about`, `in_report` added 2026-11-12*) |
 | `job_status` | `{ "job_id": "..." }` | Free: never charged to quota (§9) |
 
 Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
@@ -174,9 +203,10 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
 - `job.stage` and `job.question` are present on `start_campaign` jobs (and
   the replies of `answer_question`, which describe one), on
   `compose_report` replies (`stage: report`, `question: null`, §8.2), and on
-  `draft_brief` and `regenerate_field` jobs (`question: null` always, §10.6);
-  other tasks omit them. `job.question` is non-null exactly when `job.state` is
-  `needs_input`.
+  `draft_brief` and `regenerate_field` jobs (`question: null` always, §10.6;
+  a `draft_brief` at intake carries `job.questions` instead, §10.3); other
+  tasks omit them. `job.question` is non-null exactly when `job.state` is
+  `needs_input` and the task is `start_campaign`.
 - `trace.usage` is what was actually spent; an implementation that ran no model
   reports zeros and never an estimate. `trace.model` is `null` when no model ran.
   `trace.hits` lists what was read: facts (`scope` = layer, `source` = origin
@@ -197,11 +227,15 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
   return the same change again. **The host applies any reply's `change`,
   whatever the job's state.** Real research runs minutes and must survive the
   laptop closing (N2), so a job outlives the request that started it.
-- **`needs_input`** (`start_campaign` only): the job is waiting for the person.
-  It carries `job.question` (§8.3) and stays so — polls are free and change
-  nothing — until an `answer_question` for it is accepted, or until its wait
-  runs out and the job goes on with the question's stated default (§8.3;
-  *changed 2026-09-30*: no stage may halt a research job).
+- **`needs_input`** (`start_campaign`, and a `draft_brief` asked to take intake,
+  §10.3): the job is waiting for the person.
+  A `start_campaign` job carries `job.question` (§8.3) and stays so — polls are
+  free and change nothing — until an `answer_question` for it is accepted, or
+  until its wait runs out and the job goes on with the question's stated default
+  (§8.3; *changed 2026-09-30*: no stage may halt a research job). A `draft_brief`
+  instead carries `job.questions` (a list) and `job.questions_id`, with
+  `job.question` `null`, and its wait ends with each question skipped (§10.3,
+  §10.6), not with a default.
 - `progress.total` is the number of units of work: for `research_lens`, one per
   lens × market. `progress.done` never goes backwards.
 - A `job_status` response describes the job: its `task` and `handler` are the
@@ -212,6 +246,12 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
 - A job belongs to the tenant (from auth) and the document it was started on.
   Polling it from another tenant or another `clan.id` is `404`, the same as an
   id that never existed.
+- Jobs live in the middleware's memory: a restart (a deploy) ends every job in
+  flight, and later polls of one are `404 unknown_job`. There is no drain and
+  no durable job store. The app treats `unknown_job` on a job it was following
+  as the run's end: the run was interrupted, it says so ("This run was
+  interrupted (the service restarted). Run it again.") in its existing failure
+  state, and offers to run it again. What already landed stays (*2026-11-12*).
 - The host also reads `job` for the landing's Running and Needs you: `queued` and
   `running` are working, `needs_input` is waiting on a person, `failed` is failed,
   `done` is finished (os-layer.md section 12.3, `RunTracker`). It adds no route and
@@ -220,6 +260,22 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
   staged changes it carries no change; a failed `start_campaign` carries the
   change for any stages finished since the previous reply, plus an agent
   message saying which stage failed. What already landed stays.
+- *Amended 2026-11-12 (the owner, features/job-end-states.clan).* Besides a
+  fault in the job runner (`type: internal`), a `start_campaign` or brief job
+  (`draft_brief`, `regenerate_field`, `fix_parts`) ends `failed` in two cases,
+  and `job.stage` is the stage it failed at:
+  - **Nothing to show** (`type: stages_failed`): a stage failed (raised, its
+    model call refused or invalid, or out of its time) and nothing came of the
+    job — for `start_campaign` no fact, finding or report; for a brief job
+    nothing written into the brief. Every stage still runs first (§8.4,
+    §10.9); `message` is the first failure, `<stage> failed: <error type>:
+    <error>`. A job with any output still ends `done` with its gaps.
+  - **No progress** (`type: timeout`): a running stage wrote no event to the
+    job's run log (heartbeats do not count) for its stall budget, ten minutes
+    in the real middleware, while it was not waiting on a person (intake) or on
+    the briefing engine (§10.14, its own time limit and fallback). `message` is
+    `timed out in <stage> after <N> s waiting on <what was in flight>`. The
+    stages after it do not run.
 
 ## 3. `change`
 
@@ -404,9 +460,9 @@ Every change must leave the document valid against the campaign schemas
 | 400 | `{"error":{"type":"unknown_handler","message"}}` | handler unregistered, for another task, malformed, or an unimplemented major |
 | 400 | `{"error":{"type":"invalid_input","message"}}` | body not JSON; `request_kind` not `middleware`; no task; no `clan.id` / `clan.version`; scope in the request; bad lens, market or attachment; nothing to read; gate not met |
 | 401 | `{"error":{"type":"unauthenticated","message"}}` | credentials missing or wrong (when the deployment requires them) |
-| 400 | `{"error":{"type":"invalid_input","message"}}` | also: `start_campaign` attachment whose `material_id` is not in `clan.data.materials` with that `sha256`; `answer_question` with a `question_id` that is not the job's open question, neither or both of `option_id` / `text`, an `option_id` not among the question's candidates (an escape option is answered with `text`), `text` when `allow_text` is false; `compose_report` with no pin and no finding to cite |
+| 400 | `{"error":{"type":"invalid_input","message"}}` | also: `draft_brief` with an `intake` that is not a boolean; `answer_question` for a brief job with a `questions_id` that is not the job's, `answers` that is not an object, an id that is not one of the questions, or an answer that is neither text nor null; `start_campaign` attachment whose `material_id` is not in `clan.data.materials` with that `sha256`; `answer_question` with a `question_id` that is not the job's open question, not exactly one of `option_id` / `text` / `skip`, a `skip` that is not `true`, an `option_id` not among the question's candidates (an escape option is answered with `text`), `text` when `allow_text` is false; `compose_report` with no pin and no finding to cite |
 | 404 | `{"error":{"type":"unknown_job","message"}}` | job id unknown to this tenant and document |
-| 409 | `{"error":{"type":"job_state","message"}}` | `answer_question` for a job that is not `needs_input` (already answered, done or failed); `start_campaign` or `compose_report` while a `start_campaign` job on the same document is `queued`, `running` or `needs_input` — one composition of a document at a time; `draft_brief` while a `draft_brief` or `regenerate_field` job on the same document is `queued` or `running`, and `regenerate_field` while a `draft_brief` job, or a `regenerate_field` job for the same field, is (§10.11) |
+| 409 | `{"error":{"type":"job_state","message"}}` | `answer_question` for a job that is not `needs_input` (already answered, done or failed, or a brief job that never asked or went on without an answer); `start_campaign` or `compose_report` while a `start_campaign` job on the same document is `queued`, `running` or `needs_input` — one composition of a document at a time; `draft_brief` while a `draft_brief` or `regenerate_field` job on the same document is `queued` or `running`, and `regenerate_field` while a `draft_brief` job, or a `regenerate_field` job for the same field, is (§10.11) |
 | 400 | `{"error":{"type":"invalid_input","message"}}` | also: `draft_brief` or `regenerate_field` on a brief whose `data.locked` is true; `regenerate_field` for a field not in §10.4 or in `data.locked_fields`; an `image` over 5 MB or of another media type (§10.1) |
 | 409 | `{"error":{"type":"version_conflict","message"}}` | `base_version` is stale — only an implementation that holds the document (the web product) can know this |
 | 500 | `{"error":{"type":"internal","message"}}` | anything else. The message never carries request content |
@@ -635,8 +691,8 @@ object the middleware writes into the thread as the question message's
 
 **The answer is the person's write, not the middleware's.** Before sending
 `answer_question` the view writes, as a human, the person's message
-(`role: user`, `job_id`, `answer: { question_id, option_id | text }`) and,
-for an option answer, the field at `address`:
+(`role: user`, `job_id`, `answer: { question_id, option_id | text | skipped:
+true }`) and, for an option answer, the field at `address`:
 
 | Picked option's `origin` | The view writes the field as |
 |---|---|
@@ -656,6 +712,24 @@ stated`, a brand `{ref: brand/<slug>, name: <text>}`). The field is then
 written from that pick. Free text steers a question; it never becomes a field
 value without the person picking it. When nothing resolves (a leaf or market
 the taxonomy does not know), the new question says so and allows text again.
+
+A **`skip: true` answer** (*added 2026-11-12, the owner: every question
+the Research agents ask can be skipped*) is the person choosing not to answer.
+The view writes only the message (`answer: { question_id, skipped: true }`,
+text "Skipped"). The middleware leaves the field open and goes on exactly as
+for a question nobody answers (below), except that it takes **no** default
+(not even the material's most likely category) and later questions in the job
+are still asked. It records the skip: an `identify` decision ("Went on
+without the <field>: you skipped the question", naming the person and what
+goes on without the field in `attention`), an agent message saying so, a gap
+`{stage: identify, reason: skipped}` in `result.gaps`, and an `answer` event
+with `skipped: true` in the run log. The field's question is not asked again
+in that job. What each skipped field leaves: the **brand**, no roster row is
+looked up and research covers the category and markets; the **categories**,
+research needs a category, so it does not run (its lens × market pairs are
+gaps); the **markets**, research runs once per market, so it does not run.
+With nothing to cite the job still ends `done`, with no report and a message
+saying what was skipped (§8.5).
 
 `answer_question` is accepted only when the job is `needs_input` and
 `question_id` is `job.question.id` (else `409 job_state` / `400
@@ -701,10 +775,11 @@ is `409 job_state`, saying that nobody answered in time.
   minutes in the real middleware), the report is composed from the job's own
   copy of the document, and its decision's `attention` says so; **Refresh
   report** composes it again from the document.
-- **No stage halts the job** (the owner, 2026-09-30). A stage can raise, have
+- **No stage halts the job** (the owner, 2026-09-30; *amended 2026-11-12*,
+  see the end of this item). A stage can raise, have
   its model call refused or answered with output that never validates, run
   out of its time, or have its change refused by the host. None of these
-  fails the job. The stage becomes a **gap**: a decision with the stage's own
+  stops the job. The stage becomes a **gap**: a decision with the stage's own
   action (`extract`, `identify`, `select`, `research`, `synthesise`,
   `report`) and no field target. Its reasoning says why the stage did not
   finish and what the job does without it, and an agent message says the
@@ -717,8 +792,14 @@ is `409 job_state`, saying that nobody answered in time.
   `research_run` decision per pair, so the report names them and the view
   can offer to look again. With no model plan, `select` runs every lens in
   every market. With nothing to cite, the `report` stage writes no report,
-  and its decision says why. `failed` is left for a fault in the job runner
-  itself.
+  and its decision says why. `failed` is for a fault in the job runner
+  itself and, *since 2026-11-12* (§2, Jobs), for a job that ran every stage
+  and has nothing to show — a stage failed and no fact, finding or report
+  came of it, `error.type: stages_failed` with the first stage's error and a
+  `stage_failed` decision and agent message saying so — and for a stage that
+  made no progress for its stall budget (`error.type: timeout`; the job stops
+  there, with the same decision and message). A job with any output ends
+  `done` with its gaps.
 
 ### 8.5 The report
 
@@ -797,7 +878,7 @@ not reach a brief; and the data flag let a view lock around the lock list.
 
 ### 10.1 Input
 
-`draft_brief`: `{ "prompt"?, "attachments": [...] }`.
+`draft_brief`: `{ "prompt"?, "attachments": [...], "intake"?, "redraft"? }`.
 
 - `prompt` — the planner's typed ask (`data.brief_input`). It is a material
   (`kind: prompt`, sha256 of its UTF-8 bytes).
@@ -810,6 +891,20 @@ not reach a brief; and the data flag let a view lock around the lock list.
   **unread** and grounds nothing.
 - At least a non-empty `prompt`, a `text` or an `image`; else `400
   invalid_input`.
+- `intake` — optional boolean, false when absent (*added 2026-10-30*, brief-intake-qa).
+  `true` asks the planned flow to stop once, after the capture and before the plan,
+  to ask the planner what the capture leaves open (§10.3). Absent or false, the job
+  never waits, exactly as before. Anything else is `400 invalid_input`. The
+  field-by-field flow and the engine path ignore it, and so do `regenerate_field`
+  and `fix_parts`.
+- `redraft` — optional boolean, false when absent (*added 2026-11-12*,
+  brief-redraft-in-place). `true` says Draft it again on a drafted brief, run in
+  place. Anything else is `400 invalid_input`. The planned flow reads the parts as
+  they stand from the document either way: on a brief that already holds written
+  parts, the plan and the whole draft are given `current` (each open part's words,
+  capped, and `by`: `person` or `agent`, from its last writer). Locked parts are
+  never in it, and the holder rule is unchanged: a part a person wrote last is
+  proposed, not written.
 
 The drafters also read `clan.facts` and `clan.findings` (§1) — in a brief
 spun off from research, the pins and findings it carried (§10.13); capture
@@ -893,10 +988,52 @@ own or carried — is fed to Loop 1, and no captured field cites a passage, a
 pin or a finding. The no-loss ledger measures
 fidelity to the client's own words, and injected text craters it.
 
+**Intake** (*added 2026-10-30*, brief-intake-qa; the owner approved the wait).
+With `input.intake: true`, the planned flow's `context` stage pauses once: after
+the library lookups and before the plan call, so the lookups run while the
+person reads. It pauses only when the capture lacks something a sentence from
+the planner would settle, by rule and with no model call: the client or brand
+not named, the objective and its measure (no `objective` and no
+`success_metrics` item), the audience (no `target_audience` item), the budget,
+a must-appear or avoid line (no `mandatories` or `constraints` item), the
+timing. In that priority, at most `settings.brief_intake_max` (3). Tone and
+the strategic parts (insight, barrier, proposition, objection, reasons to
+believe, competitors) are never asked: they are the planner's and the Strategy agent's work.
+Something the capture, or an earlier answer the document holds, already has is
+never asked, and an answered question is never asked again.
+
+- The job is `needs_input`, `job.stage` stays `context`, and `job.questions` is
+  `[{ id, key, text, why, priority, skippable }]` with `job.questions_id`;
+  `job.question` stays `null`. Polls are free and change nothing.
+- `answer_question` with `{ job_id, questions_id, answers: { <question id>: text |
+  null } }`. A `null`, a missing id and `answers: {}` each skip a question; the
+  job runs again at once. It is `409 job_state` unless the job is `needs_input`.
+- **The wait is bounded** (`settings.brief_intake_wait`, 90 seconds; 0 turns
+  intake off). When it runs out the job goes on exactly as if every question
+  were skipped, and says so; `cancel_job` ends the wait at once
+  (`cancelled`, from `needs_input` as from `running`). The 60-minute stage
+  limit never ends it.
+- **An answer is the client's word, as the planner gave it.** It lands as one
+  material (`kind: other`, name `Intake answers`, text `Q: … A: …`, sha256 of
+  that text) and one capture item per answer (`status: fact`, `quote` the answer
+  verbatim, found in that material), filed under the capture key the question is
+  about (the client question under `background_context`), in a change after the
+  stage's own, with one `edit` decision (action `capture`, agent
+  `…/extract`) whose `attention` says the planner gave it. Never a field write:
+  a field a person holds is proposed, not written (§10.5). The part it feeds is
+  then written with basis `client` and no `To confirm:` mark, and the Brief and Review agents
+  read it in `client_said`.
+- **A skipped or unanswered question changes nothing**: the part is an
+  assumption marked `To confirm:` as before, the question stays in
+  `open_questions` once, in the intake's wording, and a decision with no target
+  (action `capture`) says nobody answered, or the person skipped. The run log
+  records the wait on its own (`intake_wait`, with `secs` and the outcome) so
+  the person's time is not counted as the model's.
+
 **The planned engine** (*added 2026-10-19*, brief-fact-provenance). The
 default flow (`NAPKIN_BRIEF_FLOW=planned`) runs `extract → context → draft →
-judge`: Sam plans the brief and runs the research it lacks, Dara drafts every
-part at once, and Jude (or jev's check loop) has the parts that need it
+judge`: the Strategy agent plans the brief and runs the research it lacks, the Brief agent drafts every
+part at once, and the Review agent (or jev's check loop) has the parts that need it
 rewritten. Capture stays RAG-free and research-free as above. What changes is
 where a part's value may come from: in the planned engine every part,
 captured-class parts included, may rest on the client, the research (`f_`,
@@ -915,8 +1052,8 @@ captured-class parts included, may rest on the client, the research (`f_`,
   (same type) and `success_metrics` for desired response. A value the
   working brief already holds is not, by itself, the client's words. A
   `builds_on_client` point takes the same gate.
-- **Provenance is added after drafting, never by restricting it.** Dara's
-  draft call, its inputs and its schema are unchanged, and she is never asked
+- **Provenance is added after drafting, never by restricting it.** The Brief agent's
+  draft call, its inputs and its schema are unchanged, and it is never asked
   for claim bookkeeping. One cleaner (`server/napkin/brief/provenance.py`,
   `clean_parts`) runs after every draft and every rewrite on every path:
   draft, review revise, the jev check-loop rewrite, `fix_parts`
@@ -929,7 +1066,7 @@ captured-class parts included, may rest on the client, the research (`f_`,
   nor any judge applies to a brief value.
 - **Facts outside the measure list** that the context stage's research
   finds are kept as document pins (§3 `facts_append`, `kept_in_document`) in
-  this job's change, before the draft, so Dara can cite them and the cleaner
+  this job's change, before the draft, so the Brief agent can cite them and the cleaner
   can tie to them. They are never written to the layers.
 
 **Omitted, not blank.** No patch sets a brief field to `""`, `[]`, `{}` or
@@ -989,7 +1126,7 @@ review:                           # replaced whole by extract, then by judge
   based_on: { version }           # the clan.version the job read
   scorecard:
     dimensions: [{ dimension, verdict: pass | vague | missing, evidence?, fix? }]   # the seven, in order
-    single_mindedness: { verdict: single | multiple, split_into: [] }
+    single_mindedness: { verdict: single | multiple | unchecked, split_into: [] }   # unchecked: the jev judge made no Review agent call
     summary: "…"
   judge:                          # absent until the judge stage
     reason_codes_version: "1"
@@ -1047,7 +1184,7 @@ the view's human write of `K` (as §8.3's answers are), citing the proposal's
 decision from a point of its reasoning (`reasoning.because[].cites`: the host
 keeps a view claim's reasoning, not a top-level `cites`); its rationale names
 the proposer and never an id
-(`Accepted Dara's new version of the single-minded proposition.`). Briefs from
+(`Accepted the Brief agent's new version of the single-minded proposition.`). Briefs from
 before 2026-10-23 named the id in the rationale instead (`Accepted d_…: …`), and
 readers still understand that form. Ignoring a proposal changes nothing. Locked
 fields are not even proposed. A human-held `open_questions` is proposed like
@@ -1075,8 +1212,12 @@ The §2 envelope; `task` and `handler` are the job's own (`draft_brief@1.x`,
 ```
 
 - `job.stage`: `extract | draft | judge` (`regenerate_field`: `draft |
-  judge`). `job.question` is always `null`: Brief Maker never waits for the
-  person mid-job.
+  judge`). `job.question` is always `null`. Brief Maker waits for the person
+  only at intake: a `draft_brief` the request asked to take intake (§10.3) may be
+  `needs_input` once, bounded, and then carries `job.questions` (a list) and
+  `job.questions_id` and is `needs_input` for at most the intake wait; every
+  other job, and every `draft_brief` without `intake: true`, is `queued`,
+  `running` or finished and never carries `questions`.
 - `result.fields` — all eighteen keys, each `{state, by}`. `state`: `waiting
   | extracting | drafting | judging | revising | done | proposed | absent |
   kept | failed`; `by`: the worker doing it or that last did it — `extract |
@@ -1103,6 +1244,8 @@ reply's.
 |---|---|---|---|
 | one per captured field written | `edit`, action `extract` | `#K` | the `cap_` items and `mat_` it rests on |
 | the capture | `edit`, action `capture` | `#capture`, each new `#materials[mat_…]` | the `mat_` ids; flatten tail `material_read`, `unread`, `abstained` (keys not written) |
+| the intake answers, when there are any | `edit`, action `capture` | `#capture`, `#materials[mat_…]` (the `Intake answers` material) | that `mat_`; flatten tail `material_read` |
+| intake questions skipped or not answered in time | `edit`, action `capture`, no target | none | none: the reasoning says which, and why |
 | the scorecard, the review | `edit`, action `score` / `review` | `#review` | `mat_` ids / the verdict decision ids |
 | one per drafted field written | `edit`, action `draft` (`regenerate` for §10.10) | `#K` | its `psg_`, `cap_`, `f_`, `fi_` grounds; in the planned engine every claim cite too, flatten `claims` |
 | one per judged field | `verdict`, `polarity: good \| bad`, `reason_code` when bad, `taxonomy_version: "reason-codes/1"` | `#K` | the edit decision it judges; loop-7 `psg_` |
@@ -1164,7 +1307,7 @@ claims:
     working: "15 Oct 2026 - 5 Oct 2026 = 10 days"   # derived only: how it was worked out
     calc: { op: days_between, inputs: [...] }       # derived only, when one was parsed
     check: recomputed        # derived and fact: recomputed | stated | false
-    by: match                # match (code, through the part's own cites) | model (tie_claims, checked in code) | net (code) | writer (Dara's own "To confirm:" line)
+    by: match                # match (code, through the part's own cites) | model (tie_claims, checked in code) | net (code) | writer (the Brief agent's own "To confirm:" line)
     suggest: [f_C]           # to_confirm only: ids that may support it, never cited
 ```
 
@@ -1191,7 +1334,7 @@ claims:
 - **`client`**: the claim is in a capture item's quote, citing its `cap_`
   and `mat_`. Certainty comes from the capture (`capture_certainty`), never
   a fixed `high`.
-- **`to_confirm`**: nothing the document holds supports it, or Dara wrote
+- **`to_confirm`**: nothing the document holds supports it, or the Brief agent wrote
   the line as "To confirm: …" (`by: writer`), whatever a pin near it says. The value is
   unchanged; `attention` reads "To confirm: <claim>", certainty is `low`,
   and `cites` is empty. A coincidental match (a pin pair whose sum is right
@@ -1288,13 +1431,20 @@ field whose decisions are all in the chain.
   **new** decision id and a `read` holding the value the extract stage wrote
   (§3, *Staged writes*).
 - `draft` sends no change. *Changed 2026-09-30:* a stage that does not finish
-  does not fail the job. It is a gap, as in §8.4: one decision with no field
+  does not fail the job. *Amended 2026-10-30 (brief-intake-qa):* the rule is that
+  no stage halts the brief, and the one wait it has is intake, on request only
+  (`input.intake`), for at most the intake wait (§10.3). Nobody answering is a
+  recorded default, never a halt and never a failure. It is a gap, as in §8.4: one decision with no field
   target (action `capture`, `draft` or `review`; agent `…/extract`,
   `…/drafter` or `…/judge`), and the fields it was working on become
   `failed`. Then the next stage runs, and the job ends `done`, with
   `result.gaps` listing `[{stage, reason, detail}]` (display only; absent
   when there are none). A judge stage that does not finish writes no draft
-  unjudged. What landed stays.
+  unjudged. What landed stays. *Amended 2026-11-12 (§2, Jobs):* when a stage
+  failed and nothing was written into the brief, the job ends `failed`
+  (`error.type: stages_failed`, the first stage's error, `job.stage` that
+  stage); a stage with no progress for its stall budget ends it `failed`
+  (`error.type: timeout`) and the stages after it do not run.
 - The `done` poll carries the last change; later polls repeat it.
 
 ### 10.10 `regenerate_field`
@@ -1312,23 +1462,23 @@ field whose decisions are all in the chain.
   brief, where the redraft runs as a one-part fix, §10.15 — plus its verdict)
   — or, when the field is human-held, proposes it (§10.5): pressing Redraft
   asks for a draft, and the planner decides whether it replaces their words. A
-  draft Jude still fails after one revision is placed all the same, with low
-  certainty and his reasons in its attention (an empty part helps nobody);
+  draft the Review agent still fails after one revision is placed all the same, with low
+  certainty and its reasons in its attention (an empty part helps nobody);
   `result.summary` says so and the bad verdict is recorded.
 - **What steered a draft is on the record.** Its reasoning carries the
   planner's guidance as a point in their own words, `Your ask: “…”`, cited
   against the part (on a planned brief, against what wrote it), and its
   `decided` line says so: `Drafted the insight on your ask.`
-- **The loop is recorded as it happened.** When Jude sends a draft back and
-  Dara revises it, the change carries three decisions for the part, in this
-  order: the draft he sent back (`superseded_by` the rewrite; certainty low,
-  `Jude sent it back`), his verdict on it (`bad`, citing that draft, his
+- **The loop is recorded as it happened.** When the Review agent sends a draft back and
+  the Brief agent revises it, the change carries three decisions for the part, in this
+  order: the draft it sent back (`superseded_by` the rewrite; certainty low,
+  `The Review agent sent it back`), its verdict on it (`bad`, citing that draft, its
   reasons as its points), and the rewrite, citing the verdict, with the point
-  `Jude's note: …` and the line `Rewrote the insight on Jude's note and your
+  `The Review agent's note: …` and the line `Rewrote the insight on the Review agent's note and your
   ask.` Nothing is collapsed into one line. The same holds for `draft_brief`'s
-  whole-brief review and for `fix_parts` (§10.15); there, Jude's pass on a
-  part he sent back that his final review no longer flags is a `good` verdict
-  with a reason, so his note is answered on the record and not only by a
+  whole-brief review and for `fix_parts` (§10.15); there, the Review agent's pass on a
+  part it sent back that its final review no longer flags is a `good` verdict
+  with a reason, so its note is answered on the record and not only by a
   draft.
 - *Changed 2026-10-19* (brief-fact-provenance; owner: no orphan route left).
   On a brief drafted by the planned engine (§10.3), `regenerate_field` runs
@@ -1465,7 +1615,7 @@ client's words, and each call carries only what it needs.
    (§3 `facts_append`, `kept_in_document`, carrying the candidate's layer and
    sources) in the brief only, after `merge_rules.merge` against the pins it
    holds, so one identity holds one pin. They are listed first among the
-   held facts Dara sees, so the 400-fact cap never cuts them. They are never
+   held facts the Brief agent sees, so the 400-fact cap never cuts them. They are never
    written to the layers; the measure is still proposed. On a brief whose
    embedded facts schema predates `kept_in_document` the fact stays a run-log
    note, and a claim resting on it is `to_confirm` with the fact id in
@@ -1473,14 +1623,14 @@ client's words, and each call carries only what it needs.
 10. **Rewrites keep what was worked out** (*added 2026-10-19*). Every
     rewrite (review revise, the jev check loop, `fix_parts`, the brief
     engine's) carries the part's prior claims, `research_upstream` and the
-    draft's library, and asks Dara to keep a worked-out conclusion unless the
+    draft's library, and asks the Brief agent to keep a worked-out conclusion unless the
     instruction says it is wrong. The rewrite passes through the cleaner like
     the draft. A conclusion a rewrite lost is counted in the run log
     (`derived_lost`), never restored by code.
-11. **Judges never strip a conclusion** (*added 2026-10-19*). Jude grades a
+11. **Judges never strip a conclusion** (*added 2026-10-19*). The Review agent grades a
     `derived` claim on its working and inputs, not on whether its number is
     literally in a fact, and code sets a recomputed derived claim to
-    `supported` whatever Jude says. In jev mode the cleaner's `to_confirm`
+    `supported` whatever the Review agent says. In jev mode the cleaner's `to_confirm`
     and `check: false` claims are added to `rv.claims` as code-derived
     `unsupported` verdicts, and `explain_flags` sees each claim with its
     working. In both modes **no claim verdict adds a part to the revise list
@@ -1528,7 +1678,7 @@ applies. `regenerate_field` is unchanged either way. The adapter is
    written, nor proposed (`map_brief` echoes the names sent). Otherwise a
    field a person holds is proposed. Each written field (per
    leaf) gets one `edit`, action `draft`, `agent draft_brief@1.x/drafter`
-   (Dara), flatten `drafted_by: "brief-engine"`. Its cites are the `mat_` ids
+   (the Brief agent), flatten `drafted_by: "brief-engine"`. Its cites are the `mat_` ids
    the engine read and, for every `fact_ref` on that leaf, the fact id when
    `clan.facts` holds it, or the research finding by its own id.
    The refs themselves ride as flatten `fact_refs`. A ref the document holds
@@ -1562,14 +1712,14 @@ applies. `regenerate_field` is unchanged either way. The adapter is
    when the fallback's own capture does not finish either, to that stage's
    gap decision, whose action is also `capture`, §10.11) and to
    `result.summary`; the job still ends `done` with `result.gaps` (no stage
-   halts the brief, §8.4). A readable reply that is thin is not a failure:
+   halts the brief, §8.4), unless nothing came of it at all (§10.9). A readable reply that is thin is not a failure:
    what it has lands, and the rest is `absent` and named in `abstained`.
    The engine call runs inside the `extract` stage, so that stage's time
    limit (60 minutes) covers the engine's 900 s plus the fallback capture.
 7. **Rewrites are cleaned; the engine's draft is not** (*added
    2026-10-19*, brief-fact-provenance). When the engine's draft is checked
    and parts are rewritten (`EngineCheckedBriefJob`), each rewrite reads
-   `provenance.evidence` (the same facts the planned engine's Dara sees,
+   `provenance.evidence` (the same facts the planned engine's Brief agent sees,
    upstream headline cites included) and passes through `clean_parts`
    (§10.3), so it carries `claims` (§10.7) and a derived basis. The engine's
    own draft keeps item 2's cites and is not cleaned.
@@ -1578,9 +1728,9 @@ applies. `regenerate_field` is unchanged either way. The adapter is
 
 ### 10.15 `fix_parts`
 
-*Added 2026-10-19* (owner: when Jude leaves a problem on a brief, the planner
-asks the crew to fix it: Sam finds what it lacks, Dara rewrites the parts
-together, Jude checks them).
+*Added 2026-10-19* (owner: when the Review agent leaves a problem on a brief, the planner
+asks the crew to fix it: the Strategy agent finds what it lacks, the Brief agent rewrites the parts
+together, the Review agent checks them).
 
 `{ verdict, guidance? }` — fix the problem a bad verdict names.
 
@@ -1592,12 +1742,12 @@ together, Jude checks them).
 - **The problem** is the verdict's own words (its reasoning's `decided` and
   points), then those of every person's bad verdict still standing on the
   same parts. The job's parts are the verdict's open parts.
-- Stages `context` — Sam: one plan call (`plan_fix`) with the brief as it
+- Stages `context` — the Strategy agent: one plan call (`plan_fix`) with the brief as it
   stands, the parts, the problem and every fact and finding the brief holds,
   giving each part an instruction and the research the fix lacks; that
   research runs as `draft_brief`'s (§10.13): already-held needs skipped (jev),
   at most two runs, each pin and source in the change, its raw facts written
-  to the layers as every research run's are — then `draft` — Dara rewrites
+  to the layers as every research run's are — then `draft` — the Brief agent rewrites
   the parts together in one call (`fix_brief_parts`) from the problem, the
   instructions and the facts, never one a person excluded — then `judge` —
   `draft_brief`'s Judge on the parts only (the whole-brief review, or with
@@ -1605,12 +1755,12 @@ together, Jude checks them).
   `progress`: `{done, total: 3}`.
 - It writes only the parts (an `edit`, action `draft`, each) and the review;
   a part a person wrote last is proposed (§10.5). `open_questions`, when not
-  a part, only gains what Jude says only the client can answer. A part's later
+  a part, only gains what the Review agent says only the client can answer. A part's later
   edit answers the verdict (Contract 4, the lock list). After a rewrite with
-  jev, Jude's argument note is placed as a new bad verdict only while jev
+  jev, the Review agent's argument note is placed as a new bad verdict only while jev
   still reads the argument as broken.
 - `result.summary`: how many parts were fixed, proposed, and the new facts.
-- *Changed 2026-10-19* (brief-fact-provenance). Dara's rewrite passes
+- *Changed 2026-10-19* (brief-fact-provenance). The Brief agent's rewrite passes
   through `clean_parts` (§10.3), so each part's decision carries `claims`
   (§10.7). The client's words come from `data.capture.items`, the capture
   the document holds, so the client guard holds here as on the draft. The
@@ -1641,6 +1791,11 @@ contract, because client material is confidential.
   (`infra/modules/services` variable `middleware_runlog_bodies`, `true` only
   in `infra/envs/staging`; `stack.tftest.hcl` asserts it). Locally, set it
   for test prompts only.
+- **Stdout** (*added 2026-11-12*, job-observability). Every run-log event is
+  also one stdout line, `runlog {json}`, with the job, task and org, whether
+  or not `NAPKIN_RUNLOG_DIR` is set. It never carries a body key (payload,
+  reply, results, queries, a decision's words, answers, question text,
+  strategy, brand names), bodies on or off (`runlog.STDOUT_DROPS`).
 - **`provenance`**, one note per clean (§10.3):
 
   ```yaml

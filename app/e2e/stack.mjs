@@ -8,11 +8,14 @@
 //      directory with the SDK's own examples, as `npm run apps` does for the site;
 //   3. builds napkin-web and starts it on 127.0.0.1:$NAPKIN_E2E_PORT (default 18080),
 //      anonymous sessions, a fresh empty data directory, the seed installed into
-//      every new workspace.
+//      every new workspace. With NAPKIN_E2E_ROSTER=1 it signs people in from a
+//      placeholder roster instead (NAPKIN_AUTH=roster): sam@wk, tia@tbwa and
+//      ann@napkin, so the agency's colours and the medallion can be seen.
 // Nothing here calls a model or any network service. Ctrl-C (or SIGTERM from
 // Playwright) stops the server and removes the temp directories.
 
 import { spawn, spawnSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -46,8 +49,6 @@ function cleanup() {
 if (process.env.NAPKIN_E2E_SKIP_BUILD !== '1') {
   run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--logLevel', 'warn'], { cwd: app })
 }
-// The apps inline the shared agent figures; generate them as `npm run apps` does.
-run(process.execPath, ['scripts/agent-figures.mjs'], { cwd: app })
 const example = (name, ...out) => run('cargo', ['run', '-q', '-p', 'clan-sdk', '--example', name, '--', ...out])
 example('make_campaign_research', join(seed, 'campaign-research.app.clan'), join(scratch, 'research.example.clan'))
 example('make_brief_maker', join(seed, 'brief-maker.app.clan'), join(scratch, 'research.example.clan'))
@@ -75,6 +76,9 @@ const middleware = createServer((req, res) => {
   })
 })
 middleware.listen(Number(mwPort), '127.0.0.1')
+// Placeholder people only, one per agency kit the screenshots compare (wk, tbwa) and Napkin's own.
+const roster = process.env.NAPKIN_E2E_ROSTER === '1' ? join(config, 'roster.tsv') : null
+if (roster) writeFileSync(roster, 'sam@wk\tSam Test\ntia@tbwa\tTia Test\nann@napkin\tAnn Test\n')
 writeFileSync(join(config, 'workspace.yaml'), `proxies:\n  middleware:\n    endpoint: http://127.0.0.1:${mwPort}/v1/tasks\n`)
 
 const server = spawn(join(root, 'target/debug/napkin-web'), [], {
@@ -82,7 +86,9 @@ const server = spawn(join(root, 'target/debug/napkin-web'), [], {
   cwd: root,
   env: {
     ...process.env,
-    NAPKIN_AUTH: 'none',
+    NAPKIN_AUTH: roster ? 'roster' : 'none',
+    // Signed sessions need a key: a throwaway one, made for this run and gone with it.
+    ...(roster ? { NAPKIN_AUTH_ROSTER: roster, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),
     NAPKIN_WEB_ADDR: `127.0.0.1:${port}`,
     NAPKIN_WEB_DATA: data,
     NAPKIN_WEB_STATIC: join(app, 'dist'),

@@ -2,6 +2,7 @@
 
 import json
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -574,3 +575,112 @@ def test_synthesis_never_proposes_a_rejected_finding_again(store):
               rejection={"reason": "no", "by": "human:u", "at": "2026-09-28T10:00:00Z", "decision": "d_01REJECT01"})
     _, again, _ = synthesise.run_synthesis(DOC, "4", dict(clan, findings=[fi]), {}, "t@1.0", caps)
     assert fi["id"] not in {f["id"] for f in again["findings_append"]}
+
+
+# ---- a research started from a brief (features/spinoff-and-links) ----------
+
+BRIEF_DOC = "3f2a6b1c-1d2e-4f3a-8b4c-5d6e7f8a9b0c"
+
+
+def brief_clan(campaign=None):
+    return {"id": DOC, "version": "1", "facts": [], "findings": [], "decision_chain": {"decisions": []},
+            "data": {"campaign": campaign or {}, "upstream": {BRIEF_DOC: {"direct": True, "keys": ["client"]}}},
+            "upstream_ask": {"document_id": BRIEF_DOC, "direct": True, "fields": {
+                "client": "Orchard Hill Cider",
+                "audience": "Irish adults who skip alcohol on weeknights",
+                "background": "Sales of 0.0 grew, but Lúnasa is unknown.",
+                "objectives.behavioural": "Try it at a barbecue",
+            }}}
+
+
+def _research_schema_validator():
+    import jsonschema
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    schema = json.loads((root / "app/templates/campaign-research/schema.json").read_text())
+    return jsonschema.Draft7Validator(schema)
+
+
+def test_a_research_from_a_brief_proposes_the_ask_citing_the_brief_with_no_model_call(store):
+    model = FakeModel()
+    caps = caps_for(store, model=model)
+    result, change, hits = extract.run_extract(DOC, "1", brief_clan(), {}, "t@1.0", caps)
+    assert model.calls == [], "nothing but the brief to read: no model call"
+    camp = change["data_patch"]["campaign"]
+    assert camp["client_org"]["value"] == {"ref": "org/orchard-hill-cider", "name": "Orchard Hill Cider"}
+    assert camp["audience_stated"]["value"] == "Irish adults who skip alcohol on weeknights"
+    assert camp["problem"]["value"] == "Sales of 0.0 grew, but Lúnasa is unknown."
+    assert camp["objective"]["value"] == "Try it at a barbecue"
+    for f, path in [("client_org", "client"), ("audience_stated", "audience"), ("problem", "background"),
+                    ("objective", "objectives.behavioural")]:
+        env = camp[f]
+        assert env["origin"] == "proposed", f  # behind the confirm step, never extracted or stated
+        assert env["upstream_refs"] == [f"{BRIEF_DOC}#{path}"]
+        assert "fact_ids" not in env and "source" not in env
+    dec = change["decisions"][0]
+    assert f"{BRIEF_DOC}#client" in dec["cites"]
+    assert "the brief it started from" in dec["rationale"]
+    assert hits == []
+    # What it writes is what the research's schema takes.
+    _research_schema_validator().validate({"campaign": {**camp}})
+
+
+def test_the_brief_never_overwrites_a_stated_field_or_one_the_material_gave(store):
+    caps = caps_for(store)
+    clan = brief_clan({"audience_stated": stated("Families in Cork", "brief")})
+    result, change, _ = extract.run_extract(
+        DOC, "1", clan, {"prompt": "The problem: Sales are flat in Ireland."}, "t@1.0", caps)
+    camp = change["data_patch"]["campaign"]
+    assert "audience_stated" not in camp, "a stated field belongs to a person"
+    assert "audience_stated" in result["withheld"]
+    # The fake model reads the problem from the prompt: the material wins over the brief.
+    if "problem" in camp:
+        assert camp["problem"]["origin"] == "extracted"
+    assert camp["client_org"]["upstream_refs"] == [f"{BRIEF_DOC}#client"]
+
+
+def test_without_a_brief_or_material_there_is_still_nothing_to_read(store):
+    caps = caps_for(store)
+    clan = {"id": DOC, "version": "1", "data": {}, "facts": [], "findings": [], "decision_chain": {}}
+    with pytest.raises(Exception, match="nothing to read"):
+        extract.run_extract(DOC, "1", clan, {}, "t@1.0", caps)
+
+
+def test_a_proposed_field_still_needs_fact_ids_or_upstream_refs_in_the_schema():
+    v = _research_schema_validator()
+    base = {"value": "x", "origin": "proposed", "gate": "brief", "decision": "d_TESTSTATED1"}
+    assert list(v.iter_errors({"campaign": {"problem": base}})), "proposed with neither is refused"
+    assert not list(v.iter_errors({"campaign": {"problem": {**base, "upstream_refs": [f"{BRIEF_DOC}#background"]}}}))
+    assert list(v.iter_errors({"campaign": {"problem": {**base, "upstream_refs": ["not-an-address"]}}}))
+
+
+# ---- origin_kind: where each new pin and finding came from (features/os-source-card) ----
+
+def test_a_pin_found_by_research_says_research_and_one_reused_from_the_layers_says_layer(store):
+    caps = caps_for(store)
+    _, change, _ = Researcher(DOC, "3", rclan(), "t@1.0", caps, ["market_structure", "media_spend"],
+                              ["IE", "GB"], ["automotive.ev_charging"]).run()
+    assert change["facts_append"] and all(p["origin_kind"] == "research" for p in change["facts_append"])
+    # the sources it read say so too, so /cite on a source answers research, not document
+    assert change["sources_append"] and all(s["origin_kind"] == "research" for s in change["sources_append"])
+    # a second campaign pins the same rows from the layers, researching nothing
+    _, again, _ = Researcher("22222222-2222-4333-8444-555555555555", "1", rclan(), "t@1.0",
+                             caps_for(store, research=FakeResearch()), ["market_structure", "media_spend"],
+                             ["IE", "GB"], ["automotive.ev_charging"]).run()
+    assert again["facts_append"] and all(p["origin_kind"] == "layer" for p in again["facts_append"])
+
+
+def test_a_synthesised_finding_says_research(store):
+    caps = caps_for(store)
+    _, rch, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps, ["media_spend"], ["IE"],
+                           ["automotive.ev_charging"]).run()
+    _, syn, _ = synthesise.run_synthesis(DOC, "3", dict(rclan(["IE"]), facts=rch["facts_append"]), {}, "t@1.0", caps)
+    assert syn["findings_append"] and all(f["origin_kind"] == "research" for f in syn["findings_append"])
+
+
+def test_origin_kind_names_only_what_the_source_card_reads():
+    from napkin import origin
+    card = (Path(__file__).resolve().parents[2] / "crates/napkin-host/src/ops/decisions/card.rs").read_text()
+    assert f'ORIGIN_KEY: &str = "{origin.KEY}"' in card
+    for kind in (origin.RESEARCH, origin.LAYER, origin.CLIENT, origin.BRAND, origin.PERSON):
+        assert f'"{kind}"' in card.split("pub const ORIGINS")[1].split("];")[0]

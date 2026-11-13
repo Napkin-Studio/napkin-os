@@ -1148,6 +1148,7 @@ fn cmd_app(command: AppCommands, hints: &Hints) -> Result<()> {
                     lift,
                     ..Default::default()
                 }),
+                attach: None,
             };
             let bytes = make_template(&source, app, MakeTemplateOptions::default())
                 .context("failed to make template")?;

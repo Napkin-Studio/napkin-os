@@ -3,11 +3,12 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import { toggleTheme, useTheme } from '../theme'
+import { MoonSun } from '../shell/nui/icons'
 import './chrome.css'
 
 interface Props {
   /** `floating` is for a view with no chrome to sit in. */
-  variant?: 'toolbar' | 'floating'
+  variant?: 'toolbar' | 'floating' | 'nui'
 }
 
 /** Sun for "go light", crescent for "go dark" — drawn, so they match the type. */
@@ -29,6 +30,15 @@ function Glyph({ sun }: { sun: boolean }) {
 export default function ThemeToggle({ variant = 'toolbar' }: Props) {
   const theme = useTheme()
   const next = theme === 'dark' ? 'light' : 'dark'
+  // The OS bar's round button (the mock's #tb-theme): moon in light, sun in dark.
+  if (variant === 'nui') {
+    return (
+      <button type="button" className="tb-theme" id="tb-theme" onClick={toggleTheme} aria-pressed={theme === 'dark'}
+        title={theme === 'dark' ? 'Light mode' : 'Dark mode'} aria-label={`Switch to ${next} mode`}>
+        <MoonSun />
+      </button>
+    )
+  }
   return (
     <button
       className={`ch-btn ch-btn-icon${variant === 'floating' ? ' ch-btn-floating' : ''}`}

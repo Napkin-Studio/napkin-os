@@ -29,6 +29,8 @@ clan-tray{display:block}
 .clf.in{display:inline;padding:0 2px;font-weight:600;font-variant-numeric:tabular-nums;border-bottom:1.5px solid color-mix(in srgb,var(--clf-ink) 22%,transparent)}
 .clf.in .clf-src{margin-left:4px}
 .clf.in.txt{font-weight:inherit;border-bottom-style:dotted}
+/* inline, the tag is text: a full stop after the field stays on its line, never alone under it */
+.clf.in .tag{display:inline;white-space:nowrap}
 .clf.big,.clf.stat{display:grid;gap:4px;padding:6px;margin:-6px}
 .clf.big .v{font-size:clamp(34px,5vw,54px);font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
 .clf.stat .v{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.05;font-variant-numeric:tabular-nums}
@@ -151,7 +153,7 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
 .clf-tray{position:sticky;top:var(--clan-top,0px);z-index:19;background:var(--clf-paper);border-bottom:1px solid var(--clf-line);box-shadow:0 1px 2px rgba(20,32,64,.06),0 8px 24px rgba(40,64,120,.07)}
 .clf-tray-in{max-width:1120px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .clf-tray .who{display:flex;align-items:center;gap:10px;min-width:0}
-.clf-tray .who .agent-figure{width:30px;height:40px}
+.clf-tray .who .nk-ag{width:32px;height:32px}
 .clf-tray .count{font-weight:700;font-size:14.5px;white-space:nowrap}
 .clf-tray .count.zero{color:var(--clf-green-ink)}
 .clf-tray .items{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 300px;min-width:0}
@@ -210,7 +212,7 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
 .clf-by a:hover{text-decoration:underline}
 /* The agent that recorded a thing says so, in its own words and signed. */
 .clf-say-row{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:end}
-.clf-say-row .agent-figure{width:40px;height:53px}
+.clf-say-row .nk-ag{width:42px;height:42px}
 .clf-say{position:relative;margin:0 0 14px;background:var(--clf-paper);border:1.5px solid var(--clf-ink);border-radius:16px;padding:10px 14px;font-size:15px;line-height:1.4;box-shadow:3px 3px 0 var(--clf-ink);color:var(--clf-ink)}
 .clf-say::after{content:"";position:absolute;left:-8px;bottom:12px;width:12px;height:12px;background:var(--clf-paper);border-left:1.5px solid var(--clf-ink);border-bottom:1.5px solid var(--clf-ink);transform:rotate(45deg)}
 .clf-say .who{display:block;font-family:var(--clf-mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--clf-ink3);margin-bottom:2px}
@@ -309,10 +311,230 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
 .cl-list > li::before{counter-increment:m;content:counter(m);font-family:var(--clf-mono);font-size:12px;color:var(--clf-ink3);padding-top:2px}
 .cl-foot{padding:32px clamp(20px,5vw,64px) 40px;border-top:1px solid var(--clf-line2);background:var(--clf-soft)}
 @media (max-width:860px){.cl-cols,.cl-split,.cl-grid{grid-template-columns:minmax(0,1fr)}.cl-grid > * + *{border-left:0;border-top:1px solid var(--clf-line2)}}
+/* The source card (ClanFields.card): one card for a fact from any origin,
+   the same markup inline in any app and at the top of the drawer. */
+.clf-sc{display:grid;gap:8px;border:1px solid var(--clf-line);border-radius:10px;padding:14px 16px;background:var(--clf-paper);color:var(--clf-ink);font-size:13.5px;line-height:1.45;min-width:0}
+.clf-sc.compact{border:0;border-radius:0;padding:0 0 12px;border-bottom:1px solid var(--clf-line2);background:none}
+.clf-sc-h{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.clf-sc-k,.clf-sc-r{font-family:var(--clf-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.clf-sc-k{border:1px solid var(--clf-line);color:var(--clf-ink2)}
+.clf-sc-r.v-verified{background:var(--clf-green-soft);color:var(--clf-green-ink)}
+.clf-sc-r.v-rejected{background:var(--clf-create-soft);color:var(--clf-create-ink)}
+.clf-sc-r.v-set_aside{background:var(--clf-amber-soft);color:var(--clf-amber-ink)}
+.clf-sc-v{font-size:22px;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.clf-sc-t{margin:0;font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.clf-sc-d{margin:0;color:var(--clf-ink2);overflow-wrap:anywhere}
+.clf-sc-from{display:flex;gap:6px;align-items:baseline;padding:7px 10px;border-radius:8px;background:var(--clf-soft);color:var(--clf-ink2);overflow-wrap:anywhere}
+.clf-sc-from b{color:var(--clf-ink);font-weight:600}
+.clf-sc .clf-q{font-size:14px;padding:10px 12px 10px 14px}
+.clf-sc-g{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:0}
+.clf-sc-g dt{font-family:var(--clf-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-sc-g dd{margin:1px 0 0;overflow-wrap:anywhere}
+.clf-sc-g a{color:var(--clf-chart);text-decoration:none}
+.clf-sc-f{display:flex;flex-wrap:wrap;gap:8px}
+.clf-sc-f button{all:unset;cursor:pointer;font-size:13px;font-weight:500;color:var(--clf-ink);border:1px solid var(--clf-line);border-radius:999px;padding:4px 12px}
+.clf-sc-f button:hover{border-color:var(--clf-ink3)}
+.clf-sc-f button:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-sc.loading{color:var(--clf-ink3)}
+/* A line of a document as a field (the report's headline, a summary line, a
+   paragraph, a finding, a gap, a list item): the app draws its words, the
+   field makes them a target that traces to its source (the mock's wash). */
+:root{--clf-hl:var(--rs-hl,#FFE36E)}
+clan-field.clf-ln{display:inline;cursor:pointer;border-radius:3px;box-decoration-break:clone;-webkit-box-decoration-break:clone;transition:background .12s var(--clf-ease),box-shadow .12s var(--clf-ease)}
+clan-field.clf-ln:hover{background:color-mix(in srgb,var(--clf-hl) 34%,transparent);box-shadow:0 2px 0 var(--clf-ink)}
+clan-field.clf-ln:has(.clf:hover,button:hover){background:none;box-shadow:none}
+clan-field.clf-ln:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+/* the answer (a report's headline) lights as any line does: its words, line by line, not a block */
+clan-field.clf-ln.s-rejected,clan-field.clf-ln.s-superseded{text-decoration:line-through;text-decoration-color:var(--clf-create)}
+clan-chart .clf-chart{cursor:pointer}
+/* The views of those lines (ClanFields.card): the mock's inspector views,
+   the same in the research inspector, the brief's panel and the drawer. */
+.clf-rv{display:grid;gap:0;color:var(--clf-ink);font-size:13px;line-height:1.5;min-width:0}
+.clf-rv .rv-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.clf-rv .rv-kind{display:inline-flex;align-items:center;gap:8px;font:700 10.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-rv .rv-n{width:22px;height:22px;border-radius:50%;background:var(--clf-ink);color:var(--clf-paper);display:inline-grid;place-items:center;font:700 10.5px var(--clf-mono);letter-spacing:0;flex:none}
+.clf-rv .rv-n.p{background:transparent;color:var(--clf-ink);border:1.5px dashed var(--clf-ink)}
+.clf-rv .rv-title{font-size:18px;font-weight:600;line-height:1.35;letter-spacing:-.012em;margin:0 0 6px;overflow-wrap:anywhere}
+.clf-rv .rv-title.gone{text-decoration:line-through;color:var(--clf-ink3)}
+.clf-rv .rv-meta{font:11.5px/1.6 var(--clf-mono);color:var(--clf-ink3);margin:0 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.clf-rv .rv-meta b{color:var(--clf-ink2);font-weight:600}
+.clf-rv .rv-sec{border-top:1px solid var(--clf-line2);padding:12px 0 2px;margin-top:12px;display:grid;gap:8px}
+.clf-rv .rv-sec > h5{margin:0;font:700 10.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3);display:flex;align-items:center;gap:8px}
+.clf-rv .rv-sec > h5 em{font-style:normal;font-weight:500;letter-spacing:.02em;text-transform:none;margin-left:auto}
+.clf-rv .rv-sec p{font-size:13px;line-height:1.5;margin:0;color:var(--clf-ink2)}
+.clf-rv .rv-none{color:var(--clf-ink3)!important}
+.clf-rv .rv-q{margin:0;font-size:14px;line-height:1.5;color:var(--clf-ink);border-left:3px solid var(--clf-hl);padding:2px 0 2px 12px;overflow-wrap:anywhere}
+.clf-rv .rv-src{font:11.5px/1.6 var(--clf-mono);color:var(--clf-ink3)}
+.clf-rv .rv-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font:700 10px var(--clf-mono);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;border:1px solid currentColor}
+.clf-rv .rv-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.clf-rv .rv-pill.ok{color:var(--clf-green-ink)}.clf-rv .rv-pill.warn{color:var(--clf-amber-ink)}.clf-rv .rv-pill.bad{color:var(--clf-create-ink)}.clf-rv .rv-pill.mute{color:var(--clf-ink3)}
+.clf-rv .rv-lens{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border:1px solid var(--clf-line);border-radius:999px;font:600 10.5px var(--clf-mono);color:var(--clf-ink2)}
+.clf-rv .rv-conf{display:inline-grid;grid-template-columns:repeat(3,10px);gap:2px;vertical-align:middle;margin-right:4px}
+.clf-rv .rv-conf i{height:4px;border-radius:1px;background:var(--clf-line)}
+.clf-rv .rv-conf[data-c="3"] i,.clf-rv .rv-conf[data-c="2"] i:nth-child(-n+2){background:var(--clf-ink)}
+.clf-rv .rv-conf[data-c="1"] i:first-child{background:var(--clf-amber)}
+.clf-rv .rv-reason{display:grid;border:1px solid var(--clf-line2);border-radius:8px;overflow:hidden;background:var(--clf-paper)}
+.clf-rv .rv-row{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;padding:9px 12px;font-size:13px;line-height:1.5;color:var(--clf-ink2)}
+.clf-rv .rv-row + .rv-row{border-top:1px solid var(--clf-line2)}
+.clf-rv .rv-row .rl{font:700 10px/1.9 var(--clf-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-rv .rv-row.dec{background:color-mix(in srgb,var(--clf-hl) 14%,transparent);color:var(--clf-ink);font-weight:550}
+.clf-rv .rv-bec,.clf-rv .rv-rej{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+.clf-rv .rv-bec li,.clf-rv .rv-rej li{position:relative;padding-left:16px}
+.clf-rv .rv-bec li::before{content:"";position:absolute;left:2px;top:8px;width:6px;height:6px;background:var(--clf-ink);border-radius:1px}
+.clf-rv .rv-rej li::before{content:"×";position:absolute;left:1px;top:-1px;font:700 13px var(--clf-mono);color:var(--clf-create)}
+.clf-rv .rv-rej s{color:var(--clf-ink3);text-decoration-color:var(--clf-create)}
+.clf-rv .rv-cites{display:inline-flex;flex-wrap:wrap;gap:4px;margin-left:6px;vertical-align:1px}
+.clf-rv .rv-attn{display:flex;gap:8px;padding:9px 12px;border-top:1px solid color-mix(in srgb,var(--clf-amber) 40%,transparent);background:color-mix(in srgb,var(--clf-amber) 8%,transparent);font-size:12.5px;color:var(--clf-ink2)}
+.clf-rv .rv-attn b{font:700 10px/1.9 var(--clf-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--clf-amber-ink);white-space:nowrap}
+.clf-rv .rv-by{font:11px var(--clf-mono);color:var(--clf-ink3);padding:7px 12px;border-top:1px solid var(--clf-line2)}
+.clf-rv .rv-chip,.clf-rv .rv-fchip,.clf-rv .rv-schip,.clf-rv .rv-dchip,.clf-rv .rv-cchip{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:0 7px;height:20px;max-width:100%;border-radius:3px;border:1px solid var(--clf-line);background:var(--clf-paper);font:600 10.5px var(--clf-mono);color:var(--clf-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.clf-rv .rv-chip .pin{width:7px;height:7px;border-radius:50%;background:var(--clf-create);flex:none}
+.clf-rv .rv-chip b{font-weight:500;color:var(--clf-ink2)}
+.clf-rv .rv-chip.rej{text-decoration:line-through;color:var(--clf-ink3)}
+.clf-rv .rv-fchip{border-radius:999px;padding-left:2px}
+.clf-rv .rv-fchip .rv-n{width:15px;height:15px;font-size:8.5px}
+.clf-rv .rv-schip::before{content:"";width:7px;height:7px;background:var(--clf-ink);flex:none}
+.clf-rv .rv-dchip{color:var(--clf-ink3);border-style:dashed;cursor:default}
+.clf-rv .rv-cchip{border-radius:999px}
+.clf-rv .rv-chip:hover,.clf-rv .rv-fchip:hover,.clf-rv .rv-schip:hover,.clf-rv .rv-cchip:hover{border-color:var(--clf-ink);background:color-mix(in srgb,var(--clf-hl) 30%,var(--clf-paper))}
+.clf-rv .rv-claims{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.clf-rv .rv-claims button{all:unset;box-sizing:border-box;width:100%;cursor:pointer;display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:8px;align-items:start;padding:8px 10px;border:1px solid var(--clf-line2);border-radius:6px;font-size:13px;line-height:1.45;color:var(--clf-ink);background:var(--clf-paper)}
+.clf-rv .rv-claims button:hover{border-color:var(--clf-ink)}
+.clf-rv .rv-claims button:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-rv .rv-claims .no{font:700 11px/1.7 var(--clf-mono);color:var(--clf-ink3)}
+.clf-rv .rv-claims .fx{display:flex;gap:3px;align-items:center;padding-top:2px}
+.clf-rv .rv-claims .fx .rv-n{width:16px;height:16px;font-size:9px}
+.clf-rv .rv-claims small{display:block;font:10.5px var(--clf-mono);color:var(--clf-ink3);margin-top:2px}
+.clf-rv .rv-claims .flagged{border-color:color-mix(in srgb,var(--clf-create) 50%,transparent)}
+.clf-rv .rv-uses{display:grid;gap:6px}
+.clf-rv .rv-use{display:flex;align-items:baseline;gap:6px 8px;font-size:12.5px;color:var(--clf-ink2);flex-wrap:wrap}
+.clf-rv .rv-use > span:first-child{font:700 9.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3);min-width:82px}
+.clf-rv .rv-dec{border:1px solid var(--clf-line2);border-radius:6px;background:var(--clf-paper)}
+.clf-rv .rv-dec + .rv-dec{margin-top:6px}
+.clf-rv .rv-dec > summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:48px auto minmax(0,1fr);gap:8px;align-items:baseline;padding:8px 10px;font-size:12.5px;line-height:1.45;color:var(--clf-ink2)}
+.clf-rv .rv-dec > summary::-webkit-details-marker{display:none}
+.clf-rv .rv-dec > summary b{color:var(--clf-ink)}
+.clf-rv .rv-dec[open] > summary{border-bottom:1px solid var(--clf-line2)}
+.clf-rv .rv-dec .rv-reason{border:0;border-radius:0}
+.clf-rv .rv-t{font:11px var(--clf-mono);color:var(--clf-ink3);font-variant-numeric:tabular-nums}
+.clf-rv .rv-k{display:inline-block;padding:0 6px;border-radius:3px;font:700 9.5px/16px var(--clf-mono);letter-spacing:.06em;text-transform:uppercase;background:color-mix(in srgb,var(--clf-ink) 8%,transparent);color:var(--clf-ink2)}
+.clf-rv .rv-k.k-verify,.clf-rv .rv-k.k-approve{background:var(--clf-green-soft);color:var(--clf-green-ink)}
+.clf-rv .rv-k.k-contest,.clf-rv .rv-k.k-reject{background:var(--clf-create-soft);color:var(--clf-create-ink)}
+.clf-rv .rv-k.k-resolve{background:color-mix(in srgb,var(--clf-hl) 55%,transparent);color:#141413}
+.clf-rv .rv-k.k-verdict{background:var(--clf-amber-soft);color:var(--clf-amber-ink)}
+.clf-rv .rv-flag{padding:9px 12px;border-radius:6px;border:1px solid color-mix(in srgb,var(--clf-create) 45%,transparent);background:color-mix(in srgb,var(--clf-create) 8%,transparent);font-size:12.5px;color:var(--clf-ink2);margin-top:8px}
+.clf-rv .rv-flag b{color:var(--clf-create-ink)}
+.clf-rv .rv-needs{padding:11px 12px;border-radius:8px;border:1px solid color-mix(in srgb,var(--clf-amber) 45%,transparent);background:color-mix(in srgb,var(--clf-amber) 8%,transparent);display:grid;gap:8px;margin:10px 0 2px}
+.clf-rv .rv-needs b{font:700 10.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-amber-ink)}
+.clf-rv .rv-needs p{font-size:13px;margin:0;color:var(--clf-ink2)}
+.clf-rv .rv-chain{list-style:none;margin:0;padding:0;display:grid}
+.clf-rv .rv-chain li{position:relative;padding:0 0 12px 22px;font-size:12.5px;line-height:1.45;color:var(--clf-ink2);display:grid;gap:4px}
+.clf-rv .rv-chain li::before{content:"";position:absolute;left:4px;top:5px;width:9px;height:9px;border-radius:50%;border:2px solid var(--clf-ink);background:var(--clf-paper);box-sizing:border-box}
+.clf-rv .rv-chain li::after{content:"";position:absolute;left:8px;top:15px;bottom:0;border-left:1px solid var(--clf-line)}
+.clf-rv .rv-chain li:last-child{padding-bottom:0}.clf-rv .rv-chain li:last-child::after{display:none}
+.clf-rv .rv-chain li.hl::before{background:var(--clf-hl)}
+.clf-rv .rv-pinb{all:unset;cursor:pointer;display:grid;gap:1px;color:var(--clf-ink);font-size:13px}
+.clf-rv .rv-pinb .k,.clf-rv .rv-chain .k{display:block;font:700 9.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-rv .rv-pinb:hover{text-decoration:underline;text-underline-offset:3px}
+.clf-rv .rv-chain .rv-q{font-size:13px}
+.clf-rv .rv-chain .rv-q.rej{text-decoration:line-through;color:var(--clf-ink3)}
+.clf-rv .rv-pins{width:100%;border-collapse:collapse;font-size:12.5px}
+.clf-rv .rv-pins td{padding:7px 6px;border-bottom:1px solid var(--clf-line2);vertical-align:top;color:var(--clf-ink2)}
+.clf-rv .rv-pins tr{cursor:pointer}
+.clf-rv .rv-pins tr:hover td{background:color-mix(in srgb,var(--clf-hl) 16%,transparent)}
+.clf-rv .rv-pins td:first-child{padding-left:0;color:var(--clf-ink)}
+.clf-rv .rv-pins .v{font:650 12.5px var(--clf-mono);white-space:nowrap;color:var(--clf-ink);text-align:right}
+.clf-rv .rv-pins small{display:block;font:10.5px/1.5 var(--clf-mono);color:var(--clf-ink3)}
+.clf-rv .rv-pins .rej td{opacity:.6}.clf-rv .rv-pins .rej .v{text-decoration:line-through}
+.clf-rv .rv-vs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.clf-rv .rv-vs > div{border:1px solid var(--clf-line2);border-radius:8px;padding:10px 11px;display:grid;gap:4px;font-size:12px;color:var(--clf-ink2);align-content:start}
+.clf-rv .rv-vs > div.won{border:1.5px solid var(--clf-ink);box-shadow:inset 0 4px 0 var(--clf-hl)}
+.clf-rv .rv-vs .v{font:650 20px var(--clf-mono);color:var(--clf-ink)}
+.clf-rv .rv-vs .lost .v{text-decoration:line-through;color:var(--clf-ink3);font-weight:500}
+.clf-rv .rv-vs .tag{font:700 9.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-rv .rv-bars{display:grid;gap:6px}
+.clf-rv .rv-bar{all:unset;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:6px 8px;border:1px solid var(--clf-line2);border-radius:6px}
+.clf-rv .rv-bar:hover{border-color:var(--clf-ink)}
+.clf-rv .rv-bar i{grid-column:1 / -1;height:6px;border-radius:3px;background:var(--clf-chart)}
+.clf-rv .rv-bar b{font:650 12.5px var(--clf-mono)}
+.clf-rv .rv-bar small{grid-column:1 / -1;font:10.5px var(--clf-mono);color:var(--clf-ink3)}
+.clf-rv .rv-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+.clf-rv .rv-btn{all:unset;box-sizing:border-box;cursor:pointer;height:28px;padding:0 10px;display:inline-flex;align-items:center;border-radius:6px;border:1px solid var(--clf-line);background:var(--clf-paper);color:var(--clf-ink);font-size:12px;font-weight:600}
+.clf-rv .rv-btn:hover{border-color:var(--clf-ink)}
+/* Open the source / Open the file: the way out to the original, the view's one strong action */
+.clf-rv .rv-acts.pv-open{margin-top:8px}
+.clf-rv a.rv-btn{text-decoration:none}
+.clf-rv .rv-open{background:var(--clf-ink);border-color:var(--clf-ink);color:var(--clf-paper)}
+.clf-rv .rv-open:hover{background:color-mix(in srgb,var(--clf-ink) 85%,var(--clf-paper));color:var(--clf-paper)}
+.clf-rv .rv-q.pv-doc{position:relative;max-height:260px;overflow:auto;white-space:pre-wrap}
+.clf-rv .rv-btn:focus-visible,.clf-rv .rv-chip:focus-visible,.clf-rv .rv-fchip:focus-visible,.clf-rv .rv-schip:focus-visible,.clf-rv .rv-cchip:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-rv .rv-host:empty{display:none}
+/* One view per part (ClanFields.partView): the inspector's sections, a part's name at its head. */
+.clf-rv .rv-bec,.clf-rv .rv-rej{grid-template-columns:minmax(0,1fr)}
+.clf-rv .rv-reason .rv-cites{display:flex;max-width:100%;min-width:0;margin:4px 0 0}
+.clf-rv .rv-reason .rv-cites > *{flex:0 1 auto;min-width:0}
+.clf-rv .pv .rv-meta > span,.clf-rv.pv .rv-meta > span{display:inline}
+.clf-rv .rv-pname{font-size:15px;font-weight:700;letter-spacing:-.01em;line-height:1.3;color:var(--clf-ink);min-width:0;overflow-wrap:anywhere}
+.clf-rv.pv > .rv-head:first-child,.clf-rv .pv-in > .rv-head:first-child{align-items:flex-start;margin-bottom:4px}
+.clf-rv .pv-said{display:grid;gap:3px}
+.clf-rv .pv-cap{all:unset;box-sizing:border-box;cursor:pointer;display:block;width:max-content;max-width:100%;font:11.5px/1.6 var(--clf-mono);color:var(--clf-ink3);overflow-wrap:anywhere;padding-left:15px}
+.clf-rv p.rv-src{padding-left:15px}
+.clf-rv .pv-cap:hover{color:var(--clf-ink);text-decoration:underline;text-underline-offset:3px}
+.clf-rv .pv-cap:focus-visible,.clf-rv .rv-pins tr:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-rv .rv-q{white-space:pre-line}
+.clf-rv .pv-long details > summary{list-style:none;cursor:pointer}
+.clf-rv .pv-long details > summary::-webkit-details-marker{display:none}
+.clf-rv .pv-long details[open] > summary{display:none}
+.clf-rv .pv-more{font:600 11px var(--clf-mono);color:var(--clf-ink3);text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+.clf-rv .rv-pins .pv-lv{display:block;color:var(--clf-ink2);font-size:12.5px;line-height:1.45;margin-top:1px;overflow-wrap:anywhere}
+.clf-rv .rv-pins td:last-child{width:1%;white-space:nowrap;padding-right:0}
+.clf-rv .rv-pins .rv-schip{height:16px;font-size:9.5px;padding:0 5px;vertical-align:0}
+.clf-rv .rv-pins .clf-lock{width:11px;height:11px;margin-right:4px;vertical-align:-1px}
+.clf-rv .rv-more > summary{cursor:pointer;list-style:none;font:600 11px var(--clf-mono);color:var(--clf-ink3);padding:6px 0;text-decoration:underline;text-underline-offset:3px}
+.clf-rv .rv-more > summary::-webkit-details-marker{display:none}
+.clf-rv .rv-more[open] > summary{display:none}
+@media (max-width:620px){.clf-rv .rv-pins td.v{white-space:normal}}
+.clf-drawer .clf-rv{padding-top:4px}
+/* The side panel's inspector (setPanelHost): the research inspector's bar, ← back, the trail, ×. */
+.clf-insp{display:grid;gap:0;min-width:0;color:var(--clf-ink);font-size:13.5px;line-height:1.5}
+.clf-ibar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;padding:0 0 10px;margin:0 0 12px;border-bottom:1px solid var(--clf-line2);background:inherit}
+.clf-ibtn{width:28px;height:28px;flex:0 0 auto;border-radius:6px;border:1px solid var(--clf-line);background:var(--clf-paper);color:var(--clf-ink);cursor:pointer;font:600 14px/1 inherit;display:grid;place-items:center;padding:0}
+.clf-ibtn:hover{border-color:var(--clf-ink)}
+.clf-ibtn:focus-visible,.clf-crumbs button:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-crumbs{flex:1 1 0%;min-width:0;display:flex;align-items:center;gap:4px;overflow:hidden;white-space:nowrap;font:11.5px var(--clf-mono);color:var(--clf-ink3)}
+.clf-crumbs button{all:unset;cursor:pointer;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.clf-crumbs button:hover{color:var(--clf-ink);text-decoration:underline}
+.clf-crumbs b{color:var(--clf-ink);font-weight:650}
+.clf-crumbs > span{flex:none}
+.clf-insp-b{display:grid;gap:16px;align-content:start;min-width:0}
+.clf-insp-b .clf-dv .stmt{font-size:16px}
+/* The answers under a view, in the inspector's size: its section heads, compact buttons in a row. */
+.clf-insp-b .clf-sec{border-top:1px solid var(--clf-line2);padding-top:12px}
+.clf-insp-b .clf-sec > h3,.clf-insp-b .clf-sec > h3.ask{font:700 10.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-insp-b .clf-answers{display:flex;flex-wrap:wrap;gap:6px}
+.clf-insp-b .clf-btn.big{min-height:30px;padding:5px 11px;font-size:12.5px;font-weight:600;border-width:1px;border-radius:6px;white-space:nowrap}
+.clf-insp-b .clf-btn.big:hover:not([disabled]){box-shadow:none;border-color:var(--clf-ink)}
+.clf-insp-b .clf-btn.big.quiet{border-color:var(--clf-line)}
+.clf-insp-b .clf-ex,.clf-insp-b .clf-muted{font-size:12px;line-height:1.45;color:var(--clf-ink3)}
+.clf-insp-b .clf-answers + .clf-answers{margin-top:2px}
+.clf-rv .rv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin:0}
+.clf-rv .rv-grid > div{min-width:0}
+.clf-rv .rv-grid > div.w{grid-column:1 / -1}
+.clf-rv .rv-grid dt{font:700 9.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-rv .rv-grid dd{margin:2px 0 0;font-size:12.5px;color:var(--clf-ink);overflow-wrap:anywhere}
+.clf-rv .rv-grid a{color:var(--clf-ink)}
+.clf-rv .rv-dot{width:8px;height:8px;border-radius:50%;background:var(--clf-create);flex:none}
+.clf-rv .rv-sq{width:8px;height:8px;background:var(--clf-ink);flex:none}
+.clf-rv .rv-q mark{background:color-mix(in srgb,var(--clf-hl,#FFE45C) 70%,transparent);color:inherit;padding:0 1px}
 /* On a phone a long publisher breaks rather than push the column past the card. */
 @media (max-width:620px){.clf-drawer{top:auto;height:88%;width:100%;border-radius:18px 18px 0 0;transform:translateY(104%)}.clf-titem .x{max-width:170px}.clf-src{white-space:normal;overflow-wrap:anywhere}
   .clf-db{padding:16px 16px 24px}.clf-acts > .clf-btn.big,.clf-textbar > .clf-btn,.clf-ed .row > .clf-btn,.clf-pop .clf-acts > .clf-btn{flex:1 1 100%}}
 @media (prefers-reduced-motion:reduce){.clf-drawer,.clf-scrim,.clf-toast,.clf{transition:none}.clf-flash{animation:none}}
+/* Feedback by pointing at it (the dogfood build; features/feedback-point.clan): what is under the
+   cursor is outlined and named while the shell asks (clan:feedback-pick). */
+html.clf-fb-on,html.clf-fb-on *{cursor:crosshair!important}
+.clf-fb{position:fixed;z-index:2147483000;pointer-events:none;border-radius:5px;outline:2px solid #515BFF;background:color-mix(in srgb,#515BFF 6%,transparent);display:none}
+.clf-fb-tag{position:absolute;right:6px;top:-11px;background:#515BFF;color:#fff;font:600 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 <script>
 /* The OS's fields. Everything a field shows comes from the record the host
@@ -321,9 +543,41 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
    (clan://decisions): the kind of field and what it asks of a person are the
    record's, never the tag's. Every action is one host route; the reply
    carries the document as it now stands, which replaces the page's copy. */
+/* The agency's colours on a document's own controls (features/brief-new-ui.clan).
+   The shell answers clan:me with the agency's admin-set base and accent; they
+   land on :root as --ag-base and --ag-acc, with the ink that reads on each.
+   An app derives its primary actions from them (base in light, accent in
+   dark) and keeps its documents on paper. Nothing here is the document's. */
+var NapkinAgency=(function(){
+  var HEX=/^#[0-9a-f]{6}$/i, now=null;
+  function lum(h){ var n=parseInt(h.slice(1),16); return [n>>16,(n>>8)&255,n&255].map(function(v){ v/=255; return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4); }).reduce(function(a,v,i){ return a+v*[.2126,.7152,.0722][i]; },0); }
+  function inkOn(h){ return lum(h)>.3?'#141413':'#FFFFFF'; }
+  // The agency's logos (palette.ts: logo and logoOnDark per ground, icon square) arrive inline; only an inline picture is kept.
+  function img(u){ return typeof u==='string'&&/^data:image\/(svg\+xml|png)[;,]/.test(u)?u:null; }
+  function apply(c){
+    if(!c||!HEX.test(c.base||'')||!HEX.test(c.accent||'')) return;
+    now={base:c.base, accent:c.accent, name:typeof c.name==='string'&&c.name.trim()?c.name.trim():null,
+      logo:img(c.logo), logoOnDark:img(c.logoOnDark), icon:img(c.icon), accentUse:c.accentUse==='line'?'line':'fill'};
+    var r=document.documentElement;
+    r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
+    r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', HEX.test(c.accentInk||'')?c.accentInk:inkOn(c.accent));
+    r.setAttribute('data-agency', '');
+    // accentUse 'line' (palette.ts: Catapult's crimson): actions stay the base in both themes, with
+    // the accent as their outline (--ag-act-line), never a fill; an app's CSS reads data-agency-accent.
+    if(now.accentUse==='line'){ r.setAttribute('data-agency-accent','line'); r.style.setProperty('--ag-act-line', c.accent); }
+    else { r.removeAttribute('data-agency-accent'); r.style.removeProperty('--ag-act-line'); }
+    try{ window.dispatchEvent(new CustomEvent('napkin:agency', {detail:now})); }catch(e){}
+  }
+  function start(){ if(window.clan&&typeof window.clan.me==='function') window.clan.me().then(function(m){ if(m&&m.agency) apply(m.agency); }, function(){}); }
+  if(document.readyState==='complete') setTimeout(start,0); else window.addEventListener('load', start);
+  return {apply:apply, now:function(){ return now; }};
+})();
 var ClanFields=(function(){
   var SCHEME=(navigator.userAgent.indexOf('Windows')!==-1)?'http://clan.localhost':'clan://localhost';
   var VIEW=null, STACK=[], DRAWER=null, EDIT=false;
+  // The app's side panel, when it has one (ClanFields.setPanelHost), and the
+  // inspector open in it: provenance opens there, never in the drawer.
+  var PANEL=null, SURF=null;
   var TICK='<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.5l2.5 2.5 4.5-5"/></svg>';
   var LOCK='<svg class="clf-lock" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="5.5" width="8" height="5.5" rx="1"/><path d="M4 5.5V4a2 2 0 0 1 4 0v1.5"/></svg>';
 
@@ -373,7 +627,7 @@ var ClanFields=(function(){
   function docId(){ if(VIEW&&VIEW.document_id) return VIEW.document_id; var m=obj((window.__CLAN__||{}).manifest); return m.document_id||m.id||''; }
   function yr(d){ return d?String(d).slice(0,4):''; }
   // Dates in plain words: 'March 2025' for when a source came out, '28 Sept'
-  // for when the crew read it. What is not a date is shown as it is.
+  // for when the agents read it. What is not a date is shown as it is.
   var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var MON=['Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'];
   function dparts(d){ var m=/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?(?:[T ].*)?$/.exec(String(d||'').trim()); return m&&(!m[2]||+m[2]>=1&&+m[2]<=12)?{y:+m[1],m:m[2]?+m[2]:0,d:m[3]?+m[3]:0,t:(/[T ](\d{2}:\d{2})/.exec(String(d))||[])[1]||''}:null; }
@@ -415,7 +669,18 @@ var ClanFields=(function(){
       return short(v)+(u?' '+u:'');
     }
     if(typeof v==='boolean') return v?'yes':'no';
+    if(u==='code'||typeof v==='string'&&CODE.test(v)) return codeWords(v);
     return String(v);
+  }
+  // A code in words (design, data fixes 4): the intake's own option label for it ("Fast food"),
+  // else its last segment in words; never the raw code.
+  var CODE=/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
+  function codeWords(v){
+    v=String(v==null?'':v); var lab='', M=obj(obj(data().intake).messages);
+    Object.keys(M).some(function(k){ var q=obj(M[k]).question; return arr(q&&q.options).some(function(o){
+      var vs=o&&Array.isArray(o.value)?o.value:[o&&o.value]; if(o&&o.label&&vs.indexOf(v)!==-1){ lab=String(o.label); return true; } return false; }); });
+    if(lab) return lab;
+    var w=slugWords(v.split('.').pop()); return w.charAt(0).toUpperCase()+w.slice(1);
   }
   function short(n){
     var a=Math.abs(n);
@@ -424,10 +689,20 @@ var ClanFields=(function(){
     if(a>=1e4) return (Math.round(n/100)/10)+'k';
     return String(Math.round(n*100)/100);
   }
+  // A key in words (design, data fixes 5): a family the roster names has its own word; the rest is the
+  // key less its trailing hash, with acronyms and names spelt as people write them. Never the raw key.
+  var KEY_FAM={'roster.categories.primary':'Category','roster.categories.secondary':'Second category','roster.client_org':'Client','roster.brand':'Brand','roster.markets':'Markets'};
+  var ACRO={hfss:'HFSS',asai:'ASAI',asa:'ASA',cap:'CAP',bai:'BAI',ipa:'IPA',qsr:'QSR',fmcg:'FMCG',ooh:'OOH',tv:'TV',bvod:'BVOD',uk:'UK',eu:'EU',gb:'GB',ie:'IE',nl:'NL',be:'BE',yoy:'year on year',cnam:'Coimisiún na Meán',mcdonalds:'McDonald’s'};
+  function slugWords(k){
+    var ws=String(k||'').replace(/_[0-9a-f]{6}$/,'').replace(/_(eur|gbp|usd)$/,'').split(/[_.\s]+/).filter(Boolean);
+    return ws.map(function(w){ return ACRO[w]||w; }).join(' ').replace(/\bcoimisi[uú]n na me[aá]n\b/i,'Coimisiún na Meán');
+  }
   function label(p){
     if(!p) return '';
-    var k=String(p.key||'').split('.').slice(1).join(' ')||String(p.key||'');
-    k=k.replace(/_(eur|gbp|usd)$/,'').replace(/_/g,' ').replace(/\byoy\b/,'year on year');
+    // A text pin's key ends in a slug of its own value ("key_moment.christmas_the_busiest…"):
+    // its label is the kind of thing it is, and the value says the rest.
+    var key=String(p.key||''), fam=KEY_FAM[key], seg=key.split('.');
+    var k=fam||slugWords((seg.length>1?(p.unit==='text'?seg[1]:seg.slice(1).join(' ')):seg[0])||'')||'Fact';
     return k.charAt(0).toUpperCase()+k.slice(1)+(p.market?' · '+country(p.market):'');
   }
   // "IE" → "Ireland", as the report names a market; the code where the browser has no name.
@@ -444,14 +719,24 @@ var ClanFields=(function(){
   var OPAQUE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   // A person's id back as their name: hyphens were spaces, and a word held
   // wholly as letter codes (a name in another script) is spelt out again.
-  function nameOfId(n){ return String(n||'').split('-').map(function(w){ return /^(\.[0-9a-f]{2,4})+$/.test(w)?w.slice(1).split('.').map(function(h){ return String.fromCharCode(parseInt(h,16)); }).join(''):w; }).join(' '); }
+  // A sign-in id ("sam@wk", "ann.lee@napkin") reads as the person's first
+  // name, capitalised, never the id itself.
+  function nameOfId(n){ n=String(n||''); var at=/^([^@\s]+)@[^@\s]+$/.exec(n);
+    if(at) return at[1].split(/[._-]+/).filter(Boolean).map(function(w){ return w.charAt(0).toUpperCase()+w.slice(1); }).join(' ');
+    return n.split('-').map(function(w){ return /^(\.[0-9a-f]{2,4})+$/.test(w)?w.slice(1).split('.').map(function(h){ return String.fromCharCode(parseInt(h,16)); }).join(''):w; }).join(' '); }
   function personName(uri){ if(isYou(uri)) return 'you'; var n=String(uri).replace(/^human:/,''); return OPAQUE.test(n)?'someone':nameOfId(n); }
   // What a person wrote, without the "<their id>: " an older note began with.
   function saidBy(q,rec){ var id=String(rec&&rec.publisher||''); q=String(q); return id&&q.indexOf(id+': ')===0?q.slice(id.length+2):q; }
   function srcShort(p){ var s=srcOf(p); if(!s||!s.rec) return s?'source details missing':'';
-    if(s.rec.tier==='reviewer-verified') return (/correct/.test(s.rec.title||'')?'corrected by ':'checked by ')+personName(whoOfSrc(s.rec));
+    if(s.rec.tier==='reviewer-verified') return reviewerWords(s.rec);
     if(/^material:/.test(s.rec.uri||'')) return 'your file'+(s.rec.title?' '+s.rec.title:'');
     return (pubName(s.rec.publisher)||s.rec.domain||'source')+(s.rec.published_at?' · '+yr(s.rec.published_at):''); }
+  // A person's check, one rule everywhere (design, data fixes 8): "Confirmed by Tia in chat" when the
+  // record says it was confirmed in the chat, "corrected by" only when it says correction, else
+  // "checked by"; a record from the knowledge layer adds where it came from.
+  function reviewerWords(rec){ var t=String(rec&&rec.title||''), who=personName(whoOfSrc(rec));
+    var w=/correct/i.test(t)?'corrected by '+who:/confirm/i.test(t)?'confirmed by '+who+' in chat':'checked by '+who;
+    return w+(rec&&(rec.origin==='layer'||rec.origin_kind==='layer')?' · from what Napkin already knew':''); }
   // Where a source came from, in plain words: 'ShelfLife Magazine · March 2025
   // · we read it on 28 Sept'.
   function srcLine(rec,p){
@@ -459,46 +744,48 @@ var ClanFields=(function(){
     return [pubName(rec.publisher)||rec.domain||'',rec.published_at?monthYear(rec.published_at):'',read?'we read it on '+dayMonth(read):''].filter(Boolean).join(' · ');
   }
 
-  // ── who in the crew recorded a thing ────────────────────────────────
-  // The agent that made the newest decision on the path, as the crew names it
-  // (the judge checks things and never records them, so it is passed over);
-  // failing that, the researcher whose lens the key's namespace names (the
+  // ── which agent recorded a thing ────────────────────────────────
+  // The agent that made the newest decision on the path, by role (the Review
+  // agent checks things and never records them, so it is passed over);
+  // failing that, the Research agent when the key's namespace names a lens (the
   // server's KEY_LENS: a namespace is a word of its lens's name, and these
-  // extra namespaces map as it maps them).
+  // extra namespaces map as it maps them). Roles, words and spheres are the one
+  // engine's (NapkinRoles, inlined at the agent-sphere marker).
   var NS_EXTRA={share:'market_structure',awareness:'brands_positioning',launch:'brands_positioning',product:'brands_positioning'};
-  function crew(){ return typeof NapkinAgents==='object'&&NapkinAgents?NapkinAgents:null; }
-  // The crew member a decision is by. A client-review suggestion is the host's
+  var LENS_IDS=['market_structure','brands_positioning','consumer_culture','category_codes','rhythm_moments','media_spend','regulation_clearance','effectiveness_evidence'];
+  var WORK_ROLE={read:'knowledge', synthesise:'strategy', draft:'brief', judge:'review', research:'research'};
+  function crew(){
+    var R=typeof NapkinRoles==='object'&&NapkinRoles?NapkinRoles:null; if(!R) return null;
+    var given={}; Object.keys(R.ROLES).forEach(function(k){ given[k]=R.name(k); });
+    return { lenses:LENS_IDS, given:given, forWork:function(w){ return WORK_ROLE[w]||''; }, ofDecision:function(d){ return R.ofDecision(d); },
+      who:function(k){ return R.name(k); }, figure:function(w,o){ return R.tag(WORK_ROLE[w]||w,o); } };
+  }
+  // The agent a decision is by. A client-review suggestion is the host's
   // matcher (process:host, handler client_parts_match; in an older chain the
-  // middleware's find_client_parts): shown as the extract agent's reading of
+  // middleware's find_client_parts): shown as the Knowledge agent's reading of
   // the client's words.
-  function ellisKey(){ var A=crew(); return A?A.forWork('read')||'':''; }
+  function ellisKey(){ return crew()?'knowledge':''; }
   function crewKey(d){
     var A=crew(); d=d||{}; if(!A) return null;
     if(/^(client_parts_match|find_client_parts)\b/.test(d.handler||'')||d.agent==='find_client_parts'||d.agent==='client_parts_match'||d.action==='suggest_part') return ellisKey()||null;
-    return A.ofDecision?A.ofDecision(d):null;
+    return A.ofDecision(d);
   }
   function lensOfKey(key){
     // A contest's key carries its entity first: "category/x.y:codes.dominant_code".
-    var A=crew(), ns=String(key||'').split(':').pop().split('.')[0]; if(!A||!ns) return '';
-    return NS_EXTRA[ns]||arr(A.lenses).filter(function(l){ return l.split('_').indexOf(ns)!==-1; })[0]||'';
+    var ns=String(key||'').split(':').pop().split('.')[0]; if(!ns) return '';
+    return NS_EXTRA[ns]||LENS_IDS.filter(function(l){ return l.split('_').indexOf(ns)!==-1; })[0]||'';
   }
   function agentOf(path,key,work){
     var A=crew(); if(!A) return '';
     var ds=arr(VIEW&&VIEW.decisions);
     for(var i=0;i<ds.length;i++){ if(!arr(ds[i].targets).some(function(t){ return t.path===path; })) continue;
-      var k=crewKey(ds[i].decision); if(k&&k!=='judge'&&A.given[k]) return k; }
+      var k=crewKey(ds[i].decision); if(k&&k!=='review'&&A.given[k]) return k; }
     if(work) return A.forWork(work)||'';
-    var l=lensOfKey(key); return l?A.forWork('research',l)||'':'';
+    return lensOfKey(key)?'research':'';
   }
-  // A figure by agent key, through the crew's own work names.
-  function figOf(k,o){
-    var A=crew(); if(!A||!k) return '';
-    var ws=['read','synthesise','draft','judge'];
-    for(var i=0;i<ws.length;i++) if(A.forWork(ws[i])===k) return A.figure(ws[i],o);
-    var l=arr(A.lenses).filter(function(x){ return A.forWork('research',x)===k; })[0];
-    return l?A.figure('research',o,l):'';
-  }
-  // The agent says it, in first person, signed by name.
+  // The agent's sphere, by role.
+  function figOf(k,o){ var R=typeof NapkinRoles==='object'?NapkinRoles:null; return R&&k?R.tag(k,o):''; }
+  // The agent says it, in first person, signed by its role.
   function say(k,text,state){
     var A=crew(); if(!A||!k||!A.given[k]) return '';
     return '<div class="clf-say-row">'+figOf(k,{decorative:true,state:state||'idle'})+'<div class="clf-say"><span class="who">'+esc(A.who(k))+'</span><p>'+text+'</p></div></div>';
@@ -521,6 +808,14 @@ var ClanFields=(function(){
     if(/^cap_/.test(ref)) return 'capture';
     if(/^mat_/.test(ref)) return 'material';
     if(/^cite:/.test(ref)) return 'cite';
+    if(/^chart:/.test(ref)) return 'chart';
+    // A line of the report: its answer (headline and summary), one summary
+    // line or one paragraph of a section; a list item is <path>[i].
+    if(ref==='report.headline') return 'answer';
+    if(/^report\.(?:summary\[\d+\]|sections\[[A-Za-z0-9_-]+\]\.blocks\[\d+\])$/.test(ref)) return 'line';
+    var im=/^([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)\[(\d+)\]$/.exec(ref); if(im&&isPath(im[1])&&!/^report(?:\.|$)/.test(im[1])) return 'item';
+    // A gap by its own id, whatever its prefix (research writes g_…).
+    if(gap(ref)) return 'gap';
     if(isPath(ref)) return 'path';
     return null;
   }
@@ -568,7 +863,11 @@ var ClanFields=(function(){
     if(v==null||v==='') return '';
     if(typeof v==='string'||typeof v==='number') return String(v);
     if(typeof v==='boolean') return v?'yes':'no';
-    if(Array.isArray(v)) return v.map(function(x){ return typeof x==='object'&&x?(x.name||x.statement||x.label||x.ref||''):String(x); }).filter(Boolean).join(', ');
+    if(Array.isArray(v)){
+      var xs=v.map(function(x){ return typeof x==='object'&&x?(x.name||x.statement||x.label||x.ref||''):String(x); }).filter(Boolean);
+      // A list of sentences reads as sentences ("… together. Made by …"), never "together., Made by".
+      return xs.join(xs.length&&xs.every(function(x){ return /[.!?\u2026][\u0022\u201d\u2019\u0029]?\s*$/.test(x); })?' ':', ');
+    }
     return v.name||v.definition||v.statement||v.label||'';
   }
   // What a person can type: a string, a number, a list of plain values, a named thing.
@@ -642,7 +941,7 @@ var ClanFields=(function(){
   function drafterKey(){ var A=crew(); return A?A.forWork('draft')||'':''; }
   // Who proposed what a person accepted, by name: the drafter when the
   // proposal itself is no longer in the chain.
-  function proposerOf(b){ var pb=acceptOf(b); return givenOf(pb?crewKey(pb.decision):drafterKey())||'the crew'; }
+  function proposerOf(b){ var pb=acceptOf(b); return givenOf(pb?crewKey(pb.decision):drafterKey())||'the agents'; }
   // A person's reason as they gave it: an older accept began with the
   // decision's id, which is nobody's words.
   function saidWords(d){ return String(d&&d.rationale||'').replace(/^Accepted d_[A-Za-z0-9_-]+:\s*/,'Accepted ').replace(/^Used proposal d_[A-Za-z0-9_-]+\.?$/,'Used the proposal.'); }
@@ -655,7 +954,7 @@ var ClanFields=(function(){
     if(act==='extract') return 'from your material';
     if(act==='draft'||act==='regenerate'){ var g=givenOf(crewKey(d)); return 'drafted by '+(g||'the agent'); }
     if(act==='seed') return 'carried over';
-    // Not the client's words: what the research gave, or the crew's assumption.
+    // Not the client's words: what the research gave, or the agents' assumption.
     if(act==='from_research') return 'from the research';
     if(act==='assume') return 'assumed: confirm with the client';
     return '';
@@ -665,6 +964,8 @@ var ClanFields=(function(){
   function needsAt(path){ var me=docId()+'#'+path; return arr(VIEW&&VIEW.attention).filter(function(a){ return a.address===me; }); }
   // (A client's answer on a part shows as its chip, beside the part.)
   var NEED_TAG={flagged_field:'needs changing',bad_verdict:'marked wrong'};
+  // An agent's own bad verdict is not someone marking the part wrong: say whose it is.
+  function needTag(a){ var vb=a.code==='bad_verdict'&&blockOf(a.decision); return vb&&!isPerson(vb.decision)?'an agent said no':NEED_TAG[a.code]; }
 
   // ── the host ────────────────────────────────────────────────────────
   function post(route, body){
@@ -696,7 +997,7 @@ var ClanFields=(function(){
   // ── rendering ───────────────────────────────────────────────────────
   // What cannot be shown says so in plain words; the record's ids stay out of it.
   function missing(why){ return '<span class="clf-missing" title="'+esc(why)+'">'+esc(why.charAt(0).toLowerCase()+why.slice(1))+'</span>'; }
-  // A verified finding the crew checked again after a review, quietly.
+  // A verified finding the agents checked again after a review, quietly.
   function recheckWords(r){ return /correction/.test(r&&r.note||'')?'Re-checked after a correction: it still holds.':'Re-checked after a review: it still holds.'; }
   function tagFor(st){
     return st==='check'?'<span class="tag">please check</span>':st==='verified'?'<span class="tag">'+TICK+'checked</span>'
@@ -706,6 +1007,7 @@ var ClanFields=(function(){
   function renderField(el){
     var ref=el.getAttribute('ref')||'', as=el.getAttribute('as')||'inline', k=kindOf(ref), st=stateOf(ref);
     var cls={big:'big',stat:'stat',cell:'cell',claim:'claim'}[as]||'in';
+    if(el.hasAttribute('keep')||LINE_KINDS[k]){ renderLine(el, ref, k); return; }
     if(k==='path'){ renderPath(el, ref, as); return; }
     if(k==='passage'||k==='capture'||k==='material'){ renderEvidence(el, ref, k, as, cls); return; }
     if(k==='pin'){
@@ -741,13 +1043,12 @@ var ClanFields=(function(){
     var v=valueAt(path), t=textOf(v), ok=editableValue(v)&&canEdit(path);
     var org=provenance(path), need=needsAt(path).filter(function(a){ return NEED_TAG[a.code]; })[0], prop=!need&&proposalOf(path);
     var block=as==='block'||as==='big'||(typeof v==='string'&&v.length>80);
-    el.innerHTML='<button type="button" class="clf txt-f'+(block?' blk':'')+(ok?' editable':'')+(need?' s-check':prop?' low':'')+'" data-ref="'+esc(path)+'" aria-label="'+esc((el.getAttribute('caption')||path)+': '+(t||'nothing yet')+(need?' — '+NEED_TAG[need.code]:prop?' — a new version is proposed':''))+'">'
+    el.innerHTML='<button type="button" class="clf txt-f'+(block?' blk':'')+(ok?' editable':'')+(need?' s-check':prop?' low':'')+'" data-ref="'+esc(path)+'" aria-label="'+esc((el.getAttribute('caption')||path)+': '+(t||'nothing yet')+(need?' — '+needTag(need):prop?' — a new version is proposed':''))+'">'
       +(t?esc(t):'<span class="empty">nothing yet</span>')+(org?'<span class="org">'+esc(org)+'</span>':'')
-      +(need?'<span class="tag">'+esc(NEED_TAG[need.code])+'</span>':prop?'<span class="tag conf-l">proposed</span>':'')+'</button>';
+      +(need?'<span class="tag">'+esc(needTag(need))+'</span>':prop?'<span class="tag conf-l">proposed</span>':'')+'</button>';
   }
   // A passage, a capture item or a material, as a field shows it.
   // A material by its name; the person's own typed words have none worth showing.
-  function matName(m){ return !m?'Your material':m.kind==='prompt'||m.name==='prompt'?'What you typed':m.name||'Your material'; }
   var MAT_KIND={prompt:'your prompt',client_brief:'the client’s brief',email:'an email',deck:'a deck',image:'an image',other:'a file'};
   function renderEvidence(el, ref, k, as, cls){
     var cap=el.getAttribute('caption'), h='', aria='', low=false;
@@ -774,7 +1075,7 @@ var ClanFields=(function(){
     el.innerHTML='<div class="clf-ed" role="group" aria-label="Edit '+esc(opts.label||el.getAttribute('caption')||words(path))+'">'
       +(long?'<textarea>'+esc(t)+'</textarea>':'<input type="text" value="'+esc(t)+'">')
       +(list?'<span class="hint">Put a comma between each one.</span>':'')
-      +whyRow()+'<div class="clf-err" hidden></div><div class="row"><button type="button" class="clf-btn big primary" data-clf-save>Save</button><button type="button" class="clf-btn big quiet" data-clf-cancel>Cancel</button><span class="hint">Once you save, the crew will not write over it.</span></div></div>';
+      +whyRow()+'<div class="clf-err" hidden></div><div class="row"><button type="button" class="clf-btn big primary" data-clf-save>Save</button><button type="button" class="clf-btn big quiet" data-clf-cancel>Cancel</button><span class="hint">Once you save, the agents will not write over it.</span></div></div>';
     wireWhy(el.querySelector('.clf-ed'));
     if(opts.why){ var w0=el.querySelector('[data-why]'); w0.value=opts.why; w0.dispatchEvent(new Event('input')); }
     var box=el.querySelector('.clf-ed textarea, .clf-ed > input'); box.focus(); if(box.setSelectionRange) box.setSelectionRange(box.value.length,box.value.length);
@@ -870,7 +1171,7 @@ var ClanFields=(function(){
     var g=gap(el.getAttribute('ref')||'');
     if(!g){ el.innerHTML=missing('This is no longer in the document'); return; }
     var tried=arr(g.sources_tried||g.tried);
-    el.innerHTML='<button type="button" class="clf-gap" data-ref="'+esc(g.id)+'"><span class="ic" aria-hidden="true">?</span><span><b>'+esc(g.wanted||g.key||g.id)+'</b><span>'+esc(g.note||'')+(tried.length?' We looked in '+tried.length+' place'+(tried.length===1?'':'s')+', but found nothing we could quote.':'')+'</span></span></button>';
+    el.innerHTML='<button type="button" class="clf-gap" data-ref="'+esc(g.id)+'"><span class="ic" aria-hidden="true">?</span><span><b>'+esc(gapWords(g.wanted||g.searched||g.key||g.id))+'</b><span>'+esc(gapWords(g.note||''))+(tried.length?' We looked in '+tried.length+' place'+(tried.length===1?'':'s')+', but found nothing we could quote.':'')+'</span></span></button>';
   }
   function renderSources(el){
     var S=sources(), ids=Object.keys(S), used={};
@@ -886,6 +1187,357 @@ var ClanFields=(function(){
     el.innerHTML='<section class="clf-sources"><h2>'+esc(el.getAttribute('title')||'Sources')+' ('+order.length+')</h2><ol>'+rows.join('')+'</ol></section>';
   }
 
+
+  // ── the source card (OS-layer contract §8.3) ────────────────────────
+  // One card for a fact from any origin, whatever app shows it: the host
+  // resolves it (`POST /cite`, every ref a page asks for in the same tick in
+  // one call), and the card is kept per ref until the document changes.
+  var ORIGIN_WORD={research:'Research',client:'Client upload',brand:'Brand Clan',layer:'Knowledge layer',person:'A person',document:'This document'};
+  var VERDICT_WORD={verified:'Verified',rejected:'Marked wrong',set_aside:'Set aside'};
+  var CARD_KIND={fact:'Fact',finding:'Finding',source:'Source',material:'Material',passage:'Library passage',capture:'From material',decision:'Decision',person:'Person',address:'Field',unknown:'Not found'};
+  var CARDS={}, CARDS_AT=null, CARD_BATCH=null, CITE_MAX=500;
+  function cardVer(){ return VIEW&&VIEW.version||''; }
+  function fetchCites(refs){
+    var parts=[]; for(var i=0;i<refs.length;i+=CITE_MAX) parts.push(refs.slice(i,i+CITE_MAX));
+    return Promise.all(parts.map(function(rs){
+      return fetch(SCHEME+'/cite',{method:'POST',body:JSON.stringify({refs:rs})}).then(function(r){ return r.ok?r.json():null; }).then(function(v){ return v&&v.cites?v.cites:null; }).catch(function(){ return null; });
+    })).then(function(ms){ var out={}; ms.forEach(function(m){ if(!m) return; for(var k in m) out[k]=m[k]; }); return out; });
+  }
+  // The cards for `refs`, by ref; a ref the host could not be asked about
+  // is null and asked again next time.
+  function cardsFor(refs){
+    refs=uniq(arr(refs).map(String).filter(Boolean));
+    var v=cardVer(); if(v!==CARDS_AT){ CARDS={}; CARDS_AT=v; }
+    var need=refs.filter(function(r){ return !CARDS[r]; });
+    if(need.length){
+      if(!CARD_BATCH){ var b={refs:[]}; CARD_BATCH=b;
+        b.done=new Promise(function(ok){ setTimeout(function(){ if(CARD_BATCH===b) CARD_BATCH=null; ok(fetchCites(b.refs)); },0); }); }
+      var batch=CARD_BATCH, at=CARDS;
+      need.forEach(function(r){ batch.refs.push(r);
+        at[r]=batch.done.then(function(m){ var c=m[r]||null; if(!c&&at[r]&&CARDS===at) delete at[r]; return c; }); });
+    }
+    return Promise.all(refs.map(function(r){ return CARDS[r]; })).then(function(list){ var o={}; refs.forEach(function(r,i){ o[r]=list[i]; }); return o; });
+  }
+  // Who reviewed it: you, a person by name, or the agent whose verdict it
+  // is ("Review agent"), never the job that ran it ("regenerate field").
+  function reviewLine(r){ var agent=r.actor&&!/^human(?::|$)/.test(r.actor), rb=agent&&r.decision?blockOf(r.decision):null;
+    var by=r.actor&&isYou(r.actor)?'you':agent?(rb?whoDid(rb):givenOf(judgeKey())||'the agents'):r.by?(r.by==='You'?'you':personName(/^human:/.test(r.by)?r.by:'human:'+r.by)):'';
+    return esc(VERDICT_WORD[r.verdict]||r.verdict)+(by?' by '+esc(by):'')+(r.at?' · '+esc(plainDate(r.at)):''); }
+  // The card's markup, from what the host said of `ref`. `compact` is the
+  // drawer's: the drawer shows the value and the words below it already.
+  function cardHTML(c,compact){
+    c=obj(c); var ref=String(c.ref||''), o=ORIGIN_WORD[c.origin]?c.origin:'document', rv=c.review, hs=arr(c.history), f=c.from, h='';
+    h+='<div class="clf-sc-h"><span class="clf-sc-k">'+esc(CARD_KIND[c.kind]||CARD_KIND.unknown)+'</span><span class="clf-sc-k o-'+o+'">'+esc(ORIGIN_WORD[o])+'</span>'
+      +(rv&&VERDICT_WORD[rv.verdict]?'<span class="clf-sc-r v-'+esc(rv.verdict)+'">'+reviewLine(rv)+'</span>':'')+'</div>';
+    if(!compact){
+      if(c.kind==='unknown') return '<div class="clf-sc" data-card="'+esc(ref)+'" data-origin="'+o+'">'+h+'<p class="clf-sc-d">This is not in the document any more.</p></div>';
+      if(c.value) h+='<span class="clf-sc-v">'+esc(c.value)+'</span>';
+      h+='<p class="clf-sc-t">'+esc(c.title&&c.kind!=='source'?c.title:c.label)+'</p>';
+      if(c.detail) h+='<p class="clf-sc-d">'+esc(c.detail)+'</p>';
+      if(c.quote) h+='<blockquote class="clf-q said">'+esc(c.quote)+'</blockquote>';
+    }
+    if(f&&f.document_id) h+='<p class="clf-sc-from">From <b>'+esc(f.title||'another document')+'</b>'+(f.app_id?'<small>'+esc(String(f.app_id).split('.').pop().replace(/-/g,' '))+'</small>':'')+'</p>';
+    var g=[['Link',c.uri&&/^https?:[/][/]/.test(c.uri)?'<a href="'+esc(c.uri)+'" target="_blank" rel="noopener noreferrer">'+esc(clip(String(c.uri).replace(/^https?:[/][/]/,''),60))+' ↗</a>':''],['Publisher',esc(c.publisher||'')],['Published',c.published_at?esc(plainDate(c.published_at)):''],['Tier',c.tier?esc(tierWord(c.tier)):'']].filter(function(x){ return x[1]; });
+    if(g.length&&!compact) h+='<dl class="clf-sc-g">'+g.map(function(x){ return '<div><dt>'+x[0]+'</dt><dd>'+x[1]+'</dd></div>'; }).join('')+'</dl>';
+    if(hs.length) h+='<details class="clf-more clf-sc-rec"><summary>Record</summary><ul class="clf-hist">'+hs.map(function(r){ return '<li><span>'+reviewLine(r)+(r.superseded?' · replaced':'')+(r.note?' — “'+esc(r.note)+'”':'')+'</span></li>'; }).join('')+'</ul></details>';
+    var acts=(!compact?'<button type="button" data-clf-sc="open" data-ref="'+esc(ref)+'">Where this came from</button>':'')
+      +(f&&f.path?'<button type="button" data-clf-sc="from" data-path="'+esc(f.path)+'">Open '+esc(clip(f.title||'the original',40))+'</button>':'');
+    if(acts) h+='<div class="clf-sc-f">'+acts+'</div>';
+    return '<div class="clf-sc'+(compact?' compact':'')+'" data-card="'+esc(ref)+'" data-origin="'+o+'">'+h+'</div>';
+  }
+  // What the host calls a ref the drawer shows: a data path is an address on
+  // this document; a contest, a gap or a list of cites has no card.
+  function cardRef(ref,k){ return !ref?'':k==='path'?docId()+'#'+ref:/^(?:pin|finding|source|passage|capture|material)$/.test(k||'')?ref:''; }
+  // Render the source card for `ref` into `el`; resolves when it is shown.
+  var NEEDS=null;
+  function card(ref,el,compact){
+    if(!el) return Promise.resolve(null);
+    if(!compact&&RICH[kindOf(ref)]) return richCard(ref,el);
+    el.innerHTML='<div class="clf-sc loading'+(compact?' compact':'')+'" aria-busy="true">Finding where this came from…</div>';
+    return cardsFor([ref]).then(function(m){ var c=m[ref];
+      if(el.isConnected===false) return c;
+      el.innerHTML=c?cardHTML(c,compact):'<div class="clf-sc'+(compact?' compact':'')+'"><p class="clf-sc-d">Where this came from could not be read. Try again in a moment.</p></div>';
+      return c; });
+  }
+  // The drawer's trail, oldest first: what the research inspector shows as
+  // breadcrumbs.
+  function stack(){ return STACK.map(function(s){ return {ref:s.ref, label:named(s.ref)||s.ref}; }); }
+
+  // ── lines as fields: the report's answer, its lines, a finding, a gap, a
+  // list item, a chart (owner, 2026-11-09: every line has a source, and every
+  // one is clickable). The app draws the words; the field is the target, and
+  // ClanFields.card draws its view: the mock's vAnswer, vClaim and vFinding,
+  // from the record. Every certainty here is derived from the findings and
+  // pins, never asked of a model.
+  var LINE_KINDS={answer:1, line:1, item:1, chart:1};
+  var RICH={answer:1, line:1, item:1, chart:1, finding:1, gap:1};
+  var LV={high:3, medium:2, med:2, low:1}, LV_WORD={3:'High', 2:'Medium', 1:'Low'};
+  function lvOf(c){ return LV[String(c||'').toLowerCase()]||0; }
+  function report(){ return obj(data().report); }
+  function fno(id){ return Object.keys(findings()).indexOf(id)+1; }
+  // The words and cites a line ref names, with where it sits.
+  function lineOf(ref){
+    var r=report(), m;
+    if(ref==='report.headline'){ var h=obj(r.headline); return h.text||arr(r.summary).length?{ref:ref, text:String(h.text||''), cites:arr(h.cites), where:'answer'}:null; }
+    if((m=/^report\.summary\[(\d+)\]$/.exec(ref))){ var s=arr(r.summary), l=s[+m[1]]; return l?{ref:ref, text:String(obj(l).text||''), cites:arr(obj(l).cites), n:+m[1]+1, of:s.length, where:'summary'}:null; }
+    if((m=/^report\.sections\[([^\]]+)\]\.blocks\[(\d+)\]$/.exec(ref))){
+      var sec=obj(arr(r.sections).filter(function(x){ return obj(x).id===m[1]; })[0]), bl=arr(sec.blocks), b=bl[+m[2]];
+      if(!b||!b.text) return null;
+      var cl=bl.filter(function(x){ return obj(x).kind==='claim'; });
+      return {ref:ref, text:String(b.text), cites:arr(b.cites), n:cl.indexOf(b)+1, of:cl.length, where:'section', section:sec};
+    }
+    return null;
+  }
+  function itemOf(ref){
+    var m=/^(.+)\[(\d+)\]$/.exec(ref); if(!m) return null;
+    var list=valueAt(m[1]); list=Array.isArray(list)?list:list==null?[]:[list];
+    var v=list[+m[2]]; return v==null?null:{path:m[1], i:+m[2], of:list.length, value:v, text:textOf(v)};
+  }
+  function chartRefs(ref){ return String(ref).replace(/^chart:/,'').split(/[\s,]+/).filter(Boolean); }
+  function chartEl(ref){ var want=chartRefs(ref).join(' ');
+    return Array.prototype.filter.call(document.querySelectorAll('clan-chart[refs]'),function(c){ return (c.getAttribute('refs')||'').split(/\s+/).filter(Boolean).join(' ')===want; })[0]||null; }
+  function excludedPin(id){ return arr(obj(data().selection).excluded).some(function(e){ return e&&e.fact_id===id; }); }
+  function resolvedFor(id){ return contests().filter(function(c){ return c.status==='resolved'&&arr(c.values).some(function(v){ return v.fact_id===id; }); })[0]||null; }
+  function findingLv(f){ var c=lvOf(f.confidence)||(f.status==='verified'?3:2); return f.status==='proposed'?Math.min(c,1):/rejected|superseded/.test(f.status||'')?1:c; }
+  function pinLv(p){ return lvOf(p&&p.confidence)||2; }
+  // What a line is, from what it cites: a finding restated, a figure quoted
+  // as written (or contested, then resolved), or an inference no source says.
+  // What kind of line it is (design: line kinds), from what it cites. A figure is a numeric fact
+  // only; a worded fact is a source's point; a code or roster fact is the client's record. One
+  // finding is restated; two or more are drawn on; nothing cited is our reading, never more than
+  // fairly sure. Mixed facts name the kinds there ("A figure and a source's point").
+  function numPin(p){ return !!p&&typeof p.value==='number'; }
+  function codePin(p){ return !!p&&(p.unit==='code'||/^roster\./.test(String(p.key||''))); }
+  // Strict: the fact's own words, or a long enough quote of its source, stand in the line.
+  function quotesText(p,text){ var t=normText(text), v=normText(typeof p.value==='string'?p.value:'');
+    if(v.length>=12&&t.indexOf(v)!==-1) return true;
+    var q=obj(p.quotes); return Object.keys(q).some(function(k){ var x=normText(q[k]); return x.length>=24&&t.indexOf(x)!==-1; }); }
+  function lineKind(l){
+    var cs=arr(l&&l.cites), F=findings(), P=pins(), text=String(l&&l.text||'');
+    var fis=uniq(cs.filter(function(c){ return F[c]; })), ps=uniq(cs.filter(function(c){ return P[c]; }));
+    var flag=fis.some(function(i){ return /rejected|superseded/.test(F[i].status||''); })||ps.some(function(p){ return P[p].replaced_by||excludedPin(p); });
+    var minF=fis.length?Math.min.apply(0,fis.map(function(i){ return findingLv(F[i]); })):3;
+    var minP=function(xs){ return xs.length?Math.min.apply(0,xs.map(function(p){ return pinLv(P[p]); })):3; };
+    var num=ps.filter(function(p){ return numPin(P[p]); }), code=ps.filter(function(p){ return !numPin(P[p])&&codePin(P[p]); }), txt=ps.filter(function(p){ return num.indexOf(p)<0&&code.indexOf(p)<0; });
+    var o={fis:fis, pins:ps, flag:flag};
+    if(fis.length>1){ o.kind='Draws on Findings '+andList(fis.map(function(i){ return String(fno(i)); })); o.glyph='◗◗'; o.lv=Math.min(2,minF,minP(ps)); o.inf=true; }
+    else if(fis.length===1){ var f=F[fis[0]]; o.kind=(f.status==='proposed'?'From Finding '+fno(fis[0])+' · proposed':'Restates Finding '+fno(fis[0])); o.glyph='◗'; o.lv=Math.min(findingLv(f),minP(ps)); }
+    else if(!ps.length){ o.kind='Our reading, nothing cited'; o.glyph='?'; o.lv=2; o.inf=true; }
+    else {
+      var quoted=num.filter(function(p){ var v=fmt(P[p]); return v&&v.length>1&&text.indexOf(v)!==-1; }), qt=txt.filter(function(p){ return quotesText(P[p],text); });
+      var kinds=[num.length?'figure':'', txt.length?'point':'', code.length?'record':''].filter(Boolean);
+      if(kinds.length>1){ var W={figure:'a figure', point:'a source’s point', record:'the client’s record'}, ws=kinds.map(function(k){ return W[k]; }); o.kind=andList(ws); o.kind=o.kind.charAt(0).toUpperCase()+o.kind.slice(1); o.fig=num.length>0; }
+      else if(num.length){ o.fig=true; o.kind=quoted.length?(quoted.filter(resolvedFor).length?'A figure sources disagreed on':'Quotes a figure'):'A figure, in our words'; if(quoted.filter(resolvedFor).length) o.agree=true; }
+      else if(txt.length) o.kind=qt.length?'Quotes a source':'A source’s point, in our words';
+      else o.kind='From the client’s record';
+      o.glyph=o.agree?'◆⇄':'◆'; o.lv=minP(ps);
+    }
+    if(flag) o.lv=1;
+    return o;
+  }
+  function lvWord(n){ return LV_WORD[n]||'Medium'; }
+  function confBars(n){ return '<span class="rv-conf" data-c="'+n+'" aria-hidden="true"><i></i><i></i><i></i></span>'; }
+  // The decision that composed the report: the newest that wrote it.
+  function composeBlock(){
+    var ds=arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{};
+      return !b.superseded&&(/^(?:compose_report|report|report\.compose)$/.test(d.action||'')||arr(b.targets).some(function(t){ return t&&t.here!==false&&t.path==='report'; })); });
+    var at=function(b){ var t=Date.parse(String((b.decision||{}).timestamp||'')); return isNaN(t)?0:t; };
+    return ds.sort(function(a,b){ return at(b)-at(a); })[0]||null;
+  }
+  function blocksOn(test){ return arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{}; return test(b,d); }); }
+  // The chips a view links with: each opens its own view (clan:cardgo).
+  function go(ref,cls,inner,title){ return '<button type="button" class="'+cls+'" data-clf-go="'+esc(ref)+'"'+(title?' title="'+esc(title)+'"':'')+'>'+inner+'</button>'; }
+  function fChip(id){ var f=findings()[id]||{}, n=fno(id); return go(id,'rv-fchip','<span class="rv-n'+(f.status==='proposed'?' p':'')+'">'+n+'</span>Finding '+n,f.statement); }
+  function pChip(id,rej){ var p=pins()[id]; if(!p) return '<span class="rv-chip">'+esc(clip(id,14))+'</span>';
+    return go(id,'rv-chip'+(rej?' rej':''),'<span class="pin" aria-hidden="true"></span>'+esc(clip(label(p),26))+' <b>'+esc(clip(fmt(p),16))+'</b>',label(p)+' = '+fmt(p)); }
+  function sChip(id){ var s=sources()[id]; return s?go(id,'rv-schip',esc(clip(pubName(s.publisher)||s.domain||'Source',30)),s.title||''):''; }
+  function dChip(id){ return id?'<span class="rv-dchip" title="Decision on the record">'+esc(clip(id,14))+'</span>':''; }
+  function citeChip(id){ var k=kindOf(id);
+    if(k==='finding'&&findings()[id]) return fChip(id);
+    if(k==='pin') return pChip(id);
+    if(k==='source') return sChip(id);
+    if(k==='contest') return go(id,'rv-cchip','contest');
+    if(/^d_/.test(id)) return dChip(id);
+    if(k==='line'||k==='answer'){ var l=lineOf(id); return l?go(id,'rv-cchip',l.where==='summary'?'line '+l.n:'the answer'):''; }
+    return ''; }
+  function sec(h,body,em){ return '<section class="rv-sec"><h5>'+esc(h)+(em?'<em>'+esc(em)+'</em>':'')+'</h5>'+body+'</section>'; }
+  // Why it says this, as the mock lays a decision's reasoning out.
+  function reasonHTML(rs,by,fallback){
+    rs=obj(rs); var h='', bec=arr(rs.because).filter(function(p){ return p&&p.point; }), rej=arr(rs.rejected).filter(function(r){ return r&&(r.option||r.why); });
+    var dec=rs.decided||fallback||''; if(!dec&&!bec.length) return '';
+    h+='<div class="rv-row dec"><span class="rl">Decided</span><div>'+esc(noIds(dec))+'</div></div>';
+    if(bec.length) h+='<div class="rv-row"><span class="rl">Because</span><ul class="rv-bec">'+bec.map(function(p){ var cs=arr(p.cites).map(citeChip).filter(Boolean); return '<li>'+esc(noIds(p.point))+(cs.length?'<span class="rv-cites">'+cs.join('')+'</span>':'')+'</li>'; }).join('')+'</ul></div>';
+    if(rs.decided||rej.length) h+='<div class="rv-row"><span class="rl">Rejected</span>'+(rej.length?'<ul class="rv-rej">'+rej.map(function(r){ return '<li><s>'+esc(noIds(r.option||''))+'</s>'+(r.why?' · '+esc(noIds(r.why)):'')+'</li>'; }).join('')+'</ul>':'<div class="rv-none">Only option: nothing else was on the table.</div>')+'</div>';
+    var ce=obj(rs.certainty), cl=lvOf(ce.level); if(cl) h+='<div class="rv-row"><span class="rl">Certainty</span><div>'+confBars(cl)+' <b>'+esc(lvWord(cl))+'</b>'+(ce.why?' · '+esc(noIds(ce.why)):'')+'</div></div>';
+    var ch=rs.would_change_if; if(ch) h+='<div class="rv-row"><span class="rl">Would change if</span><div>'+esc(noIds(ch))+'</div></div>';
+    var at=attnOf(rs); if(at.length) h+='<div class="rv-attn"><b>Look at this</b><span>'+esc(at[0])+'</span></div>';
+    if(by) h+='<div class="rv-by">'+esc(by)+'</div>';
+    return '<div class="rv-reason">'+h+'</div>';
+  }
+  var KIND_OF_ACTION={verify_finding:'verify', reject_finding:'reject', resolve:'resolve', contest:'contest', synthesise:'finding', compose_report:'report', report:'report'};
+  function decRow(b){
+    var d=b.decision||{}, k=d.kind==='verdict'&&d.polarity==='bad'?'reject':KIND_OF_ACTION[d.action]||d.kind||'decision';
+    var rs=obj(d.reasoning), body=reasonHTML(rs,'',d.rationale||'');
+    return '<details class="rv-dec"><summary><span class="rv-t">'+esc(dayMonth(d.timestamp))+'</span><span class="rv-k k-'+esc(k)+'">'+esc(k)+'</span><span><b>'+esc(whoDid(b))+'</b> '+esc(didWords(b))+'</span></summary>'+(body||'<p class="rv-none" style="padding:8px 10px">No reasons recorded.</p>')+'</details>';
+  }
+  function decsSec(bs,limit){ bs=bs.slice(0,limit||6); return bs.length?sec('Decisions on the record',bs.map(decRow).join(''),String(bs.length)):''; }
+  function onTargets(b,re){ return arr(b.targets).some(function(t){ return t&&re.test(String(t.path||'')); })||arr((b.decision||{}).targets).some(function(t){ return re.test(String(t)); }); }
+  function citesAny(b,ids){ var d=b.decision||{}; return arr(d.cites).some(function(c){ return ids.indexOf(c)!==-1; }); }
+  function rxIds(ids){ return new RegExp('\\[(?:'+ids.map(function(i){ return String(i).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }).join('|')+')\\]'); }
+  // A finding's pins, with the cites a line makes through its findings.
+  function pinsUnder(cites){
+    var F=findings(), P=pins(), out=[];
+    arr(cites).forEach(function(c){ if(P[c]) out.push(c); else if(F[c]) arr(F[c].cites).forEach(function(x){ if(P[x]) out.push(x); }); });
+    return uniq(out);
+  }
+  function quoteOf(p){ var s=srcOf(p), q=s&&obj(p.quotes)[s.id]; if(!q){ var qs=obj(p.quotes), k=Object.keys(qs)[0]; q=k?qs[k]:''; s=k?{id:k, rec:sources()[k]||null}:s; } return {q:q?saidBy(q,s&&s.rec):'', s:s}; }
+  function srcBits(s){ var r=s&&s.rec; if(!r) return ''; return [sChip(s.id), r.published_at?esc(monthYear(r.published_at)):'', r.tier?esc(tierWord(r.tier)):''].filter(Boolean).join(' · '); }
+  function pinChainLi(id,rej){
+    var p=pins()[id]; if(!p) return '';
+    var qs=quoteOf(p);
+    return '<li class="'+(rej?'':'hl')+'">'+go(id,'rv-pinb','<span class="k">'+esc(fmt(p))+' · '+(rej?'not chosen':esc(lvWord(pinLv(p))))+'</span>'+esc(label(p))+(p.market?' · '+esc(country(p.market)):''))
+      +(qs.q?'<blockquote class="rv-q'+(rej?' rej':'')+'">'+esc(clip(qs.q,320))+'</blockquote>':'')
+      +(qs.s?'<span class="rv-src">'+srcBits(qs.s)+(p.as_of?' · as of '+esc(plainDate(p.as_of)):'')+'</span>':'')+'</li>';
+  }
+  function lostTo(ids){ var out=[]; contests().forEach(function(c){ if(c.status!=='resolved') return; if(!arr(c.values).some(function(v){ return ids.indexOf(v.fact_id)!==-1; })) return;
+    arr(c.values).forEach(function(v){ if(v.fact_id&&v.fact_id!==c.chosen&&pins()[v.fact_id]) out.push(v.fact_id); }); }); return uniq(out); }
+  function stPill(f){ var s=f&&f.status; return s==='verified'?'<span class="rv-pill ok">Verified</span>':s==='proposed'?'<span class="rv-pill warn">Proposed · needs you</span>':s==='rejected'?'<span class="rv-pill bad">Rejected</span>':s==='superseded'?'<span class="rv-pill mute">Replaced</span>':''; }
+  function lvPill(o){ return o.lv>=3?'<span class="rv-pill ok">High</span>':o.lv===2?'<span class="rv-pill warn">Medium'+(o.inf?' · inference':'')+'</span>':'<span class="rv-pill warn">Low'+(o.flag?' · flagged':' · thin')+'</span>'; }
+  function lineFlag(o){ return o.flag?'<div class="rv-flag"><b>Flagged.</b> This line cites a finding that was rejected or replaced, or a figure marked wrong. Refresh the report to rewrite it.</div>':''; }
+
+  // 01 · Answer: how the headline and summary were formed.
+  function viewAnswer(){
+    var r=report(), hl=lineOf('report.headline'); if(!hl) return '<p class="rv-none">There is no report yet.</p>';
+    var lines=arr(r.summary).map(function(_,i){ return lineOf('report.summary['+i+']'); }).filter(Boolean), kinds=lines.map(lineKind);
+    var cb=composeBlock(), d=cb?cb.decision:{}, rs=obj(d.reasoning), lvs=kinds.map(function(o){ return o.lv; }).sort();
+    var lv=lvOf(obj(rs.certainty).level)||(lvs.length?lvs[Math.floor((lvs.length-1)/2)]:lineKind(hl).lv);
+    var all=uniq([].concat(hl.cites,[].concat.apply([],lines.map(function(l){ return l.cites; }))));
+    var fis=all.filter(function(c){ return findings()[c]; }), ps=pinsUnder(all), srcs=uniq(ps.map(function(p){ var s=srcOf(pins()[p]); return s&&s.rec?s.id:''; }).filter(Boolean));
+    var lost=lostTo(ps), ex=arr(obj(data().selection).excluded).map(function(e){ return e&&e.fact_id; }).filter(function(x){ return x&&pins()[x]; });
+    var nf=kinds.filter(function(o){ return o.inf; }).length, vf=fis.filter(function(i){ return findings()[i].status==='verified'; }).length;
+    var why='Derived from the lines: '+vf+' of '+fis.length+' finding'+(fis.length===1?' is':'s are')+' verified'+(nf?'; '+plural(nf,'line')+' '+(nf===1?'is':'are')+' inference':'')+'. Never asked of the model.';
+    var h='<div class="rv-head"><span class="rv-kind">01 · Answer</span><span class="rv-pill '+(lv>=3?'ok':'warn')+'">'+esc(lvWord(lv))+' confidence</span></div>'
+      +'<p class="rv-title">How the headline and summary were formed</p>'
+      +'<p class="rv-meta">'+(cb?'Composed by <b>'+esc(whoDid(cb))+'</b> · '+esc(d.handler?String(d.handler).split('@')[0]:d.action||'')+' · '+esc(dayMonth(d.timestamp,true))+' · '+dChip(d.id):'Composed from the record')+'</p>';
+    if(lines.length) h+=sec('Line by line','<ol class="rv-claims">'+lines.map(function(l,i){ var o=kinds[i];
+      return '<li><button type="button" data-clf-go="'+esc(l.ref)+'"'+(o.flag?' class="flagged"':'')+'><span class="no">'+l.n+'</span><span>'+esc(l.text)+'<small>'+esc(o.kind)+' · '+esc(lvWord(o.lv))+(o.flag?' · cites a rejected finding':'')+'</small></span><span class="fx">'+o.fis.map(function(f){ return '<span class="rv-n'+(findings()[f].status==='proposed'?' p':'')+'">'+fno(f)+'</span>'; }).join('')+'</span></button></li>'; }).join('')+'</ol>','click one to trace it');
+    h+=sec('Why it says this',reasonHTML({decided:rs.decided||'', because:rs.because, rejected:rs.rejected, certainty:{level:lvWord(lv).toLowerCase(), why:obj(rs.certainty).why||why}, would_change_if:rs.would_change_if, attention:rs.attention},(cb?whoDid(cb)+' · ':'')+'certainty is derived from the findings, never asked of the model',d.rationale||'Wrote the headline and summary from the findings and pins below.'));
+    var built='<div class="rv-uses">'+(fis.length?'<div class="rv-use"><span>Findings</span>'+fis.map(fChip).join(' ')+'</div>':'')
+      +(ps.length?'<div class="rv-use"><span>Pins</span>'+ps.map(function(p){ return pChip(p); }).join(' ')+'</div>':'')
+      +(srcs.length?'<div class="rv-use"><span>Sources</span>'+srcs.map(sChip).join(' ')+'</div>':'')
+      +(lost.length?'<div class="rv-use"><span>Considered</span>'+lost.map(function(p){ return pChip(p,true); }).join(' ')+' not chosen</div>':'')
+      +(ex.length?'<div class="rv-use"><span>Excluded</span>'+ex.map(function(p){ return pChip(p,true); }).join(' ')+'</div>':'')+'</div>';
+    h+=sec('Built from',built);
+    var rx=fis.length?rxIds(fis.concat(ps)):null;
+    h+=decsSec([].concat(cb?[cb]:[],rx?blocksOn(function(b){ return b!==cb&&!b.superseded&&(onTargets(b,rx)||citesAny(b,fis))&&/verify|reject|resolve|contest|synthesise|verdict/.test((b.decision||{}).action||(b.decision||{}).kind||''); }):[]));
+    h+='<div class="rv-acts"><button type="button" class="rv-btn" data-clf-act="map">Show the evidence map</button></div>';
+    return h;
+  }
+  // Summary · line n of N (or a paragraph of a section): what it rests on.
+  function viewLine(ref){
+    var l=lineOf(ref); if(!l) return '<p class="rv-none">This line is no longer in the report.</p>';
+    var o=lineKind(l), F=findings(), ps=pinsUnder(l.cites), lost=lostTo(ps);
+    var where=l.where==='summary'?'Summary · line '+l.n+' of '+l.of:(obj(l.section).title||'Section')+' · paragraph '+(l.n||1);
+    var h='<div class="rv-head"><span class="rv-kind">'+esc(where)+'</span>'+lvPill(o)+'</div>'
+      +'<p class="rv-title">“'+esc(l.text.replace(/[,:]\s*$/,''))+'”</p><p class="rv-meta"><b>'+esc(o.kind)+'</b></p>'+lineFlag(o);
+    h+=sec('Comes from',o.fis.length?'<div class="rv-uses">'+o.fis.map(function(i){ return '<div class="rv-use"><span>'+fChip(i)+'</span>'+esc(F[i].statement)+' '+stPill(F[i])+'</div>'; }).join('')+'</div>'
+      :o.inf?'<p class="rv-none">No source says this in so many words: the agent drew it from the lines around it.</p>':o.fig&&!o.pins.some(function(p){ return !numPin(pins()[p]); })?'<p>The figures below, as their sources give them.</p>':'<p>What the source says, below.</p>');
+    if(ps.length||lost.length) h+=sec('Pins and sources under it','<ol class="rv-chain">'+ps.map(function(p){ return pinChainLi(p); }).join('')+lost.map(function(p){ return pinChainLi(p,true); }).join('')+'</ol>');
+    var bec=o.fis.map(function(i){ return {point:'Finding '+fno(i)+': '+F[i].statement, cites:[i].concat(arr(F[i].cites).filter(function(c){ return pins()[c]; }).slice(0,3))}; })
+      .concat(arr(l.cites).filter(function(c){ return pins()[c]; }).map(function(p){ var P=pins()[p], s=srcOf(P); return {point:(numPin(P)?label(P)+' is '+fmt(P):'“'+fmt(P)+'”')+(s&&s.rec?', as '+(pubName(s.rec.publisher)||s.rec.domain||'its source')+' gives it':''), cites:[p]}; }));
+    var chg=o.fis.length?'Finding '+o.fis.map(fno).join(' or ')+' is rejected, or a pin under it is marked wrong.':ps.length?'A pin under it is corrected or marked wrong.':'A source is found that says it, or one that says otherwise.';
+    h+=sec('Why it says this',reasonHTML({decided:'Write “'+l.text+'”', because:bec, certainty:{level:lvWord(o.lv).toLowerCase(), why:o.kind}, would_change_if:chg}));
+    h+='<div class="rv-acts">'+o.fis.map(function(i){ return '<button type="button" class="rv-btn" data-clf-go="'+esc(i)+'">Open Finding '+fno(i)+'</button>'; }).join('')+(l.where!=='answer'?'<button type="button" class="rv-btn" data-clf-go="report.headline">The whole summary</button>':'')+'</div>';
+    return h;
+  }
+  // Finding n of N: what it says, its evidence and reasons, what it rests on.
+  function viewFinding(id){
+    var F=findings(), f=F[id]; if(!f) return '<p class="rv-none">This finding is no longer in the document.</p>';
+    var n=fno(id), all=Object.keys(F).length, cs=arr(f.cites), ps=cs.filter(function(c){ return pins()[c]; }), lost=lostTo(ps);
+    var wb=blocksOn(function(b,d){ return !b.superseded&&onTargets(b,rxIds([id]))&&/synthes|finding/.test(d.action||d.kind||''); })[0];
+    var gone=/rejected|superseded/.test(f.status||''), lv=findingLv(f);
+    var h='<div class="rv-head"><span class="rv-kind"><span class="rv-n'+(f.status==='proposed'?' p':'')+'">'+n+'</span>Finding '+n+' of '+all+'</span>'+stPill(f)+'</div>'
+      +'<p class="rv-title'+(gone?' gone':'')+'">'+esc(f.statement)+'</p>'
+      +'<p class="rv-meta">'+(f.lens?'<span class="rv-lens">'+esc(String(f.lens).replace(/_/g,' '))+'</span>':'')+(f.market?'<span class="rv-lens">'+esc(f.market)+'</span>':'')+'Worked out by <b>'+esc(wb?whoDid(wb):'the agents')+'</b> · derived from '+plural(ps.length,'pin')+'</p>';
+    // An app that answers checks itself (the research's Your call) draws this box: needsWith(fn).
+    var nh=f.status==='proposed'&&NEEDS?NEEDS(id):null;
+    if(nh!=null) h+='<div class="rv-needs" data-clf-needs="'+esc(id)+'">'+nh+'</div>';
+    else if(f.status==='proposed') h+='<div class="rv-needs"><b>Your call</b><p>Nobody has checked this yet. Verify it, or reject it with a reason.</p><div><button type="button" class="rv-btn" data-clf-sc="open" data-ref="'+esc(id)+'">Verify or reject…</button></div></div>';
+    var ev=ps.map(function(p){ return {p:p, q:quoteOf(pins()[p])}; }).filter(function(x){ return x.q.q; }).slice(0,2);
+    if(ev.length) h+=sec('Evidence',ev.map(function(x){ return '<blockquote class="rv-q">'+esc(clip(x.q.q,320))+'</blockquote><p class="rv-src">'+srcBits(x.q.s)+'</p>'; }).join(''),plural(ev.length,'source'));
+    var rsn=wb?reasonHTML(obj(wb.decision.reasoning),whoDid(wb),wb.decision.rationale||''):'';
+    if(rsn) h+=sec('Why it says this',rsn);
+    if(ps.length||lost.length) h+=sec('Rests on','<table class="rv-pins"><tbody>'+ps.map(function(p){ return [p,0]; }).concat(lost.map(function(p){ return [p,1]; })).map(function(x){ var P=pins()[x[0]], s=srcOf(P), st=excludedPin(x[0])?'marked wrong':x[1]?'not chosen':P.stale?'stale':resolvedFor(x[0])?'chosen':'active';
+      return '<tr data-clf-go="'+esc(x[0])+'" class="'+(x[1]?'rej':'')+'"><td>'+esc(label(P))+'<small>'+esc([s&&s.rec?pubName(s.rec.publisher)||s.rec.domain:'',P.as_of?'as of '+plainDate(P.as_of):'',P.market?country(P.market):''].filter(Boolean).join(' · '))+'</small></td><td class="v">'+esc(clip(fmt(P),18))+'</td><td>'+confBars(pinLv(P))+'<small>'+esc(st)+'</small></td></tr>'; }).join('')+'</tbody></table>',plural(ps.length,'pin')+(lost.length?' · '+lost.length+' not chosen':''));
+    h+=sec('Confidence','<p>'+confBars(lv)+' <b>'+esc(lvWord(lv))+'</b>. Derived from the pins, never asked of the model'+(f.status==='proposed'?': nobody has checked it yet.':'.')+'</p>');
+    var cts=contests().filter(function(c){ return arr(c.values).some(function(v){ return cs.indexOf(v.fact_id)!==-1; }); });
+    h+=sec('Contests touching it',cts.length?cts.map(function(c){ var vs=arr(c.values);
+      return '<div class="rv-vs">'+vs.slice(0,2).map(function(v){ var won=c.status==='resolved'&&v.fact_id===c.chosen; return '<div class="'+(won?'won':c.status==='resolved'?'lost':'')+'"><span class="tag">'+(won?'Chosen':c.status==='resolved'?'Not chosen · kept':'Open')+'</span><span class="v">'+esc(clip(fmt(v),14))+'</span>'+(pins()[v.fact_id]?pChip(v.fact_id,c.status==='resolved'&&!won):'')+'</div>'; }).join('')+'</div>'
+        +'<p>'+go(c.id,'rv-cchip',c.status==='open'?'Pick one':'Open the contest')+'</p>'; }).join(''):'<p class="rv-none">None. No source disagrees with these pins.</p>');
+    var vb=blocksOn(function(b,d){ return !b.superseded&&onTargets(b,rxIds([id]))&&/verify|reject|verdict/.test(d.action||d.kind||''); })[0];
+    h+=sec('Verification','<p>'+(vb?esc(STATUS_WORD[f.status]||f.status||'')+' by <b>'+esc(whoDid(vb))+'</b> · '+esc(dayMonth(vb.decision.timestamp))+(vb.decision.rationale?' · “'+esc(clip(noIds(vb.decision.rationale),200))+'”':''):f.status==='proposed'?'Not checked yet.':esc(STATUS_WORD[f.status]||f.status||''))+'</p>');
+    h+=decsSec(blocksOn(function(b){ return onTargets(b,rxIds([id]))||citesAny(b,[id]); }));
+    var r=report(), used=arr(r.summary).map(function(l,i){ return arr(obj(l).cites).indexOf(id)!==-1?i:-1; }).filter(function(i){ return i>=0; });
+    var inHl=arr(obj(r.headline).cites).indexOf(id)!==-1;
+    var shares=uniq(ps.reduce(function(a,p){ return a.concat(Object.keys(F).filter(function(j){ return j!==id&&arr(F[j].cites).indexOf(p)!==-1; })); },[]));
+    h+=sec('Used by','<div class="rv-uses"><div class="rv-use"><span>Answer</span>'+(inHl?go('report.headline','rv-cchip','the headline')+' ':'')+(used.length?used.map(function(i){ return go('report.summary['+i+']','rv-cchip','line '+(i+1)); }).join(' '):inHl?'':'not cited')+'</div><div class="rv-use"><span>Shares pins</span>'+(shares.length?shares.map(fChip).join(' '):'with no other finding')+'</div></div>');
+    h+='<div class="rv-host"></div><div class="rv-acts">'+(f.status==='proposed'?'':'<button type="button" class="rv-btn" data-clf-sc="open" data-ref="'+esc(id)+'">Verify or reject…</button>')+'<button type="button" class="rv-btn" data-clf-act="map">Show in the evidence map</button></div>';
+    return h;
+  }
+  function viewGap(id){
+    var g=gap(id); if(!g) return '<p class="rv-none">This gap is no longer in the document.</p>';
+    var tried=arr(g.sources_tried||g.tried), what=gapWords(g.searched||g.wanted||g.key||'')||'Something we looked for';
+    return '<div class="rv-head"><span class="rv-kind">Gap · '+(tried.length?'not found':'not looked up')+'</span><span class="rv-pill mute">No source</span></div>'
+      +'<p class="rv-title">'+esc(noIds(what))+'</p>'
+      +'<p class="rv-meta">'+(g.lens?'<span class="rv-lens">'+esc(String(g.lens).replace(/_/g,' '))+'</span>':'')+(g.market?'<span class="rv-lens">'+esc(g.market)+'</span>':'')+'Nothing here is a fact: it is what the research could not pin.</p>'
+      +sec('Where we looked',tried.length?'<ul class="rv-bec">'+tried.map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul>':'<p class="rv-none">Not looked up.</p>')
+      +(g.note?sec('Note','<p>'+esc(noIds(gapWords(g.note)))+'</p>'):'');
+  }
+  // A list line opened on its own: the line, then its part's one view.
+  function viewItem(ref){
+    var it=itemOf(ref); if(!it) return '<p class="rv-none">This line is no longer in the document.</p>';
+    return '<div class="rv-head"><span class="rv-kind">'+esc(words(it.path))+' · line '+(it.i+1)+' of '+it.of+'</span></div>'
+      +'<p class="rv-title">'+esc(it.text)+'</p>'
+      +'<section class="rv-sec pv-in">'+partHTML(it.path)+'</section>'
+      +'<div class="rv-host"></div>';
+  }
+  function viewChart(ref){
+    var refs=chartRefs(ref), el=chartEl(ref), title=el&&el.getAttribute('title')||'', P=pins();
+    var ps=refs.filter(function(r){ return P[r]&&typeof P[r].value==='number'; }), mx=Math.max.apply(0,ps.map(function(r){ return Math.abs(P[r].value); }).concat([1e-9]));
+    var labels=el?chartLabels(el,ps.map(function(r){ return P[r]; })):ps.map(function(r){ return label(P[r]); });
+    var srcs=uniq(ps.map(function(r){ var s=srcOf(P[r]); return s&&s.rec?s.id:''; }).filter(Boolean));
+    return '<div class="rv-head"><span class="rv-kind">Chart · '+plural(ps.length,'bar')+'</span><span class="rv-pill ok">Every bar is a pin</span></div>'
+      +'<p class="rv-title">'+esc(title||'A chart of '+plural(ps.length,'figure'))+'</p>'
+      +'<p class="rv-meta">Drawn by the OS from the pins below; click a bar to trace it.</p>'
+      +sec('Bars','<div class="rv-bars">'+ps.map(function(r,i){ var p=P[r], s=srcOf(p); return '<button type="button" class="rv-bar" data-clf-go="'+esc(r)+'"><span>'+esc(labels[i]||label(p))+'</span><b>'+esc(fmt(p))+'</b><i style="width:'+Math.max(2,Math.round(100*Math.abs(p.value)/mx))+'%"></i><small>'+esc([s&&s.rec?pubName(s.rec.publisher)||s.rec.domain:'',p.as_of?'as of '+plainDate(p.as_of):''].filter(Boolean).join(' · '))+'</small></button>'; }).join('')+'</div>')
+      +(srcs.length?sec('Sources','<div class="rv-uses"><div class="rv-use"><span>From</span>'+srcs.map(sChip).join(' ')+'</div></div>'):'')
+      +(refs.length>ps.length?sec('Not drawn','<p class="rv-none">'+plural(refs.length-ps.length,'ref')+' with no number to draw.</p>'):'');
+  }
+  function viewOf(ref){ var k=kindOf(ref);
+    return k==='answer'?viewAnswer():k==='line'?viewLine(ref):k==='finding'?viewFinding(ref):k==='gap'?viewGap(ref):k==='item'?viewItem(ref):k==='chart'?viewChart(ref):''; }
+  // The host's own card for a rich kind, compact under the view: its review
+  // record and where it was carried from.
+  function hostRefOf(ref,k){ return k==='finding'?ref:k==='item'?docId()+'#'+ref:''; }
+  function richCard(ref,el){
+    var k=kindOf(ref); el.innerHTML='<div class="clf-rv" data-card="'+esc(ref)+'">'+viewOf(ref)+'</div>';
+    var hr=hostRefOf(ref,k), slot=el.querySelector('.rv-host');
+    if(!hr||!slot||!docId()) return Promise.resolve(null);
+    return card(hr,slot,true).then(function(c){ if(!c||c.kind==='unknown'||!(arr(c.history).length||c.from)) slot.innerHTML=''; return c; });
+  }
+  // A line drawn by its app: the field marks it as a target and leaves its
+  // words; without `keep` it draws the record's words itself.
+  function renderLine(el,ref,k){
+    if(!el.hasAttribute('keep')){
+      var t=k==='item'?(itemOf(ref)||{}).text:k==='answer'||k==='line'?(lineOf(ref)||{}).text:k==='finding'?(findings()[ref]||{}).statement:k==='gap'?(gap(ref)||{}).searched:'';
+      el.innerHTML=t?esc(t):missing('This is no longer in the document');
+    }
+    el.classList.add('clf-ln'); el.setAttribute('data-ref',ref);
+    if(k==='finding'){ var f=findings()[ref]; el.classList.toggle('s-rejected',!!f&&f.status==='rejected'); el.classList.toggle('s-superseded',!!f&&f.status==='superseded'); }
+    if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
+    if(!el.querySelector('button,a,[data-ref]')) el.setAttribute('role','button');
+    if(!el.hasAttribute('title')) el.setAttribute('title','Where this came from');
+  }
+
   // ── the tray ────────────────────────────────────────────────────────
   function refOfAddress(a){
     var p=String(a||'').split('#')[1]||'', m=p.match(/^(?:findings|facts|materials)\[([^\]]+)\]$/)||p.match(/^selection\.contested\[([^\]]+)\]$/);
@@ -894,6 +1546,11 @@ var ClanFields=(function(){
   // What a person would call the thing a ref names.
   function named(ref){
     var k=kindOf(ref);
+    if(k==='answer') return 'Summary';
+    if(k==='line'){ var ln=lineOf(ref); return ln?(ln.where==='summary'?'Line '+ln.n:'Paragraph '+(ln.n||1)):''; }
+    if(k==='item'){ var it=itemOf(ref); return it?it.text:''; }
+    if(k==='chart'){ var ce=chartEl(ref); return ce&&ce.getAttribute('title')||'Chart'; }
+    if(k==='gap'){ var gg=gap(ref); return gg?gg.searched||gg.wanted||'Gap':''; }
     if(k==='finding') return (findings()[ref]||{}).statement||'';
     if(k==='pin') return label(pins()[ref]);
     if(k==='contest'){ var c=contest(ref), v=c&&arr(c.values)[0]; return v?label(v.pin||pins()[v.fact_id]||{key:c.key}):''; }
@@ -902,17 +1559,37 @@ var ClanFields=(function(){
   // The lock: an approve, not superseded, on THIS document (Contract 4 §7.1).
   // A carried approve targets the parent: history, not the lock. The newest
   // is the lock when a document was locked again after a part was reopened.
-  function lockDecision(){ var id=docId();
-    return arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{};
-      return d.kind==='approve'&&!b.superseded&&!d.superseded_by&&(arr(b.targets).some(function(t){ return t&&t.here&&!t.path; })||(!!id&&arr(d.targets).some(function(t){ return t===id||t===id+'#'; }))); })[0]||null; }
+  // The newest unsuperseded approve or unlock_document on this document decides (POST /unapprove,
+  // 9 Nov 2026): an approve locks it; an unlock that is newer than it means it is not locked.
+  function onThisDoc(b){ var d=b.decision||{}, id=docId(); return arr(b.targets).some(function(t){ return t&&t.here&&!t.path; })||(!!id&&arr(d.targets).some(function(t){ return t===id||t===id+'#'; })); }
+  function isUnlockDoc(d){ return d.action==='unlock_document'||(d.kind==='unlock'&&!!d.lock); }
+  function lockDecision(){
+    var ds=arr(VIEW&&VIEW.decisions), live=function(b){ var d=b.decision||{}; return !b.superseded&&!d.superseded_by&&onThisDoc(b); };
+    var lock=ds.filter(function(b){ return (b.decision||{}).kind==='approve'&&live(b); })[0]||null;
+    if(!lock) return null;
+    var at=function(b){ var t=Date.parse(String((b.decision||{}).timestamp||'')); return isNaN(t)?0:t; };
+    var un=ds.filter(function(b){ var d=b.decision||{}; return isUnlockDoc(d)&&live(b)&&(d.lock===lock.decision.id||arr(d.cites).indexOf(lock.decision.id)!==-1||at(b)>at(lock)); })[0]||null;
+    return un?null:lock; }
   function reopenedParts(){ return arr(obj(VIEW&&VIEW.lock).reopened); }
+  // What needs a person before the lock: the host's view, one item per place
+  // and reason (the shell's needsOf keys them the same way, code:address), so
+  // the tray, an app's own lock button and the OS's Decisions count agree.
+  function needs(){
+    var seen={};
+    return arr(VIEW&&VIEW.attention).filter(function(a){
+      if(!a||!a.blocks_lock) return false;
+      var k=a.code+':'+(a.address!=null?a.address:a.text);
+      if(seen[k]) return false;
+      seen[k]=1; return true;
+    });
+  }
   function renderTray(el){
     if(!VIEW){ el.innerHTML=''; return; }
-    var lock=lockDecision(), items=arr(VIEW.attention).filter(function(a){ return a.blocks_lock; }), noun=el.getAttribute('noun')||'report', open=lock?reopenedParts():[];
+    var lock=lockDecision(), items=needs(), noun=el.getAttribute('noun')||'report', open=lock?reopenedParts():[];
     var h='<div class="clf-tray" role="region" aria-label="What needs you"><div class="clf-tray-in">';
-    if(lock&&!open.length){ h+='<span class="clf-locked">'+TICK+' Locked by '+esc(lock.who&&lock.who.you?'you':lock.who&&lock.who.name?personName('human:'+String(lock.who.name).replace(/^human:/,'')):'a person')+' · '+esc(plainDate(String(lock.decision.timestamp||'').slice(0,10)))+'</span><span class="items"><span class="clf-muted">Changes from here make a new version.</span></span>'; }
+    if(lock&&!open.length){ h+='<span class="clf-locked">'+TICK+' Locked by '+esc(lock.who&&lock.who.you?'you':lock.who&&lock.who.name?personName('human:'+String(lock.who.name).replace(/^human:/,'')):'a person')+' · '+esc(plainDate(String(lock.decision.timestamp||'').slice(0,10)))+'</span><span class="items"><span class="clf-muted">Changes from here make a new version.</span></span><button type="button" class="clf-btn" data-clf-unlock>Unlock</button>'; }
     else {
-      var fig=typeof NapkinAgents==='object'?NapkinAgents.figure('judge',{state:items.length?'needs-you':'idle',decorative:true}):'';
+      var fig=figOf('review',{state:items.length?'needs':'idle',decorative:true});
       h+='<span class="who">'+fig+'<span class="count'+(items.length?'':' zero')+'">'+(items.length?items.length+' thing'+(items.length===1?'':'s')+' need'+(items.length===1?'s':'')+' you':'Nothing needs you')+'</span></span>';
       h+='<span class="items">'+(open.length&&!items.length?'<span class="clf-muted">'+esc(andList(open.map(function(r){ return r.label; })))+(open.length===1?' is':' are')+' open for the change the client asked for. Lock it again when you are done.</span>':'')
         +items.map(function(a){ var ref=refOfAddress(a.address), shown=!!document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)');
@@ -936,7 +1613,9 @@ var ClanFields=(function(){
   function carriedName(a){ var p=String(a.address||'').split('#')[1]||'', m;
     if(a.code==='unmerged_branch') return 'Work not brought back into '+carriedFrom(a.address);
     if((m=/^merge-report\[(.*)\]$/.exec(p))) return /^decisions\[/.test(m[1])?'Agents disagree on a call':'Agents disagree on '+words(m[1]).toLowerCase();
-    if(/^selection\.contested\[/.test(p)){ var k=String(a.label||'').replace(/^Contest · /,'').split(':').pop().split('@')[0]; return k?'Sources disagree on '+words(k).toLowerCase():'Sources disagree'; }
+    // The host names a contest by its fact ("Contest · Export value · IE"); an older one by its key.
+    if(/^selection\.contested\[/.test(p)){ var l=String(a.label||'').replace(/^Contest · /,''), k=/[:@]/.test(l)?words(l.split(':').pop().split('@')[0]):l.replace(/ · [A-Z]{2}$/,'');
+      return k?'Sources disagree on '+k.toLowerCase():'Sources disagree'; }
     return a.label||words(p); }
   var CARRIED_WHY={
     flagged_field:'It rests on a point marked wrong here. It belongs to {from}, so it cannot be changed here.',
@@ -961,7 +1640,7 @@ var ClanFields=(function(){
   function asideDone(b){ var d=b.decision||{};
     return '<div class="clf-dv"><span class="stmt">'+esc(arr(b.targets).map(function(t){ return t.label; })[0]||'Carried over')+'</span><div class="clf-pills"><span class="clf-pill ok">'+TICK+' Set aside</span></div></div>'
       +'<p class="clf-by"><b>'+esc(whoDid(b))+'</b> set it aside'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'</p>'
-      +(d.rationale?'<blockquote class="clf-q said">'+esc(d.rationale)+'</blockquote>':''); }
+      +(d.rationale?'<blockquote class="clf-q said">'+esc(noIds(d.rationale))+'</blockquote>':''); }
 
   // ── the drawer ──────────────────────────────────────────────────────
   function ensureDrawer(){
@@ -979,8 +1658,55 @@ var ClanFields=(function(){
     return DRAWER;
   }
   function toast(msg){ var t=ensureDrawer().toast; t.textContent=msg; t.classList.add('on'); clearTimeout(toast.h); toast.h=setTimeout(function(){ t.classList.remove('on'); },2600); }
-  function open(ref,push,note){ ensureDrawer(); if(!push) STACK=[]; STACK.push({ref:ref,note:note||''}); draw(); DRAWER.el.classList.add('on'); DRAWER.el.setAttribute('aria-hidden','false'); DRAWER.scrim.classList.add('on'); setTimeout(function(){ DRAWER.el.querySelector('[data-clf="close"]').focus(); },50); }
-  function close(){ if(!DRAWER) return; DRAWER.el.classList.remove('on'); DRAWER.el.setAttribute('aria-hidden','true'); DRAWER.scrim.classList.remove('on'); STACK=[]; }
+  // open(ref, push, note): where `ref` came from. A page with its own side panel
+  // (setPanelHost) shows it there, with the inspector's trail; any other page,
+  // in the drawer. A push opens it from the view already showing, one step on.
+  function open(ref,push,note){
+    if(PANEL&&!(push&&SURF&&kindOf(ref)!=='path')){
+      var r=PANEL(ref,kindOf(ref));
+      // The app showed it itself (a part of its own: its panel's part view).
+      if(r===true){ SURF=null; STACK=[]; return; }
+      if(r&&r.el){ if(DRAWER&&DRAWER.el.classList.contains('on')){ SURF=null; close(); } mountSurf(r.el,r.root); push=false; }
+      else SURF=null;
+    }
+    if(SURF){ if(!push) STACK=[]; STACK.push({ref:ref,note:note||''}); draw(); return; }
+    ensureDrawer(); if(!push) STACK=[]; STACK.push({ref:ref,note:note||''}); draw(); DRAWER.el.classList.add('on'); DRAWER.el.setAttribute('aria-hidden','false'); DRAWER.scrim.classList.add('on'); setTimeout(function(){ DRAWER.el.querySelector('[data-clf="close"]').focus(); },50); }
+  // Done, or ×: the panel goes back to the app's own view (quiet: the app is
+  // already drawing something else there).
+  function close(quiet){
+    if(SURF){ SURF=null; STACK=[]; if(PANEL&&!quiet) PANEL(null); return; }
+    if(!DRAWER) return; DRAWER.el.classList.remove('on'); DRAWER.el.setAttribute('aria-hidden','true'); DRAWER.scrim.classList.remove('on'); STACK=[]; }
+  // Whichever is showing a view: the panel's inspector, else the drawer.
+  function surf(){ return SURF||DRAWER; }
+  function inSurf(n){ var x=surf(); return !!(x&&x.el&&n&&x.el.contains(n)); }
+  function showing(){ return !!SURF||!!(DRAWER&&DRAWER.el.classList.contains('on')); }
+  // ── the side panel's inspector ─────────────────────────────────────
+  // The research inspector's bar (rb-ibar), shared: ← back, the trail
+  // root › … › where you are, and ×. trail is [{label, title}], oldest first.
+  function crumbsHTML(root,trail){
+    trail=arr(trail); var n=trail.length;
+    return '<div class="clf-ibar"><button type="button" class="clf-ibtn back" data-clf="back" title="'+(n>1?'Back':esc('Back to '+(root||'the page')))+'" aria-label="Back">←</button>'
+      +'<nav class="clf-crumbs" aria-label="Trail">'+(root?'<button type="button" class="clf-root" data-clf-crumb="-1" title="'+esc(root)+'">'+esc(clip(root,34))+'</button>':'')
+      +trail.map(function(c,i){ var last=i===n-1; return (root||i?'<span aria-hidden="true">›</span>':'')+'<button type="button" data-clf-crumb="'+i+'"'+(last?' aria-current="true"':'')+' title="'+esc(c.title||c.label)+'">'+(last?'<b>':'')+esc(clip(c.label,28))+(last?'</b>':'')+'</button>'; }).join('')
+      +'</nav><button type="button" class="clf-ibtn" data-clf="close" title="Close (Esc)" aria-label="Close">×</button></div>';
+  }
+  // A crumb names what a ref is, as the trail reads: Budget & scope › Fact › Source.
+  var CRUMB_WORD={pin:'Fact', finding:'Point', source:'Source', capture:'Your words', passage:'Library passage', material:'File', contest:'Disagreement', gap:'Gap', cite:'Sources', answer:'Summary', line:'Line', item:'Line', chart:'Chart'};
+  function crumbWord(ref){ var k=kindOf(ref); return k==='path'?words(ref):CRUMB_WORD[k]||'Needs a person'; }
+  function trailOf(){ return STACK.map(function(s){ return {label:crumbWord(s.ref), title:named(s.ref)||crumbWord(s.ref)}; }); }
+  function mountSurf(el,root){
+    el.innerHTML='<div class="clf-insp" role="region" aria-label="Where this came from"><div class="clf-insp-bar"></div><div class="clf-insp-b"></div></div>';
+    var box=el.querySelector('.clf-insp');
+    box.addEventListener('click',onSurfClick); box.addEventListener('submit',onDrawerSubmit);
+    SURF={el:box, host:el, root:root||'', bar:box.querySelector('.clf-insp-bar'), body:box.querySelector('.clf-insp-b')};
+  }
+  function onSurfClick(e){
+    var c=e.target.closest&&e.target.closest('[data-clf-crumb]');
+    if(c){ e.preventDefault(); var i=+c.getAttribute('data-clf-crumb');
+      if(i<0) close(); else if(i<STACK.length-1){ STACK.length=i+1; draw(); }
+      return; }
+    onDrawerClick(e);
+  }
   function top(){ return STACK[STACK.length-1]||{}; }
   function locked(){ return !!lockDecision(); }
 
@@ -1039,7 +1765,7 @@ var ClanFields=(function(){
     var pp=pins()[ref], ps=pp&&srcOf(pp), byPerson=ps&&ps.rec&&ps.rec.tier==='reviewer-verified';
     if(byPerson&&st==='sourced') st='by-person';
     if(st==='contest'&&carriedAt(ref).length) st='contest-carried';  // nothing here to pick: only to set aside
-    h+={'by-person':'<span class="clf-pill ok">'+TICK+' '+esc(srcShort(pp).replace(/^./,function(c){ return c.toUpperCase(); }))+'</span>',sourced:'<span class="clf-pill">Found in a source · the words match</span>',check:'<span class="clf-pill check">Worked out by the crew · please check</span>',verified:'<span class="clf-pill ok">'+TICK+' Checked</span>',rejected:'<span class="clf-pill check">Marked wrong</span>',contest:'<span class="clf-pill check">Sources disagree · pick one</span>','contest-carried':'<span class="clf-pill check">Sources disagree</span>',resolved:'<span class="clf-pill ok">'+TICK+' Picked</span>',replaced:'<span class="clf-pill check">Replaced by a person’s pick</span>',superseded:'<span class="clf-pill">Replaced after a review</span>'}[st]||'';
+    h+={'by-person':'<span class="clf-pill ok">'+TICK+' '+esc(srcShort(pp).replace(/^./,function(c){ return c.toUpperCase(); }))+'</span>',sourced:'<span class="clf-pill">Found in a source · the words match</span>',check:'<span class="clf-pill check">Worked out by the agents · please check</span>',verified:'<span class="clf-pill ok">'+TICK+' Checked</span>',rejected:'<span class="clf-pill check">Marked wrong</span>',contest:'<span class="clf-pill check">Sources disagree · pick one</span>','contest-carried':'<span class="clf-pill check">Sources disagree</span>',resolved:'<span class="clf-pill ok">'+TICK+' Picked</span>',replaced:'<span class="clf-pill check">Replaced by a person’s pick</span>',superseded:'<span class="clf-pill">Replaced after a review</span>'}[st]||'';
     if(confidential(ref)) h+='<span class="clf-pill conf">'+LOCK+'Private</span>';
     var p=pins()[ref]; if(p&&p.confidence&&p.confidence!=='high') h+='<span class="clf-pill warn">'+esc(SURE[p.confidence]?SURE[p.confidence].replace(/^./,function(c){ return c.toUpperCase(); }):p.confidence)+'</span>';
     if(p&&p.stale) h+='<span class="clf-pill warn">Out of date: a newer number is saved</span>';
@@ -1048,13 +1774,15 @@ var ClanFields=(function(){
   // What happened to a thing, in plain words: who did what, when, and why.
   var DID={verdict:'checked it',verify:'said it is right',classify:'set who may see it',edit:'changed it',correct:'corrected it',resolve:'picked a value',approve:'locked it',finding:'worked it out',pin:'saved it',claim:'saved it',
     client_review:'recorded the client’s answer',unlock:'opened it for the client’s change',backref:'noted it was used'};
-  var DID_ACTION={propose:'proposed a new version',suggest_part:'thinks the client meant it',dismiss_part:'said the client did not mean it',looks_right:'said it looks right',set_aside:'set it aside',seed:'carried it over',extract:'took it from your material',draft:'drafted it',regenerate:'drafted it again',look:'changed the look'};
+  var DID_ACTION={unlock_document:'unlocked it',propose:'proposed a new version',suggest_part:'thinks the client meant it',dismiss_part:'said the client did not mean it',looks_right:'said it looks right',set_aside:'set it aside',seed:'carried it over',extract:'took it from your material',draft:'drafted it',regenerate:'drafted it again',look:'changed the look'};
   function whoDid(b){
     var d=b.decision||{}, A=crew(), k=crewKey(d);
     if(b.who&&b.who.you) return 'You';
     if(k&&A.given[k]) return A.given[k];
+    // A step no one agent owns is the agents', never its job's name as a person.
+    if((b.who&&b.who.kind==='agent')||(!isPerson(d)&&!(b.who&&b.who.kind==='person'))) return 'The agents';
     var n=b.who&&b.who.name||(/^human:/.test(d.actor||'')?d.actor:'');
-    return n?personName(/^human:/.test(n)?n:'human:'+n).replace(/^./,function(c){ return c.toUpperCase(); }):'The crew';
+    return n?personName(/^human:/.test(n)?n:'human:'+n).replace(/^./,function(c){ return c.toUpperCase(); }):'The agents';
   }
   // What a decision did, in words: the redraft loop's steps (a first draft
   // the Judge sent back, the version that replaced it, the person's accept),
@@ -1062,13 +1790,13 @@ var ClanFields=(function(){
   function didWords(b){
     var d=b.decision||{};
     if(d.action==='propose') return 'proposed a '+(b.superseded||d.superseded_by?'first':'new')+' version';
-    if(isAccept(b)) return 'accepted '+proposerOf(b)+'’s new version';
+    if(isAccept(b)) return 'accepted '+(/^the /.test(proposerOf(b))?'':'the ')+proposerOf(b)+'’s new version';
     return DID_ACTION[d.action]||(d.kind==='verdict'?(d.polarity==='bad'?'said it is wrong':'said it is right'):DID[d.kind]||'changed it');
   }
   function history(path){
     var ds=arr(VIEW&&VIEW.decisions).filter(function(b){ return arr(b.targets).some(function(t){ return t.path===path; }); });
     if(!ds.length) return '';
-    return '<details class="clf-more"><summary>What happened to it ('+ds.length+')</summary><ul class="clf-hist">'+ds.slice(0,6).map(function(b){ var d=b.decision||{}, said=saidWords(d);
+    return '<details class="clf-more"><summary>What happened to it ('+ds.length+')</summary><ul class="clf-hist">'+ds.slice(0,6).map(function(b){ var d=b.decision||{}, said=isPerson(d)?saidWords(d):noIds(saidWords(d));
       return '<li><span><b>'+esc(whoDid(b))+'</b> '+didWords(b)+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(said?' — “'+esc(said.length>160?said.slice(0,157)+'…':said)+'”':'')+'</span></li>'; }).join('')+'</ul></details>';
   }
   function wrote(ref){
@@ -1078,15 +1806,13 @@ var ClanFields=(function(){
   }
   // "Keep it private", with what private means, under every review.
   function privBlock(){
-    return '<div class="clf-answers"><button type="button" class="clf-btn big quiet" data-clf="conf">'+LOCK+'Keep it private</button><p class="clf-ex">Private keeps it out of the agency’s shared memory, so work for other clients never learns from it. The client still sees it, and our agents still use it on this document.</p></div>';
+    return '<div class="clf-answers"><button type="button" class="clf-btn big quiet" data-clf="conf">'+LOCK+'Keep it private</button><p class="clf-ex">Private means Napkin never learns from it: it stays out of the shared memory, out of other campaigns and out of training. The agency and the client still see it, in every copy and export.</p></div>';
   }
   function confForm(ref,target){
     return '<form class="clf-form" data-clf-form="classify" data-target="'+esc(target)+'"><b>Keep it private</b>'
       +(confidential(ref)?'<p class="clf-muted">It is already private. What you choose now replaces what was chosen before.</p>':'')
-      +'<p class="clf-ex">Tick what may still happen with it. Anything you leave unticked is kept from it.</p>'
-      +'<label class="clf-toggle"><input type="checkbox" name="model" checked><span>Our agents may read it<small>If not ticked, no agent reads it, not even the agency’s own.</small></span></label>'
-      +'<label class="clf-toggle"><input type="checkbox" name="export" checked><span>It may go in files you send out<small>If not ticked, it is left out of anything that leaves the workspace.</small></span></label>'
-      +'<label class="clf-toggle"><input type="checkbox" name="corpus"><span>Other campaigns may learn from it<small>If not ticked, it stays out of the agency’s shared memory.</small></span></label>'
+      +'<p class="clf-ex">Napkin never learns from it: not the shared memory, not other campaigns, not training. The agency and the client still see it, in every copy and export.</p>'
+      +'<label class="clf-toggle"><input type="checkbox" name="model" checked><span>Our agents may read it on this document<small>If not ticked, no agent reads it, not even the agency’s own.</small></span></label>'
       +'<label><span>Why keep it private? <span class="req">needed</span></span><textarea name="why" required></textarea></label>'
       +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Keep it private</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div></form>';
   }
@@ -1111,67 +1837,249 @@ var ClanFields=(function(){
   function uniq(xs){ var s={}; return xs.filter(function(x){ if(!x||s[x]) return false; s[x]=1; return true; }); }
   function clip(s,n){ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s; }
   function plural(n,w){ return n+' '+w+(n===1?'':'s'); }
+  // Ids are for Technical details, never for people (B4): a server's text
+  // ("… 1.2% ABV (f_RPH5UFCVDCUV)", "cites finding fi_…") loses its ids here.
+  // A finding is named by what it says when the page holds it.
+  function noIds(s){
+    var F=(function(){ try{ return findings()||{}; }catch(e){ return {}; } })();
+    function finding(id){ var f=F[id], t=f&&String(f.statement||'').replace(/\s+/g,' ').trim(); return t?'the finding “'+(t.length>70?t.slice(0,69).replace(/\s+\S*$/,'')+'…':t)+'”':'a finding'; }
+    return String(s==null?'':s)
+      .replace(/\s*\((?:(?:from |in |see |cites? )?(?:f|fi|fnd|src|mat|msg|d|psg)_[0-9A-Za-z]+(?:,\s*|\s+and\s+)?)+\)/g,'')
+      .replace(/\b(?:the )?finding ((?:fi|fnd)_[0-9A-Za-z]{2,})/g,function(_,id){ return finding(id); })
+      .replace(/\b(?:fi|fnd)_[0-9A-Za-z]{4,}\b/g,function(id){ return finding(id); })
+      .replace(/\b(?:the )?fact f_[0-9A-Za-z]{2,}/g,'a fact')
+      .replace(/\bf_[0-9A-Z]{6,}\b/g,'a fact')
+      .replace(/\bd_[0-9A-Z]{10,}\b/g,'a decision')
+      .replace(/\s+([.,;:])/g,'$1').replace(/\s{2,}/g,' ').trim()
+      .replace(/^[\s\S]*$/,function(t){ return keyWords(t); });
+  }
+  // This document's parts by their key, in the words the page gives them
+  // (data-clan-part-label) or the host does: an agent's sentence that names a
+  // part by its key ("budget_and_scope asks…") reads with its label.
+  function partNames(){
+    var out={};
+    arr(VIEW&&VIEW.decisions).forEach(function(b){ arr(b.targets).forEach(function(t){
+      if(t&&t.here&&t.kind==='field'&&/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?$/.test(t.path||'')&&!out[t.path]){ var l=String(t.label||'').split(' › ').pop().trim(); if(l) out[t.path]=lowerWord(l); } }); });
+    try{ declaredParts().forEach(function(p){ var a=p.address.replace(/^campaign\./,''); if(p.label){ out[p.address]=lowerWord(p.label); if(!out[a]) out[a]=out[p.address]; } }); }catch(e){}
+    return out;
+  }
+  function lowerWord(l){ return /^[A-Z][a-z]/.test(l)?l.charAt(0).toLowerCase()+l.slice(1):l; }
+  // Part keys and the agents' words in a sentence, for a person: a known part by
+  // its label, any other key in words, a length check's "background 99/70" as
+  // "background (99 words, 70 at most)", and "a"/"an" settled.
+  function keyWords(s){
+    var n=partNames();
+    function name(k){ return n[k]||(k.indexOf('_')!==-1&&k.indexOf('.')===-1?k.replace(/_/g,' '):null); }
+    return String(s==null?'':s)
+      .replace(/^Over length:\s*/,'Too long: ')
+      .replace(/\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?) (\d+)\/(\d+)\b/g,function(m,k,a,b){ var w=name(k); return w?w+' ('+a+' words, '+b+' at most)':m; })
+      .replace(/\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\b/g,function(k){ return n[k]||k; })
+      .replace(/\b[a-z]+(?:_[a-z]+)+\b/g,function(k){ return n[k]||k.replace(/_/g,' '); })
+      .replace(/\b(the (?:new|old) )the /gi,'$1').replace(/\b([Tt]he) the\b/g,'$1')
+      .replace(/\b(a|A) (?=(?:[ai]|o(?!n[ce])|e(?!u)|u(?!n[iy]|s[eu]|r[aeiou]|tili))[a-z])/g,'$1n ');
+  }
+  // A gap's category or measure key in words, as the research's own list says
+  // it: "category/qsr.fast_food" and "qsr.fast_food" are fast food,
+  // "market.size_value" size value, "brand/bulmers" Bulmers. A web address stays.
+  var GAP_TLD={com:1, ie:1, uk:1, org:1, net:1, io:1, gov:1, eu:1, co:1, edu:1, info:1, html:1, pdf:1};
+  function gapWords(s){
+    return String(s==null?'':s)
+      .replace(/(^|[\s(])([a-z]+)\/([a-z0-9][a-z0-9._\-]*[a-z0-9])(?=[\s,.;:)]|$)/g,function(m,b,k,e){ var w=e.split('.').pop().replace(/^x_/,'').replace(/[-_]/g,' '); return b+(k==='category'||k==='measure'?w:w.replace(/\b[a-z]/g,function(c){ return c.toUpperCase(); })); })
+      .replace(/(^|[^\w\/.:@-])([a-z][a-z0-9]+(?:\.[a-z][a-z0-9_]+)+)(?![\w\/@-])/g,function(m,b,k){ var last=k.split('.').pop(); if(GAP_TLD[last]) return m; return b+last.replace(/^x_/,'').replace(/_/g,' '); });
+  }
   function becauseList(rs){ var bs=arr(obj(rs).because).filter(function(p){ return p&&p.point; });
-    return bs.length?'<ul class="clf-hist">'+bs.map(function(p){ return '<li><span>'+esc(p.point)+'</span></li>'; }).join('')+'</ul>':''; }
-  function attnOf(rs){ var a=obj(rs).attention; return (Array.isArray(a)?a:a?[a]:[]).filter(function(x){ return typeof x==='string'&&x; }); }
+    return bs.length?'<ul class="clf-hist">'+bs.map(function(p){ return '<li><span>'+esc(noIds(p.point))+'</span></li>'; }).join('')+'</ul>':''; }
+  function attnOf(rs){ var a=obj(rs).attention; return (Array.isArray(a)?a:a?[a]:[]).filter(function(x){ return typeof x==='string'&&x; }).map(noIds); }
 
-  // Where a bare value came from: its current writing decision, with what it
-  // cites — the client's words, the library's passages, the facts with what
-  // their source says, the points the crew worked out — and why.
+  // One provenance view per part (where-it-came-from, approved 2026-11-10):
+  // what wrote it and what that cites, drawn once in the inspector's grammar
+  // (the .clf-rv sections), in the brief's panel, the drawer and a list line.
   // The person's ask, when a drafter kept it as a point of its reasoning
   // ("Your ask: “…”", middleware-api §10.10): the words inside the quotes.
   function askOf(p){ var m=/^Your ask:\s*[“"]?([\s\S]*?)[”"]?\s*$/.exec(String(p&&p.point||'')); return m?m[1].trim():''; }
-  function writerBlock(ref){
-    var w=writerOf(ref); if(!w) return '';
-    // A person's accept of a proposal rests on what the proposal rested on.
-    var b=w.block, d=b.decision||{}, ab=acceptOf(b), src=ab?ab.decision:d, rs=obj(src.reasoning), h='';
+  // What the writing decision cites, sorted by kind. A person's accept of a
+  // proposal rests on what the proposal rested on.
+  function writeOf(path){
+    var w=writerOf(path); if(!w) return null;
+    var b=w.block, d=b.decision||{}, ab=acceptOf(b), src=ab?ab.decision:d, rs=obj(src.reasoning);
     var ids=uniq([].concat.apply(arr(src.cites),arr(rs.because).map(function(p){ return arr(p&&p.cites); })).map(String));
-    var caps=ids.filter(function(i){ return kindOf(i)==='capture'&&captures()[i]; }), psgs=ids.filter(function(i){ return kindOf(i)==='passage'&&passages()[i]; });
-    var fs=ids.filter(function(i){ return kindOf(i)==='pin'&&pins()[i]; }), fis=ids.filter(function(i){ return kindOf(i)==='finding'&&findings()[i]; });
+    var P=pins(), caps=ids.filter(function(i){ return kindOf(i)==='capture'&&captures()[i]; }), psgs=ids.filter(function(i){ return kindOf(i)==='passage'&&passages()[i]; });
+    // A pin a person marked wrong, or one replaced, is not something it rests on.
+    var fs=ids.filter(function(i){ return kindOf(i)==='pin'&&P[i]&&!P[i].replaced_by&&!excludedPin(i); }), fis=ids.filter(function(i){ return kindOf(i)==='finding'&&findings()[i]; });
     var viaCap={}; caps.forEach(function(c){ viaCap[captures()[c].material_id]=1; });
     var mats=ids.filter(function(i){ return kindOf(i)==='material'&&materials()[i]&&!viaCap[i]; });
-    if(ab){ var pd=ab.decision;
-      h+='<p class="clf-by"><b>'+esc(givenOf(crewKey(pd))||'The crew')+'</b> wrote this'+(pd.timestamp?' on '+esc(dayMonth(pd.timestamp,true)):'')+(/your ask/.test(String(pd.rationale||''))?', on your ask':'')
-        +'; <b>'+esc(whoDid(b))+'</b> accepted it'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'.</p>'; }
-    else if(isAccept(b)) h+='<p class="clf-by"><b>'+esc(proposerOf(b))+'</b> wrote this; <b>'+esc(whoDid(b))+'</b> accepted it'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'.</p>';
-    else if(isPerson(d)) h+='<p class="clf-by"><b>'+esc(whoDid(b))+'</b> wrote this'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(saidWords(d)?' — “'+esc(clip(saidWords(d),200))+'”':'')+'</p>';
-    else {
-      var act=String(d.action||''), from=[];
-      if(caps.length||mats.length) from.push('your material');
-      if(psgs.length) from.push(plural(psgs.length,'passage')+' from the library');
-      if(fs.length) from.push(plural(fs.length,'fact'));
-      if(fis.length) from.push(plural(fis.length,'point')+' the crew worked out');
-      var line=act==='extract'?'I took this from your material.'
-        :act==='seed'?'This came over from '+upTitle(String(arr(d.cites)[0]||'').split('#')[0])+' when this document started from it.'
-        :(act==='draft'||act==='regenerate'?'I drafted this':'I wrote this')+(from.length?' from '+andList(from):'')+'.';
-      h+=say(crewKey(d),esc(line))||'<p class="clf-by">'+esc(line)+'</p>';
-    }
     // The same words cited twice (two capture items saying one thing) show once.
     var seenQ={}; caps=caps.filter(function(c){ var q=String(obj(captures()[c]).quote||''); if(!q) return true; if(seenQ[q]) return false; seenQ[q]=1; return true; });
-    if(caps.length) h+='<div class="clf-sec"><h3>What your material says</h3>'+caps.map(function(c){ var ci=captures()[c], m=materials()[ci.material_id];
-      return ci.quote?'<blockquote class="clf-q said">'+esc(ci.quote)+'</blockquote><p class="clf-by">'+esc(matName(m))+(ci.status==='assumption'?' · assumed, not said':'')+'</p>'
-        :'<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(c)+'"><span>'+esc(textOf(ci.value))+'<small>'+(ci.status==='assumption'?'assumed, not said':'from your material')+'</small></span><b></b></button></div>'; }).join('')+'</div>';
-    // The prompt's own words, when the document keeps them (middleware-api §10.4), quoted; any other material by its name.
-    var typed=mats.filter(function(m){ var mt=materials()[m]; return mt.kind==='prompt'&&typeof mt.text==='string'&&mt.text; });
-    mats=mats.filter(function(m){ return typed.indexOf(m)===-1; });
-    // The note typed for this draft first, then the prompt the document keeps.
-    var asks=arr(rs.because).map(askOf).filter(Boolean);
-    if(asks.length||typed.length) h+='<div class="clf-sec"><h3>What you asked for</h3>'+asks.map(function(a){ return '<blockquote class="clf-q said">'+esc(clip(a,600))+'</blockquote>'; }).join('')
-      +typed.map(function(m){ return '<blockquote class="clf-q said">'+esc(clip(materials()[m].text,600))+'</blockquote><p class="clf-by">'+esc(matName(materials()[m]))+'</p>'; }).join('')+'</div>';
-    if(mats.length) h+='<div class="clf-sec"><h3>From your material</h3><div class="clf-rows">'+mats.map(function(m){ var mt=materials()[m]; return '<button type="button" class="clf-row" data-open="'+esc(m)+'"><span>'+esc(mt.name||'A file')+'<small>'+esc(MAT_KIND[mt.kind]||MAT_KIND.other)+'</small></span><b></b></button>'; }).join('')+'</div></div>';
-    if(psgs.length) h+='<div class="clf-sec"><h3>What the library says</h3><div class="clf-rows">'+psgs.map(function(p){ var pg=passages()[p];
-      return '<button type="button" class="clf-row" data-open="'+esc(p)+'"><span>'+esc(pg.citation||'A passage')+(pg.text?'<small>“'+esc(clip(pg.text,180))+'”</small>':'')+'</span><b></b></button>'; }).join('')+'</div></div>';
-    if(fs.length) h+='<div class="clf-sec"><h3>The facts it uses</h3><div class="clf-rows">'+fs.map(function(f){ var p=pins()[f], s=srcOf(p), q=s&&obj(p.quotes)[s.id];
-      return '<button type="button" class="clf-row" data-open="'+esc(f)+'"><span>'+esc(label(p))+'<small>'+(q?'“'+esc(clip(q,160))+'” · ':'')+esc(srcShort(p))+'</small></span><b>'+(confidential(f)?LOCK:'')+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
-    if(fis.length) h+='<div class="clf-sec"><h3>Points the crew worked out</h3><div class="clf-rows">'+fis.map(function(f){ var fi=findings()[f];
-      return '<button type="button" class="clf-row" data-open="'+esc(f)+'"><span>'+esc(fi.statement)+'<small>'+(fi.status==='proposed'?'derived by the agent · not checked yet':esc(STATUS_WORD[fi.status]||fi.status||''))+'</small></span><b></b></button>'; }).join('')+'</div></div>';
-    var why=becauseList({because:arr(rs.because).filter(function(p){ return !askOf(p); })}), sure=obj(rs.certainty);
-    if(why) h+='<details class="clf-more"><summary>Why it says this</summary>'+why+'</details>';
-    if(sure.level) h+='<p class="clf-muted">How sure: '+esc(SURE[sure.level]||sure.level)+(sure.why?'. '+esc(sure.why.charAt(0).toUpperCase()+sure.why.slice(1)):'')+'.</p>';
-    attnOf(rs).forEach(function(a){ h+='<p class="clf-muted">'+esc(a)+'</p>'; });
+    return {b:b, d:d, ab:ab, src:src, rs:rs, caps:caps, psgs:psgs, fs:fs, fis:fis, mats:mats, asks:arr(rs.because).map(askOf).filter(Boolean)};
+  }
+  // An agent by its name in a sentence: "the Brief agent", else the agents.
+  function theName(g){ return g?(/ agent$/i.test(g)?'the '+g:g):'the agents'; }
+  function byName(k){ return theName(givenOf(k)); }
+  // The certainty pill: the writing decision's own, never invented.
+  function pvPill(rs){ var ce=obj(rs.certainty), lv=lvOf(ce.level); if(!lv) return '';
+    return lv>=3?'<span class="rv-pill ok">High</span>':lv===2?'<span class="rv-pill warn">Medium'+(/infer/i.test(String(ce.why||''))?' · inference':'')+'</span>':'<span class="rv-pill warn">Low · thin</span>'; }
+  // Who wrote it, from what, and when: one mono line under the part's name.
+  function pvMeta(x){
+    var b=x.b, d=x.d, act=String(d.action||''), at=d.timestamp?esc(dayMonth(d.timestamp)):'', dot=function(s){ return s?' · '+s:''; };
+    if(x.ab) return 'Written by <b>'+esc(byName(crewKey(x.ab.decision)))+'</b> · accepted by <b>'+esc(whoDid(b))+'</b>'+dot(at);
+    if(isAccept(b)) return 'Written by <b>'+esc(theName(proposerOf(b)))+'</b> · accepted by <b>'+esc(whoDid(b))+'</b>'+dot(at);
+    if(isPerson(d)) return 'Written by <b>'+esc(whoDid(b))+'</b>'+dot(at);
+    if(act==='extract') return 'Taken from your material by <b>'+esc(byName(crewKey(d)))+'</b>'+dot(at);
+    if(act==='seed') return 'Came over from <b>'+esc(upTitle(String(arr(d.cites)[0]||'').split('#')[0]))+'</b> when this '+esc(trayNoun())+' started from it';
+    var from=[];
+    if(x.caps.length||x.mats.length||x.asks.length) from.push('your words');
+    if(x.psgs.length) from.push(plural(x.psgs.length,'library passage'));
+    if(x.fs.length) from.push(plural(x.fs.length,'fact'));
+    if(x.fis.length) from.push(plural(x.fis.length,'point')+' the agents worked out');
+    return 'Written by <b>'+esc(byName(crewKey(d)))+'</b>'+(from.length?' · from '+esc(andList(from)):'')+dot(at)+(d.id?' · '+dChip(d.id):'');
+  }
+  // A quote as the inspector sets one, clipped; More opens the rest in place.
+  function pvQuote(t,n){ t=String(t||''); if(t.length<=n) return '<blockquote class="rv-q">'+esc(t)+'</blockquote>';
+    return '<blockquote class="rv-q pv-long"><details><summary><span>'+esc(clip(t,n))+'</span> <span class="pv-more">More</span></summary>'+esc(t)+'</details></blockquote>'; }
+  // The mono caption under a quote, opening what it names.
+  function pvCap(ref,words){ return ref?go(ref,'rv-src pv-cap',esc(words)):'<p class="rv-src">'+esc(words)+'</p>'; }
+  function matCap(m){ return !m?'your material':m.kind==='prompt'||m.name==='prompt'?'your prompt':m.name||'your material'; }
+  // A pin's row of Facts under it: label, value, source, tier, date and its state.
+  // A long value takes the whole row, so it never squeezes the label.
+  function pvPinRow(id){
+    var P=pins()[id]; if(!P) return '';
+    var s=srcOf(P), r=s&&s.rec, v=fmt(P), long=v.length>18;
+    var st=openContestOf(id)?'contested':resolvedFor(id)?'chosen':P.stale?'stale':(r&&r.tier==='reviewer-verified')||obj(P.review).verdict==='verified'?'verified':'active';
+    var sm=[s?sChip(s.id):'', r&&r.tier?esc(tierWord(r.tier)):'', r&&r.published_at?esc(monthYear(r.published_at)):'', P.market?esc(country(P.market)):''].filter(Boolean).join(' · ');
+    var lab=(confidential(id)?LOCK:'')+esc(label(P));
+    return '<tr data-clf-go="'+esc(id)+'" tabindex="0" role="button"'+(long?' class="pv-wide"':'')+' title="'+esc(label(P)+' = '+v)+'">'
+      +(long?'<td colspan="2">'+lab+'<span class="pv-lv">'+esc(clip(v,140))+'</span>':'<td>'+lab)+(sm?'<small>'+sm+'</small>':'')+'</td>'
+      +(long?'':'<td class="v">'+esc(clip(v,18))+'</td>')+'<td>'+confBars(pinLv(P))+'<small>'+esc(st)+'</small></td></tr>';
+  }
+  var PV_OPEN={};
+  function pvPins(path,fs){
+    if(!fs.length) return '';
+    var top=fs.slice(0,6), rest=fs.slice(6);
+    return '<table class="rv-pins"><tbody>'+top.map(pvPinRow).join('')+'</tbody></table>'
+      +(rest.length?'<details class="rv-more" data-pv-facts="'+esc(path)+'"'+(PV_OPEN[path]?' open':'')+'><summary>Show all '+fs.length+'</summary><table class="rv-pins"><tbody>'+rest.map(pvPinRow).join('')+'</tbody></table></details>':'');
+  }
+  // The decisions about a path: what wrote it, checked it, or cites it.
+  function pvDecs(path){
+    var re=new RegExp('^(?:[^#]*#)?'+String(path).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$'), me=docId()+'#'+path;
+    return blocksOn(function(b,d){ return onTargets(b,re)||arr(d.cites).indexOf(me)!==-1; });
+  }
+  // The view's markup in two pieces: its head (name, certainty, who wrote it)
+  // and its sections. opts.name names the part (else its key in words);
+  // opts.also lists the other parts that use what it cites ([{key,label}]).
+  function partParts(path,opts){
+    opts=opts||{}; var nm=opts.name||words(path), x=writeOf(path);
+    var head=function(pill,meta){ return '<div class="rv-head"><span class="rv-pname">'+esc(nm)+'</span>'+(pill||'')+'</div>'+(meta?'<p class="rv-meta"><span>'+meta+'</span></p>':''); };
+    if(!docId()) return {head:head(), body:'<p class="rv-none">Where this came from shows in the Napkin host.</p>'};
+    if(!VIEW) return {head:head(), body:'<p class="rv-none">Reading the record…</p>'};
+    if(!textOf(valueAt(path))) return {head:head(), body:'<p class="rv-none">Nothing is written here yet.</p>'};
+    var also=arr(opts.also), alsoSec=also.length?sec('Also used in','<details class="rv-more pv-also"><summary>Show '+(also.length===1?'it':'them')+'</summary><div class="rv-uses"><div class="rv-use">'+also.map(function(a){ return '<button type="button" class="rv-cchip" data-clf-part="'+esc(a.key)+'">'+esc(a.label||words(a.key))+'</button>'; }).join(' ')+'</div></div></details>',plural(also.length,'part')):'';
+    if(opts.compact) return {head:head(x?pvPill(x.rs):'', x?pvMeta(x):''), body:x?pvCompact(path,x,opts,also):'<p class="rv-none">Nothing on the record wrote this yet.</p>'+pvAlso(also)};
+    var decs=decsSec(pvDecs(path));
+    if(!x) return {head:head(), body:'<p class="rv-none">Nothing on the record wrote this yet.</p>'+alsoSec+decs};
+    var h='', said=[];
+    x.caps.forEach(function(c){ var ci=captures()[c], m=materials()[ci.material_id], as=ci.status==='assumption';
+      said.push(ci.quote?pvQuote(ci.quote,220)+pvCap(c,matCap(m)+(as?' · assumed, not said':'')):'<blockquote class="rv-q">'+esc(textOf(ci.value))+'</blockquote>'+pvCap(c,as?'assumed, not said':'from your material')); });
+    x.asks.forEach(function(a){ said.push(pvQuote(a,220)+pvCap('','your note for this draft')); });
+    // The prompt's own words, when the document keeps them (middleware-api §10.4), quoted; any other file by its name.
+    var typed=x.mats.filter(function(m){ var mt=materials()[m]; return mt.kind==='prompt'&&typeof mt.text==='string'&&mt.text; }), files=x.mats.filter(function(m){ return typed.indexOf(m)===-1; });
+    typed.forEach(function(m){ said.push(pvQuote(materials()[m].text,220)+pvCap(m,'your prompt')); });
+    if(said.length||files.length) h+=sec('From your words',said.map(function(s){ return '<div class="pv-said">'+s+'</div>'; }).join('')
+      +(files.length?'<div class="rv-uses"><div class="rv-use"><span>Files</span>'+files.map(function(m){ return go(m,'rv-chip',(confidential(m)?LOCK:'')+esc(materials()[m].name||'A file')); }).join(' ')+'</div></div>':''),said.length?String(said.length):'');
+    if(x.psgs.length) h+=sec('From the library',x.psgs.map(function(p){ var pg=passages()[p]; return '<div class="pv-said">'+(pg.text?pvQuote(pg.text,180):'')+pvCap(p,(pg.citation||'A passage')+' · knowledge library')+'</div>'; }).join(''),String(x.psgs.length));
+    if(x.fs.length) h+=sec('Facts under it',pvPins(path,x.fs),String(x.fs.length));
+    if(x.fis.length) h+=sec('Points it rests on','<div class="rv-uses">'+x.fis.map(function(i){ var f=findings()[i]; return '<div class="rv-use"><span>'+fChip(i)+'</span>'+esc(f.statement)+' '+stPill(f)+'</div>'; }).join('')+'</div>',String(x.fis.length));
+    // Why: the reasons, less the ask already quoted; a person's write leads with their words.
+    var d=x.d, src=x.src, rs={}, k; for(k in x.rs) rs[k]=x.rs[k];
+    rs.because=arr(x.rs.because).filter(function(p){ return !askOf(p); });
+    if(isPerson(d)&&!x.ab&&saidWords(d)) rs.decided=saidWords(d);
+    var kw=x.ab||isAccept(x.b)?'accept':String(d.action||'').split(/\s/)[0]||d.kind||'edit';
+    // Signed by what gave the reasons: an accept shows the proposal's.
+    var by=x.ab?[givenOf(crewKey(src))||'The agents', 'draft', src.timestamp?dayMonth(src.timestamp):'']
+      :[isPerson(d)?whoDid(x.b):(givenOf(crewKey(d))||whoDid(x.b)), kw, d.timestamp?dayMonth(d.timestamp):''];
+    by=by.filter(Boolean).join(' · ');
+    var why=reasonHTML(rs,by,src.rationale||'');
+    if(why) h+=sec('Why it says this',why);
+    return {head:head(pvPill(x.rs),pvMeta(x)), body:h+alsoSec+decs};
+  }
+  function partHTML(path,opts){ var p=partParts(path,opts); return p.head+p.body; }
+  // ── the compact part view (opts.compact: the brief's side tab, features/brief-new-ui.clan) ──
+  // Built from as compact rows (your words, the library, facts, points), the top five, then "All n ›";
+  // a your-words row that says what the sheet already says (opts.sheet) is left out, so the panel never
+  // quotes the part back. Then "Also in" as part chips, and Why it says this folded, without the
+  // certainty (the state chips carry it) and without a Because line the panel already shows (opts.seen).
+  function normText(t){ return String(t==null?'':t).toLowerCase().replace(/[\u2018\u2019\u201C\u201D"'`.,;:!?()\[\]\-–—…]/g,' ').replace(/\s+/g,' ').trim(); }
+  function echoes(quote,sheet){ var q=normText(quote), sh=normText(sheet); return !!q&&!!sh&&(q===sh||sh.indexOf(q)!==-1); }
+  // A row opens what it names in the panel; a fact's row also carries ↗, its source's own page in a new
+  // tab (the old Sources list's "Open it ↗": one click from the part to the publisher).
+  function pvRow(ref,title,meta,val,uri,pub){ var b=go(ref,'pv-bf','<span class="pv-bf-t">'+esc(clip(title,90))+'</span>'+(meta?'<small>'+esc(meta)+'</small>':'')+(val?'<b class="pv-bf-v">'+esc(clip(val,18))+'</b>':''));
+    return uri?'<div class="pv-bfr">'+b+'<a class="pv-bf-go" href="'+esc(uri)+'" target="_blank" rel="noopener noreferrer" title="'+esc('Open the source: '+pub+', in a new tab')+'" aria-label="'+esc('Open the source, '+pub+', in a new tab')+'">↗</a></div>':b; }
+  function pvRows(path,x,sheet){
+    var rows=[], quoted={}, echoed=[]; rows.echoed=0;
+    x.caps.forEach(function(c){ var ci=captures()[c], m=materials()[ci.material_id], q=ci.quote||textOf(ci.value);
+      if(echoes(q,sheet)){ rows.echoed++; echoed.push(c); return; }
+      quoted[ci.material_id]=1; rows.push(pvRow(c,'“'+q+'”',matCap(m)+(ci.status==='assumption'?' · assumed, not said':''),'')); });
+    // Words the sheet already says are not quoted back, but the way to them stays: a row for the file
+    // they are in (opening on them, marked), unless another row here opens that file already.
+    echoed.forEach(function(c){ var ci=captures()[c], mc=matCap(materials()[ci.material_id]); if(quoted[ci.material_id]) return; quoted[ci.material_id]=1;
+      rows.push(pvRow(c,mc.charAt(0).toUpperCase()+mc.slice(1),'the words the sheet uses, marked in it','')); });
+    x.mats.forEach(function(m){ var mt=materials()[m]; if(!mt) return; var typed=mt.kind==='prompt'&&typeof mt.text==='string'&&mt.text;
+      if(typed&&echoes(mt.text,sheet)){ rows.echoed++; if(!quoted[m]){ quoted[m]=1; rows.push(pvRow(m,'Your prompt','the words the sheet uses','')); } return; }
+      quoted[m]=1;
+      rows.push(pvRow(m,typed?'“'+mt.text+'”':(mt.name||'A file'),typed?'your prompt':'your file','')); });
+    x.psgs.forEach(function(p){ var pg=passages()[p]; rows.push(pvRow(p,pg.text?'“'+pg.text+'”':(pg.citation||'A passage'),(pg.citation||'A passage')+' · knowledge library','')); });
+    // A fact by what it says (a worded one) or by its label and figure, with its publisher, never its id.
+    x.fs.forEach(function(id){ var P=pins()[id]; if(!P) return; var sr=srcOf(P), r=sr&&sr.rec, v=fmt(P), long=v.length>18, pub=r&&r.tier!=='reviewer-verified'?pubName(r.publisher)||r.domain||'':'';
+      var who=r&&r.tier==='reviewer-verified'?'checked by a person':pub;
+      rows.push(pvRow(id,(confidential(id)?'🔒 ':'')+(long?v:label(P)),[long?label(P):'', who].filter(Boolean).join(' · '),long?'':v,pub&&/^https?:\/\//.test(r.uri||'')?r.uri:'',pub)); });
+    x.fis.forEach(function(i){ var f=findings()[i]; rows.push(pvRow(i,f.statement,'Finding '+fno(i)+' · a point the agents worked out','')); });
+    return rows;
+  }
+  function pvAlso(also){ return also.length?'<div class="pv-also-row"><span>Also in</span>'+also.map(function(a){ return '<button type="button" class="rv-cchip" data-clf-part="'+esc(a.key)+'">'+esc(a.label||words(a.key))+'</button>'; }).join(' ')+'</div>':''; }
+  function pvCompact(path,x,opts,also){
+    var rows=pvRows(path,x,opts.sheet), top=rows.slice(0,5), rest=rows.slice(5), h='';
+    // Everything it rests on is your own words, as the sheet has them: said once, not quoted back.
+    if(rows.length) h+=sec('Built from','<div class="pv-bfl">'+top.join('')+'</div>'
+      +(rest.length?'<details class="pv-all" data-pv-facts="'+esc(path)+'"'+(PV_OPEN[path]?' open':'')+'><summary>All '+rows.length+' ›</summary><div class="pv-bfl">'+rest.join('')+'</div></details>':''));
+    else h+='<p class="rv-none">'+(rows.echoed?'From your words, as the sheet has them.':'Written without anything to cite.')+'</p>';
+    h+=pvAlso(also);
+    // Why, folded: no certainty (the chips say it), no Because the panel shows already, none twice.
+    var seen=normText(opts.seen||''), d=x.d, src=x.src, rs={}, k, kept={};
+    for(k in x.rs) rs[k]=x.rs[k];
+    delete rs.certainty;
+    rs.because=arr(x.rs.because).filter(function(p){ if(!p||askOf(p)) return false;
+      var t=normText(noIds(p.point||'')).replace(/^the review agent s note /,''); if(!t||kept[t]) return false; kept[t]=1;
+      return !(seen&&t.length>12&&seen.indexOf(t)!==-1); });
+    if(isPerson(d)&&!x.ab&&saidWords(d)) rs.decided=saidWords(d);
+    var why=reasonHTML(rs,'',src.rationale||'');
+    if(why) h+='<details class="pv-why" data-pv-why="'+esc(path)+'"'+(PV_OPEN['why:'+path]?' open':'')+'><summary>Why it says this</summary>'+why+'</details>';
     return h;
   }
-  // A proposal the crew made for a value a person holds: shown, never applied.
+  // The state chips' facts (ClanFields.partFacts): the writing decision's certainty and how many facts it rests on.
+  function partFacts(path){
+    var x=docId()&&VIEW?writeOf(path):null; if(!x) return {level:'', tone:'', facts:0, decisions:VIEW?pvDecs(path).length:0};
+    var ce=obj(x.rs.certainty), lv=lvOf(ce.level);
+    return {level:lv>=3?'High':lv===2?'Medium'+(/infer/i.test(String(ce.why||''))?' · inference':''):lv===1?'Low · thin':'', tone:lv>=3?'ok':lv?'warn':'', facts:x.fs.length, decisions:pvDecs(path).length};
+  }
+  // History, opened inside the panel (ClanFields.partHistory): who wrote it, when, its decision's id,
+  // and the decisions on the record about it.
+  function partHistory(path){
+    var x=docId()&&VIEW?writeOf(path):null, bs=VIEW?pvDecs(path):[];
+    return '<div class="clf-rv pv pv-panel pv-hist" data-card="'+esc(path)+'">'+(x?'<p class="rv-meta"><span>'+pvMeta(x)+'</span></p>':'')
+      +(bs.length?decsSec(bs,bs.length):'<p class="rv-none">Nothing on the record about this part yet.</p>')+'</div>';
+  }
+  // ClanFields.partView(ref, el, {panel, name, head, also}): the view into el.
+  // In the brief's panel the head goes to its own element (opts.head), by the
+  // part's name and above its actions; elsewhere it leads the view.
+  function partView(ref,el,opts){
+    opts=opts||{}; if(!el) return;
+    var p=partParts(ref,opts);
+    if(opts.compact){ el.innerHTML='<div class="clf-rv pv pv-panel pv-compact" data-card="'+esc(ref)+'">'+p.body+'</div>';
+      [].forEach.call(el.querySelectorAll('details[data-pv-facts],details[data-pv-why]'),function(dt){ dt.addEventListener('toggle',function(){ var k=dt.getAttribute('data-pv-why'); PV_OPEN[k!=null?'why:'+k:dt.getAttribute('data-pv-facts')]=dt.open; }); });
+      return; }
+    if(opts.head){ opts.head.innerHTML='<div class="clf-rv pv">'+p.head+'</div>'; el.innerHTML='<div class="clf-rv pv'+(opts.panel?' pv-panel':'')+'" data-card="'+esc(ref)+'">'+p.body+'</div>'; }
+    else el.innerHTML='<div class="clf-rv pv'+(opts.panel?' pv-panel':'')+'" data-card="'+esc(ref)+'">'+p.head+p.body+'</div>';
+  }
+  // A proposal the agents made for a value a person holds: shown, never applied.
   function proposalBlock(ref){
     var pb=proposalOf(ref); if(!pb) return '';
     var d=pb.decision, w=writerOf(ref), mine=w&&w.block.who&&w.block.who.you;
@@ -1194,9 +2102,9 @@ var ClanFields=(function(){
       return (d.kind==='verdict'||d.polarity)&&!b.superseded&&d.action!=='looks_right'&&!isPerson(d)&&arr(d.targets).some(function(t){ return qualify(t)===me; }); });
     if(!vs.length) return '';
     var shown=vs.filter(function(b,i){ return i===0||openVerdict(b,me); }).slice(0,3), jk=judgeKey();
-    return '<div class="clf-sec"><h3>What '+esc(givenOf(jk)||'the Judge')+' thinks</h3>'+shown.map(function(b){
+    return '<div class="clf-sec"><h3>What '+esc(givenOf(jk)?'the '+givenOf(jk):'the Review agent')+' thinks</h3>'+shown.map(function(b){
       var d=b.decision, bad=d.polarity==='bad', open=openVerdict(b,me), k=crewKey(d)||jk, at=attnOf(d.reasoning)[0];
-      var text=bad?'I think this needs work'+(RC[d.reason_code]?': '+RC[d.reason_code]:'')+'.'+(d.rationale?' '+clip(d.rationale,280):'')
+      var text=bad?'I think this needs work'+(RC[d.reason_code]?': '+RC[d.reason_code]:'')+'.'+(d.rationale?' '+clip(noIds(d.rationale),280):'')
         :'I checked it and it holds up.'+(at?' '+at:'');
       var h=say(k,esc(text),bad&&open?'needs-you':'idle')||'<p class="clf-by">'+esc(text)+'</p>';
       if(!bad&&acked(d.id)) h+='<p class="clf-muted">'+TICK+' Someone said it looks right.</p>';
@@ -1220,7 +2128,7 @@ var ClanFields=(function(){
     return '<div class="clf-sec" data-clf-anchor><h3 class="ask">'+(by?esc(by.charAt(0).toUpperCase()+by.slice(1))+' marked this wrong':'Marked wrong')+'</h3>'
       +(why?'<blockquote class="clf-q said">'+esc(why)+'</blockquote>':'')
       +'<p class="clf-ex">'+(ex?'It is taken out: nothing in the research uses it now. What rested on it was checked again without it, and anything that changed is in “What happened”.'
-        :'The crew is taking it out and checking everything that rested on it. That takes a minute or two; this changes when it is done.')+'</p></div>';
+        :'The agents are taking it out and checking everything that rested on it. That takes a minute or two; this changes when it is done.')+'</p></div>';
   }
   // What else needs a person on a path: a field resting on a point someone
   // marked wrong, or a person's own "it's wrong" nobody has answered.
@@ -1229,7 +2137,7 @@ var ClanFields=(function(){
       if(a.code==='flagged_field'){ var fid=(/\b(fi_[A-Za-z0-9_-]+)/.exec(a.text||'')||[])[1], f=fid&&findings()[fid];
         return '<div class="clf-sec"><h3 class="ask">This needs changing</h3><p class="clf-ex">It rests on a point someone marked wrong. Change it so it no longer uses that point, then lock the '+esc(trayNoun())+'.</p>'
           +(f?'<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(fid)+'"><span>'+esc(f.statement)+'<small>marked wrong</small></span><b></b></button></div>':'')+'</div>'; }
-      if(a.code==='bad_verdict'){ var vb=blockOf(a.decision); if(vb&&!isPerson(vb.decision)) return ''; // the crew's: in its verdict below
+      if(a.code==='bad_verdict'){ var vb=blockOf(a.decision); if(vb&&!isPerson(vb.decision)) return ''; // the agents's: in its verdict below
         return '<div class="clf-sec"><h3 class="ask">Someone said this is wrong</h3>'+(vb&&vb.decision.rationale?'<blockquote class="clf-q said">'+esc(vb.decision.rationale)+'</blockquote>':'')
           +'<p class="clf-ex">Change it, or say why it is right as it is.</p>'+(!locked()?'<div class="clf-answers"><button type="button" class="clf-btn big" data-clf="override">Keep it, and say why</button></div>':'')+'</div>'; }
       return '';
@@ -1240,16 +2148,131 @@ var ClanFields=(function(){
       +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Keep it as it is</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div>'
       +'<p class="clf-muted">Your reason is kept with it, and the doubt is marked answered.</p></form>';
   }
+  // ── the inspector's views of a fact, a source, your words, a passage and a
+  // file (the research inspector's pin and source cards, in .clf-rv): what it
+  // is, where it says so, and what rests on it. Each link opens one step on.
+  function rvGrid(rows){ rows=rows.filter(function(x){ return x&&x[1]; }); return rows.length?'<dl class="rv-grid">'+rows.map(function(x){ return '<div'+(x[2]?' class="w"':'')+'><dt>'+esc(x[0])+'</dt><dd>'+(x[2]?x[1]:esc(x[1]))+'</dd></div>'; }).join('')+'</dl>':''; }
+  function rvLink(uri){ return /^https?:\/\//.test(uri||'')?'<a href="'+esc(uri)+'" target="_blank" rel="noopener noreferrer">'+esc(clip(String(uri).replace(/^https?:\/\//,''),48))+' ↗</a>':''; }
+  function rvQuote(q,p){ return quoteBlock(q,p).replace('class="clf-q said"','class="rv-q"'); }
+  // "Open the source ↗": the original itself (the publisher's page or document) in a new tab. A source
+  // kept with no web address has nothing further to open, so its button opens the source's own view.
+  function srcName(s){ return s?pubName(s.publisher)||s.domain||'the source':'the source'; }
+  function openSrc(sid,cls){ var s=sources()[sid]; if(!s) return ''; cls='rv-btn rv-open'+(cls?' '+cls:'');
+    return /^https?:\/\//.test(s.uri||'')?'<a class="'+cls+'" href="'+esc(s.uri)+'" target="_blank" rel="noopener noreferrer" title="'+esc('Opens '+srcName(s)+' in a new tab: '+String(s.uri).replace(/^https?:\/\//,''))+'">Open the source ↗</a>'
+      :go(sid,cls,'Open the source','We have no web address for it: this shows what we kept about '+srcName(s)); }
+  // A client's file kept in the document (materials[].asset): "Open the file ↗" reads it through
+  // clan:// (the host serves the document's own files there) and opens it in a new tab as what it is.
+  // A plain link cannot: this frame is sandboxed without downloads, so the browser drops it, and a
+  // file the browser would download (a PDF, a deck, a .clan) is dropped the same way. Only what a tab
+  // can show (text, an image) gets the button; for the rest the view says how to get it.
+  function assetName(mt){ var a=String(mt&&mt.asset||''); return a?a.split('/').pop():''; }
+  function viewable(mt){ return /^(?:text\/|image\/)/.test(String(mt&&mt.media_type||'')); }
+  function openFile(mt){ var n=assetName(mt); if(!n) return '';
+    if(!viewable(mt)) return '<p class="rv-none">The file itself is kept in this document. To get it, save a copy of the document.</p>';
+    return '<button type="button" class="rv-btn rv-open" data-clf-file="'+esc(n)+'"'+(mt.media_type?' data-type="'+esc(mt.media_type)+'"':'')+' title="'+esc('Opens '+(mt.name||n)+' in a new tab')+'">Open the file ↗</button>'; }
+  // The passage in the whole of what the client sent, marked; null when the words are not in it as such.
+  function markIn(text,q){ text=String(text||''); q=String(q||'').trim(); if(!text||!q) return null;
+    var at=text.toLowerCase().indexOf(q.toLowerCase()); if(at===-1) return null;
+    return esc(text.slice(0,at))+'<mark>'+esc(text.slice(at,at+q.length))+'</mark>'+esc(text.slice(at+q.length)); }
+  function restsOn(id){ var F=findings(); return Object.keys(F).filter(function(f){ return arr(F[f].cites).indexOf(id)!==-1; }); }
+  function viewPin(id){
+    var p=pins()[id]; if(!p) return '<p class="rv-none">This fact is no longer in the document.</p>';
+    var st=stateOf(id), s=srcOf(p), byPerson=s&&s.rec&&s.rec.tier==='reviewer-verified', lv=pinLv(p);
+    var pill=st==='contest'?'<span class="rv-pill warn">Sources disagree</span>':st==='rejected'?'<span class="rv-pill bad">Marked wrong</span>':st==='replaced'||st==='superseded'?'<span class="rv-pill mute">Replaced</span>'
+      :byPerson||st==='verified'?'<span class="rv-pill ok">Checked</span>':p.stale?'<span class="rv-pill warn">Out of date</span>':lvPill({lv:lv});
+    var h='<div class="rv-head"><span class="rv-kind"><span class="rv-dot" aria-hidden="true"></span>Fact'+(p.market?' · '+esc(country(p.market)):'')+'</span>'+pill+'</div>'
+      +'<p class="rv-title">'+(confidential(id)?LOCK:'')+esc(fmt(p))+'</p>'
+      +'<p class="rv-meta"><span>'+esc(label(p))+'</span>'+(p.as_of?'<span>as of '+esc(plainDate(p.as_of))+'</span>':'')+'</p>';
+    var qs=obj(p.quotes), srcs=arr(p.sources).filter(function(x){ return /^src_|^human:/.test(x); });
+    if(!srcs.length) h+=sec('Where it says so','<p class="rv-none">No source was saved for this.</p>');
+    srcs.forEach(function(sid){ var q=qs[sid], rec=sources()[sid], person=rec&&rec.tier==='reviewer-verified', you=person&&isYou(whoOfSrc(rec));
+      var cap=/^human:/.test(sid)?'<p class="rv-src">checked by '+esc(personName(sid))+'</p>':'<p class="rv-src">'+srcBits({id:sid, rec:rec})+'</p>';
+      h+=sec(q?(person?(you?'What you said':'What they said'):'What '+srcName(rec)+' says'):'The source','<div class="pv-said">'+cap+(q?(person?pvQuote(saidBy(q,rec),600):rvQuote(q,p)):'')+'</div>'
+        +(!rec||person&&!/^https?:\/\//.test(rec.uri||'')?'':'<div class="rv-acts pv-open">'+openSrc(sid)+'</div>')); });
+    h+=sec('Confidence','<p>'+confBars(lv)+' <b>'+esc(lvWord(lv))+'</b>'+(p.confidence==='low'?': the agents are not very sure of it.':'.')+'</p>');
+    var fis=restsOn(id);
+    if(fis.length) h+=sec('Points that rest on it','<div class="rv-uses">'+fis.map(function(i){ var f=findings()[i]; return '<div class="rv-use"><span>'+fChip(i)+'</span>'+esc(f.statement)+' '+stPill(f)+'</div>'; }).join('')+'</div>',String(fis.length));
+    return h;
+  }
+  function viewSource(sid){
+    var s=sources()[sid]; if(!s) return '<p class="rv-none">We no longer have the details of this source: it was saved before sources were kept with the document.</p>';
+    var P=pins(), used=Object.keys(P).filter(function(x){ return arr(P[x].sources).indexOf(sid)!==-1; }), reach=uniq([].concat.apply([],used.map(restsOn)));
+    var person=s.tier==='reviewer-verified', who=person?personName(whoOfSrc(s)):'';
+    var h='<div class="rv-head"><span class="rv-kind"><span class="rv-sq" aria-hidden="true"></span>Source'+(s.tier?' · '+esc(tierWord(s.tier)):'')+'</span>'+(person?'<span class="rv-pill ok">A person</span>':'<span class="rv-pill ok">Read'+(used.length?' · pinned':'')+'</span>')+'</div>'
+      +'<p class="rv-title">'+esc(person?(/correct/.test(s.title||'')?'Corrected':'Checked')+' by '+who:pubName(s.publisher)||s.domain||'A source')+'</p>'
+      +(s.title&&!person?'<p class="rv-meta"><span>'+esc(s.title)+'</span></p>':'')
+      +(/^https?:\/\//.test(s.uri||'')?'<div class="rv-acts pv-open">'+openSrc(sid)+'</div>':'');
+    h+=sec('About it',rvGrid([['Published',s.published_at?monthYear(s.published_at):''],['Read',s.retrieved_at?dayMonth(s.retrieved_at,true):''],['Domain',s.domain||''],['Licence',s.licence||''],['Address',rvLink(s.uri),1]])||'<p class="rv-none">Nothing more was kept about it.</p>');
+    if(used.length) h+=sec('What we took from it','<table class="rv-pins"><tbody>'+used.map(pvPinRow).join('')+'</tbody></table>',plural(used.length,'fact'));
+    if(reach.length) h+=sec('Reaches','<div class="rv-uses"><div class="rv-use"><span>Points</span>'+reach.map(fChip).join(' ')+'</div></div>');
+    return h;
+  }
+  // Your words: the client's own material, with the passage it was taken from marked in it (the whole
+  // prompt when the document keeps its words; else the passage itself), Open the file when the file
+  // is kept, and then what was taken from it.
+  function viewCapture(id){
+    var ci=captures()[id], m=ci&&materials()[ci.material_id]; if(!ci) return '<p class="rv-none">This is no longer in the document.</p>';
+    var as=ci.status==='assumption', full=m&&m.kind==='prompt'&&typeof m.text==='string'&&m.text, marked=full&&markIn(full,ci.quote);
+    var name=m?(m.kind==='prompt'?'Your prompt':m.name||'Your file'):'Your material';
+    var said=marked?'<blockquote class="rv-q pv-doc">'+marked+'</blockquote>':ci.quote?pvQuote(ci.quote,600):'';
+    return '<div class="rv-head"><span class="rv-kind"><span class="rv-dot" aria-hidden="true"></span>Your words</span>'+(as?'<span class="rv-pill warn">Assumed</span>':'<span class="rv-pill ok">The words match</span>')+'</div>'
+      +'<p class="rv-title">'+(m&&confidential(ci.material_id)?LOCK:'')+esc(name)+'</p>'+(m?'<p class="rv-meta"><span>'+esc(MAT_KIND[m.kind]||MAT_KIND.other)+'</span>'+(m.received_at?'<span>arrived '+esc(dayMonth(m.received_at,true))+'</span>':'')+'</p>':'')
+      +sec(as?'Assumed, not said':marked?'The passage, marked in it':'The passage','<div class="pv-said">'+said+(ci.material_id&&!marked?pvCap(ci.material_id,m?matCap(m):'no longer in the document'):'')+'</div>'
+        +(as?'<p class="rv-none">Your material does not say this in so many words: the agents assumed it.</p>':'')
+        +(m&&assetName(m)?'<div class="rv-acts pv-open">'+openFile(m)+'</div>':''))
+      +sec('Taken from it','<div class="pv-said"><blockquote class="rv-q">'+esc(textOf(ci.value))+'</blockquote>'+(ci.key?'<p class="rv-src">'+esc(words(ci.key))+'</p>':'')+'</div>');
+  }
+  function viewPassage(id){
+    var pg=passages()[id]; if(!pg) return '<p class="rv-none">This passage is no longer in the document.</p>';
+    return '<div class="rv-head"><span class="rv-kind"><span class="rv-sq" aria-hidden="true"></span>Library passage</span><span class="rv-pill mute">An example</span></div>'
+      +'<p class="rv-title">'+esc(pg.citation||pg.section||'A passage')+'</p>'
+      +(pg.text?sec('What it says','<div class="pv-said">'+pvQuote(pg.text,600)+'</div>'):'')
+      +sec('About it',rvGrid([['From',pg.source||''],['Section',pg.section||''],['Pack',pg.pack?pg.pack+(pg.pack_version?' · '+pg.pack_version:''):''],['Whose library',scopeWord(pg.scope)],['Licence',pg.licence||''],['Read',pg.retrieved_at?dayMonth(pg.retrieved_at,true):''],['Link',rvLink(pg.uri),1]]))
+      +'<p class="rv-none" style="margin-top:10px">A passage is an example the agents learned from, not evidence about this client.</p>';
+  }
+  function viewMaterial(id){
+    var mt=materials()[id]; if(!mt) return '<p class="rv-none">This file is no longer in the document.</p>';
+    var tr=obj(mt.transcribed), said=mt.kind==='prompt'&&typeof mt.text==='string'&&mt.text;
+    return '<div class="rv-head"><span class="rv-kind"><span class="rv-sq" aria-hidden="true"></span>'+(mt.kind==='prompt'?'Your prompt':'File')+'</span>'+(confidential(id)?'<span class="rv-pill mute">Private</span>':'')+'</div>'
+      +'<p class="rv-title">'+(confidential(id)?LOCK:'')+esc(mt.kind==='prompt'?'What you asked for':mt.name||'A file')+'</p>'
+      +'<p class="rv-meta"><span>'+esc(MAT_KIND[mt.kind]||MAT_KIND.other)+'</span></p>'
+      +(assetName(mt)?'<div class="rv-acts pv-open">'+openFile(mt)+'</div>':'')
+      +(said?sec('What it says','<div class="pv-said">'+pvQuote(mt.text,600)+'</div>'):'')
+      +sec('About it',rvGrid([['Arrived',mt.received_at?dayMonth(mt.received_at,true):''],['Read',mt.unread?'Nothing in it could be read':tr.model?'Read from the image by an agent':'Yes'],['Licence',mt.licence||'']]));
+  }
+  var PANEL_VIEW={pin:viewPin, source:viewSource, capture:viewCapture, passage:viewPassage, material:viewMaterial};
+  // The view's name: the drawer's title, or the panel's trail.
+  function setCrumb(t){ if(SURF) SURF.bar.innerHTML=crumbsHTML(SURF.root,trailOf()); else DRAWER.crumb.textContent=t; }
   function draw(){
     var t=top(), ref=t.ref, k=kindOf(ref), b='', crumb='Where this came from', L=locked();
-    DRAWER.back.hidden=STACK.length<2;
+    var S=surf(), P=!!SURF;
+    if(!P) S.back.hidden=STACK.length<2;
     // Something carried over that nothing here can settle, and has no page
     // of its own here: what it is, and "Set aside, with a reason".
     var ca=carriedAt(ref), sa=!ca.length&&setAsideOf(ref);
     if((ca.length||sa)&&(!k||(k==='path'&&valueAt(ref)==null))){
-      DRAWER.crumb.textContent='Carried over'; DRAWER.body.innerHTML=ca.length?carriedBlock(ca):asideDone(sa); return; }
+      setCrumb('Carried over'); S.body.innerHTML=ca.length?carriedBlock(ca):asideDone(sa); return; }
     if(t.note) b+='<p class="clf-err" style="background:var(--clf-soft);color:var(--clf-ink2)">'+esc(t.note)+'</p>';
-    if(k==='pin'){
+    var cref=cardRef(ref,k); if(cref&&!(P&&PANEL_VIEW[k])) b+='<div class="clf-sc-slot"></div>';
+    if(LINE_KINDS[k]){
+      crumb=k==='answer'?'How the summary was formed':k==='line'?'Where this line came from':k==='chart'?'What this chart shows':'Where this line came from';
+      setCrumb(crumb); S.body.innerHTML=b+'<div class="clf-rich"></div>'; richCard(ref,S.body.querySelector('.clf-rich')); return;
+    }
+    // In the panel a fact, source, capture, passage or file is the inspector's
+    // own view (the research inspector's grammar); its answers follow it.
+    if(P&&PANEL_VIEW[k]){
+      b+='<div class="clf-rv" data-card="'+esc(ref)+'">'+PANEL_VIEW[k](ref)+'</div>';
+      var pp=k==='pin'&&pins()[ref];
+      if(pp){
+        if(pp.replaced_by) b+='<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(pp.replaced_by.fact_id)+'"><span>Now replaced by<small>a person picked another value</small></span><b>'+esc(fmt(pins()[pp.replaced_by.fact_id]))+'</b></button></div>';
+        var poc=openContestOf(ref); if(poc) b+='<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(poc.id)+'"><span>Another source says something else<small>pick one before you lock it</small></span><b>'+arr(poc.values).map(fmt).map(esc).join(' or ')+'</b></button></div>';
+        var pwb=wrongBlock(ref);
+        if(pwb) b+=pwb;
+        else if(!L&&!pp.replaced_by) b+=(t.fix?correctForm(ref,pp):'')+'<div class="clf-sec" data-clf-anchor><h3 class="ask">Is this right?</h3><div class="clf-answers"><button type="button" class="clf-btn big primary" data-clf="good">Yes, this is right</button><button type="button" class="clf-btn big" data-clf="bad">No, this is wrong</button><button type="button" class="clf-btn big quiet" data-clf="fix">Change it to the right value</button></div>'+privBlock()+'</div>';
+        b+=history('facts['+ref+']');
+      }
+      if(k==='material'&&materials()[ref]){ if(!L) b+='<div class="clf-sec" data-clf-anchor>'+privBlock()+'</div>'; b+=history('materials['+ref+']'); }
+    } else if(k==='pin'){
       var p=pins()[ref];
       if(!p){ b+=gone(); }
       else {
@@ -1273,7 +2296,7 @@ var ClanFields=(function(){
         b+=say(agentOf('findings['+ref+']',null,'synthesise'),'I worked this out from '+cs.length+' fact'+(cs.length===1?'':'s')+(fp.length?(fp.length===1&&cs.length>1?(cs.length===2?', both':', all')+' from ':', from ')+bolds(fp):'')+'.');
         b+='<div class="clf-sec"><h3>The facts it rests on</h3><div class="clf-rows">'+cs.map(function(c){ var p=pins()[c];
           return '<button type="button" class="clf-row" data-open="'+esc(c)+'"><span>'+esc(p?label(p):'A fact')+'<small>'+esc(p?srcShort(p):'no longer in the document')+'</small></span><b>'+(confidential(c)?LOCK:'')+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
-        if(f.confidence) b+='<p class="clf-muted">How sure: '+esc(SURE[f.confidence]||f.confidence)+'. That is as sure as the least sure fact it rests on, never a guess of the crew’s own.</p>';
+        if(f.confidence) b+='<p class="clf-muted">How sure: '+esc(SURE[f.confidence]||f.confidence)+'. That is as sure as the least sure fact it rests on, never a guess of the agents’ own.</p>';
         var nf=f.status==='superseded'&&f.superseded_by&&f.superseded_by.finding;
         if(nf) b+='<div class="clf-sec"><h3>Replaced after a review</h3><div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(nf)+'"><span>'+esc((findings()[nf]||{}).statement||'The finding that replaces it')+'<small>worked out again from what the review left</small></span><b></b></button></div></div>';
         if(f.status==='verified'&&f.recheck) b+='<p class="clf-muted" title="'+esc(f.recheck.note||'')+'">'+recheckWords(f.recheck)+'</p>';
@@ -1314,17 +2337,16 @@ var ClanFields=(function(){
       var pg=passages()[ref];
       if(!pg) b+=gone();
       else { b+='<div class="clf-dv"><span class="stmt">'+esc(pg.citation||pg.section||'A passage')+'</span></div>';
-        if(pg.text) b+='<div class="clf-sec"><h3>What it says</h3><blockquote class="clf-q said">'+esc(pg.text)+'</blockquote></div>';
+        if(pg.text) b+='<div class="clf-rv pv">'+sec('What it says','<div class="pv-said">'+pvQuote(pg.text,600)+'<p class="rv-src">'+esc(pg.citation||'A passage')+' · knowledge library</p></div>')+'</div>';
         var pm=[pg.source?['From',pg.source]:null, pg.section?['Section',pg.section]:null, pg.pack?['Pack',pg.pack+(pg.pack_version?' · '+pg.pack_version:'')]:null, ['Whose library',scopeWord(pg.scope)],
           pg.licence?['Licence',pg.licence]:null, pg.retrieved_at?['We read it',dayMonth(pg.retrieved_at,true)]:null].filter(Boolean);
         b+='<div class="clf-card"><dl>'+pm.map(function(x){ return '<dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd>'; }).join('')+'</dl>'+openLink(pg.uri)+'</div>';
-        b+='<p class="clf-muted">A passage is an example the crew learned from, not evidence about this client.</p>'; }
+        b+='<p class="clf-muted">A passage is an example the agents learned from, not evidence about this client.</p>'; }
     } else if(k==='capture'){
       var ci=captures()[ref], cm=ci&&materials()[ci.material_id];
       if(!ci) b+=gone();
       else { b+='<div class="clf-dv"><span class="stmt">'+esc(textOf(ci.value))+'</span><span class="c">'+esc(words(ci.key||''))+'</span><div class="clf-pills">'+(ci.status==='assumption'?'<span class="clf-pill warn">Assumed: your material does not say it</span>':'<span class="clf-pill">From your material · the words match</span>')+'</div></div>';
-        if(ci.quote) b+='<div class="clf-sec"><h3>What your material says</h3><blockquote class="clf-q said">'+esc(ci.quote)+'</blockquote></div>';
-        if(ci.material_id) b+='<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(ci.material_id)+'"><span>'+esc(cm&&cm.name||'Your material')+'<small>'+esc(cm?MAT_KIND[cm.kind]||MAT_KIND.other:'no longer in the document')+'</small></span><b></b></button></div>';
+        if(ci.quote||ci.material_id) b+='<div class="clf-rv pv">'+sec('What your material says','<div class="pv-said">'+(ci.quote?pvQuote(ci.quote,600):'')+(ci.material_id?pvCap(ci.material_id,cm?matCap(cm):'no longer in the document'):'')+'</div>')+'</div>';
         if(!L) b+='<p class="clf-muted">To change it, press <b>Edit</b> at the top, then tap the part that uses it.</p>'; }
     } else if(k==='material'){
       var mt=materials()[ref]; crumb='About this file';
@@ -1339,17 +2361,18 @@ var ClanFields=(function(){
       b+='<div class="clf-dv"><span class="stmt">'+(textOf(v)?esc(textOf(v)):'<span class="clf-muted">Nothing here yet</span>')+'</span>'+(org?'<div class="clf-pills"><span class="clf-pill">'+esc(org.charAt(0).toUpperCase()+org.slice(1))+'</span></div>':'')+'</div>';
       b+=needsBlock(ref);
       if(cp||cs) b+='<div class="clf-sec"><h3>What the client said</h3>'+popOf(ref,true)+'</div>';
-      if(env&&env.source&&env.source.quote) b+='<div class="clf-sec"><h3>What your material says</h3><blockquote class="clf-q said">'+esc(env.source.quote)+'</blockquote></div>';
-      if(env&&arr(env.fact_ids).length) b+='<div class="clf-sec"><h3>Worked out from</h3><div class="clf-rows">'+arr(env.fact_ids).map(function(c){ var p=pins()[c]; return '<button type="button" class="clf-row" data-open="'+esc(c)+'"><span>'+esc(p?label(p):'A fact')+'</span><b>'+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
-      if(!env) b+=writerBlock(ref);
+      // An envelope says its source itself; any other value has the part's one view.
+      if(env&&((env.source&&env.source.quote)||arr(env.fact_ids).length)) b+='<div class="clf-rv pv">'+(env.source&&env.source.quote?sec('From your words','<div class="pv-said">'+pvQuote(env.source.quote,600)+'<p class="rv-src">from your material</p></div>'):'')
+        +(arr(env.fact_ids).length?sec('Facts under it',pvPins(ref,arr(env.fact_ids).filter(function(c){ return pins()[c]; })),String(arr(env.fact_ids).length)):'')+'</div>';
+      if(!env) b+='<div class="clf-rv pv" data-card="'+esc(ref)+'">'+partHTML(ref)+'</div>';
       b+=proposalBlock(ref)+verdictBlock(ref);
       if(ca.length) b+='<div class="clf-sec">'+carriedBlock(ca)+'</div>';
-      if(canEdit(ref)&&editableValue(v)) b+=L?'<p class="clf-muted">It is open for the client’s change: tap it to change it.</p>':'<p class="clf-muted">To change it, choose <b>Edit</b> under More at the top, then tap it.</p>';
+      if(!P&&canEdit(ref)&&editableValue(v)) b+=L?'<p class="clf-muted">It is open for the client’s change: tap it to change it.</p>':'<p class="clf-muted">To change it, choose <b>Edit</b> under More at the top, then tap it.</p>';
       b+=history(ref);
     } else if(k==='cite'){
       b+='<div class="clf-rows">'+ref.slice(5).split(',').map(function(r){ var kk=kindOf(r), t='', v='';
         if(kk==='pin'){ var p=pins()[r]; t=p?label(p):'A fact'; v=fmt(p); }
-        else if(kk==='finding'){ var f=findings()[r]||{}; t=f.statement||'A point the crew worked out'; v=STATUS_WORD[f.status]||''; }
+        else if(kk==='finding'){ var f=findings()[r]||{}; t=f.statement||'A point the agents worked out'; v=STATUS_WORD[f.status]||''; }
         else if(kk==='contest'){ t=named(r); v=stateOf(r)==='contest'?'sources disagree':'picked'; }
         else if(kk==='passage'){ var pg=passages()[r]||{}; t=pg.citation||'A passage'; v='library'; }
         else if(kk==='capture'){ var ci=captures()[r]||{}; t=textOf(ci.value)||'Something your material says'; v=ci.status==='assumption'?'assumed':'your material'; }
@@ -1361,8 +2384,14 @@ var ClanFields=(function(){
     } else {
       crumb='Needs a person'; if(!t.note) b+='<p class="clf-muted">This needs a person to look at it.</p>';
     }
-    if(k&&k!=='source'&&k!=='cite') b+=wrote(ref);
-    DRAWER.crumb.textContent=crumb; DRAWER.body.innerHTML=b;
+    if(!P&&k&&k!=='source'&&k!=='cite') b+=wrote(ref);
+    setCrumb(crumb); S.body.innerHTML=b;
+    // The passage marked in the client's whole prompt: its box scrolls to it.
+    var mk=S.body.querySelector('.pv-doc mark'), box=mk&&mk.parentNode;
+    if(box&&typeof box.scrollTop==='number'&&mk.offsetTop>box.clientHeight/2) box.scrollTop=mk.offsetTop-24;
+    // The source card's provenance at the top: the same renderer as inline.
+    var slot=cref&&S.body.querySelector('.clf-sc-slot');
+    if(slot) card(cref,slot,true).then(function(c){ if(!c||c.kind==='unknown') slot.innerHTML=''; });
   }
   function showError(form,msg){ var e=form&&form.querySelector('.clf-err'); if(e){ e.textContent=msg; e.hidden=false; } else toast(msg); }
   function act(route,body,form,done){
@@ -1389,22 +2418,23 @@ var ClanFields=(function(){
     if(w==='override'||w==='pathbad'){
       var host=a.closest('.clf-answers')||a, fb=document.createElement('div');
       fb.innerHTML=w==='override'?overrideForm(target):badForm(target); host.replaceWith(fb.firstChild);
-      var ta=DRAWER.body.querySelector('form[data-clf-form="'+(w==='override'?'override':'bad')+'"] textarea'); if(ta) ta.focus(); return; }
+      var ta=surf().body.querySelector('form[data-clf-form="'+(w==='override'?'override':'bad')+'"] textarea'); if(ta) ta.focus(); return; }
     if(w==='aside'){ var ah=a.closest('.clf-answers')||a, af=document.createElement('div'); af.innerHTML=asideForm(a.getAttribute('data-target')); ah.replaceWith(af.firstChild);
-      var at=DRAWER.body.querySelector('form[data-clf-form="aside"] textarea'); if(at) at.focus(); return; }
+      var at=surf().body.querySelector('form[data-clf-form="aside"] textarea'); if(at) at.focus(); return; }
     if(w==='useprop'){ var pb=blockOf(a.getAttribute('data-d')), ro=reopenedOf(ref); if(!pb) return;
       var ub={path:ref,value:pb.decision.proposed_value,rationale:'Used proposal '+pb.decision.id}; if(ro) ub.answers=ro.answers;
       act('/edit',ub,null,'Saved. The proposal is used.'); return; }
     if(w==='close') close();
-    else if(w==='back'){ STACK.pop(); draw(); }
+    // Back from the first step in the panel is back to the part.
+    else if(w==='back'){ if(SURF&&STACK.length<2) close(); else { STACK.pop(); draw(); } }
     else if(w==='redraw') draw();
-    else if(w==='fix'){ top().fix=true; draw(); var inp=DRAWER.body.querySelector('form[data-clf-form="correct"] input[name="value"]'); if(inp) inp.focus(); }
+    else if(w==='fix'){ top().fix=true; draw(); var inp=surf().body.querySelector('form[data-clf-form="correct"] input[name="value"]'); if(inp) inp.focus(); }
     else if(w==='good') act('/verdict',{target:target,polarity:'good',rationale:''},null,'Thanks. Saved as right.');
     else if(w==='bad'||w==='conf'){
       var box=document.createElement('div');
       box.innerHTML=w==='conf'?confForm(ref,target):badForm(target);
-      var anchor=DRAWER.body.querySelector('[data-clf-anchor]'); if(anchor) anchor.replaceWith(box.firstChild); else DRAWER.body.appendChild(box.firstChild);
-      var first=DRAWER.body.querySelector('form[data-clf-form="'+(w==='conf'?'classify':'bad')+'"] textarea'); if(first&&w==='bad') first.focus();
+      var anchor=surf().body.querySelector('[data-clf-anchor]'); if(anchor) anchor.replaceWith(box.firstChild); else surf().body.appendChild(box.firstChild);
+      var first=surf().body.querySelector('form[data-clf-form="'+(w==='conf'?'classify':'bad')+'"] textarea'); if(first&&w==='bad') first.focus();
     }
   }
   function onDrawerSubmit(e){
@@ -1420,7 +2450,7 @@ var ClanFields=(function(){
       top().fix=false; act('/correct',{fact:ref,value:String(fd.get('value')).trim(),source_uri:String(fd.get('src')||'').trim(),rationale:why},form,'Saved. The old value is kept on record.'); }
     else if(!why){ showError(form,kind==='bad'?'Say what is wrong, so it can be fixed.':kind==='aside'?'Say why this can go ahead without it.':'Say why, in a few words.'); return; }
     else if(kind==='aside') act('/acknowledge',{target:form.getAttribute('data-target'),rationale:why},form,'Set aside. Your reason is kept with it.');
-    else if(kind==='classify') act('/classify',{target:form.getAttribute('data-target'),model:fd.get('model')==='on',export:fd.get('export')==='on',corpus:fd.get('corpus')==='on',rationale:why},form,'Saved. It is kept private.');
+    else if(kind==='classify') act('/classify',{target:form.getAttribute('data-target'),model:fd.get('model')==='on',export:true,corpus:false,rationale:why},form,'Saved. It is kept private.');
     else if(kind==='bad') act('/verdict',{target:form.getAttribute('data-target'),polarity:'bad',rationale:why},form,'Thanks. Saved as wrong.');
     else if(kind==='override') act('/verdict',{target:form.getAttribute('data-target'),polarity:'good',rationale:why},form,'Saved. It stays as it is, with your reason.');
   }
@@ -1615,12 +2645,90 @@ var ClanFields=(function(){
   // Reduced motion: scrolls jump instead of gliding (the CSS rule only stops transitions).
   function calm(){ try{ return !!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){ return false; } }
   function toShell(m){ if(window.parent&&window.parent!==window) window.parent.postMessage(m,'*'); }
+  // The person is active in this page: tell the shell, at most every 5 s, so the medallion stays
+  // awake while they work here and sleeps after 30 s of nothing (owner, 2026-11-11).
+  (function(){ var last=0; function act(e){ if(e&&e.isTrusted===false) return; var t=Date.now(); if(t-last<5000) return; last=t; toShell({type:'clan:activity'}); }
+    ['pointermove','pointerdown','keydown','wheel','input','scroll'].forEach(function(ev){ window.addEventListener(ev, act, {capture:true, passive:true}); }); })();
   function postParts(force){
     var ps=declaredParts().map(partRef), sig=JSON.stringify(ps);
     if(!force&&sig===SENT_PARTS) return;
     SENT_PARTS=sig; toShell({type:'clan:parts', parts:ps});
   }
   function postMark(a,marked,said){ toShell({type:'clan:part-mark', address:a, marked:!!marked, words:said||''}); }
+
+  // ── feedback by pointing at it (the dogfood build; features/feedback-point.clan) ──
+  // The shell asks (clan:feedback-pick {on}). While on, what is under the cursor is outlined
+  // and named; one click picks it and presses nothing; Esc cancels. The answer goes up as
+  // clan:feedback-picked {target:{kind,id,label}|null, rect, version, title} (null: cancelled
+  // here; version and title are the document's, from window.ClanFeedbackDoc()). A tool
+  // names its own things with window.ClanFeedbackTarget(el) → {kind,id,label,el}|null; else a
+  // control is named by its label and a declared part by its label. The innermost one wins.
+  // F pressed here, not while typing, asks the shell to start (clan:feedback-key).
+  var FB={on:false, box:null};
+  function fbClip(s,n){ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>n?s.slice(0,n-1)+'…':s; }
+  function fbTyping(el){
+    if(!el) return false; var t=String(el.tagName||'').toUpperCase();
+    if(t==='TEXTAREA'||t==='SELECT') return true;
+    if(t==='INPUT') return /^(?:text|search|email|url|tel|password|number|date|datetime-local|month|time|week)?$/i.test(String(el.type||''));
+    return !!(el.isContentEditable||(el.closest&&el.closest('[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]')));
+  }
+  // A field's own words (the snippet renders them as button.clf) are what they say, not a control.
+  function fbControl(el){
+    var c=el.closest('button,a,[role="button"],[role="menuitem"],[role="tab"],summary,select,input,textarea');
+    if(!c||/(?:^|\s)clf(?:\s|$)/.test(String(c.getAttribute('class')||''))) return null;
+    var l=fbClip(c.getAttribute('aria-label')||c.getAttribute('title')||c.textContent,80)||String(c.tagName||'control').toLowerCase();
+    return {kind:'control', id:c.getAttribute('data-act')||c.getAttribute('id')||l, label:l, el:c};
+  }
+  function fbPart(el){
+    var p=el.closest('[data-clan-part]'); if(!p) return null; var a=p.getAttribute('data-clan-part');
+    return {kind:'part', id:a, label:fbClip(p.getAttribute('data-clan-part-label')||words(a),80), el:p};
+  }
+  // A real button or link inside a part is the button; a block the page made clickable
+  // (role="button" on a part's words) is still the part.
+  function fbTarget(el){
+    if(!el||!el.closest||el.closest('.clf-fb')) return null;
+    var own=typeof window.ClanFeedbackTarget==='function'?window.ClanFeedbackTarget(el):null, best=null, c=fbControl(el);
+    [fbPart(el), own].forEach(function(t){ if(t&&t.el&&t.label&&(!best||best.el===t.el||best.el.contains(t.el))) best=t; });
+    if(c&&(!best||(best.el!==c.el&&best.el.contains(c.el)&&/^(?:BUTTON|A|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(String(c.el.tagName||'').toUpperCase())))) best=c;
+    return best;
+  }
+  function fbShow(t){
+    if(!FB.box){ FB.box=document.createElement('div'); FB.box.className='clf-fb'; FB.box.setAttribute('aria-hidden','true');
+      FB.tag=document.createElement('span'); FB.tag.className='clf-fb-tag'; FB.box.appendChild(FB.tag); document.body.appendChild(FB.box); }
+    if(!t){ FB.box.style.display='none'; return; }
+    var r=t.el.getBoundingClientRect();
+    FB.box.style.display='block'; FB.box.style.left=(r.left-3)+'px'; FB.box.style.top=(r.top-3)+'px';
+    FB.box.style.width=(r.width+6)+'px'; FB.box.style.height=(r.height+6)+'px'; FB.tag.textContent=t.label;
+  }
+  function fbReply(t){
+    var r=t?t.el.getBoundingClientRect():null;
+    // The document's own version ("v2") and title, as the page names them (window.ClanFeedbackDoc).
+    var d=t&&typeof window.ClanFeedbackDoc==='function'?(window.ClanFeedbackDoc()||{}):{};
+    toShell({type:'clan:feedback-picked', target:t?{kind:t.kind, id:String(t.id||''), label:t.label}:null,
+      rect:r?{x:r.left, y:r.top, w:r.width, h:r.height}:null,
+      version:typeof d.version==='string'&&d.version?d.version:null, title:typeof d.title==='string'&&d.title?d.title:null});
+  }
+  function fbSet(on){
+    FB.on=!!on; document.documentElement.classList.toggle('clf-fb-on',FB.on);
+    if(!FB.on&&FB.box) fbShow(null);
+  }
+  function fbMove(e){ if(FB.on) fbShow(fbTarget(e.target)); }
+  function fbClick(e){
+    if(!FB.on) return;
+    e.preventDefault(); e.stopPropagation();
+    if(e.type!=='click') return;
+    var t=fbTarget(e.target); if(!t) return;
+    fbSet(false); fbReply(t);
+  }
+  function fbKey(e){
+    if(FB.on&&e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); fbSet(false); fbReply(null); return; }
+    if(!FB.on&&(e.key==='f'||e.key==='F')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.repeat&&!fbTyping(e.target)) toShell({type:'clan:feedback-key'});
+  }
+  window.addEventListener('message',function(e){ var m=e.data; if(e.source===window.parent&&m&&m.type==='clan:feedback-pick') fbSet(m.on===true); });
+  document.addEventListener('pointermove',fbMove,true);
+  ['pointerdown','mousedown','click'].forEach(function(t){ document.addEventListener(t,fbClick,true); });
+  document.addEventListener('keydown',fbKey,true);
+  window.addEventListener('scroll',function(){ if(FB.on&&FB.box) fbShow(null); },true);
 
   // What /decisions says of client review, by this document's bare path.
   function cview(){ return obj(VIEW&&VIEW.client); }
@@ -1663,14 +2771,14 @@ var ClanFields=(function(){
       :'Recorded by '+rec+'. Nothing attached';
     return '<span class="clf-strength'+(strong?'':' weak')+'"><i aria-hidden="true"></i>'+esc((strong?'Strong record: ':'Weaker record: ')+line+'.')+'</span>';
   }
-  // The chip beside a part: the client's answer on it, or Ellis's guess.
+  // The chip beside a part: the client's answer on it, or the Knowledge agent's guess.
   function chipOf(path){
     var p=clientPart(path), sg=!p&&clientSugg(path)[0], cls, text;
     if(p){
       if(p.state==='accepted'){ cls=p.stale?'stale':'ok'; text=p.stale?'Client accepted an earlier version':'✓ Client accepted'; }
       else if(p.answered){ cls='ok'; text='✓ Changed as '+firstName(p.client)+' asked · to send back'; }
       else { cls=p.state==='rejected'?'rj':'chg'; text=(p.state==='rejected'?'✕ Client rejected':'✎ Client asked for a change')+(p.stale?' · changed since':''); }
-    } else if(sg){ cls='sug'; text=(givenOf(ellisKey())||'The crew')+' thinks this part · check it'; }
+    } else if(sg){ cls='sug'; text=(givenOf(ellisKey())||'The agents')+' thinks this part · check it'; }
     else return '';
     return '<button type="button" class="clf-chip '+cls+'" data-clf-cr="chip" data-part="'+esc(path)+'" aria-expanded="'+(OPEN_PART===path)+'">'+esc(text)+'</button>';
   }
@@ -1690,7 +2798,7 @@ var ClanFields=(function(){
       else if(p.found_by!=='document') h+='<p class="clf-muted">No words for this part.</p>';
       if(arr(an.reasons).length) h+='<p class="clf-ex">Reason: '+esc(arr(an.reasons).map(function(r){ return REASON_WORD[r]||r; }).join(', '))+'</p>';
       h+=strengthLine(an);
-      h+='<p class="clf-ex">'+esc(p.found_by==='agent'?'Part found by '+(givenOf(ellisKey())||'the crew')+' in '+possessive(fn)+' words, confirmed by '+by.replace(/^You$/,'you')
+      h+='<p class="clf-ex">'+esc(p.found_by==='agent'?'Part found by '+(givenOf(ellisKey())||'the agents')+' in '+possessive(fn)+' words, confirmed by '+by.replace(/^You$/,'you')
         :p.found_by==='document'?clientName(p.client||an.client)+' accepted the whole '+trayNoun()
         :'Part marked by '+by.replace(/^You$/,'you'))+(an.at?' · recorded by '+recorderOf(an)+' on '+dayMonth(an.at):'')+'.</p>';
       if(p.stale&&!p.answered) h+='<p class="clf-muted">This part has changed since '+esc(fn)+' saw it.</p>';
@@ -1699,7 +2807,7 @@ var ClanFields=(function(){
         +(p.reopened?'<p class="clf-muted">It is open for this change now.</p>':'');
     } else if(sg){
       var sa=clientAnswerOf(sg.review)||{}, sn=firstName(sa.client);
-      h='<b>'+esc((givenOf(ellisKey())||'The crew')+' thinks '+sn+' meant this part')+'</b>'
+      h='<b>'+esc((givenOf(ellisKey())||'The agents')+' thinks '+sn+' meant this part')+'</b>'
         +(sg.quote?'<blockquote class="clf-q said">'+esc(sg.quote)+'</blockquote>':'')
         +'<p class="clf-ex">'+esc(ANSWER_WORD[sg.answer]||sg.answer)+'. Only a suggestion until someone confirms it.</p>'+strengthLine(sa)
         +'<div class="clf-acts"><button type="button" class="clf-btn big primary" data-clf-cr="yes" data-s="'+esc(sg.decision)+'">Yes, this part</button><button type="button" class="clf-btn big quiet" data-clf-cr="no" data-s="'+esc(sg.decision)+'">Not this part</button></div>';
@@ -1811,12 +2919,12 @@ var ClanFields=(function(){
     if(w==='mark'){ if(!wantsParts()) return true; var m=MARKS[path]||{marked:false,words:''}; m.marked=!m.marked; if(!m.marked) m.words=''; MARKS[path]=m;
       postMark(path,m.marked,m.words); syncParts(); refocus(path,'mark'); return true; }
     if(w==='chip'){ OPEN_PART=OPEN_PART===path?null:path; syncParts(); refocus(path,'chip'); return true; }
-    if(w==='make'){ if(DRAWER&&DRAWER.el.contains(t)) close(); makeChange(path||(top().ref||''),t.getAttribute('data-answer'),t); return true; }
+    if(w==='make'){ if(inSurf(t)) close(); makeChange(path||(top().ref||''),t.getAttribute('data-answer'),t); return true; }
     if(w==='yes'||w==='no'){
       Array.prototype.forEach.call(t.parentNode.querySelectorAll('button'),function(b){ b.disabled=true; });
       post('/client-review/confirm',{suggestion:t.getAttribute('data-s'),confirm:w==='yes'}).then(function(res){
         if(!res||!res.ok){ Array.prototype.forEach.call(t.parentNode.querySelectorAll('button'),function(b){ b.disabled=false; }); toast(errorOf(res)||'That did not go through. Please try again.'); return; }
-        return loadView().then(function(){ refresh(); if(DRAWER&&DRAWER.el.classList.contains('on')) draw(); toast(w==='yes'?'Saved. That part has the client’s answer.':'Saved. Not that part.'); });
+        return loadView().then(function(){ refresh(); if(showing()&&STACK.length) draw(); toast(w==='yes'?'Saved. That part has the client’s answer.':'Saved. Not that part.'); });
       },function(){ Array.prototype.forEach.call(t.parentNode.querySelectorAll('button'),function(b){ b.disabled=false; }); toast(OFFLINE); });
       return true; }
     return false;
@@ -1835,19 +2943,48 @@ var ClanFields=(function(){
     each('clan-quote',renderQuote); each('clan-gap',renderGap); each('clan-sources',renderSources); each('clan-tray',renderTray);
     try{ syncParts(); }catch(e){ if(window.console) console.error('client review parts',e); }
   }
+  // Show all under Facts stays open for its part while the view redraws.
+  document.addEventListener('toggle',function(e){ var d=e.target; if(d&&d.getAttribute&&d.hasAttribute('data-pv-facts')) PV_OPEN[d.getAttribute('data-pv-facts')]=d.open; },true);
   document.addEventListener('click',function(e){
     var cr=e.target.closest&&e.target.closest('[data-clf-cr]'); if(cr&&onClientClick(cr)){ e.preventDefault(); return; }
-    if(DRAWER&&DRAWER.el.contains(e.target)) return;
+    // A link inside a line's view: the app may show it itself (the research
+    // inspector does, cancelling clan:cardgo); else it opens in the drawer.
+    var cg=e.target.closest&&e.target.closest('[data-clf-go]');
+    if(cg){ e.preventDefault(); var gr=cg.getAttribute('data-clf-go'), inD=inSurf(cg);
+      if(window.dispatchEvent(new CustomEvent('clan:cardgo',{cancelable:true, detail:{ref:gr, drawer:inD}}))) open(gr,inD&&STACK.length>0);
+      return; }
+    var cf=e.target.closest&&e.target.closest('[data-clf-file]');
+    if(cf){ e.preventDefault(); var ft=cf.getAttribute('data-type')||'';
+      fetch('clan://localhost/assets/'+encodeURIComponent(cf.getAttribute('data-clf-file'))).then(function(r){ return r.ok?r.blob():null; }).then(function(bl){
+        var w=bl&&window.open(URL.createObjectURL(ft?new Blob([bl],{type:ft}):bl),'_blank');
+        if(!w) toast(bl?'Your browser would not open it from here. Save a copy of the document to get the file.':'That file is not in this document any more.'); },
+        function(){ toast(OFFLINE); });
+      return; }
+    var ca=e.target.closest&&e.target.closest('[data-clf-act]');
+    if(ca){ e.preventDefault(); window.dispatchEvent(new CustomEvent('clan:cardact',{detail:{act:ca.getAttribute('data-clf-act'), ref:(ca.closest('[data-card]')||ca).getAttribute('data-card')||''}})); return; }
+    var cb=e.target.closest&&e.target.closest('[data-clf-sc]');
+    if(cb){ e.preventDefault();
+      if(cb.getAttribute('data-clf-sc')==='from') post('/open',{path:cb.getAttribute('data-path')});
+      else open(cb.getAttribute('data-ref'),inSurf(cb)&&STACK.length>0);
+      return; }
+    if(inSurf(e.target)) return;
     if(e.target.closest('.clf-part')) return; // a part's own controls
     if(EDIT&&!locked()){
       var tx=e.target.closest('[data-clan-text]');
       if(tx&&tx.__clfEditing&&!e.target.closest('[data-ref]')) return; // typing
       if(tx&&!e.target.closest('[data-ref]')&&!e.target.closest('.clf-textbar')){ e.preventDefault(); editText(tx); return; }
     }
+    var ub=e.target.closest('[data-clf-unlock]');
+    if(ub){ var tu=ub.closest('clan-tray'), nu=tu&&tu.getAttribute('noun')||'report'; act('/unapprove',{rationale:'Unlocked to change the '+nu},null,'Unlocked.'); return; }
     var lb=e.target.closest('[data-clf-lock]');
     if(lb){ var tr=lb.closest('clan-tray'), noun=tr&&tr.getAttribute('noun')||'report'; act('/approve',{},null,'The '+noun+' is locked. This version is the final one.'); return; }
+    // A chart, clicked off its bars: the chart's own view.
+    var chq=e.target.closest('clan-chart[refs]');
+    if(chq&&!e.target.closest('.mark,a,button')){ open('chart:'+(chq.getAttribute('refs')||'').split(/\s+/).filter(Boolean).join(',')); return; }
     var t=e.target.closest('[data-ref]'); if(!t) return;
     if(!t.closest('clan-field,clan-cite,clan-chart,clan-quote,clan-gap,clan-sources,clan-tray')) return;
+    // A control inside a line (a finding's chip, the app's own button) is its own.
+    var inner=e.target.closest('button,a,[data-rsel]'); if(inner&&inner!==t&&t.contains(inner)) return;
     var ref=t.getAttribute('data-ref');
     // A part reopened for a client's change is edited with a tap, locked or not.
     if(t.classList.contains('editable')&&kindOf(ref)==='path'&&(EDIT&&canEdit(ref)||locked()&&reopenedOf(ref))){ editPath(t.closest('clan-field'), ref); return; }
@@ -1855,7 +2992,12 @@ var ClanFields=(function(){
     if(t.classList.contains('clf-titem')){ var el=document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)'); if(el&&el.scrollIntoView) el.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'}); open(ref,false,kindOf(ref)&&kindOf(ref)!=='path'?'':t.getAttribute('data-note')); return; }
     open(ref);
   });
-  document.addEventListener('keydown',function(e){ var m=e.target.closest&&e.target.closest('.clf-chart .mark'); if(m&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); open(m.getAttribute('data-ref')); } });
+  // Escape in the panel's inspector goes back to the part (the app sees it was handled).
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&SURF&&!e.defaultPrevented){ e.preventDefault(); close(); } });
+  document.addEventListener('keydown',function(e){ var m=e.target.closest&&e.target.closest('.clf-chart .mark'); if(m&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); open(m.getAttribute('data-ref')); return; }
+    // A line as a field takes Enter and Space as a click, as a button would.
+    if(e.target.matches&&e.target.matches('clan-field.clf-ln')&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); e.target.click(); return; }
+    var tr=e.target.closest&&e.target.closest('.clf-rv tr[data-clf-go]'); if(tr&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); tr.click(); } });
   window.addEventListener('clan:dataupdated',function(){ loadView().then(refresh); });
   // What they said about a part the client answered about, as it is typed.
   document.addEventListener('input',function(e){
@@ -1901,16 +3043,39 @@ var ClanFields=(function(){
     var el=ref&&document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)');
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'});
     // A data path no field on the page shows is the app's to show.
-    if(kindOf(ref)&&!(kindOf(ref)==='path'&&!el)) open(ref);
+    if(kindOf(ref)&&!(kindOf(ref)==='path'&&!el)){
+      open(ref);
+      // The app may follow along (the brief selects the part, so its panel shows it).
+      if(kindOf(ref)==='path') window.dispatchEvent(new CustomEvent('clan:opened',{detail:{path:ref}}));
+    }
     else window.dispatchEvent(new CustomEvent('clan:focus',{detail:{path:m.path||ref}}));
   });
   function start(){ watchParts(); loadView().then(refresh); }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
 
   return {refresh:refresh, reload:function(){ return loadView().then(refresh); }, open:open, layout:layout, mount:mount,
-          format:fmt, label:label, kindOf:kindOf, stateOf:stateOf,
+          format:fmt, label:label, kindOf:kindOf, stateOf:stateOf, codeWords:codeWords, slugWords:slugWords, reviewerWords:reviewerWords,
           // The host's decision view as last read (null until it is), and the lock.
-          view:function(){ return VIEW; }, locked:lockDecision,
+          view:function(){ return VIEW; }, locked:lockDecision, needs:needs,
+          // The source card (OS-layer contract §8.3): card(ref, el) renders it
+          // into el; cards(refs) is the same lookup without the markup; the
+          // drawer's trail of refs, oldest first, is stack().
+          card:function(ref,el){ return card(ref,el,false); }, needsWith:function(fn){ NEEDS=typeof fn==='function'?fn:null; }, cards:cardsFor, stack:stack,
+          // A line's view (answer, line, finding, gap, item, chart) as markup, and
+          // what kind of line it is: derived from its cites, never asked of a model.
+          // A part's one provenance view (where-it-came-from): partView(ref, el, {panel, name, head, also}).
+          partView:partView,
+          // The compact view's state chips and its History (the brief's side tab).
+          partFacts:partFacts, partHistory:partHistory,
+          // A page with its own side panel shows provenance there, never in the drawer:
+          // setPanelHost(fn), fn(ref, kind) -> true (the app showed it itself), {el, root}
+          // (the inspector goes into el, its trail starting at root) or null (the drawer);
+          // fn(null) when the inspector closes. closePanel(quiet) closes it; inspecting() asks.
+          setPanelHost:function(fn){ PANEL=typeof fn==='function'?fn:null; if(!PANEL&&SURF) close(true); },
+          closePanel:function(quiet){ if(SURF) close(!!quiet); }, inspecting:function(){ return !!SURF; },
+          // The inspector's bar (← back, root › … › here, ×), for any app's own inspector.
+          crumbs:crumbsHTML,
+          lineView:function(ref){ return viewOf(ref); }, lineKind:function(ref){ var l=lineOf(ref); return l?lineKind(l):null; }, named:named,
           // The parts this page declares for client review, as sent to the shell.
           parts:function(){ return declaredParts().map(partRef); }};
 })();

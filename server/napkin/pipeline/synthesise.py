@@ -19,7 +19,7 @@ from ..rules.cite import clean_claim
 from ..rules.confidence import finding_confidence
 from ..rules.figures import NUM
 from ..util import bad, iso, lid, uid
-from .. import reasoning as rsn
+from .. import origin, reasoning as rsn
 from ..aliases import Aliases
 
 log = logging.getLogger("napkin.synthesise")
@@ -36,6 +36,11 @@ other statements the pins would allow and what in them rules each out.
 If the input lists rejected findings, a person has ruled each out, with their reason: do not propose
 any of them again, and do not describe the audience in their terms.""" + rsn.GUIDE.replace(
     " for your answer as a whole", " for each finding and the audience")
+
+
+def _a(words: str) -> str:
+    """"a market structure", "an effectiveness evidence": the article the words take."""
+    return ("an " if words[:1].lower() in "aeio" else "a ") + words
 
 
 def _obj(props: dict) -> dict:
@@ -122,12 +127,12 @@ def run_synthesis(doc, base, clan, inp, handler, caps, seed=None, with_audience=
                     {f["market"] for f in cited if f.get("market")})
         fi = {"id": fid, "statement": cleaned["text"], "cites": cites, "method": "synthesis", "status": "proposed",
               "derived_by": handler, "confidence": finding_confidence(cited), "derived_at": t, "decision": did,
-              "lens": lens}
+              "lens": lens, origin.KEY: origin.RESEARCH}
         if mk:
             fi["markets"] = mk
         findings.append(fi)
         r, why_notes = rsn.from_model(
-            item.get("grounds"), decided=f"Proposed a {lens.replace('_', ' ')} finding for a person to verify.",
+            item.get("grounds"), decided=f"Proposed {_a(lens.replace('_', ' '))} finding for a person to verify.",
             known=by_id, certainty_=_derived(cited, fi["confidence"]),
             fallback=[rsn.point(_pin_line(f), f["id"]) for f in cited],
             would_change_if="a cited pin is revised, excluded or goes stale",

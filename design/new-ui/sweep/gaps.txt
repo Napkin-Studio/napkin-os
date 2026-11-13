@@ -1,0 +1,149 @@
+Of the 10 new-UI features I checked, 2 already have a full backend: asking the research, and redrafting one part with a note. Brief lock has most of one. Linking an existing doc and Brand Clan on the brief can reuse the attach mechanism on `feat/brand-clan`, which is built but not merged. The rest each need new host routes or schema keys, listed below. All paths are relative to `/home/batunii/Documents/Code/napkin-studio-new-ui` unless they name a branch.
+
+**Spin-off today**, from the `SpinoffSpec` blocks in `crates/clan-sdk/examples/make_*.rs`. The host offers a target only if its app declares `app.spinoff` (`library.rs:spinoff_targets`).
+
+| Source → target | Status |
+|---|---|
+| research → brief | Exists. `make_brief_maker.rs:250`, accepts research, `upstream: true`. |
+| research → deck, brief → deck | The hop exists (`make_deck_maker.rs:134`, accepts both, `upstream: true`). Feeding the carried data into the deck engine (`build_deck` gets `deck_inputs`) is only on `feat/deck-maker-spinoff-inputs`, 39 commits ahead of `feat/new-ui` and not merged. |
+| brief → production | Exists, older style: `make_advertising_studio.rs:97`, `map: brief`, `upstream: false`. |
+| brief → research | **Missing.** `make_campaign_research.rs:213` has `spinoff: None`. |
+| research → production | **Missing.** Advertising Studio accepts only `ie.napkin.brief` and `ie.napkin.brief-maker`. |
+| deck → anything, production → anything | **Missing.** No app accepts them. |
+
+---
+
+### 1. Spin-off: brief → research, research → production
+- **Missing:** the research and production apps don't accept these sources. `extract_ask@1` (campaign-research `app/pipeline.yaml`) reads only the prompt, materials and layers, never `data.upstream`.
+- **Design:**
+  - Research declares `spinoff {accepts:[ie.napkin.brief-maker], upstream:true}` with no `lift`. Lift copies raw values, but campaign fields are envelopes (`value`/`origin`), so copying would skip the envelope.
+  - `extract_ask` gains one read: `upstream.<brief>` (client, market, brand, audience, proposition) as `origin: proposed`, citing `<brief id>#<path>`. It confirms the short list as it does today. The `never` rule (never overwrite stated or confirmed) is unchanged.
+  - Production: Advertising Studio uses `map: brief`, and `map` can't be combined with `upstream` (422). Either add `ie.napkin.campaign-research` to `accepts` with a second map (`map_by_source`), or move production to `upstream: true` with a lift. The second matches Contract 4 §5 but changes how production reads its brief, so it is an owner decision.
+  - The UI's "Continue in ▾" already lists whatever `spinoffTargets()` returns, so no shell change is needed.
+- **Effort:** brief → research about 1.5 days (manifest, packer asserts, `extract_ask` read, server test, conformance). Research → production about 1–2 days, plus that decision.
+- **Risks:** research made from a brief may echo the brief's guesses back as research. Guard it with `origin: proposed` and the confirm step. Production code lives on other branches (`feat/production-tool-v2`, overhaul), so the change will conflict.
+
+### 2. Link an existing doc to another (research ↔ brief), with kept versions and update notices
+- **Exists:**
+  - Unmerged on `feat/brand-clan` (19 commits ahead, status `building`): the `attach` mechanism. It covers `docs/contracts/brand-clan.md` §4, `clan-sdk::attach`, `napkin-host/tests/attach.rs`, the routes `GET /attach-targets`, `POST /attach`, `/attach/update`, `/attach/detach`, `lineage.attached[]`, and `GET /upstream` gaining `attached[]`. Its contract says "the mechanism is general".
+  - Here: `GET /upstream` (os-layer §8.1 item 6) for change notices, and `backref` with `used` / `resolved` / `verified` (§7.4).
+- **Missing:**
+  - Attach is limited to the brand app. Brief Maker declares no `app.attach` for research.
+  - Only one document of an app can be attached at a time.
+  - Attaching writes nothing back to the parent.
+  - No route lists a document's downstream documents.
+- **Design:**
+  1. Merge `feat/brand-clan` first. Everything else here builds on it.
+  2. Brief Maker declares `app.attach {accepts:[ie.napkin.brand, ie.napkin.campaign-research], many:[ie.napkin.campaign-research]}`. `many` is a new flag that lifts the one-per-app limit for research.
+  3. The draft engine reads attached research exactly as it reads spun-off research: frozen at `data.upstream.<id>`, members merged. The §10.13 selection must key on all `data.upstream` keys, not only `lineage.carried`.
+  4. A new backref action `linked` / `unlinked`, written to the attached parent on attach and detach. That gives research a "Used in: <brief>" row before the brief locks. `used` stays the lock-time backref.
+  5. `GET /related` returns `{upstream:[{document_id,title,app_id,how:'spinoff'|'attach',version,status}], downstream:[{document_id,title,app_id,how,used:bool,locked}]}`. Upstream comes from the document's lineage. Downstream comes from an index of `lineage.carried` and `attached[]` kept in `LibraryCache`, so no store scan per request.
+  6. The update notice uses the existing `/upstream` diff, and "Take the newer version" is `/attach/update`. On a spin-off parent, update is "not built" (§5.5 owner default). Proposed: allow `/attach/update` on the spin-off parent too, which needs the owner to reverse that default.
+  7. Every hop writes one decision: `attach`, `update_from_<noun>`, `detach`.
+  8. UI: the "Continue in ▾" menu has a "Link to…" group from `/attach-targets`. The record's inspector shows "Linked research · v3 · changed" with an Update action.
+- **Effort:** 3–4 days after the merge.
+- **Risks:**
+  - Merge conflicts: `feat/brand-clan` touches `library.rs`, `routes.rs` and os-layer §5.7.
+  - Attaching to a locked brief is refused (409). The UI must say why.
+  - Two linked research docs can disagree. Their contests carry as open items onto the brief's lock list, which is correct but can block the lock.
+
+### 3. OS app slot (document name, state, actions in the shell bar)
+- **Exists:**
+  - `clan:bar` v1 (`app/src/shell/appBar.ts`, item kinds tab, button and chip, max 6/6/4) in `AppHost.tsx:194`.
+  - `/set-title` with the `clan-title-changed` event.
+  - `RecentState {needs_you, locked}` and `DecisionsView.lock`.
+  - Only Deck Maker sends `clan:bar` (`deck-maker/index.html:1514`). Brief and Research send nothing. `features/app-bar-actions.clan` is `verifying` and its next step says Research and Brief should adopt it.
+- **Missing:** an app can't publish a status pill or a lock control. The shell's Continue-in has no link entries.
+- **Design:**
+  - Name and state come from the shell, not the app: title from `/set-title`, pill and needs-you from `getDecisions().lock`, so every app gets them free.
+  - Add one bar kind, `status {label, tone, locked}`. The app may override the pill wording ("Ready to lock"), and the shell falls back to the derived state.
+  - Brief and Research adopt `clan:bar` (Save·PDF, Draft again, Refresh, Lock as buttons). The shared helper moves to `app/templates/shared/clan-fields.html`, and `docs/contracts/clan-fields.md` §7 gains the kind.
+- **Effort:** about 1.5 days.
+- **Risks:** controls drawn twice, in the bar and in the app's own side tab. Keep one source per action: the bar button posts `clan:bar-action` and the app runs its existing handler.
+
+### 4. OS-level source card (facts from any origin)
+- **Exists:** `/decisions` resolves cites to `CiteInfo` (`app/src/host/types.ts:292`; kinds fact, finding, source, material, person, address) with value, sources, uri, publisher and tier.
+- **Missing:**
+  - No route answers "what is this address/id" outside the decisions view.
+  - No `origin` field telling apart a research pin, a client upload (material), a Brand Clan item (carried from `upstream.<brand>`) and a direct knowledge-layer pin (`origin`/`version` on the pin).
+- **Design:**
+  - `GET /cite?ref=<id or address>` returns `CiteInfo` plus `origin: 'research'|'client'|'brand'|'layer'|'person'|'document'`, plus `from {document_id,title,app_id,version}` for a carried item and `review {verdict,by,at}`. It reuses the decisions resolver (`ops/decisions`).
+  - Batch form: `POST /cite {refs:[…]}`.
+  - The shell renders one `SourceCard` component. Apps ask for it with a `clan:source` message (the same way the shell already handles `clan:parts`), so Brief's "Built from" and Research's inline fields show the same card.
+- **Effort:** about 2 days.
+- **Risks:** deciding the origin of pins written before `origin` existed. Mark them `document`, never guess.
+
+### 5. Brand Clan colours and logos on a brief, and a logo library
+- **Exists:**
+  - On `feat/brand-clan`: kit `visual.logos` / `visual.colours`, the look proposal ("the brief's theme from the brand is a proposal, never applied"), and the harvest panel.
+  - Here: brief `theme {bg,bg2,accent,text,font}`, `x-clan-appearance`, and the rolling `look` entry (os-layer §4).
+- **Missing:**
+  - No logo key on the brief: the sheet hard-codes "NAPKIN" (`brief-maker/index.html:1251`).
+  - No agency logo library.
+  - No path from "client logo uploaded on a brief" to the kit.
+- **Design:**
+  - Brief schema gains appearance keys:
+    - `logos: [{slot:'client'|'agency'|'partner', ref:{brand:<doc id>, asset:<path>} | {asset:<path>}}]`
+    - `layout: {frame, headings, parts:{<key>:{col,row,w,h,order}}}`, which also persists part move and resize
+    - "Reset look" deletes those keys.
+  - Agency library: a per-tenant Brand Clan for the agency itself, flagged `kit.kind: agency` (still strictly per agency, no Napkin seed). The logo picker lists the attached client kit's `visual.logos` plus the agency kit's.
+  - A client logo uploaded on a brief is stored as a document asset (`/upload-asset`) and listed under `app.attach.harvest` as `{from: logos[slot=client], to: visual.logos}`. It reaches the kit only through client-accepted harvest, as the owner decided.
+- **Effort:** about 2.5 days on top of the Brand Clan merge.
+- **Risks:** the agency kit needs an owner call, because it stretches "one kit per brand". PDF export must embed logos from assets, and SVG needs sanitising.
+
+### 6. Brief status pill and Lock
+- **Exists:** `/approve` (lock), the lock list via `/decisions`, `/client-review/reopen` for reopening one part (§7.5.6), and the per-field `locked_fields` lock (`index.html:2489`).
+- **Missing:** a general unlock. "There is no unlocking an approve" (`index.html:2795`), and unsealing is still open (W5-Z1). A Lock toggle in the new UI therefore can't turn off.
+- **Design:** pill states come from `DecisionsView.lock`:
+
+  | Pill | When |
+  |---|---|
+  | Draft | otherwise |
+  | Needs you (n) | blockers > 0 |
+  | Ready to lock | `can_lock` |
+  | Locked | `locked` |
+  | Reopened | parts reopened since the lock |
+
+  Lock is `/approve`. Unlock needs a new `/unapprove {rationale}`: one decision that supersedes the approve, refused once a client answer is recorded. The owner must decide W5-Z1 first. Until then, show "Locked" with "Reopen a part…".
+- **Effort:** 0.5 day for the pill; 1 day for unlock once W5-Z1 is decided.
+- **Risks:** unlocking breaks the seal and the `used` backrefs. They would need an `unused` backref.
+
+### 7. Redraft one part with a note: already built
+`regenerate_field {field, guidance}` (middleware-api §10.10, `server/napkin/handlers/regenerate_field.py`). `fix_parts {verdict, guidance}` handles a standing bad verdict. Only the UI wiring is needed. Effort: 0.
+
+### 8. Ask the research: already built
+`ask_research@1` is declared in the research pipeline, has `handlers/ask_research.py`, is listed in `LATER_TASKS` (`server/napkin/registry.py:70`), and the UI calls it at `campaign-research/index.html:3540`. It writes `asks[<id>]`. Effort: 0, wiring only.
+
+### 9. Client page aggregation
+- **Exists:** `listLibrary({client, app})` returns `LibraryItem {client, state:{needs_you, locked}, run}`. The client registry exists, and the shell can group by `app_id` itself.
+- **Missing:**
+  - The client's Brand Clan (on `feat/brand-clan`).
+  - Per-client needs-you items as text, not just counts.
+  - The links between the client's documents.
+  - A cross-document Decisions feed.
+- **Design:** `GET /clients/{id}/overview` returns:
+  - `{client, brand:{document_id,version}|null, by_app:{<app_id>:[LibraryItem]}, needs_you:[{document_id,title,reason,label,blocks_lock}], links:[{from,to,how}]}`
+  - `needs_you` comes from a capped per-document attention summary, cached in `LibraryCache` beside `RecentState`; `links` comes from the §2 index.
+  - The top bar's "needs-your-call" is the same aggregate across all clients.
+- **Effort:** about 2 days.
+- **Risks:** scan cost on the web host. The cache is already keyed by the document's last change, so reuse that key.
+
+---
+
+**Suggested order and feature records** (each `feat/<slug>` needs an approved design before code):
+1. Merge `brand-clan`.
+2. `doc-links`, which is §2 plus §9 links.
+3. `research-from-brief` (§1).
+4. `os-app-slot` (§3), which closes out `app-bar-actions`.
+5. `source-card` (§4).
+6. `brief-look-logos` (§5).
+7. `brief-status-lock` (§6).
+8. `client-overview` (§9).
+9. `production-from-research` (§1).
+
+**Owner decisions needed:**
+- Reverse §5.5 so a spin-off can take a newer parent.
+- The production spin-off style: a second map, or `upstream: true` with a lift.
+- An agency Brand Clan as the logo library.
+- Unlock and unsealing (W5-Z1).
+- Lifting one-per-app attach for research.
