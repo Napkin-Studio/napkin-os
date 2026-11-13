@@ -94,7 +94,7 @@ for (const size of SIZES) {
     // A role change takes effect on the person's next request, with no new sign-in.
     const who = await open(browser, size, 'white', { roster: true })
     await signIn(who.page, { username: person(1) })
-    const doorsOf = async () => ((await (await who.page.request.get(`/api/t/${tenant}/doors`)).json()) as { doors: { name: string }[] }).doors.map(d => d.name)
+    const doorsOf = async () => ((await (await who.page.request.get(`/api/t/${tenant}/doors`)).json()) as { pages: { name: string }[] }).pages.map(d => d.name)
     expect(await doorsOf()).not.toContain('Traffic board')
     const members = (await (await who.page.request.get(`/api/t/${tenant}/agency/people`)).json()) as { username: string; email?: string }[]
     expect(members.some(m => 'email' in m)).toBe(false) // a member never reads an email
