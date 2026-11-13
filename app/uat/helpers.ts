@@ -4,7 +4,7 @@
 import { appendFileSync } from 'node:fs'
 import { expect, type FrameLocator, type Locator, type Page } from '@playwright/test'
 
-export const MOCKS = ['plu@pluto', 'bo@boysandgirls', 'tia@tbwa', 'sam@wk', 'oli@ogilvy', 'hal@harbour', 'dee@droga', 'ann@napkin', 'cat@catapult'] as const
+export const MOCKS = ['plu@pluto', 'bo@boysandgirls', 'tia@tbwa', 'sam@wk', 'oli@ogilvy', 'hal@harbour', 'dee@droga', 'ann@napkin', 'cat@catapult', 'ace@acne'] as const
 export type Mock = (typeof MOCKS)[number]
 
 /** Timing budgets, in ms. Over budget is a finding, not a flake: it fails the journey. */
