@@ -13,7 +13,7 @@ import { test } from 'node:test'
 
 import {
   AGENCY_COLOURS, CHROME_INK, NEUTRAL, agencyCss, agencyIdOf, applyAgency, basicLook, canonicalAgencyId, coloursOf, contrast, logoFill, lookChecks,
-  paletteOf, pillOf, registerAgencyLooks, surfaceTokens, type AgencyColours,
+  paletteOf, pillOf, registerAgencyLooks, surfaceCss, surfaceTokens, type AgencyColours,
 } from '../src/shell/agency/palette.ts'
 import { recolourSvg } from '../src/shell/agency/svgSanitise.ts'
 
@@ -136,4 +136,32 @@ test('the app theme reset never clears the agency layer: it is not one of the in
   const css = readFileSync('src/components/chrome.css', 'utf8')
   assert.doesNotMatch(css, /--create:\s*var\(--agency/)
   assert.doesNotMatch(readFileSync('src/index.css', 'utf8'), /--create:\s*var\(--agency/)
+})
+
+test('registerAgencyLooks takes a basic look\'s style (features/agency-style.clan); absent or default is today\'s look', () => {
+  registerAgencyLooks([
+    { id: 'greenline', name: 'Greenline', base: '#000000', accent: '#86bc25', pill: 'base', accent_use: 'line', surface: 'mono', accent_ink: null },
+    { id: 'marlow', name: 'Marlow Bay', base: '#0B1F4D', accent: '#A8E04A', accent_ink: '#0b1f4d' },
+    { id: 'plain', name: 'Plain', base: '#0B1F4D', accent: '#A8E04A' },
+    { id: 'spelled', name: 'Spelled', base: '#0B1F4D', accent: '#A8E04A', pill: 'accent', accent_use: 'fill', surface: 'warm' },
+    { id: 'junk', name: 'Junk', base: '#0B1F4D', accent: '#A8E04A', pill: 'round' as never, accent_ink: 'navy' },
+  ])
+  const g = coloursOf('greenline')!
+  assert.deepEqual([g.pill, g.accentUse, g.surface, g.accentInk], ['base', 'line', 'mono', undefined])
+  // the shell draws it as ACNE's code look does: same pill, same surfaces
+  assert.equal(surfaceCss(g), surfaceCss({ ...AGENCY_COLOURS.acne, name: 'Greenline' }))
+  assert.equal(coloursOf('marlow')!.accentInk, '#0B1F4D')
+  assert.equal(paletteOf(coloursOf('marlow')).light.fg, '#0B1F4D')
+  for (const id of ['plain', 'spelled', 'junk']) {
+    const c = coloursOf(id)!
+    assert.deepEqual(Object.keys(c).sort(), ['accent', 'base', 'name'], `${id}: no style fields`)
+    assert.equal(surfaceCss(c), surfaceCss({ name: c.name, base: c.base, accent: c.accent }))
+  }
+  // the outline-only look's checks: buttons named for the base, the needs badge and the outline
+  assert.deepEqual(lookChecks(g).map(r => r.label), [
+    'Text on the pill', 'Text on the base (buttons, light)', 'Text on the base (buttons, dark)',
+    'Text on the accent (needs badge)', 'Accent outline on the base (pill, buttons)',
+  ])
+  assert.equal(lookChecks(g).filter(r => r.line).length, 1)
+  registerAgencyLooks([])
 })

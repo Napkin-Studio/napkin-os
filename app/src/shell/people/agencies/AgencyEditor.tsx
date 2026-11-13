@@ -2,8 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The agency editor (mock people-agencies-v3, states 3-8). A basic agency:
-// its name, other spellings, base and accent, one SVG wordmark, and "Does it
+// The agency editor (mock people-agencies-v4, states 3-11). A basic agency:
+// its name, other spellings, base and accent, its style (how the two colours
+// are used: features/agency-style.clan), one SVG wordmark, and "Does it
 // read?" (palette.ts lookChecks; a warning never blocks Publish). An agency in
 // code: its look read-only, its display name editable, Reset name. Live
 // previews, light and dark, of the OS bar pill, the sign-in card and the brief
@@ -24,8 +25,8 @@ import {
 } from './editor'
 import { LookPill } from './LookPill'
 import {
-  HEX, canPublish, coloursForLook, excerpt, hasColours, hasDraft, histParts, initialsOf, kb, slugOf,
-  type EditLook, type UploadReport,
+  HEX, canPublish, coloursForLook, excerpt, hasColours, hasDraft, histParts, initialsOf, kb, slugOf, startInk, styleOfColours,
+  type EditLook, type LookStyle, type UploadReport,
 } from './model'
 
 /** What the view's buttons do; the container (AgencyEditor) wires them to the api. */
@@ -86,19 +87,78 @@ function Frame({ theme, c, sid }: { theme: 'light' | 'dark'; c: AgencyColours; s
 }
 
 /** A colour: the picker and its hex, either sets it; a half-typed hex waits. */
-function ColourField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string, now: boolean) => void }) {
+function ColourField({ id, label, value, onChange, bare = false }: { id: string; label: string; value: string; onChange: (v: string, now: boolean) => void; bare?: boolean }) {
   const [typed, setTyped] = useState<string | null>(null)
   const shown = typed ?? value
+  const field = (
+    <div className="ag-colour">
+      <input type="color" aria-label={`${label} colour`} value={HEX.test(value) ? value.toLowerCase() : '#d9d9d9'} onChange={e => { setTyped(null); onChange(e.target.value.toUpperCase(), true) }} />
+      <input id={id} aria-label={bare ? label : undefined} className={`ag-hex${shown.length === 7 && !HEX.test(shown) ? ' ag-bad' : ''}`} maxLength={7} placeholder="#RRGGBB" value={shown}
+        onChange={e => { const v = e.target.value; setTyped(v); if (HEX.test(v)) onChange(v.toUpperCase(), true) }}
+        onBlur={() => setTyped(null)} />
+    </div>
+  )
+  if (bare) return field
   return (
     <div>
       <label htmlFor={id}>{label}</label>
-      <div className="ag-colour">
-        <input type="color" aria-label={`${label} colour`} value={HEX.test(value) ? value.toLowerCase() : '#d9d9d9'} onChange={e => { setTyped(null); onChange(e.target.value.toUpperCase(), true) }} />
-        <input id={id} className={`ag-hex${shown.length === 7 && !HEX.test(shown) ? ' ag-bad' : ''}`} maxLength={7} placeholder="#RRGGBB" value={shown}
-          onChange={e => { const v = e.target.value; setTyped(v); if (HEX.test(v)) onChange(v.toUpperCase(), true) }}
-          onBlur={() => setTyped(null)} />
-      </div>
+      {field}
     </div>
+  )
+}
+
+/** One choice of two (or more): the selected one in the page's action colour. */
+function Seg<T extends string>({ name, value, options, onPick }: { name: string; value: T; options: readonly (readonly [T, string])[]; onPick: (v: T) => void }) {
+  return (
+    <span className="ag-seg" role="group" aria-label={name} data-testid={`seg-${name}`}>
+      {options.map(([v, label]) => (
+        <button key={v} type="button" className={v === value ? 'on' : undefined} aria-pressed={v === value} onClick={() => { if (v !== value) onPick(v) }}>{label}</button>
+      ))}
+    </span>
+  )
+}
+
+/** The Style card (mock v4, states 9-11): how the two colours are used, not the colours. Each choice goes to the draft. */
+function StyleCard({ look, onEdit }: { look: EditLook; onEdit: EditorActions['onEdit'] }) {
+  const auto = HEX.test(look.accent) ? inkOn(look.accent) : null
+  return (
+    <div className="ag-card" data-testid="style-card">
+      <h3>Style</h3>
+      <div className="ag-style">
+        <div className="ag-opt"><span className="lb">Pill</span><span className="val">
+          <Seg name="Pill" value={look.pill} options={[['accent', 'Accent fill'], ['base', 'Base with accent outline']]} onPick={v => onEdit({ pill: v }, true)} />
+        </span></div>
+        <div className="ag-opt"><span className="lb">Accent use</span><span className="val">
+          <Seg name="Accent use" value={look.accentUse} options={[['fill', 'Fill'], ['line', 'Outline only']]} onPick={v => onEdit({ accentUse: v }, true)} />
+        </span></div>
+        <div className="ag-opt"><span className="lb">Surfaces</span><span className="val">
+          <Seg name="Surfaces" value={look.surface} options={[['warm', 'Warm paper'], ['mono', 'Plain']]} onPick={v => onEdit({ surface: v }, true)} />
+        </span></div>
+        <div className="ag-opt"><span className="lb">Text on accent</span><span className="val">
+          <Seg name="Text on accent" value={look.accentInk ? 'set' : 'auto'} options={[['auto', 'Automatic'], ['set', 'Choose a colour']]}
+            onPick={v => onEdit({ accentInk: v === 'auto' ? null : startInk(look) }, true)} />
+          {look.accentInk
+            ? <ColourField bare id="ag-ink" label="Text on accent" value={look.accentInk} onChange={(v, now) => onEdit({ accentInk: v }, now)} />
+            : auto && <span className="ag-auto" data-testid="auto-ink"><i style={{ background: auto }} />{auto === '#FFFFFF' ? 'white' : 'near-black'}, worked out</span>}
+        </span></div>
+      </div>
+      <div className="ag-hint">These change how the two colours are used, not the colours.</div>
+    </div>
+  )
+}
+
+/** A style in words, for a look in code's read-only card. */
+function StyleWords({ st }: { st: LookStyle }) {
+  const items = [
+    <>Pill: {st.pill === 'base' ? 'base with accent outline' : 'accent fill'}</>,
+    <>Accent: {st.accentUse === 'line' ? 'outline only' : 'fill'}</>,
+    <>Surfaces: {st.surface === 'mono' ? 'plain' : 'warm paper'}</>,
+    <>Text on accent: {st.accentInk ? <><i style={{ background: st.accentInk }} /><span className="ag-mono">{st.accentInk}</span></> : 'automatic'}</>,
+  ]
+  return (
+    <span className="ag-ro-style" data-testid="code-style">
+      {items.map((it, i) => <span key={i} className="it">{i > 0 && <span className="sep">·</span>}{it}</span>)}
+    </span>
   )
 }
 
@@ -203,11 +263,12 @@ function Checks({ look }: { look: EditLook }) {
       <ul className="ag-checks">
         {rows.map(r => {
           const ok = r.ratio >= r.need
-          const logo = r.need === 3 && svg
+          const logo = !r.line && r.need === 3 && svg
           return (
             <li key={r.label} className={ok ? 'good' : 'bad'} data-ok={ok}>
-              {logo ? <span className="sw" style={{ background: r.bg }}><img src={'data:image/svg+xml,' + encodeURIComponent(recolourSvg(svg, r.fg))} alt="" /></span>
-                : <span className="sw" style={{ background: r.bg, color: r.fg }}>Aa</span>}
+              {r.line ? <span className="sw" style={{ background: r.bg, boxShadow: `inset 0 0 0 2px ${r.fg}` }} />
+                : logo ? <span className="sw" style={{ background: r.bg }}><img src={'data:image/svg+xml,' + encodeURIComponent(recolourSvg(svg, r.fg))} alt="" /></span>
+                  : <span className="sw" style={{ background: r.bg, color: r.fg }}>Aa</span>}
               <span>{r.label}</span>
               <span className="r">{r.ratio.toFixed(1)}:1{ok ? ' ✓' : <><span className="wi">{WARN_ICON}</span>needs {r.need}:1</>}</span>
             </li>
@@ -237,6 +298,7 @@ function CodeLook({ look }: { look: EditLook }) {
         <label>Pill</label><span><LookPill colours={c} /></span>
         <label>Colours</label>
         <span className="ag-sws"><span className="ag-swc"><i style={{ background: code.base }} />base {code.base}</span><span className="ag-swc"><i style={{ background: code.accent }} />accent {code.accent}</span></span>
+        <label>Style</label><StyleWords st={styleOfColours(code)} />
         <label>Logos</label>
         <div className="ag-grounds">{tile(wordmarkOf(code, 'light'), 'l', 'On light grounds')}{tile(wordmarkOf(code, 'dark'), 'd', 'On dark grounds')}</div>
         <label>Where</label><span className="ag-mono">app/src/shell/agency/palette.ts · AGENCY_COLOURS.{look.id}</span>
@@ -331,8 +393,9 @@ export function AgencyEditorView({ st, actions, user, busy = false }: { st: Edit
                   <ColourField id="ag-base" label="Base" value={look.base} onChange={(v, now) => actions.onEdit({ base: v }, now)} />
                   <ColourField id="ag-accent" label="Accent" value={look.accent} onChange={(v, now) => actions.onEdit({ accent: v }, now)} />
                 </div>
-                <div className="ag-hint">Everything else, in light and dark, is worked out from these two: the pill, the surfaces, and the text on each.</div>
+                <div className="ag-hint">Everything else, in light and dark, is worked out from these two and the style below: the pill, the surfaces, and the text on each.</div>
               </div>
+              <StyleCard look={look} onEdit={actions.onEdit} />
               <Wordmark look={look} report={st.report} actions={actions} />
               <Checks look={look} />
             </>
