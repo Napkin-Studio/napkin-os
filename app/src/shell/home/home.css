@@ -50,3 +50,5 @@
 @media (max-width: 760px) { .pg-door:where(.nui, .nui *) { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .pg-door:where(.nui, .nui *) { transition: none; } }
 .cl-row-wrap:where(.nui, .nui *) > .hm-sec { margin: 30px 0 6px; }
+.pg-soon:where(.nui, .nui *) .ln-cover { display: none; }
+.pg-soon:where(.nui, .nui *) .ln-app { max-width: 520px; }

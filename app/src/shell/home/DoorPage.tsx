@@ -83,7 +83,7 @@ export function DoorPage({ door, name, clients, rights = null, go }: Props) {
             <div className="eyebrow">YOUR PAGES</div>
             <h1 className="hero-title" tabIndex={-1} data-testid="door-title">{title}<span className="period-dot" aria-hidden /></h1>
           </div>
-          <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to the desk</button></div>
+          {page && <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to the desk</button></div>}
         </section>
         <main className="hm-main">{body}</main>
       </div>
