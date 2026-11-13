@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!DOCTYPE svg [
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+  <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+]>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <text>&lol3;</text>
+  <rect width="10" height="10"/>
+</svg>

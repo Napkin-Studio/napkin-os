@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <rect width="10" height="10"/>
+  <path d="M0 0h5v5z" onclick=alert(1) />
+  <circle r="2" ONMOUSEOVER = 'x()'/>
+</svg>

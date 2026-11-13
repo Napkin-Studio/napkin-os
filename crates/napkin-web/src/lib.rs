@@ -26,6 +26,7 @@ pub mod people;
 pub mod sandbox;
 pub mod state;
 pub mod store;
+pub mod svg_sanitise;
 pub mod tenant;
 pub mod timing;
 pub mod tokens;

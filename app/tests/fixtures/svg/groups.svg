@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="white">
+  <path d="M0 0h10v10H0z"/>
+  <g fill="#ABC">
+    <rect x="1" y="2" width="3" height="4"/>
+    <g>
+      <circle cx="5" cy="5" r="2"/>
+      <g fill="BLACK"><ellipse cx="1" cy="2" rx="3" ry="4"/></g>
+      <rect fill="url(#grad)" x="0" y="0" width="1" height="1"/>
+    </g>
+    <g fill="none"/>
+    <rect fill="currentColor" width="2" height="2"/>
+  </g>
+  <g fill="none">
+    <path d="M1 1L2 2"/>
+    <path fill="#FF0000" d="M3 3L4 4" fill-rule="evenodd" clip-rule="weird"/>
+  </g>
+  <rect/>
+  <path fill="#123456"/>
+  <path fill="#010203" d="M1 1 url(x)"/>
+  <polygon points="1,2 3,4 5,6" fill="#00ff00" stroke="#000" stroke-width="3"/>
+  <rect x="1px" y="-2" width="1e2" height=".5" rx="-.25" ry="3."/>
+  <circle cx='10' cy = "11" r= '12'/>
+</svg>

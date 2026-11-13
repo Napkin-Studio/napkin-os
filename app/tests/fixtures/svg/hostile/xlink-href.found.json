@@ -1,0 +1,10 @@
+[
+  {
+    "what": "external link http://evil.example/",
+    "line": 2
+  },
+  {
+    "what": "external link other.svg#mark",
+    "line": 3
+  }
+]
