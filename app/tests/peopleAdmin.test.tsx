@@ -23,6 +23,10 @@ import {
 } from '../src/shell/agency/palette.ts'
 import { signInLookOf } from '../src/shell/agency/signInLook.ts'
 import PeoplePage, { AddSheet } from '../src/shell/people/PeoplePage.tsx'
+import { AgencyEditorView } from '../src/shell/people/agencies/AgencyEditor.tsx'
+import { discard, edit, openNew, openRow, publish, resetName, saveDraft, toggleCopy, upload, type EditorState } from '../src/shell/people/agencies/editor.ts'
+import type { BasicRow } from '../src/shell/people/agencies/model.ts'
+import { MOCK_PEOPLE, cannedFiles, fakePeopleApi, mockAgencies } from './peopleFake.ts'
 import {
   PEOPLE_ADMINS, agencyFieldFromSignInName, agencySlug, isPeopleAdmin, napkinPageCss, newAgencyLook, peopleEntryFor,
   recogniseAgency, signInNameOf, type AgencyRow, type PersonRow,
@@ -35,7 +39,7 @@ const unescape = (s: string) => s.replace(/\\\\/g, '\\')
 
 const noop = () => {}
 const AGENCIES: AgencyRow[] = Object.entries(AGENCY_COLOURS).map(([id, c]) => ({
-  id, name: c.name, base: c.base, accent: c.accent, source: 'code',
+  id, kind: 'code', name: c.name, code_name: c.name, draft: null, rev: 1,
   aliases: Object.entries(AGENCY_ALIASES).filter(([, to]) => to === id).map(([a]) => a), people: id === 'napkin' ? 3 : 0,
 }))
 const PEOPLE: PersonRow[] = [
@@ -103,9 +107,9 @@ test('a new agency gets its look on the page, and its people wear it after sign-
   assert.equal(agencyNameOf('aoife@rothco', 'x'), 'Rothco')
   assert.deepEqual(markOf('aoife@rothco'), { base: '#0F6B5C', accent: '#9FE6D8' })
   assert.equal(signInLookOf('aoife@rothco').name, 'Rothco')
-  // the code registry wins a clash, and a bad colour is not taken
-  registerAgencyLooks([{ id: 'napkin', name: 'Fake', base: '#000000', accent: '#000000' }, { id: 'odd', name: 'Odd', base: 'red', accent: '#FFFFFF' }])
-  assert.equal(coloursOf('napkin')?.name, 'Napkin')
+  // an agency in code takes only a published name (its look stays the code's), and a bad colour is not taken
+  registerAgencyLooks([{ id: 'napkin', name: 'Napkin Dublin', base: '#000000', accent: '#000000' }, { id: 'odd', name: 'Odd', base: 'red', accent: '#FFFFFF' }])
+  assert.deepEqual(coloursOf('napkin'), { ...AGENCY_COLOURS.napkin, name: 'Napkin Dublin' })
   assert.equal(coloursOf('odd'), null)
   registerAgencyLooks([])
 })
@@ -161,4 +165,192 @@ test('napkin-web keeps the same admins, agencies and aliases as the shell', () =
   assert.deepEqual(agencies, Object.entries(AGENCY_COLOURS).map(([id, c]) => [id, c.name, c.base, c.accent]))
   const aliases = Object.fromEntries([...block('CODE_ALIASES').matchAll(/\("([^"]+)", "([^"]+)"\)/g)].map(m => [m[1], m[2]]))
   assert.deepEqual(aliases, { ...AGENCY_ALIASES })
+})
+
+// ---- Agencies (features/agency-looks-admin.clan; mock people-agencies-v3), against the fake napkin-web ----
+
+const view = (st: EditorState) => renderToStaticMarkup(createElement(AgencyEditorView, { st, user: 'engineer@napkin', actions: NOOP_ACTIONS }))
+const NOOP_ACTIONS = { onEdit: noop, onUpload: noop, onRemoveWordmark: noop, onResetName: noop, onPublish: noop, onDiscard: noop, onCopy: noop, onBack: noop }
+const rowOf = (api: ReturnType<typeof fakePeopleApi>, id: string) => api.rows.find(r => r.id === id)!
+const calls = (api: ReturnType<typeof fakePeopleApi>) => api.heard.map(h => h.call)
+const buttonOf = (html: string, label: string) => new RegExp(`<button[^>]*>${label}</button>`).exec(html)?.[0] ?? ''
+
+test('People | Agencies: the list has every agency with its kind, and the People list wears each agency\'s pill', () => {
+  const agencies = mockAgencies()
+  const list = renderToStaticMarkup(createElement(PeoplePage, { user: 'engineer@napkin', onClose: noop, initial: { people: MOCK_PEOPLE, agencies }, initialTab: 'agencies' }))
+  assert.match(list, /Agencies <small>12<\/small>/)
+  assert.match(list, /People <small>11<\/small>/)
+  const tagsOf = (id: string) => { const tr = list.slice(list.indexOf(`data-agency="${id}"`)); return [...tr.slice(0, tr.indexOf('</tr>')).matchAll(/class="pa-tag ag-(\w+)">([^<]+)</g)].map(m => m[2]) }
+  for (const id of Object.keys(AGENCY_COLOURS)) assert.deepEqual(tagsOf(id), ['In code'], id)
+  assert.deepEqual(tagsOf('saltmarsh'), ['Basic'])
+  assert.deepEqual(tagsOf('kestrellane'), ['Basic', 'Draft'])
+  assert.match(list, /<b>Boys\+Girls<\/b><br\/><span class="ag-mono">@boysandgirls<\/span><\/td><td class="ag-mono">bg, boysgirls, b\+g<\/td><td>1<\/td>/)
+  assert.match(list, />New agency</)
+  // the list's pill is what people see now: Kestrel Lane's published look (no wordmark), not its draft
+  const kestrel = list.slice(list.indexOf('data-agency="kestrellane"'))
+  assert.match(kestrel.slice(0, kestrel.indexOf('</td>')), /<span class="big">Kestrel Lane<\/span>/)
+
+  const people = renderToStaticMarkup(createElement(PeoplePage, { user: 'engineer@napkin', onClose: noop, initial: { people: MOCK_PEOPLE, agencies } }))
+  const cell = (id: string) => { const at = people.indexOf(`<small>${id}</small>`); const td = people.slice(at, people.indexOf('</tr>', at)); return td }
+  assert.match(cell('niamh@bg'), /data-testid="look-pill" style="background:#000000;color:#FFFFFF;box-shadow:inset 0 0 0 1.5px #FFFFFF"/, 'B+G by its other spelling')
+  assert.match(cell('niamh@bg'), /<img src="data:image\/svg\+xml,[^"]+" alt="Boys\+Girls"/)
+  assert.match(cell('owen@saltmarsh'), /<img src="data:image\/svg\+xml,[^"]+" alt="Saltmarsh"/, 'a basic agency\'s published wordmark')
+  assert.match(cell('ella@kestrel'), /<span class="big">Kestrel Lane<\/span>/)
+  assert.match(cell('engineer@napkin'), /<span class="big">Napkin Studio<\/span><\/span>/, 'Napkin Studio once')
+  assert.doesNotMatch(cell('engineer@napkin'), /NAPKIN STUDIO/)
+  assert.match(cell('ann@napkin'), /<small>member<\/small>/)
+  registerAgencyLooks([])
+})
+
+test('a new basic agency: a draft on the page until Publish makes it, its id from the name', async () => {
+  const api = fakePeopleApi()
+  let st = openNew()
+  let html = view(st)
+  assert.match(html, /Not saved yet\. Your first edit starts a draft\./)
+  assert.match(html, /class="pa-tag ag-new">New/)
+  assert.match(html, /value="@…"/)
+  assert.match(html, /Placeholder colours until you pick a base and an accent\./)
+  assert.match(buttonOf(html, 'Publish'), /disabled/)
+  assert.match(buttonOf(html, 'Copy to code'), /disabled.*title="Publish first"/)
+  st = edit(st, { name: 'Rothco & Sons' })
+  html = view(st)
+  assert.match(html, /value="@rothcoandsons"/, 'Signs in as, made from the name')
+  assert.match(html, /Draft by engineer@napkin, .*not live.*Publish needs a name and both colours\./)
+  assert.match(buttonOf(html, 'Publish'), /disabled/)
+  st = edit(edit(st, { base: '#0F6B5C' }), { accent: '#9FE6D8', aliases: ['rothco'] })
+  assert.doesNotMatch(buttonOf(view(st), 'Publish'), /disabled/)
+  // edits of a new agency stay on the page
+  assert.deepEqual(await saveDraft(api, st, ['name']), st)
+  // its wordmark is checked on the page, and sent with it at Publish
+  const { good } = cannedFiles('Rothco', '#0F6B5C')
+  st = await upload(api, st, good.name, good.src)
+  assert.ok(st.look.wordmark?.startsWith('data:image/svg+xml,'))
+  assert.ok(st.report?.ok)
+  assert.deepEqual(calls(api), [])
+  st = await publish(api, st)
+  assert.deepEqual(calls(api), ['createAgency', 'putWordmark', 'publish'])
+  assert.deepEqual(api.heard[0].args[0], { name: 'Rothco & Sons', aliases: ['rothco'], base: '#0F6B5C', accent: '#9FE6D8' }, 'no id sent')
+  assert.deepEqual(api.heard[2].args, ['rothcoandsons', 2], 'published with the rev the wordmark returned')
+  assert.equal(st.row?.id, 'rothcoandsons')
+  assert.equal(st.flash?.lead, 'Published.')
+  assert.ok(rowOf(api, 'rothcoandsons').kind === 'basic' && (rowOf(api, 'rothcoandsons') as BasicRow).published)
+  // discarding a new one makes nothing
+  assert.equal(await discard(api, edit(openNew(), { name: 'X' })), null)
+})
+
+test('a wordmark upload: the server\'s cleaned SVG replaces the preview; a refusal says why and where, and keeps the old one', async () => {
+  const api = fakePeopleApi()
+  const files = cannedFiles('Kestrel Lane', '#1F4E3D')
+  const open = openRow(rowOf(api, 'kestrellane'))
+  const before = open.look.wordmark
+  const took = await upload(api, open, files.good.name, files.good.src)
+  assert.deepEqual(calls(api), ['putWordmark'])
+  assert.equal(took.look.wordmark, (rowOf(api, 'kestrellane') as BasicRow).draft!.wordmark, 'the server\'s SVG')
+  assert.equal(took.row!.rev, rowOf(api, 'kestrellane').rev, 'the returned rev is the next call\'s')
+  assert.ok(took.report?.ok && took.report.dropped.includes('metadata'))
+  assert.match(view(took), /kestrel-wordmark\.svg<\/b> taken, in the draft\. Cleaned: .* kept of .*; dropped: metadata\./)
+  assert.match(view(took), /Now: <span class="ag-mono">kestrel-wordmark\.svg<\/span>/)
+
+  const refused = await upload(api, open, files.bad.name, files.bad.src)
+  assert.equal(refused.look.wordmark, before, 'the wordmark is unchanged')
+  assert.ok(refused.report && !refused.report.ok)
+  assert.equal(refused.report.why, 'Refused: the file has a script on line 4.')
+  const html = view(refused)
+  assert.match(html, /data-testid="upload-refused"/)
+  assert.match(html, /kestrel-wordmark-final\.svg<\/b> · Refused: the file has a script on line 4\. The wordmark is unchanged\./)
+  assert.match(html, /<mark> {2}4 {2}&lt;script&gt;new Image\(\)/, 'the line, marked')
+  assert.match(html, /<span> {2}2 {2}&lt;svg /)
+  // the server's refusal is what counts: a 422 with found lines, as the fake (napkin-web) answers
+  assert.equal(api.heard.at(-1)!.call, 'putWordmark')
+})
+
+test('Does it read? warns on a hard-to-read draft and never blocks Publish', async () => {
+  const api = fakePeopleApi()
+  let st = edit(openRow(rowOf(api, 'kestrellane')), { accent: '#5A9A78' })
+  st = await saveDraft(api, st, ['accent'])
+  assert.deepEqual(api.heard.map(h => [h.call, h.args[1]]), [['patchDraft', { rev: 6, accent: '#5A9A78' }]])
+  const html = view(st)
+  assert.match(html, /1 hard to read/)
+  assert.match(html, /<li class="bad" data-ok="false">.*Logo on the pill.*2\.9:1.*needs 3:1/)
+  assert.doesNotMatch(buttonOf(html, 'Publish'), /disabled/, 'a warning never stops publishing')
+  const good = view(openRow(mockAgencies().find(r => r.id === 'kestrellane')!))
+  assert.match(good, /all read/)
+  assert.equal((good.match(/<li class="good"/g) ?? []).length, 6)
+})
+
+test('Publish and Discard draft call the server and say what happened; a stale rev reloads', async () => {
+  const api = fakePeopleApi()
+  const live = await publish(api, openRow(rowOf(api, 'kestrellane')))
+  assert.deepEqual(api.heard.at(-1), { call: 'publish', args: ['kestrellane', 6] })
+  assert.equal(live.flash?.text, 'People at Kestrel Lane see it the next time a page loads.')
+  assert.match(view(live), /Published by engineer@napkin, 13 Nov 2026 · 14:40/)
+  assert.match(buttonOf(view(live), 'Discard draft'), /disabled/, 'nothing to discard')
+  assert.match(buttonOf(view(live), 'Publish'), /disabled/)
+
+  const api2 = fakePeopleApi()
+  const gone = await discard(api2, openRow(rowOf(api2, 'kestrellane')))
+  assert.deepEqual(api2.heard.at(-1), { call: 'discardDraft', args: ['kestrellane'] })
+  assert.equal(gone?.flash?.lead, 'Draft discarded.')
+  assert.equal(gone?.look.accent, '#E8B04A', 'as it was')
+
+  // another tab moved the rev on: the agency is reloaded and the page says so
+  const api3 = fakePeopleApi()
+  const old = openRow(structuredClone(rowOf(api3, 'kestrellane')))
+  rowOf(api3, 'kestrellane').rev = 9
+  const reloaded = await saveDraft(api3, edit(old, { name: 'Kestrel' }), ['name'])
+  assert.equal(reloaded.flash?.lead, 'Changed elsewhere.')
+  assert.equal(reloaded.row?.rev, 9)
+  assert.equal(reloaded.look.name, 'Kestrel Lane')
+})
+
+test('an agency in code: its look read-only, its display name a draft, Reset name back to the code\'s', async () => {
+  const api = fakePeopleApi()
+  const open = openRow(rowOf(api, 'boysandgirls'))
+  assert.throws(() => edit(open, { base: '#FF0000' }), /name only/)
+  assert.throws(() => edit(open, { aliases: ['bgd'] }), /name only/)
+  let html = view(open)
+  assert.match(html, /data-kind="code"/)
+  assert.match(html, /This look is in code\. Change it through a PR\./)
+  assert.match(html, /AGENCY_COLOURS\.boysandgirls/)
+  for (const no of [/type="color"/, /Choose an SVG|Replace the SVG/, /Does it read\?/, /Add a spelling/, /data-testid="copy-to-code"/]) assert.doesNotMatch(html, no)
+  assert.match(html, /<div class="ag-chips ro"><span>bg<\/span><span>boysgirls<\/span><span>b\+g<\/span><\/div>/)
+  assert.match(html, /As in code/)
+  assert.doesNotMatch(html, /Reset name/)
+
+  let st = await saveDraft(api, edit(open, { name: 'Boys+Girls Dublin' }), ['name'])
+  assert.deepEqual(api.heard.at(-1), { call: 'patchDraft', args: ['boysandgirls', { rev: 1, name: 'Boys+Girls Dublin' }] })
+  html = view(st)
+  assert.match(html, /In code: <b>Boys\+Girls<\/b>\. <button type="button" class="pa-link">Reset name<\/button>/)
+  assert.match(html, /class="pa-tag ag-code">In code<\/span><span class="pa-tag ag-draft">Draft/)
+  assert.match(html, /As in code<\/span><span> · <\/span><b>Draft by engineer@napkin, 13 Nov 2026 · 14:40<\/b>/)
+  assert.match(html, /Sign in to Boys\+Girls Dublin on Napkin Studio\./, 'the previews show the draft name')
+  // Reset name is an edit of the draft, back to the code's name (then Publish)
+  st = await resetName(api, st)
+  assert.deepEqual(api.heard.at(-1), { call: 'patchDraft', args: ['boysandgirls', { rev: 2, name: 'Boys+Girls' }] })
+  assert.equal(st.look.name, 'Boys+Girls')
+  assert.ok(!calls(api).includes('putWordmark') && !calls(api).includes('exportCode'))
+})
+
+test('Copy to code: only for a published basic agency, with its four boxes and three steps', async () => {
+  const api = fakePeopleApi()
+  // not published yet: the button waits, and nothing is asked
+  const made = await api.createAgency({ name: 'Rothco', base: '#0F6B5C', accent: '#9FE6D8' })
+  api.heard.length = 0
+  const draft = openRow(made)
+  assert.match(buttonOf(view(draft), 'Copy to code'), /disabled.*title="Publish first"/)
+  assert.equal(await toggleCopy(api, draft), draft)
+  assert.deepEqual(calls(api), [])
+  // published: the code it would be
+  const salt = openRow(rowOf(api, 'saltmarsh'))
+  assert.doesNotMatch(buttonOf(view(salt), 'Copy to code'), /disabled/)
+  const shown = await toggleCopy(api, salt)
+  assert.deepEqual(calls(api), ['exportCode'])
+  const html = view(shown)
+  assert.match(html, /Copy to code <span class="ag-mono">the published look, for a pull request/)
+  assert.match(html, /1\. Save the SVG into the owner’s assets folder\..*2\. Run .*node scripts\/agency-logos\.mjs.*3\. Paste the entry and open a PR\./)
+  for (const box of ['The look', 'saltmarsh-logo.svg', 'The logo file', 'The server’s copy']) assert.match(html, new RegExp(`<b>${box.replace('.', '\\.')}</b>`), box)
+  assert.equal((html.match(/>Copy<\/button>/g) ?? []).length, 4)
+  assert.match(html, /&#x27;salt marsh&#x27;: &#x27;saltmarsh&#x27;,/, 'the other spellings go to code too')
+  assert.match(html, />Hide the code</)
+  assert.equal((await toggleCopy(api, shown)).copy, null)
 })
