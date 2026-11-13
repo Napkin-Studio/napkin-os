@@ -5,7 +5,9 @@ its answer (§10.14); the middleware's own stages run when the engine gives
 nothing. Unset, the job is the middleware's own: planned (plan, research, whole draft,
 whole review; brief/planned.py) unless NAPKIN_BRIEF_FLOW=fields keeps the
 field-by-field drafters and judge. With input.intake the planned job may stop once, after
-the capture, to ask the planner a few questions (brief/intake.py); the others never do."""
+the capture, to ask the planner a few questions (brief/intake.py); the others never do. input.redraft
+says the brief is drafted again in place; the planned job reads the parts as they stand from the data
+either way (planned._current)."""
 
 from ..brief import engine
 from ..brief.capture import build_materials
@@ -26,6 +28,9 @@ def start(req, caps, settings, jid):
     intake = req.inp.get("intake", False)
     if not isinstance(intake, bool):
         raise bad("input.intake must be true or false")
+    redraft = req.inp.get("redraft", False)  # Draft it again, in place (features/brief-redraft-in-place)
+    if not isinstance(redraft, bool):
+        raise bad("input.redraft must be true or false")
     port = engine.port_for(settings)
     judge = getattr(settings, "brief_judge", "review")
     if port is not None:
@@ -38,4 +43,4 @@ def start(req, caps, settings, jid):
     return PlannedBriefJob(jid, TASK, req.handler, req, caps, mats=mats,
                            research_max=getattr(settings, "brief_research_max", 3), judge=judge,
                            intake_wait=getattr(settings, "brief_intake_wait", 90) if intake else 0,
-                           intake_max=getattr(settings, "brief_intake_max", 3))
+                           intake_max=getattr(settings, "brief_intake_max", 3), redraft=redraft)

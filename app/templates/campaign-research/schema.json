@@ -695,7 +695,7 @@
     },
     "answer": {
       "type": "object",
-      "description": "The person's answer to a question: an option id, or free text. Exactly one.",
+      "description": "The person's answer to a question: an option id, free text, or skipped (the person chose not to answer; the field stays open). Exactly one.",
       "additionalProperties": false,
       "required": [
         "question_id"
@@ -710,6 +710,9 @@
         "text": {
           "type": "string",
           "minLength": 1
+        },
+        "skipped": {
+          "const": true
         }
       },
       "oneOf": [
@@ -721,6 +724,11 @@
         {
           "required": [
             "text"
+          ]
+        },
+        {
+          "required": [
+            "skipped"
           ]
         }
       ]
@@ -2671,6 +2679,20 @@
     "upstream": {
       "$ref": "#/definitions/upstream",
       "$comment": "written only by the host, on a spin-off from a brief, or when it takes the brief's newer version; read-only (os-layer.md §5.2, §8.1 item 8)"
+    },
+    "asks": {
+      "type": "object",
+      "description": "A person's questions about the research and their answers, by ask id (middleware-api.md §1, ask_research). The middleware writes each answer; a person writes only in_report, in_report_by and in_report_at.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "about": { "type": ["string", "null"], "description": "The fact (f_…) or finding (fi_…) the question was asked from; null for a general question." },
+          "in_report": { "type": "boolean", "description": "Whether the answer is in the report. A general question's is; one asked from a fact or finding is shown under it until a person adds it." },
+          "in_report_by": { "type": ["string", "null"] },
+          "in_report_at": { "type": ["string", "null"] }
+        }
+      }
     }
   }
 }

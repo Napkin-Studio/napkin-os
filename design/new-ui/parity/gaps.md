@@ -182,8 +182,8 @@ Pairs:
 |---|---|---|---|---|---|
 | K1 | Locked: "Brief ● LOCKED · v1.3 · locked by Siobhán Ryan, today", **Unlock** button, **Record the client's answer** | "Brief ● LOCKED", a disabled "✓ Locked" bar, "Locked for handoff", **Reopen a part…**. Client review is a red button **in the OS bar** | **no backend for Unlock**: there is no `/unapprove`; "There is no unlocking an approve" (W5-Z1). Reopen exists: `/client-review/reopen` | L (owner decision) | `brief-maker/index.html` `renderLock` |
 | K2 | Client's answer form **inside the side tab**: Accepted / With changes / Rejected, **Which parts checkboxes for every part**, paste email, "Or attach it" file, who answered, Cancel, Save the answer | The shell's **ClientReviewPanel replaces the drawer on the right**, with the doc shifted left and a mode bar "● Client review · Cancel". Parts are marked **on the brief**, not by checkboxes. Paste email, "Add the email or PDF file", "Nothing: a call or a chat" and who answered are all there | exists: `/client-review`, `/client-review/confirm` | L (placement) / V | `shell/clientReview/*`, `brief-maker/index.html` |
-| K3 | Per-part **Confidential**: chip on the part head, hatch, "● Confidential" toggle; the client copy leaves it out | Same: CONFIDENTIAL pill, hatch, dark "Confidential" toggle | exists: `confidential_fields` | — | **match** |
-| K4 | Share → "Send the client copy · N confidential parts left out · lock it first" | "Send the client copy · Lock it first…" (disabled). When locked: "Leaving the confidential parts out is not built yet" | **no backend** for a client-copy export without confidential parts | L | `barMenus.ts`, `/export` |
+| K3 | Per-part **Confidential**: chip on the part head, hatch, "● Confidential" toggle; Napkin never learns from it, and the client copy prints it in full (owner, 2026-11-13) | Same: CONFIDENTIAL pill, hatch, dark "Confidential" toggle | exists: `confidential_fields` | — | **match** |
+| K4 | Share → "Send the client copy · lock it first" | "Send the client copy · Lock it first…" (disabled); when locked it runs the brief's Client copy · PDF, every part in it (confidential = Napkin never sees it, not the client; owner, 2026-11-13) | exists: `/export` | — | **match** (fix/confidential-means-napkin-never-sees) |
 | K5 | Lock gives a toast. The gate lists questions | Lock is instant; toast "Locked & saved as "<long title>..clan"" (**double dot**) | — | C | `brief-maker/index.html` |
 
 **Home, prompt and loading**
@@ -237,7 +237,7 @@ Pairs: `m-brief-share.png` vs `b-brief-share.png`; lineage `m-brief.png` ("from 
 
 | # | Mock | Build | Backend | Sev | Likely file |
 |---|---|---|---|---|---|
-| SH1 | Share: Copy link, Send the client copy (with the confidential count), Invite to the crew | Copy link, **Download a copy** (extra), Send the client copy (disabled), Invite to the crew (disabled, "Not built yet") | **no backend**: invite (no invitable accounts) and the client copy (K4) | — / L | `barMenus.ts` |
+| SH1 | Share: Copy link, Send the client copy, Invite to the crew | Copy link, **Download a copy** (extra), Send the client copy (on a locked brief, K4), Invite to the crew (disabled, "Not built yet") | **no backend**: invite (no invitable accounts) | — / L | `barMenus.ts` |
 | SH2 | Lineage chip: brief "from **Irish summer treats**"; research "→ **1 brief**" (downstream count) | Chip with the upstream title and version ("↔ Bone Dry (working n… v1", "in Fernhill Cider · Ir…"). **No downstream count chip** | exists: `/related` upstream and downstream | C / V | `Toolbar.tsx` |
 | SH3 | Crew avatars plus agent orb | See B10 | no backend for presence | L | `Toolbar.tsx` |
 
@@ -309,7 +309,7 @@ Pairs: `b-empty-home.png`, `b-empty-clients.png`, `b-empty-clients-dark.png`, `b
 | Brand Clan card, brand applied on the brief, kit colours and logos | **no backend here** | `feat/brand-clan` (local branch, not merged); `/attach*` routes exist |
 | Agency logo library | **no backend** | — |
 | Brief cover style | **no backend** | no schema key |
-| Client copy without confidential parts | **no backend** | `/export` |
+| Client copy (every part; confidential hides nothing from the client) | exists | `/export` |
 | Presence (who is viewing), crew invite | **no backend** | — |
 | Layer fact counts on the client page | **no backend** | layers-service |
 | Research → Production spin-off | **no backend** | `make_advertising_studio.rs` accepts briefs only |

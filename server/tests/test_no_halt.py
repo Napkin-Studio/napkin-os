@@ -5,11 +5,15 @@ Every way a start_campaign or draft_brief job used to stall or stop — a stage
 that raises, one the model refuses or answers malformed, one that outlives its
 time, a change the host refuses, no poll bringing the earlier stages, a
 question nobody answers — now degrades to a recorded gap, and the job ends
-`done` with what it has. The campaign job is driven directly with the fakes and
+`done` with what it has. Only a job that has nothing to show (a stage failed
+and no fact, finding, report or brief part came of it) ends `failed`, with
+the first real error, and a stage that makes no progress for its stall
+budget fails the job (owner, 2026-11-12, features/job-end-states.clan). The campaign job is driven directly with the fakes and
 a small host that applies each reply's change (and refuses what a test says).
 """
 
 import copy
+import re
 import importlib.util
 import threading
 import time
@@ -230,7 +234,9 @@ def test_a_stage_that_raises_is_a_gap_and_the_next_stage_runs(store, monkeypatch
     reasoned(host)
 
 
-def test_a_research_stage_that_raises_names_every_pair_as_a_gap(store, monkeypatch):
+def test_a_research_stage_that_raises_names_every_pair_and_fails_with_its_error(store, monkeypatch):
+    """Research raised and nothing came of the run (no fact, finding or report): it ends `failed` with the
+    research's own error. Every pair is still named as a gap, and what landed stays."""
     class Broken:
         def __init__(self, *a, **kw):
             pass
@@ -241,7 +247,10 @@ def test_a_research_stage_that_raises_names_every_pair_as_a_gap(store, monkeypat
     host = MiniHost(LABELLED, categories=TONIC)
     job = start(store, host)
     v = drive(job, host)
-    assert v["state"] == "done"
+    assert v["state"] == "failed" and v["stage"] == "research"
+    assert v["error"] == {"type": "stages_failed",
+                          "message": "research failed: ConnectionError: research service gone"}
+    assert "stage_failed" in host.actions()
     gaps = host.data["selection"]["gaps"]
     assert len(gaps) == len(campaign.LENSES) and all("research did not run" in g["note"] for g in gaps)
     runs = [d for d in host.chain if d["action"] == "research_run"]
@@ -252,7 +261,7 @@ def test_a_research_stage_that_raises_names_every_pair_as_a_gap(store, monkeypat
     assert "report" not in host.data
     none = next(d for d in host.chain if d["action"] == "report")
     assert none["reasoning"]["decided"] == "Wrote no report: the document holds nothing to cite."
-    assert job.summary().startswith("Campaign finished without a report")
+    assert job.summary() == "Failed at research: research failed: ConnectionError: research service gone"
     reasoned(host)
 
 
@@ -316,10 +325,10 @@ def _after_the_left_thread_dies(module, monkeypatch):
     dead one's ident, the case a mark by ident got wrong."""
     real, left_behind, idents = module.bounded, [], []
 
-    def wrapped(fn, seconds, name, stop=None):
+    def wrapped(fn, seconds, name, stop=None, **kw):
         for t in left_behind:
             t.join(5)
-        value, err, left = real(fn, seconds, name, stop=stop)
+        value, err, left = real(fn, seconds, name, stop=stop, **kw)
         if left is not None:
             left_behind.append(left)
             idents.append(left.ident)
@@ -385,17 +394,19 @@ def test_the_brand_is_never_guessed_when_nobody_answers(store):
     reasoned(host)
 
 
-def test_nothing_settled_still_ends_the_job(store):
+def test_nothing_settled_ends_the_job_failed_with_the_first_error(store):
     """A model that refuses every call: no brand, no category read, questions
-    nobody answers — the job still ends, each gap named."""
+    nobody answers — the job still runs every stage to the end, each gap named,
+    and, with nothing to show, ends `failed` with the first stage's error."""
     host = MiniHost("Launch it in Ireland this spring.")
     model = Model(refuse={"extract", "identify", "select", "synthesise", "report", "layout"})
     job = start(store, host, model=model, question_wait=0.1)
     v = drive(job, host)
-    assert v["state"] == "done" and v["error"] is None
+    assert v["state"] == "failed" and v["stage"] == "extract" and v["error"]["type"] == "stages_failed"
+    assert v["error"]["message"].startswith("extract failed: ModelError: extract: the model refused")
     stages = {g["stage"] for g in job.gaps}
-    assert {"extract", "identify", "select", "report"} <= stages
-    assert "report" not in host.data and job.summary().startswith("Campaign finished without a report")
+    assert {"extract", "identify", "select", "report"} <= stages  # every stage ran: the failure is at the end
+    assert "report" not in host.data and job.summary().startswith("Failed at extract: extract failed")
     reasoned(host)
 
 
@@ -554,3 +565,103 @@ def test_a_brief_stage_after_one_left_behind_still_lands(tmp_path, monkeypatch):
     assert [g["stage"] for g in last["result"]["gaps"]] == ["draft"]
     assert host.data["review"]["judge"]  # the Judge after it landed
     check_change_rules(host)
+
+
+# -- a job with nothing to show, and a stage that makes no progress (owner, 2026-11-12) -----
+
+class _Stuck(Model):
+    """The model, but the synthesise call does not answer until released."""
+
+    def __init__(self, release):
+        super().__init__()
+        self.release = release
+
+    def create(self, **kw):
+        user = kw["messages"][0]["content"]
+        if isinstance(user, str) and user.startswith("Task: synthesise"):
+            self.release.wait(10)
+        return super().create(**kw)
+
+
+def _start_logged(store, host, model=None, **kw):
+    """`start`, with the job's run log bound first (as the middleware does): the watchdog reads it."""
+    caps = caps_for(store, model)
+    caps.bind_job("job_test0002")
+    req = SimpleNamespace(doc=host.doc, clan=host.clan(), inp=host.inp, handler="start_campaign@1.0")
+    job = start_campaign.start(req, caps, settings(**kw), "job_test0002")
+    job.start()
+    return job
+
+
+def test_a_campaign_stage_with_no_progress_fails_the_job_saying_on_what(store, monkeypatch):
+    """No run-log event but heartbeats for the stall budget: the job is `failed` at that stage with
+    "timed out in <stage> after N s waiting on <what>". Heartbeats are not progress."""
+    from napkin import runlog
+    monkeypatch.setattr(runlog, "HEARTBEAT_S", 0.05)
+    release = threading.Event()
+    host = MiniHost(LABELLED, categories=TONIC)
+    try:
+        job = _start_logged(store, host, model=_Stuck(release), stall_timeout=0.5, stage_timeout=30.0)
+        v = drive(job, host)
+    finally:
+        release.set()
+    assert v["state"] == "failed" and v["stage"] == "synthesise" and v["error"]["type"] == "timeout"
+    assert re.fullmatch(r"timed out in synthesise after \d+ s waiting on model synthesise \(.+ s\)",
+                        v["error"]["message"]), v["error"]
+    assert "stage_failed" in host.actions() and "report" not in host.actions()  # the job stopped there
+    assert host.facts  # what landed before it stays
+    assert any("made no progress" in m for m in host.messages())
+    reasoned(host)
+
+
+def test_a_stage_that_beats_while_making_progress_is_not_stalled(store):
+    """A stage whose calls keep logging is never failed by the stall budget: it ends `done`."""
+    host = MiniHost(LABELLED, categories=TONIC)
+    job = _start_logged(store, host, stall_timeout=0.5)
+    v = drive(job, host)
+    assert v["state"] == "done" and v["error"] is None
+
+
+def test_a_brief_whose_every_stage_failed_ends_failed_with_the_first_error(tmp_path, monkeypatch):
+    from napkin.brief import job as bj
+
+    def boom(self):
+        raise RuntimeError("the layers are gone")
+    for name in ("extract", "context", "draft", "judge"):
+        monkeypatch.setattr(bj.BriefJob, "stage_" + name, boom)
+    s = _brief(tmp_path)
+    try:
+        last = brief_run(s, BriefHost())[-1]
+    finally:
+        s.stop()
+    assert last["job"]["state"] == "failed" and last["job"]["stage"] == "extract"
+    assert last["job"]["error"] == {"type": "stages_failed", "message": "extract failed: RuntimeError: the layers are gone"}
+    assert [g["stage"] for g in last["result"]["gaps"]] == ["extract", "context", "draft", "judge"]
+    assert last["result"]["summary"].startswith("Failed at extract: extract failed: RuntimeError")
+
+
+def test_a_brief_stage_with_no_progress_fails_the_job(tmp_path, monkeypatch):
+    from napkin.brief import job as bj
+    from napkin import runlog
+    monkeypatch.setattr(runlog, "HEARTBEAT_S", 0.05)
+    release = threading.Event()
+    real = bj.run_drafters
+
+    def stuck(*a, **kw):
+        release.wait(10)
+        return real(*a, **kw)
+    monkeypatch.setattr(bj, "run_drafters", stuck)
+    monkeypatch.setattr(bj, "STALL_TIMEOUT", 0.4)
+    s = _brief(tmp_path)
+    try:
+        host = BriefHost()
+        last = brief_run(s, host)[-1]
+    finally:
+        release.set()
+        s.stop()
+    assert last["job"]["state"] == "failed" and last["job"]["stage"] == "draft"
+    assert last["job"]["error"]["type"] == "timeout"
+    assert last["job"]["error"]["message"].startswith("timed out in draft after ")
+    assert "waiting on" in last["job"]["error"]["message"]
+    assert not (host.data.get("review") or {}).get("judge")  # the judge never ran: the job stopped at the draft
+    assert host.data["background"]  # the capture landed before it

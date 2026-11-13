@@ -139,6 +139,25 @@ export function feedbackNote(on: string, thumb: 'up' | 'down', note: string, ext
   recorder.flush(false)
 }
 
+/**
+ * The note line a thumb opens, by its placeholder; null when it opens none. On
+ * an agent's result only 👎 asks (the mock's state 5: "What was off?").
+ */
+export function noteFor(noteOn: 'any' | 'down', thumb: 'up' | 'down' | null): string | null {
+  if (!thumb) return null
+  if (noteOn === 'down') return thumb === 'down' ? 'What was off? (optional)' : null
+  return 'Anything to add? (optional)'
+}
+
+/**
+ * Feedback by pointing at it (pointer.ts; features/feedback-point.clan): what
+ * was picked as `name`, the note and its context as `data`; sent at once.
+ */
+export function feedbackPoint(name: string, data: Record<string, unknown>) {
+  record('feedback-point', name.slice(0, 160), data)
+  recorder.flush(false)
+}
+
 /** Ask the server whether this build records; on the desktop and offline it does not. */
 export async function loadDogfood(): Promise<DogfoodState> {
   try {
@@ -172,8 +191,8 @@ export async function acknowledge(): Promise<boolean> {
  * element (' · '), with dates and times taken out. A click on no control is
  * 'background', never the page's text. A name is at most 80 characters.
  *
- * Self-contained on purpose: FRAME_CAPTURE carries this function's own source
- * into app frames, so the shell and the frames name things by one rule.
+ * Self-contained on purpose: src/shell/bridge/frameCapture.js carries the same
+ * function into app frames, so the shell and the frames name things by one rule.
  */
 export function nameOf(el: Element | null): string {
   const CONTROLS = '[data-dogfood],button,a,[role="button"],[role="menuitem"],[role="tab"],input,select,textarea,summary,label'
@@ -222,28 +241,11 @@ function startCapture() {
 }
 
 // ── capture inside app frames ───────────────────────────────────────────────
-
-/**
- * The listener the shell adds to an app frame's page when this build records:
- * it only listens (capture phase, passive) and tells the shell what was
- * clicked or submitted, named by `nameOf` itself. No app changes; a template
- * can name things with `data-dogfood`.
- */
-export const FRAME_CAPTURE = `<script data-dogfood-capture>(function(){
-var nameOf=${nameOf.toString()};
-function tell(kind,e){if(!e.isTrusted)return;try{parent.postMessage({type:'clan:interaction',kind:kind,name:nameOf(e.target)},'*')}catch(_){}}
-document.addEventListener('click',function(e){tell('click',e)},{capture:true,passive:true});
-document.addEventListener('submit',function(e){tell('submit',e)},{capture:true,passive:true});
-})();</script>`
-
-/**
- * What to add to an app page beside the edit bridge: the frame listener when
- * this build records, else nothing. (The bridge is spliced in at the page's
- * last `</body>`; an app's script may hold an earlier one in a string.)
- */
-export function frameCapture(on: boolean): string {
-  return on ? FRAME_CAPTURE : ''
-}
+//
+// The frame's own listener is src/shell/bridge/frameCapture.js, which carries
+// a copy of `nameOf`; napkin-host puts it in an app's page when the frame's
+// options ask for capture (AppRuntime: the build records and the person has
+// agreed). tests/dogfood.test.tsx holds the two copies to the same answers.
 
 /** For tests: set the state and the transport directly. */
 export function __test(next: DogfoodState, send?: Send) {

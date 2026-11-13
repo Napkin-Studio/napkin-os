@@ -14,6 +14,7 @@ use std::time::Duration;
 use axum::body::Bytes;
 use axum::extract::{Path, Query, RawQuery, State};
 use axum::http::{header, StatusCode};
+use axum::middleware::from_fn;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch as patch_method, post, put};
@@ -51,11 +52,23 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/dogfood/export", get(crate::dogfood::get_export))
         .route("/dogfood/runlog", get(crate::dogfood::get_runlog))
         .route("/dogfood/purge", post(crate::dogfood::post_purge))
-        .route("/t/{tenant}/apps", get(list_apps))
+        // The three lists the shell polls answer 304 when nothing changed (etag.rs).
+        .route(
+            "/t/{tenant}/apps",
+            get(list_apps).layer(from_fn(crate::etag::revalidate)),
+        )
         .route("/t/{tenant}/apps/from/{doc}", post(install_from_document))
         .route("/t/{tenant}/recent", get(recent))
-        .route("/t/{tenant}/library", get(library_listing))
-        .route("/t/{tenant}/clients", get(list_clients).post(create_client))
+        .route(
+            "/t/{tenant}/library",
+            get(library_listing).layer(from_fn(crate::etag::revalidate)),
+        )
+        .route(
+            "/t/{tenant}/clients",
+            get(list_clients)
+                .layer(from_fn(crate::etag::revalidate))
+                .post(create_client),
+        )
         .route("/t/{tenant}/clients/legacy", get(legacy_clients))
         .route("/t/{tenant}/clients/adopt", post(adopt_clients))
         .route("/t/{tenant}/clients/{id}", patch_method(update_client))
@@ -80,7 +93,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/d/{doc}/human-html", get(human_html))
         .route("/t/{tenant}/d/{doc}/entry/{which}", get(entry))
         .route("/t/{tenant}/d/{doc}/edit-mode", post(edit_mode))
-        .route("/t/{tenant}/d/{doc}/preview-html", post(preview_html))
+        .route("/t/{tenant}/d/{doc}/preview-html", post(preview_html_gone))
         .route("/t/{tenant}/d/{doc}/patch", post(patch))
         .route("/t/{tenant}/d/{doc}/spinoff-targets", get(spinoff_targets))
         .route("/t/{tenant}/d/{doc}/spinoff", post(spinoff_document))
@@ -109,6 +122,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .merge(crate::agency::router())
         .merge(crate::audit::router())
         .merge(crate::search::router())
+        // The People page: who signs in, and their agencies (admin only; admin.rs)
+        .merge(crate::admin::router())
         // A route that is not built yet answers 404 from here, so the layers around
         // the API (the session, the role check) still see the request. Without it an
         // unknown path fell through to the shell's index.html and a role was never asked.
@@ -144,8 +159,9 @@ fn view(ctx: &AppCtx, tenant: &TenantId, person: &str, doc: &DocId, open: OpenRe
     }
 }
 
-/// Open `doc` and describe it. The session is cached, so this is cheap on the
-/// second call and every tab of the same document shares one archive.
+/// Open `doc` and describe it. The session is cached, so every tab of the same
+/// document shares one archive; a cold open reads the archive once
+/// ([`Workspace::open`]), a warm one re-reads it as it stands now.
 fn open_view(
     ctx: &AppCtx,
     tenant: &TenantId,
@@ -153,9 +169,10 @@ fn open_view(
     ws: &Workspace,
     doc: DocId,
 ) -> ApiResult<OpenView> {
-    let session = ws.session(&doc)?;
-    let open = session.open(doc.clone())?;
-    Ok(view(ctx, tenant, person, &doc, open))
+    let (_session, open) = crate::timing::phase("session", || ws.open(&doc))?;
+    Ok(crate::timing::phase("token", || {
+        view(ctx, tenant, person, &doc, open)
+    }))
 }
 
 // ── Session ──────────────────────────────────────────────────────────────────
@@ -801,7 +818,7 @@ fn doc_session(
 ) -> ApiResult<(Arc<Workspace>, Arc<napkin_host::Session>, DocId)> {
     let ws = ctx.workspace(tenant);
     let id = DocId::new(doc);
-    let session = ws.session(&id)?;
+    let session = crate::timing::phase("session", || ws.session(&id))?;
     Ok((ws, session, id))
 }
 
@@ -1137,20 +1154,17 @@ async fn edit_mode(
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
-/// The composed page the app frame will load, pushed by the shell.
+/// The page the shell used to compose and post, for the frame to fetch back.
 ///
-/// Same handshake as the desktop: the shell splices the edit bridge into the
-/// human view and hands the result to the host, which serves it back to the
-/// frame at `/s/{token}/document`.
-async fn preview_html(
-    State(ctx): Ctx,
-    Tenant(tenant): Tenant,
-    Path((_t, doc)): Path<(String, String)>,
-    body: String,
-) -> ApiResult<Json<Value>> {
-    let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
-    session.set_preview_html(body);
-    Ok(Json(serde_json::json!({ "ok": true })))
+/// Gone (features/doc-open-direct.clan): the frame loads `/s/{token}/document`,
+/// composed by this server. Answered `410` for one release so a shell from
+/// before the change says why its frame stays empty instead of failing quietly.
+async fn preview_html_gone() -> ApiResult<Json<Value>> {
+    Err(ApiError::new(
+        410,
+        "preview-html is gone: the server composes the frame's page now \
+         (GET /s/{token}/document). Reload the page to get the current shell.",
+    ))
 }
 
 #[derive(Deserialize)]

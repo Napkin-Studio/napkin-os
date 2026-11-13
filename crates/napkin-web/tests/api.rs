@@ -359,6 +359,75 @@ async fn the_sandbox_token_is_the_only_authority_it_needs() {
     assert_eq!(reply.status, StatusCode::FORBIDDEN);
 }
 
+/// A deploy restarts the server, and sandbox tokens live in its memory: every
+/// open page's token is dead. The refusal says so in a way the page can tell
+/// from every other one (`code`), so the shell can open the document again
+/// for a fresh token and retry (features/stale-token-and-menus.clan).
+#[tokio::test]
+async fn a_token_from_before_a_restart_is_refused_as_stale_and_a_reopen_mints_one_that_works() {
+    let s = server(40);
+    let b = browser(&s).await;
+    let (doc, token) = upload(&s, &b, "Survives").await;
+
+    // The same data, a new process: what a deploy does.
+    let ctx = Arc::new(AppCtx::new(
+        s._dir.path().to_path_buf(),
+        Arc::new(NoConfig),
+        None,
+        40,
+    ));
+    let after = Server {
+        _dir: tempfile::tempdir().unwrap(),
+        app: napkin_web::router(ctx.clone(), None, false),
+        ctx,
+    };
+
+    let body =
+        serde_json::json!({ "patch": { "note": "kept" }, "agent": "human", "action": "edit" })
+            .to_string();
+    for reply in [
+        post(&after, &format!("/s/{token}/patch-data"), "", body.clone()).await,
+        get(&after, &format!("/s/{token}/document"), None).await,
+        get(&after, &format!("/s/{token}/chain"), None).await,
+    ] {
+        assert_eq!(reply.status, StatusCode::FORBIDDEN);
+        let v = reply.json();
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["code"], napkin_web::sandbox::STALE_TOKEN);
+        assert_eq!(v["error"], "invalid or expired sandbox token");
+    }
+
+    // Any other refusal carries no such code: only a dead token makes the
+    // page ask for a new one.
+    let other = post(&s, &format!("/s/{token}/attach"), "", "{}").await;
+    assert_eq!(other.status, StatusCode::BAD_REQUEST);
+    assert!(other.json().get("code").is_none(), "{:?}", other.json());
+
+    // Opening the document again, as the shell does, mints a token the new
+    // process holds, and the write goes through on it.
+    let reopened = get(
+        &after,
+        &format!("/api/t/{}/d/{doc}", b.tenant),
+        Some(&b.cookie),
+    )
+    .await;
+    assert_eq!(
+        reopened.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&reopened.body)
+    );
+    let fresh = reopened.json()["token"].as_str().unwrap().to_string();
+    assert_ne!(fresh, token);
+    let wrote = post(&after, &format!("/s/{fresh}/patch-data"), "", body).await;
+    assert_eq!(
+        wrote.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&wrote.body)
+    );
+}
+
 /// The same document answers the same way on the server and in the browser.
 ///
 /// napkin-wasm is `napkin_host::handle` over a session acting as the local
@@ -487,7 +556,7 @@ async fn a_token_reaches_exactly_one_document() {
 async fn sandbox_writes_reach_the_shell_as_events() {
     let s = server(40);
     let b = browser(&s).await;
-    let (_doc, token) = upload(&s, &b, "Events").await;
+    let (doc, token) = upload(&s, &b, "Events").await;
 
     let tenant = napkin_web::tenant::TenantId::parse(&b.tenant).unwrap();
     let mut rx = s.ctx.events.subscribe(&tenant);
@@ -502,6 +571,8 @@ async fn sandbox_writes_reach_the_shell_as_events() {
 
     let event = rx.try_recv().expect("a data write must reach the shell");
     assert_eq!(event.name, "clan-data-changed");
+    // the stream is the whole tenant's: the event names its document
+    assert_eq!(event.data["path"], doc.as_str());
 }
 
 #[tokio::test]
@@ -676,6 +747,12 @@ fn server_with_shell() -> (Server, tempfile::TempDir) {
     )
     .unwrap();
     std::fs::write(shell.path().join("sw.js"), "// worker").unwrap();
+    std::fs::create_dir(shell.path().join("assets")).unwrap();
+    std::fs::write(
+        shell.path().join("assets").join("index-abc123.js"),
+        "// app",
+    )
+    .unwrap();
     let mut s = server(40);
     s.app = napkin_web::router(s.ctx.clone(), Some(shell.path()), false);
     (s, shell)
@@ -1428,7 +1505,7 @@ fn roster_server(roster: &str) -> Server {
     let identity = napkin_web::tenant::Identity {
         mode: napkin_web::tenant::Mode::Accounts {
             provider: napkin_web::auth::Provider::Roster(
-                napkin_web::auth::Roster::new(path).unwrap(),
+                napkin_web::auth::Roster::open(dir.path().join("_people"), &path).unwrap(),
             ),
             // the same key as accounts_server(): one deployment, switched
             sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
@@ -1571,7 +1648,7 @@ fn dogfood_server_with(
     let identity = napkin_web::tenant::Identity {
         mode: napkin_web::tenant::Mode::Accounts {
             provider: napkin_web::auth::Provider::Roster(
-                napkin_web::auth::Roster::new(roster).unwrap(),
+                napkin_web::auth::Roster::open(dir.path().join("_people"), &roster).unwrap(),
             ),
             sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
         },
@@ -3195,4 +3272,274 @@ async fn a_job_files_its_documents_and_the_index_answers_read_only() {
             assert_eq!(r.status, StatusCode::METHOD_NOT_ALLOWED, "{method} {route}");
         }
     }
+}
+
+// ── Opening a document quickly (features/doc-open-speed.clan) ───────────────
+
+fn gunzip(bytes: &[u8]) -> Vec<u8> {
+    use std::io::Read;
+    let mut out = Vec::new();
+    flate2::read::GzDecoder::new(bytes)
+        .read_to_end(&mut out)
+        .unwrap();
+    out
+}
+
+/// The frame's GET for its page, as a browser on `https://uat.example` sends it.
+fn frame_get(token: &str, query: &str, extra: &[(header::HeaderName, &str)]) -> Request<Body> {
+    let mut req = Request::builder()
+        .uri(format!("/s/{token}/document{query}"))
+        .header(header::HOST, "uat.example")
+        .header("x-forwarded-proto", "https");
+    for (k, v) in extra {
+        req = req.header(k, *v);
+    }
+    req.body(Body::empty()).unwrap()
+}
+
+// features/doc-open-direct.clan: the shell no longer composes and posts the
+// page; the frame's one GET is composed here from the session's view.
+#[tokio::test]
+async fn the_frame_page_is_composed_from_the_view_for_the_query() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let (_doc, token) = upload(&s, &b, "Composed").await;
+
+    let r = send(
+        &s,
+        frame_get(&token, "?model=legacy&capture=1&theme=dark&v=1", &[]),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(
+        r.headers.get(header::CONTENT_TYPE).unwrap(),
+        "text/html; charset=utf-8"
+    );
+    let page = String::from_utf8(r.body.to_vec()).unwrap();
+    let base = format!("https://uat.example/s/{token}");
+    assert!(
+        page.contains(&format!("var BASE=\"{base}\";")),
+        "the fetch shim names the frame's own URL"
+    );
+    assert!(!page.contains("clan://localhost") && !page.contains("http://clan.localhost"));
+    assert!(
+        page.contains("__clan_bridge_listening"),
+        "the legacy bridge, as asked"
+    );
+    assert!(page.contains("data-dogfood-capture"));
+    assert!(page.contains("data-color-scheme=\"dark\""));
+
+    // Nothing asked: the document's own model, no listener, light.
+    let r = send(&s, frame_get(&token, "", &[])).await;
+    let page = String::from_utf8(r.body.to_vec()).unwrap();
+    assert!(!page.contains("data-dogfood-capture"));
+    assert!(page.contains("data-color-scheme=\"light\""));
+}
+
+#[tokio::test]
+async fn the_frame_page_goes_out_compressed_when_the_browser_takes_it() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let (_doc, token) = upload(&s, &b, "Compressed").await;
+    let plain = send(&s, frame_get(&token, "?model=authored", &[])).await;
+    assert!(plain.headers.get(header::CONTENT_ENCODING).is_none());
+
+    let packed = send(
+        &s,
+        frame_get(
+            &token,
+            "?model=authored",
+            &[(header::ACCEPT_ENCODING, "gzip")],
+        ),
+    )
+    .await;
+    assert_eq!(packed.status, StatusCode::OK);
+    assert_eq!(
+        packed.headers.get(header::CONTENT_ENCODING).unwrap(),
+        "gzip"
+    );
+    assert!(packed.body.len() < plain.body.len());
+    assert_eq!(gunzip(&packed.body), plain.body);
+}
+
+#[tokio::test]
+async fn an_unchanged_frame_page_answers_304_and_a_changed_one_does_not() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let (_doc, token) = upload(&s, &b, "Revalidated").await;
+    let first = send(&s, frame_get(&token, "?model=legacy&theme=light&v=1", &[])).await;
+    let tag = first
+        .headers
+        .get(header::ETAG)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(tag.starts_with("W/\""));
+    assert_eq!(
+        first.headers.get(header::CACHE_CONTROL).unwrap(),
+        "private, no-cache"
+    );
+
+    let again = send(
+        &s,
+        frame_get(
+            &token,
+            "?model=legacy&theme=light&v=1",
+            &[(header::IF_NONE_MATCH, &tag)],
+        ),
+    )
+    .await;
+    assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+    assert!(again.body.is_empty());
+
+    // Another option is another page.
+    let dark = send(
+        &s,
+        frame_get(
+            &token,
+            "?model=legacy&theme=dark&v=1",
+            &[(header::IF_NONE_MATCH, &tag)],
+        ),
+    )
+    .await;
+    assert_eq!(dark.status, StatusCode::OK);
+
+    // A write changes the page, so the browser's copy is not served again.
+    let patched = post(
+        &s,
+        &format!("/s/{token}/patch-data"),
+        &b.cookie,
+        r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#,
+    )
+    .await;
+    assert_eq!(patched.status, StatusCode::OK);
+    let after = send(
+        &s,
+        frame_get(
+            &token,
+            "?model=legacy&theme=light&v=2",
+            &[(header::IF_NONE_MATCH, &tag)],
+        ),
+    )
+    .await;
+    assert_eq!(after.status, StatusCode::OK);
+    assert_ne!(
+        after.headers.get(header::ETAG).unwrap().to_str().unwrap(),
+        tag
+    );
+}
+
+#[tokio::test]
+async fn a_bad_token_gets_no_frame_page() {
+    let s = server(5);
+    let r = send(&s, frame_get("not-a-token", "", &[])).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn posting_a_preview_page_is_gone_and_says_why() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let (doc, _token) = upload(&s, &b, "Gone").await;
+    let r = post(
+        &s,
+        &format!("/api/t/{}/d/{doc}/preview-html", b.tenant),
+        &b.cookie,
+        "<p>a page</p>",
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::GONE);
+    assert!(r.json()["error"]
+        .as_str()
+        .unwrap()
+        .contains("/s/{token}/document"));
+}
+
+#[tokio::test]
+async fn the_event_stream_is_never_compressed() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let req = Request::builder()
+        .uri(format!("/api/t/{}/events", b.tenant))
+        .header(header::COOKIE, &b.cookie)
+        .header(header::ACCEPT_ENCODING, "gzip, br")
+        .body(Body::empty())
+        .unwrap();
+    let resp = s.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
+}
+
+#[tokio::test]
+async fn a_polled_list_that_has_not_changed_answers_304() {
+    let s = server(5);
+    let b = browser(&s).await;
+    upload(&s, &b, "Listed").await;
+    for path in ["library", "clients", "apps"] {
+        let uri = format!("/api/t/{}/{path}", b.tenant);
+        let first = get(&s, &uri, Some(&b.cookie)).await;
+        assert_eq!(first.status, StatusCode::OK, "{path}");
+        let tag = first
+            .headers
+            .get(header::ETAG)
+            .unwrap_or_else(|| panic!("{path} carries no ETag"))
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(
+            first.headers.get(header::CACHE_CONTROL).unwrap(),
+            "private, no-cache",
+            "{path}: the browser must ask again every time"
+        );
+
+        let again = Request::builder()
+            .uri(&uri)
+            .header(header::COOKIE, &b.cookie)
+            .header(header::IF_NONE_MATCH, &tag)
+            .body(Body::empty())
+            .unwrap();
+        let r = send(&s, again).await;
+        assert_eq!(r.status, StatusCode::NOT_MODIFIED, "{path}");
+        assert!(r.body.is_empty());
+    }
+
+    // A change is a new tag and a full answer.
+    let uri = format!("/api/t/{}/library", b.tenant);
+    let tag = get(&s, &uri, Some(&b.cookie)).await.headers[header::ETAG].clone();
+    upload(&s, &b, "Another").await;
+    let after = Request::builder()
+        .uri(&uri)
+        .header(header::COOKIE, &b.cookie)
+        .header(header::IF_NONE_MATCH, tag)
+        .body(Body::empty())
+        .unwrap();
+    let r = send(&s, after).await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(r.json()["items"].as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn the_shell_page_is_revalidated_and_hashed_assets_are_kept() {
+    // UAT round 3: index.html had no Cache-Control, so a browser kept the old shell after a deploy.
+    let (s, _shell) = server_with_shell();
+    for path in ["/", "/view", "/some/shell/route"] {
+        let r = get(&s, path, None).await;
+        // An unknown shell route is index.html with 404, as before; it is still revalidated.
+        assert!(
+            String::from_utf8_lossy(&r.body).contains("<title>shell</title>"),
+            "{path}"
+        );
+        assert_eq!(
+            r.headers.get(header::CACHE_CONTROL).unwrap(),
+            "no-cache",
+            "{path}"
+        );
+    }
+    let a = get(&s, "/assets/index-abc123.js", None).await;
+    assert_eq!(a.status, StatusCode::OK);
+    assert_eq!(
+        a.headers.get(header::CACHE_CONTROL).unwrap(),
+        "public, max-age=31536000, immutable"
+    );
 }

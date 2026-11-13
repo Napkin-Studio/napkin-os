@@ -85,7 +85,7 @@ tasks:
   answer_question:
     handler: answer_question@1
     continues: start_campaign      # the reply describes the start_campaign job; its task and handler are the job's
-    input: "{ job_id, question_id, option_id? | text? }"   # exactly one of option_id and text
+    input: "{ job_id, question_id, option_id? | text? | skip? }"   # exactly one of option_id, text and skip (true)
     precondition: the job is needs_input and question_id is job.question.id
 
   compose_report:

@@ -39,7 +39,7 @@ from . import capture as cap_stage
 from . import provenance as prov
 from .clientcat import plan_category
 from .drafters import _query
-from .fields import ARRAY_KEYS, KEYS, LABELS, bare, clean, filled, get, last_writer, put
+from .fields import ARRAY_KEYS, KEYS, LABELS, _is_human, bare, clean, filled, get, last_writer, put
 from .job import BriefJob, log
 from . import checks, intake
 from .questions import dedupe, without_answered
@@ -51,6 +51,8 @@ REVIEW_MAX_TOKENS = 24000
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
 FACTS_MAX = prov.FACTS_MAX
+# A part as it stands, on a redraft (`current`): its words up to this many characters, a list's items each.
+CURRENT_MAX, CURRENT_ITEM_MAX = 900, 220
 # jev's "the facts held already answer the need" at or above this: the planned search is skipped.
 HELD = 0.6
 
@@ -142,6 +144,8 @@ Plan:
   or none.
 - category: the category code from the list that fits the brief best, or null.
 - ask_client: the questions only the client can answer, each with the part it serves.
+On a redraft, `current` is the brief as it stands, each part with who wrote it last (person or agent): plan
+from it, keep what a person wrote unless the facts contradict it, and build on the rest.
 Never restate the person's request ("make me a brief") as content. Plain British English."""
 
 
@@ -162,6 +166,11 @@ def plan_schema(keys, lens_codes, cat_codes):
 
 
 # -- draft -----------------------------------------------------------------------------------
+# Draft it again (features/brief-redraft-in-place): the parts as they stand come as `current`.
+REDRAFT_RULE = """On a redraft, `current` is the brief as it stands, each part with who wrote it last. Keep what a person wrote
+(by "person") unless the facts contradict it, and say so in `why` when they do. Build on what an agent wrote
+(by "agent") with the facts, new ones included; do not start it from scratch.
+"""
 DRAFT_SYSTEM = """You are a senior strategic planner writing a complete creative brief, every part at once, so
 the parts make one argument: the objectives, the audience, the insight, the proposition and its proof all
 serve the plan's strategy.
@@ -184,7 +193,7 @@ Lists (reasons to believe, tone, mandatories, open questions) are arrays of shor
 believe you cannot prove from a fact starts with "To confirm:". Budget and scope: deliverables, channels and
 timing only, no budget figure the client did not give. Open questions: what only the client can answer.
 Return null for a part only when nothing sensible can be said. Never restate the person's request as content.
-Write in plain British English, specific and vivid, no category jargon."""
+""" + REDRAFT_RULE + """Write in plain British English, specific and vivid, no category jargon."""
 
 
 # Every rewrite (the Review agent's revise, the check loop's, fix_parts') carries each part's claims as they stand.
@@ -287,8 +296,10 @@ class PlannedBriefJob(BriefJob):
     """draft_brief, planned (module docstring)."""
 
     def __init__(self, *a, research_max: int = 3, judge: str = "review", intake_wait: float = 0,
-                 intake_max: int = 3, **kw):
+                 intake_max: int = 3, redraft: bool = False, **kw):
         super().__init__(*a, **kw)
+        # Draft it again (the template says so); whether parts are written is read from the data (_current)
+        self.redraft = bool(redraft)
         # intake (brief/intake.py): off unless the request asked and the wait is above 0
         self.intake_wait, self.intake_max = max(0, float(intake_wait)), max(0, int(intake_max))
         self.intake_skipped, self.intake_answered = [], {}  # questions left open; {key: the words it was asked in}
@@ -350,6 +361,29 @@ class PlannedBriefJob(BriefJob):
         out = prov.prior_claims(self.chain, self.doc, [k for k in keys if k not in self.whole])
         out.update({k: self.whole[k].get("claims") or [] for k in keys if k in self.whole})
         return out
+
+    def _current(self, keys):
+        """The brief as it stands, on a redraft: every open part that holds words, with who wrote it last
+        ("person" or "agent"). Locked parts are not open, so never here. A part with words no decision
+        wrote is a person's (fields.holder reads it the same way). Empty on a first draft, so a redraft
+        is read from the data, whichever way it started."""
+        chain = {d.get("id"): d for d in self.chain}
+        out = {}
+        for k in keys:
+            v = clean(k, get(self.data0, k))
+            if not filled(v):
+                continue
+            last = chain.get(last_writer(self.doc, self.chain, k))
+            by = "person" if last is None or _is_human(last) else "agent"
+            text = [_short(x, CURRENT_ITEM_MAX) for x in v] if isinstance(v, list) else _short(v, CURRENT_MAX)
+            out[k] = {"text": text, "by": by}
+        return out
+
+    def _with_current(self, payload, keys):
+        cur = self._current(keys)
+        if cur:
+            payload["current"] = cur
+        return payload
 
     def _library(self, n=12):
         """The library's passages for the Brief and Review agents, capped at n. The gated ones (the award library) are
@@ -449,6 +483,9 @@ class PlannedBriefJob(BriefJob):
                                for pid, p in list(self.lib.items())[:8]],
                    "lenses": LENSES if leaves else [], "categories": leaves,
                    "research_budget": self.research_max if leaves else 0}
+        self._with_current(payload, keys)
+        if self.redraft or payload.get("current"):
+            rl.note("redraft", flagged=self.redraft, current={k: v["by"] for k, v in (payload.get("current") or {}).items()})
         plan = self.caps.model.structured("plan_brief", PLAN_SYSTEM, payload,
                                           plan_schema(keys, LENSES, [x["code"] for x in leaves]), max_tokens=8000)
         self.plan_out = plan
@@ -489,7 +526,9 @@ class PlannedBriefJob(BriefJob):
         if not asked:
             return
         t0 = time.monotonic()
-        answers, timed_out = self.ask(asked, self.intake_wait)
+        rl.waiting("a person's answers to the intake questions", budget_s=self.intake_wait, asked=len(asked))
+        with rl.busy("person", "intake answers"):
+            answers, timed_out = self.ask(asked, self.intake_wait)
         if self.caps.jobs.cancelled:
             return
         mat, new, done, skipped = intake.answer_items(asked, answers)
@@ -519,7 +558,10 @@ class PlannedBriefJob(BriefJob):
             why = "nobody answered within the wait" if timed_out else "a person chose to skip them"
             rl.note("intake_unanswered" if timed_out else "intake_skipped", keys=[q["key"] for q in skipped])
             r = rsn.make(f"Went on without an answer to {len(skipped)} intake question(s): {why}.",
-                         [rsn.point(f"“{q['text']}” was asked and not answered: {why}") for q in skipped],
+                         # The question's key, not its wording: a planner's question may hold a digit ("Is the 2025
+                         # date fixed?"), and an uncited point with a digit is refused as a figure.
+                         [rsn.point(f"The {q['key'].replace('_', ' ')} question was asked and not answered: {why}")
+                          for q in skipped],
                          rsn.certainty("high", "the questions were asked and no answer came"),
                          "the client answers, or a person edits the part",
                          only_option="nothing is invented to stand for an answer",
@@ -684,6 +726,7 @@ class PlannedBriefJob(BriefJob):
                    "library": self._library(12),
                    "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in keys},
                    "who_handles": {k: who for k, (_, who) in getattr(self, "routing", {}).items()}}
+        self._with_current(payload, keys)
         out = self.caps.model.structured("draft_brief_whole", DRAFT_SYSTEM, payload, draft_schema(keys),
                                          max_tokens=16000)
         self.whole = self._clean(out, ev, "draft", keys=keys)
@@ -723,11 +766,9 @@ class PlannedBriefJob(BriefJob):
                    "part_checks": checks.facts(self.whole), "tests": checks.tests(list(self.whole))}
         rv = self._judge_call(purpose, payload)
         if purpose == "review_brief":  # what code can measure goes back with the Review agent's own list, once
-            named = {x["part"] for x in rv.get("revise") or []}
-            extra = [x for x in checks.revisions(self.whole) if x["part"] not in named]
+            extra = self._code_sent_back({x["part"] for x in rv.get("revise") or []})
             if extra:
                 rv["revise"] = list(rv.get("revise") or []) + extra
-                self.caps.runlog.note("checks_sent_back", parts=[x["part"] for x in extra])
         # The Review agent grades a worked-out claim on its working: one that recomputes is supported whatever it says;
         # code's own verdicts join its. None of them is a reason to rewrite.
         rv["claims"] = prov.judge_claims(self.whole, rv.get("claims") or [])
@@ -745,30 +786,48 @@ class PlannedBriefJob(BriefJob):
                               revise=[x["part"] for x in rv["revise"]])
         return rv
 
+    def judge_path(self):
+        """Which judge reviews a whole draft: "jev" (the check loop) or "review" (the Review agent). Both send back
+        what code measures (_code_sent_back)."""
+        return "jev" if self.judge_mode == "jev" and self.caps.jev.configured else "review"
+
     def stage_judge(self):
         if not self.whole:
             return super().stage_judge()  # nothing drafted as a whole: the field-by-field judge reviews what there is
-        rl = self.caps.runlog
         keys = list(self.whole)
         self.set_state(keys, "judging", "judge")
         ev = self._evidence()
-        if self.judge_mode == "jev" and self.caps.jev.configured:
+        if self.judge_path() == "jev":
             return self._judge_by_jev(ev)
+        return self._judge_by_review(ev)
+
+    def _code_sent_back(self, named=(), note="checks_sent_back"):
+        """What code measures (checks.revisions) that the judge's own list does not name: each part with the check's
+        instruction, noted on the run log. Both judges send these back: what code can measure is never left to a
+        review or a probability (the owner, 2026-11-12)."""
+        out = [x for x in checks.revisions(self.whole) if x["part"] not in named]
+        if out:
+            self.caps.runlog.note(note, parts=[x["part"] for x in out])
+        return out
+
+    def _judge_by_review(self, ev):
+        """The Review agent reviews the whole brief (code's send-backs join its list), the Brief agent revises once, the
+        Review agent reads it again; what code still measures goes back once more."""
         rv = self._review(ev, "review_brief")
         revise = [x for x in rv.get("revise") or [] if x["part"] in self.whole]
         if revise:
             rv = self._rewrite(revise, rv, ev, "review_brief_again") or rv
         # what code can still measure after the one rewrite goes back once more, then the Review agent reads it again
-        left = checks.revisions(self.whole)
+        left = self._code_sent_back(note="checks_sent_back_again")
         if left:
-            rl.note("checks_sent_back_again", parts=[x["part"] for x in left])
             rv = self._rewrite(left, rv, ev, "review_brief_again") or rv
         self.review_out = rv
         self._place(rv, ev)
 
     def _rewrite(self, revise, rv, ev, purpose):
         """The Brief agent rewrites the parts named in `revise`, the Review agent reads the brief again. -> its new review, or None
-        when the rewrite failed and the review before it stands."""
+        when the rewrite failed and the review before it stands. `purpose` None: no second review (the check
+        loop's own reading stands), -> `rv` as it was."""
         rl = self.caps.runlog
         parts = [x["part"] for x in revise]
         before = dict(self.whole)  # the brief the review in hand was written about
@@ -792,7 +851,7 @@ class PlannedBriefJob(BriefJob):
                 self.whole[k] = v
             rl.note("revised", parts=sorted(got))
             self.set_state(parts, "judging", "judge")
-            return self._review(ev, purpose)
+            return self._review(ev, purpose) if purpose else rv
         except Exception as e:  # noqa: BLE001 - the review before stands, so does the brief it read
             self.whole.clear()
             self.whole.update(before)
@@ -800,17 +859,20 @@ class PlannedBriefJob(BriefJob):
             return None
 
     def _judge_by_jev(self, ev):
-        """The check loop on the whole draft: jev flags, the Review agent says why, the Brief agent rewrites; then the
-        brief is placed with jev's reading as the review."""
+        """The check loop on the whole draft: jev flags, the Review agent says why (and judges the skill's tests),
+        code sends back what it measures, the Brief agent rewrites; what code still measures goes back once more;
+        then the brief is placed with jev's reading as the review."""
         from . import checkloop
         values = {k: v["value"] for k, v in self.whole.items()}
         for k in KEYS:
             if k not in values and filled(get(self.W, k)):
                 values[k] = get(self.W, k)
         keys = self._open_keys()
+        code = {x["part"]: x["instruction"] for x in self._code_sent_back()}
         res = checkloop.run(self, values, self._said(), keys, ev, self._library(12), self.plan_out,
                             clean=lambda out, ks: self._clean(out, ev, "check", keys=ks, prior=self._prior(ks)),
-                            claims={k: v.get("claims") or [] for k, v in self.whole.items()})
+                            claims={k: v.get("claims") or [] for k, v in self.whole.items()},
+                            code=code, tests=checks.tests(list(self.whole)), part_checks=checks.facts(self.whole))
         if res["rewritten"]:
             self.set_state(list(res["rewritten"]), "revising", "drafter")
         for k, v in res["rewritten"].items():
@@ -820,7 +882,12 @@ class PlannedBriefJob(BriefJob):
         self.set_state(list(self.whole), "judging", "judge")
         read = res["after"] or res["before"]
         if read is None:  # jev did not answer: the Review agent reviews the whole brief as before
-            return self._place(self._review(ev, "review_brief"), ev)
+            return self._judge_by_review(ev)
+        # what code can still measure after the loop's rewrite goes back once more, as in the review path
+        left = self._code_sent_back(note="checks_sent_back_again")
+        if left:
+            self._rewrite(left, {}, ev, None)
+            self.set_state(list(self.whole), "judging", "judge")
         chain = (res["jude"] or {}).get("chain") or {}
         notes = [{"parts": [p for p in chain.get("parts") or [] if p in KEYS], "severity": "fix",
                   "note": chain["issue"]}] if chain.get("issue") and chain.get("parts") and self._note_stands(res) else []
@@ -830,12 +897,29 @@ class PlannedBriefJob(BriefJob):
                                                        else "jev doubts the argument holds")},
               "claims": prov.code_verdicts(self.whole), "notes": notes, "revise": [],
               "questions": res["questions"],
-              "single_mindedness": {"verdict": "single", "split_into": []},
+              "single_mindedness": self._single_minded(res),
               "summary": (f"A quick check read every part and flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)}"
-                          f"; the Review agent sent {len(res['todo'])} back to the Brief agent, who rewrote {len(res['rewritten'])}.")
+                          f"; the Review agent and code's checks sent {len(res['todo'])} back to the Brief agent, who rewrote "
+                          f"{len(res['rewritten'])}" + (f"; code sent {len(left)} back again" if left else "") + ".")
               if res["before"] else "Checked."}
         self.scores = [x["score"] for x in (res["before"], res["after"]) if x]
         self._place(rv, ev)
+
+    def _single_minded(self, res):
+        """single_mindedness under jev: "multiple" when code still finds a standalone 'and' or several sentences in
+        the proposition after the rewrites; else the Review agent's verdict when the loop asked it; else "unchecked"
+        (nothing judged it: jev flagged nothing and code sent nothing back, so no Review agent call was made)."""
+        f = checks.facts(self.whole).get("single_minded_proposition") or {}
+        if f.get("standalone_and") or f.get("sentences", 0) > 1:
+            out = {"verdict": "multiple", "split_into": []}
+        else:
+            sm = (res.get("jude") or {}).get("single_mindedness") or {}
+            out = ({"verdict": sm["verdict"], "split_into": [str(x) for x in sm.get("split_into") or []]}
+                   if sm.get("verdict") in ("single", "multiple") else {"verdict": "unchecked", "split_into": []})
+        self.caps.runlog.note("single_mindedness", verdict=out["verdict"],
+                              by="code" if f.get("standalone_and") or f.get("sentences", 0) > 1
+                              else "review" if out["verdict"] != "unchecked" else "none")
+        return out
 
     # -- the loop as it happened -----------------------------------------------------------------
     def _sent_back(self, k, v, instruction, why):

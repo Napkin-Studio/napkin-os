@@ -599,7 +599,7 @@
   .redge::after{content:"";position:absolute;left:3px;top:0;bottom:0;width:2px;border-radius:1px;background:var(--brief-accent)}
   .row:hover > .grip,.row.sel > .grip,.row:hover > .redge,.row.sel > .redge,.grip:focus-visible,.redge:focus-visible{opacity:1}
   .row.resizing{box-shadow:inset 0 0 0 1.5px var(--brief-accent)}
-  /* Confidential (owner, 9 Nov): a hatch and a tag; the client copy leaves the part out. */
+  /* Confidential (owner, 9 Nov; meaning 13 Nov): a hatch and a tag. Napkin never learns from the part; the client copy shows it. */
   .pgrid > .row.conf{background-image:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--ink) 6%,transparent) 7px 8px)}
   .conftag{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;line-height:16px;padding:0 7px;border-radius:var(--r-pill);border:1px solid currentColor;color:var(--ink2);opacity:.85}
   .sp-acts button.sp-conf[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
@@ -734,9 +734,11 @@
 
   /* the desk: an A4-ish sheet (860) and the 440 side tab, 32 apart, 28 under the bar */
   .app.wide{max-width:none;padding-left:0;padding-right:0}
-  #structured .bdesk{grid-template-columns:minmax(0,860px) minmax(320px,440px);gap:32px;justify-content:center;align-items:start;margin-top:0;padding:28px 16px 40px}
-  @media (max-width:1400px){ #structured .bdesk{grid-template-columns:minmax(0,860px) 380px;gap:24px} }
-  @media (max-width:1260px){ #structured .bdesk{grid-template-columns:minmax(0,860px) 350px;gap:20px} }
+  /* --trk is the Booth's column: the selection's width (--bw, set by boothApply: whole brief 420, a part 440),
+     narrower windows today's 380 and 350 (features/booth.clan) */
+  #structured .bdesk{--trk:var(--bw,440px);grid-template-columns:minmax(0,860px) var(--trk);gap:32px;justify-content:center;align-items:start;margin-top:0;padding:28px 16px 40px}
+  @media (max-width:1400px){ #structured .bdesk{--trk:380px;gap:24px} }
+  @media (max-width:1260px){ #structured .bdesk{--trk:350px;gap:20px} }
   @media (max-width:1100px){ #structured .bdesk{grid-template-columns:minmax(0,1fr)} }
   #structured .sheetcol{padding-top:16px}
 
@@ -834,6 +836,16 @@
   .sheet.a4 .pgrid > .row.needs::before{content:"Needs your call";position:absolute;top:14px;right:10px;padding:2px 8px;border-radius:999px;background:#B45309;color:#fff;font:700 9.5px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;z-index:2}
   .sheet.a4 .pgrid > .row.needs .lab{padding-right:130px}
   .sheet.a4 .pgrid > .row.needs:hover{background-color:color-mix(in srgb,#B45309 11%,transparent)}
+  /* Draft it again, in place (napkin-app-v1 .brief-page.all-working, features/brief-redraft-in-place): a part
+     the run is writing sweeps with the accent and dims, until the run ends. */
+  @keyframes aw-sheen{from{background-position:150% 0}to{background-position:-50% 0}}
+  #fields .row.working{background-image:linear-gradient(100deg,transparent 30%,color-mix(in srgb,var(--accent) 6%,transparent) 50%,transparent 70%);background-size:200% 100%;animation:aw-sheen 1.4s linear infinite}
+  #fields .row.working > *{opacity:.55;transition:opacity .3s}
+  @media (prefers-reduced-motion: reduce){#fields .row.working{animation:none;background-image:none}}
+  .side-stop{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px 14px;padding:8px 0 10px;border-bottom:1px solid var(--nd-line,var(--line))}
+  .side-stop[hidden]{display:none}
+  .side-stop.at-agent{position:absolute;top:58px;right:18px;padding:0;border:0}   /* beside the agent, as the mock's agent card */
+  .side-stop .stopq{flex-basis:100%;font:13px/1.35 var(--font-ui);color:var(--nd-muted,var(--ink2))}
   .sheet.a4 .pgrid > .row.needs.sel{background-color:color-mix(in srgb,#B45309 7%,transparent);box-shadow:inset 3px 0 0 #B45309,inset 0 0 0 1px color-mix(in srgb,#B45309 45%,transparent)}
   /* Why notes: hidden on the sheet unless the side tab says Show all (layout.why) */
   .sheet.a4:not(.why-show) .prov,.sheet.a4:not(.why-show) .org,.sheet.a4:not(.why-show) .row > .why{display:none!important}
@@ -1066,6 +1078,13 @@
   .b-up ul{margin:0 12px 8px 28px;display:grid;gap:4px;font-size:12.5px;line-height:1.45;color:var(--nd-ink-soft)}
   .b-up ul .m{color:var(--nd-muted)}
   .b-up-acts{display:flex;gap:10px;align-items:center;padding:0 12px 12px}
+  /* a research linked into the brief: what came in, and one press to write it again with it */
+  .lk-h{display:flex;align-items:center;gap:8px;padding:10px 12px 0;font:600 13px/1.55 var(--font-ui);color:var(--nd-ink)}
+  .lk-h i{width:7px;height:7px;border-radius:50%;background:var(--ag-base);flex:none}
+  :root[data-color-scheme="dark"] .lk-h i{background:var(--ag-acc)}
+  .lknote .b-up-m{margin:6px 12px 10px;font-size:12.5px}
+  .lknote .lk-small{margin-top:-2px;font-size:11.5px}
+  #fields .lk-chg{background:color-mix(in srgb,var(--clf-hl) 55%,transparent)}
   /* the state chip when locked */
   #structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
   /* Record the client's answer */
@@ -1411,6 +1430,49 @@
   @media (max-width:880px){ .paperc{max-width:none} }
   @media (max-width:760px){ .ahead{grid-template-columns:1fr;position:relative} .ahead-right{justify-content:space-between} .flow > li.fl-crew{position:static} }
   @media (max-width:520px){ .app.p-start{padding:0 16px 40px} .paperc{padding:18px} }
+  /* ── the Booth (features/booth.clan; mock panel-v3, B · Full): the side tab hides to the window's right
+     edge and comes back. It never floats over the sheet: its column closes and the sheet recentres alone;
+     opening, the column opens and the sheet moves left to make room. Below 1100px nothing hides. ── */
+  :root{--booth-dur:460ms;--booth-ease:cubic-bezier(.2,.7,.2,1)}
+  #structured .stab > .booth-hd{display:flex;align-items:center;gap:8px;margin:-18px -18px 0;padding:9px 10px 9px 18px;border-bottom:1px solid var(--nd-line)}
+  #structured .stab > .booth-hd + .side-agent{margin-top:-16px}
+  .booth-hd .booth-nm{font:500 10.5px var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--nd-muted)}
+  .booth-hd .booth-sp{flex:1}
+  #structured .booth-hd .booth-hide{all:unset;box-sizing:border-box;cursor:pointer;height:30px;padding:0 10px 0 12px;border-radius:999px;border:1px solid var(--nd-line);display:inline-flex;align-items:center;gap:6px;color:var(--nd-ink-soft);flex:none;font:500 12px var(--font-ui);background:var(--nd-paper)}
+  #structured .booth-hd .booth-hide svg{width:14px;height:14px}
+  #structured .booth-hd .booth-hide:hover{background:color-mix(in srgb,var(--ag-base) 8%,var(--nd-paper));color:var(--nd-ink);border-color:color-mix(in srgb,var(--ag-base) 30%,var(--nd-line))}
+  #structured .booth-hd .booth-hide:focus-visible{outline:2px solid var(--ag-base)}
+  .booth-edge{all:unset;box-sizing:border-box;cursor:pointer;position:fixed;right:var(--clan-right,0px);top:calc(var(--clan-top,0px) + 56px);z-index:40;width:38px;padding:14px 0 16px;
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    border:1px solid var(--nd-line);border-right:0;border-radius:9px 0 0 9px;background:var(--nd-paper);color:var(--nd-ink-soft);
+    box-shadow:-1px 0 0 color-mix(in srgb,var(--ag-base) 18%,transparent);
+    transform:translate(0,0);transition:transform .32s var(--booth-ease) .14s,opacity .2s ease .14s,width .18s var(--booth-ease),color .15s,visibility 0s}
+  .booth-edge:hover{width:44px;color:var(--nd-ink);border-color:color-mix(in srgb,var(--ag-base) 25%,var(--nd-line))}
+  .booth-edge:focus-visible{outline:2px solid var(--ag-base);outline-offset:2px}
+  .booth-edge .booth-lb{writing-mode:vertical-rl;transform:rotate(180deg);font:600 12px var(--font-mono);letter-spacing:.2em;text-transform:uppercase}
+  .booth-edge svg{flex:none;width:16px;height:16px}
+  .booth-edge .booth-ct{position:absolute;left:-7px;top:-7px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--nd-warn);color:#fff;font:600 9.5px/15px var(--font-ui);text-align:center;border:1.5px solid var(--nd-desk);display:none;box-sizing:border-box}
+  .booth-edge.has .booth-ct{display:block}
+  .booth-edge.ping .booth-ct{animation:booth-ping 1.1s var(--booth-ease) 2}
+  @keyframes booth-ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--nd-warn) 45%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
+  body:not(.booth-folded) .booth-edge{transform:translate(110%,0);opacity:0;visibility:hidden;pointer-events:none;transition:transform .2s var(--booth-ease),opacity .15s ease,visibility 0s linear .2s}
+  @media (min-width:1101px){
+    #structured{overflow-x:clip}
+    #structured .bdesk{transition:grid-template-columns var(--booth-dur) var(--booth-ease),gap var(--booth-dur) var(--booth-ease)}
+    #structured .bdesk > .stab{width:var(--trk);transition:transform var(--booth-dur) var(--booth-ease),opacity .3s ease .06s,visibility 0s}
+    #structured .bdesk.booth-off{grid-template-columns:minmax(0,860px) 0px;gap:0}
+    #structured .bdesk.booth-off > .stab{opacity:0;visibility:hidden;pointer-events:none;transform:translateX(28px);transition:transform var(--booth-dur) var(--booth-ease),opacity .22s ease,visibility 0s linear var(--booth-dur)}
+  }
+  @media (max-width:1100px){ .booth-edge,#structured .booth-hd .booth-hide{display:none} }
+  #structured .bdesk.booth-instant,#structured .bdesk.booth-instant > .stab,.booth-edge.booth-instant{transition:none!important}
+  /* reduced motion: a short fade, nothing moves */
+  @media (prefers-reduced-motion:reduce){
+    #structured .bdesk{transition:none!important}
+    #structured .bdesk > .stab{transform:none!important;transition:opacity .15s ease,visibility 0s!important}
+    #structured .bdesk.booth-off > .stab{transition:opacity .15s ease,visibility 0s linear .15s!important}
+    .booth-edge,body:not(.booth-folded) .booth-edge{transform:none!important;transition:opacity .15s ease,visibility 0s!important}
+    .booth-edge.ping .booth-ct{animation:none}
+  }
 </style>
 <!-- @napkin:clan-fields -->
 <!-- @napkin:source-card -->
@@ -1455,7 +1517,7 @@
           <label class="attach" title="Add the client’s files"><span aria-hidden="true">+</span><span class="sr">Add the client’s files</span><input type="file" class="sr" id="addAny" multiple /></label>
           <span class="cfoot-hint">Drop decks, PDFs, brand books, or voice notes.</span>
         </div>
-        <button type="button" class="go" id="genBtn">Write the brief</button>
+        <button type="button" class="go" id="genBtn" disabled>Write the brief</button>
       </div>
       <div class="note" id="intakeStatus" role="status"></div>
       <div class="nomw" id="noMw" hidden></div>
@@ -1511,8 +1573,10 @@
         </article>
       </div>
 
-      <aside class="stab" id="stab" aria-label="The brief’s controls">
+      <aside class="stab" id="stab" aria-label="Booth: the brief’s controls">
+        <div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span><button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="true" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>
         <div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden></div>
+        <div class="side-stop" id="sideStop" hidden></div>
         <!-- One thing at a time (features/brief-new-ui.clan, the side tab design): the BRIEF view while
              nothing is selected, the PART view (#selPart) while a part is. Never both. -->
         <div class="bview" id="briefView">
@@ -1520,6 +1584,7 @@
             <div class="b-state" id="bState"><b>Brief<span class="pill" id="statusPill" role="status"></span></b><span class="b-state-t" id="stateLine"></span></div>
             <span class="muted status" id="status" role="status"></span>
           </div>
+          <div class="upnote lknote" id="linkNote" role="status" hidden></div>
           <div class="upnote" id="upNote" role="status" hidden></div>
           <div class="locklist" id="lockList" hidden></div>
           <div class="b-lockslot">
@@ -1575,6 +1640,8 @@
   <footer class="foot"><span>Nothing gets lost.</span><span class="dot"></span><span>Every brief stored and searchable.</span></footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- the hidden Booth: a tab on the window's right edge (features/booth.clan) -->
+<button type="button" class="booth-edge" id="boothEdge" aria-controls="stab" aria-expanded="true" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="-1"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span><span class="booth-ct" id="boothCt"></span></button>
 <div class="dropveil" id="dropveil" hidden>Drop to add to your brief</div>
 
 <!-- @napkin:agent-sphere -->
@@ -1652,7 +1719,8 @@
   function style(){ return 'basic'; }
   function lockedList(){ var l=get('locked_fields'); return Array.isArray(l)?l:[]; }
   function isLocked(k){ return lockedList().indexOf(k)!==-1; }
-  // Confidential parts (owner, 9 Nov): kept in the agency's copies, left out of the client copy.
+  // Confidential parts (owner, 2026-11-13): Napkin's systems never learn from them (no knowledge layer, RAG,
+  // harvest, eval or training). The agency and the client see them in full, in every copy.
   function confList(){ return arr(get('confidential_fields')).filter(function(k){ return typeof k==='string'; }); }
   function isConf(k){ return confList().indexOf(k)!==-1; }
   var forceIntake=false, handWrite=false, phase='intake';
@@ -1712,6 +1780,23 @@
     mandatories:'mandatories, mandatory, must include',
     open_questions:'open questions, questions'
   };
+  // Feedback by pointing at it (the dogfood build; features/feedback-point.clan): the shared
+  // snippet outlines what is under the cursor and asks this page to name it. A brief part is
+  // named by its heading, from its row or from a tile in the side panel that stands for it.
+  function feedbackTarget(el){
+    if(!el||!el.closest) return null;
+    var row=el.closest('#fields .row[data-clan-part]'), clip=function(s){ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>80?s.slice(0,79)+'…':s; };
+    if(row){ var h=row.querySelector('.lab > span'), k=row.getAttribute('data-clan-part');
+      return {kind:'part', id:k, label:clip(h&&h.textContent||row.getAttribute('data-clan-part-label')||k), el:row}; }
+    var tile=el.closest('.tile[data-key]');
+    if(tile){ var key=tile.getAttribute('data-key'), f=FIELDS.filter(function(x){ return x.key===key; })[0];
+      return {kind:'part', id:key, label:clip(f?headOf(f):tile.textContent), el:tile}; }
+    return null;
+  }
+  window.ClanFeedbackTarget=feedbackTarget;
+  // The brief's own version and title for the note card ("Brief v1 · Welcome Back, Barista").
+  function feedbackDoc(){ return {version:docVersion(), title:String(get('project_name')||'').trim()||derivedTitle()}; }
+  window.ClanFeedbackDoc=feedbackDoc;
   function partLabel(f){
     if(f.sec==='Objectives') return f.label+' objective';
     if(f.sec==='Desired response') return 'What they should '+f.label.toLowerCase();
@@ -1790,7 +1875,7 @@
       fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
         .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
         .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
-        .then(function(){ chainMoved(); if(phase!=='doc') return; refreshWhy();
+        .then(function(){ chainMoved(); if(phase!=='doc') return; refreshWhy(); renderLinkNote();
           // The selected part's calls follow the chain, unless someone is typing in the panel.
           var sp=$('selPart'); if(sp&&sp.contains(document.activeElement)) renderProv(); else renderSelPart(); });
     }, 120);
@@ -2212,7 +2297,7 @@
   }
   function gridCell(c, ctx){
     var v=ctx.get(c.key), has=gridHas(v), mk=exportMarkHtml((ctx.cit.marks||{})[c.key]);
-    var cf=arr(ctx.conf).indexOf(c.key)!==-1;   // a confidential part: hatched and tagged in this, an agency copy
+    var cf=arr(ctx.conf).indexOf(c.key)!==-1;   // a confidential part: hatched and tagged in the agency copy
     var step=gridStep(gridWords(v), gridLimit(c.key)), cls='box'+(c.kind==='hero'?' dark':'')+(step?' fit'+step:'')+(cf?' conf':'');
     var tab='<div class="lab"><b>'+esc(c.num)+'</b>'+esc(c.label)+(cf?'<span class="cf">Confidential</span>':'')+'</div>', body, missing='<p class="todo">Missing: ask the Brief agent to write this part.</p>';
     if(c.kind==='sources'){
@@ -2731,6 +2816,7 @@
     document.querySelector('.app').classList.toggle('p-start', p!=='doc');
     document.querySelector('.app').classList.toggle('p-intake', p==='intake');
     if(p!=='doc') SEL=null;
+    boothApply(false);   // the edge tab is the open sheet's only
     sendBar();
   }
   function render(){
@@ -2757,7 +2843,9 @@
   function renderIntake(){
     buildIntroCrew(); syncKind(); renderFromUp();
     var nm=$('noMw'), off=noMiddleware();
-    nm.hidden=!off; $('genBtn').disabled=off;
+    // The button is drawn disabled and turned on here, once its click is wired: a page still
+    // loading must not offer a press that does nothing (UAT round 5).
+    nm.hidden=!off; genOff();
     if(off){
       nm.innerHTML=fig('drafter',{decorative:true})+say('drafter', esc(NO_MW)+'<span class="answers"><button type="button" id="handBtn">Write it by hand</button></span>','left');
       $('handBtn').addEventListener('click',function(){ handWrite=true; forceIntake=false; render(); });
@@ -2835,17 +2923,51 @@
 
   function fileType(f){var m=f.type||'';return m.indexOf('image/')===0?'image':m.indexOf('audio/')===0?'audio':m.indexOf('video/')===0?'video':'document';}
   function uploadFiles(input, statusEl){ uploadList(input.files, statusEl, function(){ input.value=''; }); }
+  // While files go up, Write the brief waits: a draft started now would go without them. A file that
+  // could not be added is named, with why; "Adding…" never stays (UAT attachment journeys, 2026-11-12).
+  var UPLOADING=0;
+  function genOff(){ var g=$('genBtn'); if(g) g.disabled=noMiddleware()||UPLOADING>0; }
+  function upWhy(res, file){
+    var e=res&&res.error; if(e&&typeof e==='object') e=e.message||e.type;
+    return e?String(e):'the studio did not take '+(file.name||'it');
+  }
+  // What the agents read: the text the host extracts (crates/napkin-host/src/ops/mod.rs extract_text), and
+  // pictures, which they look at. Anything else is kept with the brief but not read, and the person is told
+  // when they add it, before a run is paid for (owner, 2026-11-12, UAT round 7).
+  var READ_EXT=/^(txt|text|md|markdown|csv|tsv|json|ya?ml|log|pdf|docx|pptx|png|jpe?g|gif|webp)$/;
+  function unreadNote(names){
+    if(!names.length) return '';
+    var exts=[]; names.forEach(function(n){ var e=(n.split('.').length>1?n.split('.').pop():'').toLowerCase(); if(exts.indexOf(e)===-1) exts.push(e); });
+    var what=exts.map(function(e){ return e?'.'+e:'files without a type'; }).join(' or ');
+    return names.join(', ')+(names.length===1?' is':' are')+' added, but the agents can’t read '+what+(exts.length===1&&exts[0]?' files':'')
+      +'. They read PDF, Word, PowerPoint, pictures and text.';
+  }
   function uploadList(list, statusEl, done){
     var files=Array.prototype.slice.call(list||[]); if(!files.length) return;
-    if(statusEl) statusEl.textContent='Adding '+files.length+' '+(files.length===1?'file':'files')+'…';
+    var failed=[], unread=[];
+    UPLOADING++; genOff();
+    if(statusEl){ statusEl.classList.remove('err'); statusEl.textContent='Adding '+files.length+' '+(files.length===1?'file':'files')+'…'; }
     files.reduce(function(p,file,i){return p.then(function(){
+      if(!file.size){ failed.push(file.name+' (it is empty)'); return; }
       var type=fileType(file), ext=(file.name.split('.').pop()||'bin').replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
       var name=type+'-'+Date.now()+'-'+i+'.'+ext;
       return file.arrayBuffer().then(function(buf){ return sha256Hex(buf).then(function(h){
           return fetch(clanScheme+'/upload-asset?name='+encodeURIComponent(name)+'&agent=human',{method:'POST',body:buf})
-            .then(function(r){return r.json();}).then(function(res){if(res&&res.internal_path){var n=(data().reference_assets||[]).slice();n.push({type:type,name:name,path:res.internal_path,label:file.name,sha256:h,media_type:mediaTypeOf(file.name,file.type)});patch('reference_assets',n);}});
-        }); });
-    });},Promise.resolve()).then(function(){if(statusEl)statusEl.textContent='';if(done)done();});
+            .then(function(r){return r.json().catch(function(){ return {error:'the studio answered '+r.status}; });}).then(function(res){
+              if(!(res&&res.internal_path)){ failed.push(file.name+' ('+upWhy(res, file)+')'); return; }
+              if(!READ_EXT.test(ext)) unread.push(file.name);
+              var n=(data().reference_assets||[]).slice();n.push({type:type,name:name,path:res.internal_path,label:file.name,sha256:h,media_type:mediaTypeOf(file.name,file.type)});
+              return patch('reference_assets',n);
+            });
+        }); }).catch(function(e){ failed.push(file.name+' ('+(e&&e.message||e)+')'); });
+    });},Promise.resolve()).then(function(){
+      UPLOADING=Math.max(0,UPLOADING-1); genOff();
+      if(statusEl){
+        statusEl.textContent=[failed.length?'Could not add '+failed.join(', ')+'.':'', unreadNote(unread)].filter(Boolean).join(' ');
+        statusEl.classList.toggle('err', !!failed.length);
+      }
+      if(done) done();
+    });
   }
   $('addAny').addEventListener('change',function(){ uploadFiles(this, $('intakeStatus')); });
   // Files dropped anywhere on the page are added, as the attach button adds
@@ -2881,11 +3003,16 @@
   function noMiddleware(){ return MW.configured===false; }
   var NO_MW='This workspace has no middleware set up, so the agents can’t write here. You can still write the brief by hand.';
   function mwBody(res){ return (res && typeof res==='object' && 'ok' in res && 'data' in res)?res.data:res; }
+  // A job the middleware no longer knows (404 unknown_job): jobs live in its memory, so a restart
+  // (a deploy) ends every run in flight. The run is over; say so and offer it again.
+  var INTERRUPTED='This run was interrupted (the service restarted). Run it again.';
+  function interrupted(res){ return !!(res&&res.error&&typeof res.error==='object'&&res.error.type==='unknown_job'); }
   function hostErr(res){
     if(!res) return 'Empty reply from the host.';
     if(res.error){
       var e=res.error, st=res.status&&res.status!==200?' ('+res.status+')':'';
       if(e&&e.type==='no_middleware'){ MW.configured=false; return NO_MW; }
+      if(interrupted(res)) return INTERRUPTED;
       return typeof e==='string'?e+st:(e.type?e.type+st+': ':'')+(e.message||JSON.stringify(e));
     }
     if(res.ok===false) return 'The host could not complete the call'+(res.status?' (status '+res.status+')':'')+'. Nothing was applied.';
@@ -2893,9 +3020,6 @@
     if(!b||typeof b!=='object'||b.api!==MW_API) return 'Not a '+MW_API+' reply'+(b&&b.api?' (got '+b.api+')':'')+'. Nothing was applied.';
     return null;
   }
-  function store(k, v){ try{ if(v==null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); }catch(e){} }
-  function stored(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }
-  function jobKey(task, field){ return 'clan.brief.job.'+docId()+'.'+task+(field?'.'+field:''); }
   // One job: {task, field, id, state, stage, progress, fields, proposals,
   // summary, error, applied, reason}. `onUpdate` re-draws whatever shows it.
   function runJob(j, input){
@@ -2904,7 +3028,7 @@
   }
   function onJobReply(j, res){
     var err=hostErr(res);
-    if(err){ j.error=err; if(j.state==='sending'||j.state==='checking') j.state='unsent'; else j.state='stalled'; endJob(j); return; }
+    if(err){ j.error=err; j.interrupted=interrupted(res); j.state=j.interrupted?'failed':j.state==='sending'||j.state==='checking'?'unsent':'stalled'; endJob(j); return; }
     var b=mwBody(res);
     j.error=null;
     if(b.job&&typeof b.job==='object'){
@@ -2922,7 +3046,6 @@
       if(Array.isArray(b.result.proposals)){ j.proposals=b.result.proposals; LAST_PROPOSALS=b.result.proposals; }
     }
     if(b.change&&typeof b.change==='object'){ j.applied=landed(b.change); j.reason=b.change.reason; if(j.applied){ loadChain(); render(); } }
-    if(j.id) store(jobKey(j.task,j.field), (j.state==='queued'||j.state==='running'||j.state==='needs_input')?j.id:null);
     if(j.state==='queued'||j.state==='running'||j.state==='needs_input'){ j.onUpdate(j); clearTimeout(j.t); j.t=setTimeout(function(){ pollJob(j); }, j.delay); j.delay=Math.min(Math.round(j.delay*1.4), 5000); }
     else endJob(j);
   }
@@ -2935,7 +3058,7 @@
     window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:j.id}}).then(function(r){ onJobReply(j, r); }, function(e){ unreachable(j, e); });
   }
   function unreachable(j, e){ j.error='The middleware could not be reached: '+(e&&e.message||e); j.state=j.state==='sending'?'unsent':'stalled'; endJob(j); }
-  function endJob(j){ store(jobKey(j.task,j.field), null); loadChain(); j.onEnd(j); }
+  function endJob(j){ loadChain(); j.onEnd(j); }
   // The planner's answers to intake's questions ({question id: text, or null to skip}; {} skips them all).
   // The reply is the job's, as a poll's. A refusal (the wait ran out, the job went on) is not the job's
   // end: say so and keep polling.
@@ -3164,11 +3287,12 @@
     $('tilesSum').textContent='See each part as it is written · '+written+' of '+FIELDS.length;
     // Stop: a person may cancel it at any stage (cancel_job); what the crew already sent stays.
     var acts=$('procActs'), canStop=live&&j.id&&j.state!=='checking';
-    acts.innerHTML=canStop?(j.stopAsk?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="sp-btn" id="procStopYes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="sp-btn" id="procStopNo"'+(j.stopping?' disabled':'')+'>Keep going</button>'
+    acts.innerHTML=j.interrupted&&!live?'<button type="button" class="sp-btn" id="procAgain">Run it again</button>':canStop?(j.stopAsk?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="sp-btn" id="procStopYes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="sp-btn" id="procStopNo"'+(j.stopping?' disabled':'')+'>Keep going</button>'
       :'<button type="button" class="sp-btn" id="procStop">Stop</button>'):'';
     var stp=$('procStop'); if(stp) stp.addEventListener('click',function(){ j.stopAsk=true; renderProc(); var y=$('procStopYes'); if(y) y.focus(); });
     var sno=$('procStopNo'); if(sno) sno.addEventListener('click',function(){ j.stopAsk=false; renderProc(); });
     var syes=$('procStopYes'); if(syes) syes.addEventListener('click',function(){ cancelJob(j); });
+    var again=$('procAgain'); if(again) again.addEventListener('click',function(){ if(DRAFT===j) DRAFT=null; draftNow(''); });
     syncHead(); sendBar();
   }
   // ---------- the agent asks, on the one screen (owner, 2026-11-09) ----------
@@ -3260,12 +3384,26 @@
   // (No skipping a live run: the sheet opens when the run ends.)
   // (the mock's Skip: the sheet at once, its parts arriving as the crew write them)
   function draftLive(){ var j=DRAFT; return !!j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input'); }
-  function startDraft(prompt, atts, resumeId){
-    var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
+  // In place (Draft it again on a drafted brief, features/brief-redraft-in-place): the same job and the same
+  // polling, but the sheet stays on screen. Each part the run is writing sweeps (markSweep), the agent at work
+  // is in the side panel (sideAgent), and the agents ask nothing (intake false: their defaults apply).
+  function startDraft(prompt, atts, resumeId, inPlace){
+    var j=DRAFT={task:'draft_brief', fields:{}, inPlace:!!inPlace, onUpdate:inPlace?draftInPlace:renderProc, onEnd:function(j){
+      linkRunEnded(j);
+      if(j.inPlace){
+        if(DRAFT===j) DRAFT=null;
+        if(j.state!=='done'&&j.error) toast(j.error);
+        render(); draftInPlace(j); return;
+      }
       renderProc();
       if(j.state==='done') setTimeout(function(){ if(DRAFT!==j) return; DRAFT=null; forceIntake=false; setPhase('doc'); render(); window.scrollTo(0,0); }, reduce?200:1100);
     }};
     if(!resumeId) j.sent={words:!!String(prompt||'').trim(), files:arr(atts).length};
+    if(inPlace){
+      if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; pollJob(j); }
+      else runJob(j, {prompt:prompt, attachments:atts, intake:false, redraft:true});
+      draftInPlace(j); return;
+    }
     setPhase('proc'); window.scrollTo(0,0);
     if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; renderProc(); pollJob(j); return; }
     runJob(j, {prompt:prompt, attachments:atts, intake:true});  // the planner is here to answer: ask first (§10.1)
@@ -3329,29 +3467,62 @@
   // A draft: the planner's words (else the ask already recorded, else, in a
   // brief started from research, the ask that started the research) and the
   // client's files, the ones that came with the research included.
-  function draftNow(prompt){
+  // `inPlace`: Draft it again on the sheet (startDraft). A first draft from the ask goes to the Agents screen.
+  function draftNow(prompt, inPlace){
     var typed=!!prompt, ask=prompt||String(get('brief_input')||'').trim()||(isResearchFed()?upPrompt():'');
     if(!window.clan){ $('intakeStatus').textContent='No host bridge — open this inside the studio.'; return; }
-    if(draftLive()){ setPhase('proc'); renderProc(); return; }   // one draft at a time: back to the crew at work
+    if(draftLive()){ if(!DRAFT.inPlace){ setPhase('proc'); renderProc(); } return; }   // one draft at a time: back to the crew at work, or the sheet it is writing
     if(noMiddleware()){ renderIntake(); return; }
     if(!ask&&!(data().reference_assets||[]).length&&!upMaterials().length){ $('intakeStatus').textContent='Say what the brief is, or attach the client’s material.'; return; }
     $('intakeStatus').classList.remove('err'); $('intakeStatus').textContent='';
     // The ask is the planner's own words: theirs to write.
     var why=typed||!isResearchFed()?'The ask, in the planner’s words':'The ask that started the research “'+(upTitle()||'it')+'”, in the planner’s words';
     var ready=(ask&&ask!==get('brief_input'))?Promise.resolve(patch('brief_input',ask,{actor:'human',pinned:false,action:'edit brief_input',rationale:why})):Promise.resolve();
-    ready.then(attachmentsFor).then(function(atts){ startDraft(ask, atts); })
+    ready.then(attachmentsFor).then(function(atts){ startDraft(ask, atts, null, !!inPlace&&phase==='doc'); })
       .catch(function(e){ $('intakeStatus').textContent='Could not read the attachments: '+(e&&e.message||e); $('intakeStatus').classList.add('err'); });
   }
   $('genBtn').addEventListener('click',function(){ draftNow($('prompt').value.trim()); });
 
-  // On open: pick up a job this tab started on this document, with one free poll.
-  function resumeJobs(){
-    if(!(window.clan&&window.clan.apiProxy)) return;
-    var id=stored(jobKey('draft_brief'));
-    if(id) startDraft('', [], id);
-    FIELDS.forEach(function(f){ var rid=stored(jobKey('regenerate_field', f.key)); if(rid) regenField(f, '', rid); });
-    var fid=stored(jobKey('fix_parts')); if(fid) fixParts('', fid);
+  // On open, and while the brief is open: the runs still going on it. The shell says which of the
+  // document's jobs the host has not seen finish (clan:jobs, ids only), on load and whenever its
+  // listing changes. Each id this page is not already polling gets one free job_status poll, whose
+  // reply names the job's task; a live draft goes back to the Agents screen (questions and all), or in
+  // place on a drafted brief (a redraft, features/brief-redraft-in-place), a
+  // redraft or a fix back to its row, and from then on this page polls it, so a finished run lands
+  // without leaving (the shell's settler skips the open document). The page used to keep the ids in
+  // sessionStorage, but the frame is sandboxed without allow-same-origin, so storage always threw.
+  var SEEN_JOBS={};
+  var LIVE_JOB={queued:1, running:1, needs_input:1};
+  function ownJob(id){
+    if(DRAFT&&DRAFT.id===id||FIX&&FIX.id===id) return true;
+    return Object.keys(REGEN).some(function(k){ return REGEN[k]&&REGEN[k].id===id; });
   }
+  function resumeJobs(ids){
+    if(!(window.clan&&window.clan.apiProxy)) return;
+    arr(ids).forEach(function(id){
+      if(typeof id!=='string'||!id||SEEN_JOBS[id]||ownJob(id)) return;
+      SEEN_JOBS[id]=1;
+      window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:id}}).then(function(r){ resumeJob(id, r); }, function(){ delete SEEN_JOBS[id]; });
+    });
+  }
+  // A redraft's field: the one part its reply has in flight (the rest are kept, done or absent).
+  function regenFieldOf(b){
+    var fs=b.result&&b.result.fields||{}, at=Object.keys(fs).filter(function(k){ return fs[k]&&(fs[k].state==='waiting'||BUSY[fs[k].state]); });
+    return at.length===1?fieldOf(at[0]):null;
+  }
+  function resumeJob(id, r){
+    if(hostErr(r)||ownJob(id)) return;
+    var b=mwBody(r), st=b.job&&b.job.state;
+    if(!LIVE_JOB[st]){ loadChain(); return; }   // it ended: the host applied what the reply carried
+    // a redraft on the sheet comes back in place; a first draft (or one asking its questions) to the Agents screen
+    if(b.task==='draft_brief'){ if(!DRAFT) startDraft('', [], id, st!=='needs_input'&&phase==='doc'&&hasContent()); }
+    else if(b.task==='fix_parts'){ if(!FIX) fixParts('', id); }
+    else if(b.task==='regenerate_field'){ var f=regenFieldOf(b); if(f&&!REGEN[f.key]) regenField(f, '', id); }
+  }
+  window.addEventListener('message', function(e){
+    var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:jobs') return;
+    resumeJobs(m.jobs);
+  });
 
   // A working title while project_name is empty: the product and the move the
   // commercial objective names ("Relaunch Glenmore 12 to …" → "Glenmore 12
@@ -3531,9 +3702,103 @@
     UP.t=setTimeout(function(){
       fetch(clanScheme+'/upstream').then(function(r){ return r.ok?r.json():null; })
         .then(function(v){ if(v&&typeof v==='object'){ UP.res=v; UP.state='ok'; } }, function(){ UP.state='unavailable'; })
-        .then(function(){ if(phase==='intake'){ renderFromUp(); syncKind(); } else if(phase==='doc'){ renderUpNote($('upNote')); renderMadeFrom(); } syncTitle(); });
+        .then(function(){ if(phase==='intake'){ renderFromUp(); syncKind(); } else if(phase==='doc'){ renderLinkNote(); renderUpNote($('upNote')); renderMadeFrom(); } syncTitle(); });
     }, 300);
   }
+
+  // ---------- a research linked into this brief (features/brief-link-redraft.clan) ----------
+  // Linked after the brief was written (Continue in › Link to an existing one), a research's facts
+  // and findings are in the brief, and the brief was written without them. The notice says what came
+  // in and offers one press to write it again with it: the same Draft it again (draftNow, the same
+  // job and Agents screen), unarmed, since choosing it is the confirmation. A person's edits and kept
+  // parts stay, as in any redraft. It stays on later visits until used or put off (Not now), recorded
+  // per research and per version taken (data.link_notice), and comes back when another research is
+  // linked or this one is taken again. Never on a locked brief. After the run: what changed.
+  var LINK={run:null, done:null, shown:false, off:false};
+  function linkSeen(){ var s=get('link_notice'); return s&&typeof s==='object'&&!Array.isArray(s)?s:{}; }
+  // The linked research this brief has not used or put off yet, the latest link first.
+  function linkedNew(){
+    var seen=linkSeen(), u=get('upstream')||{};
+    return (UP.res?arr(UP.res.upstream):[]).filter(function(e){
+      if(!e||e.how!=='linked'||e.noun==='brand'||isBrandKit(u[e.document_id])) return false;
+      var s=seen[e.document_id]; return !(s&&typeof s.taken==='number'&&s.taken>=(e.taken||1));
+    }).sort(function(a,b){ var x=String(a.linked_at||''), y=String(b.linked_at||''); return x>y?-1:x<y?1:0; });
+  }
+  function linkMark(es, how){
+    var s=Object.assign({}, linkSeen());
+    es.forEach(function(e){ s[e.document_id]={taken:e.taken||1, how:how}; });
+    return patch('link_notice', s, {actor:'human', pinned:false, action:how==='used'?'rewrite the brief with the linked research':'put off the linked research',
+      rationale:(how==='used'?'Rewrote the brief with ':'Not now: ')+listWords(es.map(function(e){ return '“'+(e.title||'the research')+'”'; }))});
+  }
+  function linkRewrite(){
+    if(LINK.run||approveLocked()||draftLive()) return;
+    var es=linkedNew(); if(!es.length) return;
+    var before={}; FIELDS.forEach(function(f){ before[f.key]=valToText(get(f.key),f.type); });
+    LINK.run={title:es[0].title||'the research', before:before}; LINK.done=null; LINK.shown=false;
+    var go=function(){ draftNow('', true); };
+    Promise.resolve(linkMark(es,'used')).then(go, go);
+  }
+  function linkLater(){
+    var es=linkedNew(); if(!es.length) return;
+    LINK.off=true; renderLinkNote();
+    var back=function(){ LINK.off=false; renderLinkNote(); };
+    Promise.resolve(linkMark(es,'later')).then(back, back);
+  }
+  // The draft this notice started ended: done, it says what changed; else it says nothing more.
+  function linkRunEnded(j){
+    if(!LINK.run||!j||j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input') return;
+    if(j.state==='done') LINK.done=LINK.run;
+    LINK.run=null;
+  }
+  // What the rewrite changed, from the parts as they stood at the press.
+  function linkChanges(){
+    var d=LINK.done, changed=[], kept=[], cites=[];
+    FIELDS.forEach(function(f){
+      var was=d.before[f.key], now=valToText(get(f.key),f.type);
+      if(was!==now){ changed.push(f); partCites(f.key).forEach(function(c){ if(/^f_/.test(c)&&cites.indexOf(c)===-1) cites.push(c); }); }
+      else if(String(was||'').trim()&&(isLocked(f.key)||isHuman(decisionsFor(f.key)[0]))) kept.push(f);
+    });
+    return {changed:changed, kept:kept, cites:cites.length};
+  }
+  function linkNoteHtml(){
+    if(phase!=='doc'||approveLocked()||draftLive()||LINK.run) return '';
+    var es=LINK.off?[]:linkedNew();
+    if(es.length) LINK.done=null;   // another research linked since: that one is what to say
+    else if(LINK.done){
+      var c=linkChanges(), lab=function(fs){ return listWords(fs.map(function(f){ return f.label; })); };
+      var said=c.changed.length
+        ?lab(c.changed)+(c.changed.length===1?' now rests':' now rest')+' on the research'+(c.cites?' ('+c.cites+(c.cites===1?' fact':' facts')+' cited)':'')+'.'
+        :'Nothing changed: the brief already said what the research says.';
+      if(c.kept.length) said+=' '+lab(c.kept)+' kept your words.';
+      return '<div class="lk-h"><i aria-hidden="true"></i>'+esc('Rewritten with '+LINK.done.title)+'</div><p class="b-up-m">'+esc(said)+'</p>'
+        +(c.changed.length?'<div class="b-up-acts"><button type="button" class="side-link" data-lk="show">'+(LINK.shown?'Hide what changed':'Show what changed')+'</button></div>':'');
+    }
+    if(!es.length) return '';
+    var e=es[0], h=e.holds||{}, n=[];
+    if(h.facts) n.push(h.facts+(h.facts===1?' fact':' facts'));
+    if(h.findings) n.push(h.findings+(h.findings===1?' finding':' findings'));
+    var came=n.length?listWords(n)+' came in.':'Its facts and findings came in.';
+    return '<div class="lk-h"><i aria-hidden="true"></i>'+esc('Research linked: '+(e.title||'the research'))+'</div>'
+      +'<p class="b-up-m">'+esc(came+' The brief was written without them. Rewrite it with the research: your edits and the parts you kept stay as they are.')+'</p>'
+      +'<div class="b-up-acts"><button type="button" class="btn-primary" data-lk="go">Rewrite with the research</button><button type="button" class="side-link" data-lk="later">Not now</button></div>'
+      +'<p class="b-up-m lk-small">Answers you already gave are used, not asked again.</p>';
+  }
+  function linkMarkRows(){
+    var ks=LINK.done&&LINK.shown?linkChanges().changed.map(function(f){ return f.key; }):[];
+    document.querySelectorAll('#fields .row[data-clan-part]').forEach(function(r){ r.classList.toggle('lk-chg', ks.indexOf(r.getAttribute('data-clan-part'))!==-1); });
+    return ks;
+  }
+  function renderLinkNote(){
+    var el=$('linkNote'); if(!el) return;
+    var h=linkNoteHtml(); el.hidden=!h; el.innerHTML=h; linkMarkRows();
+  }
+  document.addEventListener('click', function(e){
+    var b=e.target&&e.target.closest&&e.target.closest('#linkNote [data-lk]'); if(!b) return;
+    var a=b.getAttribute('data-lk');
+    if(a==='go') linkRewrite();
+    else if(a==='later') linkLater();
+    else if(a==='show'){ LINK.shown=!LINK.shown; renderLinkNote(); var ks=linkMarkRows(), r=ks.length&&document.querySelector('#fields .row[data-clan-part="'+ks[0]+'"]'); if(r&&LINK.shown) r.scrollIntoView({block:'center', behavior:reduce?'auto':'smooth'}); }
+  });
 
   // ---------- structured ----------
   var REGEN={};   // field key → true while its Drafter is redrafting it
@@ -3651,9 +3916,9 @@
     $('boardsNote').hidden=!showBoards;
     $('boards').classList.toggle('on',showBoards);
     if(showBoards) renderBoards(false);
-    renderLock(); renderUpNote($('upNote'));
+    renderLock(); renderLinkNote(); renderUpNote($('upNote'));
     renderCrewline(); renderReview();
-    renderLook(); renderSelPart(); scheduleBreaks();
+    renderLook(); renderSelPart(); scheduleBreaks(); markSweep();
     LOCK_SIG=lockSig();
     // The clan-fields inside the rows render, and the snippet finds the
     // parts again (and puts back what it shows under them).
@@ -3693,7 +3958,7 @@
       provHtml(f)+
       (locked?' <span class="lockbadge">'+IC.lock+'locked</span>':'')+
       (reo?' <span class="lockbadge">open for the client’s change</span>':'')+
-      (conf?' <span class="conftag" title="Kept in the agency copy, left out of the client copy">Confidential</span>':'')+
+      (conf?' <span class="conftag" title="Napkin never learns from this part. The client copy shows it.">Confidential</span>':'')+
       '</div>'+valHtml+
       regenLine(f)+
       '<div class="notes">'+notesHtml(f)+'</div>'+
@@ -3882,13 +4147,54 @@
       :WRITER_+' is writing '+f.label.toLowerCase()+' again…';
     return '<div class="regen-now"><span>'+esc(t)+'</span></div>';
   }
+  // ---------- Draft it again, in place (features/brief-redraft-in-place) ----------
+  // The parts the in-place run is writing now: those the job reports still in hand; before it reports
+  // any, every unlocked part. None once it ends (done, failed or stopped).
+  var SWEEP={waiting:1, extracting:1, drafting:1, judging:1, revising:1};
+  function sweepKeys(j){
+    if(!j||!j.inPlace||DRAFT!==j||!draftLive()) return [];
+    var fs=j.fields||{}, told=Object.keys(fs).length>0;
+    return FIELDS.filter(function(f){ if(isLocked(f.key)) return false; var x=fs[f.key]; return told?!!(x&&SWEEP[x.state]):true; }).map(function(f){ return f.key; });
+  }
+  function markSweep(){
+    var ks=sweepKeys(DRAFT);
+    document.querySelectorAll('#fields .row[data-clan-part]').forEach(function(r){ r.classList.toggle('working', ks.indexOf(r.getAttribute('data-clan-part'))!==-1); });
+    return ks;
+  }
+  // The side panel's line for the run: who works the stage the job is at, and what they do.
+  var DRAFT_SIDE={extract:'reading what you sent', context:'planning the brief', draft:'writing every part', judge:'checking every part'};
+  function draftSide(j){
+    var st=STAGES.indexOf(j.stage)>=0?j.stage:'extract', n=STAGES.indexOf(st)+1, fs=j.fields||{};
+    var rev=st==='judge'&&Object.keys(fs).some(function(k){ return fs[k]&&fs[k].state==='revising'; });
+    return {role:roleOf(rev?'drafter':STAGE_K[st]), key:'draft|'+st+(rev?'|rev':''), doing:rev?'rewriting on the review’s note':DRAFT_SIDE[st],
+      status:'step '+n+' of '+STAGES.length, progress:(n-1)/STAGES.length};
+  }
+  // Stop, under the agent: asked once, as on the Agents screen. What is written so far stays.
+  function renderSideStop(){
+    var el=$('sideStop'); if(!el) return;
+    var j=DRAFT, on=phase==='doc'&&!!j&&j.inPlace&&!!j.id&&draftLive();
+    el.hidden=!on; el.classList.toggle('at-agent', on&&!j.stopAsk);
+    el.innerHTML=!on?'':j.stopAsk
+      ?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="side-link" data-ds="yes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="side-link" data-ds="no"'+(j.stopping?' disabled':'')+'>Keep going</button>'
+      :'<button type="button" class="side-link" data-ds="stop">Stop</button>';
+  }
+  document.addEventListener('click', function(e){
+    var b=e.target&&e.target.closest&&e.target.closest('#sideStop [data-ds]'), j=DRAFT; if(!b||!j||!j.inPlace) return;
+    var a=b.getAttribute('data-ds');
+    if(a==='stop'){ j.stopAsk=true; renderSideStop(); }
+    else if(a==='no'){ j.stopAsk=false; renderSideStop(); }
+    else if(a==='yes') cancelJob(j);
+  });
+  // A step of the in-place run: the sweep, the side panel, the notice (hidden while it runs) and the bar.
+  function draftInPlace(){ markSweep(); sideAgent(); renderLinkNote(); renderLock(); }
   // The agent at work while the sheet is open, at the top of the side tab: one sphere, small, and one
   // line, "<Role> agent · <what it is doing>". Gone when the job ends; the run screen keeps its own stage.
   function sideAgent(){
     var el=$('sideAgent'); if(!el) return;
     var job=null, go=function(k){ return k&&fieldOf(k)?function(){ select(k); var r=rowOf(k); if(r&&r.scrollIntoView) r.scrollIntoView({block:'center', behavior:'smooth'}); }:null; };
     if(phase==='doc'){
-      if(FIX){ var st0=FIX.stage||'context', n0=st0==='draft'?2:st0==='judge'?3:1, fk=Object.keys(FIX.fields||{})[0];
+      if(DRAFT&&DRAFT.inPlace&&draftLive()) job=draftSide(DRAFT);
+      else if(FIX){ var st0=FIX.stage||'context', n0=st0==='draft'?2:st0==='judge'?3:1, fk=Object.keys(FIX.fields||{})[0];
         job={role:roleOf(st0==='draft'?'drafter':st0==='judge'?'judge':'synthesis'), doing:st0==='draft'?'rewriting the parts the note names':st0==='judge'?'checking the fix':'looking up what the fix needs',
           status:'step '+n0+' of 3', progress:(n0-1)/3, onGo:go(fk)}; }
       else { var k=Object.keys(REGEN)[0], j=k&&REGEN[k], f=k&&fieldOf(k);
@@ -3897,6 +4203,9 @@
             doing:st==='judging'?'checking the new '+w:st==='revising'?'rewriting '+w+' on the review’s note':'writing '+w+' again',
             status:'step '+n+' of '+(st==='revising'?3:2), progress:(n-1)/(st==='revising'?3:2), onGo:go(k)}; } }
     }
+    renderSideStop();
+    // an agent waiting on the person while the sheet is open: the hidden Booth shows it, then comes in
+    boothAsk(phase==='doc'&&DRAFT&&DRAFT.inPlace&&DRAFT.state==='needs_input'?1:0);
     if(ROLES&&ROLES.sideSet){ ROLES.sideSet(el, job); return; }
     el.hidden=!job; el.innerHTML=job?'<span><b>'+esc(AGENT_NAME[job.role]||'An agent')+'</b> · '+esc(job.doing)+'</span>':'';
   }
@@ -3952,13 +4261,13 @@
 
   // lock toggle
   function toggleLock(f){ setLock(f.key, !isLocked(f.key)); }
-  // Confidential: a person's call on who may read a part. A locked brief changes only a reopened part.
+  // Confidential: a person's call that Napkin never learns from a part (the client still sees it). A locked brief changes only a reopened part.
   function toggleConf(f){
     if(!canWrite(f.key)){ toast('The brief is locked. Reopen a part to change it.'); return; }
     var on=!isConf(f.key), cur=confList(), next=on?cur.concat([f.key]):cur.filter(function(k){ return k!==f.key; });
-    Promise.resolve(patch('confidential_fields', next, {actor:'human', pinned:false, action:(on?'mark ':'share ')+f.key+(on?' confidential':' again'),
-      rationale:on?'Kept in the agency copy, left out of the client copy.':'In the client copy again.'})).then(function(){
-      toast(on?'“'+headOf(f)+'” is confidential: it stays in the agency copy and is left out of the client copy.':'“'+headOf(f)+'” is shared again.'); });
+    Promise.resolve(patch('confidential_fields', next, {actor:'human', pinned:false, action:(on?'mark ':'unmark ')+f.key+' confidential',
+      rationale:on?'Napkin never learns from this part. The agency and the client still see it.':'No longer confidential.'})).then(function(){
+      toast(on?'“'+headOf(f)+'” is confidential: Napkin never learns from it. The client copy still shows it.':'“'+headOf(f)+'” is no longer confidential.'); });
   }
   function setLock(key, on){
     var cur=lockedList(); var has=cur.indexOf(key)!==-1;
@@ -4278,6 +4587,15 @@
   var KIND_WORD={open_contest:'Sources disagree', unverified_finding:'Is this right?', flagged_field:'Rests on something marked wrong',
     bad_verdict:'Marked wrong', unmerged_branch:'Copy not brought back', client_rejected:'The client said no',
     client_rejected_parts_unknown:'Which parts?'};
+  // What kind of thing a lock item is, in words. A bad verdict says whose it is: the Review agent's
+  // own check is not someone marking the part wrong (the decision's who, from the host's view).
+  function kindWord(x, view){
+    if(x.code!=='bad_verdict') return KIND_WORD[x.code]||'Needs you';
+    var b=arr(view&&view.decisions).filter(function(d){ return d&&d.decision&&d.decision.id===x.decision; })[0], w=b&&b.who;
+    if(w&&w.kind==='agent') return 'Review agent said no';
+    if(w&&w.you) return 'You marked it wrong';
+    return w&&w.name?'Marked wrong by '+w.name:KIND_WORD.bad_verdict;
+  }
   function refOfAddress(a){ var p=String(a||'').split('#')[1]||'', m=/^(?:findings|facts|materials)\[([^\]]+)\]$/.exec(p)||/^selection\.contested\[([^\]]+)\]$/.exec(p); return m?m[1]:p; }
   function fieldOfAddress(a){ var p=pathOf(a); if(p==null) return null; return FIELDS.filter(function(f){ return f.key===p||p.indexOf(f.key+'.')===0; })[0]||null; }
   // One line per part and kind: a part the whole-brief check and its own
@@ -4288,7 +4606,7 @@
       if(!a||!a.blocks_lock) return false;
       var k=a.code+'|'+(a.address||a.decision||a.text); if(seen[k]) return false; seen[k]=1; return true;
     }).map(function(a){
-      return {code:a.code, text:a.text||'', label:a.label||'', address:a.address||'', ref:refOfAddress(a.address), field:fieldOfAddress(a.address)};
+      return {code:a.code, text:a.text||'', label:a.label||'', address:a.address||'', decision:a.decision||'', ref:refOfAddress(a.address), field:fieldOfAddress(a.address)};
     });
   }
   // What the lock waits for besides the parts the Review agent already names in its line.
@@ -4300,7 +4618,7 @@
   var LOCK_SIG='';
   function lkItemHtml(x){
     return '<button type="button" class="lkitem" data-addr="'+esc(x.address)+'" data-ref="'+esc(x.ref)+'" data-note="'+esc(x.text)+'"'+(x.key?' data-key="'+esc(x.key)+'"':'')+'>'
-      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(x.tag||KIND_WORD[x.code]||'Needs you')+'</small></button>';
+      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(x.tag||kindWord(x, osView()))+'</small></button>';
   }
   // A part of this brief is settled at the part: the row selects it (the part view, Your call first);
   // anything else (a carried contest, a finding) opens where it came from, in the panel.
@@ -4331,11 +4649,18 @@
   var NEEDS_N=null, READY_NUDGE=false;
   function renderLockBtn(){
     var lb=$('lockBtn'), l=lockState(), A=approveLocked(), L=A||get('locked')===true, re=l?arr(l.reopened):[];
-    var again=A&&re.length>0, items=lockItems(), n=items.length, wait=!!l&&!l.can_lock;
+    // Needs you is the one settle-before-lock list: the host's lock list and the open questions nobody has
+    // answered. Lock waits on all of it, and "Settle n first" counts what Needs you shows (UAT round 9: Lock was on
+    // with an open question left, because only the host's can_lock was read).
+    // Until the host's lock list has loaded (the fields snippet reads /decisions after the page), what blocks the
+    // lock is unknown: Lock waits (UAT round 11: Needs you showed only the open questions for a few seconds, then
+    // three Review agent items arrived).
+    var again=A&&re.length>0, rows=needsRows(), n=rows.length, busy=draftLive(), unknown=!l&&!L,
+      wait=unknown||(!!l&&!l.can_lock)||n>0||busy;
     lb.classList.toggle('locked', L&&!again);
     // One needs indicator (owner, 9 Nov 2026): the count is Decisions'. The
     // button carries no badge of its own; why it waits is said in words.
-    var why=wait?lockWhy(n):'';
+    var why=busy?'The agents are drafting it again. Lock it when they are done.':wait?lockWhy(n):'';
     if(again){ lb.hidden=false; lb.disabled=wait; lb.textContent='Lock the brief again'; lb.title=why; }
     else if(A){ lb.hidden=true; lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock the brief to change it. Locking it again makes a new version.'; }   // Unlock: the OS bar
     else if(L){ lb.hidden=false; lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock this brief'; }   // a brief locked before /approve
@@ -4345,7 +4670,6 @@
     renderStateLine();
     var acts=$('lockActs'); if(acts) acts.hidden=!(A&&!again);
     // The last call settled while a part is selected: a one-line nudge under the crumb (Lock is out of view).
-    var rows=needsRows();
     if(NEEDS_N!==null&&NEEDS_N>0&&rows.length===0&&SEL&&!wait) READY_NUDGE=true;
     NEEDS_N=rows.length;
     var el=$('lockList'), show=(!L||again)&&rows.length>0;
@@ -4626,12 +4950,6 @@
     var t=row[j]; row[j]=row[a[1]]; row[a[1]]=t;
     return fromRows(rows);
   }
-  // The parts without `keys` (the client copy leaves the confidential ones out): each row closes up.
-  function layoutWithout(items, keys){
-    var rows=layoutRows(items);
-    arr(keys).forEach(function(k){ var a=rowAt(rows, k); if(a) takeOut(rows, a); });
-    return fromRows(rows);
-  }
   // Can Move up / Move down do anything? -> [up, down]
   function layoutCanStep(items, key){
     var rows=layoutRows(items), a=rowAt(rows, key);
@@ -4692,6 +5010,7 @@
     document.querySelectorAll('#fields .row.sel').forEach(function(r){ r.classList.remove('sel'); });
     var r=SEL&&rowOf(SEL); if(r) r.classList.add('sel');
     renderSelPart();
+    if(SEL) boothPick(); boothApply(false);   // the Booth: back on the part, and at its width (420 whole, 440 a part)
   }
   // A part's place on the sheet, and the handles that move and size it.
   function placeRow(row, f, p){
@@ -4875,6 +5194,83 @@
     if(e.target.closest('#fields > .row,button,a,input,label,select,textarea,.boards,.board,[contenteditable]')) return;
     select(null);
   }); })();
+  // ---------- the Booth (features/booth.clan; mock panel-v3, B · Full) ----------
+  // The side tab hides to the window's right edge and comes back. It never floats over the sheet: its
+  // column closes and the sheet recentres alone. While it is hidden, a click on a part brings the whole
+  // Booth back on that part, and an agent's question shows a dot on the edge tab, then brings it in.
+  // Hidden or shown is the shell's to remember, per person and tool (clan:booth): this frame is
+  // sandboxed and its storage throws. ] hides and shows it; nothing on screen says so.
+  var BOOTH={open:true, ask:0, t:0}, BOOTH_MIN=1101, BOOTH_ASK_MS=1000, BOOTH_DUR=470;
+  // At 1100px and below nothing hides, as before.
+  function boothCanHide(w){ return w>=BOOTH_MIN; }
+  // The Booth's width for what is selected: the whole brief 420, a part 440.
+  function boothWidth(sel){ return sel?440:420; }
+  // The next state for an event: {t:'toggle'|'hide'|'show'|'pick'|'shell'|'ask'|'arrive', open?, n?} at window
+  // width w. `later` is how long until an agent's question brings the hidden Booth in.
+  function boothStep(s, ev, w){
+    var n={open:s.open, ask:s.ask, later:0};
+    if(ev.t==='ask'){ n.ask=Math.max(0, ev.n|0); if(!s.open&&n.ask>s.ask&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }
+    if(ev.t==='shell'){ n.open=ev.open!==false; return n; }
+    if(ev.t==='show'||ev.t==='pick'||(ev.t==='arrive'&&s.ask>0)){ n.open=true; return n; }
+    if(!boothCanHide(w)) return n;
+    if(ev.t==='hide') n.open=false;
+    else if(ev.t==='toggle') n.open=!s.open;
+    return n;
+  }
+  function boothApply(instant){
+    if(!BOOTH) return;
+    var d=document.querySelector('#structured .bdesk'), p=$('stab'), e=$('boothEdge'), hid=!BOOTH.open; if(!d||!p) return;
+    if(instant){ d.classList.add('booth-instant'); if(e) e.classList.add('booth-instant'); }
+    d.style.setProperty('--bw', boothWidth(SEL)+'px');
+    d.classList.toggle('booth-off', hid); document.body.classList.toggle('booth-folded', hid&&phase==='doc');
+    p.inert=hid&&boothCanHide(window.innerWidth);
+    var hb=p.querySelector('.booth-hide'); if(hb) hb.setAttribute('aria-expanded', String(!hid));
+    if(e){
+      var k=BOOTH.ask, ct=$('boothCt'); if(ct) ct.textContent=k?String(k):'';
+      e.classList.toggle('has', !!k); e.tabIndex=hid?0:-1; e.setAttribute('aria-expanded', String(!hid));
+      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+(k===1?' question':' questions')+' waiting':''));
+    }
+    if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
+  }
+  // An agent's question brings it in on the whole brief, as the mock does.
+  function boothWhole(){ if(SEL) select(null); }
+  function boothSet(ev){
+    var was=BOOTH.open, had=BOOTH.ask, n=boothStep(BOOTH, ev, window.innerWidth), p=$('stab'), e=$('boothEdge');
+    var focusIn=!!(p&&p.contains(document.activeElement)), fromEdge=!!(e&&document.activeElement===e);
+    BOOTH.open=n.open; BOOTH.ask=n.ask;
+    if(ev.t==='arrive'&&BOOTH.open&&!was) boothWhole();
+    if(n.later){ clearTimeout(BOOTH.t); BOOTH.t=setTimeout(function(){ boothSet({t:'arrive'}); }, n.later); }
+    if(BOOTH.open||!BOOTH.ask) clearTimeout(BOOTH.t);
+    boothApply(ev.t==='shell');
+    if(e&&BOOTH.ask>had&&!BOOTH.open){ e.classList.remove('ping'); void e.offsetWidth; e.classList.add('ping'); }
+    if(was===BOOTH.open) return;
+    if(ev.t!=='shell'){ try{ window.parent.postMessage({type:'clan:booth', open:BOOTH.open}, '*'); }catch(x){} }
+    if(!BOOTH.open&&focusIn) setTimeout(function(){ if(!BOOTH.open&&e) e.focus({preventScroll:true}); }, BOOTH_DUR);
+    if(BOOTH.open&&fromEdge) setTimeout(function(){ var hb=p&&p.querySelector('.booth-hide'); if(BOOTH.open&&hb) hb.focus({preventScroll:true}); }, BOOTH_DUR);
+  }
+  // A click on the document (B · Full): the whole Booth comes back on it.
+  // (Both may run before this block has: BOOTH is still undefined then, and the shell's word comes after.)
+  function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
+  function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  (function(){
+    document.addEventListener('click', function(e){
+      var t=e.target&&e.target.closest?e.target:null; if(!t) return;
+      if(t.closest('[data-booth="hide"]')){ boothSet({t:'hide'}); return; }
+      if(t.closest('#boothEdge')) boothSet({t:'show'});
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key!==']'||e.defaultPrevented||e.metaKey||e.ctrlKey||e.altKey||phase!=='doc'||typing(e.target)) return;
+      e.preventDefault(); boothSet({t:'toggle'});
+    });
+    // The shell says what this person last had, on every load (AppRuntime.tsx).
+    window.addEventListener('message', function(e){
+      var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:booth') return;
+      boothSet({t:'shell', open:m.open!==false});
+    });
+    window.addEventListener('resize', function(){ boothApply(false); });
+    boothApply(true);
+  })();
+
   // The hint shows until the first selection, then never again on this device.
   function hintSeen(){ try{ window.localStorage.setItem('napkin.brief.hinted','1'); }catch(e){} var h=$('sideHint'); if(h) h.hidden=true; }
   function hintShown(){ try{ return window.localStorage.getItem('napkin.brief.hinted')!=='1'; }catch(e){ return true; } }
@@ -4973,7 +5369,7 @@
     renderProv();
   }
   function keepBtn(f,A,kept){ return !A?'<button type="button" class="sp-btn sp-keep" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the agents change this again':'Keep this part as it is when the brief is drafted again')+'">'+(kept?IC.lock:IC.unlock)+(kept?'Kept as is':'Keep as is')+'</button>':''; }
-  function confBtn(f,wr,conf){ return '<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: left out of the client copy. Click to share it.':'Mark confidential: kept in the agency copy, left out of the client copy')+'">Confidential</button>'; }
+  function confBtn(f,wr,conf){ return '<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: Napkin never learns from this part. Click to unmark it.':'Mark confidential: Napkin never learns from this part. The client still sees it.')+'">Confidential</button>'; }
   // The state chips, one line: how sure the writing is and how many facts it rests on (from the
   // record), and Kept, Confidential or Open for the client's change only when they are on.
   function chipsHtml(f){
@@ -5116,7 +5512,9 @@
     var l=lockState();
     // Nothing written yet, or the crew still writing it, is a draft whatever
     // the host's lock says (it has nothing to block on yet).
-    return briefStatus({locked:docLocked(), reopened:approveLocked()&&arr(l&&l.reopened).length>0, needs:lockItems().length, canLock:!!(l&&l.can_lock)&&!DRAFT&&hasContent()});
+    // The pill agrees with Lock: both read Needs you (the host's lock list and the open questions).
+    var n=needsRows().length;
+    return briefStatus({locked:docLocked(), reopened:approveLocked()&&arr(l&&l.reopened).length>0, needs:n, canLock:!!(l&&l.can_lock)&&n===0&&!DRAFT&&hasContent()});
   }
   function renderPill(){
     var p=$('statusPill'); if(!p) return; var s=statusNow();
@@ -5129,13 +5527,14 @@
   // redraft", 4 s), a second runs the whole crew, so a stray click never redrafts a brief.
   function redraftClick(){
     if(approveLocked()){ toast('The brief is locked. Unlock it to draft it again.'); return; }
+    if(draftLive()) return;   // one at a time: the button is off while the agents write
     if(!REDRAFT_ARMED){
       REDRAFT_ARMED=setTimeout(function(){ REDRAFT_ARMED=null; sendBar(); }, 4000);
       sendBar(); return;
     }
     clearTimeout(REDRAFT_ARMED); REDRAFT_ARMED=null;
     sendBar();
-    draftNow('');
+    draftNow('', true);
   }
   var ACTIONS={
     pdf:function(){ doExport('pdf'); },
@@ -5169,9 +5568,9 @@
     }
     var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, L=docLocked();
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
-    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
+    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', disabled:draftLive(), title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
     if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
-    items.push({kind:'button', id:'client', label:'Client copy · PDF', disabled:!L, title:L?'The sheet without the parts marked Confidential, for the client':'Lock the brief first: the client sees the version you lock'});
+    items.push({kind:'button', id:'client', label:'Client copy · PDF', disabled:!L, title:L?'The locked sheet, every part in it, for the client':'Lock the brief first: the client sees the version you lock'});
     items.push({kind:'button', id:'html', label:'Save · HTML', title:'The sheet as a standalone web page'});
     items.push({kind:'button', id:'gridPdf', label:'Grid PDF', title:'The grid template: two sheets of boxes, as before the new page'});
     items.push({kind:'button', id:'gridHtml', label:'Grid HTML', title:'The grid template as a web page'});
@@ -5539,10 +5938,8 @@
   // The page's own styles, which the printed sheet is drawn with (the probe that measures it is in this page).
   function pageCss(){ return [].map.call(document.querySelectorAll('head style:not(#sheetCss)'), function(s){ return s.textContent; }).join('\n'); }
   (function(){ var st=document.createElement('style'); st.id='sheetCss'; st.textContent=SHEET_PRINT_CSS; document.head.appendChild(st); })();
-  // What a sheet export prints: the agency's copy (every part; confidential ones hatched and tagged) or
-  // the client's (no confidential part, and nothing it cites).
-  // The client copy leaves the confidential parts out, and their rows close up (layoutWithout).
-  function sheetItems(copy){ var items=layoutItems(); return copy==='client'?layoutWithout(items, confList()):items; }
+  // What a sheet export prints: every part, in both copies. The agency's copy hatches and tags the confidential
+  // ones; the client's prints them plain (owner, 2026-11-13: confidential keeps a part from Napkin, never from the client).
   // Measure one long sheet, A4 wide, off the screen in this page (whose styles it is drawn with; an app
   // frame is sandboxed, so a frame inside it could not be read). -> blocks for sheetPaginate, or null
   // when it could not be measured within `wait` ms: an unmeasured sheet is not printed.
@@ -5578,7 +5975,7 @@
   }
   // The context sheetDoc needs, from the brief as it is now. logos/boards are inlined by the caller.
   function sheetCtx(copy, extra){
-    var items=sheetItems(copy), pn=String(get('project_name')||'').trim(), l=layoutData(), cli=String(get('client')||'').trim();
+    var items=layoutItems(), pn=String(get('project_name')||'').trim(), l=layoutData(), cli=String(get('client')||'').trim();
     var ctx={css:pageCss(), get:get, fieldOf:fieldOf, styleOf:fieldStyle, conf:copy==='client'?[]:confList(), cells:layoutPack(items), items:items,
       client:cli, project:pn||derivedTitle()||'Untitled campaign', derived:!pn, ident:IDENT, copy:copy||'agency',
       look:{frame:l.frame, headings:l.headings, cover:l.cover, accent:get('theme.accent')}, marks:{}, sources:[], logos:[], boards:[],
@@ -5643,7 +6040,6 @@
   // ---------- boot ----------
   render();
   checkMiddleware();
-  resumeJobs();
   announce();
   loadUpstream();
   // A write lands: re-render, and re-read the chain it was recorded in.

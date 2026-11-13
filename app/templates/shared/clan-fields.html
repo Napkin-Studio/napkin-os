@@ -530,6 +530,11 @@ clan-chart .clf-chart{cursor:pointer}
 @media (max-width:620px){.clf-drawer{top:auto;height:88%;width:100%;border-radius:18px 18px 0 0;transform:translateY(104%)}.clf-titem .x{max-width:170px}.clf-src{white-space:normal;overflow-wrap:anywhere}
   .clf-db{padding:16px 16px 24px}.clf-acts > .clf-btn.big,.clf-textbar > .clf-btn,.clf-ed .row > .clf-btn,.clf-pop .clf-acts > .clf-btn{flex:1 1 100%}}
 @media (prefers-reduced-motion:reduce){.clf-drawer,.clf-scrim,.clf-toast,.clf{transition:none}.clf-flash{animation:none}}
+/* Feedback by pointing at it (the dogfood build; features/feedback-point.clan): what is under the
+   cursor is outlined and named while the shell asks (clan:feedback-pick). */
+html.clf-fb-on,html.clf-fb-on *{cursor:crosshair!important}
+.clf-fb{position:fixed;z-index:2147483000;pointer-events:none;border-radius:5px;outline:2px solid #515BFF;background:color-mix(in srgb,#515BFF 6%,transparent);display:none}
+.clf-fb-tag{position:absolute;right:6px;top:-11px;background:#515BFF;color:#fff;font:600 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 <script>
 /* The OS's fields. Everything a field shows comes from the record the host
@@ -959,6 +964,8 @@ var ClanFields=(function(){
   function needsAt(path){ var me=docId()+'#'+path; return arr(VIEW&&VIEW.attention).filter(function(a){ return a.address===me; }); }
   // (A client's answer on a part shows as its chip, beside the part.)
   var NEED_TAG={flagged_field:'needs changing',bad_verdict:'marked wrong'};
+  // An agent's own bad verdict is not someone marking the part wrong: say whose it is.
+  function needTag(a){ var vb=a.code==='bad_verdict'&&blockOf(a.decision); return vb&&!isPerson(vb.decision)?'an agent said no':NEED_TAG[a.code]; }
 
   // ── the host ────────────────────────────────────────────────────────
   function post(route, body){
@@ -1036,9 +1043,9 @@ var ClanFields=(function(){
     var v=valueAt(path), t=textOf(v), ok=editableValue(v)&&canEdit(path);
     var org=provenance(path), need=needsAt(path).filter(function(a){ return NEED_TAG[a.code]; })[0], prop=!need&&proposalOf(path);
     var block=as==='block'||as==='big'||(typeof v==='string'&&v.length>80);
-    el.innerHTML='<button type="button" class="clf txt-f'+(block?' blk':'')+(ok?' editable':'')+(need?' s-check':prop?' low':'')+'" data-ref="'+esc(path)+'" aria-label="'+esc((el.getAttribute('caption')||path)+': '+(t||'nothing yet')+(need?' — '+NEED_TAG[need.code]:prop?' — a new version is proposed':''))+'">'
+    el.innerHTML='<button type="button" class="clf txt-f'+(block?' blk':'')+(ok?' editable':'')+(need?' s-check':prop?' low':'')+'" data-ref="'+esc(path)+'" aria-label="'+esc((el.getAttribute('caption')||path)+': '+(t||'nothing yet')+(need?' — '+needTag(need):prop?' — a new version is proposed':''))+'">'
       +(t?esc(t):'<span class="empty">nothing yet</span>')+(org?'<span class="org">'+esc(org)+'</span>':'')
-      +(need?'<span class="tag">'+esc(NEED_TAG[need.code])+'</span>':prop?'<span class="tag conf-l">proposed</span>':'')+'</button>';
+      +(need?'<span class="tag">'+esc(needTag(need))+'</span>':prop?'<span class="tag conf-l">proposed</span>':'')+'</button>';
   }
   // A passage, a capture item or a material, as a field shows it.
   // A material by its name; the person's own typed words have none worth showing.
@@ -1799,15 +1806,13 @@ var ClanFields=(function(){
   }
   // "Keep it private", with what private means, under every review.
   function privBlock(){
-    return '<div class="clf-answers"><button type="button" class="clf-btn big quiet" data-clf="conf">'+LOCK+'Keep it private</button><p class="clf-ex">Private keeps it out of the agency’s shared memory, so work for other clients never learns from it. The client still sees it, and our agents still use it on this document.</p></div>';
+    return '<div class="clf-answers"><button type="button" class="clf-btn big quiet" data-clf="conf">'+LOCK+'Keep it private</button><p class="clf-ex">Private means Napkin never learns from it: it stays out of the shared memory, out of other campaigns and out of training. The agency and the client still see it, in every copy and export.</p></div>';
   }
   function confForm(ref,target){
     return '<form class="clf-form" data-clf-form="classify" data-target="'+esc(target)+'"><b>Keep it private</b>'
       +(confidential(ref)?'<p class="clf-muted">It is already private. What you choose now replaces what was chosen before.</p>':'')
-      +'<p class="clf-ex">Tick what may still happen with it. Anything you leave unticked is kept from it.</p>'
-      +'<label class="clf-toggle"><input type="checkbox" name="model" checked><span>Our agents may read it<small>If not ticked, no agent reads it, not even the agency’s own.</small></span></label>'
-      +'<label class="clf-toggle"><input type="checkbox" name="export" checked><span>It may go in files you send out<small>If not ticked, it is left out of anything that leaves the workspace.</small></span></label>'
-      +'<label class="clf-toggle"><input type="checkbox" name="corpus"><span>Other campaigns may learn from it<small>If not ticked, it stays out of the agency’s shared memory.</small></span></label>'
+      +'<p class="clf-ex">Napkin never learns from it: not the shared memory, not other campaigns, not training. The agency and the client still see it, in every copy and export.</p>'
+      +'<label class="clf-toggle"><input type="checkbox" name="model" checked><span>Our agents may read it on this document<small>If not ticked, no agent reads it, not even the agency’s own.</small></span></label>'
       +'<label><span>Why keep it private? <span class="req">needed</span></span><textarea name="why" required></textarea></label>'
       +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Keep it private</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div></form>';
   }
@@ -2445,7 +2450,7 @@ var ClanFields=(function(){
       top().fix=false; act('/correct',{fact:ref,value:String(fd.get('value')).trim(),source_uri:String(fd.get('src')||'').trim(),rationale:why},form,'Saved. The old value is kept on record.'); }
     else if(!why){ showError(form,kind==='bad'?'Say what is wrong, so it can be fixed.':kind==='aside'?'Say why this can go ahead without it.':'Say why, in a few words.'); return; }
     else if(kind==='aside') act('/acknowledge',{target:form.getAttribute('data-target'),rationale:why},form,'Set aside. Your reason is kept with it.');
-    else if(kind==='classify') act('/classify',{target:form.getAttribute('data-target'),model:fd.get('model')==='on',export:fd.get('export')==='on',corpus:fd.get('corpus')==='on',rationale:why},form,'Saved. It is kept private.');
+    else if(kind==='classify') act('/classify',{target:form.getAttribute('data-target'),model:fd.get('model')==='on',export:true,corpus:false,rationale:why},form,'Saved. It is kept private.');
     else if(kind==='bad') act('/verdict',{target:form.getAttribute('data-target'),polarity:'bad',rationale:why},form,'Thanks. Saved as wrong.');
     else if(kind==='override') act('/verdict',{target:form.getAttribute('data-target'),polarity:'good',rationale:why},form,'Saved. It stays as it is, with your reason.');
   }
@@ -2650,6 +2655,80 @@ var ClanFields=(function(){
     SENT_PARTS=sig; toShell({type:'clan:parts', parts:ps});
   }
   function postMark(a,marked,said){ toShell({type:'clan:part-mark', address:a, marked:!!marked, words:said||''}); }
+
+  // ── feedback by pointing at it (the dogfood build; features/feedback-point.clan) ──
+  // The shell asks (clan:feedback-pick {on}). While on, what is under the cursor is outlined
+  // and named; one click picks it and presses nothing; Esc cancels. The answer goes up as
+  // clan:feedback-picked {target:{kind,id,label}|null, rect, version, title} (null: cancelled
+  // here; version and title are the document's, from window.ClanFeedbackDoc()). A tool
+  // names its own things with window.ClanFeedbackTarget(el) → {kind,id,label,el}|null; else a
+  // control is named by its label and a declared part by its label. The innermost one wins.
+  // F pressed here, not while typing, asks the shell to start (clan:feedback-key).
+  var FB={on:false, box:null};
+  function fbClip(s,n){ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>n?s.slice(0,n-1)+'…':s; }
+  function fbTyping(el){
+    if(!el) return false; var t=String(el.tagName||'').toUpperCase();
+    if(t==='TEXTAREA'||t==='SELECT') return true;
+    if(t==='INPUT') return /^(?:text|search|email|url|tel|password|number|date|datetime-local|month|time|week)?$/i.test(String(el.type||''));
+    return !!(el.isContentEditable||(el.closest&&el.closest('[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]')));
+  }
+  // A field's own words (the snippet renders them as button.clf) are what they say, not a control.
+  function fbControl(el){
+    var c=el.closest('button,a,[role="button"],[role="menuitem"],[role="tab"],summary,select,input,textarea');
+    if(!c||/(?:^|\s)clf(?:\s|$)/.test(String(c.getAttribute('class')||''))) return null;
+    var l=fbClip(c.getAttribute('aria-label')||c.getAttribute('title')||c.textContent,80)||String(c.tagName||'control').toLowerCase();
+    return {kind:'control', id:c.getAttribute('data-act')||c.getAttribute('id')||l, label:l, el:c};
+  }
+  function fbPart(el){
+    var p=el.closest('[data-clan-part]'); if(!p) return null; var a=p.getAttribute('data-clan-part');
+    return {kind:'part', id:a, label:fbClip(p.getAttribute('data-clan-part-label')||words(a),80), el:p};
+  }
+  // A real button or link inside a part is the button; a block the page made clickable
+  // (role="button" on a part's words) is still the part.
+  function fbTarget(el){
+    if(!el||!el.closest||el.closest('.clf-fb')) return null;
+    var own=typeof window.ClanFeedbackTarget==='function'?window.ClanFeedbackTarget(el):null, best=null, c=fbControl(el);
+    [fbPart(el), own].forEach(function(t){ if(t&&t.el&&t.label&&(!best||best.el===t.el||best.el.contains(t.el))) best=t; });
+    if(c&&(!best||(best.el!==c.el&&best.el.contains(c.el)&&/^(?:BUTTON|A|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(String(c.el.tagName||'').toUpperCase())))) best=c;
+    return best;
+  }
+  function fbShow(t){
+    if(!FB.box){ FB.box=document.createElement('div'); FB.box.className='clf-fb'; FB.box.setAttribute('aria-hidden','true');
+      FB.tag=document.createElement('span'); FB.tag.className='clf-fb-tag'; FB.box.appendChild(FB.tag); document.body.appendChild(FB.box); }
+    if(!t){ FB.box.style.display='none'; return; }
+    var r=t.el.getBoundingClientRect();
+    FB.box.style.display='block'; FB.box.style.left=(r.left-3)+'px'; FB.box.style.top=(r.top-3)+'px';
+    FB.box.style.width=(r.width+6)+'px'; FB.box.style.height=(r.height+6)+'px'; FB.tag.textContent=t.label;
+  }
+  function fbReply(t){
+    var r=t?t.el.getBoundingClientRect():null;
+    // The document's own version ("v2") and title, as the page names them (window.ClanFeedbackDoc).
+    var d=t&&typeof window.ClanFeedbackDoc==='function'?(window.ClanFeedbackDoc()||{}):{};
+    toShell({type:'clan:feedback-picked', target:t?{kind:t.kind, id:String(t.id||''), label:t.label}:null,
+      rect:r?{x:r.left, y:r.top, w:r.width, h:r.height}:null,
+      version:typeof d.version==='string'&&d.version?d.version:null, title:typeof d.title==='string'&&d.title?d.title:null});
+  }
+  function fbSet(on){
+    FB.on=!!on; document.documentElement.classList.toggle('clf-fb-on',FB.on);
+    if(!FB.on&&FB.box) fbShow(null);
+  }
+  function fbMove(e){ if(FB.on) fbShow(fbTarget(e.target)); }
+  function fbClick(e){
+    if(!FB.on) return;
+    e.preventDefault(); e.stopPropagation();
+    if(e.type!=='click') return;
+    var t=fbTarget(e.target); if(!t) return;
+    fbSet(false); fbReply(t);
+  }
+  function fbKey(e){
+    if(FB.on&&e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); fbSet(false); fbReply(null); return; }
+    if(!FB.on&&(e.key==='f'||e.key==='F')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.repeat&&!fbTyping(e.target)) toShell({type:'clan:feedback-key'});
+  }
+  window.addEventListener('message',function(e){ var m=e.data; if(e.source===window.parent&&m&&m.type==='clan:feedback-pick') fbSet(m.on===true); });
+  document.addEventListener('pointermove',fbMove,true);
+  ['pointerdown','mousedown','click'].forEach(function(t){ document.addEventListener(t,fbClick,true); });
+  document.addEventListener('keydown',fbKey,true);
+  window.addEventListener('scroll',function(){ if(FB.on&&FB.box) fbShow(null); },true);
 
   // What /decisions says of client review, by this document's bare path.
   function cview(){ return obj(VIEW&&VIEW.client); }

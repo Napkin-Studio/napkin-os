@@ -92,6 +92,30 @@ fn patch_and_patch_data_are_distinct_routes() {
     ));
 }
 
+// Every shell hears these on one stream for the workspace, so each names its
+// document: the id the shell opened it by (os-layer.md §8.4).
+#[test]
+fn data_and_patch_events_name_their_document() {
+    let f = fixture();
+    let path = f.session.current_id().unwrap().as_str().to_string();
+    let resp = post(&f, "/patch", r#"{"id":"heading-0","content":"Edited"}"#);
+    let [HostEvent::PatchSaved(v)] = resp.events.as_slice() else {
+        panic!("one clan-patch-saved")
+    };
+    assert_eq!(v["path"], path.as_str());
+    assert_eq!(v["id"], "heading-0", "what it said before stays");
+    let resp = post(
+        &f,
+        "/patch-data",
+        r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#,
+    );
+    let [HostEvent::DataChanged(v)] = resp.events.as_slice() else {
+        panic!("one clan-data-changed")
+    };
+    assert_eq!(v["path"], path.as_str());
+    assert_eq!(resp.events[0].payload()["path"], path.as_str());
+}
+
 #[test]
 fn every_reachable_route_answers_with_cors_open() {
     let f = fixture();
@@ -273,6 +297,39 @@ fn assets_are_served_from_inside_the_archive_and_traversal_is_refused() {
     assert_eq!(resp.body, b"hello");
 
     assert_eq!(get(&f, "/assets/../manifest.yaml").status, 400);
+}
+
+// The frame's page is composed on request from the open view, for the options
+// the shell's src names (features/doc-open-direct.clan); nothing is stored.
+#[test]
+fn the_document_route_composes_the_frame_page_from_the_query() {
+    let f = fixture();
+    let human = f.session.human_html().unwrap();
+    let page = |query: &str| {
+        let resp = handle(
+            &f.session,
+            &NoConfig,
+            HostRequest::new("/document", query, Vec::new()),
+        );
+        assert_eq!(resp.status, 200);
+        String::from_utf8(resp.body).unwrap()
+    };
+
+    let plain = page("");
+    assert!(
+        plain.contains("__clan_bridge_listening"),
+        "a generated view gets the legacy bridge"
+    );
+    assert!(plain.contains("data-color-scheme=\"light\""));
+    assert!(!plain.contains("data-dogfood-capture"));
+    assert!(plain.len() > human.len());
+
+    let asked = page("model=authored&capture=1&theme=dark&v=abc");
+    assert!(asked.contains("__clan_structured_bridge"));
+    assert!(asked.contains("data-dogfood-capture"));
+    assert!(asked.contains("data-color-scheme=\"dark\""));
+    // clan:// is a real scheme here: no rewrite, no shim.
+    assert!(!asked.contains("var BASE="));
 }
 
 // The one async route. Everything else must be answerable inline, because the
@@ -1398,6 +1455,10 @@ mod upstream {
         assert_eq!(e["status"], "current");
         assert_eq!(e["taken"], 1);
         assert_eq!(e["title"], "Lúnasa 0.0 launch");
+        // What the link brought in, for the brief to say (features/brief-link-redraft.clan).
+        let facts = e["holds"]["facts"].as_u64().unwrap();
+        let findings = e["holds"]["findings"].as_u64().unwrap();
+        assert!(facts > 0 && findings > 0, "{e}");
 
         let rel = brief.get("/related");
         assert_eq!(rel["upstream"][0]["how"], "linked");
@@ -1453,6 +1514,59 @@ mod upstream {
             left.manifest().attached()[0].carried.document_id,
             research.doc
         );
+    }
+
+    // Each target names its client as the library does (features/linked-research-bar.clan):
+    // the registry's current name, and `null` for a document with no client.
+    #[test]
+    fn attach_targets_carry_each_targets_client() {
+        use napkin_host::clients;
+        let store = Arc::new(MemStore::default());
+        let research = research(&store);
+        install_linking_brief(&*store);
+        let ctx = Ctx::local();
+        let acme = clients::create_client(&*store, &ctx, "Acme", None).unwrap();
+        let theirs = library::create_instance_for(
+            &*store,
+            RESEARCH,
+            Some("Acme audience".into()),
+            Some(&acme),
+        )
+        .unwrap();
+        Doc::open(&store, theirs.clone()).post(
+            "/patch-data",
+            r#"{"patch":{"note":"x"},"agent":"human","action":"edit"}"#,
+        );
+        clients::update_client(
+            &*store,
+            &ctx,
+            &acme.id,
+            clients::ClientPatch {
+                name: Some("Acme Group".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let id = library::create_instance(&*store, BRIEF, Some("Spring brief".into())).unwrap();
+        let brief = Doc::open(&store, id);
+
+        let targets = brief.get("/attach-targets");
+        let by = |doc: &str| {
+            targets
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|t| t["path"] == doc || t["document_id"] == doc)
+                .cloned()
+                .unwrap_or_else(|| panic!("{doc} offered: {targets}"))
+        };
+        let t = by(theirs.as_str());
+        assert_eq!(t["client"]["id"], acme.id.as_str(), "{t}");
+        assert_eq!(
+            t["client"]["name"], "Acme Group",
+            "renamed in the registry: {t}"
+        );
+        assert!(by(&research.doc)["client"].is_null(), "{targets}");
     }
 
     #[test]

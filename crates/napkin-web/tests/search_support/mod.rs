@@ -72,7 +72,7 @@ pub fn rig() -> Rig {
     let identity = napkin_web::tenant::Identity {
         mode: napkin_web::tenant::Mode::Accounts {
             provider: napkin_web::auth::Provider::Roster(
-                napkin_web::auth::Roster::new(file).unwrap(),
+                napkin_web::auth::Roster::open(dir.path().join("_people"), &file).unwrap(),
             ),
             sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
         },

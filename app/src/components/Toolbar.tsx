@@ -19,9 +19,9 @@
 // Pure: everything it shows comes in as props, so a test can draw every state
 // with no host.
 
-import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
-import { accountItems, continueItems, docMenuItems, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
+import { accountItems, continueItems, docMenuItems, linkList, linkedChip, linkedRows, plural, pressContinue, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type LinkRow, type LinkedRow, type MenuItem } from './barMenus'
 import { DeepOMark } from '../brand/DeepOMark'
 import type { MarkTarget } from './medallionMotion'
 import { modeOf } from '../shell/appBar'
@@ -30,6 +30,9 @@ import { markOf, type AgencyLogo } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
 import { roles } from '../shell/agents/engine'
 import { DogfoodBadge } from '../dogfood/Dogfood'
+import { dogfoodState, subscribe as subscribeDogfood } from '../dogfood/recorder'
+import { betaNoticeOpener } from '../dogfood/notice'
+import { feedbackOpener } from '../dogfood/pointer'
 import { BarButtons, BarChips } from './AppBarItems'
 import { Pop } from '../shell/nui/Pop'
 import { usePop } from '../shell/nui/popKit'
@@ -80,7 +83,7 @@ interface Props {
   barField?: ReactNode
 }
 
-type PopKey = 'account' | 'client' | 'doc' | 'cont' | 'share'
+type PopKey = 'account' | 'client' | 'doc' | 'cont' | 'share' | 'linked' | 'link'
 
 /** A popover's rows: a button per item, with its hint; a rule above `apart`; disabled ones say why. */
 function Rows({ items, close }: { items: MenuItem[]; close: (refocus: boolean) => void }) {
@@ -94,7 +97,7 @@ function Rows({ items, close }: { items: MenuItem[]; close: (refocus: boolean) =
         data-dogfood={`menu: ${item.label}`}
         onClick={() => { if (item.disabled) return; close(true); item.run() }}
       >
-        {item.label}
+        {item.label}{item.key && <kbd className="mi-key">{item.key}</kbd>}
         {item.hint && <small>{item.hint}</small>}
       </button>
     </Fragment>
@@ -139,8 +142,13 @@ function Medallion({ onHome, attention, mark, target }: { onHome: () => void; at
   )
 }
 
-/** Beside the document's name: what it was made from, what was made from it, and what is linked to it. */
-function Lineage({ doc }: { doc: DocBar }) {
+/**
+ * Beside the document's name: what it was made from, what was made from it,
+ * and one chip for everything linked with it ("↔ 2 linked ▾", with the dot
+ * when one changed since it was taken), which opens their list
+ * (features/linked-research-bar.clan). One chip, so the name keeps its room.
+ */
+function Lineage({ doc, linkedOpen, onLinked }: { doc: DocBar; linkedOpen: boolean; onLinked: (el: HTMLElement) => void }) {
   const from = doc.madeFrom
   const open = (path?: string) => (path && doc.onOpenDocument ? () => doc.onOpenDocument!(path) : undefined)
   const chips: ReactNode[] = []
@@ -163,20 +171,104 @@ function Lineage({ doc }: { doc: DocBar }) {
       </button>,
     )
   }
-  for (const l of doc.linked ?? []) {
-    const go = open(l.path)
-    const said = l.dir === 'in'
-      ? `Linked: ${l.title}${l.taken ? `, v${l.taken} kept here` : ''}${l.changed ? ', which has changed since' : ''}`
-      : `Linked into ${l.title}`
+  const chip = linkedChip(doc.linked)
+  if (chip) {
+    const said = `${chip.count} linked${chip.changed ? '; one has changed since it was taken' : ''}`
     chips.push(
-      <button key={`l:${l.dir}:${l.documentId}`} type="button" className="tba-line tba-line-link" onClick={go} disabled={!go} title={said}
-        data-testid={l.dir === 'in' ? 'lineage-linked' : 'lineage-linked-in'}>
-        ↔ {l.dir === 'out' && 'in '}<b>{l.title}</b>{l.dir === 'in' && l.taken ? <small className="ch-line-v"> v{l.taken}</small> : null}
-        {l.changed && <i className="ch-line-dot" aria-label="changed since" />}
+      <button key="linked" type="button" className="tba-line tba-line-link" data-testid="lineage-linked" title={said}
+        aria-haspopup="menu" aria-expanded={linkedOpen} aria-label={said}
+        onClick={e => onLinked(e.currentTarget)}
+        onKeyDown={e => { if (e.key === 'ArrowDown') { e.preventDefault(); onLinked(e.currentTarget) } }}>
+        ↔ <b>{chip.count} linked</b>{chip.changed && <i className="ch-line-dot" aria-label="changed since" />} <span aria-hidden>▾</span>
       </button>,
     )
   }
   return chips.length ? <>{chips}</> : null
+}
+
+/** What the open document is, as the linked list's heading says it. */
+const DOC_NOUN: Record<string, string> = { brief: 'brief', research: 'research', deck: 'deck', prod: 'production' }
+
+/** The linked chip's list: each linked document with Update (when it changed), Open and Unlink, then "Link another…". */
+export function LinkedList({ doc, close, onLinkAnother }: { doc: DocBar; close: (refocus: boolean) => void; onLinkAnother: () => void }) {
+  const { into, out } = linkedRows(doc)
+  const here = DOC_NOUN[doc.toolKey ?? ''] ?? 'document'
+  const targets = doc.linkTargets ?? []
+  const noun = targets.length ? linkList(doc).noun : null
+  const row = (r: LinkedRow) => (
+    <div key={`${r.doc.dir}:${r.doc.documentId}`} className="pp-link" data-testid="linked-row" data-dir={r.doc.dir}>
+      <span className="pp-link-t"><b>{r.doc.title}</b><small>{r.sub}</small></span>
+      {r.actions.map(a => (
+        <button key={a.label} type="button" role="menuitem" title={a.hint} className={a.label === 'Update' ? 'pp-act pp-act-up' : 'pp-act'}
+          aria-label={`${a.label} ${r.doc.title}`} data-dogfood={`menu: linked ${a.label}`}
+          onClick={() => { close(true); a.run() }}>{a.label}</button>
+      ))}
+    </div>
+  )
+  return <>
+    {into.length > 0 && <><div className="pp-h">Linked into this {here}</div>{into.map(row)}</>}
+    {out.length > 0 && <><div className="pp-h">This {here} is linked into</div>{out.map(row)}</>}
+    {noun && doc.onLink && (
+      <button type="button" role="menuitem" className="pp-more" data-testid="link-another" onClick={onLinkAnother}>＋ Link another {noun}…</button>
+    )}
+  </>
+}
+
+/**
+ * The Link list (Continue in ▾ › Link, and the chip's "Link another…"): this
+ * client's documents, newest first, a search that finds any client's, and
+ * all clients grouped by client, this client first.
+ */
+export function LinkPicker({ doc, close, startQuery = '', startAll = false }: {
+  doc: DocBar; close: (refocus: boolean) => void; startQuery?: string; startAll?: boolean
+}) {
+  const [query, setQuery] = useState(startQuery)
+  const [all, setAll] = useState(startAll)
+  const list = linkList(doc, query)
+  const many = plural(list.noun)
+  const row = (r: LinkRow) => (
+    <div key={r.target.document_id} className="pp-link" data-testid="link-row" data-state={r.state}>
+      <span className="pp-link-t"><b>{r.target.title}</b><small>{r.sub}</small></span>
+      {r.state === 'linked'
+        ? <span className="pp-linked">Linked</span>
+        : <button type="button" role="menuitem" className="pp-act" aria-label={`Link ${r.target.title}`}
+            aria-disabled={r.state === 'locked' || undefined} title={r.state === 'locked' ? list.locked ?? undefined : `Link ${r.target.title} into this one`}
+            data-dogfood="menu: link research"
+            onClick={() => { if (r.state === 'locked') return; close(true); r.run() }}>Link</button>}
+    </div>
+  )
+  const search = (placeholder: string) => (
+    <label className="pp-search">
+      <span aria-hidden>⌕</span>
+      <input type="search" value={query} placeholder={placeholder} aria-label={placeholder} data-testid="link-search"
+        onChange={e => setQuery(e.target.value)}
+        onKeyDown={e => { if (e.key !== 'Escape' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') e.stopPropagation() }} />
+    </label>
+  )
+  const empty = (said: string) => <p className="tba-empty">{said}</p>
+  return <>
+    {list.locked && <p className="tba-gate" data-testid="link-locked">{list.locked}</p>}
+    {all ? <>
+      <div className="pp-h">Link {list.noun} · all clients</div>
+      {search('Search by name or client')}
+      {list.groups.length ? list.groups.map(g => (
+        <div key={g.name} role="group" aria-label={g.name} data-testid="link-group">
+          <div className="pp-h">{g.name}{g.here && ' · this client'}</div>
+          {g.rows.map(row)}
+        </div>
+      )) : empty(`No ${many} match “${query.trim()}”.`)}
+      <button type="button" role="menuitem" className="pp-more" data-testid="link-only-here" onClick={() => setAll(false)}>Only this client</button>
+    </> : <>
+      <div className="pp-h">Link {list.noun} · {list.here}</div>
+      {list.mine.length ? list.mine.map(row) : empty(`No ${many} for ${list.here} yet.`)}
+      {search(`Search ${many} for other clients`)}
+      <button type="button" role="menuitem" className="pp-more" data-testid="link-all" onClick={() => setAll(true)}>Show {many} for all clients</button>
+      {query.trim() && <>
+        <div className="pp-h">Other clients</div>
+        {list.others.length ? list.others.map(row) : empty(`No other client’s ${list.noun} matches “${query.trim()}”.`)}
+      </>}
+    </>}
+  </>
 }
 
 /** Colours for a person's avatar, from their name: the mock's crew reds and greens. */
@@ -345,7 +437,9 @@ export default function Toolbar({
     return { top: (slot?.top ?? r.top) + 40, left: r.left }
   }, [])
 
-  const acct = accountItems(account, user, onSignOut)
+  const dogfood = useSyncExternalStore(subscribeDogfood, dogfoodState, dogfoodState)
+  const recording = dogfood.on
+  const acct = accountItems(account, user, onSignOut, betaNoticeOpener(recording), feedbackOpener(dogfood.on && dogfood.consented))
   const me = account ? <AccountButton account={account} open={pop.open?.key === 'account'} onMenu={el => pop.toggle('account', el)} /> : null
   const lead = (
     <>
@@ -353,7 +447,9 @@ export default function Toolbar({
         <Medallion onHome={onHome} attention={!!doc && attention} mark={mark} target={doc ? markTarget : undefined} />
         <AgencyPill agency={agency} logo={agencyLogo} onDesk={onAgency ?? onHome} />
       </div>
-      <span className="tb-vsep" aria-hidden />
+      {/* Only between the pill and a client: with no client the document's own rule follows the
+          pill, and two rules around an empty gap read as something missing (owner, 2026-11-12). */}
+      {client && <span className="tb-vsep" aria-hidden />}
       <nav className="tb-trail" id="tb-trail" aria-label="Where you are">
         {client && (
           <button
@@ -465,7 +561,9 @@ export default function Toolbar({
     )
   }
 
-  const cont = continueItems(doc)
+  // Continue in ▾ › Link opens the Link list where Continue in was.
+  const contAnchor = pop.open?.key === 'cont' ? pop.open.anchor : null
+  const cont = continueItems(doc, () => { if (contAnchor) pop.setOpen({ key: 'link', anchor: contAnchor }) })
   const fresh = cont.fresh
   // The research's gate line ("Not brief-ready yet: …"), first in Continue in, when the app sends one.
   const gate = gateOf(doc.bar ?? [])?.label ?? null
@@ -484,10 +582,10 @@ export default function Toolbar({
           {lead}
           <div className="tb-app" id="tb-app" aria-label="App" ref={appRef}>
             <DocName doc={doc} open={pop.open?.key === 'doc'} onMenu={el => pop.toggle('doc', el)} renaming={renaming} setRenaming={setRenaming} />
-            {!mode && <Lineage doc={doc} />}
+            {!mode && <Lineage doc={doc} linkedOpen={pop.open?.key === 'linked'} onLinked={el => pop.toggle('linked', el)} />}
             {!mode && <span className="tba-acts">
               <button type="button" className="tba-btn tba-cont" data-tba="b-cont" aria-haspopup="menu" aria-expanded={pop.open?.key === 'cont'}
-                onClick={e => pop.toggle('cont', e.currentTarget)}>Continue in ▾</button>
+                onClick={e => { const el = e.currentTarget; pressContinue(doc, pop.open?.key === 'cont', () => pop.toggle('cont', el)) }}>Continue in ▾</button>
               <button type="button" className="tba-btn tba-share" data-p36-share aria-haspopup="menu" aria-expanded={pop.open?.key === 'share'}
                 onClick={e => pop.toggle('share', e.currentTarget)}>Share</button>
             </span>}
@@ -556,6 +654,16 @@ export default function Toolbar({
             <div className="tba-mh">Start fresh</div>
             <TbaRows items={fresh} close={pop.close} icon={contIcon} />
           </>}
+        </Pop>
+      )}
+      {pop.open?.key === 'linked' && (
+        <Pop anchor={pop.open.anchor} onClose={pop.close} label="Linked" className="p33-pop pp-links" testid="linked-menu">
+          <LinkedList doc={doc} close={pop.close} onLinkAnother={() => { const a = pop.open?.anchor; if (a) pop.setOpen({ key: 'link', anchor: a }) }} />
+        </Pop>
+      )}
+      {pop.open?.key === 'link' && (
+        <Pop anchor={pop.open.anchor} onClose={pop.close} label="Link" className="p33-pop pp-links" testid="link-menu">
+          <LinkPicker doc={doc} close={pop.close} />
         </Pop>
       )}
       {pop.open?.key === 'share' && (

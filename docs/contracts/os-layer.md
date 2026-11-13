@@ -136,7 +136,7 @@ one Postgres transaction. This is the single write funnel — the version check
 | `superseded_by` | The decision that replaced this one |
 | `actor`, `handler`, `backend`, `scope` | Copied from `Ctx` — never from the body |
 | `polarity`, `reason_code`, `taxonomy_version`, `reviewer_role` | Verdicts |
-| `licence` | Classify: `{model, export, corpus}` per C2 |
+| `licence` | Classify: `{model, export, corpus}` per C2; `export` is always `true` and not read (C4) |
 | `rationale` | Required for `resolve`, `verdict` with polarity bad, `lease` force-take, and `approve`. The plain one-line summary older readers show: with `reasoning`, `decided` + its first `because` point, unless the writer supplied one |
 | `reasoning` | Why, in the shape of the foundation spec's decisions (below). Optional in the format — a person's edit has none. Required of the middleware on every `pin`, `contest`, `finding` and `verdict` and every proposal, and on what the document's app declares in the `reasoning` block of its `app/pipeline.yaml` (`kinds`, and `edits`: the data paths an edit must say why it wrote) — the layer applies the declaration and knows no app's fields (`napkin.middleware/1` §3). Never rewritten by compression |
 | `#[serde(flatten)] rest` | Unknown fields survive a read-modify-write |
@@ -214,15 +214,35 @@ predates it.
 
 ### Confidential (C4)
 
-A `classify` decision setting the three C2 destinations: may it reach the
-model, may it appear in an export, may it enter the corpus.
+**What Confidential means** (owner, 2026-11-13; it replaces every earlier
+reading). There are three players: Napkin, the ad agency and the client. The
+client owns the confidential material and shares it with the agency; the
+agency makes something with it and shares that with the client. The only
+party that must not see it is **Napkin's own systems**. So a part, fact or
+material marked Confidential (a `classify` mark with `corpus: false`, a brief
+part in `confidential_fields`, or a source or material whose licence is
+`client-confidential`) **is shown in full to the agency and to the client**:
+in the document, the client copy, the PDF and every other export, and Share.
+It is **never** written to Napkin's shared knowledge layers (brand or
+category) or to RAG, never harvested into a layer (client-accepted harvest
+included), never used for evals, golden sets or training, and never kept in
+any Napkin-side store that outlives the agency's own documents (run logs
+with bodies included). Confidential is not an export filter: nothing a client
+sees is filtered by it.
+
+A `classify` decision records the mark. Its licence keeps the C2 shape
+`{model, export, corpus}`: `corpus: false` is the mark; `model` says whether
+the agency's own agents may read it on this document (a person's call, kept);
+`export` is always `true` and is not read (the client copy hides nothing).
 
 - On a field backed by a pinned fact, the mark supersedes the **fact's
   licence in the layer**, with the decision behind it. A document-only mark
   would still leak through the layer into the next campaign.
 - On authored text, it is a licence on the field in the document.
-- Enforced at gate G4 (prompt selection), `compose_export` (this layer), and
-  the dossier promotion check (W5-Z2).
+- Enforced at gate G4 (prompt selection, `model: false` only), at every
+  Napkin-side write (layer writes, harvest, the corpus extract
+  (`clan-extract.md` §5), evals and run logs), and at the dossier promotion
+  check (W5-Z2). `compose_export` does not read it.
 
 ### Good and bad (L4)
 
@@ -567,7 +587,11 @@ names and shapes below are that branch's, so it merges onto them.
    6); the shell shows the notice and offers **Update**, which takes the
    newer version (`POST /attach/update`, or `POST /upstream/update
    {document_id}`). An update replaces the frozen copy and adds only what the
-   document does not hold yet.
+   document does not hold yet. A linked entry in the store also says what the
+   link brought in: `holds: {facts, findings}`, how many of the source's
+   facts and findings this document holds now (merged by id). Brief Maker
+   says it in its "Research linked" notice. *Added 2026-11-12
+   (features/brief-link-redraft.clan).*
 4. **Decisions on both sides.** The document gets one decision per hop,
    `action: attach | update_from_<source noun> | replace | detach`, kind
    `edit`, as the person in `Ctx`, targeting `<this id>#upstream.<source
@@ -857,8 +881,9 @@ email, attached as a file, or noted from a call.
    `/client-link/state`, `/client-link/answer`, `/client-link/comment`,
    `/client-link/comment-withdraw` and `/client-link/piece` (§7.5.10). Nothing
    else is added to it.
-6. **Confidential is not a filter here** (owner, 2026-09-29: confidential
-   means only "kept out of RAG and the corpus"). Clients see everything, so
+6. **Confidential is not a filter here** (owner, 2026-09-29, restated
+   2026-11-13: confidential means only that Napkin's systems never see it,
+   §4 C4). Clients see everything, so
    nothing in client review — the records, `/decisions`, the extract's
    rendering (§7.5.8) — filters by a `classify` mark. Nothing in client review
    reaches a model or the middleware (*2026-09-30*: the parts are found by the
@@ -1558,6 +1583,8 @@ the `.clan` is what export, handoff and the offline presenter use, and old
 majors still run, so the route surface is a contract apps depend on: add
 freely, never redefine.
 
+- `/document` is the frame's page, composed from the view for the query's
+  options (§8.4); it no longer serves a page the shell stored.
 - Existing routes stay as they are: `/patch`, `/patch-data`, `/fork`,
   `/upload-asset`, `/assets/*`, `/chain`, `/api-proxy`, `/spinoff`,
   `/spinoff-targets`, `/set-title`, `/set-context`, `/export`, `/notify`,
@@ -1587,6 +1614,7 @@ freely, never redefine.
     may stay empty. Neither holds: `404`, as before.
   - `/classify {target, model, export, corpus, rationale}` — the mark is
     recorded; taking it to the fact's licence in the layer (§4) is not built.
+    The view always sends `export: true, corpus: false` (§4 C4).
   - `/resolve {contest, chosen, rationale}` — the contest resolved; a chosen
     value not yet pinned is pinned from the copy the research froze beside it,
     and a pin of the same identity it replaces is kept, marked `replaced_by`.
@@ -1799,10 +1827,13 @@ body or reply changes meaning.
 9. **Links** (§5.7, *added 2026-11-09*). Writes as the person in `Ctx`; the
    reply carries `clan` and `backrefs` as the review routes do.
    - `GET /attach-targets` — `[{app_id, app_name, document_id, title,
-     version, path, updated_at, attached, many, locked}]`, by title: this
-     tenant's documents the open document's app accepts, never a fork, a
+     version, path, updated_at, attached, many, locked, client}]`, by title:
+     this tenant's documents the open document's app accepts, never a fork, a
      template, itself or what it was made from. `locked` says a link would be
-     refused, so the shell says why instead of offering it.
+     refused, so the shell says why instead of offering it. `client` is
+     `{id, name} | null`, named as the library names it (the registry's name,
+     else the manifest's); the shell's Link list filters and groups by it
+     (*added 2026-11-12*, features/linked-research-bar.clan).
    - `POST /attach {document_id}` — link it. Reply `{ok, verb: attached |
      replaced, decision, action, document_id, attached: <record>, seeded,
      kept, carried_decisions, backrefs, clan}`.
@@ -2011,7 +2042,73 @@ address. A card is that `Cite` — the same resolver, so the same words — with
   record's own `review`, `verification` or `rejection`. "Looks right" is not
   a review of a fact.
 
+### 8.4 Events name their document
+
+A route's `HostEvent`s reach the shell as events of the same name: Tauri
+events on the desktop, SSE frames on napkin-web's per-tenant stream
+(`/api/t/{tenant}/events`), and straight back from the call in the browser
+host (`napkin-wasm`). The web stream is the whole tenant's (in accounts mode,
+the whole agency's), so every shell hears every document's writes.
+
+`clan-data-changed` and `clan-patch-saved` therefore carry `path`: the id of
+the document the request was about, as the shell opened it
+(`OpenResult.path`; the document's id in its store, a file path on the
+desktop). The host adds it to the payload in one place
+(`napkin_host::routes::dispatch` and `dispatch_async`), on every host alike;
+what the payload said before stays (a payload that was not an object moves
+under `value`). A listener acts only on events whose `path` is its own
+document, and ignores one without a `path`
+(`app/src/shell/decisions/needs.ts isFor`). *Added 2026-11-12.*
+
 ---
+
+### 8.4 The frame's page: `/document` and `napkin_host::frame`
+
+*Landed 2026-11-12 (features/doc-open-direct.clan).* The page an app frame
+loads is composed by the host, on request, from the open document's view —
+one composer, `napkin_host::frame::compose(human_html, FrameOptions)`, for
+every host. It is pure string work (wasm32-clean):
+
+- the edit bridge for the render model (`authored`: structured, writes the
+  data layer; `legacy`: contenteditable) at the view's **last** `</body>`
+  (an app's script may hold an earlier one in a string), or at the end when
+  there is none; a fragment (no `<!doctype html` or `<html` first) gets the
+  studio's page around it;
+- the dogfood frame listener after the bridge when `capture` is on;
+- `data-color-scheme="light|dark"` stamped on the first `<html>`, unless the
+  page set its own (the shell still posts `clan:colorscheme` after load);
+- the host's last pass, `Reach`: **Origin** (the web) rewrites the literal
+  `clan://localhost` and `http://clan.localhost` bases to the frame's token
+  URL and puts a fetch shim first in `<head>`; **Scheme** (the desktop)
+  leaves the page alone; **Device** (the WebAssembly host) puts the frame CSP
+  first and an rpc shim that routes every `clan://` call to the shell.
+
+The scripts are browser code and live with the shell,
+`app/src/shell/bridge/*.js` (linted there); napkin-host compiles them in with
+`include_str!`, without their leading `//` lines.
+`crates/napkin-host/tests/frame_golden.rs` holds the composer to the 120 pages
+the shell's TypeScript made before it moved, byte for byte.
+
+The options travel as one query string, `model=&capture=0|1&theme=&v=`: a
+missing or unknown `model` is the document's own render model, a missing theme
+light, `capture` on only for `1`; `v` (the document's sha256, and its view's
+version when the library's) is not read — it makes a changed document a new
+address.
+
+| Host | The frame loads | Composed by |
+|---|---|---|
+| web | `GET /s/{token}/document?…` (src) | napkin-web, `Reach::Origin` (the sandbox origin, else `Host` and `X-Forwarded-Proto`, then `/s/{token}`); weak ETag of the page, `Cache-Control: private, no-cache`, `304` when unchanged; compressed |
+| desktop | `clan://localhost/document?…` (src) | the `/document` route, `Reach::Scheme` |
+| device | `srcdoc` | `NapkinHost.framePage(query)`, `Reach::Device` |
+
+`Host` (`app/src/host/types.ts`) names the page with `frameSrc(opts)` on a
+host whose `frameLoad` is `url`, and gets it with `compose(opts)` on the
+`srcdoc` one. Gone, with nothing stored in their place: `updatePreviewHtml`,
+`getHumanHtml` and `prepareAppHtml` on `Host`; `Session::{set_,}preview_html`;
+the Tauri commands `update_preview_html` and `get_human_html`; the wasm
+exports `setPreviewHtml` and `humanHtml`. `POST /api/t/{t}/d/{doc}/preview-html`
+answers `410` with the reason for one release, then goes.
+`GET /api/t/{t}/d/{doc}/human-html` stays (the view as stored, for tools).
 
 ## 9. Retrieval scope
 
@@ -2624,3 +2721,42 @@ no model and no network (`crates/napkin-host/src/searchindex.rs`, held as `Works
   available, run}`) that the bar searches and the `?` sheet prints, and a provider list (`BarProvider`) that Ask Nap and
   voice join from their own folders. A command that cannot be undone (sign out) shows what it will do and waits for a second
   Enter. Phone width is `max-width: 720px`, the shell's own breakpoint.
+
+## 16. People and agencies (napkin-web only)
+
+Who may sign in under `NAPKIN_AUTH=roster`, changed from the shell's People
+page (features/people-admin.clan). Not tenant-addressed: under `/api`, on the
+cookie session. Errors keep the `{ok:false, error:"message"}` shape.
+
+**Store.** `<NAPKIN_WEB_DATA>/_people/people.json` (`{people, agencies}`) on the
+web data volume, replaced whole (tmp + rename) and re-read when its mtime or
+length changes (checked at most every 2 s, so a second web task sees a change
+within that). `_people/changes.jsonl` keeps one line per change: `at`, `by`,
+`what` and the detail; each change is on the server log too
+(`napkin_web::people`), and a consenting account's calls on the dogfood record.
+Seeded once, from the roster file `NAPKIN_AUTH_ROSTER`, the first time a server
+starts without the store; after that the file is not read.
+
+**Admins.** `crates/napkin-web/src/people.rs` `PEOPLE_ADMINS` (`engineer@napkin`).
+Every `/admin/*` route is `403` for anyone else (`401` with no session), and `404`
+on a server without the roster. The shell's `PEOPLE_ADMINS`
+(`app/src/shell/people/model.ts`) only hides the menu entry.
+
+**Recognising an agency.** An id, a name or an alias, any case: the shell
+registry's (`palette.ts` `AGENCY_COLOURS`, `AGENCY_ALIASES`, mirrored as
+`CODE_AGENCIES`, `CODE_ALIASES`; `app/tests/peopleAdmin.test.tsx` keeps them the
+same), then the added agencies'.
+
+| Route | Does |
+|---|---|
+| `GET /admin/people` | `{people: [Person], agencies: [Agency], admins: [id]}`. `people` includes the removed (`removed_at` set). |
+| `POST /admin/people {name, agency, username?}` | `201` + the Person. `agency` is recognised as above (`400` when nothing matches: add the agency first). `username` defaults to `firstname@agency`; its agency must be the recognised id (`400`). `409` when they can already sign in; a removed person is brought back. |
+| `PATCH /admin/people/{id} {name}` | The Person, renamed (the sign-in name stays). `404`. |
+| `DELETE /admin/people/{id}` | The Person with `removed_at`. They cannot sign in, and a session they hold is answered `401` at its next request; their documents and decisions stay. `409` for an admin, `404`. |
+| `GET /admin/agencies` | `[Agency]`: the registry's (`source: "code"`) and the added (`"added"`), each with `people`, the number who can sign in. |
+| `POST /admin/agencies {name, base, accent, id?, aliases?}` | `201` + the added agency. `base`, `accent` `#rrggbb` (`400`); `id` defaults to the name, lower case, `+`/`&` as "and", letters and digits only. `409` when the id, name or an alias is an agency already. |
+| `GET /agency-looks` | Public (no session). `[{id, name, base, accent, aliases}]` of the added agencies; the shell registers them (`palette.ts` `registerAgencyLooks`) before the sign-in card or the studio shows, so their people wear their look. |
+
+`Person` is `{id, name?, agency, admin, added_by, added_at, removed_at?}`
+(`added_by` is `roster` for the seed). `Agency` (admin list) is `{id, name, base,
+accent, aliases, source, people}`.

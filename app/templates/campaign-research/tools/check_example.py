@@ -271,7 +271,7 @@ for mid, m in ordered:
                 if env.get("value") != opt["value"] or env.get("origin") != want_origin or \
                         (want_origin == "confirmed" and env.get("confirmed_from") != opt["origin"]):
                     errors.append(f"intake {mid}: the answered field {q['address']} does not hold the picked option as a {want_origin} value")
-        elif not q["allow_text"]:
+        elif "text" in ans and not q["allow_text"]:
             errors.append(f"intake {mid}: text answer to {q['id']}, which does not allow text")
 for d in load(os.path.join(EX, "agent/decision-chain.yaml"))["decisions"]:
     for tg in d.get("targets", []):

@@ -23,7 +23,7 @@ from napkin.brief.planned import DIMS
 from napkin.rules import derive
 
 from conftest import Server
-from fakes import FakeModel
+from fakes import FakeModel, explained
 from test_brief import BRIEF_SCHEMA, DOC, Host, check_change_rules, retrieval, run
 
 REPO = Path(__file__).resolve().parents[2]
@@ -226,9 +226,9 @@ def test_lidl_jev_tie_failed(tmp_path):
 
     def explain(p):
         seen["explain"] = p
-        return {"parts": {k: {"rework": k == "tone_and_world", "why": "generic", "instruction": "be specific"
-                              if k == "tone_and_world" else ""} for k in list(p["flagged"]) + p["empty"]},
-                "chain": {"issue": None, "parts": []}, "dimensions": [], "questions": []}
+        return explained(p, {"parts": {k: {"rework": k == "tone_and_world", "why": "generic", "instruction": "be specific"
+                                           if k == "tone_and_world" else ""} for k in list(p["flagged"]) + p["empty"]},
+                             "chain": {"issue": None, "parts": []}, "dimensions": [], "questions": []})
     m.overrides["explain_flags"] = explain
     m.overrides["rewrite_brief_parts"] = lambda p: (seen.__setitem__("rewrite", p), {
         k: {"value": ["sunny"], "basis": "assumption", "cites": [], "builds_on_client": False, "why": "x"}
@@ -369,10 +369,10 @@ def test_client_guard_all_paths(tmp_path, path):
         jev = FakeJev()
         m.overrides["draft_brief_whole"] = lambda p: {**base(p), key: {
             "value": "A vague background", "basis": "assumption", "cites": [], "builds_on_client": False, "why": "x"}}
-        m.overrides["explain_flags"] = lambda p: {
+        m.overrides["explain_flags"] = lambda p: explained(p, {
             "parts": {k: {"rework": k == key, "why": "vague", "instruction": "be specific" if k == key else ""}
                       for k in list(p["flagged"]) + p["empty"]},
-            "chain": {"issue": None, "parts": []}, "dimensions": [], "questions": []}
+            "chain": {"issue": None, "parts": []}, "dimensions": [], "questions": []})
         m.overrides["rewrite_brief_parts"] = lambda p: {k: _client_part(k) for k in p["parts"]}
     elif path == "fix_parts":
         key = "objectives.commercial"
@@ -763,7 +763,8 @@ def test_prompt_snapshot():
     assert "Cite the cap_ ids\n  of the client's words (client_words) it rests on." in d
     assert "Cite nothing." not in d.split('basis "research"')[0]
     # nothing else in DRAFT_SYSTEM moved: the Brief agent's prompt, as before but for the listed edits
-    before = d.replace("Cite the cap_ ids\n  of the client's words (client_words) it rests on.", "Cite nothing.") \
+    assert planned.REDRAFT_RULE in d  # the redraft rule (features/brief-redraft-in-place), the one other listed edit
+    before = d.replace(planned.REDRAFT_RULE, "").replace("Cite the cap_ ids\n  of the client's words (client_words) it rests on.", "Cite nothing.") \
         .replace("Use their\n  numbers exactly as given.", "Use their\n  numbers exactly as given; never a number that "
                                                            "is not in a cited fact.")
     assert before.count("Cite nothing.") == 1 and OLD_DRAFT_RESEARCH in before and OLD_CLIENT in before

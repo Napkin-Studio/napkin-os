@@ -48,6 +48,8 @@ export interface OpenResult {
   render_model: 'authored' | 'legacy'
   is_template: boolean
   trusted: boolean
+  /** The installed app's version when the view is the library's (napkin-host `view`). */
+  view_version?: string | null
 }
 
 /** A template app installed in the local library, listed on the launcher. */
@@ -946,6 +948,8 @@ export interface UpstreamEntry {
   how?: 'made_from' | 'linked' | 'carried'
   /** A linked document: how many times this one took it (1 on link, one more on each update). */
   taken?: number | null
+  /** A linked document in the store: how many of its facts and findings this one holds now (what the link brought in). */
+  holds?: { facts: number; findings: number }
   changed?: { data: boolean; facts: boolean; findings: boolean; sources: boolean }
   decisions_since?: number | null
   pins?: { id: string; change: 'added' | 'replaced' | 'changed'; label: string; replaced_by?: string }[]
@@ -976,6 +980,8 @@ export interface AttachTarget {
   many: boolean
   /** The open document is locked, so a link would be refused. */
   locked: boolean
+  /** Who it is for, as the library names it (the registry's id and name); null when it has no client. */
+  client: { id: string; name: string } | null
 }
 
 /** `POST /attach`, `/attach/update` or `/attach/detach`: what was written. */
@@ -1034,9 +1040,11 @@ export interface HostEvents {
   'clan-title-changed': string
   'napkin-notify': { title: string; body: string }
   'clan-theme-changed': Record<string, string>
-  /** Informational: a legacy fragment patch was saved. Never save in response (#9). */
-  'clan-patch-saved': { id: string; content: string }
-  'clan-data-changed': unknown
+  /** Informational: a legacy fragment patch was saved. Never save in response (#9).
+   * `path` is the document's (`OpenResult.path`): the stream is the workspace's. */
+  'clan-patch-saved': { id: string; content: string; path: string }
+  /** A document's data changed. `path` names it (`OpenResult.path`); act only on your own. */
+  'clan-data-changed': { path: string; [key: string]: unknown }
 }
 
 export type Unlisten = () => void
@@ -1075,6 +1083,18 @@ export interface DocOps {
   }
 }
 
+/** What the app frame's page is composed for: everything but the view (napkin-host `frame`). */
+export interface FrameOptions {
+  /** Which edit bridge: the document's `render_model`. */
+  model: 'authored' | 'legacy'
+  /** The dogfood build records, and the person agreed: add the frame listener. */
+  capture: boolean
+  /** Stamped on the page's `<html>`, so a light reader sees no dark flash. */
+  theme: 'light' | 'dark'
+  /** The document as opened (its sha256): a changed document is a new address. */
+  version: string
+}
+
 export interface Host {
   // ── Who is here ───────────────────────────────────────────────────────────
   /** The signed-in person, as the host acts for them. Read-only. */
@@ -1089,7 +1109,6 @@ export interface Host {
   takeLaunchFile(): Promise<string | null>
 
   // ── Reading the open document ─────────────────────────────────────────────
-  getHumanHtml(): Promise<string>
   getData(): Promise<string>
   /**
    * Every decision in the open document, newest first, with what needs a
@@ -1165,7 +1184,6 @@ export interface Host {
 
   // ── The render surface ────────────────────────────────────────────────────
   setEditMode(active: boolean): Promise<void>
-  updatePreviewHtml(html: string): Promise<void>
   savePatch(id: string, content: string): Promise<void>
   /**
    * Origin the sandboxed app frame reaches the clan:// API on. A custom URI
@@ -1174,17 +1192,30 @@ export interface Host {
    */
   clanOrigin(): string
   /**
-   * Last pass over a composed app page before the frame loads it. Identity on
-   * the desktop, where `clan://` is a real scheme; on the web it rewrites that
-   * base to the frame's own URL so app HTML runs unmodified.
+   * The web host only: the open document's frame origin after its token was
+   * refused as stale (napkin-web keeps tokens in memory, so a deploy ends
+   * them). Opens the document again for a new token, unless the open document
+   * already has an origin other than `held`. Null when it cannot. The frame's
+   * fetch shim asks for it (`clan:token?`) and retries its call once.
    */
-  prepareAppHtml(html: string): string
+  renewToken?(held?: string): Promise<string | null>
   /**
-   * How the app frame gets its document. `'url'` means the host serves it and
-   * the frame loads it by address; `'srcdoc'` means there is no server to
-   * serve it from, so it is inlined.
+   * How the app frame gets its page. `'url'` means the host serves it and the
+   * frame loads it by address (`frameSrc`); `'srcdoc'` means there is no
+   * server to serve it from, so it is inlined (`compose`).
    */
   readonly frameLoad: 'url' | 'srcdoc'
+  /**
+   * The address of the open document's frame page, composed by the host on
+   * request (`{clanOrigin}/document?model=&capture=&theme=&v=`): the web and
+   * the desktop. Throws on the device host.
+   */
+  frameSrc(opts: FrameOptions): string
+  /**
+   * The open document's frame page itself, for a `srcdoc` frame: the device
+   * host, composed by the same napkin-host code. Rejects on the others.
+   */
+  compose(opts: FrameOptions): Promise<string>
   /**
    * Answer a `clan://` request the app frame made, when the shim routes those
    * through the shell instead of the network. Only the serverless host needs

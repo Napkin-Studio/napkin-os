@@ -11,6 +11,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
+import { frameQuery } from './frame'
 
 import type {
   Adopted,
@@ -65,7 +66,6 @@ export const tauriHost: Host = {
     invoke<OpenResult>('new_document_from_app', { appId, title, clientId: clientId ?? null }),
   takeLaunchFile: () => invoke<string | null>('take_launch_file'),
 
-  getHumanHtml: () => invoke<string>('get_human_html'),
   getData: () => invoke<string>('get_data'),
   // The desktop viewer is parked; the web shell is where the panel lives.
   getDecisions: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
@@ -103,12 +103,13 @@ export const tauriHost: Host = {
   uploadAsset: () => Promise.reject(new Error('client review is not available on the desktop yet')),
 
   setEditMode: active => invoke('set_edit_mode', { active }),
-  updatePreviewHtml: html => invoke('update_preview_html', { html }),
   savePatch: (id, content) => invoke('save_patch', { id, content }),
   clanOrigin: clanScheme,
-  // `clan://` is a real scheme here; nothing to rewrite.
-  prepareAppHtml: html => html,
+  // `clan://` is a real scheme here: the host composes the page at
+  // clan://localhost/document, with nothing to rewrite.
   frameLoad: 'url',
+  frameSrc: opts => `${clanScheme()}/document?${frameQuery(opts)}`,
+  compose: () => Promise.reject(new Error('the frame loads its page by address in this build')),
   handleFromFrame: () =>
     Promise.reject(new Error('the frame reaches the host directly in this build')),
 

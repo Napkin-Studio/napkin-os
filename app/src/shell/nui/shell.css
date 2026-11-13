@@ -124,3 +124,23 @@
   .nui .tb-client { max-width: 84px; padding-right: 8px; }
   .nui .tb-theme, .nui .tb-decisions-btn, .nui .tb-me { min-width: 40px; min-height: 40px; width: 40px; height: 40px; padding: 0; }
 }
+
+/* The linked chip's list and the Link list (features/linked-research-bar.clan,
+   mock brief-links-bar-v1): a row is the title over its line, then its actions. */
+.nui .p33-pop.pp-links { width: 380px; max-width: calc(100vw - 16px); max-height: calc(100vh - 96px); overflow-y: auto; }
+.nui .pp-links .pp-link { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 7px; }
+.nui .pp-links .pp-link:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.nui .pp-links .pp-link-t { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.nui .pp-links .pp-link-t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nui .pp-links .pp-link-t small { font-size: 12px; color: var(--muted); }
+.nui .pp-links .pp-act { all: unset; cursor: pointer; font-size: 12px; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.nui .pp-links .pp-act:hover, .nui .pp-links .pp-act:focus-visible { color: var(--ink); }
+.nui .pp-links .pp-act-up { color: var(--status-amber); }
+.nui .pp-links .pp-linked { font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.nui .pp-links .pp-more { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 13px; color: var(--muted); }
+.nui .pp-links .pp-more:hover, .nui .pp-links .pp-more:focus-visible { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+.nui .pp-links .pp-search { display: flex; align-items: center; gap: 8px; margin: 6px 4px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); }
+.nui .pp-links .pp-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: 13px var(--font-ui); }
+.nui .pp-links .tba-gate { margin: 2px 2px 4px; }
+/* The changed-since dot on a lineage chip: the chip is `all: unset` (inline), so the dot needs its own box. */
+.nui .tba-line .ch-line-dot { display: inline-block; margin-left: 6px; vertical-align: 2px; }

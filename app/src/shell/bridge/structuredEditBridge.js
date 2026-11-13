@@ -1,7 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
+//
 // Structured edit bridge for AUTHORED Napkin apps. Injected by the viewer
 // (trusted). Unlike the legacy bridge it does NOT patch rendered HTML — it
 // writes the DATA layer via clan://patch-data with attribution
@@ -18,7 +18,11 @@
 // On a successful write the bridge updates window.__CLAN__.data in place and
 // dispatches a `clan:dataupdated` CustomEvent — no iframe reload, so the app's
 // own state is preserved.
-export const STRUCTURED_EDIT_BRIDGE = `
+//
+// napkin-host reads this file (crates/napkin-host/src/frame.rs, include_str!)
+// and puts it in the frame page as it is, after these leading `//` lines. The
+// frame golden (crates/napkin-host/tests/frame_golden.rs) holds its bytes.
+
 (function() {
   var clanScheme = window.navigator.userAgent.includes('Windows') ? 'http://clan.localhost' : 'clan://localhost';
   if (window.__clan_structured_bridge) return;
@@ -61,7 +65,7 @@ export const STRUCTURED_EDIT_BRIDGE = `
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'clan:write', v: 1, id: w.id, state: w.state, field: w.field, text: w.text }, '*');
       }
-    } catch (e) {}
+    } catch (_e) {}
   }
   function sendWrite(entry) {
     if (entry.inflight) return entry.inflight;
@@ -342,34 +346,42 @@ export const STRUCTURED_EDIT_BRIDGE = `
     });
   }
 
-  setInterval(function() {
-    fetch(clanScheme + '/edit-mode').then(function(r) { return r.text(); }).then(function(t) {
-      var active = t === 'true';
-      if (active !== window.__clan_edit_mode) {
-        window.__clan_edit_mode = active;
-        window.dispatchEvent(new CustomEvent('clan:editmode', { detail: { active: active } }));
-        if (active) activate(); else deactivate();
-      } else if (active) {
-        activate();
-      }
-    }).catch(function() {});
-  }, 400);
-})();
-`
-
-// Cmd or Ctrl K inside the app is the shell's bar (features/one-bar-search.clan), in a text field too: the key is
-// forwarded and takes no other, and the shell opens the bar and moves focus there. The viewer injects this at the top
-// of the page, before anything of the app's, for every render model: a key pressed while the page is still loading
-// (the edit bridge sits at the foot of the body, after the app's own scripts) reaches the shell all the same.
-export const BAR_KEY_FORWARDER = `
-(function() {
-  if (window.__clan_bar_key || window.parent === window) return;
-  window.__clan_bar_key = true;
-  window.addEventListener('keydown', function(e) {
-    if (e.defaultPrevented || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-    if (String(e.key).toLowerCase() !== 'k') return;
-    e.preventDefault();
-    window.parent.postMessage({ type: 'clan:bar-key' }, '*');
+  // ── Edit mode, pushed by the shell ───────────────────────────────────────
+  // The shell posts { type: 'clan:edit-mode', active } on every load and on
+  // every change (features/edit-mode-pushed.clan); the page no longer asks
+  // clan://edit-mode on a timer. While on, fields the app draws later are
+  // wired as they appear, as the old poll's every-tick activate() did.
+  var fieldWatch = null;
+  var fieldWatchDue = false;
+  function watchFields(on) {
+    if (!on) {
+      if (fieldWatch) { fieldWatch.disconnect(); fieldWatch = null; }
+      return;
+    }
+    if (fieldWatch || typeof MutationObserver === 'undefined') return;
+    fieldWatch = new MutationObserver(function() {
+      if (fieldWatchDue) return;
+      fieldWatchDue = true;
+      setTimeout(function() {
+        fieldWatchDue = false;
+        if (window.__clan_edit_mode) activate();
+      }, 0);
+    });
+    fieldWatch.observe(document.documentElement, { childList: true, subtree: true });
+  }
+  function applyEditMode(active) {
+    if (active !== window.__clan_edit_mode) {
+      window.__clan_edit_mode = active;
+      window.dispatchEvent(new CustomEvent('clan:editmode', { detail: { active: active } }));
+      if (active) activate(); else deactivate();
+    } else if (active) {
+      activate();
+    }
+    watchFields(active);
+  }
+  window.addEventListener('message', function(e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (m && m.type === 'clan:edit-mode') applyEditMode(m.active === true);
   });
 })();
-`

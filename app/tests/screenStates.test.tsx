@@ -40,7 +40,6 @@ const { createSaveQueue, writeFrom } = await import('../src/components/states/sa
 const { StateStrip } = await import('../src/components/states/StateStrip.tsx')
 const { DOORS, PHASE1_DOORS, ROLES, doorsWithoutTool, hasTool, doorById } = await import('../src/components/states/doors.ts')
 const { barFrom, stateOf } = await import('../src/shell/appBar.ts')
-const { STRUCTURED_EDIT_BRIDGE } = await import('../src/bridge/structuredEditBridge.ts')
 const { TEASERS } = await import('../src/shell/comingSoon.ts')
 const { SoonCard } = await import('../src/shell/SoonCard.tsx')
 
@@ -50,6 +49,8 @@ let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
 /** A file under app/, by its path from app/. */
 const read = (p: string) => readFileSync(new URL(p, root), 'utf8')
+/** The authored edit bridge, as the host puts it in the frame (src/shell/bridge/structuredEditBridge.js). */
+const STRUCTURED_EDIT_BRIDGE = read('src/shell/bridge/structuredEditBridge.js')
 
 /** Draw an element into the page and hand back its container. */
 async function draw(el: ReturnType<typeof createElement>) {

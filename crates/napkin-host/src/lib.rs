@@ -31,6 +31,7 @@ pub mod error;
 pub mod event;
 #[cfg(feature = "native")]
 pub mod export;
+pub mod frame;
 pub mod html;
 pub mod import;
 pub mod jobindex;
@@ -70,7 +71,9 @@ pub use routes::{
     dispatch, dispatch_async, handle, handle_async, is_async, HostRequest, HostResponse,
 };
 pub use runs::RunTracker;
-pub use session::{AppMeta, Applied, LineageInfo, ManifestInfo, OpenResult, Session, ViewState};
+pub use session::{
+    AppMeta, Applied, LineageInfo, ManifestInfo, OpenMark, OpenResult, Session, ViewState,
+};
 #[cfg(feature = "native")]
 pub use store::FsStore;
 pub use store::{DocId, DocStore, Library, PartStore, Stamp};

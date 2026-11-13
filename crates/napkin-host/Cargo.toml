@@ -39,5 +39,7 @@ default = ["native"]
 native = ["dep:tempfile", "dep:reqwest", "dep:pdf-extract"]
 
 [dev-dependencies]
+# The frame golden's two big inputs are kept gzipped (tests/fixtures/frame).
+flate2 = "1"
 # The score verdict is held to docs/contracts/judge-verdict.schema.json by tests/judge.rs.
 jsonschema = { workspace = true }

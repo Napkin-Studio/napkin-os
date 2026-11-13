@@ -19,7 +19,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ClientRecord, LibraryItem } from '../src/host/types.ts'
 import { AddForm, Desk } from '../src/shell/nui/Desk.tsx'
 import { ClientView } from '../src/shell/nui/ClientView.tsx'
-import { CLIENT_LOOKS, ago, clientLine, clientLook, deskClients, pickRows, stateWords, worthItems, type DocFacts } from '../src/shell/nui/deskData.ts'
+import { CLIENT_LOOKS, ago, clientLine, clientLook, deskClients, pickRows, stateWords, thinOf, worthItems, type DocFacts } from '../src/shell/nui/deskData.ts'
 import { clientBrand, setClientAgency, slugOf } from '../src/shell/agency/clients.ts'
 import { agencyNameOf } from '../src/shell/agency/palette.ts'
 import { initialsOf } from '../src/shell/landing/model.ts'
@@ -117,10 +117,32 @@ test('Worth a look is what can be derived: thin findings, an upstream change, fi
   const r = item(a, RESEARCH, { title: 'Category scan', run: { state: 'done', label: 'Done' } })
   const b = item(a, BRIEF, { title: 'Spring brief' })
   const f = (over: Partial<DocFacts>): DocFacts => ({ editor: null, calls: [], thin: [], upstreamChanged: null, locked: false, canLock: true, decisions: 0, ...over })
-  const w = worthItems([b, r], { [b.path]: f({ thin: [{ text: 'Finding · Two clips only' }], upstreamChanged: { title: 'Category scan' } }) })
+  const w = worthItems([b, r], { [b.path]: f({ thin: [{ text: 'Finding · Two clips only', kind: 'finding' }], upstreamChanged: { title: 'Category scan' } }) })
   assert.deepEqual(w.map(x => x.title), ['A thin finding is waiting', 'Category scan changed', 'Client A: Category scan is done'])
   assert.match(w[0].sub, /^Two clips only · Spring brief$/)
   assert.ok(!w.some(x => /tracker|layer/i.test(x.title)))
+})
+
+test('Worth a look counts thin findings and thin facts apart, each once (UAT 2026-11-12: 2 findings and 9 facts read "11 thin findings")', () => {
+  const at = (code: string, address: string, label: string) => ({ code, text: 'x', blocks_lock: false, address, label })
+  const facts = Array.from({ length: 9 }, (_, i) => at('low_certainty', `r1#facts[f_${i}]`, `Fact · ruling ${i}`))
+  const thin = thinOf([
+    at('unverified_finding', 'r1#findings[fi_1]', 'Finding · One'),
+    at('low_certainty', 'r1#findings[fi_1]', 'Finding · One'), // the same finding, low certainty too: once
+    at('unverified_finding', 'r1#findings[fi_2]', 'Finding · Two'),
+    ...facts,
+    at('open_contest', 'r1#selection.contested[ct_1]', 'Contest'),
+  ] as never)
+  assert.deepEqual(thin.map(t => t.kind), ['finding', 'finding', ...facts.map(() => 'fact')])
+  const a = client(0)
+  const r = item(a, RESEARCH, { title: 'UAT Oatly' })
+  const f = (t: DocFacts['thin']): DocFacts => ({ editor: null, calls: [], thin: t, upstreamChanged: null, locked: false, canLock: true, decisions: 0 })
+  const title = (t: DocFacts['thin']) => worthItems([r], { [r.path]: f(t) })[0].title
+  assert.equal(title(thin), '2 thin findings and 9 thin facts are waiting')
+  assert.equal(title([thin[2]]), 'A thin fact is waiting')
+  assert.equal(title(thin.slice(2, 4)), '2 thin facts are waiting')
+  assert.equal(title([thin[0], thin[2]]), '1 thin finding and 1 thin fact are waiting')
+  assert.equal(title([{ text: 'Brief · Tone', kind: 'point' }, thin[2]]), '1 thin fact and 1 thin point are waiting')
 })
 
 test('the empty desk: the greeting says to add the first client, the row has only the add circle, no lower grid', () => {
@@ -253,4 +275,35 @@ test('Rename and Archive live in the ⋯ menu, only where the registry can be ma
   assert.match(page([], { onRename: async () => null, onArchive: async () => null }), /aria-label="Options for Client A"/)
   const prod = page([item(client(0), 'ie.napkin.film', { title: 'Film' })], { live: LIVE })
   assert.doesNotMatch(prod, /group-ads/)
+})
+
+// UAT, 2026-11-12: the desk read ten documents at once on every load, and a document being opened waited 3 s
+// behind them. It reads at most READING at a time, in order, and waits while a document's page loads (App.tsx).
+test('desk: reads at most two documents at a time, in order', async () => {
+  const { limiter, READING } = await import('../src/shell/nui/limiter')
+  assert.equal(READING, 2)
+  const run = limiter(READING)
+  let now = 0, most = 0
+  const order: number[] = []
+  const gates: (() => void)[] = []
+  const all = [0, 1, 2, 3, 4].map(i => run(() => new Promise<number>(res => {
+    now++; most = Math.max(most, now); order.push(i)
+    gates.push(() => { now--; res(i) })
+  })))
+  for (let k = 0; k < 5; k++) {
+    await new Promise(r => setTimeout(r, 0))
+    gates.shift()!()
+  }
+  assert.deepEqual(await Promise.all(all), [0, 1, 2, 3, 4])
+  assert.equal(most, 2, 'never more than two in flight')
+  assert.deepEqual(order, [0, 1, 2, 3, 4])
+})
+
+test('desk: its reads wait for the open document’s page', async () => {
+  const { readFileSync } = await import('node:fs')
+  const app = readFileSync('src/App.tsx', 'utf8')
+  const rt = readFileSync('src/shell/AppRuntime.tsx', 'utf8')
+  assert.match(rt, /onLoad=\{\(\) => \{[\s\S]*window\.dispatchEvent\(new Event\(DOC_LOADED\)\)/)
+  assert.match(app, /const deskMayRead = !openDocPath \|\| docIn === openDocPath/)
+  assert.match(app, /useDeskFacts\(landing\.data\?\.items \?\? null,\s*landing\.state === 'ready' && !\(device && !serverless\) && deskMayRead\)/)
 })

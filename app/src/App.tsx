@@ -10,6 +10,8 @@ import DeviceHome from './offline/DeviceHome'
 import OfflineDialog from './offline/OfflineDialog'
 import AgencyLookPanel from './shell/agency/AgencyLookPanel'
 import { applyAgencyLook, getAgencyLook } from './shell/agency/look'
+import PeoplePage from './shell/people/PeoplePage'
+import { peopleEntryFor } from './shell/people/model'
 import { isClanFile, keepOffline, pickFile, type DeviceSource } from './offline/actions'
 import { copyBytes, type OfflineCopy } from './offline/store'
 import { useFileDrop } from './offline/useFileDrop'
@@ -50,6 +52,7 @@ import './shell/nui/modes.css'
 import './shell/nui/nui.css'
 import './shell/nui/shell.css'
 import { roles } from './shell/agents/engine'
+import { DOC_LOADED } from './shell/AppRuntime'
 
 // Theme keys an immersive app may recolor → CSS variables on the shell root.
 // These are the design tokens; the legacy names (--bg, --surface, --text,
@@ -116,7 +119,9 @@ export default function App() {
   const [device, setDevice] = useState(onDevice)
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
-const [lookOpen, setLookOpen] = useState(false)
+  const [lookOpen, setLookOpen] = useState(false)
+  // The People page (features/people-admin.clan): an admin's, from the account menu.
+  const [peopleOpen, setPeopleOpen] = useState(false)
   const updateReady = useUpdateReady()
   // The landing's data, read through the host. Not on the device's own home.
   // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
@@ -140,9 +145,11 @@ const [lookOpen, setLookOpen] = useState(false)
   // Not before the first read settles: until then the boot screen's layer (brand/bootLook.ts, the agency
   // this browser last signed in to) stays, so a reload never shows Napkin's kit on the way to the agency's.
   const personKnown = personId != null || landing.state !== 'loading' || (device && !serverless)
-  useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown])
+  // An agency added on the People page joins the registry there; closing the page puts its look on again.
+  const [looksSeen, setLooksSeen] = useState(0)
+  useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown, looksSeen])
   // The accent sampled from the agency's logo (shell/agency/look.ts), once the server says whose it is.
-  useEffect(() => { if (personKnown && hasServer && !device) void getAgencyLook().then(applyAgencyLook) }, [personId, personKnown, device])
+  useEffect(() => { if (personKnown && hasServer && !device) void getAgencyLook().then(applyAgencyLook) }, [personId, personKnown, device, looksSeen])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
   // The agency's wordmark on its pill (and its icon on a narrow bar), where the registry has them.
@@ -150,7 +157,19 @@ const [lookOpen, setLookOpen] = useState(false)
   // Decisions on the desk: every call across the documents it has read.
   const [deskDecisions, setDeskDecisions] = useState(false)
   // What the desk reads of recent documents' own chains: last editor, calls, thin findings, upstream changes.
-  const { facts, refresh: refreshFacts } = useDeskFacts(landing.data?.items ?? null, landing.state === 'ready' && !(device && !serverless))
+  // While a document opens, the desk's reads wait for its page: they load whole documents on the server and
+  // held the one being opened behind them (UAT, 2026-11-12: 5-7.6 s opens). The desk is not on screen then.
+  const openDocPath = screen === 'app' ? running?.artifactPath ?? null : null
+  const [docIn, setDocIn] = useState<string | null>(null)
+  useEffect(() => {
+    if (!openDocPath) return
+    const on = () => setDocIn(openDocPath)
+    window.addEventListener(DOC_LOADED, on)
+    return () => window.removeEventListener(DOC_LOADED, on)
+  }, [openDocPath])
+  const deskMayRead = !openDocPath || docIn === openDocPath
+  const { facts, refresh: refreshFacts } = useDeskFacts(landing.data?.items ?? null,
+    landing.state === 'ready' && !(device && !serverless) && deskMayRead)
   const offlineCopies = useOfflineCopies()
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
@@ -211,10 +230,9 @@ const [lookOpen, setLookOpen] = useState(false)
   }, [refreshApps])
 
   const runArtifact = useCallback(async (n: number, open: OpenResult, source?: DeviceSource) => {
-    const html = open.has_human_view ? await host.getHumanHtml() : ''
     if (!isLatest(n)) return
     resetTheme() // clear any prior app's theme before this one (re)applies its own
-    setRunning({ artifactPath: open.path, open, htmlContent: html, editMode: false, source })
+    setRunning({ artifactPath: open.path, open, editMode: false, source })
     setScreen('app')
     // The browser's Back leaves the document for where it was opened from: the
     // document takes one history entry of its own (once, however many it opens).
@@ -581,6 +599,8 @@ const [lookOpen, setLookOpen] = useState(false)
     // The agency's name, and the person's role where the session carries one (the role an admin is viewing as is not theirs).
     line: home.view?.restricted && !home.view.viewing && home.view.title ? `${agency} · ${home.view.title}` : agency,
     ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null, onLook: () => setLookOpen(true) } : {}),
+    // Only for an admin: the server refuses everyone else's calls with 403 too.
+    ...(hasServer && !device ? { onPeople: peopleEntryFor(user, () => setPeopleOpen(true)) } : {}),
   }
 
   // Share ▾ "Copy link": the web's link to a document (`?open=`, host/http.ts takeLaunchFile).
@@ -696,6 +716,8 @@ const [lookOpen, setLookOpen] = useState(false)
       <BarMount enabled={barOn} home={home.view} go={go} openPath={openPath} recent={recentDocs} signedIn={!!user} onSignOut={onSignOut} />
       {lookOpen && <AgencyLookPanel onClose={() => setLookOpen(false)} />}
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
+
+      {peopleOpen && <PeoplePage user={user} onClose={() => { setPeopleOpen(false); setLooksSeen(n => n + 1) }} />}
 
       {dragging && (
         <div className="dv-drop" aria-hidden>
