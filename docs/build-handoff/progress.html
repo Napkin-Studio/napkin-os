@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="60">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Napkin OS build · spike/fabletest · progress</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F6F3EE; --card:#FFFFFF; --ink:#141414; --mute:#6B665E; --line:#E3DED5;
+    --accent:#FF4F2E; --ok:#1F7A4D; --okbg:#E4F2EA; --warn:#9A6200; --warnbg:#FBF0D9;
+    --stop:#B3261E; --stopbg:#FBE6E3; --idle:#6B665E; --idlebg:#ECE8E1;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --paper:#141413; --card:#1E1D1B; --ink:#F2EFE9; --mute:#A39D92; --line:#33312D;
+      --okbg:#173326; --ok:#6FCB9B; --warnbg:#3A2E12; --warn:#E5B95A; --stopbg:#3D1B18; --stop:#F0877E; --idlebg:#2A2926; --idle:#A39D92; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 24px 80px}
+  header{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:20px}
+  .eyebrow{font:500 12px/1 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+  h1{font-size:34px;line-height:1.1;margin:8px 0 6px;letter-spacing:-.02em;text-wrap:balance}
+  h1 b{color:var(--accent);font-weight:700}
+  h2{font-size:20px;margin:44px 0 6px;letter-spacing:-.01em}
+  h2+p.sub{margin:0 0 14px;color:var(--mute)}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font:500 12px/1.5 'Geist Mono',monospace;white-space:nowrap}
+  .ok{background:var(--okbg);color:var(--ok)} .warn{background:var(--warnbg);color:var(--warn)}
+  .stop{background:var(--stopbg);color:var(--stop)} .idle{background:var(--idlebg);color:var(--idle)}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:24px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .tile .n{font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .tile .n small{font-size:16px;color:var(--mute);font-weight:500}
+  .tile .l{color:var(--mute);font-size:13px;margin-top:2px}
+  .bar{height:6px;border-radius:3px;background:var(--idlebg);margin-top:10px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+  .phases{display:grid;gap:10px;margin-top:8px}
+  .phase{display:grid;grid-template-columns:150px 1fr 150px;gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px}
+  .phase .nm{font-weight:600} .phase .ds{color:var(--mute);font-size:13.5px} .phase .st{text-align:right}
+  .tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}
+  table{border-collapse:collapse;width:100%;min-width:640px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top;font-size:14px}
+  th{font:500 11.5px/1.4 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+  tr:last-child td{border-bottom:0}
+  td.k{font-weight:600;white-space:nowrap} td code,li code,p code{font:13px 'Geist Mono',monospace;background:var(--idlebg);padding:1px 5px;border-radius:5px}
+  ol.plan{counter-reset:s;list-style:none;padding:0;margin:8px 0 0;display:grid;gap:10px}
+  ol.plan li{counter-increment:s;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px 14px 58px;position:relative}
+  ol.plan li:before{content:counter(s);position:absolute;left:18px;top:14px;width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--paper);font:600 13px/26px Geist;text-align:center}
+  ol.plan li.new:before{background:var(--accent);color:#fff}
+  ol.plan b{display:block} ol.plan span{color:var(--mute);font-size:14px}
+  .two{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .box h3{margin:0 0 8px;font-size:15px} .box ul{margin:0;padding-left:18px} .box li{margin:5px 0}
+  .note{border-left:3px solid var(--accent);padding:2px 0 2px 14px;margin:14px 0;color:var(--mute)}
+  footer{margin-top:48px;color:var(--mute);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
+  @media (max-width:640px){ .phase{grid-template-columns:1fr} .phase .st{text-align:left} h1{font-size:27px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <div class="eyebrow">Napkin OS build · branch spike/fabletest</div>
+    <h1>Phase 1 is done. Phase 2 is <b>two thirds built</b>. Develop has moved on.</h1>
+    <div style="color:var(--mute)"><!--a:asof-->As of 13 Nov 2026, 10:14.<!--/a--> Governing prompt: <code>docs/napkin-os-build-prompt-v3.1.md</code>.</div>
+  </div>
+  <div><!--a:run--><span class="pill ok">Running · 3 builders (confidential and prices, landing and look, slow server fix)</span><!--/a--></div>
+</header>
+
+<div class="grid">
+  <div class="tile"><!--a:p1rec--><div class="n">13<small> / 13</small></div><!--/a--><div class="l">Phase 1 records built</div><div class="bar"><i style="width:100%"></i></div></div>
+  <div class="tile"><!--a:p1t--><div class="n">18<small> / 18</small></div><!--/a--><div class="l">Phase 1 acceptance tests live</div><div class="bar"><i style="width:100%"></i></div></div>
+  <div class="tile"><!--a:p2rec--><div class="n">11<small> / 17</small></div><!--/a--><div class="l">Phase 2 records built and merged</div><!--a:p2recbar--><div class="bar"><i style="width:64%"></i></div><!--/a--></div>
+  <div class="tile"><!--a:p2t--><div class="n">38<small> / 55</small></div><!--/a--><div class="l">Phase 2 acceptance tests live</div><!--a:p2tbar--><div class="bar"><i style="width:69%"></i></div><!--/a--></div>
+  <div class="tile"><!--a:dev--><div class="n">0</div><!--/a--><div class="l"><!--a:devl-->commits on develop not yet in this branch (merges cleanly)<!--/a--></div></div>
+  <div class="tile"><!--a:unpushed--><div class="n">129</div><!--/a--><div class="l"><!--a:unpl-->local commits not pushed (GitHub copy is at a658a60a)<!--/a--></div></div>
+</div>
+
+<h2>The phases</h2>
+<div class="phases">
+  <div class="phase"><div class="nm">Discovery</div><div class="ds">Audit, design proposal and the Phase 1 records. Open as PR #166.</div><div class="st"><span class="pill ok">Done</span></div></div>
+  <div class="phase"><div class="nm">Phase 1</div><div class="ds">Client wall, harness, screen states, roles and homes, agency look, Brief gate, versions and undo, Visual Brief, client confirm link, job index, timesheet sessions, Cannes removal runbook, pilot suite.</div><div class="st"><span class="pill ok">Done · pushed</span></div></div>
+  <div class="phase"><div class="nm">Phase 2</div><div class="ds">17 records designed, 11 built. Last full test run: 153 passed, 2 timed out (pilot tests 7 and 18 at 1440 px), not yet re-run.</div><div class="st"><span class="pill warn">In progress</span></div></div>
+  <div class="phase"><div class="nm">Phase 3</div><div class="ds">Production: recipe runner, cost engine, tiers, ledger. Not designed. The Deck and Production prompt lands here.</div><div class="st"><span class="pill idle">Not started</span></div></div>
+  <div class="phase"><div class="nm">Phase 4</div><div class="ds">Shopper, Experiential, Deck Maker server side. Not designed.</div><div class="st"><span class="pill idle">Not started</span></div></div>
+</div>
+
+<h2>Phase 2, record by record</h2>
+<p class="sub">Built means merged into <code>spike/fabletest</code> with its tests live. Nothing here is on develop.</p>
+<div class="tablewrap"><table>
+<tr><th>Record</th><th>State</th><th>Note</th></tr>
+<tr><td class="k">j001-phase2-suite</td><td><!--a:rec.j001-phase2-suite--><span class="pill ok">Built</span><!--/a--></td><td>The acceptance list, tests 19 to 73.</td></tr>
+<tr><td class="k">job-page</td><td><!--a:rec.job-page--><span class="pill ok">Built</span><!--/a--></td><td>Re-read against develop's new job end states.</td></tr>
+<tr><td class="k">remaining-homes</td><td><!--a:rec.remaining-homes--><span class="pill ok">Built</span><!--/a--></td><td>Five more role homes.</td></tr>
+<tr><td class="k">approval-route</td><td><!--a:rec.approval-route--><span class="pill ok">Built</span><!--/a--></td><td>Stage owner, deadline, who holds it.</td></tr>
+<tr><td class="k">needs-you-full</td><td><!--a:rec.needs-you-full--><span class="pill ok">Built</span><!--/a--></td><td>Develop changed Lock and Needs you in Brief Maker (#212, #217, #226). Re-read.</td></tr>
+<tr><td class="k">client-review-full</td><td><!--a:rec.client-review-full--><span class="pill ok">Built</span><!--/a--></td><td>Security reviewed, five faults fixed. Develop reversed what "confidential" means (#224). Re-read.</td></tr>
+<tr><td class="k">judge</td><td><!--a:rec.judge--><span class="pill ok">Built</span><!--/a--></td><td>Designed when jev did not exist. Develop now judges every brief under jev (#206, #208). Re-read. Rubric is a draft for Laurence.</td></tr>
+<tr><td class="k">one-bar-search</td><td><!--a:rec.one-bar-search--><span class="pill ok">Built</span><!--/a--></td><td>Cmd K fix sits on the old way of loading a document (#172 replaced it).</td></tr>
+<tr><td class="k">agency-setup</td><td><!--a:rec.agency-setup--><span class="pill warn">Part built</span><!--/a--></td><td>Stages 1 to 3 of 5. Develop added its own People page (#211). The two must become one.</td></tr>
+<tr><td class="k">idea-room</td><td><!--a:rec.idea-room--><span class="pill warn">Part built</span><!--/a--></td><td>Slice 1 of 3. The AI ideas need a model and a spend decision.</td></tr>
+<tr><td class="k">script-editor</td><td><!--a:rec.script-editor--><span class="pill warn">Part built</span><!--/a--></td><td>Without the AI margin. The Deck and Production prompt also asks for a script editor: settle which one.</td></tr>
+<tr><td class="k">align-confidential-prices</td><td><span class="pill warn">Building</span></td><td>Alignment, 5 days. Client sees confidential parts; Napkin's systems never read them; no prices or hours on screen.</td></tr>
+<tr><td class="k">align-landing-look</td><td><span class="pill warn">Building</span></td><td>Alignment, 6 days. Develop's desk is the first screen; role pages become one row; the O, grey mode and sampled accent go. No search field in the bar; Cmd K stays.</td></tr>
+<tr><td class="k">align-needs-lock-people</td><td><span class="pill idle">Approved</span></td><td>Alignment, 9 days. One Needs you, one Lock, one People page. Next.</td></tr>
+<tr><td class="k">align-booth</td><td><span class="pill idle">Approved</span></td><td>Alignment, 14 days. Gate, Judge, versions and route move into the Booth; one shared Booth for all five tools. Next.</td></tr>
+<tr><td class="k">slow server fix</td><td><span class="pill warn">Building</span></td><td>No request may scan every document while holding a lock. The cause of the test timeouts.</td></tr>
+<tr><td class="k">first-day</td><td><!--a:rec.first-day--><span class="pill idle">Designed</span><!--/a--></td><td>Next to build.</td></tr>
+<tr><td class="k">ask-nap</td><td><!--a:rec.ask-nap--><span class="pill idle">Designed</span><!--/a--></td><td>Next to build (offline core). Conflicts with the new "no chatbots" and "no prices in the UI" rules. Needs a decision first.</td></tr>
+<tr><td class="k">napkin-brain</td><td><!--a:rec.napkin-brain--><span class="pill idle">Designed</span><!--/a--></td><td>Next to build.</td></tr>
+<tr><td class="k">sso</td><td><!--a:rec.sso--><span class="pill stop">Held</span><!--/a--></td><td>Needs an identity provider account.</td></tr>
+<tr><td class="k">timesheet-signals</td><td><!--a:rec.timesheet-signals--><span class="pill stop">Held</span><!--/a--></td><td>Needs registered OAuth apps; Google and Microsoft review takes weeks.</td></tr>
+<tr><td class="k">voice</td><td><!--a:rec.voice--><span class="pill stop">Held</span><!--/a--></td><td>Cannot be proven without a paid provider.</td></tr>
+</table></div>
+
+<h2>The plan from here</h2>
+<p class="sub">Orange steps are new since develop moved. Nothing starts until you say resume.</p>
+<ol class="plan">
+  <li class="new"><b>Take develop into the branch <span class="pill ok">Done 13 Nov</span></b><span>Develop is in up to 34235abb. All check suites green. Full test run: 212 passed, 18 failed; nine are the old known ones, one (shots) is a seeding tie being fixed, and the rest passed when run alone and point at the slow-server fault now being fixed.</span></li>
+  <li class="new"><b>Bring every built screen into line with develop <span class="pill warn">Building</span></b><span>Your rule of 13 Nov: develop is the model for how the system looks and behaves, from the landing page and desk to working in a tool. An audit of each built Phase 1 and 2 screen against develop's shell, bar, Booth and the two finished tools, then fix records: panels and bands (Judge, Brief gate, Script editor margin) move into the Booth; Needs you becomes the one list; no prices shown; confidential follows the new meaning; agency setup and the People page become one; every part named for feedback.</span></li>
+  <li class="new"><b>Redesign Ask Nap the develop way</b><span>No chat panel and no price on screen: suggestions, previews with Keep and Discard, and asks live in the Booth; the cost goes to the decision record. My reading of your rule; say if you want it dropped instead. Deck and Production run as their own track with pull requests into develop, as Shrey's release note has it.</span></li>
+  <li class="new"><b>Deck and Production, part 1: mocks only</b><span>Two records (<code>deck-ui</code>, <code>production-ui</code>), one clickable mock per tool with every state, the Booth beside the slide and beside the canvas, a review page, then a hard stop for approval. No product code, so it runs beside the Phase 2 build. Needs develop merged first (step 1), since the Booth and the approved design language live there.</span></li>
+  <li class="new"><b>Merge develop at the start of every wave</b><span>So the gap never grows past a day again.</span></li>
+  <li><b>Build first-day, napkin-brain and (if it survives step 3) ask-nap</b><span>Three builders at most, each running only its own tests, then one full check.</span></li>
+  <li><b>Finish the part-built records</b><span>Agency setup stages 4 and 5, Idea room slices 2 and 3, the per-client AI switch, the Script editor's AI margin.</span></li>
+  <li><b>Close Phase 2, push, then UAT by hand</b><span>Push needs your hand or a permission rule. UAT needs a person's terraform apply first.</span></li>
+  <li class="new"><b>Deck and Production, part 2: build to the approved mocks</b><span>After approval only. This becomes the front of Phase 3 (Production UI) and Phase 4 (Deck Maker UI). Two builders at most, paired screenshots of build against mock for every state. Production's canvas engine, relay and contracts stay as they are.</span></li>
+  <li><b>Design the rest of Phases 3 and 4</b><span>Recipe runner, cost engine, tiers, ledger, Shopper, Experiential, Deck Maker's server side. Not started.</span></li>
+</ol>
+
+<h2>The Deck and Production prompt</h2>
+<p class="sub"><code>fable-master-prompt-deck-production.md</code>: read, not acted on. It asks for mocks of Deck Maker and Production in the Brief Maker and Research design language, with the Booth, then a hard stop for Shrey's approval, then the build.</p>
+<div class="two">
+  <div class="box"><h3>Where it fits</h3><ul>
+    <li>It is Phase 3 and 4 territory (Production, Deck Maker), with a clearer design language than v3.1 gave.</li>
+    <li>Its first phase is mocks only, outside the repo, so it can run beside the Phase 2 build without touching code.</li>
+    <li>Its rules also reach back into Phase 2 screens: the Booth, no chatbots, Needs you as the one list, point-at-it feedback.</li>
+  </ul></div>
+  <div class="box"><h3>Where it disagrees with this build</h3><ul>
+    <li><b>Branch rule.</b> It says pull requests into develop. This build is one branch, no pull requests.</li>
+    <li><b>Prices.</b> It says no prices anywhere in the UI. v2 and the Ask Nap design show the cost before a run.</li>
+    <li><b>Chat.</b> It says no chat panel in any tool. Ask Nap is close to one.</li>
+    <li><b>Owner.</b> Shrey approves there; here approvals are yours, with Laurence's relayed.</li>
+    <li><b>Builders.</b> Two at once there, three here.</li>
+    <li><b>Machine.</b> It names paths on Shrey's Linux machine and mocks in <code>~/Documents/napkin-design-mocks</code>, which this Mac may not have.</li>
+  </ul></div>
+</div>
+
+<h2>Open pull requests and how to merge them</h2>
+<p class="sub">14 open. Five are yours. I can plan and check; a person merges. Order matters only for the first four rows.</p>
+<div class="tablewrap"><table>
+<tr><th>PR</th><th>What</th><th>State</th><th>Plan</th></tr>
+<tr><td class="k">#229</td><td>Release: develop into main (Shrey)</td><td><span class="pill stop">Blocked</span> 1 check failing</td><td>Shrey's. Let it go first so nothing of yours rides into a release unreviewed. Merge commit, never squash.</td></tr>
+<tr><td class="k">#166</td><td>Discovery audit, proposal, Phase 1 records (yours, docs only, 72 files)</td><td><span class="pill ok">Clean</span> checks green</td><td>Merge first of yours, after Shrey reads it. It is the root this branch was cut from, so landing it shrinks the later fabletest merge.</td></tr>
+<tr><td class="k">#77</td><td>Runway model and audio research (yours, docs)</td><td><span class="pill ok">Clean</span> checks green</td><td>Merge any time. Open since 14 Oct.</td></tr>
+<tr><td class="k">#157</td><td>ADR 0007 wording in the dormant tournament (yours, 3 files)</td><td><span class="pill ok">Clean</span> checks green</td><td>Merge after review. It does not depend on #156.</td></tr>
+<tr><td class="k">#156</td><td>Laurence's checks on the jev judge path (yours)</td><td><span class="pill stop">Conflicts</span> 4 files</td><td>Shrey's #206 and #208 already brought your first-draft checks under jev on develop. Compare, then keep only what #206 lacks (the two ADRs, any missing check) in a small new PR and close this one.</td></tr>
+<tr><td class="k">#11</td><td>Brief Maker evidence, sections, rule packs (yours, 6 Oct)</td><td><span class="pill stop">Conflicts</span> 231 behind, 1 check failing</td><td>Stale. Close it unless something in it is still wanted; if so, lift that part onto today's develop.</td></tr>
+<tr><td class="k">#203</td><td>Let a hotfix branch into main (Shrey)</td><td><span class="pill ok">Clean</span></td><td>Shrey's call.</td></tr>
+<tr><td class="k">#152, #13</td><td>Brief revert; replaced facts (Shrey)</td><td><span class="pill stop">Conflicts</span></td><td>Shrey's call. Both look overtaken by later work.</td></tr>
+<tr><td class="k">#129, #124</td><td>Production Tool v2 chain (Shrey), not aimed at develop</td><td><span class="pill warn">Checks failing</span></td><td>Leave until the Production prompt decides which Production code is current.</td></tr>
+<tr><td class="k">#130, #75, #74</td><td>Docs and assets (Shrey)</td><td>Mixed</td><td>Shrey's call.</td></tr>
+</table></div>
+<div class="note"><b>spike/fabletest itself</b> has no pull request and should not get one yet. When the build is accepted, it goes into develop as several pull requests by area, not one of 300 commits. That split is a plan for later.</div>
+
+<h2>Needs you</h2>
+<div class="two">
+  <div class="box"><h3>To unblock the build</h3><ul>
+    <li>Say "resume" to start step 1.</li>
+    <li>Push <code>spike/fabletest</code> yourself, or allow me to. The work is on this Mac only.</li>
+    <li>Answer the Deck and Production questions: branch rule, prices, Ask Nap, whose approval.</li>
+    <li>Confirm sso, timesheet-signals and voice stay held.</li>
+  </ul></div>
+  <div class="box"><h3>Still open from before</h3><ul>
+    <li>Laurence: sign ADR-004, read the Judge rubric draft.</li>
+    <li>Shrey: read the contract changes and the job index stamp.</li>
+    <li>Two findings from the last check: some document reads lock the server on large tenants; the Judge's notes reach every art director and copywriter in the agency.</li>
+    <li>The Cannes removal, by a person. The possible Runway token in history.</li>
+  </ul></div>
+</div>
+
+<footer>This page refreshes itself every minute. The numbers are recomputed by <code>napkin-os-build-progress.py</code>, run at every merge. Sources: <code>BUILD-LOG.md</code> on spike/fabletest (Phase 2 · session 3), the feature records, GitHub's open pull requests, and trial merges against develop at 34235abb. Develop was read only, never written to.</footer>
+</div>
+</body>
+</html>
