@@ -57,7 +57,7 @@ pub const CODE_AGENCIES: &[(&str, &str, &str, &str)] = &[
     ("boysandgirls", "Boys+Girls", "#000000", "#FFFFFF"),
     ("catapult", "Catapult", "#000000", "#C61566"),
     ("pluto", "Pluto", "#000047", "#B2F257"),
-    ("acne", "ACNE", "#000000", "#FFFFFF"),
+    ("acne", "ACNE", "#000000", "#86BC25"),
 ];
 
 /// Other spellings of the registry's agencies (palette.ts `AGENCY_ALIASES`).
