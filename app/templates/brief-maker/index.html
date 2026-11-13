@@ -4839,12 +4839,13 @@
       return partCopy(it, r);
     });
   }
-  // The items as rows: [[item]], left to right. A row never holds two sections or more than ROW_MAX parts.
+  // The items as rows: [[item]], left to right. A row holds ROW_MAX parts at most, of any sections (owner,
+  // 13 Nov: any parts can share a row).
   function layoutRows(items){
     if(items.some(function(it){ return it.r==null; })) items=layoutFlow(items);
     var rows=[], cur=null, rk=null;
     items.forEach(function(it){
-      if(!cur||it.r!==rk||it.sec!==cur[0].sec||cur.length>=ROW_MAX){ cur=[]; rows.push(cur); rk=it.r; }
+      if(!cur||it.r!==rk||cur.length>=ROW_MAX){ cur=[]; rows.push(cur); rk=it.r; }
       cur.push(partCopy(it));
     });
     return rows;
@@ -4912,13 +4913,13 @@
   }
   // Drop `key` on the part `target`, before or after it: it joins that row, and the row shrinks its parts
   // to fit (fitRow), so none drops out. Its old row gets its width back. Inside its own row it only changes
-  // place. A row holds one section and ROW_MAX parts at most: a drop across a section, or on a full row,
+  // place. A row holds ROW_MAX parts at most, of any sections: a drop on a full row
   // makes a row of its own beside the target's instead (layoutNewRow).
   function layoutJoin(items, key, target, after){
     var rows=layoutRows(items), a=rowAt(rows, key), b=rowAt(rows, target);
     if(!a||!b||key===target) return items.slice();
     var it=rows[a[0]][a[1]], t=rows[b[0]][b[1]];
-    if(it.sec!==t.sec||(a[0]!==b[0]&&rows[b[0]].length>=ROW_MAX)) return layoutNewRow(items, key, target, after);
+    if(a[0]!==b[0]&&rows[b[0]].length>=ROW_MAX) return layoutNewRow(items, key, target, after);
     if(a[0]===b[0]) rows[a[0]].splice(a[1],1); else takeOut(rows, a);
     var to=rows[b[0]]; to.splice(to.indexOf(t)+(after?1:0), 0, it);
     return fromRows(rows);
