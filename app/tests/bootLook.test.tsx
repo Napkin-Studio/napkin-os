@@ -18,7 +18,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { BOOT_CSS, BOOT_INK, bootHeadScript, bootLooks, bootMark, bootMarkHtml, bootSurfaceCss, markColours } from '../src/brand/bootLook.ts'
 import { HANDOFF_MS, lateBegin, lateDelay, lateEnd, resetLateClock, SHOW_AFTER_MS, waitStart } from '../src/brand/lateShow.ts'
 import { LogoSpinnerFill, LogoSpinnerVeil } from '../src/brand/LogoSpinner.tsx'
-import { AGENCY_COLOURS, applyAgency, BOOT_SURFACE_ID, DESK_BASE, NAPKIN_COLOURS, NEUTRAL_MARK, surfaceCss } from '../src/shell/agency/palette.ts'
+import { AGENCY_COLOURS, applyAgency, BOOT_SURFACE_ID, coloursOf, DESK_BASE, NAPKIN_COLOURS, NEUTRAL_MARK, registerAgencyLooks, surfaceCss } from '../src/shell/agency/palette.ts'
+import { lastAgency, lastAgencyLook, rememberAgency } from '../src/shell/agency/lastAgency.ts'
+import { useAgencyMark } from '../src/brand/useAgencyMark.ts'
+import { AGENCY_LOOK_KEY, bootLookOf } from '../src/brand/bootLook.ts'
 
 let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
@@ -169,4 +172,39 @@ test('one clock: a sign carries on the boot screen\'s wait and the sign before i
   // the very first sign after the boot screen went: its own wait
   resetLateClock()
   assert.equal(waitStart(3000, false), 3000)
+})
+
+test('a basic agency\'s look is kept when applied, so the next boot paints it and not Napkin\'s', () => {
+  const had = (globalThis as Record<string, unknown>).localStorage
+  const m = new Map<string, string>()
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) } })
+  try {
+    registerAgencyLooks([{ id: 'kestrellane', name: 'Kestrel Lane', base: '#1F4E3D', accent: '#F2C14E', aliases: ['kestrel'] }])
+    rememberAgency('ruth@kestrel')
+    const c = coloursOf('kestrellane')!
+    assert.equal(lastAgency(), 'kestrellane')
+    assert.deepEqual(lastAgencyLook(), { ...bootLookOf(c), base: '#1F4E3D', accent: '#F2C14E' })
+    // the head script takes it before any module runs (the build's table has no such agency)
+    const boot = runHead(Object.fromEntries(m))
+    assert.equal(boot.appended[0].textContent, bootSurfaceCss(c))
+    assert.deepEqual(Array.from(boot.mark ?? []), markColours({ base: '#1F4E3D', accent: '#F2C14E' }))
+    // and the loading signs, before the shell applies it
+    assert.equal(renderToStaticMarkup(createElement(() => { const p = useAgencyMark(); return createElement('i', null, p.base + p.accent) })), '<i>#1F4E3D#F2C14E</i>')
+    // an agency in code always boots in the build's look: a kept look is never taken for it, nor kept
+    const build = bootSurfaceCss(AGENCY_COLOURS.wk)
+    assert.equal(runHead({ 'napkin.lastAgency': 'wk', [AGENCY_LOOK_KEY]: JSON.stringify({ id: 'wk', ...bootLookOf(c) }) }).appended[0].textContent, build)
+    registerAgencyLooks([{ id: 'wk', name: 'W+K Dublin' }])
+    rememberAgency('tom@wk')
+    assert.equal(m.get(AGENCY_LOOK_KEY), undefined)
+    // another agency's kept look, or a malformed one, is not taken: Napkin's kit, as before
+    const napkin = bootSurfaceCss(NAPKIN_COLOURS)
+    for (const bad of ['{', JSON.stringify({ id: 'other', ...bootLookOf(c) }), JSON.stringify({ id: 'acme', s: 'x', m: ['red'] }), JSON.stringify({ id: 'acme', s: '</style><script>', m: bootLookOf(c).m }), JSON.stringify({ id: 'acme', s: 1, m: [] })])
+      assert.equal(runHead({ 'napkin.lastAgency': 'acme', [AGENCY_LOOK_KEY]: bad }).appended[0].textContent, napkin, bad)
+    // an agency the registry does not colour keeps nothing
+    rememberAgency('x@nowhere')
+    assert.equal(m.get(AGENCY_LOOK_KEY), undefined)
+  } finally {
+    registerAgencyLooks([])
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: had })
+  }
 })
