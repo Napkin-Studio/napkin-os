@@ -12,7 +12,7 @@
 import { AGENCY_ALIASES, AGENCY_COLOURS } from '../src/shell/agency/palette.ts'
 import { activeContent, sanitiseSvg } from '../src/shell/agency/svgSanitise.ts'
 import { PeopleError, type PeopleApi, type PeopleList } from '../src/shell/people/api.ts'
-import type { AgencyAdminRow, BasicRow, CodeRow } from '../src/shell/people/agencies/model.ts'
+import type { AgencyAdminRow, BasicDraft, BasicRow, CodeRow, DraftPatch } from '../src/shell/people/agencies/model.ts'
 import type { PersonRow } from '../src/shell/people/model.ts'
 
 // The mock's wordmarks: block letters, one rect per run (what a clean export looks like).
@@ -59,6 +59,33 @@ export function cannedFiles(name: string, base: string): { good: { name: string;
 const uri = (svg: string) => 'data:image/svg+xml,' + encodeURIComponent(svg)
 const ME = 'engineer@napkin'
 
+/** The four style fields, as napkin-web takes them on PATCH .../draft (features/agency-style.clan): a value, or null for the default. */
+const STYLE = { pill: ['accent', 'base'], accent_use: ['fill', 'line'], surface: ['warm', 'mono'] } as const
+type StyleKey = 'pill' | 'accent_use' | 'surface' | 'accent_ink'
+const STYLE_KEYS: StyleKey[] = ['pill', 'accent_use', 'surface', 'accent_ink']
+const DEFAULT: Record<StyleKey, string | null> = { pill: 'accent', accent_use: 'fill', surface: 'warm', accent_ink: null }
+
+/** A PATCH body's style, checked (400 on a bad value), applied over a draft; a default or null leaves the field absent. */
+function applyStyle(d: BasicDraft, b: DraftPatch): BasicDraft {
+  const out: BasicDraft = { ...d }
+  for (const k of STYLE_KEYS) {
+    if (!(k in b)) continue
+    const v = (b as Record<string, unknown>)[k]
+    if (v != null && (k === 'accent_ink' ? !(typeof v === 'string' && /^#[0-9A-Fa-f]{6}$/.test(v)) : !(STYLE[k as keyof typeof STYLE] as readonly unknown[]).includes(v)))
+      throw new PeopleError(400, `${k} cannot be ${JSON.stringify(v)}.`)
+    if (v == null || v === DEFAULT[k]) delete out[k]
+    else Object.assign(out, { [k]: k === 'accent_ink' ? (v as string).toUpperCase() : v })
+  }
+  return out
+}
+
+/** The style fields a record carries (only the set ones). */
+function styleOf(r: BasicDraft | BasicRow): Partial<Pick<BasicRow, StyleKey>> {
+  const out: Partial<Pick<BasicRow, StyleKey>> = {}
+  for (const k of STYLE_KEYS) if (r[k] != null) Object.assign(out, { [k]: r[k] })
+  return out
+}
+
 /** The mock's people. */
 export const MOCK_PEOPLE: PersonRow[] = ([
   ['Engineer', 'engineer@napkin', true, '2026-10-05'], ['Ann Murphy', 'ann@napkin', false, '2026-10-05'], ['Niamh Doyle', 'niamh@bg', false, '2026-10-12'],
@@ -104,7 +131,7 @@ export function fakePeopleApi(start: { people?: PersonRow[]; agencies?: AgencyAd
   }
   const fresh = (r: AgencyAdminRow, rev: number) => { if (rev !== r.rev) throw new PeopleError(409, 'Someone changed this agency since you opened it.') }
   const touched = (r: AgencyAdminRow) => { r.rev += 1; r.changed_by = ME; r.changed_at = now; return structuredClone(r) }
-  const draftOf = (r: BasicRow) => r.draft ?? { name: r.name, aliases: [...r.aliases], base: r.base, accent: r.accent, wordmark: r.wordmark }
+  const draftOf = (r: BasicRow): BasicDraft => r.draft ?? { name: r.name, aliases: [...r.aliases], base: r.base, accent: r.accent, wordmark: r.wordmark, ...styleOf(r) }
   const hear = (call: string, ...args: unknown[]) => { heard.push({ call, args }) }
   const api: PeopleApi = {
     list: async () => { hear('list'); return { people: structuredClone(people), agencies: structuredClone(rows) } satisfies PeopleList },
@@ -133,7 +160,7 @@ export function fakePeopleApi(start: { people?: PersonRow[]; agencies?: AgencyAd
         r.draft = b.name === r.name ? null : { name: b.name ?? r.name }
       } else {
         const d = draftOf(r)
-        r.draft = { ...d, ...(b.name != null ? { name: b.name } : {}), ...(b.aliases ? { aliases: b.aliases } : {}), ...(b.base ? { base: b.base } : {}), ...(b.accent ? { accent: b.accent } : {}) }
+        r.draft = applyStyle({ ...d, ...(b.name != null ? { name: b.name } : {}), ...(b.aliases ? { aliases: b.aliases } : {}), ...(b.base ? { base: b.base } : {}), ...(b.accent ? { accent: b.accent } : {}) }, b)
       }
       return touched(r)
     },
@@ -162,7 +189,11 @@ export function fakePeopleApi(start: { people?: PersonRow[]; agencies?: AgencyAd
       fresh(r, rev)
       if (!r.draft) throw new PeopleError(409, 'There is no draft to publish.')
       if (r.kind === 'code') { r.name = r.draft.name; r.draft = null }
-      else { Object.assign(r, { name: r.draft.name, aliases: r.draft.aliases, base: r.draft.base, accent: r.draft.accent, wordmark: r.draft.wordmark, published: true }); r.draft = null }
+      else {
+        for (const k of STYLE_KEYS) delete r[k]
+        Object.assign(r, { name: r.draft.name, aliases: r.draft.aliases, base: r.draft.base, accent: r.draft.accent, wordmark: r.draft.wordmark, ...styleOf(r.draft), published: true })
+        r.draft = null
+      }
       r.published_by = ME
       r.published_at = now
       return touched(r)
@@ -180,7 +211,9 @@ export function fakePeopleApi(start: { people?: PersonRow[]; agencies?: AgencyAd
       if (r.kind === 'code' || !r.published) throw new PeopleError(409, 'Only a published basic agency goes to code.')
       const svg = r.wordmark ? decodeURIComponent(r.wordmark.slice('data:image/svg+xml,'.length)) : null
       const q = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
-      let palette = `// AGENCY_COLOURS\n  ${id}: {\n    name: ${q(r.name)}, base: ${q(r.base)}, accent: ${q(r.accent)},` + (svg ? `\n    logo: svgUri(WORDMARK_SVG.${id}),\n    logoOnDark: svgUri(recolourSvg(WORDMARK_SVG.${id}, '#FFFFFF')),` : '') + '\n  },'
+      // the style, only what is not the default, on the entry's first line after accent (as ACNE's entry has it), accentInk last
+      const style = [r.pill && `pill: ${q(r.pill)}`, r.accent_use && `accentUse: ${q(r.accent_use)}`, r.surface && `surface: ${q(r.surface)}`, r.accent_ink && `accentInk: ${q(r.accent_ink)}`].filter(Boolean)
+      let palette = `// AGENCY_COLOURS\n  ${id}: {\n    name: ${q(r.name)}, base: ${q(r.base)}, accent: ${q(r.accent)},` + (style.length ? ` ${style.join(', ')},` : '') + (svg ? `\n    logo: svgUri(WORDMARK_SVG.${id}),\n    logoOnDark: svgUri(recolourSvg(WORDMARK_SVG.${id}, '#FFFFFF')),` : '') + '\n  },'
       if (r.aliases.length) palette += '\n// AGENCY_ALIASES\n' + r.aliases.map(a => `  ${q(a)}: ${q(id)},`).join('\n')
       return { palette_ts: palette, svg, agency_logos_files: svg ? `  ${id}: { logo: '${id}-logo.svg' },` : null, people_rs: `    ("${id}", "${r.name}", "${r.base}", "${r.accent}"),` }
     },

@@ -11,8 +11,8 @@
 
 import { PeopleError, type PeopleApi } from '../api'
 import {
-  NEW_LOOK, currentLook, refusalWhy, screenUpload,
-  type AgencyAdminRow, type BasicRow, type CodeExport, type DraftPatch, type EditLook, type UploadReport,
+  DEFAULT_STYLE, NEW_LOOK, currentLook, isDefaultStyle, refusalWhy, screenUpload, wireOf,
+  type AgencyAdminRow, type BasicRow, type CodeExport, type DraftPatch, type EditLook, type LookStyle, type UploadReport,
 } from './model'
 
 /** A line over the page: a bold lead and the rest. */
@@ -43,8 +43,11 @@ export function openNew(): EditorState {
   return { row: null, look: { ...NEW_LOOK, aliases: [] }, drafted: false, draftedAt: null, pending: null, report: null, copy: null, flash: null }
 }
 
-/** The fields an edit may change. An agency in code takes its name only. */
-export type LookEdit = Partial<Pick<EditLook, 'name' | 'aliases' | 'base' | 'accent'>>
+/** The fields an edit may change: a basic agency's name, spellings, colours and style. An agency in code takes its name only. */
+export type LookEdit = Partial<Pick<EditLook, 'name' | 'aliases' | 'base' | 'accent' | keyof LookStyle>>
+
+/** Each style field's name on the wire (DraftPatch); a default goes as null, which clears it. */
+const WIRE = { pill: 'pill', accentUse: 'accent_use', surface: 'surface', accentInk: 'accent_ink' } as const
 
 /** Apply an edit on the page, at once (the previews follow); the server hears of it through saveDraft. */
 export function edit(st: EditorState, patch: LookEdit, now: () => string = () => new Date().toISOString()): EditorState {
@@ -76,7 +79,11 @@ export async function saveDraft(api: PeopleApi, st: EditorState, fields: readonl
   for (const f of fields) {
     if (st.look.kind === 'code' && f !== 'name') continue
     if (f === 'aliases') body.aliases = [...st.look.aliases]
-    else body[f] = st.look[f]
+    else if (f === 'name' || f === 'base' || f === 'accent') body[f] = st.look[f]
+    else {
+      const v = st.look[f]
+      Object.assign(body, { [WIRE[f]]: v === DEFAULT_STYLE[f] || v == null ? null : v })
+    }
   }
   try {
     const row = await api.patchDraft(st.row.id, body)
@@ -102,7 +109,7 @@ export async function upload(api: PeopleApi, st: EditorState, name: string, text
   try {
     const took = await api.putWordmark(st.row!.id, text)
     const was = st.row as BasicRow
-    const row: BasicRow = { ...was, rev: took.rev, draft: { ...(was.draft ?? { name: was.name, aliases: was.aliases, base: was.base, accent: was.accent, wordmark: was.wordmark }), wordmark: took.svg } }
+    const row: BasicRow = { ...was, rev: took.rev, draft: { ...(was.draft ?? { name: was.name, aliases: was.aliases, base: was.base, accent: was.accent, wordmark: was.wordmark, pill: was.pill, accent_use: was.accent_use, surface: was.surface, accent_ink: was.accent_ink }), wordmark: took.svg } }
     return {
       ...st, row, look: { ...st.look, wordmark: took.svg, file: name },
       report: { ok: true, name, bytes: took.bytes, kept: took.kept_bytes, dropped: took.dropped, warnings: took.warnings },
@@ -132,6 +139,8 @@ export async function publish(api: PeopleApi, st: EditorState): Promise<EditorSt
     if (!row) {
       const l = st.look
       row = await api.createAgency({ name: l.name.trim(), aliases: l.aliases, base: l.base.toUpperCase(), accent: l.accent.toUpperCase() })
+      // its style goes to the new draft, like any other edit (only what is not the default)
+      if (!isDefaultStyle(l)) row = await api.patchDraft(row.id, { ...wireOf(l), rev: row.rev })
       if (st.pending) {
         try {
           row = { ...row, rev: (await api.putWordmark(row.id, st.pending.text)).rev }
