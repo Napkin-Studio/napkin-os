@@ -2290,14 +2290,19 @@ test('dropping a part onto a row joins it; a full row shrinks its parts to fit a
   assert.deepEqual(rowWith(L, five, 'objection'), ['objection:6'], 'a row of its own, below')
   assert.equal(rowWith(L, five, 'audience').length, 4)
   assert.deepEqual(keysOf(five).sort(), BM_FIELDS.map(f => f.key).sort(), 'every part is still on the sheet')
-  // A row is one section: a drop across a section boundary makes a row of its own instead (as before:
-  // a part never shared a row with another section's).
+  // Any parts can share a row (owner, 13 Nov): a drop across a section boundary joins the row like any
+  // other, fitted to the sheet, and its old row gets the width back.
   const across = L.layoutJoin(items, 'background', 'client', true)
-  assert.deepEqual(rowWith(L, across, 'background'), ['background:6'])
-  assert.deepEqual(rowWith(L, across, 'client'), ['client:12'])
+  assert.deepEqual(rowWith(L, across, 'client'), ['client:6', 'background:6'])
   assert.deepEqual(rowWith(L, across, 'barrier'), ['barrier:12'], 'its old row gets the width back')
   const cells = L.layoutPack(across)
-  assert.ok(cells.find(c => c.key === 'background')!.row > cells.find(c => c.key === 'client')!.row)
+  assert.equal(cells.find(c => c.key === 'background')!.row, cells.find(c => c.key === 'client')!.row)
+  // The owner's recording: Tone & world (Execution) into the free space after The objection to beat
+  // (Strategy) joins its row, and the row comes back the same after a save and reopen.
+  const narrow = L.layoutResize(L.layoutNewRow(items, 'objection', 'audience', true), 'objection', 5)
+  const mixed = L.layoutJoin(narrow, 'tone_and_world', 'objection', true)
+  assert.deepEqual(rowWith(L, mixed, 'objection'), ['objection:5', 'tone_and_world:6'])
+  assert.deepEqual(rowWith(L, reload(L, mixed), 'objection'), ['objection:5', 'tone_and_world:6'], 'kept after a save')
 })
 
 test('dropping between rows makes a row of its own; dragging a part out gives its width back to the rest of that row', () => {
@@ -3704,9 +3709,9 @@ test('a part moves in both frames: onto a part, into a row’s free space, betwe
   const fitted = L.layoutJoin(full, 'project_name', 'client', true)
   assert.equal(cellOf(fitted, 'project_name').row, cellOf(fitted, 'client').row)
   assert.equal(cellOf(fitted, 'project_name').w + cellOf(fitted, 'client').w, 12)
-  // Onto a part of another section: a row of its own, its width kept.
-  assert.equal(L.layoutJoin(items, 'job', 'client', true).find(x => x.key === 'job')!.w, 12)
-  assert.deepEqual(rowWith(L, L.layoutJoin(items, 'background', 'client', true), 'background'), ['background:6'])
+  // Onto a part of another section: it joins that row too (owner, 13 Nov), fitted into the free space.
+  assert.deepEqual(rowWith(L, L.layoutJoin(items, 'job', 'client', true), 'job'), ['client:6', 'job:6'])
+  assert.deepEqual(rowWith(L, L.layoutJoin(items, 'background', 'client', true), 'background'), ['client:6', 'background:6'])
   // Move up / Move down: read back the same.
   const up = L.layoutStep(items, 'project_name', -1)
   assert.deepEqual(keysOf(reload(L, up)).slice(0, 2), ['project_name', 'client'])

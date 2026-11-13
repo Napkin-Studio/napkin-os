@@ -29,9 +29,9 @@ async function openBrief(page: Page) {
   await page.reload()
   await page.getByTestId('work-item').first().click()
   const app = page.frameLocator('iframe').first()
-  // 21 parts, every row a part: the version is the side tab's, not a row on the sheet (owner, 10 Nov).
-  await expect(app.locator('#fields .row[data-clan-part]')).toHaveCount(21, { timeout: 30_000 })
-  await expect(app.locator('#fields .row')).toHaveCount(21)
+  // 23 parts, every row a part: the version is the side tab's, not a row on the sheet (owner, 10 Nov).
+  await expect(app.locator('#fields .row[data-clan-part]')).toHaveCount(23, { timeout: 30_000 })
+  await expect(app.locator('#fields .row')).toHaveCount(23)
   await expect(app.locator('#fields .row.k-cell').first()).toHaveAttribute('data-clan-part', 'client')
   return app
 }
@@ -84,7 +84,7 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   await expect(item.or(page.locator('[data-where="document"]'))).toBeVisible({ timeout: 30_000 })
   if (await item.isVisible()) await item.click()
   const again = page.frameLocator('iframe').first()
-  await expect(again.locator('#fields .row[data-clan-part]')).toHaveCount(21, { timeout: 30_000 })
+  await expect(again.locator('#fields .row[data-clan-part]')).toHaveCount(23, { timeout: 30_000 })
   const b2 = again.locator('#fields .row[data-clan-part="budget_and_scope"]')
   await expect(b2).toHaveClass(/\bconf\b/)
   const m2 = again.locator('#fields .row[data-clan-part="mandatories"]')
@@ -94,6 +94,46 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   expect(keys.indexOf('mandatories')).toBeLessThan(keys.indexOf(before!)) // it moved past the part before it on the sheet
   // Save · PDF and the menu's other ways to save are all there.
   for (const id of ['exPdf', 'exClient', 'exHtml', 'exGridPdf', 'exGridHtml', 'exHtmlPlain', 'exPdfPlain', 'saveBtn']) await expect(again.locator(`#${id}`)).toHaveCount(1)
+})
+
+test('any parts share a row: Tone & world dragged beside The objection to beat lands there and stays', async ({ page }) => {
+  // The owner's recording (13 Nov): a part of another section (Execution) dropped into the free space
+  // of a Strategy part's row used to light the slot and then land back below it.
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const app = await openBrief(page)
+  type Parts = Record<string, { row: number; col: number; w: number }>
+  const parts = async () => ((await order(page)) as { layout?: { parts?: Parts } }).layout?.parts ?? {}
+  // The objection to beat on a row of its own, half the sheet wide: Move down takes it out of its row.
+  const obj = app.locator('#fields .row[data-clan-part="objection"]')
+  await obj.locator('.lab > span').first().click()
+  const panel = app.locator('#selPart')
+  await panel.locator('[data-sp="down"]').click()
+  await expect.poll(async () => (await parts()).objection?.w).toBe(6)
+  const tone = app.locator('#fields .row[data-clan-part="tone_and_world"]')
+  await tone.scrollIntoViewIfNeeded()
+  await obj.scrollIntoViewIfNeeded()
+  const grip = (await tone.locator('.grip').boundingBox())!
+  const o = (await obj.boundingBox())!
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+  await page.mouse.down()
+  // Into the free space to the right of the objection, mid-height (not its top or bottom band).
+  const tx = o.x + o.width + 120, ty = o.y + o.height / 2
+  await page.mouse.move(tx - 40, ty, { steps: 6 })
+  await page.mouse.move(tx, ty, { steps: 6 })
+  await expect(app.locator('#fields .rowfree.drop-in')).toHaveCount(1)
+  await page.mouse.up()
+  await expect.poll(async () => { const p = await parts(); return [p.tone_and_world?.row === p.objection?.row, p.objection?.w, p.tone_and_world?.w] }).toEqual([true, 6, 6])
+  // It holds on reload.
+  await page.reload()
+  const item = page.getByTestId('work-item').first()
+  await expect(item.or(page.locator('[data-where="document"]'))).toBeVisible({ timeout: 30_000 })
+  if (await item.isVisible()) await item.click()
+  const again = page.frameLocator('iframe').first()
+  await expect(again.locator('#fields .row[data-clan-part]')).toHaveCount(23, { timeout: 30_000 })
+  const row = (k: string) => again.locator(`#fields .row[data-clan-part="${k}"]`).evaluate(el => (el as HTMLElement).style.gridRowStart)
+  expect(await row('tone_and_world')).toBe(await row('objection'))
+  await again.locator('#fields .row[data-clan-part="objection"]').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: test.info().outputPath('mixed-row.png') })
 })
 
 test('at 390 px the sheet is one column and a selected part opens as a bottom sheet', async ({ page }) => {
