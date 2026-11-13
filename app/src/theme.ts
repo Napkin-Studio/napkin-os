@@ -22,11 +22,20 @@ function systemTheme(): Theme {
   return window.matchMedia?.(QUERY).matches ? 'light' : 'dark'
 }
 
+/**
+ * What storage holds as a theme: light or dark. The three modes an earlier build stored are read as the
+ * theme they sat in (white and grey are light, black is dark), so no one's choice is lost.
+ */
+export function parseTheme(v: string | null): Theme | null {
+  if (v === 'light' || v === 'white' || v === 'grey') return 'light'
+  if (v === 'dark' || v === 'black') return 'dark'
+  return null
+}
+
 /** The user's own choice, if they have made one. */
 function storedTheme(): Theme | null {
   try {
-    const v = localStorage.getItem(STORAGE_KEY)
-    return v === 'light' || v === 'dark' ? v : null
+    return parseTheme(localStorage.getItem(STORAGE_KEY))
   } catch {
     // Private windows and locked-down browsers throw on access, not on read.
     return null

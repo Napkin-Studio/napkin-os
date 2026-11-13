@@ -190,7 +190,7 @@ export function PeoplePage({ go }: { go: (r: Route) => void }) {
   else if (people.length === 0) {
     body = admin
       ? <Empty line="No one is on the list yet. Bring your people in from a file, and each gets the home that fits their role." example={{ title: 'Example · Agency C, ten people', lines: ['Dara, creative director. Aoife, planning. Cian, account service.'] }} verb="Bring people in from a file" onStart={() => go({ level: 'setup' })} />
-      : <Empty line="Your agency has not set up its people list yet. Your studio admin does that." example={{ title: 'Example · Agency C, ten people', lines: ['Dara, creative director. Aoife, planning. Cian, account service.'] }} verb="Back to your home" onStart={() => go({ level: 'agency' })} />
+      : <Empty line="Your agency has not set up its people list yet. Your studio admin does that." example={{ title: 'Example · Agency C, ten people', lines: ['Dara, creative director. Aoife, planning. Cian, account service.'] }} verb="Back to the desk" onStart={() => go({ level: 'agency' })} />
   } else {
     body = (
       <>
@@ -214,7 +214,7 @@ export function PeoplePage({ go }: { go: (r: Route) => void }) {
             <h1 className="hero-title" tabIndex={-1} data-testid="people-title">Your people<span className="period-dot" aria-hidden /></h1>
             <p className="hero-sub">{admin ? 'Who works here and what they can open. A change reaches them on their next click.' : 'Who works here and what they do.'}</p>
           </div>
-          <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to your home</button></div>
+          <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to the desk</button></div>
         </section>
         <main className="hm-main">{body}</main>
       </div>

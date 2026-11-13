@@ -2,7 +2,7 @@
 import { expect, type Page } from '@playwright/test'
 import { PEOPLE } from './seed/j001'
 
-const home = async (page: Page) => { await page.goto('/'); await expect(page.getByTestId('home')).toBeVisible() }
+const home = async (page: Page) => { await page.goto('/'); await expect(page.getByTestId('desk')).toBeVisible() }
 
 export const PAGES = [
   { name: 'home of the art director', as: PEOPLE.artDirector, show: home },

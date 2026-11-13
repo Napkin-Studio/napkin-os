@@ -50,6 +50,8 @@ interface Props {
   /** This client's work. */
   items: readonly LibraryItem[]
   live: ReadonlySet<string>
+  /** The tools the person's role is offered; a tool it is not offered has no quadrant. Null offers all four. */
+  offered?: ReadonlySet<string> | null
   /** Where the dial sits in the row (the mock's openClient placement). */
   place: { left: number; top: number; origin: string }
   onOpenTool: (tool: Tool) => void
@@ -60,25 +62,35 @@ interface Props {
   focusFirst?: boolean
 }
 
-export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenClient, onClose, focusFirst }: Props) {
+export function Dial({ client, items, live, offered = null, place, onOpenTool, onSoon, onOpenClient, onClose, focusFirst }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   // One tab stop for the four quadrants (roving): the arrows move it, and it starts on the first.
   const [at, setAt] = useState(0)
   const quads = useRef<(SVGGElement | null)[]>([])
-  const n = QUADRANTS.length, span = (2 * Math.PI) / n, start = -Math.PI / 2 - span / 2
+  // Only the tools the role is offered have a quadrant. The four keep their places on the circle (the dial is not
+  // re-cut for a role), so 1 to 4 and the shapes stay where a person learned them; a tool not offered leaves a gap.
+  const quads4 = QUADRANTS.map((q, orig) => ({ q, orig })).filter(({ q }) => !offered || offered.has(q.id))
+  const n = quads4.length, span = (2 * Math.PI) / QUADRANTS.length, start = -Math.PI / 2 - span / 2
   const choose = (i: number) => {
-    const t = toolById(QUADRANTS[i].id)
+    const t = toolById(quads4[i].q.id)
     if (!t) return
     if (live.has(t.id)) onOpenTool(t)
     else onSoon(t)
   }
-  const pick = useRef(choose)
-  useEffect(() => { pick.current = choose })
+  // A number key names a place on the circle (1 to 4); it opens that tool only when the role has it.
+  const chooseKey = (orig: number): boolean => {
+    const i = quads4.findIndex(x => x.orig === orig)
+    if (i < 0) return false
+    choose(i)
+    return true
+  }
+  const pick = useRef(chooseKey)
+  useEffect(() => { pick.current = chooseKey })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey || e.ctrlKey || e.metaKey) return
       if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
-      if (/^[1-4]$/.test(e.key)) { e.preventDefault(); pick.current(Number(e.key) - 1) }
+      if (/^[1-4]$/.test(e.key) && pick.current(Number(e.key) - 1)) e.preventDefault()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -93,11 +105,11 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const parts = QUADRANTS.map((q, i) => {
+  const parts = quads4.map(({ q, orig }, i) => {
     const mine = items.filter(it => toolOfApp(it.app_id)?.id === q.id)
     const st = areaState(mine)
     const on = live.has(q.id)
-    const a0 = start + i * span, a1 = a0 + span, am = (a0 + a1) / 2
+    const a0 = start + orig * span, a1 = a0 + span, am = (a0 + a1) / 2
     const [lx, ly] = pol(212, am)
     const c = mine.length
     const sub = !on ? 'Soon' : st === 'needs' ? '' : st === 'working' ? 'Agents working' : c ? `${c} ${q.noun[c > 1 ? 1 : 0]}` : 'Nothing yet'
@@ -106,8 +118,8 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
     const move = (to: number) => { const k = (to + n) % n; setAt(k); quads.current[k]?.focus() }
     return (
       <g key={q.id}>
-        <g className={`dz dz-out${st === 'needs' ? ' dz-needs' : ''}`} data-i={i} style={{ ['--d' as string]: `${i * 55}ms` }}
-          role="button" tabIndex={i === at ? 0 : -1} aria-label={said} aria-keyshortcuts={String(i + 1)} data-testid={`quadrant-${q.id}`}
+        <g className={`dz dz-out${st === 'needs' ? ' dz-needs' : ''}`} data-i={orig} style={{ ['--d' as string]: `${orig * 55}ms` }}
+          role="button" tabIndex={i === at ? 0 : -1} aria-label={said} aria-keyshortcuts={String(orig + 1)} data-testid={`quadrant-${q.id}`}
           data-activity={strongest(mine.map(activityOfItem))}
           ref={el => { quads.current[i] = el }}
           aria-disabled={on ? undefined : true}

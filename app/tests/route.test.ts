@@ -116,3 +116,13 @@ test('a malformed job hash is the landing', () => {
   ]
   for (const h of hostile) assert.deepEqual(parseRoute(h), { level: 'agency' }, JSON.stringify(h))
 })
+
+test('the role home and the O are gone: their old addresses fall to the desk like any unknown one', () => {
+  for (const old of ['#map', '#home-planning', '#home-copywriter', '#home-', '#home-x/y']) {
+    assert.deepEqual(parseRoute(old), { level: 'agency' }, old)
+    assert.equal(formatRoute(parseRoute(old)), '#agency', old)
+  }
+  // the page door and the new tool ids stay
+  assert.deepEqual(parseRoute('#door-live-jobs'), { level: 'door', door: 'live-jobs' })
+  for (const tool of ['script', 'visual', 'idea']) assert.deepEqual(parseRoute(`#tool-${ID}-${tool}`), { level: 'tool', client: ID, tool })
+})

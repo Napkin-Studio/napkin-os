@@ -25,7 +25,7 @@ for (const size of SIZES) {
     await page.goto('/')
     await page.getByTestId('sign-in-agency').fill(SSO_AGENCY) // ADJUST(sso)
     await page.getByRole('button', { name: SSO_BUTTON }).click()
-    await expect(page.getByTestId('home')).toBeVisible()
+    await expect(page.getByTestId('desk')).toBeVisible()
     const session = (await (await page.request.get('/api/session')).json()) as { username: string; roles: string[] }
     expect(session.roles).toEqual(SSO_PERSON.roles)
     // A person from an unknown domain is refused with one line.
@@ -53,7 +53,7 @@ for (const size of SIZES) {
     // Try again works once the provider is back.
     await page.request.post(`${idp}/control`, { data: { fail: false, sign_in_as: SSO_PERSON } })
     await page.getByRole('button', { name: 'Try again' }).click()
-    await expect(page.getByTestId('home')).toBeVisible()
+    await expect(page.getByTestId('desk')).toBeVisible()
     await ctx.close()
   })
 }

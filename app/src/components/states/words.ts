@@ -106,7 +106,7 @@ export const J001_BRIEF_EXAMPLE: Example = {
 }
 
 /** The three modes every screen reads in (v2 section 8). */
-export const MODES = ['white', 'grey', 'black'] as const
+export const MODES = ['white', 'black'] as const
 export type Mode = (typeof MODES)[number]
 
 /** The ids the shell sends the app (clan:bar-action) when a state's button is pressed. */

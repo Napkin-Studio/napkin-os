@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Toolbar, { type Account, type ClientChip, type Crew, type ToolBrand } from '../components/Toolbar'
 import SaveStatus from '../components/SaveStatus'
+import { toolOfApp } from './landing/tools'
 import { useLinks, useMadeFrom, useSpinoffTargets, useWakeTick } from '../components/ContinueIn'
 import { linksOf } from '../components/barMenus'
 import Sidebar from '../components/Sidebar'
@@ -70,6 +71,8 @@ interface Props {
   account?: Account
   /** The tool's key, for its icon and face in the bar. */
   toolKey?: string | null
+  /** The tools the person's role is offered (the server's `tools`): Continue in lists only these. Null offers all. */
+  offeredTools?: ReadonlySet<string> | null
   /** Continue in › Start fresh: a new document of this app for this client. */
   onStartFresh?: () => void
   /** The document menu's way to its tool's page for its client. */
@@ -103,7 +106,7 @@ interface Props {
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
 const NO_ITEMS: BarItem[] = []
 
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, barField, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, offeredTools = null, onStartFresh, onToolPage, agency, agencyLogo, barField, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
   const docPath = open.path
@@ -155,7 +158,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   }, [docPath])
   // Which view the drawer shows: Graph, By part, By time or Lineage.
   const [drawerView, setDrawerView] = useState<DrawerView>('graph')
-  const targets = useSpinoffTargets(docPath)
+  const allTargets = useSpinoffTargets(docPath)
+  // Continue in offers only the tools the role is offered (a tool the role may not open is absent, not greyed).
+  const targets = offeredTools ? allTargets.filter(t => { const k = toolOfApp(t.app_id)?.id; return !k || offeredTools.has(k) }) : allTargets
   const noun = nounOf(open.manifest.app?.app_id)
   // The tool, as its manifest names it (app.home.brand, else its name); a
   // document made before tools named themselves still finds its tool.

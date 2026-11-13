@@ -190,6 +190,45 @@ export function contrast(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
+/** What text on a colour must reach (WCAG AA). */
+export const MIN_CONTRAST = 4.5
+const TARGET = 4.8
+
+function toHsl([r, g, b]: [number, number, number]): [number, number, number] {
+  r /= 255; g /= 255; b /= 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2
+  if (max === min) return [0, 0, l]
+  const d = max - min
+  const sat = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return [h * 60, sat, l]
+}
+
+function hslHex([h, sat, l]: [number, number, number]): string {
+  const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+  return '#' + [r, g, b].map(v => Math.round(Math.max(0, Math.min(255, (v + m) * 255))).toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * A client's monogram ink on its own fill, at 4.5 to 1 or better. The fill is the client's colour and does not
+ * change with the theme, so neither does this pair. An ink that already reads is returned as it is; otherwise only
+ * its lightness moves, away from the fill, so it keeps its hue and saturation.
+ */
+export function readableInk(fill: string, ink: string): string {
+  const reads = (c: string) => contrast(c, fill) >= TARGET
+  if (reads(ink)) return ink
+  const c0 = rgb(ink)
+  if (!c0) return inkOn(fill)
+  const [h, sat, l] = toHsl(c0)
+  const lighter = contrast(WHITE, fill) >= contrast(INK, fill)
+  for (let step = 1; step <= 100; step++) {
+    const c = hslHex([h, sat, Math.max(0, Math.min(1, l + (lighter ? 1 : -1) * step * 0.01))])
+    if (reads(c)) return c
+  }
+  return lighter ? '#FFFFFF' : '#000000'
+}
+
 /** Near-black or white, whichever reads better on `bg`. */
 export function inkOn(bg: string): string {
   return contrast(bg, INK) >= contrast(bg, WHITE) ? INK : WHITE
