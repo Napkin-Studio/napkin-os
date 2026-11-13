@@ -16,7 +16,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import {
   AGENCY_ALIASES, AGENCY_COLOURS, accentInkOf, agencyIdOf, agencyOfSignInName, canonicalAgencyId, coloursOf, contrast, groundOf, iconOf,
-  markOf, paletteOf, pillLogoOf, pillOf, surfaceCss, wordmarkOf,
+  lookChecks, markOf, paletteOf, pillLogoOf, pillOf, surfaceCss, wordmarkOf,
 } from '../src/shell/agency/palette.ts'
 import { ICON_PNG, ICON_SVG, WORDMARK_SVG } from '../src/shell/agency/logos.ts'
 import { recolourSvg, sanitiseSvg } from '../src/shell/agency/svgSanitise.ts'
@@ -50,18 +50,28 @@ test('each look is complete and reads: tokens, action colour, desk tint and mark
     const p = paletteOf(c)
     for (const theme of ['light', 'dark'] as const) {
       for (const k of ['agency', 'fg', 'soft'] as const) assert.match(p[theme][k], /^#[0-9A-F]{6}$/, `${id} ${theme} ${k}`)
-      assert.ok(contrast(p[theme].agency, p[theme].fg) >= 4.5, `${id} ${theme}: text on the accent`)
+      // the --agency tokens are the accent and its ink: lookChecks' "Ink on the accent"
+      assert.deepEqual([p[theme].agency, p[theme].fg], [c.accent.toUpperCase(), accentInkOf(c)], `${id} ${theme}: text on the accent`)
     }
-    assert.ok(contrast(c.accent, accentInkOf(c)) >= 4.5, `${id}: ink on the accent`)
     const css = surfaceCss(c)
     for (const theme of ['light', 'dark'] as const) {
       const t = tokens(css, theme)
-      assert.ok(contrast(t['--ag-act'], t['--ag-act-ink']) >= 4.5, `${id} ${theme}: ${t['--ag-act-ink']} on the action colour ${t['--ag-act']}`)
-      assert.ok(contrast(t['--ag-acc'], t['--ag-acc-ink']) >= 4.5, `${id} ${theme}: ink on the accent`)
-      if (t['--needs']) assert.ok(contrast(t['--needs'], t['--needs-ink']) >= 4.5, `${id} ${theme}: the needs count`)
+      // --ag-acc-ink is the same ink on the same accent, and the needs pair is the same in both themes (lookChecks checks them once)
+      assert.deepEqual([t['--ag-acc'], t['--ag-acc-ink']], [c.accent.toUpperCase(), accentInkOf(c)], `${id} ${theme}: ink on the accent`)
+      assert.deepEqual([t['--needs'], t['--needs-ink']], [tokens(css, 'light')['--needs'], tokens(css, 'light')['--needs-ink']], `${id} ${theme}: the needs count`)
     }
+    // every pair of ink and ground the look draws reads (palette.ts lookChecks: the People page's editor runs the same)
+    const checks = lookChecks(c, true)
+    for (const k of checks) assert.ok(k.ratio >= k.need, `${id}: ${k.label}, ${k.fg} on ${k.bg} is ${k.ratio.toFixed(2)}, needs ${k.need}`)
+    const by = Object.fromEntries(checks.map(k => [k.label, k]))
     const pill = pillOf(c)
-    assert.ok(contrast(pill.bg, pill.ink) >= 4.5, `${id}: ink on the pill`)
+    assert.deepEqual([by['Text on the pill'].bg, by['Text on the pill'].fg], [pill.bg, pill.ink], `${id}: ink on the pill`)
+    for (const theme of ['light', 'dark'] as const) {
+      const t = tokens(css, theme), k = by[theme === 'light' ? 'Text on the base (buttons, light)' : 'Text on the accent (buttons, dark)']
+      assert.deepEqual([k.bg, k.fg], [t['--ag-act'], t['--ag-act-ink']], `${id} ${theme}: ${t['--ag-act-ink']} on the action colour ${t['--ag-act']}`)
+    }
+    if (tokens(css, 'light')['--needs']) assert.ok(by['What needs you'], `${id}: the needs count`)
+    for (const l of ['Logo on the pill', 'Logo on a light ground (sign-in card)', 'Logo on a dark ground (recoloured white)']) assert.ok(by[l], `${id}: ${l}`)
     for (const tok of ['--ag-act', '--ag-act-ink', '--desk', '--paper', '--line', '--ag-base', '--ag-acc'])
       assert.equal(css.split(`${tok}:`).length - 1, 2, `${id}: ${tok} in both themes`)
     if (c.surface === 'mono') assert.match(css, /--desk: #F5F5F4;[\s\S]*--desk: #000000;/, `${id}: neutral desks`)
@@ -197,7 +207,7 @@ test('no script, style, link or handler survives the sanitiser', () => {
 
 test('the committed logos are sanitised, small, and logos.ts is written from them', () => {
   const files = readdirSync(LOGOS).sort()
-  assert.deepEqual(files, ['boysandgirls-icon.png', 'boysandgirls-logo.svg', 'catapult-icon.svg', 'catapult-logo.svg', 'pluto-logo.svg'])
+  assert.deepEqual(files, ['acne-logo.svg', 'boysandgirls-icon.png', 'boysandgirls-logo.svg', 'catapult-icon.svg', 'catapult-logo.svg', 'pluto-logo.svg'])
   for (const f of files) {
     const buf = readFileSync(`${LOGOS}/${f}`)
     assert.ok(buf.length < 6000, `${f} is small (${buf.length} bytes)`)

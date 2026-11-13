@@ -9,8 +9,9 @@
 //! from the People page by an admin:
 //!
 //! ```text
-//! <data>/_people/people.json     { people: [...], agencies: [...] }
+//! <data>/_people/people.json     { people: [...], agencies: [...], names: {...} }
 //! <data>/_people/changes.jsonl   one line per change: when, who, what
+//! <data>/_people/logos/<id>/     basic agencies' cleaned wordmarks (wordmark-<sha256-8>.svg)
 //! ```
 //!
 //! The file is seeded once, from the roster file (`NAPKIN_AUTH_ROSTER`), the
@@ -21,7 +22,11 @@
 //! (tmp + rename) and a read notices another task's write by the file's
 //! modification time, checked at most every [`RECHECK`].
 //!
-//! Agencies here are the ones added from the page. The shell's registry
+//! Two tiers of agency (features/agency-looks-admin.clan). `agencies` are the
+//! basic ones, made on the page: a name, aliases, base, accent and one SVG
+//! wordmark, every change going to a draft until it is published. `names`
+//! holds the display names given on the page to agencies kept in code, the
+//! only thing about them the page can change. The shell's registry
 //! (app/src/shell/agency/palette.ts `AGENCY_COLOURS`, `AGENCY_ALIASES`) keeps
 //! the agencies with logos and options; [`CODE_AGENCIES`] and
 //! [`CODE_ALIASES`] mirror its ids, names, colours and aliases so an agency is
@@ -57,6 +62,7 @@ pub const CODE_AGENCIES: &[(&str, &str, &str, &str)] = &[
     ("boysandgirls", "Boys+Girls", "#000000", "#FFFFFF"),
     ("catapult", "Catapult", "#000000", "#C61566"),
     ("pluto", "Pluto", "#000047", "#B2F257"),
+    ("acne", "ACNE", "#000000", "#86BC25"),
 ];
 
 /// Other spellings of the registry's agencies (palette.ts `AGENCY_ALIASES`).
@@ -93,6 +99,58 @@ impl PersonRec {
     }
 }
 
+/// A basic agency's wordmark: a sanitised SVG file under
+/// `<store>/logos/<agency id>/`, named by its content (`wordmark-<sha256-8>.svg`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Wordmark {
+    pub file: String,
+    /// The cleaned file's size.
+    pub bytes: usize,
+}
+
+/// `Option<Option<T>>` read so that a key given as `null` is `Some(None)`
+/// (removed in the draft) and an absent key is `None` (unchanged).
+fn present<'de, D, T>(d: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(d).map(Some)
+}
+
+/// What a basic agency's draft changes, field by field; an absent field is the
+/// published one. `wordmark: null` takes the published wordmark away.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BasicDraft {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aliases: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    pub wordmark: Option<Option<Wordmark>>,
+}
+
+impl BasicDraft {
+    fn is_empty(&self) -> bool {
+        *self == BasicDraft::default()
+    }
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// A basic agency: made on the People page, its look from two colours and a
+/// wordmark. An agency kept before drafts existed has none of the draft
+/// fields and reads as published.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgencyRec {
     pub id: String,
@@ -101,10 +159,136 @@ pub struct AgencyRec {
     pub accent: String,
     #[serde(default)]
     pub aliases: Vec<String>,
+    #[serde(default)]
+    pub wordmark: Option<Wordmark>,
+    /// False until the first Publish: then it is not on `/agency-looks` and
+    /// people cannot be added to it.
+    #[serde(default = "yes")]
+    pub published: bool,
+    /// Unpublished changes. An unpublished agency always has one (perhaps empty).
+    #[serde(default)]
+    pub draft: Option<BasicDraft>,
+    /// Bumped on every change to this agency; a write naming an older one is refused.
+    #[serde(default)]
+    pub rev: u64,
+    /// The rev the published look was made at (what `/agency-looks` shows, so
+    /// a draft is not seen there even as a number).
+    #[serde(default)]
+    pub published_rev: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub added_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub added_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changed_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changed_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_at: Option<String>,
+}
+
+/// The look a basic agency's draft would publish: every field, merged.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct BasicLook {
+    pub name: String,
+    pub aliases: Vec<String>,
+    pub base: String,
+    pub accent: String,
+    pub wordmark: Option<Wordmark>,
+}
+
+impl AgencyRec {
+    /// The look as published (for an unpublished agency, as created).
+    pub fn live(&self) -> BasicLook {
+        BasicLook {
+            name: self.name.clone(),
+            aliases: self.aliases.clone(),
+            base: self.base.clone(),
+            accent: self.accent.clone(),
+            wordmark: self.wordmark.clone(),
+        }
+    }
+
+    /// The look the draft would publish; None without a draft.
+    pub fn drafted(&self) -> Option<BasicLook> {
+        let d = self.draft.as_ref()?;
+        let l = self.live();
+        Some(BasicLook {
+            name: d.name.clone().unwrap_or(l.name),
+            aliases: d.aliases.clone().unwrap_or(l.aliases),
+            base: d.base.clone().unwrap_or(l.base),
+            accent: d.accent.clone().unwrap_or(l.accent),
+            wordmark: d.wordmark.clone().unwrap_or(l.wordmark),
+        })
+    }
+
+    /// Every name the agency answers to or will once its draft is published.
+    fn claims(&self) -> Vec<String> {
+        let mut out = vec![self.id.clone(), self.name.to_lowercase()];
+        out.extend(self.aliases.iter().map(|a| a.to_lowercase()));
+        if let Some(d) = &self.draft {
+            out.extend(d.name.iter().map(|n| n.to_lowercase()));
+            out.extend(d.aliases.iter().flatten().map(|a| a.to_lowercase()));
+        }
+        out
+    }
+
+    /// Drop draft fields that equal the published ones; a published agency's
+    /// empty draft goes.
+    fn tidy_draft(&mut self) {
+        let l = self.live();
+        if let Some(d) = &mut self.draft {
+            if d.name.as_ref() == Some(&l.name) {
+                d.name = None;
+            }
+            if d.aliases.as_ref() == Some(&l.aliases) {
+                d.aliases = None;
+            }
+            if d.base.as_ref() == Some(&l.base) {
+                d.base = None;
+            }
+            if d.accent.as_ref() == Some(&l.accent) {
+                d.accent = None;
+            }
+            if d.wordmark.as_ref() == Some(&l.wordmark) {
+                d.wordmark = None;
+            }
+            if self.published && d.is_empty() {
+                self.draft = None;
+            }
+        }
+    }
+
+    fn touched(&mut self, by: &str) {
+        self.rev += 1;
+        self.changed_by = Some(by.to_string());
+        self.changed_at = Some(now());
+    }
+}
+
+/// A display name given on the page to an agency kept in code (palette.ts):
+/// only the name can change there; the look stays the code's.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NameRec {
+    /// The published name (the code's until a draft is first published).
+    pub name: String,
+    #[serde(default)]
+    pub draft_name: Option<String>,
+    #[serde(default)]
+    pub rev: u64,
+    /// The rev the published name was made at.
+    #[serde(default)]
+    pub published_rev: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changed_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changed_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -113,6 +297,17 @@ pub struct Book {
     pub people: Vec<PersonRec>,
     #[serde(default)]
     pub agencies: Vec<AgencyRec>,
+    /// Display names of agencies in code, by code id.
+    #[serde(default)]
+    pub names: std::collections::BTreeMap<String, NameRec>,
+}
+
+/// The code agency `id`'s name in palette.ts.
+pub fn code_name(id: &str) -> Option<&'static str> {
+    CODE_AGENCIES
+        .iter()
+        .find(|(i, ..)| *i == id)
+        .map(|(_, n, ..)| *n)
 }
 
 /// Why a change was refused, as the route answers it.
@@ -168,7 +363,8 @@ pub fn first_name_user(name: &str) -> String {
 
 impl Book {
     /// The agency id `text` means: an id, a name or an alias, of the shell's
-    /// registry or of an added agency, any case. None when nothing matches.
+    /// registry (or the display name published for one) or of a published
+    /// basic agency, any case. None when nothing matches.
     pub fn recognise(&self, text: &str) -> Option<String> {
         let t = text.trim().to_lowercase();
         if t.is_empty() {
@@ -184,14 +380,55 @@ impl Book {
                 return Some(id.to_string());
             }
         }
+        if let Some((id, _)) = self.names.iter().find(|(_, n)| n.name.to_lowercase() == t) {
+            return Some(id.clone());
+        }
         self.agencies
             .iter()
+            .filter(|a| a.published)
             .find(|a| {
                 a.id == t
                     || a.name.to_lowercase() == t
                     || a.aliases.iter().any(|x| x.to_lowercase() == t)
             })
             .map(|a| a.id.clone())
+    }
+
+    /// The agency, other than `except`, that already answers to `text` or will
+    /// once its draft is published: code ids, names, aliases and display
+    /// names (published or drafted), and every basic agency's id, names and
+    /// aliases, published or not.
+    pub fn claimed(&self, text: &str, except: &str) -> Option<String> {
+        let t = text.trim().to_lowercase();
+        if t.is_empty() {
+            return None;
+        }
+        for (id, name, _, _) in CODE_AGENCIES {
+            if *id != except && (t == *id || t == name.to_lowercase()) {
+                return Some(id.to_string());
+            }
+        }
+        for (alias, id) in CODE_ALIASES {
+            if *id != except && t == *alias {
+                return Some(id.to_string());
+            }
+        }
+        for (id, n) in &self.names {
+            if id != except
+                && (n.name.to_lowercase() == t
+                    || n.draft_name.as_ref().is_some_and(|d| d.to_lowercase() == t))
+            {
+                return Some(id.clone());
+            }
+        }
+        self.agencies
+            .iter()
+            .find(|a| a.id != except && a.claims().contains(&t))
+            .map(|a| a.id.clone())
+    }
+
+    pub fn agency(&self, id: &str) -> Option<&AgencyRec> {
+        self.agencies.iter().find(|a| a.id == id)
     }
 
     pub fn person(&self, id: &str) -> Option<&PersonRec> {
@@ -226,7 +463,7 @@ impl Book {
         }
         Book {
             people,
-            agencies: Vec::new(),
+            ..Default::default()
         }
     }
 }
@@ -242,18 +479,103 @@ pub struct NewPerson {
     pub username: Option<String>,
 }
 
-/// What adding an agency asks for.
+/// What creating a basic agency asks for. Its id is made from the name
+/// ([`agency_slug`]) and fixed from then on.
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NewAgency {
     /// The name as shown.
     pub name: String,
-    /// The id people sign in under; made from the name when absent.
-    #[serde(default)]
-    pub id: Option<String>,
     pub base: String,
     pub accent: String,
     #[serde(default)]
     pub aliases: Vec<String>,
+}
+
+/// A change to an agency's draft. A basic agency takes any of the fields; an
+/// agency in code only `name`. `rev` is the agency's as the page last read it.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DraftEdit {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub aliases: Option<Vec<String>>,
+    #[serde(default)]
+    pub base: Option<String>,
+    #[serde(default)]
+    pub accent: Option<String>,
+    #[serde(default)]
+    pub rev: Option<u64>,
+}
+
+/// Publishing asks for the rev the page last read.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Publish {
+    #[serde(default)]
+    pub rev: Option<u64>,
+}
+
+/// Other spellings as kept: trimmed, lower case, once each, none empty.
+fn clean_aliases(aliases: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for a in aliases {
+        let a = a.trim().to_lowercase();
+        if !a.is_empty() && !out.contains(&a) {
+            out.push(a);
+        }
+    }
+    out
+}
+
+fn colours(base: &str, accent: &str) -> Change<(String, String)> {
+    match (hex_colour(base), hex_colour(accent)) {
+        (Some(b), Some(a)) => Ok((b, a)),
+        _ => bad("The base and accent colours must be #rrggbb."),
+    }
+}
+
+fn stale<T>(name: &str) -> Change<T> {
+    Err(Refusal::Conflict(format!(
+        "{name} was changed by someone else since you opened it. Reload it to see their change."
+    )))
+}
+
+fn need_rev(rev: Option<u64>) -> Change<u64> {
+    rev.ok_or_else(|| Refusal::Bad("Say which rev of the agency you are changing.".into()))
+}
+
+/// Refuse a name or alias another agency answers to (or will, once published).
+fn check_free<'a>(book: &Book, id: &str, texts: impl IntoIterator<Item = &'a str>) -> Change<()> {
+    for t in texts {
+        if let Some(other) = book.claimed(t, id) {
+            return Err(Refusal::Conflict(format!(
+                "{t:?} is already the agency {other}."
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Which of the two kinds an agency id is.
+pub enum Kind {
+    Code(&'static str),
+    Basic,
+}
+
+fn kind_of(book: &Book, id: &str) -> Change<Kind> {
+    if let Some(n) = code_name(id) {
+        return Ok(Kind::Code(n));
+    }
+    if book.agency(id).is_some() {
+        return Ok(Kind::Basic);
+    }
+    Err(Refusal::NotFound(format!("There is no agency {id}.")))
+}
+
+fn code_only_name<T>() -> Change<T> {
+    bad("Only the display name of an agency in code changes here; its look is kept in code.")
 }
 
 struct Cache {
@@ -368,12 +690,23 @@ impl People {
             return bad("Give the person's name.");
         }
         self.change(by, "added", |book| {
-            let agency = book.recognise(&req.agency).ok_or_else(|| {
-                Refusal::Bad(format!(
+            let Some(agency) = book.recognise(&req.agency) else {
+                let t = req.agency.trim().to_lowercase();
+                if let Some(a) = book
+                    .agencies
+                    .iter()
+                    .find(|a| !a.published && a.claims().contains(&t))
+                {
+                    return Err(Refusal::Conflict(format!(
+                        "{} is not published yet, so nobody can be added to it. Publish it on the Agencies tab first.",
+                        a.drafted().map_or_else(|| a.name.clone(), |l| l.name)
+                    )));
+                }
+                return Err(Refusal::Bad(format!(
                     "No agency called {:?}. Add it as a new agency first.",
                     req.agency.trim()
-                ))
-            })?;
+                )));
+            };
             let typed = req
                 .username
                 .as_deref()
@@ -452,58 +785,355 @@ impl People {
         })
     }
 
-    /// Add an agency with its look.
+    /// Create a basic agency as a draft: nobody sees it, and nobody can be
+    /// added to it, until it is published.
     pub fn add_agency(&self, by: &str, req: &NewAgency) -> Change<AgencyRec> {
         let name = req.name.trim().to_string();
         if name.is_empty() {
             return bad("Give the agency's name as people should see it.");
         }
-        let (Some(base), Some(accent)) = (hex_colour(&req.base), hex_colour(&req.accent)) else {
-            return bad("The base and accent colours must be #rrggbb.");
-        };
-        let id = req
-            .id
-            .as_deref()
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| agency_slug(&name));
+        let (base, accent) = colours(&req.base, &req.accent)?;
+        let id = agency_slug(&name);
         if Account::parse_username(&format!("x@{id}")).map(|(_, a)| a) != Some(id.clone()) {
             return bad(format!(
-                "{id:?} cannot be an agency id: letters, digits and hyphens only."
+                "{name:?} makes no usable sign-in id: give a name with letters or digits."
             ));
         }
-        let aliases: Vec<String> = req
-            .aliases
-            .iter()
-            .map(|a| a.trim().to_lowercase())
-            .filter(|a| !a.is_empty())
-            .collect();
-        self.change(by, "agency added", |book| {
-            for t in [id.as_str(), name.as_str()]
-                .into_iter()
-                .chain(aliases.iter().map(String::as_str))
-            {
-                if let Some(other) = book.recognise(t) {
-                    return Err(Refusal::Conflict(format!(
-                        "{t:?} is already the agency {other}."
-                    )));
-                }
-            }
+        let aliases = clean_aliases(&req.aliases);
+        self.change(by, "agency drafted", |book| {
+            check_free(
+                book,
+                "",
+                [id.as_str(), name.as_str()]
+                    .into_iter()
+                    .chain(aliases.iter().map(String::as_str)),
+            )?;
+            let at = now();
             let rec = AgencyRec {
                 id: id.clone(),
                 name: name.clone(),
                 base: base.clone(),
                 accent: accent.clone(),
                 aliases: aliases.clone(),
+                wordmark: None,
+                published: false,
+                draft: Some(BasicDraft::default()),
+                rev: 1,
+                published_rev: 0,
                 added_by: Some(by.to_string()),
-                added_at: Some(now()),
+                added_at: Some(at.clone()),
+                changed_by: Some(by.to_string()),
+                changed_at: Some(at),
+                published_by: None,
+                published_at: None,
             };
             book.agencies.push(rec.clone());
             Ok((
                 rec,
-                serde_json::json!({ "agency": id, "name": name, "base": base, "accent": accent }),
+                serde_json::json!({ "agency": id, "name": name, "base": base, "accent": accent, "aliases": aliases }),
             ))
         })
+    }
+
+    /// Change an agency's draft: a basic agency's name, aliases and colours,
+    /// an agency in code's display name only.
+    pub fn edit_draft(&self, by: &str, id: &str, req: &DraftEdit) -> Change<()> {
+        let rev = need_rev(req.rev)?;
+        let name = match req.name.as_deref().map(str::trim) {
+            Some("") => return bad("Give the agency's name as people should see it."),
+            n => n.map(str::to_string),
+        };
+        let base = match req.base.as_deref() {
+            Some(b) => Some(
+                hex_colour(b)
+                    .ok_or_else(|| Refusal::Bad("The base colour must be #rrggbb.".into()))?,
+            ),
+            None => None,
+        };
+        let accent = match req.accent.as_deref() {
+            Some(a) => Some(
+                hex_colour(a)
+                    .ok_or_else(|| Refusal::Bad("The accent colour must be #rrggbb.".into()))?,
+            ),
+            None => None,
+        };
+        let aliases = req.aliases.as_deref().map(clean_aliases);
+        self.change(by, "agency draft changed", |book| {
+            match kind_of(book, id)? {
+                Kind::Code(code) => {
+                    if aliases.is_some() || base.is_some() || accent.is_some() {
+                        return code_only_name();
+                    }
+                    let current = book.names.get(id).map_or(0, |n| n.rev);
+                    if rev != current {
+                        return stale(code);
+                    }
+                    let Some(name) = name.clone() else {
+                        return bad("Give the display name.");
+                    };
+                    check_free(book, id, [name.as_str()])?;
+                    let n = book.names.entry(id.to_string()).or_insert_with(|| NameRec {
+                        name: code.to_string(),
+                        draft_name: None,
+                        rev: 0,
+                        published_rev: 0,
+                        changed_by: None,
+                        changed_at: None,
+                        published_by: None,
+                        published_at: None,
+                    });
+                    n.draft_name = (name != n.name).then(|| name.clone());
+                    n.rev += 1;
+                    n.changed_by = Some(by.to_string());
+                    n.changed_at = Some(now());
+                    let gone = n.draft_name.is_none() && n.name == code;
+                    if gone {
+                        book.names.remove(id);
+                    }
+                    Ok(((), serde_json::json!({ "agency": id, "name": name })))
+                }
+                Kind::Basic => {
+                    let i = book.agencies.iter().position(|a| a.id == id).unwrap();
+                    let current = &book.agencies[i];
+                    if rev != current.rev {
+                        return stale(&current.name);
+                    }
+                    check_free(
+                        book,
+                        id,
+                        name.iter()
+                            .map(String::as_str)
+                            .chain(aliases.iter().flatten().map(String::as_str)),
+                    )?;
+                    let a = &mut book.agencies[i];
+                    let d = a.draft.get_or_insert_with(BasicDraft::default);
+                    if name.is_some() {
+                        d.name = name.clone();
+                    }
+                    if aliases.is_some() {
+                        d.aliases = aliases.clone();
+                    }
+                    if base.is_some() {
+                        d.base = base.clone();
+                    }
+                    if accent.is_some() {
+                        d.accent = accent.clone();
+                    }
+                    a.tidy_draft();
+                    a.touched(by);
+                    Ok((
+                        (),
+                        serde_json::json!({ "agency": id, "name": name, "aliases": aliases, "base": base, "accent": accent }),
+                    ))
+                }
+            }
+        })
+    }
+
+    /// Put a cleaned wordmark into a basic agency's draft. The file is
+    /// written first, named by its content, so a refused change leaves only
+    /// an unused file behind.
+    pub fn set_wordmark(&self, by: &str, id: &str, svg: &str) -> Change<()> {
+        if code_name(id).is_some() {
+            return Err(Refusal::Conflict(
+                "An agency in code keeps its logos in code; only its display name changes here."
+                    .into(),
+            ));
+        }
+        if self.book().agency(id).is_none() {
+            return Err(Refusal::NotFound(format!("There is no agency {id}.")));
+        }
+        use sha2::Digest as _;
+        let hash = sha2::Sha256::digest(svg.as_bytes());
+        let short: String = hash[..4].iter().map(|b| format!("{b:02x}")).collect();
+        let file = format!("wordmark-{short}.svg");
+        let dir = self.logo_dir(id);
+        std::fs::create_dir_all(&dir)
+            .and_then(|_| std::fs::write(dir.join(&file), svg))
+            .map_err(|e| Refusal::Io(e.to_string()))?;
+        let mark = Wordmark {
+            file: file.clone(),
+            bytes: svg.len(),
+        };
+        self.change(by, "agency wordmark drafted", |book| {
+            let a = book
+                .agencies
+                .iter_mut()
+                .find(|a| a.id == id)
+                .ok_or_else(|| Refusal::NotFound(format!("There is no agency {id}.")))?;
+            a.draft.get_or_insert_with(BasicDraft::default).wordmark = Some(Some(mark.clone()));
+            a.tidy_draft();
+            a.touched(by);
+            Ok((
+                (),
+                serde_json::json!({ "agency": id, "file": file, "bytes": svg.len() }),
+            ))
+        })
+    }
+
+    /// Take the wordmark out of a basic agency's draft.
+    pub fn remove_wordmark(&self, by: &str, id: &str) -> Change<()> {
+        self.change(by, "agency wordmark removed from draft", |book| {
+            if let Kind::Code(_) = kind_of(book, id)? {
+                return Err(Refusal::Conflict(
+                    "An agency in code keeps its logos in code; only its display name changes here."
+                        .into(),
+                ));
+            }
+            let a = book.agencies.iter_mut().find(|a| a.id == id).unwrap();
+            if a.drafted().unwrap_or_else(|| a.live()).wordmark.is_none() {
+                return Err(Refusal::Conflict(format!(
+                    "{} has no wordmark to remove.",
+                    a.name
+                )));
+            }
+            a.draft.get_or_insert_with(BasicDraft::default).wordmark = Some(None);
+            a.tidy_draft();
+            a.touched(by);
+            Ok(((), serde_json::json!({ "agency": id })))
+        })
+    }
+
+    /// Make an agency's draft live.
+    pub fn publish(&self, by: &str, id: &str, req: &Publish) -> Change<()> {
+        let rev = need_rev(req.rev)?;
+        self.change(by, "agency published", |book| match kind_of(book, id)? {
+            Kind::Code(code) => {
+                let n = book.names.get(id).cloned();
+                if rev != n.as_ref().map_or(0, |n| n.rev) {
+                    return stale(code);
+                }
+                let Some(name) = n.as_ref().and_then(|n| n.draft_name.clone()) else {
+                    return Err(Refusal::Conflict(format!(
+                        "{code} has no draft to publish."
+                    )));
+                };
+                check_free(book, id, [name.as_str()])?;
+                if name == code {
+                    book.names.remove(id);
+                } else {
+                    let n = book.names.get_mut(id).unwrap();
+                    n.name = name.clone();
+                    n.draft_name = None;
+                    n.rev += 1;
+                    let at = now();
+                    n.changed_by = Some(by.to_string());
+                    n.changed_at = Some(at.clone());
+                    n.published_by = Some(by.to_string());
+                    n.published_at = Some(at);
+                    n.published_rev = n.rev;
+                }
+                Ok(((), serde_json::json!({ "agency": id, "name": name })))
+            }
+            Kind::Basic => {
+                let i = book.agencies.iter().position(|a| a.id == id).unwrap();
+                let a = book.agencies[i].clone();
+                if rev != a.rev {
+                    return stale(&a.name);
+                }
+                let Some(look) = a.drafted() else {
+                    return Err(Refusal::Conflict(format!(
+                        "{} has no draft to publish.",
+                        a.name
+                    )));
+                };
+                check_free(
+                    book,
+                    id,
+                    [look.name.as_str()]
+                        .into_iter()
+                        .chain(look.aliases.iter().map(String::as_str)),
+                )?;
+                let a = &mut book.agencies[i];
+                a.name = look.name.clone();
+                a.aliases = look.aliases.clone();
+                a.base = look.base.clone();
+                a.accent = look.accent.clone();
+                a.wordmark = look.wordmark.clone();
+                a.published = true;
+                a.draft = None;
+                a.touched(by);
+                a.published_by = Some(by.to_string());
+                a.published_at = a.changed_at.clone();
+                a.published_rev = a.rev;
+                Ok((
+                    (),
+                    serde_json::json!({ "agency": id, "name": look.name, "aliases": look.aliases,
+                        "base": look.base, "accent": look.accent,
+                        "wordmark": look.wordmark.map(|w| w.file) }),
+                ))
+            }
+        })
+    }
+
+    /// Drop an agency's draft. An agency never published goes with it.
+    pub fn discard_draft(&self, by: &str, id: &str) -> Change<()> {
+        self.change(by, "agency draft discarded", |book| {
+            match kind_of(book, id)? {
+                Kind::Code(code) => {
+                    let Some(n) = book.names.get_mut(id).filter(|n| n.draft_name.is_some()) else {
+                        return Err(Refusal::Conflict(format!(
+                            "{code} has no draft to discard."
+                        )));
+                    };
+                    n.draft_name = None;
+                    n.rev += 1;
+                    n.changed_by = Some(by.to_string());
+                    n.changed_at = Some(now());
+                    if n.name == code {
+                        book.names.remove(id);
+                    }
+                    Ok(((), serde_json::json!({ "agency": id })))
+                }
+                Kind::Basic => {
+                    let i = book.agencies.iter().position(|a| a.id == id).unwrap();
+                    let a = &mut book.agencies[i];
+                    if !a.published {
+                        book.agencies.remove(i);
+                        return Ok(((), serde_json::json!({ "agency": id, "unpublished": true })));
+                    }
+                    if a.draft.is_none() {
+                        return Err(Refusal::Conflict(format!(
+                            "{} has no draft to discard.",
+                            a.name
+                        )));
+                    }
+                    a.draft = None;
+                    a.touched(by);
+                    Ok(((), serde_json::json!({ "agency": id })))
+                }
+            }
+        })
+    }
+
+    /// An agency in code back to the code's name: its published display name
+    /// and any draft of one go.
+    pub fn reset_name(&self, by: &str, id: &str) -> Change<()> {
+        self.change(by, "agency name reset", |book| match kind_of(book, id)? {
+            Kind::Code(code) => {
+                if book.names.remove(id).is_none() {
+                    return Err(Refusal::Conflict(format!("{code} already has the code's name.")));
+                }
+                Ok(((), serde_json::json!({ "agency": id, "name": code })))
+            }
+            Kind::Basic => Err(Refusal::Conflict(
+                "Only an agency in code has a code name to reset to. Edit this one's name in its draft."
+                    .into(),
+            )),
+        })
+    }
+
+    /// Where a basic agency's wordmark files are kept.
+    pub fn logo_dir(&self, id: &str) -> PathBuf {
+        self.dir.join("logos").join(id)
+    }
+
+    /// A kept wordmark's cleaned SVG text; None when it is missing.
+    pub fn wordmark_svg(&self, id: &str, w: &Wordmark) -> Option<String> {
+        if w.file.contains(['/', '\\']) || w.file.starts_with('.') {
+            return None;
+        }
+        std::fs::read_to_string(self.logo_dir(id).join(&w.file)).ok()
     }
 }
 
@@ -754,93 +1384,246 @@ mod tests {
         assert_eq!(whats.len(), 1 + 3 + 1 + 1 + 1);
     }
 
+    fn person(name: &str, agency: &str) -> NewPerson {
+        NewPerson {
+            name: name.into(),
+            agency: agency.into(),
+            username: None,
+        }
+    }
+
+    fn rothco() -> NewAgency {
+        NewAgency {
+            name: "Rothco".into(),
+            base: "#0f6b5c".into(),
+            accent: "#9FE6D8".into(),
+            aliases: vec!["Roth".into(), " roth ".into(), "".into()],
+        }
+    }
+
     #[test]
-    fn a_new_agency_has_its_look_and_is_recognised_after() {
+    fn a_new_agency_is_a_draft_until_published_then_recognised() {
         let (_dir, p) = store();
         let by = "engineer@napkin";
-        let a = p
-            .add_agency(
-                by,
-                &NewAgency {
-                    name: "Rothco".into(),
-                    base: "#0f6b5c".into(),
-                    accent: "#9FE6D8".into(),
-                    aliases: vec!["Roth".into()],
-                    id: None,
-                },
-            )
-            .unwrap();
+        let a = p.add_agency(by, &rothco()).unwrap();
         assert_eq!(
             (a.id.as_str(), a.base.as_str(), a.accent.as_str()),
             ("rothco", "#0F6B5C", "#9FE6D8")
         );
+        assert_eq!(a.aliases, ["roth"]);
+        assert!(!a.published);
+        assert_eq!(a.rev, 1);
+        assert_eq!(a.draft, Some(BasicDraft::default()));
+        // unpublished: not offered for new people, and adding one says why
         let b = p.book();
+        assert_eq!(b.recognise("rothco"), None);
+        assert_eq!(b.claimed("ROTH", ""), Some("rothco".into()));
+        match p.add(by, &person("Aoife Byrne", "Rothco")) {
+            Err(Refusal::Conflict(m)) => assert!(m.contains("not published"), "{m}"),
+            other => panic!("{other:?}"),
+        }
+        p.publish(by, "rothco", &Publish { rev: Some(1) }).unwrap();
+        let b = p.book();
+        let r = b.agency("rothco").unwrap();
+        assert!(r.published && r.draft.is_none());
+        assert_eq!(r.rev, 2);
+        assert_eq!(r.published_by.as_deref(), Some(by));
         assert_eq!(b.recognise("ROTHCO").as_deref(), Some("rothco"));
         assert_eq!(b.recognise("roth").as_deref(), Some("rothco"));
-        let person = p
-            .add(
-                by,
-                &NewPerson {
-                    name: "Aoife Byrne".into(),
-                    agency: "Rothco".into(),
-                    username: None,
-                },
-            )
-            .unwrap();
-        assert_eq!(person.id, "aoife@rothco");
-        // a name already taken, a bad colour, a bad id
-        assert!(matches!(
-            p.add_agency(
-                by,
-                &NewAgency {
+        assert_eq!(
+            p.add(by, &person("Aoife Byrne", "Rothco")).unwrap().id,
+            "aoife@rothco"
+        );
+        // a name already taken, a bad colour, a name with no id in it
+        for (req, conflict) in [
+            (
+                NewAgency {
                     name: "Boys+Girls".into(),
                     base: "#000000".into(),
                     accent: "#FFFFFF".into(),
                     ..Default::default()
-                }
+                },
+                true,
             ),
-            Err(Refusal::Conflict(_))
-        ));
-        assert!(matches!(
-            p.add_agency(
-                by,
-                &NewAgency {
+            (
+                NewAgency {
                     name: "Rothco".into(),
                     base: "#000000".into(),
                     accent: "#FFFFFF".into(),
                     ..Default::default()
-                }
+                },
+                true,
             ),
-            Err(Refusal::Conflict(_))
-        ));
-        assert!(matches!(
-            p.add_agency(
-                by,
-                &NewAgency {
+            (
+                NewAgency {
+                    name: "Kin".into(),
+                    base: "#000000".into(),
+                    accent: "#FFFFFF".into(),
+                    aliases: vec!["W+K".into()],
+                },
+                true,
+            ),
+            (
+                NewAgency {
                     name: "Kin".into(),
                     base: "red".into(),
                     accent: "#FFFFFF".into(),
                     ..Default::default()
-                }
+                },
+                false,
             ),
-            Err(Refusal::Bad(_))
-        ));
-        assert!(matches!(
-            p.add_agency(
-                by,
-                &NewAgency {
-                    name: "Kin".into(),
-                    id: Some("k/in".into()),
+            (
+                NewAgency {
+                    name: "!!".into(),
                     base: "#000000".into(),
                     accent: "#FFFFFF".into(),
+                    ..Default::default()
+                },
+                false,
+            ),
+        ] {
+            match p.add_agency(by, &req) {
+                Err(Refusal::Conflict(_)) if conflict => {}
+                Err(Refusal::Bad(_)) if !conflict => {}
+                other => panic!("{}: {other:?}", req.name),
+            }
+        }
+        assert_eq!(agency_slug("Boys+Girls"), "boysandgirls");
+        assert_eq!(agency_slug("Harbour & Co"), "harbourandco");
+        assert_eq!(first_name_user("  Aoife Byrne"), "aoife");
+    }
+
+    #[test]
+    fn a_draft_is_sparse_and_tidies_itself_away() {
+        let (_dir, p) = store();
+        let by = "engineer@napkin";
+        p.add_agency(by, &rothco()).unwrap();
+        p.publish(by, "rothco", &Publish { rev: Some(1) }).unwrap();
+        let edit = |rev, accent: &str| DraftEdit {
+            accent: Some(accent.into()),
+            rev: Some(rev),
+            ..Default::default()
+        };
+        p.edit_draft(by, "rothco", &edit(2, "#ffffff")).unwrap();
+        let r = p.book().agency("rothco").unwrap().clone();
+        assert_eq!(
+            r.draft,
+            Some(BasicDraft {
+                accent: Some("#FFFFFF".into()),
+                ..Default::default()
+            })
+        );
+        assert_eq!(r.accent, "#9FE6D8", "the published look is untouched");
+        // stale rev
+        assert!(matches!(
+            p.edit_draft(by, "rothco", &edit(2, "#000000")),
+            Err(Refusal::Conflict(_))
+        ));
+        // back to the published value: no draft left
+        p.edit_draft(by, "rothco", &edit(3, "#9fe6d8")).unwrap();
+        assert_eq!(p.book().agency("rothco").unwrap().draft, None);
+        // a name another agency answers to, even one only drafted
+        p.edit_draft(
+            by,
+            "pluto",
+            &DraftEdit {
+                name: Some("Plutonic".into()),
+                rev: Some(0),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        for taken in ["Plutonic", "Ogilvy", "b+g"] {
+            assert!(
+                matches!(
+                    p.edit_draft(
+                        by,
+                        "rothco",
+                        &DraftEdit {
+                            name: Some(taken.into()),
+                            rev: Some(4),
+                            ..Default::default()
+                        }
+                    ),
+                    Err(Refusal::Conflict(_))
+                ),
+                "{taken}"
+            );
+        }
+        // an agency in code takes its name only
+        assert!(matches!(
+            p.edit_draft(
+                by,
+                "pluto",
+                &DraftEdit {
+                    base: Some("#000000".into()),
+                    rev: Some(1),
                     ..Default::default()
                 }
             ),
             Err(Refusal::Bad(_))
         ));
-        assert_eq!(agency_slug("Boys+Girls"), "boysandgirls");
-        assert_eq!(agency_slug("Harbour & Co"), "harbourandco");
-        assert_eq!(first_name_user("  Aoife Byrne"), "aoife");
+        assert!(matches!(
+            p.set_wordmark(by, "pluto", "<svg/>"),
+            Err(Refusal::Conflict(_))
+        ));
+        assert!(matches!(
+            p.remove_wordmark(by, "pluto"),
+            Err(Refusal::Conflict(_))
+        ));
+        // published name of a code agency is recognised; reset takes it away
+        p.publish(by, "pluto", &Publish { rev: Some(1) }).unwrap();
+        let b = p.book();
+        assert_eq!(b.recognise("plutonic").as_deref(), Some("pluto"));
+        assert_eq!(b.recognise("pluto").as_deref(), Some("pluto"));
+        p.reset_name(by, "pluto").unwrap();
+        assert!(p.book().names.is_empty());
+        assert!(matches!(
+            p.reset_name(by, "pluto"),
+            Err(Refusal::Conflict(_))
+        ));
+        assert!(matches!(
+            p.reset_name(by, "rothco"),
+            Err(Refusal::Conflict(_))
+        ));
+        assert!(matches!(
+            p.edit_draft(by, "nobody", &edit(0, "#000000")),
+            Err(Refusal::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn an_agency_kept_before_drafts_reads_as_published() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("_people");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::write(
+            store.join("people.json"),
+            r##"{"people":[{"id":"engineer@napkin","agency":"napkin","admin":true,"added_by":"roster","added_at":"2026-11-12T10:00:00Z"}],
+                "agencies":[{"id":"rothco","name":"Rothco","base":"#0F6B5C","accent":"#9FE6D8","aliases":["roth"],"added_by":"engineer@napkin","added_at":"2026-11-12T10:00:00Z","later":"ignored"}]}"##,
+        )
+        .unwrap();
+        let p = People::open(store, &dir.path().join("no-seed.tsv")).unwrap();
+        let b = p.book();
+        let r = b.agency("rothco").unwrap();
+        assert!(r.published);
+        assert_eq!(
+            (r.draft.clone(), r.wordmark.clone(), r.rev),
+            (None, None, 0)
+        );
+        assert!(b.names.is_empty());
+        assert_eq!(b.recognise("roth").as_deref(), Some("rothco"));
+        // and it can be drafted from rev 0
+        p.edit_draft(
+            "engineer@napkin",
+            "rothco",
+            &DraftEdit {
+                name: Some("Rothco Dublin".into()),
+                rev: Some(0),
+                ..Default::default()
+            },
+        )
+        .unwrap();
     }
 
     #[test]
@@ -863,5 +1646,14 @@ mod tests {
         // a write in the same second keeps the mtime on some filesystems; force a different stamp
         p.cache.lock().unwrap().stamp = None;
         assert!(p.active("ciara@napkin").is_some());
+        // and so is another server's publish
+        other.add_agency("engineer@napkin", &rothco()).unwrap();
+        other
+            .publish("engineer@napkin", "rothco", &Publish { rev: Some(1) })
+            .unwrap();
+        assert!(p.book().agency("rothco").is_none(), "not before RECHECK");
+        p.cache.lock().unwrap().checked = Instant::now() - RECHECK;
+        p.cache.lock().unwrap().stamp = None;
+        assert!(p.book().agency("rothco").is_some_and(|a| a.published));
     }
 }
