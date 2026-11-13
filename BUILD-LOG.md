@@ -213,3 +213,8 @@ None is verified or merged.
 - wasm, conformance, frontend, desktop, engine, middleware, mock-backend, secrets, copy: pass.
 
 **Branches.** `feat/align-confidential-prices`, `feat/align-landing-look` and `fix/store-scan-under-lock` are NOT on origin (checked with `git ls-remote`). Their work lives only on the first machine, so they are rebuilt from their records' designs.
+
+**Rust and e2e on this machine.** rust suite: pass (23 min, cold build). Full e2e, one worker, Playwright's Chromium, 52 min: 213 passed, 17 failed, 51 skipped (the Mac: 212 passed, 18 failed).
+- Same as the Mac: the known older failures bar Share, briefSheet x2, landing 320, registry x2, research x2, and `shots.spec.ts:44`.
+- Different: the tools spin-off test passed here. Judge 59 failed at 390 and 1440 (Mac: Judge 59 once). Pilot 9 failed at 390 (Mac: pilot 18). Visual Brief failed 3 (Mac: six). The Mac's run-alone failures are not yet re-run here, so the slow-server explanation is still unverified.
+- Not installed, so two check suites fail on this machine: terraform and the wasm-bindgen CLI (production-tool).
