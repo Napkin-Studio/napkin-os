@@ -2019,7 +2019,7 @@ Who may sign in under `NAPKIN_AUTH=roster`, changed from the shell's People
 page (features/people-admin.clan). Not tenant-addressed: under `/api`, on the
 cookie session. Errors keep the `{ok:false, error:"message"}` shape.
 
-**Store.** `<NAPKIN_WEB_DATA>/_people/people.json` (`{people, agencies}`) on the
+**Store.** `<NAPKIN_WEB_DATA>/_people/people.json` (`{people, agencies, names}`) on the
 web data volume, replaced whole (tmp + rename) and re-read when its mtime or
 length changes (checked at most every 2 s, so a second web task sees a change
 within that). `_people/changes.jsonl` keeps one line per change: `at`, `by`,
@@ -2036,7 +2036,18 @@ on a server without the roster. The shell's `PEOPLE_ADMINS`
 **Recognising an agency.** An id, a name or an alias, any case: the shell
 registry's (`palette.ts` `AGENCY_COLOURS`, `AGENCY_ALIASES`, mirrored as
 `CODE_AGENCIES`, `CODE_ALIASES`; `app/tests/peopleAdmin.test.tsx` keeps them the
-same), then the added agencies'.
+same), then the display names published for those, then the published basic
+agencies'. An unpublished agency is not recognised for adding people (`409`).
+When a name or alias is checked for being free, every agency's counts,
+drafts and unpublished ones included.
+
+**Two tiers of agency** (features/agency-looks-admin.clan). A *basic*
+agency is made on the page: name, other spellings, base, accent and one SVG
+wordmark; the rest of its look is derived in the shell. An agency *in code*
+keeps its look in `palette.ts`; only its display name changes here. Every
+change goes to a draft that only the admin's previews show, until it is
+published. Each agency has a `rev`, bumped by every change to it; `PATCH` and
+`publish` name the rev they read, and a stale one is `409`.
 
 | Route | Does |
 |---|---|
@@ -2044,10 +2055,32 @@ same), then the added agencies'.
 | `POST /admin/people {name, agency, username?}` | `201` + the Person. `agency` is recognised as above (`400` when nothing matches: add the agency first). `username` defaults to `firstname@agency`; its agency must be the recognised id (`400`). `409` when they can already sign in; a removed person is brought back. |
 | `PATCH /admin/people/{id} {name}` | The Person, renamed (the sign-in name stays). `404`. |
 | `DELETE /admin/people/{id}` | The Person with `removed_at`. They cannot sign in, and a session they hold is answered `401` at its next request; their documents and decisions stay. `409` for an admin, `404`. |
-| `GET /admin/agencies` | `[Agency]`: the registry's (`source: "code"`) and the added (`"added"`), each with `people`, the number who can sign in. |
-| `POST /admin/agencies {name, base, accent, id?, aliases?}` | `201` + the added agency. `base`, `accent` `#rrggbb` (`400`); `id` defaults to the name, lower case, `+`/`&` as "and", letters and digits only. `409` when the id, name or an alias is an agency already. |
-| `GET /agency-looks` | Public (no session). `[{id, name, base, accent, aliases}]` of the added agencies; the shell registers them (`palette.ts` `registerAgencyLooks`) before the sign-in card or the studio shows, so their people wear their look. |
+| `GET /admin/agencies` | `[Agency]`: every agency in code, then every basic agency (published or not). |
+| `POST /admin/agencies {name, base, accent, aliases?}` | `201` + the Agency, a basic agency as a draft (`published: false`). Its id is the name, lower case, `+`/`&` as "and", letters and digits only, fixed from then on. Unknown keys, a missing field or a colour that is not `#rrggbb` are `400`; `409` when the id, name or an alias is an agency's already. Not on `/agency-looks`, and people cannot be added to it, until published. |
+| `PATCH /admin/agencies/{id}/draft {rev, name?, aliases?, base?, accent?}` | The Agency, with the draft changed. An agency in code takes `name` only (any other field `400`). `400` bad colour, empty name, unknown key or no `rev`; `409` stale `rev` or a name or alias another agency answers to; `404`. A field set back to its published value leaves the draft, and a published agency's empty draft goes. |
+| `PUT /admin/agencies/{id}/draft/wordmark` | Body: the SVG, `Content-Type: image/svg+xml`. Cleaned by `svg_sanitise.rs` (the port of the shell's `svgSanitise.ts`) and put in the draft. `200 {bytes, kept_bytes, dropped: [element], warnings: [text], svg: "data:image/svg+xml,...", rev}`. `415` another type, not text, or no `<svg>`; `413` over 200 KB as sent, over 48 KB or 2,000 shapes cleaned; `422 {ok:false, error, found: [{what, line}]}` for active content (script, `on*=`, `foreignObject`, an external or `javascript:` href, `<!ENTITY>`, `<!DOCTYPE>`), `found: []` for no viewBox or no shapes; `409` for an agency in code; `404`. |
+| `DELETE /admin/agencies/{id}/draft/wordmark` | The Agency, the draft without a wordmark. `409` for an agency in code or when there is none. |
+| `POST /admin/agencies/{id}/publish {rev}` | The Agency, its draft live (on the log as `agency published`). `409` stale `rev`, no draft, or a name or alias taken meanwhile; `400` no `rev`. |
+| `DELETE /admin/agencies/{id}/draft` | The Agency without its draft; an agency never published goes with it: `{id, removed: true}`. `409` when there is no draft. |
+| `DELETE /admin/agencies/{id}/name` | An agency in code back to the code's name (its published display name and any draft of one go). `409` for a basic agency, or when it already has the code's name. |
+| `GET /admin/agencies/{id}/export` | Copy to code, from the published look: `{palette_ts, svg, agency_logos_files, people_rs}` (the `AGENCY_COLOURS` entry and `AGENCY_ALIASES` lines; the cleaned SVG or `null`; the `agency-logos.mjs` `FILES` line or `null`; the `CODE_AGENCIES` tuple and `CODE_ALIASES` lines). `409` for an agency in code or one not published yet. |
+| `GET /agency-looks` | Public (no session). Published looks only, never a draft: basic agencies `{id, name, base, accent, aliases, logo?, rev}` (`logo` the wordmark as a `data:image/svg+xml,` URI) and agencies in code with a published display name `{id, name, rev}` (`rev` as published). Weak `ETag` of the body, `Cache-Control: private, no-cache`, `304` on `If-None-Match`. The shell registers them (`palette.ts` `registerAgencyLooks`) before the sign-in card or the studio shows. |
 
 `Person` is `{id, name?, agency, admin, added_by, added_at, removed_at?}`
-(`added_by` is `roster` for the seed). `Agency` (admin list) is `{id, name, base,
-accent, aliases, source, people}`.
+(`added_by` is `roster` for the seed). `Agency` (admin list), basic: `{id,
+kind: "basic", name, aliases, base, accent, wordmark (data: URI | null),
+published, draft: {name, aliases, base, accent, wordmark} | null, people, rev,
+added_by, added_at, changed_by, changed_at, published_by, published_at}`, where
+`draft` is the whole look the draft would publish. In code: `{id, kind:
+"code", name, code_name, aliases, draft: {name} | null, people, rev,
+changed_by, changed_at, published_by, published_at}`. `GET /admin/people`'s
+`agencies` are the same rows.
+
+In `people.json`, a basic agency (`agencies[]`) adds to `{id, name, base,
+accent, aliases}`: `wordmark: {file, bytes} | null`, `published` (absent reads
+`true`), `draft` (sparse: only the fields it changes; `wordmark: null` removes
+it), `rev`, `published_rev`, `changed_by/at`, `published_by/at`. `names` is
+`{<code id>: {name, draft_name, rev, published_rev, changed_by/at,
+published_by/at}}`. Wordmarks are files under `_people/logos/<id>/wordmark-<sha256-8>.svg`;
+an old one is kept when replaced. Unknown keys are refused on write and
+ignored on read.

@@ -10,7 +10,9 @@
 //     and the mark and its words shown only once the wait passes SHOW_AFTER_MS;
 //   - bootHeadScript(): reads the theme and the agency this browser last
 //     signed in to (agency/lastAgency.ts), sets data-theme, and puts that
-//     agency's surface layer (palette.ts surfaceCss) on the page at once;
+//     agency's surface layer (palette.ts surfaceCss) on the page at once:
+//     the build's own for an agency in code, else (a basic agency from the
+//     People page) the look lastAgency kept when it was last applied;
 //   - bootMarkHtml(): the mark, in the neutral colours, and a line of script
 //     that recolours it to the agency's.
 //
@@ -21,9 +23,10 @@ import { AGENCY_COLOURS, BOOT_SURFACE_ID, DESK_BASE, NAPKIN_COLOURS, NEUTRAL_MAR
 import { staticMarkSvg, type MarkPalette } from './deepOSvg'
 import { SHOW_AFTER_MS, SHOW_FADE_MS } from './lateShow'
 
-/** localStorage keys the boot reads: theme.ts's and lastAgency.ts's. */
+/** localStorage keys the boot reads: theme.ts's and lastAgency.ts's (the agency, and a basic agency's look as last applied). */
 export const THEME_KEY = 'napkin.theme'
 export const AGENCY_KEY = 'napkin.lastAgency'
+export const AGENCY_LOOK_KEY = 'napkin.lastAgencyLook'
 
 /** The boot words' ink: tokens.css's --muted, light and dark. */
 export const BOOT_INK = { light: '#6D655A', dark: '#A49B8D' } as const
@@ -59,13 +62,18 @@ export function bootSurfaceCss(c: AgencyColours | null): string {
   return surfaceCss(c).replace(/:root/g, ':root:root')
 }
 
+/** The boot look for one agency's colours (as lastAgency keeps it): its surface layer and its mark's colours. */
+export function bootLookOf(c: AgencyColours): BootLook {
+  return { s: bootSurfaceCss(c), m: markColours({ base: c.base, accent: c.accent }) }
+}
+
 /** The looks, generated from the registry; throws if any mark's markup differs from the neutral one but for colour. */
 export function bootLooks(): BootLooks {
   const base = skeleton(bootMark(NEUTRAL_MARK))
   const look = (c: AgencyColours): BootLook => {
     const p = { base: c.base, accent: c.accent }
     if (skeleton(bootMark(p)) !== base) throw new Error('boot mark: markup differs between palettes; it cannot be recoloured')
-    return { s: bootSurfaceCss(c), m: markColours(p) }
+    return bootLookOf(c)
   }
   const a: Record<string, BootLook> = {}
   for (const [id, c] of Object.entries(AGENCY_COLOURS)) a[id] = look(c)
@@ -84,12 +92,15 @@ export const BOOT_CSS = `:root,:root[data-theme='light']{--desk:${DESK_BASE.ligh
 
 /** The head script: theme and agency from the last session, before the first paint. Storage may throw: then neutral. */
 export function bootHeadScript(looks: BootLooks = bootLooks()): string {
-  return '(function(){var L=' + JSON.stringify(looks) + ',d=document.documentElement,t,a,k;'
-    + `try{t=localStorage.getItem('${THEME_KEY}');a=localStorage.getItem('${AGENCY_KEY}')}catch(e){}`
+  return '(function(){var L=' + JSON.stringify(looks) + ',d=document.documentElement,t,a,k,j;'
+    + `try{t=localStorage.getItem('${THEME_KEY}');a=localStorage.getItem('${AGENCY_KEY}');j=localStorage.getItem('${AGENCY_LOOK_KEY}')}catch(e){}`
     + "if(t!=='light'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';"
     + "d.setAttribute('data-theme',t);d.style.colorScheme=t;"
     + "a=a?String(a).trim().toLowerCase():'';"
     + 'k=/^[a-z0-9._-]+$/.test(a)?(Object.prototype.hasOwnProperty.call(L.a,a)?L.a[a]:L.d):null;'
+    // a basic agency's kept look: never for an agency in code, only for that agency, only a stylesheet string and the mark's number of #rrggbb colours
+    + 'if(k&&j&&k===L.d)try{j=JSON.parse(j);if(j&&j.id===a&&typeof j.s===\'string\'&&j.s.indexOf(\'<\')<0&&Object.prototype.toString.call(j.m)===\'[object Array]\'&&j.m.length===L.d.m.length'
+    + '&&j.m.every(function(c){return typeof c===\'string\'&&/^#[0-9A-Fa-f]{6}$/.test(c)}))k={s:j.s,m:j.m}}catch(e){}'
     + `if(k){var s=document.createElement('style');s.id='${BOOT_SURFACE_ID}';s.textContent=k.s;document.head.appendChild(s)}`
     + 'window.__napkinBootMark=k?k.m:null})()'
 }

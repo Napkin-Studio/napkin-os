@@ -13,9 +13,9 @@
   font: 14px/1.5 var(--font-ui);
 }
 .pa-bar {
-  max-width: 980px;
-  margin: 14px auto 0;
-  padding: 10px 16px;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 12px 16px;
   display: flex;
   gap: 10px;
   align-items: center;
@@ -24,9 +24,9 @@
 .pa-pill { border-radius: 999px; padding: 4px 12px; font-weight: 700; font-size: 13px; }
 .pa-crumb { color: var(--muted); font-size: 13px; }
 .pa-sp { flex: 1; }
-.pa-wrap { max-width: 980px; margin: 18px auto 40px; padding: 0 16px; }
+.pa-wrap { max-width: 1080px; margin: 18px auto 0; padding: 0 16px 60px; }
 .pa-wrap h1 { font: 600 34px/1.1 var(--font-serif); margin: 0 0 4px; }
-.pa-lede { color: var(--muted); margin: 0 0 18px; }
+.pa-lede { color: var(--muted); margin: 0 0 14px; }
 .pa-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
 .pa-page input, .pa-page select {
   width: 100%;
@@ -38,7 +38,7 @@
   color: var(--ink);
   font: 14px var(--font-ui);
 }
-.pa-page input.pa-search { flex: 1; padding: 7px 10px; background: var(--card); }
+.pa-page input.pa-search { flex: 1; }
 .pa-page input.pa-colour { height: 38px; padding: 2px; }
 .pa-btn {
   font: 500 13px var(--font-ui);
@@ -68,7 +68,11 @@
 .pa-tag { font: 11px var(--font-mono); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; color: var(--muted); }
 .pa-tag.pa-admin { color: var(--ag-base); border-color: var(--ag-acc); }
 .pa-tag.pa-new { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-.pa-act { text-align: right; white-space: nowrap; }
+.pa-table td:has(> .pa-act) { position: relative; }
+.pa-act { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); white-space: nowrap; }
+/* Rename and Remove show on the row in hand (hover or focus), as the mock's quiet table */
+.pa-table tr .pa-act .pa-link { opacity: 0; }
+.pa-table tr:hover .pa-act .pa-link, .pa-table tr:focus-within .pa-act .pa-link { opacity: 1; }
 .pa-link { background: none; border: 0; color: var(--muted); font-size: 12px; text-decoration: underline; cursor: pointer; margin-left: 10px; padding: 0; }
 .pa-rename { display: inline-flex; gap: 6px; align-items: center; }
 .pa-rename input { width: 220px; padding: 5px 8px; }
@@ -79,8 +83,8 @@
 .pa-hint { color: var(--faint); font-size: 12px; margin-top: 6px; }
 .pa-acts { display: inline-flex; gap: 8px; }
 .pa-acts.pa-end { display: flex; justify-content: flex-end; margin-top: 12px; }
-.pa-ok { border-left: 2px solid var(--ag-base); padding: 8px 12px; background: var(--agency-soft); border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
-.pa-err { border-left: 2px solid var(--alert); padding: 8px 12px; background: var(--alert-soft); border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+.pa-ok { border-left: 2px solid var(--ok); padding: 8px 12px; background: var(--ok-soft); border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+.pa-err { border-left: 2px solid var(--alert); padding: 10px 12px; background: var(--alert-soft); border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
 .pa-warn {
   display: flex; gap: 12px; align-items: center; justify-content: space-between;
   border-left: 2px solid var(--warn); padding: 8px 12px; background: var(--warn-soft);
@@ -93,6 +97,6 @@
 
 @media (max-width: 640px) {
   .pa-grid { grid-template-columns: 1fr; }
-  .pa-table th:nth-child(4), .pa-table td:nth-child(4) { display: none; }
+  .pa-table th:nth-child(4), .pa-table td:nth-child(4) small { display: none; }
   .pa-warn { flex-direction: column; align-items: flex-start; }
 }
