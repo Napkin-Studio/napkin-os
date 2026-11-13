@@ -197,7 +197,7 @@ test('no script, style, link or handler survives the sanitiser', () => {
 
 test('the committed logos are sanitised, small, and logos.ts is written from them', () => {
   const files = readdirSync(LOGOS).sort()
-  assert.deepEqual(files, ['boysandgirls-icon.png', 'boysandgirls-logo.svg', 'catapult-icon.svg', 'catapult-logo.svg', 'pluto-logo.svg'])
+  assert.deepEqual(files, ['acne-logo.svg', 'boysandgirls-icon.png', 'boysandgirls-logo.svg', 'catapult-icon.svg', 'catapult-logo.svg', 'pluto-logo.svg'])
   for (const f of files) {
     const buf = readFileSync(`${LOGOS}/${f}`)
     assert.ok(buf.length < 6000, `${f} is small (${buf.length} bytes)`)
