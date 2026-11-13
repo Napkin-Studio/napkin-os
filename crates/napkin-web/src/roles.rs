@@ -76,6 +76,9 @@ pub struct Table {
     pub departments: Vec<Department>,
 }
 
+/// The tools a door can open for a client (landing/tools.ts ids), in the order the desk lists them.
+const ALL_TOOLS: [&str; 6] = ["brief", "research", "territories", "deck", "idea", "script"];
+
 /// The tool (a landing/tools.ts id) a door opens for a client, when it is one.
 pub fn tool_of(door: &str) -> Option<&'static str> {
     Some(match door {
@@ -435,6 +438,10 @@ impl Table {
             } else if d.id != "clients" && !page_doors.iter().any(|x| x.id == d.id) {
                 page_doors.push(d.clone());
             }
+        }
+        // An admin or a demo opens every route, so every tool is offered to them; trying a role (View as) narrows it.
+        if is_switcher(roles) && viewing.is_none() {
+            tools = ALL_TOOLS.iter().map(|t| t.to_string()).collect();
         }
         let more = page_doors.split_off(page_doors.len().min(MAX_DOORS));
         let pages = page_doors;
@@ -1081,6 +1088,9 @@ mod tests {
             ["Client brains", "Case study builder (read only)"]
         );
         assert!(v.more.is_empty());
+        let admin = t.view(&r(&["admin"]), None);
+        assert_eq!(admin.tools.len(), 6, "an admin is offered every tool");
+        assert_eq!(t.view(&r(&["admin"]), Some("management")).tools, ["deck"]);
         let m = t.view(&r(&["management"]), None);
         assert_eq!(
             names(&m.pages),

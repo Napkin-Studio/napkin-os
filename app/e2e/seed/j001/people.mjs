@@ -35,9 +35,8 @@ export const PEOPLE = {
   // A producer: no Needs you rule addresses that role, so on the shared stack nothing reaches them by role (Judge's notes go to every
   // art director and copywriter when a job has none on it: as an art director, Brid was given the Judge tests' items).
   needsQuiet: { username: 'brid@wk', name: 'Brid Test', roles: ['producer'] },
-  // align-landing-look: people of registry agencies with the other looks (palette.ts: a line accent on mono surfaces; a base pill)
-  lookCatapult: { username: 'ivo@catapult', name: 'Ivo Test', roles: ['account-service'] },
-  lookBoysGirls: { username: 'bea@boysandgirls', name: 'Bea Test', roles: ['account-service'] },
+  // align-landing-look: a person of a registry agency with another look, by its alias (palette.ts AGENCY_ALIASES: a base pill on mono surfaces)
+  lookBg: { username: 'bea@bg', name: 'Bea Test', roles: ['account-service'] },
   // an agency that never has a job, for the Live jobs Empty state (job-page)
   emptyAgency: { username: 'fia@empty', name: 'Fia Test', roles: ['account-service'] },
 }

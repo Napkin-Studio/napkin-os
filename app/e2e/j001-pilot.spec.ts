@@ -132,26 +132,14 @@ async function somethingToRead(page: Page): Promise<{ client: string }> {
   return { client }
 }
 
-/** The three papers the page really draws, as #rrggbb: what --desk, --paper and --card resolve to. */
-async function papers(page: Page): Promise<string[]> {
-  const rgb = await page.evaluate(() => ['--desk', '--paper', '--card'].map(v => {
-    const probe = document.createElement('div')
-    probe.style.background = `var(${v})`
-    document.body.appendChild(probe)
-    const c = getComputedStyle(probe).backgroundColor
-    probe.remove()
-    // Chrome writes a mixed colour as color(srgb r g b) with 0 to 1 channels, a plain one as rgb(r, g, b).
-    const n = (c.match(/-?[\d.]+/g) ?? []).slice(0, 3).map(Number)
-    return c.startsWith('color(') ? n.map(x => Math.round(x * 255)) : n
-  }))
-  return rgb.map(c => '#' + c.map(x => x.toString(16).padStart(2, '0')).join(''))
-}
-
-/** The five agencies of test 6: three from the registry (palette.ts AGENCY_COLOURS), one of each look variant, and two added from the People page. */
+/**
+ * The five agencies of test 6: three from the registry (palette.ts AGENCY_COLOURS; the line accent of one more is held by tests/alignLanding.test.ts and
+ * tests/agencyPalette.test.ts, for no roster person may be of a real agency), and two added from the People page.
+ */
 const LOOKS = [
   { name: 'wk: the default, an accent fill on warm surfaces', who: PEOPLE.planning, added: null },
-  { name: 'catapult: a line accent on mono surfaces', who: PEOPLE.lookCatapult, added: null },
-  { name: 'boys and girls: a base pill on mono surfaces', who: PEOPLE.lookBoysGirls, added: null },
+  { name: 'bg, the alias of a registry agency: a base pill on mono surfaces', who: PEOPLE.lookBg, added: null },
+  { name: 'napkin: the studio\'s own registry entry', who: { username: 'ann@napkin' }, added: null },
   { name: 'added: a dark base and a gold accent', who: PEOPLE.otherAgency, added: { id: 'bq', name: 'Agency B', base: '#1A3A5C', accent: '#F2C14E' } },
   { name: 'added: a light base and a pale accent', who: PEOPLE.emptyAgency, added: { id: 'empty', name: 'Agency E', base: '#E9E2D0', accent: '#9FD6C4' } },
 ]
