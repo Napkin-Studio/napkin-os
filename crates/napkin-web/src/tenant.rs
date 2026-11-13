@@ -242,10 +242,9 @@ pub async fn layer(
             response
         }
         Mode::Accounts { sessions, provider } => {
-            // A person removed from the People page is signed out at their next request.
-            let account = cookie_value(&parts, SESSION_COOKIE)
-                .and_then(|c| sessions.read(&c))
-                .filter(|a| provider.still_allowed(&a.username));
+            // Whether the roster still lists the person (a removal on the People page) is asked
+            // by `directory::live_roles`, which knows whether the agency has a directory of its own.
+            let account = cookie_value(&parts, SESSION_COOKIE).and_then(|c| sessions.read(&c));
             let path = parts.uri.path().to_string();
             match account {
                 Some(a) => {

@@ -196,7 +196,27 @@ pub async fn live_roles(
     mut request: Request,
     next: Next,
 ) -> Response {
-    let path = request.uri().path();
+    let path = request.uri().path().to_string();
+    // A person removed from the People page is signed out at their next request, unless their
+    // agency has a directory: then the directory is the only list (features/agency-setup.clan)
+    // and the people store is not asked.
+    if let Some(account) = request.extensions().get::<Account>().cloned() {
+        let identity = request.extensions().get::<Arc<Identity>>().cloned();
+        let listed = ctx.directory.has(&account.agency)
+            || match identity.as_deref().map(|i| &i.mode) {
+                Some(crate::tenant::Mode::Accounts { provider, .. }) => {
+                    provider.still_allowed(&account.username)
+                }
+                _ => true,
+            };
+        if !listed {
+            if path.starts_with("/auth/") || path == "/healthz" {
+                request.extensions_mut().remove::<Account>();
+            } else {
+                return signed_out(identity.as_ref());
+            }
+        }
+    }
     if !(path.starts_with("/auth/") || path == "/healthz") {
         if let Some(account) = request.extensions().get::<Account>().cloned() {
             if ctx.directory.has(&account.agency) {
