@@ -4,7 +4,8 @@ name: CI
 # once, by its PR, not twice (push + pull_request).
 on:
   push:
-    branches: [ main, develop ]
+    # spike/fabletest is the Napkin OS build's one integration branch. It has no PR, so it is checked on push.
+    branches: [ main, develop, spike/fabletest ]
   pull_request:
 
 # Cancel superseded runs on the same ref (e.g. force-pushes to a PR branch).
