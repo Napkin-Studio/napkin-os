@@ -145,12 +145,22 @@ async fn doors(r: &Rig, p: &Person) -> Vec<String> {
     )
     .await;
     assert_eq!(st, StatusCode::OK, "{v}");
-    v["doors"]
+    // the names of the page doors, and the ids of the tools
+    let mut out: Vec<String> = v["pages"]
         .as_array()
         .unwrap()
         .iter()
+        .chain(v["more"].as_array().unwrap())
         .map(|d| d["name"].as_str().unwrap().to_string())
-        .collect()
+        .collect();
+    out.extend(
+        v["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t.as_str().unwrap().to_string()),
+    );
+    out
 }
 
 #[tokio::test]
@@ -380,7 +390,7 @@ async fn a_role_change_reaches_the_next_request_after_the_cache_window_with_no_n
     )
     .await;
     assert_ne!(st, StatusCode::FORBIDDEN, "planning may open client brains");
-    assert!(doors(&r, &dan).await.contains(&"Brief".to_string()));
+    assert!(doors(&r, &dan).await.contains(&"brief".to_string()));
     // changed behind the server's back (another process, a person editing the file): the cache holds
     // for a minute, then the next request reads the new roles
     host_edit(&r, |store, ctx| {
@@ -398,12 +408,12 @@ async fn a_role_change_reaches_the_next_request_after_the_cache_window_with_no_n
         .unwrap();
     });
     assert!(
-        doors(&r, &dan).await.contains(&"Brief".to_string()),
+        doors(&r, &dan).await.contains(&"brief".to_string()),
         "still inside the window"
     );
     r.clock.fetch_add(61, Ordering::SeqCst);
     let after = doors(&r, &dan).await;
-    assert!(!after.contains(&"Brief".to_string()));
+    assert!(!after.contains(&"brief".to_string()));
     assert!(after.contains(&"Agency dashboard".to_string()));
     let (st, _, _) = call(
         &r,

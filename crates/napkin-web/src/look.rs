@@ -2,15 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! An agency's look (features/agency-look.clan): its logo, and the accent the
-//! browser sampled from it, one lightness per mode.
+//! An agency's logo, kept as one settings file per tenant (features/agency-look.clan).
 //!
-//! The browser reads the logo's pixels and sends the result; the server does
-//! not decode images (napkin-host must stay wasm32-clean, and no decoder is
-//! worth carrying for a value that is saved either way). It checks the shape
-//! of what it is given, stores it as one settings file per tenant, and names
-//! who wrote it and what they did. Phase 1 keeps it here; when the agency
-//! database lands, only the shell's `getAgencyLook()` and this file change.
+//! The agency's colours are not here: they come from the shell's palette.ts, set by an admin
+//! (features/align-landing-look.clan). A sampled accent is no longer accepted or served: an
+//! old file that still holds one is read for its logo and the accent is left unread. This file
+//! stays until align-needs-lock-people moves the logo onto the People page's agency form.
 
 use std::sync::Arc;
 
@@ -26,22 +23,11 @@ use crate::tenant::{Person, Tenant};
 const MAX_LOGO: usize = 256 * 1024;
 const FILE: &str = "agency-look.json";
 
-/// The accent in each mode, `#rrggbb`: lightness set so text in it reads there.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Accents {
-    pub white: String,
-    pub grey: String,
-    pub black: String,
-}
-
-/// What the shell reads and writes. `accent` is absent for a logo with no
-/// colour of its own (black, white and grey only): then there is no accent.
+/// What the shell reads and writes: the logo only.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Look {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logo: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub accent: Option<Accents>,
 }
 
 /// The file on disk: the look, and who set it, and what they did.
@@ -52,10 +38,6 @@ struct Saved {
     agent: String,
     action: String,
     at: String,
-}
-
-fn is_hex(s: &str) -> bool {
-    s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit())
 }
 
 /// Refuse anything the shell would not have made. The logo is only ever shown
@@ -70,14 +52,6 @@ fn check(look: &Look) -> Result<(), &'static str> {
             || logo.starts_with("data:image/svg+xml;base64,");
         if !ok {
             return Err("the logo must be an SVG or a PNG");
-        }
-    }
-    if let Some(a) = &look.accent {
-        if ![&a.white, &a.grey, &a.black].iter().all(|c| is_hex(c)) {
-            return Err("an accent must be #rrggbb in every mode");
-        }
-        if look.logo.is_none() {
-            return Err("an accent comes from a logo");
         }
     }
     Ok(())
@@ -134,10 +108,9 @@ pub async fn put_look(
     let agent = person
         .map(|Extension(p)| p.0)
         .unwrap_or_else(|| tenant.to_string());
-    let action = match (&look.logo, &look.accent) {
-        (None, _) => "agency look: removed the logo",
-        (Some(_), Some(_)) => "agency look: set the logo and its accent",
-        (Some(_), None) => "agency look: set the logo, no accent",
+    let action = match &look.logo {
+        None => "agency look: removed the logo",
+        Some(_) => "agency look: set the logo",
     };
     let saved = Saved {
         look: look.clone(),
@@ -158,39 +131,33 @@ pub async fn put_look(
 mod tests {
     use super::*;
 
-    fn look(logo: Option<&str>, accent: Option<[&str; 3]>) -> Look {
+    fn look(logo: Option<&str>) -> Look {
         Look {
             logo: logo.map(String::from),
-            accent: accent.map(|[w, g, b]| Accents {
-                white: w.into(),
-                grey: g.into(),
-                black: b.into(),
-            }),
         }
     }
 
     #[test]
-    fn a_png_or_svg_with_three_hex_accents_is_accepted() {
-        assert!(check(&look(
-            Some("data:image/png;base64,AAAA"),
-            Some(["#112233", "#223344", "#aabbcc"])
-        ))
-        .is_ok());
-        assert!(check(&look(Some("data:image/svg+xml,%3Csvg%3E"), None)).is_ok());
-        assert!(check(&look(None, None)).is_ok());
+    fn a_png_or_svg_is_accepted() {
+        assert!(check(&look(Some("data:image/png;base64,AAAA"))).is_ok());
+        assert!(check(&look(Some("data:image/svg+xml,%3Csvg%3E"))).is_ok());
+        assert!(check(&look(None)).is_ok());
     }
 
     #[test]
-    fn anything_else_is_refused() {
-        assert!(check(&look(Some("https://elsewhere/x.png"), None)).is_err());
-        assert!(check(&look(Some("data:text/html,<script>"), None)).is_err());
-        assert!(check(&look(
-            Some("data:image/png;base64,AAAA"),
-            Some(["red", "#223344", "#aabbcc"])
-        ))
-        .is_err());
-        assert!(check(&look(None, Some(["#112233", "#223344", "#aabbcc"]))).is_err());
+    fn anything_else_is_refused_and_an_accent_is_never_kept() {
+        assert!(check(&look(Some("https://elsewhere/x.png"))).is_err());
+        assert!(check(&look(Some("data:text/html,<script>"))).is_err());
         let big = format!("data:image/png;base64,{}", "A".repeat(MAX_LOGO));
-        assert!(check(&look(Some(&big), None)).is_err());
+        assert!(check(&look(Some(&big))).is_err());
+        // an old body that carries an accent is read for its logo; the accent is dropped
+        let old: Look = serde_json::from_str(
+            r##"{"logo":"data:image/png;base64,AAAA","accent":{"white":"#112233","grey":"#223344","black":"#aabbcc"}}"##,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(&old).unwrap(),
+            serde_json::json!({"logo":"data:image/png;base64,AAAA"})
+        );
     }
 }

@@ -30,9 +30,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::Account;
 
-/// No home has more than five doors, and the O draws no more than five circles.
+/// No role is offered more than five page doors on the desk's row; the rest are listed under More.
 pub const MAX_DOORS: usize = 5;
-pub const MAX_CIRCLES: usize = 5;
 
 /// The role of an admin and of a demo account. Both open every route and see
 /// every home through the role switcher; nobody else gets the switcher.
@@ -75,6 +74,19 @@ pub struct Table {
     pub homes: Vec<Home>,
     /// The seven departments, in the order the O lists them.
     pub departments: Vec<Department>,
+}
+
+/// The tool (a landing/tools.ts id) a door opens for a client, when it is one.
+pub fn tool_of(door: &str) -> Option<&'static str> {
+    Some(match door {
+        "brief" => "brief",
+        "research" => "research",
+        "territories" => "territories",
+        "presentations" => "deck",
+        "ideas" => "idea",
+        "script-editor" => "script",
+        _ => return None,
+    })
 }
 
 fn e(id: &str, name: &str) -> Entry {
@@ -290,26 +302,7 @@ pub struct RoleInfo {
     pub title: String,
 }
 
-/// A circle on the O: a department, and where it opens.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct Circle {
-    pub id: String,
-    pub name: String,
-    /// The person's own department.
-    pub mine: bool,
-    /// The role whose home it opens; none for Clients, which opens the client desk.
-    pub opens: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct Map {
-    /// At most five, the person's own first.
-    pub circles: Vec<Circle>,
-    /// The rest the person may open, as a text list.
-    pub other: Vec<Circle>,
-}
-
-/// What `/api/t/{tenant}/doors` answers.
+/// What `/api/t/{tenant}/doors` answers: what the desk adds for a role (features/align-landing-look.clan).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct HomeView {
     pub roles: Vec<String>,
@@ -319,9 +312,13 @@ pub struct HomeView {
     pub title: String,
     /// The home the role switcher put on screen, when it did.
     pub viewing: Option<String>,
-    pub doors: Vec<Entry>,
+    /// The page doors of the desk's "Your pages" row: at most five, the person's own role first.
+    pub pages: Vec<Entry>,
+    /// The page doors that did not fit, as a text list under More.
     pub more: Vec<Entry>,
-    pub map: Map,
+    /// The tools this person is offered (landing/tools.ts ids): the Dial, the client's page and Continue in
+    /// show these and no others. Not a second list: a tool is a door that opens a document of a client.
+    pub tools: Vec<String>,
     /// Every role's home, for admins and demos; none for anyone else.
     pub switcher: Option<Vec<RoleInfo>>,
     /// What this person may do with jobs; the shell draws a control only when it is true, and the
@@ -406,90 +403,6 @@ impl Table {
         (doors, more)
     }
 
-    /// The departments `roles` may open, the person's own first.
-    fn open_departments(&self, roles: &[String]) -> Vec<&Department> {
-        let all = is_switcher(roles);
-        let mut own: Vec<&str> = Vec::new();
-        for r in roles {
-            let dept = self
-                .home_of(self.landing_role(r))
-                .map(|h| h.department.as_str());
-            if let Some(d) = dept {
-                if !own.contains(&d) {
-                    own.push(d);
-                }
-            }
-        }
-        let opens = |d: &Department| {
-            all || own.contains(&d.id.as_str())
-                || d.open_to.iter().any(|o| roles.iter().any(|r| r == o))
-        };
-        let mut out: Vec<&Department> = Vec::new();
-        for id in &own {
-            if let Some(d) = self.departments.iter().find(|d| d.id == *id) {
-                out.push(d);
-            }
-        }
-        for d in &self.departments {
-            if opens(d) && !out.iter().any(|x| x.id == d.id) {
-                out.push(d);
-            }
-        }
-        out
-    }
-
-    /// A circle on the O. It opens the home of the first role in its department; a person's
-    /// own department opens the person's own role (`own_role`), so an art director's Creative
-    /// circle carries the art director's home, not the creative director's.
-    fn circle(&self, d: &Department, own_role: Option<&str>) -> Circle {
-        let opens = if d.id == "clients" {
-            None
-        } else if let Some(role) = own_role {
-            Some(role.to_string())
-        } else {
-            self.homes
-                .iter()
-                .find(|h| h.department == d.id)
-                .map(|h| h.role.clone())
-        };
-        Circle {
-            id: d.id.clone(),
-            name: d.name.clone(),
-            mine: own_role.is_some(),
-            opens,
-        }
-    }
-
-    pub fn map_for(&self, roles: &[String]) -> Map {
-        // For each of the person's own departments, the role that put them there (the first).
-        let mut own: Vec<(String, String)> = Vec::new();
-        for r in roles {
-            let landing = self.landing_role(r);
-            if let Some(h) = self.home_of(landing) {
-                if !own.iter().any(|(d, _)| *d == h.department) {
-                    own.push((h.department.clone(), landing.to_string()));
-                }
-            }
-        }
-        let open = self.open_departments(roles);
-        let mut circles = Vec::new();
-        let mut other = Vec::new();
-        for (i, d) in open.iter().enumerate() {
-            let c = self.circle(
-                d,
-                own.iter()
-                    .find(|(o, _)| *o == d.id)
-                    .map(|(_, role)| role.as_str()),
-            );
-            if i < MAX_CIRCLES {
-                circles.push(c);
-            } else {
-                other.push(c);
-            }
-        }
-        Map { circles, other }
-    }
-
     /// The home `roles` land on, or, for an admin or a demo, the home of the
     /// role `as_role` names. A role switcher that is not allowed is ignored.
     pub fn view(&self, roles: &[String], as_role: Option<&str>) -> HomeView {
@@ -509,7 +422,22 @@ impl Table {
             Some(r) => vec![r.clone()],
             None => roles.to_vec(),
         };
-        let (doors, more) = self.home_for(&shown);
+        let (doors, rest) = self.home_for(&shown);
+        // One rule: a door that opens a document of a client is a tool (the shell's TOOLS table); any other is a
+        // page door. The desk is the Clients door, so that one is not drawn as a page.
+        let mut tools: Vec<String> = Vec::new();
+        let mut page_doors: Vec<Entry> = Vec::new();
+        for d in doors.iter().chain(rest.iter()) {
+            if let Some(t) = tool_of(&d.id) {
+                if !tools.iter().any(|x| x == t) {
+                    tools.push(t.to_string());
+                }
+            } else if d.id != "clients" && !page_doors.iter().any(|x| x.id == d.id) {
+                page_doors.push(d.clone());
+            }
+        }
+        let more = page_doors.split_off(page_doors.len().min(MAX_DOORS));
+        let pages = page_doors;
         let title = shown
             .iter()
             .filter_map(|r| self.home_of(self.landing_role(r)).map(|h| h.title.clone()))
@@ -525,9 +453,9 @@ impl Table {
             restricted: !roles.is_empty(),
             title,
             viewing,
-            doors,
+            pages,
             more,
-            map: self.map_for(roles),
+            tools,
             switcher,
             jobs: job_rights(roles),
         }
@@ -741,9 +669,8 @@ mod tests {
     #[test]
     fn each_live_role_gets_the_doors_of_the_v2_table() {
         let t = Table::default();
-        let v = |role: &str| t.view(&r(&[role]), None);
         assert_eq!(
-            names(&v("planning").doors),
+            names(&t.home_for(&r(&["planning"])).0),
             [
                 "Brief",
                 "Research",
@@ -753,7 +680,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            names(&v("creative-director").doors),
+            names(&t.home_for(&r(&["creative-director"])).0),
             [
                 "Ideas",
                 "Ready for review",
@@ -763,7 +690,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            names(&v("account-service").doors),
+            names(&t.home_for(&r(&["account-service"])).0),
             [
                 "Clients",
                 "Live jobs",
@@ -773,7 +700,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            names(&v("management").doors),
+            names(&t.home_for(&r(&["management"])).0),
             [
                 "Agency dashboard",
                 "Live jobs",
@@ -783,7 +710,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            names(&v("planning").more),
+            names(&t.home_for(&r(&["planning"])).1),
             ["Ideas (read only)", "Case study builder (read only)"]
         );
     }
@@ -815,8 +742,9 @@ mod tests {
     fn two_roles_get_one_merged_home_of_five() {
         let t = Table::default();
         let v = t.view(&r(&["planning", "creative-director"]), None);
+        let two = t.home_for(&r(&["planning", "creative-director"]));
         assert_eq!(
-            names(&v.doors),
+            names(&two.0),
             [
                 "Brief",
                 "Ideas",
@@ -834,40 +762,10 @@ mod tests {
             "Approved work",
             "Direction notes",
         ] {
-            assert!(names(&v.more).contains(&lost), "{lost} is in More tools");
+            assert!(names(&two.1).contains(&lost), "{lost} is in More tools");
         }
         // Ideas is a full door for the creative director, so the planner's read-only line is not repeated
-        assert!(!names(&v.more).contains(&"Ideas (read only)"));
-    }
-
-    #[test]
-    fn the_o_shows_five_circles_and_lists_the_rest() {
-        let t = Table::default();
-        let admin = t.view(&r(&["admin"]), None);
-        assert_eq!(admin.map.circles.len(), 5);
-        assert_eq!(admin.map.other.len(), 2);
-        assert_eq!(
-            admin.map.circles[0].name, "Management",
-            "an admin's own department first"
-        );
-        let planner = t.view(&r(&["planning"]), None);
-        assert_eq!(planner.map.circles.len(), 1);
-        assert!(planner.map.circles[0].mine);
-        assert!(planner.map.other.is_empty());
-        // a person's own department comes first, then the others they may open
-        let am = t.view(&r(&["account-service"]), None);
-        assert_eq!(
-            am.map
-                .circles
-                .iter()
-                .map(|c| c.id.as_str())
-                .collect::<Vec<_>>(),
-            ["account-service", "clients"]
-        );
-        assert_eq!(
-            am.map.circles[1].opens, None,
-            "Clients opens the client desk"
-        );
+        assert!(!names(&two.1).contains(&"Ideas (read only)"));
     }
 
     #[test]
@@ -883,7 +781,7 @@ mod tests {
         let a = t.view(&r(&["admin"]), Some("copywriter"));
         assert!(a.switcher.is_some());
         assert_eq!(
-            names(&a.doors),
+            names(&t.home_for(&r(&["copywriter"])).0),
             [
                 "Ideas",
                 "Script editor",
@@ -1062,10 +960,9 @@ mod tests {
         let t = Table::default();
         assert_eq!(t.homes.len(), 9);
         assert!(t.homes.iter().all(|h| h.live), "no home is marked not live");
-        let v = |role: &str| t.view(&r(&[role]), None);
         let check = |role: &str, doors: &[&str], more: &[&str]| {
-            assert_eq!(names(&v(role).doors), doors, "{role} doors");
-            assert_eq!(names(&v(role).more), more, "{role} more tools");
+            assert_eq!(names(&t.home_for(&r(&[role])).0), doors, "{role} doors");
+            assert_eq!(names(&t.home_for(&r(&[role])).1), more, "{role} more tools");
         };
         check(
             "art-director",
@@ -1130,7 +1027,7 @@ mod tests {
     }
 
     #[test]
-    fn the_o_shows_at_most_five_circles_for_every_role_and_pair() {
+    fn the_desk_row_has_at_most_five_pages_and_every_door_is_a_tool_or_a_page() {
         let t = Table::default();
         let ids = all_roles();
         let mut sets: Vec<Vec<String>> = ids.iter().map(|a| r(&[a])).collect();
@@ -1142,67 +1039,63 @@ mod tests {
         sets.push(r(&["admin"]));
         sets.push(r(&["demo"]));
         for roles in sets {
-            let m = t.map_for(&roles);
-            assert!(m.circles.len() <= MAX_CIRCLES, "{roles:?}");
-            assert!(!m.circles.is_empty(), "{roles:?}");
-            assert!(
-                m.circles[0].mine || is_switcher(&roles),
-                "{roles:?} own first"
-            );
-            let seen: Vec<&str> = m
-                .circles
+            let v = t.view(&roles, None);
+            assert!(v.pages.len() <= MAX_DOORS, "{roles:?}");
+            let mut seen: Vec<&str> = v
+                .pages
                 .iter()
-                .chain(&m.other)
-                .map(|c| c.id.as_str())
+                .chain(&v.more)
+                .map(|e| e.id.as_str())
                 .collect();
-            let mut unique = seen.clone();
-            unique.dedup();
-            assert_eq!(seen.len(), unique.len(), "{roles:?} no circle twice");
+            let n = seen.len();
+            seen.sort();
+            seen.dedup();
+            assert_eq!(n, seen.len(), "{roles:?} no page twice");
+            for e in v.pages.iter().chain(&v.more) {
+                assert!(tool_of(&e.id).is_none(), "{} is a tool, not a page", e.id);
+                assert_ne!(e.id, "clients", "the desk is the Clients door");
+            }
+            let (doors, rest) = t.home_for(&roles);
+            for d in doors.iter().chain(&rest) {
+                let ok = match tool_of(&d.id) {
+                    Some(tool) => v.tools.iter().any(|x| x == tool),
+                    None => {
+                        d.id == "clients" || v.pages.iter().chain(&v.more).any(|e| e.id == d.id)
+                    }
+                };
+                assert!(ok, "{} reaches nobody for {roles:?}", d.id);
+            }
         }
     }
 
     #[test]
-    fn a_persons_own_department_opens_their_own_home() {
+    fn a_role_is_offered_its_own_tools_and_pages() {
         let t = Table::default();
-        let opens = |roles: &[&str], dept: &str| {
-            let m = t.map_for(&r(roles));
-            m.circles
-                .iter()
-                .chain(&m.other)
-                .find(|c| c.id == dept)
-                .and_then(|c| c.opens.clone())
-        };
+        let v = t.view(&r(&["planning"]), None);
         assert_eq!(
-            opens(&["art-director"], "creative").as_deref(),
-            Some("art-director")
+            v.tools,
+            ["brief", "research", "territories", "deck", "idea"]
         );
         assert_eq!(
-            opens(&["copywriter"], "creative").as_deref(),
-            Some("copywriter")
+            names(&v.pages),
+            ["Client brains", "Case study builder (read only)"]
         );
+        assert!(v.more.is_empty());
+        let m = t.view(&r(&["management"]), None);
         assert_eq!(
-            opens(&["traffic"], "production").as_deref(),
-            Some("traffic")
+            names(&m.pages),
+            [
+                "Agency dashboard",
+                "Live jobs",
+                "Time and money",
+                "Traffic board",
+                "Agency Brain (read only)"
+            ]
         );
-        assert_eq!(
-            opens(&["producer"], "production").as_deref(),
-            Some("producer")
-        );
-        assert_eq!(
-            opens(&["creative-director"], "creative").as_deref(),
-            Some("creative-director")
-        );
-        // an admin has no department of their own beyond Management: the other circles open what they did
-        assert_eq!(
-            opens(&["admin"], "management").as_deref(),
-            Some("management")
-        );
-        assert_eq!(
-            opens(&["admin"], "creative").as_deref(),
-            Some("creative-director")
-        );
-        assert_eq!(opens(&["admin"], "production").as_deref(), Some("producer"));
-        assert_eq!(opens(&["admin"], "clients"), None);
+        assert_eq!(m.tools, ["deck"]);
+        // two roles merge into one row of five, the person's own role first
+        let two = t.view(&r(&["account-service", "management"]), None);
+        assert_eq!(two.pages.len(), 5);
     }
 
     #[test]
