@@ -218,3 +218,14 @@ None is verified or merged.
 - Same as the Mac: the known older failures bar Share, briefSheet x2, landing 320, registry x2, research x2, and `shots.spec.ts:44`.
 - Different: the tools spin-off test passed here. Judge 59 failed at 390 and 1440 (Mac: Judge 59 once). Pilot 9 failed at 390 (Mac: pilot 18). Visual Brief failed 3 (Mac: six). The Mac's run-alone failures are not yet re-run here, so the slow-server explanation is still unverified.
 - Not installed, so two check suites fail on this machine: terraform and the wasm-bindgen CLI (production-tool).
+
+**align-confidential-prices: three security reviews, then a redesign (session 5).**
+- Built on `feat/align-confidential-prices` (Sonnet), three Fable 5.2 reviews, three fix rounds. Heads: 30bfbaf0, babd6462, 38cae6e1. Not merged; not pushed.
+- Round 1 blocker: `proxy.rs` sent the whole document context (confidential parts included) to the middleware on every app call; the READERS test could not see it. Fixed by scrubbing the context.
+- Round 2 blockers (fixed, proved at runtime in round 3): a spin-off dropped the mark on a carried research fact; carried member facts reached `upstream_payload`; `projection.pins/findings/sources` copies were not dropped.
+- Round 3 blockers, open: (1) version history: an edit of a confidential field records `fields_changed` and `before` with no `targets`, and the chain goes to agents, so the old words leave (`confidential.rs:449-452`); (2) a confidential source's quote is dropped under `projection.pins` only, not under `facts[f].quotes` (`confidential.rs:195`).
+- Open should-fix: the mark does not follow a fact copied under a new id or cited by a finding; a confidential file's name stays in attachments and free text, and some path spellings get through; app-built payloads pass numbers, strings under 24 characters and partial quotes.
+- Cause: the context is built from the whole document and confidential bits are subtracted, so every new copy of the data is a new leak. Decision (Sai, in chat): try an allow-listed agent context (each outgoing field named, read only from non-confidential nodes), designed by Fable 5.2, then rebuilt. The design is not approved until Sai says so.
+- Also found: `an_open_racing_a_write_does_not_lose_the_write` (`crates/napkin-host/tests/client_link.rs`) hangs or fails 10 times in 20 on plain `spike/fabletest`, on this machine. It is not caused by this branch. It looks like the view-lock fault that `fix/store-scan-under-lock` was meant to fix, and that branch has no record on this branch.
+- `align-landing-look` built (head 3f83aa71, Sonnet), not merged: pilot 4 fails because the Needs you list left the landing; the bar search field remains; a wider e2e was not run. Waiting on Sai's decision.
+- Cost log: three Fable reviews of about 100-125k tokens each; Sonnet builders about 450-520k tokens each per round.
