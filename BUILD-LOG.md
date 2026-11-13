@@ -201,3 +201,15 @@ None is verified or merged.
 4. Phase 3 wave 0 (`production-line-merge`, with `j001-phase3-suite` beside it) can start as soon as a builder slot is free; `align-confidential-prices` must be merged before Phase 3 wave 1.
 5. Then `first-day`, `napkin-brain`, the per-client AI switch, the Phase 2 close, and the Phase 3 and 4 waves.
 6. Push `spike/fabletest` after each wave; merge `origin/develop` at the start of each.
+
+## 2026-11-13 · Machine proof on Linux ARM64 · session 5
+
+**Machine.** Linux aarch64. Installed: Rust stable (rustfmt and clippy added; they were missing), wasm32 target, Node 22.23.5 via nvm, uv 0.13.8 (was 0.12.24), gitleaks 8.30.1 in `~/bin` (`GITLEAKS_BIN`), Playwright's own Chromium (`npx playwright install chromium`; `--with-deps` needs sudo, and the system libraries were already present). The sudo password is not available to the agent.
+
+**Differences from the Mac run (`scripts/check.sh --all`).**
+- rust: failed first because rustfmt was not installed; re-run after adding it is recorded below.
+- terraform: FAIL, `terraform: command not found`. Not on the install list; not installed. Infra is not touched by this build.
+- production-tool: FAIL, `wasm-bindgen: not found` (the wasm-bindgen CLI is not installed). Its Python tests passed (one xfail).
+- wasm, conformance, frontend, desktop, engine, middleware, mock-backend, secrets, copy: pass.
+
+**Branches.** `feat/align-confidential-prices`, `feat/align-landing-look` and `fix/store-scan-under-lock` are NOT on origin (checked with `git ls-remote`). Their work lives only on the first machine, so they are rebuilt from their records' designs.
