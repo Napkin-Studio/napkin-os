@@ -37,6 +37,7 @@ pub mod sandbox;
 pub mod search;
 pub mod state;
 pub mod store;
+pub mod svg_sanitise;
 pub mod tenant;
 pub mod timesheet;
 pub mod timing;

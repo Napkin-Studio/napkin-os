@@ -101,7 +101,7 @@ export function AuditPage({ go }: { go: (r: Route) => void }) {
   else if (load === 'refused') body = <MissingAccess what="the audit view" who="an admin of this agency" />
   else if (load === 'failed') body = <FailedSave onRetry={() => { setLoad('loading'); setAttempt(a => a + 1) }} primary={false} />
   else if (lines.length === 0) {
-    body = <Empty line="Nothing has been signed, exported or changed yet. Each approval, export and change to who can open what is listed here." example={{ title: 'Example · Client A, an Irish whiskey', lines: ['12 Nov, 09:41. Dara signed the brief for J001.'] }} verb="Back to your home" onStart={() => go({ level: 'agency' })} />
+    body = <Empty line="Nothing has been signed, exported or changed yet. Each approval, export and change to who can open what is listed here." example={{ title: 'Example · Client A, an Irish whiskey', lines: ['12 Nov, 09:41. Dara signed the brief for J001.'] }} verb="Back to the desk" onStart={() => go({ level: 'agency' })} />
   } else body = <AuditBody lines={lines} filter={filter} verified={verified} checking={checking} onFilter={setFilter} onCheck={() => void check()} />
 
   return (
@@ -113,7 +113,7 @@ export function AuditPage({ go }: { go: (r: Route) => void }) {
             <h1 className="hero-title" tabIndex={-1} data-testid="audit-title">What happened<span className="period-dot" aria-hidden /></h1>
             <p className="hero-sub">Every approval, export and change to who can open what. It is a record: nobody edits it.</p>
           </div>
-          <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to your home</button></div>
+          <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to the desk</button></div>
         </section>
         <main className="hm-main">{body}</main>
       </div>

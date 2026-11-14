@@ -43,6 +43,8 @@ interface Props {
   items: LibraryItem[]
   facts: Facts
   live: ReadonlySet<string>
+  /** The tools the person's role is offered (the server's `tools`); a tool it is not offered is not listed. Null offers all. */
+  offered?: ReadonlySet<string> | null
   onOpenItem: (path: string) => void
   /** Start a document of a live tool for this client. */
   onNew: (tool: Tool) => void
@@ -56,7 +58,7 @@ interface Props {
   onArchive?: () => Promise<string | null>
 }
 
-export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive }: Props) {
+export function ClientView({ client: c, items, facts, live, offered = null, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive }: Props) {
   const pop = usePop<'more' | 'deck'>()
   const [mode, setMode] = useState<'idle' | 'rename' | 'archive'>('idle')
   const look = clientLook(c.id, c.name)
@@ -79,7 +81,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
   useEffect(() => {
     pick.current = (i: number) => {
       const t = toolById(GROUPS[i].tool)
-      if (!t) return
+      if (!t || (offered && !offered.has(t.id))) return
       if (live.has(t.id)) onOpenTool(t)
       else onSoon(t)
     }
@@ -112,6 +114,8 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
   const groups = GROUPS.map((g, n) => ({ ...g, n, docs: work.filter(i => toolOfApp(i.app_id)?.id === g.tool) }))
     // A new client lists Briefs and Research; Decks and Production once there is one (the mock's client page).
     .filter(g => g.docs.length > 0 || g.tool === 'brief' || g.tool === 'research')
+    // A role sees only the tools it is offered, so no tool is listed that the server would refuse.
+    .filter(g => !offered || offered.has(g.tool))
   // Each group's heading opens its tool's own page: one tab stop for them (roving), the arrows move it, as the tool wheel did.
   const [at, setAt] = useState(0)
   const heads = useRef<(HTMLButtonElement | null)[]>([])

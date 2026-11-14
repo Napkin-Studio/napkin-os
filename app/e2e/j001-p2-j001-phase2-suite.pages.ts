@@ -11,7 +11,7 @@ const loaded = async (page: import('@playwright/test').Page, hash: string) => {
 }
 
 export const PAGES: Phase2Page[] = [
-  { name: 'home of the creative director', as: PEOPLE.creativeDirector, show: async page => { await page.goto('/'); await expect(page.getByTestId('home')).toBeVisible() } },
+  { name: 'home of the creative director', as: PEOPLE.creativeDirector, show: async page => { await page.goto('/'); await expect(page.getByTestId('desk')).toBeVisible() } },
   { name: 'desk', as: PEOPLE.planning, show: page => loaded(page, 'agency') },
   { name: 'clients', as: PEOPLE.planning, show: page => loaded(page, 'clients') },
   { name: 'client', as: PEOPLE.planning, show: (page, { job }) => loaded(page, `client-${job.client}`) },

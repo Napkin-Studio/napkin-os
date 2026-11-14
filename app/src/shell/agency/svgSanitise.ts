@@ -101,3 +101,43 @@ export function sanitiseSvg(src: string): string {
 export function recolourSvg(svg: string, fill: string): string {
   return svg.replace(/fill="#[0-9a-f]{3,6}"/gi, `fill="${fill.toLowerCase()}"`)
 }
+
+/** Something in a file that could run or reach out, and the line it is on. */
+export interface Found { what: string; line: number }
+
+// The whitespace and control characters Rust's char::is_whitespace / is_control take out of an href (svg_sanitise.rs).
+// eslint-disable-next-line no-control-regex -- the control characters are the point: Rust's is_control drops them
+const HREF_JUNK = /[\t\n\v\f\r \u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\u0000-\u001F\u007F-\u009F]/g
+
+/**
+ * Everything in `src` that could run or reach out: script and foreignObject
+ * elements, `on*=` handlers, an href that is not `#local` (or is
+ * `javascript:`), entity declarations and DOCTYPEs, in the order they appear.
+ * Comments are not read (sanitiseSvg deletes them). The server refuses an
+ * upload with any of these before it sanitises (crates/napkin-web/src/
+ * svg_sanitise.rs active_content, held to the same fixtures,
+ * tests/fixtures/svg/hostile/*.found.json); the People page runs it on a new
+ * agency's wordmark before the agency is on the server.
+ */
+export function activeContent(src: string): Found[] {
+  const text = src.replace(/<!--[\s\S]*?-->/g, c => c.replace(/[^\n]/g, ' '))
+  const found: [number, string][] = []
+  for (const m of text.matchAll(/<!doctype/gi)) found.push([m.index, 'DOCTYPE'])
+  for (const m of text.matchAll(/<!entity/gi)) found.push([m.index, 'ENTITY declaration'])
+  for (const t of text.matchAll(/<([A-Za-z_][A-Za-z0-9_:.-]*)([^>]*)>/g)) {
+    const local = (t[1].split(':').pop() ?? t[1]).toLowerCase()
+    if (local === 'script') found.push([t.index, 'script'])
+    else if (local === 'foreignobject') found.push([t.index, 'foreignObject'])
+    const restAt = t.index + 1 + t[1].length
+    for (const a of t[2].matchAll(/(?:^|[\s"'/])([oO][nN][A-Za-z][A-Za-z0-9_.:-]*)\s*=/g))
+      found.push([restAt + a.index + (a[0].startsWith(a[1]) ? 0 : 1), `event handler ${a[1]}`])
+    for (const h of t[2].matchAll(/(?:^|[\s"'/])(?:[A-Za-z0-9_.-]+:)?[hH][rR][eE][fF]\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/g)) {
+      const plain = (h[1] ?? h[2] ?? h[3] ?? '').replace(HREF_JUNK, '')
+      const at = restAt + h.index
+      if (plain.toLowerCase().startsWith('javascript:')) found.push([at, 'javascript: link'])
+      else if (plain && !plain.startsWith('#')) found.push([at, `external link ${[...plain].slice(0, 80).join('')}`])
+    }
+  }
+  found.sort((a, b) => a[0] - b[0])
+  return found.map(([at, what]) => ({ what, line: 1 + (text.slice(0, at).match(/\n/g)?.length ?? 0) }))
+}

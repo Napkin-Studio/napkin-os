@@ -115,7 +115,7 @@ for (const size of SIZES) {
     await expect(link).toHaveAttribute('href', `#job-${job.job}`)
     // a Needs you row: the job number is a link, and the button still opens the document
     await signIn(page, PEOPLE.planning) // the planner's Needs you holds the brief's gate need for this job
-    await page.goto('/'); await expect(page.getByTestId('home')).toBeVisible()
+    await page.goto('/'); await expect(page.getByTestId('desk')).toBeVisible()
     await expect(page.getByTestId('needs-you')).toBeVisible()
     // earlier jobs of this agency's planner may fill the first five rows: Show all, when it is offered
     await expect.poll(async () => {

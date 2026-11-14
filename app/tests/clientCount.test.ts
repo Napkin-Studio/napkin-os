@@ -10,7 +10,6 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
-import { MODE_SURFACES } from '../src/shell/agency/accent.ts'
 import { contrast } from '../src/shell/agency/palette.ts'
 
 let root = new URL('.', import.meta.url)
@@ -28,17 +27,14 @@ function token(css: string, selector: string, name: string): string {
 }
 
 const tokens = read('src/shell/nui/tokens.css')
-const modes = read('src/shell/nui/modes.css')
 const muted = {
   white: token(tokens, ':root,\n:root[data-theme=\'light\'] {', '--muted'),
-  grey: token(modes, ':root[data-theme=\'light\'][data-mode=\'grey\']', '--muted'),
   black: token(tokens, ':root[data-theme=\'dark\'] {', '--muted'),
 }
 // Papers a count can sit on: the three of the mode, and the tinted white paper axe measured it on.
 const sit: Record<keyof typeof muted, string[]> = {
-  white: [...MODE_SURFACES.white, '#ece8e8'],
-  grey: [...MODE_SURFACES.grey],
-  black: [...MODE_SURFACES.black],
+  white: ['#F6F1E7', '#FFFDF8', '#FFFFFF', '#ece8e8'],
+  black: ['#121110', '#1B1A18', '#201E1B'],
 }
 
 test('the stylesheet colours the count with --muted, not --faint', () => {
@@ -47,7 +43,7 @@ test('the stylesheet colours the count with --muted, not --faint', () => {
   assert.match(rule, /color: var\(--muted\)/)
 })
 
-for (const mode of ['white', 'grey', 'black'] as const) {
+for (const mode of ['white', 'black'] as const) {
   test(`the count reads at 4.5 to 1 on every paper in ${mode}`, () => {
     for (const paper of sit[mode]) {
       assert.ok(contrast(muted[mode], paper) >= 4.5, `${muted[mode]} on ${paper} in ${mode}: ${contrast(muted[mode], paper).toFixed(2)}`)

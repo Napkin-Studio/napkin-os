@@ -22,6 +22,8 @@ const FILES = {
   // Catapult's icon is redrawn from their site's ring "C" (owner's reference, 2026-11-11): a ring, a bold C and its bar.
   catapult: { logo: 'Catapult-logo.svg', icon: 'catapult-icon.svg' },
   pluto: { logo: 'Pluto-logo.svg' },
+  // ACNE's mark traced from their site's LogoNero.png with potrace (2026-11-13; their site has no SVG): the "acne" mark only, without "a Deloitte business".
+  acne: { logo: 'acne-logo.svg' },
 }
 
 const app = fileURLToPath(new URL('..', import.meta.url))

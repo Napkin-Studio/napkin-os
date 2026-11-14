@@ -68,30 +68,31 @@ interface SessionInfo {
   roles?: string[]
 }
 
-/** A door, or a line under More tools (napkin-web/src/roles.rs `Entry`). */
+/** A page door, or a line under More (napkin-web/src/roles.rs `Entry`). */
 export interface DoorEntry { id: string; name: string }
-/** A circle on the O: a department, and the role whose home it opens (none: the client desk). */
-export interface MapCircle { id: string; name: string; mine: boolean; opens: string | null }
 /**
- * The person's home, as the server serves it (`GET /api/t/{tenant}/doors`): the doors,
- * More tools and the O's circles, from the roles in the session. `restricted` is false
- * for a person with no roles, who keeps the desk.
+ * What the desk shows for the roles in the session (`GET /api/t/{tenant}/doors`): the row of page doors, the
+ * rest under More, and the tools the role is offered. `restricted` is false for a person with no roles, who
+ * is offered everything.
  */
 export interface HomeView {
   roles: string[]
   restricted: boolean
   title: string
-  viewing: string | null
-  doors: DoorEntry[]
+  /** The role an admin is trying through View as; null otherwise. */
+  view_as: string | null
+  /** At most five, the person's own role first. */
+  pages: DoorEntry[]
   more: DoorEntry[]
-  map: { circles: MapCircle[]; other: MapCircle[] }
-  /** Every role's home, for admins and demos; null for everyone else. */
+  /** landing/tools.ts ids the role is offered. */
+  tools: string[]
+  /** Every role, for admins; null for everyone else. */
   switcher: { id: string; title: string }[] | null
   /** What this person may do with jobs (open one, change it, set its budget). */
   jobs: JobRights
 }
 
-/** The person's home. `as` asks for another role's (an admin or a demo only; the server ignores it otherwise). */
+/** The person's role view. `as` asks for another role's (an admin or a demo only; the server ignores it otherwise). */
 export async function homeView(as?: string | null): Promise<HomeView | null> {
   try {
     const q = as ? `?as=${encodeURIComponent(as)}` : ''

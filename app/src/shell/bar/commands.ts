@@ -29,7 +29,7 @@ export interface Command {
 }
 
 export interface BarEnv {
-  /** The person's home (doors, More tools), null where there is none (no roles, no server). */
+  /** The person's role view (page doors, More), null where there is none (no roles, no server). */
   home: HomeView | null
   go: (r: Route) => void
   /** The open document's undo and redo, when one is open and has something to undo. */
@@ -42,8 +42,8 @@ export interface BarEnv {
   signedIn: boolean
 }
 
-/** The page a door opens: the clients door is the clients page, the others their own door page. */
-export const doorRoute = (id: string): Route => (id === 'clients' ? { level: 'clients' } : { level: 'door', door: id })
+/** The page a door opens: People and the audit view are pages of their own, the others their own door page. */
+export const doorRoute = (id: string): Route => (id === 'people' ? { level: 'people' } : id === 'audit' ? { level: 'audit' } : { level: 'door', door: id })
 
 /** The words a command is found by, folded the way the server folds a query. */
 export const fold = (s: string): string[] =>
@@ -51,18 +51,17 @@ export const fold = (s: string): string[] =>
 
 /**
  * Every command, available or not. The bar offers the available ones; the shortcuts sheet prints every one
- * that has a key. A door the person does not have is not here at all (an allow list: only the doors of
- * their own home and its More tools).
+ * that has a key. A door the person does not have is not here at all (an allow list: only the page
+ * doors of their own row and its More).
  */
 export function commandsFor(env: BarEnv): Command[] {
   const out: Command[] = []
-  const doors = [...(env.home?.doors ?? []), ...(env.home?.more ?? [])]
+  const doors = [...(env.home?.pages ?? []), ...(env.home?.more ?? [])]
   for (const d of doors) {
     const name = d.name.replace(/\s*\(.*\)\s*$/, '')
     out.push({ id: `door-${d.id}`, title: `Open ${d.name}`, keywords: ['open', 'door', 'tool', name, d.id], undoable: true, available: true, run: () => env.go(doorRoute(d.id)) })
   }
   out.push({ id: 'home', title: 'Home', keywords: ['home', 'desk', 'studio', 'back'], undoable: true, available: true, run: () => env.go({ level: 'agency' }) })
-  if (env.home?.restricted) out.push({ id: 'map', title: 'The map', keywords: ['map', 'agency', 'departments', 'the o'], undoable: true, available: true, run: () => env.go({ level: 'map' }) })
   if (env.signedIn) out.push({ id: 'timesheet', title: 'Your timesheet', keywords: ['timesheet', 'time', 'hours', 'day'], undoable: true, available: true, run: () => env.go({ level: 'timesheet' }) })
   out.push({ id: 'search', title: 'Search or type a command', keywords: ['bar', 'find'], shortcut: 'mod K', undoable: true, available: false, run: env.openBar })
   out.push({ id: 'undo', title: 'Undo', keywords: ['undo', 'back', 'revert'], shortcut: 'mod Z', undoable: true, available: !!env.undo, run: () => env.undo?.() })

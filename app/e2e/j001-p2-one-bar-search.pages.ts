@@ -8,7 +8,7 @@ import type { Phase2Page } from './phase2/pages'
 type Pg = import('@playwright/test').Page
 const phone = (page: Pg) => (page.viewportSize()?.width ?? 1440) <= 720
 const loaded = async (page: Pg) => {
-  await page.goto('/'); await expect(page.getByTestId('home')).toBeVisible()
+  await page.goto('/'); await expect(page.getByTestId('desk')).toBeVisible()
   await expect(page.getByTestId('os-bar')).toBeVisible()
 }
 const openBar = async (page: Pg) => {

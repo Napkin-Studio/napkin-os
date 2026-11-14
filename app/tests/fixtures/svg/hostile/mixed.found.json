@@ -1,0 +1,18 @@
+[
+  {
+    "what": "event handler onLoad",
+    "line": 1
+  },
+  {
+    "what": "script",
+    "line": 3
+  },
+  {
+    "what": "foreignObject",
+    "line": 4
+  },
+  {
+    "what": "javascript: link",
+    "line": 5
+  }
+]

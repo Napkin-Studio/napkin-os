@@ -518,7 +518,7 @@ async fn view(
             "state": "open",
             "title": page.title,
             "client": { "name": state_v["client"]["name"] },
-            "agency": { "name": claims.agency, "logo": look.logo, "accent": look.accent },
+            "agency": { "name": claims.agency, "logo": look.logo },
             "version": claims.version,
             "expires": state_v["expires"],
             "summary": page.summary,
@@ -927,8 +927,7 @@ async fn review_view(ctx: Arc<AppCtx>, claims: Claims, headers: HeaderMap) -> Re
                     json!({
                         "ok": false, "state": "code",
                         "agency": { "name": claims.agency,
-                                    "logo": look.as_ref().and_then(|l| l.logo.clone()),
-                                    "accent": look.as_ref().and_then(|l| l.accent.clone()) },
+                                    "logo": look.as_ref().and_then(|l| l.logo.clone()) },
                     }),
                 );
             }
@@ -967,7 +966,7 @@ async fn review_view(ctx: Arc<AppCtx>, claims: Claims, headers: HeaderMap) -> Re
             "ok": true, "state": "open", "mode": "review",
             "title": page.title,
             "client": { "name": st["client"]["name"] },
-            "agency": { "name": claims.agency, "logo": look.logo, "accent": look.accent },
+            "agency": { "name": claims.agency, "logo": look.logo },
             "version": claims.version, "version_n": st["version_n"],
             "expires": st["expires"],
             "round": st["round"], "rounds_in_scope": rounds,

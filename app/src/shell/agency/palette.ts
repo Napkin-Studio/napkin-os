@@ -18,7 +18,7 @@
 // their own paper palette: nothing here reaches the iframe.
 
 import { ICON_PNG, ICON_SVG, WORDMARK_SVG } from './logos'
-import { recolourSvg } from './svgSanitise'
+import { recolourSvg, sanitiseSvg } from './svgSanitise'
 
 /** What an admin sets for an agency: its colour (`accent`) and its darker base. */
 export interface AgencyColours {
@@ -96,6 +96,13 @@ export const AGENCY_COLOURS: Readonly<Record<string, AgencyColours>> = {
     name: 'Pluto', base: '#000047', accent: '#B2F257', accentInk: '#000047',
     logo: svgUri(WORDMARK_SVG.pluto), logoOnDark: svgUri(recolourSvg(WORDMARK_SVG.pluto, '#FFFFFF')),
   },
+  // ACNE (a Deloitte business; deloittedigital.com/ie/en/acne.html, owner 2026-11-13): black, with a hint
+  // of Deloitte green (#86BC25, their page's progress bar) as Catapult has its crimson: a hairline on
+  // actions and the pill, and the needs colour; never a big fill. The mark traced from their site.
+  acne: {
+    name: 'ACNE', base: '#000000', accent: '#86BC25', pill: 'base', accentUse: 'line', surface: 'mono',
+    logo: svgUri(WORDMARK_SVG.acne), logoOnDark: svgUri(recolourSvg(WORDMARK_SVG.acne, '#FFFFFF')),
+  },
 }
 
 /**
@@ -111,28 +118,107 @@ export const AGENCY_ALIASES: Readonly<Record<string, string>> = {
 // napkin-web mirrors the ids, names, colours and aliases above (crates/napkin-web/src/people.rs
 // CODE_AGENCIES, CODE_ALIASES) to recognise an agency on the People page; tests/peopleAdmin.test.ts keeps them in step.
 
-/** An agency added from the People page, as napkin-web serves it (`GET /api/agency-looks`). */
-export interface AgencyLook { id: string; name: string; base: string; accent: string; aliases?: string[] }
+/**
+ * A published look, as napkin-web serves it (`GET /api/agency-looks`,
+ * features/agency-looks-admin.clan). Two tiers: a basic agency made on the
+ * People page carries its name, two colours, other spellings and one SVG
+ * wordmark (`logo`, a data: URI); an agency in code carries only a published
+ * display `name` (its look stays the code's).
+ */
+export interface AgencyLook extends WireStyle { id: string; name?: string; base?: string; accent?: string; aliases?: string[]; logo?: string | null; rev?: number }
 
-// The added agencies (features/people-admin.clan): after the code registry, which wins on a clash.
+/**
+ * A basic look's style on the wire (features/agency-style.clan), snake_case as
+ * napkin-web serves it: absent (or null) is the default, today's look (the
+ * accent pill, the accent as a fill, warm paper, automatic ink on the accent).
+ */
+export interface WireStyle {
+  pill?: 'accent' | 'base' | null
+  accent_use?: 'fill' | 'line' | null
+  surface?: 'warm' | 'mono' | null
+  accent_ink?: string | null
+}
+
+/** A wire style as AgencyColours fields: only what is not the default, so a default look is exactly today's. */
+export function styleOfWire(w: WireStyle): Pick<AgencyColours, 'pill' | 'accentUse' | 'surface' | 'accentInk'> {
+  const out: Pick<AgencyColours, 'pill' | 'accentUse' | 'surface' | 'accentInk'> = {}
+  if (w.pill === 'base') out.pill = 'base'
+  if (w.accent_use === 'line') out.accentUse = 'line'
+  if (w.surface === 'mono') out.surface = 'mono'
+  if (typeof w.accent_ink === 'string' && rgb(w.accent_ink)) out.accentInk = w.accent_ink.trim().toUpperCase()
+  return out
+}
+
+// The People page's published looks (features/people-admin.clan, agency-looks-admin.clan): basic agencies
+// after the code registry, and display names laid onto code entries (AGENCY_COLOURS itself never changes).
 let addedColours: Record<string, AgencyColours> = {}
 let addedAliases: Record<string, string> = {}
+let codeNames: Record<string, AgencyColours> = {}
 
-/** Take the agencies added from the People page into the registry: their people wear their look. */
+/** The SVG text of an SVG data: URI (percent-encoded or base64); null for anything else. */
+export function svgOfUri(uri: unknown): string | null {
+  if (typeof uri !== 'string') return null
+  const m = /^data:image\/svg\+xml(?:;charset=[\w-]+)?(;base64)?,([\s\S]*)$/i.exec(uri)
+  if (!m) return null
+  try {
+    if (!m[1]) return decodeURIComponent(m[2])
+    const bin = atob(m[2])
+    return new TextDecoder().decode(Uint8Array.from(bin, ch => ch.charCodeAt(0)))
+  } catch { return null }
+}
+
+/**
+ * A basic agency's look from its name, two colours, its style (pill, accent
+ * use, surface, ink on the accent; absent is the default) and its one wordmark
+ * (SVG text or an SVG data: URI): every other token is derived as for any agency
+ * (paletteOf, surfaceCss), and the dark-ground wordmark is the same SVG
+ * recoloured white. The wordmark goes through sanitiseSvg again (idempotent on
+ * the server's output); one that does not survive is dropped, the name stands
+ * in. Null without a name or with a colour that is not #rrggbb.
+ */
+export function basicLook(l: { name?: string; base?: string; accent?: string; logo?: string | null } & WireStyle): AgencyColours | null {
+  const name = typeof l.name === 'string' ? l.name.trim() : ''
+  if (!name || typeof l.base !== 'string' || typeof l.accent !== 'string' || !rgb(l.base) || !rgb(l.accent)) return null
+  const c: AgencyColours = { name, base: l.base.trim().toUpperCase(), accent: l.accent.trim().toUpperCase(), ...styleOfWire(l) }
+  const raw = typeof l.logo === 'string' ? (svgOfUri(l.logo) ?? (l.logo.trimStart().startsWith('<') ? l.logo : null)) : null
+  if (raw) {
+    try {
+      const svg = sanitiseSvg(raw)
+      c.logo = svgUri(svg)
+      c.logoOnDark = svgUri(recolourSvg(svg, '#FFFFFF'))
+    } catch { /* not a logo: the name stands in */ }
+  }
+  return c
+}
+
+/**
+ * Take the published looks into the registry: a basic agency's people wear its
+ * look, and an agency in code takes only its published display name (its look,
+ * logos and spellings stay the code's, so Reset is always the tested look).
+ */
 export function registerAgencyLooks(looks: readonly AgencyLook[]): void {
   const colours: Record<string, AgencyColours> = {}
+  const names: Record<string, AgencyColours> = {}
   const aliases: Record<string, string> = {}
   for (const l of looks) {
-    const id = l.id.trim().toLowerCase()
-    if (!id || Object.hasOwn(AGENCY_COLOURS, id) || !rgb(l.base) || !rgb(l.accent)) continue
-    colours[id] = { name: l.name, base: l.base.toUpperCase(), accent: l.accent.toUpperCase() }
-    for (const a of l.aliases ?? []) aliases[a.trim().toLowerCase()] = id
+    const id = typeof l?.id === 'string' ? l.id.trim().toLowerCase() : ''
+    if (!id) continue
+    if (Object.hasOwn(AGENCY_COLOURS, id)) {
+      const name = typeof l.name === 'string' ? l.name.trim() : ''
+      if (name && name !== AGENCY_COLOURS[id].name) names[id] = { ...AGENCY_COLOURS[id], name }
+      continue
+    }
+    const c = basicLook(l)
+    if (!c) continue
+    colours[id] = c
+    for (const a of l.aliases ?? []) if (typeof a === 'string' && a.trim()) aliases[a.trim().toLowerCase()] = id
   }
   addedColours = colours
+  codeNames = names
   addedAliases = aliases
 }
 
-/** The agencies added from the People page that the registry holds now. */
+/** The basic agencies from the People page that the registry holds now. */
 export function addedAgencyIds(): string[] { return Object.keys(addedColours) }
 
 /** The registry id an agency id means (itself, or an alias's target); null when the registry has neither. */
@@ -190,6 +276,45 @@ export function contrast(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
+/** What text on a colour must reach (WCAG AA). */
+export const MIN_CONTRAST = 4.5
+const TARGET = 4.8
+
+function toHsl([r, g, b]: [number, number, number]): [number, number, number] {
+  r /= 255; g /= 255; b /= 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2
+  if (max === min) return [0, 0, l]
+  const d = max - min
+  const sat = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return [h * 60, sat, l]
+}
+
+function hslHex([h, sat, l]: [number, number, number]): string {
+  const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+  return '#' + [r, g, b].map(v => Math.round(Math.max(0, Math.min(255, (v + m) * 255))).toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * A client's monogram ink on its own fill, at 4.5 to 1 or better. The fill is the client's colour and does not
+ * change with the theme, so neither does this pair. An ink that already reads is returned as it is; otherwise only
+ * its lightness moves, away from the fill, so it keeps its hue and saturation.
+ */
+export function readableInk(fill: string, ink: string): string {
+  const reads = (c: string) => contrast(c, fill) >= TARGET
+  if (reads(ink)) return ink
+  const c0 = rgb(ink)
+  if (!c0) return inkOn(fill)
+  const [h, sat, l] = toHsl(c0)
+  const lighter = contrast(WHITE, fill) >= contrast(INK, fill)
+  for (let step = 1; step <= 100; step++) {
+    const c = hslHex([h, sat, Math.max(0, Math.min(1, l + (lighter ? 1 : -1) * step * 0.01))])
+    if (reads(c)) return c
+  }
+  return lighter ? '#FFFFFF' : '#000000'
+}
+
 /** Near-black or white, whichever reads better on `bg`. */
 export function inkOn(bg: string): string {
   return contrast(bg, INK) >= contrast(bg, WHITE) ? INK : WHITE
@@ -235,7 +360,8 @@ export function agencyIdOf(personId: string | null | undefined): string | null {
 export function coloursOf(agencyId: string | null | undefined): AgencyColours | null {
   const id = canonicalAgencyId(agencyId)
   if (!id) return null
-  return Object.hasOwn(AGENCY_COLOURS, id) ? AGENCY_COLOURS[id] : addedColours[id] ?? null
+  if (Object.hasOwn(AGENCY_COLOURS, id)) return Object.hasOwn(codeNames, id) ? codeNames[id] : AGENCY_COLOURS[id]
+  return addedColours[id] ?? null
 }
 
 /** Which ground a colour is: light when near-black ink reads best on it. */
@@ -336,6 +462,78 @@ export function surfaceCss(colours: AgencyColours | null | undefined): string {
   const light = `${shared} --ag-act: ${act.light}; --ag-act-ink: ${actInk(act.light)}; ${surfaces.light}`
   const dark = `${shared} --ag-act: ${act.dark}; --ag-act-ink: ${actInk(act.dark)}; ${surfaces.dark}`
   return `:root, :root[data-theme='light'] { ${light} }\n:root[data-theme='dark'] { ${dark} }`
+}
+
+/** One theme's block of surfaceCss as token: value, with every colour (color-mix included) as #RRGGBB. */
+export function surfaceTokens(colours: AgencyColours | null | undefined, theme: 'light' | 'dark'): Record<string, string> {
+  const block = surfaceCss(colours).split('\n')[theme === 'light' ? 0 : 1] ?? ''
+  const out: Record<string, string> = {}
+  for (const m of block.matchAll(/(--[\w-]+): ([^;]+);/g)) {
+    const v = m[2].trim()
+    const cm = /^color-mix\(in srgb, (#[0-9A-Fa-f]{6}) ([\d.]+)%, (#[0-9A-Fa-f]{6})\)$/.exec(v)
+    out[m[1]] = cm ? mix(cm[1], cm[3], Number(cm[2]) / 100) : rgb(v) ? v.toUpperCase() : v
+  }
+  return out
+}
+
+/** One readability check: `fg` on `bg` reads at `ratio`, and needs `need` (text 4.5:1, a logo 3:1). */
+export interface LookCheck {
+  label: string; bg: string; fg: string; ratio: number; need: number
+  /** An outline (the accent's hairline on the base), not text or a logo. */
+  line?: boolean
+}
+
+/** The chrome's own ink over the agency's wash (hovers, selected rows), light and dark. */
+export const CHROME_INK = { light: '#14161B', dark: '#F2F3F5' } as const
+
+/** The ink of an SVG data: URI: its first fill, as #RRGGBB; null for anything else. */
+export function logoFill(uri: string | null | undefined): string | null {
+  const m = /fill="#([0-9a-f]{6}|[0-9a-f]{3})"/i.exec(svgOfUri(uri) ?? '')
+  if (!m) return null
+  return '#' + (m[1].length === 3 ? m[1].replace(/./g, x => x + x) : m[1]).toUpperCase()
+}
+
+/**
+ * Whether a look reads (the People page's "Does it read?" panel, and the
+ * tests for every look in code): text on the pill, on the light action colour
+ * and on the dark one at 4.5:1 (each named for the colour it is: an
+ * outline-only look's buttons are the base in dark too); for an outline-only
+ * look, the text on the accent where it is the needs badge; for a look that
+ * draws the accent as a hairline on the base (a base pill, outline-only
+ * buttons), that outline at 3:1; and, for a look with a wordmark, the
+ * wordmark on the pill, on a light card and on a dark card at 3:1. `every`
+ * adds the pairs the editor does not list but the tests hold every code look
+ * to: the accent's own ink and the chrome's ink on the wash.
+ */
+export function lookChecks(colours: AgencyColours, every = false): LookCheck[] {
+  const out: LookCheck[] = []
+  const add = (label: string, bg: string, fg: string, need: number, line = false) =>
+    out.push({ label, bg, fg, ratio: contrast(bg, fg), need, ...(line ? { line } : {}) })
+  const pill = pillOf(colours)
+  const light = surfaceTokens(colours, 'light'), dark = surfaceTokens(colours, 'dark')
+  const base = colours.base.toUpperCase(), accent = colours.accent.toUpperCase()
+  const which = (bg: string) => (bg === accent && bg !== base ? 'accent' : 'base')
+  const lineUse = colours.accentUse === 'line'
+  add('Text on the pill', pill.bg, pill.ink, 4.5)
+  add(`Text on the ${which(light['--ag-act'])} (buttons, light)`, light['--ag-act'], light['--ag-act-ink'], 4.5)
+  add(`Text on the ${which(dark['--ag-act'])} (buttons, dark)`, dark['--ag-act'], dark['--ag-act-ink'], 4.5)
+  if (light['--needs']) add('Text on the accent (needs badge)', light['--needs'], light['--needs-ink'], 4.5)
+  if (pill.line || lineUse) add(`Accent outline on the base (${pill.line && lineUse ? 'pill, buttons' : pill.line ? 'pill' : 'buttons'})`, base, accent, 3, true)
+  if (colours.logo || colours.logoOnDark) {
+    const onPill = logoFill(pillLogoOf(colours).wordmark)
+    if (onPill) add('Logo on the pill', pill.bg, onPill, 3)
+    const l = logoFill(colours.logo)
+    if (l) add('Logo on a light ground (sign-in card)', '#FFFFFF', l, 3)
+    const d = logoFill(colours.logoOnDark)
+    if (d) add('Logo on a dark ground (recoloured white)', dark['--card'], d, 3)
+  }
+  if (every) {
+    const p = paletteOf(colours)
+    add('Ink on the accent', colours.accent.toUpperCase(), accentInkOf(colours), 4.5)
+    add('Ink on the wash, light', p.light.soft, CHROME_INK.light, 4.5)
+    add('Ink on the wash, dark', p.dark.soft, CHROME_INK.dark, 4.5)
+  }
+  return out
 }
 
 /** Put the agency's layer on the page (or the neutral one); idempotent. */

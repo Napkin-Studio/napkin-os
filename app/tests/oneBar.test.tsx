@@ -45,34 +45,35 @@ test('? opens the shortcuts sheet only where no text field owns the key', () => 
   assert.equal(barKeyOf(key({ key: '?', ctrlKey: true })), null)
 })
 
-const home = (doors: string[], more: string[] = [], restricted = true): HomeView => ({
-  roles: [], restricted, title: '', viewing: null,
-  doors: doors.map(n => ({ id: n.toLowerCase().replace(/\W+/g, '-'), name: n })),
+const home = (pages: string[], more: string[] = [], restricted = true): HomeView => ({
+  roles: [], restricted, title: '', view_as: null, tools: [],
+  pages: pages.map(n => ({ id: n.toLowerCase().replace(/\W+/g, '-'), name: n })),
   more: more.map(n => ({ id: n.toLowerCase().replace(/\W+/g, '-'), name: n })),
-  map: { circles: [], other: [] }, switcher: null, jobs: { open: true, change: true, budget: false } as unknown as HomeView['jobs'],
+  switcher: null, jobs: { open: true, change: true, budget: false } as unknown as HomeView['jobs'],
 })
 const noop = () => {}
 const env = (h: HomeView | null, extra: Partial<BarEnv> = {}): BarEnv => ({ home: h, go: noop, openBar: noop, openShortcuts: noop, signedIn: true, signOut: noop, ...extra })
 const titles = (cs: readonly Command[]) => cs.filter(c => c.available).map(c => c.title)
 
-const PLANNER = home(['Brief', 'Research', 'Territories', 'Client brains', 'Presentations'], ['Ideas (read only)', 'Case study builder (read only)'])
-const COPYWRITER = home(['Ideas', 'Script editor', 'Radio', 'Video and motion', 'Formats and in situ'], ['Shopper stands', 'Experiential', 'Presentations'])
+const PLANNER = home(['Client brains'], ['Case study builder (read only)'])
+const COPYWRITER = home(['Radio', 'Video and motion', 'Formats and in situ'], ['Shopper stands', 'Experiential', 'Craft review'])
 
 test('the command list is built from the person\'s own home: a door they do not have is not offered', () => {
   const planner = titles(commandsFor(env(PLANNER)))
   const copy = titles(commandsFor(env(COPYWRITER)))
-  assert.ok(planner.includes('Open Research') && planner.includes('Open Brief') && planner.includes('Open Ideas (read only)'))
-  assert.ok(!planner.includes('Open Script editor') && !planner.includes('Open Radio'), 'a planner has no Script editor')
-  assert.ok(copy.includes('Open Script editor') && copy.includes('Open Shopper stands'))
-  assert.ok(!copy.includes('Open Research') && !copy.includes('Open Brief'), 'a copywriter has no Research door')
-  for (const list of [planner, copy]) for (const always of ['Home', 'The map', 'Your timesheet', 'Keyboard shortcuts', 'Sign out']) assert.ok(list.includes(always), always)
+  assert.ok(planner.includes('Open Client brains') && planner.includes('Open Case study builder (read only)'))
+  assert.ok(!planner.includes('Open Radio'), 'a planner has no Radio')
+  assert.ok(copy.includes('Open Radio') && copy.includes('Open Shopper stands'))
+  assert.ok(!copy.includes('Open Client brains'), 'a copywriter has no Client brains')
+  for (const list of [planner, copy]) for (const always of ['Home', 'Your timesheet', 'Keyboard shortcuts', 'Sign out']) assert.ok(list.includes(always), always)
+  assert.ok(![...planner, ...copy].includes('The map'), 'the O is gone, so is its command')
   assert.deepEqual(titles(commandsFor(env(null, { signedIn: false, signOut: null }))), ['Home', 'Keyboard shortcuts'], 'no home, no account: only what always works')
 })
 
-test('typing a tool\'s name finds its door for the person who has it, and nothing for the person who has not', () => {
+test('typing a page door\'s name finds it for the person who has it, and nothing for the person who has not', () => {
   const planner = commandsFor(env(PLANNER))
-  assert.deepEqual(matchCommands(planner, 'research').map(c => c.id), ['door-research'])
-  assert.deepEqual(matchCommands(commandsFor(env(COPYWRITER)), 'research'), [])
+  assert.deepEqual(matchCommands(planner, 'client brains').map(c => c.id), ['door-client-brains'])
+  assert.deepEqual(matchCommands(commandsFor(env(COPYWRITER)), 'client brains'), [])
   assert.deepEqual(matchCommands(planner, 'sign out').map(c => c.id), ['sign-out'])
   assert.deepEqual(matchCommands(planner, 'J001 brief'), [], 'a job number is not a command')
   assert.deepEqual(matchCommands(planner, ''), [])

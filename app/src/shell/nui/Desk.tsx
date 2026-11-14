@@ -27,6 +27,12 @@ import { ToolIcon, SearchIcon } from './icons'
 import { Pop } from './Pop'
 import { usePop } from './popKit'
 import { changedBriefs } from '../gate/words'
+import { YourPages } from '../home/YourPages'
+import { SetupCard } from '../setup/SetupCard'
+import { Ask } from '../../timesheet/Ask'
+import { useConsent } from '../../timesheet/consent'
+import type { DoorEntry } from '../../host/http'
+import type { ReactNode } from 'react'
 import '../gate/gate.css'
 
 interface Props {
@@ -34,6 +40,18 @@ interface Props {
   facts: Facts
   /** Which tools have an installed app. */
   live: ReadonlySet<string>
+  /** The tools the person's role is offered (the server's `tools`); null offers every tool. */
+  offered?: ReadonlySet<string> | null
+  /** The role's page doors: the "Your pages" row under the greeting, and what did not fit. Absent for a person with no role. */
+  pages?: readonly DoorEntry[]
+  morePages?: readonly DoorEntry[]
+  onOpenPage?: (door: DoorEntry) => void
+  /** Opens the person's own timesheet day (the consent card's "What is captured"). */
+  onTimesheet?: () => void
+  /** The Needs you list (home/NeedsYou.tsx), drawn under the row for a person with a role. */
+  needsYou?: ReactNode
+  /** Opens the agency's setup flow: offered to an admin while a step is still to do. */
+  onSetup?: () => void
   /** The person's first name, for the greeting. */
   first: string | null
   manage?: Manage
@@ -63,7 +81,7 @@ function placeOf(row: HTMLElement, circle: HTMLElement): { left: number; top: nu
   return { left, top, origin: `${cx - left}px ${dr.height / 2 + 12}px` }
 }
 
-export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
+export function Desk({ data, facts, live, offered = null, pages = [], morePages = [], onOpenPage, onTimesheet, onSetup, needsYou, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -157,6 +175,9 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
   const worth = useMemo(() => worthItems(data.items, facts), [data.items, facts])
   const open = dial ? all.find(c => c.id === dial) ?? null : null
   const none = data.clients.length === 0
+  // The timesheet question is asked once, here, as the first thing worth a look: it covers nothing, and nothing is
+  // captured before a yes (features/timesheet-sessions.clan).
+  const asking = useConsent() === 'not_asked'
   // The eyebrow counts the desk: clients, open work, and what needs you, runs or failed (the old agency home's line).
   const counts = countsLine(agencySummary(data.clients, data.items, data.unassigned))
 
@@ -172,6 +193,10 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
             </p>
           </div>
         </section>
+
+        {onOpenPage && <YourPages pages={pages} more={morePages} onOpen={onOpenPage} />}
+        {onSetup && <SetupCard onOpen={onSetup} />}
+        {needsYou && <div className="pg-needs" data-testid="needs-you-section">{needsYou}</div>}
 
         <main id="view-desk">
           {data.registryError && (
@@ -229,6 +254,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                   client={{ id: open.id, name: open.name, sector: sectorOf(open.id), look: open.look }}
                   items={data.items.filter(i => i.client?.id === open.id)}
                   live={live}
+                  offered={offered}
                   place={place}
                   onOpenTool={t => { setDial(null); onOpenTool(open.id, t) }}
                   onSoon={onSoon}
@@ -253,9 +279,9 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
             )}
             {adding && <AddForm onAdd={onAdd} onClose={() => setAdding(false)} />}
 
-            {!none && (
+            {(!none || asking) && (
               <section className="p33-desk" id="p33-desk">
-                <div>
+                {!none && <div>
                   <h3>Pick up where you left off
                     <span className="seg-row" id="p33-from" role="group" aria-label="Whose work">
                       <button type="button" aria-pressed={from === 'all'} onClick={() => setFrom('all')}>Everyone</button>
@@ -276,16 +302,17 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                         : 'Nothing to pick up yet. Open a client to start the first piece of work.'}</p>
                     )}
                   </div>
-                </div>
+                </div>}
                 <div>
                   <h3>Worth a look</h3>
                   <div className="p33-worth-list" id="p33-worth" data-testid="worth-a-look">
+                    {asking && <Ask variant="card" onTimesheet={onTimesheet} />}
                     {worth.map(w => (
                       <button key={w.key} type="button" className="p33-wl" onClick={() => onOpenDocument(w.path)}>
                         <b>{w.title}</b><small>{w.sub}</small>
                       </button>
                     ))}
-                    {worth.length === 0 && <p className="nui-empty">Nothing new since you last looked.</p>}
+                    {worth.length === 0 && !asking && <p className="nui-empty">Nothing new since you last looked.</p>}
                   </div>
                 </div>
               </section>

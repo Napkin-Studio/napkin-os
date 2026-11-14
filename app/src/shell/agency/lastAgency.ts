@@ -7,11 +7,13 @@
 // signed out, so the sign-in screen (shell/SignIn.tsx) can say "Signed out.".
 // The sign-in screen itself always opens in Napkin's look and takes an
 // agency's only from what is typed. Per browser only: a convenience, never a
-// source of truth.
+// source of truth. For a basic agency (made on the People page, so not in the
+// build's boot table) it also keeps the look as the registry resolved it, so a
+// reload does not flash Napkin's look before /api/agency-looks answers.
 
-import { agencyIdOf, canonicalAgencyId } from './palette'
+import { AGENCY_KEY, AGENCY_LOOK_KEY, bootLookOf, type BootLook } from '../../brand/bootLook'
+import { AGENCY_COLOURS, agencyIdOf, canonicalAgencyId, coloursOf } from './palette'
 
-const AGENCY_KEY = 'napkin.lastAgency'
 const SIGNED_OUT_KEY = 'napkin.signedOut'
 
 function store(kind: 'local' | 'session'): Storage | null {
@@ -24,7 +26,31 @@ export function rememberAgency(personId: string | null | undefined): void {
   const raw = agencyIdOf(personId)
   const id = canonicalAgencyId(raw) ?? raw
   if (!id) return
-  try { store('local')?.setItem(AGENCY_KEY, id) } catch { /* not kept */ }
+  // An agency in code boots in the build's look (it can change only its name on the People page).
+  const c = Object.hasOwn(AGENCY_COLOURS, id) ? null : coloursOf(id)
+  try {
+    const s = store('local')
+    s?.setItem(AGENCY_KEY, id)
+    if (c) s?.setItem(AGENCY_LOOK_KEY, JSON.stringify({ id, ...bootLookOf(c), base: c.base, accent: c.accent }))
+    else s?.removeItem(AGENCY_LOOK_KEY)
+  } catch { /* not kept */ }
+}
+
+/** What rememberAgency keeps of a basic agency's look: the boot's surface layer and mark colours, and the mark's base and accent. */
+export interface KeptLook extends BootLook { base: string; accent: string }
+
+const HEX = /^#[0-9A-Fa-f]{6}$/
+
+/** The look kept for the agency this browser last signed in to, if it is a basic agency's, that agency's, and well formed. */
+export function lastAgencyLook(): KeptLook | null {
+  try {
+    const id = lastAgency()
+    if (!id || Object.hasOwn(AGENCY_COLOURS, id)) return null
+    const v = JSON.parse(store('local')?.getItem(AGENCY_LOOK_KEY) ?? 'null') as ({ id?: unknown } & Partial<KeptLook>) | null
+    if (!v || v.id !== id || typeof v.s !== 'string' || v.s.includes('<') || !Array.isArray(v.m) || !v.m.every(c => typeof c === 'string' && HEX.test(c))) return null
+    if (typeof v.base !== 'string' || !HEX.test(v.base) || typeof v.accent !== 'string' || !HEX.test(v.accent)) return null
+    return { s: v.s, m: v.m, base: v.base, accent: v.accent }
+  } catch { return null }
 }
 
 /** The agency id this browser last signed in to, if any. */

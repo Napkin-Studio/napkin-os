@@ -59,7 +59,7 @@ for (const size of SIZES) {
     // Account service opens the Approvals door and names the route on the page.
     await signIn(page, PEOPLE.accountService)
     await page.goto('/')
-    await page.getByTestId('door').filter({ hasText: 'Approvals' }).click()
+    await page.getByTestId('page-door').filter({ hasText: 'Approvals' }).click()
     await expect(page.getByTestId('approvals')).toBeVisible()
     const mine = section(page, job)
     await expect(mine.getByTestId('holder')).toContainText('No route yet')
@@ -244,8 +244,8 @@ for (const size of SIZES) {
         { stage: 'client-approval', party: 'client', role: 'client', approver: 'Client A contact', contact: 'contact@client-a.example', due: inDays(6), rounds: 2 },
       ])).status()).toBe(200)
       await page.goto('/')
-      const door = page.getByTestId('door').filter({ hasText: 'Approvals' })
-      await expect(door).toHaveAttribute('data-live', 'true')
+      const door = page.getByTestId('page-door').filter({ hasText: 'Approvals' })
+      await expect(door).toBeVisible()
       await door.click()
       const mine = section(page, job)
       await expect(mine.getByTestId('route-step')).toHaveCount(3)

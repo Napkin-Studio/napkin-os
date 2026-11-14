@@ -104,8 +104,10 @@ export interface Account {
   /** "Strategy lead · TBWA\Dublin": role (when known) and the agency's name. */
   line: string
   onOffline?: () => void
-  /** The agency's logo and accent (shell/agency/AgencyLookPanel.tsx); where the server keeps them. */
-  onLook?: () => void
+  /** View as (an admin's): try the desk as another role. Present for an admin only. */
+  onViewAs?: () => void
+  /** The role being tried, by its title; null when none. */
+  viewingAs?: string | null
   /** How many offline copies are on this device, when known. */
   offlineCount?: number | null
   /** Open the People page: who can sign in (features/people-admin.clan). Present for an admin only. */
@@ -354,7 +356,7 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
 
 
 /**
- * The account menu on the avatar (owner, 2026-11-11): People (an admin's), Agency look,
+ * The account menu on the avatar (owner, 2026-11-11): People and View as (an admin's),
  * Offline copies, then Feedback (F) and About this beta (a recording build only; owner,
  * 2026-11-13, mock feedback-point-v1), then Sign out, last. The agency pill
  * only goes to the desk.
@@ -363,11 +365,11 @@ export function accountItems(account: Account | undefined, user?: string | null,
   const n = account?.offlineCount
   return [
     ...(account?.onPeople ? [{ label: 'People', hint: 'Who can sign in, by agency', run: account.onPeople }] : []),
-    ...(account?.onLook ? [{ label: 'Agency look', hint: 'Its logo, and the accent taken from it', run: account.onLook }] : []),
+    ...(account?.onViewAs ? [{ label: 'View as', hint: account.viewingAs ? `Trying ${account.viewingAs}. Pick another, or your own.` : 'Try the desk as another role', run: account.onViewAs }] : []),
     ...(account?.onOffline ? [{ label: 'Offline copies', hint: `${n != null ? `${n} on this device · ` : ''}present without a connection`, run: account.onOffline }] : []),
     ...(onFeedback ? [{ label: 'Feedback', hint: 'Point at what it is about, and tell us', key: 'F', run: onFeedback }] : []),
     ...(onBetaNotice ? [{ label: 'About this beta', hint: 'What this beta records, and why', run: onBetaNotice }] : []),
-    ...(user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: !!(account?.onOffline || account?.onLook || account?.onPeople || onBetaNotice || onFeedback) }] : []),
+    ...(user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: !!(account?.onOffline || account?.onViewAs || account?.onPeople || onBetaNotice || onFeedback) }] : []),
   ]
 }
 

@@ -22,7 +22,7 @@ import {
 } from '../src/shell/job/jobModel.ts'
 import { JobBody } from '../src/shell/job/JobPage.tsx'
 import { LiveJobsBody } from '../src/shell/job/LiveJobs.tsx'
-import { doorTarget } from '../src/shell/home/doorTargets.ts'
+import { BUILT_PAGES } from '../src/shell/home/doorWords.ts'
 
 const doc = (over: Partial<JobDocument> = {}): JobDocument => ({ path: 'brief.clan', title: 'Autumn launch brief', app_id: 'ie.napkin.brief-maker', needs_you: 0, locked: false, version: null, changed_since_lock: false, ...over })
 const job = (number = 'J001', over: Partial<JobEntry> = {}): JobEntry => ({
@@ -108,8 +108,8 @@ test('a Needs you row carries its job and the hash of its page', () => {
   assert.equal(jobNeedRow(need({ job: 'not-a-job' })).job, undefined)
 })
 
-test('Live jobs is a built door', () => {
-  assert.deepEqual(doorTarget('live-jobs'), { page: 'live-jobs', built: true })
+test('Live jobs is a built page door', () => {
+  assert.ok(BUILT_PAGES.includes('live-jobs'))
 })
 
 test('the page shows the stage, who holds it, the dates, every document, and one primary button', () => {

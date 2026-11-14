@@ -1,0 +1,18 @@
+[
+  {
+    "what": "DOCTYPE",
+    "line": 2
+  },
+  {
+    "what": "ENTITY declaration",
+    "line": 3
+  },
+  {
+    "what": "ENTITY declaration",
+    "line": 4
+  },
+  {
+    "what": "ENTITY declaration",
+    "line": 5
+  }
+]

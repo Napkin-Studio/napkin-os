@@ -9,15 +9,13 @@
 // The clean copy is shown in a frame that cannot run script; the answer goes back to the same link.
 
 import { useEffect, useState } from 'react'
-import { applyAgencyLook } from '../shell/agency/look'
-import type { AgencyLook } from '../shell/agency/look'
 import ReviewLink, { CodeScreen, type Review } from './ReviewLink'
 import './clientLink.css'
 
 interface Open {
   title: string
   client: { name: string }
-  agency: { name: string | null; logo?: string | null; accent?: AgencyLook['accent'] | null }
+  agency: { name: string | null; logo?: string | null }
   expires: string
   summary: { label: string; text: string }[]
   signed_by: string[]
@@ -77,16 +75,13 @@ export default function ClientLink({ token }: { token: string }) {
       if (!live) return
       if (r.ok && body.mode === 'review') {
         const page = body as unknown as Review
-        applyAgencyLook({ logo: page.agency.logo ?? undefined, accent: page.agency.accent ?? undefined })
         document.title = `Please review: ${page.title}`
         setSeen({ kind: 'review', page })
       } else if (r.status === 401 && body.state === 'code') {
-        const ag = (body.agency ?? {}) as { name?: string | null; logo?: string | null; accent?: AgencyLook['accent'] | null }
-        applyAgencyLook({ logo: ag.logo ?? undefined, accent: ag.accent ?? undefined })
+        const ag = (body.agency ?? {}) as { name?: string | null; logo?: string | null }
         setSeen({ kind: 'code', agency: { name: ag.name ?? null, logo: ag.logo } })
       } else if (r.ok) {
         const page = body as unknown as Open
-        applyAgencyLook({ logo: page.agency.logo ?? undefined, accent: page.agency.accent ?? undefined })
         document.title = `Please confirm: ${page.title}`
         setSeen({ kind: 'open', page })
       } else if (r.status === 410) setSeen({ kind: 'gone', state: String(body.state ?? 'gone') })

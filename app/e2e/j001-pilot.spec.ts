@@ -29,13 +29,13 @@ const SIZES: Size[] = [{ tag: '390', width: 390, height: 844 }, { tag: '1440', w
 
 /** Each test: its title, and the feature record that turns it on (null: it runs now). */
 const TESTS: Record<number, { title: string; slug: string | null }> = {
-  1: { title: 'each live role sees its own doors', slug: null },
+  1: { title: 'each live role lands on the desk and sees its own page doors', slug: null },
   2: { title: 'Planning gets 403 on Scope and estimates', slug: null },
   3: { title: 'the creative director signs the brief with one approve decision', slug: null },
   4: { title: 'editing after approval makes a new version and a Changed brief alert', slug: null },
   5: { title: 'the dashboard shows a J001 stage change within 10 seconds', slug: null },
-  6: { title: 'five logos repaint the accent and it passes contrast in all three modes', slug: null },
-  7: { title: 'axe finds nothing serious on every Phase 1 page in all three modes', slug: null },
+  6: { title: 'five agencies repaint from palette.ts and the ink passes contrast in light and dark', slug: null },
+  7: { title: 'axe finds nothing serious on every Phase 1 page in light and dark', slug: null },
   8: { title: 'a canary key set on the server never reaches the browser', slug: null },
   9: { title: 'each confirmed timesheet line links to its sessions', slug: null },
   10: { title: 'the brief passes the gate and the client confirms it before Territories open', slug: null },
@@ -49,13 +49,14 @@ const TESTS: Record<number, { title: string; slug: string | null }> = {
   18: { title: 'no consent means no captured sessions', slug: null },
 }
 
+// The v2 doors table, split as the desk draws it: the page doors in the "Your pages" row, and the tools the Dial offers.
 const DOORS = {
-  planning: ['Brief', 'Research', 'Territories', 'Client brains', 'Presentations'],
-  creativeDirector: ['Ideas', 'Ready for review', 'Judge scores', 'Approved work', 'Direction notes'],
-  accountService: ['Clients', 'Live jobs', 'Approvals', 'Scope and estimates', 'Presentations'],
-  management: ['Agency dashboard', 'Live jobs', 'Time and money', 'Clients', 'Traffic board'],
+  planning: { pages: ['Client brains'], tools: ['brief', 'research', 'idea', 'deck', 'territories'] },
+  creativeDirector: { pages: ['Ready for review', 'Judge scores', 'Approved work', 'Direction notes'], tools: ['brief', 'idea', 'deck'] },
+  accountService: { pages: ['Live jobs', 'Approvals', 'Scope and estimates'], tools: ['deck'] },
+  management: { pages: ['Agency dashboard', 'Live jobs', 'Time and money', 'Traffic board'], tools: ['deck'] },
 } as const
-const MODES = ['white', 'grey', 'black'] as const
+const THEMES = ['light', 'dark'] as const
 
 type Decision = { id?: string; kind?: string; agent?: string; action?: string; version?: string; actor?: string; source?: string }
 
@@ -98,17 +99,6 @@ const sessionOf = async (page: Page) =>
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap(f => (statSync(join(dir, f)).isDirectory() ? walk(join(dir, f)) : [join(dir, f)]))
 
-/** WCAG contrast of two #rrggbb colours. */
-function contrast(a: string, b: string): number {
-  const lum = (hex: string) => {
-    const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
-      .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
-  }
-  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
-  return (hi + 0.05) / (lo + 0.05)
-}
-
 /**
  * A client with a brief in it, in the signed-in agency's workspace, so the pages have something to show.
  * The J001 seed is not used here: its brief patch is refused on this branch (j001-seed.spec.ts fails the
@@ -129,41 +119,28 @@ async function somethingToRead(page: Page): Promise<{ client: string }> {
   return { client }
 }
 
-/** The three papers the page really draws, as #rrggbb: what --desk, --paper and --card resolve to. */
-async function papers(page: Page): Promise<string[]> {
-  const rgb = await page.evaluate(() => ['--desk', '--paper', '--card'].map(v => {
-    const probe = document.createElement('div')
-    probe.style.background = `var(${v})`
-    document.body.appendChild(probe)
-    const c = getComputedStyle(probe).backgroundColor
-    probe.remove()
-    // Chrome writes a mixed colour as color(srgb r g b) with 0 to 1 channels, a plain one as rgb(r, g, b).
-    const n = (c.match(/-?[\d.]+/g) ?? []).slice(0, 3).map(Number)
-    return c.startsWith('color(') ? n.map(x => Math.round(x * 255)) : n
-  }))
-  return rgb.map(c => '#' + c.map(x => x.toString(16).padStart(2, '0')).join(''))
-}
-
-/** Five flat logos in five hues, and one black and white (the fixtures of test 6). */
-const LOGOS = [
-  ...['#d6402f', '#2f6fd6', '#2fa36b', '#8a3fd1', '#d19a1f'].map(c => ({ name: c, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="${c}"/></svg>`, accent: true })),
-  { name: 'black and white', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#fff"/><circle cx="32" cy="32" r="28" fill="#000"/></svg>', accent: false },
-]
-
 for (const size of SIZES) {
   const t = (n: number) => `${n} ${TESTS[n].title}, ${size.tag} px`
 
   // 1 to 12: as written in v2 section 10.
 
   test(t(1), async ({ browser }) => {
-    for (const [role, doors] of Object.entries(DOORS)) {
-      const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    for (const [role, door] of Object.entries(DOORS)) {
+      const { ctx, page } = await open(browser, size, 'light', { roster: true })
       await signIn(page, PEOPLE[role as keyof typeof PEOPLE])
       await page.goto('/')
-      await expect(page.getByTestId('home')).toBeVisible()
-      const shown = page.getByTestId('door')
-      await expect(shown).toHaveCount(doors.length)
-      expect(await shown.allInnerTexts()).toEqual([...doors])
+      // everyone lands on the desk: the circles row is there, and no role home is drawn
+      await expect(page.getByTestId('desk')).toBeVisible()
+      await expect(page.locator('#cl-row')).toBeVisible()
+      await expect(page.getByTestId('home')).toHaveCount(0)
+      // the role adds one row of page doors under the greeting, and filters the tools the server offers
+      const shown = page.getByTestId('page-door')
+      await expect(shown).toHaveCount(door.pages.length)
+      expect(await shown.allInnerTexts(), role).toEqual([...door.pages])
+      const { tenant } = await sessionOf(page)
+      const view = (await (await page.request.get(`/api/t/${tenant}/doors`)).json()) as { pages: { name: string }[]; tools: string[] }
+      expect(view.pages.map(p => p.name), `${role} pages from the server`).toEqual([...door.pages])
+      expect(view.tools, `${role} tools`).toEqual([...door.tools])
       await ctx.close()
     }
   })
@@ -292,38 +269,65 @@ for (const size of SIZES) {
   })
 
   test(t(6), async ({ browser }) => {
-    // The accent is sampled in the browser from the uploaded logo (Agency look, in the account
-    // menu), saved for the agency, and set per mode. Each mode is checked on the papers the page
-    // really draws (--desk, --paper, --card), not on a table kept in this file.
-    for (const logo of LOGOS) {
-      const up = await open(browser, size, 'white', { roster: true })
-      await signIn(up.page, { username: 'ann@napkin' }) // an admin
-      await up.page.goto('/')
-      await up.page.getByTestId('account-button').click()
-      await up.page.getByRole('menuitem', { name: /Agency look/ }).click()
-      await up.page.getByTestId('look-file').setInputFiles({ name: 'logo.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(logo.svg) })
-      await expect(up.page.getByTestId('look-note'), logo.name).toContainText('Saved')
-      await expect(up.page.getByTestId(logo.accent ? 'look-accents' : 'look-no-accent'), logo.name).toBeVisible()
-      await up.ctx.close()
-
-      for (const mode of MODES) {
-        const { ctx, page } = await open(browser, size, mode, { roster: true })
-        await signIn(page, { username: 'ann@napkin' })
+    // The look is palette.ts alone: five agencies, three from the code registry (wk, the default; catapult, an outline accent
+    // on a base pill with mono surfaces; pluto, an ink of its own on the accent) and two added from the People page with a
+    // base and an accent. Each is read from what the page draws: the --agency tokens on the root, and the agency pill's own
+    // computed colours, checked with palette.ts contrast(), in light and in dark.
+    const { contrast: ratio, coloursOf, paletteOf } = await import('../src/shell/agency/palette')
+    const ADDED = [
+      { id: 'acme', name: 'Acme', base: '#0F6B5C', accent: '#9FE6D8' },
+      { id: 'kiln', name: 'Kiln', base: '#16181D', accent: '#C6F432' },
+    ]
+    const admin = await open(browser, size, 'light', { roster: true })
+    await signIn(admin.page, PEOPLE.peopleAdmin)
+    for (const a of ADDED) {
+      // develop (#234): an added agency takes name, base and accent; its id is made from the name, and it is a draft until published.
+      const r = await admin.page.request.post('/api/admin/agencies', { data: { name: a.name, base: a.base, accent: a.accent } })
+      expect([201, 409], `${a.id} added: ${await r.text()}`).toContain(r.status()) // 409: a run at the other width added it already
+      if (r.status() === 201) {
+        // publishing names the rev it makes live: the one on the row the add answered with
+        const p = await admin.page.request.post(`/api/admin/agencies/${a.id}/publish`, { data: { rev: (await r.json()).rev } })
+        expect(p.status(), `${a.id} published: ${await p.text()}`).toBe(200)
+      }
+    }
+    await admin.ctx.close()
+    const AGENCIES = [
+      { id: 'wk', who: PEOPLE.planning, colours: coloursOf('wk')! },
+      { id: 'catapult', who: PEOPLE.lookCatapult, colours: coloursOf('catapult')! },
+      { id: 'pluto', who: PEOPLE.lookPluto, colours: coloursOf('pluto')! },
+      { id: 'acme', who: PEOPLE.lookAcme, colours: { name: ADDED[0].name, base: ADDED[0].base.toUpperCase(), accent: ADDED[0].accent.toUpperCase() } },
+      { id: 'kiln', who: PEOPLE.lookKiln, colours: { name: ADDED[1].name, base: ADDED[1].base.toUpperCase(), accent: ADDED[1].accent.toUpperCase() } },
+    ]
+    const hex = (c: string) => {
+      // Chrome writes a mixed colour as color(srgb r g b) with 0 to 1 channels, a plain one as rgb(r, g, b).
+      const n = (c.match(/-?[\d.]+/g) ?? []).slice(0, 3).map(Number)
+      const v = c.startsWith('color(') ? n.map(x => Math.round(x * 255)) : n
+      return '#' + v.map(x => x.toString(16).padStart(2, '0')).join('')
+    }
+    for (const ag of AGENCIES) {
+      expect(ag.colours, `${ag.id} is in the registry`).toBeTruthy()
+      for (const theme of THEMES) {
+        const { ctx, page } = await open(browser, size, theme, { roster: true })
+        await signIn(page, ag.who)
         await page.goto('/')
         await expect(page.getByTestId('os-bar')).toBeVisible()
-        await expect(page.locator('html')).toHaveAttribute('data-mode', mode)
-        const token = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--agency-accent').trim())
-        if (logo.accent) {
-          await expect.poll(token, { message: `accent for ${logo.name} in ${mode}` }).toMatch(/^#[0-9a-f]{6}$/i)
-          const accent = await token()
-          for (const paper of await papers(page)) {
-            expect(contrast(accent, paper), `${accent} on ${paper} in ${mode}`).toBeGreaterThanOrEqual(4.5)
-          }
-        } else {
-          // The saved look has been read once the signed-in desk has settled; give it a moment, then check it stayed empty.
-          await page.waitForLoadState('networkidle')
-          expect(await token(), `the black and white logo gives no accent in ${mode}`).toBe('')
-        }
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+        await expect(page.locator('html')).not.toHaveAttribute('data-mode', /.*/)
+        const want = paletteOf(ag.colours)[theme]
+        const token = (name: string) => page.evaluate(n => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name)
+        await expect.poll(() => token('--agency'), { message: `--agency for ${ag.id} in ${theme}` }).toBe(want.agency)
+        expect(await token('--agency-fg'), `${ag.id} ${theme} --agency-fg`).toBe(want.fg)
+        expect(await token('--ag-base'), `${ag.id} ${theme} --ag-base`).toBe(ag.colours.base.toUpperCase())
+        expect(await token('--ag-acc'), `${ag.id} ${theme} --ag-acc`).toBe(ag.colours.accent.toUpperCase())
+        // ink on the agency colour: the tokens and the pill the person sees
+        expect(ratio(want.agency, want.fg), `${ag.id} ${theme}: ink on the agency colour`).toBeGreaterThanOrEqual(4.5)
+        // the pill's colours ease in for a moment on arrival: read them once they have settled
+        await expect.poll(async () => {
+          const pill = await page.getByTestId('agency-pill').evaluate(el => { const s = getComputedStyle(el); return { bg: s.backgroundColor, ink: s.color } })
+          return ratio(hex(pill.bg), hex(pill.ink))
+        }, { message: `${ag.id} ${theme}: ink on the agency pill`, timeout: 8000 }).toBeGreaterThanOrEqual(4.5)
+        // nothing samples a logo any more: there is no accent token of its own
+        expect(await token('--agency-accent'), `${ag.id} ${theme}`).toBe('')
         await ctx.close()
       }
     }
@@ -335,18 +339,18 @@ for (const size of SIZES) {
     test.setTimeout(240_000)
     const { default: AxeBuilder } = await import('@axe-core/playwright')
     // The Phase 1 pages that exist on this branch: the desk, the clients page, a client, its Brief
-    // page, Territories (the visual brief's choose-a-territory form), and the Agency look panel. The pages other records build (gate, dashboard, timesheet,
+    // page, Territories (the visual brief's choose-a-territory form), a page door's SoonCard, and View as. The pages other records build (gate, dashboard, timesheet,
     // visual brief) join this list when they land. The app frame is a document with its own paper
     // (the apps are restyled in their own records), so it is left out of the scan.
     const problems: string[] = []
-    for (const mode of MODES) {
+    for (const mode of THEMES) {
       const { ctx, page } = await open(browser, size, mode, { roster: true })
       await signIn(page, { username: 'ann@napkin' })
       const job = await somethingToRead(page)
       // Territories open only for a brief that has passed the gate, been signed and been confirmed by the client (the
       // roster stack has the Brief gate on), so the page scanned is the open one with its choose-a-territory form. The
       // admin cannot sign a brief, so the agency "wk" does it (planner, creative director, client) and the page is read as
-      // its planner, who has the Territories door; every other page is read as the admin, whose Agency look it is.
+      // its planner, who has the Territories tool; every other page is read as the admin, whose View as it is.
       await signIn(page, PEOPLE.planning)
       const signed = await seedJ001(page, { ready: true, fresh: true })
       await signOff(page, signed)
@@ -357,11 +361,15 @@ for (const size of SIZES) {
         ['client', async () => { await page.goto(`/#client-${job.client}`); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
         ['brief page', async () => { await page.goto(`/#tool-${job.client}-brief`); await page.reload(); await expect(page.getByTestId('work-item').first()).toBeVisible() }],
         ['territories', async () => { await page.goto(`/#tool-${signed.client}-territories`); await page.reload(); await expect(page.getByTestId('choose-territory')).toBeVisible() }],
-        ['agency look', async () => {
+        ['view as', async () => {
           await page.goto('/#agency'); await page.reload()
           await page.getByTestId('account-button').click()
-          await page.getByRole('menuitem', { name: /Agency look/ }).click()
-          await expect(page.getByTestId('agency-look')).toBeVisible()
+          await page.getByRole('menuitem', { name: /View as/ }).click()
+          await expect(page.getByTestId('view-as')).toBeVisible()
+        }],
+        ['page door', async () => {
+          await page.goto('/#door-client-brains'); await page.reload()
+          await expect(page.getByTestId('door-page')).toBeVisible()
         }],
       ]
       for (const [name, show] of pages) {
@@ -721,6 +729,16 @@ for (const size of SIZES) {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
     await signIn(page, PEOPLE.planning) // has not answered the consent question
     const job = await seedJ001(page, { ready: true, fresh: true })
+    // The question is the first item of the desk's Worth a look list, once, and it covers nothing.
+    await page.goto('/')
+    await expect(page.getByTestId('desk')).toBeVisible()
+    const worth = page.getByTestId('worth-a-look')
+    await expect(worth.getByTestId('timesheet-ask')).toHaveCount(1)
+    expect(await worth.locator('> *').first().getAttribute('data-testid'), 'the first item of the list').toBe('timesheet-ask')
+    await expect(page.getByTestId('timesheet-ask')).toBeVisible()
+    expect(await page.getByTestId('timesheet-ask').evaluate(el => getComputedStyle(el).position), 'in the flow, not over the page').toBe('static')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.locator('#cl-row')).toBeVisible()
     await page.goto(`/#tool-${job.client}-brief`)
     await page.getByTestId('work-item').first().click()
     await page.waitForTimeout(3000) // long enough for a session, if one were being kept

@@ -35,6 +35,13 @@ export const PEOPLE = {
   // A producer: no Needs you rule addresses that role, so on the shared stack nothing reaches them by role (Judge's notes go to every
   // art director and copywriter when a job has none on it: as an art director, Brid was given the Judge tests' items).
   needsQuiet: { username: 'brid@wk', name: 'Brid Test', roles: ['producer'] },
+  // align-landing-look, test 6: one person in each agency whose look is read. The code registry has wk (above) and these two;
+  // the next two agencies are added from the People page by the Napkin people admin, which has an account of its own.
+  lookCatapult: { username: 'kit@catapult', name: 'Kit Test', roles: ['planning'] },
+  lookPluto: { username: 'pia@pluto', name: 'Pia Test', roles: ['planning'] },
+  lookAcme: { username: 'ade@acme', name: 'Ade Test', roles: ['planning'] },
+  lookKiln: { username: 'kim@kiln', name: 'Kim Test', roles: ['planning'] },
+  peopleAdmin: { username: 'engineer@napkin', name: 'Eng Test', roles: ['admin'] },
   // an agency that never has a job, for the Live jobs Empty state (job-page)
   emptyAgency: { username: 'fia@empty', name: 'Fia Test', roles: ['account-service'] },
 }

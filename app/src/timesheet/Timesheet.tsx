@@ -119,7 +119,7 @@ export function Timesheet({ go }: { go: (r: Route) => void }) {
             <div className="eyebrow">TIMESHEET</div>
             <h1 className="hero-title" tabIndex={-1} data-testid="timesheet-title">{dayTitle(date)}<span className="period-dot" aria-hidden /></h1>
           </div>
-          <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to your home</button></div>
+          <div className="hm-tools"><button type="button" className="side-link" data-testid="to-home" onClick={() => go({ level: 'agency' })}>Back to the desk</button></div>
         </section>
         <main className="hm-main">
           {changing && <ChangeBack onDone={() => setChanging(false)} />}

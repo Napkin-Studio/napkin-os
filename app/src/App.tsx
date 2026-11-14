@@ -2,14 +2,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { hasServer, host, onDevice, openOnDevice, serverless, switchToDevice, switchToServer } from './host'
 import type { InstalledApp, OpenResult } from './host'
 import DeviceBanner from './offline/DeviceBanner'
 import DeviceHome from './offline/DeviceHome'
 import OfflineDialog from './offline/OfflineDialog'
-import AgencyLookPanel from './shell/agency/AgencyLookPanel'
-import { applyAgencyLook, getAgencyLook } from './shell/agency/look'
+import { ViewAsDialog } from './shell/home/ViewAsDialog'
+import { loadAgencyLooks } from './shell/agency/looks'
 import PeoplePage from './shell/people/PeoplePage'
 import { peopleEntryFor } from './shell/people/model'
 import { isClanFile, keepOffline, pickFile, type DeviceSource } from './offline/actions'
@@ -48,7 +48,6 @@ import { LogoSpinnerFill, LogoSpinnerVeil } from './brand/LogoSpinner'
 import './index.css'
 import './components/chrome.css'
 import './shell/nui/tokens.css'
-import './shell/nui/modes.css'
 import './shell/nui/nui.css'
 import './shell/nui/shell.css'
 import { roles } from './shell/agents/engine'
@@ -119,7 +118,9 @@ export default function App() {
   const [device, setDevice] = useState(onDevice)
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
-  const [lookOpen, setLookOpen] = useState(false)
+  // An admin trying a role (the account menu's View as): changes the desk's row and the tools offered, nothing else.
+  const [viewAs, setViewAs] = useState<string | null>(null)
+  const [viewAsOpen, setViewAsOpen] = useState(false)
   // The People page (features/people-admin.clan): an admin's, from the account menu.
   const [peopleOpen, setPeopleOpen] = useState(false)
   const updateReady = useUpdateReady()
@@ -127,8 +128,9 @@ export default function App() {
   // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
   const landing = useLanding(host, screen === 'home' || screen === 'app', !(device && !serverless),
     screen === 'app' ? running?.artifactPath ?? null : null)
-  // The person's home, from the roles in their session; none for a person with no role, who keeps the desk.
-  const home = useHomeView(hasServer && !(device && !serverless), route.level === 'home' ? route.as : null)
+  // What the roles in the session add to the desk: the "Your pages" row and the tools offered; none for a person with no role.
+  const home = useHomeView(hasServer && !(device && !serverless), viewAs)
+  const offeredTools = useMemo(() => (home.view?.restricted ? new Set(home.view.tools) : null), [home.view])
   // On a server with accounts: who is signed in, for the bar's way out.
   const [user, setUser] = useState<string | null>(null)
   // Who the history entries the shell writes are for (lastOpen.ts).
@@ -148,8 +150,8 @@ export default function App() {
   // An agency added on the People page joins the registry there; closing the page puts its look on again.
   const [looksSeen, setLooksSeen] = useState(0)
   useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown, looksSeen])
-  // The accent sampled from the agency's logo (shell/agency/look.ts), once the server says whose it is.
-  useEffect(() => { if (personKnown && hasServer && !device) void getAgencyLook().then(applyAgencyLook) }, [personId, personKnown, device, looksSeen])
+  // The agencies added on the People page are read once at start, so a reload signed in (no sign-in card to read them) still wears the look.
+  useEffect(() => { if (hasServer && !device) void loadAgencyLooks().then(() => setLooksSeen(n => n + 1)) }, [device])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
   // The agency's wordmark on its pill (and its icon on a narrow bar), where the registry has them.
@@ -534,8 +536,6 @@ export default function App() {
       onOffline={hasServer && !device ? () => setOfflineOpen(true) : undefined}
       onDecisions={() => setDeskDecisions(true)}
       home={home.view}
-      agencyName={agencyNameOf(landing.data.person?.id, whoIs(landing.data.person ?? null).agency)}
-      agencyLogo={agencyLogo}
     />
   ) : landing.state === 'loading' || (landing.state === 'ready' && home.state === 'loading') ? (
     <LogoSpinnerFill label="Opening the studio…" />
@@ -597,8 +597,10 @@ export default function App() {
     name: personName,
     initials: initialsOf(personName),
     // The agency's name, and the person's role where the session carries one (the role an admin is viewing as is not theirs).
-    line: home.view?.restricted && !home.view.viewing && home.view.title ? `${agency} · ${home.view.title}` : agency,
-    ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null, onLook: () => setLookOpen(true) } : {}),
+    line: home.view?.restricted && !home.view.view_as && home.view.title ? `${agency} · ${home.view.title}` : agency,
+    ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null } : {}),
+    // Only for an admin (the server sends the role list to an admin alone): try the desk as another role.
+    ...(home.view?.restricted && home.view.roles.includes('admin') && home.view.switcher ? { onViewAs: () => setViewAsOpen(true), viewingAs: home.view.view_as ? (home.view.switcher.find(r => r.id === home.view!.view_as)?.title ?? home.view.view_as) : null } : {}),
     // Only for an admin: the server refuses everyone else's calls with 403 too.
     ...(hasServer && !device ? { onPeople: peopleEntryFor(user, () => setPeopleOpen(true)) } : {}),
   }
@@ -646,6 +648,7 @@ export default function App() {
           client={docChip}
           account={account}
           toolKey={toolOfApp(running.open.manifest.app?.app_id)?.id ?? null}
+          offeredTools={offeredTools}
           onToolPage={docRoute?.level === 'tool' && docClient ? {
             label: `${toolById(docRoute.tool)?.full ?? 'Its tool'} for ${clientName({ id: docClient.id, name: docClient.name })}`,
             run: () => leaveTo(docRoute),
@@ -714,7 +717,7 @@ export default function App() {
       )}
 
       <BarMount enabled={barOn} home={home.view} go={go} openPath={openPath} recent={recentDocs} signedIn={!!user} onSignOut={onSignOut} />
-      {lookOpen && <AgencyLookPanel onClose={() => setLookOpen(false)} />}
+      {viewAsOpen && home.view?.switcher && <ViewAsDialog roles={home.view.switcher} current={viewAs} onPick={r => { setViewAs(r); setViewAsOpen(false); if (route.level !== 'agency') go({ level: 'agency' }) }} onClose={() => setViewAsOpen(false)} />}
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
 
       {peopleOpen && <PeoplePage user={user} onClose={() => { setPeopleOpen(false); setLooksSeen(n => n + 1) }} />}

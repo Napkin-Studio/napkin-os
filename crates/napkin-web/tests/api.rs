@@ -3133,21 +3133,26 @@ async fn the_doors_are_served_from_the_roles_in_the_session_and_the_switcher_is_
     let home = get(&s, &format!("/api/t/{t}/doors"), Some(&c)).await.json();
     assert_eq!(home["restricted"], true);
     assert_eq!(
-        home["doors"].as_array().unwrap().len(),
+        home["pages"].as_array().unwrap().len(),
         5,
-        "two roles, one merged home of five"
+        "two roles, one merged row of five"
     );
     assert!(home["switcher"].is_null(), "a planner has no switcher");
     // asking to see another role's home changes nothing for a planner
     let tried = get(&s, &format!("/api/t/{t}/doors?as=management"), Some(&c))
         .await
         .json();
-    assert_eq!(tried["doors"], home["doors"]);
+    assert_eq!(tried["pages"], home["pages"]);
 
     let (a, t) = signed_in_as(&s, "ann@wk").await;
     let admin = get(&s, &format!("/api/t/{t}/doors"), Some(&a)).await.json();
-    assert_eq!(admin["map"]["circles"].as_array().unwrap().len(), 5);
-    assert_eq!(admin["map"]["other"].as_array().unwrap().len(), 2);
+    assert!(admin.get("map").is_none(), "the O is gone");
+    assert_eq!(admin["pages"][0]["name"], "Agency dashboard");
+    assert_eq!(
+        admin["tools"].as_array().unwrap().len(),
+        9,
+        "an admin is offered every tool"
+    );
     assert!(admin["switcher"].is_array());
     let as_cd = get(
         &s,
@@ -3156,7 +3161,9 @@ async fn the_doors_are_served_from_the_roles_in_the_session_and_the_switcher_is_
     )
     .await
     .json();
-    assert_eq!(as_cd["doors"][0]["name"], "Ideas");
+    assert_eq!(as_cd["pages"][0]["name"], "Ready for review");
+    assert_eq!(as_cd["view_as"], "creative-director");
+    assert_eq!(as_cd["tools"], serde_json::json!(["brief", "idea", "deck"]));
 
     // no role: not restricted, so the shell keeps the desk as it was
     let (l, t) = signed_in_as(&s, "legacy@wk").await;

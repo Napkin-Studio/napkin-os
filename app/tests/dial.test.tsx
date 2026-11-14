@@ -57,3 +57,19 @@ test('a quadrant counts its work in its own noun', () => {
   assert.match(html, /class="dz-sub">1 brief</)
 })
 
+
+// features/align-landing-look.clan: a role is offered some tools. The ones it is not offered have no quadrant; the rest keep
+// their places on the circle and their number keys, so what a person learned does not move.
+test('a quadrant for a tool the role is not offered is absent, and the others keep their places and keys', () => {
+  const html = renderToStaticMarkup(createElement(Dial, {
+    client: c, items: [], live: new Set(['brief', 'research', 'deck']), offered: new Set(['research', 'deck']),
+    place: { left: -8, top: -12, origin: '74px 70px' }, onOpenTool: noop, onSoon: noop, onOpenClient: noop, onClose: noop,
+  }))
+  assert.deepEqual([...html.matchAll(/data-testid="quadrant-(\w+)"/g)].map(m => m[1]), ['research', 'deck'])
+  assert.match(html, /data-testid="quadrant-research"/)
+  assert.match(html, /aria-keyshortcuts="2"[^>]*data-testid="quadrant-research"|data-testid="quadrant-research"[^>]*aria-keyshortcuts="2"/)
+  assert.match(html, /aria-label="Deck Maker for Client Alpha, nothing yet \(2 of 2\)"/)
+  assert.doesNotMatch(html, /quadrant-brief|quadrant-prod/)
+  // a person with no role is offered all four
+  assert.equal([...dial([]).matchAll(/data-testid="quadrant-(\w+)"/g)].length, 4)
+})

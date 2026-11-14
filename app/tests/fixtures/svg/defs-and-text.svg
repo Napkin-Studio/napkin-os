@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 120 40" width="120" height="40">
+  <title>Agency</title>
+  <desc>A logo</desc>
+  <metadata><rdf:RDF><path d="M0 0h1v1z"/></rdf:RDF></metadata>
+  <defs>
+    <linearGradient id="g"><stop offset="0" stop-color="#fff"/></linearGradient>
+    <clipPath id="c"><rect width="10" height="10"/></clipPath>
+    <path id="p" d="M5 5h5v5z"/>
+  </defs>
+  <style><![CDATA[ path { fill: red } ]]></style>
+  <mask id="m"><rect width="5" height="5" fill="#fff"/></mask>
+  <text x="10" y="20" fill="#000000">Agency</text>
+  <use xlink:href="#p"/>
+  <use href="#p" x="3"/>
+  <symbol id="s"><circle r="4"/></symbol>
+  <path fill="url(#g)" clip-path="url(#c)" d="M10 10h100v20H10z"/>
+  <filter id="f"/>
+  <marker id="mk"><path d="M0 0h2v2z"/></marker>
+  <pattern id="pt"><rect width="1" height="1"/></pattern>
+  <radialGradient id="r"/>
+  <rect x="0" y="0" width="4" height="4" fill="#C61566"/>
+</svg>

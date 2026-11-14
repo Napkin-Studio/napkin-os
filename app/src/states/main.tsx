@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // /states.html: the gallery of the nine screen states (features/screen-states.clan).
-// `?mode=white|grey|black` shows one mode only, as a screenshot wants it.
+// `?mode=white|black` shows one theme only, as a screenshot wants it.
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
