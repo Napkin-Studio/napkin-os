@@ -91,6 +91,6 @@ export function useJudge(docPath: string, on: boolean): Judge {
     disabled: busy || (card !== null && !card.can_score),
     title: card && !card.can_score ? (card.why_not ?? '') : 'Judge scores this version out of 30 and advises. The creative director decides.',
   }) : null, [on, busy, card])
-  const failedChip = useMemo<BarItem | null>(() => failed ? { kind: 'chip', label: 'Judge could not score', tone: 'warn', title: failed.line } : null, [failed])
+  const failedChip = useMemo<BarItem | null>(() => failed ? { kind: 'chip', label: 'Not scored', tone: 'warn', title: failed.line, alert: true } : null, [failed])
   return { card, line: note ?? failed?.line ?? null, busy, item, failed: failedChip, send, overrule }
 }

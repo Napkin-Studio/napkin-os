@@ -615,6 +615,7 @@ for (const size of SIZES) {
     await field.press('Control+Enter')
     const failed = page.locator('[data-state="failed-save"]')
     await expect(failed).toBeVisible()
+    if (process.env.NAPKIN_E2E_SHOTS) { await page.waitForTimeout(400); await page.screenshot({ path: `${process.env.NAPKIN_E2E_SHOTS}/bands-state-failed-save-${size.width}.png`, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' }) }
     await expect(field).toHaveText('Typed while the network is cut.') // the typed text stays on screen
     await ctx.setOffline(false)
     await failed.getByRole('button', { name: 'Try again' }).click()
@@ -732,6 +733,7 @@ for (const size of SIZES) {
     await field.press('Control+Enter')
     await expect(app.locator('#fields')).toContainText('An edit to undo.')
     await expect.poll(() => barOffers(page, 'Undo')).toBe(true) // the shell took the edit: the bar offers Undo
+    await app.locator('body').evaluate(() => window.focus()) // the key is pressed in the page again, not in the bar's field
     await page.keyboard.press('Meta+z')
     await expect(app.locator('#fields')).not.toContainText('An edit to undo.')
     await barCommand(page, 'Redo') // the undone text can be brought back

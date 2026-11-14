@@ -37,14 +37,36 @@ export async function openWork(page: Page, client: string, tool: string, title: 
 export async function barCommand(page: Page, title: 'Undo' | 'Redo') {
   await page.getByTestId('bar-search-input').click()
   await page.getByTestId('bar-search-input').fill(title)
-  await page.getByTestId('bar-result').filter({ hasText: new RegExp(`^${title}`) }).first().click()
+  await page.locator('[data-testid="bar-result"][data-kind="command"]').filter({ has: page.locator('b', { hasText: new RegExp(`^${title}$`) }) }).first().click()
 }
 
 /** Whether the bar offers a command now (it lists only the ones that can run). */
 export async function barOffers(page: Page, title: 'Undo' | 'Redo'): Promise<boolean> {
   await page.getByTestId('bar-search-input').click()
   await page.getByTestId('bar-search-input').fill(title)
-  const n = await page.getByTestId('bar-result').filter({ hasText: new RegExp(`^${title}`) }).count()
+  const n = await page.locator('[data-testid="bar-result"][data-kind="command"]').filter({ has: page.locator('b', { hasText: new RegExp(`^${title}$`) }) }).count()
   await page.keyboard.press('Escape')
   return n > 0
+}
+
+/**
+ * Nothing is drawn between the OS bar and an open document (features/align-booth.clan): the frame's top edge meets the
+ * bar's bottom edge. With NAPKIN_E2E_SHOTS set, the screen is kept as bands-<tool>-<width>.png.
+ */
+export async function nothingBetweenBarAndDocument(page: Page, tool: string) {
+  await expect(page.locator('iframe').first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByTestId('os-bar')).toBeVisible()
+  const gap = await page.evaluate(() => {
+    const bar = document.querySelector('[data-testid="os-bar"]')?.getBoundingClientRect()
+    const frame = document.querySelector('iframe')?.getBoundingClientRect()
+    return bar && frame ? Math.round(frame.top - bar.bottom) : null
+  })
+  expect(gap, `the frame's top edge meets the bar's bottom edge on ${tool}`).not.toBeNull()
+  expect(Math.abs(gap!), `nothing between the bar and the ${tool}`).toBeLessThanOrEqual(1)
+  expect(await page.locator('[data-testid="gate-band"], [data-testid="version-band"], [data-testid="judge-band"]').count()).toBe(0)
+  const dir = process.env.NAPKIN_E2E_SHOTS
+  if (dir) {
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: `${dir}/bands-${tool}-${page.viewportSize()?.width ?? 0}.png`, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
+  }
 }

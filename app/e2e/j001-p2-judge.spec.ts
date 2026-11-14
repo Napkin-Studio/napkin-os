@@ -191,7 +191,7 @@ for (const size of SIZES) {
     await open1(page, job)
     await page.getByRole('button', { name: 'Send to Judge' }).click()
     // The shell sent this run from its own bar button, so the Booth's page never heard of it: the OS bar says it, in the host's words.
-    const failed = page.getByTestId('bar-chip').filter({ hasText: 'Judge could not score' })
+    const failed = page.getByTestId('bar-chip').filter({ hasText: 'Not scored' })
     await expect(failed).toBeVisible()
     await expect(failed).toHaveAttribute('title', /\S/)
     expect((await sessionOf(page)).quota.used).toBe(credits) // the credits come back

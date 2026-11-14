@@ -7,7 +7,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type Page } from '@playwright/test'
-import { barCommand, barOffers, wideBeside } from './boothFolds'
+import { barCommand, barOffers, nothingBetweenBarAndDocument, wideBeside } from './boothFolds'
 import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
 
 const SHOTS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'design', 'brief-versions-undo')
@@ -49,6 +49,7 @@ for (const size of SIZES) {
     await page.goto(`/#tool-${job.client}-brief`)
     await page.reload()
     await page.getByTestId('work-item').first().click()
+    await nothingBetweenBarAndDocument(page, 'brief')
     // Versions live in the Booth (features/align-booth.clan): the whole brief's Versions fold.
     const app = page.frameLocator('iframe').first()
     const booth = app.locator('[data-booth-panel]')

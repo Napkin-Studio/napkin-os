@@ -629,6 +629,7 @@ export default function Toolbar({
           <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} waiting={!!doc.crew?.waiting} />
         </header>
       </div>
+      {doc.saveAlert}
       {popovers}
       {pop.open?.key === 'doc' && (
         <Pop anchor={pop.open.anchor} onClose={pop.close} label="Document" testid="doc-menu">

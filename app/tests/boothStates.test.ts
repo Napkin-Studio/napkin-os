@@ -17,7 +17,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { CHANGED_BRIEF, FAILED_SAVE, LOADING, LONG_RUN, MISSING_ACCESS, NOT_RIGHT, runFailedLine } from '../src/components/states/words.ts'
 import { barFrom } from '../src/shell/appBar.ts'
-import SaveStatus from '../src/components/SaveStatus.tsx'
+import SaveStatus, { SaveAlert } from '../src/components/SaveStatus.tsx'
 
 let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
@@ -204,23 +204,27 @@ test('Judge\'s fold keeps what its band said: the fixture line, not set up, and 
   assert.doesNotMatch(await text(card({ setup: setup({ backend: 'llm-judge' }) })), /price|cost|euro|\bcents?\b|spend/i, 'a priced setup says nothing of a price')
 })
 
-test('Failed save is said once, in the OS bar\'s save line, with Try again; Changed (409) says Update there', () => {
-  const failed = renderToStaticMarkup(createElement(SaveStatus, { state: 'failed', onRetry: () => {}, updatedAt: null }))
+test('Failed save is said once, in the OS bar, with Try again; Changed (409) says Update there; the quiet line steps aside', () => {
+  const bar = (state: 'failed' | 'changed' | 'idle', extra: object = {}) => renderToStaticMarkup(createElement('div', null,
+    createElement(SaveStatus, { state, updatedAt: null }), createElement(SaveAlert, { state, ...extra })))
+  const failed = bar('failed', { onRetry: () => {} })
   assert.equal(failed.split('data-state="failed-save"').length - 1, 1, 'said once')
-  assert.match(failed, /Not saved/)
+  assert.equal(failed.split('Not saved').length - 1, 1, 'the words are in one place')
+  assert.doesNotMatch(failed, /ch-saved/, 'the quiet "saved" line does not say saved while a write has not landed')
   assert.match(failed, new RegExp(FAILED_SAVE.line.replace(/\./g, '\\.')))
   assert.equal(failed.split('<button').length - 1, 1)
   assert.match(failed, />Try again</)
-  const moved = renderToStaticMarkup(createElement(SaveStatus, { state: 'changed', onRefresh: () => {}, updatedAt: null }))
+  const moved = bar('changed', { onRefresh: () => {} })
   assert.match(moved, /The brief changed while you were typing\./)
   assert.match(moved, />Update to the new brief</)
-  const fine = renderToStaticMarkup(createElement(SaveStatus, { state: 'idle', updatedAt: null }))
-  assert.doesNotMatch(fine, /failed-save|<button|Not saved/)
+  const fine = bar('idle')
+  assert.doesNotMatch(fine, /failed-save|<button|Not saved|tb-alert/)
+  assert.match(fine, /ch-saved/)
 })
 
-test('an undo\'s note, which only the bands said, is said by the bar beside the save line', () => {
-  const html = renderToStaticMarkup(createElement(SaveStatus, { state: 'idle', updatedAt: null, note: 'The audience changed after you wrote it, so nothing was undone.' }))
-  assert.match(html, /role="status"[^>]*data-testid="undo-note"[^>]*>The audience changed after you wrote it, so nothing was undone\./)
+test('an undo\'s note, which only the bands said, is said by the bar, for a moment', () => {
+  const html = renderToStaticMarkup(createElement(SaveAlert, { state: 'idle', note: 'The audience changed after you wrote it, so nothing was undone.' }))
+  assert.match(html, /role="status" data-testid="undo-note">The audience changed after you wrote it, so nothing was undone\./)
 })
 
 test('a bar item of kind state is dropped, as on develop; the status item and its tone are how a tool reports its state', () => {

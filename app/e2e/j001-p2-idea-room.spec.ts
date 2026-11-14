@@ -12,6 +12,7 @@
 import { expect, test, type Browser, type BrowserContext, type FrameLocator, type Page } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { nothingBetweenBarAndDocument } from './boothFolds'
 import { PHASE2 } from './phase2/tests.mjs'
 import { asMe, gateOf, lockBrief, PEOPLE, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
@@ -93,6 +94,7 @@ async function openRoom(page: Page, job: Job) {
   await page.reload()
   await page.getByTestId('work-item').first().click()
   await expect(frameOf(page).locator('[data-where="idea-room"]')).toBeVisible({ timeout: 30_000 })
+  await nothingBetweenBarAndDocument(page, 'idea-room')
   return frameOf(page)
 }
 

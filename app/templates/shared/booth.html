@@ -20,6 +20,7 @@
           none), boothApply(false) whenever the selection or the view changes the Booth's width.
        4. One call once the page is drawn: boothStart({
             panel: id of the Booth's column,
+            state: optional function returning an element for the state line where the Booth is not on screen,
             head: id of the element the header is put first in (default: panel),
             desk: function(){ return the desk element },
             size: function(desk){ set the width the Booth takes (the page's own boothWidth(...)), as a CSS variable on the desk },
@@ -177,11 +178,15 @@
     return '';
   }
   function boothSay(s, act){
-    var el=$('boothState'); if(!el) return;
+    var own=$('boothState'); if(!own) return;
     BOOTH_SAY.act=act||null; BOOTH_SAY.last=s||null;
     var h=s&&!BOOTH_SAY.client?boothSayHtml(s):'';   // client review mode says nothing here
-    if(h===BOOTH_SAY.html) return;
-    BOOTH_SAY.html=h; el.innerHTML=h; el.hidden=!h;
+    // Where the page has no Booth on screen (a run before the document), its own mount (boothStart's `state`) holds the line.
+    var alt=BOOTH_AT&&BOOTH_AT.state?BOOTH_AT.state():null, el=alt||own, key=(alt?'a':'o')+h;
+    if(key===BOOTH_SAY.html) return;
+    BOOTH_SAY.html=key;
+    [own, alt].forEach(function(x){ if(x&&x!==el){ x.innerHTML=''; x.hidden=true; x.removeAttribute('data-state'); } });
+    el.innerHTML=h; el.hidden=!h;
     if(h) el.setAttribute('data-state', s.name); else el.removeAttribute('data-state');
   }
   // The brief a page answers has moved on: its Changed brief state, from GET clan://upstream, or null while it is as it was.

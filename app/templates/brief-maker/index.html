@@ -612,6 +612,7 @@
   /* Headings: a label above the words, or a tab on the part's top edge */
   .sheet.head-tab .pgrid > .row .lab > span:first-child{background:var(--brief-accent);color:var(--paper);padding:2px 8px;border-radius:3px 3px 0 0}
   /* the side tab */
+  #runState{margin:14px auto 0;max-width:640px;border:1px solid var(--line);border-radius:8px}
   .stab{position:sticky;top:calc(var(--clan-top,0px) + 12px);max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 24px);overflow-x:hidden;overflow-y:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-content:start;padding:18px;border:1px solid var(--line);border-radius:var(--r-panel);background:var(--grain),var(--card);box-shadow:var(--edge-hi),var(--lift);font-size:13.5px}
   .stab .upnote{margin:0}
   /* Nothing in the side tab is wider than it: a long chip ("Verified by … · 9 November 2026") wraps. */
@@ -1525,6 +1526,7 @@
   <section class="proc" id="proc">
     <div class="pwrap">
       <div class="ptop"><div class="apills" id="apills" role="list" aria-label="The agents’ steps"></div></div>
+      <div class="booth-state" id="runState" data-testid="booth-state" role="status" aria-live="polite" hidden></div>
       <div class="sstage" id="meet" data-nk-stage>
         <div class="rail" id="railL"></div>
         <div class="score">
@@ -5236,6 +5238,7 @@
   function boothWidth(sel){ return sel?440:420; }
   boothStart({
     panel:'stab', desk:function(){ return document.querySelector('#structured .bdesk'); },
+    state:function(){ return phase==='doc'?null:$('runState'); },
     size:function(d){ d.style.setProperty('--bw', boothWidth(SEL)+'px'); },
     whole:function(){ if(SEL) select(null); },
     fold:function(){ return phase==='doc'; },

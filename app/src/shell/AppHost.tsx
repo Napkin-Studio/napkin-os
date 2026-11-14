@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Toolbar, { type Account, type ClientChip, type Crew, type ToolBrand } from '../components/Toolbar'
-import SaveStatus from '../components/SaveStatus'
+import SaveStatus, { SaveAlert } from '../components/SaveStatus'
 import { toolOfApp } from './landing/tools'
 import { useLinks, useMadeFrom, useSpinoffTargets, useWakeTick } from '../components/ContinueIn'
 import { linksOf } from '../components/barMenus'
@@ -476,7 +476,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           // A locked version keeps what it was made from; the host refuses it too.
           onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
-          saved: saved ? <SaveStatus state={saveState} onRetry={() => writes.retry()} onRefresh={refreshApp} note={briefUndo.note} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
+          saved: saved ? <SaveStatus state={saveState} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
+          saveAlert: <SaveAlert state={saveState} onRetry={() => writes.retry()} onRefresh={refreshApp} note={briefUndo.note} />,
           editMode,
           // A locked document with nothing reopened takes no edit: Client
           // review stands where Edit was.

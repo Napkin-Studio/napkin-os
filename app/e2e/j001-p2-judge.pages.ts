@@ -1,5 +1,5 @@
 // The pages of record `judge` for the suite's axe, 44 px and em dash checks (tests 72 and 73): the Judge scores door a creative director reads,
-// and a script open with its score card above it (the card's buttons carry data-primary where a screen has one real primary action).
+// and a script open with its score card in the Booth's Judge fold (the card's buttons carry data-primary where a screen has one real primary action).
 import { expect, type Page } from '@playwright/test'
 import { control } from './pilot'
 import { PEOPLE } from './seed/j001'
@@ -31,7 +31,11 @@ export const PAGES: Phase2Page[] = [
       await scored(page, job)
       await page.goto(`/#tool-${job.client}-script`); await page.reload()
       await page.getByTestId('work-item').first().click()
-      await expect(page.getByTestId('score-card')).toBeVisible()
+      // the score card is the Judge fold of the script's Booth (features/align-booth.clan): opened, it is what the scan reads
+      const fold = page.frameLocator('iframe').first().getByTestId('judge-fold')
+      await expect(fold).toBeVisible()
+      if ((await fold.getAttribute('open')) === null) await fold.locator('summary').click()
+      await expect(page.frameLocator('iframe').first().getByTestId('score-card')).toBeVisible()
     },
   },
 ]

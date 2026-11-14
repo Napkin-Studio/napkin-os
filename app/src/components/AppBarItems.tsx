@@ -20,7 +20,7 @@ const chipsOf = (bar: BarItem[]) => bar.filter((i): i is Chip => i.kind === 'chi
 /** Read-only facts, beside the title. */
 export function BarChips({ bar }: { bar: BarItem[] }) {
   return <>{chipsOf(bar).map((c, i) => (
-    <span key={i} data-testid="bar-chip" className={`ch-chip${c.tone ? ` ch-chip-${c.tone}` : ''}`} title={c.title || undefined}>{c.label}</span>
+    <span key={i} data-testid="bar-chip" data-alert={c.alert || undefined} role={c.alert ? 'alert' : undefined} className={`ch-chip${c.tone ? ` ch-chip-${c.tone}` : ''}`} title={c.title || undefined}>{c.label}</span>
   ))}</>
 }
 

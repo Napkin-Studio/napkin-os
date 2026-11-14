@@ -26,6 +26,7 @@ for (const [tag, width, height] of [['390', 390, 844], ['1440', 1440, 900]] as c
       await expect(failed).toBeVisible()
       expect((await failed.locator('.bs-line').allInnerTexts()).filter(Boolean)).toHaveLength(1) // one plain line
       await expect(failed).not.toContainText(/exception|stack|[{}]/i)
+      if (process.env.NAPKIN_E2E_SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: `${process.env.NAPKIN_E2E_SHOTS}/bands-state-run-failed-${width}.png`, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' }) }
       await expect(app.locator('body')).toContainText(ask) // the inputs stay
       // The provider is back: Try again sends the same ask and the state goes.
       await page.request.post(mw, { data: { state: 'running', stage: 'research' } })

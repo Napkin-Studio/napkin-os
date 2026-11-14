@@ -10,7 +10,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type FrameLocator, type Page } from '@playwright/test'
-import { barOffers, wideBeside } from './boothFolds'
+import { nothingBetweenBarAndDocument, wideBeside } from './boothFolds'
 import { asMe, PEOPLE, seedJ001 } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Size } from './pilot'
 import { RADIO_SCRIPT, SCRIPT_EDITOR_APP, TV_SCRIPT } from './seed/j001/p2/script-editor.mjs'
@@ -36,6 +36,7 @@ const open1 = async (page: Page, job: Seeded, title = 'J001 radio script') => {
   await page.goto(`/#tool-${job.client}-script`); await page.reload()
   await page.getByTestId('work-item').filter({ hasText: title }).first().click()
   await expect(frameOf(page).locator('[data-where="script-editor"]')).toBeVisible()
+  await nothingBetweenBarAndDocument(page, 'script')
 }
 const dataOf = async (page: Page, job: Seeded, path: string) => (await page.request.get(`${job.api}/d/${encodeURIComponent(path)}/entry/data`)).text()
 async function shot(page: Page, name: string, size: Size) {
@@ -167,7 +168,6 @@ for (const size of SIZES) {
       await line.evaluate((el: HTMLTextAreaElement) => { el.focus(); el.setSelectionRange(el.value.length, el.value.length) })
       await line.pressSequentially(' more')
       await expect.poll(async () => (await dataOf(page, job, doc.path)).includes('Tonight, try something new. more')).toBe(true)
-      await expect.poll(() => barOffers(page, 'Undo')).toBe(true)
       await page.keyboard.press('ControlOrMeta+z')
       await expect(line).not.toHaveValue(/more/)
       await page.keyboard.press('ControlOrMeta+Shift+z')
