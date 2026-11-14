@@ -29,6 +29,39 @@ async function issueRound(page: Page, job: Awaited<ReturnType<typeof seedJ001>>,
   return (await r.json()) as { links: { path: string; email: string }[]; round: number }
 }
 
+/**
+ * The same round, made the way the agency makes it (features/align-booth.clan): account service opens the signed
+ * brief, presses Share, Send the client copy, and names the two reviewers in the Booth under Record the client's
+ * answer, the approver first. Each link is shown once, in the Booth.
+ */
+async function issueRoundInBooth(page: Page, job: Awaited<ReturnType<typeof seedJ001>>) {
+  await signIn(page, PEOPLE.accountService)
+  await page.goto(`/#tool-${job.client}-brief`)
+  await page.reload()
+  await page.getByTestId('work-item').first().click()
+  await expect(page.frameLocator('iframe').first().locator('#stab #lockBtn')).toBeVisible()
+  await page.getByRole('button', { name: /^Share/ }).click()
+  await page.getByRole('menu', { name: 'Share' }).getByRole('menuitem', { name: /Send the client copy/ }).click()
+  const links = page.frameLocator('iframe').first().locator('#stab #clientLinks')
+  await links.getByRole('button', { name: 'Add a person' }).click()
+  const people = Object.values(CLIENT_REVIEWERS)
+  for (const [i, p] of people.entries()) {
+    await links.getByLabel(`Name ${i + 1}`).fill(p.name)
+    await links.getByLabel(`Email ${i + 1}`).fill(p.email)
+    if (p.approver) await links.getByLabel(`${p.name} is the approver`).check()
+  }
+  await links.getByRole('button', { name: 'Make the links' }).click()
+  const made = links.getByLabel('The client link')
+  await expect(made).toHaveCount(people.length)
+  const out: { path: string; email: string }[] = []
+  for (let i = 0; i < people.length; i++) {
+    out.push({ path: new URL(await made.nth(i).inputValue()).pathname, email: (await made.nth(i).getAttribute('data-email')) ?? '' })
+  }
+  expect(out.map(l => l.email)).toEqual(people.map(p => p.email))
+  await expect(links.getByTestId('round-number')).toContainText('Round 1')
+  return { links: out, round: 1 }
+}
+
 for (const size of SIZES) {
   const t = (n: number) => `${n} ${short(n)}, ${size.tag} px`
 
@@ -37,7 +70,7 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.planning)
     const job = await seedJ001(page, { ready: true, fresh: true })
     await signOff(page, job)
-    const round = await issueRound(page, job)
+    const round = await issueRoundInBooth(page, job)
     expect(round.round).toBe(1)
     // The client opens one piece with no account: a context with no cookies at all.
     const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } })
@@ -83,7 +116,7 @@ for (const size of SIZES) {
       { stage: 'client-approval', party: 'client', role: 'client', approver: 'Client A contact', contact: CLIENT_REVIEWERS.approver.email, due: day(6), rounds: 3 },
     ] } })).status()).toBe(200)
     await signOff(page, job)
-    const round = await issueRound(page, job)
+    const round = await issueRoundInBooth(page, job)
     // A reviewer taps the piece, types, and chooses the brief point; the comment is the reviewer's own and pinned.
     const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } })
     const cp = await phone.newPage()
@@ -117,6 +150,14 @@ for (const size of SIZES) {
     expect(merged.comments.some(c => c.tag === 'proposition' || c.tag === 'single_minded_proposition')).toBe(true)
     expect(merged.round).toBe(1)
     expect(merged.rounds_in_scope).toBe(3)
+    // The brief's Booth holds the same merged list, under Record the client's answer.
+    await page.goto(`/#tool-${job.client}-brief`); await page.reload()
+    await page.getByTestId('work-item').first().click()
+    const fold = page.frameLocator('iframe').first().locator('#stab #clientLinks')
+    await expect(fold.getByTestId('round-comments').getByTestId('comment')).toHaveCount(3)
+    await expect(fold.getByTestId('round-number')).toContainText('Round 1 of 3')
+    await expect(fold.locator('[data-testid="comment"][data-flags*="same spot"]')).toHaveCount(2)
+    if (shots) await page.screenshot({ path: `${shots}/round-booth-${size.tag}.png` })
     await page.goto('/'); await page.goto(`/#job-${job.job}`); await page.reload()
     await expect(page.getByTestId('round-comments').getByTestId('comment')).toHaveCount(3)
     await expect(page.getByTestId('round-number').first()).toContainText('Round 1 of 3')
