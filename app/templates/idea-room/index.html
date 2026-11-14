@@ -55,7 +55,10 @@
   button,textarea,input{font:inherit;color:inherit}
   :focus-visible{outline:2px solid var(--ag-act);outline-offset:2px}
 
-  .desk{display:grid;gap:28px;max-width:860px;margin:0 auto;padding:28px 16px 72px}
+  /* the room: the document, and the Booth beside it (shared/booth.html). The Booth takes its own column, so the
+     document makes room for it and is never covered; hidden, its column closes and the document recentres. */
+  .idesk{display:grid;grid-template-columns:minmax(0,860px) var(--bw,420px);justify-content:center;align-items:start;gap:28px;padding:28px 24px 72px}
+  .doc{display:grid;gap:28px;min-width:0}
   .eyebrow{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
   .eyebrow b{font-weight:500;color:var(--ink)}
   .head{display:grid;gap:10px}
@@ -72,7 +75,7 @@
 
   /* the gate: how many of the team's own cards are on the table, and what that opens */
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;display:grid;gap:12px}
-  .card h2{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .card h2,.bsec h2{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
   .count{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
   .count .n{font:400 46px/1 var(--font-serif)}
   .count .of{font:500 13px/1 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
@@ -137,6 +140,50 @@
     .pips{margin-left:0;width:100%} .pips i{flex:1;width:auto}
   }
 
+  /* a card or a route is picked by clicking it: the Booth then shows it */
+  .idea[data-card],.route[data-route]{cursor:pointer}
+  .idea.sel,.route.sel{outline:2px solid var(--ag-act);outline-offset:3px}
+  .tally{font:500 11px/1.6 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+  /* ── the Booth's place in this page (the Booth itself is shared/booth.html): its colours, its column and where
+     its header sits. What is in it is the room's side parts: the gate, the picked card or route, the choice. ── */
+  :root{--booth-line:var(--line);--booth-paper:var(--paper);--booth-ink:var(--ink);--booth-ink-soft:var(--ink-soft);--booth-muted:var(--muted);--booth-warn:var(--warn);--booth-desk:var(--desk)}
+  .booth{background:var(--paper);border:1px solid var(--line);border-radius:8px;display:grid;grid-template-columns:minmax(0,1fr);align-content:start;min-width:0;overflow-x:hidden;overflow-y:auto;font-size:13.5px;color:var(--ink)}
+  .booth>*{min-width:0}
+  .bbody>div>section,.bbody>section{padding:18px;border-top:1px solid var(--line);display:grid;gap:12px;align-content:start}
+  .bbody>div>section:first-child,.bbody>section:first-child{border-top:0}
+  .bbody section:empty,.bbody section[hidden]{display:none}
+  .bbody .count .n{font-size:38px}
+  .bbody .pips i{width:18px;height:26px}
+  .bbody .gline{font-size:14.5px}
+  .bbody .small{font-size:12.5px}
+  .bbody .btn{min-height:34px}
+  .bbody .btn.primary.big{min-height:40px}
+  .bbody textarea{min-height:64px}
+  .bbody .acts{margin-left:-10px}
+  .bbody .sel-name{font:400 22px/1.25 var(--font-serif);overflow-wrap:anywhere}
+  .bbody .facts{display:grid;gap:4px}
+  .bbody .facts dt{font:500 11px/1.9 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .bbody .facts dd{font-size:14px;color:var(--ink-soft)}
+  .bbody .facts dd+dt{margin-top:6px}
+  .bbody .flag{display:inline-flex;align-items:center;min-height:24px;padding:2px 10px;border-radius:999px;border:1px solid var(--warn);background:var(--warn-soft);color:var(--warn);font:600 12px/1.3 var(--font-ui)}
+  .bbody .flag.plain{border-color:var(--line-strong);background:transparent;color:var(--ink-soft);font-weight:500}
+  .bbody .flags{display:flex;gap:6px;flex-wrap:wrap}
+  .bbody .pickrow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .bbody .pickrow span{font:400 17px/1.2 var(--font-serif);overflow-wrap:anywhere}
+  .booth>.booth-hd{margin:0}
+  @media (min-width:1101px){
+    body{overflow-x:clip}
+    .idesk{transition:grid-template-columns var(--booth-dur) var(--booth-ease),gap var(--booth-dur) var(--booth-ease)}
+    .idesk > .booth{width:var(--bw,420px);position:sticky;top:calc(var(--clan-top,0px) + 12px);max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 24px)}
+    .idesk.booth-off{grid-template-columns:minmax(0,860px) 0px;gap:0}
+  }
+  /* 1100 px and below the Booth follows the document, in one column, and cannot be hidden */
+  @media (max-width:1100px){
+    .idesk{display:block;max-width:860px;margin:0 auto;padding:28px 16px 72px}
+    .idesk > .booth{margin-top:28px}
+  }
+
   /* the nine screen states are the shell's (states.css): this page asks the shell to draw the one it is in (clan:bar) and does not draw its own */
   .err{color:var(--alert);font-size:13px}
   .toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,12px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:5}
@@ -144,22 +191,36 @@
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   @media (prefers-reduced-motion:reduce){ .toast{transition:none} }
 </style>
+<!-- @napkin:clan-fields -->
+<!-- @napkin:booth -->
 </head>
 <body>
-<div class="desk" data-where="idea-room">
+<div class="idesk" id="idesk" data-where="idea-room">
+ <div class="doc" id="doc">
   <header class="head">
     <p class="eyebrow" id="eyebrow">Idea room</p>
     <h1 class="title">Ideas</h1>
     <p class="lede" id="lede">The team goes first. Then the room makes routes, and the creative director picks one.</p>
   </header>
   <section class="brief" id="brief" aria-label="What every idea answers"></section>
-  <section class="card" id="gate" data-testid="ai-gate" aria-label="The team goes first"></section>
   <section class="sec" id="cards" aria-label="Cards"></section>
   <section class="sec" id="routes" aria-label="Routes"></section>
+ </div>
+ <!-- The Booth: the room's side parts. Whole room: The team goes first, the routes' state and the creative
+      director's choice. A card or a route picked in the document: its author, votes and flags, or its fork and merge state. -->
+ <aside class="booth" id="booth" data-testid="booth" aria-label="Booth">
+  <div class="bbody">
+   <section id="bSel" hidden></section>
+   <div id="bWhole">
+    <section id="gate" data-testid="ai-gate" aria-label="The team goes first"></section>
+    <section id="bRoutes" aria-label="Routes, in short"></section>
+    <section id="bChoice" aria-label="The creative director's choice"></section>
+   </div>
+  </div>
+ </aside>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<!-- @napkin:clan-fields -->
 <script>
 (function(){
   'use strict';
@@ -225,7 +286,7 @@
 
   // ── the page ────────────────────────────────────────────────────────────────────────────────────
   var S = {
-    room: null, me: null, composer: '', commentFor: null, commentText: '', notes: {}, openEdit: null, edit: {},
+    room: null, me: null, sel: null, composer: '', commentFor: null, commentText: '', notes: {}, openEdit: null, edit: {},
     builder: [{ name: '', bet: '', cards: [] }, { name: '', bet: '', cards: [] }, { name: '', bet: '', cards: [] }],
     earlyOpen: false, early: '', reopenOpen: false, reopen: '', error: '', clashes: [], busy: false, saveFailed: false
   };
@@ -285,6 +346,7 @@
     if(m && m.type === 'clan:retry' && typeof m.id === 'string' && pending[m.id]) send(pending[m.id]).then(function(j){ if(j && j.ok !== false) return load(); });
     else if(m && m.type === 'clan:bar?') sendBar(true);
     else if(m && m.type === 'clan:bar-action' && m.id === 'state-update') updateBrief();
+    else if(m && m.type === 'clan:bar-action' && m.id === 'merge') mergeRoutes();
   });
 
   // ── drawing ─────────────────────────────────────────────────────────────────────────────────────
@@ -297,7 +359,11 @@
   var BAR_LAST = '';
   function sendBar(force){
     if(window.parent === window) return;
-    var br = brief(), items = [];
+    var br = brief(), items = [], g = gate(), out = routesOut(data()), merged = routeList(data()), ch = obj(data().chosen);
+    // The room's state, as the bar's status item, and Merge routes as its one button while routes are out.
+    var label = ch.route ? 'Route chosen' : out.length ? out.length + ' routes out' : merged.length ? merged.length + ' routes merged' : g.open ? 'Room open' : (g.team_cards || 0) + ' of ' + (g.needed || 5) + ' team cards';
+    items.push({ kind: 'status', label: label, tone: ch.route || g.open ? 'ok' : null, locked: false });
+    if(out.length) items.push({ kind: 'button', id: 'merge', label: 'Merge routes', primary: true, title: 'Fold every route back into the room. No model is used.' });
     if(br && br.changed){
       if(br.from && br.to) items.push({ kind: 'state', state: 'changed-brief', from: 'v' + br.from, to: 'v' + br.to, changes: 'The insight or the proposition may have moved. Your cards and routes stay as they are.' });
     }
@@ -344,20 +410,10 @@
     $('gate').innerHTML = h;
   }
   function ideaHtml(c){
-    var routeName = routeOfCard(data(), c.id), n = votesOf(c), mine = votedBy(c, S.me), cm = arr(c.comments), frozen = routesOut(data()).length > 0;
-    var h = '<article class="idea" data-testid="card" data-card="' + esc(c.id) + '"><p class="idea-text">' + esc(c.text) + '</p>'
-      + '<p class="meta">' + esc(nameOf(c.by)) + (c.at ? ' · ' + esc(dayOf(c.at)) : '') + (routeName ? ' · in route ' + esc(routeName) : '') + '</p>';
-    if(c.kind !== 'banned' && !frozen){
-      h += '<div class="acts"><button type="button" class="btn quiet" data-vote="' + esc(c.id) + '" aria-pressed="' + (mine ? 'true' : 'false') + '" aria-label="Vote for this card, ' + n + (n === 1 ? ' vote' : ' votes') + '"><span data-testid="votes">' + n + '</span>&nbsp;' + (n === 1 ? 'vote' : 'votes') + '</button>'
-        + '<button type="button" class="btn quiet" data-comment="' + esc(c.id) + '">Comment' + (cm.length ? ' (' + cm.length + ')' : '') + '</button></div>';
-    } else if(n){
-      h += '<p class="small">' + n + (n === 1 ? ' vote' : ' votes') + '</p>';
-    }
-    if(cm.length) h += '<ul class="comments">' + cm.map(function(x){ return '<li><b>' + esc(nameOf(x.by)) + '</b> ' + esc(x.text) + '</li>'; }).join('') + '</ul>';
-    if(S.commentFor === c.id && !frozen){
-      h += '<div class="composer"><label for="cm">Your comment</label><textarea id="cm" rows="2">' + esc(S.commentText) + '</textarea><div class="row"><button type="button" class="btn primary" data-comment-save="' + esc(c.id) + '">Add comment</button><button type="button" class="btn quiet" data-comment-cancel="1">Cancel</button></div></div>';
-    }
-    return h + '</article>';
+    var routeName = routeOfCard(data(), c.id), n = votesOf(c);
+    return '<article class="idea' + (isSel('card', c.id) ? ' sel' : '') + '" data-testid="card" data-card="' + esc(c.id) + '" tabindex="0"' + (isSel('card', c.id) ? ' aria-current="true"' : '') + '><p class="idea-text">' + esc(c.text) + '</p>'
+      + '<p class="meta">' + esc(nameOf(c.by)) + (c.at ? ' · ' + esc(dayOf(c.at)) : '') + (routeName ? ' · in route ' + esc(routeName) : '') + '</p>'
+      + (n ? '<p class="tally">' + n + (n === 1 ? ' vote' : ' votes') + '</p>' : '') + '</article>';
   }
   function drawCards(){
     var list = cardList(data()), frozen = routesOut(data()).length > 0, can = S.composer.trim().length > 0;
@@ -396,7 +452,7 @@
   }
   function routeOutHtml(r){
     var ed = S.openEdit === r.id, e = S.edit[r.id] || { name: r.name || '', bet: r.bet || '' }, notes = arr(r.notes), cards = cardList(data()).filter(function(c){ return arr(r.cards).indexOf(c.id) >= 0; });
-    var h = '<article class="route" data-testid="route" data-route="' + esc(r.id) + '" data-phase="out"><span class="meta">In progress · version ' + esc(r.version || 1) + '</span>';
+    var h = '<article class="route' + (isSel('route', r.id) ? ' sel' : '') + '" data-testid="route" data-route="' + esc(r.id) + '" data-route-name="' + esc(r.name || r.id) + '" data-phase="out" tabindex="0"' + (isSel('route', r.id) ? ' aria-current="true"' : '') + '><span class="meta">In progress · version ' + esc(r.version || 1) + '</span>';
     if(ed){
       h += '<div class="composer"><label for="rn-' + esc(r.id) + '">Name</label><input type="text" id="rn-' + esc(r.id) + '" data-r-name="' + esc(r.id) + '" maxlength="80" value="' + esc(e.name) + '">'
         + '<label for="rb-' + esc(r.id) + '">The bet</label><textarea rows="2" id="rb-' + esc(r.id) + '" data-r-bet="' + esc(r.id) + '" maxlength="400">' + esc(e.bet) + '</textarea>'
@@ -414,48 +470,166 @@
   function routeDoneHtml(r){
     var ch = obj(obj(data()).chosen), picked = ch.route === r.id, notes = arr(r.notes);
     var cards = cardList(data()).filter(function(c){ return arr(r.cards).indexOf(c.id) >= 0; });
-    var h = '<article class="route' + (picked ? ' chosen' : '') + '" data-testid="route" data-route="' + esc(r.id) + '" data-phase="' + (picked ? 'chosen' : 'merged') + '"><span class="meta">Route version ' + esc(r.version || 1) + '</span>'
+    var h = '<article class="route' + (picked ? ' chosen' : '') + (isSel('route', r.id) ? ' sel' : '') + '" data-testid="route" data-route="' + esc(r.id) + '" data-route-name="' + esc(r.name || r.id) + '" data-phase="' + (picked ? 'chosen' : 'merged') + '" tabindex="0"' + (isSel('route', r.id) ? ' aria-current="true"' : '') + '><span class="meta">Route version ' + esc(r.version || 1) + (picked ? ' · Chosen' : '') + '</span>'
       + '<h3>' + esc(r.name || r.id) + '</h3>' + (r.bet ? '<p class="bet">' + esc(r.bet) + '</p>' : '');
     if(cards.length) h += '<div class="chips">' + cards.map(function(c){ return '<span class="chip fixed">' + esc(c.text.length > 54 ? c.text.slice(0, 53) + '...' : c.text) + '</span>'; }).join('') + '</div>';
     if(notes.length) h += '<ul class="comments">' + notes.map(function(x){ return '<li><b>' + esc(nameOf(x.by)) + '</b> ' + esc(x.text) + '</li>'; }).join('') + '</ul>';
-    if(picked){
-      h += '<p><span class="stamp" data-testid="chosen-route"><i aria-hidden="true"></i>Chosen · version ' + esc(ch.version) + ' · ' + esc(nameOf(ch.by)) + '</span></p>';
-    } else if(isCD()){
-      h += '<div><button type="button" class="btn primary" data-pick="' + esc(r.id) + '" aria-label="Pick the route ' + esc(r.name || r.id) + '">Pick this route</button></div>';
-    }
     return h + '</article>';
   }
   function drawRoutes(){
-    var d = data(), g = gate(), out = routesOut(d), list = routeList(d), ch = obj(d.chosen);
+    var d = data(), out = routesOut(d), list = routeList(d);
     var h = '<h2><span>Routes</span><span>' + (out.length ? out.length + ' out' : list.length ? list.length + ' merged' : '') + '</span></h2><div class="routes">';
     if(out.length){
       // the routes that are branches now come from the host's gate (the page reads each branch's seed through the room)
-      h += '<div class="routes" id="outRoutes">' + out.map(function(id){ var r = obj(obj(S.branches)[id]); r.id = id; return routeOutHtml(r); }).join('') + '</div>'
-        + '<div class="card"><h2>Merge</h2><p class="gline">Merging folds every route back into the room, and lists any clash with both sides. No model is used.</p>'
-        + '<div><button type="button" class="btn primary big" id="mergeRoutes" data-merge="1">Merge routes</button></div></div>';
+      h += '<div class="routes" id="outRoutes">' + out.map(function(id){ var r = obj(obj(S.branches)[id]); r.id = id; return routeOutHtml(r); }).join('') + '</div>';
     } else {
       if(S.clashes.length){
         h += '<div class="clash" data-testid="clashes" role="status"><b>' + S.clashes.length + (S.clashes.length === 1 ? ' clash' : ' clashes') + ' to settle.</b>'
           + S.clashes.map(function(c){ return '<span>' + esc(clashLine(c)) + '</span>'; }).join('') + '<span>Nothing was picked for you.</span></div>';
       }
-      if(list.length){
-        h += list.map(routeDoneHtml).join('');
-        if(!ch.route && !isCD() && g.creative_director) h += '<p class="small" data-testid="pick-note">Only ' + esc(nameOf(g.creative_director)) + ', the creative director on the brief, picks the route.</p>';
-        if(ch.route && isCD()){
-          h += S.reopenOpen
-            ? '<div class="composer"><label for="reopenWhy">Why reopen the choice?</label><textarea id="reopenWhy" rows="2">' + esc(S.reopen) + '</textarea><div class="row"><button type="button" class="btn primary" id="reopenGo" aria-disabled="' + (S.reopen.trim() ? 'false' : 'true') + '" data-reopen-go="1">Reopen the choice</button><button type="button" class="btn quiet" data-reopen-cancel="1">Cancel</button></div><p class="small">The first pick stays in the history.</p></div>'
-            : '<div><button type="button" class="btn" data-reopen="1">Reopen the choice</button></div>';
-        }
-      }
+      if(list.length) h += list.map(routeDoneHtml).join('');
       h += builderHtml();
     }
     h += '</div>';
     $('routes').innerHTML = h;
   }
+
+  // ── the Booth: the room's side parts ────────────────────────────────────────────────────────────
+  // Nothing here counts cards or votes for a person: a card's votes are a number on the card, never a list of people.
+  function clip(s, n){ s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+  function isSel(kind, id){ return !!S.sel && S.sel.kind === kind && S.sel.id === id; }
+  function selCard(){ return S.sel && S.sel.kind === 'card' ? cardList(data()).filter(function(c){ return c.id === S.sel.id; })[0] || null : null; }
+  // A route is out (a branch, read through the host), merged, or the one chosen.
+  function routeNow(id){
+    var d = data(), out = routesOut(d).indexOf(id) >= 0;
+    if(out){ var r = obj(obj(S.branches)[id]); r.id = id; r.phase = 'out'; return r; }
+    var hit = routeList(d).filter(function(x){ return x.id === id; })[0];
+    if(!hit) return null;
+    hit.phase = obj(d.chosen).route === id ? 'chosen' : 'merged';
+    return hit;
+  }
+  function mergeBlock(){
+    return '<p class="gline">Merging folds every route back into the room, and lists any clash with both sides. No model is used.</p>'
+      + '<div><button type="button" class="btn primary big" id="mergeRoutes" data-merge="1">Merge routes</button></div>';
+  }
+  function stampHtml(){
+    var ch = obj(data().chosen);
+    return '<p><span class="stamp" data-testid="chosen-route"><i aria-hidden="true"></i>Chosen · version ' + esc(ch.version) + ' · ' + esc(nameOf(ch.by)) + '</span></p>';
+  }
+  function pickBtn(r){
+    return '<button type="button" class="btn primary" data-pick="' + esc(r.id) + '" aria-label="Pick the route ' + esc(r.name || r.id) + '">Pick this route</button>';
+  }
+  function reopenHtml(){
+    return S.reopenOpen
+      ? '<div class="composer"><label for="reopenWhy">Why reopen the choice?</label><textarea id="reopenWhy" rows="2">' + esc(S.reopen) + '</textarea><div class="row"><button type="button" class="btn primary" id="reopenGo" aria-disabled="' + (S.reopen.trim() ? 'false' : 'true') + '" data-reopen-go="1">Reopen the choice</button><button type="button" class="btn quiet" data-reopen-cancel="1">Cancel</button></div><p class="small">The first pick stays in the history.</p></div>'
+      : '<div><button type="button" class="btn" data-reopen="1">Reopen the choice</button></div>';
+  }
+  function pickNote(){
+    var g = gate();
+    return g.creative_director && !isCD() ? '<p class="small" data-testid="pick-note">Only ' + esc(nameOf(g.creative_director)) + ', the creative director on the brief, picks the route.</p>' : '';
+  }
+  // The whole room: how many routes are out or merged, and the creative director's choice.
+  function drawRouteState(){
+    var d = data(), g = gate(), out = routesOut(d), list = routeList(d), el = $('bRoutes');
+    if(S.sel){ el.innerHTML = ''; return; }
+    var h = '<h2>Routes</h2>';
+    if(out.length) h += '<p class="gline"><b>' + out.length + ' routes out.</b> Each is its own copy, worked on by itself, until they are merged.</p>' + mergeBlock();
+    else if(list.length) h += '<p class="gline"><b>' + list.length + ' routes merged</b> into the room.</p>';
+    else h += '<p class="gline">No routes yet. ' + (g.open ? 'Name two in the document to start.' : 'Routes start once the room is open.') + '</p>';
+    el.innerHTML = h;
+  }
+  function drawChoice(){
+    var d = data(), ch = obj(d.chosen), list = routeList(d), el = $('bChoice'), out = routesOut(d).length > 0;
+    if(S.sel){ el.innerHTML = ''; return; }
+    var h = '<h2>The creative director\'s choice</h2>';
+    if(ch.route){
+      h += stampHtml() + (isCD() ? reopenHtml() : '');
+    } else if(!out && list.length){
+      if(isCD()){
+        h += '<p class="gline">Pick one route. The pick is kept with your name and the route\'s version.</p>'
+          + list.map(function(r){ return '<div class="pickrow"><span>' + esc(r.name || r.id) + '</span>' + pickBtn(r) + '</div>'; }).join('');
+      } else h += pickNote();
+    } else {
+      h += '<p class="gline">Nothing to pick yet. The creative director picks one route once the routes are merged.</p>';
+    }
+    el.innerHTML = h;
+  }
+  function selCardHtml(c){
+    var routeName = routeOfCard(data(), c.id), n = votesOf(c), mine = votedBy(c, S.me), cm = arr(c.comments), frozen = routesOut(data()).length > 0, banned = c.kind === 'banned';
+    var flags = '';
+    if(banned) flags += '<span class="flag">Banned: takes no vote and goes into no route</span>';
+    if(routeName) flags += '<span class="flag plain">In route ' + esc(routeName) + '</span>';
+    if(frozen) flags += '<span class="flag plain">Held while routes are out</span>';
+    var h = '<h2 class="eyebrow">Card</h2><p class="sel-name" data-sel-name="1">' + esc(clip(c.text, 80)) + '</p>'
+      + '<dl class="facts"><dt>Written by</dt><dd data-testid="sel-author">' + esc(nameOf(c.by)) + (c.at ? ' · ' + esc(dayOf(c.at)) : '') + '</dd>'
+      + '<dt>Votes</dt><dd>';
+    if(!banned && !frozen){
+      h += '<button type="button" class="btn" data-vote="' + esc(c.id) + '" aria-pressed="' + (mine ? 'true' : 'false') + '" aria-label="Vote for this card, ' + n + (n === 1 ? ' vote' : ' votes') + '"><span data-testid="votes">' + n + '</span>&nbsp;' + (n === 1 ? 'vote' : 'votes') + (mine ? ', yours' : '') + '</button>';
+    } else h += '<span data-testid="votes">' + n + '</span> ' + (n === 1 ? 'vote' : 'votes');
+    h += '</dd><dt>Flags</dt><dd>' + (flags ? '<div class="flags">' + flags + '</div>' : 'None.') + '</dd></dl>';
+    if(cm.length) h += '<ul class="comments">' + cm.map(function(x){ return '<li><b>' + esc(nameOf(x.by)) + '</b> ' + esc(x.text) + '</li>'; }).join('') + '</ul>';
+    if(!frozen){
+      if(S.commentFor === c.id) h += '<div class="composer"><label for="cm">Your comment</label><textarea id="cm" rows="2">' + esc(S.commentText) + '</textarea><div class="row"><button type="button" class="btn primary" data-comment-save="' + esc(c.id) + '">Add comment</button><button type="button" class="btn quiet" data-comment-cancel="1">Cancel</button></div></div>';
+      else h += '<div class="acts"><button type="button" class="btn quiet" data-comment="' + esc(c.id) + '">Comment' + (cm.length ? ' (' + cm.length + ')' : '') + '</button></div>';
+    }
+    return h;
+  }
+  function selRouteHtml(r){
+    var notes = arr(r.notes), h = '<h2 class="eyebrow">Route</h2><p class="sel-name" data-sel-name="1">' + esc(r.name || r.id) + '</p>';
+    h += '<dl class="facts"><dt>Fork</dt><dd>' + (r.phase === 'out' ? 'Out as its own copy. It is worked on by itself, then folded back.' : 'Made as its own copy, worked on by itself, and folded back.') + '</dd>'
+      + '<dt>Merge</dt><dd>' + (r.phase === 'out' ? 'Not merged yet.' : r.phase === 'chosen' ? 'Merged. The creative director chose it.' : 'Merged into the room.') + '</dd>'
+      + '<dt>Version</dt><dd>Version ' + esc(r.version || 1) + (notes.length ? ' · ' + notes.length + (notes.length === 1 ? ' note' : ' notes') : '') + '</dd>'
+      + '<dt>Cards</dt><dd>' + arr(r.cards).length + (arr(r.cards).length === 1 ? ' card' : ' cards') + '</dd></dl>';
+    if(r.phase === 'out') h += mergeBlock();
+    else if(r.phase === 'chosen') h += stampHtml() + (isCD() ? reopenHtml() : '');
+    else if(!obj(data().chosen).route) h += isCD() ? '<div>' + pickBtn(r) + '</div>' : pickNote();
+    return h;
+  }
+  function drawSel(){
+    var el = $('bSel'), c = selCard(), r = S.sel && S.sel.kind === 'route' ? routeNow(S.sel.id) : null;
+    if(S.sel && !c && !r) S.sel = null;
+    if(!S.sel){ el.hidden = true; el.innerHTML = ''; el.removeAttribute('data-sel-id'); $('bWhole').hidden = false; return; }
+    el.setAttribute('data-sel-kind', S.sel.kind); el.setAttribute('data-sel-id', S.sel.id);
+    el.setAttribute('data-sel-label', S.sel.kind === 'card' ? clip(c.text, 80) : String(r.name || r.id));
+    el.innerHTML = '<div><button type="button" class="btn quiet" data-sel-back="1">All of the room</button></div>' + (c ? selCardHtml(c) : selRouteHtml(r));
+    el.hidden = false; $('bWhole').hidden = true;
+  }
+  function drawBooth(){ drawGate(); drawSel(); drawRouteState(); drawChoice(); }
+  // The picked card or route is marked in the document without drawing it again (a note being typed stays).
+  function markSel(){
+    Array.prototype.forEach.call(document.querySelectorAll('#doc [data-card],#doc [data-route]'), function(el){
+      var on = el.hasAttribute('data-card') ? isSel('card', el.getAttribute('data-card')) : isSel('route', el.getAttribute('data-route'));
+      el.classList.toggle('sel', on);
+      if(on) el.setAttribute('aria-current', 'true'); else el.removeAttribute('aria-current');
+    });
+  }
+  // A click on a card or a route brings the whole Booth back on it when it is hidden (boothPick).
+  function select(kind, id){
+    S.sel = kind ? { kind: kind, id: id } : null; S.commentFor = null; S.commentText = '';
+    markSel(); drawBooth(); boothPick();
+  }
+  // Feedback by pointing at it: a card and a route are parts, named by their own words; the picked one in the Booth too.
+  function feedbackTarget(el){
+    if(!el || !el.closest) return null;
+    var c = el.closest('#doc [data-card]');
+    if(c){ var t = c.querySelector('.idea-text'); return { kind: 'part', id: c.getAttribute('data-card'), label: clip(t && t.textContent, 80), el: c }; }
+    var r = el.closest('#doc [data-route]');
+    if(r) return { kind: 'part', id: r.getAttribute('data-route'), label: clip(r.getAttribute('data-route-name'), 80), el: r };
+    var s = el.closest('#bSel[data-sel-id]');
+    if(s) return { kind: 'part', id: s.getAttribute('data-sel-id'), label: clip(s.getAttribute('data-sel-label'), 80), el: s };
+    return null;
+  }
+  window.ClanFeedbackTarget = feedbackTarget;
+  // The version of the brief this room answers, and the room's name, for the note card.
+  function feedbackDoc(){
+    var b = briefOf(data()), br = brief();
+    return { version: br && br.from ? 'v' + br.from : '', title: b.name ? b.name + ', ideas' : 'Idea room' };
+  }
+  window.ClanFeedbackDoc = feedbackDoc;
   function drawAll(){
     var keep = document.activeElement && document.activeElement.id, pos = null;
     if(keep && document.activeElement.selectionStart != null) pos = document.activeElement.selectionStart;
-    drawHead(); drawBrief(); drawGate(); drawCards(); drawRoutes();
+    drawHead(); drawBrief(); drawCards(); drawRoutes(); drawBooth();
     if(keep){ var el = document.getElementById(keep); if(el && el.focus){ el.focus(); try { if(pos != null) el.setSelectionRange(pos, pos); } catch(e){} } }
   }
 
@@ -471,7 +645,7 @@
         // A route that is out is a branch; its working copy is what the host last seeded and every person added.
         return fetch(clanScheme + '/ideas/routes').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }).then(function(b){ S.branches = (b && b.routes) || {}; });
       })
-      .then(function(){ sendBar(); if(!isTyping()) drawAll(); else drawGate(); });
+      .then(function(){ sendBar(); if(!isTyping()) drawAll(); else if(!($('gate').contains(document.activeElement))) drawGate(); });
   }
   function isTyping(){ var a = document.activeElement; return !!a && /^(TEXTAREA|INPUT)$/.test(a.tagName); }
   function askMe(){
@@ -532,13 +706,19 @@
 
   // ── events ──────────────────────────────────────────────────────────────────────────────────────
   document.addEventListener('click', function(e){
-    var el = e.target.closest('[data-add-card],[data-vote],[data-comment],[data-comment-save],[data-comment-cancel],[data-early],[data-open-early],[data-cancel-early],[data-b-card],[data-start-routes],[data-r-edit],[data-r-save],[data-r-cancel],[data-r-note-save],[data-merge],[data-pick],[data-reopen],[data-reopen-go],[data-reopen-cancel]');
-    if(!el) return;
+    var el = e.target.closest('[data-add-card],[data-vote],[data-comment],[data-comment-save],[data-comment-cancel],[data-early],[data-open-early],[data-cancel-early],[data-b-card],[data-start-routes],[data-r-edit],[data-r-save],[data-r-cancel],[data-r-note-save],[data-merge],[data-pick],[data-reopen],[data-reopen-go],[data-reopen-cancel],[data-sel-back]');
+    if(!el){
+      // Not a control: a card or a route picked, unless this was in a field or a link.
+      var part = e.target.closest('#doc [data-card],#doc [data-route]');
+      if(part && !e.target.closest('textarea,input,a')) return part.hasAttribute('data-card') ? select('card', part.getAttribute('data-card')) : select('route', part.getAttribute('data-route'));
+      return;
+    }
+    if(el.hasAttribute('data-sel-back')) return select(null);
     if(el.hasAttribute('data-add-card')){ if(el.getAttribute('aria-disabled') === 'true') return; return addCard(); }
     if(el.hasAttribute('data-vote')) return vote(el.getAttribute('data-vote'));
-    if(el.hasAttribute('data-comment')){ S.commentFor = el.getAttribute('data-comment'); S.commentText = ''; drawCards(); var t = $('cm'); if(t) t.focus(); return; }
+    if(el.hasAttribute('data-comment')){ S.commentFor = el.getAttribute('data-comment'); S.commentText = ''; drawSel(); var t = $('cm'); if(t) t.focus(); return; }
     if(el.hasAttribute('data-comment-save')) return saveComment(el.getAttribute('data-comment-save'));
-    if(el.hasAttribute('data-comment-cancel')){ S.commentFor = null; return drawCards(); }
+    if(el.hasAttribute('data-comment-cancel')){ S.commentFor = null; return drawSel(); }
     if(el.hasAttribute('data-early')){ S.earlyOpen = true; drawGate(); var w = $('earlyWhy'); if(w) w.focus(); return; }
     if(el.hasAttribute('data-cancel-early')){ S.earlyOpen = false; return drawGate(); }
     if(el.hasAttribute('data-open-early')){ if(el.getAttribute('aria-disabled') === 'true') return; return openEarly(); }
@@ -554,8 +734,8 @@
     if(el.hasAttribute('data-r-note-save')) return saveNote(el.getAttribute('data-r-note-save'));
     if(el.hasAttribute('data-merge')) return mergeRoutes();
     if(el.hasAttribute('data-pick')) return pick(el.getAttribute('data-pick'));
-    if(el.hasAttribute('data-reopen')){ S.reopenOpen = true; drawRoutes(); var q = $('reopenWhy'); if(q) q.focus(); return; }
-    if(el.hasAttribute('data-reopen-cancel')){ S.reopenOpen = false; return drawRoutes(); }
+    if(el.hasAttribute('data-reopen')){ S.reopenOpen = true; drawBooth(); var q = $('reopenWhy'); if(q) q.focus(); return; }
+    if(el.hasAttribute('data-reopen-cancel')){ S.reopenOpen = false; return drawBooth(); }
     if(el.hasAttribute('data-reopen-go')){ if(el.getAttribute('aria-disabled') === 'true') return; return reopen(); }
   });
   document.addEventListener('input', function(e){
@@ -571,6 +751,8 @@
     if((a = t.getAttribute('data-r-note')) != null){ S.notes[a] = t.value; return; }
   });
   document.addEventListener('keydown', function(e){
+    var own = e.target && e.target.hasAttribute && (e.target.hasAttribute('data-card') || e.target.hasAttribute('data-route'));
+    if(own && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); e.target.click(); return; }
     if(e.target && e.target.id === 'cardInput' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); addCard(); }
   });
   window.addEventListener('clan:dataupdated', function(){ load(); });
@@ -581,11 +763,23 @@
   setInterval(function(){ if(!document.hidden && !isTyping()) load(); }, 12000);
 
   drawAll();
+  // The Booth: the panel, the document's grid, the width it takes, what an agent's question or a hidden Booth does.
+  // The room has no agent asking in this slice, so there is nothing for boothAsk to count.
+  function boothWidth(){ return S.sel ? 440 : 420; }
+  boothStart({
+    panel: 'booth', desk: function(){ return $('idesk'); },
+    size: function(d){ d.style.setProperty('--bw', boothWidth() + 'px'); },
+    whole: function(){ if(S.sel) select(null); },
+    fold: function(){ return true; },
+    inert: function(){ return true; },
+    key: function(e){ var t = e.target; return !(t && t.closest && t.closest('input,textarea,select,[contenteditable="true"],[contenteditable="plaintext-only"],dialog[open]')); }
+  });
+  boothApply(true);
   load();
   // Seen by the page tests: nothing else reads it.
   window.__ideaRoom = {
     state: function(){ return S; }, cardList: cardList, votesOf: votesOf, routeList: routeList, briefOf: briefOf,
-    toGoWords: toGoWords, changedWords: changedWords, nameOf: nameOf
+    toGoWords: toGoWords, changedWords: changedWords, nameOf: nameOf, select: select
   };
 })();
 </script>

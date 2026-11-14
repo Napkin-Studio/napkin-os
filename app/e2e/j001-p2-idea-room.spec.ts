@@ -120,6 +120,63 @@ async function threeRoutesMerged(page: Page, job: Job, room: { path: string }) {
   return { merged: (await merged.json()) as { routes: Record<string, unknown>; clashes: unknown[] }, token: (await asMe(page, job.api, { path: room.path, id: '' })).token }
 }
 
+/** The Booth is the room's side column (shared/booth.html, align-booth): its box, and the document's, as the page lays them out. */
+const boxes = (app: FrameLocator) => app.locator('body').evaluate(() => {
+  const r = (sel: string) => { const b = document.querySelector(sel)!.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom } }
+  return { doc: r('#doc'), booth: r('#booth'), w: window.innerWidth }
+})
+const meets = (a: { l: number; r: number; t: number; b: number }, b: { l: number; r: number; t: number; b: number }) => a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5
+
+/** The Booth on the room: never over the document at 1440 or 1100 px, and at 390 under it in one column with no Hide. At 1440
+ *  also the hidden edge tab, `]`, and a click on a card or a route bringing the whole Booth back on it. Leaves the Booth open. */
+async function boothBehaves(page: Page, app: FrameLocator, size: Size) {
+  const booth = app.getByTestId('booth')
+  await expect(booth).toBeVisible()
+  await expect(booth.locator('.booth-nm')).toHaveText('Booth')
+  const open = await boxes(app)
+  expect(meets(open.doc, open.booth), 'the Booth does not cover the document').toBe(false)
+  if (open.w <= 1100) {
+    expect(open.booth.t, 'one column: the Booth follows the document').toBeGreaterThanOrEqual(open.doc.b - 1)
+    await expect(app.locator('.booth-hide')).toBeHidden()
+    await expect(app.locator('#boothEdge')).toBeHidden()
+    return
+  }
+  // 1100 px: the Booth follows the document in one column and cannot be hidden.
+  await page.setViewportSize({ width: 1100, height: size.height })
+  await expect.poll(async () => (await boxes(app)).w).toBeLessThanOrEqual(1100)
+  const narrow = await boxes(app)
+  expect(meets(narrow.doc, narrow.booth), 'no overlap at 1100 px').toBe(false)
+  await expect(app.locator('.booth-hide')).toBeHidden()
+  await page.setViewportSize({ width: size.width, height: size.height })
+  await expect.poll(async () => (await boxes(app)).w).toBeGreaterThan(1100)
+  // Hide: the edge tab comes, the document recentres and the column closes.
+  await booth.getByRole('button', { name: 'Hide the Booth' }).click()
+  const edge = app.locator('#boothEdge')
+  await expect(edge).toBeVisible()
+  await expect(booth).toBeHidden()
+  await shot(page, 'idea-room-booth-hidden', size)
+  const tab = await edge.boundingBox()
+  expect(Math.round(tab!.width), 'the edge tab is 38 px wide').toBe(38)
+  expect(await edge.innerText()).toMatch(/booth/i)
+  expect(await app.locator('body').innerText()).not.toMatch(/press\s*\]|shortcut/i)
+  // A click on a card while hidden brings the whole Booth back on it.
+  await app.getByTestId('card').first().click()
+  await expect(booth).toBeVisible()
+  await expect(booth.locator('#bSel')).toContainText('Written by')
+  await expect(edge).toBeHidden()
+  const back = await boxes(app)
+  expect(meets(back.doc, back.booth), 'back, it still does not cover the document').toBe(false)
+  await shot(page, 'idea-room-booth-card-back', size)
+  await booth.getByRole('button', { name: 'All of the room' }).click()
+  await expect(booth.locator('#bSel')).toBeHidden()
+  // ] toggles, from the document.
+  await app.locator('h1.title').click()
+  await page.keyboard.press(']')
+  await expect(booth).toBeHidden()
+  await page.keyboard.press(']')
+  await expect(booth).toBeVisible()
+}
+
 async function shot(page: Page, name: string, size: Size, at?: string) {
   if (!SHOTS) return
   mkdirSync(SHOTS, { recursive: true })
@@ -143,7 +200,7 @@ for (const size of SIZES) {
     const app = await openRoom(page, job)
     await expect(app.getByTestId('brief-insight')).toContainText('Younger drinkers think Irish whiskey is for someone else')
     await expect(app.getByTestId('ai-ideas')).toHaveCount(0) // the AI shows no ideas
-    await expect(app.getByTestId('ai-gate')).toContainText('One card to go')
+    await expect(app.getByTestId('booth').getByTestId('ai-gate')).toContainText('One card to go')
     await expect(app.getByTestId('card')).toHaveCount(4)
     await shot(page, 'room-four-cards', size)
     // The host refuses a model task now, and the page cannot get round it.
@@ -162,7 +219,12 @@ for (const size of SIZES) {
     const after = await task()
     expect(after.status()).toBe(403)
     expect(await after.text()).toContain('ai_off')
-    await shot(page, 'room-open', size)
+    await shot(page, 'idea-room-booth-whole', size)
+    await expect(app.getByTestId('booth').getByTestId('ai-gate')).toContainText('The room is open') // the gate is in the Booth
+    await app.getByTestId('card').first().click()
+    await shot(page, 'idea-room-booth-card', size)
+    await app.getByTestId('booth').getByRole('button', { name: 'All of the room' }).click()
+    await boothBehaves(page, app, size)
     await ctx.close()
   })
 
@@ -175,12 +237,12 @@ for (const size of SIZES) {
     const writer = await asMe(page, job.api, { path: room.path, id: '' })
     expect((await page.request.post(`/s/${writer.token}/ideas/open-early`, { data: { rationale: 'Early.' } })).status()).toBe(403)
     const asWriter = await openRoom(page, job)
-    await expect(asWriter.getByRole('button', { name: 'Open early' })).toHaveCount(0)
-    await expect(asWriter.getByTestId('ai-gate')).toContainText('Only Dara, the creative director on the brief, can open it early.')
+    await expect(asWriter.getByTestId('booth').getByRole('button', { name: 'Open early' })).toHaveCount(0)
+    await expect(asWriter.getByTestId('booth').getByTestId('ai-gate')).toContainText('Only Dara, the creative director on the brief, can open it early.')
     // The creative director opens it: one decision in their name, with the reason.
     await signIn(page, PEOPLE.creativeDirector)
     const app = await openRoom(page, job)
-    await app.getByRole('button', { name: 'Open early' }).click()
+    await app.getByTestId('booth').getByRole('button', { name: 'Open early' }).click()
     await expect(app.getByRole('button', { name: 'Open the room early' })).toHaveAttribute('aria-disabled', 'true')
     await app.getByLabel('Why open it before the team has its 5?').fill('The team asked for help.')
     await shot(page, 'room-open-early-form', size)
@@ -191,8 +253,8 @@ for (const size of SIZES) {
     expect(opened).toHaveLength(1)
     expect(opened[0].actor).toBe(`human:${PEOPLE.creativeDirector.username}`)
     expect(await gate(page, cd.token)).toMatchObject({ open: true, opened_by: PEOPLE.creativeDirector.username, opened_via: 'early' })
-    await expect(app.getByTestId('ai-gate')).toContainText('Opened early by Dara')
-    await expect(app.getByTestId('ai-gate')).toContainText('The team asked for help.')
+    await expect(app.getByTestId('booth').getByTestId('ai-gate')).toContainText('Opened early by Dara')
+    await expect(app.getByTestId('booth').getByTestId('ai-gate')).toContainText('The team asked for help.')
     await ctx.close()
   })
 
@@ -227,7 +289,12 @@ for (const size of SIZES) {
     await expect(app.getByTestId('route')).toHaveCount(3)
     await expect(app.getByTestId('route').first()).toContainText('One song')
     await expect(app.getByTestId('route').first()).toContainText('The film is the pour.')
-    await shot(page, 'room-routes-merged', size, '#routes')
+    await app.getByTestId('route').first().click()
+    const sel = app.getByTestId('booth').locator('#bSel')
+    await expect(sel).toContainText('One song')
+    await expect(sel).toContainText('Merged into the room')
+    await expect(sel).toContainText('Version 3')
+    await shot(page, 'idea-room-booth-route', size)
     await ctx.close()
   })
 
@@ -247,12 +314,12 @@ for (const size of SIZES) {
     expect((await pick(writer.token)).status(), "a copywriter's pick is refused").toBe(403)
     // The page offers it to nobody else.
     const asWriter = await openRoom(page, job)
-    await expect(asWriter.getByRole('button', { name: /^Pick the route/ })).toHaveCount(0)
-    await expect(asWriter.getByTestId('pick-note')).toContainText('Only Dara, the creative director on the brief, picks the route.')
+    await expect(asWriter.getByTestId('booth').getByRole('button', { name: /^Pick the route/ })).toHaveCount(0)
+    await expect(asWriter.getByTestId('booth').getByTestId('pick-note')).toContainText('Only Dara, the creative director on the brief, picks the route.')
     await signIn(page, PEOPLE.creativeDirector)
     const app = await openRoom(page, job)
     await shot(page, 'room-before-pick', size, '#routes')
-    await app.getByRole('button', { name: 'Pick the route One song' }).click()
+    await app.getByTestId('booth').getByRole('button', { name: 'Pick the route One song' }).click()
     const cd = await asMe(page, job.api, { path: room.path, id: '' })
     await expect.poll(async () => (await gate(page, cd.token)).chosen?.route).toBe('route_1')
     const picks = (await chainOf(page, cd.token)).filter(d => d.action === 'pick_route')
@@ -263,7 +330,7 @@ for (const size of SIZES) {
     expect(picks.every(p => p.actor?.startsWith('human:') && !p.handler && !p.backend)).toBe(true)
     const patch = await page.request.post(`/s/${cd.token}/patch-data`, { data: { patch: { chosen: { route: 'route_2' } }, agent: 'human', action: 'edit' } })
     expect(patch.status(), 'a patch cannot write the pick').toBe(403)
-    await expect(app.getByTestId('chosen-route')).toContainText('Chosen · version 3 · Dara')
+    await expect(app.getByTestId('booth').getByTestId('chosen-route')).toContainText('Chosen · version 3 · Dara')
     await shot(page, 'room-chosen', size, '#routes')
     await ctx.close()
   })
@@ -347,9 +414,9 @@ for (const size of SIZES) {
     expect(Object.keys(merged.routes)).toHaveLength(3)
     const app = await openRoom(page, job)
     await shot(page, 'room-j001-routes', size, '#routes')
-    await app.getByRole('button', { name: 'Pick the route The long pour' }).click()
+    await app.getByTestId('booth').getByRole('button', { name: 'Pick the route The long pour' }).click()
     await expect.poll(async () => (await gate(page, token)).chosen?.route).toBe('route_2')
-    await expect(app.getByTestId('chosen-route')).toContainText('Chosen · version 1 · Dara')
+    await expect(app.getByTestId('booth').getByTestId('chosen-route')).toContainText('Chosen · version 1 · Dara')
     expect((await chainOf(page, token)).filter(d => d.action === 'pick_route')).toHaveLength(1)
     await shot(page, 'room-j001-chosen', size, '#routes')
     await ctx.close()
