@@ -271,6 +271,8 @@ for (const size of SIZES) {
     await script(page, job, RADIO_SCRIPT, 'J001 radio script')
     await open1(page, job)
     const app = frameOf(page), booth = boothOf(page)
+    // Measure only what is on screen: wait for it to be visible, then read its box and say the box exists.
+    const box = async (loc: ReturnType<typeof app.locator>, what: string) => { await expect(loc, what).toBeVisible(); const b = await loc.boundingBox(); expect(b, `${what}: has a box`).not.toBeNull(); return b! }
     const say = () => app.locator('body').evaluate(() => (window as unknown as { boothSay: (s: object, a: () => void) => void }).boothSay({ name: 'changed-brief', from: 'v1', to: 'v2', changes: 'Updating takes the new brief into this page. What you wrote here stays.' }, () => {}))
     if (size.width >= 1100) {
       await booth.locator('.booth-hide').click()
@@ -279,14 +281,19 @@ for (const size of SIZES) {
       await expect(app.locator('#boothEdge.has')).toBeVisible() // the dot, at once
       await shot(page, 'bands-state-hidden-dot', size)
       await expect(booth.getByTestId('booth-state')).toBeVisible({ timeout: 5_000 }) // then the Booth comes in on it, after a second
-      const [d, b] = await Promise.all([app.locator('#sheet').boundingBox(), booth.boundingBox()])
-      expect(d!.x + d!.width, 'beside the page, never over it').toBeLessThanOrEqual(b!.x + 1)
+      // The Booth is pushing the page aside (the grid moves for about half a second): wait for that state, then assert it.
+      const beside = async () => { const d = await app.locator('#sheet').boundingBox(), b = await booth.boundingBox(); return !!d && !!b && d.x + d.width <= b.x + 1 }
+      await expect.poll(beside, { intervals: [250], timeout: 10_000, message: 'the page ends before the Booth begins, never over it' }).toBe(true)
+      const d = await box(app.locator('#sheet'), 'the page'), b = await box(booth, 'the Booth')
+      expect(d.x + d.width, 'beside the page, never over it').toBeLessThanOrEqual(b.x + 1)
       await shot(page, 'bands-state-hidden-in', size)
     } else {
       // A phone: wherever the person is in the page the state is a short line fixed under the bar, over the page and never pushing it.
       const first = app.locator('textarea[data-id="b1"][data-field="text"]')
-      const yOf = async () => (await first.boundingBox())!.y
+      const yOf = async () => (await box(first, 'the first line')).y
       const top0 = await yOf()
+      // The line steps aside by itself after ten seconds (tested in boothStates.test.ts); here it is kept up, so slow screenshots cannot outlast it.
+      await app.locator('body').evaluate(() => { (window as unknown as { BOOTH_LINE_MS: number }).BOOTH_LINE_MS = 600_000 })
       await say()
       const line = app.getByTestId('booth-state-line')
       await expect(line).toBeVisible()
@@ -294,11 +301,10 @@ for (const size of SIZES) {
       const scrollTo = (where: 'top' | 'middle' | 'bottom') => app.locator('body').evaluate((_b, w) => { const h = document.documentElement.scrollHeight - innerHeight; scrollTo(0, w === 'top' ? 0 : w === 'middle' ? h / 2 : h) }, where)
       for (const where of ['top', 'middle', 'bottom'] as const) {
         await scrollTo(where)
-        await expect(line).toBeVisible()
-        const r = (await line.boundingBox())!
+        const r = await box(line, `${where}: the line`)
         expect(r.y, `${where}: under the bar, within the first screen`).toBeLessThan(120)
         expect(r.y + r.height, `${where}: and short`).toBeLessThan(130)
-        for (const b of await line.locator('button:visible').all()) expect((await b.boundingBox())!.height, `${where}: 44 px targets`).toBeGreaterThanOrEqual(43.5)
+        for (const b of await line.locator('button:visible').all()) expect((await box(b, `${where}: a button of the line`)).height, `${where}: 44 px targets`).toBeGreaterThanOrEqual(43.5)
         await shot(page, `bands-state-390-${where}`, size)
       }
       await expect(line).toHaveAttribute('role', 'status')
