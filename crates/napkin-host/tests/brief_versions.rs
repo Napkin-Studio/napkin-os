@@ -192,3 +192,193 @@ fn a_write_that_kept_no_inverse_makes_older_versions_unreadable() {
         "One."
     );
 }
+
+// review probe (throwaway): a part marked Confidential after v1, then Restore v1.
+#[test]
+fn review_probe_restore_keeps_a_confidential_mark() {
+    let rig = rig();
+    let dara = || session(&rig, "dara@wk");
+    edit(&rig, "First words.");
+    assert_eq!(call(&dara(), "/approve", "", json!({})).0, 200);
+    assert_eq!(
+        call(&dara(), "/unapprove", "", json!({ "rationale": "again" })).0,
+        200
+    );
+    let (s, v) = call(
+        &dara(),
+        "/patch-data",
+        "",
+        json!({ "agent": "human", "action": "mark audience confidential", "patch": { "confidential_fields": ["audience"] } }),
+    );
+    assert_eq!(s, 200, "{v}");
+    edit(&rig, "Second words, not for the client.");
+    assert_eq!(data_of(&rig)["confidential_fields"], json!(["audience"]));
+    let (s, v) = call(&dara(), "/restore", "", json!({ "version": 1 }));
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(
+        data_of(&rig)["confidential_fields"],
+        json!(["audience"]),
+        "the part is still marked Confidential after the restore"
+    );
+}
+
+// A mark a person put on a part is about the part, not about one version's
+// words: a restore changes the words and leaves every mark as it stands now.
+
+fn patch(rig: &Rig, action: &str, patch: Value) {
+    let (s, v) = call(
+        &session(rig, "dara@wk"),
+        "/patch-data",
+        "",
+        json!({ "agent": "human", "action": action, "patch": patch }),
+    );
+    assert_eq!(s, 200, "{v}");
+}
+
+/// v1 holds "First words."; it is approved, then unlocked so the draft can change.
+fn v1_then_unlocked(rig: &Rig) {
+    let dara = || session(rig, "dara@wk");
+    edit(rig, "First words.");
+    assert_eq!(call(&dara(), "/approve", "", json!({})).0, 200);
+    assert_eq!(
+        call(&dara(), "/unapprove", "", json!({ "rationale": "again" })).0,
+        200
+    );
+}
+
+fn restore_v1(rig: &Rig) {
+    let (s, v) = call(
+        &session(rig, "dara@wk"),
+        "/restore",
+        "",
+        json!({ "version": 1 }),
+    );
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(
+        data_of(rig)["audience"],
+        "First words.",
+        "the words are v1's"
+    );
+}
+
+#[test]
+fn restore_keeps_a_confidential_mark_on_one_part_of_a_field() {
+    let rig = rig();
+    v1_then_unlocked(&rig);
+    patch(
+        &rig,
+        "mark objectives.commercial confidential",
+        json!({ "confidential_fields": ["audience", "objectives.commercial"] }),
+    );
+    edit(&rig, "Second words.");
+    restore_v1(&rig);
+    assert_eq!(
+        data_of(&rig)["confidential_fields"],
+        json!(["audience", "objectives.commercial"])
+    );
+}
+
+#[test]
+fn a_mark_removed_after_a_version_is_not_brought_back_by_restoring_it() {
+    let rig = rig();
+    let dara = || session(&rig, "dara@wk");
+    patch(
+        &rig,
+        "mark audience confidential",
+        json!({ "confidential_fields": ["audience"] }),
+    );
+    v1_then_unlocked(&rig);
+    patch(
+        &rig,
+        "unmark audience confidential",
+        json!({ "confidential_fields": [] }),
+    );
+    edit(&rig, "Second words.");
+    restore_v1(&rig);
+    assert_eq!(
+        data_of(&rig)["confidential_fields"],
+        json!([]),
+        "restore changes only the words; the person's later unmark stands"
+    );
+    // A restore that changes no words writes nothing.
+    assert_eq!(
+        call(&dara(), "/restore", "", json!({ "version": 1 })).1["noop"],
+        true
+    );
+}
+
+#[test]
+fn restore_keeps_a_lock_and_signers_set_after_the_version() {
+    let rig = rig();
+    v1_then_unlocked(&rig);
+    let signers = json!([{ "role": "planner", "person": "aoife@wk" }]);
+    patch(
+        &rig,
+        "lock audience",
+        json!({ "locked_fields": ["audience"], "locked": true, "signers": signers }),
+    );
+    edit(&rig, "Second words.");
+    restore_v1(&rig);
+    let data = data_of(&rig);
+    assert_eq!(data["locked_fields"], json!(["audience"]));
+    assert_eq!(data["locked"], true, "an older brief's lock flag stands");
+    assert_eq!(data["signers"], signers);
+}
+
+#[test]
+fn restore_keeps_a_classify_mark_made_after_the_version() {
+    let rig = rig();
+    v1_then_unlocked(&rig);
+    let (s, v) = call(
+        &session(&rig, "dara@wk"),
+        "/classify",
+        "",
+        json!({ "target": "audience", "model": false, "export": true, "corpus": false,
+                "rationale": "Client data" }),
+    );
+    assert_eq!(s, 200, "{v}");
+    edit(&rig, "Second words.");
+    restore_v1(&rig);
+    let c = chain(&rig);
+    let mark = c
+        .decisions
+        .iter()
+        .find(|d| d.kind.as_deref() == Some("classify"))
+        .expect("the classify mark is still in the chain");
+    assert!(mark.superseded_by.is_none(), "and still live");
+    let l = mark.licence.as_ref().unwrap();
+    assert_eq!((l.model, l.corpus), (Some(false), Some(false)));
+}
+
+#[test]
+fn restore_keeps_material_received_after_the_version_and_its_licence() {
+    let rig = rig();
+    v1_then_unlocked(&rig);
+    let materials = json!({ "mat_1": { "kind": "deck", "name": "Client deck",
+        "sha256": "sha256:00", "received_at": "2026-11-14T09:00:00Z",
+        "licence": "client-confidential" } });
+    patch(&rig, "receive a deck", json!({ "materials": materials }));
+    edit(&rig, "Second words.");
+    restore_v1(&rig);
+    assert_eq!(data_of(&rig)["materials"], materials);
+}
+
+#[test]
+fn compare_shows_words_not_marks() {
+    let rig = rig();
+    let dara = || session(&rig, "dara@wk");
+    v1_then_unlocked(&rig);
+    patch(
+        &rig,
+        "mark audience confidential",
+        json!({ "confidential_fields": ["audience"], "locked": true,
+                "materials": { "mat_1": { "licence": "client-confidential" } } }),
+    );
+    for n in ["1", "draft"] {
+        let parts = call(&dara(), "/version", &format!("n={n}"), Value::Null).1["parts"].clone();
+        assert_eq!(parts["audience"], "First words.", "v{n}");
+        for mark in ["confidential_fields", "locked", "materials"] {
+            assert!(parts.get(mark).is_none(), "v{n} shows {mark} as a part");
+        }
+    }
+}
