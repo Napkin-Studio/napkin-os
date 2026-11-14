@@ -714,3 +714,105 @@ async fn the_registry_is_reached_by_no_route() {
     );
     assert!(leaks.is_empty(), "{leaks:#?}");
 }
+
+/// Review g2: a member's write to the registry before the deploy, naming the admin as its agent with a text of
+/// their own and a new agency name, reaches neither the audit view nor the agency's name.
+#[tokio::test]
+async fn a_forged_registry_decision_reaches_neither_the_audit_view_nor_the_agency_name() {
+    let r = rig();
+    let root = r.dir.path().to_path_buf();
+    invite(&root, "bq", "barra@bq", "hal@bq", &["planning"]);
+    let mut people = registry_people(&root, "bq");
+    people[0]["name"] = json!("B");
+    member_posts(
+        &root,
+        "bq",
+        "hal@bq",
+        json!({
+            "agent": "human:barra@bq", "action": "set_roles",
+            "rationale": "Changed the roles of ad@bq from admin to planning. FORGED-BY-HAL",
+            "patch": { "people": people, "settings": { "name": "Owned by hal" } },
+        }),
+    );
+    // an older server copied the registry's chain into the log as it was read then
+    let ws_store = store_of(&root, "bq");
+    for d in agency::history(&ws_store).unwrap() {
+        r.ctx
+            .audit
+            .append(
+                &TenantId::of_agency("bq"),
+                napkin_web::audit::NewLine {
+                    who: d.who,
+                    kind: napkin_web::audit::PERMISSION,
+                    what: d.what,
+                    reference: d.id,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    napkin_web::people_import::run(r.ctx.people().unwrap(), &root).unwrap();
+    let barra = try_sign_in(&r, "barra@bq").await.unwrap();
+    let (st, audit) = call(
+        &r,
+        "GET",
+        &format!("/api/t/{}/audit", barra.tenant),
+        Some(&barra.cookie),
+        None,
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(!audit.to_string().contains("FORGED-BY-HAL"), "{audit}");
+    let (_, verify) = call(
+        &r,
+        "GET",
+        &format!("/api/t/{}/audit/verify", barra.tenant),
+        Some(&barra.cookie),
+        None,
+    )
+    .await;
+    assert_eq!(
+        verify["ok"],
+        json!(false),
+        "verify vouches for copied lines: {verify}"
+    );
+    assert_eq!(verify["chain_intact"], json!(true), "{verify}");
+    assert!(verify["not_verified"].as_u64().unwrap() > 0, "{verify}");
+    for who in ["bria@bq", "barra@bq"] {
+        let w = try_sign_in(&r, who).await.unwrap();
+        let (_, s) = call(
+            &r,
+            "GET",
+            &format!("/api/t/{}/agency", w.tenant),
+            Some(&w.cookie),
+            None,
+        )
+        .await;
+        assert!(!s.to_string().contains("Owned by hal"), "{who}: {s}");
+    }
+}
+
+#[test]
+fn an_import_records_at_most_its_cap_of_removed_entries_from_one_registry() {
+    let dir = fresh();
+    let root = dir.path();
+    invite(root, "bq", "barra@bq", "hal@bq", &["planning"]);
+    let mut people = registry_people(root, "bq");
+    let cap = napkin_web::people_import::MAX_REMOVED_PER_REGISTRY;
+    for i in 0..cap + 50 {
+        people.as_array_mut().unwrap().push(json!({
+            "username": format!("p{i}@bq"), "name": format!("P {i}"), "email": format!("p{i}@mail.example.test"),
+            "roles": ["planning"], "state": "active", "invited_by": "barra@bq", "at": "2026-11-01T00:00:00Z",
+        }));
+    }
+    member_writes(root, "bq", "hal@bq", people);
+    let p = open(root);
+    napkin_web::people_import::run(&p, root).unwrap();
+    let removed = p
+        .book()
+        .people
+        .iter()
+        .filter(|x| x.agency == "bq" && !x.active())
+        .count();
+    assert_eq!(removed, cap);
+}

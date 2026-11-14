@@ -1028,7 +1028,7 @@ fn a_change_recorded_but_never_written_is_marked_not_applied_at_the_next_start()
     std::fs::write(&roster, ROSTER).unwrap();
     let people = napkin_web::people::People::open(dir.path().join("_people"), &roster).unwrap();
     // a server stopped after recording aoife's change and before writing people.json
-    let line = json!({ "at": "2026-11-14T10:00:00Z", "by": "ad@wk", "what": "roles changed",
+    let line = json!({ "at": "2026-11-14T10:00:00Z", "by": "ad@wk", "what": "roles changed", "seq": 999,
         "person": "aoife@wk", "agency": "wk",
         "before": { "name": "Aoife", "roles": ["planning"], "removed_at": null },
         "after": { "name": "Aoife", "roles": ["admin"], "removed_at": null } });
@@ -1057,4 +1057,63 @@ fn a_change_recorded_but_never_written_is_marked_not_applied_at_the_next_start()
     // a second start finds nothing to mark
     let again = napkin_web::people::People::open(dir.path().join("_people"), &roster).unwrap();
     assert_eq!(again.reconcile(), 0);
+}
+
+/// Review g1: one request makes two changes (roles and name) in the same second by the same admin; the next
+/// start must not say the role change did not happen.
+#[tokio::test]
+async fn a_change_the_store_took_is_never_marked_not_applied_at_the_next_start() {
+    let r = rig();
+    let ad = sign_in(&r, "ad@wk").await;
+    let (st, v) = call(
+        &r,
+        "PUT",
+        &format!("/api/t/{}/agency/people/aoife@wk", ad.tenant),
+        Some(&ad.cookie),
+        Some(json!({ "roles": ["admin"], "name": "Aoife New" })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    // and the two lines, made to fall in the same second whatever the clock did
+    let log = r.dir.path().join("_people").join("changes.jsonl");
+    let text = std::fs::read_to_string(&log).unwrap();
+    let fixed: Vec<String> = text
+        .lines()
+        .map(|l| {
+            let mut v: Value = serde_json::from_str(l).unwrap();
+            if v["person"] == "aoife@wk" {
+                v["at"] = json!("2026-11-14T10:00:00Z");
+            }
+            v.to_string()
+        })
+        .collect();
+    std::fs::write(&log, fixed.join("\n") + "\n").unwrap();
+    let before = std::fs::read_to_string(&log).unwrap();
+    // the next start
+    let ctx = AppCtx::new(r.dir.path().to_path_buf(), Arc::new(NoConfig), None, 40);
+    let people = napkin_web::people::People::open(
+        r.dir.path().join("_people"),
+        &r.dir.path().join("accounts.tsv"),
+    )
+    .unwrap();
+    ctx.set_people(Arc::new(people));
+    let after = std::fs::read_to_string(&log).unwrap();
+    assert_eq!(
+        after,
+        before,
+        "the start wrote: {}",
+        &after[before.len().min(after.len())..]
+    );
+    assert_eq!(
+        ctx.people().unwrap().active("aoife@wk").unwrap().roles,
+        ["admin"]
+    );
+    let audit = std::fs::read_to_string(
+        r.dir
+            .path()
+            .join(TenantId::of_agency("wk").as_str())
+            .join("audit.jsonl"),
+    )
+    .unwrap();
+    assert!(!audit.contains("Not applied"), "{audit}");
 }
