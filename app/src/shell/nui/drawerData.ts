@@ -23,6 +23,12 @@ const TITLE: Record<string, string> = {
 
 /** A call's row: its question in bold, then the document and what kind of call it is. */
 export function callWords(item: AttentionItem, docTitle: string): { title: string; sub: string } {
+  // The Brief gate's items and the job's notices say what they are in their own words.
+  if (item.code.startsWith('gate:') || item.code.startsWith('signoff:')) {
+    const t = item.text.replace(/^Brief gate, /, '')
+    return { title: t.charAt(0).toUpperCase() + t.slice(1), sub: `${docTitle} · Brief gate` }
+  }
+  if (item.code.startsWith('notice:')) return { title: item.text, sub: `${docTitle} · Worth a look` }
   const label = withCountry((item.label ?? '').replace(/^(Finding|Fact|Contest) · /, '')).trim()
   const kind = item.code === 'bad_verdict' ? verdictWords((item as Need).by) : TITLE[item.code] ?? 'Needs your call'
   return label ? { title: label, sub: `${docTitle} · ${kind}` } : { title: kind, sub: `${docTitle} · ${item.text}` }

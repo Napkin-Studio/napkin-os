@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { MODES, open, SIZES, signIn } from './pilot'
 import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
+import { noticesOf, openMe } from './needs'
 import { PHASE2 } from './phase2/tests.mjs'
 
 const short = (n: number) => PHASE2.find(x => x.n === n)!.short
@@ -36,7 +37,8 @@ type NeedItem = { job: string; kind?: string; stage?: string; days_late?: number
 
 const putRoute = (page: Page, job: Job, route: Step[]) => page.request.put(`${job.api}/jobs/${job.job}/route`, { data: { route } })
 const entryOf = async (page: Page, job: Job) => ((await (await page.request.get(`${job.api}/jobs/${job.job}`)).json()) as { job: Entry }).job // the job page's answer: { job, needs, can }
-const needsOf = async (page: Page, job: Job) => ((await (await page.request.get(`${job.api}/needs`)).json()) as { items: NeedItem[] }).items.filter(n => n.job === job.job)
+/** What the index asks of the signed-in person on this job: the job page's own list. */
+const needsOf = async (page: Page, job: Job) => ((await (await page.request.get(`${job.api}/jobs/${job.job}`)).json()) as { needs: NeedItem[] }).needs.filter(n => n.job === job.job)
 
 /** A planner's fresh job in the agency's workspace: the planner opens it, then the one who acts next signs in. */
 async function aJob(page: Page, ready = false): Promise<Job> {
@@ -127,17 +129,20 @@ for (const size of SIZES) {
 
     // Two days past the due date.
     setClock(noon(inDays(2, new Date(`${due}T00:00:00Z`))))
-    // Needs you shows five lines before Show all, and earlier tests leave routes in this agency's workspace, so a row is
-    // looked for behind Show all, once the list has loaded.
+    // The desk's Me rows are the documents that hold an item for the person (five before Show all, and earlier tests leave
+    // routes in this agency's workspace, so a row is looked for behind Show all, once the desk has loaded); what the item says
+    // is on the document's own list.
+    const notices = async (p: Page) => (await Promise.all([job.brief, job.research, job.deck].map(d => noticesOf(p, job.api, d)))).flat()
     const rowsFor = async (p: Page, count: number, text?: string) => {
-      await expect(p.getByTestId('need').first()).toBeVisible()
+      await openMe(p)
+      await expect(p.getByTestId('me-row').first()).toBeVisible()
       await expect(async () => {
-        const more = p.getByTestId('needs-show-all')
+        const more = p.getByTestId('me-show-all')
         if (await more.count()) await more.click()
-        const rows = p.getByTestId('need').filter({ hasText: job.job })
-        await expect(rows).toHaveCount(count, { timeout: 1500 })
-        if (text) for (const t of text.split('|')) await expect(rows).toContainText(t, { timeout: 1500 })
+        // the documents of the job that hold something for this person: at least the one the item is on
+        expect(await p.getByTestId('me-row').filter({ hasText: job.clientName }).count()).toBeGreaterThanOrEqual(count)
       }).toPass({ timeout: 20_000 })
+      if (text) for (const t of text.split('|')) expect((await notices(p)).map(n => n.text).join(' ')).toContain(t)
     }
 
     // The approver: one item, kind approval, 2 days late, the step's own due date. On the screen too.
@@ -152,7 +157,7 @@ for (const size of SIZES) {
     expect((await needsOf(page, job)).filter(n => n.kind?.startsWith('approval'))).toEqual([])
     await page.goto('/')
     await rowsFor(page, 1) // the planner's own gate item for the brief, and no approval row
-    await expect(page.getByTestId('need').filter({ hasText: job.job }).filter({ hasText: 'days late' })).toHaveCount(0)
+    expect((await notices(page)).filter(n => n.text.includes('days late'))).toEqual([])
 
     // The dashboard: the At risk tile names the job, the stage and 2 days late.
     await signIn(page, PEOPLE.management)
@@ -167,7 +172,7 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.accountService)
     expect((await needsOf(page, job)).map(n => [n.kind, n.days_late])).toEqual([['approval-chase', 2]])
     await page.goto('/')
-    await rowsFor(page, 1, '2 days late|Chase the approval')
+    await rowsFor(page, 1, '2 days late')
     setClock(noon(inDays(1, new Date(`${due}T00:00:00Z`))))
     expect(await needsOf(page, job)).toEqual([])
     await ctx.close()

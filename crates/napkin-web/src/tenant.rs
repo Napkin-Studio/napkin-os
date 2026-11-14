@@ -138,6 +138,10 @@ impl Identity {
 #[derive(Clone, Debug)]
 pub struct Person(pub String);
 
+/// The roles the signed-in account holds (none for an anonymous visitor).
+#[derive(Clone, Debug, Default)]
+pub struct Roles(pub Vec<String>);
+
 /// The request's tenant and person as the host's context: who writes, in
 /// which workspace. Writes take this, so the decision chain names the person.
 pub struct Acting(pub napkin_host::Ctx);
@@ -228,6 +232,7 @@ pub async fn layer(
             crate::timing::note_who(tenant.as_str(), tenant.as_str());
             parts.extensions.insert(tenant.clone());
             parts.extensions.insert(Person(tenant.to_string()));
+            parts.extensions.insert(Roles::default());
             let mut response = next
                 .run(axum::extract::Request::from_parts(parts, body))
                 .await;
@@ -252,6 +257,7 @@ pub async fn layer(
                     crate::timing::note_who(tenant.as_str(), &a.username);
                     parts.extensions.insert(tenant);
                     parts.extensions.insert(Person(a.username.clone()));
+                    parts.extensions.insert(Roles(a.roles.clone()));
                     parts.extensions.insert(a);
                 }
                 // the agencies' looks are public: the sign-in card wears them before anyone signs in

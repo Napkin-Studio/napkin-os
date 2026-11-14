@@ -17,6 +17,7 @@ import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Decision } from './pilot'
 import { CANARY_SENTENCE } from './seed/j001/p2/wall.mjs'
 import { OVERRULE_REASON } from './seed/j001/p2/judge.mjs'
+import { noticesOf } from './needs'
 import { RADIO_SCRIPT, SCRIPT_EDITOR_APP } from './seed/j001/p2/script-editor.mjs'
 import { PHASE2 } from './phase2/tests.mjs'
 
@@ -91,7 +92,8 @@ for (const size of SIZES) {
     expect((await verdicts(page, doc.token))[0].judge?.advised_route).toBe('cd_brave')
     await signIn(page, PEOPLE.creativeDirector)
     await page.goto('/'); await page.reload()
-    await expect(page.getByTestId('need').filter({ hasText: 'Brave, fix the craft' })).toBeVisible()
+    // the work waits on the creative director as a notice on the piece itself (the one Needs you), and the desk's Me holds it
+    expect((await noticesOf(page, job.api, { path: doc.path, id: '' })).map(n => n.text).join(' ')).toContain('Brave, fix the craft')
     await shot(page, 'judge-need-brave', size)
     await page.goto('/#door-judge-scores'); await page.reload()
     await expect(page.getByTestId('judge-piece').first()).toBeVisible()
