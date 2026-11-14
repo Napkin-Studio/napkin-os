@@ -175,13 +175,13 @@ for (const size of SIZES) {
   }
   /** The rows of Needs you the host's gate gave (gate:<item>, signoff:<role>). */
   const gateRows = (booth: ReturnType<Page['locator']>) => booth.locator('#lockList [data-code^="gate:"], #lockList [data-code^="signoff:"]')
-  /** Share, Send the client copy: the Booth opens on the client's link under Record the client's answer. */
+  /** Share, Send the client copy: the shell's own form for the client's link, for the brief open in the frame. */
   const sendClientCopy = async (page: Page) => {
     await page.getByRole('button', { name: /^Share/ }).click()
     await page.getByRole('menu', { name: 'Share' }).getByRole('menuitem', { name: /Send the client copy/ }).click()
-    const links = page.frameLocator('iframe').first().locator('#stab #clientLinks')
-    await expect(links.getByRole('button', { name: 'Make the link' })).toBeVisible()
-    return links
+    const form = page.getByTestId('client-link-form')
+    await expect(form.getByRole('button', { name: 'Make the link' })).toBeVisible()
+    return form
   }
 
   test(t(3), async ({ browser }) => {
@@ -519,11 +519,11 @@ for (const size of SIZES) {
     // service makes it from the signed brief with Share, Send the client copy, and the client confirms it.
     await signIn(page, PEOPLE.accountService)
     await openBrief(page, job, 'job')
-    const links = await sendClientCopy(page)
-    await links.getByLabel('Name 1').fill('Client A contact')
-    await links.getByLabel('Email 1').fill('contact@client-a.example')
-    await links.getByRole('button', { name: 'Make the link' }).click()
-    const url = await links.getByLabel('The client link').first().inputValue()
+    const form = await sendClientCopy(page)
+    await form.getByLabel('Who it is for').fill('Client A contact')
+    await form.getByLabel('Their email').fill('contact@client-a.example')
+    await form.getByRole('button', { name: 'Make the link' }).click()
+    const url = await form.getByLabel('The client link').first().inputValue()
     const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } })
     const cp = await phone.newPage()
     await cp.goto(new URL(url).pathname)
@@ -747,23 +747,24 @@ for (const size of SIZES) {
     const job = await seedJ001(page, { ready: true, fresh: true })
     await signOff(page, job)
     await signIn(page, PEOPLE.accountService)
-    // The agency's side is the brief's Booth: Share, Send the client copy makes the signed link, and the links
-    // made are listed under Record the client's answer with their state and Withdraw.
-    await openBrief(page, job, 'job')
-    let links = await sendClientCopy(page)
-    await links.getByLabel('Name 1').fill('Someone else')
-    await links.getByLabel('Email 1').fill('someone@client-a.example')
-    await links.getByRole('button', { name: 'Make the link' }).click()
-    const first = new URL(await links.getByLabel('The client link').first().inputValue()).pathname
-    await expect(links.locator('[data-link-state="open"]')).toHaveCount(1)
-    await links.locator('[data-link-state="open"]').getByRole('button', { name: 'Withdraw' }).click()
-    await expect(links.locator('[data-link-state="withdrawn"]')).toContainText('Withdrawn')
-    links = await sendClientCopy(page)
-    await links.getByLabel('Name 1').fill('Client A contact')
-    await links.getByLabel('Email 1').fill('contact@client-a.example')
-    await links.getByRole('button', { name: 'Make the link' }).click()
-    const path = new URL(await links.getByLabel('The client link').first().inputValue()).pathname
-    await expect(links.locator('[data-link-state="open"]')).toContainText('Client A contact')
+    // The agency's side: Share, Send the client copy opens the shell's own form, which makes the signed link for the
+    // brief open in the frame and lists the links with Withdraw; the brief's Booth shows them under Record the client's answer.
+    const booth = await openBrief(page, job, 'job')
+    const form = await sendClientCopy(page)
+    await form.getByLabel('Who it is for').fill('Someone else')
+    await form.getByLabel('Their email').fill('someone@client-a.example')
+    await form.getByRole('button', { name: 'Make the link' }).click()
+    const first = new URL(await form.getByLabel('The client link').first().inputValue()).pathname
+    await expect(booth.locator('#clientLinks [data-link-state="open"]')).toContainText('Someone else')
+    await form.locator('li[data-state="open"]').getByRole('button', { name: 'Withdraw' }).click()
+    await expect(form.locator('li[data-state="withdrawn"]')).toContainText('Withdrawn')
+    await form.getByLabel('Who it is for').fill('Client A contact')
+    await form.getByLabel('Their email').fill('contact@client-a.example')
+    await form.getByRole('button', { name: 'Make the link' }).click()
+    await expect(form.locator('li[data-state="open"]')).toContainText('Client A contact')
+    const path = new URL(await form.getByLabel('The client link').first().inputValue()).pathname
+    expect(path).not.toBe(first)
+    await expect(booth.locator('#clientLinks [data-link-state="withdrawn"]')).toContainText('Someone else')
     const brief = await asMe(page, job.api, job.brief)
     const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } }) // no cookies, no account
     const cp = await phone.newPage()

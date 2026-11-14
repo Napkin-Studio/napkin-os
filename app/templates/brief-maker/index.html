@@ -954,14 +954,8 @@
   .b-links .lk-fold > summary{display:flex;align-items:baseline;gap:8px;cursor:pointer;font:600 13px var(--font-ui);list-style:none}
   .b-links .lk-fold > summary::-webkit-details-marker{display:none}
   .b-links .lk-fold > summary small{margin-left:auto;font:500 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
-  .lk-form,.lk-made,.lk-round{display:grid;gap:8px}
-  .lk-p{display:grid;gap:6px;padding-bottom:8px;border-bottom:1px solid var(--nd-line)}
-  .lk-lead{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--nd-ink-soft)}
-  .lk-sp{flex:1}
   .lk-m{font-size:12.5px;color:var(--nd-muted)}
-  .lk-one{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center}
-  .lk-one span{grid-column:1 / -1;font-size:12px;color:var(--nd-muted)}
-  .lk-one input{min-width:0;border:1px solid var(--nd-line);border-radius:6px;padding:6px 8px;font:12px var(--font-mono);background:var(--nd-paper);color:var(--nd-ink)}
+  .lk-round{display:grid;gap:8px}
   .lk-rows,.lk-comments{list-style:none;display:grid;gap:6px;margin:0;padding:0}
   .lk-rows li{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12.5px}
   .lk-rows li[data-link-state="withdrawn"],.lk-rows li[data-link-state="expired"],.lk-rows li[data-link-state="superseded"]{color:var(--nd-muted)}
@@ -4783,7 +4777,7 @@
     if(m.type==='clan:bar-action'){ if(phase==='doc'&&ACTIONS.hasOwnProperty(m.id)) ACTIONS[m.id](); return; }
     // Client review is the shell's mode; the fields snippet draws it. The
     // brief only holds its parts still while it is on, and catches up after.
-    if(m.type==='clan:clientmode'){ var was=CLIENT.on; CLIENT={on:!!m.on, answer:m.answer||null}; if(was&&!CLIENT.on&&phase==='doc') render(); return; }
+    if(m.type==='clan:clientmode'){ var was=CLIENT.on; CLIENT={on:!!m.on, answer:m.answer||null}; renderClientLinks(); if(was&&!CLIENT.on&&phase==='doc') render(); return; }
     if(m.type!=='clan:run'||RUNNABLE.indexOf(m.task)===-1) return;
     var input=m.input&&typeof m.input==='object'?m.input:{};
     if(docLocked()){ toast('The brief is locked, so the agents can’t write it again.'); return; }
@@ -5515,7 +5509,7 @@
     lock:function(){ lockClick(); },
     reopen:function(){ toggleReopen(); },
     unlock:function(){ unlockClick(); },
-    client:function(){ sendClientCopy(); },
+    client:function(){ showClientLinks(); },
     html:function(){ doExport('html'); },
     gridPdf:function(){ doExport('pdf','grid'); },
     gridHtml:function(){ doExport('html','grid'); },
@@ -5543,7 +5537,7 @@
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
     if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', disabled:draftLive(), title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
     if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
-    items.push({kind:'button', id:'client', label:'Send the client copy', disabled:!A||re, title:A&&!re?'A signed link to this locked version, made in the Booth, for the client to open on a phone':'Lock the brief first: the client sees the version you lock'});
+    items.push({kind:'button', id:'client', label:'Send the client copy', disabled:!A||re, title:A&&!re?'A signed link to this locked version, for the client to open on a phone':'Lock the brief first: the client sees the version you lock'});
     items.push({kind:'button', id:'html', label:'Save · HTML', title:'The sheet as a standalone web page'});
     items.push({kind:'button', id:'gridPdf', label:'Grid PDF', title:'The grid template: two sheets of boxes, as before the new page'});
     items.push({kind:'button', id:'gridHtml', label:'Grid HTML', title:'The grid template as a web page'});
@@ -5731,119 +5725,80 @@
     }
   }
 
-  // ---------- the client's link and the round, under Record the client's answer (features/align-booth.clan) ----------
-  // Send the client copy (OS bar, Share) opens it on a locked version: one person gets the signed link, several get
-  // one each with one approver (the round). The links made are listed with what each is worth now and Withdraw, and
-  // the round's comments are merged under them. The links live on the server's document routes, which this frame
-  // cannot reach: the shell reads them and posts them here (shell/gate/clientLinkFeed.ts), and makes or withdraws one
-  // when asked. The host decides every state; the page draws it.
-  var LINKS={rows:null, round:null, code:false, form:false, people:[{name:'', email:''}], lead:0, useCode:false, made:[], busy:false, err:'', asked:0, open:false};
-  var LINKS_SIG='';
-  function askLinks(force){
-    if(window.parent===window) return;
-    var t=Date.now(); if(!force&&t-LINKS.asked<3000) return; LINKS.asked=t;
-    try{ window.parent.postMessage({type:'clan:client-links?'}, '*'); }catch(e){}
-  }
-  function linksShown(){ var A=approveLocked(); return A&&!arr((lockState()||{}).reopened).length; }
-  function sendClientCopy(){
-    if(phase!=='doc') return;
-    if(!linksShown()){ toast('Lock the brief first: the client sees the version you lock.'); return; }
-    LINKS.form=true; LINKS.open=true; LINKS.made=[]; LINKS.err='';
-    if(SEL) select(null);
-    boothPick(); askLinks(true); renderClientLinks(true);
-    var el=$('clientLinks'); if(!el||el.hidden) return;
-    el.scrollIntoView({block:'nearest'});
-    var i=el.querySelector('input[name=lkname]'); if(i) i.focus({preventScroll:true});
-  }
+  // ---------- the client's links and the round, under Record the client's answer (features/align-booth.clan) ----------
+  // Send the client copy (OS bar, Share) is the shell's own form: a link or a round is made, and withdrawn, there,
+  // for this document, never from this page. The Booth shows what exists, read through this frame's own token routes
+  // (the host's /client-link/list and /client-review/round, read-only; a frame may not issue a link,
+  // crates/napkin-web/src/sandbox.rs). Not drawn in client review mode.
+  var LINKS={rows:null, round:null, open:false, at:0, busy:false};
+  var LINK_STATE={open:'Waiting for the client', answered:'Answered', withdrawn:'Withdrawn', expired:'Expired', superseded:'Replaced: the brief changed'};
+  var LINK_ANSWER={accepted:'confirmed', accepted_with_changes:'asked for changes'};
+  function linkWords(r){ return r&&r.answer?(LINK_ANSWER[r.answer]||String(r.answer).replace(/_/g,' ')):(LINK_STATE[r&&r.state]||String(r&&r.state||'')); }
   function linkDay(iso){ var d=new Date(String(iso||'')); return isNaN(d)?'':d.toLocaleDateString('en-IE',{day:'numeric', month:'long'}); }
-  function linksFormHtml(){
-    var n=LINKS.people.length, many=n>1;
-    return '<div class="lk-form">'
-      +'<p class="lk-m">'+(many?'Each person gets their own link to this locked version and sees nothing of the others. Only the approver’s answer counts as the client’s decision.':'They open it on a phone with no account and confirm this locked version. It works once and ends in 30 days.')+'</p>'
-      +LINKS.people.map(function(p,i){
-        return '<div class="lk-p"><label class="gb-f"><span>Name '+(i+1)+'</span><input type="text" name="lkname" data-i="'+i+'" autocomplete="off" value="'+esc(p.name)+'"></label>'
-          +'<label class="gb-f"><span>Email '+(i+1)+'</span><input type="email" name="lkemail" data-i="'+i+'" autocomplete="off" value="'+esc(p.email)+'"></label>'
-          +(many?'<label class="lk-lead"><input type="radio" name="lklead" data-i="'+i+'" aria-label="Person '+(i+1)+' approves"'+(LINKS.lead===i?' checked':'')+'> The approver</label>':'')+'</div>';
-      }).join('')
-      +(many&&LINKS.code?'<label class="lk-lead"><input type="checkbox" name="lkcode"'+(LINKS.useCode?' checked':'')+'> Ask each person for a code we email them first</label>':'')
-      +'<div class="gb-acts">'+(n<12?'<button type="button" class="side-link" data-lk="add">Add a person</button>':'')+'<span class="lk-sp"></span>'
-      +'<button type="button" class="side-link" data-lk="cancel">Cancel</button><button type="button" class="sp-btn" data-lk="make"'+(LINKS.busy?' disabled':'')+'>'+(many?'Make the links':'Make the link')+'</button></div>'
-      +'</div>';
+  function linksShown(){ return approveLocked()&&!arr((lockState()||{}).reopened).length&&!(CLIENT&&CLIENT.on); }
+  function readJson(r){ return r.ok?r.json().catch(function(){ return null; }):null; }
+  function loadLinks(){
+    if(LINKS.busy||!window.clan) return;
+    LINKS.busy=true;
+    Promise.all([
+      fetch(clanScheme+'/client-link/list').then(readJson, function(){ return null; }),
+      fetch(clanScheme+'/client-review/round').then(readJson, function(){ return null; })
+    ]).then(function(got){
+      LINKS.busy=false; LINKS.at=Date.now();
+      LINKS.rows=arr(got[0]&&got[0].links);
+      LINKS.round=got[1]&&typeof got[1].round==='number'?got[1]:null;
+      renderClientLinks();
+    }, function(){ LINKS.busy=false; LINKS.at=Date.now(); });
+  }
+  window.addEventListener('clan:dataupdated', function(){ LINKS.at=0; if(phase==='doc'&&linksShown()) loadLinks(); });
+  // Send the client copy reached the page: the shell had no form for it (a file opened from this device, or not
+  // locked). Say so, and show what exists.
+  function showClientLinks(){
+    if(phase!=='doc') return;
+    if(!approveLocked()){ toast('Lock the brief first: the client sees the version you lock.'); return; }
+    toast('The client’s link is made in the studio, from a brief saved there.');
+    LINKS.open=true; if(SEL) select(null); boothPick(); renderClientLinks();
+    var el=$('clientLinks'); if(el&&!el.hidden) el.scrollIntoView({block:'nearest'});
+  }
+  function linkWhere(c, label){
+    var p=c&&c.pin, at=!p?'whole piece':p.t_ms!=null?'at '+Math.floor(p.t_ms/60000)+':'+('0'+Math.floor(p.t_ms/1000)%60).slice(-2):p.x!=null?'at '+Math.round(p.x*100)+'%, '+Math.round((p.y||0)*100)+'%':'whole piece';
+    return label+', '+at+' · '+(c.tag==='preference'?'a preference':String(c.tag||'').replace(/_/g,' '));
   }
   function linksRoundHtml(r){
     if(!r) return '';
+    var label=function(n){ var p=arr(r.pieces).filter(function(x){ return x&&x.n===n; })[0]; return p&&p.label||'Piece '+n; };
+    var title='Round '+r.round+(r.rounds_in_scope&&r.rounds_in_scope>=r.round?' of '+r.rounds_in_scope:'');
+    var A={accepted:'approved', accepted_with_changes:'asked for changes'};
     return '<div class="lk-round" data-testid="client-round">'
-      +'<h5 data-testid="round-number">'+esc(r.title)+'</h5>'
+      +'<h5 data-testid="round-number">'+esc(title)+'</h5>'
       +(r.current===false?'<p class="lk-m">The brief has changed since this round was sent. Its links no longer open.</p>':'')
-      +'<ul class="lk-rows">'+arr(r.reviewers).map(function(v){ return '<li><span><b>'+esc(v.name)+'</b>'+(v.approver?' (approver)':'')+': '+esc(v.words)+'</span></li>'; }).join('')+'</ul>'
-      +arr(r.split).map(function(x){ return '<p class="lk-m">'+esc(x)+'</p>'; }).join('')
+      +'<ul class="lk-rows">'+arr(r.reviewers).map(function(v){ return '<li><span><b>'+esc(v.name)+'</b>'+(v.role==='approver'?' (approver)':'')+': '+esc(v.answer?(A[v.answer]||v.answer)+(v.counts===false?', counts as advice':''):linkWords({state:v.state}))+'</span></li>'; }).join('')+'</ul>'
+      +arr(r.pieces).filter(function(p){ return p&&p.split; }).map(function(p){ return '<p class="lk-m">'+esc(p.label+': '+arr(p.approved_by).join(', ')+' approved, '+arr(p.changes_by).join(', ')+' asked for changes.')+'</p>'; }).join('')
       +(arr(r.comments).length
         ?'<ul class="lk-comments" data-testid="round-comments">'+arr(r.comments).map(function(c){
-          return '<li data-testid="comment"'+(arr(c.flags).length?' data-flags="'+esc(arr(c.flags).join(','))+'"':'')+'><small>'+esc(c.where)+'</small><span>'+esc(c.text)+'</span><small>'+esc(c.by)+'</small>'
+          return '<li data-testid="comment"'+(arr(c.flags).length?' data-flags="'+esc(arr(c.flags).join(','))+'"':'')+'><small>'+esc(linkWhere(c, label(c.piece)))+'</small><span>'+esc(c.text)+'</span><small>'+esc((c.by&&c.by.name||'')+(c.role==='approver'?' (approver)':''))+'</small>'
             +arr(c.flags).map(function(f){ return '<em class="lk-flag">'+esc(f)+'</em>'; }).join('')+'</li>';
         }).join('')+'</ul>'
         :'<p class="lk-m">No comments yet.</p>')
       +'</div>';
   }
-  function renderClientLinks(force){
+  function renderClientLinks(){
     var el=$('clientLinks'); if(!el) return;
-    if(!linksShown()){ el.hidden=true; el.innerHTML=''; LINKS_SIG=''; LINKS.form=false; return; }
-    if(LINKS.rows===null) askLinks(false);
-    var rows=arr(LINKS.rows), sig=JSON.stringify([rows, LINKS.round, LINKS.code, LINKS.form, LINKS.people.length, LINKS.made, LINKS.busy, LINKS.err]);
-    if(!force&&sig===LINKS_SIG&&!el.hidden) return;   // what is typed stays while nothing changed
-    LINKS_SIG=sig;
-    var waiting=rows.filter(function(r){ return r.state==='open'; }).length;
-    var h='<details class="lk-fold"'+(LINKS.open||LINKS.form?' open':'')+'><summary>The client’s links<small>'+(rows.length?(waiting?waiting+' waiting':rows.length+' made'):'none yet')+'</small></summary>';
-    if(LINKS.form) h+=linksFormHtml();
-    if(arr(LINKS.made).length) h+='<div class="lk-made">'+arr(LINKS.made).map(function(m){
-      return '<div class="lk-one"><span>'+esc(m.name)+'</span><input type="text" readonly aria-label="The client link" data-email="'+esc(m.email)+'" value="'+esc(m.url)+'"><button type="button" class="sp-btn" data-lk="copy" data-url="'+esc(m.url)+'">Copy the link</button></div>';
-    }).join('')+'<p class="lk-m">Shown once. Send '+(LINKS.made.length>1?'each link':'it')+' yourself.</p></div>';
-    if(LINKS.err) h+='<p class="gb-err" role="alert">'+esc(LINKS.err)+'</p>';
+    if(!linksShown()){ el.hidden=true; el.innerHTML=''; return; }
+    if(!LINKS.at) loadLinks();
+    var rows=arr(LINKS.rows), waiting=rows.filter(function(r){ return r.state==='open'; }).length;
+    var h='<details class="lk-fold"'+(LINKS.open?' open':'')+'><summary>The client’s links<small>'+(rows.length?(waiting?waiting+' waiting':rows.length+' made'):'none yet')+'</small></summary>';
     if(rows.length) h+='<ul class="lk-rows" aria-label="Links made">'+rows.map(function(r){
       var until=r.state==='open'&&linkDay(r.expires)?', until '+linkDay(r.expires):'';
-      return '<li data-link-state="'+esc(r.state)+'"><span><b>'+esc(r.name)+'</b>: '+esc(r.words)+esc(until)+'</span>'
-        +(r.can_withdraw?'<button type="button" class="side-link" data-lk="withdraw" data-id="'+esc(r.id)+'"'+(LINKS.busy?' disabled':'')+'>Withdraw</button>':'')+'</li>';
+      return '<li data-link-state="'+esc(r.state)+'"><span><b>'+esc(r.client&&r.client.name||'')+'</b>: '+esc(linkWords(r))+esc(until)+'</span></li>';
     }).join('')+'</ul>';
-    else if(!LINKS.form) h+='<p class="lk-m">No link made yet. Send the client copy, in Share, makes one.</p>';
+    h+='<p class="lk-m">Send the client copy, in Share, makes a link or a round; Withdraw is there too.</p>';
     h+=linksRoundHtml(LINKS.round);
     h+='<div class="gb-acts"><button type="button" class="side-link" data-lk="pdf" title="The locked sheet, every part in it, as a PDF">Client copy · PDF</button></div></details>';
     el.hidden=false; el.innerHTML=h;
-    var d=el.querySelector('details'); d.addEventListener('toggle', function(){ LINKS.open=d.open; });
-    el.querySelectorAll('input[name=lkname],input[name=lkemail]').forEach(function(i){ i.addEventListener('input', function(){
-      var p=LINKS.people[+i.getAttribute('data-i')]; if(p) p[i.name==='lkname'?'name':'email']=i.value; }); });
-    el.querySelectorAll('input[name=lklead]').forEach(function(r){ r.addEventListener('change', function(){ LINKS.lead=+r.getAttribute('data-i'); }); });
-    var c=el.querySelector('input[name=lkcode]'); if(c) c.addEventListener('change', function(){ LINKS.useCode=c.checked; });
-    el.querySelectorAll('[data-lk]').forEach(function(b){ b.addEventListener('click', function(){ linksAct(b.getAttribute('data-lk'), b); }); });
+    var d=el.querySelector('details'); if(d) d.addEventListener('toggle', function(){ LINKS.open=d.open; });
+    var pdf=el.querySelector('[data-lk=pdf]'); if(pdf) pdf.addEventListener('click', function(){ doExport('pdf','client'); });
   }
-  function linksAct(id, b){
-    if(id==='add'){ LINKS.people.push({name:'', email:''}); renderClientLinks(true); return; }
-    if(id==='cancel'){ LINKS.form=false; LINKS.err=''; LINKS.people=[{name:'', email:''}]; LINKS.lead=0; renderClientLinks(true); return; }
-    if(id==='pdf'){ doExport('pdf','client'); return; }
-    if(id==='copy'){ var u=b.getAttribute('data-url'); if(navigator.clipboard) navigator.clipboard.writeText(u).then(function(){ b.textContent='Copied'; }, function(){}); return; }
-    if(LINKS.busy) return;
-    if(id==='withdraw'){
-      LINKS.busy=true; LINKS.err=''; renderClientLinks(true);
-      try{ window.parent.postMessage({type:'clan:client-link', op:'withdraw', id:b.getAttribute('data-id')}, '*'); }catch(e){}
-      return;
-    }
-    if(id==='make'){
-      var filled=LINKS.people.map(function(p,i){ return {name:p.name.trim(), email:p.email.trim(), approver:LINKS.people.length>1&&i===LINKS.lead}; }).filter(function(p){ return p.name&&p.email; });
-      var why=!filled.length?'Say who it is for: a name and an email.':LINKS.people.length>1&&!filled.some(function(p){ return p.approver; })?'Choose who approves: their answer is the client’s decision.':'';
-      if(why){ LINKS.err=why; renderClientLinks(true); return; }
-      LINKS.busy=true; LINKS.err=''; renderClientLinks(true);
-      try{ window.parent.postMessage({type:'clan:client-link', op:'make', people:filled, code:LINKS.useCode&&LINKS.code}, '*'); }catch(e){ LINKS.busy=false; }
-    }
-  }
-  window.addEventListener('message', function(e){
-    var m=e.data; if(e.source!==window.parent||!m||typeof m!=='object') return;
-    if(m.type==='clan:client-links'){ LINKS.rows=arr(m.links); LINKS.round=m.round&&typeof m.round==='object'?m.round:null; LINKS.code=m.code===true; LINKS.busy=false; renderClientLinks(); return; }
-    if(m.type==='clan:client-link-made'){
-      LINKS.busy=false;
-      if(m.error) LINKS.err=String(m.error).replace(/^[A-Z0-9_]{3,}:\s*/,'');
-      else { LINKS.made=arr(m.links); LINKS.form=false; LINKS.people=[{name:'', email:''}]; LINKS.lead=0; LINKS.useCode=false; LINKS.err=''; LINKS.open=true; }
-      renderClientLinks(true);
-    }
-  });
 
   // ---------- the look: frame, headings, colour, logos (appearance keys) ----------
   var SWATCHES=[['','The brief’s own'],['#C9462A','Stamp red'],['#221D15','Ink'],['#1F3FBF','Blue'],['#3D5A1E','Green'],['#B07A12','Ochre']];   // the agency's base and accent join after the first two

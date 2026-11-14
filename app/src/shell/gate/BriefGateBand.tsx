@@ -199,7 +199,7 @@ export default function BriefGateBand({ gate, client, onChanged, undo, docPath, 
               )}
               {error && <p className="bg-err" role="alert">{error}</p>}
             </section>
-            {v.signed && !v.changed_since_lock && <ClientLinkPanel client={client} onChanged={onChanged} />}
+            {v.signed && !v.changed_since_lock && <ClientLinkPanel client={client} doc={docPath} onChanged={onChanged} />}
           </aside>
         </div>
       )}

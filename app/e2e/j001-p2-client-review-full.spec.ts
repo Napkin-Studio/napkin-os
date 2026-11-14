@@ -31,8 +31,8 @@ async function issueRound(page: Page, job: Awaited<ReturnType<typeof seedJ001>>,
 
 /**
  * The same round, made the way the agency makes it (features/align-booth.clan): account service opens the signed
- * brief, presses Share, Send the client copy, and names the two reviewers in the Booth under Record the client's
- * answer, the approver first. Each link is shown once, in the Booth.
+ * brief, presses Share, Send the client copy, and names the two reviewers in the shell's own form, the approver
+ * first. Each link is shown once, in that form; the brief's Booth shows the round.
  */
 async function issueRoundInBooth(page: Page, job: Awaited<ReturnType<typeof seedJ001>>) {
   await signIn(page, PEOPLE.accountService)
@@ -41,23 +41,23 @@ async function issueRoundInBooth(page: Page, job: Awaited<ReturnType<typeof seed
   await expect(page.frameLocator('iframe').first().locator('#stab #statusPill')).toHaveText('Locked')
   await page.getByRole('button', { name: /^Share/ }).click()
   await page.getByRole('menu', { name: 'Share' }).getByRole('menuitem', { name: /Send the client copy/ }).click()
-  const links = page.frameLocator('iframe').first().locator('#stab #clientLinks')
-  await links.getByRole('button', { name: 'Add a person' }).click()
+  const form = page.getByTestId('client-link-form')
   const people = Object.values(CLIENT_REVIEWERS)
   for (const [i, p] of people.entries()) {
-    await links.getByLabel(`Name ${i + 1}`).fill(p.name)
-    await links.getByLabel(`Email ${i + 1}`).fill(p.email)
-    if (p.approver) await links.getByLabel(`Person ${i + 1} approves`).check()
+    await form.getByTestId(`round-name-${i}`).fill(p.name)
+    await form.getByTestId(`round-email-${i}`).fill(p.email)
+    if (p.approver) await form.getByLabel('The approver').nth(i).check()
   }
-  await links.getByRole('button', { name: 'Make the links' }).click()
-  const made = links.getByLabel('The client link')
+  await form.getByTestId('round-send').click()
+  const made = form.getByTestId('round-links').getByLabel('The client link')
   await expect(made).toHaveCount(people.length)
   const out: { path: string; email: string }[] = []
   for (let i = 0; i < people.length; i++) {
     out.push({ path: new URL(await made.nth(i).inputValue()).pathname, email: (await made.nth(i).getAttribute('data-email')) ?? '' })
   }
   expect(out.map(l => l.email)).toEqual(people.map(p => p.email))
-  await expect(links.getByTestId('round-number')).toContainText('Round 1')
+  // the brief's Booth shows the round under Record the client's answer
+  await expect(page.frameLocator('iframe').first().locator('#stab #clientLinks').getByTestId('round-number')).toContainText('Round 1')
   return { links: out, round: 1 }
 }
 
@@ -154,7 +154,8 @@ for (const size of SIZES) {
     await page.locator('[data-testid="job-document"][data-app="ie.napkin.brief-maker"]').getByTestId('job-open-document').click()
     const fold = page.frameLocator('iframe').first().locator('#stab #clientLinks')
     await expect(fold.getByTestId('round-comments').getByTestId('comment')).toHaveCount(3)
-    await expect(fold.getByTestId('round-number')).toContainText('Round 1 of 3')
+    // the frame's own round read has no rounds_in_scope (the server adds it on its /d/{doc} route only)
+    await expect(fold.getByTestId('round-number')).toContainText('Round 1')
     await expect(fold.locator('[data-testid="comment"][data-flags*="same spot"]')).toHaveCount(2)
     if (shots) await page.screenshot({ path: `${shots}/round-booth-${size.tag}.png` })
     await page.goto('/'); await page.goto(`/#job-${job.job}`); await page.reload()

@@ -122,3 +122,8 @@
 .cl-made .ch-btn { height: 44px; padding: 0 20px; font-size: 14px; font-weight: 600; }
 .cl-rows li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; justify-content: space-between; }
 .cl-rows .ch-btn { height: 34px; padding: 0 14px; }
+
+/* Send the client copy: the shell's own form for the client's link, over the brief (features/align-booth.clan). */
+.cl-band { padding: 10px 16px 14px; }
+.cl-band .bg-block { max-width: 720px; margin: 0 auto; }
+.cl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }

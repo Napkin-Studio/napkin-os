@@ -170,6 +170,24 @@ export async function makeRound(reviewers: { name: string; email: string; approv
   return json<ClientRoundMade>(`${docApi(doc)}/client-link/round`, postJson({ reviewers, code }))
 }
 
+// The client's own link, for one named document (features/align-booth.clan). The shell's form passes the document
+// open in its frame, so a link is never made on, listed from or withdrawn from another one.
+/** A link id is the host's own word: letters, digits, `_` and `-`. Anything else is refused before any request. */
+const LINK_ID = /^[A-Za-z0-9_-]{1,80}$/
+
+export async function listClientLinksOf(doc: string): Promise<ClientLinkRow[]> {
+  return (await json<{ links: ClientLinkRow[] }>(`${docApi(doc)}/client-links`)).links
+}
+
+export async function makeClientLinkFor(doc: string, name: string, email: string): Promise<ClientLinkMade> {
+  return json<ClientLinkMade>(`${docApi(doc)}/client-link`, postJson({ name, email }))
+}
+
+export async function withdrawClientLinkOf(doc: string, id: string): Promise<void> {
+  if (!LINK_ID.test(id)) throw new Error('That is not a link of this document.')
+  await json<unknown>(`${docApi(doc)}/client-link/${id}/withdraw`, postJson({}))
+}
+
 /** The round last sent, merged; `null` when none has been sent, or when this person may not read it. */
 export async function readRound(doc?: string): Promise<ClientRoundView | null> {
   try {
@@ -499,7 +517,7 @@ export const httpHost: Host = {
   getGate: () => clanCall<GateView>('/gate'),
   makeClientLink: (name, email) => json<ClientLinkMade>(`/d/${requireDoc()}/client-link`, postJson({ name, email })),
   listClientLinks: async () => (await json<{ links: ClientLinkRow[] }>(`/d/${requireDoc()}/client-links`)).links,
-  withdrawClientLink: async id => { await json<unknown>(`/d/${requireDoc()}/client-link/${id}/withdraw`, postJson({})) },
+  withdrawClientLink: id => withdrawClientLinkOf(requireDoc(), id),
   gateSign: async rationale => { await clanPost<unknown>('/sign', { rationale: rationale ?? '' }) },
   gatePatch: async (patch, action, rationale) => { await clanPost<unknown>('/patch-data', { patch, agent: 'human', action, ...(rationale ? { rationale } : {}) }) },
   gateNewVersion: async reason => { await clanPost<unknown>('/unapprove', { rationale: reason }) },
