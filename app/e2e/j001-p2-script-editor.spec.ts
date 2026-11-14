@@ -273,7 +273,15 @@ for (const size of SIZES) {
     const app = frameOf(page), booth = boothOf(page)
     // Measure only what is on screen: wait for it to be visible, then read its box and say the box exists.
     const box = async (loc: ReturnType<typeof app.locator>, what: string) => { await expect(loc, what).toBeVisible(); const b = await loc.boundingBox(); expect(b, `${what}: has a box`).not.toBeNull(); return b! }
-    const say = () => app.locator('body').evaluate(() => (window as unknown as { boothSay: (s: object, a: () => void) => void }).boothSay({ name: 'changed-brief', from: 'v1', to: 'v2', changes: 'Updating takes the new brief into this page. What you wrote here stays.' }, () => {}))
+    // The page draws its Changed brief from boothMoved() on every redraw (the shell's clan:dataupdated redraws it whenever the document is read
+    // again, more often late in a run), so a state said once from outside is wiped by the next redraw. Make the page's own read say it: then
+    // every redraw says the same thing, as a real moved brief would.
+    const say = () => app.locator('body').evaluate(() => {
+      const w = window as unknown as { boothSay: (s: object | null, a: () => void) => void; boothMoved: () => object }
+      const moved = { name: 'changed-brief', from: 'v1', to: 'v2', changes: 'Updating takes the new brief into this page. What you wrote here stays.' }
+      w.boothMoved = () => moved
+      w.boothSay(moved, () => {})
+    })
     if (size.width >= 1100) {
       await booth.locator('.booth-hide').click()
       await expect(app.locator('#boothEdge')).toBeVisible()
