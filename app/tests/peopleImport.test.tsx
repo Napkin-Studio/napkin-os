@@ -31,9 +31,15 @@ const report = (over: Partial<ImportReport> = {}): ImportReport => ({
   ...over,
 })
 
-test('a file check says how many rows are fine and how many need a look, in plain words', () => {
-  assert.equal(importSummary(report()).head, '117 people are ready to import. 3 rows need a look.')
-  assert.equal(importSummary(report({ errors: [], ok: 120, created: 120, results: [] })).head, '120 people are ready to import.')
+test('a file check says how many it would import, how many are here already and how many need a look, and the button agrees', () => {
+  assert.equal(importSummary(report()).head, '117 to import. 3 rows need a look.')
+  assert.equal(importSummary(report({ errors: [], ok: 120, created: 120, results: [] })).head, '120 to import.')
+  // rows that passed but are already here are said apart, and the button's number is the sentence's
+  const mixed = report({ ok: 77, created: 60, updated: 6, unchanged: 11 })
+  assert.equal(importSummary(mixed).head, '66 to import, 11 already here. 3 rows need a look.')
+  assert.equal(importVerb(mixed), 'Import 66 people')
+  assert.equal(importSummary(report({ ok: 1, created: 1, errors: [] })).head, '1 to import.')
+  assert.equal(importVerb(report({ ok: 1, created: 1, errors: [] })), 'Import 1 person')
   assert.equal(importSummary(report({ ok: 0, created: 0 })).tone, 'none')
   assert.match(importSummary(report({ ok: 0, created: 0 })).sub!, /Nothing has been saved/)
   assert.match(importSummary(report({ ok: 117, created: 0, updated: 0, unchanged: 117, errors: [] })).head, /already here\. Nothing would change/)
@@ -59,6 +65,7 @@ test('the import panel in each state it can be in', () => {
   const checked = body('checked', report(), 'people.csv')
   assert.match(checked, /data-testid="import-summary"/)
   assert.match(checked, /data-line="8"[^>]*>.*?missing email/)
+  assert.match(checked, /117 to import/)
   assert.match(checked, /Import 117 people/)
   assert.match(body('done', report({ dry_run: false, committed: true }), 'people.csv'), /data-testid="import-done"/)
   assert.match(body('unreadable', null, 'x.csv', 'That file is empty.'), /That file is empty\./)
