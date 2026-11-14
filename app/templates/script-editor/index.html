@@ -58,8 +58,20 @@
   button,textarea,input,select{font:inherit;color:inherit}
   :focus-visible{outline:2px solid var(--ag-act);outline-offset:2px}
 
-  .desk{display:grid;grid-template-columns:minmax(0,760px) minmax(300px,360px);gap:32px;justify-content:center;align-items:start;padding:28px 16px 56px}
+  /* ── the Booth's place in this page (the Booth itself is shared/booth.html): its colours, and the column it takes in
+     the desk's grid. --trk is that column (--bw, set by boothApply); closed, the column is 0 and the sheet recentres
+     alone, so the Booth never lies over the document. Below 1100px it follows the sheet in one column. ── */
+  :root{--booth-line:var(--line);--booth-paper:var(--card);--booth-ink:var(--ink);--booth-ink-soft:var(--ink-soft);--booth-muted:var(--muted);--booth-warn:var(--warn);--booth-desk:var(--desk)}
+  .desk{--trk:var(--bw,380px);display:grid;grid-template-columns:minmax(0,760px) var(--trk);gap:32px;justify-content:center;align-items:start;padding:28px 16px 56px}
+  @media (max-width:1400px){ .desk{--trk:360px;gap:24px} }
+  @media (max-width:1260px){ .desk{--trk:340px;gap:20px} }
   @media (max-width:1100px){ .desk{grid-template-columns:minmax(0,760px)} }
+  @media (min-width:1101px){
+    body{overflow-x:clip}
+    .desk{transition:grid-template-columns var(--booth-dur) var(--booth-ease),gap var(--booth-dur) var(--booth-ease)}
+    .desk > .side{width:var(--trk)}
+    .desk.booth-off{grid-template-columns:minmax(0,760px) 0px;gap:0}
+  }
 
   /* the sheet */
   .sheet{background:var(--paper);border:1px solid var(--line);border-radius:2px;box-shadow:var(--shadow-paper);padding:44px 56px 40px;display:grid;gap:28px}
@@ -75,14 +87,15 @@
   .lab{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 
   /* read time */
-  .time{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;padding:10px 0;border-top:1px solid var(--line-strong);border-bottom:1px solid var(--line)}
-  .time b{font:400 28px/1 var(--font-serif)}
+  .time{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;padding:8px 0;border-top:1px solid var(--line-strong);border-bottom:1px solid var(--line)}
+  .time b{font:400 26px/1 var(--font-serif)}
   .time .of{color:var(--muted);font-size:14px}
   .time .over{color:var(--warn);font-size:14px;font-weight:500}
 
   /* the lines: the page you type into */
   .beats{display:grid;gap:0}
   .beat{display:grid;grid-template-columns:72px minmax(0,1fr);gap:4px 14px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .beat[aria-current="true"]{background:color-mix(in srgb,var(--ag-act) 5%,transparent);box-shadow:inset 3px 0 0 var(--ag-act);padding-left:12px;margin-left:-12px}
   .beat .gut{display:grid;gap:6px;align-content:start;justify-items:start}
   .beat .num{font:500 11px/1.9 var(--font-mono);color:var(--muted)}
   .beat select{min-height:28px;border:1px solid var(--line-strong);border-radius:999px;background:transparent;padding:0 8px;font:600 11px/1 var(--font-mono);letter-spacing:.04em}
@@ -98,19 +111,21 @@
   .beat[data-kind="sfx"] textarea.line,.beat[data-kind="music"] textarea.line{font-family:var(--font-ui);font-size:15px;font-style:italic;color:var(--muted)}
   .beat .tools{grid-column:2;display:flex;flex-wrap:wrap;gap:0;margin-left:-10px}
   .beat .tools .btn.quiet{padding:0 8px}
-  .hints{grid-column:2;display:grid;gap:2px}
+  .hints,.bm{grid-column:2;display:grid;gap:2px}
+  .bm:empty,.hints:empty{display:none}
+  .bm .bmk{font:500 12px/1.4 var(--font-mono);letter-spacing:.04em;color:var(--ag-act)}
   .hint{font-size:13px;color:var(--warn)}
   .hint::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warn);margin-right:8px;vertical-align:middle}
   @media (max-width:640px){
     .sheet{padding:26px 18px 26px;gap:22px}
     .beat{grid-template-columns:minmax(0,1fr)}
     .beat .gut{grid-auto-flow:column;justify-content:start;align-items:center}
-    .beat .tools,.hints,.marks{grid-column:1}
+    .beat .tools,.hints,.bm{grid-column:1}
     .beat.tv .cols{grid-template-columns:minmax(0,1fr)}
   }
 
   /* tracked changes */
-  .marks{grid-column:2;display:grid;gap:8px}
+  .marks{display:grid;gap:8px}
   .mark{display:grid;gap:6px;border-left:3px solid var(--ag-act);padding:8px 0 8px 12px;background:color-mix(in srgb,var(--ag-act) 6%,transparent)}
   .mark[data-status="accepted"],.mark[data-status="rejected"]{border-left-color:var(--line-strong);background:transparent;opacity:.85}
   .mark .who{font:500 12px/1.4 var(--font-ui);color:var(--muted)}
@@ -121,10 +136,9 @@
   .mark .note{font-size:13px;color:var(--ink-soft)}
   .mark .acts{display:flex;gap:8px;flex-wrap:wrap}
   .mark .stale{font-size:13px;color:var(--alert)}
-  .markup{grid-column:2;display:grid;gap:8px;border:1px solid var(--line-strong);border-radius:10px;padding:12px;background:var(--card)}
+  .markup{display:grid;gap:8px;border:1px solid var(--line-strong);border-radius:10px;padding:12px;background:var(--paper)}
   .markup textarea{border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:0;font-size:16px}
   .markup input{min-height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;background:transparent}
-  @media (max-width:640px){ .markup{grid-column:1} }
 
   /* the empty page */
   .empty{display:grid;gap:14px;justify-items:start;padding:8px 0}
@@ -142,19 +156,28 @@
   .btn.big{min-height:44px;padding:0 22px;font-size:14px}
   @media (max-width:640px){ .btn{min-height:44px} .btn.quiet{min-height:44px} .btn.primary{width:100%} .seg .btn{flex:1 1 auto} .beat select{min-height:44px} }
 
-  /* the side cards */
-  .side{display:grid;gap:14px;position:sticky;top:12px}
-  @media (max-width:1100px){ .side{position:static} }
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:grid;gap:10px}
-  .card h2{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  /* the Booth's sections: the check, tracked changes, lists, version, sends. Flat, one rule between them. */
+  .side{position:sticky;top:calc(var(--clan-top,0px) + 12px);max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 24px);overflow-x:hidden;overflow-y:auto;background:var(--booth-paper);border:1px solid var(--line);border-radius:8px;color:var(--ink)}
+  .side > .booth-hd{position:sticky;top:0;z-index:2;background:var(--booth-paper)}
+  .side-body{display:grid;padding:0 18px 18px}
+  @media (max-width:1100px){ .side{position:static;max-height:none;overflow-y:visible} }
+  .bsec{padding:16px 0;border-top:1px solid var(--line);display:grid;gap:10px;min-width:0}
+  .side-body > .bsec:first-child{border-top:0}
+  .bsec h2{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .crumb{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:14px 0 4px;font:500 12px/1.4 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .crumb button{background:none;border:0;padding:0;cursor:pointer;color:var(--ink);text-decoration:underline;text-underline-offset:3px;font:inherit;letter-spacing:inherit;text-transform:inherit}
+  .crumb b{font-weight:600;color:var(--ink)}
+  .mkline{font:500 12px/1.4 var(--font-mono);letter-spacing:.04em;color:var(--muted)}
+  .judgeline{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center}
+  .judgeline .nk-ag{width:26px;height:26px}
+  .bsec p{color:var(--ink-soft)}
+  .bsec .small{font-size:13px;color:var(--muted)}
+  .bsec ul.found{display:grid;gap:8px}
+  .bsec ul.found li{font-size:14px;color:var(--ink-soft)}
+  .bsec ul.found li b{font-weight:600;color:var(--ink)}
+  .bsec ul.found .jump,.mkline .jump{background:none;border:0;padding:0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font:inherit}
+  .bsec .good{color:var(--ok);font-weight:500;font-size:14px}
   .vnum{font:400 40px/1 var(--font-serif)}
-  .card p{color:var(--ink-soft)}
-  .card .small{font-size:13px;color:var(--muted)}
-  .card ul.found{display:grid;gap:8px}
-  .card ul.found li{font-size:14px;color:var(--ink-soft)}
-  .card ul.found li b{font-weight:600;color:var(--ink)}
-  .card ul.found .jump{background:none;border:0;padding:0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font:inherit}
-  .card .good{color:var(--ok);font-weight:500;font-size:14px}
   .linkbtn{color:var(--ink);text-decoration:underline;text-underline-offset:3px;background:none;border:0;padding:0;cursor:pointer;font:inherit;text-align:left}
   .stamp{display:inline-flex;align-items:center;gap:8px;width:max-content;max-width:100%;padding:6px 12px;border-radius:999px;background:var(--ok-soft);color:var(--ok);font:600 12px/1 var(--font-ui)}
   .stamp i{width:7px;height:7px;border-radius:50%;background:currentColor}
@@ -184,16 +207,17 @@
         <p class="sub" id="sub"></p>
       </header>
       <div id="setup"></div>
-      <div id="time"></div>
       <div id="body"></div>
     </article>
   </main>
-  <aside class="side" id="side" aria-label="Check, version and hand-offs"></aside>
+  <aside class="side" id="side" aria-label="Booth"><div class="side-body" id="sideBody"></div></aside>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script type="application/json" id="house-style">@napkin:house-style</script>
 
 <!-- @napkin:clan-fields -->
+<!-- @napkin:booth -->
+<!-- @napkin:agent-sphere -->
 <script>
 (function(){
   'use strict';
@@ -469,7 +493,10 @@
   function bannedOf(data){ return listOf(data && data.checks && data.checks.banned); }
 
   // ── the page ────────────────────────────────────────────────────────────────────────────────────
-  var S = { view: null, up: null, me: null, local: null, dirty: false, timer: null, pending: 0, mark: null, busy: false, error: '', markError: {}, sent: '', focus: null, sig: '' };
+  // The agent figure is the one engine (NapkinRoles, inlined at the agent-sphere marker). Opened from source without it, nothing shows.
+  var ROLES = window.NapkinRoles || null;
+  if(ROLES && ROLES.auto) ROLES.auto();
+  var S = { sel: null, judging: 0, view: null, up: null, me: null, local: null, dirty: false, timer: null, pending: 0, mark: null, busy: false, error: '', markError: {}, sent: '', focus: null, sig: '' };
   function data(){ return (window.__CLAN__ && window.__CLAN__.data) || {}; }
   function $(id){ return document.getElementById(id); }
   function toast(m, ms){ var t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(function(){ t.classList.remove('on'); }, ms || 2400); }
@@ -534,10 +561,10 @@
       var mine = S.me && String(S.me).replace(/^human:/, '') === String(p.by).replace(/^human:/, '');
       if(locked()) h += '<p class="note">This version is approved. Start a new version to answer it.</p>';
       else if(mine) h += '<p class="note">Waiting for the writer to answer.</p>';
-      else h += '<div class="acts"><button type="button" class="btn primary" data-accept="' + esc(p.id) + '">Accept</button><button type="button" class="btn" data-reject="' + esc(p.id) + '">Keep mine</button></div>';
+      else h += '<div class="acts"><button type="button" class="btn primary" data-accept="' + esc(p.id) + '">Accept</button><button type="button" class="btn" data-reject="' + esc(p.id) + '">Reject</button></div>';
       if(S.markError[p.id]) h += '<p class="stale" role="alert">' + esc(S.markError[p.id]) + '</p>';
     } else {
-      h += '<p class="who" data-testid="mark-answer">' + (p.status === 'accepted' ? 'Accepted' : 'Kept the original') + ' by <b>' + esc(nameOf(p.answered_by)) + '</b>' + (p.answered_at ? ' · ' + esc(shortDay(p.answered_at)) : '') + '</p>';
+      h += '<p class="who" data-testid="mark-answer">' + (p.status === 'accepted' ? 'Accepted' : 'Rejected') + ' by <b>' + esc(nameOf(p.answered_by)) + '</b>' + (p.answered_at ? ' · ' + esc(shortDay(p.answered_at)) : '') + '</p>';
     }
     return h + '</div>';
   }
@@ -547,7 +574,7 @@
   }
   function beatHtml(b, i, fmt, c, findings){
     var lk = locked(), tv = fmt === 'tv', timed = FORMATS[fmt].timed, n = i + 1, unit = FORMATS[fmt].unit;
-    var h = '<li class="beat' + (tv ? ' tv' : '') + '" data-beat="' + esc(b.id) + '" data-kind="' + esc(b.kind) + '">';
+    var h = '<li class="beat' + (tv ? ' tv' : '') + '" data-beat="' + esc(b.id) + '" data-kind="' + esc(b.kind) + '"' + (S.sel === b.id ? ' aria-current="true"' : '') + '>';
     h += '<div class="gut"><span class="num">' + n + '</span>' + (timed ? roleSelect(b, n, lk) : '') + '</div>';
     h += '<div class="cols">';
     if(tv) h += '<div class="field"><span class="lab">Picture</span><textarea class="pic" rows="1" data-field="visual_action" data-id="' + esc(b.id) + '" aria-label="Picture, ' + unit + ' ' + n + '"' + (lk ? ' readonly' : '') + '>' + esc(b.visual_action || '') + '</textarea></div>';
@@ -561,12 +588,8 @@
         + '<button type="button" class="btn quiet" data-remove="' + esc(b.id) + '" aria-label="Remove ' + unit + ' ' + n + '">Remove</button></div>';
     }
     h += '<div class="hints" data-hints="' + esc(b.id) + '">' + hintsHtml(b.id, findings) + '</div>';
-    var marks = c.proposals.filter(function(p){ return p.beat === b.id; });
-    if(marks.length || S.mark === b.id){
-      h += '<div class="marks">' + marks.map(function(p){ return markHtml(p, b); }).join('');
-      if(S.mark === b.id) h += markupHtml(b);
-      h += '</div>';
-    }
+    var waiting = c.proposals.filter(function(p){ return p.beat === b.id && p.status === 'open'; }).length;
+    h += '<div class="bm" data-marks="' + esc(b.id) + '">' + (waiting ? '<span class="bmk">' + (waiting === 1 ? 'A suggestion is waiting' : waiting + ' suggestions are waiting') + '</span>' : '') + '</div>';
     return h + '</li>';
   }
   function markupHtml(b){
@@ -601,7 +624,7 @@
     }
     $('setup').innerHTML = h;
   }
-  function drawTime(){
+  function timeHtml(){
     var fmt = format(), c = cur(), h = '';
     if(fmt && FORMATS[fmt].timed){
       var secs = readSeconds(c.beats, fmt), slot = +data().slot_s || 0, over = slot ? Math.round(secs) - slot : 0;
@@ -613,7 +636,7 @@
       var n = c.beats.reduce(function(t, b){ return t + words(b.text).length; }, 0);
       h = '<div class="time" role="status"><span class="lab">Length</span><b>' + n + '</b><span class="of">' + (n === 1 ? 'word' : 'words') + '</span></div>';
     }
-    $('time').innerHTML = h;
+    return '<div id="time">' + h + '</div>';
   }
   function sigOf(c){ return JSON.stringify([format(), locked(), S.mark, S.me, c.beats.map(function(b){ return [b.id, b.kind, b.role]; }), c.proposals, S.markError]); }
   function drawBody(force){
@@ -644,41 +667,54 @@
   function fit(ta){ if(!ta || !ta.style) return; ta.style.height = 'auto'; if(ta.scrollHeight) ta.style.height = ta.scrollHeight + 'px'; }
 
   function listCard(title, key, label, items, locks){
-    var h = '<section class="card" aria-label="' + esc(title) + '"><h2>' + esc(title) + '</h2>';
+    var h = '<section class="bsec" aria-label="' + esc(title) + '"><h2>' + esc(title) + '</h2>';
     h += '<div class="listed">' + items.map(function(t, i){ return '<span class="chip">' + esc(t) + (locks ? '' : '<button type="button" data-drop="' + key + ':' + i + '" aria-label="Remove ' + esc(t) + '">&times;</button>') + '</span>'; }).join('') + '</div>';
     if(!locks) h += '<div class="add"><input type="text" id="add-' + key + '" aria-label="' + esc(label) + '" placeholder="' + esc(label) + '" autocomplete="off" /><button type="button" class="btn" data-addlist="' + key + '">Add</button></div>';
     return h + '</section>';
   }
-  function drawSide(){
-    var st = state(), d = data(), fmt = format(), approver = approverOf(d), may = mayApprove(approver, S.me), par = parentOf(S.up), c = cur();
-    var findings = fmt ? findingsOf(checkDoc()) : [], must = mandatoryOf(d);
-    var h = '';
-    // The check: what the draft says against the brief and the house style. It lists; it never blocks or edits.
-    h += '<section class="card" aria-label="The check" data-testid="check"><h2>The check</h2>';
-    if(!fmt) h += '<p class="small">Write a line and the check reads it against the brief.</p>';
-    else {
-      var body = findings.filter(function(f){ return f.rule !== 'mandatory_missing'; });
-      if(must.length){
-        h += '<ul class="found" aria-label="Mandatory lines">' + must.map(function(m){
-          var ok = !findings.some(function(f){ return f.rule === 'mandatory_missing' && f.text === m.text; });
-          return '<li data-testid="mandatory" data-state="' + (ok ? 'present' : 'missing') + '"><b>' + (ok ? 'In the script' : 'Missing') + '</b> · ' + esc(m.text) + ' <span class="small">(' + (m.source === 'brief' ? 'the brief' : 'this job') + ')</span></li>';
-        }).join('') + '</ul>';
-      } else h += '<p class="small">The brief names no mandatory lines.</p>';
-      if(body.length){
-        h += '<ul class="found" aria-label="Findings">' + body.map(function(f){
-          var at = f.beat ? c.beats.findIndex(function(b){ return b.id === f.beat; }) + 1 : 0;
-          return '<li data-testid="finding" data-rule="' + esc(f.rule) + '"><b>' + esc(wordsFound(f) || ruleName(f)) + '</b> \u00b7 ' + esc(f.advice)
-            + (f.rule === 'length_off' ? ' ' + f.words + ' words, about ' + f.target + (f.over ? ' fit.' : ' fill it.') : '') + (f.rule === 'repetition' ? ' ' + f.ratio + ' percent repeats.' : '')
-            + (at ? ' <button type="button" class="jump" data-jump="' + esc(f.beat) + '">Line ' + at + '</button>' : '') + '</li>';
-        }).join('') + '</ul>';
-      } else h += '<p class="good" data-testid="check-clear">Nothing else to flag.</p>';
-      h += '<p class="small">The check only lists. Your words are never changed.</p>';
+  function lineNo(c, id){ return c.beats.findIndex(function(b){ return b.id === id; }) + 1; }
+  // The check: what the draft says against the brief and the house style. It lists; it never blocks or edits.
+  // Whole script: every finding. One line: that line's findings, with the script's read time and mandatory lines beside them.
+  function checkHtml(fmt, findings, must, c, only){
+    var h = '<section class="bsec" aria-label="The check" data-testid="check"><h2>' + (only ? 'The check, this line' : 'The check') + '</h2>';
+    if(!fmt) return h + '<p class="small">Write a line and the check reads it against the brief.</p></section>';
+    h += timeHtml();
+    if(only){
+      var tl = c.beats.filter(function(b){ return b.id === only; })[0];
+      if(tl && FORMATS[fmt].timed && isCopy(tl, fmt)) h += '<p class="small" data-testid="line-time">This line: ' + seconds(words(tl.text).length / R.words_per_second) + ', ' + words(tl.text).length + ' spoken words.</p>';
     }
-    h += '</section>';
-    h += listCard('Must appear', 'mandatory', 'A line the copy must carry', listOf(d.checks && d.checks.mandatory), locked());
-    h += listCard('Never say', 'banned', 'A word not to use', bannedOf(d), locked());
-    // Version and approval.
-    h += '<section class="card" aria-label="Version"><h2>Version</h2><p class="vnum" id="vnum">' + st.n + '</p>';
+    if(must.length){
+      h += '<ul class="found" aria-label="Mandatory lines">' + must.map(function(m){
+        var ok = !findings.some(function(f){ return f.rule === 'mandatory_missing' && f.text === m.text; });
+        return '<li data-testid="mandatory" data-state="' + (ok ? 'present' : 'missing') + '"><b>' + (ok ? 'In the script' : 'Missing') + '</b> · ' + esc(m.text) + ' <span class="small">(' + (m.source === 'brief' ? 'the brief' : 'this job') + ')</span></li>';
+      }).join('') + '</ul>';
+    } else h += '<p class="small">The brief names no mandatory lines.</p>';
+    var body = findings.filter(function(f){ return f.rule !== 'mandatory_missing' && (!only || f.beat === only); });
+    if(body.length){
+      h += '<ul class="found" aria-label="Findings">' + body.map(function(f){
+        var at = f.beat ? lineNo(c, f.beat) : 0;
+        return '<li data-testid="finding" data-rule="' + esc(f.rule) + '"><b>' + esc(wordsFound(f) || ruleName(f)) + '</b> · ' + esc(f.advice)
+          + (f.rule === 'length_off' ? ' ' + f.words + ' words, about ' + f.target + (f.over ? ' fit.' : ' fill it.') : '') + (f.rule === 'repetition' ? ' ' + f.ratio + ' percent repeats.' : '')
+          + (at && !only ? ' <button type="button" class="jump" data-jump="' + esc(f.beat) + '">Line ' + at + '</button>' : '') + '</li>';
+      }).join('') + '</ul>';
+    } else h += '<p class="good" data-testid="check-clear">' + (only ? 'Nothing to flag on this line.' : 'Nothing else to flag.') + '</p>';
+    return h + '<p class="small">The check only lists. Your words are never changed.</p></section>';
+  }
+  // Tracked changes: a colleague's mark-up, answered with Accept and Reject. One line shows its own; the whole script shows all.
+  function marksHtml(c, only){
+    var list = c.proposals.filter(function(p){ return !only || p.beat === only; });
+    var h = '<section class="bsec" aria-label="Tracked changes" data-testid="tracked"><h2>' + (only ? 'Tracked changes, this line' : 'Tracked changes') + '</h2>';
+    if(!list.length && !(only && S.mark === only)) h += '<p class="small">' + (only ? 'No one has marked up this line.' : 'No one has marked up this script.') + '</p>';
+    h += '<div class="marks">' + list.map(function(p){
+      var at = lineNo(c, p.beat), b = c.beats.filter(function(x){ return x.id === p.beat; })[0];
+      return (only || !at ? '' : '<p class="mkline"><button type="button" class="jump" data-jump="' + esc(p.beat) + '">Line ' + at + '</button></p>') + markHtml(p, b);
+    }).join('') + '</div>';
+    if(only && S.mark === only){ var mb = c.beats.filter(function(x){ return x.id === only; })[0]; if(mb) h += markupHtml(mb); }
+    return h + '</section>';
+  }
+  function versionHtml(fmt, c){
+    var st = state(), d = data(), approver = approverOf(d), may = mayApprove(approver, S.me), par = parentOf(S.up);
+    var h = '<section class="bsec" aria-label="Version"><h2>Version</h2><p class="vnum" id="vnum">' + st.n + '</p>';
     h += par ? '<p>Answers the brief ' + esc(par.title || '') + (par.locked ? ', signed' : '') + '.</p>' : '<p>Written by hand, with no brief behind it.</p>';
     if(par && par.status === 'changed') h += '<p class="small" data-testid="brief-changed">The brief has changed since this script was made.</p>';
     if(par && par.path) h += '<p class="small"><button type="button" class="linkbtn" data-open="' + esc(par.path) + '">Open the brief</button></p>';
@@ -688,25 +724,54 @@
         + '<p class="small">Approved by ' + esc(who) + '. The approved version stays as it is.</p>'
         + '<button type="button" class="btn" id="newv" data-newv="1">Start version ' + (st.n + 1) + '</button>';
     } else {
-      var ok = !!fmt && may && !S.busy && c.beats.some(function(b){ return String(b.text).trim(); });
+      var ok = approveOk(fmt, c);
       h += '<button type="button" class="btn primary big" id="approve" aria-disabled="' + (ok ? 'false' : 'true') + '" data-approve="1">Approve version ' + st.n + '</button>'
-        + '<p class="small" id="approveReason">' + esc(!fmt || !c.beats.some(function(b){ return String(b.text).trim(); }) ? 'Write something first. Approval locks this exact version.' : !may ? 'Only ' + approver + ', the creative director on the brief, approves it.' : 'Approval locks this exact version. A later change makes version ' + (st.n + 1) + '.') + '</p>';
+        + '<p class="small" id="approveReason">' + esc(!fmt || !c.beats.some(function(b){ return String(b.text).trim(); }) ? 'Write something first. Approval locks this exact version.' : !may ? 'Only ' + approver + ', the creative director on the brief, can approve it.' : 'Approval locks this exact version.') + '</p>';
     }
     if(S.error) h += '<p class="err" role="alert" id="sideError">' + esc(S.error) + '</p>';
-    h += '</section>';
-    // One click each.
-    h += '<section class="card" aria-label="Send" data-testid="sends"><h2>Send this version</h2><div class="sends">'
+    return h + '</section>';
+  }
+  function approveOk(fmt, c){ return !!fmt && mayApprove(approverOf(data()), S.me) && !S.busy && c.beats.some(function(b){ return String(b.text).trim(); }); }
+  // Judge is an agent: its own figure, then what it said. It advises; the creative director decides.
+  function judgeFig(state){ return ROLES ? ROLES.tag('judge', { state: state || 'idle', decorative: true, size: 26 }) : ''; }
+  function sendHtml(fmt, c){
+    var d = data(), h = '';
+    if(S.judging) h += '<section class="bsec" data-testid="side-agent" role="status"><div class="judgeline">' + judgeFig('working') + '<p><b>Judge</b> is reading version ' + esc(S.judging) + '.</p></div></section>';
+    h += '<section class="bsec" aria-label="Send" data-testid="sends"><h2>Send this version</h2><div class="sends">'
       + ['radio', 'film', 'judge'].map(function(to){ return '<button type="button" class="btn" data-send="' + to + '"' + (fmt ? '' : ' aria-disabled="true"') + '>Send to ' + SENDS[to] + '</button>'; }).join('') + '</div>';
     ['radio', 'film', 'judge'].forEach(function(to){
       var ref = d.handoffs && d.handoffs[to]; if(!ref) return;
       var same = ref.content_hash === handoffRef(c.beats, ref.revision).content_hash;
       h += '<p class="sendnote" data-testid="sent-' + to + '">' + esc(SENT[to](ref.revision, same)) + '</p>';
     });
-    if(S.judge) h += '<p class="sendnote" data-testid="judge-score">Judge: ' + esc(S.judge.total) + ' of 30 for version ' + esc(S.judge.version) + '. Judge advises; the creative director decides.</p>';
+    if(S.judge) h += '<div class="judgeline" data-testid="judge-score">' + judgeFig('idle') + '<p class="sendnote">Judge: ' + esc(S.judge.total) + ' of 30 for version ' + esc(S.judge.version) + '. Judge advises; the creative director decides.</p></div>';
     if(S.sent) h += '<p class="sendnote" role="status" data-testid="send-line">' + esc(S.sent) + '</p>';
-    h += '</section>';
-    $('side').innerHTML = h;
+    return h + '</section>';
   }
+  // The Booth's body: whole script, or the line that is selected.
+  function sideHtml(){
+    var d = data(), fmt = format(), c = cur();
+    if(S.sel && !c.beats.some(function(b){ return b.id === S.sel; })) S.sel = null;
+    var findings = fmt ? findingsOf(checkDoc()) : [], must = mandatoryOf(d), h = '';
+    if(S.sel){
+      var i = lineNo(c, S.sel), b = c.beats[i - 1], tag = b.kind === 'voice' ? (b.role || 'VO') : b.kind === 'line' ? '' : b.kind.toUpperCase();
+      h += '<div class="crumb" data-testid="crumb"><button type="button" data-whole="1">Whole script</button><span aria-hidden="true">/</span><b>' + esc(FORMATS[fmt].unit.replace(/^./, function(x){ return x.toUpperCase(); }) + ' ' + i) + '</b>' + (tag ? '<span>' + esc(tag) + '</span>' : '') + '</div>';
+      return h + checkHtml(fmt, findings, must, c, S.sel) + marksHtml(c, S.sel);
+    }
+    h += checkHtml(fmt, findings, must, c, null) + marksHtml(c, null);
+    h += listCard('Must appear', 'mandatory', 'A line the copy must carry', listOf(d.checks && d.checks.mandatory), locked());
+    h += listCard('Never say', 'banned', 'A word not to use', bannedOf(d), locked());
+    return h + versionHtml(fmt, c) + sendHtml(fmt, c);
+  }
+  // Drawn again without losing the field a person is in (the mark-up form, the lists' add boxes).
+  function setSide(html){
+    var box = $('sideBody'); if(!box || box.getAttribute('data-html') === html) return;
+    var a = document.activeElement, keep = null;
+    if(a && a.id && box.contains(a)) keep = { id: a.id, v: a.value, s: a.selectionStart, e: a.selectionEnd };
+    box.innerHTML = html; box.setAttribute('data-html', html);
+    if(keep){ var n = $(keep.id); if(n){ if('value' in n && keep.v != null) n.value = keep.v; n.focus(); try{ n.setSelectionRange(keep.s, keep.e); }catch(x){} } }
+  }
+  function drawSide(){ setSide(sideHtml()); sendBar(); }
   var SENDS = { radio: 'Radio', film: 'Film', judge: 'Judge' };
   var SENT = {
     radio: function(v, same){ return 'Radio comes in Phase 3. This script, version ' + v + ', is waiting for it.' + (same ? '' : ' It has changed since.'); },
@@ -714,8 +779,8 @@
     judge: function(v, same){ return 'Sent to Judge at version ' + v + '.' + (same ? '' : ' It has changed since.'); }
   };
   function ruleName(f){ return ({ dash: 'Dash', stage_direction: 'Stage direction', repetition: 'Repeats', length_off: 'Length', cast_count: 'Voices', no_spoken_lines: 'No spoken lines' })[f.rule] || f.rule; }
-  function draw(force){ drawHead(); drawSetup(); drawTime(); drawBody(force); drawSide(); }
-  function live(){ drawTime(); drawSide(); var f = findingsOf(checkDoc()); cur().beats.forEach(function(b){ var hx = document.querySelector('[data-hints="' + b.id + '"]'); if(hx) hx.innerHTML = hintsHtml(b.id, f); }); }
+  function draw(force){ drawHead(); drawSetup(); drawBody(force); drawSide(); if(typeof boothApply === 'function') boothApply(false); }
+  function live(){ drawSide(); var f = findingsOf(checkDoc()); cur().beats.forEach(function(b){ var hx = document.querySelector('[data-hints="' + b.id + '"]'); if(hx) hx.innerHTML = hintsHtml(b.id, f); }); }
 
   // ── reading the host ────────────────────────────────────────────────────────────────────────────
   function load(){
@@ -790,6 +855,7 @@
     var fmt = format(); if(!fmt) return;
     flush().then(function(){
       var d = data(), c = cur(), st = state(), ref = handoffRef(c.beats, st.n);
+      if(to === 'judge'){ S.judging = st.n; drawSide(); }
       var handoffs = {}; Object.keys(d.handoffs || {}).forEach(function(k){ handoffs[k] = d.handoffs[k]; }); handoffs[to] = ref;
       var patch = { handoffs: handoffs };
       if(to === 'film') patch.film = { script: filmScript(fmt, c.beats, st.n, S.me, new Date().toISOString()) };
@@ -811,7 +877,7 @@
         });
         S.sent = SENT[to](st.n, true);
       });
-    }).catch(function(e){ S.sent = String(e && e.message || e); }).then(function(){ drawSide(); });
+    }).catch(function(e){ S.sent = String(e && e.message || e); }).then(function(){ S.judging = 0; drawSide(); });
   }
   function setList(key, list, action){
     var checks = data().checks || {}; var next = {}; Object.keys(checks).forEach(function(k){ next[k] = checks[k]; });
@@ -898,9 +964,10 @@
     setList(key, cur0.concat([v]), key === 'banned' ? 'add a word not to use' : 'add a line the copy must carry');
   }
   document.addEventListener('click', function(e){
-    var el = e.target.closest('[data-format],[data-slot],[data-add],[data-up],[data-down],[data-remove],[data-markup],[data-accept],[data-reject],[data-sendmark],[data-cancelmark],[data-approve],[data-newv],[data-open],[data-send],[data-jump],[data-drop],[data-addlist]');
+    var el = e.target.closest('[data-whole],[data-format],[data-slot],[data-add],[data-up],[data-down],[data-remove],[data-markup],[data-accept],[data-reject],[data-sendmark],[data-cancelmark],[data-approve],[data-newv],[data-open],[data-send],[data-jump],[data-drop],[data-addlist]');
     if(!el) return;
     var g = function(k){ return el.getAttribute(k); }, has = function(k){ return el.hasAttribute(k); };
+    if(has('data-whole')) return select(null);
     if(has('data-format')) return chooseFormat(g('data-format'));
     if(has('data-slot')){ if(!locked()) put('slot_s', +g('data-slot'), 'set the slot to ' + g('data-slot') + ' seconds').then(function(){ draw(true); }); return; }
     if(has('data-add')){ var c = cur(), last = c.beats[c.beats.length - 1], n = seqOf({ beats: c.beats, proposals: c.proposals }) + 1, nb = newBeat(format(), n, last); edit(c.beats.concat([nb]), { id: nb.id }, true); return draw(true); }
@@ -927,6 +994,86 @@
   window.addEventListener('load', askMe);
   window.addEventListener('pagehide', function(){ flush(); });
 
+  // ── the selected line, and the Booth (shared/booth.html: the state, the header, the edge tab, ], clan:booth) ──
+  // A click or the caret in a line selects it: the Booth shows that line, and a hidden Booth comes back on it.
+  // A click on the page outside any line, or Whole script in the Booth, selects nothing.
+  function select(id){
+    var was = S.sel, ok = id && cur().beats.some(function(b){ return b.id === id; });
+    S.sel = ok ? id : null;
+    if(S.sel && typeof boothPick === 'function') boothPick();
+    if(S.sel === was) return;
+    Array.prototype.forEach.call(document.querySelectorAll('.beat[data-beat]'), function(li){
+      if(li.getAttribute('data-beat') === S.sel) li.setAttribute('aria-current', 'true'); else li.removeAttribute('aria-current');
+    });
+    drawSide();
+    if(typeof boothApply === 'function') boothApply(false);
+  }
+  document.addEventListener('focusin', function(e){
+    var li = e.target && e.target.closest && e.target.closest('.beat[data-beat]');
+    if(li) select(li.getAttribute('data-beat'));
+  });
+  document.addEventListener('click', function(e){
+    var t = e.target; if(!t || !t.closest) return;
+    var li = t.closest('.beat[data-beat]');
+    if(li){ select(li.getAttribute('data-beat')); return; }
+    if(S.sel && !t.closest('#side,.booth-edge,.toast,button,a,input,select,textarea,label,[data-format]')) select(null);
+  });
+  function typing(t){ return !!t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable); }
+  // Feedback by pointing at it (features/feedback-point.clan): a line is a part, named by its first words. A control
+  // in the Booth is named by the shared snippet's own fallback, by its label.
+  function clip(t){ t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > 80 ? t.slice(0, 79) + '\u2026' : t; }
+  function feedbackTarget(el){
+    var li = el && el.closest ? el.closest('.beat[data-beat]') : null; if(!li) return null;
+    var id = li.getAttribute('data-beat'), c = cur(), b = c.beats.filter(function(x){ return x.id === id; })[0];
+    var said = b ? clip(b.text) || clip(b.visual_action) : '';
+    return { kind: 'part', id: id, label: said || 'Line ' + (lineNo(c, id) || 1), el: li };
+  }
+  window.ClanFeedbackTarget = feedbackTarget;
+  window.ClanFeedbackDoc = function(){
+    var m = (window.__CLAN__ && window.__CLAN__.manifest) || {};
+    return { version: state().n, title: String(m.title || '').trim() || (format() ? FORMATS[format()].label : 'Script') };
+  };
+
+  // What the OS bar shows (clan:bar, docs/contracts/clan-fields.md): Approve or Start the next version, the three sends, and the
+  // document's state in its own word. Each button does what the Booth's button does.
+  var ACTIONS = {
+    approve: function(){ if(!locked() && approveOk(format(), cur())) approve(); },
+    newv: function(){ if(locked()) newVersion(); },
+    'send-judge': function(){ send('judge'); }, 'send-film': function(){ send('film'); }, 'send-radio': function(){ send('radio'); }
+  };
+  function barItems(){
+    var st = state(), fmt = format(), items = [];
+    if(st.locked) items.push({ kind: 'button', id: 'newv', label: 'Start version ' + (st.n + 1), title: 'The approved version stays as it is' });
+    else items.push({ kind: 'button', id: 'approve', label: 'Approve version ' + st.n, primary: true, disabled: !approveOk(fmt, cur()), title: 'Approval locks this exact version' });
+    ['judge', 'film', 'radio'].forEach(function(to){ items.push({ kind: 'button', id: 'send-' + to, label: 'Send to ' + SENDS[to], disabled: !fmt }); });
+    items.push({ kind: 'status', label: st.locked ? 'Locked' : 'Draft', tone: st.locked ? 'ok' : null, locked: st.locked });
+    return items;
+  }
+  var BAR_LAST = null;
+  function sendBar(force){
+    if(window.parent === window) return;
+    var items = barItems(), k = JSON.stringify(items);
+    if(!force && k === BAR_LAST) return; BAR_LAST = k;
+    try{ window.parent.postMessage({ type: 'clan:bar', v: 1, items: items }, '*'); }catch(x){}
+  }
+  window.addEventListener('message', function(e){
+    var m = e.data; if(e.source !== window.parent || !m || typeof m !== 'object') return;
+    if(m.type === 'clan:bar?') sendBar(true);
+    else if(m.type === 'clan:bar-action' && ACTIONS.hasOwnProperty(m.id)) ACTIONS[m.id]();
+  });
+  // The Booth keeps one width, whole script or one line, so the sheet does not move when a line is picked.
+  function boothWidth(){ return 380; }
+  boothStart({
+    panel: 'side', desk: function(){ return document.querySelector('.desk'); },
+    size: function(d){ d.style.setProperty('--bw', boothWidth(S.sel) + 'px'); },
+    whole: function(){ if(S.sel) select(null); },
+    fold: function(){ return !!format(); },
+    inert: function(){ return true; },
+    key: function(e){ return !!format() && !typing(e.target); }
+  });
+  boothApply(true);
+  sendBar();
+
   S.local = null;
   draw(true);
   load();
@@ -936,7 +1083,7 @@
     split: split, join: join, move: move, remove: remove, typed: typed, pasted: pasted, newBeat: newBeat, blank: blank, seqOf: seqOf,
     sha256: sha256, canon: canon, handoffRef: handoffRef, filmBeats: filmBeats, filmScript: filmScript, nameOf: nameOf,
     mandatoryOf: mandatoryOf, bannedOf: bannedOf, versionOf: versionOf, approverOf: approverOf, rules: RULES,
-    state: function(){ return { version: state(), format: format(), local: !!S.local, dirty: S.dirty }; }, flush: flush
+    state: function(){ return { version: state(), format: format(), local: !!S.local, dirty: S.dirty, selected: S.sel }; }, flush: flush, select: select, barItems: barItems, boothWidth: boothWidth
   };
 })();
 </script>

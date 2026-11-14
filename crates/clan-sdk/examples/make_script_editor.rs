@@ -73,7 +73,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // A `</` inside the JSON would end the script tag early.
     let page = page.replacen(HOUSE_STYLE_MARKER, &house_style.replace("</", "<\\/"), 1);
-    let index_html = app_ui::inline_fields(&dir.join(".."), &page)?;
+    // The Booth (the margin's body) and the agent figure Judge is drawn with are inlined at their markers too.
+    let index_html = app_ui::inline_sphere(
+        &dir.join(".."),
+        &app_ui::inline_booth(&dir.join(".."), &app_ui::inline_fields(&dir.join(".."), &page)?)?,
+    )?;
     let requirements = fs::read_to_string(dir.join("agent/requirements.yaml"))?;
     let pipeline = fs::read_to_string(dir.join("app/pipeline.yaml"))?;
     let context = fs::read_to_string(dir.join("context.md"))?;

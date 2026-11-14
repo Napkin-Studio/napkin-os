@@ -28,6 +28,8 @@ async function script(page: Page, job: Seeded, data: object, title: string) {
   return body
 }
 const frameOf = (page: Page): FrameLocator => page.frameLocator('iframe').first()
+/** The Booth: the margin of the script editor (shared/booth.html), where the check, tracked changes and the sends are. */
+const boothOf = (page: Page) => frameOf(page).locator('#side')
 /** The client's scripts, then the one whose title is given, open in the app's frame. */
 const open1 = async (page: Page, job: Seeded, title = 'J001 radio script') => {
   await page.goto(`/#tool-${job.client}-script`); await page.reload()
@@ -55,9 +57,10 @@ for (const size of SIZES) {
     const before = (await middlewareLog(page)).length
     await open1(page, job)
     const app = frameOf(page)
-    await expect(app.getByTestId('read-seconds')).toContainText(/\d+ s/) // read time in seconds, against the slot
-    await expect(app.getByTestId('read-time')).toContainText('of 30 s')
-    const check = app.getByTestId('check') // the live check, with no model call
+    const booth = boothOf(page)
+    await expect(booth.getByTestId('read-seconds')).toContainText(/\d+ s/) // read time in seconds, against the slot, in the Booth
+    await expect(booth.getByTestId('read-time')).toContainText('of 30 s')
+    const check = booth.getByTestId('check') // the live check, with no model call
     await expect(check).toContainText('Drink responsibly') // the mandatory line missing from the beats
     await expect(check.locator('[data-testid="mandatory"][data-state="missing"]')).toHaveCount(2)
     await expect(app.locator('[data-hints="b3"]')).toContainText('smooth') // a banned word, with its line
@@ -89,16 +92,21 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.copywriter)
     await open1(page, job)
     const app = frameOf(page)
-    await expect(app.getByTestId('mark')).toHaveCount(2)
-    await expect(app.getByTestId('mark').first()).toContainText('suggests')
+    const booth = boothOf(page)
+    await expect(booth.getByTestId('mark')).toHaveCount(2) // a colleague's tracked changes are in the Booth
+    await expect(booth.getByTestId('mark').first()).toContainText('suggests')
+    await expect(app.locator('#sheet').getByTestId('mark')).toHaveCount(0)
+    await expect(booth.getByRole('button', { name: 'Accept' })).toHaveCount(2)
+    await expect(booth.getByRole('button', { name: 'Reject' })).toHaveCount(2) // Accept and Reject; Keep mine is for an agent's proposal
+    await expect(booth.getByRole('button', { name: 'Keep mine' })).toHaveCount(0)
     await shot(page, 'script-markup', size)
-    await app.locator('[data-accept]').first().click()
-    await expect(app.locator('[data-proposal][data-status="accepted"]')).toHaveCount(1)
-    await app.locator('[data-reject]').first().click()
-    await expect(app.locator('[data-proposal][data-status="rejected"]')).toHaveCount(1)
+    await booth.getByRole('button', { name: 'Accept' }).first().click()
+    await expect(booth.locator('[data-proposal][data-status="accepted"]')).toHaveCount(1)
+    await booth.getByRole('button', { name: 'Reject' }).first().click()
+    await expect(booth.locator('[data-proposal][data-status="rejected"]')).toHaveCount(1)
     await expect(app.locator('textarea[data-id="b1"][data-field="text"]')).toHaveValue('Tonight, pour the first one.')
     await expect(app.locator('textarea[data-id="b3"][data-field="text"]')).toHaveValue(RADIO_SCRIPT.script.beats[2].text)
-    await expect(app.getByTestId('mark-answer').first()).toContainText('Accepted by')
+    await expect(booth.getByTestId('mark-answer').first()).toContainText('Accepted by')
     const chain = await chainOf(page, (await asMe(page, job.api, { path: doc.path, id: '' })).token)
     const humans = chain.filter(d => d.agent === 'human')
     const marks = humans.filter(d => /^mark up beat/.test(d.action ?? ''))
@@ -129,12 +137,12 @@ for (const size of SIZES) {
     expect((await edit('After approval.')).status()).toBe(409)
     await open1(page, job)
     const app = frameOf(page)
-    await expect(app.getByTestId('locked-stamp')).toContainText('version 2')
+    await expect(boothOf(page).getByTestId('locked-stamp')).toContainText('version 2')
     await expect(app.locator('textarea[data-id="b1"][data-field="text"]')).toHaveAttribute('readonly', '')
     await shot(page, 'script-locked', size)
     // Start a new version and restore v1: a new edit, and v2 stays.
-    await app.locator('#newv').click()
-    await expect(app.locator('#stamp')).toHaveCount(0)
+    await boothOf(page).locator('#newv').click()
+    await expect(boothOf(page).locator('#stamp')).toHaveCount(0)
     await page.getByRole('button', { name: 'Version history' }).click()
     await expect(page.getByTestId('version-row')).toHaveCount(3) // the draft, v2, v1
     await page.locator('[data-testid="version-row"][data-version="1"]').getByRole('button', { name: 'Restore' }).click()
@@ -166,9 +174,8 @@ for (const size of SIZES) {
     await script(page, job, RADIO_SCRIPT, 'J001 radio script')
     await control(page, { variant: { judge_work: 'score24' } })
     await open1(page, job)
-    const app = frameOf(page)
-    await app.getByRole('button', { name: 'Send to Judge' }).click()
-    await expect(app.getByTestId('judge-score')).toContainText('24')
+    await boothOf(page).getByRole('button', { name: 'Send to Judge' }).click()
+    await expect(boothOf(page).getByTestId('judge-score')).toContainText('24')
     await expect(page.getByTestId('score-card')).toContainText('24') // the shared score card, above the page
     await ctx.close()
   })
@@ -180,9 +187,8 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.copywriter)
     const radio = await script(page, job, RADIO_SCRIPT, 'J001 radio script')
     await open1(page, job)
-    const app = frameOf(page)
-    await app.getByRole('button', { name: 'Send to Radio' }).click()
-    await expect(app.getByTestId('send-line')).toHaveText('Radio comes in Phase 3. This script, version 1, is waiting for it.')
+    await boothOf(page).getByRole('button', { name: 'Send to Radio' }).click()
+    await expect(boothOf(page).getByTestId('send-line')).toHaveText('Radio comes in Phase 3. This script, version 1, is waiting for it.')
     const data = await dataOf(page, job, radio.path)
     expect(data).toMatch(/handoffs:\s+radio:/)
     expect(data).toMatch(/content_hash: [0-9a-f]{64}/)
@@ -190,8 +196,8 @@ for (const size of SIZES) {
     await shot(page, 'script-sent-radio', size)
     // Judge: the draft is recorded, scored by the fixture backend, and the page says so. No dead button.
     await control(page, { variant: { judge_work: 'score24' } })
-    await app.getByRole('button', { name: 'Send to Judge' }).click()
-    await expect(app.getByTestId('send-line')).toHaveText('Judge scored version 1: 24 of 30. The card is above the page.')
+    await boothOf(page).getByRole('button', { name: 'Send to Judge' }).click()
+    await expect(boothOf(page).getByTestId('send-line')).toHaveText('Judge scored version 1: 24 of 30. The card is above the page.')
     await ctx.close()
   })
 
@@ -205,7 +211,7 @@ for (const size of SIZES) {
     const app = frameOf(page)
     await expect(app.locator('.beat.tv')).toHaveCount(3)
     await shot(page, 'script-tv', size)
-    await app.getByRole('button', { name: 'Send to Film' }).click()
+    await boothOf(page).getByRole('button', { name: 'Send to Film' }).click()
     // The shell opens the new Film document.
     await expect.poll(async () => {
       const listing = (await (await page.request.get(`${job.api}/library`)).json()) as { items: { path: string; app_id: string | null }[] }
@@ -216,6 +222,78 @@ for (const size of SIZES) {
     const data = await dataOf(page, job, film.path)
     for (const id of ['b1', 'b2', 'b3']) expect(data, `Film keeps beat ${id}`).toContain(`id: ${id}`)
     expect(data).toContain('A bar, late. The door half shut.')
+    await ctx.close()
+  })
+
+  // The Booth (features/align-booth.clan, stage 2): the margin is the shared Booth, as Brief Maker's is.
+  test(`script editor: the Booth is the margin and never overlaps the page, ${size.tag} px`, async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
+    await script(page, job, RADIO_SCRIPT, 'J001 radio script')
+    await open1(page, job)
+    const app = frameOf(page), booth = boothOf(page)
+    const apart = async () => {
+      const a = (await app.locator('#sheet').boundingBox())!, b = (await booth.boundingBox())!
+      expect(a && b, 'both are on screen').toBeTruthy()
+      return a.x + a.width <= b.x + 1 || a.y + a.height <= b.y + 1 // beside it, or under it in the one column
+    }
+    await expect(booth.locator('.booth-nm')).toHaveText('Booth')
+    await expect(booth.getByTestId('check')).toBeVisible()
+    await expect(booth.getByTestId('sends')).toBeVisible()
+    expect(await apart(), 'the Booth does not lie over the page').toBe(true)
+    if (size.width < 1100) {
+      // one column: the Booth follows the page, and cannot be hidden
+      await expect(booth.locator('.booth-hide')).toBeHidden()
+      await expect(app.locator('#boothEdge')).toBeHidden()
+      const a = (await app.locator('#sheet').boundingBox())!, b = (await booth.boundingBox())!
+      expect(b.y).toBeGreaterThanOrEqual(a.y + a.height - 1)
+      await shot(page, 'script-booth-whole', size)
+      await app.locator('textarea[data-id="b3"][data-field="text"]').click()
+      await expect(booth.getByTestId('crumb')).toContainText('Line 3')
+      await shot(page, 'script-booth-part', size)
+      await ctx.close(); return
+    }
+    await shot(page, 'script-booth-whole', size)
+    await page.setViewportSize({ width: 1100, height: size.height })
+    expect(await apart(), 'nor at 1100 px').toBe(true)
+    await expect(booth.locator('.booth-hide')).toBeHidden() // nothing hides at 1100 and below
+    await page.setViewportSize({ width: size.width, height: size.height })
+    // a click on a line selects it: the Booth shows that line
+    await app.locator('textarea[data-id="b3"][data-field="text"]').click()
+    await expect(booth.getByTestId('crumb')).toContainText('Line 3')
+    await shot(page, 'script-booth-part', size)
+    // Hide: the page recentres, and the edge tab (38 px, BOOTH written down it) is the way back
+    await booth.locator('.booth-hide').click()
+    const edge = app.locator('#boothEdge')
+    await expect(edge).toBeVisible()
+    await expect(booth).toBeHidden()
+    const w = (await edge.boundingBox())!
+    expect(Math.round(w.width)).toBe(38)
+    await expect(app.locator('.booth-lb')).toHaveText('Booth')
+    const sheet = (await app.locator('#sheet').boundingBox())!, frame = (await page.locator('iframe').first().boundingBox())!
+    expect(Math.abs(sheet.x + sheet.width / 2 - (frame.x + frame.width / 2)), 'the page recentres alone').toBeLessThan(40)
+    await shot(page, 'script-booth-hidden', size)
+    // ] brings it back; ] again hides it; no shortcut is written anywhere
+    await app.locator('#sheet .title').click()
+    await page.keyboard.press(']')
+    await expect(booth).toBeVisible()
+    expect(await apart()).toBe(true)
+    await page.keyboard.press(']')
+    await expect(booth).toBeHidden()
+    expect(await booth.locator('.booth-hd').evaluate(el => el.textContent), 'no hint of the key').not.toContain(']')
+    // a click on a line while it is hidden brings the whole Booth back on that line
+    await app.locator('[data-beat="b1"]').click({ position: { x: 20, y: 10 } })
+    await expect(booth).toBeVisible()
+    await expect(booth.getByTestId('crumb')).toContainText('Line 1')
+    expect(await apart()).toBe(true)
+    // the shell remembers the choice across a reload
+    await booth.locator('.booth-hide').click()
+    await expect(edge).toBeVisible()
+    await page.reload()
+    await expect(frameOf(page).locator('[data-where="script-editor"]')).toBeVisible()
+    await expect(frameOf(page).locator('#boothEdge')).toBeVisible()
     await ctx.close()
   })
 
