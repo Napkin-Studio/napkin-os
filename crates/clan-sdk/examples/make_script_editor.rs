@@ -76,7 +76,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The Booth (the margin's body) and the agent figure Judge is drawn with are inlined at their markers too.
     let index_html = app_ui::inline_sphere(
         &dir.join(".."),
-        &app_ui::inline_booth(&dir.join(".."), &app_ui::inline_fields(&dir.join(".."), &page)?)?,
+        &app_ui::inline_booth(
+            &dir.join(".."),
+            &app_ui::inline_fields(&dir.join(".."), &page)?,
+        )?,
     )?;
     let requirements = fs::read_to_string(dir.join("agent/requirements.yaml"))?;
     let pipeline = fs::read_to_string(dir.join("app/pipeline.yaml"))?;
