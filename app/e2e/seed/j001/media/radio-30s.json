@@ -1,0 +1,58 @@
+{
+  "id": "j001-radio-30s",
+  "format": "radio",
+  "slot_s": 30,
+  "client": "Client A, an Irish whiskey",
+  "est_total_s": 30,
+  "beats": [
+    {
+      "id": "r1",
+      "kind": "sfx",
+      "role": "",
+      "text": "A bar at closing time. One glass set down.",
+      "est_s": 3,
+      "duration_s": 3
+    },
+    {
+      "id": "r2",
+      "kind": "voice",
+      "role": "FVO",
+      "text": "It is late. Everyone else has gone home. You have not.",
+      "est_s": 7,
+      "duration_s": 7
+    },
+    {
+      "id": "r3",
+      "kind": "voice",
+      "role": "MVO",
+      "text": "Client A. Triple distilled, and in no hurry at all.",
+      "est_s": 6,
+      "duration_s": 6
+    },
+    {
+      "id": "r4",
+      "kind": "music",
+      "role": "",
+      "text": "One slow piano line under the voice.",
+      "est_s": 4,
+      "duration_s": 4
+    },
+    {
+      "id": "r5",
+      "kind": "voice",
+      "role": "FVO",
+      "text": "Pour one. The night can wait.",
+      "est_s": 5,
+      "duration_s": 5
+    },
+    {
+      "id": "r6",
+      "kind": "voice",
+      "role": "LEGAL",
+      "text": "Drink responsibly. Eighteen plus only.",
+      "est_s": 5,
+      "duration_s": 5,
+      "legal": true
+    }
+  ]
+}

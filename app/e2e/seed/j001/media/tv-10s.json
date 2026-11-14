@@ -1,0 +1,37 @@
+{
+  "id": "j001-tv-10s",
+  "format": "tv",
+  "slot_s": 10,
+  "client": "Client A, an Irish whiskey",
+  "est_total_s": 10,
+  "beats": [
+    {
+      "id": "t1",
+      "kind": "shot",
+      "role": "",
+      "text": "A bar, late. The door half shut.",
+      "est_s": 3,
+      "duration_s": 3,
+      "visual_action": "Wide on an empty room, one lamp lit."
+    },
+    {
+      "id": "t2",
+      "kind": "shot",
+      "role": "VO",
+      "text": "Some things are worth the wait.",
+      "est_s": 4,
+      "duration_s": 4,
+      "visual_action": "Close on a pour into a heavy glass."
+    },
+    {
+      "id": "t3",
+      "kind": "shot",
+      "role": "",
+      "text": "End card.",
+      "est_s": 3,
+      "duration_s": 3,
+      "visual_action": "The bottle, label forward, then the logo.",
+      "on_screen_text": "Client A. Drink responsibly."
+    }
+  ]
+}

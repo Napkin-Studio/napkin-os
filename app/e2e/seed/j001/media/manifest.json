@@ -1,0 +1,196 @@
+{
+  "note": "Drawn by make_media.py. Napkin owns every file. None comes from client_briefs/.",
+  "files": [
+    {
+      "name": "bottle.png",
+      "kind": "product_photo",
+      "bytes": 6060,
+      "sha256": "81e8366d8784e27b68f039d0e0ccf87ca7d13aad262fd073d44ddf69cb601bda",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py",
+      "width": 600,
+      "height": 900
+    },
+    {
+      "name": "scamp.png",
+      "kind": "scamp",
+      "bytes": 3729,
+      "sha256": "b37b9247d4c9016f5d5c6601f42a41ecb32a6775c66e6bcc4c48967068c676c8",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py",
+      "width": 800,
+      "height": 500
+    },
+    {
+      "name": "site-48-sheet.png",
+      "kind": "site",
+      "bytes": 6565,
+      "sha256": "402b26a0e39735d52e33428d2b0a23de9c93e45d0bd53ba8c0760e258a3a470b",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py",
+      "width": 1200,
+      "height": 800,
+      "site": "48 sheet",
+      "corners": [
+        [
+          480,
+          170
+        ],
+        [
+          1010,
+          215
+        ],
+        [
+          1010,
+          505
+        ],
+        [
+          480,
+          520
+        ]
+      ]
+    },
+    {
+      "name": "site-6-sheet.png",
+      "kind": "site",
+      "bytes": 5074,
+      "sha256": "f5c29e78b00fd3d2016d061705ea8d67096169911cb9017542d8f4b7b174f9af",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py",
+      "width": 1200,
+      "height": 800,
+      "site": "6 sheet",
+      "corners": [
+        [
+          520,
+          300
+        ],
+        [
+          700,
+          292
+        ],
+        [
+          700,
+          560
+        ],
+        [
+          520,
+          556
+        ]
+      ]
+    },
+    {
+      "name": "site-bus-shelter.png",
+      "kind": "site",
+      "bytes": 5131,
+      "sha256": "2bbed8fdb0986c05a1d58c2e420ec116b5b091e3d88eb99f57e7ca933de95be3",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py",
+      "width": 1200,
+      "height": 800,
+      "site": "bus shelter",
+      "corners": [
+        [
+          560,
+          260
+        ],
+        [
+          860,
+          250
+        ],
+        [
+          860,
+          520
+        ],
+        [
+          560,
+          530
+        ]
+      ]
+    },
+    {
+      "name": "site-station-panel.png",
+      "kind": "site",
+      "bytes": 5290,
+      "sha256": "2fcb97e36a4f716b706ae88b5217d9580dfc5c5cab79fd2cbb4ad760b6bb0781",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py",
+      "width": 1200,
+      "height": 800,
+      "site": "station panel",
+      "corners": [
+        [
+          300,
+          220
+        ],
+        [
+          900,
+          240
+        ],
+        [
+          900,
+          540
+        ],
+        [
+          300,
+          520
+        ]
+      ]
+    },
+    {
+      "name": "site-digital-screen.png",
+      "kind": "site",
+      "bytes": 5157,
+      "sha256": "473b930ffcd5b68343a21660c2ca270b04df5b7ceda81f1ad7e754147d6e96e3",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py",
+      "width": 1200,
+      "height": 800,
+      "site": "digital screen",
+      "corners": [
+        [
+          430,
+          180
+        ],
+        [
+          770,
+          190
+        ],
+        [
+          770,
+          470
+        ],
+        [
+          430,
+          465
+        ]
+      ]
+    },
+    {
+      "name": "radio-30s.json",
+      "kind": "radio_script",
+      "bytes": 1209,
+      "sha256": "1397ac300899ee9f13bdd749b4b8b16f0cd154ae3233063bd4dc7cde8587b78b",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py",
+      "slot_s": 30
+    },
+    {
+      "name": "tv-10s.json",
+      "kind": "tv_script",
+      "bytes": 850,
+      "sha256": "569f17c1dec9071387f132819da8d6bf5af6d20cc95e0109f704d232908b8063",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py",
+      "slot_s": 10
+    },
+    {
+      "name": "layout.json",
+      "kind": "layout",
+      "bytes": 1100,
+      "sha256": "e9faecb0a3fdf4daf06a800f3d743c04081711908ad3b554aac46656f31bd69c",
+      "owner": "Napkin",
+      "drawn_by": "make_media.py"
+    }
+  ]
+}
