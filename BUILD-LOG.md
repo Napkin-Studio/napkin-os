@@ -238,3 +238,11 @@ None is verified or merged.
 - Not proven: the real middleware's behaviour for 3 and 4 (no model call was made); a mark put on a parent after a spin-off; e2e on the fifth head.
 - Cost: five Fable reviews of about 100-180k tokens each, one Fable design of about 115k, and Sonnet builder rounds of about 450-660k tokens each.
 - Phase 3 wave 1 stays blocked, since it needs this branch merged. Napkin Brain records 6 onward wait on it too.
+
+**align-landing-look merged (14 Nov, session 5).**
+- `feat/align-landing-look` is merged into `spike/fabletest` (1a2d97ae, `--no-ff`), with `origin/develop` (7 commits: ACNE, the Agencies tab, style switches, parts sharing a row) merged into it first (924a062a). Not pushed.
+- Conflicts: `bootLook.ts` (kept develop's saved agency-style read and the branch's white/grey to light and black to dark migration), `briefSheet.spec.ts` (a comment). `palette.test.ts` and pilot 6 followed develop: a People-page agency may rename a registry agency, and a new agency is a draft until published with the `rev` from the add response.
+- Needs you is mounted on the desk (22cd11d7). Five stale selectors fixed in the approval-route and job-page specs (606cd99b).
+- Checks on the merged code: frontend, copy, secrets pass; napkin-host and napkin-web cargo tests pass (the racing test skipped); pilot, agency-setup, roles-homes, remaining-homes, approval-route, job-page, visual-brief pass at 390 and 1440. Not fixed: Judge 59 and the known older failures. Judge 64, pilot 15 and visual-brief 247 and 319 fail only in a long single run and pass alone (the slow-server pattern).
+- Not done: the bar search field is still in the bar; Old "Open Brief" and "The map" bar commands are gone; a full multi-worker e2e on the merged branch is still to run.
+- Cost: Sonnet builders about 450k tokens for the build, 66k for the e2e fixes, 67k for pilot 6.
