@@ -54,7 +54,7 @@ test('every door in roles.rs is a TOOLS id or a page door, none is both, and the
     assert.ok(!doors.has(id) || tool.has(id), `${id} is a tool and a page door`)
   }
   for (const d of doors) {
-    // People and Audit are the admin's own pages: routes of their own (#people, #audit), with a page each
+    // People opens the People page (the dialog from the account menu) and Audit is a route of its own (#audit)
     if (tool.has(d) || desk.includes(d) || d === 'people' || d === 'audit') continue
     assert.ok(!ids.has(d), `${d} is a page door and a tool`)
     assert.ok(content.has(d), `${d} is a page door with no words in doors.ts`)

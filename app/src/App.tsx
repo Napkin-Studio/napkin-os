@@ -11,7 +11,7 @@ import OfflineDialog from './offline/OfflineDialog'
 import { ViewAsDialog } from './shell/home/ViewAsDialog'
 import { loadAgencyLooks } from './shell/agency/looks'
 import PeoplePage from './shell/people/PeoplePage'
-import { peopleEntryFor } from './shell/people/model'
+import { OPEN_PEOPLE_EVENT, canManagePeople, peopleEntryFor } from './shell/people/model'
 import { isClanFile, keepOffline, pickFile, type DeviceSource } from './offline/actions'
 import { copyBytes, type OfflineCopy } from './offline/store'
 import { useFileDrop } from './offline/useFileDrop'
@@ -137,6 +137,13 @@ export default function App() {
   const person = useRef<string | null>(null)
   // A read from the server: the state is set when it answers.
   useEffect(() => { void signedInUser().then(u => { person.current = u ? u.username : null; setUser(person.current) }) }, [])
+  // The People page opens from its page door and the bar's command too, for whoever may open it (features/align-needs-lock-people.clan).
+  const mayManagePeople = canManagePeople(user, home.view?.roles ?? [])
+  useEffect(() => {
+    const open = () => { if (mayManagePeople) setPeopleOpen(true) }
+    window.addEventListener(OPEN_PEOPLE_EVENT, open)
+    return () => window.removeEventListener(OPEN_PEOPLE_EVENT, open)
+  }, [mayManagePeople])
   // The work session of a job's document, noted only when this person has said yes (features/timesheet-sessions.clan).
   useWorkSessions(!!user && hasServer && !(device && !serverless), screen === 'app' && running && !running.open.is_template ? running.open.path : null)
   // The agency's admin-set colours on the chrome (shell/agency/palette.ts), or
@@ -602,7 +609,7 @@ export default function App() {
     // Only for an admin (the server sends the role list to an admin alone): try the desk as another role.
     ...(home.view?.restricted && home.view.roles.includes('admin') && home.view.switcher ? { onViewAs: () => setViewAsOpen(true), viewingAs: home.view.view_as ? (home.view.switcher.find(r => r.id === home.view!.view_as)?.title ?? home.view.view_as) : null } : {}),
     // Only for an admin: the server refuses everyone else's calls with 403 too.
-    ...(hasServer && !device ? { onPeople: peopleEntryFor(user, () => setPeopleOpen(true)) } : {}),
+    ...(hasServer && !device ? { onPeople: peopleEntryFor(user, () => setPeopleOpen(true), home.view?.roles ?? []) } : {}),
   }
 
   // Share ▾ "Copy link": the web's link to a document (`?open=`, host/http.ts takeLaunchFile).
@@ -720,7 +727,7 @@ export default function App() {
       {viewAsOpen && home.view?.switcher && <ViewAsDialog roles={home.view.switcher} current={viewAs} onPick={r => { setViewAs(r); setViewAsOpen(false); if (route.level !== 'agency') go({ level: 'agency' }) }} onClose={() => setViewAsOpen(false)} />}
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
 
-      {peopleOpen && <PeoplePage user={user} onClose={() => { setPeopleOpen(false); setLooksSeen(n => n + 1) }} />}
+      {peopleOpen && <PeoplePage user={user} roles={home.view?.roles ?? []} onClose={() => { setPeopleOpen(false); setLooksSeen(n => n + 1) }} />}
 
       {dragging && (
         <div className="dv-drop" aria-hidden>

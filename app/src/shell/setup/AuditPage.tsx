@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Empty, FailedSave, Loading, MissingAccess } from '../../components/states/ScreenStates'
 import type { Route } from '../route'
-import { readAudit, verifyAudit, type AuditEntry, type Verified } from './api'
+import { readAudit, verifyAudit, verifiedWords, type AuditEntry, type Verified } from './api'
 import { AUDIT_FILTERS, auditShown, versionWords, whenWords, type AuditFilter } from './model'
 import '../home/home.css'
 import './setup.css'
@@ -39,7 +39,7 @@ export function AuditBody({ lines, filter, verified, checking, onFilter, onCheck
           <button type="button" className="side-link" data-testid="audit-check" disabled={checking} onClick={onCheck}>{checking ? 'Checking' : 'Check that nothing was changed'}</button>
           {verified && (
             <span className={verified.ok ? 'su-ok' : 'su-warn'} role="status" data-testid="audit-verified" data-ok={verified.ok}>
-              {verified.ok ? `Nothing was changed. ${verified.lines} saved ${verified.lines === 1 ? 'line' : 'lines'} checked.` : `A saved line was changed${verified.line ? ` (line ${verified.line})` : ''}. ${verified.problem ?? ''}`}
+              {verifiedWords(verified)}
             </span>
           )}
         </div>

@@ -390,6 +390,29 @@ pub fn check_people(
         let fail = |report: &mut Report, why: String| {
             report.push(line, Status::Error, label.clone(), Some(why))
         };
+        // what a spreadsheet would run, or a character no field holds, is refused by line, never cleaned
+        let cells = [email, name, cell(row, user_c), cell(row, Some(roles_c))];
+        if cells.iter().any(|c| c.starts_with(['=', '+', '-', '@'])) {
+            fail(
+                &mut report,
+                "a formula: a cell starts with =, +, - or @".into(),
+            );
+            continue;
+        }
+        if cells.iter().any(|c| c.chars().any(char::is_control)) {
+            fail(&mut report, "a control character in a cell".into());
+            continue;
+        }
+        let typed = cell(row, user_c);
+        if let Some((_, at)) = typed.split_once('@') {
+            if !at.trim().eq_ignore_ascii_case(agency_slug) {
+                fail(
+                    &mut report,
+                    "a sign-in name of another agency: this file imports into yours".into(),
+                );
+                continue;
+            }
+        }
         if email.is_empty() {
             fail(&mut report, "missing email".into());
             continue;

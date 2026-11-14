@@ -408,7 +408,14 @@ async fn add_person(
 
 #[derive(Deserialize)]
 struct Rename {
-    name: String,
+    #[serde(default)]
+    name: Option<String>,
+    /// The address kept for the person (shown to admins only); checked as an address.
+    #[serde(default)]
+    email: Option<String>,
+    /// The roles, as `PUT .../roles` takes them: at least one, each known.
+    #[serde(default)]
+    roles: Option<Vec<String>>,
 }
 
 async fn rename_person(
@@ -425,9 +432,48 @@ async fn rename_person(
         Ok(id) => id,
         Err(r) => return *r,
     };
-    match people.rename(&by, &id, &b.name) {
-        Ok(p) => Json(p).into_response(),
-        Err(e) => refused(e),
+    if b.name.is_none() && b.email.is_none() && b.roles.is_none() {
+        return answer(
+            StatusCode::BAD_REQUEST,
+            "Give a new name, address or roles.",
+        );
+    }
+    let mut out = None;
+    if let Some(roles) = &b.roles {
+        let agency = people
+            .book()
+            .person(&id)
+            .map(|p| p.agency.clone())
+            .unwrap_or_default();
+        let roles = match known_roles(&ctx, &agency, roles) {
+            Ok(r) => r,
+            Err(r) => return *r,
+        };
+        if roles.is_empty() {
+            return answer(
+                StatusCode::BAD_REQUEST,
+                "A person needs at least one role. To stop them signing in, remove them.",
+            );
+        }
+        out = Some(people.set_roles(&by, &id, &roles));
+    }
+    if let Some(name) = &b.name {
+        if out.as_ref().map_or(true, |r| r.is_ok()) {
+            out = Some(people.rename(&by, &id, name));
+        }
+    }
+    if let Some(email) = &b.email {
+        let Ok(email) = napkin_host::agency::clean_email(email) else {
+            return answer(StatusCode::BAD_REQUEST, "An address looks like name@place.");
+        };
+        if out.as_ref().map_or(true, |r| r.is_ok()) {
+            out = Some(people.set_email(&by, &id, Some(&email)));
+        }
+    }
+    match out {
+        Some(Ok(p)) => Json(p).into_response(),
+        Some(Err(e)) => refused(e),
+        None => answer(StatusCode::BAD_REQUEST, "Give a new name or address."),
     }
 }
 
@@ -504,6 +550,7 @@ async fn import_people(
     State(ctx): State<Arc<AppCtx>>,
     who: Who,
     axum::extract::Query(q): axum::extract::Query<ImportQuery>,
+    headers: axum::http::HeaderMap,
     raw: axum::body::Bytes,
 ) -> Response {
     if let Err(r) = scope(&ctx, acct(&who)) {
@@ -516,7 +563,11 @@ async fn import_people(
         .dry_run
         .as_deref()
         .is_some_and(|v| v == "1" || v == "true");
-    match crate::agency::import_people(&ctx, &me, &raw, dry) {
+    let bytes = match crate::agency::file_of(&headers, &raw) {
+        Ok(b) => b,
+        Err(e) => return e.into_response(),
+    };
+    match crate::agency::import_people(&ctx, &me, &bytes, dry) {
         Ok(report) => Json(report).into_response(),
         Err(e) => e.into_response(),
     }

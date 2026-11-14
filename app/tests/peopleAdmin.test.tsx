@@ -133,7 +133,7 @@ test('the page wears Napkin\'s look, whoever is signed in', () => {
 test('the list shows everyone who can sign in, and not the removed', () => {
   const html = page('engineer@napkin')
   assert.match(html, /<b>Shrey<\/b><br\/><small>engineer@napkin<\/small>/)
-  assert.match(html, /<span class="pa-tag pa-admin">ADMIN<\/span>/)
+  assert.match(html, /<span class="pa-tag pa-admin">NAPKIN ADMIN<\/span>/)
   assert.match(html, /2026-10-05 · roster/)
   assert.match(html, /<b>Pluto Test<\/b>/)
   assert.doesNotMatch(html, /gone@napkin/)
@@ -144,7 +144,7 @@ test('the list shows everyone who can sign in, and not the removed', () => {
   assert.doesNotMatch(shreyRow, />Remove</)
 })
 
-test('only engineer@napkin sees the People entry; anyone else is told to ask an admin', () => {
+test('a Napkin admin and an agency\'s admin see the People entry; anyone else is told to ask an admin', () => {
   assert.deepEqual(PEOPLE_ADMINS, ['engineer@napkin'])
   assert.ok(isPeopleAdmin('engineer@napkin'))
   for (const who of ['ann@napkin', 'plu@pluto', 'shrey@napkin', null, '']) assert.ok(!isPeopleAdmin(who), String(who))
@@ -152,6 +152,10 @@ test('only engineer@napkin sees the People entry; anyone else is told to ask an 
   assert.deepEqual(labels('engineer@napkin'), ['People', 'Sign out'])
   assert.deepEqual(labels('ann@napkin'), ['Sign out'])
   assert.deepEqual(labels('plu@pluto'), ['Sign out'])
+  // an agency's admin (the admin role, the People store's) sees it too, for their own agency
+  const withRoles = (user: string, roles: string[]) => accountItems({ name: 'X', initials: 'X', line: 'Napkin', onPeople: peopleEntryFor(user, noop, roles) }, user, noop).map(i => i.label)
+  assert.deepEqual(withRoles('plu@pluto', ['admin']), ['People', 'Sign out'])
+  assert.deepEqual(withRoles('plu@pluto', ['planning']), ['Sign out'])
   const denied = page('ann@napkin')
   assert.match(denied, /data-testid="people-denied"/)
   assert.match(denied, /Ask <b>Shrey<\/b> or another admin/)
@@ -199,7 +203,8 @@ test('People | Agencies: the list has every agency with its kind, and the People
   assert.match(cell('ella@kestrel'), /<span class="big">Kestrel Lane<\/span>/)
   assert.match(cell('engineer@napkin'), /<span class="big">Napkin Studio<\/span><\/span>/, 'Napkin Studio once')
   assert.doesNotMatch(cell('engineer@napkin'), /NAPKIN STUDIO/)
-  assert.match(cell('ann@napkin'), /<small>member<\/small>/)
+  // the roles the People store holds, in words (features/align-needs-lock-people.clan); the mock gives Ann none
+  assert.match(cell('ann@napkin'), /<small>No role<\/small>/)
   registerAgencyLooks([])
 })
 

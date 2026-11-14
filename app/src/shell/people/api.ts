@@ -11,11 +11,33 @@ import type { PersonRow } from './model'
 
 export interface PeopleList { people: PersonRow[]; agencies: AgencyAdminRow[] }
 
+/** One row of a people file, as the check found it. */
+export interface RowResult { line: number; status: 'new' | 'changed' | 'same' | 'error'; label: string; reason?: string }
+/** What checking or importing a people file answers: a result per line, the bad lines by line, the counts. */
+export interface ImportReport {
+  kind: 'people'
+  dry_run: boolean
+  rows: number
+  ok: number
+  errors: { line: number; reason: string }[]
+  created: number
+  updated: number
+  unchanged: number
+  committed: boolean
+  results: RowResult[]
+  starts_directory: boolean
+}
+
 /** What the page asks the server; a test hands it a fake. */
 export interface PeopleApi {
   list(): Promise<PeopleList>
-  add(body: { name: string; agency: string; username?: string }): Promise<PersonRow>
+  /** A person, with at least one role (POST /api/admin/people). An agency's admin adds to their own agency. */
+  add(body: { name: string; agency: string; username?: string; roles: string[] }): Promise<PersonRow>
   rename(id: string, name: string): Promise<PersonRow>
+  /** Change a person's roles: they hold on the person's next request (PUT /api/admin/people/{id}/roles). */
+  setRoles(id: string, roles: string[]): Promise<PersonRow>
+  /** Check a people file (`dry`) or import it into the signed-in admin's own agency (POST /api/admin/people/import). */
+  importPeople(file: Blob, dry: boolean): Promise<ImportReport>
   remove(id: string): Promise<PersonRow>
   /** Every agency, in code and basic, with its draft (GET /api/admin/agencies). */
   agencies(): Promise<AgencyAdminRow[]>
@@ -50,7 +72,7 @@ export class PeopleError extends Error {
   }
 }
 
-async function call<T>(method: string, path: string, body?: unknown, raw?: { type: string; text: string }): Promise<T> {
+async function call<T>(method: string, path: string, body?: unknown, raw?: { type: string; text: string | Blob }): Promise<T> {
   const r = await fetch(`/api${path}`, {
     method,
     credentials: 'same-origin',
@@ -71,6 +93,8 @@ export const httpPeopleApi: PeopleApi = {
   list: () => call('GET', '/admin/people'),
   add: body => call('POST', '/admin/people', body),
   rename: (id, name) => call('PATCH', `/admin/people/${encodeURIComponent(id)}`, { name }),
+  setRoles: (id, roles) => call('PUT', `/admin/people/${encodeURIComponent(id)}/roles`, { roles }),
+  importPeople: (file, dry) => call('POST', `/admin/people/import${dry ? '?dry_run=1' : ''}`, undefined, { type: 'text/csv', text: file }),
   remove: id => call('DELETE', `/admin/people/${encodeURIComponent(id)}`),
   agencies: async () => {
     const d = await call<AgencyAdminRow[] | { agencies: AgencyAdminRow[] }>('GET', '/admin/agencies')

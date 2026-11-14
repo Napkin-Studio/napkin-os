@@ -30,9 +30,8 @@ import { ClientView } from '../nui/ClientView'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
 import { Timesheet } from '../../timesheet/Timesheet'
-import { SetupFlow } from '../setup/SetupFlow'
-import { PeoplePage } from '../setup/PeoplePage'
 import { AuditPage } from '../setup/AuditPage'
+import { openPeoplePage } from '../people/model'
 import './landing.css'
 
 const NONE: never[] = []
@@ -166,8 +165,9 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     onOpenDocument(made.path)
   }
 
-  // A page door opens its page: People and the audit view are pages of their own, the rest are door pages.
-  const openPage = (d: DoorEntry) => go(d.id === 'people' ? { level: 'people' } : d.id === 'audit' ? { level: 'audit' } : { level: 'door', door: d.id })
+  // A page door opens its page: People is the People page (the dialog from the account menu), the audit view a page of its
+  // own, the rest door pages.
+  const openPage = (d: DoorEntry) => (d.id === 'people' ? openPeoplePage() : go(d.id === 'audit' ? { level: 'audit' } : { level: 'door', door: d.id }))
 
   let body
   if (clientId && client && route.level === 'tool' && route.tool === 'territories') {
@@ -183,10 +183,6 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     )
   } else if (route.level === 'timesheet') {
     body = <Timesheet go={go} />
-  } else if (route.level === 'setup') {
-    body = <SetupFlow go={go} />
-  } else if (route.level === 'people') {
-    body = <PeoplePage go={go} />
   } else if (route.level === 'audit') {
     body = <AuditPage go={go} />
   } else if (route.level === 'job') {
@@ -251,7 +247,6 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenPage={home?.restricted ? openPage : undefined}
         needs={home?.restricted ? deskNeeds.answer : undefined}
         onTimesheet={() => go({ level: 'timesheet' })}
-        onSetup={home?.restricted && home.roles.includes('admin') && !home.view_as ? () => go({ level: 'setup' }) : undefined}
         first={who.first}
         manage={manage}
         onAdd={onAdd}

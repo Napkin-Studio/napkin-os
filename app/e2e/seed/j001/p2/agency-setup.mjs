@@ -1,10 +1,11 @@
-// Agency setup's fixtures (features/agency-setup.clan): 120 people for the CSV, with three bad rows (a missing email, an unknown
-// role, a duplicate), 8 clients and 30 jobs. Placeholder names and invented agency suffixes. `peopleCsv()` returns the text.
-// Each width gets its own agency (cr at 390, cs at 1440), so a run starts from nothing at both. The admin of each is on the
-// roster stack's roster (people.mjs); the control list that would create the agency is a later stage of the record.
+// Agency setup's fixtures (features/agency-setup.clan, as features/align-needs-lock-people.clan's People page uses them): 120
+// people for the CSV, with three bad rows (a missing email, an unknown role, a duplicate), 8 clients and 30 jobs. Placeholder
+// names and invented agency suffixes. `peopleCsv()` returns the text. Each width gets its own agency (cr at 390, cs at 1440),
+// so a run starts from nothing at both. The Napkin admin adds the agency on the People page (its id is made from its name, so
+// the name is the slug in capitals); its first admin is on the roster stack's roster (people.mjs), as a deployment seeds one.
 export const AGENCIES = {
-  390: { slug: 'cr', name: 'Agency C', first_admin: 'cara@cr' },
-  1440: { slug: 'cs', name: 'Agency S', first_admin: 'cara@cs' },
+  390: { slug: 'cr', name: 'CR', first_admin: 'cara@cr' },
+  1440: { slug: 'cs', name: 'CS', first_admin: 'cara@cs' },
 }
 export const NEW_AGENCY = AGENCIES[390]
 export const BAD_ROWS = [
