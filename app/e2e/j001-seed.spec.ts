@@ -9,6 +9,8 @@ import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { assertDeIdentified } from './seed/j001/denyList.mjs'
 import { JOB, MESSY_BRIEF, seedJ001 } from './seed/j001'
+import { MEDIA, MEDIA_FILES, SITES } from './seed/j001/media/index.mjs'
+import { verifyMedia } from './seed/j001/media/verify.mjs'
 
 test('the J001 seed writes the job through the tenant API and calls no model', async ({ page }) => {
   const job = await seedJ001(page)
@@ -54,4 +56,20 @@ test('the de-identification check fails when a deny-list string is in the seed, 
 
 test('a deny list kept inside the repo is refused', () => {
   expect(() => assertDeIdentified({ listPath: new URL('./README.md', import.meta.url).pathname })).toThrow(/inside the repo/)
+})
+
+// The J001 media fixtures (features/j001-phase3-suite.clan): drawn in the repo by make_media.py, owned by Napkin, proved by hash.
+test('the J001 media fixtures are listed, drawn here, and each file proves its hash', () => {
+  expect(MEDIA_FILES.map(f => f.name).sort()).toEqual([
+    'bottle.png', 'layout.json', 'radio-30s.json', 'scamp.png', 'site-48-sheet.png', 'site-6-sheet.png',
+    'site-bus-shelter.png', 'site-digital-screen.png', 'site-station-panel.png', 'tv-10s.json',
+  ])
+  expect([MEDIA.bottle.kind, MEDIA.scamp.kind, MEDIA.radio.slot_s, MEDIA.tv.slot_s, MEDIA.layout.kind]).toEqual(['product_photo', 'scamp', 30, 10, 'layout'])
+  expect(SITES).toHaveLength(5)
+  for (const f of MEDIA_FILES) {
+    expect(f.owner).toBe('Napkin')
+    expect(f.drawn_by).toBe('make_media.py')
+  }
+  // The hash script: every file as the manifest says, every file on the list in SOURCES.md, none from client_briefs/.
+  expect(verifyMedia().problems).toEqual([])
 })

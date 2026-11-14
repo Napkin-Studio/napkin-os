@@ -1,0 +1,68 @@
+{
+  "id": "j001-layout-still",
+  "status": "approved",
+  "approved_by": "creative director (placeholder person)",
+  "canvas": {
+    "w": 1080,
+    "h": 1350
+  },
+  "safe_area": {
+    "x": 60,
+    "y": 60,
+    "w": 960,
+    "h": 1230
+  },
+  "layers": [
+    {
+      "id": "picture",
+      "type": "picture",
+      "asset": "bottle.png",
+      "box": {
+        "x": 240,
+        "y": 330,
+        "w": 600,
+        "h": 900
+      }
+    },
+    {
+      "id": "headline",
+      "type": "type",
+      "text": "The night can wait.",
+      "font": "Geist",
+      "box": {
+        "x": 80,
+        "y": 100,
+        "w": 920,
+        "h": 180
+      }
+    },
+    {
+      "id": "logo",
+      "type": "logo",
+      "source": "brand kit",
+      "box": {
+        "x": 80,
+        "y": 1180,
+        "w": 220,
+        "h": 90
+      }
+    },
+    {
+      "id": "legal",
+      "type": "type",
+      "text": "Drink responsibly",
+      "font": "Geist",
+      "box": {
+        "x": 700,
+        "y": 1220,
+        "w": 300,
+        "h": 50
+      }
+    }
+  ],
+  "protected": [
+    "headline",
+    "logo",
+    "legal"
+  ]
+}
