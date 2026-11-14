@@ -1,4 +1,4 @@
-//! What the template-app packers share: the OS's fields, the source cards, the
+//! What the template-app packers share: the OS's fields, the Booth, the source cards, the
 //! agent sphere every Napkin app draws, and the app's mark.
 //!
 //! Included by `make_brief_maker.rs` and `make_campaign_research.rs` with
@@ -31,6 +31,29 @@ pub fn inline_fields(templates: &Path, html: &str) -> Result<String, Box<dyn std
         return Err("the fields snippet contains its own marker".into());
     }
     Ok(html.replacen(FIELDS_MARKER, snippet.trim_end(), 1))
+}
+
+/// Where a template asks for the Booth: the right-hand panel agents sit in, as one
+/// piece of code (header, edge tab, state, the shell's `clan:booth`).
+pub const BOOTH_MARKER: &str = "<!-- @napkin:booth -->";
+
+/// Splice `app/templates/shared/booth.html` into the template at its marker, when
+/// it has one. Checked like the fields: no `</body>` inside it, no marker of its own.
+pub fn inline_booth(templates: &Path, html: &str) -> Result<String, Box<dyn std::error::Error>> {
+    match html.matches(BOOTH_MARKER).count() {
+        0 => return Ok(html.to_string()),
+        1 => {}
+        _ => return Err(format!("the template has more than one {BOOTH_MARKER}").into()),
+    }
+    let snippet = fs::read_to_string(templates.join("shared/booth.html"))
+        .map_err(|e| format!("app/templates/shared/booth.html: {e}"))?;
+    if snippet.to_ascii_lowercase().contains("</body") {
+        return Err("the booth snippet contains </body>".into());
+    }
+    if snippet.contains(BOOTH_MARKER) {
+        return Err("the booth snippet contains its own marker".into());
+    }
+    Ok(html.replacen(BOOTH_MARKER, snippet.trim_end(), 1))
 }
 
 /// Where a template asks for the source cards: where a document came from, on

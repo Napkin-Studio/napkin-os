@@ -29,6 +29,8 @@ function templates(): string {
   return join(process.cwd(), 'templates')
 }
 const page = (rel: string) => readFileSync(join(templates(), rel), 'utf8')
+// A tool page as the packer ships it for the Booth: shared/booth.html spliced at its marker (app_ui.rs, inline_booth).
+const packed = (rel: string) => page(rel).replace('<!-- @napkin:booth -->', page('shared/booth.html').trimEnd())
 
 /** From `start` (an opening brace) to its closing brace, skipping strings and comments. */
 function balanced(src: string, start: number): number {
@@ -240,7 +242,7 @@ test('report wording is keyed per top-level part, as the middleware splits and h
 
 // ── the Research Tool ──────────────────────────────────────────────────────
 
-const RT = page('campaign-research/index.html')
+const RT = packed('campaign-research/index.html')
 const MARKET = { IE: 'Ireland', GB: 'Great Britain' }
 
 function researchEnv(campaign: Record<string, unknown>, manifest: Record<string, unknown>) {
@@ -653,7 +655,7 @@ test('the Research Tool’s parts declare their aliases', () => {
 
 // ── Brief Maker ────────────────────────────────────────────────────────────
 
-const BM = page('brief-maker/index.html')
+const BM = packed('brief-maker/index.html')
 
 test('the brief’s parts declare the words a client calls them by', () => {
   const A = new Function(`${obj(BM, 'PART_ALIASES')} return PART_ALIASES;`)() as Record<string, string>
@@ -5390,4 +5392,37 @@ test('the Booth comes back at the size of what is selected', () => {
   assert.equal(cr.boothWidth('map', 1500), 744, 'the evidence map')
   assert.equal(cr.boothWidth('map', 1000), 640, 'the map leaves the report 360')
   assert.equal(cr.boothWidth('map', 700), 440, 'never under 440')
+})
+
+// ── the Booth is one piece of code (features/align-booth.clan, stage 1) ──────────────────────────
+test('the Booth is one piece of code: no template defines it, the marker is spliced', async () => {
+  const { readdirSync, statSync } = await import('node:fs')
+  const BOOTH = page('shared/booth.html')
+  for (const name of ['boothStep', 'boothApply', 'boothSet', 'boothCanHide']) {
+    assert.equal(BOOTH.split(`function ${name}(`).length - 1, 1, `${name} is defined once, in the snippet`)
+  }
+  const dirs = readdirSync(templates()).filter(d => d !== 'shared' && statSync(join(templates(), d)).isDirectory())
+  const using: string[] = []
+  for (const d of dirs) {
+    const f = join(templates(), d, 'index.html')
+    if (!existsSync(f)) continue
+    const html = readFileSync(f, 'utf8')
+    assert.doesNotMatch(html, /function boothStep\(|function boothApply\(/, `${d} does not define the Booth itself`)
+    if (html.includes('<!-- @napkin:booth -->')) {
+      using.push(d)
+      assert.equal(html.split('<!-- @napkin:booth -->').length - 1, 1, `${d} has the marker once`)
+      assert.match(html, /boothStart\(\{/, `${d} starts the shared Booth`)
+    }
+  }
+  assert.deepEqual(using.sort(), ['brief-maker', 'campaign-research'], 'stage 1: the two finished tools')
+  // The packer splices it, once, and the packed pages carry it once.
+  assert.match(readFileSync(join(templates(), '..', '..', 'crates', 'clan-sdk', 'examples', 'shared', 'app_ui.rs'), 'utf8'), /BOOTH_MARKER[^\n]*@napkin:booth/)
+  for (const src of [BM, RT]) {
+    assert.ok(!src.includes('<!-- @napkin:booth -->'), 'the packed page has no marker left')
+    assert.equal(src.split('function boothStep(').length - 1, 1)
+    assert.equal(src.split('id="booth-hd-tpl"').length - 1, 1)
+  }
+  // The snippet is a self-contained piece: no </body>, no marker of its own.
+  assert.doesNotMatch(BOOTH, /<\/body/i)
+  assert.ok(!BOOTH.includes('<!-- @napkin:booth -->'))
 })

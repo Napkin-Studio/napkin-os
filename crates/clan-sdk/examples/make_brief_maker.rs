@@ -184,15 +184,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| repo_root().join("app/public/apps/campaign-research.example.clan"));
 
     let schema = fs::read_to_string(dir.join("schema.json"))?;
-    // The OS's fields and the agent engine are inlined at build (one snippet
-    // each, every app).
+    // The OS's fields, the Booth and the agent engine are inlined at build (one
+    // snippet each, every app).
     let index_html = app_ui::inline_sphere(
         &dir.join(".."),
         &app_ui::inline_source_card(
             &dir.join(".."),
-            &app_ui::inline_fields(
+            &app_ui::inline_booth(
                 &dir.join(".."),
-                &fs::read_to_string(dir.join("index.html"))?,
+                &app_ui::inline_fields(
+                    &dir.join(".."),
+                    &fs::read_to_string(dir.join("index.html"))?,
+                )?,
             )?,
         )?,
     )?;
