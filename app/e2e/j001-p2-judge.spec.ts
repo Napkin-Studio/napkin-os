@@ -12,6 +12,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
+import { boothIn, openWork } from './boothFolds'
 import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Decision } from './pilot'
 import { CANARY_SENTENCE } from './seed/j001/p2/wall.mjs'
@@ -64,11 +65,18 @@ for (const size of SIZES) {
     expect(v.judge?.tests.every(x => x.evidence.length > 0)).toBe(true) // each sub-score names its evidence
     expect(v.handler).toMatch(/^judge_work@/) // the Judge version
     await open1(page, job)
-    await expect(page.getByTestId('score-card')).toContainText('22')
+    // Judge is an agent in the Booth (features/align-booth.clan): the whole script's Judge fold holds the card.
+    const { booth } = boothIn(page)
+    const fold = booth.getByTestId('judge-fold')
+    await expect(fold.locator('summary')).toContainText('Judge')
+    await expect(fold.locator('.bf-sign .nk-ag')).toHaveCount(1) // signed with Judge's own figure
+    await expect(booth.getByTestId('score-card')).toContainText('22')
+    await expect(booth.getByTestId('score-card')).toContainText('of 30')
+    for (const dim of ['Idea', 'Craft', 'Effect']) await expect(booth.getByTestId('score-card')).toContainText(dim)
+    await expect(fold).not.toContainText(/price|cost|euro|\bcents?\b|charged|credit/i) // no price line in the Booth
     await shot(page, 'judge-card', size)
-    await page.getByTestId('judge-why').click()
-    await expect(page.getByTestId('judge-test').first()).toHaveAttribute('data-value', 'fail') // the failed tests come first
-    await expect(page.getByTestId('judge-test').first()).toContainText('Fixture evidence')
+    await expect(booth.getByTestId('judge-test').first()).toHaveAttribute('data-value', 'fail') // the failed tests come first
+    await expect(booth.getByTestId('judge-test').first()).toContainText('Fixture evidence')
     await shot(page, 'judge-card-why', size)
     await ctx.close()
   })
@@ -195,7 +203,7 @@ for (const size of SIZES) {
     await control(page, { variant: { judge_work: 'score24' } })
     await score(page, doc.token)
     expect((await verdicts(page, doc.token))[0].judge?.trust).not.toBe('earned')
-    await expect(page.getByTestId('score-card')).toContainText(/not yet trusted/i)
+    await expect(boothIn(page).booth.getByTestId('score-card')).toContainText(/not yet trusted/i)
     await shot(page, 'judge-not-trusted', size)
     await ctx.close()
   })
@@ -224,10 +232,13 @@ for (const size of SIZES) {
     await page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: { single_minded_proposition: 'A newer line.' }, agent: 'human', action: 'edit the proposition' } })
     await signIn(page, PEOPLE.copywriter)
     await open1(page, job)
-    await expect(page.getByTestId('score-card')).toContainText(/out of date/i)
+    await expect(boothIn(page).booth.getByTestId('score-card')).toContainText(/out of date/i)
     await shot(page, 'judge-out-of-date', size)
     await ctx.close()
   })
 }
 
-async function open1(page: Page, job: Seeded) { await page.goto(`/#tool-${job.client}-script`); await page.reload(); await page.getByTestId('work-item').first().click() }
+// On the Script editor's own page: the shell can turn the tool route into the client's page while it is still reading
+// the tools, and the client's page lists the job's other work first (a pitch deck, in test 64). openWork waits for the
+// tool page itself.
+async function open1(page: Page, job: Seeded) { await openWork(page, job.client, 'script', 'J001 radio script') }

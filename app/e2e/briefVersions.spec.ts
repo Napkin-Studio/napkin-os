@@ -7,6 +7,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type Page } from '@playwright/test'
+import { wideBeside } from './boothFolds'
 import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
 
 const SHOTS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'design', 'brief-versions-undo')
@@ -48,19 +49,23 @@ for (const size of SIZES) {
     await page.goto(`/#tool-${job.client}-brief`)
     await page.reload()
     await page.getByTestId('work-item').first().click()
-    await page.getByRole('button', { name: 'Version history' }).click()
-    const rows = page.getByTestId('version-row')
+    // Versions live in the Booth (features/align-booth.clan): the whole brief's Versions fold.
+    const app = page.frameLocator('iframe').first()
+    const booth = app.locator('[data-booth-panel]')
+    await booth.getByTestId('versions-fold').locator('summary').click()
+    const rows = booth.getByTestId('version-row')
     await expect(rows).toHaveCount(3) // the draft, v2, v1
     await expect(rows.nth(1)).toContainText('Signed by dara@wk') // each version shows its signer and date
     await expect(rows.nth(1)).toContainText('Locked')
     await expect(rows.nth(2)).not.toContainText('Locked')
     await rows.filter({ hasText: 'v1' }).getByRole('button', { name: 'Compare' }).click()
     await rows.filter({ hasText: 'v2' }).getByRole('button', { name: 'Compare' }).click()
-    const compare = page.getByTestId('version-compare')
+    const compare = booth.getByTestId('version-compare')
     await expect(compare).toBeVisible()
     await expect(compare.getByTestId('compare-part')).toHaveCount(1) // only the part that differs
     await expect(compare).toContainText('someone else')
     await expect(compare).toContainText('go out midweek')
+    if (size.width >= 1440) await wideBeside(app, '#sheet')
     await page.screenshot({ path: join(SHOTS, `versions-compare-${size.tag}.png`) })
 
     await rows.filter({ hasText: 'v1' }).getByRole('button', { name: 'Restore' }).click()

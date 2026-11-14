@@ -1,0 +1,398 @@
+<!-- The Booth's shared folds: Judge and Versions, as one piece of code (features/align-booth.clan).
+     Spliced into a template at its booth-folds marker by the packer
+     (crates/clan-sdk/examples/shared/app_ui.rs, inline_booth, which splices shared/booth.html too), after the Booth.
+
+     Judge: the score card of the work open here (GET clan://judge), out of 30, idea, craft and effect, the failed
+     tests first with their evidence, where Judge advises it goes, and that the 24 is advice until Judge has earned
+     trust. Signed with Judge's own figure (NapkinRoles, the agent-sphere marker). Score again (POST clan://judge)
+     and the creative director's overrule with a written reason (POST clan://judge/overrule). No price and no cost.
+
+     Versions: each approved version with its signer and date and the working draft (GET clan://versions), any two
+     side by side (GET clan://version?n=), and Restore (POST clan://restore). While two are compared the Booth widens
+     to 744 px, as Research's evidence map does: its column in the page's grid grows and the document makes room,
+     so the compare is beside the document, never over it. A restore is told to the shell as a saved write
+     (clan:write), so its undo stack takes it and Cmd Z and Shift Cmd Z work as before (clan:undo-key, the bridge's).
+
+     These are the routes the shell's bands read, on the same document token; nothing new is asked of the host or
+     the shell. Each fold takes data and a mount point, draws, and writes only through the host's own routes.
+
+     What a template does, after boothStart():
+       1. Puts a mount point where the fold goes, in the Booth's whole-document view: an element with
+          data-booth-fold="judge" or "versions". In a string the page draws, boothFoldHtml('judge') gives what the
+          fold holds now, so a redraw keeps it.
+       2. Calls boothFolds({judge: true, versions: true, noun: 'script'}) once, naming the folds it uses.
+     In client review mode (clan:clientmode) the folds draw nothing, and nothing draws before the shell has said
+     which mode the page is in. boothFolds({undo: true}) where the shell keeps an undo stack for the tool (a restore
+     is then told to it as a saved clan:write); boothJudgeSend(body, before) is the one way a page sends work to
+     Judge, so a run is never sent twice (onJudge(busy) tells the page when to draw its own button). -->
+<style id="napkin-booth-folds-css">
+  [data-booth-fold]:empty{display:none}
+  .bf{display:block;min-width:0;color:var(--booth-ink)}
+  .bf > summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:8px;min-height:24px;font:600 10.5px/1.6 var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--booth-muted)}
+  .bf > summary::-webkit-details-marker{display:none}
+  .bf > summary::after{content:"";width:6px;height:6px;margin-left:auto;align-self:center;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translate(-2px,-2px);transition:transform .2s var(--booth-ease,ease)}
+  .bf[open] > summary::after{transform:rotate(-135deg) translate(-2px,-2px)}
+  .bf > summary small{font:500 12px/1.4 var(--font-ui);letter-spacing:0;text-transform:none;color:var(--booth-ink-soft)}
+  .bf > summary:focus-visible{outline:2px solid var(--ag-base);outline-offset:2px}
+  .bf-b{display:grid;gap:12px;margin-top:12px;min-width:0}
+  .bf-sign{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center}
+  .bf-sign .nk-ag{width:26px;height:26px}
+  .bf-sign b{display:block;font:600 13px/1.3 var(--font-ui);color:var(--booth-ink)}
+  .bf-sign span{display:block;font-size:12.5px;line-height:1.4;color:var(--booth-muted)}
+  .bf-note{margin:0;font-size:13px;line-height:1.5;color:var(--booth-ink-soft)}
+  .bf-warn{margin:0;font-size:13px;line-height:1.5;color:var(--booth-ink);border-left:3px solid var(--booth-warn);padding-left:10px}
+  .bf-card{display:grid;gap:10px;min-width:0}
+  .bf-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 18px}
+  .bf-total{margin:0;display:flex;align-items:baseline;gap:6px;color:var(--booth-ink)}
+  .bf-total b{font:400 46px/0.95 var(--font-serif,var(--font-ui));letter-spacing:-.02em}
+  .bf-total span{font:500 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--booth-muted)}
+  .bf-dims{display:grid;grid-template-columns:repeat(3,auto);gap:0 16px;margin:0;padding:0;list-style:none}
+  .bf-dims li{display:grid;gap:2px}
+  .bf-dims span{font:500 10.5px/1.4 var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--booth-muted)}
+  .bf-dims b{font:600 17px/1 var(--font-ui);color:var(--booth-ink)}
+  .bf-dims b small{font-weight:500;font-size:11.5px;color:var(--booth-muted);margin-left:2px}
+  .bf-route{margin:0;font:600 14px/1.4 var(--font-ui);color:var(--booth-ink)}
+  .bf-h{margin:4px 0 0;font:600 10.5px/1.4 var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--booth-muted)}
+  .bf-tests{list-style:none;margin:0;padding:0;display:grid;border-top:1px solid var(--booth-line)}
+  .bf-tests li{display:grid;grid-template-columns:3.6rem minmax(0,1fr);gap:2px 10px;padding:8px 0;border-bottom:1px solid var(--booth-line)}
+  .bf-tests li[data-value="pass"]{opacity:.78}
+  .bf-dim{font:500 10px/1.9 var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--booth-muted)}
+  .bf-tests li[data-value="fail"] .bf-dim{color:var(--booth-warn)}
+  .bf-q{font:600 13px/1.4 var(--font-ui);color:var(--booth-ink)}
+  .bf-ev{grid-column:2;font-size:12.5px;line-height:1.45;color:var(--booth-ink-soft)}
+  .bf-ev::before{content:"\201C"}.bf-ev::after{content:"\201D"}
+  .bf-acts{display:flex;flex-wrap:wrap;gap:8px}
+  .bf-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--booth-line);background:var(--booth-paper);color:var(--booth-ink);font:500 12.5px/1 var(--font-ui);cursor:pointer;white-space:nowrap}
+  .bf-btn:hover{border-color:color-mix(in srgb,var(--ag-base) 30%,var(--booth-line));background:color-mix(in srgb,var(--ag-base) 6%,var(--booth-paper))}
+  .bf-btn[aria-pressed="true"]{background:var(--booth-ink);color:var(--booth-paper);border-color:var(--booth-ink)}
+  .bf-btn[disabled]{opacity:.5;cursor:not-allowed}
+  .bf-btn.primary{background:var(--ag-act,var(--ag-base));color:var(--ag-act-ink,#fff);border-color:var(--ag-act,var(--ag-base))}
+  .bf-link{all:unset;cursor:pointer;font:500 12.5px/1.4 var(--font-ui);color:var(--booth-ink);text-decoration:underline;text-underline-offset:3px}
+  .bf-form{display:grid;gap:8px}
+  .bf-form label{font:600 13px/1.4 var(--font-ui)}
+  .bf-form textarea{font:inherit;font-size:13.5px;min-height:72px;padding:9px 11px;border:1px solid var(--booth-line);border-radius:8px;background:var(--booth-paper);color:var(--booth-ink);resize:vertical}
+  .bf-work{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;margin:0;font-size:13px;color:var(--booth-ink-soft)}
+  .bf-work .nk-ag{width:22px;height:22px}
+  /* Versions */
+  .bf-rows{list-style:none;margin:0;padding:0;display:grid;border-top:1px solid var(--booth-line)}
+  .bf-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--booth-line)}
+  .bf-row b{font:600 14px/1.3 var(--font-ui);color:var(--booth-ink)}
+  .bf-row .bf-sub{display:block;font-size:12.5px;line-height:1.4;color:var(--booth-muted)}
+  .bf-lock{display:inline-flex;align-items:center;gap:6px;margin-left:8px;font:500 10px/1 var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--booth-ink-soft)}
+  .bf-lock::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .bf-row .bf-acts{gap:6px;flex-wrap:nowrap}
+  .bf-cmp{display:grid;gap:10px;min-width:0}
+  .bf-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .bf-colhead{font:600 10.5px/1.4 var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--booth-muted);border-bottom:1px solid var(--booth-line);padding-bottom:6px}
+  .bf-part{display:grid;gap:6px}
+  .bf-part h4{margin:0;font:600 12.5px/1.4 var(--font-ui);color:var(--booth-ink)}
+  .bf-cell{margin:0;font-size:13px;line-height:1.5;color:var(--booth-ink-soft);white-space:pre-wrap;overflow-wrap:anywhere}
+  .bf-cell + .bf-cell{border-left:1px solid var(--booth-line);padding-left:14px}
+  .bf-cell em{color:var(--booth-muted)}
+  .bf-err{margin:0;font-size:13px;color:var(--booth-warn)}
+  @media (max-width:640px){ .bf-btn{min-height:44px} .bf-row{grid-template-columns:minmax(0,1fr)} .bf-tests li{grid-template-columns:minmax(0,1fr)} .bf-ev{grid-column:1} }
+  @media (prefers-reduced-motion:reduce){ .bf > summary::after{transition:none} }
+</style>
+<script id="napkin-booth-folds-js">
+  // The folds' state: what each read last, and what the person has open. BF_AT is undefined until boothFolds().
+  // client is null until the shell says which mode the page is in (clan:clientmode): nothing draws before then.
+  var BF_AT, BF={client:window.parent===window?false:null, judge:{card:null, open:true, passed:false, asking:false, reason:'', busy:false, line:''},
+    versions:{view:null, open:false, picked:[], diff:null, busy:false, error:'', note:''}};
+  var BF_WIDE=744, BF_POLL_MS=4000;
+  var BF_SCHEME=navigator.userAgent.indexOf('Windows')>=0?'http://clan.localhost':'clan://localhost';
+  function bfEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function bfArr(v){ return Array.isArray(v)?v:[]; }
+
+  // ── Judge's words (the shell's judgeModel.ts, without the price line: no price is carried into the Booth) ──
+  var BF_DIM={idea:'Idea', craft:'Craft', effect:'Effect'};
+  var BF_NOT_TRUSTED='Judge is not yet trusted here. Advice only.';
+  // The failed tests first, then the passed, each in the order the rubric gives.
+  function bfFailedFirst(tests){ return bfArr(tests).map(function(t,i){ return {t:t,i:i}; }).sort(function(a,b){ return (a.t.value==='pass')-(b.t.value==='pass')||a.i-b.i; }).map(function(x){ return x.t; }); }
+  function bfStale(s){
+    if(s.out_of_date) return 'This score is out of date: the brief has a new version since it was scored. Score again.';
+    if(!s.current) return 'This score is for an earlier version of the work. Score again to see where this version stands.';
+    return null;
+  }
+  // The host's refusal, in its words: the part after its code.
+  function bfRefusal(m){ var x=/^(ai_off|not_eu|not_configured|spend_refused|judge_failed|judge_malformed)\s*:\s*([\s\S]*)$/.exec(String(m||'').trim()); return x?x[2].trim():'Judge could not score this just now. Nothing was changed.'; }
+  function bfFig(state, size){ var R=typeof NapkinRoles==='object'&&NapkinRoles?NapkinRoles:null; return R?R.tag('judge',{state:state||'idle', decorative:true, size:size||26}):''; }
+  function bfTestHtml(t){ return '<li data-testid="judge-test" data-value="'+bfEsc(t.value)+'" data-dim="'+bfEsc(t.dim)+'"><span class="bf-dim">'+bfEsc(BF_DIM[t.dim]||t.dim)+'</span><span class="bf-q">'+bfEsc(t.question||t.id)+'</span>'+(t.evidence?'<span class="bf-ev">'+bfEsc(t.evidence)+'</span>':'')+'</li>'; }
+  // The Judge fold, from the card the host sends (GET /judge) and what the person has open.
+  function bfJudgeHtml(card, st){
+    if(!card) return '';
+    var s=card.score, h='<details class="bf bf-judge" data-testid="judge-fold" aria-label="Judge"'+(st.open?' open':'')+' data-bf="judge">';
+    h+='<summary>Judge<small>'+(s?bfEsc(s.total)+' of 30':st.busy?'Reading':'Not scored')+'</small></summary><div class="bf-b">';
+    h+='<div class="bf-sign">'+bfFig(st.busy?'working':'idle')+'<div><b>Judge</b><span>Scores the work out of 30 and advises. The creative director decides.</span></div></div>';
+    if(st.busy) h+='<p class="bf-work" role="status" data-testid="judge-working">'+bfFig('working',22)+'<span>Judge is reading this version.</span></p>';
+    if(st.line) h+='<p class="bf-warn" role="status" data-testid="judge-refusal">'+bfEsc(st.line)+'</p>';
+    if(!s){
+      h+='<p class="bf-note" data-testid="judge-empty">'+bfEsc(card.why_not||'Judge has not scored this version yet.')+'</p>';
+      if(card.can_score) h+='<div class="bf-acts"><button type="button" class="bf-btn" data-bf-act="judge-send" data-testid="judge-again"'+(st.busy?' disabled':'')+'>Score this version</button></div>';
+      return h+'</div></details>';
+    }
+    var tests=bfFailedFirst(s.tests), failed=tests.filter(function(t){ return t.value==='fail'; }), kept=tests.filter(function(t){ return t.value==='pass'; }), stale=bfStale(s);
+    var next=s.route==='team'?'cd':'team';
+    h+='<div class="bf-card" data-testid="score-card" data-route="'+bfEsc(s.route)+'" data-trust="'+bfEsc(s.trust)+'">';
+    h+='<div class="bf-top"><p class="bf-total" aria-label="'+bfEsc(s.total)+' of 30"><b>'+bfEsc(s.total)+'</b><span>of 30</span></p>';
+    h+='<ul class="bf-dims" aria-label="Sub-scores">'+['idea','craft','effect'].map(function(d){ return '<li data-dim="'+d+'"><span>'+BF_DIM[d]+'</span><b>'+bfEsc(s.sub&&s.sub[d])+'<small>of 10</small></b></li>'; }).join('')+'</ul></div>';
+    h+='<p class="bf-route" data-testid="judge-route">'+bfEsc(s.route_line)+'</p>';
+    if(stale) h+='<p class="bf-warn" data-testid="judge-stale">'+bfEsc(stale)+'</p>';
+    if(s.overruled) h+='<p class="bf-note" data-testid="judge-overruled">The creative director overruled Judge: '+bfEsc(s.overruled.reason)+'</p>';
+    h+='<h3 class="bf-h">'+(failed.length?'Not passed, '+failed.length:'Every test passed')+'</h3>';
+    if(failed.length) h+='<ul class="bf-tests" data-testid="judge-tests">'+failed.map(bfTestHtml).join('')+'</ul>';
+    if(kept.length){
+      h+='<div><button type="button" class="bf-link" data-bf-act="judge-passed" aria-expanded="'+(st.passed?'true':'false')+'">'+(st.passed?'Hide the passed tests':'Show the '+kept.length+' passed')+'</button></div>';
+      if(st.passed) h+='<ul class="bf-tests">'+kept.map(bfTestHtml).join('')+'</ul>';
+    }
+    if(bfArr(card.older).length) h+='<p class="bf-note">Earlier versions scored '+bfArr(card.older).map(function(o){ return bfEsc(o.total); }).join(', ')+'.</p>';
+    // Until Judge has earned trust its number is advice: the host's own words say so (the route line, the calibration).
+    if(s.trust!=='earned') h+='<p class="bf-note" data-testid="judge-calibration">'+bfEsc(card.setup&&card.setup.calibration||BF_NOT_TRUSTED)+'</p>';
+    var acts='';
+    if(stale||card.can_score) acts+='<button type="button" class="bf-btn'+(stale?' primary':'')+'" data-bf-act="judge-send" data-testid="judge-again"'+(st.busy||!card.can_score?' disabled':'')+'>Score again</button>';
+    if(card.can_overrule&&!s.overruled&&!st.asking) acts+='<button type="button" class="bf-btn" data-bf-act="judge-overrule" data-testid="judge-overrule">Overrule</button>';
+    if(acts) h+='<div class="bf-acts">'+acts+'</div>';
+    if(st.asking&&card.can_overrule&&!s.overruled){
+      h+='<div class="bf-form" data-testid="judge-overrule-form"><label for="bfReason">'+(next==='cd'?'Keep it with you. Why does Judge have this wrong?':'Send it back to the team. Why does Judge have this wrong?')+'</label>'
+        +'<textarea id="bfReason" rows="3" placeholder="A written reason is needed. It is kept in the file.">'+bfEsc(st.reason)+'</textarea>'
+        +'<div class="bf-acts"><button type="button" class="bf-btn primary" data-bf-act="judge-overrule-send" data-route="'+next+'" data-testid="judge-overrule-send"'+(String(st.reason).trim()?'':' disabled')+'>'+(next==='cd'?'Overrule: keep it':'Overrule: send it back')+'</button><button type="button" class="bf-btn" data-bf-act="judge-overrule-cancel">Cancel</button></div></div>';
+    }
+    return h+'</div></div></details>';
+  }
+
+  // ── Versions (the shell's compare.ts and VersionPanel's words) ──
+  function bfLabel(path){ var w=String(path).replace(/[_.]+/g,' ').trim(); return w?w.charAt(0).toUpperCase()+w.slice(1):path; }
+  function bfLine(x){ return [typeof x.role==='string'?x.role:typeof x.status==='string'?x.status+' suggestion':typeof x.kind==='string'?x.kind:'', x.text].filter(Boolean).join(': '); }
+  // Each leaf of the parts, by its path; a list is its items one to a line.
+  function bfFlatten(parts){
+    var out={}, order=[];
+    function put(path, v){
+      if(v==null||v==='') return;
+      var set=function(s){ if(!(path in out)) order.push(path); out[path]=s; };
+      if(typeof v==='string') set(v);
+      else if(typeof v==='number'||typeof v==='boolean') set(String(v));
+      else if(Array.isArray(v)){
+        var lines=v.every(function(x){ return x&&typeof x==='object'&&typeof x.text==='string'; });
+        set(v.every(function(x){ return typeof x==='string'; })?v.join('\n'):lines?v.map(bfLine).join('\n'):JSON.stringify(v));
+      } else if(typeof v==='object') Object.keys(v).forEach(function(k){ put(path+'.'+k, v[k]); });
+    }
+    Object.keys(parts||{}).forEach(function(k){ put(k, parts[k]); });
+    return {map:out, order:order};
+  }
+  // The parts whose words differ, in the order the left version has them, then the right's new ones.
+  function bfCompare(left, right){
+    var l=bfFlatten(left), r=bfFlatten(right);
+    var paths=l.order.concat(r.order.filter(function(k){ return !(k in l.map); }));
+    return paths.filter(function(p){ return (l.map[p]||'')!==(r.map[p]||''); }).map(function(p){ return {path:p, label:bfLabel(p), left:l.map[p]||'', right:r.map[p]||''}; });
+  }
+  function bfDay(iso){ var d=iso?new Date(iso):null; return d&&!isNaN(d.getTime())?d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''; }
+  function bfName(p){ return p==='draft'?'Working draft':'v'+p; }
+  // The older on the left: a version by number, the draft last.
+  function bfOrder(a, b){ return a==='draft'?1:b==='draft'?-1:a-b; }
+  function bfVersionsHtml(view, st, noun){
+    if(!view) return '';
+    var vs=bfArr(view.versions), draft=view.draft, newest=vs[0], picked=st.picked, two=picked.length===2&&st.diff;
+    var draftNote=!draft?'':draft.restored_from!=null?'Restored from v'+draft.restored_from:!newest?(draft.changed?'Not signed yet':'Nothing written yet'):draft.changed?'Changed since the last signed version':'Nothing changed since the last signed version';
+    var sum=vs.length?(vs.length+(vs.length===1?' version':' versions')+(vs.some(function(v){ return v.locked; })?', v'+vs.filter(function(v){ return v.locked; })[0].n+' locked':'')):'None signed';
+    var cmp=function(p){ var on=picked.indexOf(p)>=0; return '<button type="button" class="bf-btn" data-bf-act="ver-compare" data-v="'+bfEsc(p)+'" aria-pressed="'+(on?'true':'false')+'">Compare</button>'; };
+    var h='<details class="bf bf-versions" data-testid="versions-fold" aria-label="Versions"'+(st.open?' open':'')+' data-bf="versions"><summary>Versions<small>'+bfEsc(sum)+'</small></summary><div class="bf-b" data-testid="version-history">';
+    h+='<ul class="bf-rows" aria-label="Versions of this '+bfEsc(noun)+'">';
+    if(draft) h+='<li class="bf-row" data-testid="version-row" data-kind="draft"><div><b>Working draft</b><span class="bf-sub">'+bfEsc(draftNote)+(draft.edited_by&&draft.at?' · '+bfEsc(draft.edited_by)+', '+bfEsc(bfDay(draft.at)):'')+'</span></div><div class="bf-acts">'+cmp('draft')+'</div></li>';
+    vs.forEach(function(v, i){
+      h+='<li class="bf-row" data-testid="version-row" data-version="'+bfEsc(v.n)+'" data-locked="'+(v.locked?'true':'false')+'"><div><b>v'+bfEsc(v.n)+'</b>'+(v.locked?'<span class="bf-lock">Locked</span>':'')
+        +'<span class="bf-sub">Signed by '+bfEsc(v.signer)+' · '+bfEsc(bfDay(v.at))+'</span>'+(v.readable?'':'<span class="bf-sub">Its words cannot be shown: a later change was not kept in a way that can be undone.</span>')+'</div>';
+      if(v.readable) h+='<div class="bf-acts">'+cmp(v.n)+(i===0&&!(draft&&draft.changed)?'':'<button type="button" class="bf-btn" data-bf-act="ver-restore" data-v="'+bfEsc(v.n)+'"'+(st.busy?' disabled':'')+'>Restore</button>')+'</div>';
+      h+='</li>';
+    });
+    h+='</ul>';
+    if(!vs.length) h+='<p class="bf-note">Nothing is approved yet. Each time the '+bfEsc(noun)+' is approved and locked it becomes a version here.</p>';
+    if(picked.length===1) h+='<p class="bf-note">Pick one more to compare it with '+bfEsc(bfName(picked[0]))+'.</p>';
+    if(two){
+      var d=st.diff;
+      h+='<section class="bf-cmp" data-testid="version-compare" aria-label="'+bfEsc(bfName(d.left))+' and '+bfEsc(bfName(d.right))+', side by side">'
+        +'<div class="bf-cols"><span class="bf-colhead">'+bfEsc(bfName(d.left))+'</span><span class="bf-colhead">'+bfEsc(bfName(d.right))+'</span></div>';
+      if(!d.parts.length) h+='<p class="bf-note">These two read the same.</p>';
+      h+=d.parts.map(function(p){ return '<div class="bf-part" data-testid="compare-part"><h4>'+bfEsc(p.label)+'</h4><div class="bf-cols"><p class="bf-cell">'+(p.left?bfEsc(p.left):'<em>Empty</em>')+'</p><p class="bf-cell">'+(p.right?bfEsc(p.right):'<em>Empty</em>')+'</p></div></div>'; }).join('');
+      h+='<div class="bf-acts"><button type="button" class="bf-btn" data-bf-act="ver-close">Close the compare</button></div></section>';
+    }
+    if(st.note) h+='<p class="bf-note" role="status" data-testid="restore-note">'+bfEsc(st.note)+'</p>';
+    if(st.error) h+='<p class="bf-err" role="alert">'+bfEsc(st.error)+'</p>';
+    return h+'</div></details>';
+  }
+
+  // ── drawing, and the Booth's width ──
+  function boothFoldHtml(k){
+    if(!BF_AT||BF.client!==false||!BF_AT[k]) return '';
+    return k==='judge'?bfJudgeHtml(BF.judge.card, BF.judge):k==='versions'?bfVersionsHtml(BF.versions.view, BF.versions, BF_AT.noun||'document'):'';
+  }
+  function bfDraw(k){
+    var els=document.querySelectorAll('[data-booth-fold="'+k+'"]'), html=boothFoldHtml(k);
+    for(var i=0;i<els.length;i++){
+      var el=els[i]; if(el.getAttribute('data-bf-html')===html) continue;
+      var a=document.activeElement, keep=a&&a.id&&el.contains(a)?{id:a.id, s:a.selectionStart, e:a.selectionEnd}:null;
+      el.innerHTML=html; el.setAttribute('data-bf-html', html);
+      if(keep){ var n=document.getElementById(keep.id); if(n){ n.focus(); try{ n.setSelectionRange(keep.s, keep.e); }catch(x){} } }
+    }
+    if(k==='versions') bfWiden();
+  }
+  // Two versions side by side: the compare is wide, so the Booth's column is too (Research's evidence map, 744 px).
+  function boothFoldWide(){ return !!(BF_AT&&BF_AT.versions&&BF.client===false&&BF.versions.open&&BF.versions.picked.length===2&&BF.versions.diff); }
+  // The compare is on screen: drawn, not inside a view the page has hidden, and the Booth open.
+  function bfCompareShown(){
+    var c=document.querySelector('[data-booth-fold] [data-testid="version-compare"]');
+    return !!(c&&!c.closest('[hidden]')&&!(typeof BOOTH==='object'&&BOOTH&&BOOTH.open===false));
+  }
+  // Leaving the compare by any way (a part selected, the fold closed, the Booth hidden, another fold opened):
+  // the two picks are let go, so the Booth goes back to its own width and stays there.
+  function bfLeaveCompare(){
+    var st=BF.versions; if(!st.picked.length&&!st.diff) return;
+    st.picked=[]; st.diff=null; setTimeout(function(){ bfDraw('versions'); }, 0);
+  }
+  // The width the Booth takes while it compares, on a desk this wide: 744 px, less where the document would have
+  // under 360 px; never under what the page gave it.
+  function bfWidthOf(desk, own){
+    var cs=window.getComputedStyle?getComputedStyle(desk):null;
+    var avail=desk.clientWidth-(cs?(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0)+(parseFloat(cs.columnGap)||0):0);
+    return Math.max(own||0, Math.min(BF_WIDE, Math.floor(avail-360)));
+  }
+  var BF_WAS=null;
+  function bfWiden(){
+    var wide=boothFoldWide(); if(wide===BF_WAS) return; BF_WAS=wide;
+    if(typeof boothApply==='function') boothApply(false);
+  }
+  // Wrapped round the page's own size hook (boothStart's size): the page sets its width, then a compare widens it.
+  function bfSize(d){
+    if(boothFoldWide()&&!bfCompareShown()) bfLeaveCompare();
+    var on=boothFoldWide()&&window.innerWidth>1100;
+    d.classList.toggle('booth-wide', on);
+    if(!on){ d.style.removeProperty('--trk'); return; }
+    var own=parseFloat(d.style.getPropertyValue('--bw'))||0, w=bfWidthOf(d, own)+'px';
+    d.style.setProperty('--bw', w); d.style.setProperty('--trk', w);
+  }
+
+  // ── reading and writing, through the host's own routes ──
+  function bfGet(path){ return fetch(BF_SCHEME+path).then(function(r){ return r.ok?r.json():r.json().catch(function(){ return null; }).then(function(j){ throw new Error(j&&j.error||'status '+r.status); }); }); }
+  function bfPost(path, body){
+    return fetch(BF_SCHEME+path,{method:'POST', body:JSON.stringify(body||{})}).then(function(r){
+      return r.json().catch(function(){ return {ok:false, error:'status '+r.status}; }).then(function(j){ if(!r.ok){ j=j||{}; j.ok=false; } return j; });
+    });
+  }
+  function bfReadJudge(){
+    var st=BF.judge; if(!BF_AT||!BF_AT.judge) return;
+    if(st.reading){ st.again=true; return; }
+    st.reading=true; st.again=false;
+    bfGet('/judge').then(function(c){ st.card=c&&c.ok!==false?c:null; }, function(){ /* the card stays as it was */ })
+      .then(function(){ st.reading=false; bfDraw('judge'); if(st.again) bfReadJudge(); });
+  }
+  // One Judge run at a time for this document: every control that sends work to Judge (the fold's Score again,
+  // the page's own Send to Judge and its bar button) goes through here. While a run is unanswered nothing else is
+  // sent (each POST /judge is a metered run); a second ask gets the same answer. `before` is the page's own step
+  // ahead of the run (its hand-off write), inside the same hold.
+  function boothJudgeBusy(){ return !!BF.judge.busy; }
+  function bfJudgeHold(on){ BF.judge.busy=on; bfDraw('judge'); if(BF_AT&&typeof BF_AT.onJudge==='function') BF_AT.onJudge(on); }
+  function boothJudgeSend(body, before){
+    var st=BF.judge; if(st.run) return st.run;
+    st.line=''; bfJudgeHold(true);
+    st.run=Promise.resolve().then(function(){ return before?before():null; }).then(function(){ return bfPost('/judge', body||{}); }).then(function(j){
+      if(j&&j.ok===false) st.line=bfRefusal(j.error);
+      else if(j&&j.kind) st.card=j;
+      return j;
+    });
+    st.run.then(null, function(){ st.line=st.line||'Judge could not score this just now. Nothing was changed.'; }).then(function(){ st.run=null; bfJudgeHold(false); bfReadJudge(); });
+    return st.run;
+  }
+  function bfJudgeSend(){ var card=BF.judge.card; boothJudgeSend(card&&card.piece?{target:card.piece}:{}).then(null, function(){}); }
+  function bfOverrule(route){
+    var st=BF.judge, reason=String(st.reason||'').trim(); if(!reason) return;
+    bfPost('/judge/overrule',{reason:reason, route:route}).then(function(j){
+      if(j&&j.ok===false){ var m=bfRefusal(j.error); st.line=m.indexOf('Judge could not score')===0?'The overrule did not go through. Nothing was changed.':m; return; }
+      st.asking=false; st.reason=''; st.line='';
+    }, function(){ st.line='The overrule did not go through. Nothing was changed.'; }).then(function(){ bfDraw('judge'); bfReadJudge(); });
+  }
+  function bfReadVersions(){
+    var st=BF.versions; if(!BF_AT||!BF_AT.versions) return;
+    if(st.reading){ st.again=true; return; }
+    st.reading=true; st.again=false;
+    bfGet('/versions').then(function(v){ var same=JSON.stringify(v)===JSON.stringify(st.view); st.view=v; st.error=''; return same; }, function(e){ if(st.view) st.error=String(e&&e.message||e); return false; })
+      .then(function(same){ st.reading=false; bfDraw('versions'); if(!same) bfDiff(); if(st.again) bfReadVersions(); });
+  }
+  function bfDiff(){
+    var st=BF.versions;
+    if(st.picked.length!==2){ if(st.diff){ st.diff=null; bfDraw('versions'); } return; }
+    var pair=st.picked.slice().sort(bfOrder), want=pair.join(':');
+    Promise.all([bfGet('/version?n='+pair[0]), bfGet('/version?n='+pair[1])]).then(function(a){
+      if(st.picked.slice().sort(bfOrder).join(':')!==want) return;
+      st.diff={left:pair[0], right:pair[1], parts:bfCompare(a[0].parts, a[1].parts)};
+    }, function(e){ st.error=String(e&&e.message||e); }).then(function(){ bfDraw('versions'); });
+  }
+  function bfPick(p){
+    var st=BF.versions, at=st.picked.indexOf(p);
+    if(at>=0) st.picked.splice(at, 1); else { st.picked.push(p); if(st.picked.length>2) st.picked=st.picked.slice(-2); }
+    st.diff=null; bfDraw('versions'); bfDiff();
+  }
+  // Restore: the old words come into the draft as a new edit by this person; a signed version stays as it was.
+  // The page redraws from the host's reply, and the shell hears a saved write, so its undo stack takes it.
+  function bfRestore(n){
+    var st=BF.versions; if(st.busy) return;
+    st.busy=true; st.error=''; st.note=''; bfDraw('versions');
+    bfPost('/restore',{version:n}).then(function(j){
+      if(j&&j.ok===false){ st.error=j.error||'The host did not restore it.'; return; }
+      // Already the draft's words: nothing was written, so nothing is told.
+      if(j&&j.noop){ st.note='The draft already has the words of v'+n+'. Nothing changed.'; return; }
+      // Where the shell keeps an undo stack for this tool, Cmd Z takes the restore back; where it keeps none, it does not.
+      st.note=BF_AT.undo?'Restored from v'+n+'. Cmd Z takes it back.':'Restored from v'+n+'. To go back, restore the version you want.';
+      if(j&&j.clan&&j.clan.data&&window.__CLAN__){
+        window.__CLAN__.data=j.clan.data; if(j.clan.edits) window.__CLAN__.edits=j.clan.edits;
+        window.dispatchEvent(new CustomEvent('clan:dataupdated',{detail:{source:'restore', version:j.clan.version}}));
+      }
+      if(BF_AT.undo) try{ if(window.parent!==window) window.parent.postMessage({type:'clan:write', v:1, id:'restore-v'+n+'-'+Date.now().toString(36), state:'saved', field:'restore v'+n, text:''}, '*'); }catch(x){}
+    }, function(){ st.error='The page could not reach the host. Nothing was restored.'; })
+      .then(function(){ st.busy=false; bfReadVersions(); });
+  }
+
+  // The page names the folds it uses, once, after boothStart().
+  function boothFolds(o){
+    BF_AT={judge:!!o.judge, versions:!!o.versions, noun:o.noun||'document', undo:!!o.undo, onJudge:o.onJudge};
+    if(typeof BOOTH_AT==='object'&&BOOTH_AT&&typeof BOOTH_AT.size==='function'&&!BOOTH_AT.bfSized){
+      var own=BOOTH_AT.size; BOOTH_AT.size=function(d){ own(d); bfSize(d); }; BOOTH_AT.bfSized=true;
+    }
+    if(typeof NapkinRoles==='object'&&NapkinRoles&&NapkinRoles.auto) NapkinRoles.auto();
+    document.addEventListener('click', function(e){
+      var t=e.target&&e.target.closest?e.target.closest('[data-bf-act]'):null; if(!t||t.disabled) return;
+      var a=t.getAttribute('data-bf-act'), v=t.getAttribute('data-v');
+      if(a==='judge-send') bfJudgeSend();
+      else if(a==='judge-passed'){ BF.judge.passed=!BF.judge.passed; bfDraw('judge'); }
+      else if(a==='judge-overrule'){ BF.judge.asking=true; bfDraw('judge'); var r=document.getElementById('bfReason'); if(r) r.focus(); }
+      else if(a==='judge-overrule-cancel'){ BF.judge.asking=false; BF.judge.reason=''; bfDraw('judge'); }
+      else if(a==='judge-overrule-send') bfOverrule(t.getAttribute('data-route'));
+      else if(a==='ver-compare') bfPick(v==='draft'?'draft':+v);
+      else if(a==='ver-restore') bfRestore(+v);
+      else if(a==='ver-close'){ BF.versions.picked=[]; BF.versions.diff=null; bfDraw('versions'); }
+    });
+    document.addEventListener('input', function(e){
+      if(!e.target||e.target.id!=='bfReason') return;
+      BF.judge.reason=e.target.value;
+      var b=document.querySelector('[data-bf-act="judge-overrule-send"]'); if(b) b.disabled=!String(BF.judge.reason).trim();
+    });
+    // A fold opened or closed is kept across redraws (toggle does not bubble: heard on the way down).
+    document.addEventListener('toggle', function(e){
+      var d=e.target, k=d&&d.getAttribute&&d.getAttribute('data-bf'); if(!k||!BF[k]) return;
+      if(BF[k].open===d.open) return;
+      BF[k].open=d.open;
+      var slot=d.closest('[data-booth-fold]'); if(slot) slot.removeAttribute('data-bf-html');
+      if(k==='versions'){ bfWiden(); if(d.open) bfReadVersions(); }
+      if(k==='judge'&&d.open){ bfReadJudge(); if(BF.versions.diff){ bfLeaveCompare(); if(typeof boothApply==='function') setTimeout(function(){ boothApply(false); }, 0); } }
+    }, true);
+    window.addEventListener('message', function(e){
+      var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:clientmode') return;
+      if(BF.client===!!m.on) return;
+      BF.client=!!m.on; bfDraw('judge'); bfDraw('versions');
+    });
+    // Read again when the document changes, when the page reads the host again, and now and then (a lock, a score
+    // or a version made from outside this page tells the page nothing), as the shell's band did.
+    // The versions are read once for the fold's summary, on every data change, and while the fold is open.
+    window.addEventListener('clan:dataupdated', function(){ bfReadJudge(); bfReadVersions(); });
+    window.addEventListener('clan:viewloaded', function(){ bfReadJudge(); if(BF.versions.open) bfReadVersions(); });
+    setInterval(function(){ if(document.hidden) return; bfReadJudge(); if(BF.versions.open) bfReadVersions(); }, BF_POLL_MS);
+    bfReadJudge(); bfReadVersions();
+  }
+</script>

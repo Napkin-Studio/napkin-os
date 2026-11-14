@@ -10,6 +10,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type FrameLocator, type Page } from '@playwright/test'
+import { wideBeside } from './boothFolds'
 import { asMe, PEOPLE, seedJ001 } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Size } from './pilot'
 import { RADIO_SCRIPT, SCRIPT_EDITOR_APP, TV_SCRIPT } from './seed/j001/p2/script-editor.mjs'
@@ -144,12 +145,21 @@ for (const size of SIZES) {
     // Start a new version and restore v1: a new edit, and v2 stays.
     await boothOf(page).locator('#newv').click()
     await expect(boothOf(page).locator('#stamp')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Version history' }).click()
-    await expect(page.getByTestId('version-row')).toHaveCount(3) // the draft, v2, v1
-    await page.locator('[data-testid="version-row"][data-version="1"]').getByRole('button', { name: 'Restore' }).click()
+    // Versions live in the Booth (features/align-booth.clan): the whole script's Versions fold.
+    await boothOf(page).getByTestId('versions-fold').locator('summary').click()
+    await expect(boothOf(page).getByTestId('version-row')).toHaveCount(3) // the draft, v2, v1
+    // Two compared side by side: the Booth widens to 744 px beside the script, never over it.
+    await boothOf(page).locator('[data-testid="version-row"][data-version="1"]').getByRole('button', { name: 'Compare' }).click()
+    await boothOf(page).locator('[data-testid="version-row"][data-version="2"]').getByRole('button', { name: 'Compare' }).click()
+    await expect(boothOf(page).getByTestId('version-compare')).toContainText('A second version.')
+    if (size.width >= 1440) await wideBeside(app, '#sheet')
+    await shot(page, 'script-versions-compare', size)
+    await boothOf(page).getByRole('button', { name: 'Close the compare' }).click()
+    await boothOf(page).locator('[data-testid="version-row"][data-version="1"]').getByRole('button', { name: 'Restore' }).click()
     await expect(app.locator('textarea[data-id="b1"][data-field="text"]')).toHaveValue(RADIO_SCRIPT.script.beats[0].text)
-    await expect(page.locator('[data-testid="version-row"][data-version="2"]')).toBeVisible()
-    await expect(page.getByTestId('version-row')).toHaveCount(3)
+    await expect(boothOf(page).locator('[data-testid="version-row"][data-version="2"]')).toBeVisible()
+    await expect(boothOf(page).getByTestId('version-row')).toHaveCount(3)
+    await expect(boothOf(page).getByTestId('version-row').first()).toContainText('Restored from v1') // the page has read the restore back
     await shot(page, 'script-versions', size)
     // At desktop width Cmd Z undoes the last edit and it can be brought back.
     if (size.width >= 1024) {
@@ -177,7 +187,7 @@ for (const size of SIZES) {
     await open1(page, job)
     await boothOf(page).getByRole('button', { name: 'Send to Judge' }).click()
     await expect(boothOf(page).getByTestId('judge-score')).toContainText('24')
-    await expect(page.getByTestId('score-card')).toContainText('24') // the shared score card, above the page
+    await expect(boothOf(page).getByTestId('score-card')).toContainText('24') // Judge's score card, in the Booth's Judge fold
     await ctx.close()
   })
 

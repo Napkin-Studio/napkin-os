@@ -172,6 +172,7 @@
   .bbody .pickrow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
   .bbody .pickrow span{font:400 17px/1.2 var(--font-serif);overflow-wrap:anywhere}
   .booth>.booth-hd{margin:0}
+  .booth>.booth-holder{margin:0;padding:12px 18px 0}
   @media (min-width:1101px){
     body{overflow-x:clip}
     .idesk{transition:grid-template-columns var(--booth-dur) var(--booth-ease),gap var(--booth-dur) var(--booth-ease)}
@@ -193,6 +194,7 @@
 </style>
 <!-- @napkin:clan-fields -->
 <!-- @napkin:booth -->
+<!-- @napkin:booth-folds -->
 </head>
 <body>
 <div class="idesk" id="idesk" data-where="idea-room">
@@ -209,18 +211,21 @@
  <!-- The Booth: the room's side parts. Whole room: The team goes first, the routes' state and the creative
       director's choice. A card or a route picked in the document: its author, votes and flags, or its fork and merge state. -->
  <aside class="booth" id="booth" data-testid="booth" aria-label="Booth">
+  <p class="booth-holder" data-booth-holder data-testid="booth-holder" role="status"></p>
   <div class="bbody">
    <section id="bSel" hidden></section>
    <div id="bWhole">
     <section id="gate" data-testid="ai-gate" aria-label="The team goes first"></section>
     <section id="bRoutes" aria-label="Routes, in short"></section>
     <section id="bChoice" aria-label="The creative director's choice"></section>
+    <section id="bJudge" data-booth-fold="judge" aria-label="Judge"></section>
    </div>
   </div>
  </aside>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!-- @napkin:agent-sphere -->
 <script>
 (function(){
   'use strict';
@@ -775,6 +780,8 @@
     key: function(e){ var t = e.target; return !(t && t.closest && t.closest('input,textarea,select,[contenteditable="true"],[contenteditable="plaintext-only"],dialog[open]')); }
   });
   boothApply(true);
+  // Judge scores the chosen route: its fold sits in the whole room's Booth (shared/booth-folds.html).
+  if(typeof boothFolds === 'function') boothFolds({ judge: true, noun: 'room' });
   load();
   // Seen by the page tests: nothing else reads it.
   window.__ideaRoom = {
