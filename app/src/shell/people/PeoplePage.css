@@ -57,7 +57,8 @@
 .pa-table th {
   font: 600 11px var(--font-mono);
   letter-spacing: .08em;
-  color: var(--faint);
+  /* muted, not faint: the headers pass contrast in light and dark (the suite's axe scan, test 72) */
+  color: var(--muted);
   text-align: left;
   padding: 8px;
   border-bottom: 1px solid var(--line);
