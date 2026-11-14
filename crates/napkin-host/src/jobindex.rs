@@ -115,6 +115,8 @@ pub struct JobDoc {
 /// One place on a document's own Needs you list.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Held {
+    /// The shell's `needKey` of the item (`<code>:<address or text>`): what a set-aside mark is kept under.
+    pub key: String,
     #[serde(rename = "for", skip_serializing_if = "Option::is_none")]
     pub for_: Option<AttentionFor>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -275,8 +275,8 @@ async fn needs_are_counted_per_document_and_a_set_aside_mark_is_the_persons_own(
         .unwrap()
         .iter()
         .all(|d| d["mine"] == 0));
-    // the old answer is still there for the surfaces that read it
-    assert!(v["items"].is_array() && v["total"].is_number());
+    // the second list is gone: one source, per document
+    assert!(v.get("items").is_none() && v.get("total").is_none(), "{v}");
 
     // set aside: the key is needs.ts needKey, so it holds a colon, a space and a slash
     let key = "flagged%3Atenth%20finding%2Fa";

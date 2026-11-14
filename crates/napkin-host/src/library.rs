@@ -123,6 +123,7 @@ pub(crate) fn recent_facts(
         places
             .entry((a.code, a.address.as_deref().unwrap_or(&a.text)))
             .or_insert_with(|| crate::jobindex::Held {
+                key: format!("{}:{}", a.code, a.address.as_deref().unwrap_or(&a.text)),
                 for_: a.for_.clone(),
                 due: a.due.clone(),
             });

@@ -11,14 +11,14 @@
 //! readable by nobody else and counted by nobody: Napkin never scores people, and a mark is not a
 //! measure of one.
 //!
-//! The index stays read-only: `POST /needs` is 405. A mark is written by `POST /needs/{id}/done` and
-//! taken back by `DELETE` on the same path, which is the five seconds to undo.
+//! The index stays read-only: `POST /needs` is 405. `GET /needs` answers per document (`documents`), the
+//! person's own set-aside keys (`aside`), the next deadline and the timesheet reminder. There is no second
+//! list: what is on a document's own Needs you list is what is counted.
 //!
-//! Set aside (features/align-needs-lock-people.clan, stage 1) is the same kind of mark on the decision
-//! view's own items: `POST /needs/{key}/aside?path=<document>` with the key of the shell's `needKey`, and
-//! `DELETE` to bring it back. `GET /needs` answers the caller's keys per document (`aside`) so a set-aside
-//! item stays gone after a reload, and, per document, `{path, count, mine, earliest_due, next_deadline}`
-//! (`documents`) for the desk. The marks are the person's own: another person's answer never holds them.
+//! Set aside (features/align-needs-lock-people.clan) is the person's own mark on one of a document's items:
+//! `POST /needs/{key}/aside?path=<document>` with the key of the shell's `needKey`, and `DELETE` to bring it
+//! back. The marks are kept here, one small file each, readable by nobody else and counted by nobody:
+//! Napkin never scores people, and a mark is not a measure of one.
 
 use std::collections::{HashSet, VecDeque};
 use std::fs;
@@ -270,16 +270,10 @@ pub fn job_items(
 
 /// `GET /needs` only: the index is read-only, so a write to it is 405. A done mark has its own path.
 pub fn router() -> Router<Arc<AppCtx>> {
-    Router::new()
-        .route("/t/{tenant}/needs", get(needs))
-        .route(
-            "/t/{tenant}/needs/{id}/done",
-            post(mark_done).delete(undo_done),
-        )
-        .route(
-            "/t/{tenant}/needs/{id}/aside",
-            post(set_aside).delete(bring_back),
-        )
+    Router::new().route("/t/{tenant}/needs", get(needs)).route(
+        "/t/{tenant}/needs/{id}/aside",
+        post(set_aside).delete(bring_back),
+    )
 }
 
 // ── per document, and set aside ─────────────────────────────────────────────
@@ -294,18 +288,86 @@ fn aside_id(path: &str, key: &str) -> String {
     format!("aside{SEP}{path}{SEP}{key}")
 }
 
+/// The index's needs that are notices or tasks on one document, as the document's own list carries them: an
+/// attention item that does not block the lock (`code` `notice:<kind>`), for the person (or the role) the
+/// need is for. The gate's own row is left out (it is a `gate:` item already) and so is the timesheet
+/// reminder, which is on no document. Built from the caller's own visible needs, so it names nobody else.
+pub fn notices_on(ctx: &AppCtx, index: &JobIndex, user: &Account, path: &str) -> Vec<Value> {
+    use napkin_host::jobindex::Audience;
+    items_of(ctx, index, Some(user))
+        .into_iter()
+        .filter(|n| n.path == path && n.kind != "gate" && n.kind != "timesheet")
+        .map(|n| {
+            let who = match &n.audience {
+                Audience::Person(p) => serde_json::json!({ "person": p }),
+                Audience::Role(r) => serde_json::json!({ "role": r }),
+                Audience::Job => serde_json::json!({ "person": user.username }),
+            };
+            serde_json::json!({
+                "code": format!("notice:{}", n.kind),
+                "text": n.text,
+                "blocks_lock": false,
+                "for": who,
+                "due": n.due,
+                "job": n.job,
+            })
+        })
+        .collect()
+}
+
+/// A document's decision view as the sandbox sends it to the person who opened it: the host's answer, with
+/// the notices of the job index that are theirs on this document added to `attention` (they block nothing).
+/// The host does not know a person's roles, so the join is made here. `None` when nothing is added.
+pub fn with_notices(
+    ctx: &AppCtx,
+    ws: &crate::state::Workspace,
+    grant: &crate::tokens::Grant,
+    body: &[u8],
+) -> Option<Vec<u8>> {
+    let mut view: Value = serde_json::from_slice(body).ok()?;
+    let index = crate::api::job_index(ws).ok()?;
+    let me = Account {
+        username: grant.person.clone(),
+        agency: crate::tenant::agency_of(&grant.person).unwrap_or_default(),
+        name: None,
+        roles: grant.roles.clone(),
+    };
+    let notices = notices_on(ctx, &index, &me, grant.doc.as_str());
+    if notices.is_empty() {
+        return None;
+    }
+    view.get_mut("attention")?.as_array_mut()?.extend(notices);
+    serde_json::to_vec(&view).ok()
+}
+
 /// What the desk reads per document, for `user`: how many places the document's own Needs you list holds
-/// (the count its library state and the Decisions drawer show, never a second one), how many of those wait
-/// on them (by name or by a role they hold), the earliest date of theirs, and the date the job is next
-/// due. A document with nothing on its list is not listed.
+/// (the count its library state and the Decisions drawer show, never a second one), how many items wait on
+/// them (the list's places that name them or a role they hold, and the notices addressed to them, less what
+/// they set aside), the earliest date of theirs, and the date the job is next due. A document with nothing
+/// of theirs and nothing on its list is not listed.
 pub fn documents_for(
+    ctx: &AppCtx,
     index: &JobIndex,
     user: Option<&Account>,
     today: chrono::NaiveDate,
+    aside: &Value,
 ) -> Vec<Value> {
     let (name, roles) = user.map_or((None, &[][..]), |a| {
         (Some(a.username.as_str()), &a.roles[..])
     });
+    let held = |path: &str, key: &str| {
+        aside[path]
+            .as_array()
+            .is_some_and(|k| k.iter().any(|x| x == key))
+    };
+    let waiting_on = |f: &napkin_host::ops::decisions::AttentionFor| {
+        user.is_some_and(|a| {
+            f.person.as_deref() == Some(a.username.as_str())
+                || f.role
+                    .as_ref()
+                    .is_some_and(|r| a.roles.iter().any(|x| x == r))
+        })
+    };
     let mut out = Vec::new();
     for job in &index.jobs {
         if !index.sees_job(&job.number, name, roles) {
@@ -319,25 +381,37 @@ pub fn documents_for(
                 })
             })
         });
-        for d in job.documents.iter().filter(|d| !d.holds.is_empty()) {
-            let mine: Vec<_> = d
-                .holds
-                .iter()
-                .filter(|h| match (&h.for_, user) {
-                    (Some(f), Some(a)) => {
-                        f.person.as_deref() == Some(a.username.as_str())
-                            || f.role
-                                .as_ref()
-                                .is_some_and(|r| a.roles.iter().any(|x| x == r))
-                    }
-                    _ => false,
-                })
-                .collect();
+        for d in &job.documents {
+            let notices = user.map_or_else(Vec::new, |a| notices_on(ctx, index, a, &d.path));
+            let mut dues: Vec<&str> = Vec::new();
+            let mut mine = 0usize;
+            for h in d.holds.iter().filter(|h| {
+                h.for_.as_ref().is_some_and(|f| waiting_on(f)) && !held(&d.path, &h.key)
+            }) {
+                mine += 1;
+                dues.extend(h.due.as_deref());
+            }
+            for n in &notices {
+                let key = format!(
+                    "{}:{}",
+                    n["code"].as_str().unwrap_or(""),
+                    n["text"].as_str().unwrap_or("")
+                );
+                if held(&d.path, &key) {
+                    continue;
+                }
+                mine += 1;
+                dues.extend(n["due"].as_str());
+            }
+            if d.holds.is_empty() && notices.is_empty() {
+                continue;
+            }
             out.push(serde_json::json!({
                 "path": d.path,
                 "count": d.holds.len(),
-                "mine": mine.len(),
-                "earliest_due": mine.iter().filter_map(|h| h.due.as_deref()).min(),
+                "notices": notices.len(),
+                "mine": mine,
+                "earliest_due": dues.iter().min(),
                 "next_deadline": next,
             }));
         }
@@ -434,57 +508,19 @@ async fn needs(
     let index = crate::api::job_index(&ws)?;
     let user = user.map(|Extension(a)| a);
     let today = ws.now().date_naive();
-    let mut answer = list_for(&ctx, &index, user.as_ref(), tz_of(&query), today);
-    answer["documents"] = Value::Array(documents_for(&index, user.as_ref(), today));
-    answer["aside"] = aside_of(&ctx, user.as_ref());
-    Ok(Json(answer))
-}
-
-fn signed_in(user: Option<Extension<Account>>) -> ApiResult<Account> {
-    user.map(|Extension(a)| a)
-        .ok_or_else(|| ApiError::new(403, "Sign in to mark something done."))
-}
-
-/// The signed-in person marks one of their own items done. A notice only: 409 for a task, 404 for an id
-/// that is not theirs.
-async fn mark_done(
-    State(ctx): State<Arc<AppCtx>>,
-    Tenant(tenant): Tenant,
-    user: Option<Extension<Account>>,
-    Path((_t, id)): Path<(String, String)>,
-    RawQuery(query): RawQuery,
-) -> ApiResult<Json<Value>> {
-    let me = signed_in(user)?;
-    let ws = ctx.workspace(&tenant);
-    let index = crate::api::job_index(&ws)?;
-    let tz = tz_of(&query);
-    let mut mine = all_of(&ctx, &index, &me, tz);
-    // the reminder is decided by the person's local day, which a request a few hours either side may be on
-    for off in [-1_i64, 1] {
-        mine.extend(reminder(&ctx, &me, tz + off * 24 * 60));
-    }
-    let Some(need) = mine.iter().find(|n| n.id == id) else {
-        return Err(ApiError::new(404, "That is not one of your items."));
-    };
-    if !need.can_done {
-        return Err(ApiError::new(
-            409,
-            "This is work to do: it leaves when the work is done.",
-        ));
-    }
-    ctx.done.mark(&me.username, &id)?;
-    Ok(Json(serde_json::json!({ "ok": true, "id": id })))
-}
-
-/// Undo: the person takes their own mark back. It is theirs alone, so there is nothing to look up.
-async fn undo_done(
-    State(ctx): State<Arc<AppCtx>>,
-    user: Option<Extension<Account>>,
-    Path((_t, id)): Path<(String, String)>,
-) -> ApiResult<Json<Value>> {
-    let me = signed_in(user)?;
-    ctx.done.unmark(&me.username, &id)?;
-    Ok(Json(serde_json::json!({ "ok": true, "id": id })))
+    let aside = aside_of(&ctx, user.as_ref());
+    let (name, roles) = user.as_ref().map_or((None, &[][..]), |a| {
+        (Some(a.username.as_str()), &a.roles[..])
+    });
+    Ok(Json(serde_json::json!({
+        "documents": documents_for(&ctx, &index, user.as_ref(), today, &aside),
+        "aside": aside,
+        "next_deadline": index.next_deadline(name, roles, today),
+        // the person's own timesheet reminder, which is on no document: from 16:00 where they are
+        "timesheet": user.as_ref()
+            .and_then(|a| reminder(&ctx, a, tz_of(&query)))
+            .map(|n| crate::jobview::need_view(&n)),
+    })))
 }
 
 #[cfg(test)]
