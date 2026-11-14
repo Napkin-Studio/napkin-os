@@ -14,7 +14,6 @@ import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { linksMessage } from '../src/shell/gate/clientLinkWords.ts'
 
 function templates(): string {
   let dir = dirname(fileURLToPath(import.meta.url))
@@ -196,31 +195,35 @@ test('there is one Lock: the Booth’s, and no "Sign and lock this version" in t
   const booth = BM.slice(BM.indexOf('<aside class="stab" id="stab"'), BM.indexOf('</aside>', BM.indexOf('<aside class="stab" id="stab"')))
   assert.match(booth, /id="lockList"[\s\S]*id="gateBox"[\s\S]*id="lockBtn"/)
   assert.match(booth, /id="crOpen"[\s\S]*id="clientAnswer"[\s\S]*id="clientLinks"/)
-  // Send the client copy (OS bar, Share) runs the brief's `client` action: the link, in the Booth.
+  // Send the client copy (OS bar, Share) is the brief's `client` bar button; the shell answers it with its own form.
   assert.match(fn(BM, 'barItems'), /id:'client', label:'Send the client copy'/)
-  assert.match(BM, /client:function\(\)\{ sendClientCopy\(\); \}/)
 })
 
-test('the shell feeds the page its links and the round, in the words the page draws', () => {
-  const m = linksMessage([
-    { id: 'l1', state: 'open', answer: null, version: 'v1', client: { name: 'Client A contact', email: 'contact@client-a.example' }, expires: '2026-12-14T00:00:00Z', made: '2026-11-14T00:00:00Z' },
-    { id: 'l2', state: 'answered', answer: 'accepted', version: 'v1', client: { name: 'Pat', email: 'pat@client-a.example' }, expires: '2026-12-14T00:00:00Z', made: '2026-11-13T00:00:00Z' },
-  ], null, false)
-  assert.equal(m.type, 'clan:client-links')
-  assert.deepEqual(m.links.map(l => [l.id, l.name, l.state, l.words, l.can_withdraw]), [
-    ['l1', 'Client A contact', 'open', 'Waiting for the client', true],
-    ['l2', 'Pat', 'answered', 'confirmed', false],
-  ])
-  assert.equal(m.round, null)
-  const round = linksMessage([], {
-    review: 'r1', round: 1, rounds_in_scope: 3, version: 'v1', current: true, code: false, approver_answer: null,
-    pieces: [{ n: 1, label: 'The brief', split: false, approved_by: [], changes_by: [] }],
-    reviewers: [{ id: 'a', name: 'Pat', email: 'pat@x.example', role: 'approver', state: 'open', answer: null, answered: null, comments: 1 }],
-    comments: [{ id: 'c1', piece: 1, pin: { x: 0.4, y: 0.4 }, tag: 'preference', text: '<b>Warmer</b> here.', by: { name: 'Pat' }, role: 'approver', flags: ['same spot'] }],
-  } as never, true)
-  assert.equal(round.round!.title, 'Round 1 of 3')
-  assert.deepEqual(round.round!.comments.map(c => [c.where, c.text, c.by, c.flags]), [['The brief, at 40%, 40% · a preference', '<b>Warmer</b> here.', 'Pat (approver)', ['same spot']]])
-  assert.equal(round.code, true)
-  // No price or cost rides along, and nothing scores a person.
-  assert.doesNotMatch(JSON.stringify(round), /price|cost|credit|score/i)
+// The Booth shows the links and the round the host lists for this document (the frame's own token routes), in words;
+// in client review mode it is not drawn.
+test('the Booth says each link and the round in words, and is not drawn in client review', () => {
+  const rows = [
+    { id: 'l1', state: 'open', answer: null, client: { name: 'Client A contact', email: 'c@x.example' }, expires: '2026-12-14T00:00:00Z' },
+    { id: 'l2', state: 'answered', answer: 'accepted', client: { name: 'Pat', email: 'p@x.example' }, expires: '2026-12-14T00:00:00Z' },
+    { id: 'l3', state: 'withdrawn', answer: null, client: { name: 'Sam', email: 's@x.example' }, expires: '2026-12-14T00:00:00Z' },
+  ]
+  const els: Record<string, Record<string, unknown>> = {}
+  const el = (id: string) => els[id] ||= { hidden: false, innerHTML: '', querySelector: () => null, querySelectorAll: () => [] }
+  const run = (clientOn: boolean) => {
+    els.clientLinks = { hidden: false, innerHTML: '', querySelector: () => null, querySelectorAll: () => [] }
+    const f = lift<{ renderClientLinks(): void }>(BM, ['linkWords', 'linkDay', 'linksRoundHtml', 'renderClientLinks', 'linksShown'], ['LINK_STATE', 'LINK_ANSWER'],
+      { $: el, arr, esc, approveLocked: () => true, lockState: () => ({ reopened: [] }), CLIENT: { on: clientOn },
+        LINKS: { rows, round: { round: 1, rounds_in_scope: null, current: true, reviewers: [], comments: [], pieces: [] }, open: false, at: 1 }, loadLinks() {} })
+    f.renderClientLinks()
+    return els.clientLinks
+  }
+  const shown = run(false)
+  assert.equal(shown.hidden, false)
+  const text = String(shown.innerHTML).replace(/<[^>]*>/g, ' ')
+  assert.match(text, /Client A contact\s*: Waiting for the client/)
+  assert.match(text, /Pat\s*: confirmed/)
+  assert.match(text, /Sam\s*: Withdrawn/)
+  assert.match(text, /Round 1/)
+  assert.doesNotMatch(String(shown.innerHTML), /c@x\.example|Withdraw<\/button>|Make the link/, 'no address shown, and nothing here makes or withdraws a link')
+  assert.equal(run(true).hidden, true, 'not drawn in client review mode')
 })
