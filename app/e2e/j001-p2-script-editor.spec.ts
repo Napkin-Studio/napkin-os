@@ -310,14 +310,9 @@ for (const size of SIZES) {
       await shot(page, 'bands-state-hidden-dot', size)
       await expect(booth.getByTestId('booth-state')).toBeVisible({ timeout: 5_000 }) // then the Booth comes in on it, after a second
       // The Booth is pushing the page aside (the grid moves for about half a second): wait for that state, then assert it.
-      // Both boxes move while it does (the Booth's column grows as the page shrinks): the state to wait for is that they have stopped, and then they are beside.
-      let last = ''
-      const settledBeside = async () => {
-        const d = await app.locator('#sheet').boundingBox(), b = await booth.boundingBox(), j = JSON.stringify([d, b]), still = j === last
-        last = j
-        return still && !!d && !!b && d.x + d.width <= b.x + 1
-      }
-      await expect.poll(settledBeside, { intervals: [250], timeout: 10_000, message: 'the page ends before the Booth begins, never over it' }).toBe(true)
+      // The Booth's column grows to its width (the grid's push, about half a second, slower on a loaded machine): wait for the grid to have reached it,
+      // not for two equal reads, which a frame that has not advanced also gives. Then the page ends before the Booth begins.
+      await expect.poll(() => app.locator('.booth-desk').evaluate(e => { const t = getComputedStyle(e).gridTemplateColumns.split(' ').map(parseFloat), want = parseFloat(e.style.getPropertyValue('--bw')); return Math.abs(t[t.length - 1] - want) < 0.5 }), { intervals: [250], timeout: 15_000, message: 'the Booth\'s column has reached its width' }).toBe(true)
       const d = await box(app.locator('#sheet'), 'the page'), b = await box(booth, 'the Booth')
       expect(d.x + d.width, 'beside the page, never over it').toBeLessThanOrEqual(b.x + 1)
       await shot(page, 'bands-state-hidden-in', size)
