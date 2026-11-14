@@ -195,7 +195,7 @@ for (const tool of TOOLS) {
     assert.match(shown[0].textContent, /Does every line earn its place\?.*The second line repeats the first\./)
     assert.match(card.textContent, /advice until Judge has earned trust/)
     assert.match(card.querySelector('[data-testid="judge-route"]').textContent, /Back to the team with the notes/)
-    assert.doesNotMatch(fold.textContent, /price|cost|euro|cent\b|cents|charg|credit|spend/i, 'no price or cost line')
+    assert.doesNotMatch(fold.textContent, /price|cost|euro|\bcents?\b|charg|credit|spend/i, 'no price or cost line')
     // The passed tests are a click away.
     p.click(`${tool.panel} [data-bf-act="judge-passed"]`)
     assert.deepEqual(p.all(`${tool.panel} [data-testid="judge-test"]`).map(t => t.getAttribute('data-value')), ['fail', 'fail', 'pass', 'pass'])
@@ -205,7 +205,7 @@ for (const tool of TOOLS) {
 test('Judge with nothing scored says why, still with no price; Score again and the overrule go to the host\'s own routes', async () => {
   const none = await open(SRC.script, { data: RADIO, card: CARD({ score: null, setup: { ...CARD().setup, backend: null, price_eur: 1.5 } }) })
   assert.match(none.one('#side [data-testid="judge-empty"]').textContent, /not scored this version yet/)
-  assert.doesNotMatch(none.one('#side [data-testid="judge-fold"]').textContent, /price|cost|euro|cent\b|charg|credit/i)
+  assert.doesNotMatch(none.one('#side [data-testid="judge-fold"]').textContent, /price|cost|euro|\bcents?\b|charg|credit/i)
   const p = await open(SRC.script, { data: RADIO, post: (path) => (path === '/judge' ? CARD() : { ok: true }) })
   p.click('#side [data-testid="judge-again"]')
   await p.settle()

@@ -158,6 +158,7 @@ for (const size of SIZES) {
     await expect(app.locator('textarea[data-id="b1"][data-field="text"]')).toHaveValue(RADIO_SCRIPT.script.beats[0].text)
     await expect(boothOf(page).locator('[data-testid="version-row"][data-version="2"]')).toBeVisible()
     await expect(boothOf(page).getByTestId('version-row')).toHaveCount(3)
+    await expect(boothOf(page).getByTestId('version-row').first()).toContainText('Restored from v1') // the page has read the restore back
     await shot(page, 'script-versions', size)
     // At desktop width Cmd Z undoes the last edit and it can be brought back.
     if (size.width >= 1024) {

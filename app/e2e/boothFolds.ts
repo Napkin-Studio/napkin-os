@@ -10,7 +10,8 @@ export function boothIn(page: Page): { app: FrameLocator; booth: ReturnType<Fram
 /** Two versions compared at 1440 px: the Booth widens to 744 px and sits beside the document, never over it. */
 export async function wideBeside(app: FrameLocator, doc: string) {
   const booth = app.locator('[data-booth-panel]')
-  await expect.poll(async () => Math.round(await booth.evaluate(el => el.getBoundingClientRect().width)), { timeout: 10_000 }).toBe(744)
+  // The column opens with the page's own push (a grid transition): measured once it has settled.
+  await expect.poll(async () => booth.evaluate(el => { const r = el.getBoundingClientRect(); return Math.round(r.width) === 744 && r.right <= innerWidth + 0.5 }), { timeout: 10_000 }).toBe(true)
   const [d, b] = await Promise.all([app.locator(doc).first().evaluate(el => el.getBoundingClientRect().toJSON()), booth.evaluate(el => el.getBoundingClientRect().toJSON())])
   expect(d.right, 'the document ends before the Booth begins').toBeLessThanOrEqual(b.left)
   expect(b.right, 'the Booth stays on screen').toBeLessThanOrEqual(1440)

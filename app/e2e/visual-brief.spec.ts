@@ -236,6 +236,9 @@ for (const size of SIZES) {
     await booth.getByRole('button', { name: 'Approve version 2' }).click()
     await expect(booth.getByTestId('locked-stamp')).toContainText('Locked · version 2')
     // Versions live in the Booth (features/align-booth.clan): both are listed, and two compared sit beside the page.
+    // The fold is the whole page's: the part just edited is still selected, so go back to the whole page first.
+    const whole = booth.getByRole('button', { name: 'Back to the whole page' })
+    if (await whole.count()) await whole.click()
     await booth.getByTestId('versions-fold').locator('summary').click()
     await expect(booth.getByTestId('version-row')).toHaveCount(3) // the draft, v2, v1
     await booth.locator('[data-testid="version-row"][data-version="1"]').getByRole('button', { name: 'Compare' }).click()

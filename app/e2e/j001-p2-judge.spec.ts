@@ -72,7 +72,7 @@ for (const size of SIZES) {
     await expect(booth.getByTestId('score-card')).toContainText('22')
     await expect(booth.getByTestId('score-card')).toContainText('of 30')
     for (const dim of ['Idea', 'Craft', 'Effect']) await expect(booth.getByTestId('score-card')).toContainText(dim)
-    await expect(fold).not.toContainText(/price|cost|euro|cents?\b|charged|credit/i) // no price line in the Booth
+    await expect(fold).not.toContainText(/price|cost|euro|\bcents?\b|charged|credit/i) // no price line in the Booth
     await shot(page, 'judge-card', size)
     await expect(booth.getByTestId('judge-test').first()).toHaveAttribute('data-value', 'fail') // the failed tests come first
     await expect(booth.getByTestId('judge-test').first()).toContainText('Fixture evidence')
@@ -236,4 +236,5 @@ for (const size of SIZES) {
   })
 }
 
-async function open1(page: Page, job: Seeded) { await page.goto(`/#tool-${job.client}-script`); await page.reload(); await page.getByTestId('work-item').first().click() }
+// The script by its title: once the brief is locked the tool page lists the job's other work too (a pitch deck in test 64).
+async function open1(page: Page, job: Seeded) { await page.goto(`/#tool-${job.client}-script`); await page.reload(); await page.getByTestId('work-item').filter({ hasText: 'J001 radio script' }).first().click() }
