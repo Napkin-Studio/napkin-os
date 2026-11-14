@@ -5565,7 +5565,7 @@
     if(typeof boothSay!=='function') return;
     var j=DRAFT, st=null;
     if(phase!=='doc'&&j&&(j.state==='failed'||j.state==='unsent'||j.state==='stalled')){ var why=String(j.error||''); st={name:'run-failed', why:/refus|declin|policy/i.test(why)?'refused':/time ?out|timed out|too long/i.test(why)?'timeout':'provider'}; }
-    boothSay(st, function(id){ if(id==='state-retry') retryDraft(); });
+    boothSay(st, function(id){ if(id==='state-retry') retryDraft(); }, 'run');
   }
   var BAR_LAST=null;
   function sendBar(force){

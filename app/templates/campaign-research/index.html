@@ -5172,7 +5172,7 @@ body.fresh .booth-edge{display:none}
     if(typeof boothSay!=='function') return;
     var cj=typeof CHAT!=='undefined'?CHAT.job:null, st=null;
     if(cj&&(cj.state==='failed'||(cj.error&&!cj.id))){ var why=String(cj.error||''); st={name:'run-failed', why:/refus|declin|policy/i.test(why)?'refused':/time ?out|timed out|too long/i.test(why)?'timeout':'provider'}; }
-    boothSay(st, function(id){ if(id==='state-retry') doRetry(); });
+    boothSay(st, function(id){ if(id==='state-retry') doRetry(); }, 'run');
   }
   function sendBar(st, has, lk){
     sayState();

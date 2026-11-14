@@ -657,6 +657,12 @@
       return;
     }
     S.sig = sig;
+    // A rebuild never takes the line a person is typing in: what they have typed, their caret and the scroll of the box are kept (a part a
+    // person wrote last is never overwritten), unless a named focus asks for another place (a line added, split, joined).
+    var live = null, ae = document.activeElement;
+    if(ae && ae.tagName === 'TEXTAREA' && ae.getAttribute('data-id') && ae.closest('#body')){
+      live = { id: ae.getAttribute('data-id'), field: ae.getAttribute('data-field') || 'text', value: ae.value, a: ae.selectionStart, z: ae.selectionEnd, top: ae.scrollTop };
+    }
     $('body').innerHTML = '<ol class="beats" id="beatlist" aria-label="' + esc(FORMATS[fmt].label) + '">' + c.beats.map(function(b, i){ return beatHtml(b, i, fmt, c, findings); }).join('') + '</ol>'
       + (locked() ? '' : '<p><button type="button" class="btn" data-add="1">Add a ' + esc(FORMATS[fmt].unit) + '</button></p>');
     document.querySelectorAll('.beat textarea').forEach(fit);
@@ -664,6 +670,12 @@
       var ta = document.querySelector('textarea[data-id="' + S.focus.id + '"][data-field="' + (S.focus.field || 'text') + '"]');
       if(ta){ ta.focus(); var at = S.focus.at == null ? ta.value.length : S.focus.at; try{ ta.setSelectionRange(at, at); }catch(e){} }
       S.focus = null;
+    } else if(live){
+      var kept = document.querySelector('textarea[data-id="' + live.id + '"][data-field="' + live.field + '"]');
+      if(kept){
+        if(kept.value !== live.value){ kept.value = live.value; fit(kept); }
+        kept.focus(); try{ kept.setSelectionRange(live.a, live.z); }catch(e){} kept.scrollTop = live.top;
+      }
     }
   }
   function fit(ta){ if(!ta || !ta.style) return; ta.style.height = 'auto'; if(ta.scrollHeight) ta.style.height = ta.scrollHeight + 'px'; }
@@ -790,7 +802,7 @@
     if(typeof boothSay !== 'function') return;
     boothSay(boothMoved(S.up, locked()), function(id){
       if(id === 'state-update') boothUpdateBrief(function(j){ if(j && j.ok === false) toast(j.error || 'The script did not update.'); load(); });
-    });
+    }, 'upstream');
   }
   function draw(force){ drawHead(); drawSetup(); drawBody(force); drawSide(); drawState(); if(typeof boothApply === 'function') boothApply(false); }
   function live(){ drawSide(); var f = findingsOf(checkDoc()); cur().beats.forEach(function(b){ var hx = document.querySelector('[data-hints="' + b.id + '"]'); if(hx) hx.innerHTML = hintsHtml(b.id, f); }); }
@@ -801,7 +813,7 @@
     return Promise.all([
       fetch(clanScheme + '/decisions').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }),
       fetch(clanScheme + '/upstream').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
-    ]).then(function(a){ S.view = a[0]; S.up = a[1]; S.read = true; draw(true); });
+    ]).then(function(a){ S.view = a[0]; S.up = a[1]; S.read = true; draw(false); });
   }
   function askMe(){
     if(S.meAsked || !(window.clan && typeof window.clan.me === 'function')) return;

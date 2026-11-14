@@ -364,7 +364,7 @@
     if(typeof boothSay !== 'function') return;
     var br = brief();
     boothSay(br && br.changed && br.from && br.to ? { name: 'changed-brief', from: 'v' + br.from, to: 'v' + br.to, changes: 'The insight or the proposition may have moved. Your cards and routes stay as they are.' } : null,
-      function(id){ if(id === 'state-update') updateBrief(); });
+      function(id){ if(id === 'state-update') updateBrief(); }, 'upstream');
   }
   var BAR_LAST = '';
   function sendBar(force){

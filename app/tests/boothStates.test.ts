@@ -406,3 +406,83 @@ test('the edge tab says what waits: a state is not called a question', async () 
   assert.doesNotMatch(p.one('#boothEdge').getAttribute('aria-label'), /brief changed/i)
   assert.equal(p.one('#boothCt').textContent, '2')
 })
+
+// ── round 5: each sayer owns its own state ──
+for (const [name, o] of PAGES) {
+  test(`${name}: a page redrawing "no changed brief" does not clear a state it did not say; a data update leaves it said, on the line at 390 too`, async () => {
+    for (const width of [1440, 390]) {
+      const p = await open(SRC_OF[name], { ...o, width })
+      p.win.boothSay({ name: 'run-failed', why: 'provider' }, () => {}, 'run')
+      p.win.boothSay(null, () => {}, 'upstream') // what a page's draw says when its brief has not moved
+      assert.equal(p.one('[data-testid="booth-state"]').getAttribute('data-state'), 'run-failed', `${width}: still said`)
+      // the shell's data update: the page reads the document again and redraws
+      p.win.dispatchEvent(new p.win.CustomEvent('clan:dataupdated', { detail: { source: 'shell' } }))
+      p.win.dispatchEvent(new p.win.Event('clan:viewloaded'))
+      await new Promise(r => setTimeout(r, 200))
+      assert.equal(p.one('[data-testid="booth-state"]').getAttribute('data-state'), 'run-failed', `${width}: still said after a data update`)
+      if (width < 1100) assert.equal(p.one('[data-testid="booth-state-line"]').hidden, false, '390: and still on the line under the bar until dismissed')
+      p.win.boothSay(null) // no owner: only the default owner's own, never another's
+      assert.equal(p.one('[data-testid="booth-state"]').getAttribute('data-state'), 'run-failed', `${width}: boothSay(null) with no owner clears nothing of another sayer's`)
+      p.win.boothSay(null, () => {}, 'run')
+      assert.equal(p.one('[data-testid="booth-state"]').hidden, true, `${width}: its own sayer takes it back`)
+    }
+  })
+}
+
+test('two states true at once make one line, the more urgent first, and the others after it in a short line', async () => {
+  const p = await open('', { html: BARE })
+  const heard: string[] = []
+  p.win.boothSay({ name: 'changed-brief', from: 'v1', to: 'v2', changes: 'Your work stays.' }, (id: string) => heard.push('up:' + id), 'upstream')
+  p.win.boothSay({ name: 'run-failed', why: 'provider' }, (id: string) => heard.push('run:' + id), 'run')
+  assert.equal(p.all('[data-testid="booth-state"]').length, 1, 'one element, not a pile')
+  const line = p.one('[data-testid="booth-state"]')
+  assert.equal(line.getAttribute('data-state'), 'run-failed', 'the more urgent first')
+  assert.match(words(line), /The model did not answer/)
+  assert.match(words(line.querySelector('.bs-small:last-child')), /^Also: The brief changed to v2\.$/)
+  assert.equal(line.querySelectorAll('button').length, 1, 'one action: the top state\'s')
+  line.querySelector('button').click()
+  assert.deepEqual(heard, ['run:state-retry'])
+  p.win.boothSay(null, () => {}, 'run')
+  assert.equal(p.one('[data-testid="booth-state"]').getAttribute('data-state'), 'changed-brief', 'the next one comes up when the first is settled')
+  assert.doesNotMatch(words(p.one('[data-testid="booth-state"]')), /Also/)
+  p.win.boothSay({ name: 'long-run', minutes: 2, step: '' }, () => {}, 'a')
+  p.win.boothSay({ name: 'loading', what: 'the room' }, () => {}, 'b')
+  assert.match(words(p.one('[data-testid="booth-state"]')), /Also: About 2 minutes left\. Loading the room$/)
+})
+
+// ── round 5, item 2: typing while a redraw lands ──
+test('the script editor keeps the line a person is typing in, its caret and its text, when the shell sends a view read and a data update', async () => {
+  const p = await open(SRC.script, { data: RADIO })
+  await p.settle()
+  const sel = 'textarea[data-id="b1"][data-field="text"]'
+  const ta = p.one(sel)
+  ta.focus(); ta.setSelectionRange(7, 7)
+  assert.equal(p.d.activeElement, ta)
+  // the redraws the shell causes: a view read (the page reads the host again) and a data update (another write landed)
+  p.win.dispatchEvent(new p.win.Event('clan:viewloaded'))
+  p.win.dispatchEvent(new p.win.CustomEvent('clan:dataupdated', { detail: { source: 'shell' } }))
+  await p.settle(); await p.settle()
+  assert.equal(p.one(sel), ta, 'the same text box: it was not replaced')
+  assert.equal(ta.isConnected, true)
+  assert.equal(p.d.activeElement, ta, 'and it is still the one with focus')
+  assert.equal(ta.selectionStart, 7, 'the caret did not move')
+  // typing now lands where the caret was
+  const before = ta.value
+  ta.setRangeText('XY', 7, 7, 'end'); ta.dispatchEvent(new p.win.Event('input', { bubbles: true }))
+  assert.equal(ta.value, before.slice(0, 7) + 'XY' + before.slice(7))
+  assert.equal(ta.selectionStart, 9)
+  // a redraw that lands after the typing keeps the typed words too: nothing a person wrote last is overwritten
+  p.win.dispatchEvent(new p.win.Event('clan:viewloaded')); await p.settle(); await p.settle()
+  assert.equal(p.one(sel), ta); assert.equal(ta.value, before.slice(0, 7) + 'XY' + before.slice(7)); assert.equal(p.d.activeElement, ta)
+})
+
+test('a structural redraw (a line added) still keeps the focused line\'s caret and typed text', async () => {
+  const p = await open(SRC.script, { data: RADIO })
+  await p.settle()
+  const ta = p.one('textarea[data-id="b1"][data-field="text"]')
+  ta.focus(); ta.setSelectionRange(3, 3)
+  ta.setRangeText('Z', 3, 3, 'end'); ta.dispatchEvent(new p.win.Event('input', { bubbles: true }))
+  p.one('[data-add="1"]').click(); await p.settle()
+  const now = p.one('textarea[data-id="b1"][data-field="text"]')
+  assert.match(now.value, /^.{3}Z/, 'the typed Z is still at the caret\'s place')
+})

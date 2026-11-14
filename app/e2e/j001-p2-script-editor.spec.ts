@@ -261,6 +261,27 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
+  // Typing while a redraw lands: the line a person is typing in is never replaced, so the text goes in where the caret was (the owner's rule: a
+  // part a person wrote last is never overwritten). The shell's view read and data update are sent while the caret sits mid-text.
+  test(`script editor: a redraw that lands while a person types keeps the line, the caret and the words, ${size.tag} px`, async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
+    await script(page, job, RADIO_SCRIPT, 'J001 radio script')
+    await open1(page, job)
+    const app = frameOf(page)
+    const line = app.locator('textarea[data-id="b1"][data-field="text"]')
+    const was = await line.inputValue()
+    await line.evaluate((el: HTMLTextAreaElement) => { el.focus(); el.setSelectionRange(8, 8); (window as unknown as { __mark: HTMLElement }).__mark = el })
+    await app.locator('body').evaluate(() => { window.dispatchEvent(new Event('clan:viewloaded')); window.dispatchEvent(new CustomEvent('clan:dataupdated', { detail: { source: 'shell' } })) })
+    await app.locator('body').evaluate(() => new Promise(r => setTimeout(r, 400))) // the page reads the host and redraws
+    expect(await line.evaluate((el: HTMLTextAreaElement) => (window as unknown as { __mark: HTMLElement }).__mark === el && el.isConnected && document.activeElement === el && el.selectionStart), 'the same box, focused, caret where it was').toBe(8)
+    await page.keyboard.type('QQ')
+    await expect(line).toHaveValue(was.slice(0, 8) + 'QQ' + was.slice(8))
+    await ctx.close()
+  })
+
   // A state said while the Booth is hidden is brought to the person (features/align-booth.clan, review): the tab shows the dot, then the
   // Booth comes in on it, beside the page. At 390 px, where the Booth follows the page and cannot hide, it is said above the page.
   test(`script editor: a state said while the Booth is hidden shows the dot and then the Booth; at 390 it is a line under the bar, ${size.tag} px`, async ({ browser }) => {
@@ -273,20 +294,19 @@ for (const size of SIZES) {
     const app = frameOf(page), booth = boothOf(page)
     // Measure only what is on screen: wait for it to be visible, then read its box and say the box exists.
     const box = async (loc: ReturnType<typeof app.locator>, what: string) => { await expect(loc, what).toBeVisible(); const b = await loc.boundingBox(); expect(b, `${what}: has a box`).not.toBeNull(); return b! }
-    // The page draws its Changed brief from boothMoved() on every redraw (the shell's clan:dataupdated redraws it whenever the document is read
-    // again, more often late in a run), so a state said once from outside is wiped by the next redraw. Make the page's own read say it: then
-    // every redraw says the same thing, as a real moved brief would.
+    // A state said by something other than the page's own Changed brief (here under another sayer's name, as a failed run is) is not the page's to
+    // clear: the page's redraws, which the shell causes with clan:dataupdated and clan:viewloaded, say "no changed brief" and leave it.
     const say = () => app.locator('body').evaluate(() => {
-      const w = window as unknown as { boothSay: (s: object | null, a: () => void) => void; boothMoved: () => object }
-      const moved = { name: 'changed-brief', from: 'v1', to: 'v2', changes: 'Updating takes the new brief into this page. What you wrote here stays.' }
-      w.boothMoved = () => moved
-      w.boothSay(moved, () => {})
+      const w = window as unknown as { boothSay: (s: object | null, a: () => void, o?: string) => void }
+      w.boothSay({ name: 'changed-brief', from: 'v1', to: 'v2', changes: 'Updating takes the new brief into this page. What you wrote here stays.' }, () => {}, 'run')
     })
+    const redraw = () => app.locator('body').evaluate(() => { window.dispatchEvent(new CustomEvent('clan:dataupdated', { detail: { source: 'shell' } })); window.dispatchEvent(new Event('clan:viewloaded')) })
     if (size.width >= 1100) {
       await booth.locator('.booth-hide').click()
       await expect(app.locator('#boothEdge')).toBeVisible()
       await say()
-      await expect(app.locator('#boothEdge.has')).toBeVisible() // the dot, at once
+      await redraw()
+      await expect(app.locator('#boothEdge.has')).toBeVisible() // the dot, at once, and it survives a redraw of the page
       await shot(page, 'bands-state-hidden-dot', size)
       await expect(booth.getByTestId('booth-state')).toBeVisible({ timeout: 5_000 }) // then the Booth comes in on it, after a second
       // The Booth is pushing the page aside (the grid moves for about half a second): wait for that state, then assert it.
@@ -303,8 +323,9 @@ for (const size of SIZES) {
       // The line steps aside by itself after ten seconds (tested in boothStates.test.ts); here it is kept up, so slow screenshots cannot outlast it.
       await app.locator('body').evaluate(() => { (window as unknown as { BOOTH_LINE_MS: number }).BOOTH_LINE_MS = 600_000 })
       await say()
+      await redraw()
       const line = app.getByTestId('booth-state-line')
-      await expect(line).toBeVisible()
+      await expect(line).toBeVisible() // and it survives a redraw of the page
       expect(await yOf(), 'the page did not move under the person').toBe(top0)
       const scrollTo = (where: 'top' | 'middle' | 'bottom') => app.locator('body').evaluate((_b, w) => { const h = document.documentElement.scrollHeight - innerHeight; scrollTo(0, w === 'top' ? 0 : w === 'middle' ? h / 2 : h) }, where)
       for (const where of ['top', 'middle', 'bottom'] as const) {
