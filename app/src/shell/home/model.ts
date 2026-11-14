@@ -5,8 +5,7 @@
 // What Needs you is made of, as plain functions (features/roles-and-homes.clan, features/needs-you-full.clan):
 // what Needs you holds, in what order, and the words said about it. Nothing here fetches.
 
-import type { JobNeed, LibraryItem, NextDeadline } from '../../host/types'
-import { callsIn, clientName, stateWords } from '../nui/deskData'
+import type { JobNeed, NextDeadline } from '../../host/types'
 import { formatRoute, isJobNumber } from '../route'
 import { greeting } from '../when'
 
@@ -75,30 +74,6 @@ export function orderNeeds<T extends { due?: string | null }>(rows: readonly T[]
 export function firstNeeds<T>(rows: readonly T[], all: boolean): { shown: T[]; more: number } {
   const shown = all ? [...rows] : rows.slice(0, NEEDS_FIRST)
   return { shown, more: rows.length - shown.length }
-}
-
-/**
- * What is waiting on this person. A job's documents are the job's: its needs come from the server per
- * person (a planner and a creative director on one job see different lines). A document with no job
- * stays as it was: a call to make, a run that wants an answer, a failed run.
- */
-export function needsRows(items: readonly LibraryItem[], jobNeeds: readonly JobNeed[] = []): NeedRow[] {
-  const loose = items
-    .filter(i => !i.job)
-    .filter(i => callsIn(i) > 0 || i.run?.state === 'failed')
-    .map(i => {
-      const st = stateWords(i)
-      const failed = i.run?.state === 'failed'
-      const waiting = i.run?.state === 'waiting'
-      return {
-        path: i.path,
-        title: i.title || 'Untitled',
-        sub: i.client ? clientName(i.client) : 'No client',
-        state: st.text,
-        action: failed ? 'See what failed' : waiting ? 'Answer' : 'Make the calls',
-      }
-    })
-  return orderNeeds<NeedRow>([...jobNeeds.map(jobNeedRow), ...loose])
 }
 
 /** What an empty Needs you says: the next deadline on the person's own jobs when there is one, else that none is set. */
