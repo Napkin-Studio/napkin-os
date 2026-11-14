@@ -14,10 +14,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import type { DashboardView, JudgeCardView, JudgeTest, JobEntry, PieceScore } from '../src/host/types.ts'
 import { tiles } from '../src/shell/home/dashboardModel.ts'
-import { JudgeBand } from '../src/shell/judge/JudgeBand.tsx'
 import { JudgeScoresBody } from '../src/shell/judge/JudgeScoresPage.tsx'
 import { countsOf, failedFirst, headline, priceLine, refusalLine, rowsOf, standing, staleLine } from '../src/shell/judge/judgeModel.ts'
-import type { Judge } from '../src/shell/judge/useJudge.ts'
 
 const test_ = (id: string, value: 'pass' | 'fail', dim: JudgeTest['dim'] = 'idea'): JudgeTest => ({
   id, dim, method: 'llm', value, evidence: `The line for ${id}.`, reason_code: value === 'pass' ? 'pass' : `judge.fail.${id}`, question: `Question of ${id}?`,
@@ -29,65 +27,28 @@ const SCORE = (over: Partial<NonNullable<JudgeCardView['score']>> = {}): NonNull
   advised_route: 'team', route: 'team', brave: false, route_line: 'Advised: back to the team with the notes. Judge is not yet trusted here. Advice only.', trust: 'none',
   judge_version: 'rubric-1/fixture/none/none', overruled: null, decided: null, ...over,
 })
-const CARD = (over: Partial<JudgeCardView> = {}): JudgeCardView => ({
-  ok: true, kind: 'script', piece: 'script', pieces: ['script'], can_score: true, why_not: null, setup: SETUP, score: SCORE(), older: [], can_overrule: false, creative_director_named: true, ...over,
-})
-const JUDGE = (card: JudgeCardView | null, over: Partial<Judge> = {}): Judge => ({ card, line: null, busy: false, item: null, state: null, send: async () => {}, overrule: async () => true, ...over })
-const band = (card: JudgeCardView | null, over: Partial<Judge> = {}) => renderToStaticMarkup(createElement(JudgeBand, { judge: JUDGE(card, over) }))
 
-test('the score card says the number and why: the failed tests come first, each with its evidence', () => {
-  const html = band(CARD())
-  assert.match(html, /data-testid="score-card"/)
-  assert.match(html, /<b>22<\/b>/)
-  assert.match(html, /Idea<\/span><b>7<\/b>/)
+// The score card itself is the Booth's Judge fold (templates/shared/booth-folds.html; tests/boothFolds.test.ts reads it
+// against the host's shapes). What stays here is the shell's model: the words the host's answers are said in.
+test('the failed tests come first, and the headline says the number and why', () => {
   assert.deepEqual(failedFirst(SCORE().tests).map(t => t.value), ['fail', 'fail', 'pass', 'pass'])
   assert.match(headline(SCORE()), /^22 of 30\. Idea 7, craft 7, effect 8\. 2 tests not passed\.$/)
   assert.equal(headline(SCORE({ tests: [test_('a', 'pass')] })).endsWith('Every test passed.'), true)
-  // closed by default; open, the failed tests are listed before the passed ones and each names its evidence
-  assert.doesNotMatch(html, /data-testid="judge-test"/)
 })
 
-test('until Judge is trusted the card says so in plain words, in the header route and in the calibration line', () => {
-  const html = band(CARD())
-  assert.match(html, /Judge is not yet trusted here\. Advice only\./)
-  assert.match(html, /data-testid="judge-calibration"/)
-  assert.match(html, /60 decided pieces/)
-  // earned: no advice line and no calibration line
-  const earned = band(CARD({ score: SCORE({ trust: 'earned', route_line: 'Back to the team with the notes.' }) }))
-  assert.doesNotMatch(earned, /Advice only/)
-  assert.doesNotMatch(earned, /judge-calibration/)
-})
-
-test('a score for older work or an older brief says so and offers Score again', () => {
+test('a score for older work or an older brief is stale', () => {
   assert.equal(staleLine(SCORE()), null)
   assert.match(staleLine(SCORE({ out_of_date: true }))!, /out of date/)
   assert.match(staleLine(SCORE({ current: false }))!, /earlier version/)
-  const html = band(CARD({ score: SCORE({ out_of_date: true }) }))
-  assert.match(html, /data-testid="judge-stale"/)
-  assert.match(html, /data-testid="judge-again" data-primary=""/)
-  assert.doesNotMatch(band(CARD()), /judge-again" data-primary/)
 })
 
-test('only the creative director is offered the overrule, and an overruled score says whose word stands', () => {
-  assert.doesNotMatch(band(CARD()), /judge-overrule"/)
-  assert.match(band(CARD({ can_overrule: true })), /data-testid="judge-overrule"/)
-  const over = band(CARD({ can_overrule: true, score: SCORE({ overruled: { route: 'cd', at: 't', reason: 'The thought is the one we want.' } }) }))
-  assert.match(over, /The creative director overruled Judge: The thought is the one we want\./)
-  assert.doesNotMatch(over, /data-testid="judge-overrule"/)
-})
-
-test('with no score it says what a run costs before it starts, or that Judge is not set up, or why it cannot score yet', () => {
-  assert.match(band(CARD({ score: null })), /Judge answers from fixture scores here\. Nothing is charged/)
-  assert.match(priceLine({ ...SETUP, backend: 'llm-judge', price_eur: 0.04 }), /About 4 cents|costs about 4 cents/)
-  assert.match(priceLine({ ...SETUP, backend: 'llm-judge', price_eur: null }), /price of a run is not set/)
+test('with no score the host\'s words are said: Judge is not set up, or answers from fixtures, or why it cannot score yet', () => {
+  assert.match(priceLine(SETUP), /Judge answers from fixture scores here\. Nothing is charged/)
   assert.match(priceLine({ ...SETUP, backend: null, configured: false }), /not set up here/)
-  assert.match(band(CARD({ score: null, why_not: 'Choose a route first. Judge scores the chosen route.' })), /Choose a route first/)
-  assert.equal(band(null), '')
   // a refusal is said in the host's words
   assert.equal(refusalLine('ai_off: AI is switched off for this client, so Judge cannot read its work.'), 'AI is switched off for this client, so Judge cannot read its work.')
   assert.match(refusalLine('judge_malformed: nope'), /nope/)
   assert.match(refusalLine('something else'), /Nothing was changed/)
-  assert.match(band(CARD({ score: null }), { line: 'Judge is not set up here.' }), /data-testid="judge-refusal"[^>]*>Judge is not set up here\./)
 })
 
 const piece = (over: Partial<PieceScore> = {}): PieceScore => ({

@@ -10,7 +10,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type FrameLocator, type Page } from '@playwright/test'
-import { wideBeside } from './boothFolds'
+import { barOffers, wideBeside } from './boothFolds'
 import { asMe, PEOPLE, seedJ001 } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Size } from './pilot'
 import { RADIO_SCRIPT, SCRIPT_EDITOR_APP, TV_SCRIPT } from './seed/j001/p2/script-editor.mjs'
@@ -167,7 +167,7 @@ for (const size of SIZES) {
       await line.evaluate((el: HTMLTextAreaElement) => { el.focus(); el.setSelectionRange(el.value.length, el.value.length) })
       await line.pressSequentially(' more')
       await expect.poll(async () => (await dataOf(page, job, doc.path)).includes('Tonight, try something new. more')).toBe(true)
-      await expect(page.getByTestId('undo')).toBeEnabled()
+      await expect.poll(() => barOffers(page, 'Undo')).toBe(true)
       await page.keyboard.press('ControlOrMeta+z')
       await expect(line).not.toHaveValue(/more/)
       await page.keyboard.press('ControlOrMeta+Shift+z')

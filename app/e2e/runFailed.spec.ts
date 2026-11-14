@@ -22,9 +22,9 @@ for (const [tag, width, height] of [['390', 390, 844], ['1440', 1440, 900]] as c
       const ask = 'Client A, an Irish whiskey, wants to reach drinkers aged 25 to 34.'
       await app.locator('#prompt').fill(ask)
       await app.getByRole('button', { name: 'Write the brief' }).click()
-      const failed = page.locator('[data-state="run-failed"]')
+      const failed = app.locator('[data-state="run-failed"]') // said in the Booth
       await expect(failed).toBeVisible()
-      expect((await failed.locator('.ns-line').allInnerTexts()).filter(Boolean)).toHaveLength(1) // one plain line
+      expect((await failed.locator('.bs-line').allInnerTexts()).filter(Boolean)).toHaveLength(1) // one plain line
       await expect(failed).not.toContainText(/exception|stack|[{}]/i)
       await expect(app.locator('body')).toContainText(ask) // the inputs stay
       // The provider is back: Try again sends the same ask and the state goes.

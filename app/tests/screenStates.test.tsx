@@ -37,9 +37,10 @@ const S = await import('../src/components/states/ScreenStates.tsx')
 const { Gallery } = await import('../src/components/states/Gallery.tsx')
 const { loadingPhase, RECTS_AFTER_MS, SPINNER_AFTER_MS } = await import('../src/components/states/loading.ts')
 const { createSaveQueue, writeFrom } = await import('../src/components/states/saveQueue.ts')
-const { StateStrip } = await import('../src/components/states/StateStrip.tsx')
+const { default: SaveStatus } = await import('../src/components/SaveStatus.tsx')
+const { useSaveState } = await import('../src/components/states/useSaveState.ts')
 const { DOORS, PHASE1_DOORS, ROLES, doorsWithoutTool, hasTool, doorById } = await import('../src/components/states/doors.ts')
-const { barFrom, stateOf } = await import('../src/shell/appBar.ts')
+const { barFrom } = await import('../src/shell/appBar.ts')
 const { TEASERS } = await import('../src/shell/comingSoon.ts')
 const { SoonCard } = await import('../src/shell/SoonCard.tsx')
 
@@ -51,6 +52,11 @@ while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
 const read = (p: string) => readFileSync(new URL(p, root), 'utf8')
 /** The authored edit bridge, as the host puts it in the frame (src/shell/bridge/structuredEditBridge.js). */
 const STRUCTURED_EDIT_BRIDGE = read('src/shell/bridge/structuredEditBridge.js')
+
+/** The OS bar's save line over a queue, as AppHost draws it: Not saved with Try again or Update, said once. */
+function SaveLine({ queue, onRefresh }: { queue: ReturnType<typeof createSaveQueue>; onRefresh: () => void }) {
+  return createElement(SaveStatus, { state: useSaveState(queue), onRetry: () => queue.retry(), onRefresh, updatedAt: null })
+}
 
 /** Draw an element into the page and hand back its container. */
 async function draw(el: ReturnType<typeof createElement>) {
@@ -218,14 +224,15 @@ test('network cut while editing: the text stays, the shell is told, Try again sa
   for (const w of f.heard) queue.report(w)
   assert.equal(queue.state(), 'failed')
   assert.equal(queue.unsaved()[0].text, typed)
-  const strip = await draw(createElement(StateStrip, { queue, app: null, onAction: () => {}, onRefresh: () => {} }))
-  assert.match(text(strip.host), /This change did not save\. What you typed is still here\.Try again/)
+  const strip = await draw(createElement(SaveLine, { queue, onRefresh: () => {} }))
+  assert.match(text(strip.host), /Not saved/)
+  assert.equal(strip.host.querySelector('[data-state="failed-save"]')!.getAttribute('title'), FAILED_SAVE.line)
   assert.equal(strip.host.querySelectorAll('button').length, 1)
 
   // still no network: Try again is pressed, the frame is asked, it fails again, the line comes back, the text is kept
   await click(strip.host.querySelector('button')!)
   assert.deepEqual(sent, [f.heard[0].id])
-  assert.equal(strip.host.innerHTML, '', 'while the write is out again the line steps aside')
+  assert.equal(strip.host.querySelectorAll('button').length, 0, 'while the write is out again the line steps aside')
   f.retry(sent[0]); await f.settle()
   assert.equal(f.heard.at(-1)!.state, 'failed')
   await act(async () => { queue.report(f.heard.at(-1)!) })
@@ -243,7 +250,8 @@ test('network cut while editing: the text stays, the shell is told, Try again sa
   assert.equal(f.heard.at(-1)!.state, 'saved')
   await act(async () => { queue.report(f.heard.at(-1)!) })
   assert.equal(queue.state(), 'idle')
-  assert.equal(strip.host.innerHTML, '', 'the line is gone once it saved')
+  assert.equal(strip.host.querySelectorAll('button').length, 0, 'the line is gone once it saved')
+  assert.doesNotMatch(text(strip.host), /Not saved/)
   assert.equal(f.win.clan.data().brief.line, typed, 'reopening reads what the host now holds')
   await strip.unmount()
   f.win.close()
@@ -260,7 +268,7 @@ test('a write the host refuses as stale shows Changed and is never forced over t
   for (const w of f.heard) queue.report(w)
   assert.equal(queue.state(), 'changed')
   let refreshed = 0
-  const strip = await draw(createElement(StateStrip, { queue, app: null, onAction: () => {}, onRefresh: () => { refreshed++ } }))
+  const strip = await draw(createElement(SaveLine, { queue, onRefresh: () => { refreshed++ } }))
   assert.match(text(strip.host), /The brief changed while you were typing\./)
   assert.match(text(strip.host.querySelector('button')!), /^Update to the new brief$/)
   await click(strip.host.querySelector('button')!)
@@ -300,47 +308,6 @@ test('a failed run says one plain line, returns the estimate, keeps the inputs, 
   await click(r.host.querySelector('button')!)
   assert.equal(tried, 1)
   await r.unmount()
-})
-
-test('an app that reports a failed run gets the shell\'s line, and Try again comes back to the app as state-retry', async () => {
-  const bar = barFrom({ v: 1, items: [{ kind: 'mode', mode: 'working', label: 'Stopped' }, { kind: 'state', state: 'run-failed', why: 'refused' }] })
-  const app = stateOf(bar)
-  assert.deepEqual(app, { name: 'run-failed', why: 'refused' })
-  const sent: string[] = []
-  const s = await draw(createElement(StateStrip, { queue: createSaveQueue(), app, onAction: (id: string) => sent.push(id), onRefresh: () => {} }))
-  assert.equal(text(s.host.querySelector('p')!), runFailedLine('refused'))
-  await click(s.host.querySelector('button')!)
-  assert.deepEqual(sent, [STATE_ACTIONS.retry])
-  await s.unmount()
-})
-
-test('an app that sends no state is Normal: the strip shows nothing, so nothing is left loading for ever', async () => {
-  assert.equal(stateOf(barFrom({ v: 1, items: [{ kind: 'status', label: 'Draft' }] })), null)
-  assert.equal(stateOf([]), null)
-  const s = await draw(createElement(StateStrip, { queue: createSaveQueue(), app: null, onAction: () => {}, onRefresh: () => {} }))
-  assert.equal(s.host.innerHTML, '')
-  await s.unmount()
-})
-
-test('a state an app sends is text only, cut to length, and an unknown one is left out', () => {
-  const got = barFrom({ v: 1, items: [
-    { kind: 'state', state: 'loading', what: '<b>the brief</b>'.padEnd(300, 'z') },
-    { kind: 'state', state: 'long-run', minutes: 4 },
-  ] })
-  assert.equal(got.filter(i => i.kind === 'state').length, 1, 'one state at most')
-  const s = stateOf(got)
-  assert.ok(s?.name === 'loading' && s.what.length <= 140 && s.what.startsWith('<b>the brief</b>'))
-  for (const bad of ['sparkle', 7, null]) assert.equal(stateOf(barFrom({ v: 1, items: [{ kind: 'state', state: bad }] })), null)
-  assert.equal(stateOf(barFrom({ v: 1, items: [{ kind: 'state', state: 'changed-brief', from: 'v3' }] })), null, 'a changed brief with no version to update to is left out')
-  assert.deepEqual(stateOf(barFrom({ v: 1, items: [{ kind: 'state', state: 'long-run', minutes: -5, step: 'Step 2' }] })), { name: 'long-run', minutes: 1, step: 'Step 2' })
-})
-
-test('Brief Maker and Research report a failed run and answer state-retry', () => {
-  for (const f of ['templates/brief-maker/index.html', 'templates/campaign-research/index.html']) {
-    const src = read(f)
-    assert.match(src, /kind:'state', state:'run-failed'/, `${f} reports it`)
-    assert.match(src, /state-retry/, `${f} handles Try again`)
-  }
 })
 
 // ── 4. Empty: a finished example and one verb, for every door with no tool ──

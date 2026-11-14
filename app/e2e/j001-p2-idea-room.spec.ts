@@ -381,14 +381,14 @@ for (const size of SIZES) {
     const reopened = await asMe(page, job.api, job.brief)
     expect((await page.request.post(`/s/${reopened.token}/patch-data`, { data: { patch: { single_minded_proposition: 'The easy way to your first Irish pour.' }, agent: 'human', action: 'edit the proposition' } })).status()).toBe(200)
     const app = await openRoom(page, job)
-    const changed = page.locator('[data-state="changed-brief"]')
+    const changed = app.locator('[data-state="changed-brief"]') // said in the Booth
     await expect(changed).toBeVisible()
     await expect(changed).toContainText('The brief changed to v2. This work was made from v1.')
     await expect(changed.getByRole('button', { name: 'Update to brief v2' })).toBeVisible()
     await shot(page, 'room-changed-brief', size)
     await changed.getByRole('button', { name: 'Update to brief v2' }).click()
     await expect(app.getByTestId('brief-proposition')).toContainText('The easy way to your first Irish pour.')
-    await expect(page.locator('[data-state="changed-brief"]')).toHaveCount(0)
+    await expect(app.locator('[data-state="changed-brief"]')).toHaveCount(0)
     await ctx.close()
   })
 

@@ -190,9 +190,10 @@ for (const size of SIZES) {
     await control(page, { fail: 'judge_work' })
     await open1(page, job)
     await page.getByRole('button', { name: 'Send to Judge' }).click()
-    const failed = page.locator('[data-state="run-failed"]')
+    // The shell sent this run from its own bar button, so the Booth's page never heard of it: the OS bar says it, in the host's words.
+    const failed = page.getByTestId('bar-chip').filter({ hasText: 'Judge could not score' })
     await expect(failed).toBeVisible()
-    expect((await failed.locator('.ns-line').allInnerTexts()).filter(Boolean)).toHaveLength(1)
+    await expect(failed).toHaveAttribute('title', /\S/)
     expect((await sessionOf(page)).quota.used).toBe(credits) // the credits come back
     await shot(page, 'judge-run-failed', size)
     // The creative director can still decide.

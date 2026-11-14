@@ -321,7 +321,7 @@ for (const size of SIZES) {
     await page.goto(`/#tool-${job.client}-territories`)
     await page.reload()
     await page.getByTestId('visual-briefs').getByRole('button').first().click()
-    const changed = page.locator('[data-state="changed-brief"]')
+    const changed = frameOf(page).locator('[data-state="changed-brief"]') // said in the Booth
     await expect(changed).toBeVisible({ timeout: 30_000 })
     await expect(changed).toContainText('The brief changed to')
     await expect(changed).toContainText('approved and stays as it is')

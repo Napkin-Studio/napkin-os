@@ -39,3 +39,23 @@ test('the focus ring is var(--accent) again', () => {
   const css = readFileSync(join(src, 'index.css'), 'utf8')
   assert.match(css, /\[tabindex\]:focus-visible \{ outline: 3px solid var\(--accent\); outline-offset: 2px; \}/)
 })
+
+// Nothing is drawn between the OS bar and an open document (features/align-booth.clan, the last stage): the four
+// bands are not mounted and their files are gone. What each did lives in the Booth (the shared folds and the
+// state line) or in the OS bar (Undo and Redo as commands, the save line).
+test('AppHost mounts none of BriefGateBand, VersionBand, JudgeBand and StateStrip, and their files are gone', () => {
+  const host = readFileSync(join(src, 'shell/AppHost.tsx'), 'utf8')
+  for (const name of ['BriefGateBand', 'VersionBand', 'JudgeBand', 'StateStrip']) assert.doesNotMatch(host, new RegExp(name), `${name} is not in AppHost`)
+  for (const gone of ['shell/gate/BriefGateBand.tsx', 'shell/versions/VersionBand.tsx', 'shell/judge/JudgeBand.tsx', 'components/states/StateStrip.tsx']) {
+    assert.ok(!existsSync(join(src, gone)), `${gone} is gone`)
+  }
+  const left = files.filter(f => /\b(BriefGateBand|VersionBand|JudgeBand|StateStrip)\b/.test(readFileSync(f, 'utf8'))).map(f => f.slice(src.length + 1))
+  assert.deepEqual(left, [], 'no file names a deleted band')
+})
+
+test('the shell draws no state of the page: the bar item kind state is gone and the changed-brief block with it', () => {
+  const host = readFileSync(join(src, 'shell/AppHost.tsx'), 'utf8')
+  assert.doesNotMatch(host, /ChangedBrief|FailedSave|STATE_ACTIONS|stateOf/)
+  const bar = readFileSync(join(src, 'shell/appBar.ts'), 'utf8')
+  assert.doesNotMatch(bar, /kind: 'state'|stateOf|AppState/)
+})

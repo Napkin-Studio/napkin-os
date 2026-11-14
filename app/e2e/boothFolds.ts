@@ -32,3 +32,19 @@ export async function openWork(page: Page, client: string, tool: string, title: 
   }).toPass({ timeout: 20_000 })
   await toolPage.getByTestId('work-item').filter({ hasText: title }).first().click()
 }
+
+/** A command of the OS bar (Undo, Redo), by its title: the bar's search field lists it and Enter runs it. Cmd Z does the same. */
+export async function barCommand(page: Page, title: 'Undo' | 'Redo') {
+  await page.getByTestId('bar-search-input').click()
+  await page.getByTestId('bar-search-input').fill(title)
+  await page.getByTestId('bar-result').filter({ hasText: new RegExp(`^${title}`) }).first().click()
+}
+
+/** Whether the bar offers a command now (it lists only the ones that can run). */
+export async function barOffers(page: Page, title: 'Undo' | 'Redo'): Promise<boolean> {
+  await page.getByTestId('bar-search-input').click()
+  await page.getByTestId('bar-search-input').fill(title)
+  const n = await page.getByTestId('bar-result').filter({ hasText: new RegExp(`^${title}`) }).count()
+  await page.keyboard.press('Escape')
+  return n > 0
+}
