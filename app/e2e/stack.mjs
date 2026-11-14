@@ -12,7 +12,8 @@
 //      placeholder roster instead (NAPKIN_AUTH=roster): sam@wk, tia@tbwa and
 //      ann@napkin, so the agency's colours and the medallion can be seen.
 //   5. a second napkin-web, always, on 127.0.0.1:$NAPKIN_E2E_ROSTER_PORT (default 18082): the roster
-//      stack the role tests sign in to (seed/j001/people.mjs, with roles). The server has one auth
+//      stack the role tests sign in to (seed/j001/people.mjs, with roles, most added through the People
+//      store's API). The server has one auth
 //      mode per process, and the existing specs need anonymous sessions, so the two modes run side by
 //      side, each with its own data directory and signed-session key. A spec chooses by baseURL
 //      (`rosterURL` in j001-pilot.spec.ts). Same shell build, same seed, same stand-in middleware.
@@ -27,7 +28,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CANARY } from './seed/j001/canary.mjs'
-import { ROSTER_LINES } from './seed/j001/people.mjs'
+import { addPeople, ROSTER_LINES } from './seed/j001/people.mjs'
 import { standIn } from './standin.mjs'
 
 const app = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -154,9 +155,10 @@ function start(addr, data, auth, gate = false) {
   })
 }
 
-// The roster stack for the role tests: its own data directory, and a roster with the placeholder people
-// and their roles. Started first and waited for, so the primary's health check (which Playwright waits on)
-// means both are up.
+// The roster stack for the role tests: its own data directory, its People store seeded from a roster file with the
+// people admin and the agencies the People page cannot add to yet, and everyone else added with their roles through the
+// People store's API, as in production (features/align-needs-lock-people.clan). Started first and waited for, so the
+// primary's health check (which Playwright waits on) means both are up.
 const rosterData = join(work, 'data-roster')
 mkdirSync(rosterData)
 const rosterFile = join(work, 'roster-people.tsv')
@@ -166,6 +168,11 @@ for (let i = 0; ; i++) {
   try { if ((await fetch(`http://127.0.0.1:${rosterPort}/api/healthz`)).ok) break } catch { /* not up yet */ }
   if (i > 200) { console.error('e2e stack: the roster server did not start'); people.kill('SIGTERM'); cleanup(); process.exit(1) }
   await new Promise(r => setTimeout(r, 100))
+}
+try {
+  await addPeople(`http://127.0.0.1:${rosterPort}`)
+} catch (e) {
+  console.error(`e2e stack: ${e.message}`); people.kill('SIGTERM'); cleanup(); process.exit(1)
 }
 
 const server = start(`127.0.0.1:${port}`, data, roster)

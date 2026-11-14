@@ -1,7 +1,10 @@
 // Placeholder people for the role tests, one per live Phase 1 role, plus the extra shapes the role
 // features need. Names only; no real person. The roster server of the e2e stack (stack.mjs) signs
-// them in, with the roles on the roster line (features/roles-and-homes.clan). Shared as plain .mjs so
-// the stack, which runs under Node alone, and the specs read one list.
+// them in, with the roles the People store holds for them (features/align-needs-lock-people.clan):
+// the Napkin people admin and the people of agencies the People page cannot add to yet come from the
+// roster file, as a deployment's store is seeded; everyone else is added through the People store's
+// own API (`addPeople`), as an admin adds them in production. Shared as plain .mjs so the stack, which
+// runs under Node alone, and the specs read one list.
 export const PEOPLE = {
   planning: { username: 'aoife@wk', name: 'Aoife Test', roles: ['planning'] },
   creativeDirector: { username: 'dara@wk', name: 'Dara Test', roles: ['creative-director'] },
@@ -46,5 +49,35 @@ export const PEOPLE = {
   emptyAgency: { username: 'fia@empty', name: 'Fia Test', roles: ['account-service'] },
 }
 
-/** The roster file's lines: `user@agency<TAB>Display name<TAB>roles`. */
-export const ROSTER_LINES = Object.values(PEOPLE).map(p => `${p.username}\t${p.name}\t${p.roles.join(',')}`)
+/** The agencies the People page adds a person to today: the shell registry's (people.rs CODE_AGENCIES). Any other is made by its
+ *  own test (an agency added on the Agencies tab, or the setup of a new agency), so its people are seeded from the roster file. */
+export const PAGE_AGENCIES = ['wk', 'tbwa', 'ogilvy', 'harbour', 'droga', 'napkin', 'boysandgirls', 'catapult', 'pluto', 'acne']
+
+/** The people admin who adds everyone else, through the API. */
+export const PEOPLE_ADMIN = 'engineer@napkin'
+
+const fromFile = p => p.username === PEOPLE_ADMIN || !PAGE_AGENCIES.includes(p.username.split('@')[1])
+
+/** The roster file's lines: `user@agency<TAB>Display name<TAB>roles`, for the people the store is seeded with. */
+export const ROSTER_LINES = Object.values(PEOPLE).filter(fromFile).map(p => `${p.username}\t${p.name}\t${p.roles.join(',')}`)
+
+/** Everyone else: added with their roles by the people admin through POST /api/admin/people. */
+export const API_PEOPLE = Object.values(PEOPLE).filter(p => !fromFile(p))
+
+/** Add API_PEOPLE to the roster server at `base`, signed in as the people admin. Throws on any refusal. */
+export async function addPeople(base) {
+  const signIn = await fetch(`${base}/api/auth/sign-in`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: PEOPLE_ADMIN }),
+  })
+  const cookie = (signIn.headers.get('set-cookie') ?? '').split(';')[0]
+  if (!signIn.ok || !cookie.startsWith('napkin_session=')) throw new Error(`the people admin could not sign in (${signIn.status})`)
+  for (const p of API_PEOPLE) {
+    const agency = p.username.split('@')[1]
+    const r = await fetch(`${base}/api/admin/people`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ name: p.name, agency, username: p.username, roles: p.roles }),
+    })
+    if (r.status !== 201) throw new Error(`${p.username} was not added (${r.status}): ${await r.text()}`)
+  }
+}

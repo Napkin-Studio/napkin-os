@@ -438,6 +438,13 @@ async fn a_token_minted_before_a_demotion_carries_no_role_in_a_roster_only_agenc
         "the old token still reads as an admin: {}",
         json!(notes)
     );
-    let (_, doors, _) = call(&r, "GET", &format!("/api/t/{t}/doors"), Some(&maeve.cookie), None).await;
+    let (_, doors, _) = call(
+        &r,
+        "GET",
+        &format!("/api/t/{t}/doors"),
+        Some(&maeve.cookie),
+        None,
+    )
+    .await;
     assert_eq!(doors["roles"], json!(["copywriter"]), "{doors}");
 }

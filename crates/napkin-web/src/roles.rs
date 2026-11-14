@@ -4,8 +4,11 @@
 
 //! Roles, homes and the one permission check (features/roles-and-homes.clan).
 //!
-//! A person has one or more roles, carried by the signed session. Two things
-//! read them and nothing else does:
+//! A person has one or more roles, kept in the People store (people.rs) and
+//! read from it on every request by `crate::live::live_roles`, which puts them
+//! on the request's account; the session cookie, a document's token and the
+//! identity provider carry none (features/align-needs-lock-people.clan). Two
+//! things read them and nothing else does:
 //!
 //! - [`Table::view`] turns the roles into what the desk shows: at most five
 //!   page doors (the row under the greeting, the rest under More) and the tools
@@ -634,8 +637,9 @@ pub fn may_set_budget(roles: &[String]) -> bool {
     may_manage_jobs(roles) && in_group(roles, Group::Money)
 }
 
-/// The middleware: a signed-in person's roles against the route. 403 when the
-/// roles may not open it; everyone else passes through.
+/// The middleware: a signed-in person's roles (the People store's, put on the
+/// account by `crate::live::live_roles` just before) against the route. 403
+/// when the roles may not open it; everyone else passes through.
 pub async fn guard(request: Request, next: Next) -> Response {
     let roles = request
         .extensions()

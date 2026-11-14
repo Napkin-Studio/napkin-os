@@ -247,17 +247,19 @@ pub async fn layer(
             response
         }
         Mode::Accounts { sessions, provider } => {
-            // Whether the roster still lists the person (a removal on the People page) is asked
-            // by `directory::live_roles`, which knows whether the agency has a directory of its own.
+            // The cookie names the person and nothing more: whatever roles it claims are dropped here, and
+            // `live::live_roles` puts the People store's in, or signs out a person no longer on it
+            // (features/align-needs-lock-people.clan).
             let account = cookie_value(&parts, SESSION_COOKIE).and_then(|c| sessions.read(&c));
             let path = parts.uri.path().to_string();
             match account {
-                Some(a) => {
+                Some(mut a) => {
+                    a.roles.clear();
                     let tenant = TenantId::of_agency(&a.agency);
                     crate::timing::note_who(tenant.as_str(), &a.username);
                     parts.extensions.insert(tenant);
                     parts.extensions.insert(Person(a.username.clone()));
-                    parts.extensions.insert(Roles(a.roles.clone()));
+                    parts.extensions.insert(Roles::default());
                     parts.extensions.insert(a);
                 }
                 // the agencies' looks are public: the sign-in card wears them before anyone signs in

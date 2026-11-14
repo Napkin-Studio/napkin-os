@@ -7,7 +7,7 @@
 //! line to the one before, and verifying fails after one line is edited or the end is cut off; it holds
 //! nothing from a timesheet.
 
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -41,11 +41,12 @@ barra@bq\tBarra\tadmin\n";
 fn rig() -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let clock = Arc::new(AtomicI64::new(1_000_000));
-    let c = clock.clone();
-    let ctx = Arc::new(
-        AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40)
-            .with_directory_clock(move || c.load(Ordering::SeqCst)),
-    );
+    let ctx = Arc::new(AppCtx::new(
+        dir.path().to_path_buf(),
+        Arc::new(NoConfig),
+        None,
+        40,
+    ));
     let roster = dir.path().join("accounts.tsv");
     std::fs::write(&roster, ROSTER).unwrap();
     let identity = napkin_web::tenant::Identity {
@@ -131,6 +132,20 @@ async fn invite(r: &Rig, admin: &Person, username: &str, name: &str, roles: &[&s
         Some(json!({ "username": username, "name": name, "email": format!("{}@mail.example.test", username.split('@').next().unwrap()), "roles": roles })),
     )
     .await;
+    if st == StatusCode::CONFLICT {
+        // on the roster already, so in the People store (features/align-needs-lock-people.clan): their roles
+        // are set instead
+        let (st, body, _) = call(
+            r,
+            "PUT",
+            &format!("/api/t/{}/agency/people/{username}", admin.tenant),
+            Some(&admin.cookie),
+            Some(json!({ "name": name, "roles": roles })),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{body}");
+        return;
+    }
     assert_eq!(st, StatusCode::CREATED, "{body}");
 }
 

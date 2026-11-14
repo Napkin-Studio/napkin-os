@@ -266,7 +266,42 @@ async fn main() {
         .with_mailer_from_env(),
     );
 
-    let app = napkin_web::router_with(ctx, settings.static_dir.as_deref(), identity);
+    // One People store of who may sign in and with which roles (features/align-needs-lock-people.clan).
+    // The roster's is its provider's; a password provider keeps one beside it, and Cognito must have one:
+    // the pool says who someone is, never what they may do.
+    if let Mode::Accounts { provider, .. } = &identity.mode {
+        if !matches!(provider, Provider::Roster(_)) {
+            let seed = env_string("NAPKIN_AUTH_ROSTER").map(PathBuf::from);
+            match napkin_web::people::People::open_if_any(
+                settings.data_root.join(PEOPLE_DIR),
+                seed.as_deref(),
+            ) {
+                Ok(Some(p)) => ctx.set_people(Arc::new(p)),
+                Ok(None) if matches!(provider, Provider::Cognito(_)) => panic!(
+                    "NAPKIN_AUTH=cognito needs a People store: {}/people.json, or NAPKIN_AUTH_ROSTER to seed it \
+                     (the pool's custom:roles is no longer read)",
+                    settings.data_root.join(PEOPLE_DIR).display()
+                ),
+                Ok(None) => tracing::warn!(
+                    "no People store: local accounts sign in with no roles, as before roles existed"
+                ),
+                Err(e) => panic!("{e}"),
+            }
+        }
+    }
+    let app = napkin_web::router_with(ctx.clone(), settings.static_dir.as_deref(), identity);
+    // The first start after stage 3 imports the build's agency directories into the People store, once; a
+    // directory that moved after its import stops the start rather than run with two stores.
+    if let Some(people) = ctx.people() {
+        match napkin_web::people_import::run(people, &settings.data_root) {
+            Ok(r) => tracing::info!(
+                people = r.people,
+                logos = r.logos,
+                "people store: the agency directories are imported"
+            ),
+            Err(e) => panic!("{e}"),
+        }
+    }
 
     let listener = tokio::net::TcpListener::bind(settings.addr)
         .await

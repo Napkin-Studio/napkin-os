@@ -19,7 +19,6 @@ pub mod api;
 pub mod audit;
 pub mod auth;
 pub mod clean;
-pub mod directory;
 pub mod dogfood;
 pub mod error;
 pub mod etag;
@@ -27,11 +26,13 @@ pub mod events;
 pub mod exports;
 pub mod jobview;
 pub mod links;
+pub mod live;
 pub mod look;
 pub mod mail;
 pub mod meter;
 pub mod needs;
 pub mod people;
+pub mod people_import;
 pub mod roles;
 pub mod sandbox;
 pub mod search;
@@ -137,6 +138,14 @@ pub fn router_with(
     static_dir: Option<&Path>,
     identity: Arc<tenant::Identity>,
 ) -> Router {
+    // the roster's People store is the server's one list of who may sign in, and as what
+    if let tenant::Mode::Accounts {
+        provider: auth::Provider::Roster(r),
+        ..
+    } = &identity.mode
+    {
+        ctx.set_people(r.people_arc());
+    }
     Router::new()
         // The shell API is the only part that runs on a cookie session.
         .nest(
@@ -151,10 +160,11 @@ pub fn router_with(
                 // (features/roles-and-homes.clan), after the tenant layer has named the person
                 .layer(axum::middleware::from_fn(roles::guard))
                 .layer(DefaultBodyLimit::max(UPLOAD_MAX))
-                // the directory's roles replace the session's, on every request (features/agency-setup.clan)
+                // the People store's roles, on every request; the session carries none
+                // (features/align-needs-lock-people.clan)
                 .layer(axum::middleware::from_fn_with_state(
                     ctx.clone(),
-                    directory::live_roles,
+                    live::live_roles,
                 ))
                 .layer(axum::middleware::from_fn_with_state(
                     identity.clone(),

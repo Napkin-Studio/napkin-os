@@ -9,8 +9,8 @@
 //! from the People page by an admin:
 //!
 //! ```text
-//! <data>/_people/people.json     { people: [...], agencies: [...], names: {...} }
-//! <data>/_people/changes.jsonl   one line per change: when, who, what
+//! <data>/_people/people.json     { people: [...], agencies: [...], names: {...}, logos: {...} }
+//! <data>/_people/changes.jsonl   one line per change: when, who, what, before, after
 //! <data>/_people/logos/<id>/     basic agencies' cleaned wordmarks (wordmark-<sha256-8>.svg)
 //! ```
 //!
@@ -33,9 +33,19 @@
 //! [`CODE_ALIASES`] mirror its ids, names, colours and aliases so an agency is
 //! recognised the same way on both sides (app/tests/peopleAdmin.test.ts keeps
 //! the two in step).
+//!
+//! One store of who may sign in and with which roles
+//! (features/align-needs-lock-people.clan, stage 3). A person's `roles` are
+//! kept here and read from here on every request (`crate::live`); the session
+//! cookie, a document's token and the identity provider carry none. An agency's
+//! admin is a person of it holding the `admin` role, and the last one cannot be
+//! removed or lose the role. Every change is one line on `changes.jsonl` (when,
+//! who, what, before, after) and one entry on the agency's audit chain
+//! (`crate::audit`), through the sink the router installs ([`People::set_audit`]).
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
@@ -74,6 +84,21 @@ pub const CODE_ALIASES: &[(&str, &str)] = &[
     ("w+k", "wk"),
 ];
 
+/// The role that makes a person their agency's admin (`napkin_host::agency::ADMIN`).
+pub const ADMIN_ROLE: &str = "admin";
+
+/// Roles as kept: trimmed, lower case, each once, none empty.
+pub fn clean_roles(roles: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for r in roles {
+        let r = r.trim().to_ascii_lowercase();
+        if !r.is_empty() && !out.contains(&r) {
+            out.push(r);
+        }
+    }
+    out
+}
+
 /// How often a read looks at the file for another server's write.
 pub const RECHECK: Duration = Duration::from_secs(2);
 
@@ -92,12 +117,50 @@ pub struct PersonRec {
     pub added_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub removed_at: Option<String>,
+    /// The roles the person holds: the only place they are kept. None is every door, as before roles
+    /// existed (features/roles-and-homes.clan).
+    #[serde(default)]
+    pub roles: Vec<String>,
+    /// The address an agency's admin gave, when one did (the build's directory and CSV import).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
 }
 
 impl PersonRec {
     pub fn active(&self) -> bool {
         self.removed_at.is_none()
     }
+
+    /// An active admin of their agency.
+    pub fn is_agency_admin(&self) -> bool {
+        self.active() && self.roles.iter().any(|r| r == ADMIN_ROLE)
+    }
+
+    /// What a change line keeps of the person, before or after.
+    fn state(&self) -> serde_json::Value {
+        serde_json::json!({ "name": self.name, "roles": self.roles, "removed_at": self.removed_at })
+    }
+}
+
+/// An agency's logo, copied from look.rs's file at the import and written there since
+/// (features/align-needs-lock-people.clan). A data URI, SVG or PNG, as look.rs checks it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgencyLogo {
+    pub logo: String,
+    pub by: String,
+    pub at: String,
+}
+
+/// The one-time steps of features/align-needs-lock-people.clan, once done. Never run again.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Migrated {
+    /// The roster file's roles column was copied into the store (or the store was seeded with it).
+    #[serde(default)]
+    pub roster_roles: bool,
+    /// The build's agency directories, imported: agency id to a fingerprint of the people it held then.
+    /// None until the import ran.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directories: Option<BTreeMap<String, String>>,
 }
 
 /// A basic agency's wordmark: a sanitised SVG file under
@@ -396,7 +459,12 @@ pub struct Book {
     pub agencies: Vec<AgencyRec>,
     /// Display names of agencies in code, by code id.
     #[serde(default)]
-    pub names: std::collections::BTreeMap<String, NameRec>,
+    pub names: BTreeMap<String, NameRec>,
+    /// Agencies' logos, by agency id (any agency: in code, basic, or one only its people name).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub logos: BTreeMap<String, AgencyLogo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub migrated: Option<Migrated>,
 }
 
 /// The code agency `id`'s name in palette.ts.
@@ -420,6 +488,15 @@ pub type Change<T> = Result<T, Refusal>;
 
 fn bad<T>(msg: impl Into<String>) -> Change<T> {
     Err(Refusal::Bad(msg.into()))
+}
+
+/// The answer for an agency nobody may add to: one that does not exist and, for an agency's admin, any
+/// other than their own (the same words, so the answer says nothing of whether it exists).
+pub fn no_agency(text: &str) -> Refusal {
+    Refusal::Bad(format!(
+        "No agency called {:?}. Add it as a new agency first.",
+        text.trim()
+    ))
 }
 
 fn now() -> String {
@@ -532,7 +609,15 @@ impl Book {
         self.people.iter().find(|p| p.id == id)
     }
 
-    /// Everyone seeded from a roster file's text (`user@agency<TAB>Name`, `#` comments; a roles column after the name is not stored here).
+    /// The active admins of `agency`.
+    pub fn admins_of(&self, agency: &str) -> usize {
+        self.people
+            .iter()
+            .filter(|p| p.agency == agency && p.is_agency_admin())
+            .count()
+    }
+
+    /// Everyone seeded from a roster file's text (`user@agency<TAB>Name<TAB>roles`, `#` comments; the roles column is optional).
     pub fn seeded(roster: &str, at: &str) -> Self {
         let mut people: Vec<PersonRec> = Vec::new();
         for line in roster.lines() {
@@ -543,6 +628,7 @@ impl Book {
             let mut cols = l.splitn(3, '\t');
             let user = cols.next().unwrap_or("");
             let name = cols.next().unwrap_or("");
+            let roles = crate::roles::parse_roles(cols.next().unwrap_or(""));
             let Some((id, agency)) = Account::parse_username(user) else {
                 continue;
             };
@@ -558,12 +644,30 @@ impl Book {
                 added_by: "roster".into(),
                 added_at: at.to_string(),
                 removed_at: None,
+                roles,
+                email: None,
             });
         }
         Book {
             people,
+            migrated: Some(Migrated {
+                roster_roles: true,
+                directories: None,
+            }),
             ..Default::default()
         }
+    }
+
+    /// The roster file's roles for `id` (its optional third column); None when the file has no line for them.
+    fn roster_roles(roster: &str, id: &str) -> Option<Vec<String>> {
+        roster
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
+            .find_map(|l| {
+                let mut cols = l.trim_end_matches('\r').splitn(3, '\t');
+                let (u, _) = Account::parse_username(cols.next()?)?;
+                (u == id).then(|| crate::roles::parse_roles(cols.nth(1).unwrap_or("")))
+            })
     }
 }
 
@@ -571,11 +675,17 @@ impl Book {
 #[derive(Debug, Default, Deserialize)]
 pub struct NewPerson {
     pub name: String,
-    /// An agency id, name or alias.
+    /// An agency id, name or alias. An agency's admin may leave it out: they add to their own.
+    #[serde(default)]
     pub agency: String,
     /// The sign-in name; made from the first name and the agency when absent.
     #[serde(default)]
     pub username: Option<String>,
+    /// The roles; none is every door, as before roles existed. The route checks them against the role table.
+    #[serde(default)]
+    pub roles: Vec<String>,
+    #[serde(default)]
+    pub email: Option<String>,
 }
 
 /// What creating a basic agency asks for. Its id is made from the name
@@ -692,16 +802,104 @@ struct Cache {
     checked: Instant,
 }
 
+/// Where a change is also written: the agency's audit chain. `(agency, who, kind, what, person)`; kind is
+/// `permission` for a person's change (and names the person) and `settings` for an agency's.
+pub type AuditSink = Arc<dyn Fn(&str, &str, &'static str, String, Option<&str>) + Send + Sync>;
+
 /// The store: one JSON file, cached, re-read when another server writes it.
 pub struct People {
     dir: PathBuf,
     cache: Mutex<Cache>,
+    audit: OnceLock<AuditSink>,
+}
+
+/// One person as a CSV import or a directory gives them, to be written in one change.
+#[derive(Clone, Debug, Default)]
+pub struct Member {
+    pub id: String,
+    pub name: String,
+    pub email: Option<String>,
+    pub roles: Vec<String>,
+}
+
+/// One agency's directory as the build kept it, for [`People::import_directories`].
+#[derive(Clone, Debug, Default)]
+pub struct Directory {
+    pub agency: String,
+    pub fingerprint: String,
+    pub people: Vec<DirectoryPerson>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct DirectoryPerson {
+    pub id: String,
+    pub name: String,
+    pub email: Option<String>,
+    pub roles: Vec<String>,
+    pub removed: bool,
+    pub added_by: String,
+    pub added_at: String,
+}
+
+/// What an import wrote.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct Imported {
+    pub created: usize,
+    pub updated: usize,
+    pub unchanged: usize,
+}
+
+fn last_admin<T>(agency: &str) -> Change<T> {
+    Err(Refusal::Conflict(format!(
+        "{agency} keeps at least one admin. Make someone else an admin first."
+    )))
+}
+
+fn not_listed<T>(id: &str) -> Change<T> {
+    Err(Refusal::NotFound(format!("{id} is not on the list.")))
+}
+
+/// The words the audit view shows for a change line.
+fn audit_words(line: &serde_json::Value) -> String {
+    let what = line["what"].as_str().unwrap_or("changed");
+    let roles = |v: &serde_json::Value| {
+        let r: Vec<&str> = v["roles"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|x| x.as_str()).collect())
+            .unwrap_or_default();
+        if r.is_empty() {
+            "no roles".to_string()
+        } else {
+            r.join(", ")
+        }
+    };
+    match line["person"].as_str() {
+        Some(p) => match what {
+            "roles changed" => format!(
+                "Changed {p}'s roles from {} to {}.",
+                roles(&line["before"]),
+                roles(&line["after"])
+            ),
+            "added" => format!("Added {p} with {}.", roles(&line["after"])),
+            "removed" => format!("Removed {p} (had {}).", roles(&line["before"])),
+            "renamed" => format!("Renamed {p}."),
+            "email changed" => format!("Changed {p}'s address."),
+            other => format!("{p}: {other}, with {}.", roles(&line["after"])),
+        },
+        None => format!(
+            "{what}: {}.",
+            line["agency"].as_str().unwrap_or("an agency")
+        ),
+    }
 }
 
 impl People {
     /// Open the store in `dir`, seeding it from the roster file `seed` when it
     /// does not exist yet. Refuses a store that cannot be read, and a seed that
     /// names no one: a studio nobody can sign in to is a misconfiguration.
+    /// A store written before roles were kept takes them from the roster
+    /// file's column once (features/align-needs-lock-people.clan), as sign-in
+    /// read them until then; after that the file is only the seed.
     pub fn open(dir: PathBuf, seed: &Path) -> Result<Self, String> {
         let file = dir.join("people.json");
         if !file.exists() {
@@ -725,14 +923,68 @@ impl People {
         if book.people.is_empty() {
             return Err(format!("{} names no one", file.display()));
         }
-        Ok(Self {
+        let people = Self {
             dir,
             cache: Mutex::new(Cache {
                 book,
                 stamp,
                 checked: Instant::now(),
             }),
+            audit: OnceLock::new(),
+        };
+        people.roles_from_roster(seed)?;
+        Ok(people)
+    }
+
+    /// Open the store in `dir` when it exists, else seed it from `seed` when one is given; None when there
+    /// is neither (a server with passwords and no People store: features/align-needs-lock-people.clan).
+    pub fn open_if_any(dir: PathBuf, seed: Option<&Path>) -> Result<Option<Self>, String> {
+        if dir.join("people.json").exists() {
+            let seed = seed.map_or_else(|| dir.join("no-roster.tsv"), Path::to_path_buf);
+            return Self::open(dir, &seed).map(Some);
+        }
+        match seed {
+            Some(s) => Self::open(dir, s).map(Some),
+            None => Ok(None),
+        }
+    }
+
+    /// The one-time copy of the roster file's roles column into a store written before roles were kept.
+    fn roles_from_roster(&self, seed: &Path) -> Result<(), String> {
+        if self
+            .book()
+            .migrated
+            .as_ref()
+            .is_some_and(|m| m.roster_roles)
+        {
+            return Ok(());
+        }
+        // a missing file gave nobody a role at sign-in, and gives none now
+        let roster = std::fs::read_to_string(seed).unwrap_or_default();
+        self.change("roster", "roles from the roster", |book| {
+            let mut lines = Vec::new();
+            for p in book.people.iter_mut().filter(|p| p.roles.is_empty()) {
+                let Some(roles) = Book::roster_roles(&roster, &p.id).filter(|r| !r.is_empty())
+                else {
+                    continue;
+                };
+                let before = p.state();
+                p.roles = roles;
+                lines.push(serde_json::json!({
+                    "person": p.id, "agency": p.agency, "before": before, "after": p.state(),
+                }));
+            }
+            book.migrated
+                .get_or_insert_with(Migrated::default)
+                .roster_roles = true;
+            Ok(((), serde_json::Value::Array(lines)))
         })
+        .map_err(|e| format!("the roster's roles could not be kept: {e:?}"))
+    }
+
+    /// Where every change is also written: the agency's audit chain. Set once, by the router.
+    pub fn set_audit(&self, sink: AuditSink) {
+        let _ = self.audit.set(sink);
     }
 
     fn file(&self) -> PathBuf {
@@ -766,7 +1018,10 @@ impl People {
         self.book().person(username).filter(|p| p.active()).cloned()
     }
 
-    /// Change the store: read it fresh, apply `f`, write it, keep the change on the log.
+    /// Change the store: read it fresh, apply `f`, write it, keep the change on the log. `f` answers what
+    /// the change was: one line (an object) or one per person (an array; none when nothing changed, and then
+    /// nothing is written). Each line gets when, who and what, and goes on `changes.jsonl` and on its
+    /// agency's audit chain.
     fn change<T>(
         &self,
         by: &str,
@@ -776,45 +1031,80 @@ impl People {
         let mut c = self.cache.lock().unwrap();
         let (mut book, _) = read_book(&self.dir).map_err(Refusal::Io)?;
         let (out, detail) = f(&mut book)?;
+        let details = match detail {
+            serde_json::Value::Array(v) => v,
+            one => vec![one],
+        };
+        let marker_only = details.is_empty();
         write_book(&self.dir, &book).map_err(|e| Refusal::Io(e.to_string()))?;
         c.stamp = stamp_of(&self.file());
         c.checked = Instant::now();
         c.book = book;
         drop(c);
-        let at = now();
-        let mut line = serde_json::json!({ "at": at, "by": by, "what": what });
-        if let (Some(o), serde_json::Value::Object(d)) = (line.as_object_mut(), detail.clone()) {
-            o.extend(d);
+        if marker_only {
+            return Ok(out);
         }
-        append_change(&self.dir, &line);
-        tracing::info!(target: "napkin_web::people", by, what, detail = %detail, "people changed");
+        let at = now();
+        for detail in details {
+            let mut line = serde_json::json!({ "at": at, "by": by, "what": what });
+            if let (Some(o), serde_json::Value::Object(d)) = (line.as_object_mut(), detail) {
+                o.extend(d);
+            }
+            append_change(&self.dir, &line);
+            tracing::info!(target: "napkin_web::people", by, what = %line["what"], person = %line["person"], agency = %line["agency"], "people changed");
+            if let (Some(sink), Some(agency)) = (self.audit.get(), line["agency"].as_str()) {
+                let kind = if line.get("person").is_some() {
+                    "permission"
+                } else {
+                    "settings"
+                };
+                sink(
+                    agency,
+                    by,
+                    kind,
+                    audit_words(&line),
+                    line["person"].as_str(),
+                );
+            }
+        }
         Ok(out)
     }
 
-    /// Add a person (or bring back one who was removed).
+    /// Add a person (or bring back one who was removed), to the agency `req.agency` names.
     pub fn add(&self, by: &str, req: &NewPerson) -> Change<PersonRec> {
+        let book = self.book();
+        let Some(agency) = book.recognise(&req.agency) else {
+            let t = req.agency.trim().to_lowercase();
+            if let Some(a) = book
+                .agencies
+                .iter()
+                .find(|a| !a.published && a.claims().contains(&t))
+            {
+                return Err(Refusal::Conflict(format!(
+                    "{} is not published yet, so nobody can be added to it. Publish it on the Agencies tab first.",
+                    a.drafted().map_or_else(|| a.name.clone(), |l| l.name)
+                )));
+            }
+            return Err(no_agency(&req.agency));
+        };
+        self.add_in(by, &agency, req)
+    }
+
+    /// Add a person to `agency`, which the caller has already decided (an agency's admin adds only to their
+    /// own, whatever the request names).
+    pub fn add_in(&self, by: &str, agency: &str, req: &NewPerson) -> Change<PersonRec> {
         let name = req.name.trim().to_string();
         if name.is_empty() {
             return bad("Give the person's name.");
         }
+        let roles = clean_roles(&req.roles);
+        let email = req
+            .email
+            .as_deref()
+            .map(str::trim)
+            .filter(|e| !e.is_empty())
+            .map(str::to_string);
         self.change(by, "added", |book| {
-            let Some(agency) = book.recognise(&req.agency) else {
-                let t = req.agency.trim().to_lowercase();
-                if let Some(a) = book
-                    .agencies
-                    .iter()
-                    .find(|a| !a.published && a.claims().contains(&t))
-                {
-                    return Err(Refusal::Conflict(format!(
-                        "{} is not published yet, so nobody can be added to it. Publish it on the Agencies tab first.",
-                        a.drafted().map_or_else(|| a.name.clone(), |l| l.name)
-                    )));
-                }
-                return Err(Refusal::Bad(format!(
-                    "No agency called {:?}. Add it as a new agency first.",
-                    req.agency.trim()
-                )));
-            };
             let typed = req
                 .username
                 .as_deref()
@@ -836,21 +1126,31 @@ impl People {
                 admin: is_admin(&id),
                 id: id.clone(),
                 name: Some(name.clone()),
-                agency: agency.clone(),
+                agency: agency.to_string(),
                 added_by: by.to_string(),
                 added_at: now(),
                 removed_at: None,
+                roles: roles.clone(),
+                email: email.clone(),
             };
-            match book.people.iter_mut().find(|p| p.id == id) {
+            let before = match book.people.iter_mut().find(|p| p.id == id) {
                 Some(p) if p.active() => {
                     return Err(Refusal::Conflict(format!("{id} can already sign in.")))
                 }
-                Some(p) => *p = rec.clone(),
-                None => book.people.push(rec.clone()),
-            }
+                Some(p) => {
+                    let before = p.state();
+                    *p = rec.clone();
+                    before
+                }
+                None => {
+                    book.people.push(rec.clone());
+                    serde_json::Value::Null
+                }
+            };
             Ok((
-                rec,
-                serde_json::json!({ "person": id, "name": name, "agency": agency }),
+                rec.clone(),
+                serde_json::json!({ "person": id, "name": name, "agency": agency,
+                    "before": before, "after": rec.state() }),
             ))
         })
     }
@@ -862,34 +1162,258 @@ impl People {
             return bad("Give the new name.");
         }
         self.change(by, "renamed", |book| {
-            let p = book
-                .people
-                .iter_mut()
-                .find(|p| p.id == id && p.active())
-                .ok_or_else(|| Refusal::NotFound(format!("{id} is not on the list.")))?;
+            let Some(p) = book.people.iter_mut().find(|p| p.id == id && p.active()) else {
+                return not_listed(id);
+            };
+            let before = p.state();
             let from = p.name.replace(name.clone());
             Ok((
                 p.clone(),
-                serde_json::json!({ "person": id, "from": from, "to": name }),
+                serde_json::json!({ "person": id, "agency": p.agency, "from": from, "to": name,
+                    "before": before, "after": p.state() }),
             ))
         })
     }
 
-    /// Remove a person: they cannot sign in after this; their documents and decisions stay.
+    /// Change the address kept for a person.
+    pub fn set_email(&self, by: &str, id: &str, email: Option<&str>) -> Change<PersonRec> {
+        let email = email
+            .map(str::trim)
+            .filter(|e| !e.is_empty())
+            .map(str::to_string);
+        self.change(by, "email changed", |book| {
+            let Some(p) = book.people.iter_mut().find(|p| p.id == id && p.active()) else {
+                return not_listed(id);
+            };
+            let before = p.email.replace(email.clone().unwrap_or_default());
+            if p.email.as_deref() == Some("") {
+                p.email = None;
+            }
+            Ok((
+                p.clone(),
+                serde_json::json!({ "person": id, "agency": p.agency,
+                    "before": { "email": before }, "after": { "email": p.email } }),
+            ))
+        })
+    }
+
+    /// Change a person's roles. The last admin of an agency keeps the admin role.
+    pub fn set_roles(&self, by: &str, id: &str, roles: &[String]) -> Change<PersonRec> {
+        let roles = clean_roles(roles);
+        self.change(by, "roles changed", |book| {
+            let Some(i) = book.people.iter().position(|p| p.id == id && p.active()) else {
+                return not_listed(id);
+            };
+            let agency = book.people[i].agency.clone();
+            let was_admin = book.people[i].is_agency_admin();
+            let before = book.people[i].state();
+            book.people[i].roles = roles.clone();
+            if was_admin && book.admins_of(&agency) == 0 {
+                return last_admin(&agency);
+            }
+            let p = book.people[i].clone();
+            Ok((
+                p.clone(),
+                serde_json::json!({ "person": id, "agency": agency, "before": before, "after": p.state() }),
+            ))
+        })
+    }
+
+    /// Remove a person: they cannot sign in after this; their documents and decisions stay. A Napkin admin,
+    /// and the last admin of an agency, stay.
     pub fn remove(&self, by: &str, id: &str) -> Change<PersonRec> {
-        if is_admin(id) {
+        if is_admin(id) && self.active(id).is_some() {
             return Err(Refusal::Conflict(format!(
                 "{id} manages people and cannot be removed here."
             )));
         }
         self.change(by, "removed", |book| {
-            let p = book
-                .people
-                .iter_mut()
-                .find(|p| p.id == id && p.active())
-                .ok_or_else(|| Refusal::NotFound(format!("{id} is not on the list.")))?;
-            p.removed_at = Some(now());
-            Ok((p.clone(), serde_json::json!({ "person": id })))
+            let Some(i) = book.people.iter().position(|p| p.id == id && p.active()) else {
+                return not_listed(id);
+            };
+            let agency = book.people[i].agency.clone();
+            let was_admin = book.people[i].is_agency_admin();
+            let before = book.people[i].state();
+            book.people[i].removed_at = Some(now());
+            if was_admin && book.admins_of(&agency) == 0 {
+                return last_admin(&agency);
+            }
+            let p = book.people[i].clone();
+            Ok((
+                p.clone(),
+                serde_json::json!({ "person": id, "agency": agency, "before": before, "after": p.state() }),
+            ))
+        })
+    }
+
+    /// Add or update `members` of `agency` in one write (a CSV import): a new or removed person is added, a
+    /// listed one takes the row's name, address and roles. `keep` is never left without the admin role (the
+    /// importer's own row), and an agency that had an admin keeps one.
+    pub fn import(
+        &self,
+        by: &str,
+        agency: &str,
+        members: &[Member],
+        keep: Option<&str>,
+    ) -> Change<Imported> {
+        self.change(by, "imported", |book| {
+            let had_admin = book.admins_of(agency) > 0;
+            let mut out = Imported::default();
+            let mut lines = Vec::new();
+            for m in members {
+                let Some((id, at)) = Account::parse_username(&m.id) else {
+                    return bad(format!("{:?} is not a sign-in name.", m.id));
+                };
+                if at != agency {
+                    return bad(format!(
+                        "The sign-in name ends @{at}, but the agency is {agency}."
+                    ));
+                }
+                let roles = clean_roles(&m.roles);
+                if keep == Some(id.as_str()) && !roles.iter().any(|r| r == ADMIN_ROLE) {
+                    return Err(Refusal::Conflict(
+                        "This is you: keep the admin role in your own row.".into(),
+                    ));
+                }
+                let before = match book.people.iter_mut().find(|p| p.id == id) {
+                    Some(p)
+                        if p.active()
+                            && p.name.as_deref() == Some(m.name.as_str())
+                            && p.email == m.email
+                            && p.roles == roles =>
+                    {
+                        out.unchanged += 1;
+                        continue;
+                    }
+                    Some(p) => {
+                        let before = p.state();
+                        if p.active() {
+                            out.updated += 1;
+                        } else {
+                            out.created += 1;
+                            p.added_by = by.to_string();
+                            p.added_at = now();
+                            p.removed_at = None;
+                        }
+                        p.name = Some(m.name.clone());
+                        p.email = m.email.clone();
+                        p.roles = roles.clone();
+                        before
+                    }
+                    None => {
+                        out.created += 1;
+                        book.people.push(PersonRec {
+                            admin: is_admin(&id),
+                            id: id.clone(),
+                            name: Some(m.name.clone()),
+                            agency: agency.to_string(),
+                            added_by: by.to_string(),
+                            added_at: now(),
+                            removed_at: None,
+                            roles: roles.clone(),
+                            email: m.email.clone(),
+                        });
+                        serde_json::Value::Null
+                    }
+                };
+                let after = book.person(&id).map(PersonRec::state);
+                lines.push(serde_json::json!({ "person": id, "agency": agency, "before": before, "after": after }));
+            }
+            if had_admin && book.admins_of(agency) == 0 {
+                return last_admin(agency);
+            }
+            Ok((out, serde_json::Value::Array(lines)))
+        })
+    }
+
+    /// The one-time import of the build's agency directories (crate::people_import): `found` is each agency
+    /// with a directory, its people and a fingerprint of them. A person of the directory is written as the
+    /// directory had them (a removed one, or one with no role, who could sign in nowhere, as removed); a
+    /// person of that agency the directory did not name, who could not sign in either, is marked removed.
+    /// Nobody is dropped and no role is widened. One change line per person.
+    pub fn import_directories(&self, found: &[Directory]) -> Change<usize> {
+        self.change("directory import", "imported from the directory", |book| {
+            let mut lines = Vec::new();
+            let mut n = 0;
+            let mut prints = BTreeMap::new();
+            for d in found {
+                prints.insert(d.agency.clone(), d.fingerprint.clone());
+                for m in &d.people {
+                    n += 1;
+                    let gone = m.removed || m.roles.is_empty();
+                    let before = match book.people.iter_mut().find(|p| p.id == m.id) {
+                        Some(p) => {
+                            let before = p.state();
+                            p.name = Some(m.name.clone()).filter(|n| !n.is_empty()).or(p.name.take());
+                            p.email = m.email.clone().or(p.email.take());
+                            p.roles = m.roles.clone();
+                            p.removed_at = if gone {
+                                p.removed_at.clone().or_else(|| Some(now()))
+                            } else {
+                                None
+                            };
+                            before
+                        }
+                        None => {
+                            book.people.push(PersonRec {
+                                admin: is_admin(&m.id),
+                                id: m.id.clone(),
+                                name: Some(m.name.clone()).filter(|n| !n.is_empty()),
+                                agency: d.agency.clone(),
+                                added_by: m.added_by.clone(),
+                                added_at: m.added_at.clone(),
+                                removed_at: gone.then(now),
+                                roles: m.roles.clone(),
+                                email: m.email.clone(),
+                            });
+                            serde_json::Value::Null
+                        }
+                    };
+                    let after = book.person(&m.id).map(PersonRec::state);
+                    lines.push(serde_json::json!({ "person": m.id, "agency": d.agency, "before": before, "after": after }));
+                }
+                for p in book
+                    .people
+                    .iter_mut()
+                    .filter(|p| p.agency == d.agency && p.active())
+                    .filter(|p| !d.people.iter().any(|m| m.id == p.id))
+                {
+                    let before = p.state();
+                    p.removed_at = Some(now());
+                    lines.push(serde_json::json!({ "what": "removed: not on the agency's directory",
+                        "person": p.id, "agency": d.agency, "before": before, "after": p.state() }));
+                }
+            }
+            book.migrated.get_or_insert_with(Migrated::default).directories = Some(prints);
+            Ok((n, serde_json::Value::Array(lines)))
+        })
+    }
+
+    /// Keep `logo` as `agency`'s (a data URI look.rs has checked). The same logo again changes nothing.
+    pub fn set_logo(&self, by: &str, agency: &str, logo: Option<&str>) -> Change<()> {
+        if self.book().logos.get(agency).map(|l| l.logo.as_str()) == logo {
+            return Ok(());
+        }
+        self.change(by, "agency logo set", |book| {
+            match logo {
+                Some(l) => {
+                    book.logos.insert(
+                        agency.to_string(),
+                        AgencyLogo {
+                            logo: l.to_string(),
+                            by: by.to_string(),
+                            at: now(),
+                        },
+                    );
+                }
+                None => {
+                    book.logos.remove(agency);
+                }
+            }
+            Ok((
+                (),
+                serde_json::json!({ "agency": agency, "logo": logo.is_some() }),
+            ))
         })
     }
 
@@ -1456,7 +1980,7 @@ mod tests {
                 &NewPerson {
                     name: "X".into(),
                     agency: "napkin".into(),
-                    username: Some("x@pluto".into())
+                    username: Some("x@pluto".into()),
                     ..Default::default()
                 }
             ),
@@ -1468,7 +1992,7 @@ mod tests {
                 &NewPerson {
                     name: "Shaunagh".into(),
                     agency: "napkin".into(),
-                    username: None
+                    username: None,
                     ..Default::default()
                 }
             ),
@@ -1480,7 +2004,7 @@ mod tests {
                 &NewPerson {
                     name: "Aoife".into(),
                     agency: "Rothco".into(),
-                    username: None
+                    username: None,
                     ..Default::default()
                 }
             ),
@@ -1889,13 +2413,18 @@ mod tests {
         );
         assert!(p.active("sam@wk").unwrap().roles.is_empty());
         let by = "engineer@napkin";
-        let d = p.add(by, &member("Dara Kelly", "wk", &["copywriter"])).unwrap();
+        let d = p
+            .add(by, &member("Dara Kelly", "wk", &["copywriter"]))
+            .unwrap();
         assert_eq!(d.roles, ["copywriter"]);
         p.set_roles(by, "dara@wk", &roles(&["traffic", "Traffic", "producer"]))
             .unwrap();
         // another handle on the same folder reads them back from the file
         let again = People::open(dir.path().join("_people"), &seed).unwrap();
-        assert_eq!(again.active("dara@wk").unwrap().roles, ["traffic", "producer"]);
+        assert_eq!(
+            again.active("dara@wk").unwrap().roles,
+            ["traffic", "producer"]
+        );
         assert_eq!(
             again.active("aoife@wk").unwrap().roles,
             ["planning", "creative-director"]
@@ -1919,16 +2448,24 @@ mod tests {
             p.set_roles(by, "ad@wk", &roles(&["planning"])),
             Err(Refusal::Conflict(_))
         ));
-        assert!(p.active("ad@wk").unwrap().roles.contains(&"admin".to_string()));
+        assert!(p
+            .active("ad@wk")
+            .unwrap()
+            .roles
+            .contains(&"admin".to_string()));
         // another agency's admin is not this one's
-        p.set_roles(by, "pat@wk", &roles(&["planning", "admin"])).unwrap();
+        p.set_roles(by, "pat@wk", &roles(&["planning", "admin"]))
+            .unwrap();
         p.remove(by, "ad@wk").unwrap();
         assert!(matches!(
             p.set_roles(by, "pat@wk", &roles(&["planning"])),
             Err(Refusal::Conflict(_))
         ));
         assert!(matches!(p.remove(by, "pat@wk"), Err(Refusal::Conflict(_))));
-        assert!(matches!(p.remove(by, "bo@pluto"), Err(Refusal::Conflict(_))));
+        assert!(matches!(
+            p.remove(by, "bo@pluto"),
+            Err(Refusal::Conflict(_))
+        ));
     }
 
     #[test]

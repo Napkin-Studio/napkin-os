@@ -79,6 +79,19 @@ async fn invite_everyone(r: &Rig) {
             Some(json!({ "username": format!("{role}@cr"), "name": format!("Alpha {role}"), "email": format!("{role}@mail.example.test"), "roles": [role] })),
         )
         .await;
+        if st == StatusCode::CONFLICT {
+            // on the roster, so already in the one People store (features/align-needs-lock-people.clan)
+            let (st, body, _, _) = call(
+                r,
+                "PUT",
+                &format!("/api/t/{}/agency/people/{role}@cr", cara.tenant),
+                Some(&cara.cookie),
+                Some(json!({ "name": format!("Alpha {role}"), "email": format!("{role}@mail.example.test"), "roles": [role] })),
+            )
+            .await;
+            assert_eq!(st, StatusCode::OK, "{body}");
+            continue;
+        }
         assert_eq!(st, StatusCode::CREATED, "{body}");
     }
 }
@@ -280,11 +293,12 @@ async fn people_are_the_directory_member_view_no_email_and_nobody_removed() {
         .clone();
     assert_eq!(p["id"], json!("planning@cr"), "{v}");
     assert_eq!(p["jobs"], json!(["J001"]));
-    // an agency with no directory returns no people
+    // another agency's people are never found: wk's search finds none of cr's (one People store, scoped to
+    // the session's agency: features/align-needs-lock-people.clan)
     seed(r.dir.path(), "wk");
     let wk = sign_in(&r, "planning@wk").await;
-    let (_, ids, total, _) = search(&r, &wk, "people").await;
-    assert_eq!((ids.len(), total), (0, 0));
+    let (_, ids, _, _) = search(&r, &wk, "planning").await;
+    assert!(ids.iter().all(|i| !i.ends_with("@cr")), "{ids:?}");
 }
 
 #[tokio::test]

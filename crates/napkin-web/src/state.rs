@@ -164,8 +164,10 @@ pub struct AppCtx {
     pub timesheets: crate::timesheet::Timesheets,
     /// What each person has marked done on Needs you, private to them (features/needs-you-full.clan).
     pub done: Arc<dyn crate::needs::DoneStore>,
-    /// Who works in each agency and with which roles (features/agency-setup.clan).
-    pub directory: Arc<dyn crate::directory::Directory>,
+    /// Who may sign in, and with which roles: the one People store (features/align-needs-lock-people.clan).
+    /// Set once, by the router from the roster provider or by `main` for a password provider; none on an
+    /// anonymous server. Read through [`AppCtx::people`].
+    people: std::sync::OnceLock<Arc<crate::people::People>>,
     /// What no document's chain holds: exports, links, sign-ins and copies of permission changes.
     pub audit: Arc<dyn crate::audit::AuditLog>,
     jobs_clock: JobsClock,
@@ -182,7 +184,7 @@ impl AppCtx {
         Self {
             timesheets: crate::timesheet::Timesheets::new(root.clone()),
             done: Arc::new(crate::needs::FileDone::new(root.join("needs-done"))),
-            directory: Arc::new(crate::directory::RegistryDirectory::new(root.clone())),
+            people: std::sync::OnceLock::new(),
             audit: Arc::new(crate::audit::FileAudit::new(root.clone())),
             code_guard: crate::links::CodeGuard::new(root.join("link-codes")),
             root,
@@ -263,11 +265,37 @@ impl AppCtx {
         self
     }
 
-    /// A clock for the directory's cache, in seconds, so a test moves past its minute.
-    pub fn with_directory_clock(mut self, clock: impl Fn() -> i64 + Send + Sync + 'static) -> Self {
-        self.directory =
-            Arc::new(crate::directory::RegistryDirectory::new(self.root.clone()).with_clock(clock));
-        self
+    /// The People store, when this server keeps one.
+    pub fn people(&self) -> Option<&Arc<crate::people::People>> {
+        self.people.get()
+    }
+
+    /// Give this server its People store (once; a second call is ignored), with every change also written
+    /// to the agency's audit chain.
+    pub fn set_people(&self, people: Arc<crate::people::People>) {
+        let audit = self.audit.clone();
+        people.set_audit(Arc::new(
+            move |agency: &str,
+                  who: &str,
+                  kind: &'static str,
+                  what: String,
+                  person: Option<&str>| {
+                let tenant = crate::tenant::TenantId::of_agency(agency);
+                if let Err(e) = audit.append(
+                    &tenant,
+                    crate::audit::NewLine {
+                        who: who.to_string(),
+                        kind,
+                        what,
+                        doc: person.map(str::to_string),
+                        ..Default::default()
+                    },
+                ) {
+                    tracing::warn!(error = %e, "audit line not written");
+                }
+            },
+        ));
+        let _ = self.people.set(people);
     }
 
     /// A clock for the job index, so a test sets the day an approval is late by.

@@ -149,15 +149,8 @@ struct OpenView {
     sandbox_origin: Option<String>,
 }
 
-fn view(
-    ctx: &AppCtx,
-    tenant: &TenantId,
-    person: &str,
-    roles: &[String],
-    doc: &DocId,
-    open: OpenResult,
-) -> OpenView {
-    let token = ctx.tokens.mint(tenant, person, roles, doc);
+fn view(ctx: &AppCtx, tenant: &TenantId, person: &str, doc: &DocId, open: OpenResult) -> OpenView {
+    let token = ctx.tokens.mint(tenant, person, doc);
     OpenView {
         open,
         frame: crate::tokens::frame_id(&token),
@@ -173,13 +166,12 @@ fn open_view(
     ctx: &AppCtx,
     tenant: &TenantId,
     person: &str,
-    roles: &[String],
     ws: &Workspace,
     doc: DocId,
 ) -> ApiResult<OpenView> {
     let (_session, open) = crate::timing::phase("session", || ws.open(&doc))?;
     Ok(crate::timing::phase("token", || {
-        view(ctx, tenant, person, roles, &doc, open)
+        view(ctx, tenant, person, &doc, open)
     }))
 }
 
@@ -284,9 +276,14 @@ fn signed_in(identity: &crate::tenant::Identity, account: crate::auth::Account) 
     let crate::tenant::Mode::Accounts { sessions, .. } = &identity.mode else {
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
+    // the cookie names the person only: their roles are the People store's, read on each request
+    let named = crate::auth::Account {
+        roles: Vec::new(),
+        ..account.clone()
+    };
     let cookie = identity.cookie(
         crate::auth::SESSION_COOKIE,
-        &sessions.issue(&account),
+        &sessions.issue(&named),
         crate::auth::SESSION_SECS,
     );
     let mut r = Json(serde_json::json!({ "ok": true, "user": account })).into_response();
@@ -326,7 +323,7 @@ async fn sign_in(
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
     let name = b.sign_in_name();
-    let out = crate::agency::sign_in(&ctx, provider, &name, &b.password).await;
+    let out = crate::live::decide(&ctx, provider.sign_in(&name, &b.password).await);
     // Every attempt, with where it came from: under the roster nothing else
     // proves who signed in, so this log is how a misuse would be traced.
     let outcome = match &out {
@@ -362,7 +359,7 @@ async fn new_password(
     let out = provider
         .new_password(&b.username, &b.session, &b.password)
         .await;
-    answer(&identity, crate::agency::decide(&ctx, out))
+    answer(&identity, crate::live::decide(&ctx, out))
 }
 
 async fn sign_out(Extension(identity): Extension<Arc<crate::tenant::Identity>>) -> Response {
@@ -701,7 +698,6 @@ async fn new_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     Json(body): Json<NewDocument>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
@@ -730,7 +726,7 @@ async fn new_document(
             tracing::warn!(job = %j.number, %e, "could not fill the brief's signers from the route");
         }
     }
-    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, doc)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
 /// Which installed apps will take this document as a spin-off source.
@@ -766,7 +762,6 @@ async fn spinoff_document(
     Acting(acting): Acting,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     Path((_t, doc)): Path<(String, String)>,
     Json(body): Json<Spinoff>,
 ) -> ApiResult<Json<OpenView>> {
@@ -779,7 +774,7 @@ async fn spinoff_document(
         body.title,
         body.map,
     )?;
-    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, out)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &ws, out)?))
 }
 
 /// Accept an uploaded `.clan` as a document of this tenant and open it.
@@ -790,7 +785,6 @@ async fn upload_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     body: Bytes,
 ) -> ApiResult<Json<OpenView>> {
     if body.is_empty() {
@@ -806,18 +800,17 @@ async fn upload_document(
     // A fresh uuid: this is a new document, never a replacement.
     ws.store
         .apply(&Change::create(doc.clone(), body.to_vec()))?;
-    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, doc)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
 async fn home(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
     let doc = library::ensure_home(&*ws.store)?;
-    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, doc)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
 // ── One document ─────────────────────────────────────────────────────────────
@@ -838,7 +831,6 @@ async fn open_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
@@ -846,7 +838,6 @@ async fn open_document(
         &ctx,
         &tenant,
         &person,
-        &roles,
         &ws,
         DocId::new(doc),
     )?))

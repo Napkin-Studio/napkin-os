@@ -118,6 +118,19 @@ async fn invite(r: &Rig, admin: &Person, username: &str, email: &str, roles: &[&
         Some(json!({ "username": username, "name": username, "email": email, "roles": roles })),
     )
     .await;
+    if st == StatusCode::CONFLICT {
+        // on the roster, so already in the People store (features/align-needs-lock-people.clan)
+        let (st, body) = call(
+            r,
+            "PUT",
+            &format!("/api/t/{}/agency/people/{username}", admin.tenant),
+            Some(&admin.cookie),
+            Some(json!({ "email": email, "roles": roles })),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{body}");
+        return;
+    }
     assert_eq!(st, StatusCode::CREATED, "{body}");
 }
 

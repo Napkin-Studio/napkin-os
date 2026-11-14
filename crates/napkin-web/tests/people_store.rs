@@ -166,10 +166,9 @@ fn usernames(v: &Value) -> Vec<String> {
 #[tokio::test]
 async fn the_roster_seeds_roles_into_the_store_and_sign_in_reads_them_from_there() {
     let r = rig();
-    let book: Value = serde_json::from_slice(
-        &std::fs::read(r.dir.path().join("_people/people.json")).unwrap(),
-    )
-    .unwrap();
+    let book: Value =
+        serde_json::from_slice(&std::fs::read(r.dir.path().join("_people/people.json")).unwrap())
+            .unwrap();
     let aoife = book["people"]
         .as_array()
         .unwrap()
@@ -466,11 +465,7 @@ async fn an_agency_admin_lists_and_manages_only_their_own_agency() {
     // the agencies list holds only their own
     let (st, v) = call(&r, "GET", "/api/admin/agencies", Some(&ad.cookie), None).await;
     assert_eq!(st, StatusCode::OK);
-    assert!(v
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|a| a["id"] == "wk"), "{v}");
+    assert!(v.as_array().unwrap().iter().all(|a| a["id"] == "wk"), "{v}");
     // adds a person to their own agency, with roles
     let (st, p) = call(
         &r,
@@ -538,7 +533,11 @@ async fn every_people_route_refuses_a_foreign_agency_in_the_path_as_if_it_did_no
     let pairs = [("aoife@wk", "nobody@wk"), ("ad@wk", "ghost@zz")];
     for (foreign, missing) in pairs {
         for (m, uri, body) in [
-            ("PATCH", "/api/admin/people/{}", Some(json!({ "name": "X" }))),
+            (
+                "PATCH",
+                "/api/admin/people/{}",
+                Some(json!({ "name": "X" })),
+            ),
             ("DELETE", "/api/admin/people/{}", None),
             (
                 "PUT",
@@ -570,8 +569,22 @@ async fn every_people_route_refuses_a_foreign_agency_in_the_path_as_if_it_did_no
         ("GET", "export", None),
         ("DELETE", "draft/wordmark", None),
     ] {
-        let a = call(&r, m, &format!("/api/admin/agencies/wk/{tail}"), c, body.clone()).await;
-        let b = call(&r, m, &format!("/api/admin/agencies/zzq/{tail}"), c, body.clone()).await;
+        let a = call(
+            &r,
+            m,
+            &format!("/api/admin/agencies/wk/{tail}"),
+            c,
+            body.clone(),
+        )
+        .await;
+        let b = call(
+            &r,
+            m,
+            &format!("/api/admin/agencies/zzq/{tail}"),
+            c,
+            body.clone(),
+        )
+        .await;
         same_answer(&a, &b, "wk", "zzq");
     }
     // another agency's tenant in the path: refused before anything is read
@@ -584,7 +597,11 @@ async fn every_people_route_refuses_a_foreign_agency_in_the_path_as_if_it_did_no
             "agency/people/invite",
             Some(json!({ "email": "x@x.test", "name": "X", "roles": ["planning"] })),
         ),
-        ("PUT", "agency/people/aoife@wk", Some(json!({ "roles": ["traffic"] }))),
+        (
+            "PUT",
+            "agency/people/aoife@wk",
+            Some(json!({ "roles": ["traffic"] })),
+        ),
         ("DELETE", "agency/people/aoife@wk", None),
         ("GET", "agency/accounts.tsv", None),
         ("GET", "setup", None),
@@ -593,8 +610,20 @@ async fn every_people_route_refuses_a_foreign_agency_in_the_path_as_if_it_did_no
         let b = call(&r, m, &format!("/api/t/{missing}/{tail}"), c, body.clone()).await;
         same_answer(&a, &b, wk.as_str(), missing.as_str());
     }
-    let a = csv(&r, &format!("/api/t/{wk}/setup/import/people"), &barra.cookie, "email,name,roles\nx@wk,X,planning\n").await;
-    let b = csv(&r, &format!("/api/t/{missing}/setup/import/people"), &barra.cookie, "email,name,roles\nx@wk,X,planning\n").await;
+    let a = csv(
+        &r,
+        &format!("/api/t/{wk}/setup/import/people"),
+        &barra.cookie,
+        "email,name,roles\nx@wk,X,planning\n",
+    )
+    .await;
+    let b = csv(
+        &r,
+        &format!("/api/t/{missing}/setup/import/people"),
+        &barra.cookie,
+        "email,name,roles\nx@wk,X,planning\n",
+    )
+    .await;
     same_answer(&a, &b, wk.as_str(), missing.as_str());
     // and nothing of wk changed
     let ad = sign_in(&r, "ad@wk").await;
@@ -617,11 +646,39 @@ async fn every_people_route_refuses_a_foreign_agency_in_the_body_as_if_it_did_no
     let barra = sign_in(&r, "barra@bq").await;
     let c = Some(barra.cookie.as_str());
     // adding a person to another agency, by agency name or by sign-in name
-    let a = call(&r, "POST", "/api/admin/people", c, Some(json!({ "name": "X Y", "agency": "wk" }))).await;
-    let b = call(&r, "POST", "/api/admin/people", c, Some(json!({ "name": "X Y", "agency": "zzq" }))).await;
+    let a = call(
+        &r,
+        "POST",
+        "/api/admin/people",
+        c,
+        Some(json!({ "name": "X Y", "agency": "wk" })),
+    )
+    .await;
+    let b = call(
+        &r,
+        "POST",
+        "/api/admin/people",
+        c,
+        Some(json!({ "name": "X Y", "agency": "zzq" })),
+    )
+    .await;
     same_answer(&a, &b, "wk", "zzq");
-    let a = call(&r, "POST", "/api/admin/people", c, Some(json!({ "name": "X Y", "username": "xy@wk" }))).await;
-    let b = call(&r, "POST", "/api/admin/people", c, Some(json!({ "name": "X Y", "username": "xy@zzq" }))).await;
+    let a = call(
+        &r,
+        "POST",
+        "/api/admin/people",
+        c,
+        Some(json!({ "name": "X Y", "username": "xy@wk" })),
+    )
+    .await;
+    let b = call(
+        &r,
+        "POST",
+        "/api/admin/people",
+        c,
+        Some(json!({ "name": "X Y", "username": "xy@zzq" })),
+    )
+    .await;
     same_answer(&a, &b, "wk", "zzq");
     // the build's invite: a sign-in name at another agency
     let inv = |u: &str| json!({ "username": u, "email": "x@mail.example.test", "name": "X", "roles": ["planning"] });

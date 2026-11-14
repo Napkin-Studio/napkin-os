@@ -3,16 +3,24 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The People page's routes (features/people-admin.clan): who may sign in,
-//! and the agencies they belong to. Every `/admin/*` route answers 403 unless
-//! the signed-in person is one of [`PEOPLE_ADMINS`]; the agencies' published
+//! with which roles, and the agencies they belong to. The agencies' published
 //! looks are public, for the shell's look registry. Agencies come in two tiers
 //! (features/agency-looks-admin.clan): basic ones, drafted and published here
 //! with a wordmark, and ones in code, whose display name alone changes here.
+//!
+//! Who may call them (features/align-needs-lock-people.clan, stage 3), decided
+//! in one place, [`scope`], from the session alone: a Napkin admin (one of
+//! [`PEOPLE_ADMINS`]) manages every agency and is the only one who adds one; an
+//! admin of an agency (the `admin` role in the People store) manages their own
+//! agency and nothing else; everyone else gets 403. For an agency's admin, a
+//! person or an agency of another agency, named in the path or the body, gets
+//! exactly the answer one that does not exist gets, so nothing says whether it
+//! exists.
 
 use std::sync::Arc;
 
 use axum::body::Body;
-use axum::extract::Path;
+use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch, post, put};
@@ -22,8 +30,8 @@ use serde_json::{json, Value};
 
 use crate::auth::{Account, Provider};
 use crate::people::{
-    code_name, is_admin, AccentUse, Book, DraftEdit, NewAgency, NewPerson, People, Pill, Publish,
-    Refusal, Surface, Wordmark, CODE_AGENCIES, CODE_ALIASES, PEOPLE_ADMINS,
+    code_name, is_admin, no_agency, AccentUse, Book, DraftEdit, NewAgency, NewPerson, People, Pill,
+    Publish, Refusal, Surface, Wordmark, CODE_AGENCIES, CODE_ALIASES, PEOPLE_ADMINS,
 };
 use crate::state::AppCtx;
 use crate::svg_sanitise::{self, svg_uri, Refused};
@@ -32,10 +40,12 @@ use crate::tenant::{Identity, Mode};
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
         .route("/admin/people", get(list_people).post(add_person))
+        .route("/admin/people/import", post(import_people))
         .route(
             "/admin/people/{id}",
             patch(rename_person).delete(remove_person),
         )
+        .route("/admin/people/{id}/roles", put(set_roles))
         .route("/admin/agencies", get(list_agencies).post(add_agency))
         .route(
             "/admin/agencies/{id}/draft",
@@ -87,27 +97,107 @@ fn store(identity: &Identity) -> Option<&People> {
     }
 }
 
-/// The store and the admin acting on it; 403 for anyone not in PEOPLE_ADMINS,
-/// 404 where this server keeps no people store (no roster).
-fn admin<'a>(
+/// Which agencies the signed-in person manages: every one (a Napkin admin) or their own (an agency's admin).
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Scope {
+    All,
+    Agency(String),
+}
+
+impl Scope {
+    fn covers(&self, agency: &str) -> bool {
+        match self {
+            Scope::All => true,
+            Scope::Agency(a) => a == agency,
+        }
+    }
+}
+
+/// The store, who is acting and what they may manage, from the session alone; 403 for anyone who is not a
+/// Napkin admin or an admin of their agency, 404 where this server keeps no people store (no roster).
+fn scope<'a>(
     identity: &'a Identity,
     account: Option<&Account>,
-) -> Result<(&'a People, String), Box<Response>> {
+) -> Result<(&'a People, String, Scope), Box<Response>> {
     let who = account.map(|a| a.username.clone()).unwrap_or_default();
-    if !is_admin(&who) {
+    let scope = if is_admin(&who) {
+        Some(Scope::All)
+    } else {
+        account
+            .filter(|a| a.roles.iter().any(|r| r == crate::people::ADMIN_ROLE))
+            .map(|a| Scope::Agency(a.agency.clone()))
+    };
+    let Some(scope) = scope else {
         tracing::warn!(target: "napkin_web::people", account = %who, "refused: not a people admin");
         return Err(Box::new(answer(
             StatusCode::FORBIDDEN,
-            "Only a Napkin admin can change who signs in. Ask Shrey or another admin.",
+            "Only a Napkin admin or your agency's admin can change who signs in. Ask Shrey or another admin.",
         )));
-    }
+    };
     let people = store(identity).ok_or_else(|| {
         Box::new(answer(
             StatusCode::NOT_FOUND,
             "This server keeps no list of people.",
         ))
     })?;
+    Ok((people, who, scope))
+}
+
+/// A Napkin admin only: adding an agency.
+fn napkin_admin<'a>(
+    identity: &'a Identity,
+    account: Option<&Account>,
+) -> Result<(&'a People, String), Box<Response>> {
+    let (people, who, scope) = scope(identity, account)?;
+    if scope != Scope::All {
+        return Err(Box::new(answer(
+            StatusCode::FORBIDDEN,
+            "Only a Napkin admin adds an agency. Ask Shrey or another admin.",
+        )));
+    }
     Ok((people, who))
+}
+
+/// The person `id` when the scope covers their agency; else the answer a person nobody holds gets.
+fn in_scope(people: &People, scope: &Scope, id: &str) -> Result<String, Box<Response>> {
+    let id = id.trim().to_ascii_lowercase();
+    let covered = people
+        .book()
+        .person(&id)
+        .is_some_and(|p| scope.covers(&p.agency));
+    if covered {
+        Ok(id)
+    } else {
+        Err(Box::new(refused(Refusal::NotFound(format!(
+            "{id} is not on the list."
+        )))))
+    }
+}
+
+/// The agency `id` when the scope covers it; else the answer an agency that does not exist gets.
+fn agency_in_scope(scope: &Scope, id: &str) -> Result<String, Box<Response>> {
+    let id = agency_id(id);
+    if scope.covers(&id) {
+        Ok(id)
+    } else {
+        Err(Box::new(answer(
+            StatusCode::NOT_FOUND,
+            &format!("There is no agency {id}."),
+        )))
+    }
+}
+
+/// Roles as an admin gives them here: each one the agency's door table knows (none is every door).
+fn known_roles(ctx: &AppCtx, agency: &str, roles: &[String]) -> Result<Vec<String>, Box<Response>> {
+    let roles = crate::people::clean_roles(roles);
+    let known = crate::agency::role_known(ctx, agency);
+    match roles.iter().find(|r| !known(r)) {
+        Some(bad) => Err(Box::new(answer(
+            StatusCode::BAD_REQUEST,
+            &format!("{bad:?} is not a role."),
+        ))),
+        None => Ok(roles),
+    }
 }
 
 type Who = Option<Extension<Account>>;
@@ -221,12 +311,13 @@ fn agency_row(people: &People, book: &Book, id: &str) -> Option<Value> {
     Some(row)
 }
 
-fn agencies_of(people: &People) -> Vec<Value> {
+fn agencies_of(people: &People, scope: &Scope) -> Vec<Value> {
     let book = people.book();
     CODE_AGENCIES
         .iter()
         .map(|(id, ..)| *id)
         .chain(book.agencies.iter().map(|a| a.id.as_str()))
+        .filter(|id| scope.covers(id))
         .filter_map(|id| agency_row(people, &book, id))
         .collect()
 }
@@ -250,25 +341,67 @@ fn body<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, Box<Response>> {
 }
 
 async fn list_people(Extension(identity): Id, who: Who) -> Response {
-    let (people, _) = match admin(&identity, acct(&who)) {
+    let (people, _, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
     let book = people.book();
+    let mine: Vec<_> = book
+        .people
+        .iter()
+        .filter(|p| scope.covers(&p.agency))
+        .collect();
+    let admins: &[&str] = if scope == Scope::All {
+        PEOPLE_ADMINS
+    } else {
+        &[]
+    };
     Json(serde_json::json!({
-        "people": book.people,
-        "agencies": agencies_of(people),
-        "admins": PEOPLE_ADMINS,
+        "people": mine,
+        "agencies": agencies_of(people, &scope),
+        "admins": admins,
     }))
     .into_response()
 }
 
-async fn add_person(Extension(identity): Id, who: Who, Json(b): Json<NewPerson>) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+async fn add_person(
+    State(ctx): State<Arc<AppCtx>>,
+    Extension(identity): Id,
+    who: Who,
+    Json(mut b): Json<NewPerson>,
+) -> Response {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
-    match people.add(&by, &b) {
+    let out = match &scope {
+        Scope::All => {
+            let agency = people.book().recognise(&b.agency);
+            match agency.map(|a| known_roles(&ctx, &a, &b.roles)) {
+                Some(Err(r)) => return *r,
+                Some(Ok(roles)) => b.roles = roles,
+                None => {}
+            }
+            people.add(&by, &b)
+        }
+        // an agency's admin adds to their own agency: a request that names any other is refused as one that
+        // names no agency
+        Scope::Agency(own) => {
+            let named = b.agency.trim();
+            if !named.is_empty()
+                && named.to_lowercase() != *own
+                && people.book().recognise(named).as_deref() != Some(own.as_str())
+            {
+                return refused(no_agency(named));
+            }
+            b.roles = match known_roles(&ctx, own, &b.roles) {
+                Ok(r) => r,
+                Err(r) => return *r,
+            };
+            people.add_in(&by, own, &b)
+        }
+    };
+    match out {
         Ok(p) => (StatusCode::CREATED, Json(p)).into_response(),
         Err(e) => refused(e),
     }
@@ -285,36 +418,111 @@ async fn rename_person(
     Path(id): Path<String>,
     Json(b): Json<Rename>,
 ) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
-    match people.rename(&by, &id.trim().to_ascii_lowercase(), &b.name) {
+    let id = match in_scope(people, &scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
+    match people.rename(&by, &id, &b.name) {
+        Ok(p) => Json(p).into_response(),
+        Err(e) => refused(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct SetRoles {
+    roles: Vec<String>,
+}
+
+/// A person's roles: they hold on the person's next request (crate::live).
+async fn set_roles(
+    State(ctx): State<Arc<AppCtx>>,
+    Extension(identity): Id,
+    who: Who,
+    Path(id): Path<String>,
+    Json(b): Json<SetRoles>,
+) -> Response {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
+        Ok(x) => x,
+        Err(r) => return *r,
+    };
+    let id = match in_scope(people, &scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
+    let agency = people
+        .book()
+        .person(&id)
+        .map(|p| p.agency.clone())
+        .unwrap_or_default();
+    let roles = match known_roles(&ctx, &agency, &b.roles) {
+        Ok(r) => r,
+        Err(r) => return *r,
+    };
+    match people.set_roles(&by, &id, &roles) {
         Ok(p) => Json(p).into_response(),
         Err(e) => refused(e),
     }
 }
 
 async fn remove_person(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
-    match people.remove(&by, &id.trim().to_ascii_lowercase()) {
+    let id = match in_scope(people, &scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
+    match people.remove(&by, &id) {
         Ok(p) => Json(p).into_response(),
         Err(e) => refused(e),
     }
 }
 
+#[derive(Deserialize)]
+struct ImportQuery {
+    #[serde(default)]
+    dry_run: Option<String>,
+}
+
+/// People from a CSV file into the session's own agency (a Napkin admin's too): checked first, a result
+/// per line, the good lines written in one change. `?dry_run=1` checks without writing.
+async fn import_people(
+    State(ctx): State<Arc<AppCtx>>,
+    Extension(identity): Id,
+    who: Who,
+    axum::extract::Query(q): axum::extract::Query<ImportQuery>,
+    raw: axum::body::Bytes,
+) -> Response {
+    if let Err(r) = scope(&identity, acct(&who)) {
+        return *r;
+    }
+    let Some(me) = acct(&who).cloned() else {
+        return answer(StatusCode::FORBIDDEN, "Sign in to import people.");
+    };
+    let dry = q
+        .dry_run
+        .as_deref()
+        .is_some_and(|v| v == "1" || v == "true");
+    match crate::agency::import_people(&ctx, &me, &raw, dry) {
+        Ok(report) => Json(report).into_response(),
+        Err(e) => e.into_response(),
+    }
+}
+
 async fn list_agencies(Extension(identity): Id, who: Who) -> Response {
-    match admin(&identity, acct(&who)) {
-        Ok((people, _)) => Json(agencies_of(people)).into_response(),
+    match scope(&identity, acct(&who)) {
+        Ok((people, _, scope)) => Json(agencies_of(people, &scope)).into_response(),
         Err(r) => *r,
     }
 }
 
 async fn add_agency(Extension(identity): Id, who: Who, Json(b): Json<Value>) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+    let (people, by) = match napkin_admin(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -341,7 +549,7 @@ async fn edit_draft(
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -349,7 +557,10 @@ async fn edit_draft(
         Ok(r) => r,
         Err(r) => return *r,
     };
-    let id = agency_id(&id);
+    let id = match agency_in_scope(&scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
     match people.edit_draft(&by, &id, &req) {
         Ok(()) => row_after(people, &id),
         Err(e) => refused(e),
@@ -357,11 +568,14 @@ async fn edit_draft(
 }
 
 async fn discard_draft(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
-    let id = agency_id(&id);
+    let id = match agency_in_scope(&scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
     match people.discard_draft(&by, &id) {
         Ok(()) => match agency_row(people, &people.book(), &id) {
             Some(r) => Json(r).into_response(),
@@ -403,11 +617,14 @@ async fn put_wordmark(
     headers: HeaderMap,
     raw: Body,
 ) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
-    let id = agency_id(&id);
+    let id = match agency_in_scope(&scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
     let book = people.book();
     if code_name(&id).is_some() {
         return answer(
@@ -458,11 +675,14 @@ async fn put_wordmark(
 }
 
 async fn delete_wordmark(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
-    let id = agency_id(&id);
+    let id = match agency_in_scope(&scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
     match people.remove_wordmark(&by, &id) {
         Ok(()) => row_after(people, &id),
         Err(e) => refused(e),
@@ -475,7 +695,7 @@ async fn publish(
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -483,7 +703,10 @@ async fn publish(
         Ok(r) => r,
         Err(r) => return *r,
     };
-    let id = agency_id(&id);
+    let id = match agency_in_scope(&scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
     match people.publish(&by, &id, &req) {
         Ok(()) => row_after(people, &id),
         Err(e) => refused(e),
@@ -491,11 +714,14 @@ async fn publish(
 }
 
 async fn reset_name(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, by) = match admin(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
-    let id = agency_id(&id);
+    let id = match agency_in_scope(&scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
     match people.reset_name(&by, &id) {
         Ok(()) => row_after(people, &id),
         Err(e) => refused(e),
@@ -516,11 +742,14 @@ fn rs_str(s: &str) -> String {
 /// PR that makes it an agency in code (palette.ts, its logo file, the
 /// agency-logos.mjs FILES line, people.rs's mirror).
 async fn export_agency(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, _) = match admin(&identity, acct(&who)) {
+    let (people, _, scope) = match scope(&identity, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
-    let id = agency_id(&id);
+    let id = match agency_in_scope(&scope, &id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
     let book = people.book();
     if code_name(&id).is_some() {
         return answer(StatusCode::CONFLICT, &format!("{id} is already in code."));

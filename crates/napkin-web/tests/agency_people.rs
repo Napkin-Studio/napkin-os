@@ -2,29 +2,26 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! features/agency-setup.clan, stage 1, through the real router: the directory decides sign-in and
-//! roles for an agency that has one, a role change or a removal reaches the next request after the
-//! cache window with no new sign-in, only an admin edits the people, the last admin stays, and the
-//! people list is an allow list (emails for admins only).
+//! features/agency-setup.clan, stage 1, through the real router, on the one People store that replaced
+//! the agency directory (features/align-needs-lock-people.clan, stage 3): an agency's admin names people
+//! and they sign in as what the store says, a removal reaches the next request, only an admin edits the
+//! people, the last admin stays, and the people list is an allow list (emails for admins only). The
+//! directory's own cases (its cache window, a registry edited by hand) went with it.
 
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{header, Request, StatusCode};
 use axum::Router;
 use http_body_util::BodyExt;
-use napkin_host::agency;
-use napkin_host::{Ctx, NoConfig};
+use napkin_host::NoConfig;
 use napkin_web::state::AppCtx;
-use napkin_web::tenant::TenantId;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
 struct Rig {
-    dir: tempfile::TempDir,
+    _dir: tempfile::TempDir,
     app: Router,
-    clock: Arc<AtomicI64>,
 }
 
 struct Person {
@@ -33,20 +30,18 @@ struct Person {
 }
 
 const ROSTER: &str = "cara@cr\tCara\tadmin\n\
-dan@cr\tDan From The File\tmanagement\n\
-sam@cr\tSam\tplanning\n\
 barra@bq\tBarra\tadmin\n\
 niamh@bq\tNiamh\tmanagement\n\
 noel@nodir\tNoel\ttraffic\n";
 
 fn rig() -> Rig {
     let dir = tempfile::tempdir().unwrap();
-    let clock = Arc::new(AtomicI64::new(1_000_000));
-    let c = clock.clone();
-    let ctx = Arc::new(
-        AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40)
-            .with_directory_clock(move || c.load(Ordering::SeqCst)),
-    );
+    let ctx = Arc::new(AppCtx::new(
+        dir.path().to_path_buf(),
+        Arc::new(NoConfig),
+        None,
+        40,
+    ));
     let roster = dir.path().join("accounts.tsv");
     std::fs::write(&roster, ROSTER).unwrap();
     let identity = napkin_web::tenant::Identity {
@@ -60,8 +55,7 @@ fn rig() -> Rig {
     };
     Rig {
         app: napkin_web::router_with(ctx, None, Arc::new(identity)),
-        dir,
-        clock,
+        _dir: dir,
     }
 }
 
@@ -151,25 +145,6 @@ async fn doors(r: &Rig, p: &Person) -> Vec<String> {
         .iter()
         .map(|d| d["name"].as_str().unwrap().to_string())
         .collect()
-}
-
-#[tokio::test]
-async fn an_agency_with_no_directory_signs_in_as_before() {
-    let r = rig();
-    let noel = sign_in(&r, "noel@nodir").await;
-    let (_, me, _) = call(&r, "GET", "/api/session", Some(&noel.cookie), None).await;
-    assert_eq!(me["roles"], json!(["traffic"]));
-    let (_, people, _) = call(
-        &r,
-        "GET",
-        &format!("/api/t/{}/agency/people", noel.tenant),
-        Some(&noel.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(people, json!([]), "a roster is not a directory");
-    let (st, _, _) = try_sign_in(&r, "nobody@nodir").await;
-    assert_eq!(st, StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -300,12 +275,12 @@ async fn only_an_admin_changes_people_and_the_last_admin_stays() {
         put(&cara, "dan@cr", json!({ "roles": [] })).await.0,
         StatusCode::BAD_REQUEST
     );
-    // another agency's sign-in name is not editable here
+    // another agency's sign-in name is not editable here, and is answered as one nobody holds
     assert_eq!(
         put(&cara, "niamh@bq", json!({ "roles": ["planning"] }))
             .await
             .0,
-        StatusCode::BAD_REQUEST
+        StatusCode::NOT_FOUND
     );
 }
 
@@ -351,72 +326,13 @@ async fn an_admin_naming_another_agencys_tenant_gets_403_on_every_route() {
         None,
     )
     .await;
-    assert_eq!(
-        people,
-        json!([]),
-        "the second agency sees none of the first's people"
-    );
-}
-
-fn host_edit(r: &Rig, f: impl FnOnce(&dyn napkin_host::DocStore, &Ctx)) {
-    let store =
-        napkin_web::store::TenantStore::new(r.dir.path().join(TenantId::of_agency("cr").as_str()));
-    let ctx = TenantId::of_agency("cr").ctx_for("cara@cr");
-    f(&store, &ctx);
-}
-
-#[tokio::test]
-async fn a_role_change_reaches_the_next_request_after_the_cache_window_with_no_new_sign_in() {
-    let r = rig();
-    let cara = sign_in(&r, "cara@cr").await;
-    invite(&r, &cara, "dan@cr", "Dan Test", &["management", "planning"]).await;
-    let dan = sign_in(&r, "dan@cr").await;
-    let (st, _, _) = call(
-        &r,
-        "GET",
-        &format!("/api/t/{}/client-brains", dan.tenant),
-        Some(&dan.cookie),
-        None,
-    )
-    .await;
-    assert_ne!(st, StatusCode::FORBIDDEN, "planning may open client brains");
-    assert!(doors(&r, &dan).await.contains(&"Client brains".to_string()));
-    // changed behind the server's back (another process, a person editing the file): the cache holds
-    // for a minute, then the next request reads the new roles
-    host_edit(&r, |store, ctx| {
-        let known = |_: &str| true;
-        agency::edit_person(
-            store,
-            ctx,
-            "dan@cr",
-            agency::PersonPatch {
-                roles: Some(vec!["management".into()]),
-                ..Default::default()
-            },
-            &known,
-        )
-        .unwrap();
-    });
     assert!(
-        doors(&r, &dan).await.contains(&"Client brains".to_string()),
-        "still inside the window"
-    );
-    r.clock.fetch_add(61, Ordering::SeqCst);
-    let after = doors(&r, &dan).await;
-    assert!(!after.contains(&"Client brains".to_string()));
-    assert!(after.contains(&"Agency dashboard".to_string()));
-    let (st, _, _) = call(
-        &r,
-        "GET",
-        &format!("/api/t/{}/client-brains", dan.tenant),
-        Some(&dan.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(
-        st,
-        StatusCode::FORBIDDEN,
-        "planning-only route, after the window"
+        people
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p["username"].as_str().unwrap().ends_with("@bq")),
+        "the second agency sees none of the first's people: {people}"
     );
 }
 
@@ -472,79 +388,5 @@ async fn a_change_made_through_the_api_is_seen_at_once_and_a_removed_person_gets
             .find(|p| p["username"] == "dan@cr")
             .unwrap()["state"],
         json!("removed")
-    );
-}
-
-#[tokio::test]
-async fn a_listed_person_whose_roles_were_emptied_by_hand_gets_403_not_every_door() {
-    let r = rig();
-    let cara = sign_in(&r, "cara@cr").await;
-    invite(&r, &cara, "dan@cr", "Dan Test", &["planning"]).await;
-    let dan = sign_in(&r, "dan@cr").await;
-    // the file edited by hand: dan's roles emptied. Through the host the roles are refused, so write the YAML.
-    let store =
-        napkin_web::store::TenantStore::new(r.dir.path().join(TenantId::of_agency("cr").as_str()));
-    use napkin_host::{Library, PartStore};
-    let id = store.home("agency-v1").unwrap();
-    let clan = clan_sdk::ClanFile::from_bytes(store.read(&id).unwrap()).unwrap();
-    let yaml = String::from_utf8(clan.read_entry("shared/data.yaml").unwrap()).unwrap();
-    let edited = yaml
-        .replacen("- planning", "[]", 1)
-        .replace("roles:\n  []", "roles: []");
-    assert_ne!(yaml, edited);
-    let mut b = clan_sdk::ClanBuilder::new(clan.manifest().clone());
-    for (p, bytes) in clan.read_all_entries().unwrap() {
-        if p != "manifest.yaml" && p != "shared/data.yaml" {
-            b.add_entry(p, bytes);
-        }
-    }
-    b.add_entry("shared/data.yaml", edited.into_bytes());
-    let v = store.version(&id).unwrap();
-    store
-        .apply(&napkin_host::Change::replace(id, v, b.build().unwrap()))
-        .unwrap();
-    r.clock.fetch_add(61, Ordering::SeqCst);
-    let (st, _, _) = call(
-        &r,
-        "GET",
-        &format!("/api/t/{}/doors", dan.tenant),
-        Some(&dan.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(st, StatusCode::FORBIDDEN);
-    let (st, _, _) = call(
-        &r,
-        "GET",
-        &format!("/api/t/{}/library", dan.tenant),
-        Some(&dan.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(st, StatusCode::FORBIDDEN);
-}
-
-#[tokio::test]
-async fn a_registry_that_does_not_parse_refuses_changes_not_sign_ins() {
-    let r = rig();
-    let cara = sign_in(&r, "cara@cr").await;
-    invite(&r, &cara, "dan@cr", "Dan Test", &["planning"]).await;
-    // break the document
-    let dir = r.dir.path().join(TenantId::of_agency("cr").as_str());
-    std::fs::write(dir.join("home-agency-v1.clan"), b"not a clan").unwrap();
-    r.clock.fetch_add(61, Ordering::SeqCst);
-    // sign-in still works (from the roster, since no directory can be read), and a write is refused
-    let cara = sign_in(&r, "cara@cr").await;
-    let (st, _, _) = call(
-        &r,
-        "PUT",
-        &format!("/api/t/{}/agency/people/dan@cr", cara.tenant),
-        Some(&cara.cookie),
-        Some(json!({ "roles": ["traffic"] })),
-    )
-    .await;
-    assert!(
-        st.as_u16() >= 400,
-        "a write to a registry that cannot be read is refused, not {st}"
     );
 }

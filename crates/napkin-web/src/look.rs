@@ -7,7 +7,9 @@
 //! is kept, and a write that names one is refused. The server checks the shape of
 //! the logo, stores it as one settings file per tenant, and names who wrote it and
 //! what they did, until the People page's agency form takes the logo over
-//! (features/align-needs-lock-people.clan).
+//! (features/align-needs-lock-people.clan). Each write is also kept on the
+//! agency's record in the People store, where the first start after stage 3
+//! copied every logo already saved here.
 
 use std::sync::Arc;
 
@@ -65,7 +67,12 @@ fn path(ctx: &AppCtx, tenant: &crate::tenant::TenantId) -> std::path::PathBuf {
 
 /// The tenant's saved look, for a page that has no session (the client's link).
 pub fn read(ctx: &AppCtx, tenant: &crate::tenant::TenantId) -> Look {
-    match std::fs::read(path(ctx, tenant)) {
+    read_dir(&ctx.tenant_dir(tenant))
+}
+
+/// The look saved in a workspace folder (the one-time import reads it: crate::people_import).
+pub fn read_dir(dir: &std::path::Path) -> Look {
+    match std::fs::read(dir.join(FILE)) {
         Ok(bytes) => serde_json::from_slice::<Saved>(&bytes)
             .map(|s| Look { logo: s.logo })
             .unwrap_or_default(),
@@ -91,9 +98,12 @@ pub async fn put_look(
     Path(_t): Path<String>,
     Json(look): Json<Look>,
 ) -> ApiResult<Json<Look>> {
-    // Once an agency has a directory its look is its admin's to change.
+    // Once an agency has an admin in the People store its look is its admin's to change.
     if let Some(Extension(a)) = &account {
-        if ctx.directory.has(&a.agency) && !crate::agency::is_admin(a) {
+        let has_admin = ctx
+            .people()
+            .is_some_and(|p| p.book().admins_of(&a.agency) > 0);
+        if has_admin && !crate::agency::is_admin(a) {
             return Err(ApiError::new(
                 403,
                 "Only an admin of the agency can change its look.",
@@ -120,6 +130,13 @@ pub async fn put_look(
     }
     let bytes = serde_json::to_vec_pretty(&saved).map_err(|e| ApiError::new(500, e.to_string()))?;
     std::fs::write(&p, bytes).map_err(|e| ApiError::new(500, e.to_string()))?;
+    // the agency's record in the People store holds the logo too, which the People page's agency form will
+    // take over (features/align-needs-lock-people.clan, stage 4)
+    if let (Some(Extension(a)), Some(people)) = (&account, ctx.people()) {
+        if let Err(e) = people.set_logo(&a.username, &a.agency, look.logo.as_deref()) {
+            tracing::warn!(error = ?e, "the logo was not kept on the agency's record");
+        }
+    }
     Ok(Json(look))
 }
 

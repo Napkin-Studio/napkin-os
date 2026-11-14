@@ -2,15 +2,18 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! An agency's people, as the shell edits them (features/agency-setup.clan).
+//! An agency's people, as the build's setup flow edits them (features/agency-setup.clan), over the
+//! one People store (people.rs; features/align-needs-lock-people.clan, stage 3).
 //!
-//! `GET /api/t/{tenant}/agency/people` is the one list of people every other feature reads
-//! (sign-in names, names, roles; emails, state and who named them for admins only). Only an
-//! admin of the agency changes it, and the tenant is always the signed-in person's own: an admin
-//! naming another agency's tenant gets 403 from the tenant extractor before any of this runs.
+//! `GET /api/t/{tenant}/agency/people` lists the signed-in person's own agency (sign-in names, names,
+//! roles; emails, state and who named them for admins only). Only an admin of the agency changes it, and
+//! the agency is always the session's: a tenant in the path that is not the session's is 403 from the
+//! tenant extractor before any of this runs, and a sign-in name of another agency, in the path or the
+//! body, gets the answer a name nobody holds gets. These routes go when the People page takes them over
+//! (stage 4); until then they write the same store as `/api/admin/people`.
 //!
-//! Every write goes through `napkin_host::agency`, which records one attributed decision per
-//! change. Nothing here scores or ranks a person.
+//! Every write is one line on the store's change log and one entry on the agency's audit chain.
+//! Nothing here scores or ranks a person.
 
 use std::sync::Arc;
 
@@ -21,14 +24,14 @@ use axum::http::{header, HeaderMap};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Extension, Json, Router};
-use napkin_host::agency::{self, NewPerson, PersonPatch};
+use napkin_host::agency;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{Account, SignIn};
-use crate::directory::{Person, PersonState};
+use crate::auth::Account;
 use crate::error::{ApiError, ApiResult};
+use crate::people::{Member, NewPerson, People, PersonRec, Refusal};
 use crate::state::AppCtx;
-use crate::tenant::{Acting, Tenant, TenantId};
+use crate::tenant::{Acting, Tenant};
 
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
@@ -44,7 +47,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         )
 }
 
-/// What the agency's admin role is called in a session.
+/// Whether the signed-in person is an admin of their agency (their roles, the People store's).
 pub fn is_admin(account: &Account) -> bool {
     account.roles.iter().any(|r| r == agency::ADMIN)
 }
@@ -64,11 +67,30 @@ pub fn admin_of(account: Option<Extension<Account>>) -> ApiResult<Account> {
     }
 }
 
-/// The roles a directory may hold: every role the agency's door table knows, and `admin`. `demo`
+/// The roles a person may be given: every role the agency's door table knows, and `admin`. `demo`
 /// is for demo accounts and is not a role anyone is given.
 pub fn role_known(ctx: &AppCtx, agency: &str) -> impl Fn(&str) -> bool {
     let table = crate::roles::Table::for_agency(ctx.roles_dir.as_deref(), Some(agency));
     move |r: &str| r != crate::roles::DEMO && table.knows(r)
+}
+
+/// The People store, or 404 where this server keeps none.
+pub fn store(ctx: &AppCtx) -> ApiResult<&Arc<People>> {
+    ctx.people()
+        .ok_or_else(|| ApiError::new(404, "This server keeps no list of people."))
+}
+
+/// A refusal of the People store, as these routes answer it.
+pub fn refused(r: Refusal) -> ApiError {
+    match r {
+        Refusal::Bad(m) => ApiError::new(400, m),
+        Refusal::Conflict(m) => ApiError::new(409, m),
+        Refusal::NotFound(m) => ApiError::new(404, m),
+        Refusal::Io(m) => {
+            tracing::error!(target: "napkin_web::people", error = %m, "people store");
+            ApiError::new(500, "The people store could not be changed.")
+        }
+    }
 }
 
 /// What anyone in the agency sees of a person.
@@ -86,59 +108,84 @@ struct AdminPersonView {
     name: String,
     roles: Vec<String>,
     email: String,
-    state: PersonState,
+    state: &'static str,
     invited_by: String,
     at: String,
 }
 
-fn admin_view(p: Person) -> AdminPersonView {
+fn shown_name(p: &PersonRec) -> String {
+    p.name.clone().unwrap_or_else(|| p.id.clone())
+}
+
+fn admin_view(p: PersonRec) -> AdminPersonView {
     AdminPersonView {
-        username: p.username,
-        name: p.name,
+        name: shown_name(&p),
+        state: if p.active() { "active" } else { "removed" },
+        username: p.id,
         roles: p.roles,
-        email: p.email,
-        state: p.state,
-        invited_by: p.invited_by,
-        at: p.at,
+        email: p.email.unwrap_or_default(),
+        invited_by: p.added_by,
+        at: p.added_at,
     }
 }
 
-/// The people of the agency, an allow list per reader. An agency with no directory answers an
-/// empty list (its roster is not a directory). A removed person is listed to admins only.
+/// The people of the session's agency, an allow list per reader. A removed person is listed to admins only.
 async fn list_people(
     State(ctx): State<Arc<AppCtx>>,
     Tenant(_t): Tenant,
     account: Option<Extension<Account>>,
 ) -> Json<serde_json::Value> {
-    let Some(Extension(me)) = account else {
+    let (Some(Extension(me)), Some(people)) = (account, ctx.people()) else {
         return Json(serde_json::json!([]));
     };
-    let people = ctx.directory.people(&me.agency);
+    let mine: Vec<PersonRec> = people
+        .book()
+        .people
+        .into_iter()
+        .filter(|p| p.agency == me.agency)
+        .collect();
     if is_admin(&me) {
-        let v: Vec<AdminPersonView> = people.into_iter().map(admin_view).collect();
+        let v: Vec<AdminPersonView> = mine.into_iter().map(admin_view).collect();
         return Json(serde_json::json!(v));
     }
-    let v: Vec<PersonView> = people
+    let v: Vec<PersonView> = mine
         .into_iter()
-        .filter(|p| p.state != PersonState::Removed)
+        .filter(PersonRec::active)
         .map(|p| PersonView {
-            username: p.username,
-            name: p.name,
+            name: shown_name(&p),
+            username: p.id,
             roles: p.roles,
         })
         .collect();
     Json(serde_json::json!(v))
 }
 
-fn of_my_agency(me: &Account, username: &str) -> ApiResult<String> {
+/// A sign-in name of the session's agency. Any other, existing or not, is the same 404 a name nobody
+/// holds gets.
+fn of_my_agency(people: &People, me: &Account, username: &str) -> ApiResult<String> {
     let u = username.trim().to_ascii_lowercase();
     match Account::parse_username(&u) {
-        Some((u, agency)) if agency == me.agency => Ok(u),
-        _ => Err(ApiError::new(
-            400,
-            format!("A sign-in name here ends in @{}.", me.agency),
-        )),
+        Some((u, agency))
+            if agency == me.agency
+                && people.book().person(&u).is_some_and(|p| p.agency == agency) =>
+        {
+            Ok(u)
+        }
+        _ => Err(ApiError::new(404, format!("{u} is not on the list."))),
     }
+}
+
+/// Roles as an agency's admin gives them: at least one, each known.
+fn checked_roles(ctx: &AppCtx, agency: &str, roles: &[String]) -> ApiResult<Vec<String>> {
+    let roles = crate::people::clean_roles(roles);
+    if roles.is_empty() {
+        return Err(ApiError::new(400, "a person needs at least one role"));
+    }
+    let known = role_known(ctx, agency);
+    if let Some(bad) = roles.iter().find(|r| !known(r)) {
+        return Err(ApiError::new(400, format!("{bad:?} is not a role")));
+    }
+    Ok(roles)
 }
 
 #[derive(Deserialize)]
@@ -153,139 +200,119 @@ struct InviteBody {
 
 async fn invite(
     State(ctx): State<Arc<AppCtx>>,
-    Acting(acting): Acting,
-    Tenant(tenant): Tenant,
+    Tenant(_tenant): Tenant,
     account: Option<Extension<Account>>,
     Json(b): Json<InviteBody>,
 ) -> ApiResult<(StatusCode, Json<AdminPersonView>)> {
     let me = admin_of(account)?;
-    let username = match b.username.as_deref().filter(|u| !u.trim().is_empty()) {
-        Some(u) => of_my_agency(&me, u)?,
-        None => {
-            let local = b.email.split('@').next().unwrap_or("");
-            of_my_agency(&me, &format!("{local}@{}", me.agency))?
-        }
-    };
-    let known = role_known(&ctx, &me.agency);
-    let p = agency::invite(
-        &*ctx.workspace(&tenant).store,
-        &acting,
-        NewPerson {
-            username,
-            name: b.name,
-            email: b.email,
-            roles: b.roles,
+    let people = store(&ctx)?;
+    let local = match b
+        .username
+        .as_deref()
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+    {
+        // a sign-in name of any other agency is refused as one that is not a name here
+        Some(u) => match Account::parse_username(u) {
+            Some((u, agency)) if agency == me.agency => u,
+            _ => {
+                return Err(ApiError::new(
+                    400,
+                    format!("A sign-in name here ends in @{}.", me.agency),
+                ))
+            }
         },
-        &known,
-    )?;
-    ctx.directory.changed(&me.agency);
-    crate::audit::sync_registry(&ctx, &tenant);
+        None => format!(
+            "{}@{}",
+            b.email.split('@').next().unwrap_or("").trim(),
+            me.agency
+        ),
+    };
+    let email = agency::clean_email(&b.email).map_err(|e| ApiError::new(400, e.message))?;
+    let name = agency::clean_person_name(&b.name).map_err(|e| ApiError::new(400, e.message))?;
+    let roles = checked_roles(&ctx, &me.agency, &b.roles)?;
+    let p = people
+        .add_in(
+            &me.username,
+            &me.agency,
+            &NewPerson {
+                name,
+                agency: me.agency.clone(),
+                username: Some(local),
+                roles,
+                email: Some(email),
+            },
+        )
+        .map_err(refused)?;
     Ok((StatusCode::CREATED, Json(admin_view(p))))
+}
+
+/// What an admin may change on a person. A field left out is kept.
+#[derive(Deserialize, Default)]
+struct PersonPatch {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    email: Option<String>,
+    #[serde(default)]
+    roles: Option<Vec<String>>,
 }
 
 async fn edit_person(
     State(ctx): State<Arc<AppCtx>>,
-    Acting(acting): Acting,
-    Tenant(tenant): Tenant,
+    Tenant(_tenant): Tenant,
     account: Option<Extension<Account>>,
     Path((_t, username)): Path<(String, String)>,
     Json(patch): Json<PersonPatch>,
 ) -> ApiResult<Json<AdminPersonView>> {
     let me = admin_of(account)?;
-    let username = of_my_agency(&me, &username)?;
-    let known = role_known(&ctx, &me.agency);
-    let p = agency::edit_person(
-        &*ctx.workspace(&tenant).store,
-        &acting,
-        &username,
-        patch,
-        &known,
-    )?;
-    ctx.directory.changed(&me.agency);
-    crate::audit::sync_registry(&ctx, &tenant);
+    let people = store(&ctx)?;
+    let username = of_my_agency(people, &me, &username)?;
+    let mut p = None;
+    if let Some(roles) = &patch.roles {
+        let roles = checked_roles(&ctx, &me.agency, roles)?;
+        p = Some(
+            people
+                .set_roles(&me.username, &username, &roles)
+                .map_err(refused)?,
+        );
+    }
+    if let Some(name) = &patch.name {
+        let name = agency::clean_person_name(name).map_err(|e| ApiError::new(400, e.message))?;
+        p = Some(
+            people
+                .rename(&me.username, &username, &name)
+                .map_err(refused)?,
+        );
+    }
+    if let Some(email) = &patch.email {
+        let email = agency::clean_email(email).map_err(|e| ApiError::new(400, e.message))?;
+        p = Some(
+            people
+                .set_email(&me.username, &username, Some(&email))
+                .map_err(refused)?,
+        );
+    }
+    let p = match p {
+        Some(p) => p,
+        None => people
+            .active(&username)
+            .ok_or_else(|| ApiError::new(404, format!("{username} is not on the list.")))?,
+    };
     Ok(Json(admin_view(p)))
 }
 
 async fn remove_person(
     State(ctx): State<Arc<AppCtx>>,
-    Acting(acting): Acting,
-    Tenant(tenant): Tenant,
+    Tenant(_tenant): Tenant,
     account: Option<Extension<Account>>,
     Path((_t, username)): Path<(String, String)>,
 ) -> ApiResult<Json<AdminPersonView>> {
     let me = admin_of(account)?;
-    let username = of_my_agency(&me, &username)?;
-    let p = agency::remove_person(&*ctx.workspace(&tenant).store, &acting, &username)?;
-    ctx.directory.changed(&me.agency);
-    crate::audit::sync_registry(&ctx, &tenant);
+    let people = store(&ctx)?;
+    let username = of_my_agency(people, &me, &username)?;
+    let p = people.remove(&me.username, &username).map_err(refused)?;
     Ok(Json(admin_view(p)))
-}
-
-// ── signing in ──────────────────────────────────────────────────────────────
-
-const NOT_ON_THE_LIST: &str =
-    "That name is not on this studio's list. Ask your studio admin to add you.";
-
-/// The directory decides a sign-in for an agency that has one. A roster has no passwords, so the
-/// name alone proves nothing more than it did, and the directory is the list; with a password
-/// provider the provider proves who it is and the directory says whether they may and as what.
-/// An agency with no directory is the provider's, as before.
-pub async fn sign_in(
-    ctx: &Arc<AppCtx>,
-    provider: &crate::auth::Provider,
-    name: &str,
-    password: &str,
-) -> SignIn {
-    let Some((username, agency)) = Account::parse_username(name) else {
-        return provider.sign_in(name, password).await;
-    };
-    if !ctx.directory.has(&agency) {
-        return provider.sign_in(name, password).await;
-    }
-    if !provider.uses_passwords() {
-        return directory_account(ctx, &username, &agency);
-    }
-    decide(ctx, provider.sign_in(name, password).await)
-}
-
-fn directory_account(ctx: &Arc<AppCtx>, username: &str, agency: &str) -> SignIn {
-    match ctx.directory.person(agency, username) {
-        Some(p) if p.state != PersonState::Removed => {
-            let account = Account {
-                username: username.to_string(),
-                agency: agency.to_string(),
-                name: Some(p.name.clone()),
-                roles: p.roles.clone(),
-            };
-            activate(ctx, &account, p.state);
-            SignIn::Done(account)
-        }
-        _ => SignIn::Refused(NOT_ON_THE_LIST.into()),
-    }
-}
-
-/// A password provider said `Done`: the directory, when the agency has one, has the last word.
-pub fn decide(ctx: &Arc<AppCtx>, out: SignIn) -> SignIn {
-    match out {
-        SignIn::Done(a) if ctx.directory.has(&a.agency) => {
-            directory_account(ctx, &a.username, &a.agency)
-        }
-        other => other,
-    }
-}
-
-/// A first sign-in turns `invited` into `active`, as a decision by the person. A failure to
-/// record it is logged and never stops the sign-in.
-fn activate(ctx: &Arc<AppCtx>, account: &Account, state: PersonState) {
-    if state != PersonState::Invited {
-        return;
-    }
-    let tenant = TenantId::of_agency(&account.agency);
-    let acting = tenant.ctx_for(&account.username);
-    match agency::activate(&*ctx.workspace(&tenant).store, &acting, &account.username) {
-        Ok(()) => ctx.directory.changed(&account.agency),
-        Err(e) => tracing::warn!(error = %e, "could not mark a first sign-in"),
-    }
 }
 
 // ── the settings ────────────────────────────────────────────────────────────
@@ -321,7 +348,7 @@ async fn put_settings(
     account: Option<Extension<Account>>,
     Json(body): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let me = admin_of(account)?;
+    admin_of(account)?;
     let obj = body
         .as_object()
         .ok_or_else(|| ApiError::new(400, "Send the settings as an object."))?;
@@ -347,7 +374,6 @@ async fn put_settings(
         time_zone: text("time_zone")?,
     };
     let s = agency::set_settings(&*ctx.workspace(&tenant).store, &acting, patch)?;
-    ctx.directory.changed(&me.agency);
     crate::audit::sync_registry(&ctx, &tenant);
     Ok(Json(serde_json::json!({
         "name": s.name,
@@ -376,11 +402,7 @@ async fn setup_status(
     let me = admin_of(account)?;
     let store = &*ctx.workspace(&tenant).store;
     let (reg, _) = agency::read(store)?;
-    let others = reg
-        .people
-        .iter()
-        .filter(|p| p.state != PersonState::Removed && p.username != me.username)
-        .count();
+    let others = others_than(&ctx, &me);
     let steps = vec![
         Step {
             id: "logo",
@@ -409,7 +431,7 @@ async fn setup_status(
         "next": next,
         "complete": next.is_none(),
         "people": others,
-        "has_directory": reg.has_directory(),
+        "has_directory": others > 0,
     })))
 }
 
@@ -481,10 +503,7 @@ async fn import_csv(
     let bytes = file_of(&headers, &body)?;
     let store = &*ctx.workspace(&tenant).store;
     let report = match kind.as_str() {
-        "people" => {
-            let known = role_known(&ctx, &me.agency);
-            napkin_host::import::people(store, &acting, &me.agency, &bytes, dry, &known)?
-        }
+        "people" => import_people(&ctx, &me, &bytes, dry)?,
         "clients" => napkin_host::import::clients_csv(store, &acting, &bytes, dry)?,
         "jobs" => napkin_host::import::jobs_csv(store, &acting, &bytes, dry)?,
         other => {
@@ -494,11 +513,63 @@ async fn import_csv(
             ))
         }
     };
-    if !dry {
-        ctx.directory.changed(&me.agency);
-        crate::audit::sync_registry(&ctx, &tenant);
-    }
     Ok(Json(report))
+}
+
+/// The active people of `me`'s agency other than `me`.
+fn others_than(ctx: &AppCtx, me: &Account) -> usize {
+    ctx.people().map_or(0, |p| {
+        p.book()
+            .people
+            .iter()
+            .filter(|x| x.agency == me.agency && x.active() && x.id != me.username)
+            .count()
+    })
+}
+
+/// A people file into the session's agency, checked by the build's rules (`napkin_host::import`) and
+/// written to the People store in one change. Every row joins the importer's agency, whatever it names.
+pub fn import_people(
+    ctx: &AppCtx,
+    me: &Account,
+    bytes: &[u8],
+    dry: bool,
+) -> ApiResult<napkin_host::import::Report> {
+    let people = store(ctx)?;
+    let book = people.book();
+    let existing = |u: &str| {
+        book.person(u).filter(|p| p.active()).map(|p| {
+            (
+                p.name.clone().unwrap_or_default(),
+                p.email.clone().unwrap_or_default(),
+                p.roles.clone(),
+            )
+        })
+    };
+    let known = role_known(ctx, &me.agency);
+    let (mut report, good) =
+        napkin_host::import::check_people(&me.agency, &me.username, bytes, dry, &known, &existing)?;
+    report.starts_directory = others_than(ctx, me) == 0;
+    if dry || good.is_empty() {
+        return Ok(report);
+    }
+    let members: Vec<Member> = good
+        .into_iter()
+        .map(|p| Member {
+            id: p.username,
+            name: p.name,
+            email: Some(p.email),
+            roles: p.roles,
+        })
+        .collect();
+    let out = people
+        .import(&me.username, &me.agency, &members, Some(&me.username))
+        .map_err(refused)?;
+    report.created = out.created;
+    report.updated = out.updated;
+    report.unchanged = out.unchanged;
+    report.committed = out.created + out.updated > 0 || report.starts_directory;
+    Ok(report)
 }
 
 // ── the accounts file ───────────────────────────────────────────────────────
@@ -512,15 +583,17 @@ async fn accounts_tsv(
 ) -> ApiResult<Response> {
     let me = admin_of(account)?;
     let mut out = String::new();
-    for p in ctx.directory.people(&me.agency) {
-        if p.state == PersonState::Removed {
-            continue;
-        }
+    let book = store(&ctx)?.book();
+    for p in book
+        .people
+        .iter()
+        .filter(|p| p.agency == me.agency && p.active())
+    {
         let cell = |s: &str| napkin_host::import::export_cell(&s.replace(['\t', '\n', '\r'], " "));
         out.push_str(&format!(
             "{}\t{}\t{}\n",
-            p.username,
-            cell(&p.name),
+            p.id,
+            cell(&shown_name(p)),
             p.roles.join(",")
         ));
     }

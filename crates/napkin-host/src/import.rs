@@ -323,6 +323,47 @@ pub fn people(
     dry_run: bool,
     known: &dyn Fn(&str) -> bool,
 ) -> HostResult<Report> {
+    let me = ctx
+        .actor
+        .as_str()
+        .strip_prefix("human:")
+        .unwrap_or("")
+        .to_string();
+    let (reg, _) = agency::read(store)?;
+    let existing = |u: &str| {
+        reg.person(u)
+            .filter(|p| p.state != agency::State::Removed)
+            .map(|p| (p.name.clone(), p.email.clone(), p.roles.clone()))
+    };
+    let (mut report, good) = check_people(agency_slug, &me, bytes, dry_run, known, &existing)?;
+    report.starts_directory = !reg.has_directory();
+    if dry_run || good.is_empty() {
+        return Ok(report);
+    }
+    let out = agency::upsert_people(store, ctx, good, known)?;
+    report.created = out.created;
+    report.updated = out.updated;
+    report.unchanged = out.unchanged;
+    report.committed = out.created + out.updated > 0 || report.starts_directory;
+    Ok(report)
+}
+
+/// A listed person's name, email and roles, as a people file is compared with them.
+pub type Listed = (String, String, Vec<String>);
+
+/// A people file checked, with nothing written: the report (a result per row, the bad rows by line, the
+/// counts as they would be) and the good rows. `existing` gives a listed person's name, email and roles,
+/// so a row is new, changed or the same; `me` is the importer, who keeps the admin role in their own row.
+/// Whatever store the people go to, the checks are these (features/align-needs-lock-people.clan writes
+/// them to the People store).
+pub fn check_people(
+    agency_slug: &str,
+    me: &str,
+    bytes: &[u8],
+    dry_run: bool,
+    known: &dyn Fn(&str) -> bool,
+    existing: &dyn Fn(&str) -> Option<Listed>,
+) -> HostResult<(Report, Vec<NewPerson>)> {
     let table = read_table(bytes)?;
     let (Some(email_c), Some(roles_c)) = (
         table.col(&["email", "e-mail", "email address"]),
@@ -334,17 +375,9 @@ pub fn people(
     };
     let name_c = table.col(&["name", "full name"]);
     let user_c = table.col(&["username", "sign-in", "sign-in name"]);
-    let me = ctx
-        .actor
-        .as_str()
-        .strip_prefix("human:")
-        .unwrap_or("")
-        .to_string();
-    let (reg, _) = agency::read(store)?;
     let mut report = Report::new("people", dry_run, &table);
-    report.starts_directory = !reg.has_directory();
     let mut seen: HashMap<String, usize> = HashMap::new();
-    let mut good: Vec<(usize, NewPerson)> = Vec::new();
+    let mut good: Vec<NewPerson> = Vec::new();
     for (line, row) in &table.rows {
         let line = *line;
         let email = cell(row, Some(email_c));
@@ -410,22 +443,18 @@ pub fn people(
             continue;
         }
         seen.insert(username.clone(), line);
-        let status = match reg.person(&username) {
+        let status = match existing(&username) {
             None => Status::New,
-            Some(p) if p.state == agency::State::Removed => Status::New,
-            Some(p) if p.name == name && p.email == email && p.roles == roles => Status::Same,
+            Some((n, e, r)) if n == name && e == email && r == roles => Status::Same,
             Some(_) => Status::Changed,
         };
         report.push(line, status, username.clone(), None);
-        good.push((
-            line,
-            NewPerson {
-                username,
-                name,
-                email,
-                roles,
-            },
-        ));
+        good.push(NewPerson {
+            username,
+            name,
+            email,
+            roles,
+        });
     }
     for r in &report.results {
         match r.status {
@@ -435,20 +464,7 @@ pub fn people(
             Status::Error => {}
         }
     }
-    if dry_run || good.is_empty() {
-        return Ok(report);
-    }
-    let out = agency::upsert_people(
-        store,
-        ctx,
-        good.into_iter().map(|(_, p)| p).collect(),
-        known,
-    )?;
-    report.created = out.created;
-    report.updated = out.updated;
-    report.unchanged = out.unchanged;
-    report.committed = out.created + out.updated > 0 || report.starts_directory;
-    Ok(report)
+    Ok((report, good))
 }
 
 // ── clients ─────────────────────────────────────────────────────────────────

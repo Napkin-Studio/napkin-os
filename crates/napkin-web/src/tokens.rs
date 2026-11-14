@@ -35,11 +35,10 @@ const TTL: Duration = Duration::from_secs(12 * 60 * 60);
 #[derive(Clone)]
 pub struct Grant {
     pub tenant: TenantId,
-    /// Who opened it: the app frame writes as this person.
+    /// Who opened it: the app frame writes as this person. A grant carries no roles: the sandbox reads
+    /// them from the People store on each request, and refuses a person no longer on it
+    /// (features/align-needs-lock-people.clan).
     pub person: String,
-    /// The roles that person held when it was opened: what lets a document's decision view say which
-    /// notices are theirs (the sandbox has no session of its own).
-    pub roles: Vec<String>,
     pub doc: DocId,
 }
 
@@ -58,7 +57,7 @@ impl TokenStore {
     ///
     /// Re-use keeps a reload from stranding the previous token, and means the
     /// set never grows with page views — only with documents.
-    pub fn mint(&self, tenant: &TenantId, person: &str, roles: &[String], doc: &DocId) -> String {
+    pub fn mint(&self, tenant: &TenantId, person: &str, doc: &DocId) -> String {
         let mut entries = self.entries.lock().unwrap();
         let now = Instant::now();
         entries.retain(|_, e| e.expires > now);
@@ -67,7 +66,6 @@ impl TokenStore {
             &e.grant.tenant == tenant && e.grant.person == person && &e.grant.doc == doc
         }) {
             entry.expires = now + TTL;
-            entry.grant.roles = roles.to_vec();
             return token.clone();
         }
 
@@ -78,7 +76,6 @@ impl TokenStore {
                 grant: Grant {
                     tenant: tenant.clone(),
                     person: person.to_string(),
-                    roles: roles.to_vec(),
                     doc: doc.clone(),
                 },
                 expires: now + TTL,
@@ -107,8 +104,8 @@ mod tests {
         let b = TenantId::mint();
         let doc = DocId::new("doc-x");
 
-        let ta = store.mint(&a, a.as_str(), &[], &doc);
-        let tb = store.mint(&b, b.as_str(), &[], &doc);
+        let ta = store.mint(&a, a.as_str(), &doc);
+        let tb = store.mint(&b, b.as_str(), &doc);
         assert_ne!(ta, tb, "the same document for two tenants is two grants");
 
         let g = store.resolve(&ta).unwrap();
@@ -123,13 +120,10 @@ mod tests {
         let store = TokenStore::default();
         let t = TenantId::mint();
         let doc = DocId::new("doc-x");
-        assert_eq!(
-            store.mint(&t, "p", &[], &doc),
-            store.mint(&t, "p", &[], &doc)
-        );
+        assert_eq!(store.mint(&t, "p", &doc), store.mint(&t, "p", &doc));
         assert_ne!(
-            store.mint(&t, "p", &[], &doc),
-            store.mint(&t, "p", &[], &DocId::new("doc-y"))
+            store.mint(&t, "p", &doc),
+            store.mint(&t, "p", &DocId::new("doc-y"))
         );
     }
 }

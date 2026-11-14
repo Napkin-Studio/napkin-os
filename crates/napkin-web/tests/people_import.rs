@@ -52,7 +52,13 @@ fn invite(root: &Path, agency: &str, by: &str, username: &str, roles: &[&str]) {
 fn directory(root: &Path) {
     invite(root, "cr", "cara@cr", "dan@cr", &["planning"]);
     invite(root, "cr", "cara@cr", "eve@cr", &["traffic"]);
-    invite(root, "cr", "cara@cr", "fay@cr", &["copywriter", "art-director"]);
+    invite(
+        root,
+        "cr",
+        "cara@cr",
+        "fay@cr",
+        &["copywriter", "art-director"],
+    );
     agency::remove_person(
         &store_of(root, "cr"),
         &TenantId::of_agency("cr").ctx_for("cara@cr"),
@@ -74,9 +80,7 @@ fn before(root: &Path, roster: &str, username: &str) -> Option<Vec<String>> {
     }
     roster.lines().find_map(|l| {
         let mut c = l.split('\t');
-        (c.next() == Some(username)).then(|| {
-            napkin_web::roles::parse_roles(c.nth(1).unwrap_or(""))
-        })
+        (c.next() == Some(username)).then(|| napkin_web::roles::parse_roles(c.nth(1).unwrap_or("")))
     })
 }
 
@@ -136,7 +140,9 @@ fn the_directory_is_imported_with_nobody_dropped_and_no_role_widened() {
     for u in ["cara@cr", "dan@cr", "eve@cr", "fay@cr"] {
         let n = log
             .lines()
-            .filter(|l| l.contains("imported from the directory") && l.contains(&format!("\"{u}\"")))
+            .filter(|l| {
+                l.contains("imported from the directory") && l.contains(&format!("\"{u}\""))
+            })
             .count();
         assert_eq!(n, 1, "{u}: {log}");
     }
@@ -161,7 +167,10 @@ fn the_import_is_idempotent() {
     let again = open(root);
     let report = napkin_web::people_import::run(&again, root).unwrap();
     assert_eq!(report.people, 0, "{report:?}");
-    assert_eq!(std::fs::read(root.join("_people/people.json")).unwrap(), file);
+    assert_eq!(
+        std::fs::read(root.join("_people/people.json")).unwrap(),
+        file
+    );
     assert_eq!(
         std::fs::read_to_string(root.join("_people/changes.jsonl")).unwrap(),
         log
