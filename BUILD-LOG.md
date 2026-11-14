@@ -246,3 +246,10 @@ None is verified or merged.
 - Checks on the merged code: frontend, copy, secrets pass; napkin-host and napkin-web cargo tests pass (the racing test skipped); pilot, agency-setup, roles-homes, remaining-homes, approval-route, job-page, visual-brief pass at 390 and 1440. Not fixed: Judge 59 and the known older failures. Judge 64, pilot 15 and visual-brief 247 and 319 fail only in a long single run and pass alone (the slow-server pattern).
 - Not done: the bar search field is still in the bar; Old "Open Brief" and "The map" bar commands are gone; a full multi-worker e2e on the merged branch is still to run.
 - Cost: Sonnet builders about 450k tokens for the build, 66k for the e2e fixes, 67k for pilot 6.
+
+**Baseline after the landing and develop merges (14 Nov, session 5).**
+- Full e2e on `spike/fabletest` at c03fb068 with 6 workers: 204 passed, 28 failed, 125 skipped, in 14 min (one worker took 52 min). The skips rose from 51 to 125 because `j001-phase3-suite` adds 74 waiting tests.
+- 16 of the 28 are the known list (bar Share, briefSheet x2, landing 320, registry x2, research x2, `shots.spec.ts:44`, Judge 59 x2, visual-brief 189 and 247) or were seen before in long runs.
+- 12 were new. Run again at one worker in a small set: idea-room 50, 51 and 52, phase 2 suite 73, Judge 58, pilot 13, landing 180, roles-homes 113 and visual-brief 319 all pass, so they fail only under parallel load (the view-lock and slow-server pattern; `fix/store-scan-under-lock` is still missing). Judge 64 fails at both widths when Judge 58 runs before it and passes alone: it depends on test order, cause not yet known. Visual-brief 137 failed once at 390 and passed at 1440.
+- Until the lock fix exists, 6 workers is a quick smoke run, not a gate; a failure there is re-run alone before it counts.
+- In progress: `align-needs-lock-people` stage 1 (the host slice) and `align-booth` stage 1 (the shared Booth snippet), one Sonnet builder each. `production-line-merge` waits for them. `align-confidential-prices` is still held.
