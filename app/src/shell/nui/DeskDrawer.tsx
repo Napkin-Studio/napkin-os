@@ -11,7 +11,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { host } from '../../host'
 import type { DecisionsView, LibraryItem, RelatedView } from '../../host'
-import { read as readAside, write as writeAside } from '../decisions/useSetAside'
+import { asideKeys, toggleAside, useAsideVersion } from '../decisions/asideStore'
+import { useMe } from '../decisions/useMe'
 import { needsReason, toolName } from '../landing/model'
 import { clientName, deskCallDocs, type Facts } from './deskData'
 import { DecisionsDrawer, type CallGroup, type DrawerView } from './DecisionsDrawer'
@@ -32,7 +33,8 @@ interface Props {
 export function DeskDrawer({ items, facts, agency, onOpen, onClose, onChanged }: Props) {
   const { read, unread } = deskCallDocs(items, facts)
   const [view, setView] = useState<DrawerView>('graph')
-  const [, setTick] = useState(0)
+  useAsideVersion()
+  const me = useMe()
   const first = read[0]?.item ?? null
   const [focus, setFocus] = useState<{ path: string; view: DecisionsView | null; related: RelatedView | null; error: string | null } | null>(null)
   const focusPath = first?.path ?? null
@@ -53,14 +55,9 @@ export function DeskDrawer({ items, facts, agency, onOpen, onClose, onChanged }:
     title: `${item.client ? `${clientName(item.client)} · ` : ''}${item.title || 'Untitled'}`,
     noun: NOUN[toolName(item)?.id ?? ''] ?? 'document',
     calls,
-    aside: readAside(item.path),
-    onToggleAside: key => {
-      const keys = readAside(item.path)
-      if (keys.has(key)) keys.delete(key)
-      else keys.add(key)
-      writeAside(item.path, keys)
-      setTick(t => t + 1)
-    },
+    notices: facts[item.path]?.notices,
+    aside: asideKeys(item.path),
+    onToggleAside: key => toggleAside(item.path, key),
     locked: !!item.state?.locked,
     verify: async finding => { await (await ops(item.path)).verify(finding, 'Looks right (from Decisions on the desk)'); onChanged(item.path) },
     approve: async () => { await (await ops(item.path)).approve('Approved from Decisions on the desk'); onChanged(item.path) },
@@ -85,6 +82,7 @@ export function DeskDrawer({ items, facts, agency, onOpen, onClose, onChanged }:
       view={view}
       onView={setView}
       onClose={onClose}
+      me={me}
     />
   )
 }

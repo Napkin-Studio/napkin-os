@@ -229,6 +229,10 @@ pub async fn live_roles(
                     Some(p) if p.state != PersonState::Removed => {
                         let mut a = account;
                         a.roles = p.roles;
+                        // the roles a document's token will carry are the live ones too
+                        request
+                            .extensions_mut()
+                            .insert(crate::tenant::Roles(a.roles.clone()));
                         request.extensions_mut().insert(a);
                     }
                     _ => {

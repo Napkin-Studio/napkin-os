@@ -20,6 +20,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { CANARY } from './seed/j001/canary.mjs'
+import { noticesOf, openMe } from './needs'
 import { asMe, gateOf, INTERNAL_WORDS, lockBrief, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -234,11 +235,12 @@ for (const size of SIZES) {
     expect((await gateOf(page, job.brief)).changed_since_lock).toBe(true)
     await page.goto('/')
     await page.reload()
-    // a changed brief is a row of Needs you like any other (needs-you-full): the notice, for everyone on the job
-    await expect(page.getByTestId('needs-you')).toBeVisible()
-    const showAll = page.getByTestId('needs-show-all') // five rows show; this person's list may hold more by now
+    // a changed brief is a notice on the brief like any other item (needs-you-full): for everyone on the job, on the desk's Me rows
+    expect(await noticesOf(page, job.api, job.brief, ['brief-changed'])).toHaveLength(1)
+    await openMe(page)
+    const showAll = page.getByTestId('me-show-all') // five rows show; this person's list may hold more by now
     if (await showAll.isVisible()) await showAll.click()
-    await expect(page.locator('[data-testid="need"][data-kind="brief-changed"]').filter({ hasText: `${job.job}, ${job.clientName}` })).toBeVisible()
+    await expect(page.getByTestId('me-row').filter({ hasText: job.clientName })).toBeVisible()
     await ctx.close()
   })
 

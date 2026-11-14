@@ -17,8 +17,10 @@ import { lockWords } from './nui/drawerData'
 import { setScreen } from '../dogfood/recorder'
 import { setFeedbackDoc } from '../dogfood/pointer'
 import { docStateOf, needsOf, useDecisions } from './decisions/useDecisions'
+import { noticesOf } from './decisions/needs'
 import { splitAside } from './decisions/needs'
 import { useSetAside } from './decisions/useSetAside'
+import { useMe } from './decisions/useMe'
 import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import BriefGateBand from './gate/BriefGateBand'
@@ -127,6 +129,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // The needs-your-call count, from the one selector the drawer lists from,
   // less what this person set aside (it still blocks the lock).
   const aside = useSetAside(docPath)
+  const me = useMe()
   const needs = useMemo(() => splitAside(needsOf(decisions.view), aside.keys).open.length, [decisions.view, aside.keys])
   // The medallion (the mock's headerMark): working during this document's run, done once a run
   // ended here with nothing open, needs when it needs you, else awake (or asleep before you engage).
@@ -596,6 +599,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
               title: barTitle,
               noun,
               calls: needsOf(decisions.view),
+              notices: noticesOf(decisions.view),
               aside: aside.keys,
               onToggleAside: aside.toggle,
               locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
@@ -620,6 +624,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onView={setDrawerView}
             onClose={() => setDecisionsOpen(false)}
             onChanged={changed}
+            me={me}
           />
         ) : null}
       </div>

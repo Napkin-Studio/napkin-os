@@ -14,8 +14,8 @@ import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import type { DashboardView, JobNeed, LibraryItem } from '../src/host/types.ts'
-import { dueWords, firstNeeds, jobNeedRow, needsRows, NEEDS_FIRST, orderNeeds } from '../src/shell/home/model.ts'
+import type { DashboardView, JobNeed } from '../src/host/types.ts'
+import { dueWords, firstNeeds, jobNeedRow, NEEDS_FIRST, orderNeeds } from '../src/shell/home/model.ts'
 import { jobHref, tiles } from '../src/shell/home/dashboardModel.ts'
 
 const N = (job: string, due: string | null, text = `${job} brief`): JobNeed => ({
@@ -43,20 +43,6 @@ test('a job need is one line with one next action and its deadline in words', ()
   assert.equal(jobNeedRow(N('J001', null)).state, 'No deadline')
   assert.equal(dueWords('2026-02-03'), '3 Feb')
   assert.equal(dueWords('soon'), 'soon')
-})
-
-const doc = (title: string, over: Partial<LibraryItem> = {}): LibraryItem => ({
-  path: `d-${title}`, app_id: 'ie.napkin.brief-maker', title, updated_at: '2026-11-04T10:00:00Z',
-  client: { id: 'cli_00000001', name: 'Client A' }, state: { needs_you: 1, locked: false }, run: null, ...over,
-})
-
-test('a job document leaves the per-document rows to the per-person lines; a jobless one stays', () => {
-  const rows = needsRows([doc('J001 brief', { job: 'J001' }), doc('Loose brief')], [N('J001', '2026-11-20')])
-  assert.deepEqual(rows.map(r => r.title), ['J001 brief', 'Loose brief'])
-  assert.equal(rows[0].action, 'Sign the brief') // the job's line, from the index
-  assert.equal(rows[1].action, 'Make the calls') // the jobless document, as it was
-  // a person the index asks nothing of sees no line for the job's document
-  assert.deepEqual(needsRows([doc('J001 brief', { job: 'J001' })], []), [])
 })
 
 const dash = (over: Partial<DashboardView> = {}): DashboardView => ({

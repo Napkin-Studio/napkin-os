@@ -22,6 +22,7 @@ import { AdoptPanel } from '../landing/Registry'
 import type { LandingData } from '../landing/store'
 import { greeting } from '../when'
 import { clientName, deskClients, pickRows, sectorOf, worthItems, type DeskClient, type Facts } from './deskData'
+import { emptyLine, firstRows, meRows } from './meRows'
 import { Dial } from './Dial'
 import { ToolIcon, SearchIcon } from './icons'
 import { Pop } from './Pop'
@@ -32,7 +33,7 @@ import { SetupCard } from '../setup/SetupCard'
 import { Ask } from '../../timesheet/Ask'
 import { useConsent } from '../../timesheet/consent'
 import type { DoorEntry } from '../../host/http'
-import type { ReactNode } from 'react'
+import type { NeedsAnswer } from '../../host/types'
 import '../gate/gate.css'
 
 interface Props {
@@ -48,8 +49,8 @@ interface Props {
   onOpenPage?: (door: DoorEntry) => void
   /** Opens the person's own timesheet day (the consent card's "What is captured"). */
   onTimesheet?: () => void
-  /** The Needs you list (home/NeedsYou.tsx), drawn under the row for a person with a role. */
-  needsYou?: ReactNode
+  /** What the person's documents hold for them (`GET /needs`), for a person with a role: Me lists those documents, soonest due first. */
+  needs?: NeedsAnswer
   /** Opens the agency's setup flow: offered to an admin while a step is still to do. */
   onSetup?: () => void
   /** The person's first name, for the greeting. */
@@ -81,11 +82,12 @@ function placeOf(row: HTMLElement, circle: HTMLElement): { left: number; top: nu
   return { left, top, origin: `${cx - left}px ${dr.height / 2 + 12}px` }
 }
 
-export function Desk({ data, facts, live, offered = null, pages = [], morePages = [], onOpenPage, onTimesheet, onSetup, needsYou, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
+export function Desk({ data, facts, live, offered = null, pages = [], morePages = [], onOpenPage, onTimesheet, onSetup, needs, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
   const [from, setFrom] = useState<'all' | 'me'>('all')
+  const [meAll, setMeAll] = useState(false)
   const [dial, setDial] = useState<string | null>(null)
   const [place, setPlace] = useState<{ left: number; top: number; origin: string } | null>(null)
   const [at, setAt] = useState(0)
@@ -172,6 +174,9 @@ export function Desk({ data, facts, live, offered = null, pages = [], morePages 
 
   const hello = first ? `${greeting().replace(/\.$/, '')}, ${first}.` : greeting()
   const picks = useMemo(() => pickRows(data.items, facts, from, data.person?.id ?? null), [data.items, facts, from, data.person?.id])
+  // Me, for a person with a role, is what their documents hold for them (the server's per-document facts), soonest due first.
+  const mine = useMemo(() => (needs ? meRows(data.items, needs.documents, needs.timesheet) : null), [data.items, needs])
+  const meShown = mine ? firstRows(mine, meAll) : null
   const worth = useMemo(() => worthItems(data.items, facts), [data.items, facts])
   const open = dial ? all.find(c => c.id === dial) ?? null : null
   const none = data.clients.length === 0
@@ -196,7 +201,6 @@ export function Desk({ data, facts, live, offered = null, pages = [], morePages 
 
         {onOpenPage && <YourPages pages={pages} more={morePages} onOpen={onOpenPage} />}
         {onSetup && <SetupCard onOpen={onSetup} />}
-        {needsYou && <div className="pg-needs" data-testid="needs-you-section">{needsYou}</div>}
 
         <main id="view-desk">
           {data.registryError && (
@@ -289,18 +293,33 @@ export function Desk({ data, facts, live, offered = null, pages = [], morePages 
                     </span>
                   </h3>
                   <div className="p33-pick-list" id="p33-pick" data-testid="pick-up">
-                    {picks.map(p => (
-                      <button key={p.path} type="button" className="p33-pk" data-testid="pick-row" onClick={() => onOpenDocument(p.path)}>
-                        <span className="pk-ico"><ToolIcon tool={p.icon} /></span>
-                        <span><b>{p.title}</b><small>{p.sub}</small></span>
-                        <span className={`pk-st ${p.needs ? 'needs' : ''}`}>{p.state}</span>
-                      </button>
-                    ))}
-                    {picks.length === 0 && (
-                      <p className="nui-empty">{from === 'me'
-                        ? 'Nothing you touched last yet. What others changed is under Everyone.'
-                        : 'Nothing to pick up yet. Open a client to start the first piece of work.'}</p>
-                    )}
+                    {from === 'me' && meShown && mine ? <>
+                      {meShown.shown.map(r => (
+                        <button key={r.key} type="button" className="p33-pk" data-testid="me-row" data-due={r.due ?? ''} data-mine={r.mine}
+                          onClick={() => (r.timesheet ? onTimesheet?.() : onOpenDocument(r.path))}>
+                          <span className="pk-ico"><ToolIcon tool="other" /></span>
+                          <span><b>{r.title}</b><small>{r.sub}</small></span>
+                          <span className="pk-st needs">{r.state}</span>
+                        </button>
+                      ))}
+                      {mine.length === 0 && <p className="nui-empty" data-testid="needs-empty">{emptyLine(needs?.next_deadline)}</p>}
+                      {!meAll && meShown.more > 0 && (
+                        <p className="nui-more"><button type="button" className="side-link" data-testid="me-show-all" onClick={() => setMeAll(true)}>Show all {mine.length}</button></p>
+                      )}
+                    </> : <>
+                      {picks.map(p => (
+                        <button key={p.path} type="button" className="p33-pk" data-testid="pick-row" onClick={() => onOpenDocument(p.path)}>
+                          <span className="pk-ico"><ToolIcon tool={p.icon} /></span>
+                          <span><b>{p.title}</b><small>{p.sub}</small></span>
+                          <span className={`pk-st ${p.needs ? 'needs' : ''}`}>{p.state}</span>
+                        </button>
+                      ))}
+                      {picks.length === 0 && (
+                        <p className="nui-empty">{from === 'me'
+                          ? 'Nothing you touched last yet. What others changed is under Everyone.'
+                          : 'Nothing to pick up yet. Open a client to start the first piece of work.'}</p>
+                      )}
+                    </>}
                   </div>
                 </div>}
                 <div>

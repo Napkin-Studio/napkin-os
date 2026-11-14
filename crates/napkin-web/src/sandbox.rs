@@ -119,6 +119,13 @@ async fn dispatch(
     )
     .await;
     crate::timing::add_ms("dispatch", started);
+    // The decision view says which notices of the job index are the opener's own on this document.
+    let mut resp = resp;
+    if path == "/decisions" && method == Method::GET && resp.status == 200 {
+        if let Some(body) = crate::needs::with_notices(&ctx, &workspace, &grant, &resp.body) {
+            resp.body = body;
+        }
+    }
     // An app that builds its own export (`clan://export`) gets back a temp file
     // on this server. The browser cannot fetch a server path, so it is stashed
     // behind a handle. The event goes to every tab of the tenant (in accounts

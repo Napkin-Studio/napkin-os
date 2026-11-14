@@ -44,6 +44,10 @@ pub const MONEY_KEYS: &[&str] = &["budget_hours"];
 
 const CLIENT_KEYS: &[&str] = &["id", "name"];
 const STAGE_KEYS: &[&str] = &["id", "step", "label"];
+/// Held back from every role: who each of a document's items waits on feeds the desk's own rows and is
+/// sent to nobody as it is.
+#[cfg(test)]
+const DOC_HELD_BACK_KEYS: &[&str] = &["holds"];
 const DOC_KEYS: &[&str] = &[
     "path",
     "title",
@@ -139,7 +143,6 @@ pub const NEED_KEYS: &[&str] = &[
     "due",
     "due_source",
     "urgent",
-    "can_done",
 ];
 
 /// A need as the signed-in person is sent it.
@@ -222,6 +225,7 @@ mod tests {
                 title: "Brief".into(),
                 app_id: Some("ie.napkin.brief-maker".into()),
                 needs_you: 1,
+                holds: Vec::new(),
                 locked: false,
                 version: Some(1),
                 changed_since_lock: true,
@@ -303,7 +307,10 @@ mod tests {
         assert_eq!(keys(step), sorted(STEP_KEYS, APPROVER_KEYS));
         assert_eq!(keys(&full["client"]), sorted(CLIENT_KEYS, &[]));
         assert_eq!(keys(&full["stage"]), sorted(STAGE_KEYS, &[]));
-        assert_eq!(keys(&full["documents"][0]), sorted(DOC_KEYS, &[]));
+        assert_eq!(
+            keys(&full["documents"][0]),
+            sorted(DOC_KEYS, DOC_HELD_BACK_KEYS)
+        );
         assert_eq!(keys(&full["holder"]), sorted(HOLDER_KEYS, &[]));
         assert_eq!(keys(&full["scores"][0]), sorted(SCORE_KEYS, &[]));
     }
@@ -329,7 +336,7 @@ mod tests {
             audience: Audience::Person("dara@wk".into()),
         };
         let full = serde_json::to_value(&need).unwrap();
-        assert_eq!(keys(&full), sorted(NEED_KEYS, &["audience"]));
+        assert_eq!(keys(&full), sorted(NEED_KEYS, &["audience", "can_done"]));
         let sent = need_view(&need);
         assert_eq!(keys(&sent), sorted(NEED_KEYS, &[]));
         assert!(sent.get("audience").is_none());

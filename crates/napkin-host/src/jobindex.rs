@@ -107,6 +107,20 @@ pub struct JobDoc {
     /// since it was signed (the job page's Changed brief). `None` and `false` for any other document.
     pub version: Option<usize>,
     pub changed_since_lock: bool,
+    /// What `needs_you` counts, one entry per place, with who each waits on and when it is due: the
+    /// document's own Needs you list, read by the desk. Never sent as it is (`jobview.rs` lists the keys).
+    pub holds: Vec<Held>,
+}
+
+/// One place on a document's own Needs you list.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Held {
+    /// The shell's `needKey` of the item (`<code>:<address or text>`): what a set-aside mark is kept under.
+    pub key: String,
+    #[serde(rename = "for", skip_serializing_if = "Option::is_none")]
+    pub for_: Option<AttentionFor>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due: Option<String>,
 }
 
 /// One job, as the index has it.
@@ -481,6 +495,11 @@ impl JobIndex {
             })
     }
 
+    /// Whether `person` (with `roles`) sees the items of `job`: a person on it, or one who sees everything.
+    pub fn sees_job(&self, job: &str, person: Option<&str>, roles: &[String]) -> bool {
+        Self::sees_everything(person, roles) || person.is_some_and(|p| self.is_on(job, p))
+    }
+
     pub fn job(&self, number: &str) -> Option<&JobEntry> {
         self.jobs.iter().find(|j| j.number == number)
     }
@@ -511,7 +530,8 @@ fn facts_of(id: &DocId, bytes: Vec<u8>) -> Option<DocFacts> {
     let clan = ClanFile::from_bytes(bytes).ok()?;
     let job = clan.manifest().job.clone()?;
     let doc = Document::from_bytes(id.clone(), clan.raw_bytes().to_vec()).ok()?;
-    let state = crate::library::recent_state(id.clone(), clan.raw_bytes().to_vec());
+    let (state, holds) = crate::library::recent_facts(id.clone(), clan.raw_bytes().to_vec())
+        .map_or((None, Vec::new()), |(s, h)| (Some(s), h));
     let m = clan.manifest();
     let listed = JobDoc {
         path: id.to_string(),
@@ -528,6 +548,7 @@ fn facts_of(id: &DocId, bytes: Vec<u8>) -> Option<DocFacts> {
             .as_ref()
             .and_then(|s| s.gate.as_ref())
             .is_some_and(|g| g.changed_since_lock),
+        holds,
     };
     let evidence = m
         .app
@@ -734,6 +755,25 @@ fn entry_of(
     // The approval route: its states and its holder are read from the same
     // chains, from the clock alone. A job with no route is as it always was.
     let (route, holder) = derive_route(rec, route_set, &evidence, now, today);
+    // the open step that looks at a document says when its items are due and, where one names no one, who
+    // with no open step on it, an item is due when the job is
+    for d in &mut listed {
+        match open_step_for(&route, &d.path) {
+            Some((due, who)) => {
+                for h in &mut d.holds {
+                    h.due = Some(due.clone());
+                    if h.for_.is_none() {
+                        h.for_ = who.clone();
+                    }
+                }
+            }
+            None => {
+                for h in &mut d.holds {
+                    h.due = rec.due.clone();
+                }
+            }
+        }
+    }
     let (waiting_on, days) = match (&holder, rec.route.iter().any(|s| s.party == jobs::CLIENT)) {
         // a client step on the route: the client's wait counts from when the agency handed it over
         (Some(h), true) if h.party == jobs::CLIENT => ("client", Some(h.days)),
@@ -1147,21 +1187,29 @@ pub fn attend(view: &mut DecisionsView, index: &JobIndex, path: &str) {
     else {
         return;
     };
-    let Some(step) = job
-        .route
-        .iter()
-        .find(|s| s.state == "waiting" && s.document.as_deref() == Some(path))
-    else {
+    let Some((due, who)) = open_step_for(&job.route, path) else {
+        // no open step looks at this document: its items are due when the job is
+        for a in view.attention.iter_mut().filter(|a| a.blocks_lock) {
+            a.due = job.due.clone();
+        }
         return;
     };
-    let who = (step.party == jobs::AGENCY && !step.approver.is_empty())
-        .then(|| AttentionFor::person(step.approver.clone()));
     for a in view.attention.iter_mut().filter(|a| a.blocks_lock) {
-        a.due = Some(step.due.clone());
+        a.due = Some(due.clone());
         if a.for_.is_none() {
             a.for_ = who.clone();
         }
     }
+}
+
+/// The open route step that looks at `path`: its due date and, for an agency step, its approver.
+fn open_step_for(route: &[RouteStepState], path: &str) -> Option<(String, Option<AttentionFor>)> {
+    let step = route
+        .iter()
+        .find(|s| s.state == "waiting" && s.document.as_deref() == Some(path))?;
+    let who = (step.party == jobs::AGENCY && !step.approver.is_empty())
+        .then(|| AttentionFor::person(step.approver.clone()));
+    Some((step.due.clone(), who))
 }
 
 /// An approval is asked for from 48 hours before it is due.

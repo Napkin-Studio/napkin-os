@@ -2,10 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! features/needs-you-full.clan, through the real router: Done and Undo are one person's own and private,
-//! a task refuses Done, an id that is not yours is 404, the index takes no write (405), the timesheet
-//! reminder is the caller's own and only after the question was asked, and the next deadline is read off
-//! the person's own jobs.
+//! features/needs-you-full.clan and features/align-needs-lock-people.clan, through the real router: the
+//! timesheet reminder is the caller's own and only after the question was asked; an alert of the job index
+//! reaches the document's own decision view as a notice for the person it is for, and for nobody else.
 
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -26,6 +25,7 @@ struct Rig {
     #[allow(dead_code)]
     clock: Arc<AtomicI64>,
     /// The timesheet clock, in epoch milliseconds.
+    #[allow(dead_code)]
     sheet: Arc<AtomicI64>,
 }
 
@@ -126,33 +126,56 @@ async fn sign_in(r: &Rig, who: &str) -> Person {
     }
 }
 
+const BRIEF_MAKER: &str = "ie.napkin.brief-maker";
+
 fn step(stage: &str, role: Option<&str>, approver: &str, due: &str) -> Value {
     json!({ "stage": stage, "party": "agency", "role": role, "approver": approver, "due": due })
 }
 
-/// Client A and J001 (due 14 Nov, so inside 48 hours of the clock), opened by `p`, who is then its owner.
-async fn open_job(r: &Rig, p: &Person) {
-    let t = &p.tenant;
-    let (_, client, _) = call(
-        r,
-        "POST",
-        &format!("/api/t/{t}/clients"),
-        Some(&p.cookie),
-        Some(json!({ "name": "Client A" })),
+/// A Brief Maker brief filed under J001, in the tenant's documents folder.
+fn brief(r: &Rig, tenant: &str, client: &str) {
+    let base = clan_sdk::ClanFile::from_bytes(
+        clan_sdk::create(clan_sdk::CreateOptions {
+            title: "J001 brief".into(),
+            brief: "a brief".into(),
+            document_type: None,
+            no_render: false,
+            schema: None,
+        })
+        .unwrap(),
     )
-    .await;
-    let (st, _, _) = call(
-        r,
-        "POST",
-        &format!("/api/t/{t}/jobs"),
-        Some(&p.cookie),
-        Some(json!({ "number": "J001", "client_id": client["id"], "due": "2026-11-14", "owner": "aoife@wk" })),
-    )
-    .await;
-    assert_eq!(st, StatusCode::CREATED);
+    .unwrap();
+    let mut m = base.manifest().clone();
+    m.app = Some(clan_sdk::AppInfo {
+        home: None,
+        name: "Brief Maker".into(),
+        app_id: BRIEF_MAKER.into(),
+        version: "1.0.0".into(),
+        icon: None,
+        entry: "human/index.html".into(),
+        schema: None,
+        prompt_templates: vec![],
+        data_seed: None,
+        spinoff: None,
+        attach: None,
+    });
+    m.client = Some(clan_sdk::ClientRef {
+        id: client.into(),
+        name: "Client A".into(),
+    });
+    m.job = Some("J001".into());
+    let mut b = clan_sdk::ClanBuilder::new(m);
+    for (path, bytes) in base.read_all_entries().unwrap() {
+        if path != clan_sdk::MANIFEST_PATH {
+            b.add_entry(path, bytes);
+        }
+    }
+    let docs = r._dir.path().join(tenant).join("documents");
+    std::fs::create_dir_all(&docs).unwrap();
+    std::fs::write(docs.join("b1.clan"), b.build().unwrap()).unwrap();
 }
 
-async fn list(r: &Rig, p: &Person, query: &str) -> Value {
+async fn get(r: &Rig, p: &Person, query: &str) -> Value {
     call(
         r,
         "GET",
@@ -164,152 +187,120 @@ async fn list(r: &Rig, p: &Person, query: &str) -> Value {
     .1
 }
 
-fn kinds(v: &Value) -> Vec<String> {
-    v["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|n| n["kind"].as_str().unwrap().to_string())
-        .collect()
-}
-
-fn id_of(v: &Value, kind: &str) -> String {
-    v["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|n| n["kind"] == kind)
-        .unwrap_or_else(|| panic!("no {kind} in {v}"))["id"]
-        .as_str()
-        .unwrap()
-        .to_string()
-}
-
-async fn done(r: &Rig, p: &Person, id: &str, method: &str) -> StatusCode {
-    call(
+/// The decision view of `doc` as `p` gets it from the app sandbox.
+async fn decisions(r: &Rig, p: &Person, doc: &str) -> Value {
+    let (_, open, _) = call(
         r,
-        method,
-        &format!("/api/t/{}/needs/{id}/done", p.tenant),
+        "GET",
+        &format!("/api/t/{}/d/{doc}", p.tenant),
         Some(&p.cookie),
         None,
     )
-    .await
-    .0
+    .await;
+    let token = open["token"].as_str().expect("a token").to_string();
+    call(r, "GET", &format!("/s/{token}/decisions"), None, None)
+        .await
+        .1
+}
+
+fn codes(v: &Value) -> Vec<String> {
+    v["attention"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["code"].as_str().unwrap().to_string())
+        .collect()
 }
 
 #[tokio::test]
-async fn done_is_a_persons_own_and_private_a_task_refuses_it_and_undo_takes_it_back() {
+async fn an_alert_is_a_notice_on_its_document_for_the_person_it_is_for_only() {
     let r = rig();
     let cian = sign_in(&r, "cian@wk").await;
     let aoife = sign_in(&r, "aoife@wk").await;
     let niamh = sign_in(&r, "niamh@wk").await;
-    open_job(&r, &aoife).await;
-    // a route: aoife approves the brief by 13 Nov, so she has a task as well as the deadline notice
+    let t = aoife.tenant.clone();
+    let (_, client, _) = call(
+        &r,
+        "POST",
+        &format!("/api/t/{t}/clients"),
+        Some(&aoife.cookie),
+        Some(json!({ "name": "Client A" })),
+    )
+    .await;
+    let (st, _, _) = call(
+        &r,
+        "POST",
+        &format!("/api/t/{t}/jobs"),
+        Some(&aoife.cookie),
+        Some(json!({ "number": "J001", "client_id": client["id"], "due": "2026-11-30", "owner": "aoife@wk" })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::CREATED);
+    brief(&r, &t, client["id"].as_str().unwrap());
+    // aoife approves the brief by 13 Nov: inside 48 hours of the clock, so it is hers to see
     let (st, _, _) = call(
         &r,
         "PUT",
-        &format!("/api/t/{}/jobs/J001/route", cian.tenant),
+        &format!("/api/t/{t}/jobs/J001/route"),
         Some(&cian.cookie),
         Some(json!({ "route": [step("brief-check", Some("planner"), "aoife@wk", "2026-11-13")] })),
     )
     .await;
     assert_eq!(st, StatusCode::OK);
-
-    let mine = list(&r, &aoife, "").await;
-    assert_eq!(
-        kinds(&mine),
-        vec!["approval".to_string(), "deadline".to_string()],
+    let mine = decisions(&r, &aoife, "doc-b1").await;
+    assert!(
+        codes(&mine).contains(&"notice:approval".to_string()),
         "{mine}"
     );
-    assert_eq!(mine["total"], 2);
-    assert_eq!(mine["next_deadline"]["job"], "J001");
-    assert_eq!(mine["next_deadline"]["due"], "2026-11-14");
-    let notice = id_of(&mine, "deadline");
-    let task = id_of(&mine, "approval");
-    // a need is sent by an allow list: no audience, whoever else it was for
-    assert!(mine["items"][0].get("audience").is_none());
-    assert_eq!(mine["items"][0]["can_done"], false);
-    assert_eq!(mine["items"][1]["can_done"], true);
-
-    // nobody else on the agency has aoife's items, or her next deadline
-    assert!(kinds(&list(&r, &niamh, "").await).is_empty());
-    assert!(list(&r, &niamh, "").await["next_deadline"].is_null());
-    assert!(!kinds(&list(&r, &cian, "").await).contains(&"deadline".to_string()));
-
-    // Done: the notice leaves, the task refuses (409), another person's id is 404 and changes nothing
-    assert_eq!(done(&r, &aoife, &notice, "POST").await, StatusCode::OK);
+    let n = mine["attention"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["code"] == "notice:approval")
+        .unwrap();
+    assert_eq!(n["blocks_lock"], false);
+    assert_eq!(n["for"], json!({ "person": "aoife@wk" }));
+    assert_eq!(n["due"], "2026-11-13");
+    assert_eq!(n["job"], "J001");
+    assert_eq!(mine["lock"]["blockers"], 0, "a notice never holds the lock");
+    // nobody else has it: not the one who set the route, not management
+    for p in [&cian, &niamh] {
+        let v = decisions(&r, p, "doc-b1").await;
+        assert!(!codes(&v).iter().any(|c| c.starts_with("notice:")), "{v}");
+    }
+    // the desk counts it for her alone
+    let d = get(&r, &aoife, "").await;
+    assert_eq!(d["documents"][0]["notices"], 1, "{d}");
+    assert_eq!(d["documents"][0]["mine"], 1);
     assert_eq!(
-        done(&r, &aoife, &notice, "POST").await,
-        StatusCode::OK,
-        "twice is once"
+        get(&r, &niamh, "").await["documents"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
     );
-    assert_eq!(
-        kinds(&list(&r, &aoife, "").await),
-        vec!["approval".to_string()]
+    // set aside takes it out of what is hers
+    let key = format!(
+        "notice%3Aapproval%3A{}",
+        n["text"]
+            .as_str()
+            .unwrap()
+            .replace(' ', "%20")
+            .replace(':', "%3A")
+            .replace(',', "%2C")
+            .replace('.', "%2E")
     );
-    assert_eq!(
-        list(&r, &aoife, "").await["total"],
-        1,
-        "the total counts what is left"
-    );
-    assert_eq!(done(&r, &aoife, &task, "POST").await, StatusCode::CONFLICT);
-    assert_eq!(
-        done(&r, &niamh, &notice, "POST").await,
-        StatusCode::NOT_FOUND
-    );
-    assert_eq!(
-        done(&r, &cian, &notice, "POST").await,
-        StatusCode::NOT_FOUND
-    );
-    assert_eq!(
-        done(&r, &aoife, "J001:nothing:x:y", "POST").await,
-        StatusCode::NOT_FOUND
-    );
-    // another person's Undo takes back nothing of aoife's
-    assert_eq!(done(&r, &niamh, &notice, "DELETE").await, StatusCode::OK);
-    assert_eq!(
-        kinds(&list(&r, &aoife, "").await),
-        vec!["approval".to_string()]
-    );
-    // the job page's own list leaves it out too
-    let (_, page, _) = call(
+    let st = call(
         &r,
-        "GET",
-        &format!("/api/t/{}/jobs/J001", aoife.tenant),
+        "POST",
+        &format!("/api/t/{t}/needs/{key}/aside?path=doc-b1"),
         Some(&aoife.cookie),
         None,
     )
-    .await;
-    assert_eq!(page["needs"].as_array().unwrap().len(), 1);
-    // Undo: the item is back, with the id it had
-    assert_eq!(done(&r, &aoife, &notice, "DELETE").await, StatusCode::OK);
-    assert_eq!(id_of(&list(&r, &aoife, "").await, "deadline"), notice);
-
-    // the deadline moves: a new notice, a new id, so a Done on the old date hides nothing new
-    assert_eq!(done(&r, &aoife, &notice, "POST").await, StatusCode::OK);
-    let (st, _, _) = call(
-        &r,
-        "PATCH",
-        &format!("/api/t/{}/jobs/J001", aoife.tenant),
-        Some(&aoife.cookie),
-        Some(json!({ "due": "2026-11-13" })),
-    )
-    .await;
+    .await
+    .0;
     assert_eq!(st, StatusCode::OK);
-    assert_ne!(id_of(&list(&r, &aoife, "").await, "deadline"), notice);
-
-    // the index takes no write
-    for method in ["POST", "PUT", "PATCH", "DELETE"] {
-        let (st, _, _) = call(
-            &r,
-            method,
-            &format!("/api/t/{}/needs", aoife.tenant),
-            Some(&aoife.cookie),
-            Some(json!({})),
-        )
-        .await;
-        assert_eq!(st, StatusCode::METHOD_NOT_ALLOWED, "{method}");
-    }
+    assert_eq!(get(&r, &aoife, "").await["documents"][0]["mine"], 0);
 }
 
 #[tokio::test]
@@ -320,9 +311,10 @@ async fn the_timesheet_reminder_is_the_callers_own_after_the_question_and_from_f
     let maeve = sign_in(&r, "maeve@wk").await;
     let ms = |h: i64| at("2026-11-12") * 1000 - 12 * 3_600_000 + h * 3_600_000;
     r.sheet.store(ms(17), Ordering::SeqCst);
+    let has = |v: &Value| !v["timesheet"].is_null();
     // nobody has been asked: nobody has a reminder
     for p in [&aoife, &niamh, &maeve] {
-        assert!(!kinds(&list(&r, p, "").await).contains(&"timesheet".to_string()));
+        assert!(!has(&get(&r, p, "").await));
     }
     // aoife says yes, maeve says no: both are reminded (maeve to fill the day by hand); niamh was never asked
     for (p, yes) in [(&aoife, true), (&maeve, false)] {
@@ -337,24 +329,16 @@ async fn the_timesheet_reminder_is_the_callers_own_after_the_question_and_from_f
         assert_eq!(st, StatusCode::OK);
     }
     for p in [&aoife, &maeve] {
-        let v = list(&r, p, "").await;
-        assert!(kinds(&v).contains(&"timesheet".to_string()), "{v}");
+        assert!(has(&get(&r, p, "").await));
     }
-    assert!(
-        kinds(&list(&r, &niamh, "").await).is_empty(),
-        "management has no timesheet item about anyone"
-    );
+    assert!(!has(&get(&r, &niamh, "").await));
     // before 16:00 local time there is none: 15:00 UTC is 16:00 in UTC+1
     r.sheet.store(ms(15), Ordering::SeqCst);
-    assert!(!kinds(&list(&r, &aoife, "").await).contains(&"timesheet".to_string()));
-    assert!(kinds(&list(&r, &aoife, "?tz=60").await).contains(&"timesheet".to_string()));
-    // the reminder is a notice: Done leaves it for the day, and nobody else can mark it
-    r.sheet.store(ms(17), Ordering::SeqCst);
-    let id = id_of(&list(&r, &aoife, "").await, "timesheet");
-    assert_eq!(done(&r, &niamh, &id, "POST").await, StatusCode::NOT_FOUND);
-    assert_eq!(done(&r, &aoife, &id, "POST").await, StatusCode::OK);
-    assert!(!kinds(&list(&r, &aoife, "").await).contains(&"timesheet".to_string()));
+    assert!(!has(&get(&r, &aoife, "").await));
+    assert!(has(&get(&r, &aoife, "?tz=60").await));
     // tomorrow is a new day: a new reminder
+    r.sheet.store(ms(17), Ordering::SeqCst);
+    let id = get(&r, &aoife, "").await["timesheet"]["id"].clone();
     r.sheet.store(ms(17) + 86_400_000, Ordering::SeqCst);
-    assert_ne!(id_of(&list(&r, &aoife, "").await, "timesheet"), id);
+    assert_ne!(get(&r, &aoife, "").await["timesheet"]["id"], id);
 }
