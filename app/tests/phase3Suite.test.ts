@@ -77,11 +77,12 @@ test('the counter: a number declared twice, a wrong file, a missing test or a li
   assert.deepEqual(withPage.problems, [])
 })
 
-test('the real spec files are consistent: 37 of 38 are fixme on the first day, and test 111 runs', () => {
+test('the real spec files are consistent: test 111 ran from the first day, and each record turns on its own', () => {
   const r = count((f: string) => (existsSync(join(e2e, f)) ? readFileSync(join(e2e, f), 'utf8') : null))
   assert.deepEqual(r.problems, [])
-  assert.deepEqual([...r.live.keys()], [111])
-  assert.equal(r.fixme.size, 37)
+  // 37 of 38 were fixme on the first day; production-line-merge turned test 74 on (wave 0).
+  assert.deepEqual([...r.live.keys()].sort((a, b) => a - b), [74, 111])
+  assert.equal(r.fixme.size, 36)
 })
 
 test('the document ends with the five manual gate checks, each with its command, cap and the person who watches', () => {
