@@ -19,6 +19,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { control } from './pilot'
+import { track } from './scope'
 import { CANARY } from './seed/j001/canary.mjs'
 import { noticesOf, openMe } from './needs'
 import { barCommand, barOffers } from './boothFolds'
@@ -70,7 +72,7 @@ type Decision = { id?: string; kind?: string; agent?: string; action?: string; v
 const rosterURL = `http://127.0.0.1:${process.env.NAPKIN_E2E_ROSTER_PORT || '18082'}`
 
 async function open(browser: Browser, size: Size, mode: string = 'white', opts: { roster?: boolean } = {}): Promise<{ ctx: BrowserContext; page: Page }> {
-  const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, ...(opts.roster ? { baseURL: rosterURL } : {}) })
+  const ctx = track(await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, ...(opts.roster ? { baseURL: rosterURL } : {}) }))
   await ctx.addInitScript(m => { try { localStorage.setItem('napkin.theme', m) } catch { /* not kept */ } }, mode)
   return { ctx, page: await ctx.newPage() }
 }
@@ -692,8 +694,8 @@ for (const size of SIZES) {
     expect(blank.status()).toBe(200)
     const before = (await sessionOf(page)).quota.used
     // The stand-in middleware (stack.mjs, port NAPKIN_E2E_MW_PORT) is told to fail the run, as a provider error would.
-    const mw = `http://127.0.0.1:${process.env.NAPKIN_E2E_MW_PORT || '18081'}/control`
-    await page.request.post(mw, { data: { state: 'failed', stage: 'provider error' } })
+    const mw = (state: string, stage: string) => control(page, { state, stage }) // keyed by this test's own documents (scope.ts)
+    await mw('failed', 'provider error')
     try {
       await page.goto(`/#tool-${job.client}-brief`)
       await page.getByTestId('work-item').filter({ hasText: 'J001 blank brief' }).click()
@@ -709,12 +711,12 @@ for (const size of SIZES) {
       await expect.poll(async () => (await sessionOf(page)).quota.used).toBe(before) // the credits come back
       await expect(app.locator('body')).toContainText(ask) // the inputs stay
       // The provider is back: Try again runs it again, and that run is charged.
-      await page.request.post(mw, { data: { state: 'running', stage: 'research' } })
+      await mw('running', 'research')
       await failed.getByRole('button', { name: 'Try again' }).click()
       await expect(failed).toHaveCount(0)
       await expect.poll(async () => (await sessionOf(page)).quota.used).toBe(before + 1)
     } finally {
-      await page.request.post(mw, { data: { state: 'running', stage: 'research' } })
+      await mw('running', 'research')
     }
     await ctx.close()
   })
