@@ -12,7 +12,7 @@ import { host } from '../../host'
 import type { VersionsView } from '../../host'
 import { pushData } from '../appExport'
 import { compareParts, type PartDiff } from './compare'
-import type { BriefUndo } from './useBriefUndo'
+import { marksNow, type BriefUndo } from './useBriefUndo'
 import './versions.css'
 
 const day = (iso: string | null) => {
@@ -67,10 +67,11 @@ export default function VersionPanel({ undo, onChanged, noun = 'brief' }: Props)
   const restore = async (n: number) => {
     setBusy(true); setError(null)
     try {
-      const before = (await host.getVersion('draft')).parts
+      const [before, marksBefore] = await Promise.all([host.getVersion('draft').then(v => v.parts), marksNow()])
       await host.restoreVersion(n)
-      const [after, now] = await Promise.all([host.getVersion('draft'), host.getVersions()])
-      undo.remember(before, after.parts, now.draft.last_edit?.decision ?? `restore-${n}-${Date.now()}`)
+      const [after, now, marksAfter] = await Promise.all([host.getVersion('draft'), host.getVersions(), marksNow()])
+      undo.remember(before, after.parts, now.draft.last_edit?.decision ?? `restore-${n}-${Date.now()}`,
+        { before: marksBefore, after: marksAfter })
       setView(now)
       host.getCurrent().then(c => pushData(c.data), () => {})
       onChanged()

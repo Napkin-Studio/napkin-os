@@ -15,7 +15,12 @@ export interface UndoEntry {
   keys: string[]
   before: Record<string, unknown>
   after: Record<string, unknown>
+  /** The parts marked Confidential (`confidential_fields`) while `before`, and `after`, were the words. */
+  marks?: { before: string[]; after: string[] }
 }
+
+/** Whether a mark (`audience`, `objectives.commercial`) is on one of these top-level parts. */
+const markOn = (mark: string, keys: string[]) => keys.some(k => mark === k || mark.startsWith(`${k}.`))
 
 export type Plan =
   | { kind: 'write'; entry: UndoEntry; patch: Record<string, unknown> }
@@ -67,8 +72,9 @@ export interface UndoStack {
   push(e: UndoEntry): void
   canUndo(): boolean
   canRedo(): boolean
-  /** What undoing (or redoing) would write, given the parts as they are now. */
-  plan(dir: 'undo' | 'redo', current: Record<string, unknown>): Plan
+  /** What undoing (or redoing) would write, given the parts and the Confidential marks as they are now.
+   *  Words never come back less protected than when they were current: their marks come back with them. */
+  plan(dir: 'undo' | 'redo', current: Record<string, unknown>, marksNow?: string[]): Plan
   /** The write landed: move the entry to the other side. */
   done(dir: 'undo' | 'redo'): void
   clear(): void
@@ -87,7 +93,7 @@ export function createUndoStack(): UndoStack {
     },
     canUndo: () => undo.length > 0,
     canRedo: () => redo.length > 0,
-    plan(dir, current) {
+    plan(dir, current, marksNow = []) {
       const entry = (dir === 'undo' ? undo : redo).at(-1)
       if (!entry) return { kind: 'nothing' }
       const from = dir === 'undo' ? entry.after : entry.before // what the parts must hold now
@@ -99,6 +105,9 @@ export function createUndoStack(): UndoStack {
         const d = mergeDiff(current[k] ?? null, to[k] ?? null)
         if (d !== undefined) patch[k] = d
       }
+      const then = (dir === 'undo' ? entry.marks?.before : entry.marks?.after) ?? []
+      const back = then.filter(m => markOn(m, entry.keys) && !marksNow.includes(m))
+      if (Object.keys(patch).length && back.length) patch.confidential_fields = [...marksNow, ...back]
       return Object.keys(patch).length ? { kind: 'write', entry, patch } : { kind: 'nothing' }
     },
     done(dir) {
