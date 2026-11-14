@@ -416,11 +416,15 @@ impl Guarded {
         Self(inner, std::sync::OnceLock::new())
     }
 
+    /// The registry's id, compared as a constant and as the store names it: either matches, so an error
+    /// asking the store fails closed (the constant still matches).
     fn is_registry(&self, id: &DocId) -> bool {
-        self.1
-            .get_or_init(|| self.0.home(napkin_host::agency::REGISTRY_TAG).ok())
-            .as_ref()
-            .is_some_and(|r| r == id)
+        id.as_str() == crate::people_import::REGISTRY_DOC
+            || self
+                .1
+                .get_or_init(|| self.0.home(napkin_host::agency::REGISTRY_TAG).ok())
+                .as_ref()
+                .is_some_and(|r| r == id)
     }
 
     fn refuse(id: &DocId) -> napkin_host::HostError {
@@ -616,5 +620,22 @@ mod tests {
             2,
             "a warm open re-reads it as it stands now"
         );
+    }
+
+    /// The registry guard fails closed: a store that cannot name its home still refuses the registry.
+    #[test]
+    fn the_registry_guard_fails_closed_when_the_store_cannot_name_its_home() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("not-a-folder");
+        std::fs::write(&file, "x").unwrap();
+        // a store rooted at a file: `home` cannot make its folder and errors
+        let inner: Arc<dyn DocStore> = Arc::new(TenantStore::new(file));
+        assert!(inner.home(napkin_host::agency::REGISTRY_TAG).is_err());
+        let g = Guarded::new(inner);
+        let id = DocId::new("home-agency-v1");
+        let first = g.read(&id).unwrap_err();
+        assert_eq!(first.status, 403, "{first:?}");
+        assert_eq!(g.read(&id).unwrap_err().status, 403);
+        assert!(!g.exists(&id));
     }
 }

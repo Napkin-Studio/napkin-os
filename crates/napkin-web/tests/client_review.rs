@@ -2070,7 +2070,7 @@ async fn a_client_reaches_no_async_host_route_and_no_workspace_route() {
         "search?q=alpha",
         "judge/telemetry",
         "needs",
-        "agency/people",
+        "agency/accounts.tsv",
         "audit",
         "jobs",
         "jobs/J001",

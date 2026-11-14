@@ -113,7 +113,7 @@ async fn invite(r: &Rig, admin: &Person, username: &str, email: &str, roles: &[&
     let (st, body) = call(
         r,
         "POST",
-        &format!("/api/t/{}/agency/people/invite", admin.tenant),
+        "/api/admin/people",
         Some(&admin.cookie),
         Some(json!({ "username": username, "name": username, "email": email, "roles": roles })),
     )
@@ -122,8 +122,8 @@ async fn invite(r: &Rig, admin: &Person, username: &str, email: &str, roles: &[&
         // on the roster, so already in the People store (features/align-needs-lock-people.clan)
         let (st, body) = call(
             r,
-            "PUT",
-            &format!("/api/t/{}/agency/people/{username}", admin.tenant),
+            "PATCH",
+            &format!("/api/admin/people/{username}"),
             Some(&admin.cookie),
             Some(json!({ "email": email, "roles": roles })),
         )
@@ -250,7 +250,7 @@ async fn an_agency_address_is_refused_as_a_reviewer_however_it_is_written() {
     let (st, _) = call(
         &r,
         "DELETE",
-        &format!("/api/t/{}/agency/people/gone@cr", cara.tenant),
+        &format!("/api/admin/people/gone@cr"),
         Some(&cara.cookie),
         None,
     )

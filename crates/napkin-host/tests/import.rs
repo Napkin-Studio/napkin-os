@@ -269,14 +269,17 @@ fn a_file_that_cannot_be_read_is_refused_with_one_plain_line() {
 }
 
 #[test]
-fn a_cell_that_begins_with_a_formula_sign_is_kept_as_text_and_quoted_on_export() {
+fn a_cell_that_begins_with_a_formula_sign_is_refused_by_line_and_quoted_on_export() {
+    // features/align-needs-lock-people.clan, stage 4: a people file's formula is refused, never cleaned or kept
     let s = MemStore::default();
     let admin = ctx("cara@cr");
-    let csv = "email,name,roles\nann@cr,=HYPERLINK(\"x\"),planning\nbo@cr,+Bo Test,traffic\n";
+    let csv = "email,name,roles\nann@cr,=HYPERLINK(\"x\"),planning\nbo@cr,+Bo Test,traffic\ncy@cr,Cy Test,planning\n";
     let r = import::people(&s, &admin, "cr", csv.as_bytes(), false, &known).unwrap();
-    assert_eq!(r.ok, 2);
+    assert_eq!(r.ok, 1);
+    assert_eq!(r.errors.iter().map(|e| e.line).collect::<Vec<_>>(), [2, 3]);
+    assert!(r.errors.iter().all(|e| e.reason.contains("formula")));
     let (reg, _) = agency::read(&s).unwrap();
-    assert_eq!(reg.person("ann@cr").unwrap().name, "=HYPERLINK(\"x\")");
+    assert!(reg.person("ann@cr").is_none());
     assert_eq!(
         import::export_cell("=HYPERLINK(\"x\")"),
         "'=HYPERLINK(\"x\")"

@@ -57,7 +57,8 @@
 .pa-table th {
   font: 600 11px var(--font-mono);
   letter-spacing: .08em;
-  color: var(--faint);
+  /* muted, not faint: the headers pass contrast in light and dark (the suite's axe scan, test 72) */
+  color: var(--muted);
   text-align: left;
   padding: 8px;
   border-bottom: 1px solid var(--line);
@@ -99,4 +100,32 @@
   .pa-grid { grid-template-columns: 1fr; }
   .pa-table th:nth-child(4), .pa-table td:nth-child(4) small { display: none; }
   .pa-warn { flex-direction: column; align-items: flex-start; }
+}
+
+/* Stage 4 of features/align-needs-lock-people.clan: roles, the file import */
+.pa-roles { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.pa-roles legend { font: 12px var(--font-ui); color: var(--muted); margin-bottom: 6px; padding: 0; }
+.pa-page label.pa-role {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0;
+  font: 500 13px var(--font-ui); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.pa-page label.pa-role:has(input:checked) { border-color: var(--ag-act); background: color-mix(in srgb, var(--ag-act) 10%, transparent); }
+.pa-page label.pa-role input { margin: 0; width: auto; height: auto; padding: 0; flex: none; accent-color: var(--ag-act); }
+.pa-page label.pa-role span { white-space: nowrap; }
+.pa-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 10px 0; }
+.pa-page label.pa-file { position: relative; display: inline-flex; align-items: center; margin: 0; color: var(--ink); font: 500 13px var(--font-ui); }
+.pa-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.pa-file:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.pa-file[aria-disabled] { opacity: .6; }
+.pa-fname { font: 12px var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.pa-result { display: grid; gap: 6px; margin-top: 6px; }
+.pa-summary { margin: 0; font: 600 14px var(--font-ui); }
+.pa-note { margin: 0; padding: 8px 12px; border-left: 2px solid var(--warn); background: var(--warn-soft); border-radius: 6px; font-size: 13px; }
+.pa-cap { text-align: left; font: 600 12px var(--font-ui); color: var(--muted); padding: 6px 0; }
+
+@media (max-width: 640px) {
+  /* a screen meant for a phone: primary buttons at least 44 px tall, in the same pill */
+  .pa-btn.pa-primary { min-height: 44px; }
+  .pa-page label.pa-role { min-height: 36px; }
 }

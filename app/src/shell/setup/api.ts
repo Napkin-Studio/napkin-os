@@ -2,12 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The agency setup's calls to napkin-web (features/agency-setup.clan). Every one is the signed-in
-// person's own agency: none takes another agency's name. A call answers a result, never throws, so a
-// screen can say what happened in its own words (a 403 is Missing access, a 0 is a failed save).
+// The audit view's calls to napkin-web (features/agency-setup.clan; the setup flow's other calls went
+// with it in stage 4 of features/align-needs-lock-people.clan). Every one is the signed-in person's own
+// agency. A call answers a result, never throws, so a screen can say what happened in its own words.
 
 import { apiBase } from '../../host/http'
-import type { StepId } from './model'
 
 export type Result<T> = { ok: true; data: T } | { ok: false; status: number; message: string }
 
@@ -28,60 +27,27 @@ async function call<T>(path: string, init?: RequestInit & { json?: unknown }): P
   }
 }
 
-export interface SetupStatus {
-  steps: { id: StepId; done: boolean }[]
-  next: StepId | null
-  complete: boolean
-  /** People on the list besides the admin. */
-  people: number
-  has_directory: boolean
-}
-export const readSetup = () => call<SetupStatus>('setup')
-
-export interface Settings { name: string; credit_cap_month_eur?: number; time_zone?: string }
-export const readSettings = () => call<Settings>('agency')
-export const saveSettings = (patch: { name?: string; credit_cap_month_eur?: number; time_zone?: string }) =>
-  call<Settings>('agency', { method: 'PUT', json: patch })
-
-export type ImportKind = 'people' | 'clients' | 'jobs'
-export interface RowResult { line: number; status: 'new' | 'changed' | 'same' | 'error'; label: string; reason?: string }
-export interface ImportReport {
-  kind: ImportKind
-  dry_run: boolean
-  rows: number
-  ok: number
-  errors: { line: number; reason: string }[]
-  created: number
-  updated: number
-  unchanged: number
-  committed: boolean
-  results: RowResult[]
-  starts_directory: boolean
-  made_before_failure: number[]
-}
-/** Check a file (`dry`) or import it: the rows that are fine are written, the rest listed by line. */
-export const importFile = (kind: ImportKind, file: Blob, dry: boolean) =>
-  call<ImportReport>(`setup/import/${kind}${dry ? '?dry_run=1' : ''}`, { method: 'POST', body: file, headers: { 'content-type': 'text/csv' } })
-
-export type PersonState = 'invited' | 'active' | 'removed'
-/** What an admin sees of a person; a member sees only `username`, `name` and `roles`. */
-export interface Person { username: string; name: string; roles: string[]; email?: string; state?: PersonState; invited_by?: string; at?: string }
-export const listPeople = () => call<Person[]>('agency/people')
-export const invitePerson = (p: { email: string; name: string; roles: string[]; username?: string }) =>
-  call<Person>('agency/people/invite', { method: 'POST', json: p })
-export const editPerson = (username: string, patch: { name?: string; email?: string; roles?: string[] }) =>
-  call<Person>(`agency/people/${encodeURIComponent(username)}`, { method: 'PUT', json: patch })
-export const removePerson = (username: string) =>
-  call<Person>(`agency/people/${encodeURIComponent(username)}`, { method: 'DELETE' })
-
 export type AuditKind = 'approval' | 'export' | 'link' | 'sign-in' | 'permission' | 'settings'
 export interface AuditEntry { at: string; who: string; kind: AuditKind; what: string; doc?: string; version?: string; ip?: string }
 export const readAudit = () => call<{ total: number; lines: AuditEntry[] }>('audit')
-export interface Verified { ok: boolean; lines: number; line?: number; problem?: string }
+/** What checking the log answers: `ok` only when the server's own chain holds and no line in it was copied from a document
+ *  any member could write; `chain_intact` and `not_verified` say which. */
+export interface Verified { ok: boolean; lines: number; line?: number; problem?: string; chain_intact?: boolean; not_verified?: number }
+
+/** What a check says, plainly. */
+export function verifiedWords(v: Verified): string {
+  const n = `${v.lines} saved ${v.lines === 1 ? 'line' : 'lines'} checked.`
+  if (v.ok) return `Nothing was changed. ${n}`
+  if (v.chain_intact) {
+    const c = v.not_verified ?? 0
+    return `Nothing was changed. ${n} ${c} ${c === 1 ? 'line was' : 'lines were'} copied from the agency's old list, which anyone in the agency could edit, so ${c === 1 ? 'it is' : 'they are'} not shown or vouched for.`
+  }
+  return `A saved line was changed${v.line ? ` (line ${v.line})` : ''}. ${v.problem ?? ''}`
+}
 /** The log's chain: a 409 answers with the first line that breaks it, which is an answer here, not an error. */
 export async function verifyAudit(): Promise<Result<Verified>> {
   const r = await call<Verified>('audit/verify')
   if (r.ok) return r
-  if (r.status === 409) return { ok: true, data: { ok: false, lines: 0, problem: r.message || 'The log was changed.' } }
+  if (r.status === 409) return { ok: true, data: { ok: false, chain_intact: false, lines: 0, problem: r.message || 'The log was changed.' } }
   return r
 }

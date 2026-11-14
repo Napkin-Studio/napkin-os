@@ -42,6 +42,11 @@ use crate::tenant::TenantId;
 /// refuses to open it (`state::Workspace`), so no session, token or `patch-data` reaches it.
 pub const REGISTRY_DOC: &str = "home-agency-v1";
 
+/// The most entries the import records as removed from one registry: a registry any member could write may
+/// name any number of people, and a removed entry costs a line and a record each. Beyond it, the rest are
+/// logged as one line and not written.
+pub const MAX_REMOVED_PER_REGISTRY: usize = 1000;
+
 /// What a start imported.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Imported {
@@ -167,6 +172,20 @@ fn directories(people: &People, root: &Path) -> Vec<Directory> {
                 why,
                 id,
             });
+        }
+        let removed = list.iter().filter(|p| p.removed).count();
+        if removed > MAX_REMOVED_PER_REGISTRY {
+            let mut kept = 0;
+            list.retain(|p| {
+                if !p.removed {
+                    return true;
+                }
+                kept += 1;
+                kept <= MAX_REMOVED_PER_REGISTRY
+            });
+            tracing::warn!(target: "napkin_web::people", agency = %agency_id, removed,
+                cap = MAX_REMOVED_PER_REGISTRY,
+                "the agency registry names more people without a role than the import records; the rest are not written");
         }
         out.push(Directory {
             agency: agency_id,

@@ -289,16 +289,6 @@ async fn the_last_admin_of_an_agency_cannot_be_removed_or_demoted() {
         .await;
         assert_eq!(st, StatusCode::CONFLICT, "{v}");
     }
-    // the build's route says the same
-    let (st, _) = call(
-        &r,
-        "DELETE",
-        &format!("/api/t/{}/agency/people/ad@wk", ad.tenant),
-        Some(&ad.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(st, StatusCode::CONFLICT);
     // with a second admin, the first may go
     let (st, _) = call(
         &r,
@@ -551,16 +541,6 @@ async fn every_people_route_refuses_a_foreign_agency_in_the_path_as_if_it_did_no
             let b = call(&r, m, &uri.replace("{}", missing), c, body.clone()).await;
             same_answer(&a, &b, foreign, missing);
         }
-        // the build's routes: a sign-in name of another agency, in the path
-        for (m, body) in [
-            ("PUT", Some(json!({ "roles": ["traffic"] }))),
-            ("DELETE", None),
-        ] {
-            let uri = |u: &str| format!("/api/t/{}/agency/people/{u}", barra.tenant);
-            let a = call(&r, m, &uri(foreign), c, body.clone()).await;
-            let b = call(&r, m, &uri(missing), c, body.clone()).await;
-            same_answer(&a, &b, foreign, missing);
-        }
     }
     // an agency id of another agency, in the path
     for (m, tail, body) in [
@@ -593,40 +573,19 @@ async fn every_people_route_refuses_a_foreign_agency_in_the_path_as_if_it_did_no
     let wk = TenantId::of_agency("wk");
     let missing = TenantId::of_agency("nowhere");
     for (m, tail, body) in [
-        ("GET", "agency/people", None),
-        (
-            "POST",
-            "agency/people/invite",
-            Some(json!({ "email": "x@x.test", "name": "X", "roles": ["planning"] })),
-        ),
+        ("GET", "agency", None),
         (
             "PUT",
-            "agency/people/aoife@wk",
-            Some(json!({ "roles": ["traffic"] })),
+            "agency",
+            Some(json!({ "time_zone": "Europe/Dublin" })),
         ),
-        ("DELETE", "agency/people/aoife@wk", None),
         ("GET", "agency/accounts.tsv", None),
-        ("GET", "setup", None),
+        ("GET", "audit", None),
     ] {
         let a = call(&r, m, &format!("/api/t/{wk}/{tail}"), c, body.clone()).await;
         let b = call(&r, m, &format!("/api/t/{missing}/{tail}"), c, body.clone()).await;
         same_answer(&a, &b, wk.as_str(), missing.as_str());
     }
-    let a = csv(
-        &r,
-        &format!("/api/t/{wk}/setup/import/people"),
-        &barra.cookie,
-        "email,name,roles\nx@wk,X,planning\n",
-    )
-    .await;
-    let b = csv(
-        &r,
-        &format!("/api/t/{missing}/setup/import/people"),
-        &barra.cookie,
-        "email,name,roles\nx@wk,X,planning\n",
-    )
-    .await;
-    same_answer(&a, &b, wk.as_str(), missing.as_str());
     // and nothing of wk changed
     let ad = sign_in(&r, "ad@wk").await;
     let (_, v) = call(&r, "GET", "/api/admin/people", Some(&ad.cookie), None).await;
@@ -682,23 +641,20 @@ async fn every_people_route_refuses_a_foreign_agency_in_the_body_as_if_it_did_no
     )
     .await;
     same_answer(&a, &b, "wk", "zzq");
-    // the build's invite: a sign-in name at another agency
-    let inv = |u: &str| json!({ "username": u, "email": "x@mail.example.test", "name": "X", "roles": ["planning"] });
-    let uri = format!("/api/t/{}/agency/people/invite", barra.tenant);
-    let a = call(&r, "POST", &uri, c, Some(inv("aoife@wk"))).await;
-    let b = call(&r, "POST", &uri, c, Some(inv("aoife@zzq"))).await;
-    same_answer(&a, &b, "wk", "zzq");
-    // a CSV row naming a person of another agency joins the importer's own agency, never the other
+    // a CSV row naming a person of another agency is refused by line, and nothing reaches the other agency
     let (st, rep) = csv(
         &r,
-        &format!("/api/t/{}/setup/import/people", barra.tenant),
+        "/api/admin/people/import",
         &barra.cookie,
-        "username,email,name,roles\naoife@wk,aoife@wk,Aoife Bq,traffic\n",
+        "username,email,name,roles\naoife@wk,aoife@mail.example.test,Aoife Bq,traffic\n",
     )
     .await;
     assert_eq!(st, StatusCode::OK, "{rep}");
-    let (_, v) = call(&r, "GET", "/api/admin/people", c, None).await;
-    assert!(usernames(&v["people"]).contains(&"aoife@bq".to_string()));
+    assert_eq!(rep["ok"], json!(0), "{rep}");
+    assert!(rep["errors"][0]["reason"]
+        .as_str()
+        .unwrap()
+        .contains("another agency"));
     let ad = sign_in(&r, "ad@wk").await;
     let (_, v) = call(&r, "GET", "/api/admin/people", Some(&ad.cookie), None).await;
     let aoife = v["people"]
@@ -732,9 +688,9 @@ async fn people_routes_are_for_admins_only() {
             ),
             ("DELETE", "/api/admin/people/cian@wk".to_string(), None),
             (
-                "PUT",
-                format!("/api/t/{}/agency/people/cian@wk", w.tenant),
-                Some(json!({ "roles": ["traffic"] })),
+                "POST",
+                "/api/admin/people/import?dry_run=1".to_string(),
+                Some(json!({})),
             ),
         ] {
             let (st, _) = call(&r, m, &uri, Some(&w.cookie), body).await;
@@ -780,8 +736,6 @@ async fn no_people_response_scores_a_person() {
     for (who, uri) in [
         (&ad, "/api/admin/people".to_string()),
         (&eng, "/api/admin/people".to_string()),
-        (&ad, format!("/api/t/{}/agency/people", ad.tenant)),
-        (&eng, format!("/api/t/{}/agency/people", eng.tenant)),
     ] {
         let (st, v) = call(&r, "GET", &uri, Some(&who.cookie), None).await;
         assert_eq!(st, StatusCode::OK, "{uri}");
@@ -1028,7 +982,7 @@ fn a_change_recorded_but_never_written_is_marked_not_applied_at_the_next_start()
     std::fs::write(&roster, ROSTER).unwrap();
     let people = napkin_web::people::People::open(dir.path().join("_people"), &roster).unwrap();
     // a server stopped after recording aoife's change and before writing people.json
-    let line = json!({ "at": "2026-11-14T10:00:00Z", "by": "ad@wk", "what": "roles changed",
+    let line = json!({ "at": "2026-11-14T10:00:00Z", "by": "ad@wk", "what": "roles changed", "seq": 999,
         "person": "aoife@wk", "agency": "wk",
         "before": { "name": "Aoife", "roles": ["planning"], "removed_at": null },
         "after": { "name": "Aoife", "roles": ["admin"], "removed_at": null } });
@@ -1057,4 +1011,184 @@ fn a_change_recorded_but_never_written_is_marked_not_applied_at_the_next_start()
     // a second start finds nothing to mark
     let again = napkin_web::people::People::open(dir.path().join("_people"), &roster).unwrap();
     assert_eq!(again.reconcile(), 0);
+}
+
+/// Review g1: one request makes two changes (roles and name) in the same second by the same admin; the next
+/// start must not say the role change did not happen.
+#[tokio::test]
+async fn a_change_the_store_took_is_never_marked_not_applied_at_the_next_start() {
+    let r = rig();
+    let ad = sign_in(&r, "ad@wk").await;
+    // two changes in one breath: the roles, then the name
+    let (st, v) = call(
+        &r,
+        "PUT",
+        "/api/admin/people/aoife@wk/roles",
+        Some(&ad.cookie),
+        Some(json!({ "roles": ["admin"] })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    let (st, v) = call(
+        &r,
+        "PATCH",
+        "/api/admin/people/aoife@wk",
+        Some(&ad.cookie),
+        Some(json!({ "name": "Aoife New" })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    // and the two lines, made to fall in the same second whatever the clock did
+    let log = r.dir.path().join("_people").join("changes.jsonl");
+    let text = std::fs::read_to_string(&log).unwrap();
+    let fixed: Vec<String> = text
+        .lines()
+        .map(|l| {
+            let mut v: Value = serde_json::from_str(l).unwrap();
+            if v["person"] == "aoife@wk" {
+                v["at"] = json!("2026-11-14T10:00:00Z");
+            }
+            v.to_string()
+        })
+        .collect();
+    std::fs::write(&log, fixed.join("\n") + "\n").unwrap();
+    let before = std::fs::read_to_string(&log).unwrap();
+    // the next start
+    let ctx = AppCtx::new(r.dir.path().to_path_buf(), Arc::new(NoConfig), None, 40);
+    let people = napkin_web::people::People::open(
+        r.dir.path().join("_people"),
+        &r.dir.path().join("accounts.tsv"),
+    )
+    .unwrap();
+    ctx.set_people(Arc::new(people));
+    let after = std::fs::read_to_string(&log).unwrap();
+    assert_eq!(
+        after,
+        before,
+        "the start wrote: {}",
+        &after[before.len().min(after.len())..]
+    );
+    assert_eq!(
+        ctx.people().unwrap().active("aoife@wk").unwrap().roles,
+        ["admin"]
+    );
+    let audit = std::fs::read_to_string(
+        r.dir
+            .path()
+            .join(TenantId::of_agency("wk").as_str())
+            .join("audit.jsonl"),
+    )
+    .unwrap();
+    assert!(!audit.contains("Not applied"), "{audit}");
+}
+
+// ── stage 4: one set of people routes; the CSV import on the People page's route ──
+
+#[tokio::test]
+async fn the_builds_own_people_and_setup_routes_are_gone() {
+    let r = rig();
+    let ad = sign_in(&r, "ad@wk").await;
+    let t = &ad.tenant;
+    for (m, uri) in [
+        ("GET", format!("/api/t/{t}/agency/people")),
+        ("POST", format!("/api/t/{t}/agency/people/invite")),
+        ("PUT", format!("/api/t/{t}/agency/people/aoife@wk")),
+        ("DELETE", format!("/api/t/{t}/agency/people/aoife@wk")),
+        ("GET", format!("/api/t/{t}/setup")),
+        ("POST", format!("/api/t/{t}/setup/import/people")),
+        ("POST", format!("/api/t/{t}/setup/import/jobs")),
+    ] {
+        let (st, _) = call(&r, m, &uri, Some(&ad.cookie), Some(json!({}))).await;
+        assert!(
+            st == StatusCode::NOT_FOUND || st == StatusCode::METHOD_NOT_ALLOWED,
+            "{m} {uri}: {st}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_csv_import_checks_first_refuses_bad_lines_and_imports_the_good_ones_into_the_admins_agency(
+) {
+    let r = rig();
+    let ad = sign_in(&r, "ad@wk").await;
+    let file = "username,email,name,roles\n\
+        ,nia@mail.example.test,Nia Good,planning\n\
+        zed@bq,zed@mail.example.test,Zed Other,planning\n\
+        ,nia@mail.example.test,Nia Again,traffic\n\
+        ,wiz@mail.example.test,Wiz Role,wizard\n\
+        ,eq@mail.example.test,=HYPERLINK(\"http://x\"),planning\n\
+        ,bel@mail.example.test,Bel\u{7}l,planning\n\
+        ,ola@mail.example.test,Ola Good,traffic;producer\n";
+    let (st, dry) = csv(&r, "/api/admin/people/import?dry_run=1", &ad.cookie, file).await;
+    assert_eq!(st, StatusCode::OK, "{dry}");
+    assert_eq!(dry["ok"], json!(2), "{dry}");
+    let reasons: Vec<(u64, String)> = dry["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            (
+                e["line"].as_u64().unwrap(),
+                e["reason"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect();
+    let at = |line: u64| {
+        reasons
+            .iter()
+            .find(|(l, _)| *l == line)
+            .map(|(_, r)| r.clone())
+            .unwrap_or_default()
+    };
+    assert!(at(3).contains("another agency"), "{reasons:?}");
+    assert!(at(4).contains("duplicate"), "{reasons:?}");
+    assert!(at(5).contains("unknown role"), "{reasons:?}");
+    assert!(at(6).contains("formula"), "{reasons:?}");
+    assert!(at(7).contains("control"), "{reasons:?}");
+    // the check wrote nothing
+    assert!(r.ctx.people().unwrap().active("nia@wk").is_none());
+    let (st, done) = csv(&r, "/api/admin/people/import", &ad.cookie, file).await;
+    assert_eq!(st, StatusCode::OK, "{done}");
+    assert_eq!(done["created"], json!(2));
+    let p = r.ctx.people().unwrap();
+    assert_eq!(p.active("nia@wk").unwrap().roles, ["planning"]);
+    assert_eq!(p.active("ola@wk").unwrap().roles, ["traffic", "producer"]);
+    for u in ["zed@bq", "zed@wk", "wiz@wk", "eq@wk", "bel@wk"] {
+        assert!(p.active(u).is_none(), "{u}");
+    }
+    // a member cannot import at all
+    let aoife = sign_in(&r, "aoife@wk").await;
+    let (st, _) = csv(
+        &r,
+        "/api/admin/people/import?dry_run=1",
+        &aoife.cookie,
+        file,
+    )
+    .await;
+    assert_eq!(st, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn an_admin_changes_a_persons_name_and_address_on_the_people_route() {
+    let r = rig();
+    let ad = sign_in(&r, "ad@wk").await;
+    let (st, v) = call(
+        &r,
+        "PATCH",
+        "/api/admin/people/aoife@wk",
+        Some(&ad.cookie),
+        Some(json!({ "name": "Aoife B", "email": "aoife@mail.example.test" })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    assert_eq!(v["email"], "aoife@mail.example.test");
+    let (st, _) = call(
+        &r,
+        "PATCH",
+        "/api/admin/people/aoife@wk",
+        Some(&ad.cookie),
+        Some(json!({ "email": "not an address" })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::BAD_REQUEST);
 }

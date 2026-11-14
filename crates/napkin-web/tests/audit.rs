@@ -127,7 +127,7 @@ async fn invite(r: &Rig, admin: &Person, username: &str, name: &str, roles: &[&s
     let (st, body, _) = call(
         r,
         "POST",
-        &format!("/api/t/{}/agency/people/invite", admin.tenant),
+        "/api/admin/people",
         Some(&admin.cookie),
         Some(json!({ "username": username, "name": name, "email": format!("{}@mail.example.test", username.split('@').next().unwrap()), "roles": roles })),
     )
@@ -137,8 +137,8 @@ async fn invite(r: &Rig, admin: &Person, username: &str, name: &str, roles: &[&s
         // are set instead
         let (st, body, _) = call(
             r,
-            "PUT",
-            &format!("/api/t/{}/agency/people/{username}", admin.tenant),
+            "PATCH",
+            &format!("/api/admin/people/{username}"),
             Some(&admin.cookie),
             Some(json!({ "name": name, "roles": roles })),
         )
@@ -284,8 +284,8 @@ async fn a_day(r: &Rig) -> (Person, String) {
     assert_eq!(st, StatusCode::OK, "{v}");
     let (st, _, _) = call(
         r,
-        "PUT",
-        &format!("/api/t/{}/agency/people/niamh@cr", cara.tenant),
+        "PATCH",
+        &format!("/api/admin/people/niamh@cr"),
         Some(&cara.cookie),
         Some(json!({ "roles": ["management", "traffic"] })),
     )

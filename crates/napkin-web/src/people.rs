@@ -465,6 +465,10 @@ pub struct Book {
     pub logos: BTreeMap<String, AgencyLogo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub migrated: Option<Migrated>,
+    /// The number of the last change the file took. Every change line carries the number of its change, so
+    /// a start tells a recorded change the file never took (its number is past this one) from one it did.
+    #[serde(default)]
+    pub seq: u64,
 }
 
 /// The code agency `id`'s name in palette.ts.
@@ -1063,12 +1067,14 @@ impl People {
         // The record comes first: the new file is written aside, every line goes on changes.jsonl and on its
         // agency's audit chain, and only then does the file take the change. A change that cannot be recorded
         // does not happen (features/align-needs-lock-people.clan, done_when line 10).
+        book.seq += 1;
+        let seq = book.seq;
         let tmp = stage_book(&self.dir, &book).map_err(|e| Refusal::Io(e.to_string()))?;
         let at = now();
         let lines: Vec<serde_json::Value> = details
             .into_iter()
             .map(|detail| {
-                let mut line = serde_json::json!({ "at": at, "by": by, "what": what });
+                let mut line = serde_json::json!({ "at": at, "by": by, "what": what, "seq": seq });
                 if let (Some(o), serde_json::Value::Object(d)) = (line.as_object_mut(), detail) {
                     o.extend(d);
                 }
@@ -1161,8 +1167,11 @@ impl People {
     }
 
     /// At start (once the audit chain is attached): a server that stopped between recording a change and
-    /// writing people.json left lines for a change that never happened. Each line of the last change whose
-    /// `after` the store does not hold is marked "not applied", with a compensating audit entry.
+    /// writing people.json left lines for a change that never happened. A change is known by its number
+    /// (`seq`), written with the file: the last change's lines whose number is past the file's are marked
+    /// "not applied", with a compensating audit entry. A change the file took is never marked, however many
+    /// lines it has or however close in time to another. Lines with no number (written before numbers) are
+    /// left alone.
     pub fn reconcile(&self) -> usize {
         let Ok(text) = std::fs::read_to_string(self.dir.join("changes.jsonl")) else {
             return 0;
@@ -1174,42 +1183,23 @@ impl People {
         let Some(last) = lines.last() else {
             return 0;
         };
-        if last["what"] == "not applied" {
+        let Some(seq) = last["seq"].as_u64() else {
+            return 0;
+        };
+        if last["what"] == "not applied" || self.book().seq >= seq {
             return 0;
         }
-        let (at, by) = (last["at"].clone(), last["by"].clone());
-        let book = self.book();
         let mut n = 0;
         for l in lines
             .iter()
             .rev()
-            .take_while(|l| l["at"] == at && l["by"] == by)
+            .take_while(|l| l["seq"].as_u64() == Some(seq) && l["what"] != "not applied")
         {
-            let (Some(id), Some(after)) = (l["person"].as_str(), l.get("after")) else {
-                continue;
-            };
-            if after.is_null() {
-                continue;
-            }
-            let held = book.person(id);
-            let same = held.is_some_and(|p| {
-                let h = p.state();
-                let email = serde_json::json!(p.email);
-                ["roles", "name"]
-                    .iter()
-                    .all(|k| after.get(*k).map_or(true, |v| *v == h[*k]))
-                    && after.get("email").map_or(true, |v| *v == email)
-                    && after
-                        .get("removed_at")
-                        .map_or(true, |v| v.is_null() == h["removed_at"].is_null())
-            });
-            if !same {
-                self.not_applied(l, true);
-                n += 1;
-            }
+            self.not_applied(l, true);
+            n += 1;
         }
         if n > 0 {
-            tracing::warn!(target: "napkin_web::people", lines = n, "a recorded change was not in people.json; marked not applied");
+            tracing::warn!(target: "napkin_web::people", lines = n, seq, "a recorded change was not in people.json; marked not applied");
         }
         n
     }

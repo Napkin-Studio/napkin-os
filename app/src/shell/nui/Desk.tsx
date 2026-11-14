@@ -29,7 +29,6 @@ import { Pop } from './Pop'
 import { usePop } from './popKit'
 import { changedBriefs } from '../gate/words'
 import { YourPages } from '../home/YourPages'
-import { SetupCard } from '../setup/SetupCard'
 import { Ask } from '../../timesheet/Ask'
 import { useConsent } from '../../timesheet/consent'
 import type { DoorEntry } from '../../host/http'
@@ -51,8 +50,6 @@ interface Props {
   onTimesheet?: () => void
   /** What the person's documents hold for them (`GET /needs`), for a person with a role: Me lists those documents, soonest due first. */
   needs?: NeedsAnswer
-  /** Opens the agency's setup flow: offered to an admin while a step is still to do. */
-  onSetup?: () => void
   /** The person's first name, for the greeting. */
   first: string | null
   manage?: Manage
@@ -82,7 +79,7 @@ function placeOf(row: HTMLElement, circle: HTMLElement): { left: number; top: nu
   return { left, top, origin: `${cx - left}px ${dr.height / 2 + 12}px` }
 }
 
-export function Desk({ data, facts, live, offered = null, pages = [], morePages = [], onOpenPage, onTimesheet, onSetup, needs, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
+export function Desk({ data, facts, live, offered = null, pages = [], morePages = [], onOpenPage, onTimesheet, needs, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -200,7 +197,6 @@ export function Desk({ data, facts, live, offered = null, pages = [], morePages 
         </section>
 
         {onOpenPage && <YourPages pages={pages} more={morePages} onOpen={onOpenPage} />}
-        {onSetup && <SetupCard onOpen={onSetup} />}
 
         <main id="view-desk">
           {data.registryError && (

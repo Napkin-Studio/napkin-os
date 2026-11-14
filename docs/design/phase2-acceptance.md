@@ -53,7 +53,7 @@ the gate.
 
 | No. | Record | The fact |
 | --- | --- | --- |
-| 39 | agency-setup | An admin sets up an agency in the flow: logo, 120 people from a CSV file, roles, clients. No code. An imported person signs in to the right home. |
+| 39 | agency-setup | On the People page an admin adds an agency with its logo and look, imports 120 people from a CSV file with their roles, and adds two clients on the desk. No code. An imported person signs in to the right home. |
 | 40 | agency-setup | A bad CSV row is listed with its reason and the rest import. A role change takes effect on the next request. A second agency's admin sees none of the first's people. |
 | 41 | sso | A person signs in through a fake identity provider and lands in their own home with their roles. A person from an unknown domain is refused with one line. |
 | 42 | sso | The identity provider fails. One plain line shows, no half session is left, and Try again works. |

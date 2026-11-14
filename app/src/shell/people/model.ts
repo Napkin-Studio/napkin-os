@@ -14,17 +14,57 @@ import {
 } from '../agency/palette'
 import type { AgencyAdminRow } from './agencies/model'
 
-/** Who may open the People page: napkin-web's PEOPLE_ADMINS (tests/peopleAdmin.test.ts keeps them the same). */
+/** The Napkin admins: napkin-web's PEOPLE_ADMINS (tests/peopleAdmin.test.ts keeps them the same). They manage every agency
+ *  and alone add one. */
 export const PEOPLE_ADMINS: readonly string[] = ['engineer@napkin']
 
-/** Whether the signed-in person may manage people. The server refuses everyone else with 403 regardless. */
+/** Whether the signed-in person is a Napkin admin. */
 export function isPeopleAdmin(user: string | null | undefined): boolean {
   return !!user && PEOPLE_ADMINS.includes(user.trim().toLowerCase())
 }
 
+/** Whether the signed-in person may open the People page: a Napkin admin, or an admin of their own agency (the `admin` role,
+ *  which the People store holds; features/align-needs-lock-people.clan). The server refuses everyone else with 403 regardless. */
+export function canManagePeople(user: string | null | undefined, roles: readonly string[] = []): boolean {
+  return isPeopleAdmin(user) || (!!user && roles.includes('admin'))
+}
+
 /** The account menu's People entry: for an admin only; undefined hides it. */
-export function peopleEntryFor(user: string | null | undefined, open: () => void): (() => void) | undefined {
-  return isPeopleAdmin(user) ? open : undefined
+export function peopleEntryFor(user: string | null | undefined, open: () => void, roles: readonly string[] = []): (() => void) | undefined {
+  return canManagePeople(user, roles) ? open : undefined
+}
+
+/** Open the People page from anywhere (the "People" page door, the bar's command): App.tsx listens. */
+export const OPEN_PEOPLE_EVENT = 'napkin:open-people'
+export function openPeoplePage(): void {
+  window.dispatchEvent(new CustomEvent(OPEN_PEOPLE_EVENT))
+}
+
+/** The agency part of a sign-in name. */
+export const agencyOfUser = (user: string | null | undefined): string => (user ?? '').split('@')[1] ?? ''
+
+/** The roles a person may be given, in the order the People page offers them (roles.rs's table, and `admin`). */
+export const ROLE_CHOICES: readonly { id: string; name: string }[] = [
+  { id: 'planning', name: 'Planning' },
+  { id: 'creative-director', name: 'Creative director' },
+  { id: 'account-service', name: 'Account service' },
+  { id: 'management', name: 'Management' },
+  { id: 'art-director', name: 'Art director' },
+  { id: 'copywriter', name: 'Copywriter' },
+  { id: 'producer', name: 'Producer' },
+  { id: 'agency-brain', name: 'Agency Brain' },
+  { id: 'traffic', name: 'Traffic' },
+  { id: 'admin', name: 'Admin' },
+]
+
+/** A role as it is said: `creative-director` is Creative director. */
+export function roleName(id: string): string {
+  return ROLE_CHOICES.find(r => r.id === id)?.name ?? id.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase())
+}
+
+/** A person's roles in words, `No role` for none. */
+export function rolesLine(roles: readonly string[] | undefined): string {
+  return roles && roles.length ? roles.map(roleName).join(', ') : 'No role'
 }
 
 /** A person as the server lists them. */
@@ -36,6 +76,10 @@ export interface PersonRow {
   added_by: string
   added_at: string
   removed_at?: string
+  /** The roles the People store holds for them (features/align-needs-lock-people.clan). */
+  roles?: string[]
+  /** For an admin's eyes. */
+  email?: string
 }
 
 /** An agency as the server lists it (agencies/model.ts AgencyAdminRow): in code or basic, with how many people are in it. */

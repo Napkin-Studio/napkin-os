@@ -36,8 +36,6 @@ export type Route =
   | { level: 'tool'; client: string; tool: ToolId }
   | { level: 'door'; door: string }
   | { level: 'timesheet' }
-  | { level: 'setup' }
-  | { level: 'people' }
   | { level: 'audit' }
   | { level: 'job'; number: string }
 
@@ -62,7 +60,8 @@ export function parseRoute(hash: string): Route {
   if (h === 'agency') return AGENCY
   if (h === 'clients') return { level: 'clients' }
   if (h === 'timesheet') return { level: 'timesheet' }
-  if (h === 'setup' || h === 'people' || h === 'audit') return { level: h }
+  // #people and #setup are not routes (features/align-needs-lock-people.clan): the People page is a dialog from the account menu
+  if (h === 'audit') return { level: h }
   if (h.startsWith('door-')) {
     const door = h.slice('door-'.length)
     return isWord(door) ? { level: 'door', door } : AGENCY
@@ -95,8 +94,6 @@ export function formatRoute(r: Route): string {
     case 'tool': return `#tool-${r.client}-${r.tool}`
     case 'door': return `#door-${r.door}`
     case 'timesheet': return '#timesheet'
-    case 'setup': return '#setup'
-    case 'people': return '#people'
     case 'audit': return '#audit'
     case 'job': return `#job-${r.number}`
   }
@@ -112,8 +109,6 @@ export function ancestry(r: Route): Route[] {
     case 'client': return [AGENCY, { level: 'clients' }]
     case 'tool': return [AGENCY, { level: 'clients' }, { level: 'client', client: r.client }]
     case 'door':
-    case 'setup':
-    case 'people':
     case 'audit':
     case 'timesheet':
     case 'job': return [AGENCY]
@@ -128,8 +123,6 @@ export function up(r: Route): Route {
     case 'client': return { level: 'clients' }
     case 'tool': return { level: 'client', client: r.client }
     case 'door':
-    case 'setup':
-    case 'people':
     case 'audit':
     case 'timesheet':
     case 'job': return AGENCY

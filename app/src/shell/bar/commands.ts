@@ -11,6 +11,7 @@
 
 import type { HomeView } from '../../host/http'
 import type { Route } from '../route'
+import { openPeoplePage } from '../people/model'
 
 export interface Command {
   id: string
@@ -43,7 +44,7 @@ export interface BarEnv {
 }
 
 /** The page a door opens: People and the audit view are pages of their own, the others their own door page. */
-export const doorRoute = (id: string): Route => (id === 'people' ? { level: 'people' } : id === 'audit' ? { level: 'audit' } : { level: 'door', door: id })
+export const doorRoute = (id: string): Route => (id === 'audit' ? { level: 'audit' } : { level: 'door', door: id })
 
 /** The words a command is found by, folded the way the server folds a query. */
 export const fold = (s: string): string[] =>
@@ -59,7 +60,7 @@ export function commandsFor(env: BarEnv): Command[] {
   const doors = [...(env.home?.pages ?? []), ...(env.home?.more ?? [])]
   for (const d of doors) {
     const name = d.name.replace(/\s*\(.*\)\s*$/, '')
-    out.push({ id: `door-${d.id}`, title: `Open ${d.name}`, keywords: ['open', 'door', 'tool', name, d.id], undoable: true, available: true, run: () => env.go(doorRoute(d.id)) })
+    out.push({ id: `door-${d.id}`, title: `Open ${d.name}`, keywords: ['open', 'door', 'tool', name, d.id], undoable: true, available: true, run: () => (d.id === 'people' ? openPeoplePage() : env.go(doorRoute(d.id))) })
   }
   out.push({ id: 'home', title: 'Home', keywords: ['home', 'desk', 'studio', 'back'], undoable: true, available: true, run: () => env.go({ level: 'agency' }) })
   if (env.signedIn) out.push({ id: 'timesheet', title: 'Your timesheet', keywords: ['timesheet', 'time', 'hours', 'day'], undoable: true, available: true, run: () => env.go({ level: 'timesheet' }) })

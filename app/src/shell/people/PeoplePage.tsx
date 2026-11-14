@@ -4,11 +4,13 @@
 
 // The People page (features/people-admin.clan, agency-looks-admin.clan; the
 // approved mocks people-admin-v1 and people-agencies-v3): People | Agencies.
-// People: who can sign in, by agency, each agency in its own pill; add a
-// person by name and agency, rename, remove. Agencies: every agency with its
-// kind (In code, Basic, Draft), a new basic agency, and the editor (drafts,
-// previews, Publish). Reached from the account menu by an admin only, and
-// always in Napkin's look.
+// People: who can sign in, by agency, each agency in its own pill, with their
+// roles; add a person by name, agency and roles, change roles, rename, remove,
+// import people from a file. Agencies: every agency with its kind (In code,
+// Basic, Draft), a new basic agency, and the editor (drafts, previews, the
+// wordmark, Publish). The one People screen (features/align-needs-lock-people.clan):
+// a Napkin admin sees every agency and alone adds one; an agency's admin sees
+// their own agency's people. Reached from the account menu, always in Napkin's look.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { NAPKIN_COLOURS, type AgencyColours } from '../agency/palette'
@@ -19,15 +21,18 @@ import { LookPill } from './agencies/LookPill'
 import { isPublished, personLook, registerRows } from './agencies/model'
 import { httpPeopleApi, PeopleError, type PeopleApi, type PeopleList } from './api'
 import {
-  PAGE_CLASS, addedLine, agencyColours, agencyFieldFromSignInName, agencySlug, findPeople, isPeopleAdmin,
-  napkinPageCss, newAgencyLook, pillStyle, recogniseAgency, signInNameOf, type AgencyRow, type PersonRow,
+  PAGE_CLASS, ROLE_CHOICES, addedLine, agencyColours, agencyFieldFromSignInName, agencyOfUser, agencySlug, canManagePeople, findPeople,
+  isPeopleAdmin, napkinPageCss, newAgencyLook, pillStyle, recogniseAgency, rolesLine, signInNameOf, type AgencyRow, type PersonRow,
 } from './model'
+import { PeopleImport } from './PeopleImport'
 import './PeoplePage.css'
 import './agencies/agencies.css'
 
 interface Props {
   /** The signed-in person (`name@agency`). */
   user: string | null
+  /** Their roles (the People store's): `admin` opens the page for their own agency. */
+  roles?: readonly string[]
   onClose: () => void
   /** The server's routes; a test hands in a fake. */
   api?: PeopleApi
@@ -53,17 +58,24 @@ interface Draft {
   from: string
   base: string
   accent: string
+  /** At least one: a person with none could sign in to nothing. */
+  roles: string[]
 }
 
-const FRESH: Draft = { name: '', agency: '', username: '', touched: false, shown: null, from: '', base: '#0F6B5C', accent: '#9FE6D8' }
+const FRESH: Draft = { name: '', agency: '', username: '', touched: false, shown: null, from: '', base: '#0F6B5C', accent: '#9FE6D8', roles: [] }
 
-export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial = null, initialTab = 'people', initialEditor = null }: Props) {
+const NO_ROLES: readonly string[] = []
+
+export default function PeoplePage({ user, roles: myRoles = NO_ROLES, onClose, api = httpPeopleApi, initial = null, initialTab = 'people', initialEditor = null }: Props) {
+  // a Napkin admin manages every agency and alone adds one; an agency's admin manages their own
+  const napkin = isPeopleAdmin(user)
+  const own = napkin ? null : agencyOfUser(user)
   const [list, setList] = useState<PeopleList | null>(initial)
-  const [tab, setTab] = useState<'people' | 'agencies'>(initialEditor ? 'agencies' : initialTab)
+  const [tab, setTab] = useState<'people' | 'agencies'>(napkin && initialEditor ? 'agencies' : napkin ? initialTab : 'people')
   const [editor, setEditor] = useState<EditorState | null>(initialEditor)
   // the editor remounts on each open (its state is its own)
   const [opened, setOpened] = useState(0)
-  const [denied, setDenied] = useState(!isPeopleAdmin(user))
+  const [denied, setDenied] = useState(!canManagePeople(user, myRoles))
   const [q, setQ] = useState('')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
@@ -71,6 +83,8 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
   const [fresh, setFresh] = useState<string | null>(null)
   const [removing, setRemoving] = useState<PersonRow | null>(null)
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
+  const [roling, setRoling] = useState<{ id: string; name: string; roles: string[] } | null>(null)
+  const [importing, setImporting] = useState(false)
 
   const failed = useCallback((e: unknown) => {
     if (e instanceof PeopleError && e.status === 403) { setDenied(true); return }
@@ -98,12 +112,14 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
       e.preventDefault()
       e.stopPropagation()
       if (draft) setDraft(null)
+      else if (roling) setRoling(null)
+      else if (importing) setImporting(false)
       else if (editor) setEditor(null)
       else onClose()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [draft, editor, onClose])
+  }, [draft, roling, importing, editor, onClose])
 
   const agencies = useMemo(() => list?.agencies ?? [], [list])
   // the one just added first, as the mock shows it
@@ -111,21 +127,21 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
 
   const add = async () => {
     if (!draft) return
-    const known = recogniseAgency(draft.agency, agencies)
+    const known = own ?? recogniseAgency(draft.agency, agencies)
     setBusy(true)
     setFlash(null)
     try {
       let agencyId = known
-      if (!agencyId) {
+      if (!agencyId && napkin) {
         // a new agency from here is made and published at once (a basic agency: name and two colours)
         const made = await api.createAgency({ name: (draft.shown ?? '').trim() || draft.agency.trim(), base: draft.base, accent: draft.accent })
         agencyId = (await api.publish(made.id, made.rev)).id
       }
       const username = draft.touched ? draft.username.trim() : signInNameOf(draft.name, agencyId)
-      const p = await api.add({ name: draft.name.trim(), agency: agencyId, username })
+      const p = await api.add({ name: draft.name.trim(), agency: agencyId ?? '', username, roles: draft.roles ?? [] })
       setDraft(null)
       setFresh(p.id)
-      setFlash({ kind: 'ok', text: <>{p.name} can sign in now as <b>{p.id}</b>. Nothing to deploy.</> })
+      setFlash({ kind: 'ok', text: <>{p.name} can sign in now as <b>{p.id}</b>, as {rolesLine(p.roles).toLowerCase()}. Nothing to deploy.</> })
       await reload()
     } catch (e) { failed(e) } finally { setBusy(false) }
   }
@@ -136,6 +152,17 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
       await api.remove(p.id)
       setRemoving(null)
       setFlash({ kind: 'ok', text: <>{p.name ?? p.id} can no longer sign in. Their documents and decisions stay.</> })
+      await reload()
+    } catch (e) { failed(e) } finally { setBusy(false) }
+  }
+
+  const saveRoles = async () => {
+    if (!roling || roling.roles.length === 0) return
+    setBusy(true)
+    try {
+      const p = await api.setRoles(roling.id, roling.roles)
+      setRoling(null)
+      setFlash({ kind: 'ok', text: <>{p.name ?? p.id} is now {rolesLine(p.roles).toLowerCase()}, from their next click. No new sign-in.</> })
       await reload()
     } catch (e) { failed(e) } finally { setBusy(false) }
   }
@@ -152,7 +179,7 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
 
   const people = list?.people.filter(p => !p.removed_at) ?? []
   const crumb = tab === 'people' ? 'Account ▸ People' : editor ? `Account ▸ People ▸ Agencies ▸ ${editor.look.name || 'New agency'}` : 'Account ▸ People ▸ Agencies'
-  const go = (t: 'people' | 'agencies') => { setTab(t); setEditor(null); setDraft(null); setFlash(null) }
+  const go = (t: 'people' | 'agencies') => { setTab(t); setEditor(null); setDraft(null); setRoling(null); setImporting(false); setFlash(null) }
   const open = (st: EditorState) => { setFlash(null); setEditor(st); setOpened(n => n + 1) }
 
   return (
@@ -171,10 +198,10 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
           <p className="pa-lede" data-testid="people-denied">Only a Napkin admin can change who signs in. Ask <b>Shrey</b> or another admin to add someone.</p>
         ) : (
           <>
-            <p className="pa-lede">Who can sign in to Napkin Studio, and how each agency looks.</p>
+            <p className="pa-lede">{napkin ? 'Who can sign in, with which roles, and how each agency looks.' : 'Who in your agency can sign in, and with which roles.'}</p>
             <div className="ag-tabs" role="tablist">
               <button type="button" role="tab" aria-selected={tab === 'people'} className={tab === 'people' ? 'on' : ''} onClick={() => go('people')}>People <small>{list ? people.length : ''}</small></button>
-              <button type="button" role="tab" aria-selected={tab === 'agencies'} className={tab === 'agencies' ? 'on' : ''} onClick={() => go('agencies')}>Agencies <small>{list ? agencies.length : ''}</small></button>
+              {napkin && <button type="button" role="tab" aria-selected={tab === 'agencies'} className={tab === 'agencies' ? 'on' : ''} onClick={() => go('agencies')}>Agencies <small>{list ? agencies.length : ''}</small></button>}
             </div>
             {flash && <div className={flash.kind === 'ok' ? 'pa-ok' : 'pa-err'} role="status">{flash.text}</div>}
             {tab === 'agencies' ? (
@@ -196,16 +223,31 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
                     </span>
                   </div>
                 )}
-                {draft ? (
-                  <AddSheet draft={draft} setDraft={setDraft} agencies={agencies} busy={busy} onCancel={() => setDraft(null)} onAdd={() => void add()} />
+                {roling && (
+                  <section className="pa-sheet" aria-label="Change roles" data-testid="people-roles">
+                    <h2>Roles for {roling.name}</h2>
+                    <RolesPicker roles={roling.roles} onChange={r => setRoling({ ...roling, roles: r })} />
+                    <div className="pa-hint">The change holds on their next click, with no new sign-in. To stop someone signing in, remove them.</div>
+                    <div className="pa-acts pa-end">
+                      <button type="button" className="pa-btn" onClick={() => setRoling(null)}>Cancel</button>
+                      <button type="button" className="pa-btn pa-primary" data-testid="roles-save" disabled={busy || roling.roles.length === 0} onClick={() => void saveRoles()}>Save roles</button>
+                    </div>
+                  </section>
+                )}
+                {importing ? (
+                  <PeopleImport api={api} agency={own ?? agencyOfUser(user)} onClose={() => setImporting(false)}
+                    onImported={r => { setFresh(null); setFlash({ kind: 'ok', text: <>{r.created + r.updated} people can sign in now with the roles in the file.</> }); void reload() }} />
+                ) : draft ? (
+                  <AddSheet draft={draft} setDraft={setDraft} agencies={agencies} busy={busy} own={own} onCancel={() => setDraft(null)} onAdd={() => void add()} />
                 ) : (
                   <div className="pa-tools">
                     <input className="pa-search" placeholder="Find a person or agency" aria-label="Find a person or agency" value={q} onChange={e => setQ(e.target.value)} />
-                    <button type="button" className="pa-btn pa-primary" onClick={() => { setFlash(null); setDraft({ ...FRESH }) }}>Add a person</button>
+                    <button type="button" className="pa-btn" data-testid="people-import-open" onClick={() => { setFlash(null); setRoling(null); setImporting(true) }}>Import people</button>
+                    <button type="button" className="pa-btn pa-primary" onClick={() => { setFlash(null); setRoling(null); setDraft({ ...FRESH, agency: own ?? '' }) }}>Add a person</button>
                   </div>
                 )}
-                <table className="pa-table">
-                  <thead><tr><th>PERSON</th><th>AGENCY</th><th>ROLE</th><th>ADDED</th></tr></thead>
+                <table className="pa-table" data-testid="people-list">
+                  <thead><tr><th>PERSON</th><th>AGENCY</th><th>ROLES</th><th>ADDED</th></tr></thead>
                   <tbody>
                     {!list && <tr><td colSpan={4}><small>Reading who can sign in…</small></td></tr>}
                     {rows.map(p => {
@@ -225,10 +267,13 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
                             <br /><small>{p.id}</small>
                           </td>
                           <td className="pa-ag" data-agency={p.agency}>{look ? <LookPill colours={look} small /> : p.agency}</td>
-                          <td>{p.admin ? <span className="pa-tag pa-admin">ADMIN</span> : fresh === p.id ? <span className="pa-tag pa-new">NEW</span> : <small>member</small>}</td>
+                          <td data-testid="person-roles">
+                            {p.admin && <span className="pa-tag pa-admin">NAPKIN ADMIN</span>} {fresh === p.id && <span className="pa-tag pa-new">NEW</span>} <small>{rolesLine(p.roles)}</small>
+                          </td>
                           <td>
                             <small>{addedLine(p, fresh === p.id)}</small>
                             <span className="pa-act">
+                              <button type="button" className="pa-link" data-testid="person-roles-open" onClick={() => { setFlash(null); setDraft(null); setImporting(false); setRoling({ id: p.id, name: p.name ?? p.id, roles: [...(p.roles ?? [])] }) }}>Roles</button>
                               <button type="button" className="pa-link" onClick={() => setRenaming({ id: p.id, name: p.name ?? '' })}>Rename</button>
                               {!p.admin && <button type="button" className="pa-link" onClick={() => { setFlash(null); setRemoving(p) }}>Remove</button>}
                             </span>
@@ -248,23 +293,42 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
   )
 }
 
-/** Add a person: name and agency, the recognised agency's card, the sign-in name, and a new agency's look. */
-export function AddSheet({ draft, setDraft, agencies, busy, onCancel, onAdd }: {
+/** The roles a person holds, as a row of choices; at least one is asked for where it is used. */
+export function RolesPicker({ roles, onChange }: { roles: readonly string[]; onChange: (r: string[]) => void }) {
+  return (
+    <fieldset className="pa-roles" data-testid="roles-picker">
+      <legend>Roles</legend>
+      {ROLE_CHOICES.map(r => (
+        <label key={r.id} className="pa-role" data-testid={`role-${r.id}`}>
+          <input type="checkbox" checked={roles.includes(r.id)}
+            onChange={e => onChange(e.target.checked ? [...roles, r.id] : roles.filter(x => x !== r.id))} />
+          <span>{r.name}</span>
+        </label>
+      ))}
+    </fieldset>
+  )
+}
+
+/** Add a person: name, agency and roles, the recognised agency's card, the sign-in name, and a new agency's look. An agency's
+ *  admin adds to their own agency (`own`), and only a Napkin admin makes a new agency from here. */
+export function AddSheet({ draft, setDraft, agencies, busy, own = null, onCancel, onAdd }: {
   draft: Draft
   setDraft: (d: Draft) => void
   agencies: readonly AgencyRow[]
   busy: boolean
+  own?: string | null
   onCancel: () => void
   onAdd: () => void
 }) {
-  const id = recogniseAgency(draft.agency, agencies)
+  const id = own ?? recogniseAgency(draft.agency, agencies)
   const typed = draft.agency.trim()
   const known: AgencyColours | null = id ? agencyColours(id, agencies) : null
   const count = id ? agencies.find(a => a.id === id)?.people ?? 0 : 0
   const look = newAgencyLook(draft.shown ?? typed, draft.base, draft.accent)
   const username = draft.touched ? draft.username : signInNameOf(draft.name, id ?? (agencySlug(typed) || null))
   const set = (over: Partial<Draft>) => setDraft({ ...draft, ...over })
-  const ready = !!draft.name.trim() && !!typed && !busy
+  const chosen = draft.roles ?? []
+  const ready = !!draft.name.trim() && !!typed && chosen.length > 0 && (!!id || !own) && !busy
 
   return (
     <section className="pa-sheet" aria-label="Add a person" data-testid="people-add">
@@ -273,12 +337,14 @@ export function AddSheet({ draft, setDraft, agencies, busy, onCancel, onAdd }: {
         <div><label htmlFor="pa-nm">Name</label><input id="pa-nm" placeholder="As people see it" value={draft.name} onChange={e => set({ name: e.target.value })} /></div>
         <div>
           <label htmlFor="pa-ag">Agency</label>
-          <input id="pa-ag" list="pa-ag-list" placeholder="Pick or type an agency" value={draft.agency} onChange={e => set({ agency: e.target.value })} />
+          <input id="pa-ag" list="pa-ag-list" placeholder="Pick or type an agency" value={draft.agency} disabled={!!own} onChange={e => set({ agency: e.target.value })} />
           <datalist id="pa-ag-list">{agencies.filter(isPublished).map(a => <option key={a.id} value={a.name}>{a.id}</option>)}</datalist>
         </div>
       </div>
       <div className="pa-agcard" data-testid="agency-card" data-agency={id ?? (typed ? 'new' : 'none')}>
-        {known && id ? (
+        {own ? (
+          <span><b>{own}</b> <small>· your agency: everyone you add joins it</small></span>
+        ) : known && id ? (
           <>
             <span className="pa-pv" style={pillStyle(known)}>{known.name}</span>
             <span><b>{known.name}</b> <small>· {id} · {count} {count === 1 ? 'person' : 'people'} · its look is set</small></span>
@@ -301,7 +367,8 @@ export function AddSheet({ draft, setDraft, agencies, busy, onCancel, onAdd }: {
         </div>
         <div className="pa-hint" style={{ alignSelf: 'end' }}>Made from the name and the agency; change it if you like. Typing <b>name@agency</b> here sets the agency too.</div>
       </div>
-      {!id && typed && (
+      <div style={{ marginTop: 10 }}><RolesPicker roles={chosen} onChange={r => set({ roles: r })} /></div>
+      {!id && typed && !own && (
         <div className="pa-newag" data-testid="new-agency">
           <h2>New agency: {typed}</h2>
           <div className="pa-grid">

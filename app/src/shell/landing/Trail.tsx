@@ -36,8 +36,6 @@ export function Trail({ route, agency, client, inDocument, noAgency, onGo }: Pro
       case 'client': return { route: r, label: client?.name ?? 'Client', disc: mini(client?.material ?? 'pearl', client ? client.initials || initialsOf(client.name) : '') }
       case 'door': return { route: r, label: 'A page', disc: mini('pearl', 'D') }
       case 'timesheet': return { route: r, label: 'Timesheet', disc: mini('pearl', 'T') }
-      case 'setup': return { route: r, label: 'Set up', disc: mini('pearl', 'S') }
-      case 'people': return { route: r, label: 'People', disc: mini('pearl', 'P') }
       case 'audit': return { route: r, label: 'Audit', disc: mini('pearl', 'A') }
       case 'job': return { route: r, label: r.number, disc: mini('pearl', 'J') }
       case 'tool': {
