@@ -91,3 +91,30 @@ test('compare lists only the parts whose words differ, a list a line to an item'
   assert.equal(labelOf('single_minded_proposition'), 'Single minded proposition')
   assert.deepEqual(compareParts(left, left), [])
 })
+
+test('undo and redo never bring back words that were Confidential without their mark', () => {
+  const s = createUndoStack()
+  // The secret words were marked when they were written over; the mark was taken off since.
+  s.push({
+    id: 'd1', keys: ['audience'], before: { audience: 'Secret.' }, after: { audience: 'Safe.' },
+    marks: { before: ['audience', 'insight'], after: [] },
+  })
+  const u = s.plan('undo', { audience: 'Safe.' }, ['tone'])
+  assert.deepEqual(u.kind === 'write' && u.patch, { audience: 'Secret.', confidential_fields: ['tone', 'audience'] },
+    'the mark on the part comes back with its words; a mark on another part does not')
+  s.done('undo')
+  // Redo: words that were marked when written, after the mark was taken off.
+  const t = createUndoStack()
+  t.push({
+    id: 'd2', keys: ['objectives'], before: { objectives: null }, after: { objectives: { commercial: 'Secret.' } },
+    marks: { before: [], after: ['objectives.commercial'] },
+  })
+  t.done('undo')
+  const r = t.plan('redo', { objectives: null }, [])
+  assert.deepEqual(r.kind === 'write' && r.patch, { objectives: { commercial: 'Secret.' }, confidential_fields: ['objectives.commercial'] })
+  // A mark that stands now is never taken off by an undo.
+  const v = createUndoStack()
+  v.push({ id: 'd3', keys: ['audience'], before: { audience: 'Old.' }, after: { audience: 'New.' }, marks: { before: [], after: [] } })
+  const w = v.plan('undo', { audience: 'New.' }, ['audience'])
+  assert.deepEqual(w.kind === 'write' && w.patch, { audience: 'Old.' })
+})

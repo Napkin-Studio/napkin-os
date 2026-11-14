@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use clan_sdk::{ClanFile, DecisionChain};
+use clan_sdk::{ClanBuilder, ClanFile, DecisionChain};
 use napkin_host::{handle, Actor, Ctx, DocId, FsStore, HostRequest, NoConfig, Session};
 use serde_json::{json, Value};
 
@@ -26,6 +26,34 @@ fn rig() -> Rig {
     .unwrap();
     std::fs::write(id.as_str(), bytes).unwrap();
     Rig { dir, id }
+}
+
+/// A rig whose document was made by Brief Maker, so the gate reads it.
+fn brief_maker_rig() -> Rig {
+    let rig = rig();
+    let base = ClanFile::open(rig.id.as_str()).unwrap();
+    let mut m = base.manifest().clone();
+    m.app = Some(clan_sdk::AppInfo {
+        home: None,
+        name: "Brief Maker".into(),
+        app_id: "ie.napkin.brief-maker".into(),
+        version: "1.0.0".into(),
+        icon: None,
+        entry: "human/index.html".into(),
+        schema: None,
+        prompt_templates: vec![],
+        data_seed: None,
+        spinoff: None,
+        attach: None,
+    });
+    let mut b = ClanBuilder::new(m);
+    for (path, bytes) in base.read_all_entries().unwrap() {
+        if path != clan_sdk::MANIFEST_PATH {
+            b.add_entry(path, bytes);
+        }
+    }
+    std::fs::write(rig.id.as_str(), b.build().unwrap()).unwrap();
+    rig
 }
 
 fn session(rig: &Rig, who: &str) -> Session {
@@ -193,9 +221,9 @@ fn a_write_that_kept_no_inverse_makes_older_versions_unreadable() {
     );
 }
 
-// review probe (throwaway): a part marked Confidential after v1, then Restore v1.
+// A part marked Confidential after v1, then Restore v1 (found by a security review).
 #[test]
-fn review_probe_restore_keeps_a_confidential_mark() {
+fn restore_keeps_a_confidential_mark_added_after_the_version() {
     let rig = rig();
     let dara = || session(&rig, "dara@wk");
     edit(&rig, "First words.");
@@ -222,8 +250,10 @@ fn review_probe_restore_keeps_a_confidential_mark() {
     );
 }
 
-// A mark a person put on a part is about the part, not about one version's
-// words: a restore changes the words and leaves every mark as it stands now.
+// A restore never leaves a part less protected than it is now, or than it was
+// when the restored words were current: after it, a part is marked if it is
+// marked now or was marked in the version restored. A person may unmark it
+// again afterwards, as its own write.
 
 fn patch(rig: &Rig, action: &str, patch: Value) {
     let (s, v) = call(
@@ -279,7 +309,7 @@ fn restore_keeps_a_confidential_mark_on_one_part_of_a_field() {
 }
 
 #[test]
-fn a_mark_removed_after_a_version_is_not_brought_back_by_restoring_it() {
+fn restoring_words_that_were_confidential_keeps_them_confidential() {
     let rig = rig();
     let dara = || session(&rig, "dara@wk");
     patch(
@@ -287,24 +317,149 @@ fn a_mark_removed_after_a_version_is_not_brought_back_by_restoring_it() {
         "mark audience confidential",
         json!({ "confidential_fields": ["audience"] }),
     );
-    v1_then_unlocked(&rig);
+    edit(&rig, "The client's unannounced launch.");
+    assert_eq!(call(&dara(), "/approve", "", json!({})).0, 200);
+    assert_eq!(
+        call(&dara(), "/unapprove", "", json!({ "rationale": "again" })).0,
+        200
+    );
+    edit(&rig, "Safe words.");
     patch(
         &rig,
         "unmark audience confidential",
         json!({ "confidential_fields": [] }),
     );
+    let (s, v) = call(&dara(), "/restore", "", json!({ "version": 1 }));
+    assert_eq!(s, 200, "{v}");
+    let d = data_of(&rig);
+    assert_eq!(d["audience"], "The client's unannounced launch.");
+    assert_eq!(
+        d["confidential_fields"],
+        json!(["audience"]),
+        "the restored words were Confidential in v1, so they are marked again"
+    );
+    // The person can unmark it again on purpose, and that write stands.
+    patch(
+        &rig,
+        "unmark audience confidential",
+        json!({ "confidential_fields": [] }),
+    );
+    assert_eq!(data_of(&rig)["confidential_fields"], json!([]));
+}
+
+#[test]
+fn a_mark_written_with_the_words_is_kept_by_a_restore() {
+    let rig = rig();
+    let dara = || session(&rig, "dara@wk");
+    patch(
+        &rig,
+        "edit and mark",
+        json!({ "audience": "First words.", "confidential_fields": ["audience"] }),
+    );
+    assert_eq!(call(&dara(), "/approve", "", json!({})).0, 200);
+    assert_eq!(
+        call(&dara(), "/unapprove", "", json!({ "rationale": "again" })).0,
+        200
+    );
     edit(&rig, "Second words.");
     restore_v1(&rig);
-    assert_eq!(
-        data_of(&rig)["confidential_fields"],
-        json!([]),
-        "restore changes only the words; the person's later unmark stands"
+    assert_eq!(data_of(&rig)["confidential_fields"], json!(["audience"]));
+    let (_, list) = call(&dara(), "/versions", "", Value::Null);
+    assert_eq!(list["versions"][0]["readable"], true);
+}
+
+#[test]
+fn a_restore_keeps_the_stricter_licence_of_each_material() {
+    let rig = rig();
+    let entry = |licence: &str| {
+        json!({ "kind": "deck", "name": "Client deck", "sha256": "sha256:00",
+                "received_at": "2026-11-14T09:00:00Z", "licence": licence })
+    };
+    patch(
+        &rig,
+        "receive",
+        json!({ "materials": { "mat_1": entry("client-confidential"), "mat_2": entry("open") },
+                "passages": { "psg_1": { "text": "A line.", "licence": "licensed-internal" } } }),
     );
-    // A restore that changes no words writes nothing.
-    assert_eq!(
-        call(&dara(), "/restore", "", json!({ "version": 1 })).1["noop"],
-        true
+    v1_then_unlocked(&rig);
+    // After v1: mat_1 relaxed, mat_2 tightened, the passage relaxed.
+    patch(
+        &rig,
+        "relicense",
+        json!({ "materials": { "mat_1": { "licence": "open" }, "mat_2": { "licence": "client-confidential" } },
+                "passages": { "psg_1": { "licence": "open" } } }),
     );
+    edit(&rig, "Second words.");
+    restore_v1(&rig);
+    let d = data_of(&rig);
+    assert_eq!(
+        d["materials"]["mat_1"]["licence"], "client-confidential",
+        "as in v1"
+    );
+    assert_eq!(
+        d["materials"]["mat_2"]["licence"], "client-confidential",
+        "as now"
+    );
+    assert_eq!(
+        d["passages"]["psg_1"]["licence"], "licensed-internal",
+        "as in v1"
+    );
+}
+
+#[test]
+fn restored_capture_finds_its_material() {
+    let rig = rig();
+    let dara = || session(&rig, "dara@wk");
+    patch(
+        &rig,
+        "seed",
+        json!({ "audience": "First words.",
+            "materials": { "mat_1": { "kind": "deck", "name": "Client deck", "licence": "client-confidential" } },
+            "capture": { "items": { "cap_1": { "key": "audience", "value": "First words.", "material_id": "mat_1" } } } }),
+    );
+    assert_eq!(call(&dara(), "/approve", "", json!({})).0, 200);
+    assert_eq!(
+        call(&dara(), "/unapprove", "", json!({ "rationale": "again" })).0,
+        200
+    );
+    patch(
+        &rig,
+        "remove the deck",
+        json!({ "audience": "Second words.", "materials": { "mat_1": null },
+                "capture": { "items": { "cap_1": null } } }),
+    );
+    restore_v1(&rig);
+    let d = data_of(&rig);
+    assert_eq!(d["capture"]["items"]["cap_1"]["material_id"], "mat_1");
+    assert_eq!(
+        d["materials"]["mat_1"]["licence"], "client-confidential",
+        "cap_1 cites mat_1, which the document holds again, under its licence"
+    );
+}
+
+#[test]
+fn the_gate_and_the_version_list_agree_on_a_change() {
+    let rig = brief_maker_rig();
+    let dara = || session(&rig, "dara@wk");
+    patch(
+        &rig,
+        "seed",
+        json!({ "audience": "First words.",
+            "materials": { "mat_1": { "kind": "deck", "name": "Client deck", "licence": "client-confidential" } },
+            "signers": [{ "role": "creative_director", "person": "dara@wk" }] }),
+    );
+    let (s, v) = call(&dara(), "/approve", "", json!({}));
+    assert_eq!(s, 200, "{v}");
+    patch(
+        &rig,
+        "swap the deck",
+        json!({ "materials": { "mat_1": { "name": "Another deck", "sha256": "sha256:ff" } }, "locked": false }),
+    );
+    let (s, gate) = call(&dara(), "/gate", "", Value::Null);
+    assert_eq!(s, 200, "{gate}");
+    let (_, list) = call(&dara(), "/versions", "", Value::Null);
+    assert_eq!(gate["changed_since_lock"], true);
+    assert_eq!(gate["changed_since_lock"], list["draft"]["changed"]);
 }
 
 #[test]
@@ -373,11 +528,6 @@ fn compare_shows_words_not_marks() {
         "mark audience confidential",
         json!({ "confidential_fields": ["audience"], "locked": true,
                 "materials": { "mat_1": { "licence": "client-confidential" } } }),
-    );
-    let (_, list) = call(&dara(), "/versions", "", Value::Null);
-    assert_eq!(
-        list["draft"]["changed"], false,
-        "a mark is not a change in the words"
     );
     for n in ["1", "draft"] {
         let parts = call(&dara(), "/version", &format!("n={n}"), Value::Null).1["parts"].clone();
