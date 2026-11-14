@@ -38,16 +38,96 @@ pub const BEFORE: &str = "before";
 pub const RESTORE_PREFIX: &str = "restore v";
 
 /// Top-level keys that are not the brief's words: the host's own, and the
-/// document's records of who signs and what is held. A version holds the rest.
+/// document's records of who signs, what is held and what may be read. A
+/// version holds the rest; the compare view shows only that. Keep `NOT_WORDS`
+/// in app/src/shell/versions/useBriefUndo.ts the same.
+///
+/// A restore writes the words of the version and never leaves a part less
+/// protected than it is now, or than it was when those words were current (the
+/// lead's decision on the security review of this file): the marks below are
+/// kept as they are now, except [`MARKS`] and [`LICENSED`], which take the
+/// protective side of the two. Classify marks and locks live in the chain,
+/// which a restore never touches.
 const NOT_CONTENT: &[&str] = &[
     "projection",
     "upstream",
     "signers",
     "locked_fields",
+    // An older brief's lock flag (os-layer.md 7.1: the lock is the approve).
+    "locked",
+    MARKS,
+    // What was received, and what was retrieved, each entry under its own
+    // `licence` (the nested mark).
+    "materials",
+    "passages",
     // A script's record of where a version was sent (features/script-editor.clan).
     "handoffs",
     "film",
 ];
+
+/// The parts a person marked Confidential (os-layer.md, Confidential). After a
+/// restore, a part is marked if it is marked now or was in the version.
+const MARKS: &str = "confidential_fields";
+
+/// Records whose entries carry a `licence`. A restore brings back the version's
+/// entries (so the words' evidence, `capture`, finds what it cites), keeps the
+/// entries received since, and gives each the stricter licence of the two.
+const LICENSED: &[&str] = &["materials", "passages"];
+
+/// How far a licence keeps a thing in (the schema's `licence`); a value it does
+/// not know keeps it in furthest.
+fn strictness(licence: &str) -> u8 {
+    match licence {
+        "open" => 0,
+        "licensed-internal" => 1,
+        "client-confidential" => 2,
+        _ => 3,
+    }
+}
+
+/// The marks after a restore: those that stand now, then those the version had.
+fn kept_marks(now: Option<&Value>, then: Option<&Value>) -> Option<Value> {
+    let list = |v: Option<&Value>| -> Vec<Value> {
+        v.and_then(Value::as_array).cloned().unwrap_or_default()
+    };
+    let mut out = list(now);
+    let before = out.len();
+    for m in list(then) {
+        if !out.contains(&m) {
+            out.push(m);
+        }
+    }
+    (out.len() > before).then_some(Value::Array(out))
+}
+
+fn licence_of(entry: Option<&Value>) -> Option<&str> {
+    entry?.get("licence")?.as_str()
+}
+
+/// One licensed record after a restore (see [`LICENSED`]), as the merge patch
+/// from what it holds now; `None` when nothing changes.
+fn kept_entries(now: Option<&Value>, then: Option<&Value>) -> Option<Value> {
+    let empty = Map::new();
+    let now_map = now.and_then(Value::as_object).unwrap_or(&empty);
+    let then_map = then.and_then(Value::as_object)?;
+    let mut merged = now_map.clone();
+    for (id, entry) in then_map {
+        let mut entry = entry.clone();
+        let stricter = match (licence_of(now_map.get(id)), licence_of(Some(&entry))) {
+            (Some(a), Some(b)) => Some(if strictness(a) >= strictness(b) { a } else { b }),
+            (a, b) => a.or(b),
+        }
+        .map(str::to_string);
+        if let (Some(l), Some(o)) = (stricter, entry.as_object_mut()) {
+            o.insert("licence".into(), Value::String(l));
+        }
+        merged.insert(id.clone(), entry);
+    }
+    match now {
+        Some(v) if v.is_object() => merge_diff(v, &Value::Object(merged)),
+        _ => (!merged.is_empty()).then_some(Value::Object(merged)),
+    }
+}
 
 /// What each of `keys` holds in the stored data now (null when it holds nothing):
 /// the inverse of a write that patches exactly these keys.
@@ -117,8 +197,8 @@ fn wrote_data(d: &Decision) -> bool {
     live(d) && d.kind.as_deref() == Some("edit") && !d.fields_changed.is_empty()
 }
 
-/// The data as it stood at the approve at chain index `at`, or `None` when a write
-/// since then kept no inverse.
+/// The data as it stood at the approve at chain index `at`, marks and all, or
+/// `None` when a write since then kept no inverse.
 fn rebuilt(doc: &Document, chain: &DecisionChain, at: usize) -> Option<Map<String, Value>> {
     let mut data = stored_data(doc).as_object().cloned().unwrap_or_default();
     for d in &chain.decisions[..at] {
@@ -133,9 +213,6 @@ fn rebuilt(doc: &Document, chain: &DecisionChain, at: usize) -> Option<Map<Strin
                 data.insert(k.clone(), v.clone());
             }
         }
-    }
-    for k in NOT_CONTENT {
-        data.remove(*k);
     }
     Some(data)
 }
@@ -158,7 +235,8 @@ pub struct VersionRow {
 
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Draft {
-    /// The words differ from the newest approved version, or nothing is approved yet.
+    /// Edited since the newest approved version (as the gate reads it), or
+    /// nothing is approved yet.
     pub changed: bool,
     /// The newest change to the draft was a restore of this version.
     pub restored_from: Option<usize>,
@@ -216,7 +294,8 @@ pub fn list(doc: &Document) -> HostResult<VersionsView> {
             .and_then(|n| n.trim().parse().ok())
     });
     let changed = match at.first() {
-        Some(&i) => chain.decisions[..i].iter().any(wrote_data),
+        // The one answer the gate gives too (gate.rs): any edit since.
+        Some(&i) => super::gate::edited_since(&chain, i),
         None => last_write.is_some(),
     };
     Ok(VersionsView {
@@ -249,11 +328,12 @@ pub fn read_at(doc: &Document, which: &str) -> HostResult<Value> {
     let n: usize = which
         .parse()
         .map_err(|_| HostError::bad_request("n is a version number, or draft"))?;
-    let parts = parts_at(doc, n)?;
+    let parts = content_of(&Value::Object(full_at(doc, n)?));
     Ok(json!({ "n": n, "readable": true, "parts": parts }))
 }
 
-fn parts_at(doc: &Document, n: usize) -> HostResult<Map<String, Value>> {
+/// The whole data at v`n`, marks and all.
+fn full_at(doc: &Document, n: usize) -> HostResult<Map<String, Value>> {
     let chain = review::chain_of(doc)?;
     let at = approvals(&chain, doc.clan().document_id());
     if n == 0 || n > at.len() {
@@ -296,24 +376,35 @@ fn merge_diff(from: &Value, to: &Value) -> Option<Value> {
 
 /// `POST /restore {version: 2}`: the working draft takes v2's words, as one new
 /// attributed edit by this person. A person only; nothing about a lock changes.
+/// No part comes out less protected than it is now or was in v2 ([`NOT_CONTENT`]).
 pub fn restore(ctx: &Ctx, doc: &Document, n: usize) -> HostResult<Outcome> {
     review::person(ctx, "restore a version")?;
-    let target = Value::Object(parts_at(doc, n)?);
-    let now = Value::Object(content_of(&stored_data(doc)));
+    let then = full_at(doc, n)?;
+    let target = Value::Object(content_of(&Value::Object(then.clone())));
+    let stored = stored_data(doc);
+    let now = Value::Object(content_of(&stored));
     let mut patch = Map::new();
     if let Some(Value::Object(p)) = merge_diff(&now, &target) {
         patch = p;
+    }
+    if let Some(m) = kept_marks(stored.get(MARKS), then.get(MARKS)) {
+        patch.insert(MARKS.into(), m);
+    }
+    for k in LICENSED {
+        if let Some(d) = kept_entries(stored.get(*k), then.get(*k)) {
+            patch.insert((*k).into(), d);
+        }
     }
     if patch.is_empty() {
         return Ok(Outcome::unchanged(
             json!({ "ok": true, "noop": true, "keys": [] }),
         ));
     }
-    // What the patch would leave must be exactly v(n)'s words.
+    // What the patch would leave must hold exactly v(n)'s words.
     debug_assert!({
-        let mut check = now.clone();
+        let mut check = stored.clone();
         json_merge(&mut check, &Value::Object(patch.clone()));
-        check == target
+        Value::Object(content_of(&check)) == target
     });
     let body = json!({
         "patch": Value::Object(patch),
