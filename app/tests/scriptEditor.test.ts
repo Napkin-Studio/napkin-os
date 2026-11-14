@@ -26,7 +26,10 @@ let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
 const read = (p: string) => readFileSync(new URL(p, root), 'utf8')
 const RULES_TEXT = read('templates/script-editor/house-style.json')
-const HTML = read('templates/script-editor/index.html').replace('@napkin:house-style', RULES_TEXT.replace(/<\//g, '<\\/'))
+const BOOTH = read('templates/shared/booth.html').trimEnd()
+const SOURCE = read('templates/script-editor/index.html')
+// The page as the packer ships it for the Booth: shared/booth.html spliced at its marker.
+const HTML = SOURCE.replace('@napkin:house-style', RULES_TEXT.replace(/<\//g, '<\\/')).replace('<!-- @napkin:booth -->', () => BOOTH)
 const CASES = JSON.parse(read('templates/script-editor/house-style.cases.json'))
 
 type Json = Record<string, any>
@@ -239,12 +242,13 @@ test('Cmd Z with nothing unsaved hands the key to the shell’s undo; with unsav
   const p = await page()
   const ta = p.d.querySelector('textarea[data-id="b1"][data-field="text"]') as any
   const press = () => ta.dispatchEvent(new p.win.KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }))
+  const keys = () => JSON.parse(JSON.stringify(p.parent.filter((m: Json) => m.type === 'clan:undo-key')))
   press()
-  assert.deepEqual(JSON.parse(JSON.stringify(p.parent)), [{ type: 'clan:undo-key', dir: 'undo' }])
+  assert.deepEqual(keys(), [{ type: 'clan:undo-key', dir: 'undo' }])
   p.type('textarea[data-id="b1"][data-field="text"]', 'typed, not saved')
   p.parent.length = 0
   press()
-  assert.deepEqual(JSON.parse(JSON.stringify(p.parent)), [])
+  assert.deepEqual(keys(), [])
 })
 
 test('the voice chip is a select that follows a tag typed at the start of the line', async () => {
@@ -278,7 +282,7 @@ test('the one who marked it up does not answer it; the page says it waits for th
   assert.match(p.text('[data-proposal="p1"]')!, /Waiting for the writer/)
 })
 
-test('Accept and Keep mine call the host and never write a beat from the page', async () => {
+test('Accept and Reject call the host and never write a beat from the page', async () => {
   const p = await page({ data: MARKED, me: 'sam@wk' })
   p.click('[data-accept="p1"]')
   await p.settle()
@@ -464,4 +468,99 @@ test('the e2e seed carries every key of the schema, so a test never runs on a mi
   const p = await page({ data: seed.FULL_SCRIPT })
   assert.equal(p.all('.beat').length, 1)
   assert.match(p.text('[data-testid="sent-judge"]')!, /Sent to Judge at version/)
+})
+
+// ── the Booth (features/align-booth.clan, stage 2) ──────────────────────────────────────────────────
+
+test('the Booth is the shared one: the marker once, boothStart, and no Booth code of the page’s own', () => {
+  assert.equal(SOURCE.split('<!-- @napkin:booth -->').length - 1, 1)
+  assert.match(SOURCE, /boothStart\(\{/)
+  assert.doesNotMatch(SOURCE, /function boothStep\(|function boothApply\(|function boothSet\(/)
+  assert.match(SOURCE, /<!-- @napkin:clan-fields -->\s*<!-- @napkin:booth -->/, 'the marker follows the fields marker')
+  assert.match(SOURCE, /--booth-line:[^;]+;[^}]*--booth-desk:/, 'the page gives the Booth its colours')
+  assert.match(SOURCE, /@napkin:agent-sphere/, 'Judge is drawn with the real agent figure')
+})
+
+test('the margin is the Booth: the check, tracked changes and the sends are in it, and the header comes first', async () => {
+  const p = await page({ data: MARKED, me: 'sam@wk' })
+  const side = p.d.querySelector('#side')!
+  assert.ok(side.classList.contains('booth-panel'))
+  assert.equal(side.firstElementChild!.className, 'booth-hd')
+  assert.equal(side.querySelector('.booth-nm')!.textContent, 'Booth')
+  assert.equal(side.querySelector('.booth-hide')!.textContent!.trim(), 'Hide')
+  for (const sel of ['[data-testid="check"]', '[data-testid="mark"]', '[data-testid="sends"]', '#time', '#approve']) assert.ok(side.querySelector(sel), `${sel} is in the Booth`)
+  assert.equal(p.d.querySelector('#sheet [data-testid="mark"], #sheet #time, #sheet [data-testid="check"]'), null, 'nothing of it is left in the document')
+  assert.equal(p.d.querySelector('.desk')!.classList.contains('booth-desk'), true)
+})
+
+test('a click on a beat selects it: the Booth shows that line, and Whole script comes back', async () => {
+  const p = await page({ data: MARKED, me: 'sam@wk' })
+  assert.equal(p.all('#side [data-testid="mark"]').length, 2, 'the whole script lists every mark')
+  p.d.querySelector('[data-beat="b1"]')!.dispatchEvent(new p.win.MouseEvent('click', { bubbles: true }))
+  assert.equal(p.d.querySelector('[data-beat="b1"]')!.getAttribute('aria-current'), 'true')
+  assert.match(p.text('#side [data-testid="crumb"]')!, /Line 1/)
+  assert.equal(p.all('#side [data-testid="mark"]').length, 1, 'only this line’s mark')
+  assert.equal(p.d.querySelector('#side [data-testid="sends"]'), null, 'the sends are the whole script’s')
+  p.click('#side [data-whole]')
+  assert.equal(p.d.querySelector('[data-beat="b1"]')!.getAttribute('aria-current'), null)
+  assert.equal(p.all('#side [data-testid="mark"]').length, 2)
+})
+
+test('while the Booth is hidden, a click on a beat brings the whole Booth back on it', async () => {
+  const p = await page({ data: MARKED, me: 'sam@wk' })
+  p.win.innerWidth = 1440 // the Booth hides above 1100 px
+  p.click('#side .booth-hide')
+  assert.equal(p.win.BOOTH.open, false)
+  assert.ok(p.d.querySelector('.desk')!.classList.contains('booth-off'))
+  p.d.querySelector('[data-beat="b3"]')!.dispatchEvent(new p.win.MouseEvent('click', { bubbles: true }))
+  assert.equal(p.win.BOOTH.open, true)
+  assert.match(p.text('#side [data-testid="crumb"]')!, /Line 3/)
+  assert.deepEqual(p.parent.filter(m => m.type === 'clan:booth').map(m => m.open), [false, true])
+})
+
+test('Keep mine is for an agent’s proposal alone: a colleague’s tracked change is answered with Accept and Reject', async () => {
+  assert.ok(!SOURCE.includes('Keep mine'), 'no agent proposes in this page, so the words are not here')
+  const p = await page({ data: MARKED, me: 'sam@wk' })
+  const open = p.d.querySelector('[data-proposal="p1"]')!
+  assert.deepEqual([...open.querySelectorAll('button')].map((b: any) => b.textContent), ['Accept', 'Reject'])
+  assert.doesNotMatch(p.d.body.textContent!, /Keep mine|Kept the original/)
+})
+
+test('every part is named for feedback: a beat is a part, by its first words; a control falls back to the shared name', async () => {
+  const p = await page()
+  const t = p.win.ClanFeedbackTarget
+  const li = p.d.querySelector('[data-beat="b3"]')!
+  const r = t(li.querySelector('textarea'))
+  assert.deepEqual([r.kind, r.id, r.label], ['part', 'b3', 'Take your time. Client A does.'])
+  assert.equal(r.el, li)
+  assert.equal(t(p.d.querySelector('#sheet .title')), null, 'the title is no part')
+  const long = await page({ data: { ...RADIO, script: { beats: [{ id: 'b1', kind: 'voice', role: 'VO', text: 'word '.repeat(40).trim() }], proposals: [] } } })
+  assert.ok(long.win.ClanFeedbackTarget(long.d.querySelector('[data-beat="b1"]')).label.length <= 80)
+  const doc = p.win.ClanFeedbackDoc()
+  assert.equal(doc.version, 1)
+  assert.equal(typeof doc.title, 'string')
+})
+
+test('the OS bar: at most 10 buttons, ids unique, the three sends and the document’s state', async () => {
+  const p = await page({ me: 'dara@wk' })
+  const bar = () => p.parent.filter(m => m.type === 'clan:bar').at(-1)!.items as Json[]
+  const items = JSON.parse(JSON.stringify(bar())) as Json[]
+  const buttons = items.filter(i => i.kind === 'button')
+  assert.ok(buttons.length <= 10)
+  assert.equal(new Set(buttons.map(b => b.id)).size, buttons.length)
+  assert.deepEqual(buttons.map(b => b.label).filter(l => /^Send to/.test(l)).slice(), ['Send to Judge', 'Send to Film', 'Send to Radio'])
+  assert.equal(items.filter(i => i.kind === 'status').length, 1)
+  assert.ok(items.every(i => !i.label || i.label.length <= 28))
+  // a bar button runs what the Booth's button runs
+  const tell = (data: Json) => { const ev = new p.win.Event('message'); Object.defineProperty(ev, 'data', { value: data }); Object.defineProperty(ev, 'source', { value: p.win.parent }); p.win.dispatchEvent(ev) }
+  tell({ type: 'clan:bar-action', id: 'send-radio' })
+  await p.settle()
+  assert.ok(p.writes.some(w => /Radio/.test(String(w.opts.action))))
+  tell({ type: 'clan:bar?' })
+  assert.ok(p.parent.filter(m => m.type === 'clan:bar').length >= 2, 'asked again, it says it again')
+})
+
+test('Judge is shown with its figure and no price is said', async () => {
+  const p = await page({ data: { ...RADIO, handoffs: { judge: { kind: 'script', id: 'script', revision: '1', content_hash: 'x' } } } })
+  assert.ok(!/credit|price|cost|\$|€/i.test(p.text('#side')!.replace(/Must appear|Never say/g, '')))
 })
