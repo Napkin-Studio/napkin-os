@@ -236,7 +236,10 @@ fn the_gate_and_the_two_sign_offs_are_items_that_block_the_one_lock() {
     assert_eq!(signoff["for"], json!({ "person": "aoife@wk" }));
     assert_eq!(signoff["due"], "2026-11-13");
     assert_eq!(signoff["job"], "J001");
-    assert_eq!(item(&v, "gate:baseline")["for"], json!({ "person": "aoife@wk" }));
+    assert_eq!(
+        item(&v, "gate:baseline")["for"],
+        json!({ "person": "aoife@wk" })
+    );
     assert_eq!(item(&v, "gate:baseline")["due"], "2026-11-13");
     // without the job index behind the session the route is not read: the job is, the person and date are not
     let bare = decisions(&at(dir.path(), &b, "aoife@wk", false));
@@ -258,8 +261,8 @@ fn the_gate_and_the_two_sign_offs_are_items_that_block_the_one_lock() {
     // the route's open step is now the creative director's, and no item is waiting on anyone
     assert_eq!(post(&dara(), "/approve", json!({})).0, 200);
     let clan = ClanFile::open(b.as_str()).unwrap();
-    let chain = DecisionChain::from_yaml(&clan.read_entry("agent/decision-chain.yaml").unwrap())
-        .unwrap();
+    let chain =
+        DecisionChain::from_yaml(&clan.read_entry("agent/decision-chain.yaml").unwrap()).unwrap();
     let by = |kind: &str| -> Vec<Option<String>> {
         chain
             .decisions

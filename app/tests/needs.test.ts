@@ -98,3 +98,32 @@ test('a host event is for the document it names, and no other (os-layer §8.4)',
   assert.equal(isFor({ ok: true }, 'doc-a'), false, 'an event that names no document is no one\'s')
   assert.equal(isFor(null, 'doc-a'), false)
 })
+
+test('one Lock: the pill, the Lock button and the list come from needsOf and can_lock for every combination', () => {
+  // The host's gate and sign-off items are ordinary lock blockers, so the one selector lists them.
+  const gate = (code: string): AttentionItem => ({ code, text: code, blocks_lock: true, job: 'J001', for: { person: 'aoife@wk' }, due: '2026-11-13' } as AttentionItem)
+  const open = [gate('gate:objective'), gate('gate:baseline'), gate('signoff:planner')]
+  const written = (v: DecisionsView) => ({ ...v, decisions: [{ decision: { id: 'd1' }, who: { kind: 'person' } }] }) as unknown as DecisionsView
+  // locked, reopened, needs n, can_lock: the Lock is offered exactly when the list is empty and can_lock holds
+  const cases: [string, DecisionsView, number, string, boolean][] = [
+    ['drafting with items open', written(view(open, { can_lock: false, blockers: 3 })), 3, 'Draft', false],
+    ['one item left', written(view(open.slice(2), { can_lock: false, blockers: 1 })), 1, 'Draft', false],
+    ['settled', written(view([], { can_lock: true, blockers: 0 })), 0, 'Ready to lock', true],
+    ['locked', written(view([], { can_lock: true, locked: true })), 0, 'Locked', false],
+    ['reopened, items open again', written(view(open.slice(0, 1), { locked: true, reopened: [{}] as never, can_lock: false, blockers: 1 })), 1, 'Reopened', false],
+  ]
+  for (const [name, v, n, pill, canLock] of cases) {
+    const list = needsOf(v)
+    assert.equal(list.length, n, `${name}: the list`)
+    assert.equal(docStateOf(v)?.label, pill, `${name}: the pill`)
+    assert.equal(!v.lock.locked && list.length === 0 && v.lock.can_lock && v.decisions.length > 0, canLock, `${name}: the Lock`)
+    if (!v.lock.locked) assert.equal(v.lock.can_lock, list.length === 0, `${name}: can_lock agrees with the list`)
+  }
+  // a gate item keeps who it is for and when it is due, and can be set aside from the count and still block
+  const [first] = needsOf(view(open))
+  assert.deepEqual(first.for, { person: 'aoife@wk' })
+  assert.equal(first.due, '2026-11-13')
+  const split = splitAside(needsOf(view(open)), new Set([needKey(first)]))
+  assert.equal(split.open.length, 2)
+  assert.equal(split.aside.length, 1)
+})

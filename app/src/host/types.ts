@@ -389,7 +389,17 @@ export interface JobNeed {
 export interface NextDeadline { job: string; client: string; client_id: string; due: string }
 
 /** What `GET /needs` answers: the person's items, and the next deadline (null: none set; undefined: an older host). */
-export interface NeedsAnswer { items: JobNeed[]; next_deadline?: NextDeadline | null }
+export interface NeedsAnswer {
+  items: JobNeed[]
+  next_deadline?: NextDeadline | null
+  /** Per document, for the signed-in person: items held, items theirs, the earliest date of theirs, the job's next deadline. */
+  documents?: DocumentNeeds[]
+  /** The person's own set-aside keys (needs.ts `needKey`), by document path. Never anyone else's. */
+  aside?: Record<string, string[]>
+}
+
+/** One document's line in `GET /needs`. */
+export interface DocumentNeeds { path: string; count: number; mine: number; earliest_due: string | null; next_deadline: NextDeadline | null }
 
 /** One stage's approval: who approves it and by when (napkin-host `jobs::RouteStep`). */
 export interface RouteStep {
@@ -655,6 +665,8 @@ export interface AttentionReason {
     | 'flagged_field' | 'bad_verdict' | 'unmerged_branch'
     // A client's answer to the locked document (OS-layer contract §7.5.4).
     | 'client_rejected' | 'client_rejected_parts_unknown' | 'client_change_asked' | 'client_part_suggested'
+    // The Brief gate and its two signatures (OS-layer contract §7.2 item 7): `gate:<item id>`, `signoff:<role>`.
+    | `gate:${string}` | `signoff:${string}`
   text: string
   blocks_lock: boolean
 }
@@ -669,6 +681,12 @@ export interface AttentionItem extends AttentionReason {
    *  set it aside with a written reason (`/acknowledge {target, rationale}`,
    *  OS-layer contract §7.2.1). Absent when false. */
   can_set_aside?: boolean
+  /** Who the item waits on: a sign-in name or a role id, one of the two. Absent on a document filed under no job. */
+  for?: { person?: string; role?: string }
+  /** When it is due (`YYYY-MM-DD`): the open step of the job's approval route. */
+  due?: string
+  /** The job the document is filed under, by its number. */
+  job?: string
 }
 
 export interface DecisionTarget {

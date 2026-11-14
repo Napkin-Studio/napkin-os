@@ -455,7 +455,9 @@ pub fn blockers(clan: &clan_sdk::ClanFile, data: &Value, chain: &DecisionChain) 
         if planner_sign(chain, clan.document_id(), p).is_none() {
             out.push(Blocker {
                 code: "signoff:planner",
-                text: format!("Brief gate, signing: the planner, {p}, has not signed this version."),
+                text: format!(
+                    "Brief gate, signing: the planner, {p}, has not signed this version."
+                ),
                 who: Some(AttentionFor::person(p.clone())),
             });
         }

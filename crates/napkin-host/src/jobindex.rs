@@ -30,8 +30,8 @@ use crate::clients;
 use crate::document::Document;
 use crate::error::HostResult;
 use crate::jobs::{self, JobRecord, RouteSet, RouteStep};
-use crate::ops::judge::{self, PieceScore, ScoreTile};
 use crate::ops::decisions::{AttentionFor, DecisionsView};
+use crate::ops::judge::{self, PieceScore, ScoreTile};
 use crate::ops::{decisions, gate, review};
 use crate::store::{DocId, DocStore};
 
