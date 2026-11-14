@@ -66,6 +66,7 @@ for (const size of SIZES) {
     await expect(app.locator('[data-hints="b3"]')).toContainText('smooth') // a banned word, with its line
     await shot(page, 'script-radio', size)
     // Typing a mandatory line into the script turns it present, and the page never changes the words.
+    await page.waitForTimeout(600) // the page's first reads of the host redraw the lines once; type after that
     const line = app.locator('textarea[data-id="b3"][data-field="text"]')
     await line.evaluate((el: HTMLTextAreaElement) => { el.focus(); el.setSelectionRange(el.value.length, el.value.length) }) // the caret at the end of the text, wrapped or not
     await line.pressSequentially(' Drink responsibly.')
@@ -240,6 +241,8 @@ for (const size of SIZES) {
       return a.x + a.width <= b.x + 1 || a.y + a.height <= b.y + 1 // beside it, or under it in the one column
     }
     await expect(booth.locator('.booth-nm')).toHaveText('Booth')
+    // On a phone each primary button the shell draws is 44 px tall (suite test 72's rule): the Booth holds the primary action, the bar's copy is not marked primary.
+    if (size.width === 390) for (const b of await page.locator('.ch-btn-primary, .ns-primary, [data-primary]').all()) if (await b.isVisible()) expect((await b.boundingBox())!.height, await b.innerText()).toBeGreaterThanOrEqual(43.5)
     await expect(booth.getByTestId('check')).toBeVisible()
     await expect(booth.getByTestId('sends')).toBeVisible()
     expect(await apart(), 'the Booth does not lie over the page').toBe(true)
@@ -279,7 +282,7 @@ for (const size of SIZES) {
     await app.locator('#sheet .title').click()
     await page.keyboard.press(']')
     await expect(booth).toBeVisible()
-    expect(await apart()).toBe(true)
+    await expect.poll(apart, { message: 'the Booth comes in beside the page, never over it' }).toBe(true)
     await page.keyboard.press(']')
     await expect(booth).toBeHidden()
     expect(await booth.locator('.booth-hd').evaluate(el => el.textContent), 'no hint of the key').not.toContain(']')
@@ -287,7 +290,7 @@ for (const size of SIZES) {
     await app.locator('[data-beat="b1"]').click({ position: { x: 20, y: 10 } })
     await expect(booth).toBeVisible()
     await expect(booth.getByTestId('crumb')).toContainText('Line 1')
-    expect(await apart()).toBe(true)
+    await expect.poll(apart).toBe(true)
     // the shell remembers the choice across a reload
     await booth.locator('.booth-hide').click()
     await expect(edge).toBeVisible()

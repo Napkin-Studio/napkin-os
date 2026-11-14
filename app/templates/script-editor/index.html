@@ -1044,7 +1044,7 @@
   function barItems(){
     var st = state(), fmt = format(), items = [];
     if(st.locked) items.push({ kind: 'button', id: 'newv', label: 'Start version ' + (st.n + 1), title: 'The approved version stays as it is' });
-    else items.push({ kind: 'button', id: 'approve', label: 'Approve version ' + st.n, primary: true, disabled: !approveOk(fmt, cur()), title: 'Approval locks this exact version' });
+    else items.push({ kind: 'button', id: 'approve', label: 'Approve version ' + st.n, primary: false, disabled: !approveOk(fmt, cur()), title: 'Approval locks this exact version' });
     ['judge', 'film', 'radio'].forEach(function(to){ items.push({ kind: 'button', id: 'send-' + to, label: 'Send to ' + SENDS[to], disabled: !fmt }); });
     items.push({ kind: 'status', label: st.locked ? 'Locked' : 'Draft', tone: st.locked ? 'ok' : null, locked: st.locked });
     return items;

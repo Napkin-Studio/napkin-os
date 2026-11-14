@@ -373,7 +373,7 @@
     var st = state(), t = get('territory') || {}, has = !!(t.name && String(t.name).trim()), approver = approverOf(data()), may = mayApprove(approver, S.me);
     var items = [{ kind: 'status', label: st.locked ? 'Locked · version ' + st.n : 'Draft', tone: st.locked ? 'ok' : null, locked: st.locked }];
     if(st.locked) items.push({ kind: 'button', id: 'newv', label: 'Start version ' + (st.n + 1), primary: false, disabled: false, title: 'The approved version stays in the history as it is' });
-    else items.push({ kind: 'button', id: 'approve', label: 'Approve version ' + st.n, primary: true, disabled: !(has && may && !S.busy), title: approveReason(st, approver, may, has) });
+    else items.push({ kind: 'button', id: 'approve', label: 'Approve version ' + st.n, primary: false, disabled: !(has && may && !S.busy), title: approveReason(st, approver, may, has) });
     return items;
   }
   function sendBar(){

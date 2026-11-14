@@ -363,7 +363,7 @@
     // The room's state, as the bar's status item, and Merge routes as its one button while routes are out.
     var label = ch.route ? 'Route chosen' : out.length ? out.length + ' routes out' : merged.length ? merged.length + ' routes merged' : g.open ? 'Room open' : (g.team_cards || 0) + ' of ' + (g.needed || 5) + ' team cards';
     items.push({ kind: 'status', label: label, tone: ch.route || g.open ? 'ok' : null, locked: false });
-    if(out.length) items.push({ kind: 'button', id: 'merge', label: 'Merge routes', primary: true, title: 'Fold every route back into the room. No model is used.' });
+    if(out.length) items.push({ kind: 'button', id: 'merge', label: 'Merge routes', primary: false, title: 'Fold every route back into the room. No model is used.' });
     if(br && br.changed){
       if(br.from && br.to) items.push({ kind: 'state', state: 'changed-brief', from: 'v' + br.from, to: 'v' + br.to, changes: 'The insight or the proposition may have moved. Your cards and routes stay as they are.' });
     }
