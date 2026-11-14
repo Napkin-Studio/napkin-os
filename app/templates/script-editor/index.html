@@ -217,6 +217,7 @@
 
 <!-- @napkin:clan-fields -->
 <!-- @napkin:booth -->
+<!-- @napkin:booth-folds -->
 <!-- @napkin:agent-sphere -->
 <script>
 (function(){
@@ -761,8 +762,10 @@
     h += checkHtml(fmt, findings, must, c, null) + marksHtml(c, null);
     h += listCard('Must appear', 'mandatory', 'A line the copy must carry', listOf(d.checks && d.checks.mandatory), locked());
     h += listCard('Never say', 'banned', 'A word not to use', bannedOf(d), locked());
-    return h + versionHtml(fmt, c) + sendHtml(fmt, c);
+    return h + versionHtml(fmt, c) + sendHtml(fmt, c) + foldHtml('judge') + foldHtml('versions');
   }
+  // Judge and Versions are the Booth's shared folds (shared/booth-folds.html): the whole script's, after the sends.
+  function foldHtml(k){ return '<section class="bsec" data-booth-fold="' + k + '">' + (typeof boothFoldHtml === 'function' ? boothFoldHtml(k) : '') + '</section>'; }
   // Drawn again without losing the field a person is in (the mark-up form, the lists' add boxes).
   function setSide(html){
     var box = $('sideBody'); if(!box || box.getAttribute('data-html') === html) return;
@@ -1072,6 +1075,7 @@
     key: function(e){ return !!format() && !typing(e.target); }
   });
   boothApply(true);
+  if(typeof boothFolds === 'function') boothFolds({ judge: true, versions: true, noun: 'script' });
   sendBar();
 
   S.local = null;

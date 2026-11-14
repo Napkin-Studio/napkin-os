@@ -155,6 +155,7 @@
 </style>
 <!-- @napkin:clan-fields -->
 <!-- @napkin:booth -->
+<!-- @napkin:booth-folds -->
 </head>
 <body>
 <div class="desk" data-where="visual-brief">
@@ -414,9 +415,12 @@
     }
     if(S.error) h += '<p class="err" role="alert" id="sideError">' + esc(S.error) + '</p>';
     h += '</section>';
+    // Judge and Versions are the Booth's shared folds (shared/booth-folds.html), in the whole page's view.
+    if(!S.sel) h += foldHtml('judge') + foldHtml('versions');
     $('boothBody').innerHTML = h;
     sendBar();
   }
+  function foldHtml(k){ return '<section class="card" data-booth-fold="' + k + '">' + (typeof boothFoldHtml === 'function' ? boothFoldHtml(k) : '') + '</section>'; }
   function draw(){
     if(S.editing) { var keep = $('ed') && $('ed').value; }
     drawHead(); drawFrames(); drawRows(); drawSide(); markSel();
@@ -576,6 +580,7 @@
     key: function(e){ return !typing(e.target); }
   });
   boothApply(true);
+  if(typeof boothFolds === 'function') boothFolds({ judge: true, versions: true, noun: 'visual brief' });
   // Seen by the page tests: nothing else reads it.
   window.__visualBrief = { state: function(){ return state(); }, approver: function(){ return approverOf(data()); }, heldByPerson: heldByPerson };
 })();

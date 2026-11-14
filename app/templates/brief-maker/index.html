@@ -958,6 +958,7 @@
   #structured .madefrom.b-made{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin:0;padding:0 2px;font-size:13px;line-height:1.55;color:var(--nd-muted)}
   .b-made small{flex-basis:100%;font:500 11px var(--font-mono);color:var(--nd-muted)}
   /* review: folded */
+  #structured .b-vers{padding:12px 0 0;border-top:1px solid var(--nd-line)}
   #structured .review{display:block;margin:0;padding:12px 0 0;border:0;border-top:1px solid var(--nd-line);border-radius:0;background:none;box-shadow:none;font-size:13px;line-height:1.55}
   .b-review > summary{cursor:pointer;font:600 10.5px var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--nd-muted)}
   .b-review > summary small{text-transform:none;letter-spacing:0;font-weight:500;margin-left:6px;font-size:.8333em}
@@ -1444,6 +1445,7 @@
 </style>
 <!-- @napkin:clan-fields -->
 <!-- @napkin:booth -->
+<!-- @napkin:booth-folds -->
 <!-- @napkin:source-card -->
 </head>
 <body>
@@ -1570,6 +1572,9 @@
           </div>
 
           <details class="review b-review" id="review" hidden><summary>Review<small id="reviewSum"></small></summary><div id="reviewBody"></div><div class="b-rev-crew"><div class="bcrew" id="crewline" aria-live="polite"></div></div></details>
+
+          <!-- Versions: the Booth's shared fold (shared/booth-folds.html), the whole brief's. -->
+          <div class="b-vers" id="versFold" data-booth-fold="versions"></div>
 
           <div class="brand-line" id="brandLine" hidden></div>
           <div class="madefrom b-made" id="madeFrom" hidden></div>
@@ -5174,6 +5179,8 @@
     key:function(e){ return phase==='doc'&&!typing(e.target); }
   });
   boothApply(true);
+  // The brief's versions, with Restore and any two side by side: the Booth's shared fold.
+  if(typeof boothFolds==='function') boothFolds({versions:true, noun:'brief'});
 
   // The hint shows until the first selection, then never again on this device.
   function hintSeen(){ try{ window.localStorage.setItem('napkin.brief.hinted','1'); }catch(e){} var h=$('sideHint'); if(h) h.hidden=true; }
