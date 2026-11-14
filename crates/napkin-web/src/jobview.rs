@@ -357,7 +357,8 @@ mod tests {
             (r(&["account-service"]), true, true),
             (r(&["management"]), true, true),
             (r(&["admin"]), true, true),
-            (r(&[]), true, true),
+            (r(&[]), false, false),
+            (r(&[crate::roles::ANONYMOUS]), true, true),
             (r(&["planning", "producer"]), true, false),
             (r(&["nonsense"]), false, false),
         ] {

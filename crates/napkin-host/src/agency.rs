@@ -33,7 +33,7 @@ use crate::error::{HostError, HostResult};
 use crate::store::{Change, DocId, DocStore, Version};
 
 /// The registry's tag in `Library::home`.
-const REGISTRY_TAG: &str = "agency-v1";
+pub const REGISTRY_TAG: &str = "agency-v1";
 const DATA: &str = "shared/data.yaml";
 const DOCUMENT_TYPE: &str = "agency-registry";
 const CHAIN: &str = "agent/decision-chain.yaml";

@@ -158,15 +158,14 @@ impl DoneStore for FileDone {
 
 // ── one person's list ───────────────────────────────────────────────────────
 
-/// The roles of a person on a job, as the agency's directory has them; none for an agency with no
-/// directory, where Needs you works from roles alone.
+/// The roles of a person on a job, as the People store has them now; none for someone no longer on it, or
+/// on a server with no store, where Needs you works from roles alone.
 fn roles_in_directory<'a>(ctx: &'a AppCtx, agency: &'a str) -> impl Fn(&str) -> Vec<String> + 'a {
     move |username: &str| {
-        ctx.directory
-            .person(agency, username)
-            .filter(|p| p.state != crate::directory::PersonState::Removed)
-            .map(|p| p.roles)
-            .unwrap_or_default()
+        if crate::tenant::agency_of(username).as_deref() != Some(agency) {
+            return Vec::new();
+        }
+        crate::live::roles_of(ctx, username).unwrap_or_default()
     }
 }
 
@@ -353,16 +352,9 @@ pub fn with_notices(
     let mut view: Value = serde_json::from_slice(body).ok()?;
     let index = crate::api::job_index(ws).ok()?;
     let agency = crate::tenant::agency_of(&grant.person).unwrap_or_default();
-    // The roles are read again now, not taken from the token: a role change (or a removal) holds on the
-    // person's next read of a document, whatever the token was minted with.
-    let roles = if ctx.directory.has(&agency) {
-        match ctx.directory.person(&agency, &grant.person) {
-            Some(p) if p.state != crate::directory::PersonState::Removed => p.roles,
-            _ => return None,
-        }
-    } else {
-        grant.roles.clone()
-    };
+    // The roles are the People store's now (a token carries none): a role change, or a removal, holds on the
+    // person's next read of a document, however long ago the token was minted.
+    let roles = crate::live::roles_of(ctx, &grant.person)?;
     let me = Account {
         username: grant.person.clone(),
         agency,

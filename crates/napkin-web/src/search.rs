@@ -6,7 +6,7 @@
 //!
 //! The index is the tenant's own (`Workspace.search`, napkin-host `searchindex`), and the tenant is the
 //! session's, never the request's (the `Tenant` extractor answers 403 to any other). Every entry,
-//! and every person from the agency's directory, passes `roles::allowed` with the route it opens and
+//! and every person of the agency in the People store, passes `roles::allowed` with the route it opens and
 //! its client **before** it is scored, ranked or counted, so a person never finds, and never sees a
 //! count that hints at, what they cannot open. There is no write verb (405). The handler logs counts
 //! and milliseconds, never what was typed.
@@ -21,7 +21,6 @@ use napkin_host::searchindex::{self, Entry};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::Account;
-use crate::directory::PersonState;
 use crate::error::ApiResult;
 use crate::roles::{self, Table};
 use crate::state::AppCtx;
@@ -103,7 +102,7 @@ async fn search(
 ) -> ApiResult<Json<Answer>> {
     let started = Instant::now();
     let me = account.map(|Extension(a)| a);
-    let my_roles: Vec<String> = me.as_ref().map(|a| a.roles.clone()).unwrap_or_default();
+    let my_roles: Vec<String> = crate::roles::of(me.as_ref());
     let query = searchindex::parse(&p.q);
     if query.is_empty() {
         return Ok(Json(Answer {
@@ -115,8 +114,8 @@ async fn search(
     let before = ws.search.builds();
     let index = ws.search.get(&*ws.store, &ws.jobs, ws.now())?;
     let rebuilt = ws.search.builds() != before;
-    // People come from the agency's directory, a member's view of it: names and roles, no email,
-    // nobody removed. Anonymous, or an agency with no directory: no people.
+    // People come from the People store, a member's view of their own agency: names and roles, no email,
+    // nobody removed. Anonymous, or a server with no store: no people.
     let table = Table::for_agency(
         ctx.roles_dir.as_deref(),
         me.as_ref().map(|a| a.agency.as_str()),
@@ -124,14 +123,15 @@ async fn search(
     let people: Vec<Entry> = me
         .as_ref()
         .map(|a| {
-            ctx.directory
-                .people(&a.agency)
+            ctx.people()
+                .map(|store| store.book().people)
+                .unwrap_or_default()
                 .into_iter()
-                .filter(|x| x.state != PersonState::Removed)
+                .filter(|x| x.agency == a.agency && x.active())
                 .map(|x| {
                     searchindex::person_entry(
-                        &x.username,
-                        &x.name,
+                        &x.id,
+                        x.name.as_deref().unwrap_or(&x.id),
                         &x.roles,
                         &role_words(&table, &x.roles),
                     )

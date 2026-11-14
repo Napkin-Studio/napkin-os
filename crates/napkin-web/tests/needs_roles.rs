@@ -395,3 +395,56 @@ async fn review_a_deadline_on_a_job_with_no_document_still_reaches_its_owner() {
         job["needs"]
     );
 }
+
+/// Stage 3 of features/align-needs-lock-people.clan: in an agency that never had a directory, a document token
+/// minted while a person was an admin does not keep the role once they are demoted. The sandbox reads the
+/// People store, not the token.
+#[tokio::test]
+async fn a_token_minted_before_a_demotion_carries_no_role_in_a_roster_only_agency() {
+    let r = rig();
+    let (cian, _aoife, t) = setup(&r, "aoife@wk").await;
+    route(&r, &cian, &t).await;
+    let maeve = sign_in(&r, "maeve@wk").await;
+    let (_, open, _) = call(
+        &r,
+        "GET",
+        &format!("/api/t/{t}/d/doc-b1"),
+        Some(&maeve.cookie),
+        None,
+    )
+    .await;
+    let token = open["token"].as_str().expect("a token").to_string();
+    let ad = sign_in(&r, "ad@wk").await;
+    let (st, body, _) = call(
+        &r,
+        "PUT",
+        "/api/admin/people/maeve@wk/roles",
+        Some(&ad.cookie),
+        Some(json!({ "roles": ["copywriter"] })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{body}");
+    let v = call(&r, "GET", &format!("/s/{token}/decisions"), None, None)
+        .await
+        .1;
+    let notes: Vec<&Value> = v["attention"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["code"].as_str().unwrap().starts_with("notice:"))
+        .collect();
+    assert!(
+        notes.is_empty(),
+        "the old token still reads as an admin: {}",
+        json!(notes)
+    );
+    let (_, doors, _) = call(
+        &r,
+        "GET",
+        &format!("/api/t/{t}/doors"),
+        Some(&maeve.cookie),
+        None,
+    )
+    .await;
+    assert_eq!(doors["roles"], json!(["copywriter"]), "{doors}");
+}

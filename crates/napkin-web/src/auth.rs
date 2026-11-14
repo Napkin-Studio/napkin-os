@@ -47,9 +47,10 @@ pub struct Account {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// The roles the person holds (features/roles-and-homes.clan): `planning`,
-    /// `creative-director`, `admin`... None until the roster or the pool names
-    /// some, and a person with none is unrestricted. The signed session carries
-    /// them, so the shell and the permission check read them from nowhere else.
+    /// `creative-director`, `admin`... A person with none is unrestricted. They
+    /// are the People store's, put here on each request (`crate::live`); what a
+    /// session cookie says of them is never read
+    /// (features/align-needs-lock-people.clan).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub roles: Vec<String>,
 }
@@ -99,15 +100,6 @@ impl Provider {
     /// field, and the choose-password step exists, only when it does.
     pub fn uses_passwords(&self) -> bool {
         !matches!(self, Provider::Roster(_))
-    }
-
-    /// Whether a signed-in session still stands: under the roster, a person
-    /// removed from the People page is signed out at their next request.
-    pub fn still_allowed(&self, username: &str) -> bool {
-        match self {
-            Provider::Roster(r) => r.people.active(username).is_some(),
-            _ => true,
-        }
     }
 
     pub async fn sign_in(&self, username: &str, password: &str) -> SignIn {
@@ -346,19 +338,16 @@ impl Local {
 
 // ── the roster: names, no passwords ─────────────────────────────────────────
 
-/// The people who may sign in: the people store (crate::people), seeded once from the
+/// The people who may sign in: the People store (crate::people), seeded once from the
 /// roster file (`user@agency<TAB>Display name<TAB>roles`, the format of
 /// infra/scripts/accounts.napkin.tsv). Changed from the People page, and read
 /// at each sign-in, so a person added there signs in without a restart.
 ///
-/// The store decides who may sign in and under what name. It holds no roles: the
-/// optional roles column (`planning,creative-director`, features/roles-and-homes.clan)
-/// is read from the roster file at each sign-in, so a person the People page added
-/// has no role from the file. An agency with a directory (crate::directory) ignores
-/// both and takes its roles from the directory.
+/// The store decides who may sign in, under what name and with which roles
+/// (features/align-needs-lock-people.clan); the file's roles column is read
+/// into it once, and never at a sign-in.
 pub struct Roster {
     people: std::sync::Arc<crate::people::People>,
-    seed: PathBuf,
 }
 
 impl Roster {
@@ -367,7 +356,6 @@ impl Roster {
     pub fn open(store_dir: PathBuf, seed: &std::path::Path) -> Result<Self, String> {
         Ok(Self {
             people: std::sync::Arc::new(crate::people::People::open(store_dir, seed)?),
-            seed: seed.to_path_buf(),
         })
     }
 
@@ -376,32 +364,20 @@ impl Roster {
         &self.people
     }
 
-    /// The roles the roster file gives `username` (its optional third column); none when the
-    /// file is gone (it is only the seed once the store exists) or the line has no roles.
-    fn file_roles(&self, username: &str) -> Vec<String> {
-        let Ok(text) = std::fs::read_to_string(&self.seed) else {
-            return Vec::new();
-        };
-        text.lines()
-            .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
-            .find_map(|l| {
-                let mut cols = l.splitn(3, '\t');
-                let (u, _) = Account::parse_username(cols.next()?)?;
-                (u == username).then(|| crate::roles::parse_roles(cols.nth(1).unwrap_or("")))
-            })
-            .unwrap_or_default()
+    /// The store behind it, shared: the server's one list of who may sign in.
+    pub fn people_arc(&self) -> std::sync::Arc<crate::people::People> {
+        self.people.clone()
     }
 
     fn sign_in(&self, username: &str) -> SignIn {
         match self.people.active(username) {
             Some(p) => {
                 let (u, agency) = Account::parse_username(username).unwrap_or_default();
-                let roles = self.file_roles(&u);
                 SignIn::Done(Account {
                     username: u,
                     agency,
                     name: p.name,
-                    roles,
+                    roles: p.roles,
                 })
             }
             None => SignIn::Refused(
@@ -504,17 +480,28 @@ impl Cognito {
         let name = claims
             .as_ref()
             .and_then(|c| c["name"].as_str().map(String::from));
-        // the roles an admin gave the account (the pool's custom:roles attribute)
-        let roles = claims
+        // The person is the one the pool's token names (its `cognito:username`), not the name typed: a
+        // token for one person never signs in another. A token that names nobody, or someone else, is refused.
+        let named = claims
             .as_ref()
-            .and_then(|c| c["custom:roles"].as_str().map(crate::roles::parse_roles))
-            .unwrap_or_default();
-        let (u, agency) = Account::parse_username(username).unwrap_or_default();
+            .and_then(|c| c["cognito:username"].as_str())
+            .and_then(Account::parse_username);
+        let typed = Account::parse_username(username);
+        let (u, agency) = match (named, typed) {
+            (Some(n), Some(t)) if n == t => n,
+            _ => {
+                return SignIn::Refused(
+                    "Sign-in could not be confirmed. Try again, or ask your studio admin.".into(),
+                )
+            }
+        };
+        // the pool says who this is, never what they may do: custom:roles is not read, and the roles are
+        // the People store's (features/align-needs-lock-people.clan)
         SignIn::Done(Account {
             username: u,
             agency,
             name,
-            roles,
+            roles: Vec::new(),
         })
     }
 
@@ -675,6 +662,7 @@ mod tests {
                     name: "Laurance".into(),
                     agency: "napkin".into(),
                     username: Some("visionary@napkin".into()),
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -743,5 +731,39 @@ mod tests {
         assert!(weak("short1").is_some());
         assert!(weak("onlyletterslong").is_some());
         assert!(weak("letters-and-1-number").is_none());
+    }
+
+    #[test]
+    fn the_identity_providers_roles_are_never_read() {
+        // an ID token whose claims carry custom:roles: the person is named, their roles are the People store's
+        let claims = serde_json::json!({ "cognito:username": "aoife@wk", "name": "Aoife", "custom:roles": "admin,planning" });
+        let token = format!("h.{}.s", B64.encode(claims.to_string()));
+        let v = serde_json::json!({ "AuthenticationResult": { "IdToken": token } });
+        match Cognito::done("aoife@wk", &v) {
+            SignIn::Done(a) => {
+                assert_eq!(a.name.as_deref(), Some("Aoife"));
+                assert!(a.roles.is_empty(), "{:?}", a.roles);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_cognito_sign_in_is_the_tokens_person_not_the_name_typed() {
+        // the pool answered for aoife (its own username claim); the name typed was another's
+        let claims = serde_json::json!({ "cognito:username": "aoife@wk", "name": "Aoife" });
+        let token = format!("h.{}.s", B64.encode(claims.to_string()));
+        let v = serde_json::json!({ "AuthenticationResult": { "IdToken": token } });
+        assert!(matches!(Cognito::done("ad@wk", &v), SignIn::Refused(_)));
+        match Cognito::done("Aoife@WK", &v) {
+            SignIn::Done(a) => assert_eq!(a.username, "aoife@wk"),
+            other => panic!("{other:?}"),
+        }
+        // a token with no username claim proves nobody
+        let bare = serde_json::json!({ "AuthenticationResult": { "IdToken": format!("h.{}.s", B64.encode("{}")) } });
+        assert!(matches!(
+            Cognito::done("aoife@wk", &bare),
+            SignIn::Refused(_)
+        ));
     }
 }

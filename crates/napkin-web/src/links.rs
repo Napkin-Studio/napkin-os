@@ -855,13 +855,13 @@ pub fn rounds_in_scope(
 /// Who may be the client's reviewer or approver on a link an agency person makes (the review of
 /// 12 Nov 2026, finding 2). An agency person must not be able to answer as the client:
 ///
-/// - an address that belongs to someone in the agency's own directory is refused, in any state and
+/// - an address that belongs to someone of the agency in the People store is refused, in any state and
 ///   whatever the case, spaces or plus tag (`Aoife+client@studio.ie` is `aoife@studio.ie`);
-/// - so is the address of the person making the link, with a directory or without one;
+/// - so is the address of the person making the link, whether the store has an address for them or not;
 /// - when the job's route has a client step with a contact, the approver is that contact.
 ///
-/// An agency with no directory cannot make the first check: only the maker's own sign-in name is
-/// refused there. `who` is each reviewer's address and whether they are an approver. Errors are the
+/// A person the store has no address for cannot be checked by address: only the maker's own sign-in name
+/// is refused for them. `who` is each reviewer's address and whether they are an approver. Errors are the
 /// plain 400 to show the person making the link.
 pub fn admit(
     ctx: &AppCtx,
@@ -873,12 +873,15 @@ pub fn admit(
     use client_link::canonical_email as canon;
     let agency = crate::tenant::agency_of(maker);
     let (mut own, mut mine): (Vec<String>, Vec<String>) = (Vec::new(), vec![canon(maker)]);
-    if let Some(agency) = agency.as_deref().filter(|a| ctx.directory.has(a)) {
-        for p in ctx.directory.people(agency) {
-            if p.username == maker {
-                mine.push(canon(&p.email));
+    if let (Some(agency), Some(people)) = (agency.as_deref(), ctx.people()) {
+        for p in people.book().people.iter().filter(|p| p.agency == agency) {
+            let Some(email) = p.email.as_deref() else {
+                continue;
+            };
+            if p.id == maker {
+                mine.push(canon(email));
             }
-            own.push(canon(&p.email));
+            own.push(canon(email));
         }
     }
     let contact = client_step(ctx, tenant, session)

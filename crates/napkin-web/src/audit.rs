@@ -304,8 +304,8 @@ pub fn note_sign_in(ctx: &AppCtx, name: &str, ip: &str, refused: bool) {
 /// Copy the registry's permission and settings decisions that the log has not copied yet, oldest
 /// first, each once. Called after every write to the registry and before the view reads.
 pub fn sync_registry(ctx: &AppCtx, tenant: &TenantId) {
-    let store = &*ctx.workspace(tenant).store;
-    let Ok(history) = napkin_host::agency::history(store) else {
+    let ws = ctx.workspace(tenant);
+    let Ok(history) = napkin_host::agency::history(ws.agency_store()) else {
         return;
     };
     let known: HashSet<String> = ctx

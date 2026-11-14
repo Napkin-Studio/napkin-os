@@ -6,7 +6,7 @@
 //! cap, time zone, the look), the setup flow's progress read from the data, CSV import with a dry
 //! run through the API (raw and multipart), the accounts file, and the walls between agencies.
 
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -30,9 +30,9 @@ struct Person {
     tenant: String,
 }
 
+// cr's admin alone: a new agency, whose people come by its setup (one People store, so a roster line for anyone
+// else of cr would already be one of its people: features/align-needs-lock-people.clan)
 const ROSTER: &str = "cara@cr\tCara\tadmin\n\
-dan@cr\tDan From The File\tmanagement\n\
-sam@cr\tSam\tplanning\n\
 barra@bq\tBarra\tadmin\n\
 niamh@bq\tNiamh\tmanagement\n\
 noel@nodir\tNoel\ttraffic\n";
@@ -40,11 +40,12 @@ noel@nodir\tNoel\ttraffic\n";
 fn rig() -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let clock = Arc::new(AtomicI64::new(1_000_000));
-    let c = clock.clone();
-    let ctx = Arc::new(
-        AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40)
-            .with_directory_clock(move || c.load(Ordering::SeqCst)),
-    );
+    let ctx = Arc::new(AppCtx::new(
+        dir.path().to_path_buf(),
+        Arc::new(NoConfig),
+        None,
+        40,
+    ));
     let roster = dir.path().join("accounts.tsv");
     std::fs::write(&roster, ROSTER).unwrap();
     let identity = napkin_web::tenant::Identity {
@@ -130,6 +131,19 @@ async fn invite(r: &Rig, admin: &Person, username: &str, name: &str, roles: &[&s
         Some(json!({ "username": username, "name": name, "email": format!("{}@mail.example.test", username.split('@').next().unwrap()), "roles": roles })),
     )
     .await;
+    if st == StatusCode::CONFLICT {
+        // on the roster, so already in the People store (features/align-needs-lock-people.clan)
+        let (st, body, _) = call(
+            r,
+            "PUT",
+            &format!("/api/t/{}/agency/people/{username}", admin.tenant),
+            Some(&admin.cookie),
+            Some(json!({ "name": name, "email": format!("{}@mail.example.test", username.split('@').next().unwrap()), "roles": roles })),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{body}");
+        return;
+    }
     assert_eq!(st, StatusCode::CREATED, "{body}");
 }
 

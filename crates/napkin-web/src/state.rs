@@ -38,7 +38,12 @@ struct SessionCache {
 }
 
 pub struct Workspace {
+    /// Every document of the tenant, as every route and the sandbox load them: through [`Guarded`], so
+    /// the build's agency registry is loaded by none of them.
     pub store: Arc<dyn DocStore>,
+    /// The same store unguarded, for `napkin_host::agency` alone (the agency's settings and the audit
+    /// view's copy of its decisions): [`Workspace::agency_store`].
+    raw: Arc<dyn DocStore>,
     /// Who every session of this workspace acts as by default: its tenant.
     ctx: Ctx,
     sessions: Mutex<SessionCache>,
@@ -62,7 +67,8 @@ pub type JobsClock = Arc<dyn Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync
 impl Workspace {
     fn new(store: Arc<dyn DocStore>, ctx: Ctx, clock: JobsClock) -> Self {
         Self {
-            store,
+            store: Arc::new(Guarded::new(store.clone())),
+            raw: store,
             ctx,
             sessions: Mutex::new(SessionCache::default()),
             library: LibraryCache::new(),
@@ -70,6 +76,12 @@ impl Workspace {
             search: napkin_host::searchindex::SearchCache::new(),
             clock,
         }
+    }
+
+    /// The store as the agency's own module reads it: the registry document included. For the agency's
+    /// settings (`napkin_host::agency::read`, `set_settings`) and nothing a request names.
+    pub fn agency_store(&self) -> &dyn DocStore {
+        &*self.raw
     }
 
     /// Now, as the job index counts it.
@@ -164,8 +176,10 @@ pub struct AppCtx {
     pub timesheets: crate::timesheet::Timesheets,
     /// What each person has marked done on Needs you, private to them (features/needs-you-full.clan).
     pub done: Arc<dyn crate::needs::DoneStore>,
-    /// Who works in each agency and with which roles (features/agency-setup.clan).
-    pub directory: Arc<dyn crate::directory::Directory>,
+    /// Who may sign in, and with which roles: the one People store (features/align-needs-lock-people.clan).
+    /// Set once, by the router from the roster provider or by `main` for a password provider; none on an
+    /// anonymous server. Read through [`AppCtx::people`].
+    people: std::sync::OnceLock<Arc<crate::people::People>>,
     /// What no document's chain holds: exports, links, sign-ins and copies of permission changes.
     pub audit: Arc<dyn crate::audit::AuditLog>,
     jobs_clock: JobsClock,
@@ -182,7 +196,7 @@ impl AppCtx {
         Self {
             timesheets: crate::timesheet::Timesheets::new(root.clone()),
             done: Arc::new(crate::needs::FileDone::new(root.join("needs-done"))),
-            directory: Arc::new(crate::directory::RegistryDirectory::new(root.clone())),
+            people: std::sync::OnceLock::new(),
             audit: Arc::new(crate::audit::FileAudit::new(root.clone())),
             code_guard: crate::links::CodeGuard::new(root.join("link-codes")),
             root,
@@ -263,11 +277,37 @@ impl AppCtx {
         self
     }
 
-    /// A clock for the directory's cache, in seconds, so a test moves past its minute.
-    pub fn with_directory_clock(mut self, clock: impl Fn() -> i64 + Send + Sync + 'static) -> Self {
-        self.directory =
-            Arc::new(crate::directory::RegistryDirectory::new(self.root.clone()).with_clock(clock));
-        self
+    /// The People store, when this server keeps one.
+    pub fn people(&self) -> Option<&Arc<crate::people::People>> {
+        self.people.get()
+    }
+
+    /// Give this server its People store (once; a second call is ignored), with every change also written
+    /// to the agency's audit chain.
+    pub fn set_people(&self, people: Arc<crate::people::People>) {
+        let audit = self.audit.clone();
+        people.set_audit(Arc::new(
+            move |agency: &str,
+                  who: &str,
+                  kind: &'static str,
+                  what: String,
+                  person: Option<&str>| {
+                let tenant = crate::tenant::TenantId::of_agency(agency);
+                audit.append(
+                    &tenant,
+                    crate::audit::NewLine {
+                        who: who.to_string(),
+                        kind,
+                        what,
+                        doc: person.map(str::to_string),
+                        ..Default::default()
+                    },
+                )
+            },
+        ));
+        // a change recorded by a server that stopped before it wrote people.json is marked not applied
+        people.reconcile();
+        let _ = self.people.set(people);
     }
 
     /// A clock for the job index, so a test sets the day an approval is late by.
@@ -359,6 +399,99 @@ fn seed_library(store: &dyn DocStore, dir: &Path) {
             Ok(app) => tracing::info!(app = %app.app_id, "seeded"),
             Err(e) => tracing::warn!(file = %path.display(), error = %e, "seed skipped"),
         }
+    }
+}
+
+/// A tenant's store as every route and the app sandbox see it: the build's agency registry
+/// (`napkin_host::agency`, `home-agency-v1`) is not in it. Reading, stamping, writing or listing it is
+/// refused here, the one place every document load and write passes through (an open, a spin-off from its
+/// source, an attach, a related or upstream scan, the search and job indexes, the library listing, an
+/// export, a download, and any token, however old). Its people were imported into the People store once;
+/// any member could write it since 12 Nov 2026, so nothing it says is read again
+/// (features/align-needs-lock-people.clan).
+pub struct Guarded(Arc<dyn DocStore>, std::sync::OnceLock<Option<DocId>>);
+
+impl Guarded {
+    pub fn new(inner: Arc<dyn DocStore>) -> Self {
+        Self(inner, std::sync::OnceLock::new())
+    }
+
+    fn is_registry(&self, id: &DocId) -> bool {
+        self.1
+            .get_or_init(|| self.0.home(napkin_host::agency::REGISTRY_TAG).ok())
+            .as_ref()
+            .is_some_and(|r| r == id)
+    }
+
+    fn refuse(id: &DocId) -> napkin_host::HostError {
+        napkin_host::HostError::new(
+            403,
+            format!("{id}: the agency's people are changed on the People page"),
+        )
+    }
+}
+
+impl napkin_host::PartStore for Guarded {
+    fn read(&self, id: &DocId) -> HostResult<Vec<u8>> {
+        if self.is_registry(id) {
+            return Err(Self::refuse(id));
+        }
+        self.0.read(id)
+    }
+
+    fn exists(&self, id: &DocId) -> bool {
+        !self.is_registry(id) && self.0.exists(id)
+    }
+
+    fn version(&self, id: &DocId) -> HostResult<napkin_host::Version> {
+        if self.is_registry(id) {
+            return Err(Self::refuse(id));
+        }
+        self.0.version(id)
+    }
+
+    fn stamp(&self, id: &DocId) -> HostResult<napkin_host::Stamp> {
+        if self.is_registry(id) {
+            return Err(Self::refuse(id));
+        }
+        self.0.stamp(id)
+    }
+
+    fn apply(&self, change: &napkin_host::Change) -> HostResult<napkin_host::Version> {
+        if self.is_registry(&change.doc) {
+            return Err(Self::refuse(&change.doc));
+        }
+        self.0.apply(change)
+    }
+}
+
+impl napkin_host::Library for Guarded {
+    fn app_candidates(&self) -> Vec<DocId> {
+        self.0.app_candidates()
+    }
+
+    fn app_template(&self, app_id: &str) -> DocId {
+        self.0.app_template(app_id)
+    }
+
+    fn documents(&self) -> Vec<DocId> {
+        self.0
+            .documents()
+            .into_iter()
+            .filter(|d| !self.is_registry(d))
+            .collect()
+    }
+
+    fn new_document(&self, app_id: &str, id_short: &str) -> HostResult<DocId> {
+        self.0.new_document(app_id, id_short)
+    }
+
+    fn home(&self, version_tag: &str) -> HostResult<DocId> {
+        self.0.home(version_tag)
+    }
+
+    fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
+        self.0.fork_branch(parent, agent)
     }
 }
 

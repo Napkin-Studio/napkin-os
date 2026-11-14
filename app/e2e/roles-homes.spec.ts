@@ -142,14 +142,17 @@ for (const size of SIZES) {
     await cw.ctx.close()
   })
 
-  test(at('a person with no role keeps the desk, and the server refuses them nothing'), async ({ browser }) => {
+  // A person with no role holds no role (features/align-needs-lock-people.clan, after its security review): the desk and what
+  // is open to everyone signed in, and nothing a role opens.
+  test(at('a person with no role keeps the desk, and the server opens them no role\'s routes'), async ({ browser }) => {
     const { ctx, page } = await signedIn(browser, size, PEOPLE.noRole)
     await page.goto('/')
     await expect(page.getByTestId('desk')).toBeVisible()
     await expect(page.getByTestId('home')).toHaveCount(0)
     await expect(page.getByTestId('your-pages')).toHaveCount(0)
     const { tenant } = await (await page.request.get('/api/session')).json() as { tenant: string }
-    expect((await page.request.get(`/api/t/${tenant}/jobs/J001/scope`)).status()).not.toBe(403)
+    expect((await page.request.get(`/api/t/${tenant}/jobs/J001/scope`)).status()).toBe(403)
+    expect((await page.request.get(`/api/t/${tenant}/clients`)).status()).toBe(200)
     await ctx.close()
   })
 

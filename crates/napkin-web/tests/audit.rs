@@ -7,7 +7,7 @@
 //! line to the one before, and verifying fails after one line is edited or the end is cut off; it holds
 //! nothing from a timesheet.
 
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -41,11 +41,12 @@ barra@bq\tBarra\tadmin\n";
 fn rig() -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let clock = Arc::new(AtomicI64::new(1_000_000));
-    let c = clock.clone();
-    let ctx = Arc::new(
-        AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40)
-            .with_directory_clock(move || c.load(Ordering::SeqCst)),
-    );
+    let ctx = Arc::new(AppCtx::new(
+        dir.path().to_path_buf(),
+        Arc::new(NoConfig),
+        None,
+        40,
+    ));
     let roster = dir.path().join("accounts.tsv");
     std::fs::write(&roster, ROSTER).unwrap();
     let identity = napkin_web::tenant::Identity {
@@ -131,6 +132,20 @@ async fn invite(r: &Rig, admin: &Person, username: &str, name: &str, roles: &[&s
         Some(json!({ "username": username, "name": name, "email": format!("{}@mail.example.test", username.split('@').next().unwrap()), "roles": roles })),
     )
     .await;
+    if st == StatusCode::CONFLICT {
+        // on the roster already, so in the People store (features/align-needs-lock-people.clan): their roles
+        // are set instead
+        let (st, body, _) = call(
+            r,
+            "PUT",
+            &format!("/api/t/{}/agency/people/{username}", admin.tenant),
+            Some(&admin.cookie),
+            Some(json!({ "name": name, "roles": roles })),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{body}");
+        return;
+    }
     assert_eq!(st, StatusCode::CREATED, "{body}");
 }
 
@@ -564,4 +579,55 @@ async fn an_agency_with_no_workspace_is_not_given_a_log_by_a_made_up_sign_in() {
         .path()
         .join(TenantId::of_agency("nowhere").as_str())
         .exists());
+}
+
+/// features/align-needs-lock-people.clan, stage 3: a role change in the People store is one entry on the
+/// agency's chain, the chain verifies after it, and fails once that entry is edited by hand.
+#[tokio::test]
+async fn the_chain_verifies_after_a_role_change_and_fails_after_a_hand_edit() {
+    let r = rig();
+    let cara = sign_in(&r, "cara@cr").await;
+    let (st, v, _) = call(
+        &r,
+        "PUT",
+        "/api/admin/people/aoife@cr/roles",
+        Some(&cara.cookie),
+        Some(json!({ "roles": ["traffic"] })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    let verify = || async {
+        call(
+            &r,
+            "GET",
+            &format!("/api/t/{}/audit/verify", cara.tenant),
+            Some(&cara.cookie),
+            None,
+        )
+        .await
+    };
+    let (st, v, _) = verify().await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    let file = r
+        .dir
+        .path()
+        .join(TenantId::of_agency("cr").as_str())
+        .join("audit.jsonl");
+    let original = std::fs::read_to_string(&file).unwrap();
+    let entries: Vec<Value> = original
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .filter(|l: &Value| l["kind"] == "permission" && l["who"] == "cara@cr")
+        .collect();
+    assert_eq!(entries.len(), 1, "{original}");
+    assert!(entries[0]["what"].as_str().unwrap().contains("traffic"));
+    assert!(entries[0]["what"].as_str().unwrap().contains("aoife@cr"));
+    // someone gives aoife admin by hand in the log: the chain no longer holds
+    std::fs::write(&file, original.replace("traffic", "admin")).unwrap();
+    let (st, v, _) = verify().await;
+    assert_eq!(st, StatusCode::CONFLICT, "{v}");
+    assert_eq!(
+        v["problem"],
+        json!("a line was changed after it was written")
+    );
 }

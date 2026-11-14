@@ -63,10 +63,14 @@ async fn dispatch(
     let Some(grant) = ctx.tokens.resolve(&token) else {
         return stale_token();
     };
+    // a token outlives its person's removal by up to its lifetime: the People store is asked each time
+    if !crate::live::listed(&ctx, &grant.person) {
+        return stale_token();
+    }
 
     let path = format!("/{}", rest.trim_start_matches('/'));
 
-    // A client's link is made through the API, where the agency's directory is checked: an app frame
+    // A client's link is made through the API, where the People store is checked: an app frame
     // (or anyone holding its token) cannot make one around that check.
     if matches!(
         path.as_str(),
@@ -208,6 +212,10 @@ async fn document(
     let Some(grant) = ctx.tokens.resolve(&token) else {
         return stale_token();
     };
+    // a token outlives its person's removal by up to its lifetime: the People store is asked each time
+    if !crate::live::listed(&ctx, &grant.person) {
+        return stale_token();
+    }
     crate::timing::note_who(grant.tenant.as_str(), &grant.person);
     let ws = ctx.workspace(&grant.tenant);
     let session = match crate::timing::phase("session", || ws.session(&grant.doc)) {

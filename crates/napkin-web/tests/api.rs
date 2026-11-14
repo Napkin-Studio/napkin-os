@@ -3113,7 +3113,7 @@ async fn the_session_carries_roles_and_a_role_that_may_not_open_a_route_gets_403
         get(&s, &scope(&t), Some(&cd)).await.status,
         StatusCode::FORBIDDEN
     );
-    for who in ["niamh@wk", "cian@wk", "ann@wk", "both@wk", "legacy@wk"] {
+    for who in ["niamh@wk", "cian@wk", "ann@wk", "both@wk"] {
         let (c, t) = signed_in_as(&s, who).await;
         assert_eq!(
             get(&s, &scope(&t), Some(&c)).await.status,
@@ -3121,6 +3121,12 @@ async fn the_session_carries_roles_and_a_role_that_may_not_open_a_route_gets_403
             "{who}"
         );
     }
+    // a person with no role holds no role: refused (features/align-needs-lock-people.clan)
+    let (l, t) = signed_in_as(&s, "legacy@wk").await;
+    assert_eq!(
+        get(&s, &scope(&t), Some(&l)).await.status,
+        StatusCode::FORBIDDEN
+    );
 }
 
 #[tokio::test]
@@ -3165,12 +3171,11 @@ async fn the_doors_are_served_from_the_roles_in_the_session_and_the_switcher_is_
     assert_eq!(as_cd["view_as"], "creative-director");
     assert_eq!(as_cd["tools"], serde_json::json!(["brief", "idea", "deck"]));
 
-    // no role: not restricted, so the shell keeps the desk as it was
+    // no role: restricted, with no page and no tool (features/align-needs-lock-people.clan); the desk stays
     let (l, t) = signed_in_as(&s, "legacy@wk").await;
-    assert_eq!(
-        get(&s, &format!("/api/t/{t}/doors"), Some(&l)).await.json()["restricted"],
-        false
-    );
+    let none = get(&s, &format!("/api/t/{t}/doors"), Some(&l)).await.json();
+    assert_eq!(none["restricted"], true);
+    assert_eq!(none["tools"], serde_json::json!([]));
 }
 
 // ── jobs and the job index (features/job-index-dashboard.clan) ──────────────

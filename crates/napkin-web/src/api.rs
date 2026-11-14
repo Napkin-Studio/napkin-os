@@ -149,15 +149,8 @@ struct OpenView {
     sandbox_origin: Option<String>,
 }
 
-fn view(
-    ctx: &AppCtx,
-    tenant: &TenantId,
-    person: &str,
-    roles: &[String],
-    doc: &DocId,
-    open: OpenResult,
-) -> OpenView {
-    let token = ctx.tokens.mint(tenant, person, roles, doc);
+fn view(ctx: &AppCtx, tenant: &TenantId, person: &str, doc: &DocId, open: OpenResult) -> OpenView {
+    let token = ctx.tokens.mint(tenant, person, doc);
     OpenView {
         open,
         frame: crate::tokens::frame_id(&token),
@@ -173,13 +166,12 @@ fn open_view(
     ctx: &AppCtx,
     tenant: &TenantId,
     person: &str,
-    roles: &[String],
     ws: &Workspace,
     doc: DocId,
 ) -> ApiResult<OpenView> {
     let (_session, open) = crate::timing::phase("session", || ws.open(&doc))?;
     Ok(crate::timing::phase("token", || {
-        view(ctx, tenant, person, roles, &doc, open)
+        view(ctx, tenant, person, &doc, open)
     }))
 }
 
@@ -242,7 +234,7 @@ async fn doors(
     Query(q): Query<DoorsQuery>,
 ) -> Json<crate::roles::HomeView> {
     let user = user.map(|Extension(a)| a);
-    let roles = user.as_ref().map(|a| a.roles.clone()).unwrap_or_default();
+    let roles = crate::roles::of(user.as_ref());
     let agency = user.as_ref().map(|a| a.agency.as_str());
     let table = crate::roles::Table::for_agency(ctx.roles_dir.as_deref(), agency);
     Json(table.view(&roles, q.r#as.as_deref()))
@@ -284,9 +276,14 @@ fn signed_in(identity: &crate::tenant::Identity, account: crate::auth::Account) 
     let crate::tenant::Mode::Accounts { sessions, .. } = &identity.mode else {
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
+    // the cookie names the person only: their roles are the People store's, read on each request
+    let named = crate::auth::Account {
+        roles: Vec::new(),
+        ..account.clone()
+    };
     let cookie = identity.cookie(
         crate::auth::SESSION_COOKIE,
-        &sessions.issue(&account),
+        &sessions.issue(&named),
         crate::auth::SESSION_SECS,
     );
     let mut r = Json(serde_json::json!({ "ok": true, "user": account })).into_response();
@@ -326,7 +323,7 @@ async fn sign_in(
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
     let name = b.sign_in_name();
-    let out = crate::agency::sign_in(&ctx, provider, &name, &b.password).await;
+    let out = crate::live::decide(&ctx, provider.sign_in(&name, &b.password).await);
     // Every attempt, with where it came from: under the roster nothing else
     // proves who signed in, so this log is how a misuse would be traced.
     let outcome = match &out {
@@ -362,7 +359,7 @@ async fn new_password(
     let out = provider
         .new_password(&b.username, &b.session, &b.password)
         .await;
-    answer(&identity, crate::agency::decide(&ctx, out))
+    answer(&identity, crate::live::decide(&ctx, out))
 }
 
 async fn sign_out(Extension(identity): Extension<Arc<crate::tenant::Identity>>) -> Response {
@@ -419,9 +416,7 @@ pub(crate) fn job_index(ws: &Workspace) -> ApiResult<napkin_host::jobindex::JobI
 
 /// The roles the signed-in person holds; none for an anonymous visitor, who is unrestricted.
 fn roles_of(user: &Option<Extension<crate::auth::Account>>) -> Vec<String> {
-    user.as_ref()
-        .map(|Extension(a)| a.roles.clone())
-        .unwrap_or_default()
+    crate::roles::of(user.as_ref().map(|Extension(a)| a))
 }
 
 /// Every job, each as this person's roles may see it (`jobview.rs`): the budget in hours goes to the
@@ -677,7 +672,8 @@ async fn install_from_document(
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Json<InstalledApp>> {
     let ws = ctx.workspace(&tenant);
-    let bytes = ws.store.read(&DocId::new(doc))?;
+    // the agency registry is read by nobody (state::Workspace refuses to open it)
+    let bytes = ws.session(&DocId::new(doc))?.raw_bytes()?;
     Ok(Json(library::install_app(&*ws.store, bytes)?))
 }
 
@@ -701,7 +697,6 @@ async fn new_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     Json(body): Json<NewDocument>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
@@ -730,7 +725,7 @@ async fn new_document(
             tracing::warn!(job = %j.number, %e, "could not fill the brief's signers from the route");
         }
     }
-    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, doc)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
 /// Which installed apps will take this document as a spin-off source.
@@ -766,7 +761,6 @@ async fn spinoff_document(
     Acting(acting): Acting,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     Path((_t, doc)): Path<(String, String)>,
     Json(body): Json<Spinoff>,
 ) -> ApiResult<Json<OpenView>> {
@@ -779,7 +773,7 @@ async fn spinoff_document(
         body.title,
         body.map,
     )?;
-    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, out)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &ws, out)?))
 }
 
 /// Accept an uploaded `.clan` as a document of this tenant and open it.
@@ -790,7 +784,6 @@ async fn upload_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     body: Bytes,
 ) -> ApiResult<Json<OpenView>> {
     if body.is_empty() {
@@ -806,18 +799,17 @@ async fn upload_document(
     // A fresh uuid: this is a new document, never a replacement.
     ws.store
         .apply(&Change::create(doc.clone(), body.to_vec()))?;
-    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, doc)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
 async fn home(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
     let doc = library::ensure_home(&*ws.store)?;
-    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, doc)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
 // ── One document ─────────────────────────────────────────────────────────────
@@ -838,7 +830,6 @@ async fn open_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
-    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
@@ -846,7 +837,6 @@ async fn open_document(
         &ctx,
         &tenant,
         &person,
-        &roles,
         &ws,
         DocId::new(doc),
     )?))
@@ -1402,15 +1392,25 @@ pub fn spend(ctx: &AppCtx, tenant: &TenantId) -> ApiResult<()> {
 async fn events(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
+    user: Option<Extension<crate::auth::Account>>,
 ) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
     let rx = ctx.events.subscribe(&tenant);
-    let stream = tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|msg| {
-        // A lagging receiver has missed events; the next one still arrives.
-        let msg = msg.ok()?;
-        Some(Ok(Event::default()
-            .event(msg.name)
-            .data(msg.data.to_string())))
-    });
+    // The stream outlives the request that opened it: a person taken off the People store's list is asked
+    // about again at each event, and their stream ends there (features/align-needs-lock-people.clan).
+    let person = user.map(|Extension(a)| a.username);
+    let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
+        .take_while(move |_| {
+            person
+                .as_deref()
+                .map_or(true, |p| crate::live::listed(&ctx, p))
+        })
+        .filter_map(|msg| {
+            // A lagging receiver has missed events; the next one still arrives.
+            let msg = msg.ok()?;
+            Some(Ok(Event::default()
+                .event(msg.name)
+                .data(msg.data.to_string())))
+        });
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
 
