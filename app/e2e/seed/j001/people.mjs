@@ -14,7 +14,7 @@ export const PEOPLE = {
   planningAndCreative: { username: 'tadhg@wk', name: 'Tadhg Test', roles: ['planning', 'creative-director'] },
   // an admin: every department, and the role switcher
   admin: { username: 'ann@napkin', name: 'Ann Test', roles: ['admin'] },
-  // no role at all: every door, as before roles existed
+  // no role at all: the desk and what is open to everyone signed in, and no role's pages or tools
   noRole: { username: 'sam@wk', name: 'Sam Test', roles: [] },
   // Phase 2 (features/j001-phase2-suite.clan): the five roles whose homes come with remaining-homes, appended
   // after the Phase 1 people so no Phase 1 test sees a change. All in the agency wk.

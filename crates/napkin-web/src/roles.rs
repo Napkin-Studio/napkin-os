@@ -20,8 +20,11 @@
 //!
 //! The table is data. [`Table::default`] is the v2 section 4 table; an agency
 //! may serve its own as `roles/<agency>.json` in the config directory.
-//! A person with no roles at all is unrestricted, as every person was before
-//! roles existed, until the roster is filled in.
+//! A signed-in person with no roles holds no role: the routes open to everyone
+//! signed in, no page door, no tool, no job rights (features/align-needs-lock-people.clan,
+//! after its security review; until then no roles meant every door). Only an
+//! anonymous visitor (a server with no accounts: demos and tests) is unrestricted,
+//! and is named so by [`ANONYMOUS`], never by an empty list.
 
 use std::path::Path;
 
@@ -77,6 +80,24 @@ pub fn kind_of(door: &str) -> Kind {
 /// every home through the role switcher; nobody else gets the switcher.
 pub const ADMIN: &str = "admin";
 pub const DEMO: &str = "demo";
+
+/// The roles an anonymous visitor is checked with (a server with no accounts): unrestricted, as every visitor
+/// there always was, but no role switcher. Not a role anyone holds: `parse_roles` and the People store drop
+/// it, and no role table knows it.
+pub const ANONYMOUS: &str = "(anonymous)";
+
+/// The roles a request is checked with: the signed-in account's (the People store's), or [`ANONYMOUS`].
+pub fn of(account: Option<&Account>) -> Vec<String> {
+    match account {
+        Some(a) => a.roles.clone(),
+        None => vec![ANONYMOUS.to_string()],
+    }
+}
+
+/// Whether `roles` open every route but the admin's own: an admin, a demo, or an anonymous visitor.
+pub fn unrestricted(roles: &[String]) -> bool {
+    is_switcher(roles) || roles.iter().any(|r| r == ANONYMOUS)
+}
 
 /// A door, or a line under More tools: its id (the shell keys the tool and its
 /// Empty state on it) and the words on it.
@@ -401,9 +422,9 @@ impl Table {
     }
 
     /// The tools `roles` are offered, in the shell's order: the tool doors of their homes and the tool lines
-    /// under More. A person with no role, an admin and a demo are offered every tool.
+    /// under More. An admin, a demo and an anonymous visitor are offered every tool; a person with no role none.
     pub fn tools_for(&self, roles: &[String]) -> Vec<String> {
-        if roles.is_empty() || is_switcher(roles) {
+        if unrestricted(roles) {
             return ALL_TOOLS.iter().map(|t| t.to_string()).collect();
         }
         let mut have: Vec<&str> = Vec::new();
@@ -470,8 +491,8 @@ impl Table {
             })
             .join(" and ");
         HomeView {
-            roles: roles.to_vec(),
-            restricted: !roles.is_empty(),
+            roles: roles.iter().filter(|r| *r != ANONYMOUS).cloned().collect(),
+            restricted: !roles.iter().any(|r| r == ANONYMOUS),
             title,
             view_as,
             pages,
@@ -599,24 +620,23 @@ pub fn group_of(route: &str) -> Group {
 
 /// May a person with `roles` open `route`, for `client` (unused in Phase 1:
 /// the signature is where per-client rules would go, so they do not need a new check)?
-/// A person with no roles is unrestricted; an admin or a demo opens everything.
+/// An admin, a demo or an anonymous visitor opens everything but the admin's own groups; a
+/// person with no roles opens only the routes open to everyone signed in.
 pub fn allowed(roles: &[String], route: &str, _client: Option<&str>) -> bool {
     let group = group_of(route);
     if matches!(group, Group::Admin | Group::Control) {
         return roles.iter().any(|r| group.roles().contains(&r.as_str()));
     }
-    if roles.is_empty() || is_switcher(roles) {
+    if unrestricted(roles) {
         return true;
     }
     group == Group::Open || roles.iter().any(|r| group.roles().contains(&r.as_str()))
 }
 
-/// Is a person with `roles` in `group`? Used to decide which fields of a job they are sent. A person with
-/// no roles is unrestricted; an admin or a demo is in every group.
+/// Is a person with `roles` in `group`? Used to decide which fields of a job they are sent. An admin, a demo
+/// and an anonymous visitor are in every group; a person with no roles in none.
 pub fn in_group(roles: &[String], group: Group) -> bool {
-    roles.is_empty()
-        || is_switcher(roles)
-        || roles.iter().any(|r| group.roles().contains(&r.as_str()))
+    unrestricted(roles) || roles.iter().any(|r| group.roles().contains(&r.as_str()))
 }
 
 /// The roles that may open a job and change its title, owner and deadline (features/job-page.clan):
@@ -626,9 +646,7 @@ pub fn in_group(roles: &[String], group: Group) -> bool {
 pub const JOB_MANAGERS: &[&str] = &["planning", "account-service", "management", "producer"];
 
 pub fn may_manage_jobs(roles: &[String]) -> bool {
-    roles.is_empty()
-        || is_switcher(roles)
-        || roles.iter().any(|r| JOB_MANAGERS.contains(&r.as_str()))
+    unrestricted(roles) || roles.iter().any(|r| JOB_MANAGERS.contains(&r.as_str()))
 }
 
 /// The budget in hours is money (the owner's answer is open; the design's default): only the Money roles
@@ -641,11 +659,7 @@ pub fn may_set_budget(roles: &[String]) -> bool {
 /// account by `crate::live::live_roles` just before) against the route. 403
 /// when the roles may not open it; everyone else passes through.
 pub async fn guard(request: Request, next: Next) -> Response {
-    let roles = request
-        .extensions()
-        .get::<Account>()
-        .map(|a| a.roles.clone())
-        .unwrap_or_default();
+    let roles = of(request.extensions().get::<Account>());
     if !allowed(&roles, request.uri().path(), None) {
         let body = serde_json::json!({
             "ok": false,
@@ -668,7 +682,7 @@ pub fn parse_roles(raw: &str) -> Vec<String> {
     for r in raw
         .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
         .map(|r| r.trim().to_ascii_lowercase())
-        .filter(|r| !r.is_empty())
+        .filter(|r| !r.is_empty() && r != ANONYMOUS)
     {
         if !out.contains(&r) {
             out.push(r);
@@ -875,12 +889,52 @@ mod tests {
     }
 
     #[test]
-    fn a_person_with_no_role_is_unrestricted() {
+    fn a_person_with_no_role_holds_no_role_and_only_an_anonymous_visitor_is_unrestricted() {
         let t = Table::default();
+        // signed in with no role: the routes open to everyone signed in, no door, no tool, no job rights
         let v = t.view(&[], None);
+        assert!(v.restricted);
+        assert!(v.pages.is_empty() && v.tools.is_empty());
+        assert_eq!(
+            v.jobs,
+            JobRights {
+                manage: false,
+                budget: false
+            }
+        );
+        assert!(allowed(&[], "/t/x/jobs/J001", None));
+        for route in [
+            "/t/x/jobs/J001/scope",
+            "/t/x/proprietary/data",
+            "/t/x/dashboard",
+            "/t/x/client-brains",
+        ] {
+            assert!(!allowed(&[], route, None), "{route}");
+        }
+        for g in [
+            Group::Money,
+            Group::Brains,
+            Group::Approvals,
+            Group::Management,
+        ] {
+            assert!(!in_group(&[], g), "{g:?}");
+        }
+        assert!(!may_manage_jobs(&[]) && !may_set_budget(&[]));
+        // an anonymous visitor (no accounts on the server) is as every visitor was
+        let anon = r(&[ANONYMOUS]);
+        let v = t.view(&anon, None);
         assert!(!v.restricted);
-        assert!(allowed(&[], "/t/x/jobs/J001/scope", None));
-        assert!(allowed(&[], "/t/x/proprietary/data", None));
+        assert!(v.roles.is_empty() && v.switcher.is_none());
+        assert_eq!(v.tools.len(), ALL_TOOLS.len());
+        assert!(allowed(&anon, "/t/x/jobs/J001/scope", None));
+        assert!(allowed(&anon, "/t/x/proprietary/data", None));
+        assert!(!allowed(&anon, "/t/x/audit", None));
+        assert!(may_set_budget(&anon));
+        // nobody is given the marker: it is not a role a roster or the store keeps
+        assert!(parse_roles("planning,(anonymous)")
+            .iter()
+            .all(|x| x != ANONYMOUS));
+        assert!(!t.knows(ANONYMOUS));
         // a roles column with only a typo is a role nobody knows: no privilege, not every privilege
         assert!(!allowed(&r(&["plannign"]), "/t/x/jobs/J001/scope", None));
         assert!(!t.knows("plannign"));
@@ -963,7 +1017,8 @@ mod tests {
         assert!(allowed(&r(&["management"]), "/t/x/dashboard", None));
         assert!(allowed(&r(&["admin"]), "/t/x/dashboard", None));
         assert!(allowed(&r(&["demo"]), "/t/x/dashboard", None));
-        assert!(allowed(&[], "/t/x/dashboard", None));
+        assert!(!allowed(&[], "/t/x/dashboard", None));
+        assert!(allowed(&r(&[ANONYMOUS]), "/t/x/dashboard", None));
     }
 
     #[test]

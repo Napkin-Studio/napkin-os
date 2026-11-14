@@ -102,7 +102,7 @@ async fn search(
 ) -> ApiResult<Json<Answer>> {
     let started = Instant::now();
     let me = account.map(|Extension(a)| a);
-    let my_roles: Vec<String> = me.as_ref().map(|a| a.roles.clone()).unwrap_or_default();
+    let my_roles: Vec<String> = crate::roles::of(me.as_ref());
     let query = searchindex::parse(&p.q);
     if query.is_empty() {
         return Ok(Json(Answer {

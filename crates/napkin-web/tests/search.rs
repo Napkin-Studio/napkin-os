@@ -36,7 +36,9 @@ fn set(v: &[&str]) -> BTreeSet<String> {
 fn expected(role: &str, with_people: bool) -> BTreeSet<String> {
     let money = ["producer", "account-service", "management", "traffic"];
     let brains = ["planning", "account-service", "agency-brain"];
-    let everything = role == "admin" || role.is_empty();
+    // a person with no role holds none: only what is open to everyone signed in
+    // (features/align-needs-lock-people.clan)
+    let everything = role == "admin";
     let mut out = set(&[
         "J001",
         "doc-alpha-brief",

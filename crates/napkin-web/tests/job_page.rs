@@ -219,12 +219,14 @@ async fn who_may_open_and_change_a_job_and_who_may_set_its_budget() {
     };
 
     // opening: the creative roles, the Agency Brain and traffic are refused; the rest open
+    // and so is a person with no role, who holds none (features/align-needs-lock-people.clan)
     for role in [
         "creative-director",
         "art-director",
         "copywriter",
         "agency-brain",
         "traffic",
+        "",
     ] {
         let (s, v) = jobs(&r, &who[role], "POST", "", Some(new("J090", json!({})))).await;
         assert_eq!(s, StatusCode::FORBIDDEN, "{role} {v}");
@@ -235,7 +237,6 @@ async fn who_may_open_and_change_a_job_and_who_may_set_its_budget() {
         "management",
         "producer",
         "admin",
-        "",
     ]
     .iter()
     .enumerate()
@@ -386,7 +387,7 @@ async fn each_role_is_sent_exactly_the_fields_it_may_see_and_another_agency_sees
         ("account-service", true, true),
         ("management", true, true),
         ("admin", true, true),
-        ("", true, true),
+        ("", false, false),
     ] {
         let p = &who[role];
         let mut top: Vec<&str> = EVERYONE.to_vec();
