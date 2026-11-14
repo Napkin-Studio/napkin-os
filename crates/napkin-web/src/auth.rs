@@ -675,6 +675,7 @@ mod tests {
                     name: "Laurance".into(),
                     agency: "napkin".into(),
                     username: Some("visionary@napkin".into()),
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -743,5 +744,20 @@ mod tests {
         assert!(weak("short1").is_some());
         assert!(weak("onlyletterslong").is_some());
         assert!(weak("letters-and-1-number").is_none());
+    }
+
+    #[test]
+    fn the_identity_providers_roles_are_never_read() {
+        // an ID token whose claims carry custom:roles: the person is named, their roles are the People store's
+        let claims = serde_json::json!({ "name": "Aoife", "custom:roles": "admin,planning" });
+        let token = format!("h.{}.s", B64.encode(claims.to_string()));
+        let v = serde_json::json!({ "AuthenticationResult": { "IdToken": token } });
+        match Cognito::done("aoife@wk", &v) {
+            SignIn::Done(a) => {
+                assert_eq!(a.name.as_deref(), Some("Aoife"));
+                assert!(a.roles.is_empty(), "{:?}", a.roles);
+            }
+            other => panic!("{other:?}"),
+        }
     }
 }

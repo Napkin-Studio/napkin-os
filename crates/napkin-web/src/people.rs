@@ -1414,6 +1414,7 @@ mod tests {
                     name: "Shaunagh Kelly".into(),
                     agency: "Napkin".into(),
                     username: None,
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -1431,6 +1432,7 @@ mod tests {
                     name: "Jo Bloggs".into(),
                     agency: "bg".into(),
                     username: None,
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -1443,6 +1445,7 @@ mod tests {
                     name: "Sai Eeshwar".into(),
                     agency: "napkin".into(),
                     username: Some("sai.e@napkin".into()),
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -1454,6 +1457,7 @@ mod tests {
                     name: "X".into(),
                     agency: "napkin".into(),
                     username: Some("x@pluto".into())
+                    ..Default::default()
                 }
             ),
             Err(Refusal::Bad(_))
@@ -1465,6 +1469,7 @@ mod tests {
                     name: "Shaunagh".into(),
                     agency: "napkin".into(),
                     username: None
+                    ..Default::default()
                 }
             ),
             Err(Refusal::Conflict(_))
@@ -1476,6 +1481,7 @@ mod tests {
                     name: "Aoife".into(),
                     agency: "Rothco".into(),
                     username: None
+                    ..Default::default()
                 }
             ),
             Err(Refusal::Bad(_))
@@ -1506,6 +1512,7 @@ mod tests {
                 name: "Shaunagh Kelly".into(),
                 agency: "napkin".into(),
                 username: None,
+                ..Default::default()
             },
         )
         .unwrap();
@@ -1534,6 +1541,7 @@ mod tests {
             name: name.into(),
             agency: agency.into(),
             username: None,
+            ..Default::default()
         }
     }
 
@@ -1830,6 +1838,7 @@ mod tests {
                     name: "Ciara".into(),
                     agency: "napkin".into(),
                     username: None,
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -1847,5 +1856,119 @@ mod tests {
         p.cache.lock().unwrap().checked = Instant::now() - RECHECK;
         p.cache.lock().unwrap().stamp = None;
         assert!(p.book().agency("rothco").is_some_and(|a| a.published));
+    }
+
+    // ── roles, the last admin and the change line (features/align-needs-lock-people.clan, stage 3) ──
+
+    fn member(name: &str, agency: &str, roles: &[&str]) -> NewPerson {
+        NewPerson {
+            name: name.into(),
+            agency: agency.into(),
+            roles: roles.iter().map(|r| r.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn roles(v: &[&str]) -> Vec<String> {
+        v.iter().map(|r| r.to_string()).collect()
+    }
+
+    #[test]
+    fn roles_round_trip_through_the_store_and_the_roster_column_seeds_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let seed = dir.path().join("accounts.tsv");
+        std::fs::write(
+            &seed,
+            "engineer@napkin\tShrey\tadmin\naoife@wk\tAoife\tplanning,Creative-Director\nsam@wk\tSam\n",
+        )
+        .unwrap();
+        let p = People::open(dir.path().join("_people"), &seed).unwrap();
+        assert_eq!(
+            p.active("aoife@wk").unwrap().roles,
+            ["planning", "creative-director"]
+        );
+        assert!(p.active("sam@wk").unwrap().roles.is_empty());
+        let by = "engineer@napkin";
+        let d = p.add(by, &member("Dara Kelly", "wk", &["copywriter"])).unwrap();
+        assert_eq!(d.roles, ["copywriter"]);
+        p.set_roles(by, "dara@wk", &roles(&["traffic", "Traffic", "producer"]))
+            .unwrap();
+        // another handle on the same folder reads them back from the file
+        let again = People::open(dir.path().join("_people"), &seed).unwrap();
+        assert_eq!(again.active("dara@wk").unwrap().roles, ["traffic", "producer"]);
+        assert_eq!(
+            again.active("aoife@wk").unwrap().roles,
+            ["planning", "creative-director"]
+        );
+        // someone not on the list has no roles to change
+        assert!(matches!(
+            p.set_roles(by, "nobody@wk", &roles(&["traffic"])),
+            Err(Refusal::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn the_last_admin_of_an_agency_cannot_be_removed_or_demoted() {
+        let (_dir, p) = store();
+        let by = "engineer@napkin";
+        p.add(by, &member("Ad One", "wk", &["admin"])).unwrap();
+        p.add(by, &member("Pat Two", "wk", &["planning"])).unwrap();
+        p.add(by, &member("Bo Three", "pluto", &["admin"])).unwrap();
+        assert!(matches!(p.remove(by, "ad@wk"), Err(Refusal::Conflict(_))));
+        assert!(matches!(
+            p.set_roles(by, "ad@wk", &roles(&["planning"])),
+            Err(Refusal::Conflict(_))
+        ));
+        assert!(p.active("ad@wk").unwrap().roles.contains(&"admin".to_string()));
+        // another agency's admin is not this one's
+        p.set_roles(by, "pat@wk", &roles(&["planning", "admin"])).unwrap();
+        p.remove(by, "ad@wk").unwrap();
+        assert!(matches!(
+            p.set_roles(by, "pat@wk", &roles(&["planning"])),
+            Err(Refusal::Conflict(_))
+        ));
+        assert!(matches!(p.remove(by, "pat@wk"), Err(Refusal::Conflict(_))));
+        assert!(matches!(p.remove(by, "bo@pluto"), Err(Refusal::Conflict(_))));
+    }
+
+    #[test]
+    fn every_change_is_one_line_with_when_who_what_before_and_after() {
+        let (dir, p) = store();
+        let by = "engineer@napkin";
+        p.add(by, &member("Pat Two", "wk", &["planning"])).unwrap();
+        p.set_roles(by, "pat@wk", &roles(&["traffic"])).unwrap();
+        p.rename(by, "pat@wk", "Pat 2").unwrap();
+        p.remove(by, "pat@wk").unwrap();
+        let log = std::fs::read_to_string(dir.path().join("_people/changes.jsonl")).unwrap();
+        let lines: Vec<serde_json::Value> = log
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        let tail = &lines[lines.len() - 4..];
+        for l in tail {
+            for k in ["at", "by", "what", "person", "agency", "before", "after"] {
+                assert!(l.get(k).is_some(), "{k} missing: {l}");
+            }
+            assert_eq!(l["by"], by);
+            assert_eq!(l["person"], "pat@wk");
+            assert_eq!(l["agency"], "wk");
+        }
+        assert_eq!(tail[0]["what"], "added");
+        assert!(tail[0]["before"].is_null());
+        assert_eq!(tail[0]["after"]["roles"], serde_json::json!(["planning"]));
+        assert_eq!(tail[1]["what"], "roles changed");
+        assert_eq!(tail[1]["before"]["roles"], serde_json::json!(["planning"]));
+        assert_eq!(tail[1]["after"]["roles"], serde_json::json!(["traffic"]));
+        assert_eq!(tail[2]["what"], "renamed");
+        assert_eq!(tail[2]["before"]["name"], "Pat Two");
+        assert_eq!(tail[2]["after"]["name"], "Pat 2");
+        assert_eq!(tail[3]["what"], "removed");
+        assert!(tail[3]["before"]["removed_at"].is_null());
+        assert!(tail[3]["after"]["removed_at"].is_string());
+        // a refused change writes nothing
+        let n = lines.len();
+        let _ = p.set_roles(by, "nobody@wk", &roles(&["traffic"]));
+        let log = std::fs::read_to_string(dir.path().join("_people/changes.jsonl")).unwrap();
+        assert_eq!(log.lines().count(), n);
     }
 }

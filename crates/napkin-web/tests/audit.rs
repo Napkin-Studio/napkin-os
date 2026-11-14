@@ -565,3 +565,54 @@ async fn an_agency_with_no_workspace_is_not_given_a_log_by_a_made_up_sign_in() {
         .join(TenantId::of_agency("nowhere").as_str())
         .exists());
 }
+
+/// features/align-needs-lock-people.clan, stage 3: a role change in the People store is one entry on the
+/// agency's chain, the chain verifies after it, and fails once that entry is edited by hand.
+#[tokio::test]
+async fn the_chain_verifies_after_a_role_change_and_fails_after_a_hand_edit() {
+    let r = rig();
+    let cara = sign_in(&r, "cara@cr").await;
+    let (st, v, _) = call(
+        &r,
+        "PUT",
+        "/api/admin/people/aoife@cr/roles",
+        Some(&cara.cookie),
+        Some(json!({ "roles": ["traffic"] })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    let verify = || async {
+        call(
+            &r,
+            "GET",
+            &format!("/api/t/{}/audit/verify", cara.tenant),
+            Some(&cara.cookie),
+            None,
+        )
+        .await
+    };
+    let (st, v, _) = verify().await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    let file = r
+        .dir
+        .path()
+        .join(TenantId::of_agency("cr").as_str())
+        .join("audit.jsonl");
+    let original = std::fs::read_to_string(&file).unwrap();
+    let entries: Vec<Value> = original
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .filter(|l: &Value| l["kind"] == "permission" && l["who"] == "cara@cr")
+        .collect();
+    assert_eq!(entries.len(), 1, "{original}");
+    assert!(entries[0]["what"].as_str().unwrap().contains("traffic"));
+    assert!(entries[0]["what"].as_str().unwrap().contains("aoife@cr"));
+    // someone gives aoife admin by hand in the log: the chain no longer holds
+    std::fs::write(&file, original.replace("traffic", "admin")).unwrap();
+    let (st, v, _) = verify().await;
+    assert_eq!(st, StatusCode::CONFLICT, "{v}");
+    assert_eq!(
+        v["problem"],
+        json!("a line was changed after it was written")
+    );
+}
