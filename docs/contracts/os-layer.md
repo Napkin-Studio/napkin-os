@@ -722,6 +722,32 @@ default, 2026-09-29; may be reversed):
    a brief that does not name its two signers, and one while the planner has not
    signed this content (§7.7). The host reads them from the brief's own data;
    the middleware adds none.
+   *Amended 2026-11-14 (features/align-needs-lock-people.clan, stage 1):* the
+   code `gate_item` is replaced by two families, both `blocks_lock: true`.
+   `gate:<item>` is one of the six items the brief does not meet
+   (`gate:proposition`, `gate:insight`, `gate:objective`, `gate:feel_or_do`,
+   `gate:famous`, `gate:baseline`); `gate:objective` and `gate:baseline` are
+   the two only the client can answer, so their text ends with the question
+   the client is owed (`Ask the client: ...`). `signoff:<role>` is a signature
+   still wanted: `signoff:planner` until the planner named on the brief has
+   signed this content (or while none is named), and `signoff:creative_director`
+   only while none is named, since the creative director's signature is the
+   lock itself. `can_lock` and `blockers` count them like every other item.
+
+#### 7.2.0 Who an item is for, when it is due, which job
+
+*Added 2026-11-14.* An attention item (§8, `/decisions`) gains three optional
+fields. An item with none of them is read exactly as before.
+
+| Field | Shape | Set when |
+|---|---|---|
+| `for` | `{person}` (a sign-in name) or `{role}` (a role id), never both | The document is filed under a job and the item waits on someone: the signer a `signoff:` or `gate:` item names (the role, `planning` or `creative-director`, while the brief names none), else the approver of the job's open route step that looks at this document |
+| `due` | an ISO date | That open route step's due date, on every item that blocks the lock |
+| `job` | the job number, as the manifest has it | The document is filed under a job |
+
+The route is read from the job index the server keeps; a host with no index
+(the browser build) sets `job` and the signers' `for`, and leaves `due` out.
+A document filed under no job has none of the three on any item.
 
 #### 7.2.1 Setting a carried item aside
 

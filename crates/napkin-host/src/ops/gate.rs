@@ -361,37 +361,105 @@ fn planner_sign(chain: &DecisionChain, doc_id: &str, planner: &str) -> Option<us
 
 // ── what the lock list says ─────────────────────────────────────────────────
 
-/// The gate's items on the lock list: one text per thing still missing. Empty
-/// when the gate is not enforced or the document is not a brief.
-pub fn blockers(clan: &clan_sdk::ClanFile, data: &Value, chain: &DecisionChain) -> Vec<String> {
+/// One thing the gate still wants, as the lock list carries it: an attention item that blocks.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Blocker {
+    /// `gate:<item id>` for one of the six items, `signoff:<role>` for a signature.
+    pub code: &'static str,
+    pub text: String,
+    /// Who settles it, when the brief says (the planner or signer named on it) or the role that names one.
+    pub who: Option<super::decisions::AttentionFor>,
+}
+
+/// The attention code of a gate item: `gate:<id>`.
+pub fn gate_code(id: &str) -> &'static str {
+    match id {
+        "proposition" => "gate:proposition",
+        "insight" => "gate:insight",
+        "objective" => "gate:objective",
+        "feel_or_do" => "gate:feel_or_do",
+        "famous" => "gate:famous",
+        _ => "gate:baseline",
+    }
+}
+
+/// The question the client is owed for a gate item only the client can settle.
+pub fn client_question(id: &str) -> Option<&'static str> {
+    match id {
+        "objective" => Some("What number should it reach, and by when?"),
+        "baseline" => Some("What is the figure today, so we can measure against it?"),
+        _ => None,
+    }
+}
+
+/// The role ids (roles.rs) a missing signer is asked of.
+const PLANNING_ROLE: &str = "planning";
+const CREATIVE_DIRECTOR_ROLE: &str = "creative-director";
+
+/// The gate's items on the lock list: one blocker per thing still missing. Empty when the gate is not
+/// enforced or the document is not a brief. A missing gate item is `gate:<id>` (the two only the client
+/// can answer carry the question the client is owed), a signature still wanted is `signoff:<role>`: the
+/// planner's until they have signed this content, either role's until the brief names it. The creative
+/// director's own signature is the lock, so it is an item only while nobody is named to give it.
+pub fn blockers(clan: &clan_sdk::ClanFile, data: &Value, chain: &DecisionChain) -> Vec<Blocker> {
+    use super::decisions::AttentionFor;
     if !enforced() || !applies_to(clan) {
         return Vec::new();
     }
-    let mut out: Vec<String> = items(data)
-        .into_iter()
-        .filter(|i| i.state == "missing")
-        .map(|i| {
-            format!(
-                "Brief gate, {}: {}",
-                i.label.to_lowercase(),
-                i.why.unwrap_or_default()
-            )
-        })
-        .collect();
     let list = signer_list(data);
     let planner = list
         .iter()
         .find(|(r, _)| r == PLANNER)
         .map(|(_, p)| p.clone());
     let cd = list.iter().any(|(r, _)| r == CREATIVE_DIRECTOR);
-    match (&planner, cd) {
-        (None, _) | (_, false) => out.push(
-            "Brief gate, who signs: name the planner and the creative director who sign this brief.".into(),
-        ),
-        (Some(p), true) => {
-            if planner_sign(chain, clan.document_id(), p).is_none() {
-                out.push(format!("Brief gate, signing: the planner, {p}, has not signed this version."));
+    let planner_for = || {
+        Some(match &planner {
+            Some(p) => AttentionFor::person(p.clone()),
+            None => AttentionFor::role(PLANNING_ROLE),
+        })
+    };
+    let mut out: Vec<Blocker> = items(data)
+        .into_iter()
+        .filter(|i| i.state == "missing")
+        .map(|i| {
+            let mut text = format!(
+                "Brief gate, {}: {}",
+                i.label.to_lowercase(),
+                i.why.unwrap_or_default()
+            );
+            if let Some(q) = client_question(i.id) {
+                text.push_str(&format!(" Ask the client: {q}"));
             }
+            Blocker {
+                code: gate_code(i.id),
+                text,
+                who: planner_for(),
+            }
+        })
+        .collect();
+    if planner.is_none() {
+        out.push(Blocker {
+            code: "signoff:planner",
+            text: "Brief gate, who signs: name the planner who signs this brief.".into(),
+            who: Some(AttentionFor::role(PLANNING_ROLE)),
+        });
+    }
+    if !cd {
+        out.push(Blocker {
+            code: "signoff:creative_director",
+            text: "Brief gate, who signs: name the creative director who signs this brief.".into(),
+            who: Some(AttentionFor::role(CREATIVE_DIRECTOR_ROLE)),
+        });
+    }
+    if let (Some(p), true) = (&planner, cd) {
+        if planner_sign(chain, clan.document_id(), p).is_none() {
+            out.push(Blocker {
+                code: "signoff:planner",
+                text: format!(
+                    "Brief gate, signing: the planner, {p}, has not signed this version."
+                ),
+                who: Some(AttentionFor::person(p.clone())),
+            });
         }
     }
     out

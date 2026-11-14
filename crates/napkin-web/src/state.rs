@@ -47,7 +47,7 @@ pub struct Workspace {
     pub library: LibraryCache,
     /// The job index, read-only and disposable (napkin-host `jobindex`): rebuilt
     /// from the documents whenever one has moved.
-    pub jobs: napkin_host::jobindex::IndexCache,
+    pub jobs: Arc<napkin_host::jobindex::IndexCache>,
     /// What the one bar finds, read-only and disposable (napkin-host `searchindex`), kept beside the job
     /// index and rebuilt from the same documents by the same stamps. One per tenant, so a search never
     /// crosses an agency.
@@ -66,7 +66,7 @@ impl Workspace {
             ctx,
             sessions: Mutex::new(SessionCache::default()),
             library: LibraryCache::new(),
-            jobs: napkin_host::jobindex::IndexCache::new(),
+            jobs: Arc::new(napkin_host::jobindex::IndexCache::new()),
             search: napkin_host::searchindex::SearchCache::new(),
             clock,
         }
@@ -104,7 +104,9 @@ impl Workspace {
         // Open outside the lock: reading and validating an archive is real work
         // and must not block every other document of this tenant.
         let session = Arc::new(
-            Session::with_ctx(self.store.clone(), self.ctx.clone()).with_runs(self.library.runs()),
+            Session::with_ctx(self.store.clone(), self.ctx.clone())
+                .with_runs(self.library.runs())
+                .with_jobs(self.jobs.clone(), self.clock.clone()),
         );
         let opened = crate::timing::open(&session, doc.clone())?;
 

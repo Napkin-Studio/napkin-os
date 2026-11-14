@@ -30,6 +30,7 @@ use crate::clients;
 use crate::document::Document;
 use crate::error::HostResult;
 use crate::jobs::{self, JobRecord, RouteSet, RouteStep};
+use crate::ops::decisions::{AttentionFor, DecisionsView};
 use crate::ops::judge::{self, PieceScore, ScoreTile};
 use crate::ops::{decisions, gate, review};
 use crate::store::{DocId, DocStore};
@@ -1132,6 +1133,35 @@ fn derive_route(
         });
     }
     (states, holder)
+}
+
+/// Say, on the lock-blocking items of a document's decision view, when they are due and, where the item
+/// names no one, who they wait on: the open step of its job's approval route that looks at this document
+/// (`path`). An agency step names its approver; a client step names no sign-in, so it sets only the date.
+/// A document the index has no route for is left as the document alone says.
+pub fn attend(view: &mut DecisionsView, index: &JobIndex, path: &str) {
+    let Some(job) = index
+        .jobs
+        .iter()
+        .find(|j| j.documents.iter().any(|d| d.path == path))
+    else {
+        return;
+    };
+    let Some(step) = job
+        .route
+        .iter()
+        .find(|s| s.state == "waiting" && s.document.as_deref() == Some(path))
+    else {
+        return;
+    };
+    let who = (step.party == jobs::AGENCY && !step.approver.is_empty())
+        .then(|| AttentionFor::person(step.approver.clone()));
+    for a in view.attention.iter_mut().filter(|a| a.blocks_lock) {
+        a.due = Some(step.due.clone());
+        if a.for_.is_none() {
+            a.for_ = who.clone();
+        }
+    }
 }
 
 /// An approval is asked for from 48 hours before it is due.

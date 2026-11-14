@@ -136,6 +136,16 @@ export async function undoNeedDone(id: string): Promise<boolean> {
   try { return (await fetch(`${await base()}/needs/${encodeURIComponent(id)}/done`, { method: 'DELETE', credentials: 'same-origin' })).ok } catch { return false }
 }
 
+/** Set one of a document's items aside (`POST /needs/{key}/aside?path=`), the person's own and kept by the server; false when it refuses. */
+export async function setNeedAside(path: string, key: string): Promise<boolean> {
+  try { return (await fetch(`${await base()}/needs/${encodeURIComponent(key)}/aside?path=${encodeURIComponent(path)}`, { method: 'POST', credentials: 'same-origin' })).ok } catch { return false }
+}
+
+/** Bring it back (`DELETE` on the same path). */
+export async function bringNeedBack(path: string, key: string): Promise<boolean> {
+  try { return (await fetch(`${await base()}/needs/${encodeURIComponent(key)}/aside?path=${encodeURIComponent(path)}`, { method: 'DELETE', credentials: 'same-origin' })).ok } catch { return false }
+}
+
 /** Every job as the index has it, with its route and who holds it (`GET /jobs`); null when the server does not answer. */
 export async function jobsView(): Promise<JobEntry[] | null> {
   try { return await json<JobEntry[]>('/jobs') } catch { return null }

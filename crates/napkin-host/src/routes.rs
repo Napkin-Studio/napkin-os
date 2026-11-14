@@ -758,9 +758,20 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
 
         // The decision view the shell's OS layer renders: every decision,
         // newest first, with what needs a person — derived here, not by the app.
-        "/decisions" => match session
-            .read(|d| crate::ops::decisions::decisions_for(d, Some(ctx.actor.as_str())))
-        {
+        "/decisions" => match session.read(|d| {
+            let mut v = crate::ops::decisions::decisions_for(d, Some(ctx.actor.as_str()))?;
+            // Who an item is for and when it is due come from the job's approval route, read through
+            // the index a server keeps (a session with none leaves the item as the document alone says).
+            if let (Some((cache, clock)), true) = (
+                session.jobs(),
+                v.attention.iter().any(|a| a.blocks_lock && a.job.is_some()),
+            ) {
+                if let Ok(index) = cache.get(&**session.store(), clock()) {
+                    crate::jobindex::attend(&mut v, &index, d.id().as_str());
+                }
+            }
+            Ok(v)
+        }) {
             Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
             Err(e) => e.into(),
         },

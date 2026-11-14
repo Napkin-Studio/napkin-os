@@ -163,7 +163,16 @@ pub struct Session {
     /// Where the jobs a middleware reply names are noted, so the library can say
     /// what is running. Absent for a session nobody lists (tests, one-offs).
     runs: Option<Arc<crate::runs::RunTracker>>,
+    /// The job index and its clock, when a server keeps one: what lets `/decisions` say who an item is for
+    /// and when it is due from the job's approval route. Absent for a session with no jobs behind it.
+    jobs: Option<JobsView>,
 }
+
+/// The job index a session reads, and the clock it counts days by.
+pub type JobsView = (
+    Arc<crate::jobindex::IndexCache>,
+    Arc<dyn Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync>,
+);
 
 /// Counts the legacy patches that reached the store, so tests can assert that
 /// one edit is one write (#9) and an unchanged one is none (F4).
@@ -184,7 +193,22 @@ impl Session {
             ctx,
             view: Mutex::new(ViewState::default()),
             runs: None,
+            jobs: None,
         }
+    }
+
+    /// Read the job index (and count days by `clock`) when a decision view is asked for.
+    pub fn with_jobs(
+        mut self,
+        cache: Arc<crate::jobindex::IndexCache>,
+        clock: Arc<dyn Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync>,
+    ) -> Self {
+        self.jobs = Some((cache, clock));
+        self
+    }
+
+    pub fn jobs(&self) -> Option<&JobsView> {
+        self.jobs.as_ref()
     }
 
     /// Note every middleware job this session sees in `runs` (the tenant's
