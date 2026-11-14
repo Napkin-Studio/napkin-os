@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { emptySummary } from '../projects/projectIndex'
-import { displayName, edited, greeting, stageChip } from './homeWords'
+import { displayName, edited, greetName, greeting, menuName, refusalNotice, stageChip } from './homeWords'
+
+describe('who Home names (features/os-sign-in.clan)', () => {
+  it('greets and lists the account name from Me.name, falling back to the handle', () => {
+    const shrey = { handle: 'engineer', name: 'Shrey' }
+    expect(greetName(shrey)).toBe('Shrey')
+    expect(menuName(shrey)).toBe('Shrey')
+    expect(greetName({ handle: 'engineer', name: '  ' })).toBe('Engineer')
+    expect(menuName({ handle: 'engineer' })).toBe('@engineer')
+    expect(greetName(null)).toBe('there')
+    expect(menuName(undefined)).toBe('@guest')
+  })
+})
 
 describe('a project card\'s words', () => {
   it('the stage chip: blue on its way, amber when behind, green with the ad', () => {
@@ -31,5 +43,11 @@ describe('a project card\'s words', () => {
     expect(greeting(20)).toBe('Good evening')
     expect(displayName('shrey')).toBe('Shrey')
     expect(displayName('guest')).toBe('there')
+  })
+
+  it('says why a project made under another contract cannot be opened, as one sentence', () => {
+    expect(refusalNotice('This project was made with an older version of the Production Tool (contract 2); this one reads contract 3, so it cannot open it.'))
+      .toBe('This project was made with an older version of the Production Tool (contract 2); this one reads contract 3, so it cannot open it.')
+    expect(refusalNotice('Cannot open it ')).toBe('Cannot open it.')
   })
 })

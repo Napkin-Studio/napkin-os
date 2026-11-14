@@ -13,6 +13,8 @@ from typing import Optional
 
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
+from aspect import centre_crop_box
+
 # A pixel counts as changed when any channel differs by more than this (of 255).
 CHANGE_TOLERANCE = 8
 
@@ -51,10 +53,7 @@ def _fit(img: Image.Image, size: tuple[int, int]) -> Image.Image:
     w, h = size
     sw, sh = img.size
     if sw * h != sh * w:
-        scale = max(w / sw, h / sh)
-        cw, ch = min(sw, round(w / scale)), min(sh, round(h / scale))
-        left, top = (sw - cw) // 2, (sh - ch) // 2
-        img = img.crop((left, top, left + cw, top + ch))
+        img = img.crop(centre_crop_box(sw, sh, w, h))
     return img.resize(size, Image.LANCZOS)
 
 

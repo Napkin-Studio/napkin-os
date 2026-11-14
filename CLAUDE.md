@@ -70,6 +70,8 @@ suites, and `--list` to see what would run.
 | terraform | fmt, validate, mocked-provider test on staging | `infra/` |
 | secrets | gitleaks over the commits in range, with `.gitleaks.toml` (needs the binary: `GITLEAKS_BIN` or PATH; CI pins v8.30.1) | any change |
 | copy | no em dash in interface strings: string literals and templates in `.ts/.tsx/.js/.jsx` under `app/src` and `app/templates` | `app/src/`, `app/templates/` |
+| production-tool | relay and stitch pytest, the contracts, clan-store and web lint/test/build | `production-tool/` |
+| licences | `scripts/licences` tests, then the licence gate over the tree (lockfiles only when a manifest changed) | lockfiles and manifests, `licences/`, Dockerfiles, fonts, `patches/`, any .py/.ts/.tsx/.js/.html |
 
 The hooks are `.githooks/pre-push` and `.githooks/commit-msg`. Turn them on
 once per clone with `git config core.hooksPath .githooks`. The pre-push hook
@@ -77,6 +79,13 @@ refuses pushes to `main`, failing checks, code without a feature record, and
 records without an approved design. Never use `--no-verify`. The bypass
 variables `NAPKIN_ALLOW_MAIN`, `NAPKIN_SKIP_CHECKS` and `NAPKIN_NO_FEATURE`
 are only for a person to set.
+
+Licences: every dependency, font, binary and model weight must satisfy
+`licences/policy.toml` (`docs/contracts/licences.md`). A push that changes
+`licences/*.toml` needs `NAPKIN_LICENCE_APPROVED=<approver>`: a person's
+approval, which an agent never sets. If the gate fails, an agent records the
+finding in the feature's `open_questions` and asks; it never adds its own
+exception.
 
 ## Map
 

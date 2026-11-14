@@ -65,9 +65,21 @@ def _drain_worker():
     jl._executor().submit(lambda: None).result(timeout=10)
 
 
+# The ids and fake weight files these tests use, listed in a test weights manifest so
+# weights_guard (which refuses anything not in licences/weights.toml) lets them through.
+TEST_MODELS = [jl.DEFAULT_MODEL, "BAAI/bge-reranker-base", "x/y", "org/absent-model", "org/half", "org/m"]
+EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"   # _fake_weights' file
+
+
 @pytest.fixture(autouse=True)
-def _isolate(monkeypatch):
-    """Every test starts with an empty model cache and no environment overrides."""
+def _isolate(monkeypatch, tmp_path_factory):
+    """Every test starts with an empty model cache, no environment overrides, and a
+    weights manifest that lists the test models."""
+    manifest = tmp_path_factory.mktemp("weights") / "weights.toml"
+    manifest.write_text("".join(
+        f'[[model]]\nid = "{m}"\nfiles = [{{ path = "model.safetensors", sha256 = "{EMPTY_SHA256}" }}]\n'
+        for m in TEST_MODELS))
+    monkeypatch.setenv("NAPKIN_WEIGHTS_MANIFEST", str(manifest))
     monkeypatch.setattr(jl, "_MODELS", {})
     monkeypatch.delenv("RAG_LOCAL_DEVICE", raising=False)
     monkeypatch.delenv("RAG_LOCAL_RERANKER", raising=False)
@@ -370,6 +382,22 @@ def test_model_name_comes_from_env_else_default(monkeypatch):
     monkeypatch.setenv("RAG_LOCAL_RERANKER", "BAAI/bge-reranker-base")
     assert jl.resolve_model() == "BAAI/bge-reranker-base"
     assert jl.resolve_model("x/y") == "x/y"
+
+
+def test_an_unlisted_model_is_not_configured(monkeypatch, tmp_path):
+    """weights_guard: a model missing from the weights manifest never loads, whether it
+    comes from the argument, RAG_LOCAL_RERANKER or a local directory of other weights."""
+    with pytest.raises(jb.BackendNotConfigured) as e:
+        jl.resolve_model("org/not-listed")
+    assert "weights.toml" in str(e.value)
+    monkeypatch.setenv("RAG_LOCAL_RERANKER", "org/not-listed")
+    with pytest.raises(jb.BackendNotConfigured):
+        jl.resolve_model()
+    d = tmp_path / "other"
+    d.mkdir()
+    (d / "model.safetensors").write_bytes(b"other weights")
+    with pytest.raises(jb.BackendNotConfigured):
+        jl.resolve_model(str(d))
 
 
 def test_absent_weights_are_not_configured_and_name_the_download_command(monkeypatch):

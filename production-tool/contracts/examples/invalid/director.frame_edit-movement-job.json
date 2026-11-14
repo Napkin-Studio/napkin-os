@@ -1,0 +1,20 @@
+{
+  "op": "frame_edit",
+  "frameEdit": {
+    "reading": "camera",
+    "runAs": "none",
+    "camera": {
+      "movement": "push_in",
+      "movement_speed": "slow"
+    }
+  },
+  "question": null,
+  "rationale": "Only the camera's move changes; the still stays as it is, and the clip takes the new move.",
+  "confidence": 0.85,
+  "providerJob": {
+    "provider": "runway",
+    "model": "gemini_image3_pro",
+    "prompt": "x",
+    "refs": []
+  }
+}

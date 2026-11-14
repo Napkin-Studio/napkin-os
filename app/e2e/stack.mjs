@@ -17,18 +17,23 @@
 //      mode per process, and the existing specs need anonymous sessions, so the two modes run side by
 //      side, each with its own data directory and signed-session key. A spec chooses by baseURL
 //      (`rosterURL` in j001-pilot.spec.ts). Same shell build, same seed, same stand-in middleware.
+//   6. the Production Tool at /production on the roster server (features/production-line-merge.clan): its web app built
+//      with base /production/ (unless NAPKIN_E2E_SKIP_BUILD=1 and a build is there), and its relay (production-tool/relay,
+//      `python -m local`) on 127.0.0.1:$NAPKIN_E2E_RELAY_PORT (default: the roster port plus one) with the mock provider,
+//      the passthrough director, no key and the spend cap at 0. napkin-web signs each call to it (X-Napkin-Identity).
+//      Skipped, with a line saying so, when production-tool/web has no node_modules or uv is missing.
 // Nothing here calls a model or any network service. Ctrl-C (or SIGTERM from
 // Playwright) stops the server and removes the temp directories.
 
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:net'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CANARY } from './seed/j001/canary.mjs'
-import { addPeople, ROSTER_LINES } from './seed/j001/people.mjs'
+import { addPeople, PEOPLE, ROSTER_LINES } from './seed/j001/people.mjs'
 import { standIn } from './standin.mjs'
 
 const app = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -42,6 +47,7 @@ const config = join(work, 'config')
 for (const d of [seed, data, scratch, config]) mkdirSync(d)
 const mwPort = process.env.NAPKIN_E2E_MW_PORT || '18081'
 const rosterPort = process.env.NAPKIN_E2E_ROSTER_PORT || '18082'
+const relayPort = process.env.NAPKIN_E2E_RELAY_PORT || String(Number(rosterPort) + 1)
 
 // Two stacks on one machine must not share a port: the second would talk to the first one's servers (or its stand-in, whose state is
 // the first run's) or hang. Fail now, before any build, and name the three variables.
@@ -52,14 +58,14 @@ async function inUse(p) {
     probe.listen(Number(p), '127.0.0.1', () => probe.close(() => done(false)))
   })
 }
-const wanted = [['NAPKIN_E2E_PORT', port], ['NAPKIN_E2E_ROSTER_PORT', rosterPort], ['NAPKIN_E2E_MW_PORT', mwPort]]
+const wanted = [['NAPKIN_E2E_PORT', port], ['NAPKIN_E2E_ROSTER_PORT', rosterPort], ['NAPKIN_E2E_MW_PORT', mwPort], ['NAPKIN_E2E_RELAY_PORT', relayPort]]
 const clash = []
 for (const [name, p] of wanted) {
   if (await inUse(p)) clash.push(`${name}=${p} is already in use`)
-  else if (wanted.some(([n, q]) => n < name && q === p)) clash.push(`${name}=${p} is the same port as another of the three`)
+  else if (wanted.some(([n, q]) => n < name && q === p)) clash.push(`${name}=${p} is the same port as another of the four`)
 }
 if (clash.length) {
-  console.error(`e2e stack: ${clash.join('; ')}.\n  Another stack (or a lead's run) holds it. Choose three free, different ports: NAPKIN_E2E_PORT, NAPKIN_E2E_ROSTER_PORT and NAPKIN_E2E_MW_PORT.`)
+  console.error(`e2e stack: ${clash.join('; ')}.\n  Another stack (or a lead's run) holds it. Choose free, different ports: NAPKIN_E2E_PORT, NAPKIN_E2E_ROSTER_PORT, NAPKIN_E2E_MW_PORT (and NAPKIN_E2E_RELAY_PORT, default the roster port plus one).`)
   rmSync(work, { recursive: true, force: true })
   process.exit(1)
 }
@@ -97,6 +103,19 @@ example('make_script_editor', join(seed, 'script-editor.app.clan'), join(scratch
 example('make_advertising_studio', join(seed, 'advertising-studio.app.clan'))
 example('make_idea_room', join(seed, 'idea-room.app.clan'), join(scratch, 'idea-room.example.clan'))
 run('cargo', ['build', '-q', '-p', 'napkin-web'])
+
+// The Production Tool's web app, built for /production (as the image does, Dockerfile's production stage). It builds on the
+// CLAN store's napkin-wasm (production-tool/clan-store/src/wasm), which `npm run build` there makes.
+const tool = join(root, 'production-tool')
+const toolBuild = join(tmpdir(), `napkin-e2e-production-${rosterPort}`)
+const hasUv = spawnSync('uv', ['--version'], { stdio: 'ignore' }).status === 0
+let production = existsSync(join(tool, 'web', 'node_modules')) && existsSync(join(tool, 'clan-store', 'src', 'wasm', 'napkin_wasm.js')) && hasUv
+if (!production) {
+  console.log('e2e stack: no Production Tool (production-tool/web needs npm ci, clan-store its wasm build, and uv must be on PATH); /production is off')
+} else if (process.env.NAPKIN_E2E_SKIP_BUILD !== '1' || !existsSync(join(toolBuild, 'index.html'))) {
+  run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--logLevel', 'warn', '--outDir', toolBuild, '--emptyOutDir'],
+    { cwd: join(tool, 'web'), env: { ...process.env, VITE_BASE: '/production/', VITE_RELAY_URL: '/production/api' } })
+}
 
 // A stand-in middleware, local and free (standin.mjs): it answers every task as one job whose state the test sets
 // (POST /control {state, stage}), and from fixture files for the tasks Phase 2 names (seed/j001/p2/answers/). No model, no network.
@@ -136,6 +155,8 @@ function start(addr, data, auth, gate = false) {
       // pilot tests sign in; off on the primary, as it is by default, so the specs that count what needs a person are unchanged.
       NAPKIN_BRIEF_GATE: gate ? 'on' : 'off',
       ...(gate ? { NAPKIN_TEST_CLOCK_FILE: clockFile, NAPKIN_MAIL_OUTBOX: outboxFile } : {}),
+      // the Production Tool at /production, on the roster server only (anonymous mode never mounts it)
+      ...(gate && relay ? { NAPKIN_PRODUCTION_RELAY_URL: `http://127.0.0.1:${relayPort}`, NAPKIN_PRODUCTION_RELAY_SECRET: relaySecret, NAPKIN_PRODUCTION_STATIC: toolBuild } : {}),
       NAPKIN_AUTH: auth ? 'roster' : 'none',
       // Signed sessions need a key: a throwaway one, made for this run and gone with it.
       ...(auth ? { NAPKIN_AUTH_ROSTER: auth, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),
@@ -155,6 +176,31 @@ function start(addr, data, auth, gate = false) {
   })
 }
 
+// The Production Tool's relay, local (production-tool/relay/local.py): the mock provider and the passthrough director (no model
+// key), the spend cap at 0, every agency of the J001 people turned on. The roster server signs each call with the same key.
+const relaySecret = randomBytes(32).toString('hex')
+let relay = null
+const stopRelay = () => { relay?.kill('SIGTERM') }
+if (production) {
+  relay = spawn('uv', ['run', '-q', '--python', '3.12', 'python', '-m', 'local', '--port', relayPort, '--data', join(work, 'relay')], {
+    // In the stack's process group (Playwright stops the whole group), with its output on the stack's.
+    stdio: 'inherit',
+    cwd: join(tool, 'relay'),
+    env: {
+      ...env,
+      TOKEN_SECRET: relaySecret,
+      NAPKIN_LOCAL_TENANTS: [...new Set(Object.values(PEOPLE).map(p => p.username.split('@')[1]))].join(','),
+      NAPKIN_SPEND_CAP_EUR: '0',
+      NAPKIN_PAID_CALLS: 'off',
+    },
+  })
+  for (let i = 0; ; i++) {
+    try { if ((await fetch(`http://127.0.0.1:${relayPort}/health`)).ok) break } catch { /* not up yet */ }
+    if (i > 600) { console.error('e2e stack: the Production relay did not start'); stopRelay(); cleanup(); process.exit(1) }
+    await new Promise(r => setTimeout(r, 100))
+  }
+}
+
 // The roster stack for the role tests: its own data directory, its People store seeded from a roster file with the
 // people admin and the agencies the People page cannot add to yet, and everyone else added with their roles through the
 // People store's API, as in production (features/align-needs-lock-people.clan). Started first and waited for, so the
@@ -166,19 +212,19 @@ writeFileSync(rosterFile, ROSTER_LINES.join('\n') + '\n')
 const people = start(`127.0.0.1:${rosterPort}`, rosterData, rosterFile, true)
 for (let i = 0; ; i++) {
   try { if ((await fetch(`http://127.0.0.1:${rosterPort}/api/healthz`)).ok) break } catch { /* not up yet */ }
-  if (i > 200) { console.error('e2e stack: the roster server did not start'); people.kill('SIGTERM'); cleanup(); process.exit(1) }
+  if (i > 200) { console.error('e2e stack: the roster server did not start'); people.kill('SIGTERM'); stopRelay(); cleanup(); process.exit(1) }
   await new Promise(r => setTimeout(r, 100))
 }
 try {
   await addPeople(`http://127.0.0.1:${rosterPort}`)
 } catch (e) {
-  console.error(`e2e stack: ${e.message}`); people.kill('SIGTERM'); cleanup(); process.exit(1)
+  console.error(`e2e stack: ${e.message}`); people.kill('SIGTERM'); stopRelay(); cleanup(); process.exit(1)
 }
 
 const server = start(`127.0.0.1:${port}`, data, roster)
 
-const stop = () => { middleware.close(); server.kill('SIGTERM'); people.kill('SIGTERM') }
+const stop = () => { middleware.close(); server.kill('SIGTERM'); people.kill('SIGTERM'); stopRelay() }
 process.on('SIGTERM', stop)
 process.on('SIGINT', stop)
-server.on('exit', code => { middleware.close(); people.kill('SIGTERM'); cleanup(); process.exit(code ?? 0) })
-console.log(`e2e stack: http://127.0.0.1:${port}  (data ${data}); roster stack http://127.0.0.1:${rosterPort}`)
+server.on('exit', code => { middleware.close(); people.kill('SIGTERM'); stopRelay(); cleanup(); process.exit(code ?? 0) })
+console.log(`e2e stack: http://127.0.0.1:${port}  (data ${data}); roster stack http://127.0.0.1:${rosterPort}${relay ? `; Production relay http://127.0.0.1:${relayPort}` : ''}`)

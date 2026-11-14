@@ -1,0 +1,5 @@
+{
+ "version": "director.v7",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip_patch\", \"question\": {\"kind\": \"nudge\", \"text\": \"Fix only this moment, or remake the whole clip?\", \"why\": \"A wide shot changes the camera for the whole clip, not just one moment.\", \"options\": [{\"id\": \"fix\", \"label\": \"Fix only this moment\", \"value\": {\"route\": \"fix\"}}, {\"id\": \"remake\", \"label\": \"Remake the whole clip\", \"value\": {\"route\": \"remake\"}}], \"recommended_option_id\": \"remake\", \"allow_text\": true}, \"rationale\": \"The note asks for a wide shot for the whole shot, which changes the camera for the entire clip, so I ask whether to fix this moment or remake.\", \"confidence\": 0.9}"
+}

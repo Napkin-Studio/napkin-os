@@ -1,5 +1,5 @@
 {
-  "contractVersion": "2",
+  "contractVersion": "3",
   "routing": {
     "shot_list": [],
     "stitch": [],
@@ -15,15 +15,21 @@
     "region_edit": [
       "runway"
     ],
+    "frame_edit": [
+      "runway"
+    ],
     "clip": [
       "runway"
     ],
     "clip_edit": [
       "runway"
+    ],
+    "upscale": [
+      "runway"
     ]
   },
   "director": {
-    "promptVersion": "director.v5",
+    "promptVersion": "director.v9",
     "perClickModel": "eu.anthropic.claude-sonnet-5-5",
     "shotListModel": "eu.anthropic.claude-sonnet-5-5"
   },

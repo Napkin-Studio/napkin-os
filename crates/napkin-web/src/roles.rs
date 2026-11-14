@@ -62,6 +62,10 @@ pub const ALL_TOOLS: &[&str] = &[
     "territories",
 ];
 
+/// The doors onto the Production Tool's screens (v2 section 4: stills, video and motion, formats and in situ):
+/// a role whose home has one of them may open `/production` ([`Table::opens_production`]).
+pub const PRODUCTION_DOORS: &[&str] = &["stills", "video-motion", "formats-in-situ"];
+
 /// The kind of a door id.
 pub fn kind_of(door: &str) -> Kind {
     match door {
@@ -443,6 +447,24 @@ impl Table {
             .filter(|t| have.contains(t))
             .map(|t| t.to_string())
             .collect()
+    }
+
+    /// May `roles` open the Production Tool at `/production` (crate::production)? An admin, a demo and an
+    /// anonymous visitor may; anyone else only when one of their homes, as this table writes it, has a door or a
+    /// More line onto one of its screens ([`PRODUCTION_DOORS`]). A person with no role may not. An allow list read
+    /// from the table, so an agency's own table decides it too.
+    pub fn opens_production(&self, roles: &[String]) -> bool {
+        if unrestricted(roles) {
+            return true;
+        }
+        roles.iter().any(|r| {
+            self.home_of(r).is_some_and(|h| {
+                h.doors
+                    .iter()
+                    .chain(&h.more)
+                    .any(|d| PRODUCTION_DOORS.contains(&d.id.as_str()))
+            })
+        })
     }
 
     /// What the desk shows for `roles`, or, for an admin or a demo, for the role `as_role` names. A role the
@@ -1227,5 +1249,36 @@ mod tests {
         assert!(allowed(&r(&["napkin-admin"]), "/control/agencies", None));
         // the people list is open to everyone signed in (emails are cut in the handler)
         assert!(allowed(&r(&["traffic"]), "/t/x/agency/people", None));
+    }
+
+    #[test]
+    fn production_opens_for_the_roles_whose_homes_have_one_of_its_doors() {
+        let t = Table::default();
+        for yes in [
+            "producer",
+            "art-director",
+            "copywriter",
+            ADMIN,
+            DEMO,
+            ANONYMOUS,
+        ] {
+            assert!(t.opens_production(&r(&[yes])), "{yes}");
+        }
+        for no in [
+            "planning",
+            "creative-director",
+            "account-service",
+            "management",
+            "agency-brain",
+            "traffic",
+            "napkin-admin",
+            "someone-new",
+        ] {
+            assert!(!t.opens_production(&r(&[no])), "{no}");
+        }
+        // no role means no role
+        assert!(!t.opens_production(&[]));
+        // one role that opens it is enough
+        assert!(t.opens_production(&r(&["planning", "producer"])));
     }
 }

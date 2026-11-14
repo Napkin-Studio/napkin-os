@@ -2149,13 +2149,17 @@ async fn the_clients_replies_never_name_a_judge_score_an_idea_card_or_the_banned
 
 #[tokio::test]
 async fn the_client_page_is_never_cached_by_the_service_worker() {
-    let src = std::fs::read_to_string(format!(
-        "{}/../../app/pwa/sw.js",
-        env!("CARGO_MANIFEST_DIR")
-    ))
-    .unwrap();
+    // The worker's routes live in app/pwa/routes.js, which the build inlines into sw.js (the Production
+    // line's change; docs/production-tool/merge-2026-11.md row 4).
+    let read = |f: &str| {
+        std::fs::read_to_string(format!("{}/../../app/pwa/{f}", env!("CARGO_MANIFEST_DIR")))
+            .unwrap()
+    };
+    let (sw, routes) = (read("sw.js"), read("routes.js"));
     assert!(
-        src.contains("['api/', 's/', 'c/']") && src.contains("if (serverOwned(url)) return"),
+        routes.contains("export const SERVER_OWNED = ['api/', 's/', 'c/', 'production/']")
+            && sw.contains("__NAPKIN_ROUTES__")
+            && sw.contains("if (serverOwned(url, SCOPE)) return"),
         "the service worker leaves /c/ to the network, answered from and written to no cache"
     );
 }

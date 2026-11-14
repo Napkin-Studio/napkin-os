@@ -9,6 +9,7 @@
 
 import type { ClanSaved, InputMime, ProjectCanvas, ProjectList, SavedProject, UploadResponse } from '../contracts/types'
 import { RelayError } from '../relay'
+import { accessOf, type Access } from '../relay/access'
 
 /** Someone saved the project (from another browser or tab) since this one last saved or opened it. */
 export class SaveConflict extends Error {}
@@ -26,9 +27,12 @@ export class ProjectServer {
   private readonly base: string
   private readonly signedIn_: () => boolean
   private readonly fetchFn: typeof fetch
+  /** Told when an answer says this person cannot use the tool (relay/access.ts), as HttpRelay does. */
+  onUnauthorised?: (why: Access) => void
 
   /** No token: who is asking comes from the relay's identity seam (features/drop-hackathon-extras.clan). */
-  constructor(opts: { base: string; signedIn: () => boolean; fetchFn?: typeof fetch }) {
+  constructor(opts: { base: string; signedIn: () => boolean; fetchFn?: typeof fetch; onUnauthorised?: (why: Access) => void }) {
+    this.onUnauthorised = opts.onUnauthorised
     this.base = opts.base.replace(/\/+$/, '')
     this.signedIn_ = opts.signedIn
     this.fetchFn = opts.fetchFn ?? ((...a) => fetch(...a))
@@ -49,25 +53,29 @@ export class ProjectServer {
     return res
   }
 
-  private static async fail(res: Response): Promise<never> {
-    let err = null
+  private async fail(res: Response): Promise<never> {
+    let body: unknown = null
     try {
-      err = ((await res.json()) as { error?: RelayError['error'] }).error ?? null
+      body = await res.json()
     } catch { /* not JSON */ }
+    const access = accessOf(res.status, body)
+    if (access) this.onUnauthorised?.(access)
+    let err = (body as { error?: RelayError['error'] } | null)?.error ?? null
+    if (!err && access === 'signed_out') err = { code: 'unauthorised', message: 'Sign in to Napkin Studio to use Production.', retryable: false }
     throw new RelayError(err ?? { code: 'internal', message: `The server answered ${res.status}.`, retryable: res.status >= 500 }, res.status)
   }
 
   /** The person's saved projects, newest first. */
   async list(): Promise<SavedProject[]> {
     const res = await this.req('GET', '/projects')
-    if (!res.ok) return ProjectServer.fail(res)
+    if (!res.ok) return this.fail(res)
     return ((await res.json()) as ProjectList).projects
   }
 
   /** The newest save of a project, and its ETag. */
   async open(id: string): Promise<Opened> {
     const res = await this.req('GET', `/clan/${encodeURIComponent(id)}`)
-    if (!res.ok) return ProjectServer.fail(res)
+    if (!res.ok) return this.fail(res)
     const etag = (res.headers.get('ETag') ?? '').replace(/^W\//, '').replace(/"/g, '')
     return { bytes: new Uint8Array(await res.arrayBuffer()), etag, savedAt: res.headers.get('X-Saved-At') ?? new Date().toISOString() }
   }
@@ -85,7 +93,7 @@ export class ProjectServer {
       } catch { /* keep ours */ }
       throw new SaveConflict(message)
     }
-    if (!res.ok) return ProjectServer.fail(res)
+    if (!res.ok) return this.fail(res)
     return ((await res.json()) as ClanSaved).project
   }
 
@@ -93,7 +101,7 @@ export class ProjectServer {
   async canvas(id: string): Promise<ProjectCanvas | null> {
     const res = await this.req('GET', `/clan/${encodeURIComponent(id)}/canvas`)
     if (res.status === 404) return null
-    if (!res.ok) return ProjectServer.fail(res)
+    if (!res.ok) return this.fail(res)
     return (await res.json()) as ProjectCanvas
   }
 
@@ -101,7 +109,7 @@ export class ProjectServer {
     const res = await this.req('PUT', `/clan/${encodeURIComponent(id)}/canvas`, {
       body: JSON.stringify({ elements } satisfies ProjectCanvas), headers: { 'Content-Type': 'application/json' },
     })
-    if (!res.ok) return ProjectServer.fail(res)
+    if (!res.ok) return this.fail(res)
   }
 
   /** The bytes at one of our public URLs (in/, out/, ads/); null when they cannot be had. */

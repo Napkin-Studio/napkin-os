@@ -1,0 +1,55 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7G00000000000000000TK01",
+  "participantId": "p_a1b2c3",
+  "tenantId": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "startedBy": "human:p_a1b2c3",
+  "crew": "wren",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "nonce": "n_take000001",
+  "purpose": "shots 1-3 as one take",
+  "op": "clip",
+  "quotaClass": "video",
+  "state": "completed",
+  "provider": "runway",
+  "model": "wan3",
+  "requestId": "7c1d2e3f-0000-4000-8000-000000000000",
+  "inputHashes": [
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "outputs": [
+    {
+      "sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "url": "https://cdn.napkin.test/out/sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "mime": "video/mp4",
+      "bytes": 26800000,
+      "w": 1280,
+      "h": 720,
+      "durationS": 9
+    }
+  ],
+  "kind": "generated",
+  "cost": {
+    "estimate": 0.9,
+    "reserved": 0.9,
+    "confirmed": 0.9,
+    "currency": "USD",
+    "unknown": false
+  },
+  "createdAt": "2026-10-14T10:12:03Z",
+  "updatedAt": "2026-10-14T10:13:31Z",
+  "cuts": [
+    {
+      "planned_s": 3,
+      "found_s": 3.042
+    },
+    {
+      "planned_s": 6,
+      "found_s": null
+    }
+  ]
+}

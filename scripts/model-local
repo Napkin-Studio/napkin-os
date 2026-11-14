@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# The one local model backend: mock-backend's model port on 127.0.0.1, answered by `claude -p`
+# on your own Claude Code login (features/model-mock.clan, docs/contracts/peripherals.md §5).
+# Every service reaches it by URL through the client code it already has; nothing else changes.
+#
+#   scripts/model-local [start]          start it unless it is already up (needs `claude` on PATH)
+#   scripts/model-local status           is it up, and on which port
+#   scripts/model-local stop             stop the one this script started
+#   scripts/model-local env [--fish|--json] [--bedrock]
+#                                        print the environment that points the services at it
+#   scripts/model-local run CMD [ARG…]   start it if needed, then run CMD with that environment
+#
+# Point a shell at it (only the shell that runs the services: Claude Code reads
+# ANTHROPIC_BASE_URL too):
+#   bash/zsh:  source scripts/model-local-env.sh
+#   fish:      source scripts/model-local-env.fish
+#
+# MODEL_LOCAL_PORT (default 8797) picks another port when 8797 is taken by something else.
+# The server's log and pid file live in ${TMPDIR:-/tmp}/napkin-model-local-<port>.{log,pid}.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+port="${MODEL_LOCAL_PORT:-8797}"
+host=127.0.0.1
+base="http://$host:$port"
+state="${TMPDIR:-/tmp}/napkin-model-local-$port"
+
+die() { echo "model-local: $*" >&2; exit 1; }
+
+# up: 0 = our backend answers with the model family; 1 = nothing listens; 2 = something else does.
+probe() {
+  python3 - "$base" <<'PY'
+import json, sys, urllib.request, urllib.error
+try:
+    with urllib.request.urlopen(sys.argv[1] + "/healthz", timeout=2) as r:
+        h = json.loads(r.read() or b"{}")
+except urllib.error.HTTPError as e:
+    sys.exit(2)
+except (OSError, ValueError):
+    sys.exit(1)
+sys.exit(0 if h.get("service") == "napkin-mock-backend" and "model" in (h.get("fakes") or {}) else 2)
+PY
+}
+
+status() {
+  local rc=0
+  probe || rc=$?
+  case $rc in
+    0) echo "model-local: up on $base" ;;
+    1) echo "model-local: not running on $base"; return 1 ;;
+    *) echo "model-local: $base answers, but it is not the mock backend's model port" \
+            "(set MODEL_LOCAL_PORT to use another port)"; return 2 ;;
+  esac
+}
+
+start() {
+  command -v claude >/dev/null || die "the \`claude\` CLI is not on PATH: install Claude Code and sign in (claude, then /login)"
+  local rc=0
+  probe || rc=$?
+  if [[ $rc -eq 0 ]]; then
+    echo "model-local: already up on $base"
+    return 0
+  fi
+  [[ $rc -eq 1 ]] || die "port $port is in use by something else; pick a free one with MODEL_LOCAL_PORT=<port>"
+  # The server and its `claude -p` children must not inherit the variables that point at it.
+  env -u ANTHROPIC_BASE_URL -u ANTHROPIC_API_KEY -u ANTHROPIC_BEDROCK_BASE_URL \
+      -u ANTHROPIC_BEDROCK_MANTLE_BASE_URL -u AWS_ENDPOINT_URL_BEDROCK_RUNTIME -u OPENAI_BASE_URL \
+      MOCK_BACKEND_HOST="$host" MOCK_BACKEND_PORT="$port" \
+      nohup python3 "$root/mock-backend/server.py" >>"$state.log" 2>&1 </dev/null &
+  echo $! >"$state.pid"
+  for _ in $(seq 1 100); do
+    if probe; then
+      echo "model-local: up on $base (pid $(cat "$state.pid"), log $state.log)"
+      return 0
+    fi
+    kill -0 "$(cat "$state.pid")" 2>/dev/null || break
+    sleep 0.1
+  done
+  tail -n 20 "$state.log" >&2 || true
+  die "the mock backend did not start on $base (log above)"
+}
+
+stop() {
+  [[ -f "$state.pid" ]] || die "no pid file at $state.pid (not started by this script on port $port)"
+  local pid
+  pid="$(cat "$state.pid")"
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid"
+    echo "model-local: stopped pid $pid"
+  else
+    echo "model-local: pid $pid is not running"
+  fi
+  rm -f "$state.pid"
+}
+
+# The variables every service reads, one list (the env files and serve.py read it from here).
+vars() {
+  local api=anthropic
+  [[ "${1:-}" == --bedrock ]] && api=bedrock
+  cat <<EOF
+NAPKIN_MODEL_API=$api
+NAPKIN_MODEL_BASE_URL=$base
+NAPKIN_MODEL_API_KEY=local
+ANTHROPIC_BASE_URL=$base
+ANTHROPIC_API_KEY=local
+ANTHROPIC_BEDROCK_BASE_URL=$base
+AWS_ENDPOINT_URL_BEDROCK_RUNTIME=$base
+EOF
+  # The Bedrock clients need a region even with a base URL; the bearer key above means no SigV4.
+  [[ $api == bedrock ]] && echo "NAPKIN_MODEL_REGION=${NAPKIN_MODEL_REGION:-eu-west-1}"
+  return 0
+}
+
+print_env() {
+  local shape=sh bedrock=""
+  for a in "$@"; do
+    case "$a" in
+      --fish) shape=fish ;;
+      --json) shape=json ;;
+      --sh|--bash) shape=sh ;;
+      --bedrock) bedrock=--bedrock ;;
+      *) die "env: unknown option $a" ;;
+    esac
+  done
+  local lines
+  lines="$(vars $bedrock)"
+  case $shape in
+    sh) sed 's/^/export /' <<<"$lines" ;;
+    fish) sed -E 's/^([^=]+)=(.*)$/set -gx \1 \2/' <<<"$lines" ;;
+    json) python3 -c 'import json,sys; print(json.dumps(dict(l.split("=",1) for l in sys.stdin.read().split("\n") if l)))' <<<"$lines" ;;
+  esac
+}
+
+cmd="${1:-start}"
+[[ $# -gt 0 ]] && shift
+case "$cmd" in
+  start) start ;;
+  status) status ;;
+  stop) stop ;;
+  env) print_env "$@" ;;
+  run)
+    [[ $# -gt 0 ]] || die "run: name a command"
+    start >&2
+    while IFS='=' read -r k v; do export "$k=$v"; done < <(vars)
+    exec "$@" ;;
+  -h|--help|help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) die "unknown command $cmd (start, status, stop, env, run)" ;;
+esac

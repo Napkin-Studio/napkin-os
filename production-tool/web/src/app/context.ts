@@ -1,14 +1,16 @@
 import { createContext, useContext, useMemo, useSyncExternalStore } from 'react'
-import { controlsFor, effectiveConfig, type Controls } from '../capabilities'
+import { controlsFor, effectiveConfig, withAllow, type Controls } from '../capabilities'
 import type { Config, ProductionDocument } from '../contracts/types'
 import { subscribeDoc, type DocumentStore } from '../doc/store'
 import type { UiState } from '../doc/ui'
 import type { UiStore } from '../projects/uiStore'
 import type { JobRunner } from '../jobs/runner'
 import type { Relay } from '../relay'
-import type { ClanBackedStore } from '../doc/clan'
+import type { ModelStore } from '../model/store'
 import type { Shell } from '../projects/shell'
 import type { ServerCopy } from '../projects/serverCopy'
+import type { Route, Router } from './route'
+import { lifeOf, liveGet } from '../model/live'
 
 /** The open project (features/project-home.clan). */
 export interface ProjectHandle {
@@ -30,7 +32,7 @@ export interface Services {
   /** The config the relay served (GET /config), when there is one. */
   remoteConfig: Config | null
   /** The CLAN store behind `doc` (decision chain, .clan export); null when the wasm did not load. */
-  clan: ClanBackedStore | null
+  clan: ModelStore | null
   /** Shown under the top bar when saving is degraded ("Saving without history"). */
   storeNote: string | null
   /** The project's copy on the relay, and a save conflict waiting for the person's choice; null on the mock. */
@@ -54,7 +56,26 @@ export function useServices(): Services {
   return s
 }
 
+/**
+ * The document as the canvas has it alive (model/live.ts): a reference whose picture was deleted on
+ * the canvas is left out, with its links, until Undo brings the picture back. What every view reads.
+ */
 export function useDoc(): ProductionDocument {
+  const { doc } = useServices()
+  const subscribe = useMemo(() => {
+    const life = lifeOf(doc)
+    const onDoc = subscribeDoc(doc)
+    return (fn: () => void) => {
+      const a = onDoc(fn)
+      const b = life.subscribe(fn)
+      return () => { a(); b() }
+    }
+  }, [doc])
+  return useSyncExternalStore(subscribe, () => liveGet(doc))
+}
+
+/** The document as it is stored, dead references included: for the canvas's own sync with it. */
+export function useStoredDoc(): ProductionDocument {
   const { doc } = useServices()
   const subscribe = useMemo(() => subscribeDoc(doc), [doc])
   return useSyncExternalStore(subscribe, () => doc.get())
@@ -80,7 +101,22 @@ export function useConfig(): { config: Config; controls: Controls } {
   const { remoteConfig } = useServices()
   const ui = useUi()
   return useMemo(() => {
-    const config = effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig)
+    // The agency's allowlist from GET /me (features/tenant-limits.clan): models it turned off are not offered.
+    const config = withAllow(effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig), ui.me?.allow)
     return { config, controls: controlsFor(config) }
-  }, [ui.configChoice, ui.providerChoice, remoteConfig])
+  }, [ui.configChoice, ui.providerChoice, remoteConfig, ui.me?.allow])
+}
+
+/** The router (app/route.ts): the editors' routes under the build's base. */
+export const RouterContext = createContext<Router | null>(null)
+
+export function useRouter(): Router {
+  const r = useContext(RouterContext)
+  if (!r) throw new Error('RouterContext missing')
+  return r
+}
+
+export function useRoute(): Route {
+  const r = useRouter()
+  return useSyncExternalStore(r.subscribe, r.get)
 }

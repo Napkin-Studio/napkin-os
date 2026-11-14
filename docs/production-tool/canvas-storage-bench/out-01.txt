@@ -1,0 +1,14 @@
+scene { board: 10, preview: 300, stroke: 5000, node: 500, link: 300 } stroke points 298976 mean 59.8
+
+## float points
+JSON  raw 5665.6 KB  gzip 1846.4 KB  zstd 1905.3 KB | stringify 45.3 ms gzip 96.6 ms zstd 20.6 ms parse 15.9 ms open(zstd+parse) 17.3 ms
+Y     raw 8180.0 KB  gzip 2385.5 KB  zstd 2340.5 KB | build 3.21 ms encodeStateAsUpdate 58.1 ms gzip 102.3 ms zstd 22.9 ms applyUpdate 72.5 ms open(zstd+apply+readAll) 82.0 ms
+BESIDE durable write: json 0.52 ms json.zst 20.3 ms ybin 58.4 ms ybin.zst 83.5 ms | open json 13.8 ms open ybin.zst 80.5 ms
+
+## quantised int points
+JSON  raw 4676.7 KB  gzip 1711.2 KB  zstd 1777.7 KB | stringify 9.97 ms gzip 52.2 ms zstd 16.8 ms parse 5.62 ms open(zstd+parse) 10.4 ms
+Y     raw 3494.5 KB  gzip 1803.7 KB  zstd 1768.5 KB | build 3.00 ms encodeStateAsUpdate 19.4 ms gzip 38.4 ms zstd 12.5 ms applyUpdate 34.1 ms open(zstd+apply+readAll) 37.9 ms
+BESIDE durable write: json 0.41 ms json.zst 16.7 ms ybin 19.1 ms ybin.zst 31.6 ms | open json 5.92 ms open ybin.zst 38.2 ms
+
+(node:2100372) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)

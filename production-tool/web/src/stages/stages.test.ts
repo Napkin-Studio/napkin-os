@@ -1,0 +1,167 @@
+// A new project opens on the canvas stage with one script, one storyboard and one video (contract 3),
+// and the Storyboard and Video panels' writes land on the real .clan engine: the script's words in a
+// scene, the ratio and length on the storyboard, new shots by rank, a take picked in the cut, a note
+// with its window. The Video stage stays shut until every shot is locked or waits for review.
+
+import { describe, expect, it, vi } from 'vitest'
+
+// The canvas engine does not load in node; the projects reach it only through export.ts.
+vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () => '{}' }))
+
+import { ClanDocumentStore } from '../../../clan-store/src'
+import { SnapshotStore, updateDoc } from '../doc/store'
+import { initialAppUi, type AppUi } from '../doc/ui'
+import { currentTake, cutOf, mainScript, mainStoryboard, mainVideo, reviewsList, scenesOf, shotsOf, storyboardReady, unplannedText } from '../model/selectors'
+import { ModelStore } from '../model/store'
+import { ProjectIndex } from '../projects/projectIndex'
+import type { MakeClan } from '../projects/session'
+import { Shell } from '../projects/shell'
+import { memoryStorage } from '../projects/storage'
+import { MockRelay } from '../relay/mock'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { id, MAYA, scriptWords, SHA, wasm } from '../test/model'
+import { insertMention, removeMention } from '../script/edits'
+import { addShot, moveShot, setRatio, setTarget } from './storyboardEdits'
+import { editShot } from '../jobs/stale'
+import { addTakeNote, pickTake } from './videoEdits'
+
+const makeClan: MakeClan = (persistence, opts = {}) =>
+  new ModelStore(new ClanDocumentStore({ wasm: wasm(), persistence, saveDebounceMs: 0, person: opts.person }), { debounceMs: 1, undo: opts.undo })
+
+const ME = { participantId: MAYA.id, handle: 'maya', team: 'napkin', workspace: MAYA.tenant_id, tenant: { id: MAYA.tenant_id, agency: 'napkin' }, allow: { claude: true, makers: ['runway', 'google'] }, quotas: null, projects: 0 }
+
+async function newProject() {
+  const storage = memoryStorage()
+  const index = new ProjectIndex(storage, () => new Date('2026-10-13T10:00:00Z'))
+  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: ME }, null)
+  const relay = new MockRelay({ renderer: { async render() { return [] } }, delayMs: 2000, persistKey: null })
+  const shell = new Shell({ relay, app, index, storage, remoteConfig: null, makeClan, summaryDelayMs: 1 })
+  await shell.newProject()
+  const s = shell.get().session
+  if (!s) throw new Error('no project open')
+  return s.services
+}
+
+describe('a new project', () => {
+  it('opens on the canvas stage with one script, one storyboard and one video', async () => {
+    const { doc, ui } = await newProject()
+    expect(ui.get().stage).toBe('character')
+    const d = doc.get()
+    expect(Object.keys(d.scripts)).toHaveLength(1)
+    expect(Object.keys(d.storyboards)).toHaveLength(1)
+    expect(Object.keys(d.videos)).toHaveLength(1)
+    expect(mainScript(d)).toBeDefined()
+    expect(mainStoryboard(d)).toBeDefined()
+    expect(mainVideo(d)).toBeDefined()
+    expect(shotsOf(d)).toEqual([])
+    // Nothing to film yet: the Video stage stays shut.
+    expect(storyboardReady(d)).toBe(false)
+  })
+})
+
+describe('the Storyboard and Video panels on the .clan engine', () => {
+  it('keep the script in a scene, the format and length on the storyboard, shots in rank order', async () => {
+    const { doc } = await newProject()
+    await updateDoc(doc, (d) => scriptWords(d, 'It rains. Maya opens a red umbrella.'), 'edit')
+    await updateDoc(doc, (d) => setRatio(d, '9:16'), 'set the storyboard format to 9:16')
+    await updateDoc(doc, (d) => setTarget(d, 20), 'set the storyboard length to 20 s')
+    await doc.flush()
+    let d = doc.get()
+    expect(scenesOf(d)).toHaveLength(1)
+    expect(unplannedText(d)).toBe('It rains. Maya opens a red umbrella.')
+    expect(mainStoryboard(d)!.ratio).toBe('9:16')
+    expect(mainVideo(d)!.ratio).toBe('9:16')
+    expect(mainStoryboard(d)!.target_s).toBe(20)
+
+    const ids: string[] = []
+    for (let i = 0; i < 3; i++) await updateDoc(doc, (x) => { ids.push(addShot(x)) }, 'add shot')
+    await doc.flush()
+    d = doc.get()
+    expect(shotsOf(d).map((s) => s.id)).toEqual(ids)
+    expect(shotsOf(d)[0].camera).toEqual({ size: 'medium', movement: 'static' })
+
+    // Reorder: one rank write.
+    await updateDoc(doc, (x) => moveShot(x, ids[2], -1), 'move shot')
+    await doc.flush()
+    expect(shotsOf(doc.get()).map((s) => s.id)).toEqual([ids[0], ids[2], ids[1]])
+  })
+
+  it('a take picked goes into the cut; a note gets its window', async () => {
+    const { doc } = await newProject()
+    let shotId = ''
+    await updateDoc(doc, (x) => { shotId = addShot(x) }, 'add shot')
+    const takes = [id('gen'), id('gen')]
+    await updateDoc(doc, (x) => {
+      for (const [i, t] of takes.entries()) {
+        x.assets[SHA(String(i + 1))] = { sha256: SHA(String(i + 1)), kind: 'video', mime: 'video/mp4', origin: 'mock', locations: [] }
+        x.generations[t] = { id: t, v: 1, field_v: {}, kind: 'clip', shot_ids: [shotId], asset: SHA(String(i + 1)), duration_s: 5, state: 'ready', job_id: id('job'), crew: 'wren', mock: true, provider: 'mock', created_at: `2026-10-13T10:4${i}:00Z`, by: `human:${MAYA.id}` }
+      }
+    }, 'take')
+    await updateDoc(doc, (x) => pickTake(x, shotId, takes[0]), 'pick take')
+    await updateDoc(doc, (x) => pickTake(x, shotId, takes[1]), 'pick take')
+    await doc.flush()
+    let d = doc.get()
+    expect(cutOf(d)).toHaveLength(1) // one clip for the shot, now playing the second take
+    expect(currentTake(d, shotId)?.id).toBe(takes[1])
+    expect(cutOf(d)[0].source).toEqual({ generation_id: takes[1], in_s: 0, out_s: 5 })
+
+    await updateDoc(doc, (x) => { addTakeNote(x, { takeId: takes[1], shotId, shotS: 5, atS: 2.5, text: 'the umbrella is blue', by: `human:${MAYA.id}` }) }, 'comment')
+    await doc.flush()
+    d = doc.get()
+    const [note] = reviewsList(d)
+    expect(note.target).toEqual({ kind: 'generation', id: takes[1] })
+    expect(note.window).toEqual({ from_s: 1, to_s: 4 })
+    expect(note.state).toBe('open')
+    expect(note.text).toBe('the umbrella is blue')
+  })
+})
+
+describe('a shot\'s @names are mentions in its live text', () => {
+  it('a chip added is a mention at the end of the action; taken off, every mention of it goes; each one undo step', async () => {
+    const { doc, clan } = await newProject()
+    const store = clan!
+    const ref = id('ref')
+    const key = id('key')
+    let shotId = ''
+    await updateDoc(doc, (d) => {
+      d.assets[SHA('a')] = { sha256: SHA('a'), kind: 'image', mime: 'image/png', origin: 'generated', locations: [] }
+      d.keys[key] = { id: key, v: 1, field_v: {}, key: 'maya', role: 'character' }
+      d.refs[ref] = { id: ref, v: 1, field_v: {}, key: 'maya', variant: 'front', role: 'character', asset: SHA('a') }
+      shotId = addShot(d)
+    }, 'name maya_front')
+    await store.flush()
+    await store.text.replace('shot', shotId, { type: 'doc', content: [{ type: 'action', content: [{ type: 'text', text: 'Maya laughs' }] }] }, `human:${MAYA.id}`)
+    await insertMention(store, shotId, { id: ref, label: 'maya_front' })
+    expect(store.get().shots[shotId].action).toBe('Maya laughs @maya_front')
+    expect(store.get().shots[shotId].refs).toEqual([ref])
+    await removeMention(store, shotId, ref)
+    expect(store.get().shots[shotId].action).toBe('Maya laughs')
+    expect(store.get().shots[shotId].refs).toEqual([])
+    await store.undo()
+    expect(store.get().shots[shotId].action).toBe('Maya laughs @maya_front')
+  })
+})
+
+describe('the Storyboard stage never writes words', () => {
+  it('its writes (format, length, add, move, camera, seconds) never call TextBus.replace', async () => {
+    const { doc, clan } = await newProject()
+    const store = clan!
+    const replace = vi.spyOn(store.text, 'replace')
+    let shotId = ''
+    await updateDoc(doc, (d) => setRatio(d, '1:1'), 'set the storyboard format to 1:1')
+    await updateDoc(doc, (d) => setTarget(d, 30), 'set the storyboard length to 30 s')
+    await updateDoc(doc, (d) => { shotId = addShot(d); addShot(d) }, 'add shot')
+    await updateDoc(doc, (d) => moveShot(d, shotId, 1), 'move shot')
+    await updateDoc(doc, (d) => editShot(d, shotId, { camera: { size: 'close', movement: 'handheld' }, duration_s: 4 }), 'edit shot')
+    await doc.flush()
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('its source has no flat text writes left', () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const src = readFileSync(join(here, 'Storyboard.tsx'), 'utf8')
+    for (const gone of ['text.replace', 'writeScript', 'wordsPatch', 'withMention', 'updateWords', '<textarea']) expect(src.includes(gone), gone).toBe(false)
+  })
+})

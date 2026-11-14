@@ -26,6 +26,12 @@ describe('the job tray', () => {
     expect(trayLabel(g)).toBe('2 running')
     expect(trayLabel(trayGroups([], () => undefined, () => undefined))).toBe('Nothing running')
   })
+  it('a job waiting for an answer is not at work: the tray says "Waiting for you"', () => {
+    const g = trayGroups([job('q', 'shot_list', 'needs_input'), job('a', 'frame', 'submitted')], (id) => (id === 'q' ? ctx({ for: 'shot_list' }) : ctxs[id]), () => undefined)
+    expect(g.working.map((r) => r.job.id)).toEqual(['a'])
+    expect(g.waiting.map((r) => r.job.id)).toEqual(['q'])
+    expect(trayLabel(g)).toBe('1 running · Waiting for you')
+  })
   it('knows which stage and shot a job belongs to', () => {
     expect(whereIs(jobs[0], ctxs.a)).toEqual({ stage: 'storyboard', shotId: 's1' })
     expect(whereIs(jobs[2], ctxs.c)).toEqual({ stage: 'video', shotId: 's3' })

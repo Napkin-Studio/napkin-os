@@ -192,6 +192,10 @@ struct SessionInfo {
     /// whether this person has acknowledged that.
     dogfood: bool,
     consented: bool,
+    /// The Production Tool is at `/production` for this person: a relay is
+    /// configured, they are signed in (features/os-sign-in.clan) and their roles
+    /// give them a Production door (docs/production-tool/merge-2026-11.md).
+    production: bool,
 }
 
 /// The shell's first call: who am I, and where do app frames live.
@@ -199,9 +203,15 @@ async fn session(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     user: Option<Extension<crate::auth::Account>>,
+    production: Option<Extension<crate::production::Enabled>>,
 ) -> Json<SessionInfo> {
     let user = user.map(|Extension(a)| a);
     let roles = user.as_ref().map(|a| a.roles.clone()).unwrap_or_default();
+    // Mounted here, and this person's roles give them a Production door (production::may_open).
+    let production = production.is_some()
+        && user
+            .as_ref()
+            .is_some_and(|a| crate::production::may_open(&ctx, a));
     let dogfood = ctx.dogfood.is_some() && user.is_some();
     let consented = match (&ctx.dogfood, &user) {
         (Some(d), Some(a)) => d.consented(&a.username),
@@ -215,6 +225,7 @@ async fn session(
         roles,
         dogfood,
         consented,
+        production,
     })
 }
 

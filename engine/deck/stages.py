@@ -103,7 +103,8 @@ def _call(stage: str, user: str, system: str) -> tuple[dict, dict]:
     the ledger's real figure when the transport gives one, else an ESTIMATE from tokens (spec.estimate_usd, ``usd_estimated``)."""
     import brief_llm as L
     os.environ["BRIEF_CLI_EFFORT"] = EFFORT[stage]
-    L.CLI_TIMEOUT_S = max(L.CLI_TIMEOUT_S, 600.0)   # a high-effort storyline can run past the 240 s default (read at import)
+    if hasattr(L, "CLI_TIMEOUT_S"):   # the claude -p transport's timeout; that transport left with the Production line's merge
+        L.CLI_TIMEOUT_S = max(L.CLI_TIMEOUT_S, 600.0)
     t = time.time()
     bad: list = []
 

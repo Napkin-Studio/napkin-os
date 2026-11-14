@@ -283,6 +283,11 @@ module "services" {
   web_env = {
     NAPKIN_UNATTRIBUTED_WRITES = "dry-run"
   }
+  # The Production Tool at /production (features/os-sign-in.clan): the
+  # hackathon relay and the key napkin-web signs each call to it with. Empty
+  # until a person sets them (the design's rollout step 4).
+  production_relay_url        = var.production_relay_url
+  production_relay_secret_arn = var.production_relay_secret_arn
   # The middleware's run log beside the record (features/dogfood-log-quality.clan),
   # with what every model call and search saw, so a brief can be traced claim
   # by claim (owner, 2026-10-19; features/brief-fact-provenance.clan). Napkin

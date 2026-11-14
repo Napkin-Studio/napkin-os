@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DocJob, JobInput, JobRequest, ModelChoice, ProductionDocument } from '../contracts/types'
 import { emptyDocument } from '../doc/store'
+import { MAYA, TENANT } from '../test/jobFixtures'
 import type { UiState } from '../doc/ui'
 import { arrowCard, cardLines, directorPrompt, regionWords, type NodeKind } from './arrowCard'
 
@@ -9,12 +10,16 @@ const asset = (c: string) => ({ sha256: SHA(c), url: `https://x/${c}`, mime: 'im
 const fmtTime = (iso: string) => iso.slice(11, 16)
 
 function setup(job: Partial<DocJob> & { id: string; op: DocJob['op'] }, input: JobInput, modelChoice?: ModelChoice) {
-  const doc: ProductionDocument = emptyDocument()
-  doc.keys.push({ key: 'maya', role: 'character' })
-  doc.refs.push({ id: 'ref_maya', key: 'maya', variant: 'front', asset: SHA('m'), node: 'node_maya' })
-  doc.jobs.push({ state: 'completed', parent_ids: [], input_hashes: [], created_at: '2026-10-09T14:05:00.000Z', updated_at: '2026-10-09T14:05:12.000Z', ...job })
-  const request: JobRequest = { contractVersion: '2', jobId: job.id, op: job.op, parentIds: [], input, ...(modelChoice ? { modelChoice } : {}) }
-  const ui: Pick<UiState, 'jobCtx'> = { jobCtx: { [job.id]: { for: 'canvas', request } } }
+  const doc: ProductionDocument = emptyDocument(MAYA)
+  doc.keys.key_maya = { id: 'key_maya', v: 1, field_v: {}, key: 'maya', role: 'character' }
+  doc.refs.ref_maya = { id: 'ref_maya', v: 1, field_v: {}, key: 'maya', variant: 'front', role: 'character', asset: SHA('m'), node: 'node_maya' }
+  const node = { kind: 'group' as const, id: job.id }
+  doc.jobs[job.id] = {
+    v: 1, field_v: {}, state: 'completed', node, purpose: 'canvas', started_by: `human:${MAYA.id}`, tenant_id: TENANT, nonce: 'n1', crew: 'wren',
+    parent_ids: [], input_hashes: [], created_at: '2026-10-09T14:05:00.000Z', updated_at: '2026-10-09T14:05:12.000Z', ...job,
+  }
+  const request: JobRequest = { contractVersion: '3', jobId: job.id, op: job.op, projectId: doc.project.id, nonce: 'n1', node, parentIds: [], input, ...(modelChoice ? { modelChoice } : {}) }
+  const ui: Pick<UiState, 'jobs'> = { jobs: { [job.id]: { request } } }
   return { doc, ui }
 }
 
@@ -26,13 +31,13 @@ describe('arrowCard: what the step behind an arrow did', () => {
     const { doc, ui } = setup(
       {
         id: 'job_g', op: 'generate', provider: 'runway', model: 'gemini_image3_pro',
-        agent: { model: 'claude', promptVersion: 'director.v3', rationale: 'kept her coat', output: { op: 'generate', providerJob: { prompt: '@maya_front waving, pose from @image2' } } },
+        director: { model: 'claude', promptVersion: 'director.v3', rationale: 'kept her coat', output: { op: 'generate', providerJob: { prompt: '@maya_front waving, pose from @image2' } } },
         cost: { confirmed: 0.15, currency: 'USD', unknown: false },
       },
       { text: 'make her wave', refs: [{ id: 'ref_maya', name: 'maya_front', role: 'character', kind: 'picture', asset: asset('m') }, { id: 'node_draw', role: 'character', kind: 'drawing', asset: asset('d') }] },
     )
     const card = arrowCard(doc, ui, { from: 'node_draw', to: 'job_g' }, { kindOf, fmtTime })
-    expect(card.who).toBe('Dex · Gemini 3 Pro (runway)')
+    expect(card.who).toBe('Fin · Gemini 3 Pro (runway)')
     expect(card.from).toEqual([{ label: '@maya_front', here: false }, { label: 'drawing', here: true }])
     expect(card.words).toBe('make her wave')
     expect(card.told).toBe('@maya_front waving, pose from @image2')
@@ -40,7 +45,9 @@ describe('arrowCard: what the step behind an arrow did', () => {
     expect(card.fallback).toBeUndefined()
     expect(card.state).toBeUndefined()
     expect(card.when).toBe('Ran at 14:05 · took 12 s')
-    expect(card.cost).toBe('$0.15')
+    // No cost on the canvas (owner, 2026-10-13): History shows it.
+    expect(card).not.toHaveProperty('cost')
+    expect(cardLines(card).join(' ')).not.toMatch(/\$/)
     // The arrow from the named image marks that one.
     expect(arrowCard(doc, ui, { from: 'node_maya', to: 'job_g' }, { kindOf }).from[0]).toEqual({ label: '@maya_front', here: true })
     // An arrow from a text box names its words.
@@ -58,7 +65,7 @@ describe('arrowCard: what the step behind an arrow did', () => {
     expect(card.title).toBe('The side view')
     expect(card.changed).toBe('Turned @maya_front to the side view')
     expect(card.from).toEqual([{ label: '@maya_front', here: true }])
-    expect(card.who).toBe('Dex · Gemini 3.1 Flash (runway)')
+    expect(card.who).toBe('Fin · Gemini 3.1 Flash (runway)')
   })
 
   it('a region edit names the box and its note', () => {
@@ -80,7 +87,7 @@ describe('arrowCard: what the step behind an arrow did', () => {
       { provider: 'mock', model: 'mock-hq' },
     )
     const card = arrowCard(doc, ui, { from: 'node_note', to: 'job_f' }, { kindOf })
-    expect(card.who).toBe('Dex · Gemini 3 Pro (runway)')
+    expect(card.who).toBe('Fin · Gemini 3 Pro (runway)')
     expect(card.fallback).toBe('Made on Runway: mock could not take Mock HQ')
     expect(cardLines(card)[2]).toBe(card.fallback)
   })
@@ -88,7 +95,7 @@ describe('arrowCard: what the step behind an arrow did', () => {
   it('a job a document recorded on a provider no longer routed names it as recorded', () => {
     // madeBy is free text (features/drop-hackathon-extras.clan): older projects still load and say what made them.
     const { doc, ui } = setup({ id: 'job_o', op: 'generate', provider: 'oldco', model: 'old-model' }, { text: 'a cat', refs: [] })
-    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_o' }, { kindOf }).who).toBe('Dex · old-model (oldco)')
+    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_o' }, { kindOf }).who).toBe('Fin · old-model (oldco)')
   })
 
   it('a job with no director block went as written', () => {
@@ -96,21 +103,18 @@ describe('arrowCard: what the step behind an arrow did', () => {
     const card = arrowCard(doc, ui, { from: 'node_note', to: 'job_p' }, { kindOf })
     expect(card.told).toBeUndefined()
     expect(card.passthrough).toBe('No director: your words went to the model as written.')
-    expect(card.who).toBe('Dex · the mock (no model)')
-    expect(card.cost).toBeUndefined()
-    doc.jobs[0].cost = { confirmed: 0, currency: 'USD', unknown: false }
-    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_p' }).cost).toBeUndefined()
-    doc.jobs[0].cost = { estimate: 0.04, currency: 'USD', unknown: false }
-    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_p' }).cost).toBe('about $0.040')
+    expect(card.who).toBe('Fin · the mock (no model)')
+    doc.jobs.job_p.cost = { estimate: 0.04, currency: 'USD', unknown: false }
+    expect(cardLines(arrowCard(doc, ui, { from: 'node_note', to: 'job_p' })).join(' ')).not.toMatch(/\$/)
   })
 
   it('a step still running, or with no record, says so', () => {
     const { doc, ui } = setup({ id: 'job_q', op: 'generate', state: 'queued' }, { text: 'a cat' })
     const running = arrowCard(doc, ui, { from: 'node_note', to: 'job_q' }, { kindOf })
     expect(running.state).toBe('Still being made.')
-    expect(running.who).toBe('Dex · model not known yet')
+    expect(running.who).toBe('Fin · model not known yet')
     expect(running.passthrough).toBeUndefined()
-    const missing = arrowCard(doc, { jobCtx: {} }, { from: 'node_x', to: 'job_gone' })
+    const missing = arrowCard(doc, { jobs: {} }, { from: 'node_x', to: 'job_gone' })
     expect(missing.state).toBe('No record of this step in the document.')
     expect(missing.from).toEqual([{ label: 'a node', here: true }])
   })

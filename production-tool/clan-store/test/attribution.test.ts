@@ -1,147 +1,176 @@
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
-import {
-  ClanDocumentStore, agentKind, cardsFromRationale, directorRecord, memoryPersistence, providerRecord, recordJobOutcome, type JobEntry,
-} from '../src/index'
-import { id, job, sha, wasmBytes } from './fixtures'
+import { describe, expect, it } from 'vitest'
+import { LocalPatchBus, agentKind, cardsFromRationale, crewFor, jobRationale, landingWhy, opVerb, recordJobOutcome, sawPart, type JobEntry } from '../src/index'
+import { MAYA, id, jobValue, sha, store } from './fixtures'
 
-const wasm = wasmBytes()
-const maya = { participant: { id: 'p_a1b2c3', handle: 'maya' } }
-const tmp = mkdtempSync(join(tmpdir(), 'clan-attr-test-'))
-afterAll(() => rmSync(tmp, { recursive: true, force: true }))
-
-function store(persistence = memoryPersistence()) {
-  return new ClanDocumentStore({ wasm, persistence, saveDebounceMs: 10 })
-}
+/** patch.schema.json Why.rationale maxLength. */
+const RATIONALE_MAX = 2000
 
 function realJob(): JobEntry {
-  const j = job(0) as unknown as JobEntry
+  const j = { id: id('job', 0), ...jobValue(0) } as unknown as JobEntry
   j.op = 'generate'
   j.provider = 'runway'
   j.model = 'gen4_image'
-  j.updated_at = '2026-10-07T10:40:41Z'
-  j.agent = {
-    model: 'claude-sonnet-4-5',
-    promptVersion: 'director.v1',
+  j.updated_at = '2026-10-13T10:40:41Z'
+  j.created_at = '2026-10-13T10:40:00Z'
+  j.director = {
+    model: 'claude-sonnet-5-5',
+    promptVersion: 'director.v6',
     rationale: 'The sketch sets the pose; the photo gives the coat.',
     latencyMs: 2300,
     output: {
       op: 'generate',
-      providerJob: {
-        provider: 'runway', model: 'gen4_image', prompt: '@hero in a yellow raincoat, front view, full body, plain studio background',
-        refs: [{ sha256: sha(7), name: 'hero', role: 'character' }, { sha256: sha(8), name: 'coat', role: 'object' }],
-      },
-      needsUser: null, rationale: 'x', confidence: 0.8,
+      providerJob: { provider: 'runway', model: 'gen4_image', prompt: '@hero in a yellow raincoat, front view', refs: [{ sha256: sha(7), name: 'hero', role: 'character' }, { sha256: sha(8), name: 'coat', role: 'object' }] },
+      question: null,
     },
   }
   j.cost = { estimate: 0.08, confirmed: 0.07, currency: 'USD', unknown: false }
   return j
 }
 
-describe('attribution: participant, director, provider', () => {
-  it('names the three kinds of author', () => {
-    expect(agentKind('maya')).toBe('participant')
-    expect(agentKind('director · claude-sonnet-4-5 · director.v1')).toBe('director')
-    expect(agentKind('runway · gen4_image')).toBe('provider')
+describe('attribution: people and the crew', () => {
+  it('names people and crew', () => {
+    expect(agentKind('human:p_maya001')).toBe('person')
+    expect(agentKind('dex')).toBe('crew')
+    expect(agentKind('maya')).toBe('other')
   })
 
-  it('builds the director and provider entries from the job', () => {
+  it('gives each op its verb and its crew member', () => {
+    expect([opVerb('shot_list'), crewFor('shot_list')]).toEqual(['plan', 'dex'])
+    expect([opVerb('clip'), crewFor('clip')]).toEqual(['render', 'wren'])
+    expect([opVerb('clip_patch'), crewFor('clip_patch')]).toEqual(['edit', 'edie'])
+    expect([opVerb('cutout'), crewFor('cutout')]).toEqual(['retouch', 'rhea'])
+    expect([opVerb('check'), crewFor('check')]).toEqual(['check', 'jude'])
+    expect([opVerb('read'), crewFor('read')]).toEqual(['read', 'ellis'])
+    expect([opVerb('write'), crewFor('write')]).toEqual(['write', 'skye'])
+  })
+
+  it('says what the director decided and what the provider made, in one line', () => {
+    const r = jobRationale(realJob())
+    expect(r).toContain('The sketch sets the pose')
+    expect(r).toContain('hero as character')
+    expect(r).toContain('prompt: "@hero in a yellow raincoat')
+    expect(r).toContain('director claude-sonnet-5-5 · director.v6 · 2.3 s')
+    expect(r).toContain('gen4_image on runway')
+    expect(r).toContain('cost $0.07 confirmed')
+    expect(r).toContain('41 s')
+  })
+
+  it('names each reference Dex added beyond what the shot asked for, with why (owner 2026-10-15)', () => {
     const j = realJob()
-    const d = directorRecord(j)!
-    expect(d.agent).toBe('director · claude-sonnet-4-5 · director.v1')
-    expect(d.action).toBe(`directed generate ${j.id}`)
-    expect(d.rationale).toContain('The sketch sets the pose')
-    expect(d.rationale).toContain('hero as character')
-    expect(d.rationale).toContain('coat as object')
-    expect(d.rationale).toContain('prompt: "@hero in a yellow raincoat')
-    const p = providerRecord(j)!
-    expect(p.agent).toBe('runway · gen4_image')
-    expect(p.action).toBe(`made generate ${j.id}`)
-    expect(p.rationale).toContain('cost $0.07 confirmed')
-    expect(p.rationale).toContain('41 s')
-    expect(p.rationale).toContain(`out ${j.outputs![0]}`)
-
-    const failed = { ...j, state: 'failed', outputs: [], error: { code: 'moderated', message: 'The provider refused the picture.', retryable: false, providerCode: 'SAFETY.INPUT.IMAGE' } }
-    const pf = providerRecord(failed)!
-    expect(pf.action).toBe(`failed generate ${j.id}`)
-    expect(pf.rationale).toMatch(/^moderated \(SAFETY.INPUT.IMAGE\): The provider refused/)
-    expect(providerRecord({ ...j, state: 'running' })).toBeNull()
+    ;(j.director!.output as { added?: unknown }).added = [{ name: 'coat', why: 'the words ask for the raincoat; only this photo shows it' }]
+    expect(jobRationale(j)).toContain('Added by Dex: @coat, the words ask for the raincoat; only this photo shows it')
+    expect(jobRationale(realJob())).not.toContain('Added by Dex')
   })
 
-  it('puts the cards the director was given last in its entry, and reads them back', () => {
-    const j = realJob()
-    const cards = [
-      { tag: 'hero', sha256: `sha256:${'a'.repeat(64)}`, kind: 'character' as const, card: 'A girl in a yellow raincoat\nFlat 2D · thick outlines\nFront view' },
-      { tag: 'in_1', sha256: `sha256:${'b'.repeat(64)}`, kind: 'other' as const, card: 'Grey feathers ¦ close up' },
-    ]
-    const d = directorRecord(j, cards)!
-    expect(d.rationale).toContain('The sketch sets the pose')
-    expect(d.rationale).toContain(' · saw: @hero (character): A girl in a yellow raincoat / Flat 2D , thick outlines / Front view')
-    const back = cardsFromRationale(d.rationale)
-    expect(back.rest).toBe(directorRecord(j)!.rationale)
-    expect(back.cards).toEqual([
-      { tag: 'hero', kind: 'character', lines: ['A girl in a yellow raincoat', 'Flat 2D , thick outlines', 'Front view'] },
-      { tag: 'in_1', kind: 'other', lines: ['Grey feathers , close up'] },
-    ])
-    expect(cardsFromRationale(directorRecord(j)!.rationale).cards).toEqual([])
+  it('a landing is the crew member\'s, citing the job', () => {
+    const w = landingWhy('doc1', realJob(), `frames[${id('frame', 1)}]`)
+    expect(w.agent).toBe('wren')
+    expect(w.action).toBe(`render frames[${id('frame', 1)}]`)
+    expect(w.cites).toEqual([`doc1#jobs[${id('job', 0)}]`])
   })
 
-  it('writes the job entries once, across repeats and a reload', async () => {
+  it('cards ride at the end of a rationale and read back', () => {
+    const cards = [{ tag: 'hero', sha256: sha(7), kind: 'character' as const, card: 'A woman, 30s.\nYellow coat / hood up.' }]
+    const r = jobRationale(realJob(), cards)
+    expect(r.endsWith(sawPart(cards))).toBe(true)
+    const back = cardsFromRationale(r)
+    expect(back.cards).toEqual([{ tag: 'hero', kind: 'character', lines: ['A woman, 30s.', 'Yellow coat, hood up.'] }])
+  })
+
+  it('a failed job is recorded once, as its crew member, with the job as its target', async () => {
     const s = store()
-    await s.create(maya)
-    const j = realJob()
-    await s.patch({ jobs: [j] }, { action: 'job', quiet: true })
-    expect(await recordJobOutcome(s, { ...j, state: 'running' })).toBe(0)
-    expect(await recordJobOutcome(s, j)).toBe(2)
-    expect(await recordJobOutcome(s, j)).toBe(0)
+    await s.create({ person: MAYA })
+    const failed = { ...realJob(), state: 'failed', error: { code: 'provider_failed', message: 'Runway is busy.', retryable: true } }
+    expect(await recordJobOutcome(s, failed)).toBe(true)
+    expect(await recordJobOutcome(s, failed)).toBe(false)
+    expect(await recordJobOutcome(s, { ...realJob(), state: 'completed' })).toBe(false)
+    const [e] = await s.chain()
+    expect(e.agent).toBe('wren')
+    expect(e.action).toBe(`render failed generate ${id('job', 0)}`)
+    expect(e.rationale).toContain('provider_failed: Runway is busy.')
+    expect(e.targets).toEqual([`${s.documentId()}#jobs[${id('job', 0)}]`])
+  })
 
-    const again = store()
-    await again.open(await s.exportClan())
-    expect(await recordJobOutcome(again, j)).toBe(0)
-
-    const chain = await again.chain()
-    expect(chain.filter((e) => e.action.endsWith(j.id))).toHaveLength(2)
-    // The quiet write names its agent and an action too (ADR-004): the participant's, beside them.
-    const quiet = chain.filter((e) => e.action === 'job')
+  it('a quiet write names its agent and an action too (ADR-004): the person\'s plain sync line', async () => {
+    const s = store()
+    await s.create({ person: MAYA })
+    await s.patch({ jobs: { [id('job', 0)]: { id: id('job', 0), v: 1, field_v: {}, ...jobValue(0) } } }, { action: 'set the job running', quiet: true, pinned: true })
+    const quiet = (await s.chain()).filter((e) => e.action === 'sync')
     expect(quiet).toHaveLength(1)
-    expect(quiet[0].agent).toBe('maya')
-    const kinds = chain.map((e) => agentKind(e.agent))
-    expect(kinds).toContain('director')
-    expect(kinds).toContain('provider')
-    expect(kinds).toContain('participant')
+    expect(quiet[0].agent).toBe(`human:${MAYA.id}`)
+    expect(quiet[0].rationale).toBe('set the job running')
+    expect(quiet[0].pinned).toBeFalsy()
     s.dispose()
-    again.dispose()
   })
 
-  it('a patch can name its agent, and pins locks', async () => {
-    const s = store()
-    await s.create(maya)
-    await s.patch({ keys: [{ key: 'hero', role: 'character', library: { workspace: 'acme', ver: 1, by: 'maya', at: '2026-10-07T10:41:00Z' } }] }, { action: 'published hero', pinned: true })
-    await s.patch({ stage: { current: 'storyboard' } }, { action: 'moved on', agent: 'director · m · director.v1' })
-    const [moved, locked] = await s.chain()
-    expect(moved.agent).toBe('director · m · director.v1')
-    expect(locked.agent).toBe('maya')
-    expect(locked.pinned).toBe(true)
-    expect(locked.fields_changed).toEqual(['keys'])
-  })
+  describe('a long job still lands (2026-10-15: @pup with four views lost a paid frame)', () => {
+    // A character key with four views, each with its sha, Dex's additions, several outputs and the cards:
+    // together well past patch.schema.json's 2000 characters before the cap.
+    function longJob(): JobEntry {
+      const j = { id: id('job', 0), ...jobValue(0) } as unknown as JobEntry
+      const views = ['front', 'three_quarter', 'side', 'back']
+      const refs = [
+        ...views.map((v, i) => ({ sha256: sha(100 + i), name: `pup_${v}`, role: 'character' })),
+        ...views.map((v, i) => ({ sha256: sha(200 + i), name: `bowl_${v}`, role: 'object' })),
+        { sha256: sha(300), name: 'kitchen', role: 'setting' },
+      ]
+      j.director = {
+        model: 'claude-sonnet-5-5', promptVersion: 'director.v6', latencyMs: 4100,
+        rationale: 'The front view sets the face and the side view the tail; the bowl is the hero product, so it stays in frame and in focus. '.repeat(3),
+        output: {
+          providerJob: { provider: 'runway', model: 'gen4_image', prompt: '@pup_front sits by @bowl_front on the kitchen floor, morning light. '.repeat(5), refs, firstFrame: sha(400) },
+          added: views.map((v) => ({ name: `pup_${v}`, why: `the shot asks for @pup from the ${v}; only this view shows the markings on that side of the coat and the collar` })),
+        },
+      }
+      j.outputs = [sha(500), sha(501), sha(502), sha(503)]
+      return j
+    }
+    const cards = [
+      { tag: 'pup', sha256: sha(100), kind: 'character' as const, card: 'A golden retriever pup, 10 weeks.\nWhite blaze on the chest.\nRed collar, brass tag.\nFloppy ears, one inside out.' },
+      { tag: 'bowl', sha256: sha(200), kind: 'object' as const, card: 'Ceramic cereal bowl, cream glaze.\nLogo faces camera.\nFilled to the rim, milk splash.' },
+      { tag: 'kitchen', sha256: sha(300), kind: 'setting' as const, card: 'Bright family kitchen.\nOak floor, white cupboards.\nWindow left, morning sun.' },
+    ]
 
-  it('the real clan CLI reads all three authors from the exported bytes', async () => {
-    const s = store()
-    await s.create(maya)
-    const j = realJob()
-    await s.patch({ jobs: [j] }, { action: `generated front view`, rationale: 'from @ref_a' })
-    await recordJobOutcome(s, j)
-    const file = join(tmp, 'maya.clan')
-    writeFileSync(file, await s.exportClan())
-    const chain = execFileSync(process.env.CLAN_BIN || 'clan', ['--quiet', 'read', 'chain', file], { encoding: 'utf8' })
-    expect(chain).toContain('director · claude-sonnet-4-5 · director.v1')
-    expect(chain).toContain('runway · gen4_image')
-    expect(chain).toContain('generated front view')
-    expect(chain).toContain(id('job', 0))
-    const report = execFileSync(process.env.CLAN_BIN || 'clan', ['--quiet', 'validate', '--strict', file], { encoding: 'utf8' })
-    expect(report).toMatch(/^OK$/m)
+    it('caps the rationale at 2000 and keeps every card whole', () => {
+      const j = longJob()
+      expect(jobRationale(j).length).toBeLessThanOrEqual(RATIONALE_MAX)
+      const r = jobRationale(j, cards)
+      expect(r.length).toBeLessThanOrEqual(RATIONALE_MAX)
+      expect(r.endsWith(sawPart(cards))).toBe(true)
+      const back = cardsFromRationale(r)
+      expect(back.cards.map((c) => c.tag)).toEqual(['pup', 'bowl', 'kitchen'])
+      expect(back.cards[0].lines).toEqual(['A golden retriever pup, 10 weeks.', 'White blaze on the chest.', 'Red collar, brass tag.', 'Floppy ears, one inside out.'])
+      expect(back.rest.startsWith('The front view sets the face')).toBe(true)
+      expect(back.rest.endsWith('…')).toBe(true)
+    })
+
+    it('leaves a rationale that fits as it was', () => {
+      const cards1 = cards.slice(0, 1)
+      const r = jobRationale(realJob(), cards1)
+      expect(r).not.toContain('…')
+      expect(r.endsWith(sawPart(cards1))).toBe(true)
+    })
+
+    it('clips the whole string when the cards alone leave no room', () => {
+      const many = Array.from({ length: 30 }, (_, i) => ({ tag: `extra${i}`, sha256: sha(600 + i), kind: 'object' as const, card: 'A thing on the counter, seen in the corner of the shot.\nKeep it soft.' }))
+      const r = jobRationale(longJob(), many)
+      expect(r.length).toBeLessThanOrEqual(RATIONALE_MAX)
+      expect(r.startsWith('The front view sets the face')).toBe(true)
+      expect(cardsFromRationale(r).cards.length).toBeGreaterThan(0)
+    })
+
+    it('a landing with that job is not refused by the bus', async () => {
+      const s = store()
+      await s.create({ person: MAYA })
+      const j = longJob()
+      const { id: jobId, ...value } = j as unknown as { id: string } & Record<string, unknown>
+      const why = landingWhy(s.documentId(), j, `frames[${id('frame', 1)}]`, cards)
+      const r = await new LocalPatchBus(s).apply({ patches: [{ op: 'create', entity: 'jobs', id: jobId, value, base_version: 0 }], why })
+      expect(r.refused).toEqual([])
+      expect(r.applied).toBe(true)
+      const [e] = await s.chain()
+      expect(e.rationale).toBe(why.rationale)
+      expect(cardsFromRationale(e.rationale ?? '').cards).toHaveLength(3)
+    })
   })
 })
