@@ -78,12 +78,15 @@ export async function nothingBetweenBarAndDocument(page: Page, tool: string) {
 export async function alertCoversNoControl(page: Page) {
   const alert = page.locator('.tb-alert').first()
   await expect(alert).toBeVisible()
+  // At the top of the page: every control. At its end: the page-end controls (the lower half of the screen); anything scrolling past
+  // the top of the screen passes under any fixed line, and is not what the alert is placed for.
   const check = async (where: string) => {
     const a = (await alert.boundingBox())!
     const frame = (await page.locator('iframe').first().boundingBox())!
     const rects = await page.frameLocator('iframe').first().locator('body').evaluate(() => [...document.querySelectorAll('button,a[href],input,textarea,select,summary,[role="button"]')]
       .filter(e => (e as HTMLElement).offsetParent !== null || getComputedStyle(e).position === 'fixed').map(e => { const r = e.getBoundingClientRect(); return { n: `${e.tagName}:${(e.getAttribute('data-testid') || e.id || (e.textContent || '').trim()).slice(0, 30)}`, x: r.x, y: r.y, w: r.width, h: r.height } }).filter(r => r.w > 0 && r.h > 0))
-    const hit = rects.filter(r => r.x + frame.x < a.x + a.width && r.x + frame.x + r.w > a.x && r.y + frame.y < a.y + a.height && r.y + frame.y + r.h > a.y).map(r => r.n)
+    const half = (await page.evaluate(() => innerHeight)) / 2 - frame.y
+    const hit = rects.filter(r => (where === 'top' || r.y > half) && r.x + frame.x < a.x + a.width && r.x + frame.x + r.w > a.x && r.y + frame.y < a.y + a.height && r.y + frame.y + r.h > a.y).map(r => r.n)
     expect(hit, `${where}: nothing the alert lies over is a control`).toEqual([])
   }
   await check('top')
