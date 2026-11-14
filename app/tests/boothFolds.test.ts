@@ -494,3 +494,37 @@ test('who holds it: days late in the warn tone; a role when no one is named; onl
   const none = await open(SRC.script, { data: RADIO, attention: [{ code: 'sign', text: 'x', blocks_lock: true }] })
   assert.equal(none.one('#side [data-booth-holder]').textContent, '')
 })
+
+// ── review items 2 and 7 ──
+test('a restore that brought a mark back (Confidential) does not say Cmd Z takes it back, and tells the shell nothing', async () => {
+  const withMarks: Json = { ...VERSIONS, draft: { changed: true, restored_from: 1, edited_by: 'dara@wk', at: '2026-11-14T09:00:00Z', last_edit: { decision: 'd9', person: 'dara@wk', keys: ['audience', 'confidential_fields'], before: {} } } }
+  const s = await open(SRC.script, { data: RADIO, versions: withMarks, post: path => (path === '/restore' ? { ok: true, clan: { data: RADIO, version: 'v9' } } : { ok: true }) })
+  s.click('#side [data-testid="version-row"][data-version="1"] [data-bf-act="ver-restore"]'); await s.settle()
+  const f = s.one('#side [data-testid="versions-fold"]'); f.open = true; f.dispatchEvent(new s.win.Event('toggle')); await s.settle()
+  assert.match(s.one('#side [data-testid="restore-note"]').textContent, /To go back, restore the version you want\./)
+  assert.doesNotMatch(s.one('#side [data-testid="restore-note"]').textContent, /Cmd Z/)
+  assert.equal(s.parent.filter(m => m.type === 'clan:write').length, 0, 'the undo stack is not told of what it would refuse')
+})
+
+test('the Judge fold keeps what the band said of a stale score, an earned trust and the overrule', async () => {
+  const stale = await open(SRC.script, { data: RADIO, card: CARD({ score: { ...CARD().score, out_of_date: true } }) })
+  assert.match(stale.one('#side [data-testid="judge-stale"]').textContent, /out of date/)
+  assert.match(stale.one('#side [data-testid="judge-again"]').className, /primary/, 'Score again is the one primary on a stale score')
+  const older = await open(SRC.script, { data: RADIO, card: CARD({ score: { ...CARD().score, current: false } }) })
+  assert.match(older.one('#side [data-testid="judge-stale"]').textContent, /earlier version/)
+  const fresh = await open(SRC.script, { data: RADIO })
+  assert.equal(fresh.one('#side [data-testid="judge-stale"]'), null)
+  assert.doesNotMatch(fresh.one('#side [data-testid="judge-again"]').className, /primary/)
+  // trust: until earned the number is advice, with the host's calibration line; earned, neither
+  assert.ok(fresh.one('#side [data-testid="judge-calibration"]'))
+  const earned = await open(SRC.script, { data: RADIO, card: CARD({ score: { ...CARD().score, trust: 'earned', route_line: 'Back to the team with the notes.' } }) })
+  assert.equal(earned.one('#side [data-testid="judge-calibration"]'), null)
+  // the overrule: only the creative director's, and an overruled score says whose word stands
+  const nobody = await open(SRC.script, { data: RADIO, card: CARD({ can_overrule: false }) })
+  assert.equal(nobody.one('#side [data-testid="judge-overrule"]'), null)
+  const cd = await open(SRC.script, { data: RADIO })
+  assert.ok(cd.one('#side [data-testid="judge-overrule"]'))
+  const over = await open(SRC.script, { data: RADIO, card: CARD({ score: { ...CARD().score, overruled: { route: 'cd', at: 't', reason: 'The thought is the one we want.' } } }) })
+  assert.match(over.one('#side [data-testid="judge-overruled"]').textContent, /The creative director overruled Judge: The thought is the one we want\./)
+  assert.equal(over.one('#side [data-testid="judge-overrule"]'), null)
+})

@@ -13,8 +13,9 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { after, test } from 'node:test'
 import { JSDOM } from 'jsdom'
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { createSaveQueue } from '../src/components/states/saveQueue.ts'
 import { CHANGED_BRIEF, FAILED_SAVE, LOADING, LONG_RUN, MISSING_ACCESS, NOT_RIGHT, runFailedLine } from '../src/components/states/words.ts'
 import { barFrom } from '../src/shell/appBar.ts'
 import SaveStatus, { SaveAlert } from '../src/components/SaveStatus.tsx'
@@ -49,14 +50,14 @@ const RADIO: Json = {
 const VISUAL: Json = { territory: { name: 'The long pour', source: 'territories' }, proposition: 'The whiskey that waits.' }
 const MOVED = { upstream: [{ direct: true, in_store: true, status: 'changed', title: 'The brief', version: 'bbbbbbb2222' }], carried: { last_decision: 'aaaaaaa1111' } }
 
-interface Opts { data?: Json; card?: Json | null; up?: Json; locked?: boolean; room?: Json; post?: (path: string, body: Json) => Json }
+interface Opts { width?: number; html?: string; data?: Json; card?: Json | null; up?: Json; locked?: boolean; room?: Json; post?: (path: string, body: Json) => Json }
 async function open(src: string, opts: Opts = {}) {
   const posts: { path: string; body: Json }[] = []
-  const dom = new JSDOM(packed(src), {
+  const dom = new JSDOM(opts.html ?? packed(src), {
     url: 'https://napkin.test/', runScripts: 'dangerously', pretendToBeVisual: true,
     beforeParse(w) {
       const win = w as unknown as Record<string, any>
-      Object.defineProperty(w, 'innerWidth', { value: 1440, configurable: true })
+      Object.defineProperty(w, 'innerWidth', { value: opts.width ?? 1440, configurable: true })
       win.__CLAN__ = { data: structuredClone(opts.data ?? {}) }
       win.clan = { me: () => Promise.resolve({ actor: 'human:dara@wk', id: 'dara@wk', name: 'Dara' }), patchData: () => Promise.resolve({ ok: true }) }
       win.NapkinRoles = { tag: () => '<span class="nk-ag"></span>', auto: () => {}, ofDecision: () => null }
@@ -231,4 +232,128 @@ test('a bar item of kind state is dropped, as on develop; the status item and it
   const got = barFrom({ v: 1, items: [{ kind: 'state', state: 'run-failed', why: 'provider' }, { kind: 'status', label: 'Stopped', tone: 'warn', locked: false }, { kind: 'button', id: 'a', label: 'Go' }] })
   assert.deepEqual(got.map(i => i.kind), ['status', 'button'])
   assert.equal((got[0] as { tone: string }).tone, 'warn')
+})
+
+// ── item 1 of the review: a state said while the Booth is hidden is brought to the person ──────────────────────
+
+/** A bare page with only the Booth snippet and the call every tool makes: what Brief Maker and Research are to the snippet. */
+const BARE = `<!doctype html><html><head><style>:root{--booth-line:#ddd;--booth-paper:#fff;--booth-ink:#111;--booth-ink-soft:#333;--booth-muted:#666;--booth-warn:#b40;--booth-desk:#eee}</style>${BOOTH}</head><body>
+<div id="desk"><main id="doc"><p id="p1">The document</p></main><aside id="panel"><div id="body"></div></aside></div>
+<script>boothStart({panel:'panel', desk:function(){return document.getElementById('desk');}, size:function(d){d.style.setProperty('--bw','380px');}, whole:function(){}, fold:function(){return true;}, inert:function(){return true;}, key:function(){return true;}}); boothApply(true);</script></body></html>`
+
+const STATES: Json[] = [
+  { name: 'run-failed', why: 'provider' },
+  { name: 'changed-brief', from: 'v1', to: 'v2', changes: 'Your work stays.' },
+  { name: 'long-run', minutes: 3, step: 'Reading' },
+  { name: 'missing-access', what: 'the brief', who: 'Aoife' },
+  { name: 'not-right' },
+  { name: 'loading', what: 'the room' },
+]
+const PAGES: [string, Opts][] = [
+  ['script editor', { data: RADIO }], ['idea room', {}], ['visual brief', { data: VISUAL }], ['a page with only the snippet (Brief Maker, Research)', { html: BARE }],
+]
+const SRC_OF: Record<string, string> = { 'script editor': SRC.script, 'idea room': SRC.room, 'visual brief': SRC.visual, 'a page with only the snippet (Brief Maker, Research)': '' }
+
+for (const [name, o] of PAGES) {
+  test(`${name}: every state said while the Booth is hidden shows the dot on the tab, then the Booth comes in on it`, async () => {
+    for (const st of STATES) {
+      const p = await open(SRC_OF[name], o)
+      p.one('[data-booth="hide"]').click(); await p.settle()
+      const desk = p.one('.booth-desk'), edge = p.one('#boothEdge')
+      assert.equal(desk.classList.contains('booth-off'), true, `${st.name}: hidden`)
+      p.win.boothSay(st, () => {})
+      assert.equal(edge.classList.contains('has'), true, `${st.name}: the tab shows the dot at once`)
+      assert.match(edge.getAttribute('aria-label') ?? '', /1 question|1 waiting|waiting/i)
+      assert.equal(desk.classList.contains('booth-off'), true, `${st.name}: not yet in, the person is not startled`)
+      await new Promise(r => setTimeout(r, 1200))
+      assert.equal(desk.classList.contains('booth-off'), false, `${st.name}: the Booth is in after one second`)
+      assert.equal(p.one('[data-testid="booth-state"]').hidden, false, `${st.name}: and says it`)
+      assert.equal(p.parent.filter(m => m.type === 'clan:booth' && m.open === false).length, 1, 'the shell was told of the hide only')
+    }
+  })
+  test(`${name}: a state that goes away takes its dot with it; a state already said when the Booth is open adds no dot`, async () => {
+    const p = await open(SRC_OF[name], o)
+    p.win.boothSay(STATES[0], () => {})
+    assert.equal(p.one('#boothEdge').classList.contains('has'), false, 'open Booth: no dot')
+    p.one('[data-booth="hide"]').click(); await p.settle()
+    p.win.boothSay(null)
+    assert.equal(p.one('#boothEdge').classList.contains('has'), false)
+    p.win.boothSay(STATES[1], () => {}); assert.equal(p.one('#boothEdge').classList.contains('has'), true)
+    p.win.boothSay(null); assert.equal(p.one('#boothEdge').classList.contains('has'), false, 'cleared before the Booth came in: no dot, no surprise')
+    await new Promise(r => setTimeout(r, 1200))
+    assert.equal(p.one('.booth-desk').classList.contains('booth-off'), true, 'and the Booth stayed hidden')
+  })
+  test(`${name}: at 390 px, where the Booth follows the document, the state is the first thing above the document, not at the bottom`, async () => {
+    const p = await open(SRC_OF[name], { ...o, width: 390 })
+    p.win.boothSay(STATES[0], () => {})
+    const line = p.one('[data-testid="booth-state"]'), desk = p.one('.booth-desk')
+    assert.equal(line.hidden, false)
+    assert.equal(!!(line.compareDocumentPosition(desk) & 4), true, 'it comes before the desk (document and Booth) in the page')
+    assert.equal(p.one('[data-booth-panel]').contains(line), false, 'it is not inside the Booth, which is below the document')
+    p.win.boothSay(null)
+    assert.equal(line.hidden, true)
+    p.win.boothSay(STATES[1], () => {})
+    Object.defineProperty(p.win, 'innerWidth', { value: 1440, configurable: true }); p.win.dispatchEvent(new p.win.Event('resize'))
+    assert.equal(p.one('[data-booth-panel]').contains(p.one('[data-testid="booth-state"]')), true, 'wide again: back in the Booth under its header')
+  })
+}
+
+// ── item 3: the 409 alert says what happens to the typed words, clears once settled, and sits where it hides neither the Booth's Hide nor the page's first lines ──
+test('the 409 alert keeps the line about the typed words, and Update settles it', () => {
+  const q = createSaveQueue()
+  q.report({ id: 'w1', state: 'saving', field: 'audience', text: 'My unsaved words.' })
+  q.report({ id: 'w1', state: 'changed', field: 'audience', text: 'My unsaved words.' })
+  const html = () => renderToStaticMarkup(createElement(SaveAlert, { state: q.state(), onRefresh: () => {} }))
+  assert.match(html(), /What you typed stays on the page until you update\./)
+  assert.match(html(), /The brief changed while you were typing\./)
+  q.forgetChanged() // Update: the page reads the document again
+  assert.equal(q.state(), 'idle')
+  assert.equal(html(), '', 'the alert is gone once settled')
+  q.report({ id: 'w2', state: 'failed', field: 'x', text: 'kept' })
+  q.forgetChanged()
+  assert.equal(q.state(), 'failed', 'a write that failed to save is not forgotten by Update')
+})
+test('the alert sits at the bottom of the window: it never covers the Booth\'s header or the first lines of the page', () => {
+  const css = read('src/shell/nui/nui.css')
+  const rule = /\.nui \.tb-alert \{([^}]*)\}/.exec(css)![1]
+  assert.match(rule, /position: fixed/)
+  assert.match(rule, /bottom:/)
+  assert.doesNotMatch(rule, /top:/)
+})
+
+// ── item 4: a failed Judge run sent from the shell says its reason as text on screen ──
+test('a failed Judge run is said in the bar as readable text with a role, not in a title, and can be dismissed', () => {
+  let dismissed = 0
+  const html = renderToStaticMarkup(createElement(SaveAlert, { state: 'idle', judge: 'Judge could not score this just now. Nothing was changed.', onJudgeDismiss: () => { dismissed++ } }))
+  assert.match(html, /data-state="run-failed"/)
+  assert.match(html, /role="alert"/)
+  assert.match(html, />Judge could not score this just now\. Nothing was changed\.</)
+  assert.doesNotMatch(html, /title=/)
+  assert.match(html, />Dismiss</)
+  assert.equal(dismissed, 0)
+  assert.equal(renderToStaticMarkup(createElement(SaveAlert, { state: 'idle' })), '')
+  assert.doesNotMatch(read('src/shell/judge/useJudge.ts'), /kind: 'chip'/, 'no chip with the reason hidden in its title')
+})
+
+// ── item 5: no price or cost anywhere in what the Booth and the Judge files say ──
+test('the Booth snippets and the shell\'s Judge files name no cost, price, charge, credit or currency', () => {
+  const files = ['templates/shared/booth.html', 'templates/shared/booth-folds.html', ...readdirSync(new URL('src/shell/judge/', root)).filter(f => /\.(ts|tsx)$/.test(f)).map(f => `src/shell/judge/${f}`)]
+  const found: string[] = []
+  for (const f of files) {
+    const text = read(f)
+    for (const m of text.matchAll(/\b(costs?|prices?|priced|charg\w*|credits?|euros?|cents?)\b|[$€£]/gi)) found.push(`${f}: ${m[0]}`)
+  }
+  assert.deepEqual(found, [])
+  assert.equal(existsSync(new URL('src/shell/judge/judgeModel.ts', root)), true)
+  assert.doesNotMatch(read('src/shell/judge/judgeModel.ts'), /priceLine/)
+})
+
+// ── item 6: an undo note said again is said again ──
+test('the same undo note, said twice, is shown each time (the note carries a count)', () => {
+  const html = (key: number) => renderToStaticMarkup(createElement(SaveAlert, { state: 'idle', note: 'Nothing to undo.', noteKey: key }))
+  assert.match(html(1), /Nothing to undo\./)
+  assert.match(html(2), /Nothing to undo\./)
+  const hook = read('src/shell/versions/useBriefUndo.ts')
+  assert.match(hook, /noteKey/)
+  void useState
 })
