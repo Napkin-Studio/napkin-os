@@ -23,10 +23,12 @@ export function importSummary(r: ImportReport): { head: string; sub: string | nu
   if (r.ok === 0) {
     return { head: `None of the ${plural(r.rows, 'row', 'rows')} can be imported.`, sub: 'Fix the lines below and choose the file again. Nothing has been saved.', tone: 'none' }
   }
-  if (r.created === 0 && r.updated === 0) {
+  const n = r.created + r.updated
+  if (n === 0) {
     return { head: `All ${r.ok} ${r.ok === 1 ? 'person' : 'people'} in this file are already here. Nothing would change.`, sub: bad > 0 ? `${plural(bad, 'row needs', 'rows need')} a look.` : null, tone: bad > 0 ? 'look' : 'ok' }
   }
-  const ready = `${r.ok} ${r.ok === 1 ? 'person is' : 'people are'} ready to import.`
+  // one count, the same as the button's: what would be added or changed; what is here already is said apart
+  const ready = `${n} to import${r.unchanged > 0 ? `, ${r.unchanged} already here` : ''}.`
   return {
     head: bad > 0 ? `${ready} ${plural(bad, 'row needs', 'rows need')} a look.` : ready,
     sub: bad > 0 ? 'The rows that need a look are left out. Fix them in the file and import it again, or go on without them. Nothing has been saved yet.' : 'Nothing has been saved yet.',
@@ -46,9 +48,9 @@ export function errorRows(r: ImportReport, limit = 50): { shown: ImportReport['r
   return { shown: bad.slice(0, limit), more: Math.max(0, bad.length - limit) }
 }
 
-/** The import button's words, or null when there is nothing to import. */
+/** The import button's words, or null when there is nothing to import: the summary's own count. */
 export function importVerb(r: ImportReport): string | null {
   const n = r.created + r.updated
-  if (r.ok === 0 || (n === 0 && !r.starts_directory)) return null
-  return `Import ${n || r.ok} ${(n || r.ok) === 1 ? 'person' : 'people'}`
+  if (r.ok === 0 || n === 0) return null
+  return `Import ${n} ${n === 1 ? 'person' : 'people'}`
 }

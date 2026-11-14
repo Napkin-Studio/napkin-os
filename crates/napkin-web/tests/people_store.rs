@@ -1192,3 +1192,74 @@ async fn an_admin_changes_a_persons_name_and_address_on_the_people_route() {
     .await;
     assert_eq!(st, StatusCode::BAD_REQUEST);
 }
+
+/// Review h1b: a change recorded and never written (a stopped server), then another change on a running task, then a
+/// restart: the first must still be marked not applied, and the later one must not reuse its number.
+#[tokio::test]
+async fn an_unapplied_change_is_still_marked_after_a_later_change() {
+    let r = rig();
+    let ad = sign_in(&r, "ad@wk").await;
+    let put = |roles: Value| {
+        let c = ad.cookie.clone();
+        let r = &r;
+        async move {
+            call(
+                r,
+                "PUT",
+                "/api/admin/people/cian@wk/roles",
+                Some(&c),
+                Some(json!({ "roles": roles })),
+            )
+            .await
+            .0
+        }
+    };
+    assert_eq!(put(json!(["traffic"])).await, StatusCode::OK);
+    let seq = r.ctx.people().unwrap().book().seq;
+    let log = r.dir.path().join("_people").join("changes.jsonl");
+    let orphan = json!({ "at": "2026-11-14T00:00:00Z", "by": "ad@wk", "what": "removed", "seq": seq + 1,
+        "person": "aoife@wk", "agency": "wk",
+        "before": { "name": "Aoife", "roles": ["planning"], "removed_at": null },
+        "after": { "name": "Aoife", "roles": ["planning"], "removed_at": "2026-11-14T00:00:00Z" } });
+    use std::io::Write as _;
+    writeln!(
+        std::fs::OpenOptions::new().append(true).open(&log).unwrap(),
+        "{orphan}"
+    )
+    .unwrap();
+    assert_eq!(put(json!(["producer"])).await, StatusCode::OK);
+    // the later change took a number past the orphan's
+    let text = std::fs::read_to_string(&log).unwrap();
+    let producer: Value = text
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .find(|l| l["after"]["roles"] == json!(["producer"]))
+        .unwrap();
+    assert!(producer["seq"].as_u64().unwrap() > seq + 1, "{producer}");
+    // the next start
+    let ctx = AppCtx::new(r.dir.path().to_path_buf(), Arc::new(NoConfig), None, 40);
+    let people = napkin_web::people::People::open(
+        r.dir.path().join("_people"),
+        &r.dir.path().join("accounts.tsv"),
+    )
+    .unwrap();
+    ctx.set_people(Arc::new(people));
+    let text = std::fs::read_to_string(&log).unwrap();
+    let marked = text
+        .lines()
+        .filter(|l| l.contains("not applied") && l.contains("aoife@wk"))
+        .count();
+    assert_eq!(marked, 1, "{text}");
+    assert!(ctx.people().unwrap().active("aoife@wk").is_some());
+    // nothing that happened is marked
+    assert!(
+        !text
+            .lines()
+            .any(|l| l.contains("not applied") && l.contains("cian@wk")),
+        "{text}"
+    );
+    assert_eq!(
+        ctx.people().unwrap().active("cian@wk").unwrap().roles,
+        ["producer"]
+    );
+}

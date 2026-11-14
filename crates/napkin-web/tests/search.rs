@@ -708,3 +708,17 @@ fn five_thousand_entries_answer_a_hundred_queries_inside_the_bound() {
         "the slowest of 100 queries took {worst:?}"
     );
 }
+
+/// A person found by search opens the People page (the account menu's dialog), not a route that went with the
+/// build's setup flow (features/align-needs-lock-people.clan, stage 4).
+#[test]
+fn a_person_found_by_search_points_at_the_people_page() {
+    let e = napkin_host::searchindex::person_entry(
+        "aoife@cr",
+        "Aoife",
+        &["planning".into()],
+        "Planning",
+    );
+    assert_eq!(e.route, "/people");
+    assert!(!e.route.contains("agency/people") && !e.route.contains("setup"));
+}

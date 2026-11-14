@@ -10,7 +10,7 @@
 //   #tool-<id>-<tool>       one tool, for that client
 //   #door-<door>            one page door of the desk's "Your pages" row, e.g. #door-client-brains
 //   #timesheet              the person's own day (features/timesheet-sessions.clan)
-//   #setup #people #audit   setting the agency up, its people and roles, and its audit view (features/agency-setup.clan)
+//   #audit                  the agency's audit view (features/agency-setup.clan); people are the People page, a dialog
 //   #job-<number>           one job: its page (features/job-page.clan), `J` and three to six digits
 //
 // `#agency` is the desk for everyone. The role home, `#home-<role>` and the O, `#map`, are gone: both fall to the

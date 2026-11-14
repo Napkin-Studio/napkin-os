@@ -469,6 +469,10 @@ pub struct Book {
     /// a start tells a recorded change the file never took (its number is past this one) from one it did.
     #[serde(default)]
     pub seq: u64,
+    /// Change numbers on changes.jsonl that the file never took, seen when a later change took a number past
+    /// them (a server that stopped between its record and its write). The next start marks them not applied.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unconfirmed: Vec<u64>,
 }
 
 /// The code agency `id`'s name in palette.ts.
@@ -1067,7 +1071,19 @@ impl People {
         // The record comes first: the new file is written aside, every line goes on changes.jsonl and on its
         // agency's audit chain, and only then does the file take the change. A change that cannot be recorded
         // does not happen (features/align-needs-lock-people.clan, done_when line 10).
-        book.seq += 1;
+        // the next number is past the file's and past every number on the log, so none is reused; a number on
+        // the log the file never took is kept as unconfirmed, for the next start to mark
+        let logged = log_numbers(&self.dir);
+        for (n, marked) in &logged {
+            if *n > book.seq
+                && !marked
+                && !book.unconfirmed.contains(n)
+                && book.unconfirmed.len() < MAX_UNCONFIRMED
+            {
+                book.unconfirmed.push(*n);
+            }
+        }
+        book.seq = logged.iter().map(|(n, _)| *n).fold(book.seq, u64::max) + 1;
         let seq = book.seq;
         let tmp = stage_book(&self.dir, &book).map_err(|e| Refusal::Io(e.to_string()))?;
         let at = now();
@@ -1180,26 +1196,48 @@ impl People {
             .lines()
             .filter_map(|l| serde_json::from_str(l).ok())
             .collect();
-        let Some(last) = lines.last() else {
-            return 0;
-        };
-        let Some(seq) = last["seq"].as_u64() else {
-            return 0;
-        };
-        if last["what"] == "not applied" || self.book().seq >= seq {
-            return 0;
-        }
-        let mut n = 0;
-        for l in lines
+        let book = self.book();
+        // the numbers the file never took: past its own, or seen unconfirmed by a later change
+        let untaken = |n: u64| n > book.seq || book.unconfirmed.contains(&n);
+        let marked: std::collections::HashSet<(u64, String)> = lines
             .iter()
-            .rev()
-            .take_while(|l| l["seq"].as_u64() == Some(seq) && l["what"] != "not applied")
-        {
+            .filter(|l| l["what"] == "not applied")
+            .filter_map(|l| {
+                Some((
+                    l["seq"].as_u64()?,
+                    l["person"].as_str().unwrap_or("").to_string(),
+                ))
+            })
+            .collect();
+        let mut n = 0;
+        for l in &lines {
+            let Some(seq) = l["seq"].as_u64() else {
+                continue;
+            };
+            if l["what"] == "not applied" || !untaken(seq) {
+                continue;
+            }
+            if marked.contains(&(seq, l["person"].as_str().unwrap_or("").to_string())) {
+                continue;
+            }
             self.not_applied(l, true);
             n += 1;
         }
+        if !book.unconfirmed.is_empty() {
+            // every one of them is marked now: the file need not carry them further
+            let _g = self.cache.lock().unwrap();
+            if let Ok((mut fresh, _)) = read_book(&self.dir) {
+                fresh.unconfirmed.clear();
+                if write_book(&self.dir, &fresh).is_ok() {
+                    drop(_g);
+                    let mut c = self.cache.lock().unwrap();
+                    c.stamp = stamp_of(&self.file());
+                    c.book = fresh;
+                }
+            }
+        }
         if n > 0 {
-            tracing::warn!(target: "napkin_web::people", lines = n, seq, "a recorded change was not in people.json; marked not applied");
+            tracing::warn!(target: "napkin_web::people", lines = n, "recorded changes were not in people.json; marked not applied");
         }
         n
     }
@@ -1943,6 +1981,34 @@ fn read_book(dir: &Path) -> Result<(Book, Option<Stamp>), String> {
     let book = serde_json::from_slice(&bytes)
         .map_err(|e| format!("cannot read {}: {e}", file.display()))?;
     Ok((book, stamp_of(&file)))
+}
+
+/// The most unconfirmed change numbers a file keeps (a log of crashed writes is not a thing to fill).
+const MAX_UNCONFIRMED: usize = 1000;
+
+/// Every change number on changes.jsonl, and whether a "not applied" line marks it (for the line's person).
+fn log_numbers(dir: &Path) -> Vec<(u64, bool)> {
+    let Ok(text) = std::fs::read_to_string(dir.join("changes.jsonl")) else {
+        return Vec::new();
+    };
+    let lines: Vec<serde_json::Value> = text
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect();
+    let marked: std::collections::HashSet<u64> = lines
+        .iter()
+        .filter(|l| l["what"] == "not applied")
+        .filter_map(|l| l["seq"].as_u64())
+        .collect();
+    let mut out: Vec<(u64, bool)> = Vec::new();
+    for l in lines.iter().filter(|l| l["what"] != "not applied") {
+        if let Some(n) = l["seq"].as_u64() {
+            if !out.iter().any(|(m, _)| *m == n) {
+                out.push((n, marked.contains(&n)));
+            }
+        }
+    }
+    out
 }
 
 /// The book written beside people.json, to be renamed over it.
