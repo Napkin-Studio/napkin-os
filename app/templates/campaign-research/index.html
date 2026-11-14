@@ -1158,6 +1158,7 @@ section.report{margin-top:0}
 /* the Report box */
 .insp-box#rbox{border:1px solid var(--line-strong);border-radius:8px;padding:12px;gap:10px;background:var(--card)}
 .rbox-h{gap:8px;align-items:baseline}
+.rbox-holder{margin:4px 0 0}
 .rbox-h b{font:700 14px var(--font-ui)}
 .rbox-when{font:400 11px var(--font-mono);color:var(--muted)}
 #rbox-status.pill{border:0;padding:4px 12px;border-radius:999px;font:400 11.5px var(--font-mono);letter-spacing:1.38px;text-transform:uppercase;color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent)}
@@ -1920,6 +1921,7 @@ body.fresh .booth-edge{display:none}
     <div class="judgebar" id="judge" role="region" aria-label="Your call" hidden></div>
     <section class="insp-box" id="rbox" aria-labelledby="rbox-h">
       <div class="rbox-h"><b id="rbox-h">Report</b><span class="pill" id="rbox-status"></span><span class="sp"></span><span class="rbox-when" id="rbox-when"></span></div>
+      <p class="rbox-holder" data-booth-holder data-testid="booth-holder" role="status"></p>
       <div class="rbox-acts">
         <span id="rbox-refresh"></span>
         <button type="button" class="btn primary sm" id="lockBtn">Lock and accept</button>

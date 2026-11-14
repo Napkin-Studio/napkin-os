@@ -21,7 +21,10 @@
           data-booth-fold="judge" or "versions". In a string the page draws, boothFoldHtml('judge') gives what the
           fold holds now, so a redraw keeps it.
        2. Calls boothFolds({judge: true, versions: true, noun: 'script'}) once, naming the folds it uses.
-     In client review mode (clan:clientmode) the folds draw nothing. -->
+     In client review mode (clan:clientmode) the folds draw nothing, and nothing draws before the shell has said
+     which mode the page is in. boothFolds({undo: true}) where the shell keeps an undo stack for the tool (a restore
+     is then told to it as a saved clan:write); boothJudgeSend(body, before) is the one way a page sends work to
+     Judge, so a run is never sent twice (onJudge(busy) tells the page when to draw its own button). -->
 <style id="napkin-booth-folds-css">
   [data-booth-fold]:empty{display:none}
   .bf{display:block;min-width:0;color:var(--booth-ink)}
@@ -92,8 +95,9 @@
 </style>
 <script id="napkin-booth-folds-js">
   // The folds' state: what each read last, and what the person has open. BF_AT is undefined until boothFolds().
-  var BF_AT, BF={client:false, judge:{card:null, open:true, passed:false, asking:false, reason:'', busy:false, line:''},
-    versions:{view:null, open:false, picked:[], diff:null, busy:false, error:''}};
+  // client is null until the shell says which mode the page is in (clan:clientmode): nothing draws before then.
+  var BF_AT, BF={client:window.parent===window?false:null, judge:{card:null, open:true, passed:false, asking:false, reason:'', busy:false, line:''},
+    versions:{view:null, open:false, picked:[], diff:null, busy:false, error:'', note:''}};
   var BF_WIDE=744, BF_POLL_MS=4000;
   var BF_SCHEME=navigator.userAgent.indexOf('Windows')>=0?'http://clan.localhost':'clan://localhost';
   function bfEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
@@ -210,13 +214,14 @@
       h+=d.parts.map(function(p){ return '<div class="bf-part" data-testid="compare-part"><h4>'+bfEsc(p.label)+'</h4><div class="bf-cols"><p class="bf-cell">'+(p.left?bfEsc(p.left):'<em>Empty</em>')+'</p><p class="bf-cell">'+(p.right?bfEsc(p.right):'<em>Empty</em>')+'</p></div></div>'; }).join('');
       h+='<div class="bf-acts"><button type="button" class="bf-btn" data-bf-act="ver-close">Close the compare</button></div></section>';
     }
+    if(st.note) h+='<p class="bf-note" role="status" data-testid="restore-note">'+bfEsc(st.note)+'</p>';
     if(st.error) h+='<p class="bf-err" role="alert">'+bfEsc(st.error)+'</p>';
     return h+'</div></details>';
   }
 
   // ── drawing, and the Booth's width ──
   function boothFoldHtml(k){
-    if(!BF_AT||BF.client||!BF_AT[k]) return '';
+    if(!BF_AT||BF.client!==false||!BF_AT[k]) return '';
     return k==='judge'?bfJudgeHtml(BF.judge.card, BF.judge):k==='versions'?bfVersionsHtml(BF.versions.view, BF.versions, BF_AT.noun||'document'):'';
   }
   function bfDraw(k){
@@ -230,7 +235,18 @@
     if(k==='versions') bfWiden();
   }
   // Two versions side by side: the compare is wide, so the Booth's column is too (Research's evidence map, 744 px).
-  function boothFoldWide(){ return !!(BF_AT&&BF_AT.versions&&!BF.client&&BF.versions.open&&BF.versions.picked.length===2&&BF.versions.diff); }
+  function boothFoldWide(){ return !!(BF_AT&&BF_AT.versions&&BF.client===false&&BF.versions.open&&BF.versions.picked.length===2&&BF.versions.diff); }
+  // The compare is on screen: drawn, not inside a view the page has hidden, and the Booth open.
+  function bfCompareShown(){
+    var c=document.querySelector('[data-booth-fold] [data-testid="version-compare"]');
+    return !!(c&&!c.closest('[hidden]')&&!(typeof BOOTH==='object'&&BOOTH&&BOOTH.open===false));
+  }
+  // Leaving the compare by any way (a part selected, the fold closed, the Booth hidden, another fold opened):
+  // the two picks are let go, so the Booth goes back to its own width and stays there.
+  function bfLeaveCompare(){
+    var st=BF.versions; if(!st.picked.length&&!st.diff) return;
+    st.picked=[]; st.diff=null; setTimeout(function(){ bfDraw('versions'); }, 0);
+  }
   // The width the Booth takes while it compares, on a desk this wide: 744 px, less where the document would have
   // under 360 px; never under what the page gave it.
   function bfWidthOf(desk, own){
@@ -245,6 +261,7 @@
   }
   // Wrapped round the page's own size hook (boothStart's size): the page sets its width, then a compare widens it.
   function bfSize(d){
+    if(boothFoldWide()&&!bfCompareShown()) bfLeaveCompare();
     var on=boothFoldWide()&&window.innerWidth>1100;
     d.classList.toggle('booth-wide', on);
     if(!on){ d.style.removeProperty('--trk'); return; }
@@ -266,15 +283,24 @@
     bfGet('/judge').then(function(c){ st.card=c&&c.ok!==false?c:null; }, function(){ /* the card stays as it was */ })
       .then(function(){ st.reading=false; bfDraw('judge'); if(st.again) bfReadJudge(); });
   }
-  function bfJudgeSend(){
-    var st=BF.judge, card=st.card; if(st.busy) return;
-    st.busy=true; st.line=''; bfDraw('judge');
-    bfPost('/judge', card&&card.piece?{target:card.piece}:{}).then(function(j){
-      if(j&&j.ok===false){ st.line=bfRefusal(j.error); return; }
-      if(j&&j.kind) st.card=j;
-    }, function(){ st.line='Judge could not score this just now. Nothing was changed.'; })
-      .then(function(){ st.busy=false; bfDraw('judge'); bfReadJudge(); });
+  // One Judge run at a time for this document: every control that sends work to Judge (the fold's Score again,
+  // the page's own Send to Judge and its bar button) goes through here. While a run is unanswered nothing else is
+  // sent (each POST /judge is a metered run); a second ask gets the same answer. `before` is the page's own step
+  // ahead of the run (its hand-off write), inside the same hold.
+  function boothJudgeBusy(){ return !!BF.judge.busy; }
+  function bfJudgeHold(on){ BF.judge.busy=on; bfDraw('judge'); if(BF_AT&&typeof BF_AT.onJudge==='function') BF_AT.onJudge(on); }
+  function boothJudgeSend(body, before){
+    var st=BF.judge; if(st.run) return st.run;
+    st.line=''; bfJudgeHold(true);
+    st.run=Promise.resolve().then(function(){ return before?before():null; }).then(function(){ return bfPost('/judge', body||{}); }).then(function(j){
+      if(j&&j.ok===false) st.line=bfRefusal(j.error);
+      else if(j&&j.kind) st.card=j;
+      return j;
+    });
+    st.run.then(null, function(){ st.line=st.line||'Judge could not score this just now. Nothing was changed.'; }).then(function(){ st.run=null; bfJudgeHold(false); bfReadJudge(); });
+    return st.run;
   }
+  function bfJudgeSend(){ var card=BF.judge.card; boothJudgeSend(card&&card.piece?{target:card.piece}:{}).then(null, function(){}); }
   function bfOverrule(route){
     var st=BF.judge, reason=String(st.reason||'').trim(); if(!reason) return;
     bfPost('/judge/overrule',{reason:reason, route:route}).then(function(j){
@@ -307,21 +333,25 @@
   // The page redraws from the host's reply, and the shell hears a saved write, so its undo stack takes it.
   function bfRestore(n){
     var st=BF.versions; if(st.busy) return;
-    st.busy=true; st.error=''; bfDraw('versions');
+    st.busy=true; st.error=''; st.note=''; bfDraw('versions');
     bfPost('/restore',{version:n}).then(function(j){
       if(j&&j.ok===false){ st.error=j.error||'The host did not restore it.'; return; }
+      // Already the draft's words: nothing was written, so nothing is told.
+      if(j&&j.noop){ st.note='The draft already has the words of v'+n+'. Nothing changed.'; return; }
+      // Where the shell keeps an undo stack for this tool, Cmd Z takes the restore back; where it keeps none, it does not.
+      st.note=BF_AT.undo?'Restored from v'+n+'. Cmd Z takes it back.':'Restored from v'+n+'. To go back, restore the version you want.';
       if(j&&j.clan&&j.clan.data&&window.__CLAN__){
         window.__CLAN__.data=j.clan.data; if(j.clan.edits) window.__CLAN__.edits=j.clan.edits;
         window.dispatchEvent(new CustomEvent('clan:dataupdated',{detail:{source:'restore', version:j.clan.version}}));
       }
-      try{ if(window.parent!==window) window.parent.postMessage({type:'clan:write', v:1, id:'restore-v'+n+'-'+Date.now().toString(36), state:'saved', field:'restore v'+n, text:''}, '*'); }catch(x){}
+      if(BF_AT.undo) try{ if(window.parent!==window) window.parent.postMessage({type:'clan:write', v:1, id:'restore-v'+n+'-'+Date.now().toString(36), state:'saved', field:'restore v'+n, text:''}, '*'); }catch(x){}
     }, function(){ st.error='The page could not reach the host. Nothing was restored.'; })
       .then(function(){ st.busy=false; bfReadVersions(); });
   }
 
   // The page names the folds it uses, once, after boothStart().
   function boothFolds(o){
-    BF_AT={judge:!!o.judge, versions:!!o.versions, noun:o.noun||'document'};
+    BF_AT={judge:!!o.judge, versions:!!o.versions, noun:o.noun||'document', undo:!!o.undo, onJudge:o.onJudge};
     if(typeof BOOTH_AT==='object'&&BOOTH_AT&&typeof BOOTH_AT.size==='function'&&!BOOTH_AT.bfSized){
       var own=BOOTH_AT.size; BOOTH_AT.size=function(d){ own(d); bfSize(d); }; BOOTH_AT.bfSized=true;
     }
@@ -350,7 +380,7 @@
       BF[k].open=d.open;
       var slot=d.closest('[data-booth-fold]'); if(slot) slot.removeAttribute('data-bf-html');
       if(k==='versions'){ bfWiden(); if(d.open) bfReadVersions(); }
-      if(k==='judge'&&d.open) bfReadJudge();
+      if(k==='judge'&&d.open){ bfReadJudge(); if(BF.versions.diff){ bfLeaveCompare(); if(typeof boothApply==='function') setTimeout(function(){ boothApply(false); }, 0); } }
     }, true);
     window.addEventListener('message', function(e){
       var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:clientmode') return;
@@ -359,9 +389,10 @@
     });
     // Read again when the document changes, when the page reads the host again, and now and then (a lock, a score
     // or a version made from outside this page tells the page nothing), as the shell's band did.
+    // The versions are read once for the fold's summary, on every data change, and while the fold is open.
     window.addEventListener('clan:dataupdated', function(){ bfReadJudge(); bfReadVersions(); });
-    window.addEventListener('clan:viewloaded', function(){ bfReadJudge(); bfReadVersions(); });
-    setInterval(function(){ if(!document.hidden){ bfReadJudge(); bfReadVersions(); } }, BF_POLL_MS);
+    window.addEventListener('clan:viewloaded', function(){ bfReadJudge(); if(BF.versions.open) bfReadVersions(); });
+    setInterval(function(){ if(document.hidden) return; bfReadJudge(); if(BF.versions.open) bfReadVersions(); }, BF_POLL_MS);
     bfReadJudge(); bfReadVersions();
   }
 </script>

@@ -130,6 +130,7 @@
   @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]) .side{border-color:transparent} }
   @media (max-width:1100px){ .side{position:static;max-height:none;overflow:visible} }
   .side > .booth-hd{position:sticky;top:0;background:var(--paper);z-index:1}
+  .side-holder{margin:0;padding:12px 22px 0}
   .card{padding:20px 22px;display:grid;gap:10px}
   .card + .card{border-top:1px solid var(--line)}
   .card .pname{font:400 22px/1.2 var(--font-serif);color:var(--ink)}
@@ -171,7 +172,7 @@
       <dl class="rows" id="rows"></dl>
     </article>
   </main>
-  <aside class="side" id="side" aria-label="Booth"><div id="boothBody"></div></aside>
+  <aside class="side" id="side" aria-label="Booth"><p class="side-holder" data-booth-holder data-testid="booth-holder" role="status"></p><div id="boothBody"></div></aside>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="pick" accept="image/*" hidden />
@@ -580,7 +581,9 @@
     key: function(e){ return !typing(e.target); }
   });
   boothApply(true);
-  if(typeof boothFolds === 'function') boothFolds({ judge: true, versions: true, noun: 'visual brief' });
+  // No undo stack is kept for a visual brief (AppHost.tsx turns useBriefUndo on for briefs and scripts only): Cmd Z
+  // does nothing after a restore, and the fold says to restore again instead.
+  if(typeof boothFolds === 'function') boothFolds({ judge: true, versions: true, noun: 'visual brief', undo: false });
   // Seen by the page tests: nothing else reads it.
   window.__visualBrief = { state: function(){ return state(); }, approver: function(){ return approverOf(data()); }, heldByPerson: heldByPerson };
 })();

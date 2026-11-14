@@ -172,6 +172,7 @@
   .bbody .pickrow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
   .bbody .pickrow span{font:400 17px/1.2 var(--font-serif);overflow-wrap:anywhere}
   .booth>.booth-hd{margin:0}
+  .booth>.booth-holder{margin:0;padding:12px 18px 0}
   @media (min-width:1101px){
     body{overflow-x:clip}
     .idesk{transition:grid-template-columns var(--booth-dur) var(--booth-ease),gap var(--booth-dur) var(--booth-ease)}
@@ -210,6 +211,7 @@
  <!-- The Booth: the room's side parts. Whole room: The team goes first, the routes' state and the creative
       director's choice. A card or a route picked in the document: its author, votes and flags, or its fork and merge state. -->
  <aside class="booth" id="booth" data-testid="booth" aria-label="Booth">
+  <p class="booth-holder" data-booth-holder data-testid="booth-holder" role="status"></p>
   <div class="bbody">
    <section id="bSel" hidden></section>
    <div id="bWhole">
