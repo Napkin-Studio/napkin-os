@@ -441,8 +441,9 @@ fn client_entry(c: &clients::ClientRecord) -> Entry {
     }
 }
 
-/// A person, from the agency's directory: the name and the roles, `jobs` the numbers of the jobs they
-/// own. Never an email, never a score. `role_line` is the roles in words.
+/// A person, from the agency's People store: the name and the roles, `jobs` the numbers of the jobs they
+/// own. Never an email, never a score. `role_line` is the roles in words. Its route is the People page
+/// (the account menu's dialog, `/people`; features/align-needs-lock-people.clan): the bar shows a card.
 pub fn person_entry(username: &str, name: &str, roles: &[String], role_line: &str) -> Entry {
     let mut facts: Vec<&str> = vec!["person", local_of(username)];
     facts.extend(roles.iter().map(String::as_str));
@@ -454,7 +455,7 @@ pub fn person_entry(username: &str, name: &str, roles: &[String], role_line: &st
         line: role_line.to_string(),
         client_id: None,
         job: None,
-        route: "/agency/people".into(),
+        route: "/people".into(),
         open: Open {
             action: "person",
             target: username.to_string(),

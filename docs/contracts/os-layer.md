@@ -2617,114 +2617,67 @@ host adds up the passes and routes, and the score is one verdict in the work's o
   list: ids, hashes, numbers, test ids with pass or fail, codes, route, trust, cost, and what the creative director then did. No evidence, no
   reason, no title, no name. `python -m napkin.judge.calibrate <export>` reads it.
 
-## 14. The agency directory (features/agency-setup.clan)
+## 14. Who may sign in, and as what: the People store (features/align-needs-lock-people.clan)
 
-An agency's people are a third registry (after clients and jobs): one CLAN document per tenant,
-`document_type: agency-registry`, kept beside the home app (`Library::home("agency-v1")`,
-`crates/napkin-host/src/agency.rs`), whose `shared/data.yaml` holds `settings` and `people`. It is
-written through `Change` under one lock and never touches `std::fs`, so it stays wasm32-clean. Needs
-Shrey's review: it is the agency's own store today, and approach B (control-plane tables in Aurora) can
-replace it behind `Directory` without a caller changing.
+*This section replaced the agency directory of features/agency-setup.clan (its `trait Directory`, `live_roles`,
+`/agency/people` and `/setup` routes) on 14 Nov 2026. The old agency registry document (`home-agency-v1`) is a
+source of nothing: no route, token or index can load it (`state::Guarded`), and only the agency's settings read it.*
 
-**One rule.** An agency has a *directory* once it names people. While it has one, the directory is the
-only source of who may sign in and with which roles, and the roster column and the identity provider's
-`custom:roles` are ignored for that agency. While it has none, sign-in is exactly as it was.
+**One rule.** The People store (`crates/napkin-web/src/people.rs`, `<data>/_people/people.json` and
+`changes.jsonl`) is the only source of who may sign in and with which roles. The session cookie names a person and
+nothing more; a document's token names a person and a document; an identity provider says who someone is, never
+what they may do (Cognito's `custom:roles` is not read). `live::live_roles` puts the store's roles on every API
+request; a person not on the list is signed out (`401 {signin: true}`, the cookie cleared) and their document
+tokens stop answering. A change holds on the person's next request on the web task that made it, and on another
+task within 2 s (`people::RECHECK`). A signed-in person with no role holds no role.
 
-- **`Person`**: `{username, name, email, roles, state, invited_by, at}`. `username` is the sign-in
-  name `user@agency`; `state` is `invited` (named, not yet signed in), `active` (a first sign-in turns
-  `invited` into `active`) or `removed` (kept for the record, cannot sign in). `roles` is never empty in a
-  directory, each one a role the agency's door table knows, or `admin`; `demo` is not given to anyone.
-- **`Settings`**: `{name, credit_cap_month_eur, time_zone}` (default zone `Europe/Dublin`). The cap is
-  euros per calendar month, stored and shown, not enforced.
-- **Every change is one attributed decision** on the registry's own chain: `agent` is `human:<admin>`, the
-  `action` is `add_person`, `set_roles`, `edit_person`, `remove_person`, `activate`, `import_people` or
-  `set_settings`, and the decision's `before` and `after` hold the roles (or the settings) either side. A
-  write by anything but a person is `403`. The last admin cannot be removed or lose the role (`409`).
-- **`trait Directory`** (`crates/napkin-web/src/directory.rs`), on `AppCtx.directory`:
+- **`PersonRec`**: `{id, name?, agency, admin, roles, email?, added_by, added_at, removed_at?}`. `admin` marks a
+  Napkin admin (`PEOPLE_ADMINS`); an agency's admin is a person of it holding the `admin` role.
+- **Every change** is one line on `changes.jsonl` (`at, by, what, seq, person?, agency, before, after`) and one entry
+  on the agency's audit chain, both written before people.json takes the change; a change that cannot be recorded
+  does not happen. A change number is never reused; a start marks "not applied" any recorded change people.json
+  never took. The last admin of an agency cannot be removed or lose the role (`409`). Two web tasks writing at once
+  can lose one write (no file lock).
 
-  ```rust
-  pub trait Directory: Send + Sync {
-      fn has(&self, agency: &str) -> bool;                              // the agency names people
-      fn person(&self, agency: &str, username: &str) -> Option<Person>; // any state, removed included
-      fn people(&self, agency: &str) -> Vec<Person>;                    // in the order they were named
-      fn changed(&self, agency: &str) {}                                // this process just wrote
-  }
-  ```
+### The People page's routes (`crates/napkin-web/src/admin.rs`)
 
-  `agency` is the slug (the part after `@`). `RegistryDirectory` answers it from the registry with a cache
-  keyed by the registry's version, re-checked after 60 seconds; a registry that does not parse is served from
-  the last good read, else as no directory, with a warning (writes to it fail). A test moves the cache's
-  clock with `AppCtx::with_directory_clock`.
-- **Live roles.** `directory::live_roles`, a layer between the tenant layer and the permission check,
-  replaces the session's roles with the directory's on every request. A removed person, or one not on the
-  list, gets `401 {signin: true}` and the session cookie is cleared; a listed person with no roles gets
-  `403` on everything. The session cookie keeps carrying roles as a hint only. A role change or a removal
-  is seen by the next request after the cache window (at once by the process that wrote it). The
-  sandbox's per-document tokens are not covered: they last until they expire.
-- **Sign-in.** `agency::sign_in`: with a directory and no passwords (the roster) the name alone is looked
-  up in it; with a password provider the provider proves the person and the directory then has the last
-  word. The refusal is the roster's own line, *That name is not on this studio's list. Ask your studio
-  admin to add you.*
-
-### `GET /api/t/{tenant}/agency/people`
-
-Any signed-in person of the agency. The tenant is always the signed-in person's own: naming another
-agency's tenant is `403` from the tenant extractor. An allow list, by reader:
-
-- **A member**: `[{username, name, roles}]`, people who are not removed. No email.
-- **An admin**: `[{username, name, roles, email, state, invited_by, at}]`, removed people included.
-- An agency with no directory answers `[]` (its roster is not a directory), as does an anonymous session.
-
-`username` is `user@agency`, `roles` a list of role ids as `roles.rs` has them, `at` RFC 3339.
-
-### Writes (admin of the agency only; `403` otherwise)
+A Napkin admin manages every agency and alone adds one; an agency's admin manages their own agency; anyone else
+gets `403`. The agency is always the session's: a person or agency of another agency, in the path or the body,
+gets the answer one that does not exist gets.
 
 | Route | Body | Reply |
 | --- | --- | --- |
-| `POST /agency/people/invite` | `{username?, email, name, roles}` (`username` defaults to the email's local part at this agency) | `201` an admin person |
-| `PUT /agency/people/{username}` | `{name?, email?, roles?}` | `200` an admin person |
-| `DELETE /agency/people/{username}` | none | `200` the person, now `removed` |
+| `GET /api/admin/people` | none | `{people, agencies, admins}` within the caller's scope |
+| `POST /api/admin/people` | `{name, agency?, username?, roles, email?}` (at least one role) | `201` the person |
+| `PATCH /api/admin/people/{id}` | `{name?, email?, roles?}` | `200` the person |
+| `PUT /api/admin/people/{id}/roles` | `{roles}` (at least one, each known) | `200` the person |
+| `DELETE /api/admin/people/{id}` | none | `200` the person, removed |
+| `POST /api/admin/people/import[?dry_run=1]` | a CSV file, raw or one multipart part | the report below |
+| `/api/admin/agencies...` | develop's agencies: drafts, wordmark, publish, export | as features/agency-looks-admin.clan |
 
-`400` for a name outside the signed-in agency, an unknown or empty role list, a bad email; `404` for
-someone not on the list; `409` for a name already on the list or the last admin. The first person named
-for an agency with no directory also names the admin who writes, as `admin`, so the writer is never locked
-out. Roles are `Group::Admin`, `Group::Control` in `roles.rs`: `/audit` and `/setup/*` are admin-only
-(a person with no role is refused, not let through), `/control/*` needs `napkin-admin`.
+The import goes into the caller's own agency. Columns `email`, `name`, `roles` (separated by `;`, `,` or `|`),
+optional `username`; the sign-in name is the username, else the email's local part at the agency. A row naming
+another agency, a duplicate, an unknown role, a formula (a cell starting `=`, `+`, `-` or `@`) or a control
+character is refused on its line; the rest are written in one change. The report:
+`{kind, dry_run, rows, ok, errors: [{line, reason}], created, updated, unchanged, committed, results: [{line, status:
+new|changed|same|error, label, reason?}], starts_directory}`.
 
-### 14.1 Settings, setup and import (stage 2)
+### 14.1 Settings (stage 2, as stage 3 left them)
 
-All admin only (`403` otherwise), all on the signed-in person's own agency (another agency's tenant in the
-path is `403` from the tenant extractor).
-
-- `GET /api/t/{tenant}/agency` answers an admin `{name, credit_cap_month_eur, time_zone, look}` and anyone else
-  `{name, look}`. `PUT /agency` takes `{name?, credit_cap_month_eur?, time_zone?}` and records one
-  `set_settings` decision; a cap that is not a number, or is below zero, is `400`. The cap is euros per
-  calendar month, stored and shown; nothing enforces it until the cost engine. `PUT /agency/look` (the logo)
-  is the admin's once the agency has a directory.
-- `GET /setup` answers `{steps: [{id, done}], next, complete, people, has_directory}`: the setup flow's
-  progress, **read from the data** (a logo, a name, a person besides the admin, a client, a job), never stored.
-- `POST /setup/import/{people|clients|jobs}[?dry_run=1]` takes the file as the raw body or one
-  `multipart/form-data` part (up to 1 MB and 5,000 rows) and answers a report
-  `{kind, dry_run, rows, ok, errors: [{line, reason}], created, updated, unchanged, committed, results:
-  [{line, status: new|changed|same|error, label, reason?}], starts_directory, made_before_failure}`. A dry run
-  writes nothing. Without it the rows that are fine are written (people in **one** registry write and one
-  `import_people` decision; clients and jobs one by one, the report naming which were made if one fails) and the
-  bad ones are listed by line. The same file again changes nothing. People columns: `email`, `name`, `roles`
-  (roles separated by `;`, `,` or `|`), optional `username`; the sign-in name is the email's local part at the
-  agency. Clients: `name`, optional `material`. Jobs: `client` (a client's name that exists), optional `number`,
-  `title`, `owner`, `opened_on`, `due`, `budget_hours`. A file may be UTF-8, with or without a byte order mark,
-  or Windows-1252, comma, semicolon or tab separated. Cells are kept as typed; a cell that begins with `=`, `+`,
-  `-` or `@` is quoted when a list is written out (`import::export_cell`). The first people list starts the
-  directory and keeps the importing admin on it as an admin (a file that would demote them is refused on its line).
-- `GET /agency/accounts.tsv` is the people as `infra/scripts/create-users.sh` reads them: `user@agency`, name,
-  roles, tab separated.
+- `GET /api/t/{tenant}/agency` answers the agency's name from its People store record (a code agency's display name,
+  a basic agency's published name; none otherwise) and its look; an admin also gets `credit_cap_month_eur` and
+  `time_zone`, still read from the old registry and marked `unverified` (an open question). `PUT /agency` takes
+  `{credit_cap_month_eur?, time_zone?}`; a name is `400` (it is changed on the People page's Agencies tab).
+- `GET /agency/accounts.tsv` is the agency's people as `infra/scripts/create-users.sh` reads them.
 
 ### 14.2 The audit view (stage 3)
 
 `GET /api/t/{tenant}/audit[?kind=&limit=]`, admin only, newest first: `{total, lines: [{at, who, kind, what,
 doc?, version?, ip?}]}` with `kind` one of `approval`, `export`, `link`, `sign-in`, `permission`, `settings`.
 Approvals (a signature, a lock, a client's answer) are read from the documents' decision chains each time.
-Permission and settings changes are the registry's own decisions, copied into the file once each. Exports, client
+Permission and settings changes are the server's own lines (the People store's, and a settings change's), naming the
+session's person; a line an older server copied from the agency registry's chain is not shown, and `verify` counts it
+as not vouched for. Exports, client
 links and sign-ins (a refused one included, with its source address, 30 an agency in ten minutes, only for an
 agency that already has a workspace) are lines of an append-only file per tenant, `audit.jsonl`, behind
 `trait AuditLog`. Each line carries the hash of the one before and the newest hash is kept in `audit.head`;
@@ -2747,7 +2700,7 @@ no model and no network (`crates/napkin-host/src/searchindex.rs`, held as `Works
   hostile query answers `{total: 0, groups: []}`. The tenant is the session's (403 for any other, from the `Tenant`
   extractor), so one agency's search never reaches another's index.
 - **The walls.** Every entry carries the API route that opens it (`/d/{doc}`, `/jobs/{n}`, `/jobs/{n}/scope`,
-  `/client-brains/{doc}`, `/proprietary/{doc}`, `/clients`, `/agency/people`) and its client. `roles::allowed(roles, route,
+  `/client-brains/{doc}`, `/proprietary/{doc}`, `/clients`, and `/people`, the People page, for a person) and its client. `roles::allowed(roles, route,
   client)` is asked of every entry **before** it is scored, ranked or counted, so a role never finds, and `total` never
   counts, what its own GET of that route would answer 403. Money documents are those whose app id is `ie.napkin.scope`,
   `.estimate`, `.invoice` or `.change-order` (or `-` and more), or whose document type says so (`searchindex::MONEY`); a
@@ -2756,8 +2709,8 @@ no model and no network (`crates/napkin-host/src/searchindex.rs`, held as `Works
   names of the people who wrote in it (the sign-in name's local part, as words only), and an asset's file name and type.
   Never a document's words, a budget, an hour, a timesheet or an email: the index reads a document's manifest, the
   actors of its chain, the names of its assets folder and the kind of vault a brain is, and nothing else.
-- **People** are not in the index. They come from `trait Directory` (section 14) at each query, a member's view of it: names
-  and roles, nobody removed, no email, and no people at all for an anonymous visitor or an agency with no directory.
+- **People** are not in the index. They come from the People store (section 14) at each query, a member's view of it: the
+  agency's own people, names and roles, nobody removed, no email, and none for an anonymous visitor.
 - **Cost.** `SearchCache` keeps the last index and what it learned of each document by the document's stamp
   (`PartStore::stamp`, 13.3): an unchanged tenant is searched with no read and no hash; a write is found by the next query
   (the stamp is read on every one) and re-reads only the documents whose stamp moved. `SearchCache::delete` and a restart
