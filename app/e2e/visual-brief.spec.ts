@@ -192,6 +192,7 @@ for (const size of SIZES) {
     await chooseTerritory(page, job)
     const vb = await visualBriefOf(page, job)
     const app = frameOf(page)
+    const booth = app.locator('#side')
 
     // The planner is not the creative director: the button says why, and the host refuses.
     {
@@ -206,10 +207,10 @@ for (const size of SIZES) {
     expect(approvalsOf(await chainOf(page, vb.token), vb.docId)).toHaveLength(0)
 
     // One approve decision, naming the version, and the page locks.
-    await expect(app.locator('#vnum')).toHaveText('1')
+    await expect(booth.locator('#vnum')).toHaveText('1')
     await shot(page, 'visual-brief-approve', size)
-    await app.getByRole('button', { name: 'Approve version 1' }).click()
-    await expect(app.getByTestId('locked-stamp')).toContainText('Locked · version 1')
+    await booth.getByRole('button', { name: 'Approve version 1' }).click()
+    await expect(booth.getByTestId('locked-stamp')).toContainText('Locked · version 1')
     await expect(app.getByRole('button', { name: /^Edit / })).toHaveCount(0)
     await shot(page, 'visual-brief-locked', size)
     const first = approvalsOf(await chainOf(page, vb.token), vb.docId)
@@ -224,15 +225,15 @@ for (const size of SIZES) {
     expect(up.status()).toBe(409)
 
     // Reopen, edit, approve: both versions are in the history and the first is unchanged.
-    await app.getByRole('button', { name: 'Start version 2' }).click()
-    await expect(app.locator('#vnum')).toHaveText('2')
+    await booth.getByRole('button', { name: 'Start version 2' }).click()
+    await expect(booth.locator('#vnum')).toHaveText('2')
     await app.getByRole('button', { name: 'Edit Proposition' }).click()
     const ed = app.getByRole('textbox', { name: 'Write Proposition' })
     await ed.fill('The whiskey that waits.')
     await ed.press('Control+Enter')
     await expect(app.locator('.row[data-key="proposition"] .val')).toHaveText('The whiskey that waits.')
-    await app.getByRole('button', { name: 'Approve version 2' }).click()
-    await expect(app.getByTestId('locked-stamp')).toContainText('Locked · version 2')
+    await booth.getByRole('button', { name: 'Approve version 2' }).click()
+    await expect(booth.getByTestId('locked-stamp')).toContainText('Locked · version 2')
     const both = approvalsOf(await chainOf(page, vb.token), vb.docId)
     expect(both).toHaveLength(2)
     const oldest = both.find(d => d.id === first[0].id)
@@ -293,8 +294,9 @@ for (const size of SIZES) {
     await chooseTerritory(page, job)
     const vb = await visualBriefOf(page, job)
     const app = frameOf(page)
-    await app.getByRole('button', { name: 'Approve version 1' }).click()
-    await expect(app.getByTestId('locked-stamp')).toBeVisible()
+    const booth = app.locator('#side')
+    await booth.getByRole('button', { name: 'Approve version 1' }).click()
+    await expect(booth.getByTestId('locked-stamp')).toBeVisible()
 
     // The brief is reopened by the creative director and changed: version 2 of the brief.
     expect((await page.request.post(`/s/${job.brief.token}/unapprove`, { data: { rationale: 'The client moved the line.' } })).status()).toBe(200)
@@ -312,6 +314,84 @@ for (const size of SIZES) {
     // The approved version did not move: its page still says what it was made from, and one approve stands.
     await expect(frameOf(page).locator('.row[data-key="proposition"] .val')).toHaveText(READY_BRIEF.single_minded_proposition)
     expect(approvalsOf(await chainOf(page, vb.token), vb.docId)).toHaveLength(1)
+    await ctx.close()
+  })
+
+  // align-booth: the Approval panel is the Booth.
+  test(t('the Approval panel is the Booth: never over the sheet, hides to the edge tab, ] and a click on a part bring it back'), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    const job = await signedBrief(page)
+    await chooseTerritory(page, job)
+    const app = frameOf(page)
+    const booth = app.locator('#side')
+    const sheet = app.locator('#sheet')
+    const rects = async () => ({
+      sheet: await sheet.evaluate(e => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom } }),
+      booth: await booth.evaluate(e => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, vis: getComputedStyle(e).visibility } }),
+      vw: await app.locator('body').evaluate(() => document.documentElement.clientWidth),
+    })
+    const apart = (a: { l: number; t: number; r: number; b: number }, b: { l: number; t: number; r: number; b: number }) => a.r <= b.l + 0.5 || b.r <= a.l + 0.5 || a.b <= b.t + 0.5 || b.b <= a.t + 0.5
+    await expect(booth.locator('.booth-nm')).toHaveText('Booth')
+    // The Approval, the version and the actions are in it.
+    await expect(booth.getByRole('button', { name: 'Approve version 1' })).toBeVisible()
+    await expect(booth.locator('#vnum')).toHaveText('1')
+    // Open: never over the sheet.
+    let r = await rects()
+    expect(apart(r.sheet, r.booth), 'the Booth does not overlap the sheet').toBe(true)
+    await shot(page, 'booth-whole', size)
+
+    // A click on a part: the Booth shows that part.
+    await app.locator('.row[data-key="tone"] .val').click()
+    await expect(booth.locator('#thisPart')).toHaveAttribute('data-part', 'tone')
+    await expect(booth.locator('#thisPart')).toContainText('Tone')
+    await shot(page, 'booth-part', size)
+    await booth.locator('[data-whole]').click()
+    await expect(booth.locator('#thisPart')).toHaveCount(0)
+
+    if (size.width < 1100) {
+      // Narrow: the Booth follows the sheet in one column, with no Hide control and no edge tab.
+      await expect(booth.locator('.booth-hide')).toBeHidden()
+      await expect(app.locator('#boothEdge')).toBeHidden()
+      r = await rects()
+      expect(r.booth.t, 'below the sheet').toBeGreaterThanOrEqual(r.sheet.b - 0.5)
+      if (SHOTS) {
+        await app.locator('#rows').click({ position: { x: 20, y: 20 } })
+        await booth.scrollIntoViewIfNeeded()
+        await page.waitForTimeout(500)
+        mkdirSync(SHOTS, { recursive: true })
+        await page.screenshot({ path: join(SHOTS, `booth-below-${size.tag}.png`) })
+      }
+      await ctx.close()
+      return
+    }
+
+    // At 1100 px nothing hides and nothing overlaps.
+    await page.setViewportSize({ width: 1100, height: size.height })
+    await expect(booth.locator('.booth-hide')).toBeHidden()
+    await expect.poll(async () => { const x = await rects(); return apart(x.sheet, x.booth) }, { message: 'no overlap at 1100 px' }).toBe(true)
+    await page.setViewportSize({ width: size.width, height: size.height })
+    await expect(booth.locator('.booth-hide')).toBeVisible()
+
+    // Hide: the edge tab (38 px, BOOTH), the column closed, the sheet recentred and never under the tab.
+    await booth.locator('.booth-hide').click()
+    const edge = app.locator('#boothEdge')
+    await expect(edge).toBeVisible()
+    await expect(edge.locator('.booth-lb')).toHaveText('Booth')
+    expect((await edge.boundingBox())!.width).toBeCloseTo(38, 0)
+    await expect(booth).toBeHidden()
+    await expect.poll(async () => { const x = await rects(); return Math.abs((x.sheet.l + x.sheet.r) / 2 - x.vw / 2) }, { message: 'the sheet is centred when it is hidden' }).toBeLessThan(40)
+    await shot(page, 'booth-hidden', size)
+    // ] brings it back and takes it away again, with no shortcut shown.
+    await app.locator('body').press(']')
+    await expect(booth).toBeVisible()
+    await app.locator('body').press(']')
+    await expect(booth).toBeHidden()
+    // A click on a part while it is hidden brings the whole Booth back on that part.
+    await app.locator('.row[data-key="proposition"] .val').click()
+    await expect(booth).toBeVisible()
+    await expect(booth.locator('#thisPart')).toHaveAttribute('data-part', 'proposition')
+    // The grid is moving for about half a second; once it has settled the two are apart.
+    await expect.poll(async () => { const x = await rects(); return apart(x.sheet, x.booth) }, { message: 'no overlap once it is back' }).toBe(true)
     await ctx.close()
   })
 
@@ -338,8 +418,8 @@ for (const size of SIZES) {
       }
     }
     await scan('draft')
-    await frameOf(page).getByRole('button', { name: 'Approve version 1' }).click()
-    await expect(frameOf(page).getByTestId('locked-stamp')).toBeVisible()
+    await frameOf(page).locator('#side').getByRole('button', { name: 'Approve version 1' }).click()
+    await expect(frameOf(page).locator('#side').getByTestId('locked-stamp')).toBeVisible()
     await scan('approved')
     expect(problems).toEqual([])
     await ctx.close()
