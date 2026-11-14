@@ -47,6 +47,8 @@
   @media (prefers-color-scheme:dark){ :root[data-agency-accent="line"]:not([data-color-scheme="light"]){ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); } }
   :root[data-agency-accent="line"][data-color-scheme="dark"]{ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); }
 
+  /* the Booth's place in this page (the Booth itself is shared/booth.html): its colours, the column it takes in the desk's grid */
+  :root{--booth-line:var(--line);--booth-paper:var(--paper);--booth-ink:var(--ink);--booth-ink-soft:var(--ink-soft);--booth-muted:var(--muted);--booth-warn:var(--warn);--booth-desk:var(--desk)}
   *{box-sizing:border-box}
   html,body{margin:0}
   body{background:var(--desk);color:var(--ink);font:15px/1.55 var(--font-ui);-webkit-font-smoothing:antialiased}
@@ -57,7 +59,13 @@
   /* Every picture sits in a rectangle: a corner no rounder than 2 px, on every image and film. */
   img,video{display:block;max-width:100%;border-radius:0}
 
-  .desk{display:grid;grid-template-columns:minmax(0,760px) minmax(300px,380px);gap:32px;justify-content:center;align-items:start;padding:28px 16px 56px}
+  .desk{--bw:380px;display:grid;grid-template-columns:minmax(0,760px) var(--bw);gap:32px;justify-content:center;align-items:start;padding:28px 16px 56px}
+  @media (min-width:1101px){
+    body{overflow-x:clip}
+    .desk{transition:grid-template-columns var(--booth-dur) var(--booth-ease),gap var(--booth-dur) var(--booth-ease)}
+    .desk > .side{width:var(--bw)}
+    .desk.booth-off{grid-template-columns:minmax(0,760px) 0px;gap:0}
+  }
   @media (max-width:1100px){ .desk{grid-template-columns:minmax(0,760px)} }
 
   /* the sheet */
@@ -117,9 +125,20 @@
   @media (max-width:640px){ .btn.primary{min-height:44px;width:100%} .btn{min-height:44px} .btn.quiet{min-height:44px} }
 
   /* the approval, beside the sheet */
-  .side{display:grid;gap:14px;position:sticky;top:12px}
-  @media (max-width:1100px){ .side{position:static} }
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;display:grid;gap:10px}
+  .side{position:sticky;top:calc(var(--clan-top,0px) + 12px);background:var(--paper);border:1px solid var(--line);border-radius:2px;box-shadow:var(--shadow-paper);max-height:calc(100vh - var(--clan-top,0px) - 24px);overflow:auto}
+  :root[data-color-scheme="dark"] .side{border-color:transparent}
+  @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]) .side{border-color:transparent} }
+  @media (max-width:1100px){ .side{position:static;max-height:none;overflow:visible} }
+  .side > .booth-hd{position:sticky;top:0;background:var(--paper);z-index:1}
+  .card{padding:20px 22px;display:grid;gap:10px}
+  .card + .card{border-top:1px solid var(--line)}
+  .card .pname{font:400 22px/1.2 var(--font-serif);color:var(--ink)}
+  .by{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);min-height:20px}
+  .by .nk-ag{width:20px;height:20px}
+  .card .pacts{display:flex;gap:8px;flex-wrap:wrap}
+  /* a part picked on the sheet, and the cursor that says it can be */
+  [data-pick]{cursor:pointer}
+  .psel{outline:2px solid color-mix(in srgb,var(--ag-act) 50%,transparent);outline-offset:6px;border-radius:1px}
   .card h2{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
   .vnum{font:400 44px/1 var(--font-serif);color:var(--ink)}
   .card p{color:var(--ink-soft)}
@@ -134,6 +153,8 @@
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   @media (prefers-reduced-motion:reduce){ .toast{transition:none} }
 </style>
+<!-- @napkin:clan-fields -->
+<!-- @napkin:booth -->
 </head>
 <body>
 <div class="desk" data-where="visual-brief">
@@ -141,20 +162,20 @@
     <article class="sheet" id="sheet" aria-label="Visual brief">
       <header class="head">
         <p class="eyebrow" id="eyebrow"></p>
-        <h1 class="tname" id="tname"></h1>
-        <p class="tline" id="tline"></p>
+        <h1 class="tname" id="tname" data-pick="territory.name" data-clan-part="territory.name" data-clan-part-label="Territory name"></h1>
+        <p class="tline" id="tline" data-pick="territory.line" data-clan-part="territory.line" data-clan-part-label="The line"></p>
         <div class="headacts" id="headActs"></div>
       </header>
       <section class="frames" id="frames" aria-label="Reference frames"></section>
       <dl class="rows" id="rows"></dl>
     </article>
   </main>
-  <aside class="side" id="side" aria-label="Approval"></aside>
+  <aside class="side" id="side" aria-label="Booth"><div id="boothBody"></div></aside>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="pick" accept="image/*" hidden />
 
-<!-- @napkin:clan-fields -->
+<!-- @napkin:agent-sphere -->
 <script>
 (function(){
   'use strict';
@@ -219,7 +240,7 @@
   var SLOTS = ['a', 'b', 'c'];
 
   // ── the page ────────────────────────────────────────────────────────────────────────────────────
-  var S = { view: null, up: null, me: null, editing: null, cap: null, capText: '', busy: false, error: '' };
+  var S = { sel: null, view: null, up: null, me: null, editing: null, cap: null, capText: '', busy: false, error: '' };
   function data(){ return (window.__CLAN__ && window.__CLAN__.data) || {}; }
   function get(p){ return getPath(data(), p); }
   function $(id){ return document.getElementById(id); }
@@ -270,21 +291,32 @@
     return '<div class="editor"><textarea id="capEd" rows="2" aria-label="Write caption for frame ' + (SLOTS.indexOf(slot) + 1) + '">' + esc(S.capText) + '</textarea>'
       + '<div class="btns"><button type="button" class="btn primary" data-capdone="' + slot + '">Done</button><button type="button" class="btn" data-capcancel="1">Cancel</button></div></div>';
   }
+  // The parts, by the data path each is written at: the Booth, the feedback pointer and client review name them alike.
+  function partLabel(key){
+    if(FIELDS[key]) return FIELDS[key].label;
+    var m = /^reference_frames\.([abc])$/.exec(key);
+    return m ? 'Reference frame ' + (SLOTS.indexOf(m[1]) + 1) : '';
+  }
+  function partAttrs(key){ return ' data-pick="' + key + '" data-clan-part="' + key + '" data-clan-part-label="' + esc(partLabel(key)) + '"'; }
+  function markSel(){
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pick]'), function(el){ el.classList.toggle('psel', S.sel != null && el.getAttribute('data-pick') === S.sel); });
+  }
   function frameHtml(slot){
     var fr = get('reference_frames.' + slot) || {}, can = !locked(), n = SLOTS.indexOf(slot) + 1;
     if(fr.asset){
-      return '<figure class="frame" data-slot="' + slot + '"><div class="box"><img src="' + assetUrl(fr.asset) + '" alt="' + esc(fr.caption || 'Reference frame ' + n) + '"></div>'
+      return '<figure class="frame" data-slot="' + slot + '"' + partAttrs('reference_frames.' + slot) + '><div class="box"><img src="' + assetUrl(fr.asset) + '" alt="' + esc(fr.caption || 'Reference frame ' + n) + '"></div>'
         + '<figcaption class="cap">' + (S.cap === slot ? capEditorHtml(slot) : fr.caption ? esc(fr.caption) : '<span class="blank">No caption</span>') + '</figcaption>'
         + (can ? '<div class="acts"><button type="button" class="btn quiet" data-cap="' + slot + '">Caption</button><button type="button" class="btn quiet" data-swap="' + slot + '">Replace</button><button type="button" class="btn quiet" data-drop="' + slot + '">Remove</button></div>' : '')
         + '</figure>';
     }
-    return '<figure class="frame empty" data-slot="' + slot + '"><div class="box">' + (can ? '<button type="button" class="btn" data-add="' + slot + '">Add reference frame ' + n + '</button>' : '<span>No frame</span>') + '</div></figure>';
+    return '<figure class="frame empty" data-slot="' + slot + '"' + partAttrs('reference_frames.' + slot) + '><div class="box">' + (can ? '<button type="button" class="btn" data-add="' + slot + '">Add reference frame ' + n + '</button>' : '<span>No frame</span>') + '</div></figure>';
   }
   function drawFrames(){
     var any = SLOTS.some(function(s){ return (get('reference_frames.' + s) || {}).asset; });
     if(!any && locked()){ $('frames').hidden = true; $('frames').innerHTML = ''; return; }
     $('frames').hidden = false;
     $('frames').innerHTML = SLOTS.map(frameHtml).join('');
+    markSel();
   }
   function rowHtml(key){
     var f = FIELDS[key], v = get(key), editing = S.editing === key;
@@ -294,14 +326,75 @@
       var L = linesOf(v);
       shown = L.length ? '<ul class="val">' + L.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '<p class="val blank">Not written yet.</p>';
     } else shown = v ? '<p class="val">' + esc(v) + '</p>' : '<p class="val blank">Not written yet.</p>';
-    return '<div class="row" data-key="' + key + '" data-editable="' + (!locked()) + '"><dt>' + esc(f.label) + '</dt><dd>' + shown + (editing ? '' : editBtn(key)) + '</dd></div>';
+    return '<div class="row" data-key="' + key + '"' + partAttrs(key) + ' data-editable="' + (!locked()) + '"><dt>' + esc(f.label) + '</dt><dd>' + shown + (editing ? '' : editBtn(key)) + '</dd></div>';
   }
-  function drawRows(){ $('rows').innerHTML = ['proposition', 'tone', 'must_show', 'never_show'].map(rowHtml).join(''); }
+  function drawRows(){ $('rows').innerHTML = ['proposition', 'tone', 'must_show', 'never_show'].map(rowHtml).join(''); markSel(); }
+
+  // Who wrote a part last: the newest decision in the host's view that wrote it (an approval, a verdict or a
+  // proposal is not a write). A person's word reads "you said" or "<name> said"; an agent's draft carries the byline and
+  // the agent's own figure, with the words of shared/clan-fields.html. A part a person wrote last is never written over
+  // by an agent: this page makes no agent write, and heldByPerson is the rule one that does must ask first.
+  function isPerson(d){ return /^human(?::|$)/.test(String((d && (d.actor || d.agent)) || '')); }
+  function touches(a, b){ return a === b || a.indexOf(b + '.') === 0 || b.indexOf(a + '.') === 0; }
+  function writerOf(path){
+    var ds = arr(S.view && S.view.decisions);
+    for(var i = 0; i < ds.length; i++){
+      var b = ds[i] || {}, d = b.decision || {};
+      if(b.superseded || d.superseded_by || d.kind === 'approve' || d.kind === 'unapprove' || d.kind === 'verdict' || d.polarity || d.action === 'propose') continue;
+      if(arr(b.targets).some(function(t){ return t && t.here !== false && t.path && touches(String(t.path), path); })) return b;
+    }
+    return null;
+  }
+  function heldByPerson(path){ var w = writerOf(path); return !!w && isPerson(w.decision || {}); }
+  function agentRole(d){ var R = typeof NapkinRoles === 'object' ? NapkinRoles : null; return R ? R.ofDecision(d) : null; }
+  function bylineHtml(path){
+    var b = writerOf(path); if(!b) return '';
+    var d = b.decision || {}, who = b.who || {};
+    if(isPerson(d)){
+      if(/^accept proposal\b/.test(String(d.action || ''))) return '<p class="by">drafted by the agents · ' + (who.you ? 'you accepted' : 'accepted') + '</p>';
+      return '<p class="by">' + (who.you ? 'you said' : esc(who.name || 'someone') + ' said') + '</p>';
+    }
+    var role = agentRole(d), R = typeof NapkinRoles === 'object' ? NapkinRoles : null;
+    return '<p class="by">' + (role && R ? R.tag(role, { decorative: true, size: 20 }) : '') + 'drafted by ' + esc(role && R ? R.name(role) : 'the agent') + '</p>';
+  }
+  function partHtml(key){
+    var label = partLabel(key), isFrame = key.indexOf('reference_frames.') === 0, h;
+    h = '<section class="card" id="thisPart" data-part="' + key + '" aria-label="This part"><h2>This part</h2><p class="pname">' + esc(label) + '</p>';
+    var v = isFrame ? (get(key) || {}).caption : get(key);
+    if(!isFrame && !linesOf(v).length) h += '<p class="small">Not written yet.</p>';
+    h += bylineHtml(key);
+    if(!isFrame && !locked()) h += '<div class="pacts"><button type="button" class="btn" data-bedit="' + key + '" aria-label="Write this part">Edit</button></div>';
+    h += '<p class="small"><button type="button" class="linkbtn" data-whole="1">Back to the whole page</button></p></section>';
+    return h;
+  }
+  // What the OS bar shows (clan:bar, app/src/shell/appBar.ts): the page's state, and its actions as buttons.
+  var BAR = { last: '' };
+  function barItems(){
+    var st = state(), t = get('territory') || {}, has = !!(t.name && String(t.name).trim()), approver = approverOf(data()), may = mayApprove(approver, S.me);
+    var items = [{ kind: 'status', label: st.locked ? 'Locked · version ' + st.n : 'Draft', tone: st.locked ? 'ok' : null, locked: st.locked }];
+    if(st.locked) items.push({ kind: 'button', id: 'newv', label: 'Start version ' + (st.n + 1), primary: false, disabled: false, title: 'The approved version stays in the history as it is' });
+    else items.push({ kind: 'button', id: 'approve', label: 'Approve version ' + st.n, primary: true, disabled: !(has && may && !S.busy), title: approveReason(st, approver, may, has) });
+    return items;
+  }
+  function sendBar(){
+    var items = barItems(), k = JSON.stringify(items);
+    if(k === BAR.last) return; BAR.last = k;
+    try{ window.parent.postMessage({ type: 'clan:bar', v: 1, items: items }, '*'); }catch(e){}
+  }
+  function onBarAction(id){ if(id === 'approve') approve(); else if(id === 'newv') newVersion(); }
+  // The Booth's width: the whole page 380, a part 400.
+  function boothWidth(sel){ return sel ? 400 : 380; }
+  function select(key){
+    S.sel = key || null; markSel(); drawSide();
+    if(S.sel) boothPick();
+    boothApply(false);
+  }
 
   function drawSide(){
     var st = state(), t = get('territory') || {}, approver = approverOf(data()), may = mayApprove(approver, S.me), par = parentOf(S.up);
     var has = !!(t.name && String(t.name).trim());
-    var h = '<section class="card" aria-label="Version"><h2>Version</h2><p class="vnum" id="vnum">' + st.n + '</p>';
+    var h = S.sel ? partHtml(S.sel) : '';
+    h += '<section class="card" aria-label="Version"><h2>Version</h2><p class="vnum" id="vnum">' + st.n + '</p>';
     h += par ? '<p>Answers the brief ' + esc(par.title || '') + (par.locked ? ', signed' : '') + '.</p>' : '<p>Written by hand, with no brief behind it.</p>';
     if(par && par.status === 'changed') h += '<p class="small">The brief has changed since this page was made.</p>';
     if(par && par.path) h += '<p class="small"><button type="button" class="linkbtn" data-open="' + esc(par.path) + '">Open the brief</button></p>';
@@ -321,11 +414,12 @@
     }
     if(S.error) h += '<p class="err" role="alert" id="sideError">' + esc(S.error) + '</p>';
     h += '</section>';
-    $('side').innerHTML = h;
+    $('boothBody').innerHTML = h;
+    sendBar();
   }
   function draw(){
     if(S.editing) { var keep = $('ed') && $('ed').value; }
-    drawHead(); drawFrames(); drawRows(); drawSide();
+    drawHead(); drawFrames(); drawRows(); drawSide(); markSel();
     if(S.editing){ var ed = $('ed'); if(ed){ if(keep != null && S._keep) ed.value = keep; ed.focus(); } }
     S._keep = false;
   }
@@ -403,6 +497,12 @@
 
   // ── events ──────────────────────────────────────────────────────────────────────────────────────
   document.addEventListener('click', function(e){
+    // A click on a part of the sheet picks it, and the Booth comes back on it if it was hidden; on the paper, nothing.
+    var pk = e.target.closest('[data-pick]');
+    if(pk && !e.target.closest('#side')) select(pk.getAttribute('data-pick'));
+    else if(!pk && e.target.closest('#sheet') && !e.target.closest('button,textarea,a')) select(null);
+    var bw = e.target.closest('[data-whole],[data-bedit]');
+    if(bw) return bw.hasAttribute('data-whole') ? select(null) : openEditor(bw.getAttribute('data-bedit'));
     var el = e.target.closest('[data-edit],[data-done],[data-cancel],[data-add],[data-swap],[data-drop],[data-cap],[data-capdone],[data-capcancel],[data-approve],[data-newv],[data-open]');
     if(!el) return;
     if(el.hasAttribute('data-edit')) return openEditor(el.getAttribute('data-edit'));
@@ -448,10 +548,36 @@
   }
   window.addEventListener('load', askMe);
 
+  // Feedback by pointing at it (features/feedback-point.clan): each part is named by the path it is written at, with its
+  // words; a button is named by its label through the shared fallback (shared/clan-fields.html).
+  function feedbackTarget(el){
+    var c = el && el.closest ? el.closest('[data-pick]') : null; if(!c || c.closest('#side')) return null;
+    var id = c.getAttribute('data-pick'), t = get('territory') || {};
+    return { kind: 'part', id: id, label: id === 'territory.name' ? (t.name || partLabel(id)) : partLabel(id), el: c };
+  }
+  window.ClanFeedbackTarget = feedbackTarget;
+  window.ClanFeedbackDoc = function(){ var t = get('territory') || {}; return { version: 'v' + state().n, title: t.name || 'Visual brief' }; };
+  window.addEventListener('message', function(e){
+    var m = e.data; if(e.source !== window.parent || !m) return;
+    if(m.type === 'clan:bar?'){ BAR.last = ''; sendBar(); }
+    else if(m.type === 'clan:bar-action') onBarAction(String(m.id || ''));
+  });
+
   draw();
   load();
+  // The Booth (shared/booth.html): the Approval panel is its column; ] hides it, a click on a part brings it back.
+  function typing(t){ return !!t && /^(TEXTAREA|INPUT|SELECT)$/.test(String(t.tagName)) || !!(t && t.isContentEditable); }
+  boothStart({
+    panel: 'side', desk: function(){ return document.querySelector('.desk'); },
+    size: function(d){ d.style.setProperty('--bw', boothWidth(S.sel) + 'px'); },
+    whole: function(){ if(S.sel) select(null); },
+    fold: function(){ return true; },
+    inert: function(){ return true; },
+    key: function(e){ return !typing(e.target); }
+  });
+  boothApply(true);
   // Seen by the page tests: nothing else reads it.
-  window.__visualBrief = { state: function(){ return state(); }, approver: function(){ return approverOf(data()); } };
+  window.__visualBrief = { state: function(){ return state(); }, approver: function(){ return approverOf(data()); }, heldByPerson: heldByPerson };
 })();
 </script>
 </body>

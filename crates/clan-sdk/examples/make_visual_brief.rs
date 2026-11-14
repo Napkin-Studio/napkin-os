@@ -22,7 +22,7 @@ use clan_sdk::{
 use std::fs;
 use std::path::{Path, PathBuf};
 
-// The fields snippet every Napkin app draws (the agency colours, the decisions view).
+// The fields snippet every Napkin app draws (the agency colours, the decisions view), the Booth and the agent figures.
 #[allow(dead_code)]
 #[path = "shared/app_ui.rs"]
 mod app_ui;
@@ -60,9 +60,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let schema = fs::read_to_string(dir.join("schema.json"))?;
     // The agent engine is inlined at build, at the template's agent-sphere marker.
-    let index_html = app_ui::inline_fields(
+    let index_html = app_ui::inline_sphere(
         &dir.join(".."),
-        &fs::read_to_string(dir.join("index.html"))?,
+        &app_ui::inline_booth(
+            &dir.join(".."),
+            &app_ui::inline_fields(
+                &dir.join(".."),
+                &fs::read_to_string(dir.join("index.html"))?,
+            )?,
+        )?,
     )?;
     let requirements = fs::read_to_string(dir.join("agent/requirements.yaml"))?;
     let pipeline = fs::read_to_string(dir.join("app/pipeline.yaml"))?;

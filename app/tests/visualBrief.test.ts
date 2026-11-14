@@ -25,6 +25,7 @@ let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
 const read = (p: string) => readFileSync(new URL(p, root), 'utf8')
 const HTML = read('templates/visual-brief/index.html')
+const BOOTH = read('templates/shared/booth.html')
 
 type Json = Record<string, unknown>
 
@@ -48,12 +49,17 @@ const UP = { document_id: 'doc', carried: { document_id: 'brief' }, upstream: [{
 async function page(opts: { data?: Json; decisions?: unknown; up?: unknown; me?: string | null } = {}) {
   const writes: { path: unknown; value: unknown; opts: Json }[] = []
   const posts: string[] = []
-  const html = HTML.replace(/<link[^>]*>/g, '').replace('<!-- @napkin:clan-fields -->', '')
+  const bars: Json[][] = []
+  // As the packer ships it: the Booth snippet spliced at its marker; the fields and the agent figures are left out.
+  const html = HTML.replace(/<link[^>]*>/g, '').replace('<!-- @napkin:clan-fields -->', '').replace('<!-- @napkin:booth -->', BOOTH.trimEnd()).replace('<!-- @napkin:agent-sphere -->', '')
   const dom = new JSDOM(html, {
     url: 'https://napkin.test/', runScripts: 'dangerously', pretendToBeVisual: true,
     beforeParse(w) {
       const win = w as unknown as Record<string, unknown>
+      Object.defineProperty(w, 'innerWidth', { value: 1440, configurable: true })
       win.__CLAN__ = { data: opts.data ?? EXAMPLE }
+      // The page talks to its parent; here the parent is the page itself, so what it posts is heard.
+      w.addEventListener('message', (e: MessageEvent) => { const m = e.data as { type?: string; items?: Json[] } | null; if (m?.type === 'clan:bar') bars.push(JSON.parse(JSON.stringify(m.items ?? []))) })
       win.clan = {
         patchData: (path: unknown, value: unknown, o: Json) => { writes.push({ path, value, opts: o }); return Promise.resolve() },
         me: () => Promise.resolve(opts.me === null ? null : { actor: `human:${opts.me ?? 'dara@wk'}`, id: opts.me ?? 'dara@wk', name: 'Dara' }),
@@ -68,7 +74,7 @@ async function page(opts: { data?: Json; decisions?: unknown; up?: unknown; me?:
   })
   await new Promise(r => setTimeout(r, 30))
   const d = dom.window.document
-  return { dom, d, writes, posts, text: (sel: string) => d.querySelector(sel)?.textContent?.trim() ?? null, all: (sel: string) => [...d.querySelectorAll(sel)] }
+  return { dom, d, writes, posts, bars, text: (sel: string) => d.querySelector(sel)?.textContent?.trim() ?? null, all: (sel: string) => [...d.querySelectorAll(sel)] }
 }
 
 // ── the template renders from its example data ─────────────────────────────────────────────────────
@@ -265,4 +271,106 @@ test('the packer declares the spin-off: the brief carried whole, its proposition
   const flat = rs.replace(/\s+/g, '')
   assert.ok(flat.includes('"single_minded_proposition".to_string(),"proposition".to_string()'))
   assert.ok(flat.includes('"tone_and_world".to_string(),"tone".to_string()'))
+})
+
+// ── the Booth (features/align-booth.clan, stage 2): the Approval panel is the Booth ──────────────────
+
+test('the Booth is the shared snippet: the marker once, boothStart on the side panel, no Booth code of its own', () => {
+  assert.equal(HTML.split('<!-- @napkin:booth -->').length - 1, 1)
+  assert.ok(HTML.indexOf('<!-- @napkin:clan-fields -->') < HTML.indexOf('<!-- @napkin:booth -->'), 'after the fields, in the head')
+  assert.ok(HTML.indexOf('<!-- @napkin:booth -->') < HTML.indexOf('</head>'))
+  assert.match(HTML, /boothStart\(\{/)
+  assert.match(HTML, /panel:\s*'side'/)
+  assert.doesNotMatch(HTML, /function boothStep\(|function boothApply\(|function boothSet\(/)
+  for (const v of ['--booth-line', '--booth-paper', '--booth-ink', '--booth-ink-soft', '--booth-muted', '--booth-warn', '--booth-desk']) assert.ok(HTML.includes(v + ':'), `${v} is defined`)
+  assert.match(read('../crates/clan-sdk/examples/make_visual_brief.rs'), /app_ui::inline_booth\(/, 'the packer splices it')
+  assert.match(read('../crates/clan-sdk/examples/make_visual_brief.rs'), /app_ui::inline_sphere\(/, 'and the agent figures')
+})
+
+test('the approval, its version and the page\'s actions are inside the Booth, under its header', async () => {
+  const p = await page()
+  const side = p.d.querySelector('#side')!
+  assert.ok(side.hasAttribute('data-booth-panel'))
+  assert.equal(side.firstElementChild?.className, 'booth-hd')
+  assert.equal(side.querySelector('.booth-nm')?.textContent, 'Booth')
+  assert.equal(side.querySelector('.booth-hide')?.textContent?.trim(), 'Hide')
+  for (const sel of ['#vnum', '#approve', '#approveReason']) assert.ok(side.querySelector(sel), `${sel} is in the Booth`)
+  assert.equal(p.d.querySelectorAll('aside').length, 1, 'one right-hand panel')
+  assert.doesNotMatch(side.textContent!, /\]/, 'no shortcut is shown')
+})
+
+test('a click on a part selects it: the Booth shows that part, and another click on nothing goes back to the whole page', async () => {
+  const p = await page()
+  assert.equal(p.d.querySelector('#thisPart'), null, 'the whole page: no part')
+  p.d.querySelector<HTMLElement>('.row[data-key="tone"] .val')!.click()
+  assert.equal(p.d.querySelector('#thisPart')?.getAttribute('data-part'), 'tone')
+  assert.match(p.text('#thisPart')!, /Tone/)
+  assert.ok(p.d.querySelector('.row[data-key="tone"]')!.classList.contains('psel'))
+  assert.ok(p.d.querySelector('#side #approve'), 'the approval stays in the Booth')
+  p.d.querySelector<HTMLElement>('[data-whole]')!.click()
+  assert.equal(p.d.querySelector('#thisPart'), null)
+})
+
+test('a click while the Booth is hidden brings the whole Booth back on that part', async () => {
+  const p = await page()
+  const w = p.dom.window as unknown as { boothSet(e: { t: string }): void; BOOTH: { open: boolean } }
+  w.boothSet({ t: 'hide' })
+  assert.equal(w.BOOTH.open, false)
+  p.d.querySelector<HTMLElement>('.row[data-key="proposition"] .val')!.click()
+  assert.equal(w.BOOTH.open, true)
+  assert.equal(p.d.querySelector('#thisPart')?.getAttribute('data-part'), 'proposition')
+})
+
+test('every part is named for feedback: head, row, frame; a Booth control by its label; the document by version and title', async () => {
+  const p = await page()
+  const w = p.dom.window as unknown as { ClanFeedbackTarget(el: Element): { kind: string; id: string; label: string } | null; ClanFeedbackDoc(): { version: string; title: string } }
+  const t = (sel: string) => { const r = w.ClanFeedbackTarget(p.d.querySelector(sel)!); return r && { kind: String(r.kind), id: String(r.id), label: String(r.label) } }
+  assert.deepEqual(t('#tname'), { kind: 'part', id: 'territory.name', label: 'Permission to stop' })
+  assert.deepEqual(t('#tline'), { kind: 'part', id: 'territory.line', label: 'The line' })
+  assert.deepEqual(t('.row[data-key="must_show"] li'), { kind: 'part', id: 'must_show', label: 'Must show' })
+  assert.deepEqual(t('.frame[data-slot="b"] .box'), { kind: 'part', id: 'reference_frames.b', label: 'Reference frame 2' })
+  assert.equal(w.ClanFeedbackTarget(p.d.querySelector('#approve')!)?.kind ?? 'control', 'control', 'a Booth control is named by the shared fallback, by its label')
+  assert.equal(w.ClanFeedbackTarget(p.d.body), null)
+  assert.deepEqual({ ...w.ClanFeedbackDoc() }, { version: 'v1', title: 'Permission to stop' })
+})
+
+test('the page declares its parts for client review, each with a data path and a plain label', async () => {
+  const p = await page()
+  const got = p.all('[data-clan-part]').map(e => [e.getAttribute('data-clan-part'), e.getAttribute('data-clan-part-label')])
+  assert.deepEqual(got, [['territory.name', 'Territory name'], ['territory.line', 'The line'], ['reference_frames.a', 'Reference frame 1'], ['reference_frames.b', 'Reference frame 2'], ['reference_frames.c', 'Reference frame 3'],
+    ['proposition', 'Proposition'], ['tone', 'Tone'], ['must_show', 'Must show'], ['never_show', 'Never show']])
+})
+
+test('the page\'s actions are clan:bar buttons: Approve, then Start version n once locked, and its state is the status item', async () => {
+  const open = await page()
+  const a = open.bars.at(-1)!
+  assert.ok(a.length <= 10)
+  assert.deepEqual(a.filter(i => i.kind === 'status').map(i => String(i.label)), ['Draft'])
+  assert.deepEqual(a.filter(i => i.kind === 'button').map(i => [String(i.id), String(i.label), Boolean(i.primary)]), [['approve', 'Approve version 1', true]])
+  const lockedView = view([approve('a1')], true)
+  const done = await page({ decisions: lockedView })
+  const b = done.bars.at(-1)!
+  assert.deepEqual(b.filter(i => i.kind === 'status').map(i => [String(i.label), Boolean(i.locked)]), [['Locked · version 1', true]])
+  assert.deepEqual(b.filter(i => i.kind === 'button').map(i => String(i.id)), ['newv'])
+  // The bar's own button does what the Booth's does.
+  open.dom.window.dispatchEvent(new open.dom.window.MessageEvent('message', { data: { type: 'clan:bar-action', id: 'approve' }, source: open.dom.window as unknown as MessageEventSource }))
+  await new Promise(r => setTimeout(r, 30))
+  assert.deepEqual([...open.posts], ['/approve'])
+})
+
+test('who wrote a part: a person\'s word says you said, an agent\'s draft carries the byline and its figure; a person\'s write is never replaced', async () => {
+  const by = (path: string, d: Json, who: Json = {}) => ({ decision: { id: 'd_' + path, ...d }, superseded: false, who, targets: [{ here: true, path, address: 'doc#' + path }] })
+  const decisions = view([
+    by('tone', { kind: 'edit', actor: 'human:dara@wk', agent: 'human', action: 'edit tone' }, { you: true, name: 'Dara' }),
+    by('proposition', { kind: 'edit', agent: 'brief', action: 'draft the proposition' }),
+  ], false)
+  const p = await page({ decisions })
+  p.d.querySelector<HTMLElement>('.row[data-key="tone"] .val')!.click()
+  assert.match(p.text('#thisPart .by')!, /you said/)
+  p.d.querySelector<HTMLElement>('.row[data-key="proposition"] .val')!.click()
+  assert.match(p.text('#thisPart .by')!, /drafted by/)
+  // The holder rule: the last write on a path was a person's, so an agent's version is not put over it.
+  const w = (p.dom.window as unknown as { __visualBrief: { heldByPerson(path: string): boolean } }).__visualBrief
+  assert.equal(w.heldByPerson('tone'), true)
+  assert.equal(w.heldByPerson('proposition'), false)
 })
