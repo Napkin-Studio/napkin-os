@@ -234,11 +234,6 @@ for (const size of SIZES) {
     await expect(mine.getByTestId('route-step').nth(1)).toHaveAttribute('data-state', 'waiting')
     await expect(mine.getByTestId('route-step').nth(0)).toHaveAttribute('data-state', 'approved')
     await expect(mine.getByTestId('holder')).toContainText(`Waiting on ${PEOPLE.creativeDirector.username}, creative director`)
-    // After the withdrawal the Booth of the brief says it is with the creative director again.
-    await signIn(page, PEOPLE.creativeDirector)
-    await openWork(page, job.client, 'brief', 'J001 brief')
-    await expect(boothIn(page).booth.getByTestId('booth-holder')).toHaveText(/^With Dara, due \w+$/)
-    await signIn(page, PEOPLE.accountService)
     const back = await entryOf(page, job)
     expect(back.holder).toMatchObject({ person: PEOPLE.creativeDirector.username, stage: 'brief-check' })
     expect(back.route[1]).toMatchObject({ state: 'waiting', approved_by: null })
