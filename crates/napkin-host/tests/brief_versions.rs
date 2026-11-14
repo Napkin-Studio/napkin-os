@@ -544,16 +544,33 @@ fn compare_shows_words_not_marks() {
 fn restore_that_brings_a_mark_back_names_it_in_last_edit_keys() {
     let rig = rig();
     let dara = || session(&rig, "dara@wk");
-    patch(&rig, "mark audience confidential", json!({ "confidential_fields": ["audience"] }));
+    patch(
+        &rig,
+        "mark audience confidential",
+        json!({ "confidential_fields": ["audience"] }),
+    );
     edit(&rig, "The client's unannounced launch.");
     assert_eq!(call(&dara(), "/approve", "", json!({})).0, 200);
-    assert_eq!(call(&dara(), "/unapprove", "", json!({ "rationale": "again" })).0, 200);
+    assert_eq!(
+        call(&dara(), "/unapprove", "", json!({ "rationale": "again" })).0,
+        200
+    );
     edit(&rig, "Safe words.");
-    patch(&rig, "unmark audience confidential", json!({ "confidential_fields": [] }));
+    patch(
+        &rig,
+        "unmark audience confidential",
+        json!({ "confidential_fields": [] }),
+    );
     let (s, v) = call(&dara(), "/restore", "", json!({ "version": 1 }));
     assert_eq!(s, 200, "{v}");
     let (_, list) = call(&dara(), "/versions", "", Value::Null);
-    let keys = list["draft"]["last_edit"]["keys"].as_array().cloned().unwrap_or_default();
-    assert!(keys.contains(&json!("confidential_fields")), "keys = {keys:?}");
+    let keys = list["draft"]["last_edit"]["keys"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        keys.contains(&json!("confidential_fields")),
+        "keys = {keys:?}"
+    );
     assert!(keys.contains(&json!("audience")), "keys = {keys:?}");
 }
