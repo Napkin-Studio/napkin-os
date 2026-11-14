@@ -209,6 +209,7 @@ fn marked(v: &Value, path: &str) -> Vec<String> {
 
 #[tokio::test]
 async fn needs_are_counted_per_document_and_a_set_aside_mark_is_the_persons_own() {
+    std::env::set_var("NAPKIN_BRIEF_GATE", "on");
     let r = rig();
     let cian = sign_in(&r, "cian@wk").await;
     let aoife = sign_in(&r, "aoife@wk").await;
@@ -248,7 +249,19 @@ async fn needs_are_counted_per_document_and_a_set_aside_mark_is_the_persons_own(
     assert_eq!(docs.len(), 1, "{v}");
     let d = &docs[0];
     let path = d["path"].as_str().unwrap().to_string();
-    assert!(d["count"].as_u64().unwrap() >= 1 && d["mine"].as_u64().unwrap() >= 1);
+    assert!(d["mine"].as_u64().unwrap() >= 1);
+    // one count: the document's own Needs you, the number its library state and job page show
+    let (_, page, _) = call(
+        &r,
+        "GET",
+        &format!("/api/t/{t}/jobs/J001"),
+        Some(&aoife.cookie),
+        None,
+    )
+    .await;
+    let own = page["job"]["documents"][0]["needs_you"].as_u64().unwrap();
+    assert!(own >= 2, "a blank gated brief holds several items: {page}");
+    assert_eq!(d["count"].as_u64().unwrap(), own, "{v}");
     assert_eq!(d["earliest_due"], "2026-11-13");
     assert!(d.get("next_deadline").is_some());
     // the people on no job see no document of it, and a person with no item of their own sees none as mine
@@ -262,8 +275,8 @@ async fn needs_are_counted_per_document_and_a_set_aside_mark_is_the_persons_own(
         .unwrap()
         .iter()
         .all(|d| d["mine"] == 0));
-    // the old answer is still there for the surfaces that read it
-    assert!(v["items"].is_array() && v["total"].is_number());
+    // the second list is gone: one source, per document
+    assert!(v.get("items").is_none() && v.get("total").is_none(), "{v}");
 
     // set aside: the key is needs.ts needKey, so it holds a colon, a space and a slash
     let key = "flagged%3Atenth%20finding%2Fa";
@@ -317,4 +330,65 @@ async fn needs_are_counted_per_document_and_a_set_aside_mark_is_the_persons_own(
         .await;
         assert_eq!(st, StatusCode::METHOD_NOT_ALLOWED, "{method}");
     }
+}
+
+#[tokio::test]
+async fn aside_routes_keep_to_the_session_tenant_and_to_documents_of_it() {
+    let r = rig();
+    let aoife = sign_in(&r, "aoife@wk").await;
+    let t = aoife.tenant.clone();
+    let (_, client, _) = call(
+        &r,
+        "POST",
+        &format!("/api/t/{t}/clients"),
+        Some(&aoife.cookie),
+        Some(json!({ "name": "Client A" })),
+    )
+    .await;
+    brief(&r, &t, client["id"].as_str().unwrap());
+    let call_aside = |tenant: String, path: String, method: &'static str| {
+        let (r, c) = (&r, aoife.cookie.clone());
+        async move {
+            call(
+                r,
+                method,
+                &format!("/api/t/{tenant}/needs/k1/aside?path={path}"),
+                Some(&c),
+                None,
+            )
+            .await
+            .0
+        }
+    };
+    let other = "11111111-2222-3333-4444-555555555555".to_string();
+    for method in ["POST", "DELETE"] {
+        for tenant in [other.clone(), "not-a-tenant".to_string()] {
+            assert_eq!(
+                call_aside(tenant.clone(), "doc-b1".into(), method).await,
+                StatusCode::FORBIDDEN,
+                "{method} {tenant}"
+            );
+        }
+    }
+    // a path that is not a document of this tenant is refused, and never kept
+    for path in ["..%2F..%2Fetc%2Fpasswd", "doc-nothing", "not%20a%20doc"] {
+        let st = call_aside(t.clone(), path.into(), "POST").await;
+        assert!(
+            st == StatusCode::NOT_FOUND || st == StatusCode::BAD_REQUEST,
+            "{path}: {st}"
+        );
+    }
+    assert_eq!(
+        call_aside(t.clone(), "doc-b1".into(), "POST").await,
+        StatusCode::OK
+    );
+    let (_, v, _) = call(
+        &r,
+        "GET",
+        &format!("/api/t/{t}/needs"),
+        Some(&aoife.cookie),
+        None,
+    )
+    .await;
+    assert_eq!(v["aside"].as_object().unwrap().len(), 1, "{v}");
 }

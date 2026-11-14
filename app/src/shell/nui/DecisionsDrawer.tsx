@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AttentionItem, DecisionsView, RelatedView, UpstreamEntry } from '../../host'
 import { LogoSpinner } from '../../brand/LogoSpinner'
-import { looksRightOf, needKey, splitAside } from '../decisions/needs'
+import { looksRightOf, mineFirstBy, needKey, splitAside, waitingOn } from '../decisions/needs'
 import { refOfAddress, sectionsOf } from '../decisions/words'
 import { HistoryBody, QuietItem } from '../decisions/DecisionBlock'
 import { approveWords, callCount, callWords, graphOf, lineageOf, rowOf, type LineManifest, type LineTech } from './drawerData'
@@ -35,6 +35,8 @@ export interface CallGroup {
   /** "brief", "research": the Approve button's last word. */
   noun: string
   calls: AttentionItem[]
+  /** The document's notices for this person (alerts of its job): they block nothing and are counted apart. */
+  notices?: AttentionItem[]
   /** What this person set aside here: out of the count, still blocking the lock. */
   aside?: ReadonlySet<string>
   onToggleAside?: (key: string) => void
@@ -76,9 +78,23 @@ interface Props {
   onClose: () => void
   /** Something was settled: read again. */
   onChanged?: () => void
+  /** Who is signed in and the roles they hold: their own items come first, soonest due first. */
+  me?: { id: string | null; roles: readonly string[] }
 }
 
-export function DecisionsDrawer({ title, groups, pending = [], focus, view, onView, onClose, onChanged }: Props) {
+/** Five seconds to undo a Set aside. */
+export const ASIDE_UNDO_MS = 5000
+
+export function DecisionsDrawer({ title, groups, pending = [], focus, view, onView, onClose, onChanged, me }: Props) {
+  const meId = me?.id ?? null
+  const meRoles = me?.roles ?? []
+  // The last Set aside, for its five seconds to undo.
+  const [undo, setUndo] = useState<{ g: CallGroup; key: string } | null>(null)
+  useEffect(() => {
+    if (!undo) return
+    const t = setTimeout(() => setUndo(null), ASIDE_UNDO_MS)
+    return () => clearTimeout(t)
+  }, [undo])
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -88,15 +104,17 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
   }, [onClose])
 
   const split = groups.map(g => ({ g, ...splitAside(g.calls, g.aside ?? new Set()) }))
+  const noticeSplit = groups.map(g => ({ g, ...splitAside(g.notices ?? [], g.aside ?? new Set()) }))
   const n = split.reduce((s, x) => s + x.open.length, 0) + pending.length
   // The mock's card lists the first few calls, then "Show all N", so Approve all and the views stay in sight.
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? Infinity : CALLS_SHOWN
-  const openRows = split.flatMap(({ g, open }) => open.map(item => ({ g, item })))
+  const openRows = mineFirstBy(split.flatMap(({ g, open }) => open.map(item => ({ g, item }))), r => r.item, meId, meRoles)
+  const noticeRows = mineFirstBy(noticeSplit.flatMap(({ g, open }) => open.map(item => ({ g, item }))), r => r.item, meId, meRoles)
   // Approve buttons for the documents whose calls are in sight (all of them after Show all).
   const inSight = new Set(openRows.slice(0, shown).map(r => r.g.key))
   const approvable = groups.filter(g => !g.locked && g.calls.length && (showAll || openRows.length <= CALLS_SHOWN || inSight.has(g.key)))
-  const asideN = split.reduce((s, x) => s + x.aside.length, 0)
+  const asideN = split.reduce((s, x) => s + x.aside.length, 0) + noticeSplit.reduce((s, x) => s + x.aside.length, 0)
 
   const act = async (key: string, run: () => Promise<void>) => {
     setBusy(key); setError(null)
@@ -106,11 +124,13 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
   const row = (g: CallGroup, item: AttentionItem, isAside: boolean) => {
     const k = `${g.key}|${needKey(item)}`
     const w = callWords(item, g.title)
+    const wait = waitingOn(item, meId, meRoles)
     const lr = !g.locked ? looksRightOf(item) : null
     return (
       <div className="pp-row" style={{ gridTemplateColumns: '1fr' }} key={k} data-testid="call-row">
         <button type="button" data-np-open style={{ textAlign: 'left' }} onClick={() => g.open(item)}>
           <b style={{ fontSize: 13.5 }}>{w.title}</b><span className="pp-sub" style={{ display: 'block' }}>{w.sub}</span>
+          {wait && <span className="pp-sub" style={{ display: 'block' }} data-testid="waiting-on">{wait}</span>}
         </button>
         <span className="pp-acts" style={{ justifyContent: 'flex-start', marginTop: 6 }}>
           {lr && (
@@ -120,7 +140,7 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
           {g.onToggleAside && (
             <button type="button" className="side-link" data-np-aside data-testid={isAside ? 'bring-back' : 'set-aside'}
               title={isAside ? 'Back into the count' : 'Out of the count for now. It still stops the lock.'}
-              onClick={() => g.onToggleAside!(needKey(item))}>{isAside ? 'Bring back' : 'Set aside'}</button>
+              onClick={() => { g.onToggleAside!(needKey(item)); setUndo(isAside ? null : { g, key: needKey(item) }) }}>{isAside ? 'Bring back' : 'Set aside'}</button>
           )}
           {item.address && <button type="button" className="side-link" data-np-open data-testid="call-open" onClick={() => g.open(item)}>Open</button>}
         </span>
@@ -164,7 +184,7 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
               <span className={`badge-pill ${n ? 'proposed' : 'verified'}`} id="dtree-call-badge">{n ? 'Needs you' : 'Done'}</span>
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.45 }} id="dtree-call-desc">
-              {n || asideN ? (
+              {n || asideN || noticeRows.length ? (
                 <div className="dc-rows">
                   {openRows.slice(0, shown).map(({ g, item }) => row(g, item, false))}
                   {pending.slice(0, Math.max(0, shown - openRows.length)).map(p => (
@@ -183,10 +203,19 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
                       {showAll ? 'Show fewer' : `Show all ${n}`}
                     </button>
                   )}
+                  {noticeRows.length > 0 && <>
+                    <hr />
+                    <div className="pp-h" data-testid="notices-list">Notices · {noticeRows.length}</div>
+                    {noticeRows.map(({ g, item }) => row(g, item, false))}
+                  </>}
+                  {undo && (
+                    <p className="dp-lock" role="status" data-testid="aside-undo">Set aside. <button type="button" className="side-link" onClick={() => { undo.g.onToggleAside?.(undo.key); setUndo(null) }}>Undo</button></p>
+                  )}
                   {asideN > 0 && <>
                     <hr />
                     <div className="pp-h" data-testid="set-aside-list">Set aside · {asideN}</div>
                     {split.map(({ g, aside }) => aside.map(item => row(g, item, true)))}
+                    {noticeSplit.map(({ g, aside }) => aside.map(item => row(g, item, true)))}
                   </>}
                 </div>
               ) : 'Every call is answered and on the record.'}

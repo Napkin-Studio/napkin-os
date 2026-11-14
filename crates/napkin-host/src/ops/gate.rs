@@ -10,7 +10,7 @@
 //! with its evidence, worked out here from the document's data by rules code
 //! can apply (what the Judge thinks of the words is the middleware's, and
 //! reaches the lock list as a verdict, item 5 of Contract 4 §7.2). A missing
-//! item is a lock blocker (`gate_item`), so `/approve` refuses through the one
+//! item is a lock blocker (`gate:<item>`, `signoff:<role>`), so `/approve` refuses through the one
 //! enforcement point there already is, and the brief's two signers are a list
 //! on the brief, read here:
 //!

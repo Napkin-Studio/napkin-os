@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { hasServer, host } from '../../host'
 import type { DecisionsView, LibraryItem, UpstreamView } from '../../host'
-import { needsOf } from '../decisions/needs'
+import { needsOf, noticesOf } from '../decisions/needs'
 import { needsYou } from '../landing/model'
 import { thinOf, type DocFacts, type Facts } from './deskData'
 import { limiter, READING } from './limiter'
@@ -38,6 +38,7 @@ export function factsOf(view: DecisionsView, up: UpstreamView | null): DocFacts 
   return {
     editor: newest ? { name: newest.who.name, you: !!newest.who.you, at: newest.decision.timestamp } : null,
     calls: needsOf(view),
+    notices: noticesOf(view),
     thin: thinOf(view.attention),
     upstreamChanged: parent ? { title: parent.title || 'What it was made from', ...(parent.path ? { path: parent.path } : {}) } : null,
     locked: !!view.lock.locked && !view.lock.reopened?.length,
