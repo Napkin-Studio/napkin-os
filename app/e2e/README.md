@@ -22,12 +22,46 @@ for a week (feature `landing-circles`, owner decision).
 
 1. `vite build` into `app/dist` (skip with `NAPKIN_E2E_SKIP_BUILD=1` when it is current);
 2. packs Brief Maker, Research and Deck Maker with the SDK's examples into a temp seed directory;
-3. `cargo build -p napkin-web`, then starts it on `127.0.0.1:18080` (`NAPKIN_E2E_PORT` to change)
+3. `cargo build -p napkin-web`, then starts it on `127.0.0.1:18080` (`NAPKIN_E2E_PORT` to change; see Ports)
    with anonymous sessions, an empty temp data directory and that seed installed into every new workspace.
 
 Each test opens its own browser context, which is its own anonymous tenant, and seeds
 what it needs through the tenant's own API (`POST /clients`, `POST /documents`, and a
 document's `patch-data` for an open contest or a Deck run). Nothing is shared between tests.
+
+## Ports
+
+The stack starts three servers, and a run needs a free port for each:
+
+| Variable | Server | Default |
+| --- | --- | --- |
+| `NAPKIN_E2E_PORT` | napkin-web, anonymous sessions | 18080 |
+| `NAPKIN_E2E_ROSTER_PORT` | napkin-web, roster sign-in and the Brief gate | 18082 |
+| `NAPKIN_E2E_MW_PORT` | the stand-in middleware (`standin.mjs`) | 18081 |
+
+Set all three whenever another stack may be running on the machine (for example
+`NAPKIN_E2E_PORT=18230 NAPKIN_E2E_ROSTER_PORT=18232 NAPKIN_E2E_MW_PORT=18231`). If any of them is
+already in use, or two are the same, `stack.mjs` stops before building and names the variables.
+
+## The stand-in middleware's state is kept per test
+
+A request from napkin-web to the middleware names only its document (`clan.id`) and, for a document
+with a client, the client (`clan.workspace_client.id`); the tenant is not in it, and `x-napkin-agency`
+is shared by every test of an agency. So the stand-in (`standin.mjs`) keys the job state, `fail`,
+`variant` and the log of what was asked by those ids. `scope.ts` records the clients and documents
+each browser context creates through its own API (`open()` in `pilot.ts` does it; a spec that calls
+`browser.newContext()` itself wraps it in `track(...)`), and `control(page, ...)` and
+`middlewareLog(page)` send that scope. A control message with no scope, and a request that matches
+no scope, use the one shared state, as before. Specs set the job state through `control(page, {state, stage})`,
+never by posting to the stand-in directly.
+
+Limits: a test that reuses a client another test of the same agency also uses (`seedJ001` without
+`fresh: true` in a roster tenant) shares that client's state with it; a request about a document that
+the context did not create through its API and that has no client falls back to the shared state.
+
+Several workers: `--workers=6` is measurably better with this keying but it is not clean. Tests that
+fail only under load (the shell is slow to draw with six workers on one machine) still fail, and
+that is a timing limit, not shared state. Use `--workers=1` for a result that counts.
 
 ## Run the stack by hand
 

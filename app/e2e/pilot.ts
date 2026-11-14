@@ -5,6 +5,7 @@
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { scopeOf, track } from './scope'
 import { asMe, lockBrief, PEOPLE, signBrief, type SeededJob } from './seed/j001'
 
 export type Size = { tag: string; width: number; height: number }
@@ -20,7 +21,7 @@ export const rosterURL = `http://127.0.0.1:${process.env.NAPKIN_E2E_ROSTER_PORT 
 export const mwControl = `http://127.0.0.1:${process.env.NAPKIN_E2E_MW_PORT || '18081'}/control`
 
 export async function open(browser: Browser, size: Size, mode: string = 'light', opts: { roster?: boolean } = {}): Promise<{ ctx: BrowserContext; page: Page }> {
-  const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, ...(opts.roster ? { baseURL: rosterURL } : {}) })
+  const ctx = track(await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, ...(opts.roster ? { baseURL: rosterURL } : {}) }))
   await ctx.addInitScript(m => { try { localStorage.setItem('napkin.theme', m) } catch { /* not kept */ } }, mode)
   return { ctx, page: await ctx.newPage() }
 }
@@ -75,11 +76,15 @@ export async function papers(page: Page): Promise<string[]> {
 
 /** Tell the stand-in middleware something: `{ fail: 'judge_work' }` fails that task once, `{ variant: { judge_work: 'score22-idea7' } }` picks an answer file. */
 export async function control(page: Page, body: object) {
-  const r = await page.request.post(mwControl, { data: body })
+  // Keyed by what this page's context made, so another test's control message or request never reaches this one's state (scope.ts, standin.mjs).
+  const scope = await scopeOf(page)
+  const r = await page.request.post(mwControl, { data: scope ? { ...body, scope } : body })
   expect(r.status(), 'the stand-in middleware took the control message').toBe(200)
 }
 
 /** What the stand-in middleware was asked, newest last: `{ task, at }` for every request, and nothing else. */
 export async function middlewareLog(page: Page): Promise<{ task: string; at: string; model?: unknown }[]> {
-  return (await (await page.request.get(`${mwControl}/log`)).json()) as { task: string; at: string }[]
+  const scope = await scopeOf(page)
+  const q = scope ? `?docs=${scope.docs.join(',')}&clients=${scope.clients.join(',')}` : ''
+  return (await (await page.request.get(`${mwControl}/log${q}`)).json()) as { task: string; at: string }[]
 }

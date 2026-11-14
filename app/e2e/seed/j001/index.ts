@@ -4,6 +4,7 @@
 // The deny-list check runs first; it passes with a note when no list is supplied.
 
 import { expect, type Page } from '@playwright/test'
+import { own } from '../../scope'
 import { assertDeIdentified } from './denyList.mjs'
 import { DECK_TITLE, JOB, MESSY_BRIEF, READY_BRIEF, RESEARCH_TITLE } from './brief'
 
@@ -68,6 +69,7 @@ export async function seedJ001(page: Page, opts: { ready?: boolean; fresh?: bool
     }
     clientName = name
     ordinal = n
+    own(page, { client })
   }
   // The job: J001 for Client A, J002 for Client A2 ... It holds a deadline, and the three documents are filed under it.
   // The budget in hours is money (features/job-page.clan): the planner who opens the job cannot set it, so a test that

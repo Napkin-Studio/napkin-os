@@ -6,12 +6,13 @@
 //   NAPKIN_E2E_SHOTS=/tmp/p3 npm run e2e -- running
 
 import { expect, test, type Page } from '@playwright/test'
+import { control } from './pilot'
+import { track } from './scope'
 
 const BRIEF = 'ie.napkin.brief-maker'
 const RESEARCH = 'ie.napkin.campaign-research'
 const DECK = 'ie.napkin.deck-maker'
 const shots = process.env.NAPKIN_E2E_SHOTS
-const MW = `http://127.0.0.1:${process.env.NAPKIN_E2E_MW_PORT || '18081'}`
 const CONTEST = { selection: { contested: [{ id: 'c1', key: 'headline', status: 'open', values: [{ value: 'One' }, { value: 'Two' }] }] } }
 
 async function shot(page: Page, name: string) {
@@ -20,10 +21,11 @@ async function shot(page: Page, name: string) {
 
 /** What the stand-in middleware says its one job is doing from now on. */
 const job = async (page: Page, state: string, stage: string) => {
-  expect((await page.request.post(`${MW}/control`, { data: { state, stage } })).status()).toBe(200)
+  await control(page, { state, stage }) // keyed by this test's own clients and documents (scope.ts)
 }
 
 test('a running job, a failure and a waiting question show on the landing and the circles, live', async ({ page }) => {
+  track(page.context())
   await page.goto('/')
   const { tenant } = await (await page.request.get('/api/session')).json() as { tenant: string }
   const api = `/api/t/${tenant}`
