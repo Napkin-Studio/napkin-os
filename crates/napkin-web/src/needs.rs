@@ -486,6 +486,21 @@ mod tests {
     }
 
     #[test]
+    fn set_aside_marks_have_their_own_bound_and_done_marks_theirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileDone::new(dir.path().to_path_buf());
+        store.mark("p@wk", "J001:keep").unwrap();
+        for i in 0..MAX_ASIDE + 5 {
+            store.mark("p@wk", &aside_id("doc-a", &format!("k{i}"))).unwrap();
+        }
+        let kept = store.marked("p@wk");
+        assert!(kept.contains("J001:keep"), "set-aside marks never push a done mark out");
+        let asides = kept.iter().filter(|k| k.starts_with("aside")).count();
+        assert_eq!(asides, MAX_ASIDE);
+        assert!(!kept.contains(&aside_id("doc-a", "k0")), "the oldest set-aside goes first");
+    }
+
+    #[test]
     fn a_name_cannot_walk_out_of_the_folder() {
         let dir = tempfile::tempdir().unwrap();
         let store = FileDone::new(dir.path().join("needs-done"));
