@@ -185,7 +185,7 @@
   // hears a pressed button: state-retry, state-update, state-ask, state-fix-N. boothSay(null) is Normal: nothing said.
   var BS_NOT_RIGHT=['Make it shorter','Change the tone','Check the facts'];
   var BS_BECAUSE={provider:'The model did not answer, so the run stopped.', refused:'The model would not do this as asked, so the run stopped.', timeout:'The run took too long, so it stopped.', other:'The run stopped.'};
-  var BOOTH_SAY={act:null, html:'', last:null, client:false, lt:0, dismissed:'', lineKey:''};
+  var BOOTH_SAY={act:null, html:'', last:null, client:false, lt:0, dismissed:'', lineKey:'', items:{}};
   function boothSayHtml(s){
     var e=boothEsc, line=function(t){ return '<p class="bs-line">'+e(t)+'</p>'; }, small=function(t){ return t?'<p class="bs-small">'+e(t)+'</p>':''; };
     var btn=function(id, t){ return '<button type="button" data-bs-act="'+id+'">'+e(t)+'</button>'; };
@@ -199,10 +199,26 @@
     }
     return '';
   }
-  function boothSay(s, act){
+  // Each sayer owns its own state: boothSay(state, act, owner) says it under that owner (default 'page'); boothSay(null, act, owner) takes back
+  // only that owner's, so a page redrawing "no changed brief" never clears a run that failed. When two are true at once the most urgent is
+  // said in full, with the others after it in one short line ("Also: ..."), never a pile; its action is the one the buttons run.
+  var BS_URGENT=['run-failed','missing-access','changed-brief','not-right','long-run','loading'];
+  function boothSayTop(){
+    var all=Object.keys(BOOTH_SAY.items).map(function(k){ return BOOTH_SAY.items[k]; });
+    all.sort(function(x,y){ return BS_URGENT.indexOf(x.s.name)-BS_URGENT.indexOf(y.s.name); });
+    return all;
+  }
+  function boothSay(s, act, owner){
+    var o=owner||'page';
+    if(s) BOOTH_SAY.items[o]={s:s, act:act||null}; else delete BOOTH_SAY.items[o];
+    boothSayRender();
+  }
+  function boothSayRender(){
     var own=$('boothState'); if(!own) return;
-    BOOTH_SAY.act=act||null; BOOTH_SAY.last=s||null;
-    var h=s&&!BOOTH_SAY.client?boothSayHtml(s):'';   // client review mode says nothing here
+    var all=boothSayTop(), top=all[0]||null, s=top?top.s:null;
+    BOOTH_SAY.act=top?top.act:null; BOOTH_SAY.last=s;
+    var also=all.slice(1).map(function(x){ return boothSayShort(x.s); }).filter(Boolean);
+    var h=s&&!BOOTH_SAY.client?boothSayHtml(s)+(also.length?' <p class="bs-small">Also: '+boothEsc(also.join(' '))+'</p>':''):'';   // client review mode says nothing here
     // Where the page has no Booth on screen (a run before the document), its own mount (boothStart's `state`) holds the line.
     var alt=BOOTH_AT&&BOOTH_AT.state?BOOTH_AT.state():null, el=alt||own, key=(alt?'a':'o')+h;
     if(key===BOOTH_SAY.html) return;
@@ -346,7 +362,7 @@
     // The shell says what this person last had, on every load (AppRuntime.tsx).
     window.addEventListener('message', function(e){
       var m=e.data; if(e.source!==window.parent||!m) return;
-      if(m.type==='clan:clientmode'){ BOOTH_SAY.client=!!m.on; boothSay(BOOTH_SAY.last, BOOTH_SAY.act); return; }
+      if(m.type==='clan:clientmode'){ BOOTH_SAY.client=!!m.on; boothSayRender(); return; }
       if(m.type!=='clan:booth') return;
       boothSet({t:'shell', open:m.open!==false});
     });

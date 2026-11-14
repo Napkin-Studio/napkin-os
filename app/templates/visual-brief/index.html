@@ -427,7 +427,7 @@
     if(typeof boothSay !== 'function') return;
     boothSay(boothMoved(S.up, locked()), function(id){
       if(id === 'state-update') boothUpdateBrief(function(j){ if(j && j.ok === false) toast(j.error || 'The page did not update.'); load(); });
-    });
+    }, 'upstream');
   }
   function draw(){
     drawState();
