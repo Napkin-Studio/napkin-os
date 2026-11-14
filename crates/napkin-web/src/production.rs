@@ -13,6 +13,16 @@
 //!   leaves this server.
 //!
 //! Mounted only when `NAPKIN_PRODUCTION_RELAY_URL` is set in accounts mode.
+//!
+//! Who may open it (docs/production-tool/merge-2026-11.md): every path under
+//! `/production`, the page and its assets as well as the proxy, runs behind the
+//! same three layers as the shell API: the tenant layer (the signed session
+//! names the person and their agency; none is a 401), `live::live_roles` (the
+//! People store's roles and name, on every request; a person no longer on it
+//! is signed out) and [`gate`], which lets through only a person whose roles
+//! the agency's door table gives a Production door
+//! ([`crate::roles::Table::opens_production`]); anyone else gets 403. Nothing
+//! a cookie, a token, the identity provider or a document says grants it.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -32,6 +42,7 @@ use sha2::{Digest, Sha256};
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::auth::Account;
+use crate::state::AppCtx;
 use crate::tenant::{Identity, Mode, TenantId};
 
 /// The header the relay reads.
@@ -217,19 +228,14 @@ fn now_s() -> u64 {
 // ── The routes ───────────────────────────────────────────────────────────────
 
 /// `/production` and everything under it (merged by `router_full`): the API
-/// proxy behind the session layer, and the tool's build for everything else.
+/// proxy and the tool's build, both behind the session, the People store's
+/// roles and [`gate`].
 pub fn router<S: Clone + Send + Sync + 'static>(
+    ctx: Arc<AppCtx>,
     relay: Arc<Relay>,
     identity: Arc<Identity>,
 ) -> Router<S> {
-    let api = Router::new()
-        .fallback(proxy)
-        .with_state(relay.clone())
-        .layer(axum::middleware::from_fn_with_state(
-            identity.clone(),
-            crate::tenant::layer,
-        ))
-        .layer(axum::Extension(identity));
+    let api = Router::new().fallback(proxy).with_state(relay.clone());
     let dir = &relay.config.static_dir;
     let tool = Router::new()
         .nest("/api", api)
@@ -238,7 +244,108 @@ pub fn router<S: Clone + Send + Sync + 'static>(
         // a nest does not match its own path with a trailing slash
         .route_service("/production/", ServeFile::new(dir.join("index.html")))
         .nest("/production", tool)
+        // innermost first: the role check, the People store's roles, then the session
+        .layer(axum::middleware::from_fn_with_state(ctx.clone(), gate))
+        .layer(axum::middleware::from_fn_with_state(
+            ctx,
+            crate::live::live_roles,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            identity.clone(),
+            crate::tenant::layer,
+        ))
+        .layer(axum::Extension(identity))
+        .layer(axum::middleware::from_fn(signed_out_page))
         .layer(axum::middleware::from_fn(cache_headers))
+}
+
+/// May the signed-in `account` open the Production Tool? Its agency's door
+/// table, for the roles the People store gives it (`live_roles` put them on the
+/// account). No agency, or no role with a Production door, is no.
+pub fn may_open(ctx: &AppCtx, account: &Account) -> bool {
+    if account.agency.trim().is_empty() {
+        return false;
+    }
+    let roles = crate::roles::of(Some(account));
+    crate::roles::Table::for_agency(ctx.roles_dir.as_deref(), Some(&account.agency))
+        .opens_production(&roles)
+}
+
+/// The Production Tool's own permission check, inside the session and the
+/// People store's roles: no account (or one with no agency) is a 401, a person
+/// whose roles give no Production door a 403. Nothing reaches the relay or the
+/// tool's build past either.
+async fn gate(State(ctx): State<Arc<AppCtx>>, request: Request, next: Next) -> Response {
+    let identity = request.extensions().get::<Arc<Identity>>().cloned();
+    let Some(account) = request.extensions().get::<Account>().cloned() else {
+        return match identity {
+            Some(i) => sign_in_first(&i),
+            None => sign_in_first(&Identity::anonymous(false)),
+        };
+    };
+    if account.agency.trim().is_empty() {
+        return match identity {
+            Some(i) => sign_in_first(&i),
+            None => sign_in_first(&Identity::anonymous(false)),
+        };
+    }
+    if !may_open(&ctx, &account) {
+        return json(
+            StatusCode::FORBIDDEN,
+            serde_json::json!({"ok": false, "error": "Your role cannot open this."}),
+        );
+    }
+    next.run(request).await
+}
+
+/// A signed-out visit to one of the tool's pages is still a 401, but a browser
+/// is shown a page that sends the person to sign in and back (`/?next=`,
+/// app/src/shell/next.ts) rather than the API's JSON.
+async fn signed_out_page(request: Request, next: Next) -> Response {
+    let path = request.uri().path().to_string();
+    let target = request
+        .uri()
+        .path_and_query()
+        .map(|p| p.as_str().to_string())
+        .unwrap_or_else(|| path.clone());
+    let page = request.method() == Method::GET
+        && !(path.starts_with("/production/api/") || path == "/production/api")
+        && !path.starts_with("/production/assets/")
+        && request
+            .headers()
+            .get(header::ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.contains("text/html"));
+    let response = next.run(request).await;
+    if !page || response.status() != StatusCode::UNAUTHORIZED {
+        return response;
+    }
+    let next_url = format!("/?next={}", query_escape(&target));
+    let body = format!(
+        "<!doctype html><meta charset=utf-8><title>Sign in</title>\
+         <meta http-equiv=refresh content=\"0; url={next_url}\">\
+         <p><a href=\"{next_url}\">Sign in to open Production.</a></p>"
+    );
+    Response::builder()
+        .status(StatusCode::UNAUTHORIZED)
+        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(header::CACHE_CONTROL, "no-store")
+        .body(Body::from(body))
+        .unwrap()
+}
+
+/// Percent-encode everything but unreserved characters and `/`, so a path and
+/// its query ride safely in `next` (and in an HTML attribute).
+fn query_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~' | b'/') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
 }
 
 fn static_files(dir: &Path) -> ServeDir<ServeFile> {
@@ -452,6 +559,7 @@ mod tests {
             username: "visionary@napkin".into(),
             agency: "napkin".into(),
             name: Some("Laurance".into()),
+            roles: Vec::new(),
         }
     }
 

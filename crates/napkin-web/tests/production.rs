@@ -117,15 +117,18 @@ fn shell_build(dir: &std::path::Path) -> std::path::PathBuf {
 
 fn identity(dir: &std::path::Path) -> napkin_web::tenant::Identity {
     let roster = dir.join("accounts.tsv");
+    // Roles from the roster's roles column, which seeds the People store (features/align-needs-lock-people.clan):
+    // a producer and an art director have a Production door; a planner and a person with no role do not.
     std::fs::write(
         &roster,
-        "visionary@napkin\tLaurance\nengineer@napkin\tShrey\n",
+        "visionary@napkin\tLaurance\tproducer\nengineer@napkin\tShrey\tart-director\n\
+         planner@napkin\tPat\tplanning\nnorole@napkin\tNoel\t\n",
     )
     .unwrap();
     napkin_web::tenant::Identity {
         mode: napkin_web::tenant::Mode::Accounts {
             provider: napkin_web::auth::Provider::Roster(
-                napkin_web::auth::Roster::new(roster).unwrap(),
+                napkin_web::auth::Roster::open(dir.join("_people"), &roster).unwrap(),
             ),
             sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
         },
@@ -446,13 +449,15 @@ async fn a_write_from_another_site_is_refused() {
 async fn the_tool_is_served_with_its_own_index_for_its_routes() {
     let (url, _log) = stub_relay().await;
     let s = server(Some(url), Duration::from_secs(5));
+    // the build is behind the session as the proxy is (docs/production-tool/merge-2026-11.md)
+    let cookie = sign_in(&s, "visionary@napkin").await;
     for path in [
         "/production",
         "/production/",
         "/production/p/abc",
         "/production/p/abc/script/s1?shot=x",
     ] {
-        let r = send(&s, get(path, None)).await;
+        let r = send(&s, get(path, Some(&cookie))).await;
         assert_eq!(r.status, StatusCode::OK, "{path}");
         assert!(
             r.text().contains("<title>Production</title>"),
@@ -461,7 +466,7 @@ async fn the_tool_is_served_with_its_own_index_for_its_routes() {
         );
         assert_eq!(r.headers[header::CACHE_CONTROL], "no-cache", "{path}");
     }
-    let r = send(&s, get("/production/assets/x-abc123.js", None)).await;
+    let r = send(&s, get("/production/assets/x-abc123.js", Some(&cookie))).await;
     assert_eq!(r.status, StatusCode::OK);
     assert!(r.headers[header::CONTENT_TYPE]
         .to_str()
@@ -471,10 +476,10 @@ async fn the_tool_is_served_with_its_own_index_for_its_routes() {
         r.headers[header::CACHE_CONTROL],
         "public, max-age=31536000, immutable"
     );
-    let r = send(&s, get("/production/assets/clan_bg.wasm", None)).await;
+    let r = send(&s, get("/production/assets/clan_bg.wasm", Some(&cookie))).await;
     assert_eq!(r.status, StatusCode::OK);
     assert_eq!(r.headers[header::CONTENT_TYPE], "application/wasm");
-    let r = send(&s, get("/production/assets/missing-123.js", None)).await;
+    let r = send(&s, get("/production/assets/missing-123.js", Some(&cookie))).await;
     assert_eq!(
         r.status,
         StatusCode::NOT_FOUND,
@@ -535,5 +540,102 @@ async fn anonymous_mode_never_mounts_the_tool() {
         r.text().contains("Napkin OS"),
         "the shell's fallback, not the relay"
     );
+    assert!(log.lock().unwrap().is_empty());
+}
+
+/// A browser's GET of a page, with the cookie when there is one.
+fn page(uri: &str, cookie: Option<&str>) -> Request<Body> {
+    let mut b = Request::builder()
+        .uri(uri)
+        .header(header::HOST, "studio.test")
+        .header(header::ACCEPT, "text/html,application/xhtml+xml");
+    if let Some(c) = cookie {
+        b = b.header(header::COOKIE, c);
+    }
+    b.body(Body::empty()).unwrap()
+}
+
+#[tokio::test]
+async fn signed_out_every_path_of_the_tool_is_a_401_and_a_page_sends_the_person_to_sign_in() {
+    let (url, log) = stub_relay().await;
+    let s = server(Some(url), Duration::from_secs(5));
+    for path in [
+        "/production",
+        "/production/",
+        "/production/p/abc",
+        "/production/assets/x-abc123.js",
+        "/production/api/jobs",
+    ] {
+        let r = send(&s, get(path, None)).await;
+        assert_eq!(r.status, StatusCode::UNAUTHORIZED, "{path}");
+        assert!(!r.text().contains("<title>Production</title>"), "{path}");
+    }
+    // a browser opening a page is told where to sign in, and comes back to the page after
+    let r = send(&s, page("/production/p/abc?shot=x", None)).await;
+    assert_eq!(r.status, StatusCode::UNAUTHORIZED);
+    assert!(r.headers[header::CONTENT_TYPE]
+        .to_str()
+        .unwrap()
+        .starts_with("text/html"));
+    assert!(
+        r.text().contains("/?next=/production/p/abc%3Fshot%3Dx"),
+        "{}",
+        r.text()
+    );
+    // the API keeps its JSON 401, a browser or not
+    let r = send(&s, page("/production/api/jobs", None)).await;
+    assert_eq!(r.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(r.json()["signin"], true);
+    // a forged cookie is nobody
+    let r = send(&s, get("/production/", Some("napkin_session=forged.value"))).await;
+    assert_eq!(r.status, StatusCode::UNAUTHORIZED);
+    assert!(log.lock().unwrap().is_empty(), "the relay was called");
+}
+
+#[tokio::test]
+async fn a_person_whose_roles_open_no_production_door_gets_403_and_the_relay_is_never_called() {
+    let (url, log) = stub_relay().await;
+    let s = server(Some(url), Duration::from_secs(5));
+    for who in ["planner@napkin", "norole@napkin"] {
+        let cookie = sign_in(&s, who).await;
+        for path in ["/production/", "/production/p/abc", "/production/api/me"] {
+            let r = send(&s, get(path, Some(&cookie))).await;
+            assert_eq!(r.status, StatusCode::FORBIDDEN, "{who} {path}");
+            assert!(
+                !r.text().contains("<title>Production</title>"),
+                "{who} {path}"
+            );
+        }
+        let r = send(&s, get("/api/session", Some(&cookie))).await;
+        assert_eq!(r.json()["production"], false, "{who}");
+    }
+    assert!(log.lock().unwrap().is_empty(), "the relay was called");
+    // a producer and an art director open it
+    for who in ["visionary@napkin", "engineer@napkin"] {
+        let cookie = sign_in(&s, who).await;
+        let r = send(&s, get("/production/", Some(&cookie))).await;
+        assert_eq!(r.status, StatusCode::OK, "{who}");
+        let r = send(&s, get("/api/session", Some(&cookie))).await;
+        assert_eq!(r.json()["production"], true, "{who}");
+    }
+}
+
+#[tokio::test]
+async fn a_cookie_claiming_roles_grants_nothing_the_people_store_does_not() {
+    // The session cookie names a person and nothing more: the tenant layer drops any roles it carries and the
+    // People store's are read on every request (features/align-needs-lock-people.clan). A planner whose cookie
+    // was minted before a role change is still a planner here.
+    let (url, log) = stub_relay().await;
+    let s = server(Some(url), Duration::from_secs(5));
+    let sessions = napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap();
+    let forged = sessions.issue(&napkin_web::auth::Account {
+        username: "planner@napkin".into(),
+        agency: "napkin".into(),
+        name: None,
+        roles: vec!["producer".into(), "admin".into()],
+    });
+    let cookie = format!("napkin_session={forged}");
+    let r = send(&s, get("/production/api/me", Some(&cookie))).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
     assert!(log.lock().unwrap().is_empty());
 }

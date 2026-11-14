@@ -147,6 +147,8 @@ pub fn router_with(
 /// The service with the Production Tool at `/production` when `production` is
 /// given. It is mounted only with accounts: anonymous mode never reaches a
 /// relay that spends money (`main.rs` refuses that configuration outright).
+/// Its routes run behind the same session, People store and permission layers
+/// as the shell API ([`production::router`]).
 pub fn router_full(
     ctx: Arc<AppCtx>,
     static_dir: Option<&Path>,
@@ -204,7 +206,7 @@ pub fn router_full(
         );
     if let Some(relay) = production {
         // Not under dogfood::capture_api: the relay keeps the tool's own record.
-        app = app.merge(production::router(relay, identity));
+        app = app.merge(production::router(ctx.clone(), relay, identity));
     }
     app.merge(shell_service(static_dir))
         // one timing line per routed request, by route template (timing.rs)
