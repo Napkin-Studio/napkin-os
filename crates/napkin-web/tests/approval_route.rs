@@ -307,10 +307,11 @@ async fn a_late_approval_reaches_the_approver_then_account_service_and_the_dashb
     assert_eq!(st, StatusCode::OK);
 
     let needs = |p: &Person| {
-        let (uri, cookie) = (format!("/api/t/{t}/needs"), p.cookie.clone());
+        // the job page's own list: the person's items on the one job, from the index
+        let (uri, cookie) = (format!("/api/t/{t}/jobs/J001"), p.cookie.clone());
         let r = &r;
         async move {
-            call(r, "GET", &uri, Some(&cookie), None).await.1["items"]
+            call(r, "GET", &uri, Some(&cookie), None).await.1["needs"]
                 .as_array()
                 .unwrap()
                 .clone()
