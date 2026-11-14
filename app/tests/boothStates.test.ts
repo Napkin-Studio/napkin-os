@@ -486,3 +486,22 @@ test('a structural redraw (a line added) still keeps the focused line\'s caret a
   const now = p.one('textarea[data-id="b1"][data-field="text"]')
   assert.match(now.value, /^.{3}Z/, 'the typed Z is still at the caret\'s place')
 })
+
+test('a change that came from outside (an undo, another person) to the line being typed in is taken, with the caret kept; the node stays', async () => {
+  const p = await open(SRC.script, { data: RADIO })
+  await p.settle()
+  const sel = 'textarea[data-id="b1"][data-field="text"]'
+  const ta = p.one(sel)
+  ta.focus(); ta.setSelectionRange(6, 6)
+  const beats = p.win.__CLAN__.data.script.beats
+  beats[0].text = 'A second version.'
+  p.win.dispatchEvent(new p.win.CustomEvent('clan:dataupdated', { detail: { source: 'shell' } }))
+  await p.settle()
+  assert.equal(p.one(sel), ta, 'the same box')
+  assert.equal(ta.value, 'A second version.', 'the words that really changed are taken')
+  assert.equal(p.d.activeElement, ta)
+  assert.equal(ta.selectionStart, 6, 'the caret stays')
+  beats[0].text = 'Hi'
+  p.win.dispatchEvent(new p.win.CustomEvent('clan:dataupdated', { detail: { source: 'shell' } })); await p.settle()
+  assert.equal(ta.selectionStart, 2, 'and is at the end when the words got shorter')
+})

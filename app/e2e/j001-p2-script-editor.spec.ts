@@ -310,8 +310,14 @@ for (const size of SIZES) {
       await shot(page, 'bands-state-hidden-dot', size)
       await expect(booth.getByTestId('booth-state')).toBeVisible({ timeout: 5_000 }) // then the Booth comes in on it, after a second
       // The Booth is pushing the page aside (the grid moves for about half a second): wait for that state, then assert it.
-      const beside = async () => { const d = await app.locator('#sheet').boundingBox(), b = await booth.boundingBox(); return !!d && !!b && d.x + d.width <= b.x + 1 }
-      await expect.poll(beside, { intervals: [250], timeout: 10_000, message: 'the page ends before the Booth begins, never over it' }).toBe(true)
+      // Both boxes move while it does (the Booth's column grows as the page shrinks): the state to wait for is that they have stopped, and then they are beside.
+      let last = ''
+      const settledBeside = async () => {
+        const d = await app.locator('#sheet').boundingBox(), b = await booth.boundingBox(), j = JSON.stringify([d, b]), still = j === last
+        last = j
+        return still && !!d && !!b && d.x + d.width <= b.x + 1
+      }
+      await expect.poll(settledBeside, { intervals: [250], timeout: 10_000, message: 'the page ends before the Booth begins, never over it' }).toBe(true)
       const d = await box(app.locator('#sheet'), 'the page'), b = await box(booth, 'the Booth')
       expect(d.x + d.width, 'beside the page, never over it').toBeLessThanOrEqual(b.x + 1)
       await shot(page, 'bands-state-hidden-in', size)

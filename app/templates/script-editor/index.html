@@ -651,7 +651,13 @@
         var hx = document.querySelector('[data-hints="' + b.id + '"]'); if(hx) hx.innerHTML = hintsHtml(b.id, findings);
         ['text', 'visual_action'].forEach(function(f){
           var ta = document.querySelector('textarea[data-id="' + b.id + '"][data-field="' + f + '"]');
-          if(ta && ta !== document.activeElement && ta.value !== (b[f] || '')){ ta.value = b[f] || ''; fit(ta); }
+          // What a person types is in the model at once (edit()), so a box that differs from the model has been changed from outside (an undo, another
+          // person's write): take it, and keep the caret where it was (or at the end when the words got shorter) in the box they are in.
+          if(ta && ta.value !== (b[f] || '')){
+            var mine = ta === document.activeElement, from = mine ? ta.selectionStart : 0, to = mine ? ta.selectionEnd : 0, top = ta.scrollTop;
+            ta.value = b[f] || ''; fit(ta);
+            if(mine){ try{ ta.setSelectionRange(Math.min(from, ta.value.length), Math.min(to, ta.value.length)); }catch(e){} ta.scrollTop = top; }
+          }
         });
       });
       return;
