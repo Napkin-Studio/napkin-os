@@ -10,7 +10,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type FrameLocator, type Page } from '@playwright/test'
-import { nothingBetweenBarAndDocument, wideBeside } from './boothFolds'
+import { alertCoversNoControl, nothingBetweenBarAndDocument, wideBeside } from './boothFolds'
 import { asMe, PEOPLE, seedJ001 } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Size } from './pilot'
 import { RADIO_SCRIPT, SCRIPT_EDITOR_APP, TV_SCRIPT } from './seed/j001/p2/script-editor.mjs'
@@ -238,9 +238,32 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
+  // The 409 alert (the host said the document moved on while the person typed), said once under the bar: it keeps the words about what was typed,
+  // covers no control, and Update reads the newer version and then clears it. The frame says it with the clan:write message the bridge sends.
+  test(`script editor: the 409 alert says what happens to the words, covers no control, and Update clears it, ${size.tag} px`, async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
+    await script(page, job, RADIO_SCRIPT, 'J001 radio script')
+    await open1(page, job)
+    const said = () => frameOf(page).locator('body').evaluate(() => window.parent.postMessage({ type: 'clan:write', v: 1, id: 'w409', state: 'changed', field: 'proposition', text: 'My unsaved words.' }, '*'))
+    await said()
+    const alert = page.locator('[data-state="changed-save"]')
+    await expect(alert).toBeVisible()
+    await expect(alert).toContainText('What you typed stays on the page until you update.')
+    await alertCoversNoControl(page)
+    await shot(page, 'bands-state-409', size)
+    const asked = page.waitForRequest(r => /\/current(\?|$)/.test(r.url())) // Update reads the newer version from the host
+    await alert.getByRole('button', { name: 'Update to the new brief' }).click()
+    await asked
+    await expect(alert).toHaveCount(0)
+    await ctx.close()
+  })
+
   // A state said while the Booth is hidden is brought to the person (features/align-booth.clan, review): the tab shows the dot, then the
   // Booth comes in on it, beside the page. At 390 px, where the Booth follows the page and cannot hide, it is said above the page.
-  test(`script editor: a state said while the Booth is hidden shows the dot and then the Booth; at 390 it is above the page, ${size.tag} px`, async ({ browser }) => {
+  test(`script editor: a state said while the Booth is hidden shows the dot and then the Booth; at 390 it is a line under the bar, ${size.tag} px`, async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
     await signIn(page, PEOPLE.planning)
     const job = await seedJ001(page, { ready: true, fresh: true })
@@ -260,14 +283,31 @@ for (const size of SIZES) {
       expect(d!.x + d!.width, 'beside the page, never over it').toBeLessThanOrEqual(b!.x + 1)
       await shot(page, 'bands-state-hidden-in', size)
     } else {
+      // A phone: wherever the person is in the page the state is a short line fixed under the bar, over the page and never pushing it.
+      const first = app.locator('textarea[data-id="b1"][data-field="text"]')
+      const yOf = async () => (await first.boundingBox())!.y
+      const top0 = await yOf()
       await say()
-      const line = app.getByTestId('booth-state')
+      const line = app.getByTestId('booth-state-line')
       await expect(line).toBeVisible()
-      const [l, d, b] = await Promise.all([line.boundingBox(), app.locator('#sheet').boundingBox(), booth.boundingBox()])
-      expect(l!.y + l!.height, 'above the page').toBeLessThanOrEqual(d!.y + 1)
-      expect(l!.y, 'within the first screen').toBeLessThan(size.height)
-      expect(l!.y).toBeLessThan(b!.y)
-      await shot(page, 'bands-state-390', size)
+      expect(await yOf(), 'the page did not move under the person').toBe(top0)
+      const scrollTo = (where: 'top' | 'middle' | 'bottom') => app.locator('body').evaluate((_b, w) => { const h = document.documentElement.scrollHeight - innerHeight; scrollTo(0, w === 'top' ? 0 : w === 'middle' ? h / 2 : h) }, where)
+      for (const where of ['top', 'middle', 'bottom'] as const) {
+        await scrollTo(where)
+        await expect(line).toBeVisible()
+        const r = (await line.boundingBox())!
+        expect(r.y, `${where}: under the bar, within the first screen`).toBeLessThan(120)
+        expect(r.y + r.height, `${where}: and short`).toBeLessThan(130)
+        for (const b of await line.locator('button:visible').all()) expect((await b.boundingBox())!.height, `${where}: 44 px targets`).toBeGreaterThanOrEqual(43.5)
+        await shot(page, `bands-state-390-${where}`, size)
+      }
+      await expect(line).toHaveAttribute('role', 'status')
+      await line.locator('[data-bl="dismiss"]').click()
+      await expect(line).toBeHidden()
+      await expect(app.getByTestId('booth-state')).toBeAttached() // still in the Booth, below
+      await scrollTo('bottom')
+      await expect(app.getByTestId('booth-state')).toBeVisible()
+      await shot(page, 'bands-state-390-booth', size)
     }
     await ctx.close()
   })

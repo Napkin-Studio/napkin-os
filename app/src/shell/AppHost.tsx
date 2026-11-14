@@ -30,7 +30,8 @@ import { BRIEF_MAKER, SCRIPT_EDITOR, clientLinkDoc } from './gate/words'
 import { clientLinkRoutes } from './gate/linkRoutes'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
-import { barAction, refreshApp } from './appExport'
+import { barAction, pushData, refreshApp } from './appExport'
+import { takeNewerVersion } from './takeNewer'
 import { modeOf, statusOf, type BarItem } from './appBar'
 import { JUDGE_APPS, SEND_TO_JUDGE } from './judge/judgeModel'
 import { useJudge } from './judge/useJudge'
@@ -373,6 +374,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // One queue per document: a write that failed in another document is not this one's to retry.
   const writes = useMemo(() => createSaveQueue(), [docPath]) // eslint-disable-line react-hooks/exhaustive-deps
   const saveState = useSaveState(writes)
+  const [updateErr, setUpdateErr] = useState<string | null>(null)
   // The page says its agents are at work (the bar's working chip) before the host's run catches up:
   // the medallion follows the same signal as the chip, with the step it names (owner, 2026-11-10).
   const pageRun = pageRunOf(modeOf(barItems))
@@ -477,7 +479,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
           saved: saved ? <SaveStatus state={saveState} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
-          saveAlert: <SaveAlert state={saveState} onRetry={() => writes.retry()} onRefresh={() => { writes.forgetChanged(); refreshApp() }} note={briefUndo.note} noteKey={briefUndo.noteKey} judge={judge.failed} onJudgeDismiss={judge.dismiss} />,
+          saveAlert: <SaveAlert state={saveState} onRetry={() => writes.retry()} onRefresh={() => { void takeNewerVersion({ read: () => host.getCurrent(), push: pushData, queue: writes }).then(e => { setUpdateErr(e); if (!e) changed() }) }} updateError={updateErr} note={briefUndo.note} noteKey={briefUndo.noteKey} judge={judge.failed} onJudgeDismiss={judge.dismiss} />,
           editMode,
           // A locked document with nothing reopened takes no edit: Client
           // review stands where Edit was.

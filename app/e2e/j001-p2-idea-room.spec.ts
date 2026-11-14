@@ -12,7 +12,7 @@
 import { expect, test, type Browser, type BrowserContext, type FrameLocator, type Page } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { nothingBetweenBarAndDocument } from './boothFolds'
+import { alertCoversNoControl, nothingBetweenBarAndDocument } from './boothFolds'
 import { PHASE2 } from './phase2/tests.mjs'
 import { asMe, gateOf, lockBrief, PEOPLE, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
@@ -348,6 +348,7 @@ for (const size of SIZES) {
     await app.getByTestId('card-input').fill('A card written offline.')
     await app.getByRole('button', { name: 'Add card' }).click()
     await expect(page.locator('[data-state="failed-save"]')).toBeVisible() // the Failed save state, in the shell
+    await alertCoversNoControl(page) // under the bar, over no control of the page, at its top and at its end
     await expect(app.getByTestId('card-input')).toHaveValue('A card written offline.') // the text stays
     await shot(page, 'room-failed-save', size, '#cards')
     await ctx.setOffline(false)

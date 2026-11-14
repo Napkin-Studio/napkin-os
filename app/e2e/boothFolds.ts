@@ -70,3 +70,25 @@ export async function nothingBetweenBarAndDocument(page: Page, tool: string) {
     await page.screenshot({ path: `${dir}/bands-${tool}-${page.viewportSize()?.width ?? 0}.png`, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
   }
 }
+
+/**
+ * The shell's alert line (Failed save, Update, an undo's note) covers no control of the page: at the top of the page and at its end,
+ * no visible button, link, field or summary in the frame, and nothing of the Booth's header, lies under it.
+ */
+export async function alertCoversNoControl(page: Page) {
+  const alert = page.locator('.tb-alert').first()
+  await expect(alert).toBeVisible()
+  const check = async (where: string) => {
+    const a = (await alert.boundingBox())!
+    const frame = (await page.locator('iframe').first().boundingBox())!
+    const rects = await page.frameLocator('iframe').first().locator('body').evaluate(() => [...document.querySelectorAll('button,a[href],input,textarea,select,summary,[role="button"]')]
+      .filter(e => (e as HTMLElement).offsetParent !== null || getComputedStyle(e).position === 'fixed').map(e => { const r = e.getBoundingClientRect(); return { n: `${e.tagName}:${(e.getAttribute('data-testid') || e.id || (e.textContent || '').trim()).slice(0, 30)}`, x: r.x, y: r.y, w: r.width, h: r.height } }).filter(r => r.w > 0 && r.h > 0))
+    const hit = rects.filter(r => r.x + frame.x < a.x + a.width && r.x + frame.x + r.w > a.x && r.y + frame.y < a.y + a.height && r.y + frame.y + r.h > a.y).map(r => r.n)
+    expect(hit, `${where}: nothing the alert lies over is a control`).toEqual([])
+  }
+  await check('top')
+  await page.frameLocator('iframe').first().locator('body').evaluate(() => scrollTo(0, document.documentElement.scrollHeight))
+  await page.waitForTimeout(300)
+  await check('end')
+  await page.frameLocator('iframe').first().locator('body').evaluate(() => scrollTo(0, 0))
+}

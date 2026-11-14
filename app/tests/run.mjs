@@ -39,7 +39,9 @@ try {
     logLevel: 'warning',
     // Where the wasm package has not been built (wasm-bindgen is a CI step), the host module that imports it still loads:
     // a test that needs the real engine says so itself; the ones that only read `host` need nothing from it.
-    ...(existsSync(join(here, '..', 'src', 'wasm', 'napkin_wasm.js')) ? {} : { define: { 'import.meta.env': '{"BASE_URL":"/"}' } }),
+    // The host module reads `import.meta.env` (Vite's); a test bundle has none. VITE_NAPKIN_HOST is left unset, as in a default build, so the
+    // wasm host is never the one chosen; where the wasm package is built (a CI step) it is imported for real, not stubbed.
+    define: { 'import.meta.env': '{"BASE_URL":"/"}' },
     plugins: existsSync(join(here, '..', 'src', 'wasm', 'napkin_wasm.js')) ? [] : [{
       name: 'stub-wasm',
       setup(b) {

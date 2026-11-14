@@ -44,10 +44,12 @@ export default function SaveStatus({ updatedAt, state = 'idle' }: { updatedAt?: 
  * with Try again, or with Update when the host moved on while the person typed (409). It sits under the bar's right edge,
  * over the page and never pushing it, at every width. An undo's note, which only the bands said, is said here too, for a moment.
  */
-export function SaveAlert({ state = 'idle', onRetry, onRefresh, note, noteKey = 0, judge, onJudgeDismiss }: {
+export function SaveAlert({ state = 'idle', onRetry, onRefresh, updateError, note, noteKey = 0, judge, onJudgeDismiss }: {
   state?: SaveState
   onRetry?: () => void
   onRefresh?: () => void
+  /** Update could not read the newer version: said under the alert, which stays. */
+  updateError?: string | null
   note?: string | null
   /** Counts each time the note is said: the same words said again are shown again. */
   noteKey?: number
@@ -72,6 +74,7 @@ export function SaveAlert({ state = 'idle', onRetry, onRefresh, note, noteKey = 
           <b>Not saved</b>
           <span className="tb-alert-text">{failed ? FAILED_SAVE.line : `${CHANGED_BRIEF.moved} What you typed stays on the page until you update.`}</span>
           {failed && onRetry && <button type="button" className="ch-btn" onClick={onRetry}>{FAILED_SAVE.retry}</button>}
+          {moved && updateError && <span className="tb-alert-text">{updateError}</span>}
           {moved && onRefresh && <button type="button" className="ch-btn" onClick={onRefresh}>{CHANGED_BRIEF.update()}</button>}
         </span>
       )}

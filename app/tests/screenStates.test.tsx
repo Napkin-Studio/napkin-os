@@ -409,11 +409,12 @@ test('a wait that lasts a second gets the mark, and only then', async (t) => {
 
 // The same undo note said again is said again (round 3: a real render, the way AppHost draws it, not a static string).
 test('an undo note said a second time after it faded is shown again, and a new document\'s first note is never swallowed', async () => {
-  const { useState } = await import('react')
-  let say: (n: string | null, k: number) => void = () => {}
+  const { useState, useEffect } = await import('react')
+  const box = { say: (_n: string | null, _k: number) => {} }
+  const say = (n: string | null, k: number) => box.say(n, k)
   function Host() {
     const [held, setHeld] = useState<{ note: string | null; key: number }>({ note: null, key: 0 })
-    say = (note, key) => setHeld({ note, key })
+    useEffect(() => { box.say = (note, key) => setHeld({ note, key }) }, [])
     return createElement(SaveAlert, { state: 'idle', note: held.note, noteKey: held.key })
   }
   const s = await draw(createElement(Host))

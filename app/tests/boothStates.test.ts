@@ -264,7 +264,7 @@ for (const [name, o] of PAGES) {
       assert.equal(desk.classList.contains('booth-off'), true, `${st.name}: hidden`)
       p.win.boothSay(st, () => {})
       assert.equal(edge.classList.contains('has'), true, `${st.name}: the tab shows the dot at once`)
-      assert.match(edge.getAttribute('aria-label') ?? '', /1 question|1 waiting|waiting/i)
+      assert.match(edge.getAttribute('aria-label') ?? '', /Open the Booth, (the run stopped|the brief changed|a long run|no access yet|a note is asked for|still loading)/i)
       assert.equal(desk.classList.contains('booth-off'), true, `${st.name}: not yet in, the person is not startled`)
       await new Promise(r => setTimeout(r, 1200))
       assert.equal(desk.classList.contains('booth-off'), false, `${st.name}: the Booth is in after one second`)

@@ -48,7 +48,7 @@ export interface BriefUndo {
 export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void): BriefUndo {
   // Kept with the document it was made for: another brief opens on an empty stack.
   const [held, setHeld] = useState<{ docPath: string; stack: UndoStack; note: string | null; noteKey: number }>(() => ({ docPath, stack: createUndoStack(), note: null, noteKey: 0 }))
-  if (held.docPath !== docPath) setHeld({ docPath, stack: createUndoStack(), note: null, noteKey: 0 })
+  if (held.docPath !== docPath) setHeld(h => ({ docPath, stack: createUndoStack(), note: null, noteKey: h.noteKey + 1 }))
   const stack = useRef<UndoStack>(held.stack)
   useEffect(() => { stack.current = held.stack }, [held.stack])
   const [, bump] = useState(0)
