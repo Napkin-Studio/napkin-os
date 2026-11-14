@@ -1254,7 +1254,14 @@ mod tests {
     #[test]
     fn production_opens_for_the_roles_whose_homes_have_one_of_its_doors() {
         let t = Table::default();
-        for yes in ["producer", "art-director", "copywriter", ADMIN, DEMO, ANONYMOUS] {
+        for yes in [
+            "producer",
+            "art-director",
+            "copywriter",
+            ADMIN,
+            DEMO,
+            ANONYMOUS,
+        ] {
             assert!(t.opens_production(&r(&[yes])), "{yes}");
         }
         for no in [

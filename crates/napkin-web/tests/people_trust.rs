@@ -182,6 +182,12 @@ fn registry_people(root: &Path, agency: &str) -> Value {
 /// What the build's sandbox did for a member before this stage: a host request on the registry document as
 /// the session's person, its body the member's own (any agent, any action, any field).
 fn member_posts(root: &Path, agency: &str, who: &str, body: Value) {
+    let (status, text) = member_posts_status(root, agency, who, body);
+    assert_eq!(status, 200, "{text}");
+}
+
+/// The same, answering with the host's status and body.
+fn member_posts_status(root: &Path, agency: &str, who: &str, body: Value) -> (u16, String) {
     let store = store_of(root, agency);
     let id = napkin_host::DocId::new("home-agency-v1");
     let ctx = TenantId::of_agency(agency).ctx_for(who);
@@ -194,7 +200,10 @@ fn member_posts(root: &Path, agency: &str, who: &str, body: Value) {
     )
     .posting();
     let resp = napkin_host::dispatch(&ctx, &session, &NoConfig, req);
-    assert_eq!(resp.status, 200, "{}", String::from_utf8_lossy(&resp.body));
+    (
+        resp.status,
+        String::from_utf8_lossy(&resp.body).into_owned(),
+    )
 }
 
 fn change_lines(root: &Path) -> String {
@@ -428,18 +437,22 @@ fn a_member_cannot_forge_an_admin_grant() {
         }
     }
     for action in ["set_roles", "add_person"] {
-        member_posts(
-            root,
-            "bq",
-            "hal@bq",
-            json!({
-                "agent": "human:barra@bq", "action": action, "rationale": "x",
-                "targets": ["hal@bq"], "after": { "roles": ["admin"] }, "before": { "roles": ["planning"] },
-                "id": "d-forged", "actor": "human:barra@bq",
-                "decision": { "agent": "human:barra@bq", "action": action, "targets": ["hal@bq"], "after": { "roles": ["admin"] } },
-                "patch": { "people": people },
-            }),
-        );
+        let forged = json!({
+            "agent": "human:barra@bq", "action": action, "rationale": "x",
+            "targets": ["hal@bq"], "after": { "roles": ["admin"] }, "before": { "roles": ["planning"] },
+            "id": "d-forged", "actor": "human:barra@bq",
+            "decision": { "agent": "human:barra@bq", "action": action, "targets": ["hal@bq"], "after": { "roles": ["admin"] } },
+            "patch": { "people": people },
+        });
+        // Since the Production line's merge the host reads `targets` and refuses one that is not an address
+        // (ops/edit.rs): this forged write never lands.
+        let (status, text) = member_posts_status(root, "bq", "hal@bq", forged.clone());
+        assert_eq!(status, 400, "{text}");
+        assert!(text.contains("is not an address"), "{text}");
+        // Without a top-level `targets` the same forgery lands as data, and still grants nothing.
+        let mut landed = forged;
+        landed.as_object_mut().unwrap().remove("targets");
+        member_posts(root, "bq", "hal@bq", landed);
     }
     let p = open(root);
     napkin_web::people_import::run(&p, root).unwrap();
