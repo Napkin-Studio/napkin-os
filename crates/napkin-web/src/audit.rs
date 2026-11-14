@@ -9,9 +9,10 @@
 //!
 //! - **approvals** (a signature, a lock, a client's answer) are read from the documents' decision
 //!   chains each time (`napkin_host::audit::approvals`);
-//! - **permission and settings changes** are the agency registry's own decisions, copied into the file
-//!   below once each (a line says which decision it copies), so they stay readable if the registry is
-//!   ever replaced;
+//! - **permission and settings changes** are the server's own lines: the People store writes one for each
+//!   change, naming the session's person (people.rs), and a settings change one likewise. Lines an older
+//!   server copied from the agency registry's chain (they carry a `ref`) are not shown: that document was
+//!   writable by any member, so what it said of who did what is no record (features/align-needs-lock-people.clan);
 //! - **what no chain holds** (an export, a link issued, a sign-in, a sign-in refused) is an
 //!   append-only file per tenant, `audit.jsonl`: [`AuditLog`], with [`FileAudit`] as its store today.
 //!
@@ -25,7 +26,7 @@
 //! document and version, and when (for a sign-in, the source address, as the sign-in log does). It
 //! never counts or ranks a person. Admin only (`Group::Admin`: `/audit`).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -301,43 +302,6 @@ pub fn note_sign_in(ctx: &AppCtx, name: &str, ip: &str, refused: bool) {
     );
 }
 
-/// Copy the registry's permission and settings decisions that the log has not copied yet, oldest
-/// first, each once. Called after every write to the registry and before the view reads.
-pub fn sync_registry(ctx: &AppCtx, tenant: &TenantId) {
-    let ws = ctx.workspace(tenant);
-    let Ok(history) = napkin_host::agency::history(ws.agency_store()) else {
-        return;
-    };
-    let known: HashSet<String> = ctx
-        .audit
-        .lines(tenant)
-        .into_iter()
-        .filter_map(|l| l.reference)
-        .collect();
-    for d in history.into_iter().rev() {
-        let Some(id) = d.id.clone() else { continue };
-        if known.contains(&id) || d.action == napkin_host::agency::ACTIVATE {
-            continue;
-        }
-        note(
-            ctx,
-            tenant,
-            NewLine {
-                who: d.who,
-                kind: if d.action == napkin_host::agency::SET_SETTINGS {
-                    SETTINGS
-                } else {
-                    PERMISSION
-                },
-                what: d.what,
-                doc: Some(d.target).filter(|t| !t.is_empty()),
-                reference: Some(id),
-                ..Default::default()
-            },
-        );
-    }
-}
-
 // ── the view ────────────────────────────────────────────────────────────────
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -378,7 +342,6 @@ async fn view(
     Query(q): Query<ViewQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
     crate::agency::admin_of(account)?;
-    sync_registry(&ctx, &tenant);
     let store = &*ctx.workspace(&tenant).store;
     let mut entries: Vec<Entry> = napkin_host::audit::approvals(store)?
         .into_iter()
@@ -392,15 +355,24 @@ async fn view(
             ip: None,
         })
         .collect();
-    entries.extend(ctx.audit.lines(&tenant).into_iter().map(|l| Entry {
-        at: l.at,
-        who: l.who,
-        kind: l.kind,
-        what: l.what,
-        doc: l.doc,
-        version: l.version,
-        ip: l.ip,
-    }));
+    // Only the server's own lines: a line copied from the old agency registry's chain (it has a `ref`) names
+    // whoever that document said, and any member could write it, so it is not shown
+    // (features/align-needs-lock-people.clan). People and permission changes are the People store's lines.
+    entries.extend(
+        ctx.audit
+            .lines(&tenant)
+            .into_iter()
+            .filter(|l| l.reference.is_none())
+            .map(|l| Entry {
+                at: l.at,
+                who: l.who,
+                kind: l.kind,
+                what: l.what,
+                doc: l.doc,
+                version: l.version,
+                ip: l.ip,
+            }),
+    );
     if let Some(k) = q.kind.as_deref().filter(|k| !k.is_empty()) {
         entries.retain(|e| e.kind == k);
     }
@@ -417,15 +389,28 @@ async fn verify(
     State(ctx): State<Arc<AppCtx>>,
     Tenant(tenant): Tenant,
     account: Option<Extension<Account>>,
-) -> ApiResult<(StatusCode, Json<Verified>)> {
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
     crate::agency::admin_of(account)?;
     let v = ctx.audit.verify(&tenant);
-    Ok((
-        if v.ok {
-            StatusCode::OK
-        } else {
-            StatusCode::CONFLICT
-        },
-        Json(v),
-    ))
+    // what the check vouches for: the file's own chain. A line copied from the old agency registry is in that
+    // chain, but what it says came from a document any member could write: it is counted, not vouched for.
+    let copied = ctx
+        .audit
+        .lines(&tenant)
+        .iter()
+        .filter(|l| l.reference.is_some())
+        .count();
+    let status = if v.ok {
+        StatusCode::OK
+    } else {
+        StatusCode::CONFLICT
+    };
+    let mut body = serde_json::to_value(&v).unwrap_or_default();
+    body["ok"] = serde_json::json!(v.ok && copied == 0);
+    body["chain_intact"] = serde_json::json!(v.ok);
+    body["verified"] = serde_json::json!(
+        "the order and content of this server's own audit lines: sign-ins, exports, links, approvals' copies and the People store's changes"
+    );
+    body["not_verified"] = serde_json::json!(copied);
+    Ok((status, Json(body)))
 }

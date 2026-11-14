@@ -218,18 +218,28 @@ async fn the_settings_hold_a_name_a_cap_and_a_zone_and_an_admin_changes_them() {
     for k in ["name", "credit_cap_month_eur", "time_zone", "look"] {
         assert!(s.get(k).is_some(), "{k}");
     }
+    // the name is the agency record's in the People store (features/align-needs-lock-people.clan): not here
+    let (st, _, _) = call(
+        &r,
+        "PUT",
+        &url,
+        Some(&cara.cookie),
+        Some(json!({ "name": "Agency C" })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::BAD_REQUEST);
     let (st, s, _) = call(
         &r,
         "PUT",
         &url,
         Some(&cara.cookie),
-        Some(json!({ "name": "Agency C", "credit_cap_month_eur": 2500 })),
+        Some(json!({ "credit_cap_month_eur": 2500 })),
     )
     .await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(
         (s["name"].as_str(), s["credit_cap_month_eur"].as_f64()),
-        (Some("Agency C"), Some(2500.0))
+        (Some(""), Some(2500.0))
     );
     for bad in [
         json!({ "credit_cap_month_eur": -5 }),
@@ -252,7 +262,7 @@ async fn the_settings_hold_a_name_a_cap_and_a_zone_and_an_admin_changes_them() {
     invite(&r, &cara, "dan@cr", "Dan Test", &["management"]).await;
     let dan = sign_in(&r, "dan@cr").await;
     let (_, s, _) = call(&r, "GET", &url, Some(&dan.cookie), None).await;
-    assert_eq!(s["name"], json!("Agency C"));
+    assert_eq!(s["name"], json!(""), "cr has no agency record, so no name");
     assert!(s.get("credit_cap_month_eur").is_none() && s.get("time_zone").is_none());
     let (st, _, _) = call(
         &r,
@@ -303,20 +313,7 @@ async fn an_import_through_the_api_checks_first_then_writes_and_the_flow_reads_i
     };
     let s = status().await;
     assert_eq!(s["next"], json!("logo"), "a new agency starts at the logo");
-    // name
-    call(
-        &r,
-        "PUT",
-        &format!("/api/t/{t}/agency"),
-        Some(&cara.cookie),
-        Some(json!({ "name": "Agency C" })),
-    )
-    .await;
-    assert_eq!(
-        status().await["next"],
-        json!("logo"),
-        "a skipped step is picked up later"
-    );
+    // the name is no longer a step: it is the agency record's, on the People page
     // logo
     let logo = json!({ "logo": "data:image/svg+xml,%3Csvg%3E%3C%2Fsvg%3E" });
     call(

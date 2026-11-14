@@ -324,19 +324,44 @@ async fn get_settings(
     Tenant(tenant): Tenant,
     account: Option<Extension<Account>>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let (reg, _) = agency::read(ctx.workspace(&tenant).agency_store())?;
     let look = crate::look::read(&ctx, &tenant);
+    // The name is the agency record's in the People store (a code agency's published display name, a
+    // basic agency's published name), which only an admin changes there; never the old registry, which any
+    // member could write (features/align-needs-lock-people.clan). An agency with no record has no name here.
+    let name = account
+        .as_ref()
+        .and_then(|Extension(a)| agency_name(&ctx, &a.agency))
+        .unwrap_or_default();
     let admin = account.as_ref().is_some_and(|Extension(a)| is_admin(a));
-    Ok(Json(if admin {
-        serde_json::json!({
-            "name": reg.settings.name,
-            "credit_cap_month_eur": reg.settings.credit_cap_month_eur,
-            "time_zone": reg.settings.time_zone,
-            "look": look,
-        })
-    } else {
-        serde_json::json!({ "name": reg.settings.name, "look": look })
-    }))
+    if !admin {
+        return Ok(Json(serde_json::json!({ "name": name, "look": look })));
+    }
+    // The monthly cap and the time zone have no home in the agency record yet: still read from the
+    // registry, for this agency's admin only, and marked as not an authority (an open question).
+    let (reg, _) = agency::read(ctx.workspace(&tenant).agency_store())?;
+    Ok(Json(serde_json::json!({
+        "name": name,
+        "credit_cap_month_eur": reg.settings.credit_cap_month_eur,
+        "time_zone": reg.settings.time_zone,
+        "unverified": ["credit_cap_month_eur", "time_zone"],
+        "look": look,
+    })))
+}
+
+/// The agency's name as its record in the People store has it: a code agency's published display name (or
+/// the code's), a basic agency's published name; None for an agency with no record.
+pub fn agency_name(ctx: &AppCtx, agency: &str) -> Option<String> {
+    let book = ctx.people()?.book();
+    if let Some(code) = crate::people::code_name(agency) {
+        return Some(
+            book.names
+                .get(agency)
+                .map_or(code.to_string(), |n| n.name.clone()),
+        );
+    }
+    book.agency(agency)
+        .filter(|a| a.published)
+        .map(|a| a.name.clone())
 }
 
 /// Change the name, the monthly credit cap or the time zone. A cap that is not a number, or is
@@ -348,7 +373,7 @@ async fn put_settings(
     account: Option<Extension<Account>>,
     Json(body): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    admin_of(account)?;
+    let me = admin_of(account)?;
     let obj = body
         .as_object()
         .ok_or_else(|| ApiError::new(400, "Send the settings as an object."))?;
@@ -368,15 +393,38 @@ async fn put_settings(
             )
         })?),
     };
+    // the name is the agency record's, changed on the People page's Agencies tab by an admin there
+    if text("name")?.is_some() {
+        return Err(ApiError::new(
+            400,
+            "An agency's name is changed on the People page, in its Agencies tab.",
+        ));
+    }
     let patch = agency::SettingsPatch {
-        name: text("name")?,
+        name: None,
         credit_cap_month_eur: cap,
         time_zone: text("time_zone")?,
     };
+    let who = acting
+        .actor
+        .as_str()
+        .trim_start_matches("human:")
+        .to_string();
     let s = agency::set_settings(ctx.workspace(&tenant).agency_store(), &acting, patch)?;
-    crate::audit::sync_registry(&ctx, &tenant);
+    // the audit line is the server's own, naming the session's person (never a document's agent)
+    crate::audit::note(
+        &ctx,
+        &tenant,
+        crate::audit::NewLine {
+            who,
+            kind: crate::audit::SETTINGS,
+            what: "Changed the agency's settings.".into(),
+            ..Default::default()
+        },
+    );
+    let name = agency_name(&ctx, &me.agency).unwrap_or_default();
     Ok(Json(serde_json::json!({
-        "name": s.name,
+        "name": name,
         "credit_cap_month_eur": s.credit_cap_month_eur,
         "time_zone": s.time_zone,
         "look": crate::look::read(&ctx, &tenant),
@@ -402,16 +450,12 @@ async fn setup_status(
     let me = admin_of(account)?;
     let ws = ctx.workspace(&tenant);
     let store = &*ws.store;
-    let (reg, _) = agency::read(ws.agency_store())?;
+    // the name is no step: it is the agency record's, on the People page (features/align-needs-lock-people.clan)
     let others = others_than(&ctx, &me);
     let steps = vec![
         Step {
             id: "logo",
             done: crate::look::read(&ctx, &tenant).logo.is_some(),
-        },
-        Step {
-            id: "name",
-            done: !reg.settings.name.is_empty(),
         },
         Step {
             id: "people",
