@@ -378,9 +378,9 @@ export function accountItems(account: Account | undefined, user?: string | null,
  * client's copy, and the crew; with the download that was the bar's Share.
  * What the studio cannot do yet is shown and says so, never faked.
  *
- * Send the client copy runs the app's own client copy export (its bar's
- * `client` button, e.g. Brief Maker's "Client copy · PDF") on a locked
- * document. The client copy hides nothing: Confidential keeps a part from
+ * Send the client copy runs the app's own client copy (its bar's `client`
+ * button, said in its title: Brief Maker's makes the signed link in its
+ * Booth, features/align-booth.clan) on a locked document. The client copy hides nothing: Confidential keeps a part from
  * Napkin's systems, never from the client (owner, 2026-11-13).
  */
 export function shareItems(doc: Pick<DocBar, 'onCopyLink' | 'onSave' | 'locked' | 'bar' | 'onBarAction'>): MenuItem[] {
@@ -388,7 +388,7 @@ export function shareItems(doc: Pick<DocBar, 'onCopyLink' | 'onSave' | 'locked' 
   const send = !doc.locked
     ? { label: 'Send the client copy', hint: 'Lock it first: the client sees the version you lock', run: () => {}, disabled: true, apart: true }
     : client && doc.onBarAction
-      ? { label: 'Send the client copy', hint: 'The locked version as a PDF, every part in it', run: () => doc.onBarAction?.('client'), apart: true }
+      ? { label: 'Send the client copy', hint: (client.kind === 'button' && client.title) || 'The locked version as a PDF, every part in it', run: () => doc.onBarAction?.('client'), apart: true }
       : { label: 'Send the client copy', hint: 'This tool has no client copy yet', run: () => {}, disabled: true, apart: true }
   return [
     ...(doc.onCopyLink

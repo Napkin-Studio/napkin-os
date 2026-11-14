@@ -25,10 +25,11 @@ import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import BriefGateBand from './gate/BriefGateBand'
 import { useGate } from './gate/useGate'
+import ClientLinkPanel from './gate/ClientLinkPanel'
 import { useBriefUndo } from './versions/useBriefUndo'
 import { openBar, setHistory } from './bar'
 import VersionBand from './versions/VersionBand'
-import { BRIEF_MAKER, SCRIPT_EDITOR, VISUAL_BRIEF, briefMoved } from './gate/words'
+import { BRIEF_MAKER, SCRIPT_EDITOR, VISUAL_BRIEF, briefMoved, clientLinkDoc } from './gate/words'
 import { ChangedBrief } from '../components/states/ScreenStates'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
@@ -41,7 +42,7 @@ import { useJudge } from './judge/useJudge'
 import { createSaveQueue } from '../components/states/saveQueue'
 import { StateStrip } from '../components/states/StateStrip'
 import { useSaveState } from '../components/states/useSaveState'
-import { host } from '../host'
+import { host, onDevice } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
 import { useEngaged } from '../components/markStore'
 import type { AgencyLogo } from './agency/palette'
@@ -270,6 +271,15 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // Undo and redo of this person's own edits to the open brief or script (features/brief-versions-undo.clan; the Script
   // editor adopts the same stack, features/script-editor.clan).
   const briefUndo = useBriefUndo(docPath, (open.manifest.app?.app_id === BRIEF_MAKER || open.manifest.app?.app_id === SCRIPT_EDITOR) && !open.is_template && !clientOn, changed)
+  // Send the client copy (Share) on a locked server brief opens the shell's own form for the client's link
+  // (features/align-booth.clan): made, listed and withdrawn here, for the document open in the frame. The page's
+  // Booth only shows what exists, read through its own token routes. A file from this device has no link.
+  const linkDoc = clientLinkDoc({
+    docPath, appId: open.manifest.app?.app_id, isTemplate: open.is_template, clientOn,
+    locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
+    server: host.frameLoad === 'url' && !onDevice(),
+  })
+  const [linkOpen, setLinkOpen] = useState<string | null>(null)
 
   // The bar's Undo and Redo commands act on this document's stack, while it is the one open. Stable wrappers read the
   // latest, so the registration moves only when what can be undone does.
@@ -362,8 +372,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const barItems = judge.item ? [...appItems, judge.item] : appItems
   const onBarAction = useCallback((id: string) => {
     if (id === SEND_TO_JUDGE || (id === STATE_ACTIONS.retry && judge.state && !stateOf(appItems))) { void judge.send(); return }
+    if (id === 'client' && linkDoc) { setLinkOpen(linkDoc); return }
     barAction(id)
-  }, [judge, appItems])
+  }, [judge, appItems, linkDoc, setLinkOpen])
   // The app's own word for its state wins over the shell's, where it sends one.
   const appStatus = statusOf(barItems)
   // How each write went (the bridge reports it) and the state the app is in, shown between the bar and the work.
@@ -528,7 +539,12 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}
         <main className="ch-work-main">
           {!clientOn && gate.view && (
-            <BriefGateBand gate={gate} client={client?.name ?? 'the client'} onChanged={changed} undo={briefUndo} docPath={docPath} />
+            <BriefGateBand gate={gate} client={client?.name ?? 'the client'} onChanged={changed} undo={briefUndo} docPath={docPath} gateInBooth />
+          )}
+          {linkDoc && linkOpen === linkDoc && (
+            <section className="bg-band cl-band" aria-label="Send the client copy" data-testid="client-link-form">
+              <ClientLinkPanel key={linkDoc} doc={linkDoc} client={client?.name ?? 'the client'} onClose={() => setLinkOpen(null)} onChanged={() => { refreshApp(); changed() }} />
+            </section>
           )}
           {!clientOn && appId === SCRIPT_EDITOR && !open.is_template && (
             <VersionBand undo={briefUndo} docPath={docPath} onChanged={changed} />

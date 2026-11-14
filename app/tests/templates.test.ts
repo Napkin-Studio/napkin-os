@@ -2033,7 +2033,10 @@ test('the grid prints on A4 sheets that break cleanly, and stays among the OS ba
   // Save · PDF and its other ways to save are the OS bar's (the side tab design): one ACTIONS entry each.
   const A = obj(BM, 'ACTIONS')
   assert.match(A, /pdf:function\(\)\{ doExport\('pdf'\); \}/, 'Save · PDF, in the OS bar, is the sheet')
-  assert.match(A, /client:function\(\)\{ doExport\('pdf','client'\); \}/)
+  // Send the client copy (OS bar, Share) is the shell's form; the page shows the links in the Booth, and its client
+  // copy PDF is the Booth's (align-booth).
+  assert.match(A, /client:function\(\)\{ showClientLinks\(\); \}/)
+  assert.match(fn(BM, 'renderClientLinks'), /doExport\('pdf','client'\)/)
   assert.match(A, /html:function\(\)\{ doExport\('html'\); \}/, 'Save · HTML is the sheet')
   assert.match(A, /gridPdf:function\(\)\{ doExport\('pdf','grid'\); \}/, 'the grid template is still a PDF')
   assert.match(A, /gridHtml:function\(\)\{ doExport\('html','grid'\); \}/)
@@ -2649,7 +2652,8 @@ test('a part marked Confidential is hatched and tagged in the agency copy, and t
   // The toggle says what it means: Napkin never learns from the part, and the client still sees it.
   assert.match(fn(BM, 'confBtn'), /Napkin never learns from this part\. The client still sees it\./)
   assert.match(fn(BM, 'toggleConf'), /Napkin never learns from it\. The client copy still shows it\./)
-  assert.match(fn(BM, 'barItems'), /id:'client', label:'Client copy · PDF', disabled:!L, title:L\?'The locked sheet, every part in it, for the client'/)
+  assert.match(fn(BM, 'barItems'), /id:'client', label:'Send the client copy', disabled:!A\|\|re, title:A&&!re\?'A signed link to this locked version, for the client to open on a phone/)
+  assert.match(fn(BM, 'renderClientLinks'), /data-lk="pdf" title="The locked sheet, every part in it, as a PDF">Client copy · PDF</)
   const g = grid()
   const out = g.gridBody({ ...ctxOf({ budget_and_scope: 'Secret money.' }), conf: ['budget_and_scope'] }).html
   assert.match(out, /class="box conf"><div class="lab"><b>06<\/b>Budget and scope<span class="cf">Confidential<\/span>/)

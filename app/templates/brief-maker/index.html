@@ -940,6 +940,29 @@
   .b-gate-l button:hover{text-decoration-color:currentColor}
   .b-gate-l small{font:500 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted);margin-right:6px}
   .b-gate-more{font-size:12px;color:var(--nd-muted)}
+  /* the gate's own lines (famous, who signs, the planner's signature) and the client's links: Booth cards */
+  .b-gatebox,.b-links .lk-fold{display:grid;gap:10px;padding:12px;border:1px solid var(--nd-line);border-radius:9px;background:var(--nd-card);font-size:13px;line-height:1.45;color:var(--nd-ink)}
+  .b-gatebox[hidden],.b-links[hidden]{display:none}
+  .b-gatebox p,.b-links p{margin:0}
+  .gb-f{display:grid;gap:4px;font-size:12px;color:var(--nd-muted)}
+  .gb-f input{width:100%;box-sizing:border-box;border:1px solid var(--nd-line);border-radius:6px;padding:7px 9px;font:13px var(--font-ui);background:var(--nd-paper);color:var(--nd-ink)}
+  .gb-f input:focus-visible{outline:2px solid var(--ag-base,var(--nd-ink));outline-offset:1px}
+  .gb-acts{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:10px}
+  .gb-err{font-size:12.5px;color:var(--nd-alert)}
+  .b-links{display:block;margin-top:10px}
+  .b-links .lk-fold{gap:12px}
+  .b-links .lk-fold > summary{display:flex;align-items:baseline;gap:8px;cursor:pointer;font:600 13px var(--font-ui);list-style:none}
+  .b-links .lk-fold > summary::-webkit-details-marker{display:none}
+  .b-links .lk-fold > summary small{margin-left:auto;font:500 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
+  .lk-m{font-size:12.5px;color:var(--nd-muted)}
+  .lk-round{display:grid;gap:8px}
+  .lk-rows,.lk-comments{list-style:none;display:grid;gap:6px;margin:0;padding:0}
+  .lk-rows li{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12.5px}
+  .lk-rows li[data-link-state="withdrawn"],.lk-rows li[data-link-state="expired"],.lk-rows li[data-link-state="superseded"]{color:var(--nd-muted)}
+  .lk-round h5{margin:0;font:600 10px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--nd-muted)}
+  .lk-comments li{display:grid;gap:2px;padding:8px 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper)}
+  .lk-comments small{font-size:11.5px;color:var(--nd-muted)}
+  .lk-flag{justify-self:start;font:600 10px var(--font-mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--nd-warn)}
   /* Reopen a part… and Record the client's answer, under Locked */
   #structured .reopen{display:grid;gap:8px;margin:0}
   #structured .reopen .ghost{display:none}
@@ -1559,6 +1582,7 @@
           <div class="upnote lknote" id="linkNote" role="status" hidden></div>
           <div class="upnote" id="upNote" role="status" hidden></div>
           <div class="locklist" id="lockList" hidden></div>
+          <div class="b-gatebox" id="gateBox" hidden aria-label="The brief gate"></div>
           <div class="b-lockslot">
             <button class="lock btn-primary" id="lockBtn" data-act="lock">Lock the brief</button>
             <span class="b-lockwhy" id="lockWhy" hidden></span>
@@ -1571,6 +1595,7 @@
               <div class="reolist" id="reopenList" hidden></div>
             </div>
             <section class="b-cr" id="clientAnswer" hidden aria-label="The client’s answer"></section>
+            <section class="b-links" id="clientLinks" hidden aria-label="The client’s links"></section>
           </div>
 
           <details class="review b-review" id="review" hidden><summary>Review<small id="reviewSum"></small></summary><div id="reviewBody"></div><div class="b-rev-crew"><div class="bcrew" id="crewline" aria-live="polite"></div></div></details>
@@ -4579,8 +4604,45 @@
       if(!a||!a.blocks_lock) return false;
       var k=a.code+'|'+(a.address||a.decision||a.text); if(seen[k]) return false; seen[k]=1; return true;
     }).map(function(a){
-      return {code:a.code, text:a.text||'', label:a.label||'', address:a.address||'', decision:a.decision||'', ref:refOfAddress(a.address), field:fieldOfAddress(a.address)};
+      var x={code:a.code, text:a.text||'', label:a.label||'', address:a.address||'', decision:a.decision||'', ref:refOfAddress(a.address), field:fieldOfAddress(a.address)}, g=gateRow(a);
+      if(g){ x.key=g.key; x.field=g.field; x.open=g.open; x.say=g.say||''; x.tag=g.tag; x.ask=g.ask||''; }
+      return x;
     });
+  }
+  // ---------- the Brief gate, as rows of Needs you (features/align-booth.clan; os-layer §7.2) ----------
+  // The host lists what the gate still wants as items that block the lock: gate:<item> for one of the six items
+  // the brief does not meet (objective and baseline end with the question the client is owed), signoff:<role>
+  // for a signature still wanted. The page never works the gate out: it says each item as a row that opens
+  // its part, a question for the client, or the signer it waits on.
+  var GATE_PART={proposition:'single_minded_proposition', insight:'insight', objective:'objectives.commercial', feel_or_do:'desired_response.feel', baseline:'measurement'};
+  // The one gate item with no part on the sheet: it is written in the Booth, where its row opens it.
+  var GATE_SAY={famous:'What would make this famous'};
+  var SIGNOFF_SAY={planner:'The planner’s sign-off', creative_director:'The creative director’s sign-off'};
+  // The person the brief names for a role, by sign-in name; '' when it names none.
+  function signerOf(role){
+    var s=arr(get('signers')).filter(function(x){ return x&&x.role===role&&typeof x.person==='string'&&x.person.trim(); })[0];
+    return s?s.person.trim():'';
+  }
+  // Who a sign-off row is addressed to: the host's `for` when the brief is filed under a job, else the brief's signer.
+  function forWords(f, role){
+    var p=f&&typeof f.person==='string'&&f.person||signerOf(role), me=ME&&ME.id;
+    if(!p) return 'Name who signs';
+    return me&&p===me?'For you':'For '+p;
+  }
+  function gateRow(a){
+    var c=String(a&&a.code||''), m=/^gate:([a-z_]+)$/.exec(c), s=/^signoff:([a-z_]+)$/.exec(c);
+    if(m){
+      var id=m[1], key=GATE_PART[id]||'', q=/Ask the client:\s*(.+?)\s*$/.exec(String(a.text||''));
+      var r={key:key, field:key?fieldOf(key):null, open:key?'':id, tag:q?'Ask the client':'Brief gate'};
+      if(q){ r.say=q[1]; r.ask=q[1]; }
+      else if(!key) r.say=GATE_SAY[id]||id;
+      return r;
+    }
+    if(s){
+      var role=s[1], both=!!signerOf('planner')&&!!signerOf('creative_director');
+      return {key:'', field:null, open:role==='planner'&&both?'sign':'signers', say:SIGNOFF_SAY[role]||role, tag:forWords(a['for'], role)};
+    }
+    return null;
   }
   // What the lock waits for besides the parts the Review agent already names in its line.
   function lockOthers(){ return lockItems().filter(function(x){ return !(x.field&&x.code==='bad_verdict'); }); }
@@ -4590,14 +4652,15 @@
   function lockSig(){ var l=lockState(); return l?[l.locked, l.can_lock, arr(l.reopened).map(function(r){ return r.address; }).join(',')].join('|'):''; }
   var LOCK_SIG='';
   function lkItemHtml(x){
-    return '<button type="button" class="lkitem" data-addr="'+esc(x.address)+'" data-ref="'+esc(x.ref)+'" data-note="'+esc(x.text)+'"'+(x.key?' data-key="'+esc(x.key)+'"':'')+'>'
-      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(x.tag||kindWord(x, osView()))+'</small></button>';
+    return '<button type="button" class="lkitem" data-code="'+esc(x.code)+'" data-addr="'+esc(x.address)+'" data-ref="'+esc(x.ref)+'" data-note="'+esc(x.text)+'"'+(x.key?' data-key="'+esc(x.key)+'"':'')+(x.open?' data-open="'+esc(x.open)+'"':'')+'>'
+      +'<span class="x">'+esc(x.say||(x.field?headOf(x.field):(x.label||x.text)))+'</span><small class="k">'+esc(x.tag||kindWord(x, osView()))+'</small></button>';
   }
   // A part of this brief is settled at the part: the row selects it (the part view, Your call first);
   // anything else (a carried contest, a finding) opens where it came from, in the panel.
   function bindLkItems(el){
     el.querySelectorAll('.lkitem').forEach(function(b){ b.addEventListener('click',function(){
-      var k=b.getAttribute('data-key'), f=k?fieldOf(k):fieldOfAddress(b.getAttribute('data-addr')), F=OSF(), ref=b.getAttribute('data-ref');
+      var k=b.getAttribute('data-key'), f=k?fieldOf(k):fieldOfAddress(b.getAttribute('data-addr')), F=OSF(), ref=b.getAttribute('data-ref'), o=b.getAttribute('data-open');
+      if(o&&phase==='doc'){ gateOpen(o); return; }
       if(f&&phase==='doc'){ goPart(f.key); return; }
       if(F&&ref) F.open(ref, false, F.kindOf&&F.kindOf(ref)?'':b.getAttribute('data-note'));
     }); });
@@ -4616,7 +4679,7 @@
     return '<div class="b-gate-h">Needs you · '+items.length+'</div><ul class="b-gate-l">'+items.slice(0,8).map(function(x){ return '<li>'+lkItemHtml(x)+'</li>'; }).join('')+'</ul>'
       +(more?'<span class="b-gate-more">and '+more+' more, in Decisions</span>':'');
   }
-  function renderLock(){ renderLockBtn(); renderPill(); renderReopen(); renderClientAnswer(); sendBar(); }
+  function renderLock(){ renderLockBtn(); renderGateBox(); renderPill(); renderReopen(); renderClientAnswer(); renderClientLinks(); sendBar(); }
   // Slot 4 of the brief view: Lock the brief (the view's one primary), and why it waits; locked, it holds
   // "Locked for handoff · v2", Record the client's answer and Reopen a part…. Unlock is the OS bar's.
   var NEEDS_N=null, READY_NUDGE=false;
@@ -4721,7 +4784,7 @@
     if(m.type==='clan:bar-action'){ if(phase==='doc'&&ACTIONS.hasOwnProperty(m.id)) ACTIONS[m.id](); return; }
     // Client review is the shell's mode; the fields snippet draws it. The
     // brief only holds its parts still while it is on, and catches up after.
-    if(m.type==='clan:clientmode'){ var was=CLIENT.on; CLIENT={on:!!m.on, answer:m.answer||null}; if(was&&!CLIENT.on&&phase==='doc') render(); return; }
+    if(m.type==='clan:clientmode'){ var was=CLIENT.on; CLIENT={on:!!m.on, answer:m.answer||null}; renderClientLinks(); if(was&&!CLIENT.on&&phase==='doc') render(); return; }
     if(m.type!=='clan:run'||RUNNABLE.indexOf(m.task)===-1) return;
     var input=m.input&&typeof m.input==='object'?m.input:{};
     if(docLocked()){ toast('The brief is locked, so the agents can’t write it again.'); return; }
@@ -5456,7 +5519,7 @@
     lock:function(){ lockClick(); },
     reopen:function(){ toggleReopen(); },
     unlock:function(){ unlockClick(); },
-    client:function(){ doExport('pdf','client'); },
+    client:function(){ showClientLinks(); },
     html:function(){ doExport('html'); },
     gridPdf:function(){ doExport('pdf','grid'); },
     gridHtml:function(){ doExport('html','grid'); },
@@ -5484,7 +5547,7 @@
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
     if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', disabled:draftLive(), title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
     if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
-    items.push({kind:'button', id:'client', label:'Client copy · PDF', disabled:!L, title:L?'The locked sheet, every part in it, for the client':'Lock the brief first: the client sees the version you lock'});
+    items.push({kind:'button', id:'client', label:'Send the client copy', disabled:!A||re, title:A&&!re?'A signed link to this locked version, for the client to open on a phone':'Lock the brief first: the client sees the version you lock'});
     items.push({kind:'button', id:'html', label:'Save · HTML', title:'The sheet as a standalone web page'});
     items.push({kind:'button', id:'gridPdf', label:'Grid PDF', title:'The grid template: two sheets of boxes, as before the new page'});
     items.push({kind:'button', id:'gridHtml', label:'Grid HTML', title:'The grid template as a web page'});
@@ -5598,6 +5661,154 @@
     }, function(e){ CR.saving=false; CR.err=String(e&&e.message||'That did not go through. Check your connection and try again.'); renderClientAnswer(); });
   }
   $('crOpen').addEventListener('click', function(){ CR.open=true; if(!CR.who){ var a=clientNow(); CR.who=a&&a.client&&a.client.name||''; } renderClientAnswer(); var el=$('clientAnswer'); if(el) el.scrollIntoView({block:'nearest'}); });
+
+  // ---------- the Brief gate's own lines, in the Booth (features/align-booth.clan) ----------
+  // A gate row with no part on the sheet opens here: what would make it famous, who signs, and the planner's
+  // signature. The creative director's signature is the Booth's Lock. Closed again once the host stops listing it.
+  var GATEBOX=null, GATE_BUSY=false, GATE_ERR='', GATE_SIG='';
+  function gateOpen(k){
+    GATEBOX=k; GATE_ERR=''; renderGateBox();
+    var el=$('gateBox'); if(!el||el.hidden) return;
+    el.scrollIntoView({block:'nearest'});
+    var i=el.querySelector('input,button.sp-btn'); if(i) i.focus({preventScroll:true});
+  }
+  // A signer is written by their sign-in name (name@agency) where people sign in, or they could never sign.
+  function signerProblem(name){
+    var n=String(name||'').trim(), me=ME&&ME.id||'', at=me.indexOf('@');
+    if(!n||at<0) return '';
+    return /^[^@\s]+@[^@\s]+$/.test(n)?'':'Use their sign-in name, like name@'+me.slice(at+1)+'.';
+  }
+  function renderGateBox(){
+    var el=$('gateBox'); if(!el) return;
+    var open=GATEBOX&&needsRows().some(function(x){ return x.open===GATEBOX; });
+    if(!open&&!GATE_BUSY) GATEBOX=null;
+    var sig=[GATEBOX, GATE_BUSY, GATE_ERR, signerOf('planner'), signerOf('creative_director'), ME&&ME.id].join('|');
+    if(sig===GATE_SIG&&!el.hidden===!!GATEBOX) return;   // what is typed stays while nothing changed
+    GATE_SIG=sig;
+    if(!GATEBOX){ el.hidden=true; el.innerHTML=''; return; }
+    var acts=function(id, label){ return '<div class="gb-acts"><button type="button" class="side-link" data-gb="close">Not now</button>'+(id?'<button type="button" class="sp-btn" data-gb="'+id+'"'+(GATE_BUSY?' disabled':'')+'>'+esc(label)+'</button>':'')+'</div>'; };
+    var h='', p=signerOf('planner');
+    if(GATEBOX==='famous') h='<label class="gb-f"><span>What would make this famous?</span><input type="text" id="gbFamous" autocomplete="off" placeholder="The thing people would repeat to a friend"></label>'+acts('famous', 'Add to the brief');
+    else if(GATEBOX==='signers') h='<p>Name the planner and the creative director who sign this brief. The planner signs first; the creative director’s Lock is the signature that locks it.</p>'
+      +'<label class="gb-f"><span>Planner who signs</span><input type="text" id="gbPlanner" autocomplete="off" value="'+esc(p||(ME&&ME.id)||'')+'"></label>'
+      +'<label class="gb-f"><span>Creative director who signs</span><input type="text" id="gbCd" autocomplete="off" value="'+esc(signerOf('creative_director'))+'"></label>'+acts('signers', 'Name the signers');
+    else if(GATEBOX==='sign') h=ME&&ME.id&&p===ME.id
+      ? '<p>You sign this version as the planner. The creative director’s Lock comes next, and locks it.</p>'+acts('sign', 'Sign this version')
+      : '<p>'+esc(p)+' signs this version as the planner. The creative director’s Lock comes next, and locks it.</p>'+acts('', '');
+    else h='<p>'+esc(GATEBOX)+'</p>'+acts('', '');
+    if(GATE_ERR) h+='<p class="gb-err" role="alert">'+esc(GATE_ERR)+'</p>';
+    el.hidden=false; el.innerHTML=h;
+    el.querySelectorAll('[data-gb]').forEach(function(b){ b.addEventListener('click', function(){ gateAct(b.getAttribute('data-gb')); }); });
+    el.querySelectorAll('input').forEach(function(i){ i.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); var go=el.querySelector('button.sp-btn'); if(go) go.click(); } }); });
+  }
+  function gateDone(err){
+    GATE_BUSY=false; GATE_ERR=err||'';
+    var F=OSF(); if(F) F.reload();
+    renderGateBox();
+  }
+  function gateAct(id){
+    if(id==='close'){ GATEBOX=null; GATE_ERR=''; renderGateBox(); return; }
+    if(GATE_BUSY) return;
+    if(!window.clan){ GATE_ERR='This needs the Napkin host.'; renderGateBox(); return; }
+    var fail=function(){ gateDone('That did not go through. Check your connection and try again.'); };
+    if(id==='famous'){
+      var v=String(($('gbFamous')||{}).value||'').trim(); if(!v){ GATE_ERR='Say what would make it famous first.'; renderGateBox(); return; }
+      GATE_BUSY=true; renderGateBox();
+      Promise.resolve(patch('famous', v, {actor:'human', pinned:true, action:'say what would make this famous'})).then(function(){ gateDone(''); }, fail);
+      return;
+    }
+    if(id==='signers'){
+      var pl=String(($('gbPlanner')||{}).value||'').trim(), cd=String(($('gbCd')||{}).value||'').trim();
+      var why=!pl||!cd?'Name both: the planner and the creative director.':signerProblem(pl)||signerProblem(cd);
+      if(why){ GATE_ERR=why; renderGateBox(); return; }
+      GATE_BUSY=true; renderGateBox();
+      Promise.resolve(patch('signers', [{role:'planner', person:pl}, {role:'creative_director', person:cd}], {actor:'human', pinned:true, action:'name who signs the brief'})).then(function(){ gateDone(''); }, fail);
+      return;
+    }
+    if(id==='sign'){
+      GATE_BUSY=true; renderGateBox();
+      hostPost('/sign', {rationale:'The planner signs this version.'}).then(function(res){
+        if(!(res&&res.ok)){ gateDone(hostErrText(res)); return; }
+        toast('Signed. The creative director’s Lock comes next.');
+        gateDone('');
+      }, fail);
+    }
+  }
+
+  // ---------- the client's links and the round, under Record the client's answer (features/align-booth.clan) ----------
+  // Send the client copy (OS bar, Share) is the shell's own form: a link or a round is made, and withdrawn, there,
+  // for this document, never from this page. The Booth shows what exists, read through this frame's own token routes
+  // (the host's /client-link/list and /client-review/round, read-only; a frame may not issue a link,
+  // crates/napkin-web/src/sandbox.rs). Not drawn in client review mode.
+  var LINKS={rows:null, round:null, open:false, at:0, busy:false};
+  var LINK_STATE={open:'Waiting for the client', answered:'Answered', withdrawn:'Withdrawn', expired:'Expired', superseded:'Replaced: the brief changed'};
+  var LINK_ANSWER={accepted:'confirmed', accepted_with_changes:'asked for changes'};
+  function linkWords(r){ return r&&r.answer?(LINK_ANSWER[r.answer]||String(r.answer).replace(/_/g,' ')):(LINK_STATE[r&&r.state]||String(r&&r.state||'')); }
+  function linkDay(iso){ var d=new Date(String(iso||'')); return isNaN(d)?'':d.toLocaleDateString('en-IE',{day:'numeric', month:'long'}); }
+  function linksShown(){ return approveLocked()&&!arr((lockState()||{}).reopened).length&&!(CLIENT&&CLIENT.on); }
+  function readJson(r){ return r.ok?r.json().catch(function(){ return null; }):null; }
+  function loadLinks(){
+    if(LINKS.busy||!window.clan) return;
+    LINKS.busy=true;
+    Promise.all([
+      fetch(clanScheme+'/client-link/list').then(readJson, function(){ return null; }),
+      fetch(clanScheme+'/client-review/round').then(readJson, function(){ return null; })
+    ]).then(function(got){
+      LINKS.busy=false; LINKS.at=Date.now();
+      LINKS.rows=arr(got[0]&&got[0].links);
+      LINKS.round=got[1]&&typeof got[1].round==='number'?got[1]:null;
+      renderClientLinks();
+    }, function(){ LINKS.busy=false; LINKS.at=Date.now(); });
+  }
+  window.addEventListener('clan:dataupdated', function(){ LINKS.at=0; if(phase==='doc'&&linksShown()) loadLinks(); });
+  // Send the client copy reached the page: the shell had no form for it (a file opened from this device, or not
+  // locked). Say so, and show what exists.
+  function showClientLinks(){
+    if(phase!=='doc') return;
+    if(!approveLocked()){ toast('Lock the brief first: the client sees the version you lock.'); return; }
+    toast('The client’s link is made in the studio, from a brief saved there.');
+    LINKS.open=true; if(SEL) select(null); boothPick(); renderClientLinks();
+    var el=$('clientLinks'); if(el&&!el.hidden) el.scrollIntoView({block:'nearest'});
+  }
+  function linkWhere(c, label){
+    var p=c&&c.pin, at=!p?'whole piece':p.t_ms!=null?'at '+Math.floor(p.t_ms/60000)+':'+('0'+Math.floor(p.t_ms/1000)%60).slice(-2):p.x!=null?'at '+Math.round(p.x*100)+'%, '+Math.round((p.y||0)*100)+'%':'whole piece';
+    return label+', '+at+' · '+(c.tag==='preference'?'a preference':String(c.tag||'').replace(/_/g,' '));
+  }
+  function linksRoundHtml(r){
+    if(!r) return '';
+    var label=function(n){ var p=arr(r.pieces).filter(function(x){ return x&&x.n===n; })[0]; return p&&p.label||'Piece '+n; };
+    var title='Round '+r.round+(r.rounds_in_scope&&r.rounds_in_scope>=r.round?' of '+r.rounds_in_scope:'');
+    var A={accepted:'approved', accepted_with_changes:'asked for changes'};
+    return '<div class="lk-round" data-testid="client-round">'
+      +'<h5 data-testid="round-number">'+esc(title)+'</h5>'
+      +(r.current===false?'<p class="lk-m">The brief has changed since this round was sent. Its links no longer open.</p>':'')
+      +'<ul class="lk-rows">'+arr(r.reviewers).map(function(v){ return '<li><span><b>'+esc(v.name)+'</b>'+(v.role==='approver'?' (approver)':'')+': '+esc(v.answer?(A[v.answer]||v.answer)+(v.counts===false?', counts as advice':''):linkWords({state:v.state}))+'</span></li>'; }).join('')+'</ul>'
+      +arr(r.pieces).filter(function(p){ return p&&p.split; }).map(function(p){ return '<p class="lk-m">'+esc(p.label+': '+arr(p.approved_by).join(', ')+' approved, '+arr(p.changes_by).join(', ')+' asked for changes.')+'</p>'; }).join('')
+      +(arr(r.comments).length
+        ?'<ul class="lk-comments" data-testid="round-comments">'+arr(r.comments).map(function(c){
+          return '<li data-testid="comment"'+(arr(c.flags).length?' data-flags="'+esc(arr(c.flags).join(','))+'"':'')+'><small>'+esc(linkWhere(c, label(c.piece)))+'</small><span>'+esc(c.text)+'</span><small>'+esc((c.by&&c.by.name||'')+(c.role==='approver'?' (approver)':''))+'</small>'
+            +arr(c.flags).map(function(f){ return '<em class="lk-flag">'+esc(f)+'</em>'; }).join('')+'</li>';
+        }).join('')+'</ul>'
+        :'<p class="lk-m">No comments yet.</p>')
+      +'</div>';
+  }
+  function renderClientLinks(){
+    var el=$('clientLinks'); if(!el) return;
+    if(!linksShown()){ el.hidden=true; el.innerHTML=''; return; }
+    if(!LINKS.at) loadLinks();
+    var rows=arr(LINKS.rows), waiting=rows.filter(function(r){ return r.state==='open'; }).length;
+    var h='<details class="lk-fold"'+(LINKS.open?' open':'')+'><summary>The client’s links<small>'+(rows.length?(waiting?waiting+' waiting':rows.length+' made'):'none yet')+'</small></summary>';
+    if(rows.length) h+='<ul class="lk-rows" aria-label="Links made">'+rows.map(function(r){
+      var until=r.state==='open'&&linkDay(r.expires)?', until '+linkDay(r.expires):'';
+      return '<li data-link-state="'+esc(r.state)+'"><span><b>'+esc(r.client&&r.client.name||'')+'</b>: '+esc(linkWords(r))+esc(until)+'</span></li>';
+    }).join('')+'</ul>';
+    h+='<p class="lk-m">Send the client copy, in Share, makes a link or a round; Withdraw is there too.</p>';
+    h+=linksRoundHtml(LINKS.round);
+    h+='<div class="gb-acts"><button type="button" class="side-link" data-lk="pdf" title="The locked sheet, every part in it, as a PDF">Client copy · PDF</button></div></details>';
+    el.hidden=false; el.innerHTML=h;
+    var d=el.querySelector('details'); if(d) d.addEventListener('toggle', function(){ LINKS.open=d.open; });
+    var pdf=el.querySelector('[data-lk=pdf]'); if(pdf) pdf.addEventListener('click', function(){ doExport('pdf','client'); });
+  }
 
   // ---------- the look: frame, headings, colour, logos (appearance keys) ----------
   var SWATCHES=[['','The brief’s own'],['#C9462A','Stamp red'],['#221D15','Ink'],['#1F3FBF','Blue'],['#3D5A1E','Green'],['#B07A12','Ochre']];   // the agency's base and accent join after the first two

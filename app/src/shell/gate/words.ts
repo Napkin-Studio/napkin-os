@@ -160,3 +160,23 @@ export function briefMoved(view: UpstreamView | null): { title: string; to: stri
   const short = (v?: string) => (v ?? '').slice(0, 7)
   return { title: parent.title || 'the brief', to: short(parent.version), from: short(view?.carried?.last_decision) }
 }
+
+// ── the client's link, made in the shell (features/align-booth.clan) ─────────
+
+export interface ClientLinkPlace {
+  docPath: string
+  appId: string | undefined
+  isTemplate: boolean
+  clientOn: boolean
+  /** Locked, with nothing reopened: the client sees the version that is locked. */
+  locked: boolean
+  /** The document is on the server (not a file opened from this device): its links live there. */
+  server: boolean
+}
+
+/**
+ * The document Send the client copy makes a link for: the brief open in the frame, when it is a locked brief on
+ * the server. Null otherwise (a file from this device, a template, client review, another tool, not locked).
+ */
+export const clientLinkDoc = (p: ClientLinkPlace): string | null =>
+  p.server && p.appId === BRIEF_MAKER && !p.isTemplate && !p.clientOn && p.locked ? p.docPath : null
