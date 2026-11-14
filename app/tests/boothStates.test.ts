@@ -282,18 +282,36 @@ for (const [name, o] of PAGES) {
     await new Promise(r => setTimeout(r, 1200))
     assert.equal(p.one('.booth-desk').classList.contains('booth-off'), true, 'and the Booth stayed hidden')
   })
-  test(`${name}: at 390 px, where the Booth follows the document, the state is the first thing above the document, not at the bottom`, async () => {
+  test(`${name}: at 390 px a state is a short line fixed under the bar, announced once, with its action and a dismiss; the Booth below keeps it readable`, async () => {
     const p = await open(SRC_OF[name], { ...o, width: 390 })
-    p.win.boothSay(STATES[0], () => {})
-    const line = p.one('[data-testid="booth-state"]'), desk = p.one('.booth-desk')
-    assert.equal(line.hidden, false)
-    assert.equal(!!(line.compareDocumentPosition(desk) & 4), true, 'it comes before the desk (document and Booth) in the page')
-    assert.equal(p.one('[data-booth-panel]').contains(line), false, 'it is not inside the Booth, which is below the document')
+    const heard: string[] = []
+    p.win.boothSay(STATES[0], (id: string) => heard.push(id))
+    const line = p.one('[data-testid="booth-state-line"]'), full = p.one('[data-testid="booth-state"]')
+    assert.ok(line, 'there is a line'); assert.equal(line.hidden, false)
+    assert.equal(line.getAttribute('role'), 'status')
+    assert.match(line.textContent, /The run stopped\./)
+    assert.equal(p.one('[data-booth-panel]').contains(line), false, 'the line is not in the Booth: it is fixed, so it is seen wherever the person is')
+    assert.equal(p.one('[data-booth-panel]').contains(full), true, 'the full state stays in the Booth, where the document ends')
+    assert.equal(full.getAttribute('aria-live'), 'off', 'announced once: the copy in the Booth is quiet')
+    assert.equal(full.hasAttribute('role') && full.getAttribute('role') === 'status', false)
+    line.querySelector('[data-bl-act]').click()
+    assert.deepEqual(heard, ['state-retry'])
+    line.querySelector('[data-bl="dismiss"]').click()
+    assert.equal(line.hidden, true, 'dismissed')
+    assert.equal(full.hidden, false, 'and still readable in the Booth')
+    p.win.boothSay(STATES[1], () => {})
+    assert.equal(line.hidden, false, 'a new state shows the line again')
+    p.win.BOOTH_LINE_MS = 30
+    p.win.boothSay(STATES[0], () => {}); p.win.boothSay(STATES[2], () => {})
+    await new Promise(r => setTimeout(r, 400))
+    assert.equal(line.hidden, true, 'it steps aside by itself, so it does not cover the text for good')
+    assert.equal(full.hidden, false)
     p.win.boothSay(null)
     assert.equal(line.hidden, true)
-    p.win.boothSay(STATES[1], () => {})
     Object.defineProperty(p.win, 'innerWidth', { value: 1440, configurable: true }); p.win.dispatchEvent(new p.win.Event('resize'))
-    assert.equal(p.one('[data-booth-panel]').contains(p.one('[data-testid="booth-state"]')), true, 'wide again: back in the Booth under its header')
+    p.win.boothSay(STATES[1], () => {})
+    assert.equal(p.one('[data-testid="booth-state-line"]').hidden, true, 'wide: no line, the Booth says it')
+    assert.equal(p.one('[data-testid="booth-state"]').getAttribute('role'), 'status')
   })
 }
 
@@ -312,12 +330,12 @@ test('the 409 alert keeps the line about the typed words, and Update settles it'
   q.forgetChanged()
   assert.equal(q.state(), 'failed', 'a write that failed to save is not forgotten by Update')
 })
-test('the alert sits at the bottom of the window: it never covers the Booth\'s header or the first lines of the page', () => {
+test('the alert is a short line fixed under the bar, never at the bottom where the page\'s last controls are', () => {
   const css = read('src/shell/nui/nui.css')
   const rule = /\.nui \.tb-alert \{([^}]*)\}/.exec(css)![1]
   assert.match(rule, /position: fixed/)
-  assert.match(rule, /bottom:/)
-  assert.doesNotMatch(rule, /top:/)
+  assert.match(rule, /top: 6\dpx/)
+  assert.doesNotMatch(rule, /bottom:/)
 })
 
 // ── item 4: a failed Judge run sent from the shell says its reason as text on screen ──
@@ -355,4 +373,36 @@ test('the same undo note, said twice, is shown each time (the note carries a cou
   const hook = read('src/shell/versions/useBriefUndo.ts')
   assert.match(hook, /noteKey/)
   void useState
+})
+
+// ── round 3, items 3 and 5 ──
+test('a state said before the shell\'s hidden word arrives brings the Booth in, once, when it is known', async () => {
+  const p = await open(SRC.script, { data: RADIO, mode: null })
+  p.win.boothSay(STATES[1], () => {})
+  const w = p.win
+  w.dispatchEvent(new w.MessageEvent('message', { data: { type: 'clan:clientmode', on: false }, source: w.parent }))
+  w.dispatchEvent(new w.MessageEvent('message', { data: { type: 'clan:booth', open: false }, source: w.parent }))
+  const desk = p.one('.booth-desk')
+  assert.equal(desk.classList.contains('booth-off'), true, 'hidden as the person left it')
+  assert.equal(p.one('#boothEdge').classList.contains('has'), true, 'with the dot')
+  await new Promise(r => setTimeout(r, 1200))
+  assert.equal(desk.classList.contains('booth-off'), false, 'then the Booth comes in')
+  p.one('[data-booth="hide"]').click(); await p.settle(); await new Promise(r => setTimeout(r, 1200))
+  assert.equal(desk.classList.contains('booth-off'), true, 'and only once: the person hid it again and it stays hidden')
+})
+
+test('the edge tab says what waits: a state is not called a question', async () => {
+  const p = await open(SRC.script, { data: RADIO })
+  p.one('[data-booth="hide"]').click(); await p.settle()
+  p.win.boothSay(STATES[0], () => {})
+  const label = p.one('#boothEdge').getAttribute('aria-label')
+  assert.match(label, /the run stopped/i); assert.doesNotMatch(label, /question/i)
+  p.win.boothSay(STATES[1], () => {})
+  assert.match(p.one('#boothEdge').getAttribute('aria-label'), /the brief changed/i)
+  p.win.boothAsk(2)
+  assert.match(p.one('#boothEdge').getAttribute('aria-label'), /2 questions waiting/)
+  assert.match(p.one('#boothEdge').getAttribute('aria-label'), /the brief changed/i)
+  p.win.boothSay(null)
+  assert.doesNotMatch(p.one('#boothEdge').getAttribute('aria-label'), /brief changed/i)
+  assert.equal(p.one('#boothCt').textContent, '2')
 })

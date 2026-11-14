@@ -405,3 +405,30 @@ test('a wait that lasts a second gets the mark, and only then', async (t) => {
   await act(async () => { root.unmount() })
   mock.timers.reset()
 })
+
+
+// The same undo note said again is said again (round 3: a real render, the way AppHost draws it, not a static string).
+test('an undo note said a second time after it faded is shown again, and a new document\'s first note is never swallowed', async () => {
+  const { useState } = await import('react')
+  let say: (n: string | null, k: number) => void = () => {}
+  function Host() {
+    const [held, setHeld] = useState<{ note: string | null; key: number }>({ note: null, key: 0 })
+    say = (note, key) => setHeld({ note, key })
+    return createElement(SaveAlert, { state: 'idle', note: held.note, noteKey: held.key })
+  }
+  const s = await draw(createElement(Host))
+  await act(async () => { say('Nothing to undo.', 1) })
+  assert.match(text(s.host), /Nothing to undo\./)
+  await act(async () => { await new Promise(r => setTimeout(r, 9300)) })
+  assert.equal(text(s.host), '', 'faded after nine seconds')
+  await act(async () => { say('Nothing to undo.', 2) })
+  assert.match(text(s.host), /Nothing to undo\./, 'said again')
+  await act(async () => { await new Promise(r => setTimeout(r, 9300)) })
+  assert.equal(text(s.host), '')
+  // another document opens: its counter goes on from this one's, so its first note is not mistaken for the faded one
+  const hook = read('src/shell/versions/useBriefUndo.ts')
+  assert.match(hook, /setHeld\(h => \(\{ docPath, stack: createUndoStack\(\), note: null, noteKey: h\.noteKey \+ 1 \}\)\)/)
+  await act(async () => { say('Nothing to undo.', 3) })
+  assert.match(text(s.host), /Nothing to undo\./)
+  await s.unmount()
+})
