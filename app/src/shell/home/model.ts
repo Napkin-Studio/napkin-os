@@ -29,7 +29,6 @@ export interface NeedRow {
   job?: { number: string; href: string }
   /** `gate`, `approval`, `brief-changed`, `timesheet` ...: a notice may be marked done, a task may not. */
   kind?: string
-  canDone?: boolean
   urgent?: boolean
 }
 
@@ -50,7 +49,7 @@ export function jobNeedRow(n: JobNeed): NeedRow {
   const state = late > 0 ? `${late} ${late === 1 ? 'day' : 'days'} late` : n.kind === 'timesheet' ? 'Today' : n.due ? `Due ${dueWords(n.due)}` : 'No deadline'
   return {
     id: n.id, path: n.path, title: n.text, sub: n.job ? `${n.job}, ${n.client}` : 'Your timesheet', state, action: n.action, due: n.due,
-    kind: n.kind, canDone: n.can_done === true, urgent: n.urgent === true,
+    kind: n.kind, urgent: n.urgent === true,
     ...(isJobNumber(n.job) ? { job: { number: n.job, href: formatRoute({ level: 'job', number: n.job }) } } : {}),
   }
 }

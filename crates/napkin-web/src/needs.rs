@@ -304,10 +304,18 @@ pub fn notices_on(ctx: &AppCtx, index: &JobIndex, user: &Account, path: &str) ->
                 .map(|d| d.path.as_str())
         })
     };
+    // addressed to this person: by name, by a role they hold, or to the job's people when they are on it. What an
+    // admin or the demo person may see of every job (`items_of`) is not addressed to them.
+    let for_me = |n: &Need| match &n.audience {
+        Audience::Person(p) => *p == user.username,
+        Audience::Role(r) => user.roles.iter().any(|x| x == r),
+        Audience::Job => index.is_on(&n.job, &user.username),
+    };
     items_of(ctx, index, Some(user))
         .into_iter()
         .filter(|n| {
-            n.kind != "gate"
+            for_me(n)
+                && n.kind != "gate"
                 && n.kind != "timesheet"
                 && if n.path.is_empty() {
                     home_of(&n.job) == Some(path)
@@ -344,11 +352,22 @@ pub fn with_notices(
 ) -> Option<Vec<u8>> {
     let mut view: Value = serde_json::from_slice(body).ok()?;
     let index = crate::api::job_index(ws).ok()?;
+    let agency = crate::tenant::agency_of(&grant.person).unwrap_or_default();
+    // The roles are read again now, not taken from the token: a role change (or a removal) holds on the
+    // person's next read of a document, whatever the token was minted with.
+    let roles = if ctx.directory.has(&agency) {
+        match ctx.directory.person(&agency, &grant.person) {
+            Some(p) if p.state != crate::directory::PersonState::Removed => p.roles,
+            _ => return None,
+        }
+    } else {
+        grant.roles.clone()
+    };
     let me = Account {
         username: grant.person.clone(),
-        agency: crate::tenant::agency_of(&grant.person).unwrap_or_default(),
+        agency,
         name: None,
-        roles: grant.roles.clone(),
+        roles,
     };
     let notices = notices_on(ctx, &index, &me, grant.doc.as_str());
     if notices.is_empty() {
@@ -378,12 +397,23 @@ pub fn documents_for(
             .as_array()
             .is_some_and(|k| k.iter().any(|x| x == key))
     };
-    let waiting_on = |f: &napkin_host::ops::decisions::AttentionFor| {
+    let roles_of = user.map(|a| roles_in_directory(ctx, &a.agency));
+    // an item waits on a person when it names them, or a role they hold: on a job's people, or, when nobody on the
+    // job holds the role, on everyone who does (the item is never orphaned)
+    let waiting_on = |f: &napkin_host::ops::decisions::AttentionFor,
+                      job: &napkin_host::jobindex::JobEntry,
+                      on_job: bool| {
         user.is_some_and(|a| {
             f.person.as_deref() == Some(a.username.as_str())
-                || f.role
-                    .as_ref()
-                    .is_some_and(|r| a.roles.iter().any(|x| x == r))
+                || f.role.as_ref().is_some_and(|r| {
+                    a.roles.iter().any(|x| x == r)
+                        && (on_job
+                            || !job.people.iter().any(|p| {
+                                roles_of
+                                    .as_ref()
+                                    .is_some_and(|f| f(p).iter().any(|x| x == r))
+                            }))
+                })
         })
     };
     let mut out = Vec::new();
@@ -402,7 +432,8 @@ pub fn documents_for(
             let mut dues: Vec<&str> = Vec::new();
             let mut mine = 0usize;
             for h in d.holds.iter().filter(|h| {
-                on_job && h.for_.as_ref().is_some_and(|f| waiting_on(f)) && !held(&d.path, &h.key)
+                h.for_.as_ref().is_some_and(|f| waiting_on(f, job, on_job))
+                    && !held(&d.path, &h.key)
             }) {
                 mine += 1;
                 dues.extend(h.due.as_deref());
@@ -419,8 +450,11 @@ pub fn documents_for(
                 mine += 1;
                 dues.extend(n["due"].as_str());
             }
-            // a person off the job sees only what is addressed to them (a notice they were named on)
-            if (!on_job && notices.is_empty()) || (d.holds.is_empty() && notices.is_empty()) {
+            // a person off the job sees only what is addressed to them
+            if mine == 0
+                && (!on_job || (d.holds.is_empty() && notices.is_empty()))
+                && notices.is_empty()
+            {
                 continue;
             }
             out.push(serde_json::json!({

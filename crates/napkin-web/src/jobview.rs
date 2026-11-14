@@ -143,7 +143,6 @@ pub const NEED_KEYS: &[&str] = &[
     "due",
     "due_source",
     "urgent",
-    "can_done",
 ];
 
 /// A need as the signed-in person is sent it.
@@ -337,7 +336,7 @@ mod tests {
             audience: Audience::Person("dara@wk".into()),
         };
         let full = serde_json::to_value(&need).unwrap();
-        assert_eq!(keys(&full), sorted(NEED_KEYS, &["audience"]));
+        assert_eq!(keys(&full), sorted(NEED_KEYS, &["audience", "can_done"]));
         let sent = need_view(&need);
         assert_eq!(keys(&sent), sorted(NEED_KEYS, &[]));
         assert!(sent.get("audience").is_none());

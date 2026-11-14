@@ -216,7 +216,14 @@ async fn setup(r: &Rig, owner: &str) -> (Person, Person, String) {
     let cian = sign_in(r, "cian@wk").await;
     let aoife = sign_in(r, "aoife@wk").await;
     let t = aoife.tenant.clone();
-    let (_, client, _) = call(r, "POST", &format!("/api/t/{t}/clients"), Some(&aoife.cookie), Some(json!({ "name": "Client A" }))).await;
+    let (_, client, _) = call(
+        r,
+        "POST",
+        &format!("/api/t/{t}/clients"),
+        Some(&aoife.cookie),
+        Some(json!({ "name": "Client A" })),
+    )
+    .await;
     let (st, _, _) = call(r, "POST", &format!("/api/t/{t}/jobs"), Some(&cian.cookie),
         Some(json!({ "number": "J001", "client_id": client["id"], "due": "2026-11-30", "owner": owner }))).await;
     assert_eq!(st, StatusCode::CREATED);
@@ -225,8 +232,14 @@ async fn setup(r: &Rig, owner: &str) -> (Person, Person, String) {
 }
 
 async fn route(r: &Rig, cian: &Person, t: &str) {
-    let (st, _, _) = call(r, "PUT", &format!("/api/t/{t}/jobs/J001/route"), Some(&cian.cookie),
-        Some(json!({ "route": [step("brief-check", Some("planner"), "aoife@wk", "2026-11-13")] }))).await;
+    let (st, _, _) = call(
+        r,
+        "PUT",
+        &format!("/api/t/{t}/jobs/J001/route"),
+        Some(&cian.cookie),
+        Some(json!({ "route": [step("brief-check", Some("planner"), "aoife@wk", "2026-11-13")] })),
+    )
+    .await;
     assert_eq!(st, StatusCode::OK);
 }
 
@@ -238,11 +251,19 @@ async fn review_an_admin_is_not_told_anothers_notice_is_theirs() {
     route(&r, &cian, &t).await;
     let ad = sign_in(&r, "ad@wk").await;
     let v = decisions(&r, &ad, "doc-b1").await;
-    let notes: Vec<&Value> = v["attention"].as_array().unwrap().iter().filter(|a| a["code"].as_str().unwrap().starts_with("notice:")).collect();
+    let notes: Vec<&Value> = v["attention"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["code"].as_str().unwrap().starts_with("notice:"))
+        .collect();
     eprintln!("ADMIN DECISION VIEW NOTICES: {}", json!(notes));
     let d = get(&r, &ad, "").await;
     eprintln!("ADMIN NEEDS: {d}");
-    assert_eq!(d["documents"][0]["mine"], 0, "the notice is for aoife, not for the admin: {d}");
+    assert_eq!(
+        d["documents"][0]["mine"], 0,
+        "the notice is for aoife, not for the admin: {d}"
+    );
 }
 
 /// R2: a person demoted from admin after signing in still gets every person's notices through the sandbox.
@@ -252,22 +273,43 @@ async fn review_a_demoted_admin_stops_seeing_others_notices() {
     let (cian, _aoife, t) = setup(&r, "aoife@wk").await;
     route(&r, &cian, &t).await;
     let ad = sign_in(&r, "ad@wk").await;
-    for (u, roles) in [("ad@wk", vec!["admin"]), ("aoife@wk", vec!["planning"]), ("cian@wk", vec!["account-service"]), ("maeve@wk", vec!["admin"])] {
+    for (u, roles) in [
+        ("ad@wk", vec!["admin"]),
+        ("aoife@wk", vec!["planning"]),
+        ("cian@wk", vec!["account-service"]),
+        ("maeve@wk", vec!["admin"]),
+    ] {
         let (st, body, _) = call(&r, "POST", &format!("/api/t/{t}/agency/people/invite"), Some(&ad.cookie),
             Some(json!({ "username": u, "name": u, "email": format!("{}@mail.example.test", u.split('@').next().unwrap()), "roles": roles }))).await;
         eprintln!("invite {u}: {st} {body}");
     }
     let maeve = sign_in(&r, "maeve@wk").await;
-    let (st, body, _) = call(&r, "PUT", &format!("/api/t/{t}/agency/people/maeve@wk"), Some(&ad.cookie), Some(json!({ "roles": ["copywriter"] }))).await;
+    let (st, body, _) = call(
+        &r,
+        "PUT",
+        &format!("/api/t/{t}/agency/people/maeve@wk"),
+        Some(&ad.cookie),
+        Some(json!({ "roles": ["copywriter"] })),
+    )
+    .await;
     assert_eq!(st, StatusCode::OK, "{body}");
     let (_, me, _) = call(&r, "GET", "/api/session", Some(&maeve.cookie), None).await;
     eprintln!("MAEVE SESSION: {me}");
     let d = get(&r, &maeve, "").await;
     eprintln!("MAEVE NEEDS (live roles): {d}");
     let v = decisions(&r, &maeve, "doc-b1").await;
-    let notes: Vec<&Value> = v["attention"].as_array().unwrap().iter().filter(|a| a["code"].as_str().unwrap().starts_with("notice:")).collect();
+    let notes: Vec<&Value> = v["attention"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["code"].as_str().unwrap().starts_with("notice:"))
+        .collect();
     eprintln!("MAEVE DECISION VIEW NOTICES: {}", json!(notes));
-    assert!(notes.is_empty(), "a copywriter off the job is shown aoife's notice: {}", json!(notes));
+    assert!(
+        notes.is_empty(),
+        "a copywriter off the job is shown aoife's notice: {}",
+        json!(notes)
+    );
 }
 
 /// R3: a role's lock item on a job where nobody holds the role reaches no planner's Me rows.
@@ -277,12 +319,31 @@ async fn review_a_roles_gate_item_is_not_orphaned_from_me_rows() {
     let r = rig();
     let (_cian, aoife, _t) = setup(&r, "cian@wk").await;
     let v = decisions(&r, &aoife, "doc-b1").await;
-    let mine: Vec<&Value> = v["attention"].as_array().unwrap().iter().filter(|a| a["for"]["role"] == "planning").collect();
-    eprintln!("AOIFE DRAWER ITEMS FOR ROLE planning: {} blockers={}", mine.len(), v["lock"]["blockers"]);
+    let mine: Vec<&Value> = v["attention"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["for"]["role"] == "planning")
+        .collect();
+    eprintln!(
+        "AOIFE DRAWER ITEMS FOR ROLE planning: {} blockers={}",
+        mine.len(),
+        v["lock"]["blockers"]
+    );
     let d = get(&r, &aoife, "").await;
     eprintln!("AOIFE NEEDS: {d}");
-    assert!(!mine.is_empty(), "the brief holds items for the planning role");
-    assert!(d["documents"].as_array().unwrap().iter().any(|x| x["mine"].as_u64().unwrap_or(0) > 0), "Me rows hold nothing for the planner: {d}");
+    assert!(
+        !mine.is_empty(),
+        "the brief holds items for the planning role"
+    );
+    assert!(
+        d["documents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|x| x["mine"].as_u64().unwrap_or(0) > 0),
+        "Me rows hold nothing for the planner: {d}"
+    );
 }
 
 /// R4: a deadline within 48 hours on a job with no document yet reaches its owner nowhere.
@@ -291,14 +352,46 @@ async fn review_a_deadline_on_a_job_with_no_document_still_reaches_its_owner() {
     let r = rig();
     let aoife = sign_in(&r, "aoife@wk").await;
     let t = aoife.tenant.clone();
-    let (_, client, _) = call(&r, "POST", &format!("/api/t/{t}/clients"), Some(&aoife.cookie), Some(json!({ "name": "Client A" }))).await;
+    let (_, client, _) = call(
+        &r,
+        "POST",
+        &format!("/api/t/{t}/clients"),
+        Some(&aoife.cookie),
+        Some(json!({ "name": "Client A" })),
+    )
+    .await;
     let (st, _, _) = call(&r, "POST", &format!("/api/t/{t}/jobs"), Some(&aoife.cookie),
         Some(json!({ "number": "J001", "client_id": client["id"], "due": "2026-11-13", "owner": "aoife@wk" }))).await;
     assert_eq!(st, StatusCode::CREATED);
-    let (_, job, _) = call(&r, "GET", &format!("/api/t/{t}/jobs/J001"), Some(&aoife.cookie), None).await;
+    let (_, job, _) = call(
+        &r,
+        "GET",
+        &format!("/api/t/{t}/jobs/J001"),
+        Some(&aoife.cookie),
+        None,
+    )
+    .await;
     eprintln!("JOB NEEDS (the index has it): {}", job["needs"]);
     let d = get(&r, &aoife, "").await;
     eprintln!("AOIFE NEEDS: {d}");
-    assert!(job["needs"].as_array().is_some_and(|a| a.iter().any(|n| n["kind"] == "deadline")), "the index holds the deadline alert");
-    assert!(!d["documents"].as_array().unwrap().is_empty(), "the owner's GET /needs carries the deadline nowhere: {d}");
+    assert!(
+        job["needs"]
+            .as_array()
+            .is_some_and(|a| a.iter().any(|n| n["kind"] == "deadline")),
+        "the index holds the deadline alert"
+    );
+    // An alert is an item on a document: a job with none has no document to hold it. The owner still has it as the
+    // desk's next deadline, and the job's answer no longer offers a Done that nothing keeps.
+    assert!(d["documents"].as_array().unwrap().is_empty(), "{d}");
+    assert_eq!(d["next_deadline"]["job"], "J001", "{d}");
+    assert_eq!(d["next_deadline"]["due"], "2026-11-13", "{d}");
+    assert!(
+        job["needs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|n| n.get("can_done").is_none()),
+        "{}",
+        job["needs"]
+    );
 }

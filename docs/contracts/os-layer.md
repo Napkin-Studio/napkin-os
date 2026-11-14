@@ -2525,17 +2525,38 @@ verification measured 10 ms a document in the debug server just to hash them, ab
 
 ### 13.4 Needs you in full (features/needs-you-full.clan)
 
-`GET /api/t/{tenant}/needs[?tz=<minutes east of UTC>]` answers the signed-in person `{total, items, next_deadline}`.
-`total` counts what is left after the person's done marks. `next_deadline` is `{job, client, client_id, due}` for the
-soonest job deadline (today or later) on a job the person is on, or `null`; an older host sends no key.
+*Amended 2026-11-14 (features/align-needs-lock-people.clan, stage 2): there is one Needs you, and it is the document's own
+list (§7.2, the host's attention items). The index's alerts reach it as items; `/needs` is only the desk's per-document facts.*
 
-- **A need** (sent by the allow list `NEED_KEYS` in `jobview.rs`, never with its audience): `id`, `kind`, `stage`, `days_late`,
-  `job`, `client`, `client_id`, `text`, `action`, `path`, `due`, `due_source` (`stage`, the Approval route's date for the stage,
-  else `job`, or `day` for a day's own reminder), `urgent` (due within 48 hours, or past) and `can_done`. `GET /jobs/{number}` sends
-  the same items for that job.
-- **Kinds.** Tasks leave when the work is done and have no Done (`can_done: false`): `gate` (the Brief gate's asks),
-  `approval`, `approval-chase`. Notices have one: `brief-changed`, `client-change`, `deadline`, `timesheet`. An approver on a
-  stage the gate also asks about sees one row: the approval's, with the gate's row for the same person on the same stage folded in.
+`GET /api/t/{tenant}/needs[?tz=<minutes east of UTC>]` answers the signed-in person
+`{documents, aside, next_deadline, timesheet}`. There is no list of items and no `total`.
+
+- **`documents`**: one `{path, count, notices, mine, earliest_due, next_deadline}` per document. `count` is the places on the
+  document's own list that block its lock (the number its library state and the Decisions drawer show, never a second one).
+  `notices` is how many alerts of the index are addressed to this person on it. `mine` is the items waiting on this person
+  (a place that names them, or a role they hold, or a notice addressed to them), less what they set aside; an admin or the demo
+  person gets only what is addressed to them, not everyone's. `earliest_due` is the soonest date of those, `next_deadline` the
+  job's, as below. A document with nothing for the person and nothing on its list is not listed. A person off the job is listed
+  only for what is addressed to them; a role's item reaches everyone with the role when nobody on the job holds it.
+- **`aside`**: the person's own set-aside keys by document path (never anyone else's). `POST` and `DELETE`
+  `/api/t/{tenant}/needs/{key}/aside?path=<document>` set an item aside and bring it back; `key` is the shell's `needKey`
+  (`<code>:<address or text>`). `403` without a sign-in or for another tenant, `404` for a path that is not a document of the
+  session's tenant. Marks are kept in the person's own file, at most 500 of them (apart from done marks), counted by nothing. A
+  set-aside item that blocks the lock still blocks it.
+- **`next_deadline`** is `{job, client, client_id, due}` for the soonest job deadline (today or later) on a job the person is on,
+  or `null`. **`timesheet`** is the person's own reminder (a need, as below) or `null`.
+- **Notices on a document.** The app sandbox's `GET /decisions` adds the index's alerts that are the opener's own to `attention`
+  as `notice:<kind>` items (`blocks_lock: false`, with `for`, `due`, `job`). The roles are read from the agency's directory when
+  that request is answered, so a role change or removal holds on the next read. An alert is an item on a document: a need about
+  the job itself (its deadline) sits on the job's brief, else its first document, and a job with no document holds none: its
+  owner has it only as `next_deadline`. The drawer lists notices apart from the lock list and they are never counted in it.
+- **A need** (sent by the allow list `NEED_KEYS` in `jobview.rs`, never with its audience or a Done): `id`, `kind`, `stage`,
+  `days_late`, `job`, `client`, `client_id`, `text`, `action`, `path`, `due`, `due_source` (`stage`, the Approval route's date for
+  the stage, else `job`, or `day` for a day's own reminder) and `urgent` (due within 48 hours, or past). `GET /jobs/{number}`
+  sends the same items for that job.
+- **Kinds.** Tasks leave when the work is done: `gate` (the Brief gate's asks), `approval`, `approval-chase`. Notices:
+  `brief-changed`, `client-change`, `deadline`, `timesheet`. An approver on a stage the gate also asks about sees one row: the
+  approval's, with the gate's row for the same person on the same stage folded in.
 - **The alerts table** is `ALERTS` in `crates/napkin-host/src/alerts.rs`, the eight rows of v2 section 4, each `Live(rule)` or
   `Waiting(record)`. Live: Brief changes version (everyone on the job), Client comment or change request (account service),
   Approval overdue (the approver, then whoever set the route; every stage, since the route names them), Deadline within 48 hours
@@ -2552,10 +2573,7 @@ soonest job deadline (today or later) on a job the person is on, or `null`; an o
   documents), addressed to them by name, to everyone on the job, or to a role they hold. A role's item on a job where nobody known
   to hold the role is on the job (the agency's `Directory`, when it has one; an agency without a directory knows no one's roles)
   reaches everyone with the role: nothing is orphaned. `JobEntry.people` feeds this and is sent to nobody.
-- **Done and Undo.** `POST /needs/{id}/done` marks a notice done for the signed-in person (`404` for an id that is not theirs,
-  `409` for a task, `403` without a sign-in); `DELETE` on the same path takes it back. A mark is one person's own, kept in one small
-  file each (`needs-done/<person>.json` beside the timesheets, behind `trait DoneStore`, at most 2,000 per person), read by nobody
-  else and counted by nothing. The shell shows Done and Undo for five seconds, then the row is gone. A write to `/needs` itself is `405`.
+- **Done is retired.** `POST` and `DELETE /needs/{id}/done` are gone (`404`); Set aside, above, replaces it. A write to `/needs` itself is `405`.
 - **The timesheet reminder** is built per request for the caller alone, from their own consent and their own day (never another's),
   from 16:00 at the caller's `tz`, once a day (its id carries the date), only to a person who has answered the consent question.
 

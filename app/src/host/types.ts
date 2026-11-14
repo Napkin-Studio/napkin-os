@@ -381,8 +381,6 @@ export interface JobNeed {
   due_source?: 'stage' | 'job' | 'day'
   /** Due within 48 hours, or past. */
   urgent?: boolean
-  /** A notice may be marked done; a task leaves when the work is done. */
-  can_done?: boolean
 }
 
 /** The soonest deadline on the person's own jobs: what an empty Needs you names. */
