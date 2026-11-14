@@ -5414,7 +5414,7 @@ test('the Booth is one piece of code: no template defines it, the marker is spli
       assert.match(html, /boothStart\(\{/, `${d} starts the shared Booth`)
     }
   }
-  assert.deepEqual(using.sort(), ['brief-maker', 'campaign-research', 'script-editor'], 'the finished tools')
+  assert.deepEqual(using.sort(), ['brief-maker', 'campaign-research', 'idea-room', 'script-editor'], 'the tools on the Booth so far')
   // The packer splices it, once, and the packed pages carry it once.
   assert.match(readFileSync(join(templates(), '..', '..', 'crates', 'clan-sdk', 'examples', 'shared', 'app_ui.rs'), 'utf8'), /BOOTH_MARKER[^\n]*@napkin:booth/)
   for (const src of [BM, RT]) {

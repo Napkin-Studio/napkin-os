@@ -58,10 +58,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "idea-room.example.clan".to_string());
 
     let schema = fs::read_to_string(dir.join("schema.json"))?;
-    // The agent engine is inlined at build, at the template's agent-sphere marker.
-    let index_html = app_ui::inline_fields(
+    // The OS's fields and the Booth are inlined at build (one snippet each, every app).
+    let index_html = app_ui::inline_booth(
         &dir.join(".."),
-        &fs::read_to_string(dir.join("index.html"))?,
+        &app_ui::inline_fields(
+            &dir.join(".."),
+            &fs::read_to_string(dir.join("index.html"))?,
+        )?,
     )?;
     let requirements = fs::read_to_string(dir.join("agent/requirements.yaml"))?;
     let pipeline = fs::read_to_string(dir.join("app/pipeline.yaml"))?;

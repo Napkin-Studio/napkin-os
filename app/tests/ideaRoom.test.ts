@@ -21,7 +21,10 @@ import { JSDOM } from 'jsdom'
 let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
 const read = (p: string) => readFileSync(new URL(p, root), 'utf8')
+const BOOTH = read('templates/shared/booth.html').trimEnd()
 const HTML = read('templates/idea-room/index.html')
+// The page as the packer ships it: the Booth's snippet spliced at its marker (app_ui.rs, inline_booth).
+const PACKED = HTML.replace('<!-- @napkin:booth -->', BOOTH)
 
 type Json = Record<string, unknown>
 
@@ -44,12 +47,13 @@ after(() => { for (const w of windows) w.close() })
 async function page(opts: { room?: unknown; routes?: unknown; me?: string; post?: (path: string, body: Json) => { status: number; body: Json } | 'network' } = {}) {
   const posts: { path: string; body: Json }[] = []
   const messages: Json[] = []
-  const html = HTML.replace(/<link[^>]*>/g, '').replace('<!-- @napkin:clan-fields -->', '')
+  const html = PACKED.replace(/<link[^>]*>/g, '').replace('<!-- @napkin:clan-fields -->', '')
   const dom = new JSDOM(html, {
     url: 'https://napkin.test/', runScripts: 'dangerously', pretendToBeVisual: true,
     beforeParse(w) {
       const win = w as unknown as Record<string, unknown>
       win.__CLAN__ = { data: {} }
+      Object.defineProperty(w, 'innerWidth', { value: 1440 }) // the Booth hides above 1100 px
       win.clan = { me: () => Promise.resolve({ actor: `human:${opts.me ?? 'maeve@wk'}`, id: opts.me ?? 'maeve@wk', name: null }) }
       // The page tells its parent how each write went; the shell shows the Failed save state from it.
       Object.defineProperty(w, 'parent', { value: { postMessage: (m: Json) => messages.push(m) } })
@@ -83,7 +87,9 @@ test('every idea is a card: its words, its author, its votes, and the brief it a
   assert.equal(p.all('[data-testid="card"]').length, 2)
   assert.match(p.text('[data-card="c1"] .idea-text')!, /^Idea 1$/)
   assert.match(p.text('[data-card="c1"] .meta')!, /^Maeve · 12 Nov$/)
-  assert.match(p.text('[data-card="c1"] .comments')!, /Oisin The pour is the film\./)
+  p.d.querySelector<HTMLElement>('[data-card="c1"]')!.click()
+  assert.match(p.text('#bSel .comments')!, /Oisin The pour is the film\./)
+  assert.match(p.text('#bSel [data-testid="sel-author"]')!, /Maeve/)
   assert.equal(p.text('[data-testid="brief-insight"]'), BRIEF.insight)
   assert.equal(p.text('[data-testid="brief-proposition"]'), BRIEF.single_minded_proposition)
   assert.match(p.text('#eyebrow')!, /Idea room · J001 Client A/)
@@ -91,8 +97,10 @@ test('every idea is a card: its words, its author, its votes, and the brief it a
 
 test('votes are counted per card and the page never names who voted', async () => {
   const p = await page({ room: room({ cards: { c1: card(1, { votes: ['rory@wk', 'tadhg@wk'] }), c2: card(2, { votes: ['rory@wk'] }) } }, gate(2)) })
-  assert.deepEqual(p.all('[data-testid="votes"]').map(x => x.textContent), ['2', '1'])
-  for (const who of ['rory', 'Rory', 'tadhg', 'Tadhg']) assert.ok(!p.text('#cards')!.includes(who), `${who} is not shown as a voter`)
+  assert.deepEqual(p.all('[data-card] .tally').map(x => x.textContent), ['2 votes', '1 vote'])
+  p.d.querySelector<HTMLElement>('[data-card="c1"]')!.click()
+  assert.equal(p.text('#bSel [data-testid="votes"]'), '2', 'the selected card\'s votes are in the Booth')
+  for (const who of ['rory', 'Rory', 'tadhg', 'Tadhg']) assert.ok(!p.text('body')!.includes(who), `${who} is not shown as a voter`)
   const api = (p.dom.window as unknown as { __ideaRoom: { votesOf: (c: unknown) => number } }).__ideaRoom
   assert.equal(api.votesOf({ votes: ['a', 'b', 'c'] }), 3)
   assert.equal(api.votesOf({}), 0)
@@ -100,7 +108,8 @@ test('votes are counted per card and the page never names who voted', async () =
 
 test('pressing vote posts one /ideas/vote for that card', async () => {
   const p = await page()
-  p.d.querySelector<HTMLButtonElement>('[data-vote="c2"]')!.click()
+  p.d.querySelector<HTMLElement>('[data-card="c2"]')!.click()
+  p.d.querySelector<HTMLButtonElement>('#bSel [data-vote="c2"]')!.click()
   await p.settle()
   assert.deepEqual(p.posts, [{ path: '/ideas/vote', body: { card: 'c2' } }])
 })
@@ -174,8 +183,11 @@ test('a refusal the host explains is shown in words and is not offered as a retr
 test('a Banned card takes no vote and cannot be put in a route', async () => {
   const banned = card(1, { kind: 'banned' })
   const p = await page({ room: room({ cards: { c1: banned, c2: card(2), c3: card(3) } }, gate(5, { team_cards: 5 })) })
-  assert.equal(p.d.querySelector('[data-card="c1"] [data-vote]'), null)
-  assert.ok(p.d.querySelector('[data-card="c2"] [data-vote]'))
+  p.d.querySelector<HTMLElement>('[data-card="c1"]')!.click()
+  assert.equal(p.d.querySelector('#bSel [data-vote]'), null)
+  assert.match(p.text('#bSel')!, /Banned/)
+  p.d.querySelector<HTMLElement>('[data-card="c2"]')!.click()
+  assert.ok(p.d.querySelector('#bSel [data-vote="c2"]'))
 })
 
 test('routes: start needs two named routes and an open room', async () => {
@@ -205,7 +217,9 @@ test('routes that are out can be worked on and merged; cards are held meanwhile'
   })
   assert.equal(p.all('[data-testid="route"]').length, 2)
   assert.equal(p.d.querySelector('#cardInput'), null, 'the composer is gone while routes are out')
+  p.d.querySelector<HTMLElement>('[data-card="c1"]')!.click()
   assert.equal(p.d.querySelector('[data-vote]'), null)
+  p.d.querySelector<HTMLElement>('[data-sel-back]')!.click()
   p.d.querySelector<HTMLButtonElement>('#mergeRoutes')!.click()
   await p.settle()
   assert.deepEqual(p.posts.map(x => x.path), ['/merge'])
@@ -236,13 +250,13 @@ test('the chosen route is stamped with its version and who chose it, and reopeni
 test('Changed brief is asked of the shell with its own words, and the shell\'s update button takes the new version', async () => {
   const p = await page({ room: room({ cards: cards(2) }, gate(2), { title: 'J001 brief', changed: true, from: 1, to: 2 }) })
   const bar = p.messages.filter(m => m.type === 'clan:bar').pop() as { items: Json[] }
-  assert.equal(JSON.stringify(bar.items.map(i => [i.kind, i.state, i.from, i.to])), JSON.stringify([['state', 'changed-brief', 'v1', 'v2']]))
+  assert.equal(JSON.stringify(bar.items.filter(i => i.kind === 'state').map(i => [i.kind, i.state, i.from, i.to])), JSON.stringify([['state', 'changed-brief', 'v1', 'v2']]))
   assert.equal(p.d.querySelector('[data-state="changed-brief"]'), null, 'the page draws none of its own: the shell does')
   p.dom.window.dispatchEvent(new p.dom.window.MessageEvent('message', { data: { type: 'clan:bar-action', id: 'state-update' } }))
   await p.settle()
   assert.deepEqual(p.posts.map(x => x.path), ['/upstream/update'])
   const calm = await page({ room: room({ cards: cards(2) }, gate(2)) })
-  assert.equal(((calm.messages.filter(m => m.type === 'clan:bar').pop() as { items: Json[] } | undefined)?.items ?? []).length, 0)
+  assert.equal(((calm.messages.filter(m => m.type === 'clan:bar').pop() as { items: Json[] } | undefined)?.items ?? []).filter(i => i.kind === 'state').length, 0)
 })
 
 test('the page and its copy hold no em dash, and no real brand or award name', () => {
@@ -267,4 +281,115 @@ test('every colour the page draws on a rectangle holds: cards are rectangles, ne
     const r = /border-radius:(\d+)px/.exec(rule)
     assert.ok(r && Number(r[1]) <= 2, `${sel} has a corner no rounder than 2 px`)
   }
+})
+
+
+// ── the Booth (features/align-booth.clan, stage 2): the side parts of the room are its Booth ─────────
+const lastBar = (p: { messages: Json[] }) => (p.messages.filter(m => m.type === 'clan:bar').pop() as { items: Json[] } | undefined)?.items ?? []
+const click = (p: Awaited<ReturnType<typeof page>>, sel: string) => p.d.querySelector<HTMLElement>(sel)!.click()
+
+test('the Booth: marker once, one boothStart, no Booth code of its own, the snippet spliced whole', () => {
+  assert.equal(HTML.split('<!-- @napkin:booth -->').length - 1, 1)
+  assert.match(HTML, /boothStart\(\{/)
+  assert.doesNotMatch(HTML, /function booth(Step|Apply|Set|CanHide)\(/)
+  assert.equal(PACKED.split('function boothStep(').length - 1, 1)
+  for (const t of ['--booth-line', '--booth-paper', '--booth-ink', '--booth-ink-soft', '--booth-muted', '--booth-warn', '--booth-desk']) assert.ok(HTML.includes(t + ':'), `${t} is defined`)
+  assert.ok(HTML.indexOf('<!-- @napkin:booth -->') > HTML.indexOf('<!-- @napkin:clan-fields -->') || HTML.indexOf('<!-- @napkin:booth -->') < HTML.indexOf('</head>'))
+  assert.ok(HTML.indexOf('<!-- @napkin:booth -->') < HTML.indexOf('</head>'), 'the marker is inside the head')
+})
+
+test('the Booth holds the gate: The team goes first, cards to go and Open early; the document holds none of it', async () => {
+  const p = await page({ room: room({ cards: cards(4) }, gate(4)), me: 'dara@wk' })
+  assert.ok(p.d.querySelector('#booth #gate'), 'The team goes first is in the Booth')
+  assert.ok(p.d.querySelector('#booth [data-early]'))
+  assert.equal(p.d.querySelector('#doc [data-early]'), null)
+  assert.equal(p.d.querySelector('#doc [data-testid="ai-gate"]'), null)
+  assert.equal(p.all('.booth-hd .booth-hide').length, 1, 'the header has Hide')
+  assert.equal(p.text('.booth-hd .booth-nm'), 'Booth')
+  assert.equal(p.d.querySelectorAll('#boothEdge').length, 1)
+  assert.ok(!/\bkey\b|press \]|\[\s*\]/i.test(p.text('#booth')!), 'no shortcut hint is shown')
+})
+
+test('a card selected: its author, its votes and its flags are in the Booth; a click brings the Booth back when hidden', async () => {
+  const p = await page({ room: room({ cards: { c1: card(1, { votes: ['dara@wk'] }), c2: card(2, { kind: 'banned' }) }, routes: { route_1: { name: 'One song', bet: 'b', cards: ['c1'], notes: [], version: 1 } } }, gate(5)), me: 'maeve@wk' })
+  const bw = p.dom.window as unknown as { boothSet: (ev: { t: string; open?: boolean }) => void; BOOTH: { open: boolean } }
+  bw.boothSet({ t: 'hide' })
+  assert.equal(bw.BOOTH.open, false, 'hidden')
+  p.d.querySelector<HTMLElement>('[data-card="c1"]')!.click()
+  assert.equal(bw.BOOTH.open, true, 'a click on a card while hidden brings the whole Booth back on it')
+  assert.equal(p.d.querySelector('#bSel')?.hasAttribute('hidden'), false)
+  assert.match(p.text('#bSel')!, /Maeve/)
+  assert.match(p.text('#bSel')!, /In route One song/)
+  assert.equal(p.text('#bSel [data-testid="votes"]'), '1')
+  assert.equal(p.d.querySelector('#gate')?.closest('[hidden]') != null, true, 'the whole-room parts give way to the card')
+  p.d.querySelector<HTMLElement>('[data-card="c2"]')!.click()
+  assert.match(p.text('#bSel')!, /Banned/)
+  click(p, '[data-sel-back]')
+  assert.equal(p.d.querySelector('#bSel')?.hasAttribute('hidden'), true, 'back to the whole room')
+  assert.deepEqual(p.messages.filter(m => m.type === 'clan:booth').map(m => m.open), [false, true], 'the shell hears the hide and the return')
+})
+
+test('a route selected: its fork and merge state, and the creative director\'s choice, are in the Booth', async () => {
+  const out = room({ cards: cards(5), routes_out: ['route_1', 'route_2'] }, gate(5, { routes_out: ['route_1', 'route_2'] }))
+  const routes = { routes: { route_1: { name: 'One song', bet: 'A bar.', cards: ['c1'], notes: [{ by: 'maeve@wk', text: 'n' }], version: 2 }, route_2: { name: 'The long pour', bet: 'b', cards: [], notes: [], version: 1 } } }
+  const a = await page({ room: out, routes })
+  click(a, '[data-route="route_1"]')
+  assert.match(a.text('#bSel')!, /Out as its own copy/)
+  assert.match(a.text('#bSel')!, /Version 2/)
+  assert.ok(a.d.querySelector('#booth #mergeRoutes'), 'Merge routes is in the Booth')
+  const merged = { cards: cards(5), routes: { route_1: { name: 'One song', bet: 'b', cards: ['c1'], notes: [], version: 2 }, route_2: { name: 'The long pour', bet: 'b', cards: [], notes: [], version: 1 } } }
+  const cd = await page({ room: room(merged, gate(5)), me: 'dara@wk' })
+  assert.equal(cd.all('#booth [data-pick]').length, 2, 'the pick is in the Booth')
+  assert.equal(cd.d.querySelector('#doc [data-pick]'), null)
+  click(cd, '[data-route="route_2"]')
+  assert.match(cd.text('#bSel')!, /Merged/)
+  assert.equal(cd.all('#bSel [data-pick]').length, 1)
+  const writer = await page({ room: room(merged, gate(5)), me: 'maeve@wk' })
+  assert.match(writer.text('#booth [data-testid="pick-note"]')!, /Only Dara/)
+  const done = { ...merged, chosen: { route: 'route_1', version: '2', decision: 'd', by: 'dara@wk', at: '2026-11-12T11:00:00Z' } }
+  const c = await page({ room: room(done, gate(5, { chosen: done.chosen })), me: 'dara@wk' })
+  assert.match(c.text('#booth [data-testid="chosen-route"]')!, /Chosen · version 2 · Dara/)
+  assert.ok(c.d.querySelector('#booth [data-reopen]'))
+})
+
+test('nothing in the Booth scores a person: no count of cards or votes per person', async () => {
+  const p = await page({ room: room({ cards: cards(5) }, gate(5)), me: 'dara@wk' })
+  click(p, '[data-card="c1"]')
+  const text = p.text('#booth')!
+  assert.ok(!/\b\d+ cards? (by|from|each)\b|per person|leaderboard|ranking|most active/i.test(text))
+  for (const who of ['Maeve', 'Oisin']) assert.ok(!new RegExp(who + '[^\\n]*\\d+ (cards?|votes?)', 'i').test(text), `${who} has no count`)
+})
+
+test('the page names every card and route for point-at-it feedback, and the document for the note card', async () => {
+  const merged = { cards: cards(2), routes: { route_1: { name: 'One song', bet: 'b', cards: [], notes: [], version: 2 } } }
+  const p = await page({ room: room(merged, gate(2), { title: 'J001 brief', changed: false, from: 1, to: 1 }) })
+  const w = p.dom.window as unknown as { ClanFeedbackTarget: (el: Element) => { kind: string; id: string; label: string; el: Element } | null; ClanFeedbackDoc: () => { version: string; title: string } }
+  const c = w.ClanFeedbackTarget(p.d.querySelector('[data-card="c2"] .idea-text')!)!
+  assert.deepEqual([c.kind, c.id, c.label], ['part', 'c2', 'Idea 2'])
+  const r = w.ClanFeedbackTarget(p.d.querySelector('[data-route="route_1"] h3')!)!
+  assert.deepEqual([r.kind, r.id, r.label], ['part', 'route_1', 'One song'])
+  assert.equal(w.ClanFeedbackTarget(p.d.querySelector('#brief')!), null)
+  click(p, '[data-card="c1"]')
+  const sel = w.ClanFeedbackTarget(p.d.querySelector('#bSel [data-sel-name]')!)!
+  assert.deepEqual([sel.kind, sel.id], ['part', 'c1'], 'the Booth\'s selected card names the same part')
+  assert.equal(w.ClanFeedbackDoc().version, 'v1')
+  assert.match(w.ClanFeedbackDoc().title, /J001 Client A/)
+})
+
+test('the bar gets the room\'s state as the status item and Merge routes as a button while routes are out', async () => {
+  const four = await page({ room: room({ cards: cards(4) }, gate(4)) })
+  const st = lastBar(four).filter(i => i.kind === 'status')
+  assert.equal(st.length, 1)
+  assert.equal(st[0].label, '4 of 5 team cards')
+  assert.equal(lastBar(four).filter(i => i.kind === 'button').length, 0)
+  const out = await page({
+    room: room({ cards: cards(5), routes_out: ['route_1', 'route_2'] }, gate(5, { routes_out: ['route_1', 'route_2'] })),
+    routes: { routes: { route_1: { name: 'A', bet: '', cards: [], notes: [], version: 1 }, route_2: { name: 'B', bet: '', cards: [], notes: [], version: 1 } } },
+  })
+  const bar = lastBar(out)
+  assert.equal(JSON.stringify(bar.filter(i => i.kind === 'button').map(i => i.id)), '["merge"]')
+  assert.ok(bar.filter(i => i.kind === 'button').length <= 10)
+  out.dom.window.dispatchEvent(new out.dom.window.MessageEvent('message', { data: { type: 'clan:bar-action', id: 'merge' } }))
+  await out.settle()
+  assert.deepEqual(out.posts.map(x => x.path), ['/merge'])
 })
