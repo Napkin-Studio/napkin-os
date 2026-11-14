@@ -210,6 +210,8 @@ for (const size of SIZES) {
     // One approve decision, naming the version, and the page locks.
     await expect(booth.locator('#vnum')).toHaveText('1')
     await shot(page, 'visual-brief-approve', size)
+    // On a phone each primary button the shell draws is 44 px tall (suite test 72's rule): the Booth holds the primary action, the bar's copy is not marked primary.
+    if (size.width === 390) for (const b of await page.locator('.ch-btn-primary, .ns-primary, [data-primary]').all()) if (await b.isVisible()) expect((await b.boundingBox())!.height, await b.innerText()).toBeGreaterThanOrEqual(43.5)
     await booth.getByRole('button', { name: 'Approve version 1' }).click()
     await expect(booth.getByTestId('locked-stamp')).toContainText('Locked · version 1')
     await expect(app.getByRole('button', { name: /^Edit / })).toHaveCount(0)
