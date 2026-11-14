@@ -64,6 +64,11 @@
   --pen-green: #15803D;
   --pen-amber: #C27803;
   --pen-grey: #6B7180;
+  /* The shell's agency layer (app/src/index.css, shell/agency/palette.ts), carried so the tokens stay the shell's
+     (tokens.test.ts). Unused here: the tool draws nothing with them yet. */
+  --agency: #14161B;
+  --agency-fg: #FFFFFF;
+  --agency-soft: #F2F3F6;
   color-scheme: light;
 }
 
@@ -112,6 +117,10 @@
   --pen-amber: #F5A524;
   --pen-grey: #A6ACB8;
   color-scheme: dark;
+  /* the shell's agency layer, dark (see the light block) */
+  --agency: #F2F3F5;
+  --agency-fg: #14161B;
+  --agency-soft: #22262D;
 }
 
 :root {

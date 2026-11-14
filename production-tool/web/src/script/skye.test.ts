@@ -223,7 +223,7 @@ describe('a scene draft whose scene was undone while Skye asked (owner 2026-10-1
     if (first) expect(scene.rank < first.rank).toBe(true)  // first in the script
     expect(skyeState(d, scriptId)).toMatchObject({ newScene: sceneId })
     expect(NEW_SCENE_LINE).toBe('That scene was gone, so I put my draft in a new first scene. Undo takes it back.')
-    expect((await store.chain())[0]).toMatchObject({ agent: 'skye' })
+    expect((await store.chain()).filter((e) => e.action !== 'sync')[0]).toMatchObject({ agent: 'skye' })
 
     // Landing again (a reload) makes no second scene.
     expect(await landWrites(store, job)).toEqual([])

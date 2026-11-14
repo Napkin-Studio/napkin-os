@@ -100,11 +100,14 @@ describe('LocalTextBus', () => {
       await text.checkpoint()
       tick(500)
     }
-    expect(await s.chain()).toHaveLength(n) // quiet so far: the window is open
+    // quiet so far: the window is open. Each checkpoint is the person's plain 'sync' line, not a decision (ADR-004:
+    // the host takes no write without an agent and an action; History leaves sync out).
+    const decided = async () => (await s.chain()).filter((e) => e.action !== 'sync')
+    expect(await decided()).toHaveLength(n)
     expect(text.openWindows()).toHaveLength(1)
     tick(10_000)
     await text.checkpoint()
-    const chain = await s.chain()
+    const chain = await decided()
     expect(chain).toHaveLength(n + 1)
     expect(chain[0]).toMatchObject({ agent: 'human:p_maya001', action: `write shots[${shot}]`, targets: [`${s.documentId()}#shots[${shot}]`] })
     expect(bus.doc().shots[shot].action).toBe('take 99')

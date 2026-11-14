@@ -347,32 +347,37 @@ describe('size and time, worst case', () => {
 })
 
 describe('chain growth from quiet writes', () => {
-  // A typical session: a script, 8 shots, 16 assets, then 30 jobs each written as the engine's
-  // bookkeeping (queued, running, done: three quiet writes per job would be 90; the app's sync
-  // folds them, so 30 here) beside 12 things the person did.
+  // A typical session: a script, 8 shots, then 30 jobs each written as the engine's bookkeeping
+  // (queued, running, done: three quiet writes per job would be 90; the app folds them, so 30 here)
+  // beside 12 things the person did. Every write names an agent and an action (ADR-004), so a quiet
+  // write is the person's plain 'sync' line (spike/fabletest d8150e77, re-applied on contract 3).
+  const session = async (s: ClanDocumentStore) => {
+    await s.create({ person: MAYA })
+    const { storyboard } = defaults(s)
+    const ranks = ranksBetween(null, null, 8)
+    const shots = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [id('shot', i), { id: id('shot', i), v: 1, field_v: {}, ...shotValue(storyboard, ranks[i]) }]))
+    await s.patch({ shots }, { action: 'plan the shot list' })
+    for (let i = 0; i < 12; i++) await s.patch({ shots: { [id('shot', i % 8)]: { duration_s: 3 + (i % 3) } } }, { action: `set shot ${i} length` })
+  }
+  const jobAt = (i: number) => ({ [id('job', i)]: { id: id('job', i), v: 1, field_v: {}, ...jobValue(i) } })
+
   it('counts chain entries and bytes for 30 quiet job writes', async () => {
-    const s = store(null)
-    await s.create(maya)
-    await s.patch({ shots: Array.from({ length: 8 }, (_, i) => shot(i)), assets: Array.from({ length: 16 }, (_, i) => asset(i + 1)) }, { action: 'shot list' })
-    for (let i = 0; i < 12; i++) await s.patch({ stage: { current: 'video', next_action: `Step ${i}.` } }, { action: `moved to step ${i}` })
+    const s = store({ persistence: null })
+    await session(s)
     const before = { entries: (await s.chain()).length, bytes: (await s.exportClan()).byteLength }
-    let jobs: unknown[] = []
-    for (let i = 0; i < 30; i++) {
-      jobs = [...jobs, job(i)]
-      await s.patch({ jobs }, { action: 'sync', quiet: true })
-    }
+    for (let i = 0; i < 30; i++) await s.patch({ jobs: jobAt(i) }, { action: 'set the job state', quiet: true })
     const chain = await s.chain()
     const after = { entries: chain.length, bytes: (await s.exportClan()).byteLength }
     console.log(`\n[quiet write growth] before the 30 quiet writes: ${before.entries} entries, ${before.bytes} bytes; after: ${after.entries} entries, ${after.bytes} bytes (+${after.entries - before.entries} entries, +${after.bytes - before.bytes} bytes)\n`)
-    // The floor: the same data in one write (what the old no-entry rule cost, give or take one entry).
-    const one = store(null)
-    await one.create(maya)
-    await one.patch({ shots: Array.from({ length: 8 }, (_, i) => shot(i)), assets: Array.from({ length: 16 }, (_, i) => asset(i + 1)) }, { action: 'shot list' })
-    for (let i = 0; i < 12; i++) await one.patch({ stage: { current: 'video', next_action: `Step ${i}.` } }, { action: `moved to step ${i}` })
-    await one.patch({ jobs }, { action: 'sync', quiet: true })
+    // The floor: the same data in one write.
+    const one = store({ persistence: null })
+    await session(one)
+    await one.patch({ jobs: Object.assign({}, ...Array.from({ length: 30 }, (_, i) => jobAt(i))) }, { action: 'set the job state', quiet: true })
     console.log(`[quiet write growth] same data in one write: ${(await one.chain()).length} entries, ${(await one.exportClan()).byteLength} bytes`)
     one.dispose()
-    expect(chain.filter((e) => e.action === 'sync').every((e) => e.agent === 'maya')).toBe(true)
+    const sync = chain.filter((e) => e.action === 'sync')
+    expect(sync).toHaveLength(30)
+    expect(sync.every((e) => e.agent === `human:${MAYA.id}` && !e.pinned)).toBe(true)
     s.dispose()
   })
 })

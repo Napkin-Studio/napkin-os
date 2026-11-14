@@ -58,7 +58,9 @@ describe('the tokens are the shell\'s', () => {
     expect(dark.get('action')).toBe('#d63b1f')
   })
   it('the crew colours are the shell figures\'', () => {
-    const shell = block(read('../../../app/src/studio/AgentFigure.css'), '.agent-figure,')
+    // The shell's figure stylesheet (app/src/studio/AgentFigure.css) left the shell with develop's new UI (ea34367b);
+    // its colours, as they were at the merge base 209c602e, are pinned here (docs/production-tool/merge-2026-11.md).
+    const shell = new Map(Object.entries({ 'af-cobalt': '#2f64f5', 'af-coral': '#ff6a55', 'af-marigold': '#ffc023', 'af-iris': '#7d52f4', 'af-mint': '#6cd3a2', 'af-mark': '#16181d' }))
     const ours = block(read('./ui/agents/AgentFigure.css'), '.agent-figure,')
     for (const k of ['af-cobalt', 'af-coral', 'af-marigold', 'af-iris', 'af-mint', 'af-mark']) expect(ours.get(k)).toBe(shell.get(k))
   })

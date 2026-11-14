@@ -94,7 +94,7 @@ describe('attribution: people and the crew', () => {
   it('a quiet write names its agent and an action too (ADR-004): the person\'s plain sync line', async () => {
     const s = store()
     await s.create({ person: MAYA })
-    await s.patch({ jobs: { [id('job', 0)]: jobValue(0) } }, { action: 'set the job running', quiet: true, pinned: true })
+    await s.patch({ jobs: { [id('job', 0)]: { id: id('job', 0), v: 1, field_v: {}, ...jobValue(0) } } }, { action: 'set the job running', quiet: true, pinned: true })
     const quiet = (await s.chain()).filter((e) => e.action === 'sync')
     expect(quiet).toHaveLength(1)
     expect(quiet[0].agent).toBe(`human:${MAYA.id}`)

@@ -137,6 +137,8 @@ export function lineage(chain: ChainEntry[], doc: ProductionDocument, docId: str
   }
   for (const e of oldestFirst) {
     if (!e.id) continue
+    // "sync" is bookkeeping the host needs a name for (ADR-004, clan-store QUIET_ACTION), not a decision: not in the tree.
+    if (e.action === 'sync') continue
     const verb = e.action.split(' ')[0]
     const targets = e.targets ?? []
     const cites = e.cites ?? []

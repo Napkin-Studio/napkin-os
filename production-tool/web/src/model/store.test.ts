@@ -88,7 +88,7 @@ describe('the UI on the CLAN store', () => {
     expect(saved!.redo).toHaveLength(1)
   })
 
-  it('bookkeeping is quiet: no decision and no undo step', async () => {
+  it('bookkeeping is quiet: no decision of its own (one plain sync line, ADR-004) and no undo step', async () => {
     const s = await fresh()
     const before = (await s.chain()).length
     const j = job(s.get(), 'generate', [SHA('a')], null, { state: 'queued' })
@@ -101,7 +101,11 @@ describe('the UI on the CLAN store', () => {
     }, 'complete generate')
     await s.flush()
     expect(s.get().jobs[j.id].state).toBe('completed')
-    expect((await s.chain()).length).toBe(before)
+    // The host takes no write without an agent and an action (spike/fabletest, ADR-004): the folded bookkeeping is the
+    // person's one 'sync' line, which History and the decision tree leave out.
+    const chain = await s.chain()
+    expect(chain.filter((e) => e.action !== 'sync').length).toBe(before)
+    expect(chain.filter((e) => e.action === 'sync').length).toBeGreaterThan(0)
     expect(s.undoLabels()).toEqual({ undo: null, redo: null })
   })
 

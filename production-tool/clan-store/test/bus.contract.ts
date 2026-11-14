@@ -97,13 +97,18 @@ export function busContract(name: string, make: () => Promise<BusUnderTest>) {
       expect((await chain())[0].targets).toEqual([`${docId}#shots[${shot}]`])
     })
 
-    it('a quiet batch writes the data and no decision', async () => {
+    it('a quiet batch writes the data and no decision of its own: one plain sync line (ADR-004)', async () => {
       const { bus, shot, chain } = await withShot()
       const n = (await chain()).length
       const r = await bus.apply({ patches: [{ op: 'set', entity: 'shots', id: shot, path: 'status', value: 'locked', base_version: 1 }], why: { action: 'set status', quiet: true } })
       expect(r.applied).toBe(true)
       expect(bus.doc().shots[shot].status).toBe('locked')
-      expect(await chain()).toHaveLength(n)
+      // The host takes no write without an agent and an action (spike/fabletest, ADR-004), so bookkeeping is
+      // recorded as the person's 'sync' line, which History leaves out; no entry carries the batch's action.
+      const after = await chain()
+      expect(after).toHaveLength(n + 1)
+      expect(after[0]).toMatchObject({ action: 'sync', rationale: 'set status' })
+      expect(after.filter((e) => e.action !== 'sync')).toHaveLength(n)
     })
 
     it('the inverse undoes the batch', async () => {
