@@ -42,6 +42,13 @@ use crate::tenant::Tenant;
 /// weight, and a person's list is short.
 const MAX_MARKS: usize = 2000;
 
+/// The most set-aside marks one person keeps, counted apart from done marks: the oldest go first.
+const MAX_ASIDE: usize = 500;
+
+fn is_aside(id: &str) -> bool {
+    id.starts_with("aside\u{1f}")
+}
+
 // ── the done store ──────────────────────────────────────────────────────────
 
 /// Where a person's done marks live. The file store is the first; the agency database replaces it later
@@ -124,8 +131,15 @@ impl DoneStore for FileDone {
             return Ok(());
         }
         marks.done.push_back(id.to_string());
-        while marks.done.len() > MAX_MARKS {
-            marks.done.pop_front();
+        // each kind keeps to its own bound, so one cannot push the other out
+        let (aside, cap) = (
+            is_aside(id),
+            if is_aside(id) { MAX_ASIDE } else { MAX_MARKS },
+        );
+        while marks.done.iter().filter(|d| is_aside(d) == aside).count() > cap {
+            if let Some(at) = marks.done.iter().position(|d| is_aside(d) == aside) {
+                marks.done.remove(at);
+            }
         }
         self.write(person, &marks)
     }
@@ -280,52 +294,55 @@ fn aside_id(path: &str, key: &str) -> String {
     format!("aside{SEP}{path}{SEP}{key}")
 }
 
-/// What the desk reads per document, for `user`: how many items the index holds on it for them, how many
-/// of those are theirs (by name or by a role they hold), the earliest date of theirs, and the date the
-/// job is next due. Documents with no item are not listed.
+/// What the desk reads per document, for `user`: how many places the document's own Needs you list holds
+/// (the count its library state and the Decisions drawer show, never a second one), how many of those wait
+/// on them (by name or by a role they hold), the earliest date of theirs, and the date the job is next
+/// due. A document with nothing on its list is not listed.
 pub fn documents_for(
-    ctx: &AppCtx,
     index: &JobIndex,
     user: Option<&Account>,
     today: chrono::NaiveDate,
 ) -> Vec<Value> {
-    use napkin_host::jobindex::Audience;
-    let mut by: std::collections::BTreeMap<String, Vec<Need>> = Default::default();
-    for n in items_of(ctx, index, user) {
-        if !n.path.is_empty() {
-            by.entry(n.path.clone()).or_default().push(n);
+    let (name, roles) = user.map_or((None, &[][..]), |a| {
+        (Some(a.username.as_str()), &a.roles[..])
+    });
+    let mut out = Vec::new();
+    for job in &index.jobs {
+        if !index.sees_job(&job.number, name, roles) {
+            continue;
         }
-    }
-    by.into_iter()
-        .map(|(path, items)| {
-            let mine: Vec<&Need> = items
+        let next = job.due.as_deref().and_then(|due| {
+            (alerts::days_until(due, today)? >= 0).then(|| {
+                serde_json::json!({
+                    "job": job.number, "client": job.client.name,
+                    "client_id": job.client.id, "due": due,
+                })
+            })
+        });
+        for d in job.documents.iter().filter(|d| !d.holds.is_empty()) {
+            let mine: Vec<_> = d
+                .holds
                 .iter()
-                .filter(|n| match (&n.audience, user) {
-                    (Audience::Person(p), Some(a)) => *p == a.username,
-                    (Audience::Role(r), Some(a)) => a.roles.iter().any(|x| x == r),
+                .filter(|h| match (&h.for_, user) {
+                    (Some(f), Some(a)) => {
+                        f.person.as_deref() == Some(a.username.as_str())
+                            || f.role
+                                .as_ref()
+                                .is_some_and(|r| a.roles.iter().any(|x| x == r))
+                    }
                     _ => false,
                 })
                 .collect();
-            let earliest = mine.iter().filter_map(|n| n.due.as_deref()).min();
-            let job = items.first().map(|n| n.job.as_str()).unwrap_or_default();
-            let next = index.job(job).and_then(|j| {
-                let due = j.due.as_deref()?;
-                (alerts::days_until(due, today)? >= 0).then(|| {
-                    serde_json::json!({
-                        "job": j.number, "client": j.client.name,
-                        "client_id": j.client.id, "due": due,
-                    })
-                })
-            });
-            serde_json::json!({
-                "path": path,
-                "count": items.len(),
+            out.push(serde_json::json!({
+                "path": d.path,
+                "count": d.holds.len(),
                 "mine": mine.len(),
-                "earliest_due": earliest,
+                "earliest_due": mine.iter().filter_map(|h| h.due.as_deref()).min(),
                 "next_deadline": next,
-            })
-        })
-        .collect()
+            }));
+        }
+    }
+    out
 }
 
 /// The caller's set-aside keys, by document path.
@@ -354,6 +371,8 @@ struct AsideQuery {
 }
 
 fn aside_target(
+    ctx: &AppCtx,
+    tenant: &crate::tenant::TenantId,
     user: Option<Extension<Account>>,
     key: &str,
     path: Option<String>,
@@ -368,6 +387,11 @@ fn aside_target(
             "Say which document and which item to set aside.",
         ));
     }
+    // only a document of the session's own workspace can be named
+    let ws = ctx.workspace(tenant);
+    if !ws.store.documents().iter().any(|d| d.as_str() == path) {
+        return Err(ApiError::new(404, "That is not one of your documents."));
+    }
     Ok((me, aside_id(&path, key)))
 }
 
@@ -375,11 +399,12 @@ fn aside_target(
 /// changes nothing on the document, so an item that blocks the lock still blocks.
 async fn set_aside(
     State(ctx): State<Arc<AppCtx>>,
+    Tenant(tenant): Tenant,
     user: Option<Extension<Account>>,
     Path((_t, key)): Path<(String, String)>,
     axum::extract::Query(q): axum::extract::Query<AsideQuery>,
 ) -> ApiResult<Json<Value>> {
-    let (me, id) = aside_target(user, &key, q.path)?;
+    let (me, id) = aside_target(&ctx, &tenant, user, &key, q.path)?;
     ctx.done.mark(&me.username, &id)?;
     Ok(Json(serde_json::json!({ "ok": true, "key": key })))
 }
@@ -387,11 +412,12 @@ async fn set_aside(
 /// Bring back: the person takes their own mark away. Nothing of anyone else's is touched.
 async fn bring_back(
     State(ctx): State<Arc<AppCtx>>,
+    Tenant(tenant): Tenant,
     user: Option<Extension<Account>>,
     Path((_t, key)): Path<(String, String)>,
     axum::extract::Query(q): axum::extract::Query<AsideQuery>,
 ) -> ApiResult<Json<Value>> {
-    let (me, id) = aside_target(user, &key, q.path)?;
+    let (me, id) = aside_target(&ctx, &tenant, user, &key, q.path)?;
     ctx.done.unmark(&me.username, &id)?;
     Ok(Json(serde_json::json!({ "ok": true, "key": key })))
 }
@@ -409,7 +435,7 @@ async fn needs(
     let user = user.map(|Extension(a)| a);
     let today = ws.now().date_naive();
     let mut answer = list_for(&ctx, &index, user.as_ref(), tz_of(&query), today);
-    answer["documents"] = Value::Array(documents_for(&ctx, &index, user.as_ref(), today));
+    answer["documents"] = Value::Array(documents_for(&index, user.as_ref(), today));
     answer["aside"] = aside_of(&ctx, user.as_ref());
     Ok(Json(answer))
 }
@@ -491,13 +517,21 @@ mod tests {
         let store = FileDone::new(dir.path().to_path_buf());
         store.mark("p@wk", "J001:keep").unwrap();
         for i in 0..MAX_ASIDE + 5 {
-            store.mark("p@wk", &aside_id("doc-a", &format!("k{i}"))).unwrap();
+            store
+                .mark("p@wk", &aside_id("doc-a", &format!("k{i}")))
+                .unwrap();
         }
         let kept = store.marked("p@wk");
-        assert!(kept.contains("J001:keep"), "set-aside marks never push a done mark out");
+        assert!(
+            kept.contains("J001:keep"),
+            "set-aside marks never push a done mark out"
+        );
         let asides = kept.iter().filter(|k| k.starts_with("aside")).count();
         assert_eq!(asides, MAX_ASIDE);
-        assert!(!kept.contains(&aside_id("doc-a", "k0")), "the oldest set-aside goes first");
+        assert!(
+            !kept.contains(&aside_id("doc-a", "k0")),
+            "the oldest set-aside goes first"
+        );
     }
 
     #[test]

@@ -259,7 +259,7 @@ async fn needs_are_counted_per_document_and_a_set_aside_mark_is_the_persons_own(
         None,
     )
     .await;
-    let own = page["documents"][0]["needs_you"].as_u64().unwrap();
+    let own = page["job"]["documents"][0]["needs_you"].as_u64().unwrap();
     assert!(own >= 2, "a blank gated brief holds several items: {page}");
     assert_eq!(d["count"].as_u64().unwrap(), own, "{v}");
     assert_eq!(d["earliest_due"], "2026-11-13");

@@ -222,6 +222,7 @@ mod tests {
                 title: "Brief".into(),
                 app_id: Some("ie.napkin.brief-maker".into()),
                 needs_you: 1,
+                holds: Vec::new(),
                 locked: false,
                 version: Some(1),
                 changed_since_lock: true,

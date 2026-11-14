@@ -290,6 +290,17 @@ fn the_gate_and_the_two_sign_offs_are_items_that_block_the_one_lock() {
         json!({ "role": "creative-director" })
     );
 
+    // One signer named and the other not: the only sign-off item is the missing one's (the contract, 7.2 item 7).
+    let half = brief(dir.path(), "b4.clan", c, Some("J001"));
+    let hs = at(dir.path(), &half, "aoife@wk", true);
+    let mut only_planner = ready();
+    only_planner["signers"] = json!([{ "role": "planner", "person": "aoife@wk" }]);
+    edit(&hs, only_planner);
+    assert_eq!(
+        codes(&decisions(&hs)),
+        vec!["signoff:creative_director".to_string()]
+    );
+
     // Part 1, the other way: a document filed under no job has none of the three fields, on any item, and
     // behaves as before (the item keeps its old code on the old rules: the gate still holds a brief).
     let free = brief(dir.path(), "b3.clan", c, None);

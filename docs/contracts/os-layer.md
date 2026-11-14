@@ -728,11 +728,14 @@ default, 2026-09-29; may be reversed):
    (`gate:proposition`, `gate:insight`, `gate:objective`, `gate:feel_or_do`,
    `gate:famous`, `gate:baseline`); `gate:objective` and `gate:baseline` are
    the two only the client can answer, so their text ends with the question
-   the client is owed (`Ask the client: ...`). `signoff:<role>` is a signature
-   still wanted: `signoff:planner` until the planner named on the brief has
-   signed this content (or while none is named), and `signoff:creative_director`
-   only while none is named, since the creative director's signature is the
-   lock itself. `can_lock` and `blockers` count them like every other item.
+   the client is owed (`Ask the client: ...`). `signoff:<role>` is a signature still wanted. `signoff:planner` is open while
+   the brief names no planner, and, once both signers are named, until the
+   planner has signed this content. `signoff:creative_director` is open only
+   while the brief names no creative director (their signature is the lock
+   itself). While one signer is named and the other is not, the only
+   `signoff:` item is the missing one's: the planner's signature is asked for
+   only when both are named. The gate applies to a Brief Maker brief whether or
+   not it is filed under a job. `can_lock` and `blockers` count them like every other item.
 
 #### 7.2.0 Who an item is for, when it is due, which job
 
