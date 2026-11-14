@@ -1,0 +1,160 @@
+<!-- The Booth: the one right-hand panel where agents sit, as one piece of code (features/align-booth.clan).
+     Spliced into a template at its booth marker by the packer
+     (crates/clan-sdk/examples/shared/app_ui.rs, inline_booth), after the OS's fields. Brief Maker and
+     Research use it; Script editor, Idea room and Visual brief take it by adding the marker.
+
+     What it does: the header (BOOTH with Hide), the edge tab when the Booth is hidden (38 px, vertical BOOTH,
+     a count dot for waiting questions), ] to toggle with no shortcut shown, a click on a part while hidden
+     bringing the whole Booth back, never over the document (the page's grid closes the column and the
+     document recentres), the shell remembering the choice (clan:booth), nothing hiding at 1100 px and below,
+     reduced motion as a short fade.
+
+     What a template provides:
+       1. A panel element (the Booth's column) and a desk element (the grid that holds the document and the panel).
+       2. CSS tokens, on :root: --booth-line, --booth-paper, --booth-ink, --booth-ink-soft, --booth-muted,
+          --booth-warn, --booth-desk (the page's own line, paper, ink, soft ink, muted ink, warning and desk colours).
+          The page's own layout CSS: the desk's grid columns (and what they become under .booth-off, the Booth
+          closed), the panel's width, and the header's margin inside its column. Nothing else is the page's.
+       3. Calls it makes: boothPick() from its selection function (a click on a part while the Booth is hidden
+          brings it back), boothAsk(n) from where it draws an agent's question (n questions waiting, 0 when
+          none), boothApply(false) whenever the selection or the view changes the Booth's width.
+       4. One call once the page is drawn: boothStart({
+            panel: id of the Booth's column,
+            head: id of the element the header is put first in (default: panel),
+            desk: function(){ return the desk element },
+            size: function(desk){ set the width the Booth takes (the page's own boothWidth(...)), as a CSS variable on the desk },
+            whole: function(){ an agent's question brings the Booth in on the whole document: select nothing },
+            fold: function(){ true when the edge tab may show (the document is open, not a start screen) },
+            inert: function(){ true when a hidden Booth is taken out of the tab order },
+            key: function(e){ true when ] may toggle (not typing, not on a start screen) } }).
+     It tells the shell {type:'clan:booth', open} when a person hides or shows it, and takes the shell's
+     {type:'clan:booth', open} on every load (AppRuntime.tsx). It does not draw what is inside the Booth. -->
+<style id="napkin-booth-css">
+  /* ── the Booth (features/booth.clan; mock panel-v3, B · Full): the side tab hides to the window's right
+     edge and comes back. It never floats over the document: its column closes and the document recentres
+     alone; opening, the column opens and the document moves left to make room. Below 1100px nothing hides. ── */
+  :root{--booth-dur:460ms;--booth-ease:cubic-bezier(.2,.7,.2,1)}
+  .booth-hd{display:flex;align-items:center;gap:8px;padding:9px 10px 9px 18px;border-bottom:1px solid var(--booth-line)}
+  .booth-hd .booth-nm{font:500 10.5px var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--booth-muted)}
+  .booth-hd .booth-sp{flex:1}
+  .booth-hd button.booth-hide{all:unset;box-sizing:border-box;cursor:pointer;height:30px;padding:0 10px 0 12px;border-radius:999px;border:1px solid var(--booth-line);display:inline-flex;align-items:center;gap:6px;color:var(--booth-ink-soft);flex:none;font:500 12px var(--font-ui);background:var(--booth-paper)}
+  .booth-hd button.booth-hide svg{width:14px;height:14px}
+  .booth-hd button.booth-hide:hover{background:color-mix(in srgb,var(--ag-base) 8%,var(--booth-paper));color:var(--booth-ink);border-color:color-mix(in srgb,var(--ag-base) 30%,var(--booth-line))}
+  .booth-hd button.booth-hide:focus-visible{outline:2px solid var(--ag-base)}
+  .booth-edge{all:unset;box-sizing:border-box;cursor:pointer;position:fixed;right:var(--clan-right,0px);top:calc(var(--clan-top,0px) + 56px);z-index:40;width:38px;padding:14px 0 16px;
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    border:1px solid var(--booth-line);border-right:0;border-radius:9px 0 0 9px;background:var(--booth-paper);color:var(--booth-ink-soft);
+    box-shadow:-1px 0 0 color-mix(in srgb,var(--ag-base) 18%,transparent);
+    transform:translate(0,0);transition:transform .32s var(--booth-ease) .14s,opacity .2s ease .14s,width .18s var(--booth-ease),color .15s,visibility 0s}
+  .booth-edge:hover{width:44px;color:var(--booth-ink);border-color:color-mix(in srgb,var(--ag-base) 25%,var(--booth-line))}
+  .booth-edge:focus-visible{outline:2px solid var(--ag-base);outline-offset:2px}
+  .booth-edge .booth-lb{writing-mode:vertical-rl;transform:rotate(180deg);font:600 12px var(--font-mono);letter-spacing:.2em;text-transform:uppercase}
+  .booth-edge svg{flex:none;width:16px;height:16px}
+  .booth-edge .booth-ct{position:absolute;left:-7px;top:-7px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--booth-warn);color:#fff;font:600 9.5px/15px var(--font-ui);text-align:center;border:1.5px solid var(--booth-desk);display:none;box-sizing:border-box}
+  .booth-edge.has .booth-ct{display:block}
+  .booth-edge.ping .booth-ct{animation:booth-ping 1.1s var(--booth-ease) 2}
+  @keyframes booth-ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--booth-warn) 45%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
+  body:not(.booth-folded) .booth-edge{transform:translate(110%,0);opacity:0;visibility:hidden;pointer-events:none;transition:transform .2s var(--booth-ease),opacity .15s ease,visibility 0s linear .2s}
+  @media (min-width:1101px){
+    .booth-desk > .booth-panel{transition:transform var(--booth-dur) var(--booth-ease),opacity .3s ease .06s,visibility 0s}
+    .booth-desk.booth-off > .booth-panel{opacity:0;visibility:hidden;pointer-events:none;transform:translateX(28px);transition:transform var(--booth-dur) var(--booth-ease),opacity .22s ease,visibility 0s linear var(--booth-dur)}
+  }
+  @media (max-width:1100px){ .booth-edge,.booth-hd button.booth-hide{display:none} }
+  .booth-desk.booth-instant,.booth-desk.booth-instant > .booth-panel,.booth-edge.booth-instant{transition:none!important}
+  /* reduced motion: a short fade, nothing moves */
+  @media (prefers-reduced-motion:reduce){
+    .booth-desk{transition:none!important}
+    .booth-desk > .booth-panel{transform:none!important;transition:opacity .15s ease,visibility 0s!important}
+    .booth-desk.booth-off > .booth-panel{transition:opacity .15s ease,visibility 0s linear .15s!important}
+    .booth-edge,body:not(.booth-folded) .booth-edge{transform:none!important;transition:opacity .15s ease,visibility 0s!important}
+    .booth-edge.ping .booth-ct{animation:none}
+  }
+  @media print{ .booth-edge{display:none!important} }
+</style>
+<template id="booth-hd-tpl"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span><button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="true" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div></template>
+<template id="booth-edge-tpl"><button type="button" class="booth-edge" id="boothEdge" aria-expanded="true" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="-1"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span><span class="booth-ct" id="boothCt"></span></button></template>
+<script id="napkin-booth-js">
+  // The Booth's state and what it does (features/booth.clan; mock panel-v3, B · Full). While it is hidden, a
+  // click on a part brings the whole Booth back on that part, and an agent's question shows a dot on the
+  // edge tab, then brings it in. Hidden or shown is the shell's to remember, per person and tool
+  // (clan:booth): a tool's frame is sandboxed and its storage throws. ] hides and shows it; nothing on
+  // screen says so. BOOTH is undefined, and a call before boothStart() is ignored, until the page starts it.
+  var BOOTH, BOOTH_AT, BOOTH_MIN=1101, BOOTH_ASK_MS=1000, BOOTH_DUR=470;
+  function $(id){ return document.getElementById(id); }
+  // At 1100px and below nothing hides.
+  function boothCanHide(w){ return w>=BOOTH_MIN; }
+  // The next state for an event: {t:'toggle'|'hide'|'show'|'pick'|'shell'|'ask'|'arrive', open?, n?} at window
+  // width w. `later` is how long until an agent's question brings the hidden Booth in.
+  function boothStep(s, ev, w){
+    var n={open:s.open, ask:s.ask, later:0};
+    if(ev.t==='ask'){ n.ask=Math.max(0, ev.n|0); if(!s.open&&n.ask>s.ask&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }
+    if(ev.t==='shell'){ n.open=ev.open!==false; return n; }
+    if(ev.t==='show'||ev.t==='pick'||(ev.t==='arrive'&&s.ask>0)){ n.open=true; return n; }
+    if(!boothCanHide(w)) return n;
+    if(ev.t==='hide') n.open=false;
+    else if(ev.t==='toggle') n.open=!s.open;
+    return n;
+  }
+  function boothApply(instant){
+    if(!BOOTH||!BOOTH_AT) return;
+    var d=BOOTH_AT.desk(), p=$(BOOTH_AT.panel), e=$('boothEdge'), hid=!BOOTH.open; if(!d||!p) return;
+    if(instant){ d.classList.add('booth-instant'); if(e) e.classList.add('booth-instant'); }
+    BOOTH_AT.size(d);
+    d.classList.toggle('booth-off', hid); document.body.classList.toggle('booth-folded', hid&&BOOTH_AT.fold());
+    p.inert=hid&&BOOTH_AT.inert()&&boothCanHide(window.innerWidth);
+    var hb=p.querySelector('.booth-hide'); if(hb) hb.setAttribute('aria-expanded', String(!hid));
+    if(e){
+      var k=BOOTH.ask, ct=$('boothCt'); if(ct) ct.textContent=k?String(k):'';
+      e.classList.toggle('has', !!k); e.tabIndex=hid?0:-1; e.setAttribute('aria-expanded', String(!hid));
+      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+(k===1?' question':' questions')+' waiting':''));
+    }
+    if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
+  }
+  // An agent's question brings the Booth in on the whole document, as the mock does (the page's `whole`).
+  function boothWhole(){ if(BOOTH_AT) BOOTH_AT.whole(); }
+  function boothSet(ev){
+    var was=BOOTH.open, had=BOOTH.ask, n=boothStep(BOOTH, ev, window.innerWidth), e=$('boothEdge');
+    var a=document.activeElement, focusIn=!!(a&&a.closest&&a.closest('[data-booth-panel]')), fromEdge=!!(e&&a===e);
+    BOOTH.open=n.open; BOOTH.ask=n.ask;
+    if(ev.t==='arrive'&&BOOTH.open&&!was) boothWhole();
+    if(n.later){ clearTimeout(BOOTH.t); BOOTH.t=setTimeout(function(){ boothSet({t:'arrive'}); }, n.later); }
+    if(BOOTH.open||!BOOTH.ask) clearTimeout(BOOTH.t);
+    boothApply(ev.t==='shell');
+    if(e&&BOOTH.ask>had&&!BOOTH.open){ e.classList.remove('ping'); void e.offsetWidth; e.classList.add('ping'); }
+    if(was===BOOTH.open) return;
+    if(ev.t!=='shell'){ try{ window.parent.postMessage({type:'clan:booth', open:BOOTH.open}, '*'); }catch(x){} }
+    if(!BOOTH.open&&focusIn) setTimeout(function(){ if(!BOOTH.open&&e) e.focus({preventScroll:true}); }, BOOTH_DUR);
+    if(BOOTH.open&&fromEdge) setTimeout(function(){ var hb=document.querySelector('[data-booth-panel] .booth-hide'); if(BOOTH.open&&hb) hb.focus({preventScroll:true}); }, BOOTH_DUR);
+  }
+  // A click on the document (B · Full): the whole Booth comes back on it.
+  // (Both may run before boothStart() has: BOOTH is still undefined then, and the shell's word comes after.)
+  function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
+  function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  // The page says where the Booth sits (see the top of this file); the header and the edge tab are drawn here.
+  function boothStart(at){
+    BOOTH_AT=at; BOOTH={open:true, ask:0, t:0};
+    var p=$(at.panel), h=$(at.head||at.panel), d=at.desk();
+    if(p){ p.classList.add('booth-panel'); p.setAttribute('data-booth-panel', ''); }
+    if(d) d.classList.add('booth-desk');
+    var hd=document.getElementById('booth-hd-tpl').content.firstElementChild.cloneNode(true);
+    hd.querySelector('.booth-hide').setAttribute('aria-controls', at.panel);
+    if(h) h.insertBefore(hd, h.firstChild);
+    var eg=document.getElementById('booth-edge-tpl').content.firstElementChild.cloneNode(true);
+    eg.setAttribute('aria-controls', at.panel); document.body.appendChild(eg);
+    document.addEventListener('click', function(e){
+      var t=e.target&&e.target.closest?e.target:null; if(!t) return;
+      if(t.closest('[data-booth="hide"]')){ boothSet({t:'hide'}); return; }
+      if(t.closest('#boothEdge')) boothSet({t:'show'});
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key!==']'||e.defaultPrevented||e.metaKey||e.ctrlKey||e.altKey||!BOOTH_AT.key(e)) return;
+      e.preventDefault(); boothSet({t:'toggle'});
+    });
+    // The shell says what this person last had, on every load (AppRuntime.tsx).
+    window.addEventListener('message', function(e){
+      var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:booth') return;
+      boothSet({t:'shell', open:m.open!==false});
+    });
+    window.addEventListener('resize', function(){ boothApply(false); });
+  }
+</script>
