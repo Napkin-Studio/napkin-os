@@ -37,8 +37,13 @@ pub fn inline_fields(templates: &Path, html: &str) -> Result<String, Box<dyn std
 /// piece of code (header, edge tab, state, the shell's `clan:booth`).
 pub const BOOTH_MARKER: &str = "<!-- @napkin:booth -->";
 
+/// Where a template asks for the Booth's shared folds (Judge, Versions): after the Booth's own marker.
+pub const BOOTH_FOLDS_MARKER: &str = "<!-- @napkin:booth-folds -->";
+
 /// Splice `app/templates/shared/booth.html` into the template at its marker, when
-/// it has one. Checked like the fields: no `</body>` inside it, no marker of its own.
+/// it has one, and `app/templates/shared/booth-folds.html` at its own marker, when
+/// the template asks for the folds too. Checked like the fields: no `</body>` inside
+/// either, no marker of its own.
 pub fn inline_booth(templates: &Path, html: &str) -> Result<String, Box<dyn std::error::Error>> {
     match html.matches(BOOTH_MARKER).count() {
         0 => return Ok(html.to_string()),
@@ -50,10 +55,24 @@ pub fn inline_booth(templates: &Path, html: &str) -> Result<String, Box<dyn std:
     if snippet.to_ascii_lowercase().contains("</body") {
         return Err("the booth snippet contains </body>".into());
     }
-    if snippet.contains(BOOTH_MARKER) {
+    if snippet.contains(BOOTH_MARKER) || snippet.contains(BOOTH_FOLDS_MARKER) {
         return Err("the booth snippet contains its own marker".into());
     }
-    Ok(html.replacen(BOOTH_MARKER, snippet.trim_end(), 1))
+    let html = html.replacen(BOOTH_MARKER, snippet.trim_end(), 1);
+    match html.matches(BOOTH_FOLDS_MARKER).count() {
+        0 => return Ok(html),
+        1 => {}
+        _ => return Err(format!("the template has more than one {BOOTH_FOLDS_MARKER}").into()),
+    }
+    let folds = fs::read_to_string(templates.join("shared/booth-folds.html"))
+        .map_err(|e| format!("app/templates/shared/booth-folds.html: {e}"))?;
+    if folds.to_ascii_lowercase().contains("</body") {
+        return Err("the booth folds snippet contains </body>".into());
+    }
+    if folds.contains(BOOTH_MARKER) || folds.contains(BOOTH_FOLDS_MARKER) {
+        return Err("the booth folds snippet contains a marker".into());
+    }
+    Ok(html.replacen(BOOTH_FOLDS_MARKER, folds.trim_end(), 1))
 }
 
 /// Where a template asks for the source cards: where a document came from, on

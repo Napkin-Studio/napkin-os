@@ -28,7 +28,14 @@
             inert: function(){ true when a hidden Booth is taken out of the tab order },
             key: function(e){ true when ] may toggle (not typing, not on a start screen) } }).
      It tells the shell {type:'clan:booth', open} when a person hides or shows it, and takes the shell's
-     {type:'clan:booth', open} on every load (AppRuntime.tsx). It does not draw what is inside the Booth. -->
+     {type:'clan:booth', open} on every load (AppRuntime.tsx). It does not draw what is inside the Booth.
+
+     Who holds it (the approval route's open step, features/align-booth.clan): one line under the Booth's status
+     pill, or under its header where the page has no pill, on a document filed under a job. A template puts an
+     element with data-booth-holder where the line goes; boothStart() fills it from GET clan://decisions, the read
+     the fields already make: the lock-blocking items carry who they wait on (for) and when they are due (due),
+     from the job's route (jobindex.rs, attend). "With Aoife, due Friday"; days late in the warn tone. That read
+     holds no "since", so the line says none. It names who holds the work, never how fast anyone is. -->
 <style id="napkin-booth-css">
   /* ── the Booth (features/booth.clan; mock panel-v3, B · Full): the side tab hides to the window's right
      edge and comes back. It never floats over the document: its column closes and the document recentres
@@ -70,6 +77,10 @@
     .booth-edge.ping .booth-ct{animation:none}
   }
   @media print{ .booth-edge{display:none!important} }
+  /* who holds it: one quiet line; days late in the warn tone */
+  [data-booth-holder]{font:500 12.5px/1.45 var(--font-ui);color:var(--booth-ink-soft)}
+  [data-booth-holder]:empty{display:none}
+  [data-booth-holder] .booth-late{color:var(--booth-warn);font-weight:600}
 </style>
 <template id="booth-hd-tpl"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span><button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="true" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div></template>
 <template id="booth-edge-tpl"><button type="button" class="booth-edge" id="boothEdge" aria-expanded="true" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="-1"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span><span class="booth-ct" id="boothCt"></span></button></template>
@@ -130,6 +141,52 @@
   // (Both may run before boothStart() has: BOOTH is still undefined then, and the shell's word comes after.)
   function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
   function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  // ── who holds it ──
+  var BOOTH_DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], BOOTH_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function boothEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  // A sign-in name as a person says it: aoife@wk is Aoife. A role id as words: creative_director is the creative director.
+  function boothPerson(id){ var m=/^([^@\s]+)@/.exec(String(id||'').replace(/^human:/,'')); var n=m?m[1]:String(id||''); return n.split(/[._-]+/).filter(Boolean).map(function(w){ return w.charAt(0).toUpperCase()+w.slice(1); }).join(' '); }
+  function boothRole(r){ var w=String(r||'').replace(/[_-]+/g,' ').trim().toLowerCase(); return w?'the '+w:''; }
+  // Days from today (a local date, YYYY-MM-DD) to the due date; null when either is not a date.
+  function boothDaysTo(due, today){
+    var a=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(due||'')), b=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(today||''));
+    if(!a||!b) return null;
+    return Math.round((Date.UTC(+a[1],a[2]-1,+a[3])-Date.UTC(+b[1],b[2]-1,+b[3]))/86400000);
+  }
+  // A due date in words: today, tomorrow, a weekday within the week either side, else the day and month.
+  function boothDueWords(due, today){
+    var n=boothDaysTo(due, today), a=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(due||'')); if(n==null||!a) return '';
+    if(n===0) return 'today'; if(n===1) return 'tomorrow'; if(n===-1) return 'yesterday';
+    var d=new Date(Date.UTC(+a[1],a[2]-1,+a[3]));
+    return Math.abs(n)<7?BOOTH_DAYS[d.getUTCDay()]:d.getUTCDate()+' '+BOOTH_MONTHS[d.getUTCMonth()];
+  }
+  // The line, from the decisions view: the lock-blocking items with a due date, the one naming a person first.
+  // Empty when nothing waits on a route step (no job, no route, or nothing blocking).
+  function boothHolderHtml(view, today){
+    var items=(view&&Array.isArray(view.attention)?view.attention:[]).filter(function(a){ return a&&a.blocks_lock&&a.due; });
+    if(!items.length) return '';
+    var it=items.filter(function(a){ return a['for']&&a['for'].person; })[0]||items.filter(function(a){ return a['for']&&a['for'].role; })[0]||items[0];
+    var f=it['for']||{}, who=f.person?boothPerson(f.person):f.role?boothRole(f.role):'';
+    var when=boothDueWords(it.due, today), late=-(boothDaysTo(it.due, today)||0);
+    if(!when) return '';
+    var h=who?'With '+boothEsc(who)+', due '+boothEsc(when):'Due '+boothEsc(when);
+    if(late>0) h+=', <span class="booth-late">'+late+(late===1?' day':' days')+' late</span>';
+    return h;
+  }
+  function boothToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  var BOOTH_HOLDER={reading:false, again:false};
+  function boothHolderRead(){
+    var els=document.querySelectorAll('[data-booth-holder]'); if(!els.length) return;
+    if(BOOTH_HOLDER.reading){ BOOTH_HOLDER.again=true; return; }
+    BOOTH_HOLDER.reading=true; BOOTH_HOLDER.again=false;
+    var scheme=navigator.userAgent.indexOf('Windows')>=0?'http://clan.localhost':'clan://localhost';
+    fetch(scheme+'/decisions').then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }).then(function(v){
+      BOOTH_HOLDER.reading=false;
+      if(v){ var html=boothHolderHtml(v, boothToday()), all=document.querySelectorAll('[data-booth-holder]');
+        for(var i=0;i<all.length;i++){ if(all[i].innerHTML!==html){ all[i].innerHTML=html; all[i].toggleAttribute('data-late', html.indexOf('booth-late')>=0); } } }
+      if(BOOTH_HOLDER.again) boothHolderRead();
+    });
+  }
   // The page says where the Booth sits (see the top of this file); the header and the edge tab are drawn here.
   function boothStart(at){
     BOOTH_AT=at; BOOTH={open:true, ask:0, t:0};
@@ -156,5 +213,11 @@
       boothSet({t:'shell', open:m.open!==false});
     });
     window.addEventListener('resize', function(){ boothApply(false); });
+    // Who holds it: read now, and again whenever the page reads its decisions or its data changes.
+    if(document.querySelector('[data-booth-holder]')){
+      window.addEventListener('clan:viewloaded', boothHolderRead);
+      window.addEventListener('clan:dataupdated', boothHolderRead);
+      boothHolderRead();
+    }
   }
 </script>
