@@ -27,6 +27,11 @@
             fold: function(){ true when the edge tab may show (the document is open, not a start screen) },
             inert: function(){ true when a hidden Booth is taken out of the tab order },
             key: function(e){ true when ] may toggle (not typing, not on a start screen) } }).
+     The state line: boothSay(state, act) says Run failed, Changed brief, Long run, Not right, Missing access or
+     Loading under the header, in the shell's words (components/states/words.ts), text only; act(id) hears a
+     pressed button (state-retry, state-update, state-ask, state-fix-N); boothSay(null) is Normal. boothMoved(up,
+     sealed) and boothUpdateBrief(done) are the Changed brief a page reads from GET clan://upstream and takes
+     with POST clan://upstream/update. Client review mode (clan:clientmode) says nothing here.
      It tells the shell {type:'clan:booth', open} when a person hides or shows it, and takes the shell's
      {type:'clan:booth', open} on every load (AppRuntime.tsx). It does not draw what is inside the Booth.
 
@@ -81,6 +86,17 @@
   [data-booth-holder]{font:500 12.5px/1.45 var(--font-ui);color:var(--booth-ink-soft)}
   [data-booth-holder]:empty{display:none}
   [data-booth-holder] .booth-late{color:var(--booth-warn);font-weight:600}
+  /* the state line: Run failed, Changed brief, Long run, Not right, Missing access, Loading, said once under the header */
+  .booth-state{display:grid;gap:8px;padding:12px 18px;border-bottom:1px solid var(--booth-line);border-left:3px solid var(--booth-warn);background:color-mix(in srgb,var(--booth-warn) 6%,var(--booth-paper));color:var(--booth-ink);min-width:0}
+  .booth-state[hidden]{display:none}
+  .booth-state[data-state="long-run"],.booth-state[data-state="loading"],.booth-state[data-state="not-right"]{border-left-color:var(--booth-line);background:var(--booth-paper)}
+  .booth-state .bs-line{margin:0;font:600 14px/1.4 var(--font-ui);color:var(--booth-ink)}
+  .booth-state .bs-small{margin:0;font:400 13px/1.5 var(--font-ui);color:var(--booth-ink-soft)}
+  .booth-state .bs-acts{display:flex;flex-wrap:wrap;gap:8px}
+  .booth-state button{all:unset;box-sizing:border-box;cursor:pointer;min-height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--booth-line);display:inline-flex;align-items:center;font:500 12.5px var(--font-ui);color:var(--booth-ink);background:var(--booth-paper)}
+  .booth-state button:hover{border-color:color-mix(in srgb,var(--ag-base) 30%,var(--booth-line))}
+  .booth-state button:focus-visible{outline:2px solid var(--ag-base);outline-offset:2px}
+  @media (max-width:640px){.booth-state button{min-height:44px}}
 </style>
 <template id="booth-hd-tpl"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span><button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="true" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div></template>
 <template id="booth-edge-tpl"><button type="button" class="booth-edge" id="boothEdge" aria-expanded="true" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="-1"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span><span class="booth-ct" id="boothCt"></span></button></template>
@@ -141,6 +157,50 @@
   // (Both may run before boothStart() has: BOOTH is still undefined then, and the shell's word comes after.)
   function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
   function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  // ── the state line (the shell's nine screen states, said in the Booth; words as components/states/words.ts) ──
+  // boothSay({name, ...}, act) draws the one state this page is in under the Booth's header, text only, and act(id)
+  // hears a pressed button: state-retry, state-update, state-ask, state-fix-N. boothSay(null) is Normal: nothing said.
+  var BS_NOT_RIGHT=['Make it shorter','Change the tone','Check the facts'];
+  var BS_BECAUSE={provider:'The model did not answer, so the run stopped.', refused:'The model would not do this as asked, so the run stopped.', timeout:'The run took too long, so it stopped.', other:'The run stopped.'};
+  var BOOTH_SAY={act:null, html:'', last:null, client:false};
+  function boothSayHtml(s){
+    var e=boothEsc, line=function(t){ return '<p class="bs-line">'+e(t)+'</p>'; }, small=function(t){ return t?'<p class="bs-small">'+e(t)+'</p>':''; };
+    var btn=function(id, t){ return '<button type="button" data-bs-act="'+id+'">'+e(t)+'</button>'; };
+    switch(s.name){
+      case 'run-failed': return line((BS_BECAUSE[s.why]||BS_BECAUSE.other)+' The reserved estimate is returned and your inputs are kept.')+' <div class="bs-acts">'+btn('state-retry','Try again')+'</div>';
+      case 'changed-brief': return line(s.to&&s.from?'The brief changed to '+s.to+'. This work was made from '+s.from+'.':'The brief changed while you were typing.')+' '+small(s.changes)+(s.sealed?'':' <div class="bs-acts">'+btn('state-update', s.to?'Update to brief '+s.to:'Update to the new brief')+'</div>');
+      case 'long-run': { var m=Math.max(1, s.minutes|0); return line(m<=1?'About a minute left.':'About '+m+' minutes left.')+' '+small('Needs you tells you when it is done. You can leave this page.')+' '+small(s.step); }
+      case 'missing-access': return line('You cannot open '+s.what+' yet. '+s.who+' can give you access.')+' <div class="bs-acts">'+btn('state-ask','Ask '+s.who)+'</div>';
+      case 'not-right': return line('What is wrong with it?')+' <div class="bs-acts">'+BS_NOT_RIGHT.map(function(f,i){ return btn('state-fix-'+(i+1), f); }).join(' ')+'</div>';
+      case 'loading': return line('Loading '+s.what);
+    }
+    return '';
+  }
+  function boothSay(s, act){
+    var el=$('boothState'); if(!el) return;
+    BOOTH_SAY.act=act||null; BOOTH_SAY.last=s||null;
+    var h=s&&!BOOTH_SAY.client?boothSayHtml(s):'';   // client review mode says nothing here
+    if(h===BOOTH_SAY.html) return;
+    BOOTH_SAY.html=h; el.innerHTML=h; el.hidden=!h;
+    if(h) el.setAttribute('data-state', s.name); else el.removeAttribute('data-state');
+  }
+  // The brief a page answers has moved on: its Changed brief state, from GET clan://upstream, or null while it is as it was.
+  // `sealed` (this version is approved) leaves the Update out: an approved version keeps what it was made from.
+  function boothMoved(up, sealed){
+    var list=up&&Array.isArray(up.upstream)?up.upstream:[], p=list.filter(function(u){ return u&&u.direct&&u.in_store&&u.status==='changed'; })[0];
+    if(!p) return null;
+    var short=function(v){ return String(v||'').slice(0,7); };
+    return {name:'changed-brief', from:short(up.carried&&up.carried.last_decision), to:short(p.version), sealed:!!sealed,
+      changes:sealed?'This version is approved and stays as it is. Start a new version to take the new brief into it.':'Updating takes the new brief into this page. What you wrote here stays.'};
+  }
+  // Update: the frame's own route takes the brief's newer version; done(reply) once it answers.
+  function boothUpdateBrief(done){
+    var scheme=navigator.userAgent.indexOf('Windows')>=0?'http://clan.localhost':'clan://localhost';
+    fetch(scheme+'/upstream/update', {method:'POST', body:'{}'})
+      .then(function(r){ return r.json().catch(function(){ return {ok:false}; }).then(function(j){ if(!r.ok&&j&&j.ok!==false) j.ok=false; return j; }); })
+      .catch(function(){ return {ok:false, error:'The page could not reach the host.'}; })
+      .then(function(j){ if(done) done(j); });
+  }
   // ── who holds it ──
   var BOOTH_DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], BOOTH_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   function boothEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
@@ -196,12 +256,15 @@
     var hd=document.getElementById('booth-hd-tpl').content.firstElementChild.cloneNode(true);
     hd.querySelector('.booth-hide').setAttribute('aria-controls', at.panel);
     if(h) h.insertBefore(hd, h.firstChild);
+    var st=document.createElement('div'); st.className='booth-state'; st.id='boothState'; st.hidden=true; st.setAttribute('data-testid','booth-state'); st.setAttribute('role','status'); st.setAttribute('aria-live','polite');
+    if(h) h.insertBefore(st, hd.nextSibling);
     var eg=document.getElementById('booth-edge-tpl').content.firstElementChild.cloneNode(true);
     eg.setAttribute('aria-controls', at.panel); document.body.appendChild(eg);
     document.addEventListener('click', function(e){
       var t=e.target&&e.target.closest?e.target:null; if(!t) return;
       if(t.closest('[data-booth="hide"]')){ boothSet({t:'hide'}); return; }
       if(t.closest('#boothEdge')) boothSet({t:'show'});
+      var sb=t.closest('[data-bs-act]'); if(sb&&BOOTH_SAY.act) BOOTH_SAY.act(sb.getAttribute('data-bs-act'));
     });
     document.addEventListener('keydown', function(e){
       if(e.key!==']'||e.defaultPrevented||e.metaKey||e.ctrlKey||e.altKey||!BOOTH_AT.key(e)) return;
@@ -209,7 +272,9 @@
     });
     // The shell says what this person last had, on every load (AppRuntime.tsx).
     window.addEventListener('message', function(e){
-      var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:booth') return;
+      var m=e.data; if(e.source!==window.parent||!m) return;
+      if(m.type==='clan:clientmode'){ BOOTH_SAY.client=!!m.on; boothSay(BOOTH_SAY.last, BOOTH_SAY.act); return; }
+      if(m.type!=='clan:booth') return;
       boothSet({t:'shell', open:m.open!==false});
     });
     window.addEventListener('resize', function(){ boothApply(false); });

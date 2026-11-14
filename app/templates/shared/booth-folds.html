@@ -115,6 +115,13 @@
   }
   // The host's refusal, in its words: the part after its code.
   function bfRefusal(m){ var x=/^(ai_off|not_eu|not_configured|spend_refused|judge_failed|judge_malformed)\s*:\s*([\s\S]*)$/.exec(String(m||'').trim()); return x?x[2].trim():'Judge could not score this just now. Nothing was changed.'; }
+  // What the band said before there was a score, without its price: Judge is not set up here, or answers from fixtures.
+  function bfSetupLine(setup){
+    if(!setup) return '';
+    if(!setup.configured) return 'Judge is not set up here, so nothing can be scored yet.';
+    if(setup.backend==='fixture') return 'Judge answers from fixture scores here. Nothing is charged and no model is called.';
+    return '';
+  }
   function bfFig(state, size){ var R=typeof NapkinRoles==='object'&&NapkinRoles?NapkinRoles:null; return R?R.tag('judge',{state:state||'idle', decorative:true, size:size||26}):''; }
   function bfTestHtml(t){ return '<li data-testid="judge-test" data-value="'+bfEsc(t.value)+'" data-dim="'+bfEsc(t.dim)+'"><span class="bf-dim">'+bfEsc(BF_DIM[t.dim]||t.dim)+'</span><span class="bf-q">'+bfEsc(t.question||t.id)+'</span>'+(t.evidence?'<span class="bf-ev">'+bfEsc(t.evidence)+'</span>':'')+'</li>'; }
   // The Judge fold, from the card the host sends (GET /judge) and what the person has open.
@@ -126,7 +133,7 @@
     if(st.busy) h+='<p class="bf-work" role="status" data-testid="judge-working">'+bfFig('working',22)+'<span>Judge is reading this version.</span></p>';
     if(st.line) h+='<p class="bf-warn" role="status" data-testid="judge-refusal">'+bfEsc(st.line)+'</p>';
     if(!s){
-      h+='<p class="bf-note" data-testid="judge-empty">'+bfEsc(card.why_not||'Judge has not scored this version yet.')+'</p>';
+      h+='<p class="bf-note" data-testid="judge-empty">'+bfEsc(card.why_not||bfSetupLine(card.setup)||'Judge has not scored this version yet.')+'</p>';
       if(card.can_score) h+='<div class="bf-acts"><button type="button" class="bf-btn" data-bf-act="judge-send" data-testid="judge-again"'+(st.busy?' disabled':'')+'>Score this version</button></div>';
       return h+'</div></details>';
     }

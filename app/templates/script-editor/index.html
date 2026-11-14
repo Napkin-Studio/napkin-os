@@ -785,7 +785,14 @@
     judge: function(v, same){ return 'Sent to Judge at version ' + v + '.' + (same ? '' : ' It has changed since.'); }
   };
   function ruleName(f){ return ({ dash: 'Dash', stage_direction: 'Stage direction', repetition: 'Repeats', length_off: 'Length', cast_count: 'Voices', no_spoken_lines: 'No spoken lines' })[f.rule] || f.rule; }
-  function draw(force){ drawHead(); drawSetup(); drawBody(force); drawSide(); if(typeof boothApply === 'function') boothApply(false); }
+  // Changed brief, said in the Booth (shared boothSay): the brief this script answers has moved on.
+  function drawState(){
+    if(typeof boothSay !== 'function') return;
+    boothSay(boothMoved(S.up, locked()), function(id){
+      if(id === 'state-update') boothUpdateBrief(function(j){ if(j && j.ok === false) toast(j.error || 'The script did not update.'); load(); });
+    });
+  }
+  function draw(force){ drawHead(); drawSetup(); drawBody(force); drawSide(); drawState(); if(typeof boothApply === 'function') boothApply(false); }
   function live(){ drawSide(); var f = findingsOf(checkDoc()); cur().beats.forEach(function(b){ var hx = document.querySelector('[data-hints="' + b.id + '"]'); if(hx) hx.innerHTML = hintsHtml(b.id, f); }); }
 
   // ── reading the host ────────────────────────────────────────────────────────────────────────────

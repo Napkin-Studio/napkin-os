@@ -350,7 +350,6 @@
     var m = e.data;
     if(m && m.type === 'clan:retry' && typeof m.id === 'string' && pending[m.id]) send(pending[m.id]).then(function(j){ if(j && j.ok !== false) return load(); });
     else if(m && m.type === 'clan:bar?') sendBar(true);
-    else if(m && m.type === 'clan:bar-action' && m.id === 'state-update') updateBrief();
     else if(m && m.type === 'clan:bar-action' && m.id === 'merge') mergeRoutes();
   });
 
@@ -359,19 +358,22 @@
     var b = briefOf(data()), br = brief();
     $('eyebrow').innerHTML = 'Idea room' + (b.name ? ' · <b>' + esc(b.name) + '</b>' : '');
   }
-  // Changed brief is the shell's state, drawn in its strip above this page: the page says what changed (clan:bar)
-  // and answers the one button (clan:bar-action, state-update), which takes the brief's newer version.
+  // Changed brief is said in the Booth (shared boothSay, under its header): the page says what changed and answers the one
+  // button, which takes the brief's newer version (clan://upstream/update).
+  function drawState(){
+    if(typeof boothSay !== 'function') return;
+    var br = brief();
+    boothSay(br && br.changed && br.from && br.to ? { name: 'changed-brief', from: 'v' + br.from, to: 'v' + br.to, changes: 'The insight or the proposition may have moved. Your cards and routes stay as they are.' } : null,
+      function(id){ if(id === 'state-update') updateBrief(); });
+  }
   var BAR_LAST = '';
   function sendBar(force){
     if(window.parent === window) return;
-    var br = brief(), items = [], g = gate(), out = routesOut(data()), merged = routeList(data()), ch = obj(data().chosen);
+    var items = [], g = gate(), out = routesOut(data()), merged = routeList(data()), ch = obj(data().chosen);
     // The room's state, as the bar's status item, and Merge routes as its one button while routes are out.
     var label = ch.route ? 'Route chosen' : out.length ? out.length + ' routes out' : merged.length ? merged.length + ' routes merged' : g.open ? 'Room open' : (g.team_cards || 0) + ' of ' + (g.needed || 5) + ' team cards';
     items.push({ kind: 'status', label: label, tone: ch.route || g.open ? 'ok' : null, locked: false });
     if(out.length) items.push({ kind: 'button', id: 'merge', label: 'Merge routes', primary: false, title: 'Fold every route back into the room. No model is used.' });
-    if(br && br.changed){
-      if(br.from && br.to) items.push({ kind: 'state', state: 'changed-brief', from: 'v' + br.from, to: 'v' + br.to, changes: 'The insight or the proposition may have moved. Your cards and routes stay as they are.' });
-    }
     var k = JSON.stringify(items);
     if(!force && k === BAR_LAST) return;
     BAR_LAST = k;
@@ -599,7 +601,7 @@
     el.innerHTML = '<div><button type="button" class="btn quiet" data-sel-back="1">All of the room</button></div>' + (c ? selCardHtml(c) : selRouteHtml(r));
     el.hidden = false; $('bWhole').hidden = true;
   }
-  function drawBooth(){ drawGate(); drawSel(); drawRouteState(); drawChoice(); }
+  function drawBooth(){ drawState(); drawGate(); drawSel(); drawRouteState(); drawChoice(); }
   // The picked card or route is marked in the document without drawing it again (a note being typed stays).
   function markSel(){
     Array.prototype.forEach.call(document.querySelectorAll('#doc [data-card],#doc [data-route]'), function(el){

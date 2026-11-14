@@ -11,7 +11,6 @@
 
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
 import { after, test } from 'node:test'
 import { JSDOM } from 'jsdom'
 import { createElement } from 'react'
@@ -100,7 +99,7 @@ test('the state line is one piece of code: the snippet draws it under the Booth\
   for (const t of readdirSync(new URL('templates/', root))) {
     const f = new URL(`templates/${t}/index.html`, root)
     if (t === 'shared' || !statSync(new URL(`templates/${t}`, root)).isDirectory() || !existsSync(f)) continue
-    assert.doesNotMatch(readFileSync(f, 'utf8'), /function boothSay\(|kind:\s*'state'|state-retry|state-update/, `${t} sends no state to the bar and draws none itself`)
+    assert.doesNotMatch(readFileSync(f, 'utf8'), /function boothSay\(|kind:\s*'state'|m\.id\s*===?\s*'state-(retry|update)'/, `${t} sends no state to the bar and draws none itself`)
   }
 })
 
@@ -208,7 +207,7 @@ test('Judge\'s fold keeps what its band said: the fixture line, not set up, and 
 test('Failed save is said once, in the OS bar\'s save line, with Try again; Changed (409) says Update there', () => {
   const failed = renderToStaticMarkup(createElement(SaveStatus, { state: 'failed', onRetry: () => {}, updatedAt: null }))
   assert.equal(failed.split('data-state="failed-save"').length - 1, 1, 'said once')
-  assert.match(failed, />Not saved</)
+  assert.match(failed, /Not saved/)
   assert.match(failed, new RegExp(FAILED_SAVE.line.replace(/\./g, '\\.')))
   assert.equal(failed.split('<button').length - 1, 1)
   assert.match(failed, />Try again</)
@@ -221,7 +220,7 @@ test('Failed save is said once, in the OS bar\'s save line, with Try again; Chan
 
 test('an undo\'s note, which only the bands said, is said by the bar beside the save line', () => {
   const html = renderToStaticMarkup(createElement(SaveStatus, { state: 'idle', updatedAt: null, note: 'The audience changed after you wrote it, so nothing was undone.' }))
-  assert.match(html, /data-testid="undo-note"[^>]*role="status"[^>]*>The audience changed after you wrote it, so nothing was undone\./)
+  assert.match(html, /role="status"[^>]*data-testid="undo-note"[^>]*>The audience changed after you wrote it, so nothing was undone\./)
 })
 
 test('a bar item of kind state is dropped, as on develop; the status item and its tone are how a tool reports its state', () => {

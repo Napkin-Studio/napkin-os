@@ -421,6 +421,10 @@
   .ch-bar-os[data-where='document'] .ch-saved-w { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 }
 .ch-saved::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--status-green); }
+.ch-saved-bad::before { background: var(--warn, #b4531a); }
+.ch-saved-note::before { content: none; }
+.ch-saved-note { margin-left: 10px; white-space: normal; max-width: 46ch; }
+.ch-saved-bad .ch-link { margin-left: 4px; }
 
 /* A document's thin accent strip, recoloured by the app's theme (shown only
    when there is one — see "the accent strip" below). */

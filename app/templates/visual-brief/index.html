@@ -422,7 +422,15 @@
     sendBar();
   }
   function foldHtml(k){ return '<section class="card" data-booth-fold="' + k + '">' + (typeof boothFoldHtml === 'function' ? boothFoldHtml(k) : '') + '</section>'; }
+  // Changed brief, said in the Booth (shared boothSay): the brief this page answers has moved on.
+  function drawState(){
+    if(typeof boothSay !== 'function') return;
+    boothSay(boothMoved(S.up, locked()), function(id){
+      if(id === 'state-update') boothUpdateBrief(function(j){ if(j && j.ok === false) toast(j.error || 'The page did not update.'); load(); });
+    });
+  }
   function draw(){
+    drawState();
     if(S.editing) { var keep = $('ed') && $('ed').value; }
     drawHead(); drawFrames(); drawRows(); drawSide(); markSel();
     if(S.editing){ var ed = $('ed'); if(ed){ if(keep != null && S._keep) ed.value = keep; ed.focus(); } }
@@ -435,7 +443,7 @@
     return Promise.all([
       fetch(clanScheme + '/decisions').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }),
       fetch(clanScheme + '/upstream').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
-    ]).then(function(a){ S.view = a[0]; S.up = a[1]; if(!S.editing) draw(); else { drawFrames(); drawSide(); } });
+    ]).then(function(a){ S.view = a[0]; S.up = a[1]; drawState(); if(!S.editing) draw(); else { drawFrames(); drawSide(); } });
   }
 
   // ── writing ─────────────────────────────────────────────────────────────────────────────────────

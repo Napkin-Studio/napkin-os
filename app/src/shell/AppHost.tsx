@@ -23,26 +23,20 @@ import { useSetAside } from './decisions/useSetAside'
 import { useMe } from './decisions/useMe'
 import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
-import BriefGateBand from './gate/BriefGateBand'
-import { useGate } from './gate/useGate'
 import ClientLinkPanel from './gate/ClientLinkPanel'
 import { useBriefUndo } from './versions/useBriefUndo'
 import { openBar, setHistory } from './bar'
-import VersionBand from './versions/VersionBand'
-import { BRIEF_MAKER, SCRIPT_EDITOR, VISUAL_BRIEF, briefMoved, clientLinkDoc } from './gate/words'
-import { ChangedBrief } from '../components/states/ScreenStates'
+import { BRIEF_MAKER, SCRIPT_EDITOR, clientLinkDoc } from './gate/words'
+import { clientLinkRoutes } from './gate/linkRoutes'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
-import { modeOf, statusOf, stateOf, type BarItem } from './appBar'
-import { STATE_ACTIONS } from '../components/states/words'
-import { JudgeBand } from './judge/JudgeBand'
+import { modeOf, statusOf, type BarItem } from './appBar'
 import { JUDGE_APPS, SEND_TO_JUDGE } from './judge/judgeModel'
 import { useJudge } from './judge/useJudge'
 import { createSaveQueue } from '../components/states/saveQueue'
-import { StateStrip } from '../components/states/StateStrip'
 import { useSaveState } from '../components/states/useSaveState'
-import { host, onDevice } from '../host'
+import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
 import { useEngaged } from '../components/markStore'
 import type { AgencyLogo } from './agency/palette'
@@ -124,8 +118,6 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // The host's view of the document, read once: the panel renders it, and
   // the bar and client review read the lock and the client's answers from it.
   const decisions = useDecisions(docPath)
-  // The Brief gate of a Brief Maker brief (features/brief-gate.clan): read for a brief only.
-  const gate = useGate(docPath, open.manifest.app?.app_id === BRIEF_MAKER && !open.is_template)
   // The needs-your-call count, from the one selector the drawer lists from,
   // less what this person set aside (it still blocks the lock).
   const aside = useSetAside(docPath)
@@ -277,7 +269,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const linkDoc = clientLinkDoc({
     docPath, appId: open.manifest.app?.app_id, isTemplate: open.is_template, clientOn,
     locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
-    server: host.frameLoad === 'url' && !onDevice(),
+    server: clientLinkRoutes(),
   })
   const [linkOpen, setLinkOpen] = useState<string | null>(null)
 
@@ -369,19 +361,18 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const appItems = barState.doc === docPath && !clientOn ? barState.items : NO_ITEMS
   // Send to Judge (features/judge.clan): the shell's own button for a tool that sends work to Judge, drawn with the app's.
   const judge = useJudge(docPath, !clientOn && !open.is_template && JUDGE_APPS.includes(appId ?? ''))
-  const barItems = judge.item ? [...appItems, judge.item] : appItems
+  const barItems = judge.item ? [...appItems, ...(judge.failed ? [judge.failed] : []), judge.item] : appItems
   const onBarAction = useCallback((id: string) => {
-    if (id === SEND_TO_JUDGE || (id === STATE_ACTIONS.retry && judge.state && !stateOf(appItems))) { void judge.send(); return }
+    if (id === SEND_TO_JUDGE) { void judge.send(); return }
     if (id === 'client' && linkDoc) { setLinkOpen(linkDoc); return }
     barAction(id)
-  }, [judge, appItems, linkDoc, setLinkOpen])
+  }, [judge, linkDoc, setLinkOpen])
   // The app's own word for its state wins over the shell's, where it sends one.
   const appStatus = statusOf(barItems)
-  // How each write went (the bridge reports it) and the state the app is in, shown between the bar and the work.
+  // How each write went (the bridge reports it), said in the bar's save line.
   // One queue per document: a write that failed in another document is not this one's to retry.
   const writes = useMemo(() => createSaveQueue(), [docPath]) // eslint-disable-line react-hooks/exhaustive-deps
   const saveState = useSaveState(writes)
-  const appState = stateOf(barItems) ?? judge.state
   // The page says its agents are at work (the bar's working chip) before the host's run catches up:
   // the medallion follows the same signal as the chip, with the step it names (owner, 2026-11-10).
   const pageRun = pageRunOf(modeOf(barItems))
@@ -485,7 +476,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           // A locked version keeps what it was made from; the host refuses it too.
           onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
-          saved: saved ? <SaveStatus state={saveState} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
+          saved: saved ? <SaveStatus state={saveState} onRetry={() => writes.retry()} onRefresh={refreshApp} note={briefUndo.note} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
           editMode,
           // A locked document with nothing reopened takes no edit: Client
           // review stands where Edit was.
@@ -510,22 +501,6 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           <button type="button" className="ch-link" onClick={() => setLinkError(null)}>Dismiss</button>
         </div>
       )}
-      <StateStrip queue={writes} app={appState} onAction={onBarAction} onRefresh={refreshApp} />
-      {/* A visual brief or a script answers one brief version: when the brief moves on, say so, and take the new one only into a version that is open. */}
-      {!clientOn && (appId === VISUAL_BRIEF || appId === SCRIPT_EDITOR) && !open.is_template && (() => {
-        const moved = briefMoved(upstream)
-        if (!moved) return null
-        const sealed = !!decisions.view?.lock.locked
-        return (
-          <ChangedBrief
-            from={moved.from || undefined}
-            to={moved.to || undefined}
-            changes={sealed ? 'This version is approved and stays as it is. Start a new version to take the new brief into it.' : 'Updating takes the new brief into this page. What you wrote here stays.'}
-            primary={!sealed}
-            onUpdate={sealed ? () => onUpError('This version is approved. Start a new version before taking the new brief.') : updateFromUpstream}
-          />
-        )
-      })()}
       {!decisions.view?.lock.locked && !open.is_template && changedLinks.map(l => (
         <div key={l.documentId} className="ch-banner ch-banner-note" role="status" data-testid="link-changed">
           <span className="ch-banner-dot" aria-hidden />
@@ -538,18 +513,11 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       <div className={`ch-work ${clientOn ? 'ch-work-review' : ''}`} ref={workRef}>
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}
         <main className="ch-work-main">
-          {!clientOn && gate.view && (
-            <BriefGateBand gate={gate} client={client?.name ?? 'the client'} onChanged={changed} undo={briefUndo} docPath={docPath} gateInBooth />
-          )}
           {linkDoc && linkOpen === linkDoc && (
             <section className="bg-band cl-band" aria-label="Send the client copy" data-testid="client-link-form">
               <ClientLinkPanel key={linkDoc} doc={linkDoc} client={client?.name ?? 'the client'} onClose={() => setLinkOpen(null)} onChanged={() => { refreshApp(); changed() }} />
             </section>
           )}
-          {!clientOn && appId === SCRIPT_EDITOR && !open.is_template && (
-            <VersionBand undo={briefUndo} docPath={docPath} onChanged={changed} />
-          )}
-          {judge.item && <JudgeBand judge={judge} />}
           {!clientOn && decisions.view && (
             <ClientReviewBand
               view={decisions.view}

@@ -32,7 +32,7 @@ Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, co
 g.IS_REACT_ACT_ENVIRONMENT = true
 const { createRoot } = await import('react-dom/client')
 
-const { STATES, STATE_NAMES, MODES, STATE_ACTIONS, FAILED_SAVE, RUN_FAILED, runFailedLine, CHANGED_BRIEF, MISSING_ACCESS, NOT_RIGHT, LONG_RUN, LOADING, J001_BRIEF_EXAMPLE } = await import('../src/components/states/words.ts')
+const { STATES, STATE_NAMES, MODES, FAILED_SAVE, RUN_FAILED, runFailedLine, CHANGED_BRIEF, MISSING_ACCESS, NOT_RIGHT, LONG_RUN, LOADING, J001_BRIEF_EXAMPLE } = await import('../src/components/states/words.ts')
 const S = await import('../src/components/states/ScreenStates.tsx')
 const { Gallery } = await import('../src/components/states/Gallery.tsx')
 const { loadingPhase, RECTS_AFTER_MS, SPINNER_AFTER_MS } = await import('../src/components/states/loading.ts')
@@ -40,7 +40,6 @@ const { createSaveQueue, writeFrom } = await import('../src/components/states/sa
 const { default: SaveStatus } = await import('../src/components/SaveStatus.tsx')
 const { useSaveState } = await import('../src/components/states/useSaveState.ts')
 const { DOORS, PHASE1_DOORS, ROLES, doorsWithoutTool, hasTool, doorById } = await import('../src/components/states/doors.ts')
-const { barFrom } = await import('../src/shell/appBar.ts')
 const { TEASERS } = await import('../src/shell/comingSoon.ts')
 const { SoonCard } = await import('../src/shell/SoonCard.tsx')
 
@@ -269,7 +268,8 @@ test('a write the host refuses as stale shows Changed and is never forced over t
   assert.equal(queue.state(), 'changed')
   let refreshed = 0
   const strip = await draw(createElement(SaveLine, { queue, onRefresh: () => { refreshed++ } }))
-  assert.match(text(strip.host), /The brief changed while you were typing\./)
+  assert.match(text(strip.host), /Not saved/)
+  assert.equal(strip.host.querySelector('[data-state="changed-save"]')!.getAttribute('title'), CHANGED_BRIEF.moved)
   assert.match(text(strip.host.querySelector('button')!), /^Update to the new brief$/)
   await click(strip.host.querySelector('button')!)
   assert.equal(refreshed, 1)

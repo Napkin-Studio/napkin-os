@@ -4,13 +4,13 @@
 
 // Send to Judge for the open document (features/judge.clan): the score card read from the host and kept current
 // (read once, again the moment the host says the document's data changed, and on a slow poll), the one bar button,
-// and the state a failed run leaves. The host does the scoring and the arithmetic; this holds nothing of either.
+// and the chip a failed run leaves in the OS bar. The host does the scoring and the arithmetic; this holds nothing of either.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { host } from '../../host'
 import { httpHost } from '../../host/http'
 import type { DocOps, JudgeCardView } from '../../host/types'
-import type { AppState, BarItem } from '../appBar'
+import type { BarItem } from '../appBar'
 import { failureOf, refusalLine, SEND_TO_JUDGE } from './judgeModel'
 
 const POLL_MS = 4000
@@ -22,8 +22,8 @@ export interface Judge {
   busy: boolean
   /** The bar's button; null when the document is not Judge's. */
   item: BarItem | null
-  /** The state a failed run leaves, for the strip between the bar and the work. */
-  state: AppState | null
+  /** The chip a failed run leaves in the OS bar (the page's Booth never heard of a run the shell sent): the host's words in its title. */
+  failed: BarItem | null
   send: () => Promise<void>
   overrule: (reason: string, route?: 'team' | 'cd') => Promise<boolean>
 }
@@ -91,6 +91,6 @@ export function useJudge(docPath: string, on: boolean): Judge {
     disabled: busy || (card !== null && !card.can_score),
     title: card && !card.can_score ? (card.why_not ?? '') : 'Judge scores this version out of 30 and advises. The creative director decides.',
   }) : null, [on, busy, card])
-  const state = useMemo<AppState | null>(() => failed ? { name: 'run-failed', why: failed.why } : null, [failed])
-  return { card, line: note ?? failed?.line ?? null, busy, item, state, send, overrule }
+  const failedChip = useMemo<BarItem | null>(() => failed ? { kind: 'chip', label: 'Judge could not score', tone: 'warn', title: failed.line } : null, [failed])
+  return { card, line: note ?? failed?.line ?? null, busy, item, failed: failedChip, send, overrule }
 }

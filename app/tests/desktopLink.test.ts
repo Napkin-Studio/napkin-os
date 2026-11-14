@@ -10,10 +10,12 @@
 import './desktopSetup.ts'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { test } from 'node:test'
 import { host, onDevice, isDesktop, hasServer } from '../src/host/index.ts'
 import { listClientLinksOf } from '../src/host/http.ts'
-import { clientLinkDoc, clientLinkRoutes } from '../src/shell/gate/words.ts'
+import { clientLinkDoc } from '../src/shell/gate/words.ts'
+import { clientLinkRoutes } from '../src/shell/gate/linkRoutes.ts'
 
 test('on the desktop app Send the client copy does not open the server form', async () => {
   assert.equal(isDesktop, true)
@@ -28,8 +30,8 @@ test('on the desktop app Send the client copy does not open the server form', as
 })
 
 test('AppHost asks clientLinkRoutes(), which needs hasServer', () => {
-  const app = readFileSync(new URL('../src/shell/AppHost.tsx', import.meta.url), 'utf8')
+  const app = readFileSync(resolve(process.cwd(), 'src/shell/AppHost.tsx'), 'utf8')
   assert.match(app, /server: clientLinkRoutes\(\)/)
   assert.doesNotMatch(app, /server: host\.frameLoad === 'url' && !onDevice\(\)/)
-  assert.match(readFileSync(new URL('../src/shell/gate/words.ts', import.meta.url), 'utf8'), /hasServer && host\.frameLoad === 'url' && !onDevice\(\)/)
+  assert.match(readFileSync(resolve(process.cwd(), 'src/shell/gate/linkRoutes.ts'), 'utf8'), /hasServer && host\.frameLoad === 'url' && !onDevice\(\)/)
 })
