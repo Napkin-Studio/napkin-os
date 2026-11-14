@@ -388,7 +388,7 @@ export function shareItems(doc: Pick<DocBar, 'onCopyLink' | 'onSave' | 'locked' 
   const send = !doc.locked
     ? { label: 'Send the client copy', hint: 'Lock it first: the client sees the version you lock', run: () => {}, disabled: true, apart: true }
     : client && doc.onBarAction
-      ? { label: 'Send the client copy', hint: client.title || 'The locked version as a PDF, every part in it', run: () => doc.onBarAction?.('client'), apart: true }
+      ? { label: 'Send the client copy', hint: (client.kind === 'button' && client.title) || 'The locked version as a PDF, every part in it', run: () => doc.onBarAction?.('client'), apart: true }
       : { label: 'Send the client copy', hint: 'This tool has no client copy yet', run: () => {}, disabled: true, apart: true }
   return [
     ...(doc.onCopyLink
