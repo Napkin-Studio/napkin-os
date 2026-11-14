@@ -474,14 +474,11 @@ class RunwayProvider:
     # The Provider interface
 
     def _guard_estimate(self, job: ProviderJob) -> float:
-        """The spend guard's ceiling for `job`: the sheet's price for the op (an `estimateUsd` where the sheet
-        gives one, else contracts/pricing.py at the job's settings), or UNPRICED_EUR when neither prices it.
-        Never zero, never an error: a guard that cannot price a job still asks."""
+        """The spend guard's ceiling for `job`: the sheet's price for the op at the job's settings (the one
+        price function, contracts/pricing.py), or UNPRICED_EUR when it cannot price it. Never zero, never an
+        error: a guard that cannot price a job still asks."""
         try:
             sheet = effective_sheet(self._sheet, job.op, job.model)
-            spec = sheet["ops"].get(job.op) or {}
-            if spec.get("estimateUsd") is not None:
-                return max(float(spec["estimateUsd"]), 0.0) or UNPRICED_EUR
             from contracts_dir import pricing
             settings = {"durationS": job.duration_s, "ratio": job.ratio, "outputs": job.outputs, "audio": job.audio}
             price = pricing().op_usd(sheet, job.op, None, settings)
