@@ -13,8 +13,18 @@ import { pushData } from '../appExport'
 import { labelOf } from './compare'
 import { createUndoStack, keepsItsOwnUndo, undoKeyOf, type UndoStack } from './undoStack'
 
-/** Parts that are not the brief's words (the host's own, the signers, what is held): never undone here. */
-const NOT_WORDS = new Set(['projection', 'upstream', 'signers', 'locked_fields', 'handoffs', 'film'])
+/** Parts that are not the brief's words (the host's own, the signers, what is held, what may be read):
+ *  never undone here. The same list as `NOT_CONTENT` in crates/napkin-host/src/ops/versions.rs. */
+const NOT_WORDS = new Set([
+  'projection', 'upstream', 'signers', 'locked_fields', 'locked', 'confidential_fields', 'materials', 'passages',
+  'handoffs', 'film',
+])
+
+/** The parts marked Confidential now (the draft's parts leave them out). */
+export async function marksNow(): Promise<string[]> {
+  const m = (await host.getCurrent()).data.confidential_fields
+  return Array.isArray(m) ? m.filter((x): x is string => typeof x === 'string') : []
+}
 
 const named = (keys: string[]) => keys.map(labelOf).join(', ').toLowerCase()
 
@@ -29,8 +39,8 @@ export interface BriefUndo {
   onSaved: () => void
   /** The key came from inside the brief's frame. */
   onFrameKey: (dir: 'undo' | 'redo') => void
-  /** A restore the person made: it can be undone like an edit. */
-  remember: (before: Record<string, unknown>, after: Record<string, unknown>, id: string) => void
+  /** A restore the person made: it can be undone like an edit (with the Confidential marks on each side). */
+  remember: (before: Record<string, unknown>, after: Record<string, unknown>, id: string, marks?: { before: string[]; after: string[] }) => void
 }
 
 export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void): BriefUndo {
@@ -56,10 +66,11 @@ export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void
       try {
         const last = (await host.getVersions()).draft.last_edit
         if (!last || last.person !== me.current || last.keys.some(k => NOT_WORDS.has(k))) return
-        const parts = (await host.getVersion('draft')).parts
+        const [parts, marks] = await Promise.all([host.getVersion('draft').then(v => v.parts), marksNow()])
         const after: Record<string, unknown> = {}
         for (const k of last.keys) after[k] = parts[k] ?? null
-        stack.current.push({ id: last.decision, keys: last.keys, before: last.before, after })
+        // A write of words leaves the marks as they were: the same on both sides.
+        stack.current.push({ id: last.decision, keys: last.keys, before: last.before, after, marks: { before: marks, after: marks } })
         bump(n => n + 1)
       } catch { /* the stack just does not take this one */ }
     })
@@ -70,8 +81,8 @@ export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void
     busy.current = true
     try {
       await line.current
-      const current = (await host.getVersion('draft')).parts
-      const plan = stack.current.plan(dir, current)
+      const [current, marks] = await Promise.all([host.getVersion('draft').then(v => v.parts), marksNow()])
+      const plan = stack.current.plan(dir, current, marks)
       if (plan.kind === 'nothing') { setNote(dir === 'undo' ? 'Nothing to undo.' : 'Nothing to redo.'); return }
       if (plan.kind === 'stale') {
         setNote(`The ${named(plan.keys)} changed after you wrote it, so nothing was ${dir === 'undo' ? 'undone' : 'redone'}.`)
@@ -103,10 +114,10 @@ export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void
     return () => window.removeEventListener('keydown', onKey)
   }, [on, run])
 
-  const remember = useCallback((before: Record<string, unknown>, after: Record<string, unknown>, id: string) => {
+  const remember = useCallback((before: Record<string, unknown>, after: Record<string, unknown>, id: string, marks?: { before: string[]; after: string[] }) => {
     const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => !NOT_WORDS.has(k))
     const pick = (o: Record<string, unknown>) => Object.fromEntries(keys.map(k => [k, o[k] ?? null]))
-    if (keys.length) { stack.current.push({ id, keys, before: pick(before), after: pick(after) }); bump(n => n + 1) }
+    if (keys.length) { stack.current.push({ id, keys, before: pick(before), after: pick(after), marks }); bump(n => n + 1) }
   }, [])
 
   return {
