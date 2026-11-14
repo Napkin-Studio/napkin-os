@@ -36,6 +36,7 @@ const KEY: [u8; 32] = [9u8; 32];
 struct Rig {
     dir: tempfile::TempDir,
     app: Router,
+    ctx: Arc<AppCtx>,
 }
 
 fn rig() -> Rig {
@@ -58,8 +59,9 @@ fn rig() -> Rig {
         secure: false,
     };
     Rig {
-        app: napkin_web::router_with(ctx, None, Arc::new(identity)),
+        app: napkin_web::router_with(ctx.clone(), None, Arc::new(identity)),
         dir,
+        ctx,
     }
 }
 
@@ -815,4 +817,179 @@ async fn no_people_response_scores_a_person() {
             }
         }
     }
+}
+
+// ── after the security review: empty roles, a change with no line, Cognito, the event stream ──
+
+#[tokio::test]
+async fn an_empty_role_list_grants_nothing_and_is_refused() {
+    let r = rig();
+    let ad = sign_in(&r, "ad@wk").await;
+    let (st, _) = call(
+        &r,
+        "PUT",
+        "/api/admin/people/aoife@wk/roles",
+        Some(&ad.cookie),
+        Some(json!({ "roles": [] })),
+    )
+    .await;
+    assert_eq!(
+        st,
+        StatusCode::BAD_REQUEST,
+        "the build's route refuses the same"
+    );
+    // a person the store holds with no role (sam, from a roster line with none) opens no role's routes
+    let sam = sign_in(&r, "sam@wk").await;
+    for route in [
+        "time-money",
+        "dashboard",
+        "jobs/J001/scope",
+        "client-brains",
+    ] {
+        let (st, _) = call(
+            &r,
+            "GET",
+            &format!("/api/t/{}/{route}", sam.tenant),
+            Some(&sam.cookie),
+            None,
+        )
+        .await;
+        assert_eq!(st, StatusCode::FORBIDDEN, "{route}");
+    }
+    let (_, d) = doors(&r, &sam).await;
+    assert_eq!(d["restricted"], json!(true), "{d}");
+    assert_eq!(d["tools"], json!([]), "{d}");
+    assert_eq!(d["jobs"]["manage"], json!(false), "{d}");
+}
+
+#[tokio::test]
+async fn a_change_that_cannot_be_recorded_does_not_happen() {
+    let r = rig();
+    let ad = sign_in(&r, "ad@wk").await;
+    let log = r.dir.path().join("_people").join("changes.jsonl");
+    let _ = std::fs::remove_file(&log);
+    std::fs::create_dir_all(&log).unwrap(); // the change log cannot be appended to
+    let (st, _) = call(
+        &r,
+        "PUT",
+        "/api/admin/people/aoife@wk/roles",
+        Some(&ad.cookie),
+        Some(json!({ "roles": ["admin"] })),
+    )
+    .await;
+    assert!(!st.is_success(), "{st}");
+    assert_eq!(
+        r.ctx.people().unwrap().active("aoife@wk").unwrap().roles,
+        ["planning"]
+    );
+}
+
+#[tokio::test]
+async fn the_people_routes_use_the_store_under_cognito() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = Arc::new(AppCtx::new(
+        dir.path().to_path_buf(),
+        Arc::new(NoConfig),
+        None,
+        40,
+    ));
+    let roster = dir.path().join("accounts.tsv");
+    std::fs::write(&roster, ROSTER).unwrap();
+    let people = napkin_web::people::People::open_if_any(dir.path().join("_people"), Some(&roster))
+        .unwrap()
+        .unwrap();
+    ctx.set_people(Arc::new(people));
+    let sessions = napkin_web::auth::Sessions::new(&KEY).unwrap();
+    let cookie_of = |u: &str| {
+        let (username, agency) = napkin_web::auth::Account::parse_username(u).unwrap();
+        format!(
+            "napkin_session={}",
+            sessions.issue(&napkin_web::auth::Account {
+                username,
+                agency,
+                name: None,
+                roles: Vec::new(),
+            })
+        )
+    };
+    let identity = napkin_web::tenant::Identity {
+        mode: napkin_web::tenant::Mode::Accounts {
+            provider: napkin_web::auth::Provider::Cognito(napkin_web::auth::Cognito::new(
+                "eu-west-1",
+                "client",
+            )),
+            sessions: napkin_web::auth::Sessions::new(&KEY).unwrap(),
+        },
+        secure: false,
+    };
+    let r = Rig {
+        app: napkin_web::router_with(ctx.clone(), None, Arc::new(identity)),
+        dir,
+        ctx,
+    };
+    let (eng, ad) = (cookie_of("engineer@napkin"), cookie_of("ad@wk"));
+    let (st, v) = call(&r, "GET", "/api/admin/people", Some(&eng), None).await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    let (st, v) = call(
+        &r,
+        "PUT",
+        "/api/admin/people/aoife@wk/roles",
+        Some(&ad),
+        Some(json!({ "roles": ["traffic"] })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    let (st, v) = call(&r, "DELETE", "/api/admin/people/cian@wk", Some(&eng), None).await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    let (st, _) = call(&r, "GET", "/api/agency-looks", None, None).await;
+    assert_eq!(st, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn a_removed_persons_event_stream_ends_at_the_next_event() {
+    let r = rig();
+    let ad = sign_in(&r, "ad@wk").await;
+    let aoife = sign_in(&r, "aoife@wk").await;
+    let req = Request::builder()
+        .uri(format!("/api/t/{}/events", aoife.tenant))
+        .header(header::COOKIE, &aoife.cookie)
+        .body(Body::empty())
+        .unwrap();
+    let resp = r.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let mut body = resp.into_body();
+    let tenant = TenantId::of_agency("wk");
+    // first, an event reaches her
+    r.ctx
+        .events
+        .publish(&tenant, &napkin_host::HostEvent::TitleChanged("one".into()));
+    let first = tokio::time::timeout(std::time::Duration::from_secs(5), body.frame())
+        .await
+        .expect("an event")
+        .expect("a frame")
+        .unwrap();
+    assert!(String::from_utf8_lossy(first.data_ref().unwrap()).contains("one"));
+    let (st, _) = call(
+        &r,
+        "DELETE",
+        "/api/admin/people/aoife@wk",
+        Some(&ad.cookie),
+        None,
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK);
+    r.ctx
+        .events
+        .publish(&tenant, &napkin_host::HostEvent::TitleChanged("two".into()));
+    let next = tokio::time::timeout(std::time::Duration::from_secs(5), body.frame())
+        .await
+        .expect("the stream answers");
+    let leaked = next
+        .and_then(|f| f.ok())
+        .and_then(|f| f.into_data().ok())
+        .is_some_and(|d| String::from_utf8_lossy(&d).contains("two"));
+    assert!(
+        !leaked,
+        "a removed person still receives the agency's events"
+    );
 }

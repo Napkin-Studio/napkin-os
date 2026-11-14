@@ -722,7 +722,7 @@ mod tests {
     #[test]
     fn the_identity_providers_roles_are_never_read() {
         // an ID token whose claims carry custom:roles: the person is named, their roles are the People store's
-        let claims = serde_json::json!({ "name": "Aoife", "custom:roles": "admin,planning" });
+        let claims = serde_json::json!({ "cognito:username": "aoife@wk", "name": "Aoife", "custom:roles": "admin,planning" });
         let token = format!("h.{}.s", B64.encode(claims.to_string()));
         let v = serde_json::json!({ "AuthenticationResult": { "IdToken": token } });
         match Cognito::done("aoife@wk", &v) {
@@ -732,5 +732,24 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn a_cognito_sign_in_is_the_tokens_person_not_the_name_typed() {
+        // the pool answered for aoife (its own username claim); the name typed was another's
+        let claims = serde_json::json!({ "cognito:username": "aoife@wk", "name": "Aoife" });
+        let token = format!("h.{}.s", B64.encode(claims.to_string()));
+        let v = serde_json::json!({ "AuthenticationResult": { "IdToken": token } });
+        assert!(matches!(Cognito::done("ad@wk", &v), SignIn::Refused(_)));
+        match Cognito::done("Aoife@WK", &v) {
+            SignIn::Done(a) => assert_eq!(a.username, "aoife@wk"),
+            other => panic!("{other:?}"),
+        }
+        // a token with no username claim proves nobody
+        let bare = serde_json::json!({ "AuthenticationResult": { "IdToken": format!("h.{}.s", B64.encode("{}")) } });
+        assert!(matches!(
+            Cognito::done("aoife@wk", &bare),
+            SignIn::Refused(_)
+        ));
     }
 }
