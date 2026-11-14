@@ -25,26 +25,62 @@ function judgeTests(rubric, kind, fail) {
 
 /** A new stand-in server (not listening yet): `standIn().listen(port, '127.0.0.1')`. */
 export function standIn(answersDir, rubricPath = new URL('../../server/napkin/judge/rubric.json', import.meta.url)) {
-  let job = { state: 'running', stage: 'research' }
-  const failNext = new Set()
-  const variants = {}
+  // State is kept apart per caller (the e2e README, "Several workers"). A request from napkin-web carries the document it came from
+  // (`clan.id`) and, when the document has one, its client (`clan.workspace_client.id`); the host sends nothing else that names the caller
+  // (the tenant is not in it, and x-napkin-agency is shared by every test of an agency). A test says which documents and clients are its own
+  // with POST /control {scope: {docs: [...], clients: [...]}, ...}: that makes (or finds) one state for those ids, and a request is answered from
+  // the state of its client or document. A request that matches no scope, and a /control with no scope, use the shared state, as before.
+  const fresh = () => ({ job: { state: 'running', stage: 'research' }, failNext: new Set(), variants: {} })
+  const shared = fresh()
+  const byId = new Map() // a document id or a client id -> its state
   const asked = []
+  const idsOf = body => {
+    const clan = body?.clan
+    const doc = typeof clan?.id === 'string' ? clan.id : null
+    const client = typeof clan?.workspace_client?.id === 'string' ? clan.workspace_client.id : null
+    return { doc, client }
+  }
+  const stateFor = ({ doc, client }) => {
+    const st = (doc && byId.get(doc)) || (client && byId.get(client)) || null
+    // A document of a client that has a scope belongs to it too, so a document the page made later is found by its client.
+    if (st) for (const id of [doc, client]) if (id && !byId.has(id)) byId.set(id, st)
+    return st
+  }
   return createServer((req, res) => {
     let body = ''
     req.on('data', c => { body += c })
     req.on('end', () => {
       const send = (code, v) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)) }
-      if (req.url === '/control/log' && req.method === 'GET') return send(200, asked)
-      if (req.url === '/control' && req.method === 'POST') {
-        const { fail, variant, ...state } = JSON.parse(body || '{}')
-        if (typeof fail === 'string') failNext.add(fail)
-        if (variant && typeof variant === 'object') Object.assign(variants, variant)
-        job = { ...job, ...state }
-        return send(200, job)
+      const url = new URL(req.url, 'http://stand-in')
+      if (url.pathname === '/control/log' && req.method === 'GET') {
+        // ?docs=a,b&clients=c: only what was asked about those documents or clients (and what the clients' later documents asked).
+        const docs = (url.searchParams.get('docs') ?? '').split(',').filter(Boolean)
+        const clients = (url.searchParams.get('clients') ?? '').split(',').filter(Boolean)
+        if (!docs.length && !clients.length) return send(200, asked.map(({ task, at }) => ({ task, at })))
+        const mine = new Set([...docs, ...clients].map(id => byId.get(id)).filter(Boolean))
+        return send(200, asked
+          .filter(e => docs.includes(e.doc) || clients.includes(e.client) || (mine.size > 0 && mine.has(stateFor(e))))
+          .map(({ task, at }) => ({ task, at })))
+      }
+      if (url.pathname === '/control' && req.method === 'POST') {
+        const { fail, variant, scope, ...state } = JSON.parse(body || '{}')
+        let st = shared
+        const ids = [...(scope?.docs ?? []), ...(scope?.clients ?? [])].filter(id => typeof id === 'string' && id)
+        if (ids.length) {
+          st = ids.map(id => byId.get(id)).find(Boolean) ?? fresh()
+          for (const id of ids) byId.set(id, st)
+        }
+        if (typeof fail === 'string') st.failNext.add(fail)
+        if (variant && typeof variant === 'object') Object.assign(st.variants, variant)
+        st.job = { ...st.job, ...state }
+        return send(200, st.job)
       }
       let task = null
-      try { task = JSON.parse(body || '{}')?.payload?.task ?? null } catch { /* not JSON: the old reply */ }
-      if (typeof task === 'string') asked.push({ task, at: new Date().toISOString() })
+      let parsed = null
+      try { parsed = JSON.parse(body || '{}'); task = parsed?.payload?.task ?? null } catch { /* not JSON: the old reply */ }
+      const ids = idsOf(parsed)
+      const { job, failNext, variants } = stateFor(ids) ?? shared
+      if (typeof task === 'string') asked.push({ task, at: new Date().toISOString(), ...ids })
       if (typeof task === 'string' && failNext.delete(task)) {
         return send(502, { error: { type: 'provider_error', message: 'e2e stand-in: the provider failed' } })
       }

@@ -21,6 +21,7 @@
 
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
+import { createServer } from 'node:net'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -40,6 +41,27 @@ const config = join(work, 'config')
 for (const d of [seed, data, scratch, config]) mkdirSync(d)
 const mwPort = process.env.NAPKIN_E2E_MW_PORT || '18081'
 const rosterPort = process.env.NAPKIN_E2E_ROSTER_PORT || '18082'
+
+// Two stacks on one machine must not share a port: the second would talk to the first one's servers (or its stand-in, whose state is
+// the first run's) or hang. Fail now, before any build, and name the three variables.
+async function inUse(p) {
+  return await new Promise(done => {
+    const probe = createServer()
+    probe.once('error', () => done(true))
+    probe.listen(Number(p), '127.0.0.1', () => probe.close(() => done(false)))
+  })
+}
+const wanted = [['NAPKIN_E2E_PORT', port], ['NAPKIN_E2E_ROSTER_PORT', rosterPort], ['NAPKIN_E2E_MW_PORT', mwPort]]
+const clash = []
+for (const [name, p] of wanted) {
+  if (await inUse(p)) clash.push(`${name}=${p} is already in use`)
+  else if (wanted.some(([n, q]) => n < name && q === p)) clash.push(`${name}=${p} is the same port as another of the three`)
+}
+if (clash.length) {
+  console.error(`e2e stack: ${clash.join('; ')}.\n  Another stack (or a lead's run) holds it. Choose three free, different ports: NAPKIN_E2E_PORT, NAPKIN_E2E_ROSTER_PORT and NAPKIN_E2E_MW_PORT.`)
+  rmSync(work, { recursive: true, force: true })
+  process.exit(1)
+}
 
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { stdio: 'inherit', cwd: root, ...opts })
@@ -78,6 +100,11 @@ run('cargo', ['build', '-q', '-p', 'napkin-web'])
 // A stand-in middleware, local and free (standin.mjs): it answers every task as one job whose state the test sets
 // (POST /control {state, stage}), and from fixture files for the tasks Phase 2 names (seed/j001/p2/answers/). No model, no network.
 const middleware = standIn()
+middleware.once('error', e => {
+  console.error(`e2e stack: the stand-in middleware could not listen on 127.0.0.1:${mwPort} (${e.code ?? e.message}). Set NAPKIN_E2E_MW_PORT (with NAPKIN_E2E_PORT and NAPKIN_E2E_ROSTER_PORT) to a free port.`)
+  cleanup()
+  process.exit(1)
+})
 middleware.listen(Number(mwPort), '127.0.0.1')
 // Placeholder people only, one per agency kit the screenshots compare (wk, tbwa) and Napkin's own.
 const roster = process.env.NAPKIN_E2E_ROSTER === '1' ? join(config, 'roster.tsv') : null
