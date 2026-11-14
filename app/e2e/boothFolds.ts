@@ -32,3 +32,66 @@ export async function openWork(page: Page, client: string, tool: string, title: 
   }).toPass({ timeout: 20_000 })
   await toolPage.getByTestId('work-item').filter({ hasText: title }).first().click()
 }
+
+/** A command of the OS bar (Undo, Redo), by its title: the bar's search field lists it and Enter runs it. Cmd Z does the same. */
+export async function barCommand(page: Page, title: 'Undo' | 'Redo') {
+  await page.getByTestId('bar-search-input').click()
+  await page.getByTestId('bar-search-input').fill(title)
+  await page.locator('[data-testid="bar-result"][data-kind="command"]').filter({ has: page.locator('b', { hasText: new RegExp(`^${title}$`) }) }).first().click()
+}
+
+/** Whether the bar offers a command now (it lists only the ones that can run). */
+export async function barOffers(page: Page, title: 'Undo' | 'Redo'): Promise<boolean> {
+  await page.getByTestId('bar-search-input').click()
+  await page.getByTestId('bar-search-input').fill(title)
+  const n = await page.locator('[data-testid="bar-result"][data-kind="command"]').filter({ has: page.locator('b', { hasText: new RegExp(`^${title}$`) }) }).count()
+  await page.keyboard.press('Escape')
+  return n > 0
+}
+
+/**
+ * Nothing is drawn between the OS bar and an open document (features/align-booth.clan): the frame's top edge meets the
+ * bar's bottom edge. With NAPKIN_E2E_SHOTS set, the screen is kept as bands-<tool>-<width>.png.
+ */
+export async function nothingBetweenBarAndDocument(page: Page, tool: string) {
+  await expect(page.locator('iframe').first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByTestId('os-bar')).toBeVisible()
+  const gap = await page.evaluate(() => {
+    const bar = document.querySelector('[data-testid="os-bar"]')?.getBoundingClientRect()
+    const frame = document.querySelector('iframe')?.getBoundingClientRect()
+    return bar && frame ? Math.round(frame.top - bar.bottom) : null
+  })
+  expect(gap, `the frame's top edge meets the bar's bottom edge on ${tool}`).not.toBeNull()
+  expect(Math.abs(gap!), `nothing between the bar and the ${tool}`).toBeLessThanOrEqual(1)
+  expect(await page.locator('[data-testid="gate-band"], [data-testid="version-band"], [data-testid="judge-band"]').count()).toBe(0)
+  const dir = process.env.NAPKIN_E2E_SHOTS
+  if (dir) {
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: `${dir}/bands-${tool}-${page.viewportSize()?.width ?? 0}.png`, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
+  }
+}
+
+/**
+ * The shell's alert line (Failed save, Update, an undo's note) covers no control of the page: at the top of the page and at its end,
+ * no visible button, link, field or summary in the frame, and nothing of the Booth's header, lies under it.
+ */
+export async function alertCoversNoControl(page: Page) {
+  const alert = page.locator('.tb-alert').first()
+  await expect(alert).toBeVisible()
+  // At the top of the page: every control. At its end: the page-end controls (the lower half of the screen); anything scrolling past
+  // the top of the screen passes under any fixed line, and is not what the alert is placed for.
+  const check = async (where: string) => {
+    const a = (await alert.boundingBox())!
+    const frame = (await page.locator('iframe').first().boundingBox())!
+    const rects = await page.frameLocator('iframe').first().locator('body').evaluate(() => [...document.querySelectorAll('button,a[href],input,textarea,select,summary,[role="button"]')]
+      .filter(e => (e as HTMLElement).offsetParent !== null || getComputedStyle(e).position === 'fixed').map(e => { const r = e.getBoundingClientRect(); return { n: `${e.tagName}:${(e.getAttribute('data-testid') || e.id || (e.textContent || '').trim()).slice(0, 30)}`, x: r.x, y: r.y, w: r.width, h: r.height } }).filter(r => r.w > 0 && r.h > 0))
+    const half = (await page.evaluate(() => innerHeight)) / 2 - frame.y
+    const hit = rects.filter(r => (where === 'top' || r.y > half) && r.x + frame.x < a.x + a.width && r.x + frame.x + r.w > a.x && r.y + frame.y < a.y + a.height && r.y + frame.y + r.h > a.y).map(r => r.n)
+    expect(hit, `${where}: nothing the alert lies over is a control`).toEqual([])
+  }
+  await check('top')
+  await page.frameLocator('iframe').first().locator('body').evaluate(() => scrollTo(0, document.documentElement.scrollHeight))
+  await page.waitForTimeout(300)
+  await check('end')
+  await page.frameLocator('iframe').first().locator('body').evaluate(() => scrollTo(0, 0))
+}

@@ -62,6 +62,8 @@ export interface DocBar {
   loading?: boolean
   /** "Saved", where each change is kept as it is made (SaveStatus); absent on the device. */
   saved?: ReactNode
+  /** A write that did not save, or an undo's note: the one place the shell says it, under the bar's right edge (SaveAlert). */
+  saveAlert?: ReactNode
   /** Share ▾ "Copy link": a link people in the agency open it from (`?open=`); absent where there is no server to open it from. */
   onCopyLink?: () => void
   /** Locked (and nothing reopened): the version a client would see. */

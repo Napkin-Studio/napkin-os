@@ -20,6 +20,7 @@
           none), boothApply(false) whenever the selection or the view changes the Booth's width.
        4. One call once the page is drawn: boothStart({
             panel: id of the Booth's column,
+            state: optional function returning an element for the state line where the Booth is not on screen,
             head: id of the element the header is put first in (default: panel),
             desk: function(){ return the desk element },
             size: function(desk){ set the width the Booth takes (the page's own boothWidth(...)), as a CSS variable on the desk },
@@ -27,6 +28,11 @@
             fold: function(){ true when the edge tab may show (the document is open, not a start screen) },
             inert: function(){ true when a hidden Booth is taken out of the tab order },
             key: function(e){ true when ] may toggle (not typing, not on a start screen) } }).
+     The state line: boothSay(state, act) says Run failed, Changed brief, Long run, Not right, Missing access or
+     Loading under the header, in the shell's words (components/states/words.ts), text only; act(id) hears a
+     pressed button (state-retry, state-update, state-ask, state-fix-N); boothSay(null) is Normal. boothMoved(up,
+     sealed) and boothUpdateBrief(done) are the Changed brief a page reads from GET clan://upstream and takes
+     with POST clan://upstream/update. Client review mode (clan:clientmode) says nothing here.
      It tells the shell {type:'clan:booth', open} when a person hides or shows it, and takes the shell's
      {type:'clan:booth', open} on every load (AppRuntime.tsx). It does not draw what is inside the Booth.
 
@@ -81,8 +87,28 @@
   [data-booth-holder]{font:500 12.5px/1.45 var(--font-ui);color:var(--booth-ink-soft)}
   [data-booth-holder]:empty{display:none}
   [data-booth-holder] .booth-late{color:var(--booth-warn);font-weight:600}
+  /* the state line: Run failed, Changed brief, Long run, Not right, Missing access, Loading, said once under the header */
+  .booth-state{display:grid;gap:8px;padding:12px 18px;border-bottom:1px solid var(--booth-line);border-left:3px solid var(--booth-warn);background:color-mix(in srgb,var(--booth-warn) 6%,var(--booth-paper));color:var(--booth-ink);min-width:0}
+  .booth-state[hidden]{display:none}
+  .booth-line{position:fixed;left:8px;right:8px;top:calc(var(--clan-top,0px) + 6px);z-index:45;display:flex;align-items:center;gap:6px;min-height:44px;padding:0 4px 0 12px;background:var(--booth-paper);color:var(--booth-ink);border:1px solid var(--booth-line);border-left:3px solid var(--booth-warn);border-radius:10px;box-shadow:0 8px 22px -12px rgba(0,0,0,.4);font:500 13px/1.3 var(--font-ui);transition:opacity .26s ease,transform .26s var(--booth-ease)}
+  .booth-line[hidden]{display:none}
+  .booth-line.out{opacity:0;transform:translateY(-8px)}
+  .booth-line .bl-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .booth-line button{all:unset;box-sizing:border-box;cursor:pointer;min-height:44px;min-width:44px;padding:0 12px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font:500 12.5px var(--font-ui);color:var(--booth-ink)}
+  .booth-line button[data-bl-act]{border:1px solid var(--booth-line);background:var(--booth-paper)}
+  .booth-line button:focus-visible{outline:2px solid var(--ag-base);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){.booth-line{transition:opacity .15s ease}.booth-line.out{transform:none}}
+  .booth-state[data-state="long-run"],.booth-state[data-state="loading"],.booth-state[data-state="not-right"]{border-left-color:var(--booth-line);background:var(--booth-paper)}
+  .booth-state .bs-line{margin:0;font:600 14px/1.4 var(--font-ui);color:var(--booth-ink)}
+  .booth-state .bs-small{margin:0;font:400 13px/1.5 var(--font-ui);color:var(--booth-ink-soft)}
+  .booth-state .bs-acts{display:flex;flex-wrap:wrap;gap:8px}
+  .booth-state button{all:unset;box-sizing:border-box;cursor:pointer;min-height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--booth-line);display:inline-flex;align-items:center;font:500 12.5px var(--font-ui);color:var(--booth-ink);background:var(--booth-paper)}
+  .booth-state button:hover{border-color:color-mix(in srgb,var(--ag-base) 30%,var(--booth-line))}
+  .booth-state button:focus-visible{outline:2px solid var(--ag-base);outline-offset:2px}
+  @media (max-width:640px){.booth-state button{min-height:44px}}
 </style>
 <template id="booth-hd-tpl"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span><button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="true" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div></template>
+<template id="booth-line-tpl"><div class="booth-line" id="boothLine" data-testid="booth-state-line" role="status" aria-live="polite" hidden><span class="bl-t"></span><button type="button" data-bl-act="" hidden></button><button type="button" class="bl-x" data-bl="dismiss" aria-label="Dismiss. It stays in the Booth.">&times;</button></div></template>
 <template id="booth-edge-tpl"><button type="button" class="booth-edge" id="boothEdge" aria-expanded="true" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="-1"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span><span class="booth-ct" id="boothCt"></span></button></template>
 <script id="napkin-booth-js">
   // The Booth's state and what it does (features/booth.clan; mock panel-v3, B · Full). While it is hidden, a
@@ -106,6 +132,15 @@
     else if(ev.t==='toggle') n.open=!s.open;
     return n;
   }
+  // What waits, in words: the page's questions, and the state it says ("the run stopped"), each by its own name.
+  function boothWaitWords(){
+    if(!BOOTH) return '';
+    var pa=BOOTH.pa|0, w=[];
+    if(pa) w.push(pa+(pa===1?' question':' questions')+' waiting');
+    if((BOOTH.ps|0)&&BOOTH_SAY.last){ var n=BOOTH_SAY.last.name; w.push({'run-failed':'the run stopped','changed-brief':'the brief changed','long-run':'a long run','missing-access':'no access yet','not-right':'a note is asked for','loading':'still loading'}[n]||'something to read'); }
+    else if(!pa&&BOOTH.ask) w.push(BOOTH.ask+(BOOTH.ask===1?' question':' questions')+' waiting');
+    return w.length?', '+w.join(', '):'';
+  }
   function boothApply(instant){
     if(!BOOTH||!BOOTH_AT) return;
     var d=BOOTH_AT.desk(), p=$(BOOTH_AT.panel), e=$('boothEdge'), hid=!BOOTH.open; if(!d||!p) return;
@@ -117,7 +152,7 @@
     if(e){
       var k=BOOTH.ask, ct=$('boothCt'); if(ct) ct.textContent=k?String(k):'';
       e.classList.toggle('has', !!k); e.tabIndex=hid?0:-1; e.setAttribute('aria-expanded', String(!hid));
-      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+(k===1?' question':' questions')+' waiting':''));
+      e.setAttribute('aria-label', 'Open the Booth'+boothWaitWords());
     }
     if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
   }
@@ -128,6 +163,8 @@
     var a=document.activeElement, focusIn=!!(a&&a.closest&&a.closest('[data-booth-panel]')), fromEdge=!!(e&&a===e);
     BOOTH.open=n.open; BOOTH.ask=n.ask;
     if(ev.t==='arrive'&&BOOTH.open&&!was) boothWhole();
+    // A state said before the shell's word about hidden arrived: now known hidden, it is a thing waiting, so the Booth comes in on it, once.
+    if(ev.t==='shell'&&!BOOTH.open&&(BOOTH.ps|0)>0&&boothCanHide(window.innerWidth)){ clearTimeout(BOOTH.t); BOOTH.t=setTimeout(function(){ BOOTH.t=0; boothSet({t:'arrive'}); }, BOOTH_ASK_MS); }
     if(n.later){ clearTimeout(BOOTH.t); BOOTH.t=setTimeout(function(){ boothSet({t:'arrive'}); }, n.later); }
     if(BOOTH.open||!BOOTH.ask) clearTimeout(BOOTH.t);
     boothApply(ev.t==='shell');
@@ -140,7 +177,100 @@
   // A click on the document (B · Full): the whole Booth comes back on it.
   // (Both may run before boothStart() has: BOOTH is still undefined then, and the shell's word comes after.)
   function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
-  function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  // What waits on the person, hidden or not: the page's questions (pa) and the state it says (ps) are one count on the tab's dot,
+  // and the hidden Booth comes in on either after a second.
+  function boothAsk(n){ if(!BOOTH) return; BOOTH.pa=Math.max(0, n|0); var t=BOOTH.pa+(BOOTH.ps|0); if(t!==BOOTH.ask) boothSet({t:'ask', n:t}); }
+  // ── the state line (the shell's nine screen states, said in the Booth; words as components/states/words.ts) ──
+  // boothSay({name, ...}, act) draws the one state this page is in under the Booth's header, text only, and act(id)
+  // hears a pressed button: state-retry, state-update, state-ask, state-fix-N. boothSay(null) is Normal: nothing said.
+  var BS_NOT_RIGHT=['Make it shorter','Change the tone','Check the facts'];
+  var BS_BECAUSE={provider:'The model did not answer, so the run stopped.', refused:'The model would not do this as asked, so the run stopped.', timeout:'The run took too long, so it stopped.', other:'The run stopped.'};
+  var BOOTH_SAY={act:null, html:'', last:null, client:false, lt:0, dismissed:'', lineKey:''};
+  function boothSayHtml(s){
+    var e=boothEsc, line=function(t){ return '<p class="bs-line">'+e(t)+'</p>'; }, small=function(t){ return t?'<p class="bs-small">'+e(t)+'</p>':''; };
+    var btn=function(id, t){ return '<button type="button" data-bs-act="'+id+'">'+e(t)+'</button>'; };
+    switch(s.name){
+      case 'run-failed': return line((BS_BECAUSE[s.why]||BS_BECAUSE.other)+' The reserved estimate is returned and your inputs are kept.')+' <div class="bs-acts">'+btn('state-retry','Try again')+'</div>';
+      case 'changed-brief': return line(s.to&&s.from?'The brief changed to '+s.to+'. This work was made from '+s.from+'.':'The brief changed while you were typing.')+' '+small(s.changes)+(s.sealed?'':' <div class="bs-acts">'+btn('state-update', s.to?'Update to brief '+s.to:'Update to the new brief')+'</div>');
+      case 'long-run': { var m=Math.max(1, s.minutes|0); return line(m<=1?'About a minute left.':'About '+m+' minutes left.')+' '+small('Needs you tells you when it is done. You can leave this page.')+' '+small(s.step); }
+      case 'missing-access': return line('You cannot open '+s.what+' yet. '+s.who+' can give you access.')+' <div class="bs-acts">'+btn('state-ask','Ask '+s.who)+'</div>';
+      case 'not-right': return line('What is wrong with it?')+' <div class="bs-acts">'+BS_NOT_RIGHT.map(function(f,i){ return btn('state-fix-'+(i+1), f); }).join(' ')+'</div>';
+      case 'loading': return line('Loading '+s.what);
+    }
+    return '';
+  }
+  function boothSay(s, act){
+    var own=$('boothState'); if(!own) return;
+    BOOTH_SAY.act=act||null; BOOTH_SAY.last=s||null;
+    var h=s&&!BOOTH_SAY.client?boothSayHtml(s):'';   // client review mode says nothing here
+    // Where the page has no Booth on screen (a run before the document), its own mount (boothStart's `state`) holds the line.
+    var alt=BOOTH_AT&&BOOTH_AT.state?BOOTH_AT.state():null, el=alt||own, key=(alt?'a':'o')+h;
+    if(key===BOOTH_SAY.html) return;
+    BOOTH_SAY.html=key;
+    [own, alt].forEach(function(x){ if(x&&x!==el){ x.innerHTML=''; x.hidden=true; x.removeAttribute('data-state'); } });
+    el.innerHTML=h; el.hidden=!h;
+    if(h) el.setAttribute('data-state', s.name); else el.removeAttribute('data-state');
+    boothSayPlace();
+    // A state said while the Booth is hidden is a thing waiting on the person, as an agent's question is: the tab shows the dot,
+    // then the Booth comes in on it (never over the document). With no Booth on screen (the alt mount) there is no tab to mark.
+    if(BOOTH){ BOOTH.ps=(h&&!alt)?1:0; var t=(BOOTH.pa|0)+BOOTH.ps; if(t!==BOOTH.ask) boothSet({t:'ask', n:t}); else boothApply(false); }
+  }
+  // Below 1100 px the Booth follows the document, at its end: a state said there is also a short line fixed under the OS bar, so it is seen
+  // wherever the person is, and it overlays, never pushes (nothing moves under their finger). The line has the state's action and a
+  // dismiss; it steps aside by itself after BOOTH_LINE_MS so it does not cover the text for good. The full state stays in the Booth, readable.
+  // One announcement: the line is the live region, the Booth's copy is quiet while the line is the way it is said.
+  var BOOTH_LINE_MS=10000, BS_ACTS={'state-retry':'Try again','state-update':'Update','state-ask':'Ask'};
+  function boothSayShort(s){
+    switch(s.name){
+      case 'run-failed': return 'The run stopped. Your inputs are kept.';
+      case 'changed-brief': return s.to?'The brief changed to '+s.to+'.':'The brief changed.';
+      case 'long-run': return Math.max(1,s.minutes|0)<=1?'About a minute left.':'About '+Math.max(1,s.minutes|0)+' minutes left.';
+      case 'missing-access': return 'You cannot open '+s.what+' yet.';
+      case 'not-right': return 'What is wrong with it?';
+      case 'loading': return 'Loading '+s.what;
+    }
+    return '';
+  }
+  function boothLineHide(fade){
+    var l=$('boothLine'); if(!l) return;
+    clearTimeout(BOOTH_SAY.lt);
+    if(!fade){ l.hidden=true; l.classList.remove('out'); return; }
+    l.classList.add('out');
+    setTimeout(function(){ if(l.classList.contains('out')){ l.hidden=true; l.classList.remove('out'); } }, 260);
+  }
+  function boothSayPlace(){
+    var el=$('boothState'), l=$('boothLine'), narrow=!boothCanHide(window.innerWidth), s=BOOTH_SAY.last, shown=!!(el&&!el.hidden&&BOOTH_SAY.html.charAt(0)==='o'&&BOOTH_SAY.html.length>1);
+    if(el){ el.setAttribute('role', narrow?'group':'status'); el.setAttribute('aria-live', narrow?'off':'polite'); }
+    if(!l) return;
+    var key=BOOTH_SAY.html;
+    if(!(narrow&&shown&&s)){ clearTimeout(BOOTH_SAY.lt); l.hidden=true; l.classList.remove('out'); if(!shown) BOOTH_SAY.dismissed=''; return; }
+    if(BOOTH_SAY.dismissed===key) return;
+    if(!l.hidden&&BOOTH_SAY.lineKey===key) return;
+    BOOTH_SAY.lineKey=key;
+    var act=null, b=el.querySelector('[data-bs-act]'); if(b) act=b.getAttribute('data-bs-act');
+    l.querySelector('.bl-t').textContent=boothSayShort(s);
+    var ab=l.querySelector('[data-bl-act]');
+    if(act&&BS_ACTS[act]){ ab.hidden=false; ab.setAttribute('data-bl-act', act); ab.textContent=BS_ACTS[act]==='Ask'?(b.textContent||'Ask'):BS_ACTS[act]; } else ab.hidden=true;
+    l.classList.remove('out'); l.hidden=false;
+    clearTimeout(BOOTH_SAY.lt); BOOTH_SAY.lt=setTimeout(function(){ BOOTH_SAY.dismissed=key; boothLineHide(true); }, BOOTH_LINE_MS);
+  }
+  // The brief a page answers has moved on: its Changed brief state, from GET clan://upstream, or null while it is as it was.
+  // `sealed` (this version is approved) leaves the Update out: an approved version keeps what it was made from.
+  function boothMoved(up, sealed){
+    var list=up&&Array.isArray(up.upstream)?up.upstream:[], p=list.filter(function(u){ return u&&u.direct&&u.in_store&&u.status==='changed'; })[0];
+    if(!p) return null;
+    var short=function(v){ return String(v||'').slice(0,7); };
+    return {name:'changed-brief', from:short(up.carried&&up.carried.last_decision), to:short(p.version), sealed:!!sealed,
+      changes:sealed?'This version is approved and stays as it is. Start a new version to take the new brief into it.':'Updating takes the new brief into this page. What you wrote here stays.'};
+  }
+  // Update: the frame's own route takes the brief's newer version; done(reply) once it answers.
+  function boothUpdateBrief(done){
+    var scheme=navigator.userAgent.indexOf('Windows')>=0?'http://clan.localhost':'clan://localhost';
+    fetch(scheme+'/upstream/update', {method:'POST', body:'{}'})
+      .then(function(r){ return r.json().catch(function(){ return {ok:false}; }).then(function(j){ if(!r.ok&&j&&j.ok!==false) j.ok=false; return j; }); })
+      .catch(function(){ return {ok:false, error:'The page could not reach the host.'}; })
+      .then(function(j){ if(done) done(j); });
+  }
   // ── who holds it ──
   var BOOTH_DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], BOOTH_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   function boothEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
@@ -196,12 +326,18 @@
     var hd=document.getElementById('booth-hd-tpl').content.firstElementChild.cloneNode(true);
     hd.querySelector('.booth-hide').setAttribute('aria-controls', at.panel);
     if(h) h.insertBefore(hd, h.firstChild);
+    var st=document.createElement('div'); st.className='booth-state'; st.id='boothState'; st.hidden=true; st.setAttribute('data-testid','booth-state'); st.setAttribute('role','status'); st.setAttribute('aria-live','polite');
+    if(h) h.insertBefore(st, hd.nextSibling);
+    var ln=document.getElementById('booth-line-tpl').content.firstElementChild.cloneNode(true); document.body.appendChild(ln);
     var eg=document.getElementById('booth-edge-tpl').content.firstElementChild.cloneNode(true);
     eg.setAttribute('aria-controls', at.panel); document.body.appendChild(eg);
     document.addEventListener('click', function(e){
       var t=e.target&&e.target.closest?e.target:null; if(!t) return;
       if(t.closest('[data-booth="hide"]')){ boothSet({t:'hide'}); return; }
       if(t.closest('#boothEdge')) boothSet({t:'show'});
+      var sb=t.closest('[data-bs-act]'); if(sb&&BOOTH_SAY.act) BOOTH_SAY.act(sb.getAttribute('data-bs-act'));
+      var lb=t.closest('[data-bl-act]'); if(lb&&BOOTH_SAY.act) BOOTH_SAY.act(lb.getAttribute('data-bl-act'));
+      if(t.closest('[data-bl="dismiss"]')){ BOOTH_SAY.dismissed=BOOTH_SAY.html; boothLineHide(); }
     });
     document.addEventListener('keydown', function(e){
       if(e.key!==']'||e.defaultPrevented||e.metaKey||e.ctrlKey||e.altKey||!BOOTH_AT.key(e)) return;
@@ -209,10 +345,12 @@
     });
     // The shell says what this person last had, on every load (AppRuntime.tsx).
     window.addEventListener('message', function(e){
-      var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:booth') return;
+      var m=e.data; if(e.source!==window.parent||!m) return;
+      if(m.type==='clan:clientmode'){ BOOTH_SAY.client=!!m.on; boothSay(BOOTH_SAY.last, BOOTH_SAY.act); return; }
+      if(m.type!=='clan:booth') return;
       boothSet({t:'shell', open:m.open!==false});
     });
-    window.addEventListener('resize', function(){ boothApply(false); });
+    window.addEventListener('resize', function(){ boothSayPlace(); boothApply(false); });
     // Who holds it: read now, and again whenever the page reads its decisions or its data changes.
     if(document.querySelector('[data-booth-holder]')){
       window.addEventListener('clan:viewloaded', boothHolderRead);

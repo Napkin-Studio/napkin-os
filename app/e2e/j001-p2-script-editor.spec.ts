@@ -10,7 +10,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type FrameLocator, type Page } from '@playwright/test'
-import { wideBeside } from './boothFolds'
+import { alertCoversNoControl, nothingBetweenBarAndDocument, wideBeside } from './boothFolds'
 import { asMe, PEOPLE, seedJ001 } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Size } from './pilot'
 import { RADIO_SCRIPT, SCRIPT_EDITOR_APP, TV_SCRIPT } from './seed/j001/p2/script-editor.mjs'
@@ -36,6 +36,9 @@ const open1 = async (page: Page, job: Seeded, title = 'J001 radio script') => {
   await page.goto(`/#tool-${job.client}-script`); await page.reload()
   await page.getByTestId('work-item').filter({ hasText: title }).first().click()
   await expect(frameOf(page).locator('[data-where="script-editor"]')).toBeVisible()
+  // The page reads the decisions and the brief once it is up and draws again: act on it after that redraw, not before (it replaces the lines).
+  await expect.poll(() => frameOf(page).locator('body').evaluate(() => (window as unknown as { __script: { state: () => { read: boolean } } }).__script.state().read)).toBe(true)
+  await nothingBetweenBarAndDocument(page, 'script')
 }
 const dataOf = async (page: Page, job: Seeded, path: string) => (await page.request.get(`${job.api}/d/${encodeURIComponent(path)}/entry/data`)).text()
 async function shot(page: Page, name: string, size: Size) {
@@ -167,7 +170,6 @@ for (const size of SIZES) {
       await line.evaluate((el: HTMLTextAreaElement) => { el.focus(); el.setSelectionRange(el.value.length, el.value.length) })
       await line.pressSequentially(' more')
       await expect.poll(async () => (await dataOf(page, job, doc.path)).includes('Tonight, try something new. more')).toBe(true)
-      await expect(page.getByTestId('undo')).toBeEnabled()
       await page.keyboard.press('ControlOrMeta+z')
       await expect(line).not.toHaveValue(/more/)
       await page.keyboard.press('ControlOrMeta+Shift+z')
@@ -236,6 +238,80 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
+  // The 409 alert (the host said the document moved on while the person typed), said once under the bar: it keeps the words about what was typed,
+  // covers no control, and Update reads the newer version and then clears it. The frame says it with the clan:write message the bridge sends.
+  test(`script editor: the 409 alert says what happens to the words, covers no control, and Update clears it, ${size.tag} px`, async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
+    await script(page, job, RADIO_SCRIPT, 'J001 radio script')
+    await open1(page, job)
+    const said = () => frameOf(page).locator('body').evaluate(() => window.parent.postMessage({ type: 'clan:write', v: 1, id: 'w409', state: 'changed', field: 'proposition', text: 'My unsaved words.' }, '*'))
+    await said()
+    const alert = page.locator('[data-state="changed-save"]')
+    await expect(alert).toBeVisible()
+    await expect(alert).toContainText('What you typed stays on the page until you update.')
+    await alertCoversNoControl(page)
+    await shot(page, 'bands-state-409', size)
+    const asked = page.waitForRequest(r => /\/current(\?|$)/.test(r.url())) // Update reads the newer version from the host
+    await alert.getByRole('button', { name: 'Update to the new brief' }).click()
+    await asked
+    await expect(alert).toHaveCount(0)
+    await ctx.close()
+  })
+
+  // A state said while the Booth is hidden is brought to the person (features/align-booth.clan, review): the tab shows the dot, then the
+  // Booth comes in on it, beside the page. At 390 px, where the Booth follows the page and cannot hide, it is said above the page.
+  test(`script editor: a state said while the Booth is hidden shows the dot and then the Booth; at 390 it is a line under the bar, ${size.tag} px`, async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
+    await script(page, job, RADIO_SCRIPT, 'J001 radio script')
+    await open1(page, job)
+    const app = frameOf(page), booth = boothOf(page)
+    const say = () => app.locator('body').evaluate(() => (window as unknown as { boothSay: (s: object, a: () => void) => void }).boothSay({ name: 'changed-brief', from: 'v1', to: 'v2', changes: 'Updating takes the new brief into this page. What you wrote here stays.' }, () => {}))
+    if (size.width >= 1100) {
+      await booth.locator('.booth-hide').click()
+      await expect(app.locator('#boothEdge')).toBeVisible()
+      await say()
+      await expect(app.locator('#boothEdge.has')).toBeVisible() // the dot, at once
+      await shot(page, 'bands-state-hidden-dot', size)
+      await expect(booth.getByTestId('booth-state')).toBeVisible({ timeout: 5_000 }) // then the Booth comes in on it, after a second
+      const [d, b] = await Promise.all([app.locator('#sheet').boundingBox(), booth.boundingBox()])
+      expect(d!.x + d!.width, 'beside the page, never over it').toBeLessThanOrEqual(b!.x + 1)
+      await shot(page, 'bands-state-hidden-in', size)
+    } else {
+      // A phone: wherever the person is in the page the state is a short line fixed under the bar, over the page and never pushing it.
+      const first = app.locator('textarea[data-id="b1"][data-field="text"]')
+      const yOf = async () => (await first.boundingBox())!.y
+      const top0 = await yOf()
+      await say()
+      const line = app.getByTestId('booth-state-line')
+      await expect(line).toBeVisible()
+      expect(await yOf(), 'the page did not move under the person').toBe(top0)
+      const scrollTo = (where: 'top' | 'middle' | 'bottom') => app.locator('body').evaluate((_b, w) => { const h = document.documentElement.scrollHeight - innerHeight; scrollTo(0, w === 'top' ? 0 : w === 'middle' ? h / 2 : h) }, where)
+      for (const where of ['top', 'middle', 'bottom'] as const) {
+        await scrollTo(where)
+        await expect(line).toBeVisible()
+        const r = (await line.boundingBox())!
+        expect(r.y, `${where}: under the bar, within the first screen`).toBeLessThan(120)
+        expect(r.y + r.height, `${where}: and short`).toBeLessThan(130)
+        for (const b of await line.locator('button:visible').all()) expect((await b.boundingBox())!.height, `${where}: 44 px targets`).toBeGreaterThanOrEqual(43.5)
+        await shot(page, `bands-state-390-${where}`, size)
+      }
+      await expect(line).toHaveAttribute('role', 'status')
+      await line.locator('[data-bl="dismiss"]').click()
+      await expect(line).toBeHidden()
+      await expect(app.getByTestId('booth-state')).toBeAttached() // still in the Booth, below
+      await scrollTo('bottom')
+      await expect(app.getByTestId('booth-state')).toBeVisible()
+      await shot(page, 'bands-state-390-booth', size)
+    }
+    await ctx.close()
+  })
+
   // The Booth (features/align-booth.clan, stage 2): the margin is the shared Booth, as Brief Maker's is.
   test(`script editor: the Booth is the margin and never overlaps the page, ${size.tag} px`, async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
@@ -273,6 +349,9 @@ for (const size of SIZES) {
     expect(await apart(), 'nor at 1100 px').toBe(true)
     await expect(booth.locator('.booth-hide')).toBeHidden() // nothing hides at 1100 and below
     await page.setViewportSize({ width: size.width, height: size.height })
+    // The grid moves the page when the width comes back (the Booth's push): click the line once the page has stopped moving, not before.
+    let last = ''
+    await expect.poll(async () => { const r = JSON.stringify(await app.locator('textarea[data-id="b3"][data-field="text"]').boundingBox()); const still = r === last; last = r; return still }, { intervals: [250], timeout: 10_000 }).toBe(true)
     // a click on a line selects it: the Booth shows that line
     await app.locator('textarea[data-id="b3"][data-field="text"]').click()
     await expect(booth.getByTestId('crumb')).toContainText('Line 3')

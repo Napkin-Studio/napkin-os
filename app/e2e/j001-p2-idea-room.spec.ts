@@ -12,6 +12,7 @@
 import { expect, test, type Browser, type BrowserContext, type FrameLocator, type Page } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { alertCoversNoControl, nothingBetweenBarAndDocument } from './boothFolds'
 import { PHASE2 } from './phase2/tests.mjs'
 import { asMe, gateOf, lockBrief, PEOPLE, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
@@ -93,6 +94,7 @@ async function openRoom(page: Page, job: Job) {
   await page.reload()
   await page.getByTestId('work-item').first().click()
   await expect(frameOf(page).locator('[data-where="idea-room"]')).toBeVisible({ timeout: 30_000 })
+  await nothingBetweenBarAndDocument(page, 'idea-room')
   return frameOf(page)
 }
 
@@ -346,6 +348,7 @@ for (const size of SIZES) {
     await app.getByTestId('card-input').fill('A card written offline.')
     await app.getByRole('button', { name: 'Add card' }).click()
     await expect(page.locator('[data-state="failed-save"]')).toBeVisible() // the Failed save state, in the shell
+    await alertCoversNoControl(page) // under the bar, over no control of the page, at its top and at its end
     await expect(app.getByTestId('card-input')).toHaveValue('A card written offline.') // the text stays
     await shot(page, 'room-failed-save', size, '#cards')
     await ctx.setOffline(false)
@@ -381,14 +384,14 @@ for (const size of SIZES) {
     const reopened = await asMe(page, job.api, job.brief)
     expect((await page.request.post(`/s/${reopened.token}/patch-data`, { data: { patch: { single_minded_proposition: 'The easy way to your first Irish pour.' }, agent: 'human', action: 'edit the proposition' } })).status()).toBe(200)
     const app = await openRoom(page, job)
-    const changed = page.locator('[data-state="changed-brief"]')
+    const changed = app.locator('[data-state="changed-brief"]') // said in the Booth
     await expect(changed).toBeVisible()
     await expect(changed).toContainText('The brief changed to v2. This work was made from v1.')
     await expect(changed.getByRole('button', { name: 'Update to brief v2' })).toBeVisible()
     await shot(page, 'room-changed-brief', size)
     await changed.getByRole('button', { name: 'Update to brief v2' }).click()
     await expect(app.getByTestId('brief-proposition')).toContainText('The easy way to your first Irish pour.')
-    await expect(page.locator('[data-state="changed-brief"]')).toHaveCount(0)
+    await expect(app.locator('[data-state="changed-brief"]')).toHaveCount(0)
     await ctx.close()
   })
 

@@ -422,6 +422,7 @@
 }
 .ch-saved::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--status-green); }
 
+
 /* A document's thin accent strip, recoloured by the app's theme (shown only
    when there is one — see "the accent strip" below). */
 .ch-strip { flex-shrink: 0; background: var(--accent); }

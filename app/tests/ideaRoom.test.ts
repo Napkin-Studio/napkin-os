@@ -247,16 +247,18 @@ test('the chosen route is stamped with its version and who chose it, and reopeni
   assert.equal(p.d.querySelector('#reopenGo')?.getAttribute('aria-disabled'), 'true')
 })
 
-test('Changed brief is asked of the shell with its own words, and the shell\'s update button takes the new version', async () => {
+test('Changed brief is said in the Booth with its own words, and the Booth\'s update button takes the new version', async () => {
   const p = await page({ room: room({ cards: cards(2) }, gate(2), { title: 'J001 brief', changed: true, from: 1, to: 2 }) })
   const bar = p.messages.filter(m => m.type === 'clan:bar').pop() as { items: Json[] }
-  assert.equal(JSON.stringify(bar.items.filter(i => i.kind === 'state').map(i => [i.kind, i.state, i.from, i.to])), JSON.stringify([['state', 'changed-brief', 'v1', 'v2']]))
-  assert.equal(p.d.querySelector('[data-state="changed-brief"]'), null, 'the page draws none of its own: the shell does')
-  p.dom.window.dispatchEvent(new p.dom.window.MessageEvent('message', { data: { type: 'clan:bar-action', id: 'state-update' } }))
+  assert.equal(bar.items.filter(i => i.kind === 'state').length, 0, 'the bar item kind state no longer exists')
+  const line = p.d.querySelector('[data-testid="booth-state"]')!
+  assert.equal(line.getAttribute('data-state'), 'changed-brief')
+  assert.match(line.textContent ?? '', /The brief changed to v2\. This work was made from v1\./)
+  p.d.querySelector<HTMLButtonElement>('[data-testid="booth-state"] button')!.click()
   await p.settle()
   assert.deepEqual(p.posts.map(x => x.path), ['/upstream/update'])
   const calm = await page({ room: room({ cards: cards(2) }, gate(2)) })
-  assert.equal(((calm.messages.filter(m => m.type === 'clan:bar').pop() as { items: Json[] } | undefined)?.items ?? []).filter(i => i.kind === 'state').length, 0)
+  assert.equal(calm.d.querySelector<HTMLElement>('[data-testid="booth-state"]')!.hidden, true)
 })
 
 test('the page and its copy hold no em dash, and no real brand or award name', () => {

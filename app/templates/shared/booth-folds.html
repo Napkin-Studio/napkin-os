@@ -5,7 +5,7 @@
      Judge: the score card of the work open here (GET clan://judge), out of 30, idea, craft and effect, the failed
      tests first with their evidence, where Judge advises it goes, and that the 24 is advice until Judge has earned
      trust. Signed with Judge's own figure (NapkinRoles, the agent-sphere marker). Score again (POST clan://judge)
-     and the creative director's overrule with a written reason (POST clan://judge/overrule). No price and no cost.
+     and the creative director's overrule with a written reason (POST clan://judge/overrule). Nothing about money is said here.
 
      Versions: each approved version with its signer and date and the working draft (GET clan://versions), any two
      side by side (GET clan://version?n=), and Restore (POST clan://restore). While two are compared the Booth widens
@@ -98,12 +98,14 @@
   // client is null until the shell says which mode the page is in (clan:clientmode): nothing draws before then.
   var BF_AT, BF={client:window.parent===window?false:null, judge:{card:null, open:true, passed:false, asking:false, reason:'', busy:false, line:''},
     versions:{view:null, open:false, picked:[], diff:null, busy:false, error:'', note:''}};
+  // The parts that are marks, never words: the shell's undo does not take them (useBriefUndo NOT_WORDS, versions.rs NOT_CONTENT).
+  var BF_NOT_WORDS=['projection','upstream','signers','locked_fields','locked','confidential_fields','materials','passages','handoffs','film'];
   var BF_WIDE=744, BF_POLL_MS=4000;
   var BF_SCHEME=navigator.userAgent.indexOf('Windows')>=0?'http://clan.localhost':'clan://localhost';
   function bfEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function bfArr(v){ return Array.isArray(v)?v:[]; }
 
-  // ── Judge's words (the shell's judgeModel.ts, without the price line: no price is carried into the Booth) ──
+  // ── Judge's words (the shell's judgeModel.ts; nothing about money is carried into the Booth) ──
   var BF_DIM={idea:'Idea', craft:'Craft', effect:'Effect'};
   var BF_NOT_TRUSTED='Judge is not yet trusted here. Advice only.';
   // The failed tests first, then the passed, each in the order the rubric gives.
@@ -115,6 +117,13 @@
   }
   // The host's refusal, in its words: the part after its code.
   function bfRefusal(m){ var x=/^(ai_off|not_eu|not_configured|spend_refused|judge_failed|judge_malformed)\s*:\s*([\s\S]*)$/.exec(String(m||'').trim()); return x?x[2].trim():'Judge could not score this just now. Nothing was changed.'; }
+  // What the band said before there was a score: Judge is not set up here, or answers from fixtures.
+  function bfSetupLine(setup){
+    if(!setup) return '';
+    if(!setup.configured) return 'Judge is not set up here, so nothing can be scored yet.';
+    if(setup.backend==='fixture') return 'Judge answers from fixture scores here. No model is called.';
+    return '';
+  }
   function bfFig(state, size){ var R=typeof NapkinRoles==='object'&&NapkinRoles?NapkinRoles:null; return R?R.tag('judge',{state:state||'idle', decorative:true, size:size||26}):''; }
   function bfTestHtml(t){ return '<li data-testid="judge-test" data-value="'+bfEsc(t.value)+'" data-dim="'+bfEsc(t.dim)+'"><span class="bf-dim">'+bfEsc(BF_DIM[t.dim]||t.dim)+'</span><span class="bf-q">'+bfEsc(t.question||t.id)+'</span>'+(t.evidence?'<span class="bf-ev">'+bfEsc(t.evidence)+'</span>':'')+'</li>'; }
   // The Judge fold, from the card the host sends (GET /judge) and what the person has open.
@@ -126,7 +135,7 @@
     if(st.busy) h+='<p class="bf-work" role="status" data-testid="judge-working">'+bfFig('working',22)+'<span>Judge is reading this version.</span></p>';
     if(st.line) h+='<p class="bf-warn" role="status" data-testid="judge-refusal">'+bfEsc(st.line)+'</p>';
     if(!s){
-      h+='<p class="bf-note" data-testid="judge-empty">'+bfEsc(card.why_not||'Judge has not scored this version yet.')+'</p>';
+      h+='<p class="bf-note" data-testid="judge-empty">'+bfEsc(card.why_not||bfSetupLine(card.setup)||'Judge has not scored this version yet.')+'</p>';
       if(card.can_score) h+='<div class="bf-acts"><button type="button" class="bf-btn" data-bf-act="judge-send" data-testid="judge-again"'+(st.busy?' disabled':'')+'>Score this version</button></div>';
       return h+'</div></details>';
     }
@@ -338,13 +347,17 @@
       if(j&&j.ok===false){ st.error=j.error||'The host did not restore it.'; return; }
       // Already the draft's words: nothing was written, so nothing is told.
       if(j&&j.noop){ st.note='The draft already has the words of v'+n+'. Nothing changed.'; return; }
-      // Where the shell keeps an undo stack for this tool, Cmd Z takes the restore back; where it keeps none, it does not.
-      st.note=BF_AT.undo?'Restored from v'+n+'. Cmd Z takes it back.':'Restored from v'+n+'. To go back, restore the version you want.';
       if(j&&j.clan&&j.clan.data&&window.__CLAN__){
         window.__CLAN__.data=j.clan.data; if(j.clan.edits) window.__CLAN__.edits=j.clan.edits;
         window.dispatchEvent(new CustomEvent('clan:dataupdated',{detail:{source:'restore', version:j.clan.version}}));
       }
-      if(BF_AT.undo) try{ if(window.parent!==window) window.parent.postMessage({type:'clan:write', v:1, id:'restore-v'+n+'-'+Date.now().toString(36), state:'saved', field:'restore v'+n, text:''}, '*'); }catch(x){}
+      // Cmd Z takes a restore back only where the shell keeps an undo stack for this tool AND the restore wrote words alone:
+      // one that also brought a mark back (Confidential, a lock) is never undone, so it never says so. The draft's last edit says which.
+      return bfGet('/versions').then(function(v){ st.view=v; return (v&&v.draft&&v.draft.last_edit&&v.draft.last_edit.keys)||[]; }, function(){ return ['unknown']; }).then(function(keys){
+        var marks=keys.some(function(k){ return BF_NOT_WORDS.indexOf(k)>=0||k==='unknown'; }), undoable=!!BF_AT.undo&&!marks;
+        st.note=undoable?'Restored from v'+n+'. Cmd Z takes it back.':'Restored from v'+n+'. To go back, restore the version you want.';
+        if(undoable) try{ if(window.parent!==window) window.parent.postMessage({type:'clan:write', v:1, id:'restore-v'+n+'-'+Date.now().toString(36), state:'saved', field:'restore v'+n, text:''}, '*'); }catch(x){}
+      });
     }, function(){ st.error='The page could not reach the host. Nothing was restored.'; })
       .then(function(){ st.busy=false; bfReadVersions(); });
   }

@@ -23,6 +23,7 @@ import { control } from './pilot'
 import { track } from './scope'
 import { CANARY } from './seed/j001/canary.mjs'
 import { noticesOf, openMe } from './needs'
+import { barCommand, barOffers } from './boothFolds'
 import { asMe, gateOf, INTERNAL_WORDS, lockBrief, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -616,6 +617,7 @@ for (const size of SIZES) {
     await field.press('Control+Enter')
     const failed = page.locator('[data-state="failed-save"]')
     await expect(failed).toBeVisible()
+    if (process.env.NAPKIN_E2E_SHOTS) { await page.waitForTimeout(400); await page.screenshot({ path: `${process.env.NAPKIN_E2E_SHOTS}/bands-state-failed-save-${size.width}.png`, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' }) }
     await expect(field).toHaveText('Typed while the network is cut.') // the typed text stays on screen
     await ctx.setOffline(false)
     await failed.getByRole('button', { name: 'Try again' }).click()
@@ -661,8 +663,8 @@ for (const size of SIZES) {
     await page.goto(`/#tool-${job.client}-brief`)
     await page.reload()
     await page.getByTestId('work-item').first().click()
-    await page.getByRole('button', { name: 'Version history' }).click()
-    const rows = page.getByTestId('version-row')
+    const rows = page.frameLocator('iframe').first().getByTestId('version-row') // the Versions fold in the Booth
+    await page.frameLocator('iframe').first().locator('[data-testid="versions-fold"] > summary').click()
     await expect(rows.filter({ hasText: 'v1' })).toHaveCount(1)
     await expect(rows.filter({ hasText: 'v3' })).toContainText('Signed by')
     await rows.filter({ hasText: 'v2' }).getByRole('button', { name: 'Restore' }).click()
@@ -701,9 +703,9 @@ for (const size of SIZES) {
       const ask = 'Client A, an Irish whiskey, wants to reach drinkers aged 25 to 34.'
       await app.locator('#prompt').fill(ask)
       await app.getByRole('button', { name: 'Write the brief' }).click()
-      const failed = page.locator('[data-state="run-failed"]')
+      const failed = app.locator('[data-state="run-failed"]') // said in the Booth
       await expect(failed).toBeVisible()
-      expect((await failed.locator('.ns-line').allInnerTexts()).filter(Boolean)).toHaveLength(1) // one plain line
+      expect((await failed.locator('.bs-line').allInnerTexts()).filter(Boolean)).toHaveLength(1) // one plain line
       await expect(failed).not.toContainText(/exception|stack|[{}]/i)
       await expect(failed).toContainText('The reserved estimate is returned')
       await expect.poll(async () => (await sessionOf(page)).quota.used).toBe(before) // the credits come back
@@ -732,10 +734,11 @@ for (const size of SIZES) {
     await field.fill('An edit to undo.')
     await field.press('Control+Enter')
     await expect(app.locator('#fields')).toContainText('An edit to undo.')
-    await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled() // the shell took the edit
+    await expect.poll(() => barOffers(page, 'Undo')).toBe(true) // the shell took the edit: the bar offers Undo
+    await app.locator('body').evaluate(() => window.focus()) // the key is pressed in the page again, not in the bar's field
     await page.keyboard.press('Meta+z')
     await expect(app.locator('#fields')).not.toContainText('An edit to undo.')
-    await page.getByRole('button', { name: 'Redo' }).click() // the undone text can be brought back
+    await barCommand(page, 'Redo') // the undone text can be brought back
     await expect(app.locator('#fields')).toContainText('An edit to undo.')
     // Undo is itself attributed: the chain holds an edit by this person, not a missing entry.
     const chain = await chainOf(page, job.brief.token)

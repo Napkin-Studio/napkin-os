@@ -7,7 +7,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type Page } from '@playwright/test'
-import { wideBeside } from './boothFolds'
+import { barCommand, barOffers, nothingBetweenBarAndDocument, wideBeside } from './boothFolds'
 import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
 
 const SHOTS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'design', 'brief-versions-undo')
@@ -49,6 +49,7 @@ for (const size of SIZES) {
     await page.goto(`/#tool-${job.client}-brief`)
     await page.reload()
     await page.getByTestId('work-item').first().click()
+    await nothingBetweenBarAndDocument(page, 'brief')
     // Versions live in the Booth (features/align-booth.clan): the whole brief's Versions fold.
     const app = page.frameLocator('iframe').first()
     const booth = app.locator('[data-booth-panel]')
@@ -94,11 +95,11 @@ test('brief undo: Cmd Z in a field is the field\'s, and a later edit by someone 
   await field.fill('My edit.')
   await field.press('Control+Enter')
   await expect(app.locator('#fields')).toContainText('My edit.')
-  await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled()
+  await expect.poll(() => barOffers(page, 'Undo')).toBe(true)
   // Someone else changes the same part after me: undo says so and writes nothing.
   const other = await page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: { audience: 'Their edit.' }, agent: 'human', action: 'edit the audience' } })
   expect(other.status()).toBe(200)
-  await page.getByRole('button', { name: 'Undo' }).click()
+  await barCommand(page, 'Undo')
   await expect(page.getByTestId('undo-note')).toContainText('changed after you wrote it')
   expect((await chainOf()).filter(d => d.action?.startsWith('undo'))).toHaveLength(0)
   await page.screenshot({ path: join(SHOTS, 'undo-stopped-1440.png') })

@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateSync } from 'node:zlib'
 import { expect as baseExpect, test, type Browser, type BrowserContext, type FrameLocator, type Page } from '@playwright/test'
-import { wideBeside } from './boothFolds'
+import { nothingBetweenBarAndDocument, wideBeside } from './boothFolds'
 import { asMe, lockBrief, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
 // Every step is a real round trip to the host and the page draws after it; a busy machine needs more than ten seconds.
@@ -99,6 +99,7 @@ async function chooseTerritory(page: Page, job: Job, name = 'Permission to stop'
   await form.getByLabel('In one line').fill(line)
   await form.getByRole('button', { name: 'Make the visual brief' }).click()
   await expect(frameOf(page).locator('[data-where="visual-brief"]')).toBeVisible({ timeout: 30_000 })
+  await nothingBetweenBarAndDocument(page, 'visual-brief')
 }
 
 const frameOf = (page: Page): FrameLocator => page.frameLocator('iframe').first()
@@ -321,7 +322,7 @@ for (const size of SIZES) {
     await page.goto(`/#tool-${job.client}-territories`)
     await page.reload()
     await page.getByTestId('visual-briefs').getByRole('button').first().click()
-    const changed = page.locator('[data-state="changed-brief"]')
+    const changed = frameOf(page).locator('[data-state="changed-brief"]') // said in the Booth
     await expect(changed).toBeVisible({ timeout: 30_000 })
     await expect(changed).toContainText('The brief changed to')
     await expect(changed).toContainText('approved and stays as it is')

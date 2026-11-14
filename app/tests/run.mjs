@@ -6,7 +6,7 @@
 
 import { build } from 'esbuild'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -37,6 +37,18 @@ try {
     jsx: 'automatic',
     loader: { '.css': 'empty' },
     logLevel: 'warning',
+    // Where the wasm package has not been built (wasm-bindgen is a CI step), the host module that imports it still loads:
+    // a test that needs the real engine says so itself; the ones that only read `host` need nothing from it.
+    // The host module reads `import.meta.env` (Vite's); a test bundle has none. VITE_NAPKIN_HOST is left unset, as in a default build, so the
+    // wasm host is never the one chosen; where the wasm package is built (a CI step) it is imported for real, not stubbed.
+    define: { 'import.meta.env': '{"BASE_URL":"/"}' },
+    plugins: existsSync(join(here, '..', 'src', 'wasm', 'napkin_wasm.js')) ? [] : [{
+      name: 'stub-wasm',
+      setup(b) {
+        b.onResolve({ filter: /napkin_wasm$/ }, a => ({ path: a.path, namespace: 'stub-wasm' }))
+        b.onLoad({ filter: /.*/, namespace: 'stub-wasm' }, () => ({ contents: 'export default function init() {}; export class NapkinHost {}', loader: 'js' }))
+      },
+    }],
   })
   const files = readdirSync(out).filter(f => f.endsWith('.mjs')).map(f => join(out, f))
   const run = spawnSync(process.execPath, ['--test', ...files], { stdio: 'inherit' })

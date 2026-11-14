@@ -229,15 +229,15 @@ bar of its own (`app/src/shell/appBar.ts`, features/app-bar-actions.clan):
   The `tab` kind is retired (owner removal of top tabs, features/new-ui-shell.clan,
   2026-11-09): the shell drops a tab like any unknown kind, and an app keeps its
   steps or sections in its own page.
-- `{kind: 'state', state, ...}` (features/screen-states.clan): the screen state the app is in when it is not
-  Normal, drawn by the shell between the bar and the app (app/src/components/states). `state` is `loading`
-  (`what`), `run-failed` (`why`: provider, refused, timeout or other), `long-run` (`minutes`, `step`),
-  `changed-brief` (`from`, `to`, `changes`), `missing-access` (`what`, `who`) or `not-right`. At most one; none
-  means Normal, so an app that sends nothing is never left Loading. Its buttons come back as
-  `clan:bar-action` ids `state-retry`, `state-update`, `state-ask` and `state-fix-1` to `state-fix-3`.
+- The bar item kind `state` is retired (features/align-booth.clan, last stage): the shell drops it like any unknown kind. A tool
+  reports its state with the `status` item and its tone, and says Run failed, Changed brief, Long run, Not right, Missing access
+  or Loading itself, in its Booth: `boothSay(state, act)` of `shared/booth.html` draws the one state under the Booth's header
+  (`loading`, `run-failed`, `long-run`, `changed-brief`, `missing-access`, `not-right`; `act` hears `state-retry`,
+  `state-update`, `state-ask`, `state-fix-N`), in the words of `app/src/components/states/words.ts`. Failed save is the shell's
+  and is said once, in the OS bar's save line.
 - `clan:write {v: 1, id, state, field, text}` (app → shell, sent by the structured edit bridge for every
-  `clan.patchData`): `state` is saving, saved, failed or changed (HTTP 409). The shell keeps the text and shows
-  Failed save; Try again sends `clan:retry {id}` to the frame, which sends the held write again once.
+  `clan.patchData`): `state` is saving, saved, failed or changed (HTTP 409). The shell keeps the text and says
+  Not saved in the bar's save line; Try again sends `clan:retry {id}` to the frame, which sends the held write again once.
 - `clan:bar-key` (app → shell, sent by the structured edit bridge; features/one-bar-search.clan): Cmd or Ctrl K was
   pressed inside the frame. The bridge sends it for that key alone, in a text field too (the shell's bar owns it), and
   after `preventDefault`; the shell opens its one bar and takes focus. No other key is forwarded this way, so a tool's own

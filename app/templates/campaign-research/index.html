@@ -5133,10 +5133,6 @@ body.fresh .booth-edge{display:none}
   function barItems(st, has, lk){
     var items=[], g=has&&!lk?gateWords():'', md=barMode();
     if(md) items.push(md);
-    // A run that did not finish is the shell's Run failed state (features/screen-states.clan): one plain line and
-    // Try again, which comes back as the bar action "state-retry". None means Normal. Kept inline: a bar item is a pure read.
-    var cj=typeof CHAT!=='undefined'?CHAT.job:null;
-    if(cj&&(cj.state==='failed'||(cj.error&&!cj.id))){ var why=String(cj.error||''); items.push({kind:'state', state:'run-failed', why:/refus|declin|policy/i.test(why)?'refused':/time ?out|timed out|too long/i.test(why)?'timeout':'provider'}); }
     if(g) items.push({kind:'gate', label:g, tone:'warn'});
     if(md&&md.mode) return items;
     if(has&&!lk) items.push({kind:'button', id:'redo', label:'Redo', title:'Write the report, the findings or the research again', menu:[
@@ -5170,14 +5166,22 @@ body.fresh .booth-edge{display:none}
     var t='Not brief-ready yet: '+open.length+' call'+(open.length===1?'':'s')+' open ('+names.join(', ')+(open.length>3?', …':'')+'). You can still start; the brief flags what is open.';
     return t.length>200?t.slice(0,199)+'…':t;
   }
+  // A run that did not finish is the Run failed state, said in the Booth (shared boothSay, under its header): one plain
+  // line and Try again. None means Normal.
+  function sayState(){
+    if(typeof boothSay!=='function') return;
+    var cj=typeof CHAT!=='undefined'?CHAT.job:null, st=null;
+    if(cj&&(cj.state==='failed'||(cj.error&&!cj.id))){ var why=String(cj.error||''); st={name:'run-failed', why:/refus|declin|policy/i.test(why)?'refused':/time ?out|timed out|too long/i.test(why)?'timeout':'provider'}; }
+    boothSay(st, function(id){ if(id==='state-retry') doRetry(); });
+  }
   function sendBar(st, has, lk){
+    sayState();
     var items=barItems(st, has, lk), k=JSON.stringify(items);
     if(k===BAR.last) return; BAR.last=k;
     try{ window.parent.postMessage({type:'clan:bar', v:1, items:items}, '*'); }catch(e){}
   }
   function onBarAction(id){
-    if(id==='state-retry') doRetry();
-    else if(id==='refresh') doRefreshReport();
+    if(id==='refresh') doRefreshReport();
     else if(id==='lock') doLock();
     else if(id==='export') doExport('pdf');
     else if(id==='export-html') doExport('html');
