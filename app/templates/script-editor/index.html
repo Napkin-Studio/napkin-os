@@ -801,7 +801,7 @@
     return Promise.all([
       fetch(clanScheme + '/decisions').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }),
       fetch(clanScheme + '/upstream').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
-    ]).then(function(a){ S.view = a[0]; S.up = a[1]; draw(true); });
+    ]).then(function(a){ S.view = a[0]; S.up = a[1]; S.read = true; draw(true); });
   }
   function askMe(){
     if(S.meAsked || !(window.clan && typeof window.clan.me === 'function')) return;
@@ -1113,7 +1113,7 @@
     split: split, join: join, move: move, remove: remove, typed: typed, pasted: pasted, newBeat: newBeat, blank: blank, seqOf: seqOf,
     sha256: sha256, canon: canon, handoffRef: handoffRef, filmBeats: filmBeats, filmScript: filmScript, nameOf: nameOf,
     mandatoryOf: mandatoryOf, bannedOf: bannedOf, versionOf: versionOf, approverOf: approverOf, rules: RULES,
-    state: function(){ return { version: state(), format: format(), local: !!S.local, dirty: S.dirty, selected: S.sel }; }, flush: flush, select: select, barItems: barItems, boothWidth: boothWidth
+    state: function(){ return { version: state(), format: format(), local: !!S.local, dirty: S.dirty, selected: S.sel, read: !!S.read }; }, flush: flush, select: select, barItems: barItems, boothWidth: boothWidth
   };
 })();
 </script>

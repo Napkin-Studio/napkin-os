@@ -36,6 +36,8 @@ const open1 = async (page: Page, job: Seeded, title = 'J001 radio script') => {
   await page.goto(`/#tool-${job.client}-script`); await page.reload()
   await page.getByTestId('work-item').filter({ hasText: title }).first().click()
   await expect(frameOf(page).locator('[data-where="script-editor"]')).toBeVisible()
+  // The page reads the decisions and the brief once it is up and draws again: act on it after that redraw, not before (it replaces the lines).
+  await expect.poll(() => frameOf(page).locator('body').evaluate(() => (window as unknown as { __script: { state: () => { read: boolean } } }).__script.state().read)).toBe(true)
   await nothingBetweenBarAndDocument(page, 'script')
 }
 const dataOf = async (page: Page, job: Seeded, path: string) => (await page.request.get(`${job.api}/d/${encodeURIComponent(path)}/entry/data`)).text()
@@ -307,6 +309,9 @@ for (const size of SIZES) {
     expect(await apart(), 'nor at 1100 px').toBe(true)
     await expect(booth.locator('.booth-hide')).toBeHidden() // nothing hides at 1100 and below
     await page.setViewportSize({ width: size.width, height: size.height })
+    // The grid moves the page when the width comes back (the Booth's push): click the line once the page has stopped moving, not before.
+    let last = ''
+    await expect.poll(async () => { const r = JSON.stringify(await app.locator('textarea[data-id="b3"][data-field="text"]').boundingBox()); const still = r === last; last = r; return still }, { intervals: [250], timeout: 10_000 }).toBe(true)
     // a click on a line selects it: the Booth shows that line
     await app.locator('textarea[data-id="b3"][data-field="text"]').click()
     await expect(booth.getByTestId('crumb')).toContainText('Line 3')
