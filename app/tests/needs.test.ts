@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { AttentionItem, DecisionsView } from '../src/host/types.ts'
-import { docStateOf, isFor, looksRightOf, needKey, needsOf, splitAside, verdictWords } from '../src/shell/decisions/needs.ts'
+import { docStateOf, isFor, looksRightOf, mineFirst, needKey, needsOf, noticesOf, splitAside, verdictWords, waitingOn } from '../src/shell/decisions/needs.ts'
 import { callWords } from '../src/shell/nui/drawerData.ts'
 import { deskCallDocs } from '../src/shell/nui/deskData.ts'
 import type { LibraryItem } from '../src/host/types.ts'
@@ -126,4 +126,37 @@ test('one Lock: the pill, the Lock button and the list come from needsOf and can
   const split = splitAside(needsOf(view(open)), new Set([needKey(first)]))
   assert.equal(split.open.length, 2)
   assert.equal(split.aside.length, 1)
+})
+
+test('a person sees their own items first, soonest due first, and each other item says who it waits on', () => {
+  const item = (code: string, who: AttentionItem['for'] | undefined, due?: string): AttentionItem =>
+    ({ code, address: code, text: code, blocks_lock: true, ...(who ? { for: who } : {}), ...(due ? { due } : {}) } as AttentionItem)
+  const list = [
+    item('a', { person: 'dara@wk' }, '2026-11-12'),
+    item('b', undefined),
+    item('c', { person: 'aoife@wk' }, '2026-11-20'),
+    item('d', { role: 'planning' }, '2026-11-13'),
+    item('e', { person: 'aoife@wk' }),
+    item('f', { person: 'aoife@wk' }, '2026-11-14'),
+  ]
+  const order = (me: string | null, roles: string[]) => mineFirst(list, me, roles).map(n => n.code).join('')
+  // aoife holds planning: hers by name or by role, by date (none last), then the rest in the host's order
+  assert.equal(order('aoife@wk', ['planning']), 'dfceab')
+  // without the role only the named ones are hers
+  assert.equal(order('aoife@wk', []), 'fceadb')
+  // nobody signed in: no item is anyone's, so it is the dates alone, none last, the host's order inside a tie
+  assert.equal(order(null, []), 'adfcbe')
+  assert.equal(list.map(n => n.code).join(''), 'abcdef', 'it sorts a copy')
+  assert.equal(waitingOn(list[0], 'aoife@wk', []), 'Waiting on Dara')
+  assert.equal(waitingOn(list[3], 'dara@wk', []), 'Waiting on Planning')
+  assert.equal(waitingOn(list[2], 'aoife@wk', []), null, 'mine says nothing')
+  assert.equal(waitingOn(list[1], 'aoife@wk', []), null, 'an item that names nobody')
+})
+
+test('notices: only the alerts that block nothing, one per place, apart from the lock list', () => {
+  const alert = (text: string, blocks = false): AttentionItem => ({ code: 'notice:brief-changed', text, blocks_lock: blocks, for: { person: 'aoife@wk' } } as AttentionItem)
+  const v = view([alert('The brief changed.'), alert('The brief changed.'), alert('Late.'), need('open_contest', 'c'), { ...alert('x'), code: 'flagged' } as AttentionItem])
+  assert.deepEqual(noticesOf(v).map(n => n.text), ['The brief changed.', 'Late.'])
+  assert.deepEqual(needsOf(v).map(n => n.code), ['open_contest'], 'a notice never reaches the lock list')
+  assert.deepEqual(noticesOf(null), [])
 })

@@ -28,6 +28,55 @@ export function needsOf(view: DecisionsView | null): Need[] {
   })
 }
 
+/** The notices on a document: items of its alerts (a brief changed, a client's change, an approval late) that wait on a person and block nothing. */
+export function noticesOf(view: DecisionsView | null): Need[] {
+  if (!view) return []
+  const seen = new Set<string>()
+  return view.attention.filter(a => {
+    if (a.blocks_lock || !a.code.startsWith('notice:')) return false
+    const k = needKey(a)
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+/** Whether an item waits on this person: it names them, or a role they hold. An item that names nobody is nobody's in particular. */
+export function isForMe(item: AttentionItem, me: string | null, roles: readonly string[]): boolean {
+  const f = item.for
+  if (!f) return false
+  return (!!f.person && f.person === me) || (!!f.role && roles.includes(f.role))
+}
+
+const dueKey = (a: AttentionItem) => a.due ?? '9999-99-99'
+
+/**
+ * A person's own items first, soonest due first within each part, an item with no date last, and otherwise the order
+ * the host gave. Pure: it sorts a copy and scores nobody.
+ */
+export function mineFirst<T extends AttentionItem>(needs: readonly T[], me: string | null, roles: readonly string[]): T[] {
+  return mineFirstBy(needs, n => n, me, roles)
+}
+
+/** [`mineFirst`] for rows that hold an item (a document's group and its item). */
+export function mineFirstBy<R>(rows: readonly R[], item: (r: R) => AttentionItem, me: string | null, roles: readonly string[]): R[] {
+  return rows
+    .map((r, i) => ({ r, i, a: item(r), mine: isForMe(item(r), me, roles) }))
+    .sort((x, y) => Number(y.mine) - Number(x.mine) || (dueKey(x.a) < dueKey(y.a) ? -1 : dueKey(x.a) > dueKey(y.a) ? 1 : 0) || x.i - y.i)
+    .map(x => x.r)
+}
+
+const words = (s: string) => s.replace(/[-_]/g, ' ').replace(/^./, c => c.toUpperCase())
+
+/** Who another person's item is waiting on, in words ("Waiting on Aoife", "Waiting on Creative director"); null for mine or for one that names nobody. */
+export function waitingOn(item: AttentionItem, me: string | null, roles: readonly string[]): string | null {
+  const f = item.for
+  if (!f || isForMe(item, me, roles)) return null
+  if (f.person) return `Waiting on ${words(f.person.split('@')[0])}`
+  if (f.role) return `Waiting on ${words(f.role).toLowerCase().replace(/^./, c => c.toUpperCase())}`
+  return null
+}
+
 /** A need, with who raised it when its decision is in the view (person or agent). */
 export type Need = AttentionItem & { by?: 'person' | 'agent' }
 

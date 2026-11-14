@@ -388,18 +388,24 @@ export interface JobNeed {
 /** The soonest deadline on the person's own jobs: what an empty Needs you names. */
 export interface NextDeadline { job: string; client: string; client_id: string; due: string }
 
-/** What `GET /needs` answers: the person's items, and the next deadline (null: none set; undefined: an older host). */
+/**
+ * What `GET /needs` answers for the signed-in person: per document, the next deadline, the person's own set-aside
+ * keys, and their own timesheet reminder. There is no list of items of its own: what a document holds is its own
+ * Needs you list (`DecisionsView.attention`).
+ */
 export interface NeedsAnswer {
-  items: JobNeed[]
-  next_deadline?: NextDeadline | null
-  /** Per document, for the signed-in person: items held, items theirs, the earliest date of theirs, the job's next deadline. */
-  documents?: DocumentNeeds[]
+  /** Per document: items on its own list, items waiting on this person, the earliest date of theirs, the job's next deadline. */
+  documents: DocumentNeeds[]
   /** The person's own set-aside keys (needs.ts `needKey`), by document path. Never anyone else's. */
-  aside?: Record<string, string[]>
+  aside: Record<string, string[]>
+  /** The next deadline on this person's jobs (null: none set). */
+  next_deadline: NextDeadline | null
+  /** The person's own timesheet reminder, from 16:00 where they are; it is on no document. */
+  timesheet: JobNeed | null
 }
 
 /** One document's line in `GET /needs`. */
-export interface DocumentNeeds { path: string; count: number; mine: number; earliest_due: string | null; next_deadline: NextDeadline | null }
+export interface DocumentNeeds { path: string; count: number; notices: number; mine: number; earliest_due: string | null; next_deadline: NextDeadline | null }
 
 /** One stage's approval: who approves it and by when (napkin-host `jobs::RouteStep`). */
 export interface RouteStep {
