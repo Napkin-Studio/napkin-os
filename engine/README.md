@@ -97,6 +97,7 @@ callers (`parse_brief._json_call`, `parse_brief.docx_text`, ...) keep working.
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` | optional further chat links, auto-detected |
 | `BRIEF_THINKING_HEADROOM` / `BRIEF_LINK_TIMEOUT` | extra output tokens for Claude models that think by default (2500) / per-request timeout for OpenAI-compatible links (90 s) |
 | `CRITIC_MODEL` / `CRITIC_SAMPLES` | the independent critic: model (default `claude-sonnet-5`) and samples per brief (default `1`); with more than one, each check keeps the majority verdict and an even split is REVIEW (`golden_critic.run_critic_sampled`). On mamaliga, three Fable 5.1 samples spread 2 health points against Sonnet's 5. `checkpoint_run.py --critic claude-fable-5-1x3` sets both for a run |
+| `BRIEF_CLI_EFFORT` | set per stage by the deck stages (`deck/stages.py`) for the Claude Code (`claude -p`) transport, which left with the Production line's merge (docs/production-tool/merge-2026-11.md): no transport reads it now, so a pinned call runs at its model's default effort |
 | `BRIEF_CORPUS` / `BRIEF_PACKS_LOCK` | pack sync: corpus root (default `engine/reference/rag` or `../reference/rag`) / path of `packs.lock` (default `engine/packs.lock`) |
 | `BRIEF_RESEARCH` / `RESEARCH_WEB` | agent server: `0` turns the research dossier off (default on; skipped when Loops 3–7 are on and the web track is off) / `claude` adds the web track through `claude -p` with WebSearch (default `off`) |
 | `NAPKIN_AGENT_PORT` | agent server port (8787, the same slot as the mock agent: run one) |
