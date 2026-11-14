@@ -374,6 +374,11 @@ fn compare_shows_words_not_marks() {
         json!({ "confidential_fields": ["audience"], "locked": true,
                 "materials": { "mat_1": { "licence": "client-confidential" } } }),
     );
+    let (_, list) = call(&dara(), "/versions", "", Value::Null);
+    assert_eq!(
+        list["draft"]["changed"], false,
+        "a mark is not a change in the words"
+    );
     for n in ["1", "draft"] {
         let parts = call(&dara(), "/version", &format!("n={n}"), Value::Null).1["parts"].clone();
         assert_eq!(parts["audience"], "First words.", "v{n}");

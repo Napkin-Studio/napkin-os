@@ -38,12 +38,26 @@ pub const BEFORE: &str = "before";
 pub const RESTORE_PREFIX: &str = "restore v";
 
 /// Top-level keys that are not the brief's words: the host's own, and the
-/// document's records of who signs and what is held. A version holds the rest.
+/// document's records of who signs, what is held and what may be read. A
+/// version holds the rest. A mark a person put on a part is about the part, not
+/// one version's words: a restore leaves each of these as it stands now (it
+/// neither clears a later mark nor brings back a removed one), and the compare
+/// view does not show them as words. Classify marks and locks live in the
+/// chain, which a restore never touches. Keep `NOT_WORDS` in
+/// app/src/shell/versions/useBriefUndo.ts the same.
 const NOT_CONTENT: &[&str] = &[
     "projection",
     "upstream",
     "signers",
     "locked_fields",
+    // An older brief's lock flag (os-layer.md 7.1: the lock is the approve).
+    "locked",
+    // What Napkin's own systems may take in (os-layer.md, Confidential).
+    "confidential_fields",
+    // What was received and under what licence, and what was retrieved under
+    // which: each entry carries its own `licence`, the nested mark.
+    "materials",
+    "passages",
     // A script's record of where a version was sent (features/script-editor.clan).
     "handoffs",
     "film",
@@ -117,6 +131,15 @@ fn wrote_data(d: &Decision) -> bool {
     live(d) && d.kind.as_deref() == Some("edit") && !d.fields_changed.is_empty()
 }
 
+/// Whether the decision changed the words: a write to anything but the marks.
+fn wrote_words(d: &Decision) -> bool {
+    wrote_data(d)
+        && d.fields_changed.iter().any(|f| {
+            let top = f.split(['.', '[']).next().unwrap_or(f);
+            !NOT_CONTENT.contains(&top)
+        })
+}
+
 /// The data as it stood at the approve at chain index `at`, or `None` when a write
 /// since then kept no inverse.
 fn rebuilt(doc: &Document, chain: &DecisionChain, at: usize) -> Option<Map<String, Value>> {
@@ -158,7 +181,8 @@ pub struct VersionRow {
 
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Draft {
-    /// The words differ from the newest approved version, or nothing is approved yet.
+    /// The words differ from the newest approved version (a mark is not a change
+    /// in the words), or nothing is approved yet.
     pub changed: bool,
     /// The newest change to the draft was a restore of this version.
     pub restored_from: Option<usize>,
@@ -216,7 +240,7 @@ pub fn list(doc: &Document) -> HostResult<VersionsView> {
             .and_then(|n| n.trim().parse().ok())
     });
     let changed = match at.first() {
-        Some(&i) => chain.decisions[..i].iter().any(wrote_data),
+        Some(&i) => chain.decisions[..i].iter().any(wrote_words),
         None => last_write.is_some(),
     };
     Ok(VersionsView {

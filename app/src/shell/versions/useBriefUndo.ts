@@ -13,8 +13,12 @@ import { pushData } from '../appExport'
 import { labelOf } from './compare'
 import { createUndoStack, keepsItsOwnUndo, undoKeyOf, type UndoStack } from './undoStack'
 
-/** Parts that are not the brief's words (the host's own, the signers, what is held): never undone here. */
-const NOT_WORDS = new Set(['projection', 'upstream', 'signers', 'locked_fields', 'handoffs', 'film'])
+/** Parts that are not the brief's words (the host's own, the signers, what is held, what may be read):
+ *  never undone here. The same list as `NOT_CONTENT` in crates/napkin-host/src/ops/versions.rs. */
+const NOT_WORDS = new Set([
+  'projection', 'upstream', 'signers', 'locked_fields', 'locked', 'confidential_fields', 'materials', 'passages',
+  'handoffs', 'film',
+])
 
 const named = (keys: string[]) => keys.map(labelOf).join(', ').toLowerCase()
 
