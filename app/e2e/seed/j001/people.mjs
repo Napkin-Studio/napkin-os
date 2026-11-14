@@ -56,7 +56,8 @@ export const PAGE_AGENCIES = ['wk', 'tbwa', 'ogilvy', 'harbour', 'droga', 'napki
 /** The people admin who adds everyone else, through the API. */
 export const PEOPLE_ADMIN = 'engineer@napkin'
 
-const fromFile = p => p.username === PEOPLE_ADMIN || !PAGE_AGENCIES.includes(p.username.split('@')[1])
+// a person with no role comes from the file too: the People routes add nobody without a role
+const fromFile = p => p.username === PEOPLE_ADMIN || p.roles.length === 0 || !PAGE_AGENCIES.includes(p.username.split('@')[1])
 
 /** The roster file's lines: `user@agency<TAB>Display name<TAB>roles`, for the people the store is seeded with. */
 export const ROSTER_LINES = Object.values(PEOPLE).filter(fromFile).map(p => `${p.username}\t${p.name}\t${p.roles.join(',')}`)

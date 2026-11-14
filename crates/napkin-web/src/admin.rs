@@ -366,6 +366,13 @@ async fn add_person(
         Ok(x) => x,
         Err(r) => return *r,
     };
+    // a person holds at least one role, as a role change says (a person with none could sign in to nothing)
+    if crate::people::clean_roles(&b.roles).is_empty() {
+        return answer(
+            StatusCode::BAD_REQUEST,
+            "A person needs at least one role. To stop them signing in, remove them.",
+        );
+    }
     let out = match &scope {
         Scope::All => {
             let agency = people.book().recognise(&b.agency);

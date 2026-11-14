@@ -9,35 +9,32 @@
 //! write, one change line per person, and copies an agency's logo from look.rs's file to its record. Only
 //! seed, staging and UAT agencies have a registry.
 //!
-//! The registry is a document, and until this stage any member of the agency could open it and write its
-//! `people` with an ordinary `patch-data` (the build's directory read it on every request). So nothing in it
-//! is trusted for what it says alone:
+//! The registry is a document, and from 12 Nov 2026 until this stage any member of the agency could write
+//! it (an ordinary `patch-data`, naming any agent and any action in its body). So nothing in it is a source
+//! of authority: not a role, not who exists, not who wrote what. The only trust roots are what an operator
+//! controls: the roster file the server starts with (`NAPKIN_AUTH_ROSTER`, its roles column) and the People
+//! store itself.
 //!
-//! - an entry is imported only into the agency that owns the registry (its workspace), checked per entry;
-//!   one of any other agency is skipped and logged;
-//! - a person the store already has is never written: not overwritten, re-roled or removed (so neither a
-//!   Napkin admin nor any agency's last admin can be touched);
-//! - a role is kept only if the default role table defines it (never `demo`, never `napkin-admin`, never a
-//!   string the store does not know), and `admin` only where the registry's own chain shows a trusted admin
-//!   gave it (an `add_person` or `set_roles` decision for that person, written by an admin); a bulk import
-//!   cannot show that, so its `admin` is dropped;
-//! - the chain is replayed from the agency's admins in the People store: every decision on it must be one of
-//!   the registry's own actions written by an admin of the time (or a person's own first sign-in). Any other
-//!   decision (a member's `patch-data`) taints the registry, and then nothing it names is trusted.
-//!
-//! An entry the import will not trust (tainted, removed, or left with no role it trusts) is written as
-//! removed with no roles: kept for the record, unable to sign in, and brought back on the People page.
+//! - A person the store already has is never written by the import.
+//! - A registry entry of another agency than the registry's own is skipped and logged.
+//! - A registry entry the store lacks takes its roles from the roster's column alone, only roles the role
+//!   table defines, and only into the roster entry's own agency; the registry's roles are never read. One
+//!   the roster does not name (or names with no role the table defines) is written as removed with no
+//!   roles, with one log line naming them: an admin brings them back on the People page.
+//! - From the registry only display data is taken, as untrusted input: a name (at most 120 characters,
+//!   no control characters, no `<` or `>`) and an address (the shape `name@place`, no markup).
+//! - An agency with a registry and no line in the roster: nobody in it gets a role, and the log says so.
 //!
 //! It runs once: the store records a fingerprint of each registry it read. After that the registry is a
 //! source of nothing (the API refuses to open it: `state::Workspace`), and a registry that changed is only
 //! logged. Nothing in a registry can stop a start: one that cannot be read is skipped and logged.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use napkin_host::agency;
 
-use crate::people::{Directory, DirectoryPerson, People, ADMIN_ROLE};
+use crate::people::{Directory, DirectoryPerson, People};
 use crate::store::TenantStore;
 use crate::tenant::TenantId;
 
@@ -69,64 +66,21 @@ fn known(role: &str) -> bool {
     role != crate::roles::DEMO && crate::roles::Table::default().knows(role)
 }
 
-fn roles_of(v: &serde_json::Value) -> Vec<String> {
-    v.as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|x| x.as_str())
-                .map(|x| x.trim().to_ascii_lowercase())
-                .collect()
-        })
-        .unwrap_or_default()
+/// A name from a registry, as display data from an untrusted source: trimmed, at most 120 characters, no
+/// control characters and no markup; None when it is not one.
+fn clean_name(raw: &str) -> Option<String> {
+    let n = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    let ok = !n.is_empty()
+        && n.chars().count() <= 120
+        && !n.chars().any(|c| c.is_control() || c == '<' || c == '>');
+    ok.then_some(n)
 }
 
-/// What the registry's chain shows: whether every decision on it was the registry's own, by an admin of the
-/// time, and which people an admin made admin.
-struct Shown {
-    tainted: Option<String>,
-    admin_by_admin: BTreeSet<String>,
-}
-
-/// Replay the chain (newest first, as `agency::history` gives it), oldest first, from `admins`: the agency's
-/// admins in the People store.
-fn replay(history: &[agency::Edit], agency_id: &str, admins: BTreeSet<String>) -> Shown {
-    let mut trusted = admins;
-    let mut shown = BTreeSet::new();
-    for d in history.iter().rev() {
-        let of_agency = crate::tenant::agency_of(&d.who).as_deref() == Some(agency_id);
-        if d.action == agency::ACTIVATE && d.target == d.who && of_agency {
-            continue;
-        }
-        if !agency::ACTIONS.contains(&d.action.as_str()) || !trusted.contains(&d.who) {
-            return Shown {
-                tainted: Some(format!(
-                    "{} wrote {:?} to the registry and was not its admin",
-                    d.who, d.action
-                )),
-                admin_by_admin: BTreeSet::new(),
-            };
-        }
-        match d.action.as_str() {
-            agency::ADD_PERSON | agency::SET_ROLES => {
-                if roles_of(&d.after).iter().any(|r| r == ADMIN_ROLE) {
-                    trusted.insert(d.target.clone());
-                    shown.insert(d.target.clone());
-                } else {
-                    trusted.remove(&d.target);
-                    shown.remove(&d.target);
-                }
-            }
-            agency::REMOVE_PERSON => {
-                trusted.remove(&d.target);
-                shown.remove(&d.target);
-            }
-            _ => {}
-        }
-    }
-    Shown {
-        tainted: None,
-        admin_by_admin: shown,
-    }
+/// An address from a registry, as untrusted display data: the shape `name@place`, no markup.
+fn clean_email(raw: &str) -> Option<String> {
+    agency::clean_email(raw)
+        .ok()
+        .filter(|e| !e.contains(['<', '>', '"', '\'']))
 }
 
 /// Every registry under `root` that names people, read as the import trusts it. A registry that cannot be
@@ -144,6 +98,7 @@ fn directories(people: &People, root: &Path) -> Vec<Directory> {
         .collect();
     names.sort();
     let book = people.book();
+    let roster = people.roster().unwrap_or_default();
     for name in names {
         let store = TenantStore::new(root.join(&name));
         let reg = match agency::read(&store) {
@@ -157,16 +112,10 @@ fn directories(people: &People, root: &Path) -> Vec<Directory> {
         if !reg.has_directory() {
             continue;
         }
-        let history = agency::history(&store).unwrap_or_default();
         let agency_id = reg
             .people
             .iter()
             .filter_map(|p| crate::tenant::agency_of(&p.username))
-            .chain(
-                history
-                    .iter()
-                    .filter_map(|d| crate::tenant::agency_of(&d.who)),
-            )
             .chain(book.people.iter().map(|p| p.agency.clone()))
             .find(|a| TenantId::of_agency(a).as_str() == name);
         let Some(agency_id) = agency_id else {
@@ -174,49 +123,49 @@ fn directories(people: &People, root: &Path) -> Vec<Directory> {
                 "an agency registry whose agency cannot be told; nobody is imported from it");
             continue;
         };
-        let admins: BTreeSet<String> = book
-            .people
-            .iter()
-            .filter(|p| p.agency == agency_id && p.is_agency_admin())
-            .map(|p| p.id.clone())
-            .collect();
-        let shown = replay(&history, &agency_id, admins);
-        if let Some(why) = &shown.tainted {
-            tracing::warn!(target: "napkin_web::people", agency = %agency_id, why = %why,
-                "the agency registry was written outside its admins' routes; nobody new signs in from it");
+        let roster_names_agency = roster.lines().any(|l| {
+            l.split('\t')
+                .next()
+                .and_then(crate::auth::Account::parse_username)
+                .is_some_and(|(_, a)| a == agency_id)
+        });
+        if !roster_names_agency {
+            tracing::warn!(target: "napkin_web::people", agency = %agency_id,
+                "an agency registry and no line of this agency in the roster: nobody in it gets a role from the import");
         }
         let mut list = Vec::new();
         for p in &reg.people {
-            if crate::tenant::agency_of(&p.username).as_deref() != Some(agency_id.as_str()) {
+            let Some((id, at)) = crate::auth::Account::parse_username(&p.username) else {
+                continue;
+            };
+            if at != agency_id {
                 tracing::warn!(target: "napkin_web::people", agency = %agency_id, person = %p.username,
                     "a registry entry of another agency; skipped");
                 continue;
             }
-            let wanted = crate::people::clean_roles(&p.roles);
-            let mut roles: Vec<String> = wanted.iter().filter(|r| known(r)).cloned().collect();
-            let mut why: Vec<String> = Vec::new();
-            if roles.len() != wanted.len() {
-                why.push("a role the store does not define was dropped".into());
-            }
-            if roles.iter().any(|r| r == ADMIN_ROLE) && !shown.admin_by_admin.contains(&p.username)
-            {
-                roles.retain(|r| r != ADMIN_ROLE);
-                why.push(
-                    "admin was dropped: the registry's chain does not show an admin gave it".into(),
-                );
-            }
-            if let Some(t) = &shown.tainted {
-                roles.clear();
-                why.push(format!("not trusted: {t}"));
-            }
-            let removed = p.state == agency::State::Removed || roles.is_empty();
+            // the roles: the roster's column, never the registry's
+            let roles: Vec<String> = People::roster_roles_of(&roster, &id)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|r| known(r))
+                .collect();
+            let why = if roles.is_empty() {
+                tracing::warn!(target: "napkin_web::people", agency = %agency_id, person = %id,
+                    "in the agency registry and given no role by the roster: imported as removed; an admin adds them back on the People page");
+                Some(
+                    "not given a role by the roster: removed until an admin adds them back"
+                        .to_string(),
+                )
+            } else {
+                None
+            };
             list.push(DirectoryPerson {
-                id: p.username.clone(),
-                name: p.name.clone(),
-                email: Some(p.email.clone()).filter(|e| !e.is_empty()),
+                name: clean_name(&p.name).unwrap_or_default(),
+                email: clean_email(&p.email),
+                removed: roles.is_empty(),
                 roles,
-                removed,
-                why: (!why.is_empty()).then(|| why.join("; ")),
+                why,
+                id,
             });
         }
         out.push(Directory {

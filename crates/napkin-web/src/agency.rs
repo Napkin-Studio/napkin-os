@@ -324,7 +324,7 @@ async fn get_settings(
     Tenant(tenant): Tenant,
     account: Option<Extension<Account>>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let (reg, _) = agency::read(&*ctx.workspace(&tenant).store)?;
+    let (reg, _) = agency::read(ctx.workspace(&tenant).agency_store())?;
     let look = crate::look::read(&ctx, &tenant);
     let admin = account.as_ref().is_some_and(|Extension(a)| is_admin(a));
     Ok(Json(if admin {
@@ -373,7 +373,7 @@ async fn put_settings(
         credit_cap_month_eur: cap,
         time_zone: text("time_zone")?,
     };
-    let s = agency::set_settings(&*ctx.workspace(&tenant).store, &acting, patch)?;
+    let s = agency::set_settings(ctx.workspace(&tenant).agency_store(), &acting, patch)?;
     crate::audit::sync_registry(&ctx, &tenant);
     Ok(Json(serde_json::json!({
         "name": s.name,
@@ -400,8 +400,9 @@ async fn setup_status(
     account: Option<Extension<Account>>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let me = admin_of(account)?;
-    let store = &*ctx.workspace(&tenant).store;
-    let (reg, _) = agency::read(store)?;
+    let ws = ctx.workspace(&tenant);
+    let store = &*ws.store;
+    let (reg, _) = agency::read(ws.agency_store())?;
     let others = others_than(&ctx, &me);
     let steps = vec![
         Step {

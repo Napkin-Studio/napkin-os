@@ -810,6 +810,9 @@ pub type AuditSink =
 /// The store: one JSON file, cached, re-read when another server writes it.
 pub struct People {
     dir: PathBuf,
+    /// The roster file the store was seeded from (`NAPKIN_AUTH_ROSTER`): the operator's own list, and the
+    /// one-time import's only source of a role (crate::people_import).
+    seed: PathBuf,
     cache: Mutex<Cache>,
     audit: OnceLock<AuditSink>,
 }
@@ -928,6 +931,7 @@ impl People {
         }
         let people = Self {
             dir,
+            seed: seed.to_path_buf(),
             cache: Mutex::new(Cache {
                 book,
                 stamp,
@@ -983,6 +987,16 @@ impl People {
             Ok(((), serde_json::Value::Array(lines)))
         })
         .map_err(|e| format!("the roster's roles could not be kept: {e:?}"))
+    }
+
+    /// The roster file's text, when there is one: `user@agency<TAB>Name<TAB>roles` lines.
+    pub fn roster(&self) -> Option<String> {
+        std::fs::read_to_string(&self.seed).ok()
+    }
+
+    /// The roles the roster file gives `id`, None when it has no line for them.
+    pub fn roster_roles_of(roster: &str, id: &str) -> Option<Vec<String>> {
+        Book::roster_roles(roster, id)
     }
 
     /// Where every change is also written: the agency's audit chain. Set once, by the router.
@@ -1061,13 +1075,12 @@ impl People {
                 line
             })
             .collect();
-        let undo = |why: String, logged: &[serde_json::Value]| {
+        // `logged` lines are on changes.jsonl and the first `audited` of them on the audit chain: each gets a
+        // "not applied" line and, where it reached the chain, a compensating entry there
+        let undo = |why: String, logged: &[serde_json::Value], audited: usize| {
             let _ = std::fs::remove_file(&tmp);
-            for l in logged {
-                let mut back = l.clone();
-                back["what"] = serde_json::json!("not applied");
-                back["was"] = l["what"].clone();
-                let _ = append_change(&self.dir, &back);
+            for (i, l) in logged.iter().enumerate() {
+                self.not_applied(l, i < audited);
             }
             tracing::error!(target: "napkin_web::people", error = %why, "a change could not be recorded and was not made");
             Refusal::Io(why)
@@ -1077,29 +1090,27 @@ impl People {
                 return Err(undo(
                     format!("the change log could not be written: {e}"),
                     &lines[..i],
+                    0,
                 ));
             }
         }
-        if let Some(sink) = self.audit.get() {
-            for line in &lines {
-                let Some(agency) = line["agency"].as_str() else {
-                    continue;
-                };
-                let kind = if line.get("person").is_some() {
-                    "permission"
-                } else {
-                    "settings"
-                };
-                if let Err(e) = sink(agency, by, kind, audit_words(line), line["person"].as_str()) {
+        if self.audit.get().is_some() {
+            for (i, line) in lines.iter().enumerate() {
+                if let Err(e) = self.audit_line(line, None) {
                     return Err(undo(
                         format!("the audit chain could not be written: {e}"),
                         &lines,
+                        i,
                     ));
                 }
             }
         }
         if let Err(e) = std::fs::rename(&tmp, self.file()) {
-            return Err(undo(format!("cannot write people.json: {e}"), &lines));
+            return Err(undo(
+                format!("cannot write people.json: {e}"),
+                &lines,
+                lines.len(),
+            ));
         }
         c.stamp = stamp_of(&self.file());
         c.checked = Instant::now();
@@ -1109,6 +1120,98 @@ impl People {
             tracing::info!(target: "napkin_web::people", by, what = %line["what"], person = %line["person"], agency = %line["agency"], "people changed");
         }
         Ok(out)
+    }
+
+    /// Put one change line on its agency's audit chain (`prefix` before the words, for a compensation).
+    fn audit_line(&self, line: &serde_json::Value, prefix: Option<&str>) -> Result<(), String> {
+        let (Some(sink), Some(agency)) = (self.audit.get(), line["agency"].as_str()) else {
+            return Ok(());
+        };
+        let kind = if line.get("person").is_some() {
+            "permission"
+        } else {
+            "settings"
+        };
+        let words = match prefix {
+            Some(p) => format!("{p} {}", audit_words(line)),
+            None => audit_words(line),
+        };
+        sink(
+            agency,
+            line["by"].as_str().unwrap_or(""),
+            kind,
+            words,
+            line["person"].as_str(),
+        )
+    }
+
+    /// A recorded change that did not happen: a "not applied" line, and a compensating audit entry when
+    /// the original reached the chain.
+    fn not_applied(&self, line: &serde_json::Value, audited: bool) {
+        let mut back = line.clone();
+        back["what"] = serde_json::json!("not applied");
+        back["was"] = line["what"].clone();
+        back["at"] = serde_json::json!(now());
+        let _ = append_change(&self.dir, &back);
+        if audited {
+            if let Err(e) = self.audit_line(line, Some("Not applied:")) {
+                tracing::error!(target: "napkin_web::people", error = %e, "a compensating audit entry was not written");
+            }
+        }
+    }
+
+    /// At start (once the audit chain is attached): a server that stopped between recording a change and
+    /// writing people.json left lines for a change that never happened. Each line of the last change whose
+    /// `after` the store does not hold is marked "not applied", with a compensating audit entry.
+    pub fn reconcile(&self) -> usize {
+        let Ok(text) = std::fs::read_to_string(self.dir.join("changes.jsonl")) else {
+            return 0;
+        };
+        let lines: Vec<serde_json::Value> = text
+            .lines()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect();
+        let Some(last) = lines.last() else {
+            return 0;
+        };
+        if last["what"] == "not applied" {
+            return 0;
+        }
+        let (at, by) = (last["at"].clone(), last["by"].clone());
+        let book = self.book();
+        let mut n = 0;
+        for l in lines
+            .iter()
+            .rev()
+            .take_while(|l| l["at"] == at && l["by"] == by)
+        {
+            let (Some(id), Some(after)) = (l["person"].as_str(), l.get("after")) else {
+                continue;
+            };
+            if after.is_null() {
+                continue;
+            }
+            let held = book.person(id);
+            let same = held.is_some_and(|p| {
+                let h = p.state();
+                let email = serde_json::json!(p.email);
+                ["roles", "name"]
+                    .iter()
+                    .all(|k| after.get(*k).map_or(true, |v| *v == h[*k]))
+                    && after.get("email").map_or(true, |v| *v == email)
+                    && after
+                        .get("removed_at")
+                        .map_or(true, |v| v.is_null() == h["removed_at"].is_null())
+            });
+            if !same {
+                self.not_applied(l, true);
+                n += 1;
+            }
+        }
+        if n > 0 {
+            tracing::warn!(target: "napkin_web::people", lines = n, "a recorded change was not in people.json; marked not applied");
+        }
+        n
     }
 
     /// Add a person (or bring back one who was removed), to the agency `req.agency` names.
@@ -1367,12 +1470,11 @@ impl People {
         })
     }
 
-    /// The one-time import of the build's agency directories (crate::people_import). `found` holds each
-    /// registry's entries as the import decided to trust them: of the registry's own agency only, with roles
-    /// the store defines, `admin` only where the registry's chain shows an admin wrote it, and anything it
-    /// would not trust marked `removed` (kept for the record, no roles, no sign-in). Only a person the store
-    /// does not have is written: an existing person is never overwritten, re-roled or removed, so neither a
-    /// Napkin admin nor any agency's last admin can be touched. One change line per person written.
+    /// The one-time import of the build's agency registries (crate::people_import). `found` holds each
+    /// registry's entries as the import read them: of the registry's own agency only, with the roles the
+    /// roster's column gives them (never the registry's), and `removed` when the roster gives none. Only a
+    /// person the store does not have is written: an existing person is never overwritten, re-roled or
+    /// removed. One change line per person written.
     pub fn import_directories(&self, found: &[Directory]) -> Change<usize> {
         self.change("directory import", "imported from the directory", |book| {
             let mut lines = Vec::new();
