@@ -29,3 +29,11 @@ export async function openMe(page: Page) {
   await expect(page.getByTestId('desk')).toBeVisible()
   await page.getByRole('group', { name: 'Whose work' }).getByRole('button', { name: 'Me', exact: true }).click()
 }
+
+/** [`openMe`], with every row shown (five show before Show all, and a shared stack leaves older jobs behind). */
+export async function openMeAll(page: Page) {
+  await openMe(page)
+  await expect(page.getByTestId('me-row').first()).toBeVisible()
+  const all = page.getByTestId('me-show-all')
+  if (await all.isVisible()) await all.click()
+}

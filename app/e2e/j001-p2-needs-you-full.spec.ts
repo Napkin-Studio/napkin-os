@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { open, SIZES, signIn, signOff } from './pilot'
-import { factsOf, noticesOf, openMe } from './needs'
+import { factsOf, noticesOf, openMe, openMeAll } from './needs'
 import { asMe, PEOPLE, seedJ001 } from './seed/j001'
 import { ALERTS } from './seed/j001/p2/needs-you-full.mjs'
 import { PHASE2 } from './phase2/tests.mjs'
@@ -112,7 +112,7 @@ for (const size of SIZES) {
     // The planner has the notice on the brief; it is a row of the document's own list, in the drawer's Notices.
     await signIn(page, PEOPLE.planning)
     expect(await changed(page)).toHaveLength(1)
-    await openMe(page)
+    await openMeAll(page)
     const row = page.getByTestId('me-row').filter({ hasText: job.clientName })
     await expect(row).toHaveCount(1)
     await row.click()
@@ -213,9 +213,7 @@ for (const size of SIZES) {
     const late = (await noticesOf(page, job.api, job.brief, ['approval']))[0]
     expect(late?.text).toContain('2 days late')
     expect(late.for).toEqual({ person: PEOPLE.planning.username })
-    await openMe(page)
-    const showAll = page.getByTestId('me-show-all') // five rows show; the planner's list holds more by now
-    if (await showAll.isVisible()) await showAll.click()
+    await openMeAll(page)
     const row = page.getByTestId('me-row').filter({ hasText: job.clientName })
     await expect(row).toHaveCount(1)
     await expect(row).toContainText('Due')

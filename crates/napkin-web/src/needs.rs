@@ -388,9 +388,7 @@ pub fn documents_for(
     };
     let mut out = Vec::new();
     for job in &index.jobs {
-        if !index.sees_job(&job.number, name, roles) {
-            continue;
-        }
+        let on_job = index.sees_job(&job.number, name, roles);
         let next = job.due.as_deref().and_then(|due| {
             (alerts::days_until(due, today)? >= 0).then(|| {
                 serde_json::json!({
@@ -404,7 +402,7 @@ pub fn documents_for(
             let mut dues: Vec<&str> = Vec::new();
             let mut mine = 0usize;
             for h in d.holds.iter().filter(|h| {
-                h.for_.as_ref().is_some_and(|f| waiting_on(f)) && !held(&d.path, &h.key)
+                on_job && h.for_.as_ref().is_some_and(|f| waiting_on(f)) && !held(&d.path, &h.key)
             }) {
                 mine += 1;
                 dues.extend(h.due.as_deref());
@@ -421,7 +419,8 @@ pub fn documents_for(
                 mine += 1;
                 dues.extend(n["due"].as_str());
             }
-            if d.holds.is_empty() && notices.is_empty() {
+            // a person off the job sees only what is addressed to them (a notice they were named on)
+            if (!on_job && notices.is_empty()) || (d.holds.is_empty() && notices.is_empty()) {
                 continue;
             }
             out.push(serde_json::json!({
