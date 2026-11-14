@@ -17,3 +17,18 @@ export async function wideBeside(app: FrameLocator, doc: string) {
   expect(b.right, 'the Booth stays on screen').toBeLessThanOrEqual(1440)
   expect(d.width, 'the document keeps room').toBeGreaterThan(360)
 }
+
+/**
+ * A tool's page for a client, and the work item with this title on it, opened. The shell may correct a tool
+ * route to the client's page while its tool list is still being read (LandingHome.tsx, correctRoute): the
+ * address is asked again until the tool's own page is the one on screen, so the click lands on the tool page.
+ */
+export async function openWork(page: Page, client: string, tool: string, title: string) {
+  const toolPage = page.locator(`[data-testid="tool-page"][data-tool="${tool}"]`)
+  await page.goto(`/#tool-${client}-${tool}`); await page.reload()
+  await expect(async () => {
+    if (!(await toolPage.count())) await page.goto(`/#tool-${client}-${tool}`)
+    await expect(toolPage.getByTestId('work-item').filter({ hasText: title }).first()).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
+  await toolPage.getByTestId('work-item').filter({ hasText: title }).first().click()
+}

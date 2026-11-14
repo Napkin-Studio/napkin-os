@@ -79,7 +79,7 @@ function packed(src: string): string {
 const windows: { close: () => void }[] = []
 after(() => { for (const w of windows) w.close() })
 
-interface Opts { card?: Json | null; versions?: Json; data?: Json; width?: number; post?: (path: string, body: Json) => Json }
+interface Opts { card?: Json | null; versions?: Json; data?: Json; width?: number; post?: (path: string, body: Json) => Json; attention?: Json[]; mode?: boolean | null }
 
 /** Run a tool page with the host's answers; resolves once it has read them. */
 async function open(src: string, opts: Opts = {}) {
@@ -107,7 +107,7 @@ async function open(src: string, opts: Opts = {}) {
         if (path === '/judge') b = opts.card === undefined ? CARD() : opts.card
         else if (path === '/versions') b = opts.versions ?? VERSIONS
         else if (path.startsWith('/version?n=')) b = PARTS[path.slice('/version?n='.length)]
-        else if (path === '/decisions') b = { document_id: 'd', version: 'v', decisions: [], attention: [], cites: {}, lock: { can_lock: true, blockers: 0, locked: false } }
+        else if (path === '/decisions') b = { document_id: 'd', version: 'v', decisions: [], attention: opts.attention ?? [], cites: {}, lock: { can_lock: true, blockers: 0, locked: false } }
         else if (path === '/upstream') b = { upstream: [] }
         else if (path === '/ideas/room') b = { data: {}, gate: { team_cards: 0, needed: 5, to_go: 5, open: false, creative_director: 'dara@wk', routes_out: [], chosen: null }, brief: null }
         else if (path === '/ideas/routes') b = { routes: {} }
@@ -116,6 +116,9 @@ async function open(src: string, opts: Opts = {}) {
     },
   })
   windows.push(dom.window)
+  // The shell says the mode on every load (AppRuntime.tsx, clan:clientmode); null leaves it unsaid.
+  const w0 = dom.window as unknown as Record<string, any>
+  if (opts.mode !== null) w0.dispatchEvent(new w0.MessageEvent('message', { data: { type: 'clan:clientmode', on: opts.mode ?? false }, source: w0.parent }))
   await new Promise(r => setTimeout(r, 60))
   const d = dom.window.document
   const win = dom.window as unknown as Record<string, any>
@@ -309,4 +312,185 @@ test('in client review mode the folds draw nothing', async () => {
 test('no em dash in the folds\' words', () => {
   const words = FOLDS.slice(FOLDS.indexOf('<script')).replace(/\/\/[^\n]*/g, '')
   assert.ok(!words.includes('—'))
+})
+
+// ── review: R1 to R6 (the coordinator's review of the folds), and who holds it ───────────────────────
+
+const XSS = '<img src=x onerror="window.__pwn=1"><script>window.__pwn=1</' + 'script>"\'><b id=pwn>'
+
+test('R1 verdict and version text is text, never HTML', async () => {
+  const card = CARD({ why_not: XSS, setup: { ...CARD().setup, calibration: XSS }, older: [{ total: XSS }] })
+  card.score.tests = [{ id: XSS, dim: XSS, value: 'fail', evidence: XSS, question: XSS }, { id: 'p', dim: 'constructor', value: XSS, evidence: XSS, question: XSS }]
+  card.score.route_line = XSS; card.score.total = XSS; card.score.sub = { idea: XSS, craft: XSS, effect: XSS }
+  card.score.overruled = { route: 'cd', at: 'x', reason: XSS }; card.score.route = XSS; card.score.trust = XSS
+  const versions = { versions: [{ n: 2, decision: 'a2', signer: XSS, at: XSS, reason: XSS, locked: true, readable: true }, { n: 1, decision: 'a1', signer: XSS, at: '2026-11-12T09:00:00Z', reason: '', locked: false, readable: true }], draft: { changed: true, restored_from: XSS, edited_by: XSS, at: '2026-11-12T09:00:00Z', last_edit: null } }
+  const kept = PARTS['1']
+  PARTS['1'] = { n: 1, readable: true, parts: { [XSS]: XSS, list: [{ text: XSS, role: XSS }], deep: { [XSS]: [XSS] } } }
+  try {
+    const p = await open(SRC.script, { data: RADIO, card, versions, post: () => ({ ok: false, error: 'ai_off: ' + XSS }) })
+    const fold = p.one('#side [data-testid="versions-fold"]'); fold.open = true; fold.dispatchEvent(new p.win.Event('toggle'))
+    p.click('#side [data-testid="version-row"][data-version="1"] [data-bf-act="ver-compare"]')
+    p.click('#side [data-testid="version-row"][data-version="2"] [data-bf-act="ver-compare"]')
+    await p.settle()
+    p.click('#side [data-testid="judge-again"]'); await p.settle()
+    assert.ok(p.one('#side [data-testid="version-compare"]'), 'compare drawn')
+    assert.ok(p.one('#side [data-testid="judge-refusal"]'), 'refusal drawn')
+    assert.equal(p.all('[data-booth-fold] img, [data-booth-fold] script, #pwn').length, 0, 'no injected element')
+    assert.equal(p.win.__pwn, undefined)
+  } finally { PARTS['1'] = kept }
+})
+
+/** Two versions compared at 1440 px on the script editor; the desk measured as 1408 px. */
+async function comparing() {
+  const p = await open(SRC.script, { data: RADIO })
+  const fold = p.one('#side [data-testid="versions-fold"]'); fold.open = true; fold.dispatchEvent(new p.win.Event('toggle'))
+  const desk = p.one('.desk'); Object.defineProperty(desk, 'clientWidth', { value: 1408, configurable: true })
+  p.click('#side [data-testid="version-row"][data-version="1"] [data-bf-act="ver-compare"]')
+  p.click('#side [data-testid="version-row"][data-version="2"] [data-bf-act="ver-compare"]')
+  await p.settle()
+  assert.equal(desk.style.getPropertyValue('--trk'), '744px')
+  return { p, desk }
+}
+
+test('R2 leaving the compare by any way gives the Booth its own width back: a beat selected', async () => {
+  const { p, desk } = await comparing()
+  p.one('[data-beat="b1"]').dispatchEvent(new p.win.MouseEvent('click', { bubbles: true }))
+  await p.settle()
+  assert.equal(p.one('#side [data-testid="version-compare"]'), null, 'the compare is not on screen')
+  assert.equal(desk.classList.contains('booth-wide'), false, 'so the Booth is back to its own width')
+  assert.equal(desk.style.getPropertyValue('--trk'), '')
+  p.click('#side [data-whole]'); await p.settle()
+  assert.equal(p.one('#side [data-testid="version-compare"]'), null, 'and the compare does not come back by itself')
+  assert.equal(desk.classList.contains('booth-wide'), false)
+})
+
+test('R2 leaving the compare: the Versions fold closed, the Booth hidden, the Judge fold opened', async () => {
+  const closed = await comparing()
+  const vf = closed.p.one('#side [data-testid="versions-fold"]'); vf.open = false; vf.dispatchEvent(new closed.p.win.Event('toggle'))
+  await closed.p.settle()
+  assert.equal(closed.desk.classList.contains('booth-wide'), false, 'fold closed')
+  const hidden = await comparing()
+  hidden.p.click('#side .booth-hide'); await hidden.p.settle()
+  assert.equal(hidden.desk.classList.contains('booth-wide'), false, 'Booth hidden')
+  const other = await comparing()
+  const jf = other.p.one('#side [data-testid="judge-fold"]'); jf.open = false; jf.dispatchEvent(new other.p.win.Event('toggle')); await other.p.settle()
+  const jf2 = other.p.one('#side [data-testid="judge-fold"]'); jf2.open = true; jf2.dispatchEvent(new other.p.win.Event('toggle')); await other.p.settle()
+  assert.equal(other.p.one('#side [data-testid="version-compare"]'), null, 'another fold opened')
+  assert.equal(other.desk.classList.contains('booth-wide'), false)
+})
+
+test('R3 a restore that changed nothing tells the shell nothing, and says so', async () => {
+  const p = await open(SRC.script, { data: RADIO, post: path => (path === '/restore' ? { ok: true, noop: true, keys: [] } : { ok: true }) })
+  p.click('#side [data-testid="version-row"][data-version="1"] [data-bf-act="ver-restore"]')
+  await p.settle()
+  assert.equal(p.parent.filter(m => m.type === 'clan:write').length, 0, 'no write happened, so none is reported')
+  const fold = p.one('#side [data-testid="versions-fold"]'); fold.open = true; fold.dispatchEvent(new p.win.Event('toggle')); await p.settle()
+  assert.match(p.one('#side [data-testid="restore-note"]').textContent, /already has the words of v1\. Nothing changed\./)
+})
+
+test('R3 after a restore the fold says what Cmd Z does: takes it back on a script, nothing on a visual brief', async () => {
+  const restored = { ok: true, clan: { data: RADIO, version: 'v9' } }
+  const s = await open(SRC.script, { data: RADIO, post: path => (path === '/restore' ? restored : { ok: true }) })
+  s.click('#side [data-testid="version-row"][data-version="1"] [data-bf-act="ver-restore"]'); await s.settle()
+  assert.equal(s.parent.filter(m => m.type === 'clan:write').length, 1, 'the script\'s undo stack hears it')
+  const sf = s.one('#side [data-testid="versions-fold"]'); sf.open = true; sf.dispatchEvent(new s.win.Event('toggle')); await s.settle()
+  assert.match(s.one('#side [data-testid="restore-note"]').textContent, /Cmd Z takes it back/)
+  const v = await open(SRC.visual, { data: VISUAL, post: path => (path === '/restore' ? { ok: true, clan: { data: VISUAL, version: 'v9' } } : { ok: true }) })
+  v.click('#side [data-testid="version-row"][data-version="1"] [data-bf-act="ver-restore"]'); await v.settle()
+  assert.equal(v.parent.filter(m => m.type === 'clan:write').length, 0, 'no undo stack for a visual brief: nothing told')
+  const vf = v.one('#side [data-testid="versions-fold"]'); vf.open = true; vf.dispatchEvent(new v.win.Event('toggle')); await v.settle()
+  assert.match(v.one('#side [data-testid="restore-note"]').textContent, /To go back, restore the version you want\./)
+  assert.doesNotMatch(v.one('#side [data-testid="restore-note"]').textContent, /Cmd Z/)
+})
+
+test('R4 one Judge run at a time: the page\'s Send to Judge, then the fold\'s Score again, sends one POST', async () => {
+  const release: (() => void)[] = []
+  const p = await open(SRC.script, { data: RADIO })
+  const real = p.win.fetch
+  p.win.fetch = (url: string, init?: { method?: string; body?: string }) => {
+    if (init?.method === 'POST' && String(url).endsWith('/judge')) { p.posts.push({ path: '/judge', body: JSON.parse(init.body || '{}') }); return new Promise(r => release.push(() => r({ ok: true, status: 200, json: () => Promise.resolve(CARD()) }))) }
+    return real(url, init)
+  }
+  p.one('#side [data-send="judge"]').click(); await p.settle()
+  assert.equal(p.one('#side [data-testid="judge-again"]').disabled, true, 'the fold\'s button waits')
+  assert.equal(p.one('#side [data-send="judge"]').getAttribute('aria-disabled'), 'true', 'and the page\'s own')
+  const bar = p.parent.filter(m => m.type === 'clan:bar').at(-1)
+  assert.equal(bar.items.find((i: Json) => i.id === 'send-judge').disabled, true, 'and the bar\'s')
+  p.click('#side [data-testid="judge-again"]'); await p.settle()
+  p.win.dispatchEvent(new p.win.MessageEvent('message', { data: { type: 'clan:bar-action', id: 'send-judge' }, source: p.win.parent })); await p.settle()
+  p.one('#side [data-send="judge"]').click(); await p.settle()
+  assert.equal(p.posts.filter(x => x.path === '/judge').length, 1, 'one POST /judge while the first is unanswered')
+  release.forEach(f => f()); await p.settle()
+  assert.equal(p.one('#side [data-testid="judge-again"]').disabled, false, 'free again once it answered')
+})
+
+test('R5 a closed Versions fold reads nothing on the poll; the fold polls only GETs', async () => {
+  const p = await open(SRC.script, { data: RADIO })
+  const seen: string[] = []
+  const real = p.win.fetch
+  p.win.fetch = (url: string, init?: { method?: string }) => { seen.push((init?.method || 'GET') + ' ' + String(url).replace(/^.*localhost/, '')); return real(url, init) }
+  await new Promise(r => setTimeout(r, 4300))
+  assert.equal(seen.filter(s => s.startsWith('POST')).length, 0)
+  assert.equal(seen.filter(s => s === 'GET /versions').length, 0, 'a closed Versions fold reads nothing on the poll')
+  p.win.dispatchEvent(new p.win.CustomEvent('clan:dataupdated'))
+  await p.settle()
+  assert.equal(seen.filter(s => s === 'GET /versions').length, 1, 'but a data change is read')
+})
+
+test('R6 nothing is drawn before the shell says the mode; then the folds draw', async () => {
+  const p = await open(SRC.visual, { data: VISUAL, mode: null })
+  assert.equal(p.one('#side [data-testid="judge-fold"]'), null)
+  assert.equal(p.one('#side [data-testid="versions-fold"]'), null)
+  p.win.dispatchEvent(new p.win.MessageEvent('message', { data: { type: 'clan:clientmode', on: false }, source: p.win.parent }))
+  await p.settle()
+  assert.ok(p.one('#side [data-testid="judge-fold"]'))
+})
+
+// ── who holds it: one line under the status pill, from the decisions view's lock-blocking items ─────
+
+const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+const WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const weekday = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return WEEK[d.getDay()] }
+const BOOTH_ONLY = BOOTH
+
+test('who holds it is one piece of code, in the Booth snippet, with a mount in every template with a Booth', () => {
+  assert.equal(BOOTH_ONLY.split('function boothHolderHtml(').length - 1, 1)
+  for (const [k, src] of Object.entries(SRC)) {
+    assert.equal(src.split('data-booth-holder').length - 1, 1, `${k} has one holder line`)
+    assert.doesNotMatch(src, /function boothHolderHtml\(/, `${k} does not draw it itself`)
+  }
+  // Brief Maker: right under the status pill's row.
+  const head = SRC.brief.slice(SRC.brief.indexOf('id="bState"'), SRC.brief.indexOf('id="lockList"'))
+  assert.match(head, /id="statusPill"[\s\S]*data-booth-holder/)
+  const rbox = SRC.research.slice(SRC.research.indexOf('id="rbox-status"'), SRC.research.indexOf('class="rbox-acts"'))
+  assert.match(rbox, /data-booth-holder/)
+})
+
+for (const tool of TOOLS) {
+  test(`${tool.name}: who holds it, from the route's open step: "With Aoife, due <day>"`, async () => {
+    const p = await open(tool.src, { data: tool.data, attention: [
+      { code: 'gate', text: 'x', blocks_lock: false, due: day(1), for: { person: 'dara@wk' } },
+      { code: 'sign', text: 'x', blocks_lock: true, due: day(3), for: { person: 'aoife@wk' }, job: 'J001' },
+    ] })
+    const line = p.one(`${tool.panel} [data-booth-holder]`)
+    assert.ok(line, 'the line is in the Booth')
+    assert.equal(line.textContent, `With Aoife, due ${weekday(3)}`)
+    assert.equal(line.hasAttribute('data-late'), false)
+    assert.doesNotMatch(line.textContent, /since|score|fast|slow|\d+ (hours|minutes)/i, 'no since, and nothing scores a person')
+  })
+}
+
+test('who holds it: days late in the warn tone; a role when no one is named; only the date for a client step; nothing with no route', async () => {
+  const late = await open(SRC.script, { data: RADIO, attention: [{ code: 'sign', text: 'x', blocks_lock: true, due: day(-2), for: { person: 'aoife@wk' } }] })
+  const l = late.one('#side [data-booth-holder]')
+  assert.equal(l.textContent, `With Aoife, due ${weekday(-2)}, 2 days late`)
+  assert.equal(l.querySelector('.booth-late').textContent, '2 days late')
+  assert.ok(l.hasAttribute('data-late'))
+  assert.match(BOOTH, /\.booth-late\{color:var\(--booth-warn\)/)
+  const role = await open(SRC.script, { data: RADIO, attention: [{ code: 'sign', text: 'x', blocks_lock: true, due: day(1), for: { role: 'creative_director' } }] })
+  assert.equal(role.one('#side [data-booth-holder]').textContent, 'With the creative director, due tomorrow')
+  const client = await open(SRC.script, { data: RADIO, attention: [{ code: 'sign', text: 'x', blocks_lock: true, due: day(0) }] })
+  assert.equal(client.one('#side [data-booth-holder]').textContent, 'Due today')
+  const none = await open(SRC.script, { data: RADIO, attention: [{ code: 'sign', text: 'x', blocks_lock: true }] })
+  assert.equal(none.one('#side [data-booth-holder]').textContent, '')
 })

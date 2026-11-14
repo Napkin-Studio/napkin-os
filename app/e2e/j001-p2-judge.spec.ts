@@ -12,7 +12,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { boothIn } from './boothFolds'
+import { boothIn, openWork } from './boothFolds'
 import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Decision } from './pilot'
 import { CANARY_SENTENCE } from './seed/j001/p2/wall.mjs'
@@ -238,5 +238,7 @@ for (const size of SIZES) {
   })
 }
 
-// The script by its title: once the brief is locked the tool page lists the job's other work too (a pitch deck in test 64).
-async function open1(page: Page, job: Seeded) { await page.goto(`/#tool-${job.client}-script`); await page.reload(); await page.getByTestId('work-item').filter({ hasText: 'J001 radio script' }).first().click() }
+// On the Script editor's own page: the shell can turn the tool route into the client's page while it is still reading
+// the tools, and the client's page lists the job's other work first (a pitch deck, in test 64). openWork waits for the
+// tool page itself.
+async function open1(page: Page, job: Seeded) { await openWork(page, job.client, 'script', 'J001 radio script') }

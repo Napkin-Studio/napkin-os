@@ -13,6 +13,16 @@ import { MODES, open, SIZES, signIn } from './pilot'
 import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
 import { noticesOf, openMe } from './needs'
 import { PHASE2 } from './phase2/tests.mjs'
+import { boothIn, openWork } from './boothFolds'
+
+/** ALIGN_BOOTH_SHOTS=docs/design/align-booth: the holder line's screenshot (folds-holder-<width>.png). */
+async function holderShot(page: Page, tag: string, line: ReturnType<Page['locator']>) {
+  const dir = process.env.ALIGN_BOOTH_SHOTS
+  if (!dir) return
+  await line.evaluate(el => { el.scrollIntoView({ block: 'center' }) })
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: join(dir, `folds-holder-${tag}.png`), mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
+}
 
 const short = (n: number) => PHASE2.find(x => x.n === n)!.short
 
@@ -113,6 +123,14 @@ for (const size of SIZES) {
     const bad = await putRoute(page, job, [{ stage: 'brief-check', party: 'agency', approver: 'dara@wk', due: '14 Nov' }])
     expect(bad.status()).toBe(400)
     expect((await entryOf(page, job)).route).toHaveLength(3)
+
+    // Who holds it, in the Booth of the J001 brief (features/align-booth.clan): one line under the status pill.
+    await signIn(page, PEOPLE.planning)
+    await openWork(page, job.client, 'brief', 'J001 brief')
+    const line = boothIn(page).booth.getByTestId('booth-holder')
+    await expect(line).toHaveText(/^With Aoife, due \w+$/)
+    await expect(line).not.toHaveAttribute('data-late', '')
+    await holderShot(page, size.tag, line)
     await ctx.close()
   })
 
@@ -216,6 +234,11 @@ for (const size of SIZES) {
     await expect(mine.getByTestId('route-step').nth(1)).toHaveAttribute('data-state', 'waiting')
     await expect(mine.getByTestId('route-step').nth(0)).toHaveAttribute('data-state', 'approved')
     await expect(mine.getByTestId('holder')).toContainText(`Waiting on ${PEOPLE.creativeDirector.username}, creative director`)
+    // After the withdrawal the Booth of the brief says it is with the creative director again.
+    await signIn(page, PEOPLE.creativeDirector)
+    await openWork(page, job.client, 'brief', 'J001 brief')
+    await expect(boothIn(page).booth.getByTestId('booth-holder')).toHaveText(/^With Dara, due \w+$/)
+    await signIn(page, PEOPLE.accountService)
     const back = await entryOf(page, job)
     expect(back.holder).toMatchObject({ person: PEOPLE.creativeDirector.username, stage: 'brief-check' })
     expect(back.route[1]).toMatchObject({ state: 'waiting', approved_by: null })
