@@ -121,7 +121,7 @@ async fn invite(r: &Rig, admin: &Person, username: &str, name: &str, roles: &[&s
     let (st, body, _) = call(
         r,
         "POST",
-        &format!("/api/t/{}/agency/people/invite", admin.tenant),
+        "/api/admin/people",
         Some(&admin.cookie),
         Some(json!({ "username": username, "name": name, "email": format!("{}@mail.example.test", username.split('@').next().unwrap()), "roles": roles })),
     )
@@ -168,22 +168,15 @@ async fn with_a_directory_it_is_the_only_source_of_who_signs_in_and_as_what() {
     // another agency's roster is untouched
     sign_in(&r, "niamh@bq").await;
     // a first sign-in made dan active
-    let (_, people, _) = call(
-        &r,
-        "GET",
-        &format!("/api/t/{}/agency/people", cara.tenant),
-        Some(&cara.cookie),
-        None,
-    )
-    .await;
-    let dan_row = people
+    let (_, people, _) = call(&r, "GET", "/api/admin/people", Some(&cara.cookie), None).await;
+    let dan_row = people["people"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|p| p["username"] == "dan@cr")
+        .find(|p| p["id"] == "dan@cr")
         .unwrap()
         .clone();
-    assert_eq!(dan_row["state"], json!("active"));
+    assert!(dan_row["removed_at"].is_null());
 }
 
 #[tokio::test]
@@ -192,33 +185,24 @@ async fn the_people_list_is_an_allow_list_and_emails_are_for_admins_only() {
     let cara = sign_in(&r, "cara@cr").await;
     invite(&r, &cara, "dan@cr", "Dan Test", &["management"]).await;
     let dan = sign_in(&r, "dan@cr").await;
-    let url = |p: &Person| format!("/api/t/{}/agency/people", p.tenant);
-    let (st, admin_view, _) = call(&r, "GET", &url(&cara), Some(&cara.cookie), None).await;
+    // the People page's list: the admin sees every field of their own agency's people; a member gets nothing
+    let url = "/api/admin/people";
+    let (st, admin_view, _) = call(&r, "GET", url, Some(&cara.cookie), None).await;
     assert_eq!(st, StatusCode::OK);
-    let row = &admin_view
+    let row = &admin_view["people"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|p| p["username"] == "dan@cr")
+        .find(|p| p["id"] == "dan@cr")
         .unwrap();
     for key in [
-        "username",
-        "name",
-        "roles",
-        "email",
-        "state",
-        "invited_by",
-        "at",
+        "id", "name", "roles", "email", "agency", "added_by", "added_at",
     ] {
         assert!(row.get(key).is_some(), "an admin sees {key}");
     }
     assert_eq!(row["email"], json!("dan@mail.example.test"));
-    let (_, member_view, _) = call(&r, "GET", &url(&dan), Some(&dan.cookie), None).await;
-    for p in member_view.as_array().unwrap() {
-        let mut keys: Vec<&str> = p.as_object().unwrap().keys().map(String::as_str).collect();
-        keys.sort();
-        assert_eq!(keys, ["name", "roles", "username"], "{p}");
-    }
+    let (st, member_view, _) = call(&r, "GET", url, Some(&dan.cookie), None).await;
+    assert_eq!(st, StatusCode::FORBIDDEN);
     assert!(!member_view.to_string().contains("mail.example.test"));
 }
 
@@ -229,10 +213,10 @@ async fn only_an_admin_changes_people_and_the_last_admin_stays() {
     invite(&r, &cara, "dan@cr", "Dan Test", &["management"]).await;
     let dan = sign_in(&r, "dan@cr").await;
     let put = |p: &Person, who: &str, body: Value| {
-        let uri = format!("/api/t/{}/agency/people/{who}", p.tenant);
+        let uri = format!("/api/admin/people/{who}");
         let cookie = p.cookie.clone();
         let r = &r;
-        async move { call(r, "PUT", &uri, Some(&cookie), Some(body)).await }
+        async move { call(r, "PATCH", &uri, Some(&cookie), Some(body)).await }
     };
     // management is 403, admin is 200
     assert_eq!(
@@ -246,7 +230,7 @@ async fn only_an_admin_changes_people_and_the_last_admin_stays() {
         StatusCode::OK
     );
     assert_eq!(
-        call(&r, "POST", &format!("/api/t/{}/agency/people/invite", dan.tenant), Some(&dan.cookie),
+        call(&r, "POST", "/api/admin/people", Some(&dan.cookie),
             Some(json!({ "username": "x@cr", "name": "X", "email": "x@x.test", "roles": ["traffic"] }))).await.0,
         StatusCode::FORBIDDEN
     );
@@ -254,7 +238,7 @@ async fn only_an_admin_changes_people_and_the_last_admin_stays() {
     let (st, _, _) = call(
         &r,
         "DELETE",
-        &format!("/api/t/{}/agency/people/cara@cr", cara.tenant),
+        &format!("/api/admin/people/cara@cr"),
         Some(&cara.cookie),
         None,
     )
@@ -285,7 +269,7 @@ async fn only_an_admin_changes_people_and_the_last_admin_stays() {
 }
 
 #[tokio::test]
-async fn an_admin_naming_another_agencys_tenant_gets_403_on_every_route() {
+async fn an_admin_naming_another_agencys_tenant_gets_403_on_every_route_and_lists_only_their_own() {
     let r = rig();
     let cara = sign_in(&r, "cara@cr").await;
     invite(&r, &cara, "dan@cr", "Dan Test", &["management"]).await;
@@ -293,20 +277,10 @@ async fn an_admin_naming_another_agencys_tenant_gets_403_on_every_route() {
     assert_ne!(cara.tenant, barra.tenant);
     let t = &cara.tenant;
     for (m, path, body) in [
-        ("GET", "agency/people".to_string(), None),
-        (
-            "POST",
-            "agency/people/invite".to_string(),
-            Some(
-                json!({ "username": "z@bq", "name": "Z", "email": "z@z.test", "roles": ["traffic"] }),
-            ),
-        ),
-        (
-            "PUT",
-            "agency/people/dan@cr".to_string(),
-            Some(json!({ "roles": ["traffic"] })),
-        ),
-        ("DELETE", "agency/people/dan@cr".to_string(), None),
+        ("GET", "agency".to_string(), None),
+        ("GET", "agency/accounts.tsv".to_string(), None),
+        ("GET", "audit".to_string(), None),
+        ("GET", "audit/verify".to_string(), None),
     ] {
         let (st, _, _) = call(
             &r,
@@ -318,20 +292,13 @@ async fn an_admin_naming_another_agencys_tenant_gets_403_on_every_route() {
         .await;
         assert_eq!(st, StatusCode::FORBIDDEN, "{m} {path}");
     }
-    let (_, people, _) = call(
-        &r,
-        "GET",
-        &format!("/api/t/{}/agency/people", barra.tenant),
-        Some(&barra.cookie),
-        None,
-    )
-    .await;
+    let (_, people, _) = call(&r, "GET", "/api/admin/people", Some(&barra.cookie), None).await;
     assert!(
-        people
+        people["people"]
             .as_array()
             .unwrap()
             .iter()
-            .all(|p| p["username"].as_str().unwrap().ends_with("@bq")),
+            .all(|p| p["id"].as_str().unwrap().ends_with("@bq")),
         "the second agency sees none of the first's people: {people}"
     );
 }
@@ -344,8 +311,8 @@ async fn a_change_made_through_the_api_is_seen_at_once_and_a_removed_person_gets
     let dan = sign_in(&r, "dan@cr").await;
     let (st, _, _) = call(
         &r,
-        "PUT",
-        &format!("/api/t/{}/agency/people/dan@cr", cara.tenant),
+        "PATCH",
+        &format!("/api/admin/people/dan@cr"),
         Some(&cara.cookie),
         Some(json!({ "roles": ["traffic"] })),
     )
@@ -355,7 +322,7 @@ async fn a_change_made_through_the_api_is_seen_at_once_and_a_removed_person_gets
     let (st, _, _) = call(
         &r,
         "DELETE",
-        &format!("/api/t/{}/agency/people/dan@cr", cara.tenant),
+        &format!("/api/admin/people/dan@cr"),
         Some(&cara.cookie),
         None,
     )
@@ -371,22 +338,13 @@ async fn a_change_made_through_the_api_is_seen_at_once_and_a_removed_person_gets
     assert!(cleared, "the cookie is cleared");
     // and cannot sign in again
     assert_eq!(try_sign_in(&r, "dan@cr").await.0, StatusCode::UNAUTHORIZED);
-    // a removed person is not in the list a member reads
-    let (_, people, _) = call(
-        &r,
-        "GET",
-        &format!("/api/t/{}/agency/people", cara.tenant),
-        Some(&cara.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(
-        people
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|p| p["username"] == "dan@cr")
-            .unwrap()["state"],
-        json!("removed")
-    );
+    // the admin's list keeps them, as removed
+    let (_, people, _) = call(&r, "GET", "/api/admin/people", Some(&cara.cookie), None).await;
+    assert!(people["people"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["id"] == "dan@cr")
+        .unwrap()["removed_at"]
+        .is_string());
 }

@@ -2,8 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! features/agency-setup.clan, stage 2, through the real router: the settings (name, monthly credit
-//! cap, time zone, the look), the setup flow's progress read from the data, CSV import with a dry
+//! features/agency-setup.clan, stage 2, through the real router, as features/align-needs-lock-people.clan
+//! left it (stage 4: the setup flow went; the People page's routes import people): the settings (monthly
+//! credit cap, time zone, the look; the name is the agency record's), CSV import of people with a dry
 //! run through the API (raw and multipart), the accounts file, and the walls between agencies.
 
 use std::sync::atomic::AtomicI64;
@@ -126,7 +127,7 @@ async fn invite(r: &Rig, admin: &Person, username: &str, name: &str, roles: &[&s
     let (st, body, _) = call(
         r,
         "POST",
-        &format!("/api/t/{}/agency/people/invite", admin.tenant),
+        "/api/admin/people",
         Some(&admin.cookie),
         Some(json!({ "username": username, "name": name, "email": format!("{}@mail.example.test", username.split('@').next().unwrap()), "roles": roles })),
     )
@@ -135,8 +136,8 @@ async fn invite(r: &Rig, admin: &Person, username: &str, name: &str, roles: &[&s
         // on the roster, so already in the People store (features/align-needs-lock-people.clan)
         let (st, body, _) = call(
             r,
-            "PUT",
-            &format!("/api/t/{}/agency/people/{username}", admin.tenant),
+            "PATCH",
+            &format!("/api/admin/people/{username}"),
             Some(&admin.cookie),
             Some(json!({ "name": name, "email": format!("{}@mail.example.test", username.split('@').next().unwrap()), "roles": roles })),
         )
@@ -295,41 +296,26 @@ async fn the_settings_hold_a_name_a_cap_and_a_zone_and_an_admin_changes_them() {
 }
 
 #[tokio::test]
-async fn an_import_through_the_api_checks_first_then_writes_and_the_flow_reads_its_progress_from_the_data(
-) {
+async fn an_import_on_the_people_route_checks_first_then_writes() {
+    // the setup flow and its progress went in stage 4 of features/align-needs-lock-people.clan: the People
+    // page imports people (its clients and jobs files went with the flow, as the record's non-goals say)
     let r = rig();
     let cara = sign_in(&r, "cara@cr").await;
-    let t = &cara.tenant;
-    let status = || async {
-        call(
-            &r,
-            "GET",
-            &format!("/api/t/{t}/setup"),
-            Some(&cara.cookie),
-            None,
-        )
-        .await
-        .1
-    };
-    let s = status().await;
-    assert_eq!(s["next"], json!("logo"), "a new agency starts at the logo");
-    // the name is no longer a step: it is the agency record's, on the People page
-    // logo
-    let logo = json!({ "logo": "data:image/svg+xml,%3Csvg%3E%3C%2Fsvg%3E" });
-    call(
-        &r,
-        "PUT",
-        &format!("/api/t/{t}/agency/look"),
-        Some(&cara.cookie),
-        Some(logo),
-    )
-    .await;
-    assert_eq!(status().await["next"], json!("people"));
+    async fn others(r: &Rig, cookie: &str) -> usize {
+        call(r, "GET", "/api/admin/people", Some(cookie), None)
+            .await
+            .1["people"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|p| p["id"] != "cara@cr" && p["agency"] == "cr")
+            .count()
+    }
     // people: a dry run (multipart) writes nothing, then the real one
     let (ctype, body) = multipart(&people_csv(120));
     let (st, dry) = post_file(
         &r,
-        &format!("/api/t/{t}/setup/import/people?dry_run=1"),
+        "/api/admin/people/import?dry_run=1",
         &cara,
         &ctype,
         body,
@@ -337,6 +323,7 @@ async fn an_import_through_the_api_checks_first_then_writes_and_the_flow_reads_i
     .await;
     assert_eq!(st, StatusCode::OK, "{dry}");
     assert_eq!(dry["ok"], json!(117));
+    assert_eq!(dry["starts_directory"], json!(true), "cr's first people");
     let lines: Vec<u64> = dry["errors"]
         .as_array()
         .unwrap()
@@ -345,13 +332,13 @@ async fn an_import_through_the_api_checks_first_then_writes_and_the_flow_reads_i
         .collect();
     assert_eq!(lines, [8, 40, 70]);
     assert_eq!(
-        status().await["has_directory"],
-        json!(false),
+        others(&r, &cara.cookie).await,
+        0,
         "the dry run wrote nothing"
     );
     let (st, done) = post_file(
         &r,
-        &format!("/api/t/{t}/setup/import/people"),
+        "/api/admin/people/import",
         &cara,
         "text/csv",
         people_csv(120).into_bytes(),
@@ -359,62 +346,28 @@ async fn an_import_through_the_api_checks_first_then_writes_and_the_flow_reads_i
     .await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(done["created"], json!(117));
-    assert_eq!(status().await["next"], json!("clients"));
+    assert_eq!(others(&r, &cara.cookie).await, 117);
     // an imported person signs in to the home of their role
     let p1 = sign_in(&r, "person1@cr").await;
     let (_, me, _) = call(&r, "GET", "/api/session", Some(&p1.cookie), None).await;
     assert_eq!(me["roles"], json!(["creative-director"]));
-    // clients, then jobs
-    let clients: String = "name\n".to_string()
-        + &(1..=8)
-            .map(|i| format!("Client C{i}\n"))
-            .collect::<String>();
-    let (st, c) = post_file(
+    // the same file again changes nothing
+    let (_, again) = post_file(
         &r,
-        &format!("/api/t/{t}/setup/import/clients"),
+        "/api/admin/people/import",
         &cara,
         "text/csv",
-        clients.into_bytes(),
+        people_csv(120).into_bytes(),
     )
     .await;
-    assert_eq!((st, c["created"].clone()), (StatusCode::OK, json!(8)));
-    let jobs: String = "client,title,due\n".to_string()
-        + &(1..=30)
-            .map(|i| format!("Client C{},Job {i},2026-12-{:02}\n", i % 8 + 1, i % 28 + 1))
-            .collect::<String>();
-    let (st, j) = post_file(
-        &r,
-        &format!("/api/t/{t}/setup/import/jobs"),
-        &cara,
-        "text/csv",
-        jobs.into_bytes(),
-    )
-    .await;
-    assert_eq!((st, j["created"].clone()), (StatusCode::OK, json!(30)));
-    let s = status().await;
-    assert_eq!(s["complete"], json!(true));
-    let (_, list, _) = call(
-        &r,
-        "GET",
-        &format!("/api/t/{t}/jobs"),
-        Some(&cara.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(list.as_array().unwrap().len(), 30);
-    // an unknown kind and a file that is not a table
-    let (st, _) = post_file(
-        &r,
-        &format!("/api/t/{t}/setup/import/pets"),
-        &cara,
-        "text/csv",
-        b"a\n1\n".to_vec(),
-    )
-    .await;
-    assert_eq!(st, StatusCode::NOT_FOUND);
+    assert_eq!(
+        (again["created"].clone(), again["unchanged"].clone()),
+        (json!(0), json!(117))
+    );
+    // a file that is not a table
     let (st, e) = post_file(
         &r,
-        &format!("/api/t/{t}/setup/import/people?dry_run=1"),
+        "/api/admin/people/import?dry_run=1",
         &cara,
         "text/csv",
         b"   ".to_vec(),
@@ -425,7 +378,7 @@ async fn an_import_through_the_api_checks_first_then_writes_and_the_flow_reads_i
 }
 
 #[tokio::test]
-async fn setup_import_and_the_accounts_file_are_for_an_admin_of_this_agency_only() {
+async fn the_import_and_the_accounts_file_are_for_an_admin_of_this_agency_only() {
     let r = rig();
     let cara = sign_in(&r, "cara@cr").await;
     invite(&r, &cara, "dan@cr", "=Dan Test", &["management"]).await;
@@ -433,11 +386,7 @@ async fn setup_import_and_the_accounts_file_are_for_an_admin_of_this_agency_only
     let barra = sign_in(&r, "barra@bq").await;
     let t = &cara.tenant;
     for who in [&dan, &barra] {
-        for (m, path) in [
-            ("GET", "setup"),
-            ("POST", "setup/import/people"),
-            ("GET", "agency/accounts.tsv"),
-        ] {
+        for (m, path) in [("GET", "agency/accounts.tsv"), ("GET", "audit")] {
             let (st, _, _) = call(
                 &r,
                 m,
@@ -449,13 +398,13 @@ async fn setup_import_and_the_accounts_file_are_for_an_admin_of_this_agency_only
             assert_eq!(st, StatusCode::FORBIDDEN, "{m} {path}");
         }
     }
-    // a member of the agency cannot reach its own setup either
-    let (st, _, _) = call(
+    // a member of the agency cannot import people either
+    let (st, _) = post_file(
         &r,
-        "GET",
-        &format!("/api/t/{}/setup", dan.tenant),
-        Some(&dan.cookie),
-        None,
+        "/api/admin/people/import?dry_run=1",
+        &dan,
+        "text/csv",
+        people_csv(3).into_bytes(),
     )
     .await;
     assert_eq!(st, StatusCode::FORBIDDEN);

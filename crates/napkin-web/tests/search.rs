@@ -76,7 +76,7 @@ async fn invite_everyone(r: &Rig) {
         let (st, body, _, _) = call(
             r,
             "POST",
-            &format!("/api/t/{}/agency/people/invite", cara.tenant),
+            "/api/admin/people",
             Some(&cara.cookie),
             Some(json!({ "username": format!("{role}@cr"), "name": format!("Alpha {role}"), "email": format!("{role}@mail.example.test"), "roles": [role] })),
         )
@@ -85,8 +85,8 @@ async fn invite_everyone(r: &Rig) {
             // on the roster, so already in the one People store (features/align-needs-lock-people.clan)
             let (st, body, _, _) = call(
                 r,
-                "PUT",
-                &format!("/api/t/{}/agency/people/{role}@cr", cara.tenant),
+                "PATCH",
+                &format!("/api/admin/people/{role}@cr"),
                 Some(&cara.cookie),
                 Some(json!({ "name": format!("Alpha {role}"), "email": format!("{role}@mail.example.test"), "roles": [role] })),
             )
@@ -255,7 +255,7 @@ async fn people_are_the_directory_member_view_no_email_and_nobody_removed() {
     let (st, _, _, _) = call(
         &r,
         "DELETE",
-        &format!("/api/t/{}/agency/people/traffic@cr", cara.tenant),
+        &format!("/api/admin/people/traffic@cr"),
         Some(&cara.cookie),
         None,
     )

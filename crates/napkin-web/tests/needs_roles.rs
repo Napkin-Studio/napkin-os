@@ -279,15 +279,15 @@ async fn review_a_demoted_admin_stops_seeing_others_notices() {
         ("cian@wk", vec!["account-service"]),
         ("maeve@wk", vec!["admin"]),
     ] {
-        let (st, body, _) = call(&r, "POST", &format!("/api/t/{t}/agency/people/invite"), Some(&ad.cookie),
+        let (st, body, _) = call(&r, "POST", "/api/admin/people", Some(&ad.cookie),
             Some(json!({ "username": u, "name": u, "email": format!("{}@mail.example.test", u.split('@').next().unwrap()), "roles": roles }))).await;
         eprintln!("invite {u}: {st} {body}");
     }
     let maeve = sign_in(&r, "maeve@wk").await;
     let (st, body, _) = call(
         &r,
-        "PUT",
-        &format!("/api/t/{t}/agency/people/maeve@wk"),
+        "PATCH",
+        &format!("/api/admin/people/maeve@wk"),
         Some(&ad.cookie),
         Some(json!({ "roles": ["copywriter"] })),
     )
