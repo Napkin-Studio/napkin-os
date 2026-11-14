@@ -54,11 +54,18 @@ data "aws_iam_policy_document" "relay" {
     actions   = ["dynamodb:GetItem"]
     resources = [aws_dynamodb_table.blocked.arn]
   }
+  # Read only: a person enables a tenant with scripts/tenants.py (features/os-sign-in.clan).
+  statement {
+    sid       = "Tenants"
+    actions   = ["dynamodb:GetItem"]
+    resources = [aws_dynamodb_table.tenants.arn]
+  }
   statement {
     sid     = "Objects"
     actions = ["s3:GetObject", "s3:PutObject"]
     # dogfood/: the beta's record (features/production-tool-dogfood.clan)
-    resources = [for p in ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*", "cards/*"] : "${aws_s3_bucket.site.arn}/${p}"]
+    # tenants/: each agency's projects and library (features/os-sign-in.clan)
+    resources = [for p in ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*", "cards/*", "tenants/*"] : "${aws_s3_bucket.site.arn}/${p}"]
   }
   statement {
     sid       = "Config"
@@ -73,7 +80,7 @@ data "aws_iam_policy_document" "relay" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*", "cards/*"]
+      values   = ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*", "cards/*", "tenants/*"]
     }
   }
   statement {
@@ -130,6 +137,7 @@ resource "aws_lambda_function" "relay" {
       JOBS_TABLE            = aws_dynamodb_table.jobs.name
       QUOTAS_TABLE          = aws_dynamodb_table.quotas.name
       BLOCKED_TABLE         = aws_dynamodb_table.blocked.name
+      TENANTS_TABLE         = aws_dynamodb_table.tenants.name
       STITCH_FUNCTION       = "${aws_lambda_function.stitch.function_name}:live"
       SECRET_ARNS           = jsonencode({ for k, s in aws_secretsmanager_secret.relay : k => s.arn })
       NAPKIN_MODEL_API      = "bedrock" # the director calls Claude on Bedrock with the relay role (IAM), no API key
@@ -151,7 +159,9 @@ resource "aws_lambda_alias" "relay_live" {
   }
 }
 
-# Public: the relay checks its own tokens. CloudFront sends /api/* here.
+# Public: the relay refuses every call without a valid X-Napkin-Identity, which
+# napkin-web's /production/api proxy signs with TOKEN_SECRET
+# (docs/contracts/production-tool-identity.md). CloudFront sends /api/* here.
 resource "aws_lambda_function_url" "relay" {
   function_name      = aws_lambda_function.relay.function_name
   qualifier          = aws_lambda_alias.relay_live.name

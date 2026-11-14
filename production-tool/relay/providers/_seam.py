@@ -175,12 +175,16 @@ class Adapted:
             raise _error(e) from e
 
 
+class KeyMissing(RuntimeError):
+    """A provider's key is not set: expected locally, so the registry says so in one line."""
+
+
 def key(var: str) -> str:
     """A provider key from the environment (on Lambda, loaded from Secrets
     Manager at cold start). Missing: the adapter is not registered."""
     value = os.environ.get(var, "").strip()
     if not value:
-        raise RuntimeError(f"{var} is not set")
+        raise KeyMissing(f"{var} is not set")
     return value
 
 

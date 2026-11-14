@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/spend-policy.schema.json",
+  "title": "What an agency gets until its tenant item says otherwise",
+  "description": "The defaults the relay applies to every agency (features/tenant-limits.clan). An agency's item in the tenants table overrides a field by holding it; scripts/tenants.py writes the item, on the agency's request. Owner decision of 2026-10-13: no price, cap, warning or quota is shown in the UI, caps and daily quotas are built but off, and each agency chooses its own cap later. The relay's global spend stop (config.json spend.capUsd) stays on behind all of this. Contract 3.",
+  "type": "object",
+  "properties": {
+    "contractVersion": {
+      "$ref": "common.schema.json#/$defs/contractVersion"
+    },
+    "decided": {
+      "type": "string",
+      "format": "date",
+      "description": "When the owner last decided these defaults."
+    },
+    "capUsdMonthly": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "The monthly cap (UTC calendar month) on what an agency's jobs may reserve, in USD. null: no cap. Only new paid jobs are refused at the cap (limit_reached); a job already admitted settles at what the provider charged."
+    },
+    "dailyQuotas": {
+      "type": "boolean",
+      "description": "Whether config.json's per-person daily quotas apply. false: they are counted, never enforced, and GET /me answers quotas: null."
+    },
+    "allow": {
+      "$ref": "#/$defs/allow"
+    },
+    "alwaysAllowed": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "description": "Makers no allowlist turns off: Napkin's own (the mock), where nothing leaves Napkin."
+    }
+  },
+  "required": ["contractVersion", "decided", "capUsdMonthly", "dailyQuotas", "allow", "alwaysAllowed"],
+  "additionalProperties": false,
+  "$defs": {
+    "allow": {
+      "type": "object",
+      "description": "Where an agency's material may go. claude: the director and the character cards (Claude on Amazon Bedrock); off means the passthrough director, no cards, and no shot planning. makers: the companies whose models may run (capabilities models[].maker); any other maker is off, and new makers are opt-in.",
+      "properties": {
+        "claude": { "type": "boolean" },
+        "makers": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$" },
+          "uniqueItems": true
+        }
+      },
+      "required": ["claude", "makers"],
+      "additionalProperties": false
+    }
+  }
+}

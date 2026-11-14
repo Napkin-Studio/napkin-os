@@ -66,6 +66,8 @@ interface SessionInfo {
   user?: { username: string; agency: string; name?: string; roles?: string[] }
   /** The roles the session carries; empty for an anonymous visitor or a person with none. */
   roles?: string[]
+  /** The Production Tool is served at /production and this person may open it (features/os-sign-in.clan). */
+  production?: boolean
 }
 
 /** A page door, or a line under More (napkin-web/src/roles.rs `Entry`). */
@@ -239,6 +241,11 @@ export async function dashboardView(): Promise<DashboardView | 'forbidden' | nul
 /** The signed-in person, when the server has accounts; null when it is anonymous. */
 export async function signedInUser(): Promise<SessionInfo['user'] | null> {
   try { return (await session()).user ?? null } catch { return null }
+}
+
+/** Whether the OS home offers the Production Tool: a server that serves it, and someone signed in. */
+export async function productionOn(): Promise<boolean> {
+  try { return (await session()).production === true } catch { return false }
 }
 
 /** `?client=<id>&app=<app_id>`, or nothing: only what the filter names. */

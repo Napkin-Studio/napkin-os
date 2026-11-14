@@ -1,0 +1,39 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000CP01",
+  "op": "cutdown",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_cutplan01a",
+  "node": {
+    "kind": "format_set",
+    "id": "fset_01K7B00000000000000000FS01"
+  },
+  "parentIds": [],
+  "input": {
+    "aspect": {
+      "w": 16,
+      "h": 9
+    },
+    "delivery": {
+      "width": 1920,
+      "height": 1080
+    },
+    "cutdown": {
+      "step": "plan",
+      "lengths": [
+        15,
+        6
+      ],
+      "aspects": [
+        {
+          "w": 9,
+          "h": 16
+        },
+        {
+          "w": 4,
+          "h": 5
+        }
+      ]
+    }
+  }
+}

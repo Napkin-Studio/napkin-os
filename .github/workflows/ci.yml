@@ -296,6 +296,14 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.10"
+      # A release that changes only the Production Tool's web app must redeploy
+      # staging, which builds it into napkin-web (features/os-sign-in.clan).
+      - name: deploy.yml does not ignore all of production-tool
+        run: |
+          if grep -nE "^[[:space:]]*-[[:space:]]*'?production-tool/\*\*'?[[:space:]]*$" .github/workflows/deploy.yml; then
+            echo "::error::deploy.yml ignores all of production-tool/**; ignore only production-tool/relay/** and production-tool/stitch/**"
+            exit 1
+          fi
       - name: Format
         working-directory: infra
         run: terraform fmt -check -recursive
@@ -363,6 +371,7 @@ jobs:
           cache-dependency-path: |
             production-tool/web/package-lock.json
             production-tool/clan-store/package-lock.json
+            production-tool/canvas-engine/package-lock.json
       - name: CLAN store — build napkin-wasm, lint, test
         working-directory: production-tool/clan-store
         run: |
@@ -370,6 +379,16 @@ jobs:
           npm run build
           npm run lint
           npm test
+      # Our own canvas engine (features/canvas-engine.clan): its lint and tests, then the PR
+      # bench on the seed-1 G3 scene: storage bytes, memory caps, and draw-time CPU under 2x
+      # bench/baseline.json relative to a control timed in the same job (features/engine-ci.clan).
+      - name: Canvas engine — lint, test, bench
+        working-directory: production-tool/canvas-engine
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run bench
       - name: Web — lint, test, build
         if: hashFiles('production-tool/web/package.json') != ''
         working-directory: production-tool/web
@@ -378,6 +397,103 @@ jobs:
           npm run lint
           npm test
           npm run build:web
+      - name: Web — e2e (Playwright, real pointer events, in-browser mock)
+        if: hashFiles('production-tool/web/package.json') != ''
+        working-directory: production-tool/web
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
+
+  # napkin-web's image, built (never pushed) when what it bundles changes:
+  # the Dockerfile, .dockerignore, and the Production Tool's web app, CLAN
+  # store and contracts (features/os-sign-in.clan). Nothing else builds the
+  # image before a merge into main deploys it. The job always reports, so the
+  # required check is green when nothing it builds has changed.
+  image:
+    name: Image — napkin-web docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changed
+        name: Does the change reach the image
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$(git merge-base "$BASE" HEAD)" HEAD |
+             grep -qE '^(Dockerfile|\.dockerignore|production-tool/(web|clan-store|contracts|canvas-engine)/)'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Nothing the image bundles changed: not building it."
+          fi
+      - uses: docker/setup-buildx-action@v3
+        if: steps.changed.outputs.build == 'true'
+      - name: Build the runtime image (no push)
+        if: steps.changed.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: napkin-web:ci
+          cache-from: type=gha,scope=web
+      - name: The Production Tool is in the image
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/production/index.html
+          docker image ls napkin-web:ci
+
+  # The licence gate (features/licence-gate.clan, docs/contracts/licences.md): every
+  # lockfile we ship or run, fonts, binaries and model weights against licences/policy.toml.
+  # No path filter: it always runs the full check. The rulesets quote this job's name, so
+  # renaming it breaks branch protection.
+  licences:
+    name: Licences — npm · cargo · python · weights · fonts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # the policy diff reads the PR's base
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            production-tool/web/package-lock.json
+            production-tool/clan-store/package-lock.json
+            production-tool/canvas-engine/package-lock.json
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: licences
+          cache-targets: false
+      # PyPI metadata by exact version, package archives for clarifications, and the
+      # production-only npm installs the font scan reads.
+      - name: Cache licence metadata
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/napkin-licences
+          key: napkin-licences-${{ hashFiles('**/uv.lock', '**/package-lock.json', 'licences/policy.toml') }}
+          restore-keys: napkin-licences-
+      - name: Licence gate (unit tests, then this tree)
+        run: uv run --no-project --python 3.12 --with pytest --with brotli python -m pytest -q -p no:cacheprovider scripts/licences
+      - name: Licence policy changes in this PR
+        if: always() && github.event_name == 'pull_request'
+        run: uv run --no-project --python 3.12 python scripts/licences/check.py --policy-diff "origin/${{ github.base_ref }}" >> "$GITHUB_STEP_SUMMARY"
 
   # The same scan as .githooks/pre-push: scripts/check.sh --only secrets, with the same config.
   secrets:

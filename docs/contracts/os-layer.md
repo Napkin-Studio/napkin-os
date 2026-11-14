@@ -145,6 +145,17 @@ Existing fields (`agent`, `action`, `timestamp`, `fields_changed`, `pinned`,
 `trace_ref`) stay. Every new field is optional, so every existing file still
 validates. Struct work is W1P-I5.
 
+**`targets` and `cites` on `/patch-data`** (2026-10-13, features/contract-v3).
+An app's attributed write may name what it changed and what it rests on: the
+body's optional `targets[]` (addresses on the open document) and `cites[]`
+(addresses on any document, or decision ids `d_…`) are recorded on the `edit`
+decision as given. Each is checked with the same address reader the layer
+uses everywhere (`normalise_target`); a malformed address, a positional index
+(`shots[0]`), a target on another document, or either field without an
+`agent` is a 400. A body without them writes exactly the decision it always
+did. The kind stays `edit`; an app that needs finer kinds says them in its
+`action` (the Production Tool's verbs, production-tool/contracts/collab.md §8).
+
 **What came first is the chain's order** (owner, 2026-09-30). The chain is
 newest first; a decision nearer the head came after one further down, and no
 rule anywhere — host, SDK, middleware or view — compares `timestamp`s to
@@ -353,7 +364,7 @@ app:
 
 1. `upstream` defaults to `false`. With `false` nothing in this section
    applies and the hop is the older graft — `map`, or the root fold — so
-   Advertising Studio's `map: brief` is unchanged.
+   an app that declares `map: brief` is unchanged.
 2. With `true`, `map` must be absent (declared or passed as the `/spinoff`
    override); a spin-off with both is refused (`422`): the source's data has
    one place, `upstream.<id>`.
@@ -542,7 +553,7 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
 
 `clan_sdk` re-exports `Carried` beside `Lineage`. Adding the two fields breaks
 the struct literals that name every field. `SpinoffSpec` in `library.rs`,
-`tests/routes.rs`, `examples/make_advertising_studio.rs` and `clan-cli` gains
+`tests/routes.rs` and `clan-cli` gains
 `upstream: false` and nothing else, and the hand-written
 `impl Default for SpinoffSpec` gains `upstream: false`. `Lineage` in
 `instantiate.rs` gains `carried: None` for `instantiate()` and the filled

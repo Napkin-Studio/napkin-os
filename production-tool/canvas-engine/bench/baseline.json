@@ -1,0 +1,10 @@
+{
+  "note": "Recorded 2026-10-14: draw time / control, median of runs (bench/g3.bench.ts).",
+  "controlMs": 64.4,
+  "ratios": {
+    "coldOverview": 0.7346,
+    "overview": 0.0143,
+    "board": 0.0031,
+    "close": 0.0018
+  }
+}

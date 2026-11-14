@@ -10,6 +10,8 @@
 //!     session, one workspace per tenant, events over SSE.
 //!   * `/s/{token}/…` — the app sandbox: the `clan://` table verbatim, reached
 //!     with a capability token instead of a custom URI scheme.
+//!   * `/production/…` — the Production Tool and its relay proxy, when one is
+//!     configured ([`production`]).
 //!
 //! Everything else is the built React app.
 
@@ -33,6 +35,7 @@ pub mod meter;
 pub mod needs;
 pub mod people;
 pub mod people_import;
+pub mod production;
 pub mod roles;
 pub mod sandbox;
 pub mod search;
@@ -138,6 +141,18 @@ pub fn router_with(
     static_dir: Option<&Path>,
     identity: Arc<tenant::Identity>,
 ) -> Router {
+    router_full(ctx, static_dir, identity, None)
+}
+
+/// The service with the Production Tool at `/production` when `production` is
+/// given. It is mounted only with accounts: anonymous mode never reaches a
+/// relay that spends money (`main.rs` refuses that configuration outright).
+pub fn router_full(
+    ctx: Arc<AppCtx>,
+    static_dir: Option<&Path>,
+    identity: Arc<tenant::Identity>,
+    production: Option<Arc<production::Relay>>,
+) -> Router {
     // the roster's People store is the server's one list of who may sign in, and as what
     if let tenant::Mode::Accounts {
         provider: auth::Provider::Roster(r),
@@ -146,32 +161,34 @@ pub fn router_with(
     {
         ctx.set_people(r.people_arc());
     }
-    Router::new()
+    let production = production.filter(|_| matches!(identity.mode, tenant::Mode::Accounts { .. }));
+    let mut api = api::router()
+        // inside the tenant layer, so it knows the signed-in account
+        .layer(axum::middleware::from_fn_with_state(
+            ctx.clone(),
+            dogfood::capture_api,
+        ))
+        // the one permission check: the session's roles against the route
+        // (features/roles-and-homes.clan), after the tenant layer has named the person
+        .layer(axum::middleware::from_fn(roles::guard))
+        .layer(DefaultBodyLimit::max(UPLOAD_MAX))
+        // the People store's roles, on every request; the session carries none
+        // (features/align-needs-lock-people.clan)
+        .layer(axum::middleware::from_fn_with_state(
+            ctx.clone(),
+            live::live_roles,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            identity.clone(),
+            tenant::layer,
+        ))
+        .layer(axum::Extension(identity.clone()));
+    if production.is_some() {
+        api = api.layer(axum::Extension(production::Enabled));
+    }
+    let mut app = Router::new()
         // The shell API is the only part that runs on a cookie session.
-        .nest(
-            "/api",
-            api::router()
-                // inside the tenant layer, so it knows the signed-in account
-                .layer(axum::middleware::from_fn_with_state(
-                    ctx.clone(),
-                    dogfood::capture_api,
-                ))
-                // the one permission check: the session's roles against the route
-                // (features/roles-and-homes.clan), after the tenant layer has named the person
-                .layer(axum::middleware::from_fn(roles::guard))
-                .layer(DefaultBodyLimit::max(UPLOAD_MAX))
-                // the People store's roles, on every request; the session carries none
-                // (features/align-needs-lock-people.clan)
-                .layer(axum::middleware::from_fn_with_state(
-                    ctx.clone(),
-                    live::live_roles,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    identity.clone(),
-                    tenant::layer,
-                ))
-                .layer(axum::Extension(identity)),
-        )
+        .nest("/api", api)
         // The sandbox authenticates with its token and nothing else, so the
         // session layer deliberately does not apply to it.
         .nest(
@@ -184,8 +201,12 @@ pub fn router_with(
         .nest(
             "/c",
             links::router().layer(DefaultBodyLimit::max(32 * 1024)),
-        )
-        .merge(shell_service(static_dir))
+        );
+    if let Some(relay) = production {
+        // Not under dogfood::capture_api: the relay keeps the tool's own record.
+        app = app.merge(production::router(relay, identity));
+    }
+    app.merge(shell_service(static_dir))
         // one timing line per routed request, by route template (timing.rs)
         .route_layer(axum::middleware::from_fn(timing::layer))
         .layer(compression())

@@ -48,3 +48,5 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 # gunzip bodies in the compression tests
 flate2 = "1"
+# the stub relay in tests/production.rs
+tokio = { version = "1", features = ["net", "time"] }

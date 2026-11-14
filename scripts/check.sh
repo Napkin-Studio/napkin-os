@@ -9,7 +9,7 @@
 #   scripts/check.sh --only rust,wasm  just these suites
 #   scripts/check.sh --list            say which suites would run, run nothing
 #
-# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool secrets copy
+# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image licences secrets copy
 # `secrets` (gitleaks over the commits in range, with .gitleaks.toml) runs for any change. It needs the
 # gitleaks binary on PATH or in $GITLEAKS_BIN (CI pins v8.30.1; the suite says how to get it).
 # `copy` fails on an em dash in an interface string: string literals and templates in .ts/.tsx/.js/.jsx
@@ -17,8 +17,11 @@
 # `e2e` (the Playwright smoke in app/e2e against a seeded local stack) runs only when named
 # (`--only e2e`): it needs a browser (`cd app && npx playwright install chromium`) and a cold run
 # builds the shell and napkin-web first.
+# `image` (docker build --target runtime) runs when the Dockerfile, .dockerignore or the parts of
+# production-tool the image bundles change, or when named; it needs docker.
 # `desktop` (cargo check of app/src-tauri) runs only when that path changes or is named:
-# the full .deb bundle stays in CI.
+# the full .deb bundle stays in CI. `licences` (scripts/licences/check.py) runs its cheap
+# scans on any code change and reads the lockfiles only when a manifest or licences/ changed.
 set -uo pipefail
 
 root="$(git rev-parse --show-toplevel)"
@@ -29,7 +32,7 @@ unset CLAN_NO_HINTS
 for b in chromium chromium-browser google-chrome-stable google-chrome; do
   command -v "$b" >/dev/null && { export NAPKIN_PDF_RENDER_TESTS=1; break; }
 done
-ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool secrets copy)
+ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image licences secrets copy)
 # Suites that only run when named; never part of --all or of what a change reaches.
 OPTIONAL=(e2e)
 
@@ -62,6 +65,7 @@ changed_files() {
 }
 
 declare -A want=()
+licence_files=()
 if [[ $all -eq 1 ]]; then
   for s in "${ALL[@]}"; do want[$s]=1; done
 elif [[ -n "$only" ]]; then
@@ -99,15 +103,31 @@ else
         want[middleware]=1 ;;
       mock-backend/*|mock-middleware/*)
         want[mock-backend]=1 ;;
+      production-tool/web/*|production-tool/clan-store/*|production-tool/contracts/*|production-tool/canvas-engine/*)
+        # napkin-web's image bundles the tool's web app and the canvas engine it imports (Dockerfile, production stage)
+        want[production-tool]=1; want[image]=1 ;;
       production-tool/*)
         want[production-tool]=1 ;;
       infra/*)
         want[terraform]=1
         infra_changed=1 ;;
+      .github/workflows/deploy.yml)
+        want[terraform]=1 ;;  # its paths-ignore lint lives in the terraform suite
       .github/workflows/*)
         notes+=("$f changed: workflows run only on GitHub; consider scripts/check.sh --all") ;;
-      Dockerfile|docker-compose.yml|server/Dockerfile|.dockerignore)
+      Dockerfile|.dockerignore)
+        want[image]=1 ;;
+      docker-compose.yml|server/Dockerfile)
         notes+=("$f changed: the Deploy workflow builds the images; try 'docker build .' locally") ;;
+    esac
+    # A second pass, so the first-match routing above is unchanged: what the licence gate reads.
+    case "$f" in
+      package.json|*/package.json|package-lock.json|*/package-lock.json|\
+      Cargo.toml|*/Cargo.toml|Cargo.lock|.cargo/*|pyproject.toml|*/pyproject.toml|uv.lock|*/uv.lock|\
+      requirements*.txt|*/requirements*.txt|licences/*|scripts/licences/*|*/build-layer.sh|\
+      Dockerfile*|*/Dockerfile*|*.woff2|*.woff|*.ttf|*.otf|patches/*|*/patches/*|\
+      *.py|*.ts|*.tsx|*.js|*.mjs|*.jsx|*.html)
+        want[licences]=1; licence_files+=("$f") ;;
     esac
   done < <(changed_files | sort -u)
   for n in "${notes[@]}"; do echo "note: $n"; done
@@ -175,6 +195,7 @@ suite_terraform() {
   # backend in .terraform, and the mocked-provider test must never reach AWS.
   local cache="${XDG_CACHE_HOME:-$HOME/.cache}/napkin-check"
   mkdir -p "$cache/tf-plugins"
+  deploy_paths_lint &&
   ( cd infra && terraform fmt -check -recursive ) &&
   for env in staging hackathon; do
     ( cd "infra/envs/$env" && export TF_DATA_DIR="$cache/tfdata-$env" TF_PLUGIN_CACHE_DIR="$cache/tf-plugins" &&
@@ -182,21 +203,73 @@ suite_terraform() {
       terraform validate && terraform test ) || return 1
   done
 }
-suite_production-tool() {
-  # relay and stitch (offline), the locked contracts, and the web app once the UI lane adds it
-  ( cd production-tool/relay && uv run -q --python 3.12 pytest -q ) &&
-  ( cd production-tool/stitch && uv run -q --python 3.12 pytest -q ) &&
-  uv run -q --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py &&
-  # The CLAN store: napkin-wasm (cargo + wasm-bindgen) into clan-store/src/wasm, its tests
-  # (against the real `clan` CLI), then the web app on top of it.
-  ( cd production-tool/clan-store &&
-    { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
-    npm run -s build && npm run -s lint && npm test ) &&
-  if [[ -f production-tool/web/package.json ]]; then
-    ( cd production-tool/web &&
-      { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
-      npm run -s lint && npm test && npm run -s build:web )
+# deploy.yml must not ignore the parts of production-tool that napkin-web's image bundles
+# (features/os-sign-in.clan): a release that changes only the tool has to redeploy staging.
+deploy_paths_lint() {
+  if grep -nE "^[[:space:]]*-[[:space:]]*'?production-tool/\*\*'?[[:space:]]*$" .github/workflows/deploy.yml; then
+    echo "deploy.yml ignores all of production-tool/**; ignore only production-tool/relay/** and production-tool/stitch/**" >&2
+    return 1
   fi
+}
+suite_image() {
+  if ! command -v docker >/dev/null; then
+    echo "image: docker is not installed; the CI image job builds it" >&2
+    return 0
+  fi
+  docker build -q --target runtime -t napkin-web:check . >/dev/null &&
+  docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/production/index.html
+}
+suite_production-tool() {
+  # Installs and the CLAN store build first (the web app builds on clan-store/src/wasm and the canvas
+  # engine's sources), then every independent part at once: relay, stitch, contracts, clan-store, the
+  # canvas engine and the web app (owner, 2026-10-16: one full check, as fast as the slowest part).
+  # The timing benches run after, alone, so the parallel load never fails them.
+  local d rc=0 p name
+  d="$(mktemp -d "${TMPDIR:-/tmp}/napkin-pt.XXXXXX")"
+  local install='{ [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; }'
+  ( cd production-tool/clan-store && eval "$install" && npm run -s build ) &&
+  ( cd production-tool/canvas-engine && eval "$install" ) &&
+  { [[ ! -f production-tool/web/package.json ]] || ( cd production-tool/web && eval "$install" ); } || return 1
+  declare -A pids=()
+  ( cd production-tool/relay && uv run -q --python 3.12 pytest -q ) >"$d/relay.log" 2>&1 & pids[relay]=$!
+  ( cd production-tool/stitch && uv run -q --python 3.12 pytest -q ) >"$d/stitch.log" 2>&1 & pids[stitch]=$!
+  uv run -q --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py >"$d/contracts.log" 2>&1 & pids[contracts]=$!
+  # The CLAN store's tests run against the real `clan` CLI; the canvas engine's are features/canvas-engine.clan's.
+  ( cd production-tool/clan-store && npm run -s lint && npm test ) >"$d/clan-store.log" 2>&1 & pids[clan-store]=$!
+  ( cd production-tool/canvas-engine && npm run -s lint && npm test ) >"$d/canvas-engine.log" 2>&1 & pids[canvas-engine]=$!
+  if [[ -f production-tool/web/package.json ]]; then
+    ( cd production-tool/web && npm run -s lint && npm test && npm run -s build:web ) >"$d/web.log" 2>&1 & pids[web]=$!
+  fi
+  for name in "${!pids[@]}"; do
+    p=${pids[$name]}
+    if wait "$p"; then echo "   $name: pass"; else echo "   $name: FAIL"; tail -n 30 "$d/$name.log"; rc=1; fi
+  done
+  [[ $rc -eq 0 ]] || return 1
+  # The PR bench on the seed-1 G3 scene (byte, memory and draw-time checks; features/engine-ci.clan), alone.
+  ( cd production-tool/canvas-engine && npm run -s bench ) || return 1
+  # The e2e specs (production-tool/web/e2e/README.md), alone after the rest: real pointer events on the
+  # dev server and its in-browser mock. A system Chromium stands in for Playwright's download when there is one.
+  if [[ -f production-tool/web/package.json ]]; then
+    if [[ -z "${E2E_CHROMIUM:-}" ]]; then
+      for b in chromium chromium-browser google-chrome-stable; do
+        command -v "$b" >/dev/null && { export E2E_CHROMIUM="$(command -v "$b")"; break; }
+      done
+    fi
+    ( cd production-tool/web && npm run -s e2e ) || return 1
+  fi
+  # Quarantined perf budget (web vite.config.ts): reported, never failing the check.
+  if [[ -f production-tool/web/package.json ]] && ! ( cd production-tool/web && npm run -s test:perf >"$d/perf.log" 2>&1 ); then
+    echo "   web perf budget (quarantined): over budget this run; not failing the check. Log: $d/perf.log"
+  fi
+}
+
+suite_licences() {
+  # The unit tests, then the repo itself (test_repo_tree_passes): on a path-picked run it
+  # reads the lockfiles only when one of the changed files is a manifest or licences/.
+  if [[ $all -eq 0 && -z "$only" ]]; then
+    export NAPKIN_LICENCE_CHANGED="$(printf '%s\n' "${licence_files[@]}")"
+  fi
+  uv run -q --no-project --python 3.12 --with pytest --with brotli python -m pytest -q -p no:cacheprovider scripts/licences
 }
 
 suite_secrets() {

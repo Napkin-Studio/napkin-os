@@ -8,19 +8,27 @@
 #      unless every one of them carries a `Feature: none` trailer (typo-sized fixes).
 #      Each feature record in the push must pass `scripts/feature verify`: past
 #      `exploring`, its design is complete and approved.
+#  0b. The licence policy (always, before the rest): a push that adds or changes anything
+#      in licences/*.toml needs NAPKIN_LICENCE_APPROVED=<name>, a name in the policy's
+#      `approvers`, and every new or changed entry must say approved_by that name
+#      (docs/contracts/licences.md). It is a person's approval, so only a person sets it.
 #
 # Before either, a secret scan (gitleaks, .gitleaks.toml) over the pushed commits. No variable
 # skips it, and it fails if gitleaks is not installed: scripts/check.sh --only secrets says how to get it.
 #
 # Only a person may bypass it: NAPKIN_ALLOW_MAIN=1 permits a push to main,
 # NAPKIN_SKIP_CHECKS=1 skips step 1, and NAPKIN_NO_FEATURE=1 skips step 2.
-# Agents never bypass it, and never use --no-verify.
+# NAPKIN_LICENCE_APPROVED is a person's approval, not a bypass; nothing skips the secret scan or step 0b.
+# Agents never set any of these, and never use --no-verify.
 set -uo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 zero=0000000000000000000000000000000000000000
 status=0
+licence_py() {
+  if command -v uv >/dev/null; then uv run -q --no-project --python 3.12 python "$@"; else python3 "$@"; fi
+}
 
 while read -r local_ref local_sha remote_ref remote_sha; do
   [[ "$local_sha" == "$zero" ]] && continue          # deleting a remote ref
@@ -33,12 +41,22 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
   if [[ "$remote_sha" == "$zero" ]] || ! git cat-file -e "$remote_sha" 2>/dev/null; then
     # A hotfix/* branch is cut from main (CLAUDE.md, Branches); every other branch from develop.
+    # Then the closest commit already on any origin branch, not only the trunk: a branch cut from an
+    # interim branch (e.g. feat/production-tool-v2) would otherwise re-check, and re-ask approval for,
+    # every commit that branch already pushed through this hook. Owner decision, Shrey 2026-10-15.
+    # CI still runs every check on the PR.
     if [[ "$remote_ref" == refs/heads/hotfix/* ]]; then
       trunk=origin/main
     else
       trunk="$(git rev-parse -q --verify origin/develop >/dev/null && echo origin/develop || echo origin/main)"
     fi
     base="$(git merge-base "$trunk" "$local_sha" 2>/dev/null || git rev-list --max-parents=0 "$local_sha" | tail -1)"
+    best_n="$(git rev-list --count "$base")"
+    while read -r ref_sha; do
+      mb="$(git merge-base "$ref_sha" "$local_sha" 2>/dev/null)" || continue
+      n="$(git rev-list --count "$mb")"
+      if (( n > best_n )); then base="$mb"; best_n="$n"; fi
+    done < <(git for-each-ref --format='%(objectname)' refs/remotes/origin)
   else
     base="$remote_sha"
   fi
@@ -50,6 +68,13 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   if ! scripts/check.sh --only secrets --range "$range"; then
     echo "pre-push: a key, or something shaped like one, is in these commits (or gitleaks is missing)."
     echo "  Remove it from the history, never just from the tip, and rotate the key."
+    status=1
+  fi
+
+  # 0b. a person approves every licence policy change
+  if [[ -n "$(git diff --name-only "$range" -- 'licences/*.toml')" ]] &&
+     ! licence_py scripts/licences/check.py --approval-guard "$base" "$local_sha"; then
+    echo "pre-push: licences/*.toml changed without a person's approval (NAPKIN_LICENCE_APPROVED)"
     status=1
   fi
 

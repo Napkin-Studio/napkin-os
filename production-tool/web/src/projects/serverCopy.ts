@@ -19,7 +19,9 @@ export interface Conflict {
   message: string
 }
 
-type Reason = 'interval' | 'accept' | 'manual'
+// The mirror's reasons; the relay knows three (X-Clan-Reason), so a handoff or an export is saved as manual (features/engine-store.clan).
+type Reason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export'
+const relayReason = (r: Reason): 'interval' | 'accept' | 'manual' => (r === 'handoff' || r === 'export' ? 'manual' : r)
 
 export interface ServerCopyDeps {
   id: string
@@ -57,7 +59,7 @@ export class ServerCopy {
     const entry = index.get(id)
     let saved
     try {
-      saved = await server.save(id, bytes, { reason: meta.reason, ifMatch: entry?.server?.etag, name: entry?.name })
+      saved = await server.save(id, bytes, { reason: relayReason(meta.reason), ifMatch: entry?.server?.etag, name: entry?.name })
     } catch (e) {
       if (e instanceof SaveConflict) this.set({ message: e.message })
       throw e

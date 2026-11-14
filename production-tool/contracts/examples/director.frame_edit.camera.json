@@ -1,0 +1,22 @@
+{
+  "op": "frame_edit",
+  "frameEdit": {
+    "reading": "camera",
+    "runAs": "frame",
+    "camera": { "angle": "overhead", "size": "wide" }
+  },
+  "providerJob": {
+    "provider": "runway",
+    "model": "gemini_image3_pro",
+    "prompt": "make this an overhead aerial shot. Seen from directly above, wide: @maya_front runs along the beach at golden hour. The people, place and light of @current, not its framing. Full-bleed cinematic image; no text, captions, borders or panels.",
+    "refs": [
+      { "sha256": "sha256:4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a", "name": "current", "role": "current" },
+      { "sha256": "sha256:ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d", "name": "maya_front", "role": "character" }
+    ],
+    "ratio": "1344:768",
+    "outputs": 1
+  },
+  "question": null,
+  "rationale": "Overhead aerial is a camera change: angle eye level to overhead, size medium to wide. The frame is redrawn from above.",
+  "confidence": 0.9
+}

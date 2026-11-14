@@ -93,24 +93,31 @@ def _vision_transcribe(image_bytes: bytes, mime: str, label: str = "image") -> s
 
 
 def _pdf_vision_transcribe(path: Path, max_pages: int = 20) -> str:
-    """Render an image-only / slide-deck PDF page by page and transcribe each."""
+    """Render an image-only / slide-deck PDF page by page and transcribe each.
+    Rendering is pypdfium2 (BSD-3-Clause/Apache-2.0; it ships with pdfplumber), which
+    replaced PyMuPDF (AGPL) under the licence rule (features/licence-gate.clan)."""
     try:
-        import fitz  # PyMuPDF
+        import io
+        import pypdfium2 as pdfium
     except ImportError:
-        print(f"[i] {path.name}: looks image-only but PyMuPDF isn't installed "
-              "(pip install pymupdf) — can't transcribe.", file=sys.stderr)
+        print(f"[i] {path.name}: looks image-only but pypdfium2 isn't installed "
+              "(pip install pypdfium2) — can't transcribe.", file=sys.stderr)
         return ""
-    doc = fitz.open(str(path))
-    n = min(len(doc), max_pages)
-    if len(doc) > max_pages:
-        print(f"[i] {path.name}: image-PDF — transcribing first {max_pages} of {len(doc)} pages.",
-              file=sys.stderr)
-    parts = []
-    for i in range(n):
-        png = doc[i].get_pixmap(dpi=150).tobytes("png")
-        t = _vision_transcribe(png, "image/png", f"{path.name} p{i + 1}")
-        if t:
-            parts.append(f"--- page {i + 1} ---\n{t}")
+    doc = pdfium.PdfDocument(str(path))
+    try:
+        n = min(len(doc), max_pages)
+        if len(doc) > max_pages:
+            print(f"[i] {path.name}: image-PDF — transcribing first {max_pages} of {len(doc)} pages.",
+                  file=sys.stderr)
+        parts = []
+        for i in range(n):
+            buf = io.BytesIO()
+            doc[i].render(scale=150 / 72).to_pil().save(buf, format="PNG")   # 150 dpi
+            t = _vision_transcribe(buf.getvalue(), "image/png", f"{path.name} p{i + 1}")
+            if t:
+                parts.append(f"--- page {i + 1} ---\n{t}")
+    finally:
+        doc.close()
     return "\n\n".join(parts)
 
 

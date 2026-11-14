@@ -7,7 +7,8 @@ the same as a JSON report. Pass --yes to delete.
 
 Which workspaces:
   --name Herons/Maya [--name Pixels/Sam …]   team name and name as people sign in with them (any case): that workspace
-  --workspace ID [...]         a workspace by its id: a participant id (p_…), or a team library left
+  --workspace ID [...]         a workspace by its id: a participant id (p_…), an agency's tenant id
+                               (tenants/<uuid>/, features/os-sign-in.clan), or a team library left
                                from before personal workspaces (library/event/, library/acme/)
   --all                        every workspace in the stores
   --before YYYY-MM-DD          only workspaces with nothing saved, published or made on or after that
@@ -16,6 +17,8 @@ Which workspaces:
 What goes, for each chosen workspace:
   clan/<pid>/…        its saved projects, every timed copy, latest.clan, canvases, projects.json
   library/<pid>/…     its library (index and every version)
+  tenants/<id>/…      an agency's shared projects and library (by tenant id; its people's jobs and
+                      counters are chosen by their own participant ids)
   jobs                its job records (DynamoDB jobs table)
   quotas              its counters: <pid>#<day>, inflight#<pid>
   in/ out/ cards/     every upload, result and character card its projects, library or jobs use,
@@ -78,8 +81,9 @@ def shas_in(data: bytes) -> set[str]:
 
 
 def workspace_of_key(key: str) -> str | None:
+    """clan/<pid>/…, library/<workspace>/… (the hackathon's), or tenants/<tenantId>/… (an agency's)."""
     parts = key.split("/")
-    return parts[1] if len(parts) > 2 and parts[0] in ("clan", "library") else None
+    return parts[1] if len(parts) > 2 and parts[0] in ("clan", "library", "tenants") else None
 
 
 def counter_owner(key: str) -> str | None:
@@ -100,7 +104,7 @@ def asset_hex(key: str) -> str | None:
 def plan(blobs, store, *, workspaces: set[str] | None, before: str | None) -> dict:
     """What a prune would delete. workspaces None: all of them. before: YYYY-MM-DD."""
     ws_keys: dict[str, list[dict]] = {}
-    for row in blobs.list_keys("clan/") + blobs.list_keys("library/"):
+    for row in blobs.list_keys("clan/") + blobs.list_keys("library/") + blobs.list_keys("tenants/"):
         w = workspace_of_key(row["key"])
         if w:
             ws_keys.setdefault(w, []).append(row)

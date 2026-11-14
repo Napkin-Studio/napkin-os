@@ -110,7 +110,6 @@ def test_effort_reaches_the_api_and_the_cli(monkeypatch):
             self.messages = Msgs()
     import types
     monkeypatch.setitem(sys.modules, "anthropic", types.SimpleNamespace(Anthropic=Client))
-    monkeypatch.setenv("BRIEF_CLAUDE_TRANSPORT", "api")
     pb._EFFORT_TL.effort = "low"
     pb._chat_anthropic("u", model="claude-sonnet-5")
     assert sent["output_config"]["effort"] == "low"

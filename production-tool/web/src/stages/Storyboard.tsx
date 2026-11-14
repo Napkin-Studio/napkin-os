@@ -3,78 +3,139 @@
 // (setting, light, style) and the frame before it (jobs/frames.ts). Each frame
 // can be changed with a sentence, optionally inside a box (or a painted mask,
 // or a click when the provider can segment), and stepped back to an earlier version.
+//
+// Contract 3: the script's words are the main script's scenes; the shots are the main storyboard's,
+// in rank order; the ratio and the target length are the storyboard's; the frame in a shot is its pick.
 
-import { useEffect, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import type { Composition, CameraMove, ModelChoice, Ratio, Region, Shot } from '../contracts/types'
-import { CAMERA_MOVES, COMPOSITIONS } from '../contracts/types'
-import { assetRef } from '../jobs/assets'
-import { allNamed, isRunning, jobAt, ratioAspect } from '../jobs/select'
-import { nameOf, subjectRefs, wholeKeys } from '../lib/names'
-import { continuity, drawFrame, drawTheRest, firstUndrawn, SCRIPT_MAX, selectFrame, selectedFrame } from '../jobs/frames'
-import { putBlob } from '../lib/blobs'
-import { checkDurations, MAX_SHOTS, TARGETS } from '../lib/shots'
-import { newId } from '../lib/ulid'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useConfig, useDoc, useJobsTick, useRouter, useServices, useUi } from '../app/context'
+import type { Ask, DocJob, Frame, ProductionDocument, Ratio, Shot } from '../contracts/types'
+import type { UiState } from '../doc/ui'
+import { isRunning, jobAt, ratioAspect } from '../jobs/select'
+import { croppedCaption } from '../canvas/core/sketch'
+import { drawFrame, drawTheRest, firstUndrawn } from '../jobs/frames'
+import { planOrJoin, askedShot } from '../jobs/plan'
+import { checkDurations, MAX_SHOTS } from '../lib/shots'
+import { lengthChoices } from '../script/length'
 import { useBlobUrl } from '../ui/hooks'
-import { JobNode } from '../ui/JobNode'
-import { RegionImage, type MarkMode, type Stroke } from '../ui/RegionImage'
-import { maskPng } from '../lib/mask'
+import { JobSlot } from '../ui/JobSlot'
 import { updateDoc } from '../doc/store'
-import { deleteFrom, removeFrame, removeShot, shotDeleteText } from '../doc/remove'
+import { deleteFrom, removeShot, shotDeleteText, shotNeedsConfirm } from '../doc/remove'
 import { InlineConfirm } from '../ui/Undo'
-import { ModelPick } from '../ui/ModelPick'
-import { choiceToSend, modelChoicesFor } from '../capabilities'
-import { madeWith, startingChoice } from '../ui/modelChoice'
-import { behindLabel, driftLabel, oldWordsLine } from '../ui/behind'
-import { editShot, frameDrift, frameStale, takeStale } from '../jobs/stale'
+import { oldWordsLine } from '../ui/behind'
+import { clipBehind, editShot, frameStale } from '../jobs/stale'
 import { useUpdate } from '../ui/useUpdate'
-import type { FollowScope } from '../jobs/follow'
-import { SplitButton } from '../ui/SplitButton'
 import { AgentFigure } from '../ui/agents/AgentFigure'
-import { sayer } from '../ui/agents/cast'
+import { sayer, whoIsWorking, workOf } from '../ui/agents/cast'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown } from '../dogfood/recorder'
 import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
+import { currentFrame, currentTake, framesOf, jobsList, mainStoryboard, openAsks, openStoryboard, refsList, scriptOfStoryboard, scriptText, shotNumber, shotsOf, storyboardSeconds, takesOf } from '../model/selectors'
+import { jobCtx, LOCAL_PERSON } from '../jobs/runner'
+import { addShot, answerShotAsk, setRatio, setTarget } from './storyboardEdits'
+import { scriptRoute } from '../app/route'
+import type { ModelStore } from '../model/store'
+import { insertShot } from '../script/edits'
+import { ShotEditor } from '../script/ShotEditor'
+import { scriptMentionHooks } from '../script/mentionHooks'
+import { EditorBar } from '../ui/chrome/TopBars'
+import { CopyLinkLater } from '../ui/chrome/MoreMenu'
+import { nodeTitle } from '../ui/chrome/panels'
+import { Float } from '../ui/Float'
+import { trayGroups, type TrayRow } from '../ui/tray'
+import { applyClipLine, applyFrameEditStep, cameraDiff, cameraLabel, changeFrame, discardStep, frameEditCopy, frameEditLines, frameEditOf, keepBothStep, proposalOf } from '../jobs/frameEdit'
+import { ImageEditor } from './ImageEditor'
+import { ScopeLine } from './InputsStrip'
+import './storyboard.css'
+import { PromptStart } from '../ui/prompt/PromptStart'
+import { moveOnStoryboard, useShotSort } from './shotDrag'
+import { ShotSort } from './ShotSort'
+import { lastWorkedModel } from '../jobs/follow'
+import { frameMarks, joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
+import { canJoin } from '../jobs/runs'
+import { videoOfStoryboard } from '../model/selectors'
+import { FrontButtons } from './FrontsNeeded'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
-const label = (s: string) => s.replace(/_/g, ' ')
+
+/** With no named picture, frame 1 comes from the words and every frame after follows it (anchorFrame). */
+const NO_PICTURES = 'No pictures yet, so frame 1 is drawn from the words and every frame after follows it. Name a picture on the canvas, like @samurai, to set how someone looks.'
 
 export function Storyboard() {
-  const { doc: docStore, ui: uiStore, runner, relay } = useServices()
+  const { doc: docStore, ui: uiStore, runner, relay, clan, project } = useServices()
+  const router = useRouter()
   const doc = useDoc()
   const ui = useUi()
-  const { controls } = useConfig()
+  const { controls, config } = useConfig()
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
   const [confirmShot, setConfirmShot] = useState<string | null>(null)
-  const shots = doc.shots ?? []
-  const check = checkDurations(shots, ui.targetS)
-  const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list')
+  /** "Deleted shot 3." or "Shot 5 is now shot 3." with Undo, after a delete or a move (ui-behaviour 3.3 Delete, 3.11). */
+  const [deleted, setDeleted] = useState<string | null>(null)
+  /** The shot whose frame is open in the Image editor (ui-behaviour 3.12). */
+  const [editing, setEditing] = useState<string | null>(null)
+  const projectName = useProjectName()
+  // The storyboard opened on the canvas (ui.openNode), else the main one (features/canvas-nodes.clan).
+  const sb = openStoryboard(doc, ui.openNode)
+  const shots = shotsOf(doc, sb?.id)
+  const targetS = sb?.target_s ?? 15
+  const ratio = sb?.ratio ?? '16:9'
+  const script = scriptOfStoryboard(doc, sb?.id)
+  const words = script ? scriptText(doc, script.id) : ''
+  const hasRefs = refsList(doc).length > 0
+  const check = checkDurations(shots, targetS)
+  // Connected video (features/connected-video.clan): the pin or "guide" on each frame, and the join a gap can
+  // take, as the video this storyboard renders would make them. Nothing when the flag is off.
+  const linked = videoOfStoryboard(doc, sb?.id)
+  const film = videoJoin(doc, linked?.id, config) === 'film'
+  const vModel = film ? videoModel(doc, linked?.id, config, lastWorkedModel(doc, 'clip', config)) : null
+  const vPlan = vModel ? videoPlan(doc, linked?.id, vModel) : undefined
+  const marks = vPlan ? frameMarks(doc, linked?.id, vPlan) : {}
+  // The same strips as the Video timeline, as a light bracket under the cards that will be one video.
+  const units = vPlan && linked ? videoUnits(doc, ui, linked.id, vPlan) : []
+  const facts = vPlan && linked ? videoShots(doc, linked.id) : []
+  const stripPlace = (i: number): StripPlace | undefined => {
+    const u = units.find((x) => x.kind === 'strip' && x.shotIds.includes(shots[i]?.id))
+    if (!u || u.kind !== 'strip') return undefined
+    const k = u.shotIds.indexOf(shots[i].id)
+    return k === 0 ? 'first' : k === u.shotIds.length - 1 ? 'last' : 'mid'
+  }
+  // The handle before card i: ✂ inside a strip, 🔗 where two neighbours may be one video.
+  const handleAt = (i: number): 'split' | 'join' | undefined => {
+    if (!vPlan || i <= 0) return undefined
+    const here = stripPlace(i)
+    if (here === 'mid' || here === 'last') return 'split'
+    return facts[i - 1] && facts[i] && canJoin(facts[i - 1], facts[i]) ? 'join' : undefined
+  }
+  const mainSb = mainStoryboard(doc)?.id
+  const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list' && (c.storyboardId ?? mainSb) === sb?.id)
   const planning = isRunning(doc, planJob)
-  const lastPlan = doc.jobs.filter((j) => j.op === 'shot_list' && j.state === 'completed').at(-1)
+  const lastPlan = jobsList(doc).filter((j) => j.op === 'shot_list' && j.state === 'completed').at(-1)
   useEffect(() => { if (error) errorShown('storyboard', error) }, [error])
-  const allFramed = shots.length > 0 && shots.every((s) => (doc.frames ?? []).some((f) => f.shot_id === s.id && f.selected))
+  const allFramed = shots.length > 0 && shots.every((s) => !!currentFrame(doc, s))
   const anyFrameRunning = shots.some((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
-  const noFrames = !(doc.frames ?? []).some((f) => shots.some((s) => s.id === f.shot_id))
+  const noFrames = !shots.some((s) => framesOf(doc, s.id).length > 0)
   const deps = { relay, doc: docStore, ui: uiStore, runner }
+  // Dex's questions about shots a re-plan left out that have frames or clips (jobs/plan.ts): Keep or Remove.
+  const shotAsks = new Map(openAsks(doc).flatMap((a) => { const id = askedShot(a); return id ? [[id, a] as const] : [] }))
+  const person = ui.me ? `human:${ui.me.participantId}` : LOCAL_PERSON
+  const answerAsk = (a: Ask, shotId: string, option: 'keep' | 'remove') => attempt(async () => {
+    if (option === 'keep') return updateDoc(docStore, (d) => answerShotAsk(d, a.id, 'keep', person), `answer ${a.question.text}`)
+    // One write: the answer and the shot with its frames and clips (Undo in the top bar puts it back).
+    return deleteFrom(docStore, (d) => { answerShotAsk(d, a.id, 'remove', person); return removeShot(d, shotId) })
+  })
 
+  // Dex plans from the whole script: the scenes' words and the planned shots' action (jobs/plan.ts).
+  // The Script editor's Plan shots is the same job on the same node: one running is joined.
   const plan = async () => {
     setError(null)
-    const text = ui.scriptDraft.trim()
-    if (!text) return setError('Write a line or two first.')
-    const revId = newId('rev')
-    updateDoc(docStore, (d) => {
-      d.script ??= { revisions: [] }
-      for (const r of d.script.revisions) if (r.status !== 'superseded') r.status = 'superseded'
-      d.script.revisions.push({ id: revId, created_at: new Date().toISOString(), imported_text: text.slice(0, SCRIPT_MAX), target_s: ui.targetS, status: 'draft', ...(d.script.current ? { parent: d.script.current } : {}) })
-      d.script.current = revId
-    }, 'script revision')
-    // The named refs go along, so each shot can name the ones it shows (@maya_front, @lamp_on).
-    const refs = await allNamed(relay, docStore.get())
-    await runner.submit('shot_list', { script: text.slice(0, SCRIPT_MAX), targetS: ui.targetS, ...(refs.length ? { refs } : {}) }, [], { for: 'shot_list', revId })
+    if (!words.trim()) return setError('Write a line or two first.')
+    await planOrJoin(deps, { storyboardId: sb?.id })
   }
+  const mentionHooks = useMemo(() => (clan ? scriptMentionHooks(clan, undefined) : undefined), [clan])
+  const openScript = (shot?: string) => script && router.push(scriptRoute(project.id, script.id, shot))
 
   const attempt = async (fn: () => Promise<unknown>) => {
     setError(null)
@@ -84,370 +145,394 @@ export function Storyboard() {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   }
-  const drawFirst = () => attempt(() => drawFrame(deps, 0, 'first'))
-  const drawNext = (index: number) => attempt(() => drawFrame(deps, index, 'next'))
+  // Delete a shot (ui-behaviour 3.11, 3.3 Delete; item 4): at once with Undo, or after a confirm when it has
+  // frames or clips. Through the document's removal cascade (doc/remove.ts), one undo step.
+  const removeNow = (shotId: string) => attempt(async () => {
+    const n = shotNumber(docStore.get(), shotId)
+    await deleteFrom(docStore, (d) => removeShot(d, shotId))
+    setDeleted(`Deleted shot ${n}.`)
+  })
+  const deleteShot = (shotId: string) => {
+    if (shotNeedsConfirm(docStore.get(), shotId)) setConfirmShot(shotId)
+    else void removeNow(shotId)
+  }
+  // Drag reorder (ui-behaviour 3.11): one rank write with the drift marks, one undo step.
+  const moveShot = (shotId: string, place: { beforeId: string | null; afterId: string | null }) => attempt(async () => {
+    if (!clan) return
+    const was = shotNumber(clan.get(), shotId)
+    setDeleted(null)
+    await moveOnStoryboard(clan, shotId, place)
+    setDeleted(`Shot ${was} is now shot ${shotNumber(clan.get(), shotId)}.`)
+  })
+  const drawFirst = () => attempt(() => drawFrame(deps, 0, 'first', { storyboardId: sb?.id }))
+  const drawNext = (index: number) => attempt(() => drawFrame(deps, index, 'next', { storyboardId: sb?.id }))
   const drawRest = () => attempt(() => drawTheRest(deps))
 
-  // The shot's own frame (words) or clip (camera, length) is marked in the same write, so undo takes both back.
-  const updateShot = (id: string, patch: Partial<Shot>) => updateDoc(docStore, (d) => editShot(d, id, patch), 'edit shot')
 
-  const lock = () => updateDoc(docStore, (d) => {
-    for (const s of d.shots ?? []) s.status = 'locked'
-    const rev = d.script?.revisions.find((r) => r.id === d.script?.current)
-    if (rev) rev.status = 'approved'
-    d.stage = { current: 'video', next_action: 'Make a clip for each shot.' }
-  }, 'lock storyboard')
+  const lock = async () => {
+    await updateDoc(docStore, (d) => {
+      for (const s of shotsOf(d, sb?.id)) d.shots[s.id].status = 'locked'
+    }, 'lock storyboard')
+    uiStore.update((u) => { u.stage = 'video' })
+  }
 
   if (!controls.storyboard) {
     return <div className="panel"><div className="empty-state"><b>Storyboards are off right now.</b></div></div>
   }
+  if (editing && shots.some((s) => s.id === editing)) {
+    return <ImageEditor target={{ kind: 'shot', shotId: editing }} onBack={() => setEditing(null)} onTarget={(t) => setEditing(t.kind === 'shot' ? t.shotId : null)} />
+  }
+
+  const total = storyboardSeconds(doc, sb?.id)
+  const over = Math.round((total - targetS) * 10) / 10
+  const working = trayGroups(jobsList(doc), (id) => jobCtx(doc, ui, id), (id) => runner.liveInfo(id)).working
+  const primary = !shots.length
+    ? <button className="btn primary" disabled={planning || !words.trim()} onClick={() => void attempt(plan)} title={words.trim() ? undefined : 'Write the script first'}>{planning ? 'Planning…' : 'Plan shots'}</button>
+    : noFrames
+      ? <button className="btn primary" disabled={!check.ok || anyFrameRunning} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : NO_PICTURES}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
+      : !allFramed
+        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
+        : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title="Lock the frames and make a clip of each in the Video editor">Make clips</button>
 
   return (
-    <div className="panel">
-      <div className="panel-inner">
-        <div className="eyebrow">Step 2</div>
-        <h1>Storyboard</h1>
-        <p className="lede">Write what happens in your ad. We plan the shots, then draw a frame for each one.</p>
-        <div className="split">
-          <div className="card section stack">
-            <div className="row"><h2>Script</h2><span className="spacer" /><span className="counter">{ui.scriptDraft.length}/{SCRIPT_MAX}</span></div>
-            <textarea
-              className="textarea"
-              rows={6}
-              maxLength={SCRIPT_MAX}
-              placeholder="e.g. It starts to rain. Our hero opens a bright umbrella and grins. The logo appears."
-              value={ui.scriptDraft}
-              onChange={(e) => uiStore.update((u) => { u.scriptDraft = e.target.value })}
-            />
-            <div className="row wrap">
-              <span className="eyebrow" style={{ width: 56 }}>Length</span>
-              {TARGETS.map((t) => (
-                <button key={t} className={`chip ${ui.targetS === t ? 'on' : ''}`} onClick={() => uiStore.update((u) => { u.targetS = t })}>{t} s</button>
-              ))}
-            </div>
-            <div className="row wrap">
-              <span className="eyebrow" style={{ width: 56 }}>Format</span>
-              {RATIOS.map((r) => (
-                <button key={r} className={`chip ${ui.ratio === r ? 'on' : ''}`} onClick={() => uiStore.update((u) => { u.ratio = r })}>{r}</button>
-              ))}
-            </div>
-            <div className="row">
-              <button className="btn primary" disabled={planning || !ui.scriptDraft.trim()} onClick={() => void attempt(plan)}>{planning ? 'Planning…' : shots.length ? 'Plan again' : 'Plan shots'}</button>
-              {!doc.refs.length && <span className="faint" style={{ fontSize: 12 }}>Name an image on the canvas first, like @maya_front.</span>}
-            </div>
-            {planJob && <div style={{ height: 120, borderRadius: 12, overflow: 'hidden' }}><JobNode jobId={planJob} /></div>}
-            {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 13 }}>{error}</div>}
+    <div className="editor">
+      <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="storyboard"
+        title={`Storyboard · ${nodeTitle(sb?.title, 'Storyboard', projectName)}`}
+        meta={<RatioPill ratio={ratio} onPick={(r) => void updateDoc(docStore, (d) => setRatio(d, r), `set the storyboard format to ${r}`)} />}
+        more={() => <CopyLinkLater />}
+        primary={primary} />
+      <div className="sb-sub">
+        <span className="pt-mono sb-len">{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {total.toFixed(1)} s of{' '}
+          <select className="sb-target" aria-label="The ad's length" value={targetS} onChange={(e) => void updateDoc(docStore, (d) => setTarget(d, Number(e.target.value)), `set the storyboard length to ${e.target.value} s`)}>
+            {lengthChoices(targetS).map((t) => <option key={t} value={t}>{t}</option>)}
+          </select> s</span>
+        {shots.length > 0 && <span className={`pt-pill ${check.ok ? 'ok' : 'warn'}`} title={check.ok ? undefined : check.reason}>{check.ok ? 'Lengths fit the ad' : over > 0 ? `${over.toFixed(1)} s over` : `${(-over).toFixed(1)} s short`}</span>}
+        {working.slice(0, 2).map((r) => <CrewLine key={r.job.id} row={r} />)}
+        <span className="pt-grow" />
+        {shots.length > 0 && <button className="btn" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
+      </div>
+      <ScopeLine nodeId={sb?.id} shotNumber={(id) => shotNumber(doc, id)} />
+      <div className="panel sb-body pt-grid">
+        {error && <div role="alert" className="sb-error">{error}<FrontButtons text={error} /></div>}
+        {deleted && (
+          <div role="status" className="sb-deleted">
+            <span>{deleted}</span>
+            {docStore.undo && <button className="btn xs" onClick={() => { setDeleted(null); void docStore.undo?.() }}>Undo</button>}
+            <button className="btn xs ghost" onClick={() => setDeleted(null)}>OK</button>
           </div>
-
-          <div className="card section stack">
-            <div className="row">
-              <h2>Shots</h2>
-              {shots.length > 0 && <Thumbs compact target={{ kind: 'shot-list', jobId: lastPlan?.id, model: lastPlan?.agent?.model, promptVersion: lastPlan?.agent?.promptVersion, shots: shots.length }} />}
-              <span className="spacer" />
-              {shots.length > 0 && (
-                <span className={`sum ${check.ok ? 'ok' : 'bad'}`}>
-                  {check.total} / {ui.targetS} s {check.ok ? '✓' : `· ${check.reason}`}
-                </span>
-              )}
-            </div>
-            {!shots.length && (
-              <div className="shots-empty">
-                <AgentFigure agent="dex" size={56} decorative />
-                <span className="sayer">{sayer('dex')}</span>
-                <b>No shots yet</b>
-                <span className="faint">Write what happens in your ad, then Plan shots. Your shots show up here, and you can change every one.</span>
-              </div>
-            )}
-            <div className="shots">
-              {shots.map((s, i) => confirmShot === s.id ? (
-                <div key={s.id} className="shotrow confirming">
-                  <span className="num">{i + 1}</span>
-                  <InlineConfirm
-                    text={shotDeleteText(i + 1, (doc.frames ?? []).filter((f) => f.shot_id === s.id).length, (doc.takes ?? []).filter((t) => t.shot_id === s.id).length)}
-                    yes="Delete shot"
-                    onNo={() => setConfirmShot(null)}
-                    onYes={async () => {
-                      setConfirmShot(null)
-                      await deleteFrom(docStore, (d) => removeShot(d, s.id)) // Undo in the top bar puts it back
-                    }}
-                  />
-                </div>
-              ) : (
-                <div key={s.id} className="shotrow">
-                  <span className="num">{i + 1}</span>
-                  <div className="stack" style={{ gap: 4 }}>
-                    <select className="select" aria-label="Composition" value={s.composition} onChange={(e) => updateShot(s.id, { composition: e.target.value as Composition })}>
-                      {COMPOSITIONS.map((c) => <option key={c} value={c}>{label(c)}</option>)}
-                    </select>
-                  </div>
-                  <div className="stack" style={{ gap: 4 }}>
-                    <textarea className="textarea" aria-label="Action" maxLength={300} value={s.action} onChange={(e) => updateShot(s.id, { action: e.target.value })} />
-                    <ShotRefs shot={s} onChange={(refs) => updateShot(s.id, { refs })} />
-                  </div>
-                  <select className="select" aria-label="Camera move" value={s.camera_move} onChange={(e) => updateShot(s.id, { camera_move: e.target.value as CameraMove })}>
-                    {CAMERA_MOVES.map((c) => <option key={c} value={c}>{label(c)}</option>)}
-                  </select>
-                  <div className="row" style={{ gap: 4 }}>
-                    <input className="input" aria-label="Seconds" type="number" min={1} max={10} step={0.5} value={s.duration_s}
-                      onChange={(e) => updateShot(s.id, { duration_s: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} />
-                    <span className="faint">s</span>
-                  </div>
-                  <button className="btn icon sm ghost" aria-label="Delete shot" title={shots.length <= 2 ? 'A storyboard needs at least 2 shots' : 'Delete this shot'} disabled={shots.length <= 2}
-                    onClick={() => setConfirmShot(s.id)}>✕</button>
-                  <OldWords shot={s} index={i} />
-                </div>
-              ))}
-            </div>
-            {shots.length > 0 && (
-              <div className="row">
-                <button className="btn sm ghost" disabled={shots.length >= MAX_SHOTS}
-                  onClick={() => updateDoc(docStore, (d) => {
-                    d.shots ??= []
-                    d.shots.push({ id: newId('shot'), order: d.shots.length + 1, duration_s: 5, composition: 'medium', action: '', camera_move: 'static', refs: [], status: 'planned' })
-                  }, 'add shot')}>+ Add shot</button>
-                <span className="spacer" />
-                {noFrames ? (
-                  <button className="btn dark" disabled={!check.ok || anyFrameRunning || !doc.refs.length} onClick={drawFirst}
-                    title="Frame 1 sets the place, the light and the style for every frame after it">
-                    {anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}
-                  </button>
-                ) : (
-                  <button className="btn dark" disabled={!check.ok || anyFrameRunning || allFramed || firstUndrawn(doc) < 0 || !doc.refs.length} onClick={drawRest}
-                    title="Draw each remaining shot in turn, each one following the one before">
-                    {ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : allFramed ? 'All frames drawn' : 'Draw the rest'}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {shots.length > 0 && (
-          <>
-            <div className="row" style={{ margin: '28px 0 12px' }}>
-              <h2>Frames</h2>
-              <span className="faint" style={{ fontSize: 12 }}>· drawn in order: each follows frame 1 and the one before</span>
-              <span className="spacer" />
-              <button className="btn primary" disabled={!allFramed || anyFrameRunning} onClick={lock} title={allFramed ? '' : 'Every shot needs a frame'}>Lock storyboard → Video</button>
-            </div>
-            <div className="frames">
-              {shots.map((s, i) => (
-                <FrameCard key={s.id} shot={s} index={i} onDraw={() => (i === 0 ? drawFirst() : drawNext(i))}
-                  onNext={i + 1 < shots.length ? () => drawNext(i + 1) : undefined} />
-              ))}
-            </div>
-          </>
         )}
+        {planJob && !shots.length && <div className="sb-planning"><JobSlot jobId={planJob} /></div>}
+        {!shots.length && !planJob && (
+          <div className="sb-empty pt-card">
+            <div className="row" style={{ gap: 10 }}><AgentFigure agent="dex" size={28} decorative /><b>No shots yet</b><span className="pt-mono">{sayer('dex')}</span></div>
+            {sb && <PromptStart kind="storyboard" nodeId={sb.id} place="editor" />}
+            <div className="row" style={{ justifyContent: 'flex-end' }}>
+              <button className="btn" disabled={!clan || !script} onClick={() => openScript()}>Open script</button>
+            </div>
+          </div>
+        )}
+        <ShotSort ids={shots.map((s) => s.id)} doc={doc} onMove={(id, place) => void moveShot(id, place)}
+          overlay={(id) => { const i = shots.findIndex((s) => s.id === id); return i < 0 ? null : <LiftedCard shot={shots[i]} index={i} /> }}
+          note={(w) => w && (
+            <div className="sb-dragnote" role="status">
+              <AgentFigure agent="dex" size={24} decorative />
+              <span><span className="pt-mono">{sayer('dex')}</span> {w}</span>
+            </div>
+          )}>
+        <div className="sb-grid">
+          {shots.map((s, i) => (
+            <ShotCard key={s.id} shot={s} index={i} prev={shots[i - 1]} store={clan} mentions={mentionHooks}
+              onOpen={() => setEditing(s.id)} onDraw={() => (i === 0 ? drawFirst() : drawNext(i))} onScript={() => openScript(s.id)}
+              onDelete={() => deleteShot(s.id)}
+              confirming={confirmShot === s.id} onConfirm={(yes) => {
+                setConfirmShot(null)
+                if (yes) void removeNow(s.id) // Undo puts it back
+              }}
+              ask={shotAsks.get(s.id)} onAsk={(a, option) => void answerAsk(a, s.id, option)}
+              mark={marks[s.id]} film={film && linked ? { videoId: linked.id, strip: stripPlace(i), handle: handleAt(i) } : undefined} />
+          ))}
+          {shots.length > 0 && (
+            <button className="sb-addtile" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add a shot at the end</button>
+          )}
+        </div>
+        </ShotSort>
+        {shots.length > 0 && <Thumbs compact target={{ kind: 'shot-list', jobId: lastPlan?.id, model: lastPlan?.director?.model, promptVersion: lastPlan?.director?.promptVersion, shots: shots.length }} />}
       </div>
     </div>
   )
 }
 
-function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number; onDraw: () => void; onNext?: () => void }) {
-  const { doc: docStore, ui: uiStore, runner, relay } = useServices()
-  const doc = useDoc()
-  const ui = useUi()
-  const { config, controls } = useConfig()
-  const showMock = useShowMock()
-  const frames = (doc.frames ?? []).filter((f) => f.shot_id === shot.id)
-  const current = frames.find((f) => f.selected) ?? frames[frames.length - 1]
-  const idx = current ? frames.indexOf(current) : -1
-  const url = useBlobUrl(current?.asset)
-  const asset = doc.assets.find((a) => a.sha256 === current?.asset)
-  const jobId = jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === shot.id)
-  const running = isRunning(doc, jobId)
-  const [mode, setMode] = useState<MarkMode>('none')
-  const [text, setText] = useState('')
-  const [strokes, setStrokes] = useState<Stroke[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [pick, setPick] = useState<ModelChoice | undefined>()
-  const region = current ? ui.frameRegions[current.id] : undefined
-  useEffect(() => { if (error) errorShown('frame', error, { shot: index + 1 }) }, [error, index])
-  const made = madeWith(doc, ui, current?.job_id)
-  const choice = pick ?? startingChoice(modelChoicesFor('frame', config), made.made)
-  const staleMark = current && (doc.stale ?? []).find((s) => s.target.kind === 'frame' && s.target.id === current.id)
-  const drift = current ? frameDrift(doc, shot.id) : undefined
-  const update = useUpdate()
-  const afterScope = { kind: 'after', item: { kind: 'frame', shotId: shot.id } } as const
-  const carryScope = { kind: 'carry', from: shot.id } as const
-  const after = update.size(afterScope)
-  const start = async (scope: FollowScope) => {
-    setError(null)
-    try {
-      await update.start(scope)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not work.')
-    }
-  }
-  const prevShot = index > 0 ? (doc.shots ?? [])[index - 1] : undefined
-  const prevDrawn = !prevShot || !!selectedFrame(doc, prevShot.id)
-  const nextShot = (doc.shots ?? [])[index + 1]
-  const nextEmpty = !!nextShot && !(doc.frames ?? []).some((f) => f.shot_id === nextShot.id)
-  const nextBusy = !!nextShot && isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === nextShot.id))
-  const aspect = asset?.w && asset?.h ? asset.w / asset.h : ratioAspect(ui.ratio)
-  const project = useProjectName()
-  const shown = current ? mediaItem(doc, project, current.asset, 'frame') : undefined
-
-  const setRegion = (r: Region | null) => current && uiStore.update((u) => { u.frameRegions[current.id] = r ?? undefined })
-  const select = (frameId: string) => selectFrame(docStore, shot.id, frameId)
-
-  const regenerate = async () => {
-    setError(null)
-    try {
-      if (current && region && controls.regionEditFrames) {
-        const image = await assetRef(relay, current.asset)
-        let mask
-        if (strokes.length && controls.maskBrush && asset?.w && asset?.h) {
-          const sha = await putBlob(await maskPng(strokes, asset.w, asset.h))
-          mask = await assetRef(relay, sha)
-        }
-        // A region edit keeps the frame in its sequence: shot 1's frame and the one before go too.
-        const anchors = await continuity(relay, doc, index)
-        await runner.submit('region_edit', { image, region, text: text.trim(), ...(mask ? { mask } : {}), ...anchors }, [current.job_id], { for: 'frame', shotId: shot.id, parentFrameId: current.id, how: 'again' })
-      } else {
-        // A pick only on a regenerate: the first draw runs the routed default.
-        const modelChoice = current ? choiceToSend('frame', config, choice) : undefined
-        await drawFrame({ relay, doc: docStore, ui: uiStore, runner }, index, current ? 'again' : index === 0 ? 'first' : 'next', { text, ...(current ? { parent: current } : {}), ...(modelChoice ? { modelChoice } : {}) })
-      }
-      setText('')
-      setStrokes([])
-      setMode('none')
-      if (current) setRegion(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not work.')
-    }
-  }
-
-  const parent = current?.parent ? frames.find((f) => f.id === current.parent) : undefined
-  const tools: { id: MarkMode; icon: string; label: string; show: boolean; title: string }[] = [
-    { id: 'box', icon: '▭', label: 'Box', show: controls.regionEditFrames, title: 'Box: draw a box around what to change' },
-    { id: 'brush', icon: '✎', label: 'Brush', show: controls.maskBrush, title: 'Brush: paint over what to change' },
-    { id: 'click', icon: '◎', label: 'Click', show: controls.clickSelect, title: 'Click: click the thing to change' },
-  ]
-
-  const deleteVersion = async () => {
-    if (!current) return
-    setError(null)
-    try {
-      await deleteFrom(docStore, (d) => removeFrame(d, current.id)) // Undo in the top bar puts it back
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not work.')
-    }
-  }
-
+/** The storyboard's ratio, as a pill that opens the three shapes. */
+function RatioPill({ ratio, onPick }: { ratio: Ratio; onPick: (r: Ratio) => void }) {
+  const ref = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
   return (
-    <div className="framecard" data-shot-card={shot.id}>
-      <div className="head">
-        <span className="num">{index + 1}</span>
-        <b>{label(shot.composition)}</b>
-        <span className="faint">· {label(shot.camera_move)} · {shot.duration_s}s</span>
-        <span className="spacer" />
-        {/* The mark is on the version on show; while its replacement is drawn, say so instead. */}
-        {staleMark && running && <span className="behind updating" title={staleMark.reason}>Updating…</span>}
-        {showMock && current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
-        {made.fallback && <span className="madeon" title={`${made.fallback}. ${ui.jobCtx[current?.job_id ?? '']?.fallbackReason ?? ''}`.trim()}>Made on Runway</span>}
+    <>
+      <button ref={ref} type="button" className="pt-ratio sb-ratio" aria-haspopup="menu" aria-expanded={open} title="The storyboard's shape" onClick={() => setOpen(!open)}>{ratio}</button>
+      <Float anchor={ref} open={open} onClose={() => setOpen(false)} label="Storyboard shape" className="pt-menu">
+        {RATIOS.map((r) => <button key={r} type="button" role="menuitem" className="pt-menurow" aria-checked={r === ratio} onClick={() => { setOpen(false); onPick(r) }}>{r}{r === ratio && <span className="hint">now</span>}</button>)}
+      </Float>
+    </>
+  )
+}
+
+/** A crew status line in the sub bar: the figure at work, the line and a mono tag (PLANNING, RENDERING). */
+function CrewLine({ row }: { row: TrayRow }) {
+  const doc = useDoc()
+  const shotId = row.ctx && 'shotId' in row.ctx ? row.ctx.shotId : undefined
+  const who = whoIsWorking(row.job, row.state, row.ctx, shotNumber(doc, shotId) || undefined)
+  const work = workOf(row.job.op, row.state)
+  const tag = work === 'plan' ? 'PLANNING' : work === 'learn' ? 'CHECKING' : work === 'produce' ? 'EDITING' : 'RENDERING'
+  return (
+    <span className="sb-crewline" role="status">
+      <AgentFigure agent={who.agent} state="working" size={20} decorative />
+      <span>{who.line}</span>
+      <span className="sb-tag">{tag}</span>
+    </span>
+  )
+}
+
+const cap = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)
+/** A card's title: the first words of its action, else its size. */
+function titleOf(s: Shot): string {
+  const words = (s.action ?? '').replace(/@\w+/g, '').replace(/\s+/g, ' ').trim().split(/[.;,:—-]/)[0].trim()
+  return words ? cap(words.length > 26 ? `${words.slice(0, 25).replace(/\s+\S*$/, '')}…` : words) : cap(cameraLabel('size', s.camera.size))
+}
+
+/** The card under the pointer while it is dragged (3.11): tilted, blue outline, shadow. */
+function LiftedCard({ shot, index }: { shot: Shot; index: number }) {
+  const doc = useDoc()
+  const current = currentFrame(doc, shot) ?? framesOf(doc, shot.id).at(-1)
+  const url = useBlobUrl(current?.asset)
+  const asset = current ? doc.assets[current.asset] : undefined
+  const ratio = doc.storyboards[shot.storyboard_id]?.ratio ?? '16:9'
+  const aspect = asset?.w && asset?.h ? asset.w / asset.h : ratioAspect(ratio)
+  return (
+    <div className="sb-card sb-lifted" aria-hidden="true">
+      <header className="sb-cardhead">
+        <span className="sb-handle">⋮⋮</span>
+        <span className="sb-num">{index + 1}</span>
+        <b className="sb-title">{titleOf(shot)}</b>
+        <span className="pt-mono sb-dur">{shot.duration_s.toFixed(1)} s</span>
+      </header>
+      <div className="sb-frame" style={{ aspectRatio: String(aspect) }}>
+        {url ? <img src={url} alt="" /> : <div className="sb-noframe"><span>No frame yet</span></div>}
       </div>
-      {/* Out of date: what changed, and Redraw (this one) with ▾ for this and the frames after. */}
-      {staleMark && !running && (
-        <div className="cardstate">
-          <span className="behind" title={staleMark.reason}>{behindLabel(doc, staleMark)}</span>
-          <span className="spacer" />
-          <SplitButton kind="dark" size="xs" menuLabel={`More ways to redraw frame ${index + 1}`} disabled={update.running}
-            title={`Redraw frame ${index + 1} only, from what shot ${index + 1} says now`}
-            onClick={() => void start({ kind: 'one', item: { kind: 'frame', shotId: shot.id } })}
-            items={after > 1 ? [{
-              label: `Redraw this and the frames after (${after})`, hint: update.cost(afterScope), icon: '⇥',
-              onSelect: () => void start(afterScope),
-            }] : []}>
-            Redraw
-          </SplitButton>
-        </div>
-      )}
-      {/* Continuity only: quiet, never "out of date"; the old chain is one click away. */}
-      {!staleMark && !running && drift !== undefined && (
-        <div className="cardstate drift">
-          <span>{driftLabel(drift)}</span><span aria-hidden="true">·</span>
-          <button className="linkbtn" disabled={update.running}
-            title={`Redraw this frame and every one after it, then their clips and the ad (${update.size(carryScope)} · ${update.cost(carryScope)})`}
-            onClick={() => void start(carryScope)}>Carry the look forward</button>
-        </div>
-      )}
-      <div className="framepic">
-        <RegionImage src={url} aspect={aspect} mode={running ? 'none' : mode} region={region} strokes={strokes}
-          onRegion={setRegion} onStrokes={setStrokes}>
-          {jobId && (
-            <div style={{ position: 'absolute', inset: 0 }}>
-              <JobNode jobId={jobId} />
-            </div>
-          )}
-          {!current && !jobId && (
-            <div className="pending idle" style={{ position: 'absolute', inset: 0 }}>
-              {ui.drawingRest && !prevDrawn ? (
-                <div className="faint">Waiting for shot {index}</div>
-              ) : prevDrawn ? (
-                <>
-                  <AgentFigure agent="dex" size={44} decorative />
-                  <div className="faint">No frame yet</div>
-                  <button className="btn xs" onClick={onDraw} disabled={!doc.refs.length}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>
-                </>
-              ) : (
-                <div className="faint">Draw shot {index} first</div>
-              )}
-            </div>
-          )}
-        </RegionImage>
-        {/* The picture's tools float on it: shown on hover and focus, and kept while marking. */}
-        {current && (
-          <div className={`hoverbar ${mode !== 'none' || region || strokes.length ? 'pinned' : ''}`} role="toolbar" aria-label={`Shot ${index + 1} frame tools`}>
-            {tools.filter((t) => t.show).map((t) => (
-              <button key={t.id} className={`btn xs ${mode === t.id ? 'on' : 'ghost'}`} title={t.title} aria-label={t.label} aria-pressed={mode === t.id} disabled={running} onClick={() => setMode(mode === t.id ? 'none' : t.id)}>{t.icon}<span className="hb-label">{t.label}</span></button>
-            ))}
-            {(region || strokes.length > 0) && <button className="btn xs ghost" onClick={() => { setRegion(null); setStrokes([]) }}>Clear</button>}
-            <span className="sep" />
-            <button className="btn xs icon ghost" aria-label="Previous version" disabled={idx <= 0} onClick={() => select(frames[idx - 1].id)}>‹</button>
-            <span className="mono vlabel" title={made.label}>v{idx + 1}/{frames.length}</span>
-            <button className="btn xs icon ghost" aria-label="Next version" disabled={idx >= frames.length - 1} onClick={() => select(frames[idx + 1].id)}>›</button>
-            <span className="sep" />
-            {shown && <DownloadButton items={[shown]} className="btn xs icon ghost" iconOnly title={`Download v${idx + 1} (${shown.name})`} />}
-            <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete version ${idx + 1}`} disabled={running}
-              title={frames.length <= 1 ? 'Delete the only version: Update what follows draws it again' : `Delete v${idx + 1}`}
-              onClick={deleteVersion}>🗑</button>
-          </div>
-        )}
-      </div>
-      {current && (
-        <>
-          {frames.length > 1 && (
-            <div className="vstrip" role="group" aria-label="Versions">
-              {frames.map((f, i) => <VersionThumb key={f.id} sha={f.asset} n={i + 1} on={f.id === current.id} onPick={() => select(f.id)} />)}
-            </div>
-          )}
-          <div className="promptbar">
-            <input className="promptbar-input" aria-label={region ? 'Change what is in the box' : 'Change this frame'} placeholder={region ? 'Change what is in the box…' : 'Change this frame…'} maxLength={1000} value={text}
-              onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !running && (text.trim() || !region) && regenerate()} />
-            <div className="row wrap">
-              {!region && <ModelPick op="frame" value={choice} onChange={setPick} />}
-              <span className="spacer" />
-              {parent && <button className="btn sm ghost" onClick={() => select(parent.id)} title="Go back to the version this came from">↶ Revert</button>}
-              <button className="btn sm primary" disabled={running || (!!region && !text.trim())} onClick={regenerate}>{region ? 'Change the box' : 'Regenerate'}</button>
-            </div>
-          </div>
-          <div className="framecard-foot">
-            <span className="faint" title={made.label}>{made.made ? `Made by Dex · ${made.label}` : ''}</span>
-            <Thumbs key={current.id} compact target={{
-              kind: 'frame', id: current.id, jobId: current.job_id, shot: index + 1, asset: current.asset,
-              provider: doc.jobs.find((j) => j.id === current.job_id)?.provider, model: doc.jobs.find((j) => j.id === current.job_id)?.model,
-            }} />
-            <span className="spacer" />
-            {onNext && nextEmpty && !ui.drawingRest && (
-              <button className="btn sm" disabled={running || nextBusy} onClick={onNext} title={`Draw shot ${index + 2}, continuing from this frame`}>Next frame →</button>
-            )}
-          </div>
-          {error && <div role="alert" className="framecard-error">{error}</div>}
-        </>
-      )}
+      {shot.action && <div className="sb-liftwords">{shot.action}</div>}
     </div>
   )
+}
+
+/** The latest Change this frame on a shot, and what it proposed. */
+function frameChangeOf(doc: ProductionDocument, ui: Pick<UiState, 'jobs'>, shotId: string): { job: DocJob; proposal?: Frame } | undefined {
+  const jobs = jobsList(doc)
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i]
+    if (j.op !== 'frame_edit') continue
+    const ctx = jobCtx(doc, ui, j.id)
+    if (!ctx || ctx.dismissed || !('shotId' in ctx) || ctx.shotId !== shotId) continue
+    return { job: j, proposal: proposalOf(doc, j.id) }
+  }
+  return undefined
+}
+
+function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript, onDelete, confirming, onConfirm, ask, onAsk, mark, film }: {
+  shot: Shot; index: number; prev?: Shot; store: ModelStore | null; mentions?: ReturnType<typeof scriptMentionHooks>
+  onOpen: () => void; onDraw: () => void; onScript: () => void; onDelete: () => void
+  confirming: boolean; onConfirm: (yes: boolean) => void
+  ask?: Ask; onAsk: (a: Ask, option: 'keep' | 'remove') => void
+  /** Connected video: the frame's pin or guide, and the video whose joins the gap sets. */
+  mark?: FrameMark; film?: { videoId: string; strip?: StripPlace; handle?: 'split' | 'join' }
+}) {
+  const doc = useDoc()
+  const ui = useUi()
+  const { doc: docStore, ui: uiStore, runner, relay } = useServices()
+  const { setNodeRef, setActivatorNodeRef, attributes, listeners, lifted, line, dragging, moving } = useShotSort(shot.id, !store || confirming)
+  const frames = framesOf(doc, shot.id)
+  const current = currentFrame(doc, shot) ?? frames.at(-1)
+  const idx = current ? frames.indexOf(current) : -1
+  const url = useBlobUrl(current?.asset)
+  const asset = current ? doc.assets[current.asset] : undefined
+  const ratio = doc.storyboards[shot.storyboard_id]?.ratio ?? mainStoryboard(doc)?.ratio ?? '16:9'
+  const aspect = asset?.w && asset?.h ? asset.w / asset.h : ratioAspect(ratio)
+  const frameJob = jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === shot.id)
+  const drawing = isRunning(doc, frameJob)
+  const take = currentTake(doc, shot.id)
+  const clipJob = jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === shot.id)
+  const clipping = isRunning(doc, clipJob)
+  const clipper = clipping && clipJob && doc.jobs[clipJob] ? whoIsWorking(doc.jobs[clipJob], doc.jobs[clipJob].state).agent : 'wren'
+  const prevDrawn = !prev || !!currentFrame(doc, prev)
+  const change = frameChangeOf(doc, ui, shot.id)
+  const changeRunning = change ? isRunning(doc, change.job.id) : false
+  const showChange = !!change && (changeRunning || (!!change.proposal && shot.pick?.current !== change.proposal.id && !shot.pick?.alternates?.includes(change.proposal.id)))
+  const [changing, setChanging] = useState(false)
+  const [words, setWords] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [menu, setMenu] = useState(false)
+  const menuRef = useRef<HTMLButtonElement>(null)
+  const [gap, setGap] = useState(false)
+  const gapRef = useRef<HTMLButtonElement>(null)
+  const [keepVideo, setKeepVideo] = useState(false)
+  const project = useProjectName()
+  const shown = current ? mediaItem(doc, project, current.asset, 'frame') : undefined
+  const attempt = async (fn: () => Promise<unknown>) => {
+    setError(null)
+    try {
+      await fn()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  }
+  const send = (redoOf?: string) => attempt(async () => {
+    await changeFrame({ relay, doc: docStore, ui: uiStore, runner }, shot.id, words, redoOf ? { redoOf } : {})
+  })
+  const chips = ([['size', shot.camera.size], ['angle', shot.camera.angle], ['movement', shot.camera.movement ?? 'static'], ['lens_mm', shot.camera.lens_mm]] as const)
+    .filter(([, v]) => v !== undefined && v !== null).map(([field, v]) => ({ field, label: cap(cameraLabel(field, v)) }))
+  const changed = change && !changeRunning ? cameraDiff(shot.camera, frameEditOf(change.job)?.camera) : undefined
+  const changedFields = new Set(changed?.rows.map((r) => r.field) ?? [])
+  const badge = clipping ? <span className="sb-badge warm"><AgentFigure agent={clipper} state="working" size={20} decorative />Rendering clip</span>
+    : take ? (clipBehind(doc, shot.id) ? <span className="sb-badge warn">Clip out of date · frame changed</span> : <span className="sb-badge ok">Clip ready</span>)
+    : null
+  if (confirming) {
+    return (
+      <article ref={setNodeRef} className="sb-card confirming" data-shot-card={shot.id}>
+        <InlineConfirm text={shotDeleteText(index + 1, frames.length, takesOf(doc, shot.id).length)} yes="Delete shot" onNo={() => onConfirm(false)} onYes={() => onConfirm(true)} />
+      </article>
+    )
+  }
+  return (
+    <article ref={setNodeRef} className={`sb-card ${showChange || changing ? 'on' : ''} ${lifted ? 'slot' : ''} ${line ? `drop-${line}` : ''} ${dragging ? 'sorting' : ''} ${film?.strip ? `instrip ${film.strip}` : ''}`}
+      data-shot-card={shot.id} aria-label={`Shot ${index + 1}`} tabIndex={0}
+      onKeyDown={(e) => {
+        // Delete or Backspace on the focused card (not in its fields) deletes the shot.
+        if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === e.currentTarget) {
+          e.preventDefault()
+          onDelete()
+        }
+      }}>
+      {line && <span className={`sb-dropline ${line}`} aria-hidden="true"><span>Shot {moving} moves here</span></span>}
+      {film?.strip && <span className="sb-bracket" aria-hidden="true">{film.strip === 'first' && <span>One video</span>}</span>}
+      {film?.handle && (
+        <button type="button" className={`sb-joinh ${film.handle}`} aria-label={film.handle === 'split' ? `Split here, between shot ${index} and shot ${index + 1}` : `Join shot ${index} and shot ${index + 1} into one video`}
+          title={film.handle === 'split' ? 'Split here' : 'Join into one video'}
+          onClick={() => void attempt(() => (film.handle === 'split' ? splitHere : joinHere)(docStore, film.videoId, shot.id))}>
+          <span aria-hidden="true">{film.handle === 'split' ? '✂' : '🔗'}</span>
+        </button>
+      )}
+      {index > 0 && (
+        <>
+          <button ref={gapRef} type="button" className="sb-gap" aria-label={`Insert between ${index} and ${index + 1}`} aria-haspopup="menu" aria-expanded={gap} onClick={() => setGap(!gap)}>+</button>
+          <Float anchor={gapRef} open={gap} onClose={() => setGap(false)} label={`Insert between ${index} and ${index + 1}`} className="pt-menu sb-insert">
+            <div className="pt-label sb-inserthead">Insert between {index} and {index + 1}</div>
+            <button type="button" role="menuitem" className="pt-menurow" disabled={!store || !prev} onClick={() => { setGap(false); if (store && prev) void attempt(() => insertShot(store, { afterShotId: prev.id })) }}>
+              <span className="sb-ins-blank" aria-hidden="true" /><span><b>Empty shot</b><br /><span className="faint">A blank card you fill in</span></span>
+            </button>
+            <button type="button" role="menuitem" className="pt-menurow" disabled title="Not in this version yet">
+              <AgentFigure agent="dex" size={22} decorative /><span><b>Bridge</b><br /><span className="faint">Dex draws a shot that links {index} and {index + 1} · not in this version yet</span></span>
+            </button>
+          </Float>
+        </>
+      )}
+      <header className="sb-cardhead">
+        <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners} className="sb-handle" aria-label={`Move shot ${index + 1}`} title="Drag to move this shot (or Space, then the arrow keys)" disabled={!store}>⋮⋮</button>
+        <span className="sb-num">{index + 1}</span>
+        <b className="sb-title">{titleOf(shot)}</b>
+        <span className="pt-mono sb-dur">{shot.duration_s.toFixed(1)} s</span>
+        <button type="button" className="sb-del" aria-label={`Delete shot ${index + 1}`} title="Delete this shot (Delete)" onClick={onDelete}>×</button>
+        <button ref={menuRef} type="button" className="sb-more" aria-label={`More for shot ${index + 1}`} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
+        <Float anchor={menuRef} open={menu} onClose={() => setMenu(false)} align="end" label={`Shot ${index + 1}`} className="pt-menu">
+          <button type="button" role="menuitem" className="pt-menurow" disabled={!current} onClick={() => { setMenu(false); setChanging(true) }}>Change this frame</button>
+          <button type="button" role="menuitem" className="pt-menurow" disabled={!current} onClick={() => { setMenu(false); onOpen() }}>Open in image editor</button>
+          <button type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onScript() }}>Open in script</button>
+          <label className="pt-menurow">Length
+            <input className="input" type="number" min={1} max={10} step={0.5} aria-label="Seconds" value={shot.duration_s} style={{ width: 70, marginLeft: 'auto' }}
+              onChange={(e) => void updateDoc(docStore, (d) => editShot(d, shot.id, { duration_s: Math.max(1, Math.min(10, Number(e.target.value) || 1)) }), 'edit shot')} /> s
+          </label>
+          {shown && <DownloadButton items={[shown]} className="pt-menurow" title={`Download v${idx + 1}`} />}
+          <div className="pt-menusep" />
+          <button type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onDelete() }}>Delete shot</button>
+        </Float>
+      </header>
+      <div className="sb-frame" style={{ aspectRatio: String(aspect) }}>
+        {url && !drawing && <img src={url} alt={`Frame ${index + 1}`} />}
+        {frameJob && drawing && <div className="sb-framejob"><JobSlot jobId={frameJob} compact /></div>}
+        {!current && !drawing && (
+          <div className="sb-noframe">
+            {prevDrawn
+              ? <><span>No frame yet</span><button className="btn xs" onClick={onDraw} disabled={!!frameJob}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>
+                {index === 0 && !refsList(doc).length && <span className="sb-nopics">{NO_PICTURES}</span>}</>
+              : <span>Draw shot {index} first</span>}
+          </div>
+        )}
+        {current && <span className="sb-vtag">v{idx + 1}</span>}
+        {current && mark && <FrameMarkTag mark={mark} />}
+        {badge && <span className="sb-badgewrap">{badge}</span>}
+        {current && !drawing && <button type="button" className="sb-openie" onClick={onOpen}><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>Open in image editor</button>}
+        {current?.cropped_to && asset?.w && asset?.h && <span className="sb-crop">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</span>}
+      </div>
+      <div className="sb-chips">{chips.map((c) => <span key={c.field} className={`sb-chip ${changedFields.has(c.field) ? 'changing' : ''}`}>{c.label}</span>)}</div>
+      <div className="sb-words">
+        {store ? <ShotEditor store={store} shotId={shot.id} name={`Shot ${index + 1}`} compact mentions={mentions} keys={{ remove: (how) => (how === 'command' ? (onDelete(), true) : false) }} /> : <div className="script-excerpt">{shot.action ?? ''}</div>}
+      </div>
+      <OldWords shot={shot} index={index} />
+      {film && !keepVideo && missedGuide(doc, shot.id) && (
+        <div className="sb-guidenote" role="group" aria-label={`Shot ${index + 1}: the video and this frame`}>
+          <span>The video went its own way here.</span>
+          <span className="spacer" />
+          <button className="btn xs" onClick={() => setKeepVideo(true)}>Keep the video</button>
+          <button className="btn xs ghost" onClick={() => void attempt(() => splitHere(docStore, film.videoId, shot.id))}>Make it match</button>
+          <button className="btn xs ghost" disabled title="Not in this version yet">Use the video's frame</button>
+        </div>
+      )}
+      {ask && (
+        <div className="shotask" role="group" aria-label={`Shot ${index + 1}: keep or remove`}>
+          <AgentFigure agent="dex" size={22} state="needs-you" decorative />
+          <span><b>Shot {index + 1} no longer has a scene.</b> Keep it or remove it?</span>
+          <span className="spacer" />
+          <button className="btn xs" onClick={() => onAsk(ask, 'keep')}>Keep</button>
+          <button className="btn xs ghost" onClick={() => onAsk(ask, 'remove')}>Remove</button>
+        </div>
+      )}
+      {(changing || showChange) && (
+        <div className="sb-change">
+          <b>Change this frame</b>
+          <div className="row">
+            <input className="input" aria-label="What to change in this frame" placeholder="Make this an overhead aerial shot" value={words} maxLength={1000}
+              onChange={(e) => setWords(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && words.trim() && !changeRunning) void send(showChange ? change?.job.id : undefined) }} />
+            <button className="btn sm" disabled={!words.trim() || changeRunning} onClick={() => void send(showChange ? change?.job.id : undefined)}>{showChange ? 'Redo' : 'Send'}</button>
+          </div>
+          {change && changeRunning && <div className="sb-changejob"><JobSlot jobId={change.job.id} compact /></div>}
+          {change && !changeRunning && change.proposal && showChange && (
+            <div className="sb-result">
+              <div className="row"><AgentFigure agent="dex" size={20} decorative /><span>{frameEditLines(change.job)[0]}</span></div>
+              {frameEditLines(change.job).slice(1).map((l) => <span key={l} className="faint">{l}</span>)}
+              <div className="sb-diff">
+                <ProposalThumb sha={change.proposal.asset} version={change.proposal.version} />
+                <div>
+                  {changed?.rows.map((r) => <div key={r.field} className="sb-diffrow"><span>{r.field.replace('_mm', '')}</span><del>{r.from}</del>→<ins>{r.to}</ins></div>)}
+                  {changed?.stay && <div className="faint">{changed.stay}</div>}
+                </div>
+              </div>
+              <div className="row">
+                <button className="btn sm primary" onClick={() => void attempt(() => applyFrameEditStep(docStore, change.job.id, shot.id))}>{frameEditCopy.apply}</button>
+                <button className="btn sm" onClick={() => void attempt(() => keepBothStep(docStore, change.job.id, shot.id))}>{frameEditCopy.keepBoth}</button>
+                <span className="spacer" />
+                <button className="btn sm ghost" onClick={() => void attempt(() => discardStep(docStore, change.job.id))}>{frameEditCopy.discard}</button>
+              </div>
+              {applyClipLine(doc, shot.id) && <div className="pt-pill warn sb-applyline">{applyClipLine(doc, shot.id)}</div>}
+            </div>
+          )}
+          {!showChange && <button className="btn xs ghost" onClick={() => setChanging(false)}>Close</button>}
+        </div>
+      )}
+      {error && <div role="alert" className="framecard-error">{error}</div>}
+    </article>
+  )
+}
+
+function ProposalThumb({ sha, version }: { sha: string; version: number }) {
+  const url = useBlobUrl(sha)
+  return <span className="sb-proposal">{url && <img src={url} alt="" />}<span>{frameEditCopy.newVersion(version)}</span></span>
 }
 
 /** Under a shot whose own frame or clip still uses what the shot said before an edit: "Frame 3 uses the
@@ -460,8 +545,7 @@ function OldWords({ shot, index }: { shot: Shot; index: number }) {
   const making = (kind: 'frame' | 'clip') => isRunning(doc, jobAt(doc, ui, (c) => c.for === kind && c.shotId === shot.id))
   const own = (m: ReturnType<typeof frameStale>) => (m?.caused_by.kind === 'shot' && m.caused_by.id === shot.id ? m : undefined)
   const frame = making('frame') ? undefined : own(frameStale(doc, shot.id))
-  const clip = making('clip') ? undefined : own(takeStale(doc, shot.id))
-  if (!frame && !clip) return null
+  if (!frame) return null
   const go = async (kind: 'frame' | 'clip') => {
     setError(null)
     try {
@@ -475,51 +559,22 @@ function OldWords({ shot, index }: { shot: Shot; index: number }) {
       {frame && (
         <span>{oldWordsLine('frame', index + 1, frame)} · <button className="linkbtn" disabled={update.running} onClick={() => void go('frame')}>Redraw frame {index + 1}</button></span>
       )}
-      {clip && (
-        <span>{oldWordsLine('take', index + 1, clip)} · <button className="linkbtn" disabled={update.running} onClick={() => void go('clip')}>Remake clip {index + 1}</button></span>
-      )}
       {error && <span role="alert" className="framecard-error">{error}</span>}
     </div>
   )
 }
 
-/** One version in the strip under a frame: its picture, its number; a click selects it. */
-function VersionThumb({ sha, n, on, onPick }: { sha: string; n: number; on: boolean; onPick: () => void }) {
-  const url = useBlobUrl(sha)
-  return (
-    <button className={`vthumb ${on ? 'on' : ''}`} aria-label={`Version ${n}`} aria-pressed={on} onClick={onPick}>
-      {url && <img src={url} alt="" />}
-      <span className="vthumb-n">v{n}</span>
-    </button>
-  )
+/** The frame's role in a connected video: a pin (the video must hit it) or "guide" (inside one take). */
+function FrameMarkTag({ mark }: { mark: FrameMark }) {
+  return mark === 'pin'
+    ? (
+      <span className="sb-mark pin" title="The video hits this frame exactly">
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 0.8a3 3 0 0 1 3 3c0 2.2-3 5.4-3 5.4S2 6 2 3.8a3 3 0 0 1 3-3Z" fill="currentColor" /></svg>
+        <span className="pt-sr">Pinned: the video hits this frame</span>
+      </span>
+    )
+    : <span className="sb-mark guide" title="Inside one take: the video follows this frame as a guide">guide</span>
 }
 
-/** The named refs a shot shows: chips to take off, and a list to add from. */
-function ShotRefs({ shot, onChange }: { shot: Shot; onChange: (refs: string[]) => void }) {
-  const doc = useDoc()
-  const names = shot.refs ?? []
-  const free = [...wholeKeys(doc), ...doc.refs.map(nameOf)].filter((n) => !names.includes(n))
-  const problem = (n: string) => {
-    try {
-      return subjectRefs(doc, n).length ? null : 'No image has this name'
-    } catch (e) {
-      return e instanceof Error ? e.message : 'Set a front first'
-    }
-  }
-  return (
-    <div className="shotrefs">
-      {names.map((n) => (
-        <span key={n} className={`taghint ${problem(n) ? 'missing' : n.includes('_') ? '' : 'whole'}`} title={problem(n) ?? (n.includes('_') ? undefined : 'The whole character')}>
-          @{n}
-          <button className="x" aria-label={`Take @${n} off this shot`} onClick={() => onChange(names.filter((x) => x !== n))}>×</button>
-        </span>
-      ))}
-      {free.length > 0 && names.length < 9 && (
-        <select className="select xs" aria-label="Add a reference to this shot" value="" onChange={(e) => e.target.value && onChange([...names, e.target.value])}>
-          <option value="">+ ref</option>
-          {free.map((n) => <option key={n} value={n}>@{n}</option>)}
-        </select>
-      )}
-    </div>
-  )
-}
+/** Where a card sits in the bracket of shots that will be one video. */
+type StripPlace = 'first' | 'mid' | 'last'

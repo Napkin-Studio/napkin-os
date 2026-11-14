@@ -1,0 +1,45 @@
+{
+  "op": "clip_patch",
+  "provider": "runway",
+  "input": {
+    "text": "the whole thing should be a wide shot",
+    "video": {
+      "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "url": "https://hack.napkin.ie/in/sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "mime": "video/mp4"
+    },
+    "window": {
+      "from_s": 2,
+      "to_s": 4
+    },
+    "atS": 3.2
+  },
+  "reply": {
+    "op": "clip_patch",
+    "question": {
+      "kind": "nudge",
+      "text": "Fix only this moment, or remake the whole clip?",
+      "why": "A wide shot changes the camera for the whole clip, not one moment.",
+      "options": [
+        {
+          "id": "fix",
+          "label": "Fix this moment",
+          "value": {
+            "route": "fix"
+          }
+        },
+        {
+          "id": "remake",
+          "label": "Remake the clip",
+          "value": {
+            "route": "remake"
+          }
+        }
+      ],
+      "allow_text": true,
+      "recommended_option_id": "remake"
+    },
+    "rationale": "The note is about the whole shot's camera.",
+    "confidence": 0.7
+  }
+}
