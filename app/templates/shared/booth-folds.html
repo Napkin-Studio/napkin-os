@@ -5,7 +5,7 @@
      Judge: the score card of the work open here (GET clan://judge), out of 30, idea, craft and effect, the failed
      tests first with their evidence, where Judge advises it goes, and that the 24 is advice until Judge has earned
      trust. Signed with Judge's own figure (NapkinRoles, the agent-sphere marker). Score again (POST clan://judge)
-     and the creative director's overrule with a written reason (POST clan://judge/overrule). No price and no cost.
+     and the creative director's overrule with a written reason (POST clan://judge/overrule). Nothing about money is said here.
 
      Versions: each approved version with its signer and date and the working draft (GET clan://versions), any two
      side by side (GET clan://version?n=), and Restore (POST clan://restore). While two are compared the Booth widens
@@ -105,7 +105,7 @@
   function bfEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function bfArr(v){ return Array.isArray(v)?v:[]; }
 
-  // ── Judge's words (the shell's judgeModel.ts, without the price line: no price is carried into the Booth) ──
+  // ── Judge's words (the shell's judgeModel.ts; nothing about money is carried into the Booth) ──
   var BF_DIM={idea:'Idea', craft:'Craft', effect:'Effect'};
   var BF_NOT_TRUSTED='Judge is not yet trusted here. Advice only.';
   // The failed tests first, then the passed, each in the order the rubric gives.
@@ -117,11 +117,11 @@
   }
   // The host's refusal, in its words: the part after its code.
   function bfRefusal(m){ var x=/^(ai_off|not_eu|not_configured|spend_refused|judge_failed|judge_malformed)\s*:\s*([\s\S]*)$/.exec(String(m||'').trim()); return x?x[2].trim():'Judge could not score this just now. Nothing was changed.'; }
-  // What the band said before there was a score, without its price: Judge is not set up here, or answers from fixtures.
+  // What the band said before there was a score: Judge is not set up here, or answers from fixtures.
   function bfSetupLine(setup){
     if(!setup) return '';
     if(!setup.configured) return 'Judge is not set up here, so nothing can be scored yet.';
-    if(setup.backend==='fixture') return 'Judge answers from fixture scores here. Nothing is charged and no model is called.';
+    if(setup.backend==='fixture') return 'Judge answers from fixture scores here. No model is called.';
     return '';
   }
   function bfFig(state, size){ var R=typeof NapkinRoles==='object'&&NapkinRoles?NapkinRoles:null; return R?R.tag('judge',{state:state||'idle', decorative:true, size:size||26}):''; }

@@ -361,7 +361,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const appItems = barState.doc === docPath && !clientOn ? barState.items : NO_ITEMS
   // Send to Judge (features/judge.clan): the shell's own button for a tool that sends work to Judge, drawn with the app's.
   const judge = useJudge(docPath, !clientOn && !open.is_template && JUDGE_APPS.includes(appId ?? ''))
-  const barItems = judge.item ? [...appItems, ...(judge.failed ? [judge.failed] : []), judge.item] : appItems
+  const barItems = judge.item ? [...appItems, judge.item] : appItems
   const onBarAction = useCallback((id: string) => {
     if (id === SEND_TO_JUDGE) { void judge.send(); return }
     if (id === 'client' && linkDoc) { setLinkOpen(linkDoc); return }
@@ -477,7 +477,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
           saved: saved ? <SaveStatus state={saveState} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
-          saveAlert: <SaveAlert state={saveState} onRetry={() => writes.retry()} onRefresh={refreshApp} note={briefUndo.note} />,
+          saveAlert: <SaveAlert state={saveState} onRetry={() => writes.retry()} onRefresh={() => { writes.forgetChanged(); refreshApp() }} note={briefUndo.note} noteKey={briefUndo.noteKey} judge={judge.failed} onJudgeDismiss={judge.dismiss} />,
           editMode,
           // A locked document with nothing reopened takes no edit: Client
           // review stands where Edit was.

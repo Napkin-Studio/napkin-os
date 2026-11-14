@@ -28,16 +28,6 @@ export const ROUTE_NAME: Record<Route, string> = {
 
 export const DIM_NAME = { idea: 'Idea', craft: 'Craft', effect: 'Effect' } as const
 
-/** What a run costs, said before it starts. */
-export function priceLine(setup: JudgeCardView['setup'] | undefined): string {
-  if (!setup) return ''
-  if (!setup.configured) return 'Judge is not set up here, so nothing can be scored yet.'
-  if (setup.backend === 'fixture') return 'Judge answers from fixture scores here. Nothing is charged and no model is called.'
-  if (setup.price_eur === null) return 'Judge reads this version once. The price of a run is not set yet.'
-  const euro = setup.price_eur < 1 ? `${Math.round(setup.price_eur * 100)} cent${Math.round(setup.price_eur * 100) === 1 ? '' : 's'}` : `${setup.price_eur.toFixed(2)} euro`
-  return `Judge reads this version once. A run costs about ${euro}, and the spend cap is checked before it starts.`
-}
-
 /** The failed tests first, then the passed, each in the order the rubric gives. */
 export function failedFirst(tests: readonly JudgeTest[]): JudgeTest[] {
   return [...tests].sort((a, b) => Number(a.value === 'pass') - Number(b.value === 'pass'))

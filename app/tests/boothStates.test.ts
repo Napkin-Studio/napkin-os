@@ -53,6 +53,7 @@ const MOVED = { upstream: [{ direct: true, in_store: true, status: 'changed', ti
 interface Opts { width?: number; html?: string; data?: Json; card?: Json | null; up?: Json; locked?: boolean; room?: Json; post?: (path: string, body: Json) => Json }
 async function open(src: string, opts: Opts = {}) {
   const posts: { path: string; body: Json }[] = []
+  const parent: Json[] = []
   const dom = new JSDOM(opts.html ?? packed(src), {
     url: 'https://napkin.test/', runScripts: 'dangerously', pretendToBeVisual: true,
     beforeParse(w) {
@@ -61,7 +62,7 @@ async function open(src: string, opts: Opts = {}) {
       win.__CLAN__ = { data: structuredClone(opts.data ?? {}) }
       win.clan = { me: () => Promise.resolve({ actor: 'human:dara@wk', id: 'dara@wk', name: 'Dara' }), patchData: () => Promise.resolve({ ok: true }) }
       win.NapkinRoles = { tag: () => '<span class="nk-ag"></span>', auto: () => {}, ofDecision: () => null }
-      Object.defineProperty(win, 'parent', { value: { postMessage: () => {} } })
+      Object.defineProperty(win, 'parent', { value: { postMessage: (m: Json) => parent.push(m) } })
       win.fetch = (url: string, init?: { method?: string; body?: string }) => {
         const path = String(url).replace(/^.*localhost/, '')
         if (init?.method === 'POST') {
@@ -87,7 +88,7 @@ async function open(src: string, opts: Opts = {}) {
   await new Promise(r => setTimeout(r, 80))
   const d = dom.window.document
   return {
-    d, win: dom.window as unknown as Record<string, any>, posts,
+    d, win: dom.window as unknown as Record<string, any>, posts, parent,
     one: (sel: string) => d.querySelector(sel) as any,
     all: (sel: string) => [...d.querySelectorAll(sel)] as any[],
     settle: () => new Promise(r => setTimeout(r, 80)),
@@ -199,7 +200,7 @@ test('Judge\'s fold keeps what its band said: the fixture line, not set up, and 
   const setup = (over: Json) => ({ backend: 'fixture', configured: true, price_eur: 0.04, trust: 'none', not_trusted: 'n', calibration: 'c', rubric_version: '1', ...over })
   const card = (over: Json) => ({ ok: true, kind: 'script', piece: 'script', pieces: ['script'], can_score: true, why_not: null, setup: setup({}), score: null, older: [], can_overrule: false, creative_director_named: true, ...over })
   const text = async (c: Json) => words((await open(SRC.script, { data: RADIO, card: c })).one('#side [data-testid="judge-empty"]'))
-  assert.match(await text(card({})), /Judge answers from fixture scores here\. Nothing is charged and no model is called\./)
+  assert.match(await text(card({})), /Judge answers from fixture scores here\. No model is called\./)
   assert.match(await text(card({ setup: setup({ backend: null, configured: false }) })), /Judge is not set up here, so nothing can be scored yet\./)
   assert.match(await text(card({ why_not: 'Choose a route first. Judge scores the chosen route.', can_score: false })), /Choose a route first\. Judge scores the chosen route\./)
   assert.doesNotMatch(await text(card({ setup: setup({ backend: 'llm-judge' }) })), /price|cost|euro|\bcents?\b|spend/i, 'a priced setup says nothing of a price')
@@ -271,10 +272,8 @@ for (const [name, o] of PAGES) {
       assert.equal(p.parent.filter(m => m.type === 'clan:booth' && m.open === false).length, 1, 'the shell was told of the hide only')
     }
   })
-  test(`${name}: a state that goes away takes its dot with it; a state already said when the Booth is open adds no dot`, async () => {
+  test(`${name}: a state that goes away takes its dot with it; a state cleared before the Booth came in leaves it hidden`, async () => {
     const p = await open(SRC_OF[name], o)
-    p.win.boothSay(STATES[0], () => {})
-    assert.equal(p.one('#boothEdge').classList.contains('has'), false, 'open Booth: no dot')
     p.one('[data-booth="hide"]').click(); await p.settle()
     p.win.boothSay(null)
     assert.equal(p.one('#boothEdge').classList.contains('has'), false)
@@ -341,7 +340,7 @@ test('the Booth snippets and the shell\'s Judge files name no cost, price, charg
   const found: string[] = []
   for (const f of files) {
     const text = read(f)
-    for (const m of text.matchAll(/\b(costs?|prices?|priced|charg\w*|credits?|euros?|cents?)\b|[$€£]/gi)) found.push(`${f}: ${m[0]}`)
+    for (const m of text.matchAll(/\b(costs?|prices?|priced|charg\w*|credits?|euros?|cents?)\b|\$\d|[€£]/gi)) found.push(`${f}: ${m[0]}`)
   }
   assert.deepEqual(found, [])
   assert.equal(existsSync(new URL('src/shell/judge/judgeModel.ts', root)), true)

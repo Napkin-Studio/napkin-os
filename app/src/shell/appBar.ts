@@ -24,7 +24,7 @@ export type BarItem =
   /** Something to do. Pressing it only tells the app; the app acts. */
   | { kind: 'button'; id: string; label: string; primary: boolean; disabled: boolean; title: string; menu?: BarMenuItem[] }
   /** A read-only fact: "0 errors · 2 to supply", "$1.14 so far". */
-  | { kind: 'chip'; label: string; tone: BarTone; title: string; /** Set only by the shell, for a failure it says in the bar at every width; an app's chip never has it. */ alert?: boolean }
+  | { kind: 'chip'; label: string; tone: BarTone; title: string }
   /** The document's state in the app's words, for the slot's pill. At most one. */
   | { kind: 'status'; label: string; tone: BarTone; locked: boolean }
   /** What Continue in says first, when the document is not ready to go on ("Not brief-ready yet: …"). At most one. */

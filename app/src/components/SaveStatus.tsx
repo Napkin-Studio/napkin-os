@@ -44,29 +44,41 @@ export default function SaveStatus({ updatedAt, state = 'idle' }: { updatedAt?: 
  * with Try again, or with Update when the host moved on while the person typed (409). It sits under the bar's right edge,
  * over the page and never pushing it, at every width. An undo's note, which only the bands said, is said here too, for a moment.
  */
-export function SaveAlert({ state = 'idle', onRetry, onRefresh, note }: {
+export function SaveAlert({ state = 'idle', onRetry, onRefresh, note, noteKey = 0, judge, onJudgeDismiss }: {
   state?: SaveState
   onRetry?: () => void
   onRefresh?: () => void
   note?: string | null
+  /** Counts each time the note is said: the same words said again are shown again. */
+  noteKey?: number
+  /** Judge's refusal or failure for a run sent from the shell's own button, in the host's words. */
+  judge?: string | null
+  onJudgeDismiss?: () => void
 }) {
-  const [gone, setGone] = useState<string | null>(null)
+  // The note is for a moment: it is said, then it steps aside; saying it again (a new key) brings it back.
+  const [gone, setGone] = useState<number | null>(null)
   useEffect(() => {
     if (!note) return
-    const id = window.setTimeout(() => setGone(note), 9_000)
+    const id = window.setTimeout(() => setGone(noteKey), 9_000)
     return () => window.clearTimeout(id)
-  }, [note])
+  }, [note, noteKey])
   const failed = state === 'failed', moved = state === 'changed'
-  const undoNote = note && note !== gone ? note : null
-  if (!failed && !moved && !undoNote) return null
+  const undoNote = note && gone !== noteKey ? note : null
+  if (!failed && !moved && !undoNote && !judge) return null
   return (
     <div className="tb-alert">
       {(failed || moved) && (
         <span className="tb-alert-line" data-state={failed ? 'failed-save' : 'changed-save'} role="alert">
           <b>Not saved</b>
-          <span>{failed ? FAILED_SAVE.line : CHANGED_BRIEF.moved}</span>
+          <span className="tb-alert-text">{failed ? FAILED_SAVE.line : `${CHANGED_BRIEF.moved} What you typed stays on the page until you update.`}</span>
           {failed && onRetry && <button type="button" className="ch-btn" onClick={onRetry}>{FAILED_SAVE.retry}</button>}
           {moved && onRefresh && <button type="button" className="ch-btn" onClick={onRefresh}>{CHANGED_BRIEF.update()}</button>}
+        </span>
+      )}
+      {judge && (
+        <span className="tb-alert-line" data-state="run-failed" data-testid="judge-failed" role="alert">
+          <span className="tb-alert-text">{judge}</span>
+          {onJudgeDismiss && <button type="button" className="ch-btn" onClick={onJudgeDismiss}>Dismiss</button>}
         </span>
       )}
       {undoNote && <span className="tb-alert-line" role="status" data-testid="undo-note">{undoNote}</span>}

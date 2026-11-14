@@ -15,12 +15,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { DashboardView, JudgeCardView, JudgeTest, JobEntry, PieceScore } from '../src/host/types.ts'
 import { tiles } from '../src/shell/home/dashboardModel.ts'
 import { JudgeScoresBody } from '../src/shell/judge/JudgeScoresPage.tsx'
-import { countsOf, failedFirst, headline, priceLine, refusalLine, rowsOf, standing, staleLine } from '../src/shell/judge/judgeModel.ts'
+import { countsOf, failedFirst, headline, refusalLine, rowsOf, standing, staleLine } from '../src/shell/judge/judgeModel.ts'
 
 const test_ = (id: string, value: 'pass' | 'fail', dim: JudgeTest['dim'] = 'idea'): JudgeTest => ({
   id, dim, method: 'llm', value, evidence: `The line for ${id}.`, reason_code: value === 'pass' ? 'pass' : `judge.fail.${id}`, question: `Question of ${id}?`,
 })
-const SETUP: JudgeCardView['setup'] = { backend: 'fixture', configured: true, price_eur: null, trust: 'none', not_trusted: 'Judge is not yet trusted here. Advice only.', calibration: 'The 24 is advice until Judge has earned trust: 60 decided pieces.', rubric_version: '1' }
 const SCORE = (over: Partial<NonNullable<JudgeCardView['score']>> = {}): NonNullable<JudgeCardView['score']> => ({
   id: 'd_1', at: '2026-11-12T10:00:00Z', version: 'abc', current: true, out_of_date: false, total: 22, sub: { idea: 7, craft: 7, effect: 8 },
   tests: [test_('idea.a', 'pass'), test_('idea.b', 'fail'), test_('craft.c', 'fail', 'craft'), test_('effect.d', 'pass', 'effect')],
@@ -42,9 +41,7 @@ test('a score for older work or an older brief is stale', () => {
   assert.match(staleLine(SCORE({ current: false }))!, /earlier version/)
 })
 
-test('with no score the host\'s words are said: Judge is not set up, or answers from fixtures, or why it cannot score yet', () => {
-  assert.match(priceLine(SETUP), /Judge answers from fixture scores here\. Nothing is charged/)
-  assert.match(priceLine({ ...SETUP, backend: null, configured: false }), /not set up here/)
+test('a refusal is said in the host\'s words (the fold\'s own words for no score are tested in boothStates)', () => {
   // a refusal is said in the host's words
   assert.equal(refusalLine('ai_off: AI is switched off for this client, so Judge cannot read its work.'), 'AI is switched off for this client, so Judge cannot read its work.')
   assert.match(refusalLine('judge_malformed: nope'), /nope/)

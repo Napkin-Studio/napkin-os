@@ -39,6 +39,7 @@ try {
     logLevel: 'warning',
     // Where the wasm package has not been built (wasm-bindgen is a CI step), the host module that imports it still loads:
     // a test that needs the real engine says so itself; the ones that only read `host` need nothing from it.
+    ...(existsSync(join(here, '..', 'src', 'wasm', 'napkin_wasm.js')) ? {} : { define: { 'import.meta.env': '{"BASE_URL":"/"}' } }),
     plugins: existsSync(join(here, '..', 'src', 'wasm', 'napkin_wasm.js')) ? [] : [{
       name: 'stub-wasm',
       setup(b) {
@@ -46,7 +47,6 @@ try {
         b.onLoad({ filter: /.*/, namespace: 'stub-wasm' }, () => ({ contents: 'export default function init() {}; export class NapkinHost {}', loader: 'js' }))
       },
     }],
-    define: { 'import.meta.env': '{"BASE_URL":"/"}' },
   })
   const files = readdirSync(out).filter(f => f.endsWith('.mjs')).map(f => join(out, f))
   const run = spawnSync(process.execPath, ['--test', ...files], { stdio: 'inherit' })

@@ -537,3 +537,23 @@ fn compare_shows_words_not_marks() {
         }
     }
 }
+
+// The Booth's Versions fold says "Cmd Z takes it back" only when the draft's last edit names no mark among its keys
+// (the shell's undo refuses marks: useBriefUndo NOT_WORDS). A restore that brings a Confidential mark back names it.
+#[test]
+fn restore_that_brings_a_mark_back_names_it_in_last_edit_keys() {
+    let rig = rig();
+    let dara = || session(&rig, "dara@wk");
+    patch(&rig, "mark audience confidential", json!({ "confidential_fields": ["audience"] }));
+    edit(&rig, "The client's unannounced launch.");
+    assert_eq!(call(&dara(), "/approve", "", json!({})).0, 200);
+    assert_eq!(call(&dara(), "/unapprove", "", json!({ "rationale": "again" })).0, 200);
+    edit(&rig, "Safe words.");
+    patch(&rig, "unmark audience confidential", json!({ "confidential_fields": [] }));
+    let (s, v) = call(&dara(), "/restore", "", json!({ "version": 1 }));
+    assert_eq!(s, 200, "{v}");
+    let (_, list) = call(&dara(), "/versions", "", Value::Null);
+    let keys = list["draft"]["last_edit"]["keys"].as_array().cloned().unwrap_or_default();
+    assert!(keys.contains(&json!("confidential_fields")), "keys = {keys:?}");
+    assert!(keys.contains(&json!("audience")), "keys = {keys:?}");
+}

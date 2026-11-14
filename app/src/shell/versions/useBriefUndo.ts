@@ -33,6 +33,8 @@ export interface BriefUndo {
   canRedo: boolean
   /** One line about the last undo or redo, or why it did nothing. */
   note: string | null
+  /** Counts each time a note is said, so the same words said again are said again. */
+  noteKey: number
   undo: () => void
   redo: () => void
   /** A write of the person's own landed: take it onto the stack. */
@@ -45,12 +47,12 @@ export interface BriefUndo {
 
 export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void): BriefUndo {
   // Kept with the document it was made for: another brief opens on an empty stack.
-  const [held, setHeld] = useState<{ docPath: string; stack: UndoStack; note: string | null }>(() => ({ docPath, stack: createUndoStack(), note: null }))
-  if (held.docPath !== docPath) setHeld({ docPath, stack: createUndoStack(), note: null })
+  const [held, setHeld] = useState<{ docPath: string; stack: UndoStack; note: string | null; noteKey: number }>(() => ({ docPath, stack: createUndoStack(), note: null, noteKey: 0 }))
+  if (held.docPath !== docPath) setHeld({ docPath, stack: createUndoStack(), note: null, noteKey: 0 })
   const stack = useRef<UndoStack>(held.stack)
   useEffect(() => { stack.current = held.stack }, [held.stack])
   const [, bump] = useState(0)
-  const setNote = useCallback((note: string | null) => setHeld(h => ({ ...h, note })), [])
+  const setNote = useCallback((note: string | null) => setHeld(h => ({ ...h, note, noteKey: h.noteKey + 1 })), [])
   const me = useRef<string | null>(null)
   const line = useRef<Promise<void>>(Promise.resolve())
   const busy = useRef(false)
@@ -124,6 +126,7 @@ export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void
     canUndo: held.stack.canUndo(),
     canRedo: held.stack.canRedo(),
     note: held.note,
+    noteKey: held.noteKey,
     undo: () => void run('undo'),
     redo: () => void run('redo'),
     onSaved,

@@ -236,6 +236,40 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
+  // A state said while the Booth is hidden is brought to the person (features/align-booth.clan, review): the tab shows the dot, then the
+  // Booth comes in on it, beside the page. At 390 px, where the Booth follows the page and cannot hide, it is said above the page.
+  test(`script editor: a state said while the Booth is hidden shows the dot and then the Booth; at 390 it is above the page, ${size.tag} px`, async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
+    await script(page, job, RADIO_SCRIPT, 'J001 radio script')
+    await open1(page, job)
+    const app = frameOf(page), booth = boothOf(page)
+    const say = () => app.locator('body').evaluate(() => (window as unknown as { boothSay: (s: object, a: () => void) => void }).boothSay({ name: 'changed-brief', from: 'v1', to: 'v2', changes: 'Updating takes the new brief into this page. What you wrote here stays.' }, () => {}))
+    if (size.width >= 1100) {
+      await booth.locator('.booth-hide').click()
+      await expect(app.locator('#boothEdge')).toBeVisible()
+      await say()
+      await expect(app.locator('#boothEdge.has')).toBeVisible() // the dot, at once
+      await shot(page, 'bands-state-hidden-dot', size)
+      await expect(booth.getByTestId('booth-state')).toBeVisible({ timeout: 5_000 }) // then the Booth comes in on it, after a second
+      const [d, b] = await Promise.all([app.locator('#sheet').boundingBox(), booth.boundingBox()])
+      expect(d!.x + d!.width, 'beside the page, never over it').toBeLessThanOrEqual(b!.x + 1)
+      await shot(page, 'bands-state-hidden-in', size)
+    } else {
+      await say()
+      const line = app.getByTestId('booth-state')
+      await expect(line).toBeVisible()
+      const [l, d, b] = await Promise.all([line.boundingBox(), app.locator('#sheet').boundingBox(), booth.boundingBox()])
+      expect(l!.y + l!.height, 'above the page').toBeLessThanOrEqual(d!.y + 1)
+      expect(l!.y, 'within the first screen').toBeLessThan(size.height)
+      expect(l!.y).toBeLessThan(b!.y)
+      await shot(page, 'bands-state-390', size)
+    }
+    await ctx.close()
+  })
+
   // The Booth (features/align-booth.clan, stage 2): the margin is the shared Booth, as Brief Maker's is.
   test(`script editor: the Booth is the margin and never overlaps the page, ${size.tag} px`, async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })

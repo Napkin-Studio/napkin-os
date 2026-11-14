@@ -58,6 +58,8 @@ export interface SaveQueue {
   retry(): number
   /** Who sends `clan:retry` to the frame; set by the runtime that owns the frame. */
   attach(send: ((id: string) => void) | null): void
+  /** The person pressed Update after a 409: the page reads the document again, so the stale writes are settled. A failed write stays. */
+  forgetChanged(): void
   /** Forget everything (another document opened). */
   clear(): void
   state(): SaveState
@@ -98,6 +100,7 @@ export function createSaveQueue(): SaveQueue {
       return asked
     },
     attach(s) { send = s },
+    forgetChanged() { let n = 0; for (const [id, w] of writes) if (w.state === 'changed') { writes.delete(id); n++ } if (n) changed() },
     clear() { if (writes.size) { writes.clear(); changed() } },
     state() {
       let saving = false

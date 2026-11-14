@@ -4,7 +4,7 @@
 
 // Send to Judge for the open document (features/judge.clan): the score card read from the host and kept current
 // (read once, again the moment the host says the document's data changed, and on a slow poll), the one bar button,
-// and the chip a failed run leaves in the OS bar. The host does the scoring and the arithmetic; this holds nothing of either.
+// and the line a failed run leaves in the OS bar's alert. The host does the scoring and the arithmetic; this holds nothing of either.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { host } from '../../host'
@@ -22,8 +22,10 @@ export interface Judge {
   busy: boolean
   /** The bar's button; null when the document is not Judge's. */
   item: BarItem | null
-  /** The chip a failed run leaves in the OS bar (the page's Booth never heard of a run the shell sent): the host's words in its title. */
-  failed: BarItem | null
+  /** What a failed run leaves, in the host's words, said in the OS bar's alert (the page's Booth never heard of a run the shell sent). */
+  failed: string | null
+  /** The person has read it. */
+  dismiss: () => void
   send: () => Promise<void>
   overrule: (reason: string, route?: 'team' | 'cd') => Promise<boolean>
 }
@@ -91,6 +93,6 @@ export function useJudge(docPath: string, on: boolean): Judge {
     disabled: busy || (card !== null && !card.can_score),
     title: card && !card.can_score ? (card.why_not ?? '') : 'Judge scores this version out of 30 and advises. The creative director decides.',
   }) : null, [on, busy, card])
-  const failedChip = useMemo<BarItem | null>(() => failed ? { kind: 'chip', label: 'Not scored', tone: 'warn', title: failed.line, alert: true } : null, [failed])
-  return { card, line: note ?? failed?.line ?? null, busy, item, failed: failedChip, send, overrule }
+  const dismiss = useCallback(() => patch({ failed: null }), [patch])
+  return { card, line: note ?? failed?.line ?? null, busy, item, failed: failed?.line ?? null, dismiss, send, overrule }
 }
