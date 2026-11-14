@@ -36,10 +36,9 @@ async function issueRound(page: Page, job: Awaited<ReturnType<typeof seedJ001>>,
  */
 async function issueRoundInBooth(page: Page, job: Awaited<ReturnType<typeof seedJ001>>) {
   await signIn(page, PEOPLE.accountService)
-  await page.goto(`/#tool-${job.client}-brief`)
-  await page.reload()
-  await page.getByTestId('work-item').first().click()
-  await expect(page.frameLocator('iframe').first().locator('#stab #lockBtn')).toBeVisible()
+  await page.goto('/'); await page.goto(`/#job-${job.job}`); await page.reload()
+  await page.locator('[data-testid="job-document"][data-app="ie.napkin.brief-maker"]').getByTestId('job-open-document').click()
+  await expect(page.frameLocator('iframe').first().locator('#stab #statusPill')).toHaveText('Locked')
   await page.getByRole('button', { name: /^Share/ }).click()
   await page.getByRole('menu', { name: 'Share' }).getByRole('menuitem', { name: /Send the client copy/ }).click()
   const links = page.frameLocator('iframe').first().locator('#stab #clientLinks')
@@ -48,7 +47,7 @@ async function issueRoundInBooth(page: Page, job: Awaited<ReturnType<typeof seed
   for (const [i, p] of people.entries()) {
     await links.getByLabel(`Name ${i + 1}`).fill(p.name)
     await links.getByLabel(`Email ${i + 1}`).fill(p.email)
-    if (p.approver) await links.getByLabel(`${p.name} is the approver`).check()
+    if (p.approver) await links.getByLabel(`Person ${i + 1} approves`).check()
   }
   await links.getByRole('button', { name: 'Make the links' }).click()
   const made = links.getByLabel('The client link')
@@ -151,8 +150,8 @@ for (const size of SIZES) {
     expect(merged.round).toBe(1)
     expect(merged.rounds_in_scope).toBe(3)
     // The brief's Booth holds the same merged list, under Record the client's answer.
-    await page.goto(`/#tool-${job.client}-brief`); await page.reload()
-    await page.getByTestId('work-item').first().click()
+    await page.goto('/'); await page.goto(`/#job-${job.job}`); await page.reload()
+    await page.locator('[data-testid="job-document"][data-app="ie.napkin.brief-maker"]').getByTestId('job-open-document').click()
     const fold = page.frameLocator('iframe').first().locator('#stab #clientLinks')
     await expect(fold.getByTestId('round-comments').getByTestId('comment')).toHaveCount(3)
     await expect(fold.getByTestId('round-number')).toContainText('Round 1 of 3')

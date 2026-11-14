@@ -89,6 +89,16 @@ export function pushData(data: Record<string, unknown>) {
   frame?.postMessage({ type: 'clan:data', data }, '*')
 }
 
+/** Post one message to the running app's page (the brief's client links: shell/gate/clientLinkFeed.ts). */
+export function postToApp(message: unknown) {
+  frame?.postMessage(message, '*')
+}
+
+/** Whether a message came from the running app's page, and so may be answered. */
+export function isAppFrame(source: MessageEventSource | null): boolean {
+  return !!frame && source === frame
+}
+
 /** A tab or button the app put in the OS bar was pressed: tell the app which. */
 export function barAction(id: string) {
   frame?.postMessage({ type: 'clan:bar-action', id }, '*')

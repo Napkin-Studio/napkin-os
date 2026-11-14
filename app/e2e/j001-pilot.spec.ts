@@ -160,12 +160,17 @@ for (const size of SIZES) {
   // The gate lives in the brief's Booth (features/align-booth.clan): the items the host lists as blocking the lock
   // are rows of the one Needs you list (#lockList), the sign-offs are rows addressed to the signer, and the Booth's
   // Lock is the one button that locks. Opening the brief is enough: there is no band to unfold.
-  const openBrief = async (page: Page, job: Awaited<ReturnType<typeof seedJ001>>) => {
-    await page.goto(`/#tool-${job.client}-brief`)
-    await page.reload()
-    await page.getByTestId('work-item').first().click()
+  const openBrief = async (page: Page, job: Awaited<ReturnType<typeof seedJ001>>, via: 'tool' | 'job' = 'tool') => {
+    if (via === 'job') { // account service has no brief tool: the brief opens from the job page
+      await page.goto('/'); await page.goto(`/#job-${job.job}`); await page.reload()
+      await page.locator('[data-testid="job-document"][data-app="ie.napkin.brief-maker"]').getByTestId('job-open-document').click()
+    } else {
+      await page.goto(`/#tool-${job.client}-brief`)
+      await page.reload()
+      await page.getByTestId('work-item').first().click()
+    }
     const booth = page.frameLocator('iframe').first().locator('#stab')
-    await expect(booth.locator('#lockBtn')).toBeVisible()
+    await expect(booth.locator('#statusPill')).toBeVisible()
     return booth
   }
   /** The rows of Needs you the host's gate gave (gate:<item>, signoff:<role>). */
@@ -506,13 +511,14 @@ for (const size of SIZES) {
     await expect(booth.locator('#statusPill')).toHaveText('Ready to lock')
     await booth.locator('#lockBtn').click()
     await expect.poll(async () => (await gateOf(page, job.brief)).signed).toBe(true)
+    await expect(booth.locator('#statusPill')).toHaveText('Locked')
     await page.goto(`/#tool-${job.client}-territories`)
     await page.reload()
     await expect(page.getByTestId('territories-closed')).toBeVisible() // passed and signed, the client has not confirmed
     // The client's confirmation, through their own link on a phone with no account (test 17): account
     // service makes it from the signed brief with Share, Send the client copy, and the client confirms it.
     await signIn(page, PEOPLE.accountService)
-    await openBrief(page, job)
+    await openBrief(page, job, 'job')
     const links = await sendClientCopy(page)
     await links.getByLabel('Name 1').fill('Client A contact')
     await links.getByLabel('Email 1').fill('contact@client-a.example')
@@ -743,7 +749,7 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.accountService)
     // The agency's side is the brief's Booth: Share, Send the client copy makes the signed link, and the links
     // made are listed under Record the client's answer with their state and Withdraw.
-    await openBrief(page, job)
+    await openBrief(page, job, 'job')
     let links = await sendClientCopy(page)
     await links.getByLabel('Name 1').fill('Someone else')
     await links.getByLabel('Email 1').fill('someone@client-a.example')
@@ -796,7 +802,7 @@ for (const size of SIZES) {
     await expect(cp.getByTestId('client-link-gone')).toBeVisible()
     await phone.close()
     // and the Booth says the client confirmed
-    const after = await openBrief(page, job)
+    const after = await openBrief(page, job, 'job')
     await expect(after.locator('#clientLinks [data-link-state="answered"]')).toContainText('confirmed')
     await ctx.close()
   })

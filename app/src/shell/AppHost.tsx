@@ -23,6 +23,7 @@ import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import BriefGateBand from './gate/BriefGateBand'
 import { useGate } from './gate/useGate'
+import { useClientLinkFeed } from './gate/clientLinkFeed'
 import { useBriefUndo } from './versions/useBriefUndo'
 import { openBar, setHistory } from './bar'
 import VersionBand from './versions/VersionBand'
@@ -267,6 +268,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // Undo and redo of this person's own edits to the open brief or script (features/brief-versions-undo.clan; the Script
   // editor adopts the same stack, features/script-editor.clan).
   const briefUndo = useBriefUndo(docPath, (open.manifest.app?.app_id === BRIEF_MAKER || open.manifest.app?.app_id === SCRIPT_EDITOR) && !open.is_template && !clientOn, changed)
+  // The brief's client links and round, fed to its Booth under Record the client's answer (features/align-booth.clan).
+  useClientLinkFeed(docPath, open.manifest.app?.app_id === BRIEF_MAKER && !open.is_template && !clientOn)
 
   // The bar's Undo and Redo commands act on this document's stack, while it is the one open. Stable wrappers read the
   // latest, so the registration moves only when what can be undone does.
@@ -525,7 +528,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}
         <main className="ch-work-main">
           {!clientOn && gate.view && (
-            <BriefGateBand gate={gate} client={client?.name ?? 'the client'} onChanged={changed} undo={briefUndo} docPath={docPath} />
+            <BriefGateBand gate={gate} client={client?.name ?? 'the client'} onChanged={changed} undo={briefUndo} docPath={docPath} gateInBooth />
           )}
           {!clientOn && appId === SCRIPT_EDITOR && !open.is_template && (
             <VersionBand undo={briefUndo} docPath={docPath} onChanged={changed} />

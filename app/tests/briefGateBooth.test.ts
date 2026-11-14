@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { linksMessage } from '../src/shell/gate/clientLinkFeed.ts'
+import { linksMessage } from '../src/shell/gate/clientLinkWords.ts'
 
 function templates(): string {
   let dir = dirname(fileURLToPath(import.meta.url))
@@ -109,8 +109,8 @@ test('each gate code is a row of Needs you that opens its part', () => {
   assert.equal(by['gate:famous'].open, 'famous')
   assert.equal(by['gate:famous'].say, 'What would make this famous')
   // The rows say the part and a tag, never the host's whole sentence.
-  const html = rows.map(f.lkItemHtml).join('')
-  assert.doesNotMatch(html, /Brief gate, one insight/)
+  const said = rows.map(f.lkItemHtml).join('').replace(/<[^>]*>/g, ' ')
+  assert.doesNotMatch(said, /Brief gate, one insight/)
   assert.match(f.lkItemHtml(by['gate:insight']), /data-code="gate:insight"/)
   assert.match(f.lkItemHtml(by['gate:insight']), /data-key="insight"/)
   assert.match(f.lkItemHtml(by['gate:famous']), /data-open="famous"/)
