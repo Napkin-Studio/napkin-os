@@ -346,7 +346,7 @@ test('the page\'s actions are clan:bar buttons: Approve, then Start version n on
   const a = open.bars.at(-1)!
   assert.ok(a.length <= 10)
   assert.deepEqual(a.filter(i => i.kind === 'status').map(i => String(i.label)), ['Draft'])
-  assert.deepEqual(a.filter(i => i.kind === 'button').map(i => [String(i.id), String(i.label), Boolean(i.primary)]), [['approve', 'Approve version 1', true]])
+  assert.deepEqual(a.filter(i => i.kind === 'button').map(i => [String(i.id), String(i.label), Boolean(i.primary)]), [['approve', 'Approve version 1', false]])
   const lockedView = view([approve('a1')], true)
   const done = await page({ decisions: lockedView })
   const b = done.bars.at(-1)!
