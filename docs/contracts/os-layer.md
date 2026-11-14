@@ -745,7 +745,7 @@ fields. An item with none of them is read exactly as before.
 | Field | Shape | Set when |
 |---|---|---|
 | `for` | `{person}` (a sign-in name) or `{role}` (a role id), never both | The document is filed under a job and the item waits on someone: the signer a `signoff:` or `gate:` item names (the role, `planning` or `creative-director`, while the brief names none), else the approver of the job's open route step that looks at this document |
-| `due` | an ISO date | That open route step's due date, on every item that blocks the lock |
+| `due` | an ISO date | That open route step's due date, on every item that blocks the lock; with no open step looking at the document, the job's own due date |
 | `job` | the job number, as the manifest has it | The document is filed under a job |
 
 The route is read from the job index the server keeps; a host with no index

@@ -756,12 +756,20 @@ fn entry_of(
     // chains, from the clock alone. A job with no route is as it always was.
     let (route, holder) = derive_route(rec, route_set, &evidence, now, today);
     // the open step that looks at a document says when its items are due and, where one names no one, who
+    // with no open step on it, an item is due when the job is
     for d in &mut listed {
-        if let Some((due, who)) = open_step_for(&route, &d.path) {
-            for h in &mut d.holds {
-                h.due = Some(due.clone());
-                if h.for_.is_none() {
-                    h.for_ = who.clone();
+        match open_step_for(&route, &d.path) {
+            Some((due, who)) => {
+                for h in &mut d.holds {
+                    h.due = Some(due.clone());
+                    if h.for_.is_none() {
+                        h.for_ = who.clone();
+                    }
+                }
+            }
+            None => {
+                for h in &mut d.holds {
+                    h.due = rec.due.clone();
                 }
             }
         }
@@ -1180,6 +1188,10 @@ pub fn attend(view: &mut DecisionsView, index: &JobIndex, path: &str) {
         return;
     };
     let Some((due, who)) = open_step_for(&job.route, path) else {
+        // no open step looks at this document: its items are due when the job is
+        for a in view.attention.iter_mut().filter(|a| a.blocks_lock) {
+            a.due = job.due.clone();
+        }
         return;
     };
     for a in view.attention.iter_mut().filter(|a| a.blocks_lock) {

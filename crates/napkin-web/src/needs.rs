@@ -294,9 +294,27 @@ fn aside_id(path: &str, key: &str) -> String {
 /// reminder, which is on no document. Built from the caller's own visible needs, so it names nobody else.
 pub fn notices_on(ctx: &AppCtx, index: &JobIndex, user: &Account, path: &str) -> Vec<Value> {
     use napkin_host::jobindex::Audience;
+    // a need about the job itself (its deadline) sits on the job's brief, or else its first document
+    let home_of = |job: &str| {
+        index.job(job).and_then(|j| {
+            j.documents
+                .iter()
+                .find(|d| d.app_id.as_deref() == Some(napkin_host::ops::gate::BRIEF_MAKER))
+                .or_else(|| j.documents.first())
+                .map(|d| d.path.as_str())
+        })
+    };
     items_of(ctx, index, Some(user))
         .into_iter()
-        .filter(|n| n.path == path && n.kind != "gate" && n.kind != "timesheet")
+        .filter(|n| {
+            n.kind != "gate"
+                && n.kind != "timesheet"
+                && if n.path.is_empty() {
+                    home_of(&n.job) == Some(path)
+                } else {
+                    n.path == path
+                }
+        })
         .map(|n| {
             let who = match &n.audience {
                 Audience::Person(p) => serde_json::json!({ "person": p }),
