@@ -117,7 +117,7 @@ async fn every_admin_route_is_403_for_anyone_but_engineer_at_napkin() {
         (
             "POST",
             "/api/admin/people",
-            Some(json!({"name": "X Y", "agency": "napkin"})),
+            Some(json!({"name": "X Y", "agency": "napkin", "roles": ["planning"]})),
         ),
         (
             "PATCH",
@@ -203,7 +203,7 @@ async fn an_added_person_signs_in_at_once_and_a_removed_one_cannot() {
         "POST",
         "/api/admin/people",
         Some(&me),
-        Some(json!({"name": "Shaunagh Kelly", "agency": "Napkin"})),
+        Some(json!({"name": "Shaunagh Kelly", "agency": "Napkin", "roles": ["planning"]})),
     )
     .await;
     assert_eq!(st, StatusCode::CREATED, "{v}");
@@ -221,7 +221,7 @@ async fn an_added_person_signs_in_at_once_and_a_removed_one_cannot() {
         "POST",
         "/api/admin/people",
         Some(&me),
-        Some(json!({"name": "Shaunagh", "agency": "napkin"})),
+        Some(json!({"name": "Shaunagh", "agency": "napkin", "roles": ["planning"]})),
     )
     .await;
     assert_eq!(st, StatusCode::CONFLICT);
@@ -297,7 +297,7 @@ async fn an_agency_is_recognised_by_its_id_name_or_alias() {
             "POST",
             "/api/admin/people",
             Some(&me),
-            Some(json!({"name": name, "agency": agency, "username": username})),
+            Some(json!({"name": name, "agency": agency, "username": username, "roles": ["planning"]})),
         )
         .await;
         assert_eq!(st, StatusCode::CREATED, "{agency}: {v}");
@@ -309,7 +309,7 @@ async fn an_agency_is_recognised_by_its_id_name_or_alias() {
         "POST",
         "/api/admin/people",
         Some(&me),
-        Some(json!({"name": "Aoife Byrne", "agency": "Rothco"})),
+        Some(json!({"name": "Aoife Byrne", "agency": "Rothco", "roles": ["planning"]})),
     )
     .await;
     assert_eq!(st, StatusCode::BAD_REQUEST);
@@ -439,7 +439,7 @@ async fn every_agency_route_is_403_for_anyone_but_engineer_at_napkin() {
                 "POST",
                 "/api/admin/people",
                 Some(&me),
-                Some(json!({"name": "Aoife", "agency": "rothco"})),
+                Some(json!({"name": "Aoife", "agency": "rothco", "roles": ["planning"]})),
             )
             .await;
             assert_eq!(st, StatusCode::CREATED);
@@ -497,7 +497,7 @@ async fn a_new_basic_agency_is_a_draft_until_published() {
         "POST",
         "/api/admin/people",
         Some(&me),
-        Some(json!({"name": "Aoife Byrne", "agency": "Roth"})),
+        Some(json!({"name": "Aoife Byrne", "agency": "Roth", "roles": ["planning"]})),
     )
     .await;
     assert_eq!(st, StatusCode::CONFLICT);
@@ -604,7 +604,7 @@ async fn a_new_basic_agency_is_a_draft_until_published() {
         "POST",
         "/api/admin/people",
         Some(&me),
-        Some(json!({"name": "Aoife Byrne", "agency": "Roth"})),
+        Some(json!({"name": "Aoife Byrne", "agency": "Roth", "roles": ["planning"]})),
     )
     .await;
     assert_eq!(st, StatusCode::CREATED, "{p}");
@@ -675,7 +675,7 @@ async fn a_draft_is_never_on_agency_looks_and_discard_drops_it() {
         "POST",
         "/api/admin/people",
         Some(&me),
-        Some(json!({"name": "Rob", "agency": "rc"})),
+        Some(json!({"name": "Rob", "agency": "rc", "roles": ["planning"]})),
     )
     .await;
     assert_eq!(st, StatusCode::BAD_REQUEST);
@@ -1075,7 +1075,7 @@ async fn an_agency_in_code_changes_only_its_display_name() {
             "POST",
             "/api/admin/people",
             Some(&me),
-            Some(json!({"name": n, "agency": a})),
+            Some(json!({"name": n, "agency": a, "roles": ["planning"]})),
         )
         .await;
         assert_eq!(
@@ -1356,7 +1356,7 @@ async fn an_agency_kept_before_drafts_reads_as_published() {
         "POST",
         "/api/admin/people",
         Some(&me),
-        Some(json!({"name": "Bríd", "agency": "roth", "username": "brid@rothco"})),
+        Some(json!({"name": "Bríd", "agency": "roth", "username": "brid@rothco", "roles": ["planning"]})),
     )
     .await;
     assert_eq!(st, StatusCode::CREATED, "{p}");

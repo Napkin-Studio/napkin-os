@@ -72,7 +72,7 @@ fn open(dir: &Path) -> People {
 }
 
 #[test]
-fn the_directory_brings_in_the_people_the_store_lacks_and_touches_no_one_it_has() {
+fn the_directory_records_the_people_the_store_lacks_and_touches_no_one_it_has() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("accounts.tsv"), ROSTER).unwrap();
@@ -89,15 +89,12 @@ fn the_directory_brings_in_the_people_the_store_lacks_and_touches_no_one_it_has(
 
     let report = napkin_web::people_import::run(&p, root).unwrap();
     assert_eq!(report.people, 3, "dan, eve and fay: {report:?}");
-    // the directory's people the store lacked come in with the roles an admin gave them; eve, removed
-    // there, comes in removed and without a role
-    assert_eq!(p.active("dan@cr").unwrap().roles, ["planning"]);
-    assert_eq!(
-        p.active("fay@cr").unwrap().roles,
-        ["copywriter", "art-director"]
-    );
-    assert!(p.active("eve@cr").is_none());
-    assert!(p.book().person("eve@cr").unwrap().roles.is_empty());
+    // the directory's people the store lacked come in for the record, removed and with no role: the roster
+    // names none of them, and the registry is no source of a role
+    for u in ["dan@cr", "eve@cr", "fay@cr"] {
+        assert!(p.active(u).is_none(), "{u}");
+        assert!(p.book().person(u).unwrap().roles.is_empty(), "{u}");
+    }
     assert_eq!(
         p.book().person("dan@cr").unwrap().email.as_deref(),
         Some("dan@mail.example.test")

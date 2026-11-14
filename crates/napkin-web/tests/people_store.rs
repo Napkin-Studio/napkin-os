@@ -993,3 +993,68 @@ async fn a_removed_persons_event_stream_ends_at_the_next_event() {
         "a removed person still receives the agency's events"
     );
 }
+
+#[tokio::test]
+async fn adding_a_person_with_no_role_is_refused_as_a_role_change_to_none_is() {
+    let r = rig();
+    for who in ["ad@wk", "engineer@napkin"] {
+        let w = sign_in(&r, who).await;
+        let (st, v) = call(
+            &r,
+            "POST",
+            "/api/admin/people",
+            Some(&w.cookie),
+            Some(json!({ "name": "Nora Test", "agency": "wk" })),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST, "{who}: {v}");
+        let (st, _) = call(
+            &r,
+            "POST",
+            "/api/admin/people",
+            Some(&w.cookie),
+            Some(json!({ "name": "Nora Test", "agency": "wk", "roles": [] })),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST, "{who}");
+    }
+    assert!(r.ctx.people().unwrap().active("nora@wk").is_none());
+}
+
+#[test]
+fn a_change_recorded_but_never_written_is_marked_not_applied_at_the_next_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let roster = dir.path().join("accounts.tsv");
+    std::fs::write(&roster, ROSTER).unwrap();
+    let people = napkin_web::people::People::open(dir.path().join("_people"), &roster).unwrap();
+    // a server stopped after recording aoife's change and before writing people.json
+    let line = json!({ "at": "2026-11-14T10:00:00Z", "by": "ad@wk", "what": "roles changed",
+        "person": "aoife@wk", "agency": "wk",
+        "before": { "name": "Aoife", "roles": ["planning"], "removed_at": null },
+        "after": { "name": "Aoife", "roles": ["admin"], "removed_at": null } });
+    std::fs::write(
+        dir.path().join("_people/changes.jsonl"),
+        format!(
+            "{}{line}\n",
+            std::fs::read_to_string(dir.path().join("_people/changes.jsonl")).unwrap_or_default()
+        ),
+    )
+    .unwrap();
+    let ctx = AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40);
+    ctx.set_people(Arc::new(people));
+    let log = std::fs::read_to_string(dir.path().join("_people/changes.jsonl")).unwrap();
+    let last: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+    assert_eq!(last["what"], "not applied", "{log}");
+    assert_eq!(last["was"], "roles changed");
+    assert_eq!(last["person"], "aoife@wk");
+    let audit = std::fs::read_to_string(
+        dir.path()
+            .join(TenantId::of_agency("wk").as_str())
+            .join("audit.jsonl"),
+    )
+    .unwrap();
+    assert!(audit.contains("Not applied:"), "{audit}");
+    // a second start finds nothing to mark
+    let again = napkin_web::people::People::open(dir.path().join("_people"), &roster).unwrap();
+    assert_eq!(again.reconcile(), 0);
+}
