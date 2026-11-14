@@ -55,9 +55,11 @@ test('an added agency repaints --agency, --agency-fg, --agency-soft and the --ag
   assert.match(read('napkin-agency'), /--agency: #FFB800/, 'a registry agency is read the same way')
 })
 
-test('the registry wins over a People-page agency that takes its id, and a bad colour is not taken', () => {
+test('a People-page agency that takes a registry id renames it but keeps the code\'s colours, and a bad colour is not taken', () => {
   registerAgencyLooks([{ id: 'wk', name: 'Not W+K', base: '#000000', accent: '#FFFFFF' }, { id: 'bad', name: 'Bad', base: 'blue', accent: '#FFFFFF' }])
-  assert.equal(coloursOf('wk')?.name, AGENCY_COLOURS.wk.name)
+  // develop (#234): the registry keeps its colours and logo; only the display name may be changed from the People page.
+  assert.equal(coloursOf('wk')?.name, 'Not W+K')
+  assert.deepEqual({ ...coloursOf('wk'), name: '' }, { ...AGENCY_COLOURS.wk, name: '' })
   assert.equal(coloursOf('bad'), null)
   registerAgencyLooks([])
 })

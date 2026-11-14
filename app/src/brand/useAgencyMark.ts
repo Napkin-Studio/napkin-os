@@ -5,12 +5,18 @@
 import { useSyncExternalStore } from 'react'
 import type { MarkPalette } from './deepOSvg'
 import { appliedAgencyMark, markOf, NEUTRAL_MARK, onAppliedAgency } from '../shell/agency/palette'
-import { lastAgency } from '../shell/agency/lastAgency'
+import { lastAgency, lastAgencyLook } from '../shell/agency/lastAgency'
 
-/** The mark's colours when it is not told: the agency on the page, else the one this browser last signed in to, else neutral (as the boot screen, brand/bootLook.ts). */
+/**
+ * The mark's colours when it is not told: the agency on the page, else the one
+ * this browser last signed in to (a basic agency's look as last applied, else
+ * the registry's), else neutral (as the boot screen, brand/bootLook.ts).
+ */
 export function useAgencyMark(): MarkPalette {
   const applied = useSyncExternalStore(onAppliedAgency, appliedAgencyMark, () => null)
   if (applied) return applied
   const last = lastAgency()
-  return last ? markOf(`_@${last}`) : NEUTRAL_MARK
+  if (!last) return NEUTRAL_MARK
+  const kept = lastAgencyLook()
+  return kept ? { base: kept.base, accent: kept.accent } : markOf(`_@${last}`)
 }

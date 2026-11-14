@@ -12,6 +12,7 @@ import {
   NAPKIN_COLOURS, agencyCss, canonicalAgencyId, coloursOf, paletteOf, pillOf, surfaceCss,
   type AgencyColours,
 } from '../agency/palette'
+import type { AgencyAdminRow } from './agencies/model'
 
 /** Who may open the People page: napkin-web's PEOPLE_ADMINS (tests/peopleAdmin.test.ts keeps them the same). */
 export const PEOPLE_ADMINS: readonly string[] = ['engineer@napkin']
@@ -37,16 +38,8 @@ export interface PersonRow {
   removed_at?: string
 }
 
-/** An agency as the server lists it: the code registry's and the added ones, with how many people are in it. */
-export interface AgencyRow {
-  id: string
-  name: string
-  base: string
-  accent: string
-  aliases: string[]
-  source: 'code' | 'added'
-  people: number
-}
+/** An agency as the server lists it (agencies/model.ts AgencyAdminRow): in code or basic, with how many people are in it. */
+export type AgencyRow = AgencyAdminRow
 
 /** The agency id `text` means: an id, a name or an alias (any case), of the listed agencies or the look registry. */
 export function recogniseAgency(text: string, agencies: readonly AgencyRow[]): string | null {
@@ -86,7 +79,7 @@ export function agencyFieldFromSignInName(typed: string, agencies: readonly Agen
 export function agencyColours(id: string, agencies: readonly AgencyRow[]): AgencyColours | null {
   return coloursOf(id) ?? (() => {
     const a = agencies.find(x => x.id === id)
-    return a ? { name: a.name, base: a.base, accent: a.accent } : null
+    return a?.kind === 'basic' ? { name: a.name, base: a.base, accent: a.accent } : null
   })()
 }
 
