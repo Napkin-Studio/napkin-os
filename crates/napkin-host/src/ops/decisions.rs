@@ -147,6 +147,41 @@ pub struct Attention {
     /// view says it in `text`; this is for the host.
     #[serde(skip)]
     pub finding: Option<String>,
+    /// Who the item waits on, when the document's job says: the signer a sign-off names, or the open
+    /// step of the job's approval route. Absent for a document filed under no job.
+    #[serde(rename = "for", skip_serializing_if = "Option::is_none")]
+    pub for_: Option<AttentionFor>,
+    /// When it is due (an ISO date): the due date of the route's open step on this document.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due: Option<String>,
+    /// The job the document is filed under (its number, as the manifest has it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub job: Option<String>,
+}
+
+/// Who an attention item is for: one person by sign-in name, or everyone in a role (a role id).
+/// One of the two.
+#[derive(Debug, Serialize, Clone, PartialEq, Default)]
+pub struct AttentionFor {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub person: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+}
+
+impl AttentionFor {
+    pub fn person(p: impl Into<String>) -> Self {
+        Self {
+            person: Some(p.into()),
+            role: None,
+        }
+    }
+    pub fn role(r: impl Into<String>) -> Self {
+        Self {
+            person: None,
+            role: Some(r.into()),
+        }
+    }
 }
 
 /// What a cite names, in words.
@@ -343,6 +378,12 @@ pub fn decisions_for(doc: &Document, viewer: Option<&str>) -> HostResult<Decisio
     attention.extend(client.blockers);
     attention.extend(asked_for(&ctx));
     attention.extend(client.attention);
+    // A document filed under a job says which job each item is about.
+    if let Some(job) = clan.manifest().job.as_deref() {
+        for a in &mut attention {
+            a.job = Some(job.to_string());
+        }
+    }
 
     for &i in &order {
         let d = &chain.decisions[i];
@@ -1066,6 +1107,9 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
             label,
             can_set_aside: false,
             finding: None,
+            for_: None,
+            due: None,
+            job: None,
         }
     };
     // A carried item nothing here can settle: a person may set it aside with
@@ -1078,8 +1122,12 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
 
     // The Brief gate (features/brief-gate.clan): a gated brief's missing items
     // and its unsigned versions hold the lock like any other open item.
-    for text in super::gate::blockers(clan, ctx.data, ctx.chain) {
-        out.push(blocker("gate_item", text, None, None));
+    for b in super::gate::blockers(clan, ctx.data, ctx.chain) {
+        out.push(Attention {
+            // who settles it is a fact of the job; a document filed under none keeps the item as it was
+            for_: b.who.filter(|_| clan.manifest().job.is_some()),
+            ..blocker(b.code, b.text, None, None)
+        });
     }
 
     // 1. Open contests: in the selection, in the chain, and left by a merge.
@@ -1772,6 +1820,9 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
         label,
         can_set_aside: false,
         finding: None,
+        for_: None,
+        due: None,
+        job: None,
     };
     let mut blockers = Vec::new();
     let mut attention = Vec::new();
@@ -2052,6 +2103,9 @@ fn asked_for(ctx: &Lookup) -> Vec<Attention> {
             label: label.clone(),
             can_set_aside: false,
             finding: None,
+            for_: None,
+            due: None,
+            job: None,
         };
         if let Some(a) = r.attention.as_deref().filter(|a| !a.trim().is_empty()) {
             out.push(item("flagged", a.trim().to_string()));
