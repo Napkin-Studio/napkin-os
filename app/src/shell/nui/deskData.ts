@@ -121,6 +121,8 @@ export function thinWords(thin: readonly Thin[]): string {
 
 /** What the desk read of one recent document's chain (useDeskFacts). */
 export interface DocFacts {
+  /** The document's notices for the person (alerts of its job). They block nothing. */
+  notices?: AttentionItem[]
   /** Who made its newest decision; null when nobody has yet. */
   editor: { name: string; you: boolean; at: string } | null
   /** What blocks its lock, one per place (needsOf). */

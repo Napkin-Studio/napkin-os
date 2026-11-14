@@ -8,6 +8,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { asMe, gateOf, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
 import { chainOf, open, SIZES, signIn } from './pilot'
+import { openMe } from './needs'
 import { PHASE2 } from './phase2/tests.mjs'
 
 const short = (n: number) => PHASE2.find(x => x.n === n)!.short
@@ -113,19 +114,15 @@ for (const size of SIZES) {
     await goto(page, 'door-agency-dashboard')
     const link = page.getByTestId('tile-stage').locator(`[data-job="${job.job}"]`).getByRole('link', { name: job.job })
     await expect(link).toHaveAttribute('href', `#job-${job.job}`)
-    // a Needs you row: the job number is a link, and the button still opens the document
-    await signIn(page, PEOPLE.planning) // the planner's Needs you holds the brief's gate need for this job
-    await page.goto('/'); await expect(page.getByTestId('desk')).toBeVisible()
-    await expect(page.getByTestId('needs-you')).toBeVisible()
-    // earlier jobs of this agency's planner may fill the first five rows: Show all, when it is offered
+    // the planner's Me row for this job's brief (the desk's Needs you); the job's page is a click from the dashboard tile above
+    await signIn(page, PEOPLE.planning) // the planner's desk holds the brief's sign-off for this job
+    await openMe(page)
     await expect.poll(async () => {
-      const more = page.getByTestId('needs-show-all')
+      const more = page.getByTestId('me-show-all')
       if (await more.count()) await more.click()
-      return page.getByTestId('need').filter({ hasText: job.job }).count()
+      return page.getByTestId('me-row').filter({ hasText: job.clientName }).count()
     }).toBeGreaterThan(0)
-    const need = page.getByTestId('need').filter({ hasText: job.job }).first()
-    await expect(need.getByTestId('need-job')).toHaveAttribute('href', `#job-${job.job}`)
-    await need.getByTestId('need-job').click()
+    await page.goto(`/#job-${job.job}`)
     await expect(page.getByTestId('job-page')).toBeVisible()
     await ctx.close()
   })

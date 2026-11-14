@@ -10,6 +10,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type FrameLocator, type Page } from '@playwright/test'
+import { wideBeside } from './boothFolds'
 import { asMe, PEOPLE, seedJ001 } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Size } from './pilot'
 import { RADIO_SCRIPT, SCRIPT_EDITOR_APP, TV_SCRIPT } from './seed/j001/p2/script-editor.mjs'
@@ -66,6 +67,7 @@ for (const size of SIZES) {
     await expect(app.locator('[data-hints="b3"]')).toContainText('smooth') // a banned word, with its line
     await shot(page, 'script-radio', size)
     // Typing a mandatory line into the script turns it present, and the page never changes the words.
+    await page.waitForTimeout(600) // the page's first reads of the host redraw the lines once; type after that
     const line = app.locator('textarea[data-id="b3"][data-field="text"]')
     await line.evaluate((el: HTMLTextAreaElement) => { el.focus(); el.setSelectionRange(el.value.length, el.value.length) }) // the caret at the end of the text, wrapped or not
     await line.pressSequentially(' Drink responsibly.')
@@ -143,12 +145,21 @@ for (const size of SIZES) {
     // Start a new version and restore v1: a new edit, and v2 stays.
     await boothOf(page).locator('#newv').click()
     await expect(boothOf(page).locator('#stamp')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Version history' }).click()
-    await expect(page.getByTestId('version-row')).toHaveCount(3) // the draft, v2, v1
-    await page.locator('[data-testid="version-row"][data-version="1"]').getByRole('button', { name: 'Restore' }).click()
+    // Versions live in the Booth (features/align-booth.clan): the whole script's Versions fold.
+    await boothOf(page).getByTestId('versions-fold').locator('summary').click()
+    await expect(boothOf(page).getByTestId('version-row')).toHaveCount(3) // the draft, v2, v1
+    // Two compared side by side: the Booth widens to 744 px beside the script, never over it.
+    await boothOf(page).locator('[data-testid="version-row"][data-version="1"]').getByRole('button', { name: 'Compare' }).click()
+    await boothOf(page).locator('[data-testid="version-row"][data-version="2"]').getByRole('button', { name: 'Compare' }).click()
+    await expect(boothOf(page).getByTestId('version-compare')).toContainText('A second version.')
+    if (size.width >= 1440) await wideBeside(app, '#sheet')
+    await shot(page, 'script-versions-compare', size)
+    await boothOf(page).getByRole('button', { name: 'Close the compare' }).click()
+    await boothOf(page).locator('[data-testid="version-row"][data-version="1"]').getByRole('button', { name: 'Restore' }).click()
     await expect(app.locator('textarea[data-id="b1"][data-field="text"]')).toHaveValue(RADIO_SCRIPT.script.beats[0].text)
-    await expect(page.locator('[data-testid="version-row"][data-version="2"]')).toBeVisible()
-    await expect(page.getByTestId('version-row')).toHaveCount(3)
+    await expect(boothOf(page).locator('[data-testid="version-row"][data-version="2"]')).toBeVisible()
+    await expect(boothOf(page).getByTestId('version-row')).toHaveCount(3)
+    await expect(boothOf(page).getByTestId('version-row').first()).toContainText('Restored from v1') // the page has read the restore back
     await shot(page, 'script-versions', size)
     // At desktop width Cmd Z undoes the last edit and it can be brought back.
     if (size.width >= 1024) {
@@ -176,7 +187,7 @@ for (const size of SIZES) {
     await open1(page, job)
     await boothOf(page).getByRole('button', { name: 'Send to Judge' }).click()
     await expect(boothOf(page).getByTestId('judge-score')).toContainText('24')
-    await expect(page.getByTestId('score-card')).toContainText('24') // the shared score card, above the page
+    await expect(boothOf(page).getByTestId('score-card')).toContainText('24') // Judge's score card, in the Booth's Judge fold
     await ctx.close()
   })
 
@@ -240,6 +251,8 @@ for (const size of SIZES) {
       return a.x + a.width <= b.x + 1 || a.y + a.height <= b.y + 1 // beside it, or under it in the one column
     }
     await expect(booth.locator('.booth-nm')).toHaveText('Booth')
+    // On a phone each primary button the shell draws is 44 px tall (suite test 72's rule): the Booth holds the primary action, the bar's copy is not marked primary.
+    if (size.width === 390) for (const b of await page.locator('.ch-btn-primary, .ns-primary, [data-primary]').all()) if (await b.isVisible()) expect((await b.boundingBox())!.height, await b.innerText()).toBeGreaterThanOrEqual(43.5)
     await expect(booth.getByTestId('check')).toBeVisible()
     await expect(booth.getByTestId('sends')).toBeVisible()
     expect(await apart(), 'the Booth does not lie over the page').toBe(true)
@@ -279,7 +292,7 @@ for (const size of SIZES) {
     await app.locator('#sheet .title').click()
     await page.keyboard.press(']')
     await expect(booth).toBeVisible()
-    expect(await apart()).toBe(true)
+    await expect.poll(apart, { message: 'the Booth comes in beside the page, never over it' }).toBe(true)
     await page.keyboard.press(']')
     await expect(booth).toBeHidden()
     expect(await booth.locator('.booth-hd').evaluate(el => el.textContent), 'no hint of the key').not.toContain(']')
@@ -287,7 +300,7 @@ for (const size of SIZES) {
     await app.locator('[data-beat="b1"]').click({ position: { x: 20, y: 10 } })
     await expect(booth).toBeVisible()
     await expect(booth.getByTestId('crumb')).toContainText('Line 1')
-    expect(await apart()).toBe(true)
+    await expect.poll(apart).toBe(true)
     // the shell remembers the choice across a reload
     await booth.locator('.booth-hide').click()
     await expect(edge).toBeVisible()

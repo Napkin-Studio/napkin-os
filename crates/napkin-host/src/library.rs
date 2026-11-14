@@ -101,6 +101,15 @@ pub struct GateSummary {
 
 /// A document's [`RecentState`], or `None` when its decisions can't be read.
 pub(crate) fn recent_state(id: DocId, bytes: Vec<u8>) -> Option<RecentState> {
+    recent_facts(id, bytes).map(|(state, _)| state)
+}
+
+/// [`recent_state`], with who each of the counted places waits on: one [`crate::jobindex::Held`] per
+/// place, so `needs_you` and the holds are the same list.
+pub(crate) fn recent_facts(
+    id: DocId,
+    bytes: Vec<u8>,
+) -> Option<(RecentState, Vec<crate::jobindex::Held>)> {
     let doc = Document::from_bytes(id, bytes).ok()?;
     let view = crate::ops::decisions::decisions(&doc).ok()?;
     if view.problem.is_some() {
@@ -108,12 +117,17 @@ pub(crate) fn recent_state(id: DocId, bytes: Vec<u8>) -> Option<RecentState> {
     }
     // Counted as the document's own "Needs you" counts them: what holds the
     // lock, one item per place.
-    let places: std::collections::BTreeSet<(&str, &str)> = view
-        .attention
-        .iter()
-        .filter(|a| a.blocks_lock)
-        .map(|a| (a.code, a.address.as_deref().unwrap_or(&a.text)))
-        .collect();
+    let mut places: std::collections::BTreeMap<(&str, &str), crate::jobindex::Held> =
+        Default::default();
+    for a in view.attention.iter().filter(|a| a.blocks_lock) {
+        places
+            .entry((a.code, a.address.as_deref().unwrap_or(&a.text)))
+            .or_insert_with(|| crate::jobindex::Held {
+                key: format!("{}:{}", a.code, a.address.as_deref().unwrap_or(&a.text)),
+                for_: a.for_.clone(),
+                due: a.due.clone(),
+            });
+    }
     let gate = crate::ops::gate::applies(&doc)
         .then(|| crate::ops::gate::view(&doc, &view).ok())
         .flatten()
@@ -125,11 +139,15 @@ pub(crate) fn recent_state(id: DocId, bytes: Vec<u8>) -> Option<RecentState> {
             changed_since_lock: g.changed_since_lock,
             open: g.open,
         });
-    Some(RecentState {
-        needs_you: places.len(),
-        locked: view.lock.locked,
-        gate,
-    })
+    let needs_you = places.len();
+    Some((
+        RecentState {
+            needs_you,
+            locked: view.lock.locked,
+            gate,
+        },
+        places.into_values().collect(),
+    ))
 }
 
 /// Scan the app library for installed template apps. Shared by the shell's

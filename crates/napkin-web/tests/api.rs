@@ -3255,8 +3255,10 @@ async fn a_job_files_its_documents_and_the_index_answers_read_only() {
     assert_eq!(
         get(&s, &format!("/api/t/{t}/needs"), Some(&b.cookie))
             .await
-            .json()["total"],
-        0
+            .json()["documents"]
+            .as_array()
+            .map(Vec::len),
+        Some(0)
     );
 
     // the index is never written to: every write method on it is 405

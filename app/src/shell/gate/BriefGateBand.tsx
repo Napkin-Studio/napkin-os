@@ -30,6 +30,12 @@ interface Props {
   /** Undo and redo of the person's own edits, and the version list's entry (features/brief-versions-undo.clan). */
   undo: BriefUndo
   docPath: string
+  /**
+   * The gate is drawn in the brief's Booth (features/align-booth.clan): its items are rows of Needs you, the
+   * sign-offs are rows, the Booth's Lock is the one button that locks, and the client link is under Record the
+   * client's answer. The band keeps only Undo, Redo and Version history until the Booth's Versions fold lands.
+   */
+  gateInBooth?: boolean
 }
 
 function Row({ item }: { item: GateItem }) {
@@ -80,7 +86,7 @@ function SignersForm({ me, busy, onSave }: { me: string | null; busy: boolean; o
   )
 }
 
-export default function BriefGateBand({ gate, client, onChanged, undo, docPath }: Props) {
+export default function BriefGateBand({ gate, client, onChanged, undo, docPath, gateInBooth = false }: Props) {
   const [open, setOpen] = useState(false)
   const [versions, setVersions] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -103,22 +109,24 @@ export default function BriefGateBand({ gate, client, onChanged, undo, docPath }
   return (
     <section className="bg-band" data-testid="gate-band" aria-label="Brief gate">
       <div className="bg-bar">
-        <span className="bg-tag">Brief gate</span>
-        {!open && <span className="bg-sum" data-testid="gate-summary">{summary}</span>}
-        {open && <span className="bg-sum" />}
+        {!gateInBooth && <span className="bg-tag">Brief gate</span>}
+        {!open && !gateInBooth && <span className="bg-sum" data-testid="gate-summary">{summary}</span>}
+        {(open || gateInBooth) && <span className="bg-sum" />}
         <div className="bg-tools">
           <button type="button" className="ch-btn" disabled={!undo.canUndo} onClick={undo.undo}>Undo</button>
           <button type="button" className="ch-btn" disabled={!undo.canRedo} onClick={undo.redo}>Redo</button>
           <button type="button" className="ch-btn" aria-expanded={versions} onClick={() => setVersions(o => !o)}>Version history</button>
         </div>
-        <button type="button" className="ch-btn bg-toggle" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-          {open ? 'Hide the gate' : 'Check the brief'}
-        </button>
+        {!gateInBooth && (
+          <button type="button" className="ch-btn bg-toggle" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+            {open ? 'Hide the gate' : 'Check the brief'}
+          </button>
+        )}
         {undo.note && <p className="bg-note-line" role="status" data-testid="undo-note">{undo.note}</p>}
       </div>
       {versions && <VersionPanel key={docPath} undo={undo} onChanged={() => { gate.reload(); onChanged() }} />}
 
-      {open && (
+      {open && !gateInBooth && (
         <div className="bg-body">
           <div className="bg-main">
             <h2 className="bg-head" data-testid="gate-headline">{headline(v, client)}</h2>
@@ -191,7 +199,7 @@ export default function BriefGateBand({ gate, client, onChanged, undo, docPath }
               )}
               {error && <p className="bg-err" role="alert">{error}</p>}
             </section>
-            {v.signed && !v.changed_since_lock && <ClientLinkPanel client={client} onChanged={onChanged} />}
+            {v.signed && !v.changed_since_lock && <ClientLinkPanel client={client} doc={docPath} onChanged={onChanged} />}
           </aside>
         </div>
       )}

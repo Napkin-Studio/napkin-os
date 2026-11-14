@@ -149,8 +149,15 @@ struct OpenView {
     sandbox_origin: Option<String>,
 }
 
-fn view(ctx: &AppCtx, tenant: &TenantId, person: &str, doc: &DocId, open: OpenResult) -> OpenView {
-    let token = ctx.tokens.mint(tenant, person, doc);
+fn view(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    person: &str,
+    roles: &[String],
+    doc: &DocId,
+    open: OpenResult,
+) -> OpenView {
+    let token = ctx.tokens.mint(tenant, person, roles, doc);
     OpenView {
         open,
         frame: crate::tokens::frame_id(&token),
@@ -166,12 +173,13 @@ fn open_view(
     ctx: &AppCtx,
     tenant: &TenantId,
     person: &str,
+    roles: &[String],
     ws: &Workspace,
     doc: DocId,
 ) -> ApiResult<OpenView> {
     let (_session, open) = crate::timing::phase("session", || ws.open(&doc))?;
     Ok(crate::timing::phase("token", || {
-        view(ctx, tenant, person, &doc, open)
+        view(ctx, tenant, person, roles, &doc, open)
     }))
 }
 
@@ -693,6 +701,7 @@ async fn new_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
+    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     Json(body): Json<NewDocument>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
@@ -721,7 +730,7 @@ async fn new_document(
             tracing::warn!(job = %j.number, %e, "could not fill the brief's signers from the route");
         }
     }
-    Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, doc)?))
 }
 
 /// Which installed apps will take this document as a spin-off source.
@@ -757,6 +766,7 @@ async fn spinoff_document(
     Acting(acting): Acting,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
+    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     Path((_t, doc)): Path<(String, String)>,
     Json(body): Json<Spinoff>,
 ) -> ApiResult<Json<OpenView>> {
@@ -769,7 +779,7 @@ async fn spinoff_document(
         body.title,
         body.map,
     )?;
-    Ok(Json(open_view(&ctx, &tenant, &person, &ws, out)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, out)?))
 }
 
 /// Accept an uploaded `.clan` as a document of this tenant and open it.
@@ -780,6 +790,7 @@ async fn upload_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
+    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     body: Bytes,
 ) -> ApiResult<Json<OpenView>> {
     if body.is_empty() {
@@ -795,17 +806,18 @@ async fn upload_document(
     // A fresh uuid: this is a new document, never a replacement.
     ws.store
         .apply(&Change::create(doc.clone(), body.to_vec()))?;
-    Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, doc)?))
 }
 
 async fn home(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
+    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
     let doc = library::ensure_home(&*ws.store)?;
-    Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
+    Ok(Json(open_view(&ctx, &tenant, &person, &roles, &ws, doc)?))
 }
 
 // ── One document ─────────────────────────────────────────────────────────────
@@ -826,6 +838,7 @@ async fn open_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
+    Extension(crate::tenant::Roles(roles)): Extension<crate::tenant::Roles>,
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
@@ -833,6 +846,7 @@ async fn open_document(
         &ctx,
         &tenant,
         &person,
+        &roles,
         &ws,
         DocId::new(doc),
     )?))

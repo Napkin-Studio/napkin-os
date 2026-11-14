@@ -23,8 +23,7 @@ import type { LandingData } from './store'
 import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
 import { Desk } from '../nui/Desk'
 import { DoorPage } from '../home/DoorPage'
-import { NeedsYou } from '../home/NeedsYou'
-import { useJobNeeds } from '../home/useJobNeeds'
+import { useDeskNeeds } from '../nui/useDeskNeeds'
 import { JobPage } from '../job/JobPage'
 import type { DoorEntry, HomeView } from '../../host/http'
 import { ClientView } from '../nui/ClientView'
@@ -90,7 +89,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   useEffect(() => { top.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true }) }, [key])
 
   // What the job index asks of this person: read only where a role says there are jobs to be asked about.
-  const jobNeeds = useJobNeeds(!!home?.restricted)
+  const deskNeeds = useDeskNeeds(!!home?.restricted)
   const who = whoIs(data.person)
   const summary = useMemo(() => agencySummary(data.clients, data.items, data.unassigned), [data])
 
@@ -250,10 +249,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         pages={home?.restricted ? home.pages : undefined}
         morePages={home?.restricted ? home.more : undefined}
         onOpenPage={home?.restricted ? openPage : undefined}
-        needsYou={home?.restricted ? (
-          <NeedsYou items={data.items} jobNeeds={jobNeeds.items} nextDeadline={jobNeeds.next} onNeedsChanged={jobNeeds.reload}
-            onOpenDocument={onOpenDocument} onTimesheet={() => go({ level: 'timesheet' })} onApprovals={() => go({ level: 'door', door: 'approvals' })} />
-        ) : undefined}
+        needs={home?.restricted ? deskNeeds.answer : undefined}
         onTimesheet={() => go({ level: 'timesheet' })}
         onSetup={home?.restricted && home.roles.includes('admin') && !home.view_as ? () => go({ level: 'setup' }) : undefined}
         first={who.first}

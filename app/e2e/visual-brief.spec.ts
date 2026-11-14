@@ -19,6 +19,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateSync } from 'node:zlib'
 import { expect as baseExpect, test, type Browser, type BrowserContext, type FrameLocator, type Page } from '@playwright/test'
+import { wideBeside } from './boothFolds'
 import { asMe, lockBrief, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
 // Every step is a real round trip to the host and the page draws after it; a busy machine needs more than ten seconds.
@@ -209,6 +210,8 @@ for (const size of SIZES) {
     // One approve decision, naming the version, and the page locks.
     await expect(booth.locator('#vnum')).toHaveText('1')
     await shot(page, 'visual-brief-approve', size)
+    // On a phone each primary button the shell draws is 44 px tall (suite test 72's rule): the Booth holds the primary action, the bar's copy is not marked primary.
+    if (size.width === 390) for (const b of await page.locator('.ch-btn-primary, .ns-primary, [data-primary]').all()) if (await b.isVisible()) expect((await b.boundingBox())!.height, await b.innerText()).toBeGreaterThanOrEqual(43.5)
     await booth.getByRole('button', { name: 'Approve version 1' }).click()
     await expect(booth.getByTestId('locked-stamp')).toContainText('Locked · version 1')
     await expect(app.getByRole('button', { name: /^Edit / })).toHaveCount(0)
@@ -234,6 +237,18 @@ for (const size of SIZES) {
     await expect(app.locator('.row[data-key="proposition"] .val')).toHaveText('The whiskey that waits.')
     await booth.getByRole('button', { name: 'Approve version 2' }).click()
     await expect(booth.getByTestId('locked-stamp')).toContainText('Locked · version 2')
+    // Versions live in the Booth (features/align-booth.clan): both are listed, and two compared sit beside the page.
+    // The fold is the whole page's: the part just edited is still selected, so go back to the whole page first.
+    const whole = booth.getByRole('button', { name: 'Back to the whole page' })
+    if (await whole.count()) await whole.click()
+    await booth.getByTestId('versions-fold').locator('summary').click()
+    await expect(booth.getByTestId('version-row')).toHaveCount(3) // the draft, v2, v1
+    await booth.locator('[data-testid="version-row"][data-version="1"]').getByRole('button', { name: 'Compare' }).click()
+    await booth.locator('[data-testid="version-row"][data-version="2"]').getByRole('button', { name: 'Compare' }).click()
+    await expect(booth.getByTestId('version-compare')).toContainText('The whiskey that waits.')
+    if (size.width >= 1440) await wideBeside(app, '.sheet')
+    await shot(page, 'visual-brief-versions-compare', size)
+    await booth.getByRole('button', { name: 'Close the compare' }).click()
     const both = approvalsOf(await chainOf(page, vb.token), vb.docId)
     expect(both).toHaveLength(2)
     const oldest = both.find(d => d.id === first[0].id)

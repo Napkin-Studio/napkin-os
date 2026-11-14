@@ -160,6 +160,7 @@
   .side{position:sticky;top:calc(var(--clan-top,0px) + 12px);max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 24px);overflow-x:hidden;overflow-y:auto;background:var(--booth-paper);border:1px solid var(--line);border-radius:8px;color:var(--ink)}
   .side > .booth-hd{position:sticky;top:0;z-index:2;background:var(--booth-paper)}
   .side-body{display:grid;padding:0 18px 18px}
+  .side-holder{margin:0;padding:10px 18px 0}
   @media (max-width:1100px){ .side{position:static;max-height:none;overflow-y:visible} }
   .bsec{padding:16px 0;border-top:1px solid var(--line);display:grid;gap:10px;min-width:0}
   .side-body > .bsec:first-child{border-top:0}
@@ -210,13 +211,14 @@
       <div id="body"></div>
     </article>
   </main>
-  <aside class="side" id="side" aria-label="Booth"><div class="side-body" id="sideBody"></div></aside>
+  <aside class="side" id="side" aria-label="Booth"><p class="side-holder" data-booth-holder data-testid="booth-holder" role="status"></p><div class="side-body" id="sideBody"></div></aside>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script type="application/json" id="house-style">@napkin:house-style</script>
 
 <!-- @napkin:clan-fields -->
 <!-- @napkin:booth -->
+<!-- @napkin:booth-folds -->
 <!-- @napkin:agent-sphere -->
 <script>
 (function(){
@@ -733,12 +735,14 @@
   }
   function approveOk(fmt, c){ return !!fmt && mayApprove(approverOf(data()), S.me) && !S.busy && c.beats.some(function(b){ return String(b.text).trim(); }); }
   // Judge is an agent: its own figure, then what it said. It advises; the creative director decides.
+  // One Judge run at a time for this script: the page's Send to Judge, its bar button and the Booth's Judge fold share it.
+  function judgeBusy(){ return !!S.judging || (typeof boothJudgeBusy === 'function' && boothJudgeBusy()); }
   function judgeFig(state){ return ROLES ? ROLES.tag('judge', { state: state || 'idle', decorative: true, size: 26 }) : ''; }
   function sendHtml(fmt, c){
     var d = data(), h = '';
     if(S.judging) h += '<section class="bsec" data-testid="side-agent" role="status"><div class="judgeline">' + judgeFig('working') + '<p><b>Judge</b> is reading version ' + esc(S.judging) + '.</p></div></section>';
     h += '<section class="bsec" aria-label="Send" data-testid="sends"><h2>Send this version</h2><div class="sends">'
-      + ['radio', 'film', 'judge'].map(function(to){ return '<button type="button" class="btn" data-send="' + to + '"' + (fmt ? '' : ' aria-disabled="true"') + '>Send to ' + SENDS[to] + '</button>'; }).join('') + '</div>';
+      + ['radio', 'film', 'judge'].map(function(to){ return '<button type="button" class="btn" data-send="' + to + '"' + (fmt && !(to === 'judge' && judgeBusy()) ? '' : ' aria-disabled="true"') + '>Send to ' + SENDS[to] + '</button>'; }).join('') + '</div>';
     ['radio', 'film', 'judge'].forEach(function(to){
       var ref = d.handoffs && d.handoffs[to]; if(!ref) return;
       var same = ref.content_hash === handoffRef(c.beats, ref.revision).content_hash;
@@ -761,8 +765,10 @@
     h += checkHtml(fmt, findings, must, c, null) + marksHtml(c, null);
     h += listCard('Must appear', 'mandatory', 'A line the copy must carry', listOf(d.checks && d.checks.mandatory), locked());
     h += listCard('Never say', 'banned', 'A word not to use', bannedOf(d), locked());
-    return h + versionHtml(fmt, c) + sendHtml(fmt, c);
+    return h + versionHtml(fmt, c) + sendHtml(fmt, c) + foldHtml('judge') + foldHtml('versions');
   }
+  // Judge and Versions are the Booth's shared folds (shared/booth-folds.html): the whole script's, after the sends.
+  function foldHtml(k){ return '<section class="bsec" data-booth-fold="' + k + '">' + (typeof boothFoldHtml === 'function' ? boothFoldHtml(k) : '') + '</section>'; }
   // Drawn again without losing the field a person is in (the mark-up form, the lists' add boxes).
   function setSide(html){
     var box = $('sideBody'); if(!box || box.getAttribute('data-html') === html) return;
@@ -853,9 +859,9 @@
   }
   function send(to){
     var fmt = format(); if(!fmt) return;
+    if(to === 'judge') return sendJudge();
     flush().then(function(){
       var d = data(), c = cur(), st = state(), ref = handoffRef(c.beats, st.n);
-      if(to === 'judge'){ S.judging = st.n; drawSide(); }
       var handoffs = {}; Object.keys(d.handoffs || {}).forEach(function(k){ handoffs[k] = d.handoffs[k]; }); handoffs[to] = ref;
       var patch = { handoffs: handoffs };
       if(to === 'film') patch.film = { script: filmScript(fmt, c.beats, st.n, S.me, new Date().toISOString()) };
@@ -865,18 +871,33 @@
           if(!j || j.ok === false) throw new Error((j && j.error) || 'Film could not open from here.');
           S.sent = 'Film is opening with every line under the same id.';
         });
-        if(to === 'judge') return call('/judge', { target: 'script' }).then(function(j){
-          if(!j || j.ok === false){
-            var m = String((j && j.error) || '');
-            S.judge = null;
-            S.sent = 'Judge did not score it. ' + (m.replace(/^[a-z_]+:\s*/, '') || 'Nothing was changed.');
-            return;
-          }
-          S.judge = { total: j.score && j.score.total, version: st.n };
-          S.sent = 'Judge scored version ' + st.n + ': ' + (j.score ? j.score.total : '') + ' of 30. The card is above the page.';
-        });
         S.sent = SENT[to](st.n, true);
       });
+    }).catch(function(e){ S.sent = String(e && e.message || e); }).then(function(){ drawSide(); });
+  }
+  // Send to Judge: the hand-off is written and the run asked for inside the one Judge hold (shared/booth-folds.html),
+  // so a second press, here, in the bar or in the Booth, while it runs sends nothing.
+  function sendJudge(){
+    if(judgeBusy()) return;
+    var st = state(), ref = null;
+    var handoff = function(){
+      return flush().then(function(){
+        var d = data(), c = cur(); ref = handoffRef(c.beats, st.n);
+        var handoffs = {}; Object.keys(d.handoffs || {}).forEach(function(k){ handoffs[k] = d.handoffs[k]; }); handoffs.judge = ref;
+        return window.clan.patchData({ handoffs: handoffs }, { actor: 'human', action: 'send version ' + st.n + ' to ' + SENDS.judge, pinned: false });
+      }).then(function(res){ if(res && res.ok === false) throw new Error('The host did not record the hand-off.'); });
+    };
+    S.judging = st.n; drawSide();
+    var run = typeof boothJudgeSend === 'function' ? boothJudgeSend({ target: 'script' }, handoff) : handoff().then(function(){ return call('/judge', { target: 'script' }); });
+    return run.then(function(j){
+      if(!j || j.ok === false){
+        var m = String((j && j.error) || '');
+        S.judge = null;
+        S.sent = 'Judge did not score it. ' + (m.replace(/^[a-z_]+:\s*/, '') || 'Nothing was changed.');
+        return;
+      }
+      S.judge = { total: j.score && j.score.total, version: st.n };
+      S.sent = 'Judge scored version ' + st.n + ': ' + (j.score ? j.score.total : '') + ' of 30. The card is above the page.';
     }).catch(function(e){ S.sent = String(e && e.message || e); }).then(function(){ S.judging = 0; drawSide(); });
   }
   function setList(key, list, action){
@@ -981,7 +1002,7 @@
     if(has('data-approve')){ if(g('aria-disabled') === 'true'){ S.error = ''; return; } return approve(); }
     if(has('data-newv')) return newVersion();
     if(has('data-open')) return void fetch(clanScheme + '/open', { method: 'POST', body: JSON.stringify({ path: g('data-open') }) });
-    if(has('data-send')){ if(g('aria-disabled') === 'true'){ S.sent = 'Start a script first.'; return drawSide(); } return send(g('data-send')); }
+    if(has('data-send')){ if(g('data-send') === 'judge' && judgeBusy()) return; if(g('aria-disabled') === 'true'){ S.sent = 'Start a script first.'; return drawSide(); } return send(g('data-send')); }
     if(has('data-jump')){ var ta = document.querySelector('textarea[data-id="' + g('data-jump') + '"][data-field="text"]'); if(ta){ ta.focus(); try{ ta.scrollIntoView({ block: 'center' }); }catch(x){} } return; }
     if(has('data-drop')){ var p = g('data-drop').split(':'), items = listOf(data().checks && data().checks[p[0]]); items.splice(+p[1], 1); return setList(p[0], items, 'remove from the list'); }
     if(has('data-addlist')) return addToList(g('data-addlist'));
@@ -1044,8 +1065,8 @@
   function barItems(){
     var st = state(), fmt = format(), items = [];
     if(st.locked) items.push({ kind: 'button', id: 'newv', label: 'Start version ' + (st.n + 1), title: 'The approved version stays as it is' });
-    else items.push({ kind: 'button', id: 'approve', label: 'Approve version ' + st.n, primary: true, disabled: !approveOk(fmt, cur()), title: 'Approval locks this exact version' });
-    ['judge', 'film', 'radio'].forEach(function(to){ items.push({ kind: 'button', id: 'send-' + to, label: 'Send to ' + SENDS[to], disabled: !fmt }); });
+    else items.push({ kind: 'button', id: 'approve', label: 'Approve version ' + st.n, primary: false, disabled: !approveOk(fmt, cur()), title: 'Approval locks this exact version' });
+    ['judge', 'film', 'radio'].forEach(function(to){ items.push({ kind: 'button', id: 'send-' + to, label: 'Send to ' + SENDS[to], disabled: !fmt || (to === 'judge' && judgeBusy()) }); });
     items.push({ kind: 'status', label: st.locked ? 'Locked' : 'Draft', tone: st.locked ? 'ok' : null, locked: st.locked });
     return items;
   }
@@ -1072,6 +1093,8 @@
     key: function(e){ return !!format() && !typing(e.target); }
   });
   boothApply(true);
+  // The shell keeps an undo stack for scripts (AppHost.tsx useBriefUndo): a restore is told to it.
+  if(typeof boothFolds === 'function') boothFolds({ judge: true, versions: true, noun: 'script', undo: true, onJudge: function(){ drawSide(); } });
   sendBar();
 
   S.local = null;

@@ -10,9 +10,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { host } from '../../host'
 import type { ClientLinkRow } from '../../host'
-import { makeRound, readRound, roundOptions } from '../../host/http'
+import { listClientLinksOf, makeClientLinkFor, makeRound, readRound, roundOptions, withdrawClientLinkOf } from '../../host/http'
 import type { ClientRoundMade, ClientRoundView } from '../../host/types'
 import { RoundView } from '../clientReview/RoundView'
+import './gate.css'
 
 const STATE_WORDS: Record<string, string> = {
   open: 'Waiting for the client',
@@ -28,11 +29,18 @@ const day = (iso: string) => new Date(iso).toLocaleDateString('en-IE', { day: 'n
 
 interface Props {
   client: string
+  /**
+   * The document the links are made for, listed from and withdrawn from: the brief open in the frame, on the server
+   * (features/align-booth.clan). Never the host's last document.
+   */
+  doc: string
+  /** Close the form (Send the client copy opened it). */
+  onClose?: () => void
   /** The version signed, so the person sees which one the link is to. */
   onChanged?: () => void
 }
 
-export default function ClientLinkPanel({ client, onChanged }: Props) {
+export default function ClientLinkPanel({ client, doc, onClose, onChanged }: Props) {
   const [rows, setRows] = useState<ClientLinkRow[]>([])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -42,8 +50,8 @@ export default function ClientLinkPanel({ client, onChanged }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    host.listClientLinks().then(setRows, () => setRows([]))
-  }, [])
+    listClientLinksOf(doc).then(setRows, () => setRows([]))
+  }, [doc])
   useEffect(() => {
     load()
     const offs = [host.on('clan-data-changed', load)]
@@ -53,7 +61,7 @@ export default function ClientLinkPanel({ client, onChanged }: Props) {
   const make = (e: FormEvent) => {
     e.preventDefault()
     setBusy(true); setError(null); setCopied(false)
-    host.makeClientLink(name.trim(), email.trim()).then(
+    makeClientLinkFor(doc, name.trim(), email.trim()).then(
       made => { setUrl(`${window.location.origin}${made.path}`); load(); onChanged?.() },
       err => setError(String(err instanceof Error ? err.message : err)),
     ).finally(() => setBusy(false))
@@ -66,12 +74,15 @@ export default function ClientLinkPanel({ client, onChanged }: Props) {
 
   const withdraw = (id: string) => {
     setBusy(true); setError(null)
-    host.withdrawClientLink(id).then(load, err => setError(String(err instanceof Error ? err.message : err))).finally(() => setBusy(false))
+    withdrawClientLinkOf(doc, id).then(load, err => setError(String(err instanceof Error ? err.message : err))).finally(() => setBusy(false))
   }
 
   return (
     <section className="bg-block" data-testid="client-link-panel">
-      <h3 className="bg-h3">Link for {client}</h3>
+      <div className="cl-head">
+        <h3 className="bg-h3">Send the client copy: a link for {client}</h3>
+        {onClose && <button type="button" className="ch-btn ch-btn-quiet" onClick={onClose}>Close</button>}
+      </div>
       <p className="bg-mid">{client} opens it on a phone with no account and confirms this signed version. It works once and ends in 30 days.</p>
       <form className="bg-form" onSubmit={make}>
         <label className="bg-field"><span>Who it is for</span>
@@ -82,7 +93,7 @@ export default function ClientLinkPanel({ client, onChanged }: Props) {
       </form>
       {url && (
         <div className="cl-made" data-testid="client-link-made">
-          <input readOnly value={url} aria-label="The client link" onFocus={e => e.currentTarget.select()} />
+          <input readOnly value={url} aria-label="The client link" data-email={email.trim()} onFocus={e => e.currentTarget.select()} />
           <button type="button" className="ch-btn ch-btn-primary" onClick={copy}>{copied ? 'Copied' : 'Copy the link'}</button>
           <p className="bg-reason">Shown once. Send it yourself.</p>
         </div>
@@ -99,7 +110,7 @@ export default function ClientLinkPanel({ client, onChanged }: Props) {
         </ul>
       )}
       {error && <p className="bg-err" role="alert">{error}</p>}
-      <RoundPanel client={client} onChanged={() => { load(); onChanged?.() }} />
+      <RoundPanel client={client} doc={doc} onChanged={() => { load(); onChanged?.() }} />
     </section>
   )
 }
@@ -107,7 +118,7 @@ export default function ClientLinkPanel({ client, onChanged }: Props) {
 interface Person { name: string; email: string }
 
 /** Send the signed version to several people at the client, one of them the approver, and read the round back. */
-function RoundPanel({ client, onChanged }: { client: string; onChanged: () => void }) {
+function RoundPanel({ client, doc, onChanged }: { client: string; doc: string; onChanged: () => void }) {
   const [people, setPeople] = useState<Person[]>([{ name: '', email: '' }, { name: '', email: '' }])
   const [lead, setLead] = useState(0)
   const [code, setCode] = useState(false)
@@ -118,13 +129,13 @@ function RoundPanel({ client, onChanged }: { client: string; onChanged: () => vo
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
 
-  const load = useCallback(() => { void readRound().then(setRound) }, [])
+  const load = useCallback(() => { void readRound(doc).then(setRound) }, [doc])
   useEffect(() => {
     load()
-    void roundOptions().then(o => setCanCode(o.code))
+    void roundOptions(doc).then(o => setCanCode(o.code))
     const offs = [host.on('clan-data-changed', load)]
     return () => { for (const off of offs) off.then(f => f()).catch(() => {}) }
-  }, [load])
+  }, [load, doc])
 
   const set = (i: number, k: keyof Person) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setPeople(ps => ps.map((p, j) => (j === i ? { ...p, [k]: e.target.value } : p)))
@@ -134,7 +145,7 @@ function RoundPanel({ client, onChanged }: { client: string; onChanged: () => vo
   const send = (e: FormEvent) => {
     e.preventDefault()
     setBusy(true); setError(null); setCopied(null)
-    makeRound(filled.map(p => ({ name: p.name.trim(), email: p.email.trim(), approver: p.i === lead })), code && canCode).then(
+    makeRound(filled.map(p => ({ name: p.name.trim(), email: p.email.trim(), approver: p.i === lead })), code && canCode, doc).then(
       m => { setMade(m); load(); onChanged() },
       err => setError(String(err instanceof Error ? err.message : err)),
     ).finally(() => setBusy(false))
@@ -166,6 +177,7 @@ function RoundPanel({ client, onChanged }: { client: string; onChanged: () => vo
           {made.links.map(l => (
             <li key={l.id}>
               <span>{l.name}{l.role === 'approver' ? ' (approver)' : ''}</span>
+              <input readOnly value={`${window.location.origin}${l.path}`} aria-label="The client link" data-email={l.email} onFocus={e => e.currentTarget.select()} />
               <button type="button" className="ch-btn ch-btn-primary" onClick={() => copy(l.id, l.path)}>{copied === l.id ? 'Copied' : 'Copy the link'}</button>
             </li>
           ))}

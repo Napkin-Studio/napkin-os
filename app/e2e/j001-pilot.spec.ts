@@ -22,7 +22,8 @@ import { expect, test, type Browser, type BrowserContext, type Page } from '@pla
 import { control } from './pilot'
 import { track } from './scope'
 import { CANARY } from './seed/j001/canary.mjs'
-import { asMe, gateOf, INTERNAL_WORDS, lockBrief, makeClientLink, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
+import { noticesOf, openMe } from './needs'
+import { asMe, gateOf, INTERNAL_WORDS, lockBrief, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
@@ -159,11 +160,31 @@ for (const size of SIZES) {
   // The Brief gate (features/brief-gate.clan). The planner signs first, then the creative director: the
   // creative director's signature is the one approve decision that locks the version. People sign in
   // on the roster server (every run starts it); the stack turns the gate on (NAPKIN_BRIEF_GATE=on).
-  const openBrief = async (page: Page, job: Awaited<ReturnType<typeof seedJ001>>) => {
-    await page.goto(`/#tool-${job.client}-brief`)
-    await page.reload()
-    await page.getByTestId('work-item').first().click()
-    await page.getByRole('button', { name: 'Check the brief' }).click()
+  // The gate lives in the brief's Booth (features/align-booth.clan): the items the host lists as blocking the lock
+  // are rows of the one Needs you list (#lockList), the sign-offs are rows addressed to the signer, and the Booth's
+  // Lock is the one button that locks. Opening the brief is enough: there is no band to unfold.
+  const openBrief = async (page: Page, job: Awaited<ReturnType<typeof seedJ001>>, via: 'tool' | 'job' = 'tool') => {
+    if (via === 'job') { // account service has no brief tool: the brief opens from the job page
+      await page.goto('/'); await page.goto(`/#job-${job.job}`); await page.reload()
+      await page.locator('[data-testid="job-document"][data-app="ie.napkin.brief-maker"]').getByTestId('job-open-document').click()
+    } else {
+      await page.goto(`/#tool-${job.client}-brief`)
+      await page.reload()
+      await page.getByTestId('work-item').first().click()
+    }
+    const booth = page.frameLocator('iframe').first().locator('#stab')
+    await expect(booth.locator('#statusPill')).toBeVisible()
+    return booth
+  }
+  /** The rows of Needs you the host's gate gave (gate:<item>, signoff:<role>). */
+  const gateRows = (booth: ReturnType<Page['locator']>) => booth.locator('#lockList [data-code^="gate:"], #lockList [data-code^="signoff:"]')
+  /** Share, Send the client copy: the shell's own form for the client's link, for the brief open in the frame. */
+  const sendClientCopy = async (page: Page) => {
+    await page.getByRole('button', { name: /^Share/ }).click()
+    await page.getByRole('menu', { name: 'Share' }).getByRole('menuitem', { name: /Send the client copy/ }).click()
+    const form = page.getByTestId('client-link-form')
+    await expect(form.getByRole('button', { name: 'Make the link' })).toBeVisible()
+    return form
   }
 
   test(t(3), async ({ browser }) => {
@@ -172,13 +193,19 @@ for (const size of SIZES) {
     const job = await seedJ001(page, { ready: true, fresh: true })
     expect((await signBrief(page, job.brief, 'Gate passed.')).status()).toBe(200) // the planner signs first
     await signIn(page, PEOPLE.creativeDirector)
-    await openBrief(page, job)
-    await expect(page.getByTestId('gate-item')).toHaveCount(6)
+    const booth = await openBrief(page, job)
     // The planner's `sign` decision is a kind the format knows: the bar shows no file error.
     await expect(page.getByTestId('os-bar')).toBeVisible()
     await expect(page.getByText('Something’s wrong with this file')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Sign and lock this version' }).click() // the creative director's signature
+    // Nothing the gate wants is left: no gate row in Needs you, the pill and Lock agree, and Lock is the one button.
+    await expect(booth.locator('#statusPill')).toHaveText('Ready to lock')
+    await expect(gateRows(booth)).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Sign and lock this version' })).toHaveCount(0)
+    await expect(booth.getByRole('button', { name: 'Sign and lock this version' })).toHaveCount(0)
+    await expect(booth.locator('#lockBtn')).toBeEnabled()
+    await booth.locator('#lockBtn').click() // the creative director's signature is the Booth's Lock
     await expect.poll(async () => (await gateOf(page, job.brief)).signed).toBe(true)
+    await expect(booth.locator('#statusPill')).toHaveText('Locked')
     const chain = await chainOf(page, job.brief.token)
     const approvals = chain.filter(d => d.kind === 'approve')
     expect(approvals).toHaveLength(1)
@@ -210,11 +237,12 @@ for (const size of SIZES) {
     expect((await gateOf(page, job.brief)).changed_since_lock).toBe(true)
     await page.goto('/')
     await page.reload()
-    // a changed brief is a row of Needs you like any other (needs-you-full): the notice, for everyone on the job
-    await expect(page.getByTestId('needs-you')).toBeVisible()
-    const showAll = page.getByTestId('needs-show-all') // five rows show; this person's list may hold more by now
+    // a changed brief is a notice on the brief like any other item (needs-you-full): for everyone on the job, on the desk's Me rows
+    expect(await noticesOf(page, job.api, job.brief, ['brief-changed'])).toHaveLength(1)
+    await openMe(page)
+    const showAll = page.getByTestId('me-show-all') // five rows show; this person's list may hold more by now
     if (await showAll.isVisible()) await showAll.click()
-    await expect(page.locator('[data-testid="need"][data-kind="brief-changed"]').filter({ hasText: `${job.job}, ${job.clientName}` })).toBeVisible()
+    await expect(page.getByTestId('me-row').filter({ hasText: job.clientName })).toBeVisible()
     await ctx.close()
   })
 
@@ -450,25 +478,59 @@ for (const size of SIZES) {
     await page.goto(`/#tool-${job.client}-territories`)
     await page.reload()
     await expect(page.getByTestId('territories-closed')).toBeVisible() // not signed, not confirmed
-    await openBrief(page, job)
-    await expect(page.getByTestId('gate-item')).toHaveCount(6)
-    await expect(page.getByTestId('gate-item').filter({ hasText: 'missing' })).toHaveCount(0)
-    await page.getByRole('button', { name: 'Sign this version' }).click() // the planner signs
+    // Two gate items missing: the insight and what would make it famous.
+    expect((await page.request.post(`/s/${job.brief.token}/patch-data`, {
+      data: { patch: { insight: '', famous: '' }, agent: 'human', action: 'take out two gate items' },
+    })).status()).toBe(200)
+    let booth = await openBrief(page, job)
+    // The Booth lists the two gate rows and the planner's own sign-off (the host lists it while the planner has
+    // not signed this content), and Lock waits on all of them; the pill agrees.
+    await expect(booth.locator('#lockList [data-code="gate:insight"]')).toBeVisible()
+    await expect(booth.locator('#lockList [data-code="gate:famous"]')).toBeVisible()
+    await expect(booth.locator('#lockList [data-code="signoff:planner"]')).toContainText('For you')
+    await expect(gateRows(booth)).toHaveCount(3)
+    await expect(booth.locator('#lockBtn')).toBeDisabled()
+    await expect(booth.locator('#lockWhy')).toHaveText('Settle 3 first')
+    await expect(booth.locator('#statusPill')).toHaveText('Draft')
+    // A row opens its part: the insight is selected on the sheet.
+    await booth.locator('#lockList [data-code="gate:insight"]').click()
+    await expect(page.frameLocator('iframe').first().locator('#fields .row.sel')).toHaveAttribute('data-clan-part', 'insight')
+    expect((await page.request.post(`/s/${job.brief.token}/patch-data`, {
+      data: { patch: { insight: READY_BRIEF.insight }, agent: 'human', action: 'write the insight' },
+    })).status()).toBe(200)
+    booth = await openBrief(page, job)
+    await expect(gateRows(booth)).toHaveCount(2)
+    // The brief has no part for "famous": its row opens the line in the Booth.
+    await booth.locator('#lockList [data-code="gate:famous"]').click()
+    await booth.locator('#gateBox').getByLabel('What would make this famous?').fill(READY_BRIEF.famous)
+    await booth.locator('#gateBox').getByRole('button', { name: 'Add to the brief' }).click()
+    await expect(gateRows(booth)).toHaveCount(1)
+    // The planner's sign-off row opens Sign this version, in the Booth.
+    await booth.locator('#lockList [data-code="signoff:planner"]').click()
+    await booth.locator('#gateBox').getByRole('button', { name: 'Sign this version' }).click()
     await expect.poll(async () => (await gateOf(page, job.brief)).passed).toBe(true)
+    await expect(gateRows(booth)).toHaveCount(0)
     await signIn(page, PEOPLE.creativeDirector)
-    await openBrief(page, job)
-    await page.getByRole('button', { name: 'Sign and lock this version' }).click()
+    booth = await openBrief(page, job)
+    await expect(booth.locator('#statusPill')).toHaveText('Ready to lock')
+    await booth.locator('#lockBtn').click()
     await expect.poll(async () => (await gateOf(page, job.brief)).signed).toBe(true)
+    await expect(booth.locator('#statusPill')).toHaveText('Locked')
     await page.goto(`/#tool-${job.client}-territories`)
     await page.reload()
     await expect(page.getByTestId('territories-closed')).toBeVisible() // passed and signed, the client has not confirmed
     // The client's confirmation, through their own link on a phone with no account (test 17): account
-    // service makes it from the signed brief, and the client confirms it.
+    // service makes it from the signed brief with Share, Send the client copy, and the client confirms it.
     await signIn(page, PEOPLE.accountService)
-    const link = await makeClientLink(page, job.api, job.brief)
+    await openBrief(page, job, 'job')
+    const form = await sendClientCopy(page)
+    await form.getByLabel('Who it is for').fill('Client A contact')
+    await form.getByLabel('Their email').fill('contact@client-a.example')
+    await form.getByRole('button', { name: 'Make the link' }).click()
+    const url = await form.getByLabel('The client link').first().inputValue()
     const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } })
     const cp = await phone.newPage()
-    await cp.goto(link.path)
+    await cp.goto(new URL(url).pathname)
     await cp.getByRole('button', { name: 'Confirm' }).click()
     await expect(cp.getByTestId('client-link-done')).toBeVisible()
     await phone.close()
@@ -689,7 +751,24 @@ for (const size of SIZES) {
     const job = await seedJ001(page, { ready: true, fresh: true })
     await signOff(page, job)
     await signIn(page, PEOPLE.accountService)
-    const { path } = await makeClientLink(page, job.api, job.brief)
+    // The agency's side: Share, Send the client copy opens the shell's own form, which makes the signed link for the
+    // brief open in the frame and lists the links with Withdraw; the brief's Booth shows them under Record the client's answer.
+    const booth = await openBrief(page, job, 'job')
+    const form = await sendClientCopy(page)
+    await form.getByLabel('Who it is for').fill('Someone else')
+    await form.getByLabel('Their email').fill('someone@client-a.example')
+    await form.getByRole('button', { name: 'Make the link' }).click()
+    const first = new URL(await form.getByLabel('The client link').first().inputValue()).pathname
+    await expect(booth.locator('#clientLinks [data-link-state="open"]')).toContainText('Someone else')
+    await form.locator('li[data-state="open"]').getByRole('button', { name: 'Withdraw' }).click()
+    await expect(form.locator('li[data-state="withdrawn"]')).toContainText('Withdrawn')
+    await form.getByLabel('Who it is for').fill('Client A contact')
+    await form.getByLabel('Their email').fill('contact@client-a.example')
+    await form.getByRole('button', { name: 'Make the link' }).click()
+    await expect(form.locator('li[data-state="open"]')).toContainText('Client A contact')
+    const path = new URL(await form.getByLabel('The client link').first().inputValue()).pathname
+    expect(path).not.toBe(first)
+    await expect(booth.locator('#clientLinks [data-link-state="withdrawn"]')).toContainText('Someone else')
     const brief = await asMe(page, job.api, job.brief)
     const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } }) // no cookies, no account
     const cp = await phone.newPage()
@@ -723,7 +802,13 @@ for (const size of SIZES) {
     await cp.reload()
     await expect(cp.getByTestId('client-link-gone')).toBeVisible()
     expect((await chainOf(page, brief.token)).filter(d => d.action === 'client_answer')).toHaveLength(1)
+    // the withdrawn link opens nothing either
+    await cp.goto(first)
+    await expect(cp.getByTestId('client-link-gone')).toBeVisible()
     await phone.close()
+    // and the Booth says the client confirmed
+    const after = await openBrief(page, job, 'job')
+    await expect(after.locator('#clientLinks [data-link-state="answered"]')).toContainText('confirmed')
     await ctx.close()
   })
 
