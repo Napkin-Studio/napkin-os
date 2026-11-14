@@ -275,14 +275,20 @@ for (const size of SIZES) {
     // computed colours, checked with palette.ts contrast(), in light and in dark.
     const { contrast: ratio, coloursOf, paletteOf } = await import('../src/shell/agency/palette')
     const ADDED = [
-      { id: 'acme', name: 'Acme Studio', base: '#0F6B5C', accent: '#9FE6D8' },
+      { id: 'acme', name: 'Acme', base: '#0F6B5C', accent: '#9FE6D8' },
       { id: 'kiln', name: 'Kiln', base: '#16181D', accent: '#C6F432' },
     ]
     const admin = await open(browser, size, 'light', { roster: true })
     await signIn(admin.page, PEOPLE.peopleAdmin)
     for (const a of ADDED) {
-      const r = await admin.page.request.post('/api/admin/agencies', { data: a })
+      // develop (#234): an added agency takes name, base and accent; its id is made from the name, and it is a draft until published.
+      const r = await admin.page.request.post('/api/admin/agencies', { data: { name: a.name, base: a.base, accent: a.accent } })
       expect([201, 409], `${a.id} added: ${await r.text()}`).toContain(r.status()) // 409: a run at the other width added it already
+      if (r.status() === 201) {
+        // publishing names the rev it makes live: the one on the row the add answered with
+        const p = await admin.page.request.post(`/api/admin/agencies/${a.id}/publish`, { data: { rev: (await r.json()).rev } })
+        expect(p.status(), `${a.id} published: ${await p.text()}`).toBe(200)
+      }
     }
     await admin.ctx.close()
     const AGENCIES = [
