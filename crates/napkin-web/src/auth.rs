@@ -480,9 +480,23 @@ impl Cognito {
         let name = claims
             .as_ref()
             .and_then(|c| c["name"].as_str().map(String::from));
+        // The person is the one the pool's token names (its `cognito:username`), not the name typed: a
+        // token for one person never signs in another. A token that names nobody, or someone else, is refused.
+        let named = claims
+            .as_ref()
+            .and_then(|c| c["cognito:username"].as_str())
+            .and_then(Account::parse_username);
+        let typed = Account::parse_username(username);
+        let (u, agency) = match (named, typed) {
+            (Some(n), Some(t)) if n == t => n,
+            _ => {
+                return SignIn::Refused(
+                    "Sign-in could not be confirmed. Try again, or ask your studio admin.".into(),
+                )
+            }
+        };
         // the pool says who this is, never what they may do: custom:roles is not read, and the roles are
         // the People store's (features/align-needs-lock-people.clan)
-        let (u, agency) = Account::parse_username(username).unwrap_or_default();
         SignIn::Done(Account {
             username: u,
             agency,

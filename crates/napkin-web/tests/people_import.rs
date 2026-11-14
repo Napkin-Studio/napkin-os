@@ -4,10 +4,10 @@
 
 //! features/align-needs-lock-people.clan, stage 3, the rollout: on first start the server imports the
 //! build's agency directories into the People store (one change line per person), copies an agency's logo
-//! to its record, and from then on the store is the only list. The import drops nobody, widens no role,
-//! is idempotent, and refuses to start on a directory that moved after it was imported (two stores).
+//! to its record, and from then on the store is the only list. The import writes over nobody the store
+//! has, is idempotent, and ignores a directory that moved after it was imported (people_trust.rs holds
+//! what it refuses to trust).
 
-use std::collections::BTreeSet;
 use std::path::Path;
 
 use napkin_host::agency::{self, NewPerson};
@@ -67,36 +67,12 @@ fn directory(root: &Path) {
     .unwrap();
 }
 
-/// Who could sign in before, and with which roles, by the build's rule: an agency with a directory is the
-/// directory's alone (a removed person or one with no roles gets in nowhere); any other is the roster's.
-fn before(root: &Path, roster: &str, username: &str) -> Option<Vec<String>> {
-    let agency = username.split('@').nth(1).unwrap();
-    let (reg, _) = agency::read(&store_of(root, agency)).unwrap();
-    if reg.has_directory() {
-        return reg
-            .person(username)
-            .filter(|p| p.state != agency::State::Removed && !p.roles.is_empty())
-            .map(|p| p.roles.clone());
-    }
-    roster.lines().find_map(|l| {
-        let mut c = l.split('\t');
-        (c.next() == Some(username)).then(|| napkin_web::roles::parse_roles(c.nth(1).unwrap_or("")))
-    })
-}
-
-fn everyone(root: &Path, p: &People) -> BTreeSet<String> {
-    let mut all: BTreeSet<String> = p.book().people.iter().map(|x| x.id.clone()).collect();
-    let (reg, _) = agency::read(&store_of(root, "cr")).unwrap();
-    all.extend(reg.people.iter().map(|x| x.username.clone()));
-    all
-}
-
 fn open(dir: &Path) -> People {
     People::open(dir.join("_people"), &dir.join("accounts.tsv")).unwrap()
 }
 
 #[test]
-fn the_directory_is_imported_with_nobody_dropped_and_no_role_widened() {
+fn the_directory_brings_in_the_people_the_store_lacks_and_touches_no_one_it_has() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("accounts.tsv"), ROSTER).unwrap();
@@ -109,42 +85,44 @@ fn the_directory_is_imported_with_nobody_dropped_and_no_role_widened() {
     )
     .unwrap();
     let p = open(root);
-    let all = everyone(root, &p);
-    let was: Vec<(String, Option<Vec<String>>)> = all
-        .iter()
-        .map(|u| (u.clone(), before(root, ROSTER, u)))
-        .collect();
+    let had: Vec<_> = p.book().people.clone();
 
     let report = napkin_web::people_import::run(&p, root).unwrap();
-    assert_eq!(report.people, 4, "cara, dan, eve and fay: {report:?}");
-
-    for (u, roles) in &was {
-        let now = p.active(u).map(|x| x.roles);
-        assert_eq!(&now, roles, "{u}: before {roles:?}, after {now:?}");
-    }
-    // nobody is dropped: every person of the directory is in the store, removed ones as removed
-    for u in ["cara@cr", "dan@cr", "eve@cr", "fay@cr"] {
-        assert!(p.book().person(u).is_some(), "{u} dropped");
-    }
-    assert!(p.book().person("eve@cr").unwrap().removed_at.is_some());
-    // the roster's line for old@cr did not let them in once cr had a directory, and does not now
-    assert!(p.active("old@cr").is_none());
-    assert!(p.book().person("old@cr").is_some(), "kept, as removed");
-    // the email comes with the person
+    assert_eq!(report.people, 3, "dan, eve and fay: {report:?}");
+    // the directory's people the store lacked come in with the roles an admin gave them; eve, removed
+    // there, comes in removed and without a role
+    assert_eq!(p.active("dan@cr").unwrap().roles, ["planning"]);
+    assert_eq!(
+        p.active("fay@cr").unwrap().roles,
+        ["copywriter", "art-director"]
+    );
+    assert!(p.active("eve@cr").is_none());
+    assert!(p.book().person("eve@cr").unwrap().roles.is_empty());
     assert_eq!(
         p.book().person("dan@cr").unwrap().email.as_deref(),
         Some("dan@mail.example.test")
     );
-    // one change line per person of the directory
+    // everyone the store already had is exactly as they were: the import writes over nobody (old@cr, on
+    // the roster but not the directory, keeps their roster record: the rollout's People page check)
+    for before in &had {
+        assert_eq!(p.book().person(&before.id), Some(before), "{}", before.id);
+    }
+    // one change line per person written, none for those it left alone
     let log = std::fs::read_to_string(root.join("_people/changes.jsonl")).unwrap();
-    for u in ["cara@cr", "dan@cr", "eve@cr", "fay@cr"] {
-        let n = log
+    for (u, n) in [
+        ("dan@cr", 1),
+        ("eve@cr", 1),
+        ("fay@cr", 1),
+        ("cara@cr", 0),
+        ("old@cr", 0),
+    ] {
+        let seen = log
             .lines()
             .filter(|l| {
                 l.contains("imported from the directory") && l.contains(&format!("\"{u}\""))
             })
             .count();
-        assert_eq!(n, 1, "{u}: {log}");
+        assert_eq!(seen, n, "{u}: {log}");
     }
     // the logo is on the agency's record
     assert_eq!(
@@ -178,7 +156,7 @@ fn the_import_is_idempotent() {
 }
 
 #[test]
-fn a_directory_that_moved_after_the_import_stops_the_start() {
+fn a_directory_that_moved_after_the_import_is_ignored() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("accounts.tsv"), ROSTER).unwrap();
@@ -187,9 +165,9 @@ fn a_directory_that_moved_after_the_import_stops_the_start() {
     napkin_web::people_import::run(&p, root).unwrap();
     // an older server, still running, names someone in the old directory
     invite(root, "cr", "cara@cr", "gil@cr", &["planning"]);
-    let err = napkin_web::people_import::run(&open(root), root).unwrap_err();
-    assert!(err.contains("cr"), "{err}");
-    assert!(open(root).active("gil@cr").is_none());
+    let again = napkin_web::people_import::run(&open(root), root).unwrap();
+    assert_eq!(again.people, 0);
+    assert!(open(root).book().person("gil@cr").is_none());
 }
 
 #[test]

@@ -92,7 +92,7 @@ pub fn clean_roles(roles: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for r in roles {
         let r = r.trim().to_ascii_lowercase();
-        if !r.is_empty() && !out.contains(&r) {
+        if !r.is_empty() && r != crate::roles::ANONYMOUS && !out.contains(&r) {
             out.push(r);
         }
     }
@@ -804,7 +804,8 @@ struct Cache {
 
 /// Where a change is also written: the agency's audit chain. `(agency, who, kind, what, person)`; kind is
 /// `permission` for a person's change (and names the person) and `settings` for an agency's.
-pub type AuditSink = Arc<dyn Fn(&str, &str, &'static str, String, Option<&str>) + Send + Sync>;
+pub type AuditSink =
+    Arc<dyn Fn(&str, &str, &'static str, String, Option<&str>) -> Result<(), String> + Send + Sync>;
 
 /// The store: one JSON file, cached, re-read when another server writes it.
 pub struct People {
@@ -835,10 +836,12 @@ pub struct DirectoryPerson {
     pub id: String,
     pub name: String,
     pub email: Option<String>,
+    /// The roles the import trusts (none when it trusts none).
     pub roles: Vec<String>,
+    /// Kept for the record only: removed in the registry, or not trusted.
     pub removed: bool,
-    pub added_by: String,
-    pub added_at: String,
+    /// Why the import narrowed the entry, when it did (on the change line).
+    pub why: Option<String>,
 }
 
 /// What an import wrote.
@@ -910,7 +913,7 @@ impl People {
                 return Err(format!("the roster {} names no one", seed.display()));
             }
             write_book(&dir, &book).map_err(|e| format!("cannot write {}: {e}", file.display()))?;
-            append_change(
+            let _ = append_change(
                 &dir,
                 &serde_json::json!({
                     "at": now(), "by": "roster", "what": "seeded",
@@ -1035,37 +1038,75 @@ impl People {
             serde_json::Value::Array(v) => v,
             one => vec![one],
         };
-        let marker_only = details.is_empty();
-        write_book(&self.dir, &book).map_err(|e| Refusal::Io(e.to_string()))?;
-        c.stamp = stamp_of(&self.file());
-        c.checked = Instant::now();
-        c.book = book;
-        drop(c);
-        if marker_only {
+        if details.is_empty() {
+            // a marker only (a one-time step that changed nobody): nothing to record
+            write_book(&self.dir, &book).map_err(|e| Refusal::Io(e.to_string()))?;
+            c.stamp = stamp_of(&self.file());
+            c.checked = Instant::now();
+            c.book = book;
             return Ok(out);
         }
+        // The record comes first: the new file is written aside, every line goes on changes.jsonl and on its
+        // agency's audit chain, and only then does the file take the change. A change that cannot be recorded
+        // does not happen (features/align-needs-lock-people.clan, done_when line 10).
+        let tmp = stage_book(&self.dir, &book).map_err(|e| Refusal::Io(e.to_string()))?;
         let at = now();
-        for detail in details {
-            let mut line = serde_json::json!({ "at": at, "by": by, "what": what });
-            if let (Some(o), serde_json::Value::Object(d)) = (line.as_object_mut(), detail) {
-                o.extend(d);
+        let lines: Vec<serde_json::Value> = details
+            .into_iter()
+            .map(|detail| {
+                let mut line = serde_json::json!({ "at": at, "by": by, "what": what });
+                if let (Some(o), serde_json::Value::Object(d)) = (line.as_object_mut(), detail) {
+                    o.extend(d);
+                }
+                line
+            })
+            .collect();
+        let undo = |why: String, logged: &[serde_json::Value]| {
+            let _ = std::fs::remove_file(&tmp);
+            for l in logged {
+                let mut back = l.clone();
+                back["what"] = serde_json::json!("not applied");
+                back["was"] = l["what"].clone();
+                let _ = append_change(&self.dir, &back);
             }
-            append_change(&self.dir, &line);
-            tracing::info!(target: "napkin_web::people", by, what = %line["what"], person = %line["person"], agency = %line["agency"], "people changed");
-            if let (Some(sink), Some(agency)) = (self.audit.get(), line["agency"].as_str()) {
+            tracing::error!(target: "napkin_web::people", error = %why, "a change could not be recorded and was not made");
+            Refusal::Io(why)
+        };
+        for (i, line) in lines.iter().enumerate() {
+            if let Err(e) = append_change(&self.dir, line) {
+                return Err(undo(
+                    format!("the change log could not be written: {e}"),
+                    &lines[..i],
+                ));
+            }
+        }
+        if let Some(sink) = self.audit.get() {
+            for line in &lines {
+                let Some(agency) = line["agency"].as_str() else {
+                    continue;
+                };
                 let kind = if line.get("person").is_some() {
                     "permission"
                 } else {
                     "settings"
                 };
-                sink(
-                    agency,
-                    by,
-                    kind,
-                    audit_words(&line),
-                    line["person"].as_str(),
-                );
+                if let Err(e) = sink(agency, by, kind, audit_words(line), line["person"].as_str()) {
+                    return Err(undo(
+                        format!("the audit chain could not be written: {e}"),
+                        &lines,
+                    ));
+                }
             }
+        }
+        if let Err(e) = std::fs::rename(&tmp, self.file()) {
+            return Err(undo(format!("cannot write people.json: {e}"), &lines));
+        }
+        c.stamp = stamp_of(&self.file());
+        c.checked = Instant::now();
+        c.book = book;
+        drop(c);
+        for line in &lines {
+            tracing::info!(target: "napkin_web::people", by, what = %line["what"], person = %line["person"], agency = %line["agency"], "people changed");
         }
         Ok(out)
     }
@@ -1326,66 +1367,55 @@ impl People {
         })
     }
 
-    /// The one-time import of the build's agency directories (crate::people_import): `found` is each agency
-    /// with a directory, its people and a fingerprint of them. A person of the directory is written as the
-    /// directory had them (a removed one, or one with no role, who could sign in nowhere, as removed); a
-    /// person of that agency the directory did not name, who could not sign in either, is marked removed.
-    /// Nobody is dropped and no role is widened. One change line per person.
+    /// The one-time import of the build's agency directories (crate::people_import). `found` holds each
+    /// registry's entries as the import decided to trust them: of the registry's own agency only, with roles
+    /// the store defines, `admin` only where the registry's chain shows an admin wrote it, and anything it
+    /// would not trust marked `removed` (kept for the record, no roles, no sign-in). Only a person the store
+    /// does not have is written: an existing person is never overwritten, re-roled or removed, so neither a
+    /// Napkin admin nor any agency's last admin can be touched. One change line per person written.
     pub fn import_directories(&self, found: &[Directory]) -> Change<usize> {
         self.change("directory import", "imported from the directory", |book| {
             let mut lines = Vec::new();
-            let mut n = 0;
             let mut prints = BTreeMap::new();
             for d in found {
                 prints.insert(d.agency.clone(), d.fingerprint.clone());
                 for m in &d.people {
-                    n += 1;
-                    let gone = m.removed || m.roles.is_empty();
-                    let before = match book.people.iter_mut().find(|p| p.id == m.id) {
-                        Some(p) => {
-                            let before = p.state();
-                            p.name = Some(m.name.clone()).filter(|n| !n.is_empty()).or(p.name.take());
-                            p.email = m.email.clone().or(p.email.take());
-                            p.roles = m.roles.clone();
-                            p.removed_at = if gone {
-                                p.removed_at.clone().or_else(|| Some(now()))
-                            } else {
-                                None
-                            };
-                            before
-                        }
-                        None => {
-                            book.people.push(PersonRec {
-                                admin: is_admin(&m.id),
-                                id: m.id.clone(),
-                                name: Some(m.name.clone()).filter(|n| !n.is_empty()),
-                                agency: d.agency.clone(),
-                                added_by: m.added_by.clone(),
-                                added_at: m.added_at.clone(),
-                                removed_at: gone.then(now),
-                                roles: m.roles.clone(),
-                                email: m.email.clone(),
-                            });
-                            serde_json::Value::Null
-                        }
+                    let Some((id, agency)) = Account::parse_username(&m.id) else {
+                        continue;
                     };
-                    let after = book.person(&m.id).map(PersonRec::state);
-                    lines.push(serde_json::json!({ "person": m.id, "agency": d.agency, "before": before, "after": after }));
-                }
-                for p in book
-                    .people
-                    .iter_mut()
-                    .filter(|p| p.agency == d.agency && p.active())
-                    .filter(|p| !d.people.iter().any(|m| m.id == p.id))
-                {
-                    let before = p.state();
-                    p.removed_at = Some(now());
-                    lines.push(serde_json::json!({ "what": "removed: not on the agency's directory",
-                        "person": p.id, "agency": d.agency, "before": before, "after": p.state() }));
+                    if agency != d.agency || book.person(&id).is_some() {
+                        continue;
+                    }
+                    let roles = if m.removed {
+                        Vec::new()
+                    } else {
+                        m.roles.clone()
+                    };
+                    let gone = m.removed || roles.is_empty();
+                    book.people.push(PersonRec {
+                        admin: false,
+                        id: id.clone(),
+                        name: Some(m.name.clone()).filter(|n| !n.is_empty()),
+                        agency: d.agency.clone(),
+                        added_by: "directory import".into(),
+                        added_at: now(),
+                        removed_at: gone.then(now),
+                        roles,
+                        email: m.email.clone(),
+                    });
+                    let after = book.person(&id).map(PersonRec::state);
+                    let mut line = serde_json::json!({ "person": id, "agency": d.agency,
+                        "before": null, "after": after });
+                    if let Some(why) = &m.why {
+                        line["why"] = serde_json::json!(why);
+                    }
+                    lines.push(line);
                 }
             }
-            book.migrated.get_or_insert_with(Migrated::default).directories = Some(prints);
-            Ok((n, serde_json::Value::Array(lines)))
+            book.migrated
+                .get_or_insert_with(Migrated::default)
+                .directories = Some(prints);
+            Ok((lines.len(), serde_json::Value::Array(lines)))
         })
     }
 
@@ -1823,23 +1853,26 @@ fn read_book(dir: &Path) -> Result<(Book, Option<Stamp>), String> {
     Ok((book, stamp_of(&file)))
 }
 
-fn write_book(dir: &Path, book: &Book) -> std::io::Result<()> {
+/// The book written beside people.json, to be renamed over it.
+fn stage_book(dir: &Path, book: &Book) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     let tmp = dir.join(format!("people.json.{}.tmp", uuid::Uuid::new_v4().simple()));
     std::fs::write(&tmp, serde_json::to_vec_pretty(book)?)?;
+    Ok(tmp)
+}
+
+fn write_book(dir: &Path, book: &Book) -> std::io::Result<()> {
+    let tmp = stage_book(dir, book)?;
     std::fs::rename(tmp, dir.join("people.json"))
 }
 
-fn append_change(dir: &Path, line: &serde_json::Value) {
+fn append_change(dir: &Path, line: &serde_json::Value) -> std::io::Result<()> {
     use std::io::Write as _;
-    let r = std::fs::OpenOptions::new()
+    std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(dir.join("changes.jsonl"))
-        .and_then(|mut f| writeln!(f, "{line}"));
-    if let Err(e) = r {
-        tracing::error!(target: "napkin_web::people", error = %e, "the change log could not be written");
-    }
+        .and_then(|mut f| writeln!(f, "{line}").and_then(|_| f.sync_data()))
 }
 
 #[cfg(test)]

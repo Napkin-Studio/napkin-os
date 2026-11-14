@@ -28,14 +28,13 @@ use axum::{Extension, Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::auth::{Account, Provider};
+use crate::auth::Account;
 use crate::people::{
     code_name, is_admin, no_agency, AccentUse, Book, DraftEdit, NewAgency, NewPerson, People, Pill,
     Publish, Refusal, Surface, Wordmark, CODE_AGENCIES, CODE_ALIASES, PEOPLE_ADMINS,
 };
 use crate::state::AppCtx;
 use crate::svg_sanitise::{self, svg_uri, Refused};
-use crate::tenant::{Identity, Mode};
 
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
@@ -87,14 +86,9 @@ fn refused(r: Refusal) -> Response {
     }
 }
 
-fn store(identity: &Identity) -> Option<&People> {
-    match &identity.mode {
-        Mode::Accounts {
-            provider: Provider::Roster(r),
-            ..
-        } => Some(r.people()),
-        _ => None,
-    }
+/// The server's one People store, whichever provider signs people in (features/align-needs-lock-people.clan).
+fn store(ctx: &AppCtx) -> Option<&People> {
+    ctx.people().map(|p| p.as_ref())
 }
 
 /// Which agencies the signed-in person manages: every one (a Napkin admin) or their own (an agency's admin).
@@ -116,7 +110,7 @@ impl Scope {
 /// The store, who is acting and what they may manage, from the session alone; 403 for anyone who is not a
 /// Napkin admin or an admin of their agency, 404 where this server keeps no people store (no roster).
 fn scope<'a>(
-    identity: &'a Identity,
+    ctx: &'a AppCtx,
     account: Option<&Account>,
 ) -> Result<(&'a People, String, Scope), Box<Response>> {
     let who = account.map(|a| a.username.clone()).unwrap_or_default();
@@ -134,7 +128,7 @@ fn scope<'a>(
             "Only a Napkin admin or your agency's admin can change who signs in. Ask Shrey or another admin.",
         )));
     };
-    let people = store(identity).ok_or_else(|| {
+    let people = store(ctx).ok_or_else(|| {
         Box::new(answer(
             StatusCode::NOT_FOUND,
             "This server keeps no list of people.",
@@ -145,10 +139,10 @@ fn scope<'a>(
 
 /// A Napkin admin only: adding an agency.
 fn napkin_admin<'a>(
-    identity: &'a Identity,
+    ctx: &'a AppCtx,
     account: Option<&Account>,
 ) -> Result<(&'a People, String), Box<Response>> {
-    let (people, who, scope) = scope(identity, account)?;
+    let (people, who, scope) = scope(ctx, account)?;
     if scope != Scope::All {
         return Err(Box::new(answer(
             StatusCode::FORBIDDEN,
@@ -201,7 +195,6 @@ fn known_roles(ctx: &AppCtx, agency: &str, roles: &[String]) -> Result<Vec<Strin
 }
 
 type Who = Option<Extension<Account>>;
-type Id = Extension<Arc<Identity>>;
 
 fn acct(w: &Who) -> Option<&Account> {
     w.as_ref().map(|Extension(a)| a)
@@ -340,8 +333,8 @@ fn body<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, Box<Response>> {
     })
 }
 
-async fn list_people(Extension(identity): Id, who: Who) -> Response {
-    let (people, _, scope) = match scope(&identity, acct(&who)) {
+async fn list_people(State(ctx): State<Arc<AppCtx>>, who: Who) -> Response {
+    let (people, _, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -366,11 +359,10 @@ async fn list_people(Extension(identity): Id, who: Who) -> Response {
 
 async fn add_person(
     State(ctx): State<Arc<AppCtx>>,
-    Extension(identity): Id,
     who: Who,
     Json(mut b): Json<NewPerson>,
 ) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -413,12 +405,12 @@ struct Rename {
 }
 
 async fn rename_person(
-    Extension(identity): Id,
+    State(ctx): State<Arc<AppCtx>>,
     who: Who,
     Path(id): Path<String>,
     Json(b): Json<Rename>,
 ) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -440,12 +432,11 @@ struct SetRoles {
 /// A person's roles: they hold on the person's next request (crate::live).
 async fn set_roles(
     State(ctx): State<Arc<AppCtx>>,
-    Extension(identity): Id,
     who: Who,
     Path(id): Path<String>,
     Json(b): Json<SetRoles>,
 ) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -462,14 +453,25 @@ async fn set_roles(
         Ok(r) => r,
         Err(r) => return *r,
     };
+    // as the build's route: a role change names at least one role (to stop someone signing in, remove them)
+    if roles.is_empty() {
+        return answer(
+            StatusCode::BAD_REQUEST,
+            "A person needs at least one role. To stop them signing in, remove them.",
+        );
+    }
     match people.set_roles(&by, &id, &roles) {
         Ok(p) => Json(p).into_response(),
         Err(e) => refused(e),
     }
 }
 
-async fn remove_person(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+async fn remove_person(
+    State(ctx): State<Arc<AppCtx>>,
+    who: Who,
+    Path(id): Path<String>,
+) -> Response {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -493,12 +495,11 @@ struct ImportQuery {
 /// per line, the good lines written in one change. `?dry_run=1` checks without writing.
 async fn import_people(
     State(ctx): State<Arc<AppCtx>>,
-    Extension(identity): Id,
     who: Who,
     axum::extract::Query(q): axum::extract::Query<ImportQuery>,
     raw: axum::body::Bytes,
 ) -> Response {
-    if let Err(r) = scope(&identity, acct(&who)) {
+    if let Err(r) = scope(&ctx, acct(&who)) {
         return *r;
     }
     let Some(me) = acct(&who).cloned() else {
@@ -514,15 +515,15 @@ async fn import_people(
     }
 }
 
-async fn list_agencies(Extension(identity): Id, who: Who) -> Response {
-    match scope(&identity, acct(&who)) {
+async fn list_agencies(State(ctx): State<Arc<AppCtx>>, who: Who) -> Response {
+    match scope(&ctx, acct(&who)) {
         Ok((people, _, scope)) => Json(agencies_of(people, &scope)).into_response(),
         Err(r) => *r,
     }
 }
 
-async fn add_agency(Extension(identity): Id, who: Who, Json(b): Json<Value>) -> Response {
-    let (people, by) = match napkin_admin(&identity, acct(&who)) {
+async fn add_agency(State(ctx): State<Arc<AppCtx>>, who: Who, Json(b): Json<Value>) -> Response {
+    let (people, by) = match napkin_admin(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -544,12 +545,12 @@ fn agency_id(id: &str) -> String {
 }
 
 async fn edit_draft(
-    Extension(identity): Id,
+    State(ctx): State<Arc<AppCtx>>,
     who: Who,
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -567,8 +568,12 @@ async fn edit_draft(
     }
 }
 
-async fn discard_draft(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+async fn discard_draft(
+    State(ctx): State<Arc<AppCtx>>,
+    who: Who,
+    Path(id): Path<String>,
+) -> Response {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -611,13 +616,13 @@ fn upload_refused(r: Refused) -> Response {
 }
 
 async fn put_wordmark(
-    Extension(identity): Id,
+    State(ctx): State<Arc<AppCtx>>,
     who: Who,
     Path(id): Path<String>,
     headers: HeaderMap,
     raw: Body,
 ) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -674,8 +679,12 @@ async fn put_wordmark(
     .into_response()
 }
 
-async fn delete_wordmark(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+async fn delete_wordmark(
+    State(ctx): State<Arc<AppCtx>>,
+    who: Who,
+    Path(id): Path<String>,
+) -> Response {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -690,12 +699,12 @@ async fn delete_wordmark(Extension(identity): Id, who: Who, Path(id): Path<Strin
 }
 
 async fn publish(
-    Extension(identity): Id,
+    State(ctx): State<Arc<AppCtx>>,
     who: Who,
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -713,8 +722,8 @@ async fn publish(
     }
 }
 
-async fn reset_name(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, by, scope) = match scope(&identity, acct(&who)) {
+async fn reset_name(State(ctx): State<Arc<AppCtx>>, who: Who, Path(id): Path<String>) -> Response {
+    let (people, by, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -741,8 +750,12 @@ fn rs_str(s: &str) -> String {
 /// Copy to code: a published basic agency as the code would hold it, for a
 /// PR that makes it an agency in code (palette.ts, its logo file, the
 /// agency-logos.mjs FILES line, people.rs's mirror).
-async fn export_agency(Extension(identity): Id, who: Who, Path(id): Path<String>) -> Response {
-    let (people, _, scope) = match scope(&identity, acct(&who)) {
+async fn export_agency(
+    State(ctx): State<Arc<AppCtx>>,
+    who: Who,
+    Path(id): Path<String>,
+) -> Response {
+    let (people, _, scope) = match scope(&ctx, acct(&who)) {
         Ok(x) => x,
         Err(r) => return *r,
     };
@@ -839,8 +852,8 @@ async fn export_agency(Extension(identity): Id, who: Who, Path(id): Path<String>
 /// The published looks, for the shell's registry: basic agencies' whole
 /// looks (the wordmark inline) and the display names published for agencies
 /// in code. Public: the sign-in card wears them too. Never a draft.
-async fn agency_looks(Extension(identity): Id) -> Json<Vec<Value>> {
-    let Some(people) = store(&identity) else {
+async fn agency_looks(State(ctx): State<Arc<AppCtx>>) -> Json<Vec<Value>> {
+    let Some(people) = store(&ctx) else {
         return Json(Vec::new());
     };
     let book = people.book();

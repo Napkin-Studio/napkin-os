@@ -98,6 +98,14 @@ impl Workspace {
     /// The cached session, or a new one with what its open described.
     fn cached_or_open(&self, doc: &DocId) -> HostResult<(Arc<Session>, Option<OpenResult>)> {
         crate::timing::note_doc(doc);
+        // The build's agency registry is not a document anyone opens: its people were imported into the
+        // People store once, and a write to it is a write to nothing (features/align-needs-lock-people.clan).
+        if doc.as_str() == crate::people_import::REGISTRY_DOC {
+            return Err(napkin_host::HostError::new(
+                403,
+                "The agency's people are changed on the People page.",
+            ));
+        }
         if let Some(s) = self.sessions.lock().unwrap().open.get(doc) {
             return Ok((s.clone(), None));
         }
@@ -281,7 +289,7 @@ impl AppCtx {
                   what: String,
                   person: Option<&str>| {
                 let tenant = crate::tenant::TenantId::of_agency(agency);
-                if let Err(e) = audit.append(
+                audit.append(
                     &tenant,
                     crate::audit::NewLine {
                         who: who.to_string(),
@@ -290,9 +298,7 @@ impl AppCtx {
                         doc: person.map(str::to_string),
                         ..Default::default()
                     },
-                ) {
-                    tracing::warn!(error = %e, "audit line not written");
-                }
+                )
             },
         ));
         let _ = self.people.set(people);
