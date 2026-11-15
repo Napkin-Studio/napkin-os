@@ -101,7 +101,13 @@ fn the_agencys_brain_and_a_clients_open_through_the_store() {
     assert_eq!(b.pages["approved"].lines.len(), 1);
 
     // An empty client brain takes its vault from the manifest.
-    let fresh = doc(dir.path(), "fresh.clan", BRAIN_APP, Some("cli_0a1b2c3d"), None);
+    let fresh = doc(
+        dir.path(),
+        "fresh.clan",
+        BRAIN_APP,
+        Some("cli_0a1b2c3d"),
+        None,
+    );
     let b = open(&store, &fresh).unwrap();
     assert_eq!(b.vault.client.as_deref(), Some("cli_0a1b2c3d"));
 }
@@ -110,7 +116,13 @@ fn the_agencys_brain_and_a_clients_open_through_the_store() {
 fn a_document_that_is_not_a_brain_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let store = FsStore::new(dir.path().to_path_buf());
-    let other = doc(dir.path(), "brief.clan", "ie.napkin.brief-maker", None, None);
+    let other = doc(
+        dir.path(),
+        "brief.clan",
+        "ie.napkin.brief-maker",
+        None,
+        None,
+    );
     assert_eq!(open(&store, &other).unwrap_err().status, 400);
     let missing = DocId::from(dir.path().join("nothing.clan"));
     assert_eq!(open(&store, &missing).unwrap_err().status, 404);

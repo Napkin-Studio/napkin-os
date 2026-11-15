@@ -44,7 +44,9 @@ fn refused(v: Value) -> u16 {
 
 #[test]
 fn a_good_page_of_each_type_passes() {
-    for ty in ["decision", "idea", "outcome", "lesson", "client", "tool", "job"] {
+    for ty in [
+        "decision", "idea", "outcome", "lesson", "client", "tool", "job",
+    ] {
         parse(page_json(ty, vec![line()])).unwrap_or_else(|e| panic!("{ty}: {e:?}"));
     }
 }
@@ -138,12 +140,20 @@ fn a_curated_line_has_its_text_and_an_approver() {
 fn supersession_is_stated_both_ways() {
     let mut l = line();
     l["state"] = json!("superseded");
-    assert_eq!(refused(page_json("decision", vec![l.clone()])), 400, "no replacement named");
+    assert_eq!(
+        refused(page_json("decision", vec![l.clone()])),
+        400,
+        "no replacement named"
+    );
     l["superseded_by"] = json!("fedcba9876543210");
     parse(page_json("decision", vec![l])).unwrap();
     let mut l = line();
     l["superseded_by"] = json!("fedcba9876543210");
-    assert_eq!(refused(page_json("decision", vec![l])), 400, "current but replaced");
+    assert_eq!(
+        refused(page_json("decision", vec![l])),
+        400,
+        "current but replaced"
+    );
 }
 
 #[test]
