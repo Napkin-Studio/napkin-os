@@ -9,9 +9,11 @@
 //! when a page is read. This module holds the page format ([`page`]); the rules, the render and the
 //! rest follow in their own records.
 
+pub mod append;
 pub mod page;
 
+pub use append::refuse_unless_append;
 pub use page::{
-    line_id, open, Brain, Cite, Line, LineKind, LineState, Page, PageType, Slot, Source, Vault,
-    VaultKind, BRAIN_APP,
+    line_id, open, vault_of, Brain, Cite, Line, LineKind, LineState, Page, PageType, Slot, Source,
+    Vault, VaultKind, BRAIN_APP,
 };
