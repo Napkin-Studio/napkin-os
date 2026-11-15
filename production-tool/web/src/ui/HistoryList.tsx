@@ -5,7 +5,7 @@ import { cardsFromRationale, type SeenCard } from '../../../clan-store/src/attri
 import { Thumbs } from '../dogfood/Dogfood'
 import type { Kind } from '../model/lineage'
 import type { ProductionDocument } from '../contracts/types'
-import { aboutItem, entryKind, jobCost, jobOf, kindOf, plainWords, readable, timeOf, who, type ChainLike, type HistoryItem } from './historyItems'
+import { aboutItem, entryKind, kindOf, plainWords, readable, timeOf, who, type ChainLike, type HistoryItem } from './historyItems'
 import { AgentFigure } from './agents/AgentFigure'
 import type { CastKey } from './agents/cast'
 import { initials } from './chrome/panels'
@@ -23,8 +23,6 @@ export function HistoryList({ entries, me, myName, item, kind, doc, tree = false
         // A crew landing's rationale ends with the character cards the director was given (clan-store attribution.ts).
         const { rest: why, cards } = ak === 'crew' && e.rationale ? cardsFromRationale(e.rationale) : { rest: e.rationale, cards: [] as SeenCard[] }
         const fields = (e.targets ?? []).filter((t) => /\]\./.test(t)).map((t) => t.slice(t.indexOf('#') + 1))
-        const job = jobOf(e)
-        const cost = doc && job ? jobCost(doc.jobs[job]?.cost) : undefined
         return (
           <li key={`${e.id ?? e.timestamp}-${i}`} className={`history-entry ${ak} ${entryKind(e) === 'ask' ? 'asked' : ''}`} data-kind={ak} data-decision-kind={entryKind(e)}>
             <span className="history-gutter" aria-hidden="true">
@@ -38,7 +36,6 @@ export function HistoryList({ entries, me, myName, item, kind, doc, tree = false
               {w.detail && <span className="history-model faint">{w.detail}</span>}
               <span className="spacer" />
               {e.pinned && <span className="history-pin" title="Pinned: never compressed">pinned</span>}
-              {cost && <span className="history-cost faint" title="What this job cost">{cost}</span>}
               <time className="faint" dateTime={e.timestamp} title={e.timestamp}>{timeOf(e.timestamp)}</time>
             </div>
             <div className="history-action" title={e.action}>{words(e.action)}</div>

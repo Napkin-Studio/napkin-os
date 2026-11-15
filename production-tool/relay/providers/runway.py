@@ -473,18 +473,44 @@ class RunwayProvider:
 
     # The Provider interface
 
+    # What the guard assumes for a setting the provider job does not carry: the dearest case.
+    GUARD_INPUT_PX = 1_000_000   # an upscale's plate: over every model's overPx
+    GUARD_INPUT_S = 30.0         # an edit's clip when the job names no length: the longest any edit model reads
+
+    def _guard_settings(self, job: ProviderJob) -> list[dict]:
+        """Every setting the price depends on (contracts/pricing.py: model, tier, scale, duration, outputs,
+        audio, refs, input length), from the provider job; where the job does not say, each candidate the
+        price could take, so the guard's figure is the dearest of them."""
+        refs = len(job.refs) + sum(1 for x in (job.first_frame, job.last_frame, job.keyframe) if x)
+        seconds = job.duration_s
+        reads_clip = job.op in ("clip_edit", "clip_patch", "cutdown")   # billed by the clip it reads
+        base = {"durationS": seconds, "inputS": (seconds or self.GUARD_INPUT_S) if reads_clip else None,
+                "ratio": job.ratio, "outputs": job.outputs, "audio": job.audio, "refs": refs or None,
+                "scaleFactor": job.scale, "inputPx": self.GUARD_INPUT_PX}
+        q = job.quality or {}
+        tiers = [q.get("tier")] if q.get("tier") else [None]
+        sheet = effective_sheet(self._sheet, job.op, job.model)
+        spec = sheet["ops"][job.op]
+        price = ((self._sheet.get("models") or {}).get(spec["model"]) or {}).get("pricing") or {}
+        if not q.get("tier") and "byResolution" in price:
+            tiers += list(price["byResolution"])     # a tier the ratio does not name: any of them
+        qualities = [None, *(price.get("byQuality") or {})]
+        return [{**base, "resolution": t, "quality": qq} for t in tiers for qq in qualities]
+
     def _guard_estimate(self, job: ProviderJob) -> float:
-        """The spend guard's ceiling for `job`: the sheet's price for the op at the job's settings (the one
-        price function, contracts/pricing.py), or UNPRICED_EUR when it cannot price it. Never zero, never an
-        error: a guard that cannot price a job still asks."""
+        """The spend guard's ceiling for `job`: the sheet's price for the op through the one price function
+        (contracts/pricing.py), with every setting the price turns on, the dearest where the job does not
+        say, and never below what the relay's ledger reserved for it (job.price_usd). UNPRICED_EUR when the
+        sheet cannot price it. Never zero, never an error: a guard that cannot price a job still asks."""
         try:
-            sheet = effective_sheet(self._sheet, job.op, job.model)
             from contracts_dir import pricing
-            settings = {"durationS": job.duration_s, "ratio": job.ratio, "outputs": job.outputs, "audio": job.audio}
-            price = pricing().op_usd(sheet, job.op, None, settings)
-            return float(price) if price else UNPRICED_EUR
+            sheet = effective_sheet(self._sheet, job.op, job.model)
+            prices = [pricing().op_usd(sheet, job.op, None, s) for s in self._guard_settings(job)]
+            price = max((p for p in prices if p), default=None)
         except Exception:  # noqa: BLE001 - the guard must still ask, at the ceiling
-            return UNPRICED_EUR
+            price = None
+        own = float(price) if price else UNPRICED_EUR
+        return max(own, float(job.price_usd or 0))
 
     def submit(self, job: ProviderJob) -> str:
         # The spend guard (spend.py), before anything is built or sent: the sheet's estimate for the op is
@@ -493,7 +519,7 @@ class RunwayProvider:
         try:
             spend.check(self._guard_estimate(job))
         except spend.SpendRefused as exc:
-            raise ProviderError("spend_stop", f"Not sent: {exc}", False, source="napkin") from None
+            raise ProviderError("spend_stop", str(exc), False, source="napkin") from None
         build = {"clip": self._clip, "clip_edit": self._clip_edit, "upscale": self._upscale,
                  "cutdown": self._outpaint}.get(job.op, self._image)
         if job.op in ("region_edit", "resize") and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":

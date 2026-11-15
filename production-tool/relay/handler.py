@@ -25,7 +25,7 @@ import cards
 import identity
 from blobs import S3Blobs, s3_client
 from contracts import Contracts
-from director import load_director
+from director import load_director, spend
 from providers import load_registry
 from runtime import CachedConfig, EnvSecrets
 from service import Raw, Relay
@@ -55,6 +55,7 @@ def _build() -> Relay:
 
     secrets = EnvSecrets()
     secrets()  # keys into the environment before the adapters start
+    log.warning(spend.describe())  # one line: which mode the euro guard is in (features/production-platform-rules.clan)
     identity.use_secrets(secrets)  # and again (at most every 5 minutes) before each assertion check
     blobs = S3Blobs(bucket, public_base, client=s3)
     director = load_director()

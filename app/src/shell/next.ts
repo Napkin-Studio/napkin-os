@@ -19,11 +19,31 @@ export function safeNext(raw: string | null | undefined): string | null {
   if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return null
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f\s]/.test(raw)) return null
-  const path = raw.split(/[?#]/, 1)[0]
+  const path = decoded(raw.split(/[?#]/, 1)[0])
+  if (path === null) return null
   if (path !== '/production' && !path.startsWith('/production/')) return null
-  // No climbing out of /production.
+  // No climbing out of /production, written plainly or percent-encoded (`%2e%2e`, `%252e%252e`).
   if (path.split('/').some(seg => seg === '..' || seg === '.')) return null
   return raw
+}
+
+/** The path with its percent-escapes decoded until nothing changes (at most three rounds), or null when it does
+ * not decode, does not settle, or decodes into a slash, a backslash or a control character. */
+function decoded(path: string): string | null {
+  let now = path
+  for (let i = 0; i < 3; i++) {
+    let next: string
+    try {
+      next = decodeURIComponent(now)
+    } catch {
+      return null
+    }
+    if (next === now) return now
+    // eslint-disable-next-line no-control-regex
+    if (/[\\\u0000-\u001f\u007f]/.test(next) || next.split('/').length !== now.split('/').length) return null
+    now = next
+  }
+  return null
 }
 
 /** The `next` in a query string (`location.search`), when it is safe to follow. */

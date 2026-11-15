@@ -350,8 +350,9 @@ def test_any_other_draft_is_made_again_from_its_own_request_at_final():
     final = remake(h, token, draft)
     sent = h.providers["runway"].submits[-1]
     assert sent["model"] == "klingO3_pro" and "draftTask" not in sent
-    assert {k: v for k, v in sent.items() if k not in ("model", "quality")} == \
-        {k: v for k, v in first.items() if k not in ("model", "quality")}  # the same words, pictures and length
+    # the same words, pictures and length (priceUsd is the guard's floor, the ledger's reservation for this model)
+    assert {k: v for k, v in sent.items() if k not in ("model", "quality", "priceUsd")} == \
+        {k: v for k, v in first.items() if k not in ("model", "quality", "priceUsd")}
     assert sent["quality"]["level"] == "final"
     assert (final["model"], final["quality"]) == ("klingO3_pro", {"level": "final", "size": "1080p"})
     assert re.match(r"Remade at Final from job_", final["director"]["rationale"])

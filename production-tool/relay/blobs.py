@@ -10,15 +10,70 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import http.client
+import ipaddress
 import json
+import socket
+import ssl
 import threading
-import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
 FETCH_TIMEOUT_S = 60
 MAX_FETCH_BYTES = 200 * 1024 * 1024
 _LOCAL_LOCK = threading.Lock()
+# Keys a URL from a request may name (fetch_own): saved projects are a person's own, never read on a URL's word.
+NOT_ON_A_URL = ("clan/",)
+_loopback_ok = False   # local.py serves its own blobs on localhost: only it turns this on
+
+
+class UnsafeUrl(ValueError):
+    """A URL the relay will not fetch: not one of its own blobs, not https, a private address, or a redirect."""
+
+
+def allow_loopback(on: bool) -> None:
+    """local.py only: its blobs and the mock's inputs are served on http://localhost."""
+    global _loopback_ok
+    _loopback_ok = bool(on)
+
+
+def _vetted_address(host: str, port: int) -> str:
+    """The address to connect to: every address the host resolves to must be a public one (no private,
+    loopback, link-local, metadata or reserved address, even behind a public-looking name)."""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as e:
+        raise UnsafeUrl(f"{host} does not resolve") from e
+    addrs = [info[4][0] for info in infos]
+    if not addrs:
+        raise UnsafeUrl(f"{host} does not resolve")
+    for a in addrs:
+        ip = ipaddress.ip_address(a.split("%", 1)[0])
+        if not (ip.is_global or (_loopback_ok and ip.is_loopback)):
+            raise UnsafeUrl(f"{host} resolves to an address the relay does not fetch from")
+    return addrs[0]
+
+
+class _PinnedHTTPS(http.client.HTTPSConnection):
+    """HTTPS to the vetted address, the certificate checked against the host name (no second lookup)."""
+
+    def __init__(self, host: str, port: int, address: str, timeout: float):
+        super().__init__(host, port, timeout=timeout, context=ssl.create_default_context())
+        self._address = address
+
+    def connect(self):
+        sock = socket.create_connection((self._address, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _PinnedHTTP(http.client.HTTPConnection):
+    def __init__(self, host: str, port: int, address: str, timeout: float):
+        super().__init__(host, port, timeout=timeout)
+        self._address = address
+
+    def connect(self):
+        self.sock = socket.create_connection((self._address, self.port), self.timeout)
 
 
 def checksum_header(sha256: str) -> str:
@@ -27,12 +82,47 @@ def checksum_header(sha256: str) -> str:
 
 
 def http_fetch(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "napkin-relay/1"})
-    with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT_S) as r:  # noqa: S310 (provider output URLs)
+    """A provider's output (or the mock's input) over the network: https only (http on localhost when local.py
+    allows it), to a public address only, and a redirect is refused, never followed
+    (features/production-platform-rules.clan, review C)."""
+    if url.startswith("data:"):   # bytes in the URL itself (the mock's, local.py's inlined assets): no request
+        head, _, body = url.partition(",")
+        data = base64.b64decode(body) if head.endswith(";base64") else urllib.parse.unquote_to_bytes(body)
+        if len(data) > MAX_FETCH_BYTES:
+            raise ValueError("output larger than 200 MB")
+        return data
+    u = urllib.parse.urlsplit(url)
+    if u.scheme not in ("https", "http") or not u.hostname or u.username or u.password:
+        raise UnsafeUrl("only an https URL is fetched")
+    if u.scheme == "http" and not _loopback_ok:
+        raise UnsafeUrl("only an https URL is fetched")
+    port = u.port or (443 if u.scheme == "https" else 80)
+    address = _vetted_address(u.hostname, port)
+    conn = (_PinnedHTTPS if u.scheme == "https" else _PinnedHTTP)(u.hostname, port, address, FETCH_TIMEOUT_S)
+    try:
+        conn.request("GET", (u.path or "/") + (f"?{u.query}" if u.query else ""),
+                     headers={"User-Agent": "napkin-relay/1"})
+        r = conn.getresponse()
+        if 300 <= r.status < 400:
+            raise UnsafeUrl(f"the server answered with a redirect ({r.status}); it is not followed")
+        if r.status >= 400:
+            raise OSError(f"HTTP {r.status} from {u.hostname}")
         data = r.read(MAX_FETCH_BYTES + 1)
+    finally:
+        conn.close()
     if len(data) > MAX_FETCH_BYTES:
         raise ValueError("output larger than 200 MB")
     return data
+
+
+def own_key(blobs, url: str) -> str:
+    """The key of one of the relay's own blobs a request's URL names, or UnsafeUrl before any request: a URL
+    the relay fetches on a caller's word must be its own (features/production-platform-rules.clan, review C)."""
+    key = blobs.key_for_url(url or "") if isinstance(url, str) else None
+    if not key or key.startswith(NOT_ON_A_URL) or any(p in ("", ".", "..") for p in key.split("/")) \
+            or "\\" in key or "%" in key or "?" in key or "#" in key:
+        raise UnsafeUrl("That picture is not one of this tool's own files, so it was not read.")
+    return key
 
 
 def s3_client(region: str | None = None):
@@ -109,10 +199,16 @@ class S3Blobs:
             raise
 
     def fetch(self, url: str) -> bytes:
+        """A provider's output: our own blob by key, else http_fetch (public https, no redirect). Never for a
+        URL a request names: that is fetch_own."""
         key = self.key_for_url(url)
         if key:
             return self.s3.get_object(Bucket=self.bucket, Key=key)["Body"].read()
         return http_fetch(url)
+
+    def fetch_own(self, url: str) -> bytes:
+        """A URL a request names: one of our own blobs, read by key, or UnsafeUrl before any request."""
+        return self.s3.get_object(Bucket=self.bucket, Key=own_key(self, url))["Body"].read()
 
     def get(self, key: str) -> bytes | None:
         try:
@@ -206,6 +302,10 @@ class LocalBlobs:
         if key:
             return self.path(key).read_bytes()
         return http_fetch(url)
+
+    def fetch_own(self, url: str) -> bytes:
+        """A URL a request names: one of our own blobs, read by key, or UnsafeUrl before any request."""
+        return self.path(own_key(self, url)).read_bytes()
 
     def get(self, key: str) -> bytes | None:
         p = self.path(key)

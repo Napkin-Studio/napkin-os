@@ -67,6 +67,16 @@ test('next: only a path on this origin under /production', () => {
     assert.equal(safeNext(bad), null, String(bad))
 })
 
+test('next: an encoded dot segment is decoded before the climb check and refused', () => {
+  // features/production-platform-rules.clan (review E): /production/%2e%2e/api decodes to /production/../api.
+  for (const bad of [
+    '/production/%2e%2e/api', '/production/%2E%2E/api/session', '/production/.%2e/api', '/production/%2e/x',
+    '/production/%252e%252e/api', '/production/%2e%2e', '/production/x/%2e%2e/%2e%2e/api', '/production/%zz',
+  ])
+    assert.equal(safeNext(bad), null, bad)
+  assert.equal(safeNext('/production/p/%E2%9C%93'), '/production/p/%E2%9C%93')
+})
+
 test('next is read from the query, decoded once', () => {
   assert.equal(nextFrom(`?next=${encodeURIComponent('/production/p/x?y=1')}`), '/production/p/x?y=1')
   assert.equal(nextFrom('?next=%2F%2Fevil.com'), null)

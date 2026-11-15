@@ -168,7 +168,7 @@ export function makeWords(n: number): string {
   return `Make ${n} ${n === 1 ? 'picture' : 'pictures'}`
 }
 
-/** A method in the panel's words: "Redraw · Gemini 3 Pro", "Extend · Ideogram 4.5", "Crop · free". No price. */
+/** A method in the panel's words: "Redraw · Gemini 3 Pro", "Extend · Ideogram 4.5", "Crop". No price and no money word. */
 export function methodLine(m: SizeMethod, models: Models): string {
   if (m === 'regenerate') return models.regenerate ? `Redraw · ${models.regenerate.label}` : 'Redraw'
   return methodWords(m, models)

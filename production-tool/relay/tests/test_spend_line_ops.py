@@ -7,8 +7,13 @@ with NAPKIN_SPEND_CAP_EUR=0: the answer is spend_stop and the mock transport rec
 and no key. test_spend.py, this build's own, is unchanged beside it.
 """
 
+import json
+import re
+
 import httpx
 import pytest
+
+from contracts_dir import contracts_dir
 
 from director import spend
 from providers import AssetRef, ProviderError, ProviderJob, Ref
@@ -16,7 +21,14 @@ from providers.runway import UNPRICED_EUR, RunwayProvider
 
 SHA = "sha256:" + "b" * 64
 VARS = ("NAPKIN_ENV", "NAPKIN_PAID_CALLS", "NAPKIN_SPEND_CAP_EUR", "NAPKIN_SPEND_RUN_CAP_EUR")
-NEW_PAID_OPS = ("frame_edit", "upscale", "resize", "cutdown")
+NEW_PAID_OPS = ("frame_edit", "upscale", "resize", "cutdown", "clip_patch")
+SHEET = json.loads((contracts_dir() / "capabilities" / "runway.json").read_text())
+# Every op on the sheet with every model it can run on (its own, its region model, its alternates): the new clip
+# models (Kling, Hailuo, Omni Flash, WAN, Seedance) and clip_patch included (review E).
+EVERY_OP_MODEL = [(op, m) for op, spec in SHEET["ops"].items()
+                  for m in dict.fromkeys([spec["model"], *([spec["regionModel"]] if spec.get("regionModel") else []),
+                                          *(a["model"] for a in spec.get("alternates") or [])])]
+FIGURE = re.compile(r"\d|euro|\beur\b|dollar|usd|credit|price|cost|\u20ac|\$", re.I)
 
 
 @pytest.fixture(autouse=True)
@@ -37,9 +49,31 @@ def runway(seen):
                           client=httpx.Client(transport=httpx.MockTransport(record)))
 
 
-def job(op):
-    return ProviderJob(op=op, provider="runway", model="x", prompt="@hero by the window, morning light",
+def job(op, model="x"):
+    return ProviderJob(op=op, provider="runway", model=model, prompt="@hero by the window, morning light",
                        refs=[Ref(SHA, "hero", "character")], ratio="1280:720", duration_s=5.0, scale=2)
+
+
+@pytest.mark.parametrize("op,model", EVERY_OP_MODEL)
+def test_every_op_and_model_on_the_sheet_is_refused_with_nothing_set(op, model):
+    """done_when 1 and review A: nothing set (the hackathon Lambda today) is off, for every op and model."""
+    seen = []
+    with pytest.raises(ProviderError) as e:
+        runway(seen).submit(job(op, model))
+    assert e.value.code == "spend_stop" and seen == [], (op, model)
+    assert not FIGURE.search(e.value.message), e.value.message
+
+
+@pytest.mark.parametrize("op,model", EVERY_OP_MODEL)
+def test_every_op_and_model_on_the_sheet_returns_spend_stop_at_cap_zero(monkeypatch, op, model):
+    """done_when 1 (Phase 3 test 76's unit half): paid calls on, cap 0, each op in capabilities/runway.json."""
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
+    monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "0")
+    seen = []
+    with pytest.raises(ProviderError) as e:
+        runway(seen).submit(job(op, model))
+    assert e.value.code == "spend_stop" and seen == [], (op, model)
+    assert e.value.message == spend.DAY_LIMIT
 
 
 @pytest.mark.parametrize("op", NEW_PAID_OPS)
@@ -49,7 +83,7 @@ def test_each_new_paid_op_is_refused_at_cap_zero_and_nothing_is_sent(monkeypatch
     with pytest.raises(ProviderError) as e:
         runway(seen).submit(job(op))
     assert e.value.code == "spend_stop", e.value
-    assert "0 euro" in e.value.message and e.value.message.startswith("Not sent")
+    assert e.value.message == spend.PAID_OFF and not FIGURE.search(e.value.message)
     assert not e.value.accepted and not e.value.retryable
     assert seen == [], f"{op}: a request reached the transport"
 
@@ -60,7 +94,7 @@ def test_each_new_paid_op_is_refused_deployed_with_paid_calls_on_and_cap_zero(mo
     monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
     monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "0")
     seen = []
-    with pytest.raises(ProviderError, match="0 euro") as e:
+    with pytest.raises(ProviderError, match="today's limit") as e:
         runway(seen).submit(job(op))
     assert e.value.code == "spend_stop" and seen == []
 
@@ -72,11 +106,13 @@ def test_the_guard_asks_a_price_never_zero_for_each_new_op(op):
 
 
 def test_the_guard_counts_the_run_for_the_new_ops(monkeypatch):
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
+    monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "1000")
     monkeypatch.setenv("NAPKIN_SPEND_RUN_CAP_EUR", "0.0001")
     spend.set_run("job-new-ops")
     for op in NEW_PAID_OPS:
         seen = []
-        with pytest.raises(ProviderError, match="this run"):
+        with pytest.raises(ProviderError, match="This run"):
             runway(seen).submit(job(op))
         assert seen == []
 
@@ -88,6 +124,7 @@ def test_through_the_relay_the_ledger_admits_the_guard_refuses_and_nothing_is_se
     from providers._seam import Adapted, Resolver
     from test_frame_edit import CAMERA, FakeRunwayHttp, dex, edit_input, harness, post, spent
 
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
     monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "0")
     h = harness(providers=("runway",))
     http = FakeRunwayHttp()
