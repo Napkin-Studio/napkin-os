@@ -558,7 +558,7 @@ fn next_ordinal(reg: &Registry) -> u32 {
 pub fn link_document(store: &dyn DocStore, doc: &DocId, number: &str) -> HostResult<()> {
     let job = get(store, number)?;
     // read, changed and written under the document's write lock: a write meanwhile is not lost
-    let _held = crate::store::write_lock(doc);
+    let _held = crate::store::write_lock(store.parts(), doc);
     let bytes = store.read(doc)?;
     let version = Version::of_archive(&bytes);
     let clan = ClanFile::from_bytes(bytes)?;

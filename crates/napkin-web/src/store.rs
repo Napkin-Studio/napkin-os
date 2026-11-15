@@ -143,6 +143,11 @@ impl PartStore for TenantStore {
     /// a new file and renames it into place, so every write lands on a new inode while the old one is
     /// still held: two writes of the same size inside one tick of a coarse clock still differ. Every
     /// web task on the same disk sees the same stat, which a counter in one task's memory would not.
+    /// This tenant's root: ids repeat across tenants (`home-*`, the registries), the root does not.
+    fn lock_scope(&self) -> String {
+        self.root.display().to_string()
+    }
+
     fn stamp(&self, id: &DocId) -> HostResult<Stamp> {
         let path = self.path_for(id)?;
         let m = std::fs::metadata(&path).map_err(|e| HostError::not_found(format!("{id}: {e}")))?;
@@ -156,7 +161,7 @@ impl PartStore for TenantStore {
     /// the old document or the new one, never half of one, and the new file's
     /// inode is part of its [`stamp`](PartStore::stamp).
     fn apply(&self, change: &Change) -> HostResult<Version> {
-        let _held = napkin_host::store::write_lock(&change.doc);
+        let _held = napkin_host::store::write_lock(self, &change.doc);
         napkin_host::store::check_base(self, change)?;
         let path = self.path_for(&change.doc)?;
         if let Some(parent) = path.parent() {

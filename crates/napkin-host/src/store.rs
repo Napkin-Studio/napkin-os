@@ -105,12 +105,14 @@ impl Drop for WriteGuard {
 /// never build on the same bytes and one never writes over the other (features/store-scan-under-lock.clan,
 /// review of 15 Nov). Held only for that short section, never across a scan of the tenant. Re-entrant on
 /// its own thread: an apply under a caller's lock takes it again. Ordering: a document's write lock is
-/// taken before its session's view lock, never after. One table for the process, keyed by the id.
-pub fn write_lock(id: &DocId) -> WriteGuard {
+/// taken before its session's view lock, never after. One table for the process, keyed by the store's
+/// [`PartStore::lock_scope`] and the id, so same-named documents of two tenants never share one.
+pub fn write_lock(store: &dyn PartStore, id: &DocId) -> WriteGuard {
+    let key = format!("{}\u{0}{}", store.lock_scope(), id.as_str());
     let lock = locks()
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .entry(id.as_str().to_string())
+        .entry(key)
         .or_default()
         .clone();
     let me = std::thread::current().id();
@@ -187,6 +189,14 @@ pub trait PartStore: Send + Sync {
     /// the file.
     fn stamp(&self, id: &DocId) -> HostResult<Stamp> {
         Ok(Stamp::new(self.version(id)?.as_str()))
+    }
+
+    /// What, with a document's id, names it uniquely in this process: the tenant's root for a store that
+    /// holds one tenant under ids another tenant also uses. Keys the document's write lock
+    /// ([`write_lock`]). Empty for a store whose ids are unique already (paths); a store that wraps
+    /// another passes its inner store's on.
+    fn lock_scope(&self) -> String {
+        String::new()
     }
 
     /// Make `change` true, and report the version the document is now at.
@@ -295,7 +305,7 @@ impl PartStore for FsStore {
     /// A file write, under the document's write lock, refused (`409`) when
     /// `change.base` is not what is on disk now ([`check_base`], W2-A4).
     fn apply(&self, change: &Change) -> HostResult<Version> {
-        let _held = write_lock(&change.doc);
+        let _held = write_lock(self, &change.doc);
         check_base(self, change)?;
         let path = path_of(&change.doc);
         // An install lands in a directory nobody has made yet.

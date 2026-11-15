@@ -458,7 +458,7 @@ pub fn adopt(store: &dyn DocStore, ctx: &Ctx, names: &[String]) -> HostResult<Ad
     let mut linked = 0;
     for doc in store.documents() {
         // each document read, changed and written under its own write lock (one at a time)
-        let _held = crate::store::write_lock(&doc);
+        let _held = crate::store::write_lock(store.parts(), &doc);
         let Ok(bytes) = store.read(&doc) else {
             continue;
         };

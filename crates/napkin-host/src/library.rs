@@ -950,7 +950,7 @@ pub fn write_backrefs(
             // two backrefs to one parent, from one child or two, or a backref and the parent's own write,
             // never build on the same bytes. The parent was found above, outside any lock (finding it may
             // read the tenant); here it is read again as it stands and the decision put on that.
-            let _held = crate::store::write_lock(&change.doc);
+            let _held = crate::store::write_lock(store.parts(), &change.doc);
             let applied = Document::load(store.parts(), change.doc.clone())
                 .and_then(|parent| {
                     let d = change.decisions.first().cloned().ok_or_else(|| {
