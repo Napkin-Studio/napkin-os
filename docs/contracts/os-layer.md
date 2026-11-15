@@ -2681,17 +2681,19 @@ store). Same scope as the table above; a member gets `403`.
 
 | Route | Body | Reply |
 | --- | --- | --- |
-| `POST /api/admin/people/{id}/first-day` | `{first?: {path}, email?}` (`first` a document on a job of the person's agency) | `201 {person, link, first?: {job, path}, mailed}` |
+| `POST /api/admin/people/{id}/first-day` | `{first?: {path}, mail?: bool}` (`first` a document on a job of the person's agency, nameable only by an admin of that agency) | `201 {person, link, first?: {job, path}, mailed, note?}` |
 | `DELETE /api/admin/people/{id}/first-day` | none | `200`, or `404` when there is none |
-| `GET /api/admin/first-days` | none | `[{person, made_on, signed_in}]` within the caller's scope |
 | `GET /api/t/{tenant}/me/first-day` | none | `{show_pointers}`: true only for an invited person who has not seen them |
 | `POST /api/t/{tenant}/me/first-day` | `{seen: true}` or `{opened: true}` (names no one) | `200`, the session's person's own mark |
 
-The link is `<origin>/?welcome=<sign-in name>`: no token, signature or session; it grants nothing and only fills
-the sign-in name. `GET /api/t/{tenant}/needs` gains `first_task` (a need of kind `first-task`, id `first:<person>`),
-for the invited person alone, until they press its button. The store keeps the date an invite was made and three
-booleans (signed in, saw the pointers, pressed the first task); the marks write no change line, so no time of use is
-kept. With `NAPKIN_MAIL` on and an address given, `Message::Invite` is also sent; the address is kept nowhere.
+The path's tenant must be the session's. The link is `<origin>/?welcome=<sign-in name>`: no token, signature or session; it
+grants nothing and only fills the sign-in name. `GET /api/t/{tenant}/needs` gains `first_task` (a need of kind
+`first-task`, id `first:<person>`), for the invited person alone, until they press its button. No route tells an admin
+what a person has done since the invite. The person's two marks are in `first-day-marks.json` beside `people.json`, written
+only when a mark changes something and never in the store. With `mail: true` the invite is mailed (`Message::Invite`) to the
+address the People store holds for the person, never one in the request, with a link built from `NAPKIN_PUBLIC_ORIGIN`
+(`scheme://host`, never a request header; unset means no mail), at most one a person a day; `note` says plainly why when no
+mail went. The development outbox does not write an invite's address.
 
 ### 14.1 Settings (stage 2, as stage 3 left them)
 
