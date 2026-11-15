@@ -333,11 +333,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      # ffmpeg first: the relay measures a clip's length with ffprobe (relay/cliplength.py), and stitch encodes.
+      - name: Install ffmpeg (the relay's clip lengths, stitch's real-encode test)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
       - name: Relay tests (offline)
         working-directory: production-tool/relay
         run: uv run --python 3.12 pytest -q
-      - name: Install ffmpeg (stitch's real-encode test)
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
       - name: Stitch tests
         working-directory: production-tool/stitch
         run: uv run --python 3.12 pytest -q
