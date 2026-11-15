@@ -1618,13 +1618,17 @@ While routes are out (`routes_out` not empty) the room takes no write other than
 No price, cost, credit or budget figure is on any screen. Two decision kinds keep them, and the Decisions
 drawer is the one place they are read:
 
-- **`run_cost`**, in the work's own chain, by the task's agent (`judge`, handler `judge_work@1`), one per run
-  that reported a cost: `run_cost: {document, version, task, route, estimate_eur, charged_eur, guard, at}`,
-  `guard` `allowed` or `refused`. Numbers and ids only; the rationale holds no figure. It is written from the
-  middleware envelope's `usage` (middleware-api.md) before the answer is read, so a charged run whose answer is
-  malformed, or that failed after the charge, still records its cost; a run the spend guard refused records
-  that it cost nothing. The spend guard itself is unchanged (server/napkin/spend.py) and refuses in the same
-  place, in one line with no figure (`spend_refused: Paid runs are off here. Nothing was sent.`).
+- **`run_cost`**, in the work's own chain, one per middleware call that was sent and charged (review of 15 Nov):
+  `run_cost: {document, version, task, job, route, estimate_eur, charged_eur, guard, at}`, `guard` always `allowed`.
+  Numbers, names and ids only; the rationale holds no figure. The host writes it where the money is spent: Judge's
+  route (`/judge`) and every middleware call a frame sends through `POST /api-proxy`, whatever the task, from the
+  envelope's `usage` (or the error's, for a call charged before it failed). The agent is the host's, named from the
+  task (`judge` for `judge_work`, `middleware` for any other), never from a body. One per middleware job: a poll that
+  answers a job already recorded writes nothing more. A refusal, and a call that charged nothing, write nothing. The
+  frame never receives `usage` or a `price_eur`: it gets the answer, not the price. A call whose answer is lost (a
+  timeout, a 500 with no usage) is not recorded: the middleware's own run log is the record of what it spent. The
+  spend guard itself is unchanged (server/napkin/spend.py) and refuses in the same place, in one line with no figure
+  (`spend_refused: Paid runs are off here. Nothing was sent.`).
 - **`set_budget`**, in the job registry's chain, targets `[J…]`, by a person: `set_budget: {job, hours}`, words
   with no figure. Written by `POST /jobs/{number}/budget` (the Money roles that manage jobs: account service,
   management, producers, and the unrestricted; `403` for anyone else) and by `POST /jobs` when a job is opened

@@ -215,13 +215,15 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
   tasks omit them. `job.question` is non-null exactly when `job.state` is
   `needs_input` and the task is `start_campaign`.
 - `usage` (*added 2026-11-15*, features/align-confidential-prices.clan) is
-  `{ "estimate_eur": 0.0, "charged_eur": 0.0, "route": "..." | null }`: what the
-  spend guard let through for this task, the ceiling it counted, what is charged,
-  and the route (the model alias, or the backend's name). Every envelope carries
-  it; a task that charged nothing reports zeros. A task that was charged and then
-  failed carries the same block in its error body (`error.usage`, beside `type`
-  and `message`). The host writes it as the document's `run_cost` decision
-  (`os-layer.md` §7.11); it is numbers and a route name, never content.
+  `{ "estimate_eur": 0.0, "charged_eur": 0.0, "route": "..." | null }`: the ceiling
+  the spend guard counted, what the task's model calls actually cost (their tokens
+  at the rate the guard prices the model with), and the route. Every envelope
+  carries it; a task that charged nothing, and a long job that has not ended,
+  report zeros, so a job's cost is said once, when it ends. A task charged and
+  then failed carries the same block in its error body (`error.usage`, beside
+  `type` and `message`), a 500 included. The host writes it as the document's
+  `run_cost` decision (`os-layer.md` §7.11) and strips it, with any `price_eur`,
+  before a frame sees the answer. It is numbers and a route name, never content.
 - `trace.usage` is what was actually spent; an implementation that ran no model
   reports zeros and never an estimate. `trace.model` is `null` when no model ran.
   `trace.hits` lists what was read: facts (`scope` = layer, `source` = origin
