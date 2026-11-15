@@ -210,3 +210,25 @@ test('a part named by its key reads by the label the host gives it', () => {
   assert.equal(plain('Checked the new the barrier: it answers the note.'), 'Checked the new barrier: it answers the note.')
   assert.equal(plain('Proposed a effectiveness_evidence finding for a person to verify'), 'Proposed an effectiveness point for you to check')
 })
+
+// ── a run's cost and a job's budget (features/align-confidential-prices.clan, done_when lines 11 and 12) ──
+// The decision tree is the one place they are read: one plain line each, from the decision's own block.
+import { budgetWords, runCostLine } from '../src/shell/decisions/words.ts'
+
+test('a run_cost decision reads "this run cost 0.02" in the Decisions drawer; a refused run cost nothing', () => {
+  assert.equal(runCostLine({ charged_eur: 0.02, estimate_eur: 0.05, guard: 'allowed' }), 'this run cost 0.02')
+  assert.equal(runCostLine({ charged_eur: 0, guard: 'allowed' }), 'this run cost 0.00')
+  assert.equal(runCostLine({ charged_eur: 0, guard: 'refused' }), 'a run was refused before it started. It cost nothing')
+  assert.equal(runCostLine(undefined), 'this run cost 0.00')
+  assert.equal(runCostLine({ charged_eur: 'lots' }), 'this run cost 0.00', 'a figure that is not a number is never shown')
+  const b = { decision: { id: 'd_c', kind: 'run_cost', agent: 'judge', action: 'run_cost', targets: ['doc'], rationale: 'The cost of one run.', timestamp: '2026-11-14T09:00:00Z', run_cost: { charged_eur: 0.02, guard: 'allowed' } }, who: { kind: 'agent' } } as never
+  assert.equal(didWhat(b, { decisions: [b], cites: {} } as never), 'this run cost 0.02')
+})
+
+test('a set_budget decision reads the hours where budgets are read', () => {
+  assert.equal(budgetWords({ hours: 80 }), 'recorded the budget: 80 hours')
+  assert.equal(budgetWords({ hours: 1 }), 'recorded the budget: 1 hour')
+  assert.equal(budgetWords({}), 'recorded the budget')
+  const b = { decision: { id: 'd_b', kind: 'set_budget', agent: 'human:cian@wk', action: 'set_budget', targets: ['J001'], rationale: 'Recorded the budget of J001.', timestamp: '2026-11-14T09:00:00Z', set_budget: { job: 'J001', hours: 80 } }, who: { kind: 'person', name: 'Cian', you: false } } as never
+  assert.equal(didWhat(b, { decisions: [b], cites: {} } as never), 'recorded the budget: 80 hours')
+})

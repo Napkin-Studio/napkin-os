@@ -318,6 +318,7 @@ async fn who_may_open_and_change_a_job_and_who_may_set_its_budget() {
         StatusCode::FORBIDDEN,
         "a planner's budget change is refused"
     );
+    // a budget is never changed by a patch, for anyone: it is a set_budget decision (features/align-confidential-prices.clan)
     let (s, v) = jobs(
         &r,
         cian,
@@ -326,11 +327,7 @@ async fn who_may_open_and_change_a_job_and_who_may_set_its_budget() {
         Some(json!({ "budget_hours": 90, "owner": "dara@wk" })),
     )
     .await;
-    assert_eq!(
-        (s, v["budget_hours"].clone()),
-        (StatusCode::OK, json!(90.0)),
-        "{v}"
-    );
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
     let (s, v) = jobs(&r, cian, "PATCH", "/J001", Some(json!({ "due": null }))).await;
     assert_eq!((s, v["due"].clone()), (StatusCode::OK, Value::Null), "{v}");
     let (s, _) = jobs(
@@ -450,5 +447,167 @@ async fn each_role_is_sent_exactly_the_fields_it_may_see_and_another_agency_sees
     let (s, list) = jobs(&r, &other, "GET", "", None).await;
     assert_eq!((s, list), (StatusCode::OK, json!([])));
     let (s, _) = jobs(&r, &other, "PATCH", "/J001", Some(json!({ "title": "x" }))).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+}
+
+/// Put a line into the job registry's chain as an older build wrote it, before budgets were decisions.
+fn plant_old_line(r: &Rig, tenant: &str, rationale: &str, fields: &str) {
+    use clan_sdk::{ClanBuilder, ClanFile, Decision, DecisionChain};
+    use napkin_host::{Change, Library, PartStore, Version};
+    let store = napkin_web::store::TenantStore::new(r._dir.path().join(tenant));
+    let id = store.home("jobs-v1").unwrap();
+    let bytes = store.read(&id).unwrap();
+    let base = Version::of_archive(&bytes);
+    let clan = ClanFile::from_bytes(bytes).unwrap();
+    let mut chain =
+        DecisionChain::from_yaml(&clan.read_entry("agent/decision-chain.yaml").unwrap()).unwrap();
+    chain.prepend(Decision {
+        id: Some("d_oldbudget01".into()),
+        kind: Some("edit".into()),
+        agent: "cian@wk".into(),
+        actor: Some("human:cian@wk".into()),
+        action: "update_job".into(),
+        targets: vec!["J001".into()],
+        fields_changed: vec![format!("J001/{fields}")],
+        rationale: rationale.into(),
+        timestamp: "2026-11-10T09:00:00Z".into(),
+        ..Default::default()
+    });
+    let mut b = ClanBuilder::new(clan.manifest().clone());
+    for (path, entry) in clan.read_all_entries().unwrap() {
+        if path != clan_sdk::MANIFEST_PATH && path != "agent/decision-chain.yaml" {
+            b.add_entry(path, entry);
+        }
+    }
+    b.add_entry("agent/decision-chain.yaml", chain.to_yaml().unwrap());
+    store
+        .apply(&Change::replace(id, base, b.build().unwrap()))
+        .unwrap();
+}
+
+// features/align-confidential-prices.clan, done_when line 12, and the reviews' findings b, c and e: a job's budget is a
+// set_budget decision recorded by a Money role that manages jobs, read back in the job's Decisions by the Money roles
+// only. Every other role (no role included) gets a 403 on the write and no figure in any line, older lines included.
+#[tokio::test]
+async fn a_budget_is_recorded_in_the_jobs_decisions_by_the_money_roles_and_read_only_by_them() {
+    let r = rig();
+    let mut who = std::collections::BTreeMap::new();
+    for (u, role) in ROLES {
+        if !who.contains_key(role) {
+            who.insert(*role, sign_in(&r, u).await);
+        }
+    }
+    let cian = &who["account-service"];
+    let client = open_client(&r, cian).await;
+    // (c) opening with a budget writes a set_budget decision as well as the open
+    let (s, v) = jobs(
+        &r,
+        cian,
+        "POST",
+        "",
+        Some(json!({ "number": "J001", "client_id": client, "title": "Autumn launch", "due": "2026-11-20", "budget_hours": 40 })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+
+    // (e) the write: the Money roles that manage jobs (and an admin); nobody else, a person with no role included
+    for role in [
+        "planning",
+        "creative-director",
+        "art-director",
+        "copywriter",
+        "agency-brain",
+        "traffic",
+        "",
+    ] {
+        let (s, _) = jobs(
+            &r,
+            &who[role],
+            "POST",
+            "/J001/budget",
+            Some(json!({ "hours": 5 })),
+        )
+        .await;
+        assert_eq!(s, StatusCode::FORBIDDEN, "{role:?} may not record a budget");
+    }
+    let (s, _) = jobs(&r, cian, "POST", "/J001/budget", Some(json!({ "hours": -3 }))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, _) = jobs(&r, cian, "POST", "/J404/budget", Some(json!({ "hours": 3 }))).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    for (role, h) in [
+        ("producer", 60),
+        ("management", 70),
+        ("admin", 75),
+        ("account-service", 80),
+    ] {
+        let (s, v) = jobs(
+            &r,
+            &who[role],
+            "POST",
+            "/J001/budget",
+            Some(json!({ "hours": h })),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK, "{role} {v}");
+    }
+    let (_, one) = jobs(&r, cian, "GET", "/J001", None).await;
+    assert_eq!(one["job"]["budget_hours"], json!(80.0), "the job keeps the last figure as data");
+
+    // (b) a line an older build wrote names the budget in its words
+    plant_old_line(
+        &r,
+        &cian.tenant,
+        "Renamed J001 from \"A\" to \"B\". Set the budget of J001 from none to 80 hours.",
+        "title,budget_hours",
+    );
+
+    // a Money role reads every line, the figures with them; account service may record
+    let (s, d) = jobs(&r, cian, "GET", "/J001/decisions", None).await;
+    assert_eq!(s, StatusCode::OK, "{d}");
+    assert_eq!(d["can_record_budget"], json!(true));
+    let rows = d["decisions"].as_array().unwrap();
+    let set: Vec<&Value> = rows.iter().filter(|x| x["kind"] == "set_budget").collect();
+    assert_eq!(set.len(), 5, "40 at the open, then four: {d}");
+    assert_eq!(set[0]["hours"], json!(80.0), "newest first");
+    assert_eq!(set[4]["hours"], json!(40.0));
+    assert!(set.iter().all(|x| x["who"].as_str().unwrap().contains('@')), "each by a person");
+    assert!(rows
+        .iter()
+        .any(|x| x["what"].as_str().unwrap().contains("Set the budget of J001 from none to 80 hours.")));
+    // traffic is in the Money group: it reads the figures, and may not record one
+    let (_, t) = jobs(&r, &who["traffic"], "GET", "/J001/decisions", None).await;
+    assert_eq!(t["can_record_budget"], json!(false));
+    assert!(t["decisions"].as_array().unwrap().iter().any(|x| x["hours"] == json!(80.0)));
+
+    // everyone else reads the job's other lines with no budget in them at all: no set_budget line, no hours, and the
+    // older line keeps only its sentence that is not about the budget
+    for role in [
+        "planning",
+        "creative-director",
+        "art-director",
+        "copywriter",
+        "agency-brain",
+        "",
+    ] {
+        let (s, d) = jobs(&r, &who[role], "GET", "/J001/decisions", None).await;
+        assert_eq!(s, StatusCode::OK, "{role:?} {d}");
+        assert_eq!(d["can_record_budget"], json!(false), "{role:?}");
+        let text = d.to_string();
+        for word in ["set_budget", "budget", "hours", "\"hours\""] {
+            assert!(!text.to_lowercase().contains(word), "{role:?} reads {word}: {text}");
+        }
+        let rows = d["decisions"].as_array().unwrap();
+        assert!(rows.iter().any(|x| x["what"] == "Renamed J001 from \"A\" to \"B\"."), "{role:?} {text}");
+        assert!(rows.iter().any(|x| x["action"] == "open_job"), "{role:?} {text}");
+        let (_, list) = jobs(&r, &who[role], "GET", "", None).await;
+        assert!(
+            list.as_array().unwrap().iter().all(|j| j.get("budget_hours").is_none()),
+            "{role:?}"
+        );
+    }
+    // a job of another agency is not found
+    let (s, _) = jobs(&r, &who["management"], "GET", "/J404/decisions", None).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, _) = jobs(&r, &sign_in(&r, "kai@other").await, "GET", "/J001/decisions", None).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
 }

@@ -369,3 +369,52 @@ def test_trust_is_earned_only_when_every_number_clears():
     assert not few["earned"] and "30 decided" in " ".join(few["failing"])
     assert not calibrate.report(rows(100, 100, repeat_same=False))["earned"]
     assert calibrate.wilson_lower(0, 0) == 0.0 and 0.8 < calibrate.wilson_lower(95, 100) < 0.95
+
+
+# -- a run's cost, handed back in the envelope (features/align-confidential-prices.clan) -----------------------
+# The host writes it as the document's run_cost decision; the middleware only reports what the spend guard let
+# through. Numbers and a route name, never content.
+
+def test_the_envelope_hands_back_the_runs_cost_and_the_fixture_backend_costs_nothing(yes, monkeypatch):
+    monkeypatch.setenv("NAPKIN_JUDGE_PRICE_EUR", "0.04")
+    out = middleware().handle(body())
+    u = out["usage"]
+    assert set(u) == {"estimate_eur", "charged_eur", "route"}
+    assert u["estimate_eur"] == 0.04 and u["charged_eur"] == 0.04
+    assert isinstance(u["route"], str) and u["route"]
+    assert CANARY not in json.dumps(u)
+    monkeypatch.setenv("NAPKIN_JUDGE_BACKEND", "fixture")
+    out = middleware().handle(body())
+    assert out["usage"] == {"estimate_eur": 0.0, "charged_eur": 0.0, "route": "fixture"}
+
+
+def test_every_task_envelope_carries_a_usage_block_of_zeros_when_nothing_was_charged(monkeypatch):
+    monkeypatch.setenv("NAPKIN_JUDGE_BACKEND", "fixture")
+    mw = middleware()
+    env = mw.envelope("job_status", "h@1", {"id": "j", "state": "done"}, {}, None, None)
+    assert env["usage"] == {"estimate_eur": 0.0, "charged_eur": 0.0, "route": None}
+
+
+def test_a_charged_run_whose_answer_is_malformed_still_reports_its_cost(yes, monkeypatch):
+    # review finding (d): the guard let it through and it was charged; the answer is then refused as malformed,
+    # and the error still says what it cost, so the host can write its run_cost
+    monkeypatch.setenv("NAPKIN_JUDGE_PRICE_EUR", "0.04")
+    def drop_one(out):
+        out.pop(next(iter(out)))
+        return out
+    e = refused(middleware(JudgeModel(mutate=drop_one)), 502, "judge_malformed")
+    assert e.usage["charged_eur"] == 0.04 and e.usage["estimate_eur"] == 0.04
+    # and over HTTP, the error body carries it beside the type and the message, and nothing else
+    from fastapi.testclient import TestClient
+    from napkin.app import create_app
+    app = create_app(Settings(pipelines=_default_pipelines()), model_client=JudgeModel(mutate=drop_one),
+                     layer_store=layer_store())
+    r = TestClient(app).post("/v1/tasks", json=body())
+    assert r.status_code == 502
+    err = r.json()["error"]
+    assert set(err) == {"type", "message", "usage"} and err["usage"]["charged_eur"] == 0.04
+    assert CANARY not in r.text
+    # a refusal before any charge carries no usage: nothing was spent
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "off")
+    r = TestClient(app).post("/v1/tasks", json=body())
+    assert r.status_code == 429 and "usage" not in r.json()["error"]

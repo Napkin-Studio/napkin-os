@@ -485,7 +485,15 @@ pub(crate) mod tests {
     #[test]
     fn every_kind_the_host_writes_is_known() {
         // The Brief gate's planner signature is a `sign` decision (os-layer §7.7).
-        for k in ["approve", "client_review", "unlock", "backref", "sign"] {
+        for k in [
+            "approve",
+            "client_review",
+            "unlock",
+            "backref",
+            "sign",
+            "run_cost",
+            "set_budget",
+        ] {
             let d = Decision {
                 kind: Some(k.into()),
                 ..Default::default()

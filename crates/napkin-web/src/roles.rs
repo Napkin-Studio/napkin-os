@@ -728,6 +728,37 @@ mod tests {
         v.tools.iter().map(String::as_str).collect()
     }
 
+    // features/align-confidential-prices.clan, review finding (e): with roles from the People store and "no role means
+    // no role", the budget is recorded by the Money roles that manage jobs and read by the Money group, and by nobody
+    // else; an admin, a demo and an anonymous visitor (a server with no accounts) are unrestricted, as everywhere.
+    #[test]
+    fn who_may_record_a_budget_and_who_may_read_one() {
+        let cases: &[(&[&str], bool, bool)] = &[
+            (&["account-service"], true, true),
+            (&["management"], true, true),
+            (&["producer"], true, true),
+            (&["traffic"], false, true),
+            (&["planning"], false, false),
+            (&["creative-director"], false, false),
+            (&["art-director"], false, false),
+            (&["copywriter"], false, false),
+            (&["agency-brain"], false, false),
+            (&["napkin-admin"], false, false),
+            (&[], false, false),
+            (&["acount-service"], false, false),
+            (&["planning", "traffic"], true, true),
+            (&[ADMIN], true, true),
+            (&[DEMO], true, true),
+            (&[ANONYMOUS], true, true),
+        ];
+        for (roles, record, read) in cases {
+            let roles = r(roles);
+            assert_eq!(may_set_budget(&roles), *record, "record {roles:?}");
+            assert_eq!(may_read_budget(&roles), *read, "read {roles:?}");
+            assert_eq!(job_rights(&roles).budget, *record, "{roles:?}");
+        }
+    }
+
     #[test]
     fn each_live_role_gets_the_page_doors_of_the_v2_table_and_its_tools_apart() {
         let t = Table::default();
