@@ -11,6 +11,7 @@
 
 pub mod append;
 pub mod page;
+pub mod render;
 pub mod rules;
 
 pub use append::refuse_unless_append;

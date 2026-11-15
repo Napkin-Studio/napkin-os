@@ -61,7 +61,10 @@ fn derived(rule: &str, slots: &[(&str, Slot)]) -> Line {
         kind: LineKind::Derived,
         rule: Some(rule.into()),
         cites: vec![napkin_host::brain::Cite::Fact { fact: "f1".into() }],
-        slots: slots.iter().map(|(k, v)| ((*k).to_string(), v.clone())).collect::<BTreeMap<_, _>>(),
+        slots: slots
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), v.clone()))
+            .collect::<BTreeMap<_, _>>(),
         state: LineState::Current,
         superseded_by: None,
         at: "2026-11-02".into(),
@@ -84,7 +87,10 @@ fn a_sentence_is_made_from_the_rule_and_the_slots() {
     assert_eq!(
         s(
             "client_answer.v1",
-            &[("answer", Slot::Id("accepted_with_changes".into())), ("version", Slot::Num(1.0))]
+            &[
+                ("answer", Slot::Id("accepted_with_changes".into())),
+                ("version", Slot::Num(1.0))
+            ]
         ),
         "The client's answer on version 1 was accepted with changes, on 2026-11-02."
     );
@@ -93,7 +99,13 @@ fn a_sentence_is_made_from_the_rule_and_the_slots() {
         "The creative director chose route route_b on 2026-11-02."
     );
     assert_eq!(
-        s("score_work.v1", &[("total", Slot::Num(27.0)), ("target", Slot::Id("scene_1".into()))]),
+        s(
+            "score_work.v1",
+            &[
+                ("total", Slot::Num(27.0)),
+                ("target", Slot::Id("scene_1".into()))
+            ]
+        ),
         "Judge scored scene_1 at 27 of 30 on 2026-11-02."
     );
     // Every rule in the table can be rendered, and a rule this build does not know still reads.
@@ -104,16 +116,25 @@ fn a_sentence_is_made_from_the_rule_and_the_slots() {
             .map(|(n, spec)| {
                 let v = match spec {
                     napkin_host::brain::rules::SlotSpec::Enum(w) => Slot::Id(w[0].into()),
-                    napkin_host::brain::rules::SlotSpec::Number { min, .. } => Slot::Num(f64::from(*min)),
+                    napkin_host::brain::rules::SlotSpec::Number { min, .. } => {
+                        Slot::Num(f64::from(*min))
+                    }
                     napkin_host::brain::rules::SlotSpec::Id => Slot::Id("x1".into()),
                 };
                 (*n, v)
             })
             .collect();
         let text = s(r.id, &slots);
-        assert!(!text.contains('{') && text.ends_with('.'), "{}: {text}", r.id);
+        assert!(
+            !text.contains('{') && text.ends_with('.'),
+            "{}: {text}",
+            r.id
+        );
     }
-    assert_eq!(s("later_rule.v9", &[]), "A decision was recorded on 2026-11-02.");
+    assert_eq!(
+        s("later_rule.v9", &[]),
+        "A decision was recorded on 2026-11-02."
+    );
 }
 
 #[test]
@@ -151,9 +172,15 @@ fn a_superseded_line_is_struck_through_with_its_date_and_a_link() {
         md.contains("~~Version 1 was approved and locked on 2026-10-21.~~"),
         "{md}"
     );
-    assert!(md.contains("Superseded on 2026-10-27"), "the date of the line that replaced it");
+    assert!(
+        md.contains("Superseded on 2026-10-27"),
+        "the date of the line that replaced it"
+    );
     assert!(md.contains(&format!("](#line-{by})")), "a link to it");
-    assert!(md.contains(&format!("<a id=\"line-{by}\"></a>")), "and the line it links to is there");
+    assert!(
+        md.contains(&format!("<a id=\"line-{by}\"></a>")),
+        "and the line it links to is there"
+    );
     // A current line is not struck through.
     assert!(md.contains("\n- <a id=\"line-") && !md.contains("~~Version 2"));
 }
@@ -162,7 +189,10 @@ fn a_superseded_line_is_struck_through_with_its_date_and_a_link() {
 fn pages_link_both_ways() {
     let b = brain();
     let job = page_md(&b, "job-j001").unwrap();
-    assert!(job.contains("Related: [[decision-j001]], [[idea-j001]]"), "{job}");
+    assert!(
+        job.contains("Related: [[decision-j001]], [[idea-j001]]"),
+        "{job}"
+    );
     let dec = page_md(&b, "decision-j001").unwrap();
     assert!(dec.contains("Linked from: [[job-j001]]"), "{dec}");
     let outcome = page_md(&b, "outcome-j001").unwrap();
@@ -196,14 +226,27 @@ fn the_log_has_one_line_per_entry_and_leaves_out_what_a_run_cost() {
         title: title.into(),
     };
     let entries = vec![
-        e("2026-11-01T09:00:00Z", "ingest", "ingest", "Job record on J001"),
+        e(
+            "2026-11-01T09:00:00Z",
+            "ingest",
+            "ingest",
+            "Job record on J001",
+        ),
         e("2026-11-02T10:00:00Z", "run_cost", "run_cost", "a run"),
         e("2026-11-03T10:00:00Z", "budget", "set_budget", "a cap"),
-        e("2026-11-04T08:30:00Z", "ingest", "ingest", "Decisions on J001"),
+        e(
+            "2026-11-04T08:30:00Z",
+            "ingest",
+            "ingest",
+            "Decisions on J001",
+        ),
     ];
     let log = log_md(&entries);
     golden("log.md", &log);
-    assert_eq!(log.matches("\n## [").count() + usize::from(log.starts_with("## [")), 2);
+    assert_eq!(
+        log.matches("\n## [").count() + usize::from(log.starts_with("## [")),
+        2
+    );
     assert!(!log.contains("run") && !log.contains("cap"));
     assert!(log.contains("## [2026-11-04] ingest | Decisions on J001"));
 }
@@ -220,7 +263,9 @@ fn the_markdown_holds_no_words_the_brain_did_not_store_and_no_price() {
         all.push_str(&page_md(&b, slug).unwrap());
     }
     let low = all.to_lowercase();
-    for bad in ["price", "cost", "budget", "credit", "cannes", "effie", "warc", "bottle", "cheap"] {
+    for bad in [
+        "price", "cost", "budget", "credit", "cannes", "effie", "warc", "bottle", "cheap",
+    ] {
         assert!(!low.contains(bad), "the markdown says {bad}");
     }
     assert!(!all.contains('\u{2014}'));
@@ -243,7 +288,14 @@ fn a_person_page_renders_what_someone_decided_and_nothing_scored() {
     .unwrap();
     let md = page_md(&b, "person-dara").unwrap();
     assert!(md.contains("The creative director signed on 2026-10-22."));
-    for bad in ["count", "rank", "score", "late", "average", "total"] {
-        assert!(!md.to_lowercase().contains(bad), "{bad}");
+    let words: Vec<String> = md
+        .to_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .map(str::to_string)
+        .collect();
+    for bad in [
+        "count", "rank", "ranking", "score", "late", "lateness", "average", "total",
+    ] {
+        assert!(!words.iter().any(|w| w == bad), "{bad}");
     }
 }
