@@ -39,6 +39,10 @@ pub const DECISION_KINDS: &[&str] = &[
     "client_review",
     "unlock",
     "sign",
+    // What one paid run cost, and a job's budget in hours (features/align-confidential-prices.clan):
+    // numbers and ids only, read in the Decisions drawer and never sent to an agent.
+    "run_cost",
+    "set_budget",
 ];
 
 /// Prefix every generated decision id carries.
