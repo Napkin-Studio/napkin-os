@@ -57,7 +57,7 @@ from director import spend
 
 import time_rules
 import timeline_layers
-from blobs import checksum_header
+from blobs import UnsafeUrl, checksum_header
 from contracts import Contracts, api
 from contracts_dir import contracts_dir, pricing
 from director.base import Director, PassthroughDirector, PromptTooOld, fit_duration, new_id
@@ -1968,6 +1968,8 @@ class Relay:
                     fracs = formats.safe_fracs(inp.get("safeArea"), inp.get("delivery"))
                     crop, _ = formats.crop_box(ms["w"], ms["h"], inp["aspect"]["w"], inp["aspect"]["h"], rz.get("protect"), fracs)
                 plate, png, drawn = formats.render(data, ms, crop, (out_w, out_h), rz.get("layers"), self.blobs.fetch_own)
+        except UnsafeUrl as e:  # a picture that is not ours: refused before any request (review C)
+            return self._fail(saved, "invalid_input", str(e), paid=False, refund=True)
         except Exception as e:
             log.exception("resize of %s failed", saved["jobId"])
             return self._fail(saved, "internal", f"Wren could not make this size ({type(e).__name__}).",

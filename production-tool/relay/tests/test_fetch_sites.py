@@ -55,6 +55,7 @@ def test_a_free_size_does_not_fetch_a_url_that_is_not_ours(method):
     _, job = h.post_job(token, op="resize", expect=200, **inp)
     job = h.poll(token, job["jobId"]) if job["state"] not in ("completed", "failed") else job
     assert job["state"] == "failed", job
+    assert job["error"]["code"] == "invalid_input" and "not one of this tool's own files" in job["error"]["message"]
     assert h.blobs.remote.fetched == [], "the relay fetched a URL outside its own store"
 
 
