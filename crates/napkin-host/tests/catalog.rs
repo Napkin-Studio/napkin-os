@@ -325,3 +325,47 @@ fn the_catalogue_gives_the_answers_the_scan_gave() {
     let up = a.iter().find(|(p, _, _)| *p == "/upstream").unwrap();
     assert_eq!(up.1["upstream"][0]["document_id"], "doc-brief", "{}", up.1);
 }
+
+// Review of 15 Nov, item 4: an id the tenant does not hold is answered from the catalogue's fresh stat
+// pass, never by reading every document. A person's POST /attach naming such an id runs inside a write
+// (the document's locks held); it must not be a way to make a request read the whole tenant.
+#[test]
+fn a_lookup_of_an_id_that_is_not_there_reads_no_document() {
+    let (_dir, store, _brief, room) = tenant(true);
+    let session = open(&store, &room);
+    answers(&store, &session); // warm
+    let before = store.reads.load(Ordering::SeqCst);
+    let r = handle(
+        &session,
+        &NoConfig,
+        HostRequest::new(
+            "/attach",
+            "",
+            json!({ "document_id": "doc-nowhere" })
+                .to_string()
+                .into_bytes(),
+        )
+        .posting(),
+    );
+    assert_eq!(r.status, 404, "{}", String::from_utf8_lossy(&r.body));
+    let child = napkin_host::Document::load(&*store, room.clone()).unwrap();
+    let after_load = store.reads.load(Ordering::SeqCst);
+    assert!(napkin_host::library::find_upstream(
+        &*store,
+        &Ctx::new(Actor::human("aoife@wk").unwrap()),
+        &child,
+        "doc-gone"
+    )
+    .is_none());
+    assert_eq!(
+        store.reads.load(Ordering::SeqCst) - after_load,
+        0,
+        "a missing parent read no archive"
+    );
+    // the attach read at most the room itself (its write path), never the tenant
+    assert!(
+        after_load - before <= 3,
+        "a missing source read {} archives of 200",
+        after_load - before
+    );
+}
