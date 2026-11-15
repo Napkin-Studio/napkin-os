@@ -441,6 +441,18 @@ impl Brain {
                 }
             }
         }
+        for page in self.pages.values() {
+            for l in &page.lines {
+                if let Some(by) = &l.superseded_by {
+                    if by == &l.id || !ids.contains(by.as_str()) {
+                        return Err(bad(format!(
+                            "line {} names {by} as its replacement, which is not another line of the brain",
+                            l.id
+                        )));
+                    }
+                }
+            }
+        }
         for (doc, s) in &self.sources {
             if !is_id(doc) || !is_id(&s.head) {
                 return Err(bad("a source is named by ids"));
@@ -465,6 +477,18 @@ fn is_client_id(s: &str) -> bool {
         && s[4..].chars().all(|c| matches!(c, '0'..='9' | 'a'..='f'))
 }
 
+/// The vault a document is for, by its manifest: the client's if it names one, the agency's if not.
+pub fn vault_of(manifest: &clan_sdk::Manifest) -> Vault {
+    Vault {
+        kind: if manifest.client.is_some() {
+            VaultKind::Client
+        } else {
+            VaultKind::Agency
+        },
+        client: manifest.client.as_ref().map(|c| c.id.clone()),
+    }
+}
+
 /// Open a brain through the store. Refuses the agency's registry document without reading it, and
 /// any document that is not a brain. A brain with no data yet is empty: its vault is the manifest's,
 /// the client's if the manifest names one and the agency's if it does not. A document whose data
@@ -484,14 +508,7 @@ pub fn open(store: &dyn DocStore, id: &DocId) -> HostResult<Brain> {
     if manifest.app.as_ref().map(|a| a.app_id.as_str()) != Some(BRAIN_APP) {
         return Err(bad(format!("{id} is not a brain")));
     }
-    let vault = Vault {
-        kind: if manifest.client.is_some() {
-            VaultKind::Client
-        } else {
-            VaultKind::Agency
-        },
-        client: manifest.client.as_ref().map(|c| c.id.clone()),
-    };
+    let vault = vault_of(manifest);
     let raw = clan.read_entry(DATA).unwrap_or_default();
     let data: Value = serde_yaml::from_slice(&raw).unwrap_or(Value::Null);
     let mut obj = match data {

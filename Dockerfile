@@ -51,7 +51,9 @@ RUN mkdir -p /out/apps \
  && cargo run --release -p clan-sdk --example make_script_editor -- \
       /out/apps/script-editor.app.clan /out/apps/script-editor.example.clan \
  && cargo run --release -p clan-sdk --example make_idea_room -- \
-      /out/apps/idea-room.app.clan /out/apps/idea-room.example.clan
+      /out/apps/idea-room.app.clan /out/apps/idea-room.example.clan \
+ && cargo run --release -p clan-sdk --example make_agency_brain -- \
+      /out/apps/agency-brain.app.clan
 
 # ── the shell ────────────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS shell

@@ -1,0 +1,16 @@
+[
+  { "doc": "doc-x", "id": "d_9001", "kind": "client_review", "action": "client_answer", "at": "2026-11-10", "job": "J001",
+    "slots": { "answer": "the bottle looked cheap", "version": 1 } },
+  { "doc": "doc-x", "id": "d_9002", "kind": "client_review", "action": "client_answer", "at": "2026-11-10", "job": "J001",
+    "slots": { "answer": "maybe", "version": 1 } },
+  { "doc": "doc-x", "id": "d_9003", "kind": "verdict", "action": "score_work", "at": "2026-11-10", "job": "J001",
+    "slots": { "total": 31, "target": "scene_2" } },
+  { "doc": "doc-x", "id": "d_9004", "kind": "verdict", "action": "score_work", "at": "2026-11-10", "job": "J001",
+    "slots": { "target": "scene_2" } },
+  { "doc": "doc-x", "id": "d_9005", "kind": "approve", "action": "lock", "at": "last Tuesday", "job": "J001",
+    "slots": { "version": 1 } },
+  { "doc": "doc-x", "id": "d_9006", "kind": "approve", "action": "lock", "at": "2026-11-10",
+    "slots": { "version": 1 } },
+  { "doc": "doc-x", "id": "d_9007", "kind": "verdict", "action": "pick_route", "at": "2026-11-10", "job": "J001",
+    "slots": { "route": "the one with the pint glass" } }
+]
