@@ -15,6 +15,7 @@
 //! they always have; a server calls the operations directly, inside its own
 //! transaction, and never needs a `Session` at all.
 
+use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
@@ -127,19 +128,31 @@ pub struct Applied {
 /// except the snapshot, which an operation borrows and never keeps. A shell
 /// that runs the operations itself can hold one of these directly; `Session`
 /// holds one behind a lock for the shells that want the old object.
+///
+/// The snapshot is shared (`Arc`): a read takes its own handle under the lock
+/// and works on it after letting the lock go, so a read that scans the whole
+/// tenant never holds the document up. Nothing changes a snapshot in place; a
+/// write or an open puts a new one in (`installs` counts them).
 #[derive(Default)]
 pub struct ViewState {
     /// The document this view has open, at the version it last read or wrote.
-    pub open: Option<Document>,
+    pub open: Option<Arc<Document>>,
     /// Whether the edit bridge is live (`clan://edit-mode`).
     pub edit_mode: bool,
+    /// How many snapshots have been put in, by an open or a write: an open
+    /// that read before the count moved does not put its older read over the
+    /// newer one ([`Session::open_observed`]).
+    pub installs: u64,
 }
 
 /// Where [`Session::open_observed`] has got to: each step of an open, as it
-/// ends.
+/// ends; and where a read ([`Session::read_observed`]) has got to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpenMark {
-    /// The view lock is held (the wait for it is over).
+    /// A read asks for the document's snapshot (it may wait for the view lock).
+    Asking,
+    /// The view lock is held (the wait for it is over). A read lets it go at
+    /// once, with its own handle on the snapshot.
     Locked,
     /// The archive is read from the store.
     Read { bytes: usize },
@@ -149,6 +162,43 @@ pub enum OpenMark {
     Resolved,
     /// What the shell is told about the document is worked out.
     Described,
+    /// A read's work on its snapshot is done (the view lock was not held for it).
+    Worked,
+}
+
+/// Who hears the marks of a thread's reads ([`observe_reads`]).
+pub type ReadMarks = Box<dyn FnMut(OpenMark)>;
+
+thread_local! {
+    /// Who hears the marks of every read this thread makes ([`observe_reads`]).
+    static READ_MARKS: RefCell<Option<ReadMarks>> = const { RefCell::new(None) };
+}
+
+/// Run `f` with `mark` told the steps of every [`Session::read`] made on this
+/// thread meanwhile ([`OpenMark::Asking`], [`OpenMark::Locked`],
+/// [`OpenMark::Worked`]), so a server can time the wait for the view lock
+/// apart from the work. The host keeps no clock; the caller measures.
+pub fn observe_reads<T>(mark: ReadMarks, f: impl FnOnce() -> T) -> T {
+    struct Restore(Option<ReadMarks>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let before = self.0.take();
+            READ_MARKS.with(|m| *m.borrow_mut() = before);
+        }
+    }
+    let _restore = Restore(READ_MARKS.with(|m| m.borrow_mut().replace(mark)));
+    f()
+}
+
+fn read_mark(m: OpenMark) {
+    READ_MARKS.with(|cell| {
+        // a mark inside a mark (an observer that reads) is not told twice
+        if let Ok(mut held) = cell.try_borrow_mut() {
+            if let Some(f) = held.as_mut() {
+                f(m);
+            }
+        }
+    });
 }
 
 /// The thin wrapper the desktop and browser shells use: a store, the context
@@ -227,10 +277,40 @@ impl Session {
         &self.ctx
     }
 
+    /// The open snapshot: the view lock is held only to take a handle on it.
+    fn snapshot_now(&self) -> Option<Arc<Document>> {
+        self.view.lock().unwrap().open.clone()
+    }
+
     /// Run a read against the open snapshot, or fail with "no file open".
+    ///
+    /// The view lock is held only to take the snapshot; `f` runs after it is
+    /// let go, so a read that scans the whole tenant (`/related`,
+    /// `/attach-targets`, `/upstream`) does not hold up every other request on
+    /// the document. A write meanwhile puts a newer snapshot in and this read
+    /// answers from the one it took: the answer it would have given a moment
+    /// earlier. Every decision that matters is made again inside
+    /// [`Self::perform`], under the lock. The steps are told to whoever
+    /// [`observe_reads`] on this thread.
     pub fn read<T>(&self, f: impl FnOnce(&Document) -> HostResult<T>) -> HostResult<T> {
-        let view = self.view.lock().unwrap();
-        f(view.open.as_ref().ok_or_else(HostError::no_file_open)?)
+        self.read_observed(&mut read_mark, f)
+    }
+
+    /// [`Self::read`], telling `mark` when it asks for the snapshot
+    /// ([`OpenMark::Asking`]), when it has it and the lock is let go
+    /// ([`OpenMark::Locked`]) and when its work is done ([`OpenMark::Worked`]).
+    pub fn read_observed<T>(
+        &self,
+        mark: &mut dyn FnMut(OpenMark),
+        f: impl FnOnce(&Document) -> HostResult<T>,
+    ) -> HostResult<T> {
+        mark(OpenMark::Asking);
+        let doc = self.snapshot_now();
+        mark(OpenMark::Locked);
+        let doc = doc.ok_or_else(HostError::no_file_open)?;
+        let out = f(&doc);
+        mark(OpenMark::Worked);
+        out
     }
 
     /// Run a write operation against the open snapshot and apply what it
@@ -238,20 +318,22 @@ impl Session {
     ///
     /// The lock is held from the snapshot the operation sees until the store
     /// has taken its changes, so two writes through one session cannot
-    /// interleave. That serialises this process only; another writer to the
-    /// same store is what `Change::base` — checked at apply, W2-A4 — is for.
+    /// interleave, and an open cannot put its read in between (it sees the
+    /// install count move). That serialises this process only; another writer
+    /// to the same store is what `Change::base` — checked at apply, W2-A4 — is
+    /// for.
     pub fn perform(
         &self,
         ctx: &Ctx,
         op: impl FnOnce(&Ctx, &Document) -> HostResult<Outcome>,
     ) -> HostResult<Applied> {
         let mut view = self.view.lock().unwrap();
-        let doc = view.open.as_ref().ok_or_else(HostError::no_file_open)?;
-        let outcome = op(ctx, doc)?;
+        let doc = view.open.clone().ok_or_else(HostError::no_file_open)?;
+        let outcome = op(ctx, &doc)?;
         let events = outcome.events();
         let noop = outcome.is_noop();
         for change in &outcome.changes {
-            self.commit(&mut view.open, change)?;
+            self.commit(&mut view, change)?;
         }
         Ok(Applied {
             reply: outcome.reply,
@@ -262,13 +344,16 @@ impl Session {
     }
 
     /// Apply one change through the store — the only write a session makes —
-    /// and, when it is to the open document, move the snapshot on to the
-    /// version the store now reports.
-    fn commit(&self, current: &mut Option<Document>, change: &Change) -> HostResult<()> {
+    /// and, when it is to the open document, put in the snapshot at the
+    /// version the store now reports. The snapshot it replaces is not
+    /// touched: a read still working on it finishes on it.
+    fn commit(&self, view: &mut ViewState, change: &Change) -> HostResult<()> {
         let version = self.store.apply(change)?;
-        if let Some(open) = current.as_mut() {
+        if let Some(open) = view.open.as_ref() {
             if open.id() == &change.doc {
-                *open = open.advance(change, version)?;
+                let next = open.advance(change, version)?;
+                view.open = Some(Arc::new(next));
+                view.installs += 1;
             }
         }
         Ok(())
@@ -279,32 +364,16 @@ impl Session {
     }
 
     pub fn trusted(&self) -> bool {
-        self.view
-            .lock()
-            .unwrap()
-            .open
-            .as_ref()
-            .map(Document::trusted)
-            .unwrap_or(false)
+        self.snapshot_now().is_some_and(|d| d.trusted())
     }
 
     pub fn current_id(&self) -> Option<DocId> {
-        self.view
-            .lock()
-            .unwrap()
-            .open
-            .as_ref()
-            .map(|d| d.id().clone())
+        self.snapshot_now().map(|d| d.id().clone())
     }
 
     /// The version the open snapshot is at — what a write from it is based on.
     pub fn current_version(&self) -> Option<Version> {
-        self.view
-            .lock()
-            .unwrap()
-            .open
-            .as_ref()
-            .map(|d| d.version().clone())
+        self.snapshot_now().map(|d| d.version().clone())
     }
 
     /// The packed archive of the open snapshot as handed out — the single-file
@@ -328,11 +397,7 @@ impl Session {
     /// The open document's app id, when it is an instance of one. What decides
     /// which apps will accept it as a spin-off source.
     pub fn app_id(&self) -> Option<String> {
-        self.view
-            .lock()
-            .unwrap()
-            .open
-            .as_ref()
+        self.snapshot_now()
             .and_then(|d| d.app_id().map(String::from))
     }
 
@@ -342,38 +407,61 @@ impl Session {
     /// the installed app's view when the library has one of the same major
     /// ([`crate::view`]).
     ///
-    /// The view lock is held from the read until the snapshot is in place, as
-    /// [`Self::perform`] holds it across a write. Read outside it, a reopen
-    /// racing a write could read the bytes from before the write and put them
-    /// back over the snapshot the write had moved on: the open document went
-    /// back a version, and the reply to the write carried the old data (UAT
-    /// round 12: the desk re-read a Research document while its report was
-    /// being written, and the page was handed the document without it).
+    /// The archive is read, parsed, verified and resolved outside the view
+    /// lock, so an open does not hold up the document's other requests. It
+    /// must still never put old bytes back: a reopen racing a write could read
+    /// the bytes from before the write, and putting them over the snapshot the
+    /// write had moved on took the open document back a version, and the reply
+    /// to the write carried the old data (UAT round 12: the desk re-read a
+    /// Research document while its report was being written, and the page was
+    /// handed the document without it). So the read is put in only if no
+    /// snapshot went in since the open began (the install count, under the
+    /// lock); if one did (a write's, which is newer than anything this open
+    /// could have read, or another open's), it stands, and the open answers
+    /// from it.
     pub fn open(&self, id: DocId) -> HostResult<OpenResult> {
         self.open_observed(id, &mut |_| {})
     }
 
     /// [`Self::open`], telling `mark` as each step ends, so a server can time
     /// where an open spends its time. The host keeps no clock (wasm32 has
-    /// none it may use); the caller measures between marks.
+    /// none it may use); the caller measures between marks. The steps come in
+    /// the order `Read`, `Verified`, `Resolved` (outside the lock), `Locked`
+    /// (the snapshot is in place, or a newer one is kept) and `Described`.
     pub fn open_observed(
         &self,
         id: DocId,
         mark: &mut dyn FnMut(OpenMark),
     ) -> HostResult<OpenResult> {
-        let mut state = self.view.lock().unwrap();
-        mark(OpenMark::Locked);
-        // One read: the snapshot holds the bytes it was built from (#10).
-        let bytes = self.store.parts().read(&id)?;
-        mark(OpenMark::Read { bytes: bytes.len() });
-        let doc = Document::from_bytes(id, bytes)?;
-        mark(OpenMark::Verified);
-        let doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
-        mark(OpenMark::Resolved);
-        let result = read::describe(&doc);
-        mark(OpenMark::Described);
-        state.open = Some(doc);
-        Ok(result)
+        loop {
+            let began = self.view.lock().unwrap().installs;
+            // One read: the snapshot holds the bytes it was built from (#10).
+            let bytes = self.store.parts().read(&id)?;
+            mark(OpenMark::Read { bytes: bytes.len() });
+            let doc = Document::from_bytes(id.clone(), bytes)?;
+            mark(OpenMark::Verified);
+            let doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
+            mark(OpenMark::Resolved);
+            let shown = {
+                let mut state = self.view.lock().unwrap();
+                mark(OpenMark::Locked);
+                if state.installs == began {
+                    let doc = Arc::new(doc);
+                    state.open = Some(doc.clone());
+                    state.installs += 1;
+                    Some(doc)
+                } else {
+                    // A write or another open put a snapshot in meanwhile: it
+                    // stands. When it is of another document, read again.
+                    state.open.clone().filter(|d| d.id() == &id)
+                }
+            };
+            if let Some(doc) = shown {
+                let result = read::describe(&doc);
+                mark(OpenMark::Described);
+                return Ok(result);
+            }
+        }
     }
 
     // ── Reading ─────────────────────────────────────────────────────────────
@@ -414,19 +502,15 @@ impl Session {
     /// Splice each attachment's cached extracted text into `payload`. A no-op
     /// with nothing open.
     pub fn attach_extracted_text(&self, payload: &mut Value) {
-        if let Some(d) = self.view.lock().unwrap().open.as_ref() {
-            read::attach_extracted_text(d, payload);
+        if let Some(d) = self.snapshot_now() {
+            read::attach_extracted_text(&d, payload);
         }
     }
 
     /// The provenance bundle an agent reads; `null` with nothing open.
     pub fn clan_context_for_agent(&self) -> Value {
-        self.view
-            .lock()
-            .unwrap()
-            .open
-            .as_ref()
-            .map(read::clan_context_for_agent)
+        self.snapshot_now()
+            .map(|d| read::clan_context_for_agent(&d))
             .unwrap_or(Value::Null)
     }
 
@@ -440,7 +524,9 @@ impl Session {
     /// Tell the open document's parents what its decision `decision` did
     /// with something it carried (Contract 4 §7.4), as the person in `ctx`.
     /// Called after the decision is written: the snapshot holds it. Writes
-    /// only to the parents, never to the open document.
+    /// only to the parents, never to the open document, and runs on the
+    /// snapshot with the view lock let go (finding a parent may read the
+    /// tenant).
     pub fn write_backrefs_as(
         &self,
         ctx: &Ctx,
@@ -1134,11 +1220,16 @@ mod tests {
         let mut marks = Vec::new();
         session.open_observed(id, &mut |m| marks.push(m)).unwrap();
         assert_eq!(marks.len(), 5);
-        assert_eq!(marks[0], OpenMark::Locked);
-        assert!(matches!(marks[1], OpenMark::Read { bytes } if bytes > 0));
+        assert!(matches!(marks[0], OpenMark::Read { bytes } if bytes > 0));
+        // read, parsed and resolved outside the lock; then put in under it, and described
         assert_eq!(
-            &marks[2..],
-            &[OpenMark::Verified, OpenMark::Resolved, OpenMark::Described]
+            &marks[1..],
+            &[
+                OpenMark::Verified,
+                OpenMark::Resolved,
+                OpenMark::Locked,
+                OpenMark::Described
+            ]
         );
     }
 
