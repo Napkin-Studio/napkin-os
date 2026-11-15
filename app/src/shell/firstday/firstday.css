@@ -1,0 +1,42 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+   License, v. 2.0. If a copy of the MPL was not distributed with this
+   file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+/* First day (features/first-day.clan): the pointer card and the invite on the People page. Shell tokens only: no veil,
+   no panel, no new colour. The card is placed beside its anchor (8 px below it, as the shell's popover is). */
+
+.fd-pointer {
+  position: fixed;
+  z-index: 40;
+  width: min(300px, calc(100vw - 16px));
+  box-sizing: border-box;
+  padding: 14px 16px;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  animation: fd-in 160ms ease-out;
+}
+.fd-pointer[data-still="true"] { animation: none; }
+@keyframes fd-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .fd-pointer { animation: fd-fade 80ms linear; }
+  @keyframes fd-fade { from { opacity: 0; } to { opacity: 1; } }
+}
+.fd-words { margin: 0 0 12px; font-size: 15px; line-height: 1.4; }
+.fd-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fd-count { color: var(--ink3); }
+.fd-btns { display: inline-flex; gap: 8px; }
+.fd-btn { min-height: 36px; }
+@media (max-width: 480px) {
+  .fd-btn { min-height: 44px; min-width: 44px; }
+}
+
+/* the invite sheet on a person's row of the People page: the same inline sheet the roles editor is */
+.fd-invite-link { width: 100%; box-sizing: border-box; font: inherit; }
+.fd-invite-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.fd-invite-note { margin: 8px 0 0; }
+
+.pa-fld { display: block; margin-bottom: 10px; }
+.pa-fld select, .pa-fld input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; }

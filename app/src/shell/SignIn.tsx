@@ -35,6 +35,7 @@ import { LOOK_DELAY_MS, signInLookOf, type SignInLook } from './agency/signInLoo
 import { loadAgencyLooks } from './agency/looks'
 import { justSignedOut, markSignedOut, rememberAgency } from './agency/lastAgency'
 import { afterSignIn, nextWhenSignedIn } from './next'
+import { welcomeName } from './firstday/welcome'
 import './SignIn.css'
 
 type Gate = 'checking' | 'open' | 'signin' | 'leaving'
@@ -70,6 +71,14 @@ export function SignInGate({ children, check }: { children: ReactNode; check: bo
       onDone={() => afterSignIn(location.search, next => location.replace(next), () => location.reload())} />
   }
   return <>{children}</>
+}
+
+/** The name the link carried has done its work: take it out of the address so a reload does not carry it. */
+function clearWelcome() {
+  try {
+    const u = new URL(location.href)
+    if (u.searchParams.has('welcome')) { u.searchParams.delete('welcome'); history.replaceState(null, '', u) }
+  } catch { /* the address stays as it is */ }
 }
 
 async function post(path: string, body: unknown): Promise<{ status: number; data: Record<string, unknown> }> {
@@ -109,7 +118,8 @@ function AgencyWordmark({ look }: { look: SignInLook }) {
 }
 
 export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone: () => void }) {
-  const [name, setName] = useState('')
+  // an invite's link starts the name (`/?welcome=name@agency`); it carries nothing else and signs nobody in
+  const [name, setName] = useState(() => welcomeName(typeof location === 'undefined' ? '' : location.search))
   const [password, setPassword] = useState('')
   const [fresh, setFresh] = useState('')
   const [again, setAgain] = useState('')
@@ -119,7 +129,7 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
   const [forgot, setForgot] = useState(false)
   const [signedOut] = useState(justSignedOut)
   const agency = useSignInLook(name)
-  const done = () => { markSignedOut(false); rememberAgency(accountName(name)); onDone() }
+  const done = () => { markSignedOut(false); rememberAgency(accountName(name)); clearWelcome(); onDone() }
 
   const signIn = async (e: FormEvent) => {
     e.preventDefault()

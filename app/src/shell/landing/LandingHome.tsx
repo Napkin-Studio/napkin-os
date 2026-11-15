@@ -24,6 +24,8 @@ import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
 import { Desk } from '../nui/Desk'
 import { DoorPage } from '../home/DoorPage'
 import { useDeskNeeds } from '../nui/useDeskNeeds'
+import { Pointers } from '../firstday/Pointers'
+import { markFirstDay } from '../../host/http'
 import { JobPage } from '../job/JobPage'
 import type { DoorEntry, HomeView } from '../../host/http'
 import { ClientView } from '../nui/ClientView'
@@ -170,6 +172,8 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const openPage = (d: DoorEntry) => (d.id === 'people' ? openPeoplePage() : go(d.id === 'audit' ? { level: 'audit' } : { level: 'door', door: d.id }))
 
   let body
+  // The first-day pointers stand beside the desk and nowhere else
+  let onDesk = false
   if (clientId && client && route.level === 'tool' && route.tool === 'territories') {
     body = (
       <TerritoriesGate
@@ -236,6 +240,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     )
   } else {
     // The desk (while a correction lands, it stands in).
+    onDesk = true
     body = (
       <Desk
         data={data}
@@ -247,6 +252,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenPage={home?.restricted ? openPage : undefined}
         needs={home?.restricted ? deskNeeds.answer : undefined}
         onTimesheet={() => go({ level: 'timesheet' })}
+        onFirstTask={home?.restricted ? path => { onOpenDocument(path); void markFirstDay({ opened: true }).then(() => deskNeeds.reload()) } : undefined}
         first={who.first}
         manage={manage}
         onAdd={onAdd}
@@ -267,6 +273,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
       <p className="lc-sr" role="status" aria-live="polite" data-testid="news">{news}</p>
       <p className="lc-sr" role="status" aria-live="polite" data-testid="registry-note">{registryNote}</p>
       {body}
+      <Pointers enabled={onDesk} />
     </div>
   )
 }

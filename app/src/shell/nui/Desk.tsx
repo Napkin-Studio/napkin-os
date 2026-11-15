@@ -48,6 +48,8 @@ interface Props {
   onOpenPage?: (door: DoorEntry) => void
   /** Opens the person's own timesheet day (the consent card's "What is captured"). */
   onTimesheet?: () => void
+  /** An invited person pressed their first task (features/first-day.clan): the page opens its document and marks it done. */
+  onFirstTask?: (path: string) => void
   /** What the person's documents hold for them (`GET /needs`), for a person with a role: Me lists those documents, soonest due first. */
   needs?: NeedsAnswer
   /** The person's first name, for the greeting. */
@@ -79,11 +81,13 @@ function placeOf(row: HTMLElement, circle: HTMLElement): { left: number; top: nu
   return { left, top, origin: `${cx - left}px ${dr.height / 2 + 12}px` }
 }
 
-export function Desk({ data, facts, live, offered = null, pages = [], morePages = [], onOpenPage, onTimesheet, needs, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
+export function Desk({ data, facts, live, offered = null, pages = [], morePages = [], onOpenPage, onTimesheet, onFirstTask, needs, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [from, setFrom] = useState<'all' | 'me'>('all')
+  // Me opens first for a person with a first task (the invite named a document to start with); their own pick wins after
+  const [picked, setFrom] = useState<'all' | 'me' | null>(null)
+  const from = picked ?? (needs?.first_task ? 'me' : 'all')
   const [meAll, setMeAll] = useState(false)
   const [dial, setDial] = useState<string | null>(null)
   const [place, setPlace] = useState<{ left: number; top: number; origin: string } | null>(null)
@@ -172,7 +176,7 @@ export function Desk({ data, facts, live, offered = null, pages = [], morePages 
   const hello = first ? `${greeting().replace(/\.$/, '')}, ${first}.` : greeting()
   const picks = useMemo(() => pickRows(data.items, facts, from, data.person?.id ?? null), [data.items, facts, from, data.person?.id])
   // Me, for a person with a role, is what their documents hold for them (the server's per-document facts), soonest due first.
-  const mine = useMemo(() => (needs ? meRows(data.items, needs.documents, needs.timesheet) : null), [data.items, needs])
+  const mine = useMemo(() => (needs ? meRows(data.items, needs.documents, needs.timesheet, needs.first_task ?? null) : null), [data.items, needs])
   const meShown = mine ? firstRows(mine, meAll) : null
   const worth = useMemo(() => worthItems(data.items, facts), [data.items, facts])
   const open = dial ? all.find(c => c.id === dial) ?? null : null
@@ -292,7 +296,7 @@ export function Desk({ data, facts, live, offered = null, pages = [], morePages 
                     {from === 'me' && meShown && mine ? <>
                       {meShown.shown.map(r => (
                         <button key={r.key} type="button" className="p33-pk" data-testid="me-row" data-due={r.due ?? ''} data-mine={r.mine}
-                          onClick={() => (r.timesheet ? onTimesheet?.() : onOpenDocument(r.path))}>
+                          onClick={() => (r.timesheet ? onTimesheet?.() : r.firstTask && onFirstTask ? onFirstTask(r.path) : onOpenDocument(r.path))}>
                           <span className="pk-ico"><ToolIcon tool="other" /></span>
                           <span><b>{r.title}</b><small>{r.sub}</small></span>
                           <span className="pk-st needs">{r.state}</span>
