@@ -348,3 +348,25 @@ None is verified or merged.
 - On the merged branch: 879 host and web tests pass; fmt clean; the relay's pytest passes; wasm, frontend, middleware, mock-backend, secrets and copy pass.
 - REGRESSION, found after the merge: Phase 2 suite tests 71 and 73 fail at both widths ("patch Client A brain"). The Napkin Brain's append-only rule (merged in 2d685c8f) refuses the way the suite seeds a brain document. The lead merged that record on its Rust tests and checks without running this spec. Being fixed on `fix/brain-suite-seed`. From here the lead runs the Phase 2 suite spec after any merge that touches the shared edit path.
 - Designs waiting for Sai: `registry-documents-closed` (approach A, about 20 hours; three of its holes are on develop and main).
+
+## 2026-11-15 · PAUSED at the owner's word · end of session 5
+
+**State.** `spike/fabletest` is at the commit that adds this entry, clean, 697 commits ahead of origin (457 are the Production line), not pushed. Nothing is running on the build machine: no builder, no reviewer, no test stack.
+
+**Merged this session** (see the entries above for each): `j001-phase3-suite`; `align-landing-look` with develop up to 0b0d4342; all of `align-booth`; all four stages of `align-needs-lock-people` (one People store, which closed a privilege escalation on this branch); the restore marks fix; the Script editor redraw fixes; the e2e stand-in and port fixes; the Production line (`production-line-merge`); `production-platform-rules` and three review rounds; the price half of `align-confidential-prices` and its follow-ups; `first-day`; Napkin Brain records 1 to 5 and the suite seed fix (9de8121c). Phase 4: 12 records approved.
+
+**Stopped part-way, nothing lost.**
+- `fix/store-scan-under-lock` (worktree `napkin-b-store-scan`, head a1d6ea66 with spike/fabletest merged in): stages A and B built. Lead's run: the hanging test 20 of 20; 885 host and web tests pass with it included; fmt clean. Its Fable review was STOPPED part-way at the pause and gave no verdict. NOT merged. Next: run that review again (brief in this session's history: no lost write; catalogue staleness and tenancy; the registry guard), then merge. Until it merges the pre-push hook's Rust suite can hang.
+- The Phase 2 suite re-run after the seed fix was STOPPED at the pause. The builder reported 28 of 28; the lead has not confirmed tests 71 and 73 on the merged branch. Next: `j001-p2-j001-phase2-suite.spec.ts` at both widths.
+
+**Not started, waiting for Sai.**
+- `registry-documents-closed`: the design is at `~/napkin-share/design-registry-documents-closed.md` on the build machine (approach A, about 20 hours). NOT approved, no record opened. The jobs registry (`home-jobs-v1`) is an ordinary document any member can read and write on this branch; the client registry, the launcher's data and a forged history in an uploaded file are on develop and main too, so staging and production have those three. Shrey has not been told by the lead.
+- The confidentiality half of `align-confidential-prices` (held; to be redesigned with agreed wording). It blocks `ask-nap`, Phase 3 wave 1 and Napkin Brain records 6 to 23.
+- The per-client AI switch (no design): until it exists the relay refuses every Runway or model job.
+- Phase 3 records after wave 0; Phase 4 builds. A cost plan for Phase 4 was put to Sai (attack each risky design before building; a preflight checklist for builders; Fable review by risk; Sonnet by default; a fresh session); not yet answered.
+
+**For a person, before any deploy of this branch.** A spend cap and settings on the hackathon relay's Lambda (`NAPKIN_ENV`, `NAPKIN_PAID_CALLS=off`, `NAPKIN_SPEND_CAP_EUR=0`, `NAPKIN_MODEL_PIN=eu`) and an ffmpeg layer; a roles column in `accounts.napkin.tsv` (13) and `accounts.uat.tsv` (23), or all 36 start with no role; a People store for production (Cognito); `NAPKIN_PUBLIC_ORIGIN` for invite mail. The push of `spike/fabletest` needs a named person's licence approval (`NAPKIN_LICENCE_APPROVED`), because the Production line changed `licences/*.toml`.
+
+**Open questions for the owner** are listed in the entries above and on each record: who opens Production (`demo` included); the two brief signers being one person; gate items on a brief with no job; clients and jobs importable from a file; the door named "Time and money"; the brief's Budget and scope shown to every role; the day cap shared by every agency; uploads public on the CDN; sign-in time and IP in the audit chain; a Production job's cost shown nowhere.
+
+**To resume.** Open the repo on `spike/fabletest`, read this entry, then: (1) re-run the store scan review and merge it; (2) confirm the Phase 2 suite; (3) Sai's answer on the registry design.
