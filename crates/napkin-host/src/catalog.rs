@@ -162,8 +162,47 @@ impl StoreCatalog {
     }
 }
 
+impl StoreCatalog {
+    /// The documents whose manifest could not be read at the last refresh: the only ones the catalogue
+    /// cannot vouch for.
+    pub fn unreadable(&self) -> Vec<DocId> {
+        self.kept
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .filter(|(_, (_, e))| e.is_none())
+            .map(|(id, _)| DocId::new(id.clone()))
+            .collect()
+    }
+}
+
 /// The candidates `store`'s catalogue gives for `pick`, or `None` when the
 /// store keeps no catalogue (the caller scans, as before).
 pub fn candidates(store: &dyn DocStore, pick: impl Fn(&Entry) -> bool) -> Option<Vec<DocId>> {
     store.catalog().map(|c| c.find(store, pick))
+}
+
+/// For a lookup of one document: the catalogue's candidates, just refreshed (every document stamped). When
+/// it names none, the document is not in the store, unless it is one of the few whose manifest the
+/// catalogue could not read: only those are handed back to be opened (logged). Never the whole tenant, so
+/// a caller naming an id that is not there cannot make a request read every document. `None` without a
+/// catalogue.
+pub fn lookup(
+    store: &dyn DocStore,
+    what: &str,
+    pick: impl Fn(&Entry) -> bool,
+) -> Option<Vec<DocId>> {
+    let catalog = store.catalog()?;
+    let hits = catalog.find(store, pick);
+    if !hits.is_empty() {
+        return Some(hits);
+    }
+    let unreadable = catalog.unreadable();
+    if !unreadable.is_empty() {
+        crate::log::log(&format!(
+            "catalog: no candidate in {what}; opening the {} document(s) whose manifest it could not read",
+            unreadable.len()
+        ));
+    }
+    Some(unreadable)
 }

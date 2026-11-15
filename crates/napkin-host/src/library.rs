@@ -767,28 +767,18 @@ pub fn find_upstream(
     }
     // The tenant's catalogue names the candidates (crate::catalog): only they are opened, each checked as
     // the scan checks it. With no catalogue, or none it names, the whole tenant is scanned as before.
-    let candidates = crate::catalog::candidates(store, |e| {
+    // A miss answers "not there" from the catalogue's fresh stat pass, never a scan of the tenant.
+    let candidates = crate::catalog::lookup(store, "find_upstream", |e| {
         e.document_id == document_id && e.is_document() && &e.id != child.id()
     });
-    if let Some(ids) = candidates.filter(|ids| !ids.is_empty()) {
+    if let Some(ids) = candidates {
         return ids.into_iter().find_map(is_it);
     }
-    scanned("find_upstream", document_id, store);
     store
         .documents()
         .into_iter()
         .filter(|id| id != child.id())
         .find_map(is_it)
-}
-
-/// A lookup the tenant's catalogue had no candidate for falls back to reading every document: said in the
-/// log, so a catalogue that misses shows (a parent that is gone or another tenant's costs the scan).
-fn scanned(what: &str, document_id: &str, store: &dyn DocStore) {
-    if store.catalog().is_some() {
-        log(&format!(
-            "catalog: no candidate for {document_id} in {what}; scanning the tenant"
-        ));
-    }
 }
 
 /// What a child decided about something it carried, as its parents are told
@@ -1369,15 +1359,10 @@ pub(crate) fn find_source(
     document_id: &str,
 ) -> HostResult<Document> {
     // the catalogue's candidates when it names any (crate::catalog), else every document
-    let ids = match crate::catalog::candidates(store, |e| e.document_id == document_id)
-        .filter(|ids| !ids.is_empty())
-    {
-        Some(ids) => ids,
-        None => {
-            scanned("find_source", document_id, store);
-            store.documents()
-        }
-    };
+    // the catalogue's candidates (crate::catalog::lookup: a miss is "not found", never a scan), else,
+    // with no catalogue, every document
+    let ids = crate::catalog::lookup(store, "find_source", |e| e.document_id == document_id)
+        .unwrap_or_else(|| store.documents());
     for id in ids {
         if &id == doc.id() {
             continue;
