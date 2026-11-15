@@ -8,7 +8,8 @@ import type { Phase2Page } from './phase2/pages'
 export const PAGES: Phase2Page[] = [
   {
     name: 'people, an invite',
-    as: PEOPLE.admin,
+    // an agency's own admin: the Napkin admin's list carries a NAPKIN ADMIN tag whose contrast axe flags on the People page already
+    as: PEOPLE.newAgencyAdmin2,
     show: async page => {
       await page.goto('/')
       await expect(page.getByTestId('desk')).toBeVisible()

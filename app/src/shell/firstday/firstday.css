@@ -28,9 +28,9 @@
 .fd-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .fd-count { color: var(--ink3); }
 .fd-btns { display: inline-flex; gap: 8px; }
-.fd-btn { min-height: 36px; }
-@media (max-width: 480px) {
-  .fd-btn { min-height: 44px; min-width: 44px; }
+.fd-pointer .fd-btn { min-height: 36px; }
+@media (max-width: 600px) {
+  .fd-pointer .fd-btn { min-height: 44px; min-width: 44px; }
 }
 
 /* the invite sheet on a person's row of the People page: the same inline sheet the roles editor is */
