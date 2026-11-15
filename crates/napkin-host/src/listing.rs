@@ -98,6 +98,10 @@ pub struct LibraryItem {
     /// the document, so a job that ends after its page closed still lands.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub jobs: Vec<String>,
+    /// It was spun off a parent it carries (`lineage.carried`): what the desk
+    /// asks `/upstream` of, and of no other document. Absent when it was not.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub carried: bool,
 }
 
 /// The library route's answer.
@@ -125,6 +129,7 @@ struct Core {
     state: Option<RecentState>,
     run: Option<RunInfo>,
     last_editor: Option<String>,
+    carried: bool,
 }
 
 type Key = (String, usize);
@@ -245,6 +250,7 @@ pub fn scan_library(
             run: cache.runs.run_for(&id).or(core.run),
             jobs: cache.runs.unsettled(&id),
             last_editor: core.last_editor,
+            carried: core.carried,
         });
     }
     // A document that is gone must not be remembered.
@@ -282,6 +288,7 @@ fn work_out(store: &dyn DocStore, id: &DocId, clan: &ClanFile) -> Option<Core> {
         state: recent_state(id.clone(), clan.raw_bytes().to_vec()),
         run: run_of(clan),
         last_editor: last_editor(clan),
+        carried: m.carried().is_some(),
     })
 }
 

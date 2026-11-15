@@ -1450,7 +1450,7 @@ mod tests {
     /// open in a session with the job index behind it, as the web server holds one.
     fn room_on_a_parked_store() -> (tempfile::TempDir, Arc<Parked>, Arc<Session>, DocId) {
         let dir = tempfile::tempdir().unwrap();
-        let (brief, brief_id) = stored(
+        let (_brief, brief_id) = stored(
             dir.path(),
             "brief.clan",
             crate::ops::gate::BRIEF_MAKER,
@@ -1459,7 +1459,8 @@ mod tests {
         );
         let lineage = clan_sdk::Lineage {
             parent_id: brief_id.clone(),
-            parent_uri: format!("clan-store:{}", brief.as_str()),
+            // a write to the room has moved its lineage on: the brief is looked up in the tenant by its id
+            parent_uri: format!("clan:{brief_id}"),
             parent_sha256: None,
             delta: "spinoff".into(),
             parents: vec![],
