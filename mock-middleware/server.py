@@ -1258,7 +1258,9 @@ def poll(doc, inp):
 def envelope(task, handler, job, result, change, hits):
     with_reasoning(change, result)
     return {"api": API, "task": task, "handler": handler, "job": job, "result": result,
-            "change": change, "trace": trace(hits)}
+            "change": change, "trace": trace(hits),
+            # what the spend guard let through (features/align-confidential-prices.clan): nothing is charged here
+            "usage": {"estimate_eur": 0.0, "charged_eur": 0.0, "route": None}}
 
 
 # ---------------------------------------------------------------------------
