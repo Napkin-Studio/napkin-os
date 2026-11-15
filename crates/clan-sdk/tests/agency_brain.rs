@@ -11,7 +11,13 @@ use serde_json::{json, Value};
 
 const APP_ID: &str = "ie.napkin.agency-brain";
 
+/// The packed template, from the real packer, made once for all the tests (they share the output folder).
 fn packed() -> ClanFile {
+    static BYTES: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    ClanFile::from_bytes(BYTES.get_or_init(pack).clone()).unwrap()
+}
+
+fn pack() -> Vec<u8> {
     let out = std::env::temp_dir().join(format!("agency-brain-pack-{}", std::process::id()));
     std::fs::create_dir_all(&out).unwrap();
     let app_path = out.join("agency-brain.app.clan");
@@ -35,9 +41,9 @@ fn packed() -> ClanFile {
         "packer failed: {}",
         String::from_utf8_lossy(&run.stderr)
     );
-    let t = ClanFile::from_bytes(std::fs::read(&app_path).unwrap()).unwrap();
+    let bytes = std::fs::read(&app_path).unwrap();
     let _ = std::fs::remove_dir_all(&out);
-    t
+    bytes
 }
 
 fn schema(t: &ClanFile) -> Value {
@@ -83,8 +89,11 @@ fn the_packed_template_is_the_agency_brain_app() {
     let app = t.manifest().app.as_ref().expect("app block");
     assert_eq!(app.app_id, APP_ID);
     assert_eq!(app.version, "0.1.0");
-    assert_eq!(t.manifest().document_type, "template");
-    assert!(app.spinoff.is_none(), "a brain is not spun off from a document");
+    assert_eq!(t.manifest().document_type.as_deref(), Some("template"));
+    assert!(
+        app.spinoff.is_none(),
+        "a brain is not spun off from a document"
+    );
     assert!(t.has_entry("agent/context.md"));
     assert!(t.has_entry("agent/output-schema.json"));
     assert!(t.has_entry("human/index.html"));
@@ -104,7 +113,10 @@ fn a_brain_per_client_and_one_for_the_agency_both_come_from_it() {
         .unwrap(),
     )
     .unwrap();
-    assert!(agency.manifest().client.is_none(), "the agency's brain names no client");
+    assert!(
+        agency.manifest().client.is_none(),
+        "the agency's brain names no client"
+    );
     assert_eq!(agency.manifest().app.as_ref().unwrap().app_id, APP_ID);
 
     let client = ClanFile::from_bytes(
@@ -130,7 +142,10 @@ fn a_brain_per_client_and_one_for_the_agency_both_come_from_it() {
         }
     }
     let client = ClanFile::from_bytes(b.build().unwrap()).unwrap();
-    assert_eq!(client.manifest().client.as_ref().unwrap().id, "cli_0a1b2c3d");
+    assert_eq!(
+        client.manifest().client.as_ref().unwrap().id,
+        "cli_0a1b2c3d"
+    );
     assert_eq!(client.manifest().app.as_ref().unwrap().app_id, APP_ID);
     // Both start with an empty brain, so the first ingest makes the pages.
     assert!(clan_sdk::validate(&client).is_valid());
@@ -205,7 +220,10 @@ fn the_page_format_is_fixed() {
 
     for key in ["type", "title", "summary", "owner_role", "lines"] {
         let mut b = brain(derived());
-        b["pages"]["j001-accepted"].as_object_mut().unwrap().remove(key);
+        b["pages"]["j001-accepted"]
+            .as_object_mut()
+            .unwrap()
+            .remove(key);
         assert!(!valid(&s, &b), "a page with no {key}");
     }
     let mut l = derived();
@@ -224,7 +242,10 @@ fn a_curated_line_adds_text_and_an_approver() {
     let mut l = derived();
     l["kind"] = json!("curated");
     l["text"] = json!("No approver");
-    assert!(!valid(&s, &brain(l)), "a curated line names who approved it");
+    assert!(
+        !valid(&s, &brain(l)),
+        "a curated line names who approved it"
+    );
 }
 
 #[test]
@@ -240,9 +261,25 @@ fn the_template_holds_no_price_and_no_borrowed_material() {
     }
     let low = all.to_lowercase();
     for bad in [
-        "price", "cost", "credit", "budget", "€", "$", "cannes", "effie", "warc", "fable", "brain/raw",
+        "price",
+        "cost",
+        "credit",
+        "budget",
+        "cannes",
+        "effie",
+        "warc",
+        "fable",
+        "brain/raw",
     ] {
         assert!(!low.contains(bad), "the template mentions {bad:?}");
+    }
+    // A currency sign: the schema's regexes end in `$`, so look only at what a person reads.
+    for p in ["agent/context.md", "human/index.html"] {
+        let text = t.read_entry_string(p).unwrap();
+        assert!(
+            !text.contains('€') && !text.contains('$') && !text.contains('£'),
+            "{p} shows money"
+        );
     }
     assert!(!all.contains('\u{2014}'), "no em dash");
 }
@@ -252,8 +289,14 @@ fn the_page_is_static_and_builds_no_panel_of_its_own() {
     let t = packed();
     let html = t.read_entry_string("human/index.html").unwrap();
     assert!(!html.contains("<script"), "record 1's page is static");
-    assert!(!html.contains("@napkin:booth"), "the Booth is spliced in a later record");
+    assert!(
+        !html.contains("@napkin:booth"),
+        "the Booth is spliced in a later record"
+    );
     for bad in ["drawer", "chat", "side-panel", "sidebar"] {
-        assert!(!html.to_lowercase().contains(bad), "the page builds a {bad}");
+        assert!(
+            !html.to_lowercase().contains(bad),
+            "the page builds a {bad}"
+        );
     }
 }
