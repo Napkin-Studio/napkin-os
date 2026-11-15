@@ -14,9 +14,10 @@ const job = {
   cost: { estimate: 0.25, reserved: 0.25, confirmed: 0.25, currency: 'USD', unknown: false },
 } as JobEntry
 
+// What a person reads: the markup's text and attributes, without the crew figure's drawing (its SVG geometry is numbers).
 const render = (rationale: string) => renderToStaticMarkup(createElement(HistoryList, { entries: [
   { id: 'd_2', agent: 'wren', action: 'render frames[v1] for shot 1', rationale, timestamp: '2026-11-15T10:00:41Z' },
-] }))
+] })).replace(/<svg[\s\S]*?<\/svg>/g, '')
 
 describe('History shows no cost', () => {
   it('a crew landing, whose rationale is clan-store jobRationale, shows no figure and no money word', () => {

@@ -108,6 +108,12 @@ export function readable(s: string): string {
   return s.replace(/sha256:([0-9a-f]{8})[0-9a-f]{56}/g, 'sha256:$1…').replace(/\b([a-z]+_)([0-9A-HJKMNP-TV-Z]{20})([0-9A-HJKMNP-TV-Z]{6})\b/g, '$1…$3')
 }
 
+/** A rationale without the cost part older landings wrote into it (clan-store jobRationale before the owner's rule:
+ *  "cost <figure> confirmed", "cost <figure> estimated, not confirmed"). The cost stays recorded on the job. */
+export function withoutCost(s: string): string {
+  return s.split(' · ').filter((part) => !/^cost\b/i.test(part.trim())).join(' · ')
+}
+
 export function timeOf(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
