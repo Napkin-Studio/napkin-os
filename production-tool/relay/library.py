@@ -82,8 +82,14 @@ class Library:
         variants = [r["variant"] for r in refs]
         if len(set(variants)) != len(variants):
             raise ValueError("Each variant can be published once.")
+        from blobs import UnsafeUrl, own_key
         for a in [r["asset"] for r in refs] + _assets(req.get("payload")):
-            upload = self.blobs.key_for_url(a["url"])
+            # The one check (blobs.own_key) before any look: a key that is not this agency's to name answers as a
+            # file not uploaded, the same as one that is missing, so no other agency's object is looked up.
+            try:
+                upload = own_key(self.blobs, a["url"], workspace)
+            except UnsafeUrl:
+                upload = None
             if not upload or not self.blobs.exists(upload):
                 raise Missing(f"A file of {key} has not been uploaded.")
         for _ in range(RETRIES):

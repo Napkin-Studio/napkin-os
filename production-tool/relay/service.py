@@ -689,7 +689,7 @@ class Relay:
         them first, or the relay made them for it), so no agency learns of another's file; anyone else
         gets a PUT bound to the hash, which S3 refuses for other bytes (features/tenant-limits.clan)."""
         tenant, sha = who["tenant"]["id"], req["sha256"]
-        key = f"in/{sha}"
+        key = own_key(self.blobs, self.blobs.public_url(f"in/{sha}"), tenant)   # the one check, for the request's hash
         url = self.blobs.public_url(key)
         if self.store.holds(tenant, sha):
             if self.blobs.exists(key):
@@ -870,9 +870,21 @@ class Relay:
             return directed
         return directed or any(p != "mock" for p in self._chain(cfg, op, req.get("modelChoice"), allow, req["input"]))
 
+    @staticmethod
+    def _billed_clip(req: dict) -> str | None:
+        """The URL of the clip a provider reads whole and bills by its length: an edit's video, an outpaint's take
+        (runway.py _outpaint sends the take, not the window). None for any other job."""
+        inp = req.get("input") or {}
+        if req["op"] == "clip_edit":
+            return (inp.get("video") or {}).get("url")
+        if req["op"] == "cutdown" and not free_resize(req):
+            return (((inp.get("cutdown") or {}).get("clips") or [{}])[0].get("asset") or {}).get("url")
+        return None
+
     def _stored_clip_seconds(self, req: dict, tenant: str) -> float:
-        """The real length of the clip an edit reads, from our own stored copy; refused when it cannot be read."""
-        url = ((req.get("input") or {}).get("video") or {}).get("url")
+        """The real length of the clip a provider reads, measured on our own stored copy (cliplength.measure, at
+        most blobs.MAX_MEASURE_BYTES); refused when it cannot be measured."""
+        url = self._billed_clip(req)
         try:
             seconds = self.blobs.clip_seconds(url, tenant) if url else None
         except UnsafeUrl as e:
@@ -978,7 +990,9 @@ class Relay:
             return settings
         if op == "cutdown":  # an outpaint: Aleph 2 bills the seconds of the clip it reads (minimum on the sheet)
             clip = ((inp.get("cutdown") or {}).get("clips") or [{}])[0]
-            if clip.get("outS") is not None:
+            if seconds is not None:   # the take it sends whole, measured on our copy (the re-review of 1d637751)
+                settings["inputS"] = max(spec.get("minS", 0), math.ceil(float(seconds) - 1e-9))
+            elif clip.get("outS") is not None:
                 settings["inputS"] = max(spec.get("minS", 0), math.ceil(float(clip["outS"]) - float(clip.get("inS") or 0) - 1e-9))
             return settings
         if op == "upscale":  # Magnific's price turns on the output's longest side (providers.md fact 7)
@@ -1131,7 +1145,8 @@ class Relay:
             raise ApiError("invalid_input", str(e)) from None
         patch = self._patch_admit(cfg, req) if op == "clip_patch" else None
         estimate, unknown = 0.0, False
-        clip_s = self._stored_clip_seconds(req, who["tenant"]["id"]) if op == "clip_edit" else None
+        clip_s = self._stored_clip_seconds(req, who["tenant"]["id"]) if self._billed_clip(req) is not None or \
+            op == "clip_edit" else None
         if op not in INTERNAL_OPS and not free:
             # Reserved at the dearest provider it may run on, with the model it would run there.
             candidates = self._chain(cfg, op, pick, policy["allow"], req["input"])
@@ -1673,6 +1688,9 @@ class Relay:
                     softened_from = pjob["prompt"]
                     pjob = {**pjob, "prompt": self._plainer(job, sheet, pjob)}
                     log.info(json.dumps({"kind": "softened", "jobId": job["jobId"], "providerCode": e.provider_code}))
+                    job, refused = self._before_send(job)   # a second send: the hooks run again, before it
+                    if refused is not None:
+                        return self._fail(job, refused.code, refused.message, paid=False, refund=True)
                     continue
                 if softened_from:
                     return self._fail(job, "moderated", f"{soften.TWICE} ({e.provider_code or 'moderated'}).",

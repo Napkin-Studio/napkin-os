@@ -136,8 +136,14 @@ TENANT_KEY = re.compile(r"^tenants/([0-9a-f-]{36})/[A-Za-z0-9_./@-]+$")
 NOT_OURS = "That file is not one of ours, so it was not read."
 
 
+MAX_MEASURE_BYTES = 100 * 1024 * 1024   # the most of a clip the relay reads to measure its length (cliplength.py)
+
+
 def own_key(blobs, url: str, tenant: str | None = None) -> str:
-    """The key of one of the relay's own blobs a request's URL names, or UnsafeUrl before any read: a public
+    """THE one check every blob access by a caller-supplied name passes (read, exists, measure, presign): fetch_own,
+    clip_seconds, the library's publish, POST /uploads and Relay._check_urls at the door all call it, and
+    tests/test_fetch_sites.py walks every blob call so a new one cannot skip it.
+    The key of one of the relay's own blobs a request's URL names, or UnsafeUrl before any read: a public
     artifact (in/, out/ by hash, ads/), or the calling agency's own tenants/<tenant>/ space. The answer turns on the
     key alone, never on whether the object exists, so it is no oracle (features/production-platform-rules.clan,
     review C and the review of 25e7c870)."""
@@ -243,9 +249,18 @@ class S3Blobs:
             raise UnsafeUrl(NOT_OURS) from None
 
     def clip_seconds(self, url: str, tenant: str | None = None) -> float | None:
-        """A stored clip's real length (cliplength.py), from our own bytes: never from the request."""
-        from cliplength import mp4_seconds
-        return mp4_seconds(self.fetch_own(url, tenant))
+        """A stored clip's real length (cliplength.measure), from our own copy, never from the request: None when
+        it is over MAX_MEASURE_BYTES (nothing past the cap is read) or cannot be measured."""
+        from cliplength import measure
+        key = own_key(self, url, tenant)
+        try:
+            r = self.s3.get_object(Bucket=self.bucket, Key=key, Range=f"bytes=0-{MAX_MEASURE_BYTES}")
+        except self.s3.exceptions.NoSuchKey:
+            raise UnsafeUrl(NOT_OURS) from None
+        total = (r.get("ContentRange") or "").rpartition("/")[2]
+        if (total.isdigit() and int(total) > MAX_MEASURE_BYTES) or r.get("ContentLength", 0) > MAX_MEASURE_BYTES:
+            return None
+        return measure(r["Body"].read(MAX_MEASURE_BYTES + 1))
 
     def get(self, key: str) -> bytes | None:
         try:
@@ -348,9 +363,14 @@ class LocalBlobs:
         return p.read_bytes()
 
     def clip_seconds(self, url: str, tenant: str | None = None) -> float | None:
-        """A stored clip's real length (cliplength.py), from our own bytes: never from the request."""
-        from cliplength import mp4_seconds
-        return mp4_seconds(self.fetch_own(url, tenant))
+        """A stored clip's real length (cliplength.measure), from our own copy: None over MAX_MEASURE_BYTES."""
+        from cliplength import measure
+        p = self.path(own_key(self, url, tenant))
+        if not p.exists():
+            raise UnsafeUrl(NOT_OURS)
+        if p.stat().st_size > MAX_MEASURE_BYTES:
+            return None
+        return measure(p.read_bytes())
 
     def get(self, key: str) -> bytes | None:
         p = self.path(key)

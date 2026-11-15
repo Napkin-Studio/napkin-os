@@ -23,7 +23,9 @@ one line a process logs at start-up saying which mode the guard is in.
 A refusal's reason is one plain line with no figure and no money word (the interface shows it); the cap
 and the amount go to the log only.
 
-Totals are kept in memory, per process: a second task counts its own spend, and a restart (a Lambda cold
+Totals are kept in memory, per process, and are ONE total per environment for every agency (an agency's paid
+calls count against the same day cap as every other's; whether the cap should be per agency is the owner's
+question). A call refused after it was counted and never sent is given back with release(). A second task counts its own spend, and a restart (a Lambda cold
 start) begins at zero, so the cap is per process until the cost engine (Phase 3) keeps one ledger. That
 engine can implement allow() with this signature. An estimate that is too high only refuses early; callers
 pass a ceiling, never zero.
@@ -171,6 +173,22 @@ def allow(amount: float, env: str, run: str) -> Verdict:
         _day[(env, today)] = spent + amount
         _run[(env, run)] = rspent + amount
     return Verdict(True)
+
+
+def release(amount: float, run: str | None = None, env: str | None = None) -> None:
+    """Give back what allow() counted for a call that was then not sent (never below zero)."""
+    env = (environment() if env is None else env or "local").strip().lower()
+    run = (_current_run.get() if run is None else run) or "-"
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        return
+    with _lock:
+        if (env, today) in _day:
+            _day[(env, today)] = max(0.0, _day[(env, today)] - amount)
+        if (env, run) in _run:
+            _run[(env, run)] = max(0.0, _run[(env, run)] - amount)
 
 
 def check(amount: float, run: str | None = None, env: str | None = None) -> None:

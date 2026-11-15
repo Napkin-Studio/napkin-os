@@ -105,10 +105,13 @@ class FakeBlobs:
     def clip_seconds(self, url, tenant=None):
         """blobs.clip_seconds: a stored clip's real length; a clip this fake store never held reads as
         default_clip_s (tests that are about the length store a real MP4: test_guard_estimate.mp4)."""
-        from blobs import own_key
-        from cliplength import mp4_seconds
-        key = own_key(self, url, tenant)
-        return mp4_seconds(self.objects[key][0]) if key in self.objects else self.default_clip_s
+        import blobs as _blobs
+        from cliplength import measure
+        key = _blobs.own_key(self, url, tenant)
+        if key not in self.objects:
+            return self.default_clip_s
+        data = self.objects[key][0]
+        return None if len(data) > _blobs.MAX_MEASURE_BYTES else measure(data)
 
     def get(self, key):
         return self.objects[key][0] if key in self.objects else None

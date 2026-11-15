@@ -382,3 +382,72 @@ def test_no_relay_module_imports_another_http_library():
             mod = getattr(node, "module", None) or ""
             for n in [mod, *names]:
                 assert not re.match(r"^(requests|aiohttp|urllib3|urllib\.request|pycurl)\b", n or ""), (rel, n)
+
+
+# ── the re-review of 1d637751: the library's existence oracle and every blob call ─────────────────────
+
+def test_publishing_to_the_library_is_no_oracle_over_another_agencys_objects():
+    from test_projects import clan, save
+    h = Harness()
+    bob = h.as_person("bob", "red")
+    save(h, bob, PROJECT, clan("red's project"))
+    alice = h.as_person("alice", "blue")
+    red = identity.tenant_id("red")
+    looked = []
+    real = h.blobs.exists
+    h.blobs.exists = lambda key: (looked.append(key), real(key))[1]
+    answers = {}
+    for name, project in (("exists", PROJECT), ("missing", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9ZZ")):
+        a = {**asset(1), "url": f"{CDN}/tenants/{red}/projects/{project}/latest.clan"}
+        body = {"kind": "key", "role": "character", "baseVer": 0, "refs": [{"variant": "front", "asset": a}]}
+        answers[name] = h.call("POST", "/library/agency/probe", body, alice)
+    assert answers["exists"][0] == answers["missing"][0] and answers["exists"][1] == answers["missing"][1], answers
+    assert not [k for k in looked if k.startswith("tenants/")], f"another agency's key was looked up: {looked}"
+
+
+# Every blob-store call by a module, and where its key comes from. INTERNAL: a key the relay builds from what it
+# owns (the agency's workspace, a job id, a hash it computed). CALLER: a name a request supplied, which passes
+# blobs.own_key first (the one check). A new site fails until it is named here with its kind.
+BLOB_METHODS = {"exists", "get", "put", "get_json", "get_json_tagged", "put_json_if", "list_keys", "delete", "presign_put",
+                "fetch", "fetch_own", "clip_seconds", "head", "copy", "accept_upload", "read_capped", "public_url",
+                "key_for_url"}
+
+
+def blob_calls():
+    found = set()
+    for rel, tree in sources():
+        if rel in ("blobs.py",) or rel.startswith(("scripts/",)):
+            continue
+        text = (RELAY / rel).read_text()
+        for fn, node in sites(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in BLOB_METHODS:
+                owner = ast.get_source_segment(text, node.func.value) or ""
+                if re.search(r"blobs\b", owner):
+                    found.add((rel, fn, node.func.attr))
+    return found
+
+
+def test_every_blob_call_with_a_callers_name_passes_the_one_check():
+    """Each function that hands a blob store a name from a request calls blobs.own_key (or a method built on it:
+    fetch_own, clip_seconds) or the relay's _check_urls on that request first."""
+    unchecked = []
+    for rel, tree in sources():
+        if rel == "blobs.py":
+            continue
+        text = (RELAY / rel).read_text()
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            body = ast.get_source_segment(text, fn) or ""
+            if re.search(r"blobs\.(exists|get|get_json|head|copy|list_keys|presign_put|delete)\(\s*(upload|key_for|self\.blobs\.key_for_url)", body) \
+                    or re.search(r"key_for_url\([^)]*\)\s*\n?.*blobs\.(exists|get)\(", body):
+                if "own_key(" not in body and "_check_urls(" not in body:
+                    unchecked.append(f"{rel}:{fn.name}")
+    assert not unchecked, unchecked
+
+
+def test_the_blob_calls_are_the_known_ones():
+    known = {line for line in (Path(__file__).with_name("fixtures") / "blob_calls.txt").read_text().splitlines()
+             if line and not line.startswith("#")}
+    found = {f"{rel} {fn} {m}" for rel, fn, m in blob_calls()}
+    assert found <= known, f"new blob calls: name each in tests/fixtures/blob_calls.txt with where its key comes from: {sorted(found - known)}"

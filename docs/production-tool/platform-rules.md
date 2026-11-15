@@ -31,9 +31,14 @@ the passthrough director never ask the guard, so the tests and the e2e stack run
 The guard's estimate is the sheet's price through `contracts/pricing.py`, the dearest case where the provider
 job does not say (tier, plate size, input length), and never below the ledger's reservation for the job
 (`priceUsd` on the provider job). `tests/test_guard_estimate.py` walks every op and model in
-`capabilities/runway.json` and asserts guard >= sheet price. An edit (`clip_edit`) is priced by the stored
-clip's real length, read from the relay's own copy (`cliplength.py`, the MP4's movie header), never by a length
-the request declares; a clip whose length cannot be read is refused. A clip refused by Runway's text check after
+`capabilities/runway.json` and asserts guard >= sheet price. An edit (`clip_edit`) and an outpaint (which sends
+the take whole) are priced by the stored clip's real length, measured on the relay's own copy, never by a length
+the request declares: `cliplength.py` runs ffprobe (at most 100 MB read, 20 s timeout) and takes the LONGEST of the
+container's duration, each track's duration and the video's packets over its frame rate; when they disagree by more
+than half a second and 5 percent (a header rewritten to lie), or none can be read, or no ffprobe is present, the job
+is refused. The relay Lambda carries no ffmpeg layer today (only stitch does): until a person attaches it (the
+deploy workflow's layer, `FFPROBE` or `/opt/bin/ffprobe`), every clip edit and outpaint on the deployed relay is
+refused. **Unproven:** how Runway itself bills a crafted clip, that is, which of these lengths it charges by. A clip refused by Runway's text check after
 it took the task is billed, and the plainer resend is billed too: the job settles at both.
 
 `NAPKIN_PAID_CALLS` reads `on` only (`1`, `true`, `yes` do not turn paid calls on).
@@ -45,6 +50,14 @@ euro; the owner decides whether it is acceptable.
 A refusal reads one plain line with no figure and no money word: "Paid runs are off here. Nothing was sent."
 "Paid runs have reached today's limit here. Nothing was sent." "This run has reached its limit for paid calls.
 Nothing was sent." The cap and the amount go to the log only.
+
+The guard reserves before the adapter builds the request and releases what it counted when nothing was sent (the
+sheet refused it, the connection never opened, Runway answered with an error): only a call that may have reached
+the provider stays counted.
+
+**One day cap for every agency.** The guard's total is one per environment, shared by every agency: one agency's
+paid calls can use up the day for all. Whether the cap should be per agency is a question for the owner (not
+redesigned here).
 
 **Totals are per process, in memory.** Each Lambda instance counts its own spend and starts at zero on every cold
 start, so a day cap of N is N per instance per cold start, not N per day. Proposed, not built (it needs storage):
@@ -103,3 +116,18 @@ form that carries or translates to an IPv4 address: NAT64, IPv4-compatible, 6to4
   connection pinned to the vetted address, and a redirect refused, never followed. `tests/test_fetch_sites.py`
   walks the source so a new fetch site, or a new HTTP client call (httpx, requests, aiohttp, urllib, http.client,
   a socket, boto3) outside the named sites, cannot skip either wall.
+
+## Open questions for the owner
+
+- Uploaded client material under `/in/*`, `/out/*` and `/ads/*` is public on the CDN, unsigned, with no account,
+  tenant check or expiry: only an unguessable address protects it, and every exported `.clan` and each provider
+  holds those addresses (`infra/envs/hackathon/storage.tf`). Changing it means serving those paths only through
+  CloudFront signed URLs (or signed cookies) with a short expiry, minted by the relay for the signed-in agency and
+  for each provider call, and moving uploads under a tenant prefix (`in/<tenant>/sha256:...`) so a key names its
+  agency; exported `.clan` files would then carry hashes, not lasting URLs, and older documents need a migration.
+- The Production line's cost is recorded per job (`jobs[<id>].cost` in the document, and the relay's ledger) and no
+  screen shows it. The owner's rule shows a cost only in the decision tree, to roles that may read a budget
+  (`may_read_budget`): napkin-web's X-Napkin-Identity assertion carries no role (claims u, a, t, n), so neither the
+  relay nor the Production web can tell who may read it, and the Production `.clan` is not a host document, so the
+  shell's Decisions drawer (which shows `run_cost` to the Money group) never reads it. Both are needed first.
+
