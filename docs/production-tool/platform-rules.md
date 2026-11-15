@@ -31,7 +31,16 @@ the passthrough director never ask the guard, so the tests and the e2e stack run
 The guard's estimate is the sheet's price through `contracts/pricing.py`, the dearest case where the provider
 job does not say (tier, plate size, input length), and never below the ledger's reservation for the job
 (`priceUsd` on the provider job). `tests/test_guard_estimate.py` walks every op and model in
-`capabilities/runway.json` and asserts guard >= sheet price.
+`capabilities/runway.json` and asserts guard >= sheet price. An edit (`clip_edit`) is priced by the stored
+clip's real length, read from the relay's own copy (`cliplength.py`, the MP4's movie header), never by a length
+the request declares; a clip whose length cannot be read is refused. A clip refused by Runway's text check after
+it took the task is billed, and the plainer resend is billed too: the job settles at both.
+
+`NAPKIN_PAID_CALLS` reads `on` only (`1`, `true`, `yes` do not turn paid calls on).
+
+**Dollars count as euro.** Every price comes from the sheets in USD and no exchange rate exists in the relay, so
+the guard counts a dollar as one euro against the euro caps. That errs high while a dollar is worth less than a
+euro; the owner decides whether it is acceptable.
 
 A refusal reads one plain line with no figure and no money word: "Paid runs are off here. Nothing was sent."
 "Paid runs have reached today's limit here. Nothing was sent." "This run has reached its limit for paid calls.
@@ -61,9 +70,10 @@ paid work until the variables are set.
 
 Every model call of the relay resolves through `director/model_routes.py` (`director/claude.py`
 `pinned_routes`): the director, Skye (`writer.py`, now the alias `sonnet-5.5`), Dex's cutdown plan and cards share
-one port and one set of routes. `NAPKIN_MODEL_PIN` unset means `eu`; only `off` unpins (a developer's own model
-login, never deployed). Start-up stops on a route or a model the relay names that the pin cannot vouch for (on
-Bedrock only an `eu.` inference profile; any other wire refused), and a config edit to `perClickModel` or
+one port and one set of routes. `NAPKIN_MODEL_PIN` unset (or `eu`, however written) is `eu`; any other value
+stops start-up, so nothing unpins the relay. Start-up stops on a route or a model the relay names that the pin
+cannot vouch for: an allow list, on Bedrock only an `eu.` inference profile (`global.`, `us.`, `apac.`, a bare id
+and an ARN all stop it), and any other wire refused, and a config edit to `perClickModel` or
 `shotListModel` that would leave the EU is refused and logged, keeping the model in force.
 
 ## Scope, the AI switch, hooks, fetches
@@ -76,9 +86,20 @@ Bedrock only an `eu.` inference profile; any other wire refused), and a config e
   mock) is refused before any quota or spend with "AI is off for this client, so nothing was sent." (403
   `flag_off`). A crop, a layout, a stitch, and the mock with the passthrough still run.
 - Hooks: `relay/hooks/NN_<record>.py`, `before_submit(job, ctx)` and `after_complete(job, result, ctx)`, in
-  file-name order (`relay/hooks/__init__.py`). A later record adds a file; `service.py` is not edited.
-- Fetches: a URL a request names is read with `blobs.fetch_own` (the relay's own keys only, saved projects
-  never, refused before any request). A provider's output goes through `blobs.http_fetch`: https only, every
-  address the host resolves to must be public (no private, loopback, link-local or metadata address), the
+  file-name order (`relay/hooks/__init__.py`). `before_submit` runs before every paid or model send: a provider
+  submit, a shot list, Skye, Dex's cutdown plan and a plainer resend, each with the spend guard's run set to the
+  job. A later record adds a file; `service.py` is not edited.
+- Fetches: every URL a request names must be one of the relay's own, or the job is refused at the door (400)
+  before anything reads, sends or reserves. `blobs.fetch_own` takes: `in/sha256:<hex>` and `out/sha256:<hex>`
+  (content-addressed) and `ads/...` (stitched and cut films), which CloudFront serves publicly by design, so
+  reading one tells the caller nothing the CDN would not; and the caller's own `tenants/<tenant>/...`, the
+  tenant from the verified identity. Everything else is refused on the key alone: another agency's
+  `tenants/<id>/` (saved projects, the library, canvases), `clan/`, `library/`, `dogfood/` (consent and events
+  per person) and `cards/` (what the director was told a picture shows). A missing object answers as a refused
+  one, so it is no existence oracle. The Runway adapter reads a job's own asset through the relay's reader
+  (`providers.base.read_asset`), never with its own client. A provider's output goes through `blobs.http_fetch`: https only, every
+  address the host resolves to must be public (no private, loopback, link-local or metadata address, and no IPv6
+form that carries or translates to an IPv4 address: NAT64, IPv4-compatible, 6to4, Teredo, site-local), the
   connection pinned to the vetted address, and a redirect refused, never followed. `tests/test_fetch_sites.py`
-  walks the source so a new fetch site cannot skip either wall.
+  walks the source so a new fetch site, or a new HTTP client call (httpx, requests, aiohttp, urllib, http.client,
+  a socket, boto3) outside the named sites, cannot skip either wall.
