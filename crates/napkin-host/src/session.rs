@@ -328,11 +328,11 @@ impl Session {
         ctx: &Ctx,
         op: impl FnOnce(&Ctx, &Document) -> HostResult<Outcome>,
     ) -> HostResult<Applied> {
-        // The document's write lock first, then the view: the order every writer keeps. Under it no other
-        // writer, in this session or outside it (a backref, a job link, another session), changes the
-        // document until this write is in.
+        // The document's write lock first, then the view: the order every path keeps (a write lock is never
+        // asked for while the view lock is held). Under it no other writer, in this session or outside it
+        // (a backref, a job link, another session), changes the document until this write is in.
         let id = self.current_id().ok_or_else(HostError::no_file_open)?;
-        let _held = write_lock(&id);
+        let _held = write_lock(self.store.parts(), &id);
         let mut view = self.view.lock().unwrap();
         let doc = view.open.clone().ok_or_else(HostError::no_file_open)?;
         if doc.id() != &id {
@@ -360,16 +360,36 @@ impl Session {
             fresh
         };
         let outcome = op(ctx, &doc)?;
+        drop(view);
         let events = outcome.events();
         let noop = outcome.is_noop();
+        // In the outcome's order. A change to this document is put in with the view lock taken again (this
+        // document's write lock is still held, so nothing else wrote it meanwhile). A change to ANOTHER
+        // document (an Idea room's route branch) is applied with the view lock let go: its apply takes that
+        // document's write lock, which an open of it on this same session (the desktop keeps one session
+        // for every document) may hold while it waits for the view lock. Its base is checked at apply, so
+        // a change built on bytes that moved meanwhile is refused (409), never written over them.
         for change in &outcome.changes {
-            self.commit(&mut view, change)?;
+            if change.doc == id {
+                let mut view = self.view.lock().unwrap();
+                self.commit(&mut view, change)?;
+            } else {
+                self.store.apply(change)?;
+            }
         }
+        let version = self
+            .view
+            .lock()
+            .unwrap()
+            .open
+            .as_ref()
+            .filter(|d| d.id() == &id)
+            .map(|d| d.version().clone());
         Ok(Applied {
             reply: outcome.reply,
             events,
             noop,
-            version: view.open.as_ref().map(|d| d.version().clone()),
+            version,
         })
     }
 
@@ -488,7 +508,7 @@ impl Session {
         let mut doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
         mark(OpenMark::Resolved);
         let doc = {
-            let _held = write_lock(&id);
+            let _held = write_lock(self.store.parts(), &id);
             let mut now = self.store.parts().stamp(&id).ok();
             if now.is_none() || now != before {
                 // Written since the read (by this session or any other writer): read it again, now that
@@ -645,10 +665,16 @@ impl Session {
     }
 
     pub fn handle_patch_request_as(&self, ctx: &Ctx, body: &str) -> Option<Applied> {
+        self.patch_request_as(ctx, body)?.ok()
+    }
+
+    /// [`Self::handle_patch_request_as`], saying why a well-formed patch was not saved (a store that
+    /// refused a stale write answers `409`). `None` for a malformed body, as before.
+    pub fn patch_request_as(&self, ctx: &Ctx, body: &str) -> Option<HostResult<Applied>> {
         let json = serde_json::from_str::<Value>(body).ok()?;
         let id = json["id"].as_str()?;
         let content = json["content"].as_str()?;
-        self.save_patch_as(ctx, id, content).ok()
+        Some(self.save_patch_as(ctx, id, content))
     }
 
     /// `POST /patch-data` — structured write to shared/data.yaml with attribution,

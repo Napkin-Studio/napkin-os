@@ -493,6 +493,10 @@ impl napkin_host::PartStore for Guarded {
         self.0.stamp(id)
     }
 
+    fn lock_scope(&self) -> String {
+        self.0.lock_scope()
+    }
+
     fn apply(&self, change: &napkin_host::Change) -> HostResult<napkin_host::Version> {
         if self.is_registry(&change.doc) {
             return Err(Self::refuse(&change.doc));

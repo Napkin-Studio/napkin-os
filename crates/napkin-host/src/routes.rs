@@ -388,18 +388,22 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
             Err(e) => HostResponse::error(e.status, &e.message),
         },
 
+        // A write the store refused (a stale base, 409) says so: the page must not think it was saved.
         "/snapshot" => {
             if let Ok(html) = String::from_utf8(req.body.clone()) {
-                let _ = session.snapshot_as(ctx, &html);
+                if let Err(e) = session.snapshot_as(ctx, &html) {
+                    return e.into();
+                }
             }
             HostResponse::empty()
         }
 
-        "/patch" => match session.handle_patch_request_as(ctx, &req.body_str()) {
-            Some(done) => {
+        "/patch" => match session.patch_request_as(ctx, &req.body_str()) {
+            Some(Ok(done)) => {
                 let events = notify_even_if_unchanged(&done, HostEvent::PatchSaved);
                 HostResponse::empty().with_events(events)
             }
+            Some(Err(e)) => e.into(),
             None => HostResponse::empty(),
         },
 
