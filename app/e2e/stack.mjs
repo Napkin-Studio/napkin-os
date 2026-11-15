@@ -102,6 +102,8 @@ example('make_script_editor', join(seed, 'script-editor.app.clan'), join(scratch
 // Send to Film (features/script-editor.clan) spins a script off into Advertising Studio, so the stack installs it.
 example('make_advertising_studio', join(seed, 'advertising-studio.app.clan'))
 example('make_idea_room', join(seed, 'idea-room.app.clan'), join(scratch, 'idea-room.example.clan'))
+// The Napkin Brain (features/brain-template.clan): the template a brain is made from. Packed so the stack starts with it installed.
+example('make_agency_brain', join(seed, 'agency-brain.app.clan'))
 run('cargo', ['build', '-q', '-p', 'napkin-web'])
 
 // The Production Tool's web app, built for /production (as the image does, Dockerfile's production stage). It builds on the
