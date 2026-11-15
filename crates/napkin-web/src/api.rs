@@ -124,6 +124,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .merge(crate::search::router())
         // The People page: who signs in, and their agencies (admin only; admin.rs)
         .merge(crate::admin::router())
+        // First day: an invite is a record on a person already on the People page (features/first-day.clan)
+        .merge(crate::firstday::router())
         // A route that is not built yet answers 404 from here, so the layers around
         // the API (the session, the role check) still see the request. Without it an
         // unknown path fell through to the shell's index.html and a role was never asked.
@@ -352,6 +354,9 @@ async fn sign_in(
     if !matches!(out, crate::auth::SignIn::NewPassword { .. }) {
         let refused = matches!(out, crate::auth::SignIn::Refused(_));
         crate::audit::note_sign_in(&ctx, &name, &crate::auth::client_ip(&headers), refused);
+    }
+    if let crate::auth::SignIn::Done(a) = &out {
+        crate::firstday::note_sign_in(&ctx, &a.username);
     }
     answer(&identity, out)
 }

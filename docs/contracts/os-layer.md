@@ -2673,6 +2673,26 @@ character is refused on its line; the rest are written in one change. The report
 `{kind, dry_run, rows, ok, errors: [{line, reason}], created, updated, unchanged, committed, results: [{line, status:
 new|changed|same|error, label, reason?}], starts_directory}`.
 
+### 14.0 First day (features/first-day.clan)
+
+An invite is a record on a person already in the People store (`first_days` in `people.json`); it never adds a
+person or a role. Made and withdrawn through the store's own change path (change line and audit entry before the
+store). Same scope as the table above; a member gets `403`.
+
+| Route | Body | Reply |
+| --- | --- | --- |
+| `POST /api/admin/people/{id}/first-day` | `{first?: {path}, email?}` (`first` a document on a job of the person's agency) | `201 {person, link, first?: {job, path}, mailed}` |
+| `DELETE /api/admin/people/{id}/first-day` | none | `200`, or `404` when there is none |
+| `GET /api/admin/first-days` | none | `[{person, made_on, signed_in}]` within the caller's scope |
+| `GET /api/t/{tenant}/me/first-day` | none | `{show_pointers}`: true only for an invited person who has not seen them |
+| `POST /api/t/{tenant}/me/first-day` | `{seen: true}` or `{opened: true}` (names no one) | `200`, the session's person's own mark |
+
+The link is `<origin>/?welcome=<sign-in name>`: no token, signature or session; it grants nothing and only fills
+the sign-in name. `GET /api/t/{tenant}/needs` gains `first_task` (a need of kind `first-task`, id `first:<person>`),
+for the invited person alone, until they press its button. The store keeps the date an invite was made and three
+booleans (signed in, saw the pointers, pressed the first task); the marks write no change line, so no time of use is
+kept. With `NAPKIN_MAIL` on and an address given, `Message::Invite` is also sent; the address is kept nowhere.
+
 ### 14.1 Settings (stage 2, as stage 3 left them)
 
 - `GET /api/t/{tenant}/agency` answers the agency's name from its People store record (a code agency's display name,

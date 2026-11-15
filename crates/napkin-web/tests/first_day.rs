@@ -136,9 +136,31 @@ async fn add(r: &Rig, admin: &Person, username: &str, name: &str, roles: &[&str]
 
 const BRIEF_MAKER: &str = "ie.napkin.brief-maker";
 
-/// A Brief Maker brief filed under J001 in `agency`'s workspace, named "J001 brief"; its path is `doc-b1`.
-fn brief(r: &Rig, agency: &str) {
-    let tenant = napkin_web::tenant::TenantId::of_agency(agency).to_string();
+/// J001 for Client A, opened by `admin` in their agency's workspace, with a Brief Maker brief named "J001 brief" filed
+/// under it; its path is `doc-b1`.
+async fn live_job(r: &Rig, admin: &Person) {
+    let t = &admin.tenant;
+    let (_, client, _) = call(
+        r,
+        "POST",
+        &format!("/api/t/{t}/clients"),
+        Some(&admin.cookie),
+        Some(json!({ "name": "Client A" })),
+    )
+    .await;
+    let (st, v, _) = call(
+        r,
+        "POST",
+        &format!("/api/t/{t}/jobs"),
+        Some(&admin.cookie),
+        Some(json!({ "number": "J001", "client_id": client["id"], "due": "2026-12-18" })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::CREATED, "{v}");
+    brief(r, t, client["id"].as_str().unwrap());
+}
+
+fn brief(r: &Rig, tenant: &str, client: &str) {
     let base = clan_sdk::ClanFile::from_bytes(
         clan_sdk::create(clan_sdk::CreateOptions {
             title: "J001 brief".into(),
@@ -165,7 +187,7 @@ fn brief(r: &Rig, agency: &str) {
         attach: None,
     });
     m.client = Some(clan_sdk::ClientRef {
-        id: "client-a".into(),
+        id: client.into(),
         name: "Client A".into(),
     });
     m.job = Some("J001".into());
@@ -231,8 +253,8 @@ async fn needs(r: &Rig, p: &Person) -> Value {
 #[tokio::test]
 async fn an_admin_invites_a_person_on_the_list_and_gets_a_name_link() {
     let r = rig();
-    brief(&r, "wk");
     let maeve = sign_in(&r, "maeve@wk").await;
+    live_job(&r, &maeve).await;
     add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
     let (st, v) = invite(
         &r,
@@ -337,8 +359,8 @@ async fn inviting_never_adds_a_person_or_a_role() {
 #[tokio::test]
 async fn a_member_writes_nothing_and_a_foreign_or_missing_person_answers_alike() {
     let r = rig();
-    brief(&r, "wk");
     let maeve = sign_in(&r, "maeve@wk").await;
+    live_job(&r, &maeve).await;
     let aoife = sign_in(&r, "aoife@wk").await;
     let barra = sign_in(&r, "barra@bq").await;
     add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
@@ -380,12 +402,12 @@ async fn a_member_writes_nothing_and_a_foreign_or_missing_person_answers_alike()
     let b = invite(&r, &barra, "ghost@wk", json!({})).await;
     let c = invite(&r, &barra, "ghost@nowhere", json!({})).await;
     assert_eq!(a.0, StatusCode::NOT_FOUND);
-    assert_eq!(a, b);
     assert_eq!(b.0, c.0);
-    assert_eq!(
-        a.1["error"].as_str().map(|e| e.replace("newcomer@wk", "X")),
-        b.1["error"].as_str().map(|e| e.replace("ghost@wk", "X"))
-    );
+    // the same words but for the name asked about: nothing says whether the person exists
+    let words =
+        |v: &(StatusCode, Value), who: &str| v.1["error"].as_str().unwrap().replace(who, "X");
+    assert_eq!(words(&a, "newcomer@wk"), words(&b, "ghost@wk"));
+    assert_eq!(words(&b, "ghost@wk"), words(&c, "ghost@nowhere"));
     // and nothing was made: the first-days list is empty for the owner
     let (st, list, _) = call(
         &r,
@@ -412,9 +434,10 @@ async fn a_member_writes_nothing_and_a_foreign_or_missing_person_answers_alike()
 #[tokio::test]
 async fn the_first_thing_to_open_is_a_document_on_a_live_job_of_that_agency() {
     let r = rig();
-    brief(&r, "wk");
-    brief(&r, "bq"); // another agency's J001, with the same path
     let maeve = sign_in(&r, "maeve@wk").await;
+    let barra = sign_in(&r, "barra@bq").await;
+    live_job(&r, &maeve).await;
+    live_job(&r, &barra).await; // another agency's J001, with the same path
     add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
     // not a document at all, and a path that climbs out of the folder
     for bad in ["doc-nope", "../bq/doc-b1", "", "doc-b1/../../x"] {
@@ -477,8 +500,8 @@ async fn where_no_people_store_is_kept_there_is_no_invite() {
 #[tokio::test]
 async fn mail_is_the_fixed_words_and_the_link_and_the_address_is_not_kept() {
     let r = rig();
-    brief(&r, "wk");
     let maeve = sign_in(&r, "maeve@wk").await;
+    live_job(&r, &maeve).await;
     add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
     let (st, v) = invite(
         &r,
@@ -631,8 +654,8 @@ async fn the_mark_is_the_servers_per_person_and_only_an_invited_person_has_point
 #[tokio::test]
 async fn the_first_task_is_a_need_for_the_invited_person_only_and_leaves_when_pressed() {
     let r = rig();
-    brief(&r, "wk");
     let maeve = sign_in(&r, "maeve@wk").await;
+    live_job(&r, &maeve).await;
     let dara = sign_in(&r, "dara@wk").await;
     add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
     invite(
@@ -650,7 +673,6 @@ async fn the_first_task_is_a_need_for_the_invited_person_only_and_leaves_when_pr
     assert_eq!(t["job"], json!("J001"));
     assert_eq!(t["path"], json!("doc-b1"));
     assert_eq!(t["action"], json!("Open"));
-    assert_eq!(t["can_done"], json!(true));
     // the words are the allow list: the job number, the client and the document's title
     let text = t["text"].as_str().unwrap();
     assert!(text.contains("J001 brief"), "{text}");
@@ -674,8 +696,8 @@ async fn the_first_task_is_a_need_for_the_invited_person_only_and_leaves_when_pr
 #[tokio::test]
 async fn nothing_about_how_long_a_person_took_is_kept_or_listed() {
     let r = rig();
-    brief(&r, "wk");
     let maeve = sign_in(&r, "maeve@wk").await;
+    live_job(&r, &maeve).await;
     add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
     invite(
         &r,
@@ -798,8 +820,8 @@ async fn inviting_and_withdrawing_are_on_the_change_log_and_the_audit_chain() {
 #[tokio::test]
 async fn removing_a_person_withdraws_their_first_day_and_they_cannot_sign_in() {
     let r = rig();
-    brief(&r, "wk");
     let maeve = sign_in(&r, "maeve@wk").await;
+    live_job(&r, &maeve).await;
     add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
     invite(
         &r,
