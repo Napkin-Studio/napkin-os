@@ -200,3 +200,19 @@ def test_after_the_resend_lands_the_ledger_holds_both_billed_tasks():
     assert job["state"] == "completed"
     assert abs(spent(h) - 2 * first) < 1e-9, f"two billed tasks ({2 * first}), the ledger holds {spent(h)}"
     assert abs(job["cost"]["confirmed"] - 2 * first) < 1e-9, job["cost"]
+
+
+def test_the_plainer_resend_runs_the_hooks_before_it_is_sent():
+    """Review finding 6: before_submit runs before every send, the resend on a status refusal included."""
+    from pathlib import Path
+
+    import hooks as relay_hooks
+    loaded = relay_hooks.load(Path(__file__).resolve().parent / "fixtures" / "hooks")
+    h = harness()
+    h.relay.hooks = loaded
+    job = post_take(h)
+    loaded[0].SEEN.clear()
+    refuse_on_status(h, "runway-1")
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True
+    assert len(loaded[0].SEEN) == 1, "before_submit ran once more, for the resend"

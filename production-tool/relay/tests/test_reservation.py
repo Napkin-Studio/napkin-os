@@ -46,10 +46,15 @@ def test_a_clip_with_no_shot_reserves_the_default_length():
 
 
 def test_a_long_aleph2_edit_reserves_its_input_length():
+    # Priced by the stored clip's real length, read from our own copy, never by the shot's declared length
+    # (the review of 25e7c870, finding 4).
+    from test_guard_estimate import mp4
     h = runway_only()
-    video = {**asset(8, "video/mp4"), "url": f"{CDN}/in/clip.mp4"}
-    long = reserved(h, "clip_edit", video=video, feel={"strength": "flex"}, text="warmer", shot={**SHOT, "duration_s": 30})
-    short = reserved(h, "clip_edit", video=video, feel={"strength": "flex"}, text="warmer")
+    long_clip, short_clip = asset(8, "video/mp4"), asset(9, "video/mp4")
+    h.blobs.put(f"in/{long_clip['sha256']}", mp4(30), "video/mp4")
+    h.blobs.put(f"in/{short_clip['sha256']}", mp4(5), "video/mp4")
+    long = reserved(h, "clip_edit", video=long_clip, feel={"strength": "flex"}, text="warmer", shot={**SHOT, "duration_s": 2})
+    short = reserved(h, "clip_edit", video=short_clip, feel={"strength": "flex"}, text="warmer", shot={**SHOT, "duration_s": 30})
     assert (long["reserved"], short["reserved"]) == (8.4, 1.4)
 
 

@@ -120,17 +120,17 @@ def pinned_routes(api: str, env=None):
     """The routes every model call of the relay resolves through (director, Skye, the cutter, cards): the routes
     file (NAPKIN_MODEL_ROUTES) under the EU pin (NAPKIN_MODEL_PIN=eu). Start-up stops (RoutesError) on a route,
     or on a model the relay names itself, that the pin cannot vouch for (features/production-platform-rules.clan,
-    ADR-004). Unset is NAPKIN_MODEL_PIN=eu."""
+    ADR-004). Unset is NAPKIN_MODEL_PIN=eu; nothing unpins it."""
     from writer import WRITE_MODEL
 
     from director.model_routes import Routes, RoutesError
     env = os.environ if env is None else env
-    # Pinned unless a developer says otherwise: unset is eu (fails closed). Only an explicit `off` unpins, for a
-    # developer's own model login with no client material; a deployed relay never sets it.
-    pin = (env.get("NAPKIN_MODEL_PIN") or "eu").strip().lower()
-    if pin == "off":
-        log.error("model routes: NAPKIN_MODEL_PIN=off: the EU pin is OFF, client text may leave the EU")
-    routes = Routes(api, PER_CLICK, source=env.get("NAPKIN_MODEL_ROUTES") or None, pin=None if pin == "off" else pin)
+    # Always pinned: unset (or blank) is eu, eu however written is eu, and any other value stops start-up. No value
+    # turns the pin off (the review of 25e7c870, finding 8).
+    pin = (env.get("NAPKIN_MODEL_PIN") or "").strip().lower() or "eu"
+    if pin != "eu":
+        raise RoutesError(f"NAPKIN_MODEL_PIN must be eu or unset on the relay, not {env.get('NAPKIN_MODEL_PIN')!r}")
+    routes = Routes(api, PER_CLICK, source=env.get("NAPKIN_MODEL_ROUTES") or None, pin=pin)
     bad = [f"{who}: {why}" for who, m in (("the director", PER_CLICK), ("the shot list", SHOT_LIST), ("Skye", WRITE_MODEL))
            if (why := routes.vouch(m))]
     if bad:

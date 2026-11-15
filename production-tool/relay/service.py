@@ -57,7 +57,7 @@ from director import spend
 
 import time_rules
 import timeline_layers
-from blobs import UnsafeUrl, checksum_header
+from blobs import UnsafeUrl, checksum_header, own_key
 from contracts import Contracts, api
 from contracts_dir import contracts_dir, pricing
 from director.base import Director, PassthroughDirector, PromptTooOld, fit_duration, new_id
@@ -117,6 +117,7 @@ CLAUDE_OFF_PLAN = "Dex plans shots with Claude, which your agency has turned off
 CLAUDE_OFF_WRITE = "Skye writes with Claude, which your agency has turned off."
 # The per-client AI switch is off (client_ai.py): the one line a refused job shows (features/production-platform-rules.clan).
 CLIENT_AI_OFF = "AI is off for this client, so nothing was sent."
+CLIP_LENGTH_UNKNOWN = "This clip's length could not be read, so nothing was sent. Upload it again."
 # Each maker's name for the not_allowed line ("made by Google"), from the notice.
 MAKER_NAMES = {e["id"]: e["name"] for e in json.loads((contracts_dir() / "subprocessors.json").read_text())["entries"]}
 CONTRACT = _COMMON["contractVersion"]["const"]  # "3"
@@ -869,6 +870,55 @@ class Relay:
             return directed
         return directed or any(p != "mock" for p in self._chain(cfg, op, req.get("modelChoice"), allow, req["input"]))
 
+    def _stored_clip_seconds(self, req: dict, tenant: str) -> float:
+        """The real length of the clip an edit reads, from our own stored copy; refused when it cannot be read."""
+        url = ((req.get("input") or {}).get("video") or {}).get("url")
+        try:
+            seconds = self.blobs.clip_seconds(url, tenant) if url else None
+        except UnsafeUrl as e:
+            raise ApiError("invalid_input", str(e)) from None
+        except Exception:
+            log.exception("reading the length of %s failed", url)
+            seconds = None
+        if not seconds or not math.isfinite(seconds) or seconds <= 0:
+            raise ApiError("invalid_input", CLIP_LENGTH_UNKNOWN)
+        return float(seconds)
+
+    def _check_urls(self, node, tenant: str) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if k == "url" and isinstance(v, str):
+                    try:
+                        own_key(self.blobs, v, tenant)
+                    except UnsafeUrl as e:
+                        raise ApiError("invalid_input", str(e)) from None
+                elif isinstance(v, (dict, list)):
+                    self._check_urls(v, tenant)
+        elif isinstance(node, list):
+            for v in node:
+                self._check_urls(v, tenant)
+
+    def _own(self, job: dict):
+        """Reads a URL the job's request names: one of our own blobs this job's agency may read (blobs.own_key)."""
+        tenant = job.get("_tenant")
+        return lambda url: self.blobs.fetch_own(url, tenant)
+
+    def _before_send(self, job: dict) -> tuple[dict, "ApiError | None"]:
+        """Before every paid or model send (a provider submit, the director, Skye, Dex's cutdown plan, a plainer
+        resend): the spend guard's run is this job's, and the later records' hooks run in file order (hooks/).
+        (the job, possibly annotated, None) or (the job, the ApiError a hook refused it with)."""
+        spend.set_run(job["jobId"])
+        if not self.hooks:
+            return job, None
+        try:
+            hooked = relay_hooks.before_submit(self.hooks, dict(job), self._hook_ctx(job))
+        except ApiError as e:
+            return job, e
+        changed = {k: v for k, v in hooked.items() if job.get(k) != v}
+        if changed:
+            job = self._save(job, **changed) or self.store.get_job(job["jobId"]) or job
+        return job, None
+
     def _hook_ctx(self, job: dict) -> dict:
         return {"tenant": job.get("_tenant"), "person": job.get("participantId"), "job_number": job.get("jobNumber"),
                 "project": job.get("projectId"), "env": spend.environment()}
@@ -958,8 +1008,13 @@ class Relay:
                 settings["refs"] = min(refs, max(0, sheet["refs"]["max"] - 1))  # the clip itself is a ref too
         if sized and sized.get("tier"):  # the quality's size (features/clip-quality.clan): its tier's price
             settings["resolution"] = sized["tier"]
-        # A take is the run's shots together, a take's window its width (features/connected-video.clan).
+        # A take is the run's shots together, a take's window its width (features/connected-video.clan). An edit is
+        # billed by the clip the provider reads: its stored length (`seconds`, measured from our own copy), never the
+        # length the request declares (the review of 25e7c870, finding 4).
+        measured = seconds
         seconds = (connected.clip_seconds(inp) if op == "clip" else None) or (inp.get("shot") or {}).get("duration_s")
+        if op == "clip_edit":
+            seconds = measured
         if seconds:
             if op == "clip":
                 settings["durationS"] = fit_duration(seconds, spec)
@@ -1036,6 +1091,9 @@ class Relay:
             return self._existing(who, existing)
         cfg = self.config()
         op = req["op"]
+        # Every URL the request names is one of our own blobs this agency may read, or the job is refused here, before
+        # anything reads, sends or reserves (features/production-platform-rules.clan; the review of 25e7c870).
+        self._check_urls(req.get("input"), who["tenant"]["id"])
         if op in UNBUILT_OPS:
             raise ApiError("capability_missing", "This step is not built yet.")
         if op == "write" and not isinstance(req["input"].get("write"), dict):
@@ -1073,6 +1131,7 @@ class Relay:
             raise ApiError("invalid_input", str(e)) from None
         patch = self._patch_admit(cfg, req) if op == "clip_patch" else None
         estimate, unknown = 0.0, False
+        clip_s = self._stored_clip_seconds(req, who["tenant"]["id"]) if op == "clip_edit" else None
         if op not in INTERNAL_OPS and not free:
             # Reserved at the dearest provider it may run on, with the model it would run there.
             candidates = self._chain(cfg, op, pick, policy["allow"], req["input"])
@@ -1080,7 +1139,7 @@ class Relay:
                 raise ApiError("capability_missing", "No provider can do this step right now.")
             level = req.get("quality")
             prices = [self._estimate(op, p, patch["model"] if patch else self._run_model(p, op, pick, req["input"], policy["allow"], level),
-                                     req["input"], seconds=patch["seconds"] if patch else None, level=level)
+                                     req["input"], seconds=patch["seconds"] if patch else clip_s, level=level)
                       for p in candidates]
             estimate = max(p for p, _ in prices)
             unknown = any(u for _, u in prices)
@@ -1120,6 +1179,8 @@ class Relay:
             "_req": req, "_day": day, "_counted": counted, "_queue": "q", "_tenant": who["tenant"]["id"],
             "_released": False, "_tried": [], "_month": month,
         }
+        if clip_s is not None:
+            job["_clipS"] = clip_s
         if free:
             job["_free"] = True
         if remade:  # what it was made from and what changed (public), and the clip request held for the next change
@@ -1296,6 +1357,8 @@ class Relay:
             raise ApiError("spend_stop", BUDGET_USED) from None
 
     def _existing(self, who: dict, job: dict) -> dict:
+        if job.get("_tenant") != who["tenant"]["id"]:   # another agency's id: no such job here, not "taken"
+            raise ApiError("invalid_input", "No such job.", status=404)
         if job["participantId"] != who["pid"]:
             raise ApiError("invalid_input", "That jobId is taken.", status=409)
         return self._with_poll(job)
@@ -1321,6 +1384,8 @@ class Relay:
         provider slot and (when nothing was paid) the reserved spend and quota."""
         cost = dict(job["cost"])
         confirmed = changes.pop("confirmed", None)
+        if confirmed is not None and job.get("_billedBefore"):   # a moderated task billed before a plainer resend
+            confirmed = confirmed + job["_billedBefore"]
         spend_delta = 0.0
         if not paid:
             spend_delta = -cost.get("reserved", 0)
@@ -1533,7 +1598,7 @@ class Relay:
         # model was chosen before the job ran (config clipPatch.model), its price by the cut's length.
         picked = job.get("model") if job["op"] == "clip_patch" else self._picked(job, provider)
         sheet = effective_sheet(self.registry.sheet(provider), job["op"], picked)
-        estimate, unknown = self._estimate(job["op"], provider, picked, job["_req"]["input"], seconds=self._cut_seconds(job),
+        estimate, unknown = self._estimate(job["op"], provider, picked, job["_req"]["input"], seconds=self._cut_seconds(job) or job.get("_clipS"),
                                            level=self._level(job))
         refused, new_month = self._floor_admission(job, cfg, estimate)
         if refused is not None:
@@ -1556,15 +1621,9 @@ class Relay:
         if not new_month:  # the reservation it holds moves to this provider's price, in its own month
             self.ledger.adjust(job.get("_tenant"), month, estimate - job["cost"].get("reserved", 0))
         job = saved
-        spend.set_run(job["jobId"])   # the spend guard's per-run total, for the model call and the submit below
-        if self.hooks:  # the later records' rules, in file order (hooks/): before anything is sent
-            try:
-                hooked = relay_hooks.before_submit(self.hooks, dict(job), self._hook_ctx(job))
-            except ApiError as e:
-                return self._fail(job, e.code, e.message, paid=False, refund=True)
-            changed = {k: v for k, v in hooked.items() if job.get(k) != v}
-            if changed:
-                job = self._save(job, **changed) or self._reload(job)
+        job, refused = self._before_send(job)   # the guard's run and the later records' hooks, before anything is sent
+        if refused is not None:
+            return self._fail(job, refused.code, refused.message, paid=False, refund=True)
 
         reused = self._promote_job(job, provider, model) if job["_req"].get("promoteFrom") else None
         try:
@@ -1602,7 +1661,7 @@ class Relay:
         sized = self._sized(job, provider, model, pjob)
         # The spend guard never asks for less than the ledger reserved (features/production-platform-rules.clan).
         pjob = {**pjob, "priceUsd": job["cost"].get("reserved") or job["cost"].get("estimate")}
-        set_job_context(run_as, asset_refs(job["_req"]["input"]) + made)
+        set_job_context(run_as, asset_refs(job["_req"]["input"]) + made, self._own(job))
         softened_from = None  # the words the provider's text check refused, when the job was sent again plainer
         while True:
             try:
@@ -1682,9 +1741,11 @@ class Relay:
         same provider job otherwise. None when it was already softened or cannot go again (the caller fails it)."""
         block = job.get("director") or {}
         pjob = (block.get("output") or {}).get("providerJob")
-        if job.get("softened"):
+        if job.get("softened"):   # the plainer task was taken and billed too: both stay recorded
             return self._fail(job, "moderated", f"{soften.TWICE} ({st.provider_code or 'moderated'}).",
-                              provider_code=st.provider_code, paid=False)
+                              provider_code=st.provider_code,
+                              confirmed=st.cost_usd if st.cost_usd is not None else
+                              job["cost"].get("reserved", 0) - job.get("_billedBefore", 0))
         if not pjob or not pjob.get("prompt"):
             return None
         refused = pjob["prompt"]
@@ -1699,29 +1760,35 @@ class Relay:
         if month != job.get("_month"):  # held in the job's own month, where it settles
             self.ledger.adjust(job.get("_tenant"), month, -estimate)
             self.ledger.adjust(job.get("_tenant"), job.get("_month"), estimate)
-        held = self._save(job, cost={**job["cost"], "reserved": job["cost"].get("reserved", 0) + estimate})
+        # What the refused task was billed (its status says, else what was reserved for it): kept on the job, so the
+        # settle at the end records both tasks (the review of 25e7c870, finding 5).
+        billed = st.cost_usd if st.cost_usd is not None else job["cost"].get("reserved", 0)
+        held = self._save(job, cost={**job["cost"], "reserved": job["cost"].get("reserved", 0) + estimate},
+                          _billedBefore=billed)
         if held is None:
             self.ledger.adjust(job.get("_tenant"), job.get("_month"), -estimate)
             return self._reload(job)
         job = held
-        spend.set_run(job["jobId"])
+        job, refused_by_hook = self._before_send(job)
+        if refused_by_hook is not None:
+            return self._fail(job, refused_by_hook.code, refused_by_hook.message, confirmed=0.0)
         pjob = {**pjob, "prompt": self._plainer(job, sheet, pjob), "priceUsd": estimate}
         log.info(json.dumps({"kind": "softened", "jobId": job["jobId"], "providerCode": st.provider_code, "at": "status"}))
         made = list((job.get("_frames") or {}).values()) if job.get("_frames") else []
-        set_job_context("clip", asset_refs(job["_req"]["input"]) + made)
+        set_job_context("clip", asset_refs(job["_req"]["input"]) + made, self._own(job))
         try:
             request_id = adapter.submit(pjob)
         except Moderated as e:
             return self._fail(job, "moderated", f"{soften.TWICE} ({e.provider_code or 'moderated'}).",
                               provider_code=e.provider_code, director=self._softened_block(block, pjob),
-                              softened=True, _softenedFrom=refused, confirmed=job["cost"]["reserved"] - estimate)
+                              softened=True, _softenedFrom=refused, confirmed=0.0)
         except ProviderError as e:
             if e.accepted:
                 return self._fail(job, "uncertain", "The provider may have this job; it will not be sent again.",
                                   provider_code=e.provider_code, director=self._softened_block(block, pjob))
             # Not sent (the spend guard, an outage): the second reservation goes back; the first task's stays.
             return self._fail(job, e.code, e.message, provider_code=e.provider_code,
-                              director=self._softened_block(block, pjob), confirmed=job["cost"]["reserved"] - estimate)
+                              director=self._softened_block(block, pjob), confirmed=0.0)
         except Exception:
             log.exception("plainer resend of %s raised", job["jobId"])
             return self._fail(job, "uncertain", "The provider may have this job; it will not be sent again.",
@@ -1805,7 +1872,7 @@ class Relay:
         from cards import downscale
         pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="frame")
         try:
-            data = pool.submit(self.blobs.fetch_own, url).result(timeout=self.FRAME_FETCH_S)
+            data = pool.submit(self._own(job), url).result(timeout=self.FRAME_FETCH_S)
             media_type, b64 = downscale(data)
         except FetchTimeout:
             log.warning("job %s: the frame took over %ss to fetch; the words go as they are", job["jobId"], self.FRAME_FETCH_S)
@@ -1905,6 +1972,9 @@ class Relay:
         saved = self._save(job, state="submitting", _queue="r")
         if saved is None:
             return self._reload(job)
+        saved, refused = self._before_send(saved)
+        if refused is not None:
+            return self._fail(saved, refused.code, refused.message, paid=False, refund=True)
         try:
             out, block = self._direct(saved, None)
         except ApiError as e:
@@ -1919,6 +1989,9 @@ class Relay:
         saved = self._save(job, state="submitting", _queue="r")
         if saved is None:
             return self._reload(job)
+        saved, refused = self._before_send(saved)
+        if refused is not None:
+            return self._fail(saved, refused.code, refused.message, paid=False, refund=True)
         req = saved["_req"]
         start = self.clock()
         try:
@@ -1952,7 +2025,7 @@ class Relay:
         rz = inp["resize"]
         start = self.clock()
         try:
-            data = self.blobs.fetch_own(inp["image"]["url"])
+            data = self._own(saved)(inp["image"]["url"])
             ms = rz["masterSize"]
             out_w, out_h = formats.preview_size(inp["delivery"], rz.get("previewMaxPx"))
             crop = rz.get("crop")
@@ -1962,12 +2035,12 @@ class Relay:
                     pw, ph = max(1, round(panel["w"] * out_w)), max(1, round(panel["h"] * out_h))
                     crop, _ = formats.crop_box(ms["w"], ms["h"], pw, ph, rz.get("protect"))
                 plate, png, drawn = formats.layout_render(data, ms, crop, (out_w, out_h), panel, rz.get("background"),
-                                                          rz.get("layers"), self.blobs.fetch_own)
+                                                          rz.get("layers"), self._own(saved))
             else:
                 if not crop:
                     fracs = formats.safe_fracs(inp.get("safeArea"), inp.get("delivery"))
                     crop, _ = formats.crop_box(ms["w"], ms["h"], inp["aspect"]["w"], inp["aspect"]["h"], rz.get("protect"), fracs)
-                plate, png, drawn = formats.render(data, ms, crop, (out_w, out_h), rz.get("layers"), self.blobs.fetch_own)
+                plate, png, drawn = formats.render(data, ms, crop, (out_w, out_h), rz.get("layers"), self._own(saved))
         except UnsafeUrl as e:  # a picture that is not ours: refused before any request (review C)
             return self._fail(saved, "invalid_input", str(e), paid=False, refund=True)
         except Exception as e:
@@ -1987,11 +2060,14 @@ class Relay:
         saved = self._save(job, state="submitting", _queue="r")
         if saved is None:
             return self._reload(job)
+        saved, refused = self._before_send(saved)
+        if refused is not None:
+            return self._fail(saved, refused.code, refused.message, paid=False, refund=True)
         claude = self._policy(saved.get("_tenant"))["allow"]["claude"]
         cutter = self.cutter if claude else cutdowns.PassthroughCutter()
         start = self.clock()
 
-        fetch = self.blobs.fetch_own   # the stills Dex looks at: only our own (review C)
+        fetch = self._own(saved)   # the stills Dex looks at: only our own (review C)
         try:
             out = dict(cutter.plan({**saved["_req"], "jobId": saved["jobId"]}, fetch))
         except Exception as e:
@@ -2037,7 +2113,7 @@ class Relay:
             clips.append(clip)
         layers = []
         try:
-            for i, (png, a, b) in enumerate(cutdowns.layer_pngs(cut.get("layers") or [], size, self.blobs.fetch_own)):
+            for i, (png, a, b) in enumerate(cutdowns.layer_pngs(cut.get("layers") or [], size, self._own(job))):
                 key = f"ads/cuts/{job['jobId']}/layer{i}.png"
                 self.blobs.put(key, png, "image/png")
                 layers.append({"key": key, **({"fromS": a} if a is not None else {}), **({"toS": b} if b is not None else {})})
@@ -2109,7 +2185,7 @@ class Relay:
         made: list = []
         if rz["method"] == "extend":
             try:
-                data = self.blobs.fetch_own(inp["image"]["url"])
+                data = self._own(job)(inp["image"]["url"])
                 ms = rz["masterSize"]
                 from PIL import Image
                 with Image.open(io.BytesIO(data)) as im:
@@ -2163,10 +2239,10 @@ class Relay:
         inp = job["_req"]["input"]
         rz = inp["resize"]
         try:
-            data = self.blobs.fetch_own(raw["url"])
+            data = self._own(job)(raw["url"])
             out_w, out_h = formats.preview_size(inp["delivery"], rz.get("previewMaxPx"))
             plate, png, (rw, rh), drawn = formats.finish(data, (inp["aspect"]["w"], inp["aspect"]["h"]), (out_w, out_h),
-                                                         rz.get("layers"), self.blobs.fetch_own)
+                                                         rz.get("layers"), self._own(job))
         except Exception as e:
             log.exception("finishing the size of %s failed", job["jobId"])
             return self._fail(job, "internal", f"Wren made this size but could not finish it ({type(e).__name__}). Redo it.",
@@ -2206,7 +2282,7 @@ class Relay:
             return pjob, []
         try:
             from PIL import Image
-            img = Image.open(io.BytesIO(self.blobs.fetch_own(inp["image"]["url"])))
+            img = Image.open(io.BytesIO(self._own(job)(inp["image"]["url"])))
             img.load()
             buf = io.BytesIO()
             img.convert("RGB").resize((iw, ih), Image.LANCZOS).save(buf, format="PNG")
@@ -2222,8 +2298,8 @@ class Relay:
         inp = job["_req"]["input"]
         d = inp["delivery"]
         try:
-            data = self.blobs.fetch_own(raw["url"])
-            png, drawn = formats.deliver(data, (d["width"], d["height"]), inp.get("layers"), self.blobs.fetch_own)
+            data = self._own(job)(raw["url"])
+            png, drawn = formats.deliver(data, (d["width"], d["height"]), inp.get("layers"), self._own(job))
         except Exception as e:
             log.exception("delivering %s failed", job["jobId"])
             return self._fail(job, "internal", f"The size was upscaled but could not be finished ({type(e).__name__}).",
@@ -2796,7 +2872,7 @@ class Relay:
                 texts.append({"key": key, **{k: t[k] for k in ("fromS", "toS", "fadeInS", "fadeOutS") if t.get(k) is not None}})
             if plan.get("endCard"):
                 key = f"ads/{job['jobId']}/endcard.png"
-                self.blobs.put(key, timeline_layers.end_card_png(plan["endCard"], size, self.blobs.fetch_own), "image/png")
+                self.blobs.put(key, timeline_layers.end_card_png(plan["endCard"], size, self._own(job)), "image/png")
                 card = {"key": key, "s": plan["endCard"]["s"],
                         **({"transitionIn": plan["endCard"]["transitionIn"]} if plan["endCard"].get("transitionIn") else {})}
         except Exception as e:

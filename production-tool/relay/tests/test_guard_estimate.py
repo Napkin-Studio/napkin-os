@@ -173,7 +173,7 @@ def test_clip_edit_is_priced_by_the_stored_clips_real_length_not_the_request(mon
         inp["shot"] = {**SHOT, "duration_s": declared, "action": "the sea at dusk", "refs": []}
     status, job = h.call("POST", "/jobs", {**envelope("clip_edit", new_id("job")), "input": inp}, h.as_person())
     full = pricing().op_usd(effective_sheet(load_sheet("runway"), "clip_edit", job.get("model")), "clip_edit", None, {"inputS": 30})
-    assert job["cost"]["reserved"] >= full, job["cost"]
+    assert job["cost"]["estimate"] >= full, job["cost"]
     assert asked and asked[-1] >= full, f"declared {declared}: guard asked {asked}, a 30 s clip is {full}"
 
 

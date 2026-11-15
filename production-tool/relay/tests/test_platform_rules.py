@@ -482,11 +482,6 @@ def model_relay(wire, hooks=None):
     return h, token
 
 
-def cutdown_plan_input(h):
-    from test_cutdowns import plan_input
-    return plan_input(h)
-
-
 def test_before_submit_hears_every_job_that_sends_to_a_model_or_a_provider():
     """Finding 6: shot_list, write and Dex's cutdown plan never reached before_submit."""
     from test_write import post_write
@@ -494,8 +489,10 @@ def test_before_submit_hears_every_job_that_sends_to_a_model_or_a_provider():
     wire = RecordingWire()
     h, token = model_relay(wire, loaded)
     heard = {}
+    from test_cutdowns import master, plan_input
     paths = {"shot_list": lambda: h.post_job(token, op="shot_list"),
              "write": lambda: post_write(h, token, expect=None),
+             "cutdown plan": lambda: h.post_job(token, op="cutdown", **plan_input(master())),
              "generate": lambda: h.post_job(token, op="generate")}
     for name, post in paths.items():
         loaded[0].SEEN.clear()

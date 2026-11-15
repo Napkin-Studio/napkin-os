@@ -53,10 +53,8 @@ def test_a_free_size_does_not_fetch_a_url_that_is_not_ours(method):
     token = h.as_person()
     inp = size_input(h, method)
     inp["image"] = {**inp["image"], "url": FOREIGN}
-    _, job = h.post_job(token, op="resize", expect=200, **inp)
-    job = h.poll(token, job["jobId"]) if job["state"] not in ("completed", "failed") else job
-    assert job["state"] == "failed", job
-    assert job["error"]["code"] == "invalid_input" and "not one of this tool's own files" in job["error"]["message"]
+    status, out = h.post_job(token, op="resize", **inp)   # refused at the door now (the review of 25e7c870)
+    assert status == 400 and out["error"]["code"] == "invalid_input" and "not one of ours" in out["error"]["message"]
     assert h.blobs.remote.fetched == [], "the relay fetched a URL outside its own store"
 
 
@@ -93,8 +91,9 @@ def test_own_key_takes_our_own_artifacts():
 
 def test_local_and_s3_blobs_read_only_their_own_keys(tmp_path):
     local = blobs.LocalBlobs(tmp_path, "http://localhost:9999")
-    local.put("in/x", b"ours", "image/png")
-    assert local.fetch_own("http://localhost:9999/in/x") == b"ours"
+    key = "in/sha256:" + "a" * 64
+    local.put(key, b"ours", "image/png")
+    assert local.fetch_own(f"http://localhost:9999/{key}") == b"ours"
     with pytest.raises(UnsafeUrl):
         local.fetch_own(FOREIGN)
 

@@ -198,8 +198,8 @@ def test_a_render_of_a_clip_that_is_not_ours_fails_plainly():
     token = h.as_person()
     inp = render_input(h)
     inp["cutdown"]["clips"][0]["asset"]["url"] = "https://elsewhere.test/clip.mp4"
-    _, job = h.post_job(token, op="cutdown", expect=200, **inp)
-    assert job["state"] == "failed" and job["error"]["code"] == "invalid_input" and not h.stitched
+    _, out = h.post_job(token, op="cutdown", expect=400, **inp)   # refused at the door, before any job
+    assert out["error"]["code"] == "invalid_input" and "not one of ours" in out["error"]["message"] and not h.stitched
 
 
 def outpaint_input(h, ratio="9:16", seconds=4):

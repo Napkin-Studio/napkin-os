@@ -34,8 +34,8 @@ passes is used only where no route sets one.
 EU pin (ADR-004, docs/adr/0004-client-wall.md): with NAPKIN_MODEL_PIN=eu, client
 text may only go to a route that processes in the EU. On the bedrock wire an
 alias resolves to its `eu.` inference profile, and any route that still
-resolves to a `global.` profile (a provider id written out in full), or runs on
-a wire that is not EU-pinned, is a violation: startup stops and an edit to the
+resolves to anything but an `eu.` profile (global., us., apac., a bare id, an
+ARN), or runs on a wire that is not EU-pinned, is a violation: startup stops and an edit to the
 routes file is refused, unless the purpose is listed with its reason in
 napkin/model_route_exceptions.json. `--check` prints the violations and exits 1.
 
@@ -189,9 +189,13 @@ class Routes:
             if name in self.exceptions:
                 continue
             model = self._resolve(doc, purpose, vision).model
-            if model.startswith("global."):
-                out.append(f"{name} resolves to the global profile {model}: not EU-pinned "
-                           f"(use an eu. profile, or record an exception for {name!r})")
+            if self.api not in EU_WIRES or model.startswith("eu."):   # a recorded wire exception speaks for its routes
+                continue
+            # An allow list: global., us., apac., a bare id or an ARN all leave the EU.
+            what = f"the global profile {model}" if model.startswith("global.") else \
+                f"{model}, which is not an EU inference profile"
+            out.append(f"{name} resolves to {what}: not EU-pinned "
+                       f"(use an eu. profile, or record an exception for {name!r})")
         return out
 
     def _maybe_reload(self):
