@@ -27,9 +27,7 @@ fn the_first_table_holds_the_seven_rules() {
         assert!(r.id.ends_with(".v1"), "{} is versioned", r.id);
     }
     let has = |kind: &str, action: Option<&str>| {
-        RULES
-            .iter()
-            .any(|r| r.kind == kind && r.action == action)
+        RULES.iter().any(|r| r.kind == kind && r.action == action)
     };
     assert!(has("approve", Some("lock")));
     assert!(has("sign", None));
@@ -44,15 +42,35 @@ fn the_first_table_holds_the_seven_rules() {
 #[test]
 fn no_rule_reads_a_cost_or_makes_a_person_page() {
     for r in RULES {
-        assert_ne!(r.page_type, PageType::Person, "{} makes a person page", r.id);
-        for bad in ["run_cost", "set_budget", "budget", "cost", "price", "credit"] {
+        assert_ne!(
+            r.page_type,
+            PageType::Person,
+            "{} makes a person page",
+            r.id
+        );
+        for bad in [
+            "run_cost",
+            "set_budget",
+            "budget",
+            "cost",
+            "price",
+            "credit",
+        ] {
             assert!(
                 !r.kind.contains(bad) && !r.action.unwrap_or("").contains(bad),
                 "{} reads {bad}",
                 r.id
             );
-            assert!(!r.template.to_lowercase().contains(bad), "{} says {bad}", r.id);
-            assert!(r.slots.iter().all(|(n, _)| !n.contains(bad)), "{} slot {bad}", r.id);
+            assert!(
+                !r.template.to_lowercase().contains(bad),
+                "{} says {bad}",
+                r.id
+            );
+            assert!(
+                r.slots.iter().all(|(n, _)| !n.contains(bad)),
+                "{} slot {bad}",
+                r.id
+            );
         }
         assert!(!r.template.contains('\u{2014}'), "no em dash");
         // The template names only its slots and the date.
@@ -104,21 +122,45 @@ fn the_j001_chain_becomes_cited_lines_of_ids_enums_dates_and_numbers() {
         .iter()
         .find(|x| x.line.cites.iter().any(|c| matches!(c, napkin_host::brain::Cite::Decision { decision, .. } if decision == "d_0005")))
         .unwrap();
-    assert_eq!(ans.line.slots["answer"], Slot::Id("accepted_with_changes".into()));
+    assert_eq!(
+        ans.line.slots["answer"],
+        Slot::Id("accepted_with_changes".into())
+    );
     assert!(!ans.line.slots.contains_key("reason"));
     assert_eq!(ans.line.at, "2026-10-23");
-    let all = serde_json::to_string(&d.derived.iter().map(|x| &x.line).collect::<Vec<_>>()).unwrap();
-    assert!(!all.contains("bottle") && !all.contains("cheap"), "no words from a source");
+    let all =
+        serde_json::to_string(&d.derived.iter().map(|x| &x.line).collect::<Vec<_>>()).unwrap();
+    assert!(
+        !all.contains("bottle") && !all.contains("cheap"),
+        "no words from a source"
+    );
 }
 
 #[test]
 fn a_row_that_would_carry_words_is_skipped_with_its_reason() {
     let d = derive(&rows("j001_hostile_rows.json"));
-    assert!(d.derived.is_empty(), "{:?}", d.derived.iter().map(|x| &x.line.id).collect::<Vec<_>>());
+    assert!(
+        d.derived.is_empty(),
+        "{:?}",
+        d.derived.iter().map(|x| &x.line.id).collect::<Vec<_>>()
+    );
     assert_eq!(d.skipped.len(), 7);
-    let why = |id: &str| d.skipped.iter().find(|s| s.decision == id).unwrap().reason.clone();
-    assert!(why("d_9001").contains("answer"), "a sentence is not an answer");
-    assert!(why("d_9002").contains("answer"), "an answer outside the three");
+    let why = |id: &str| {
+        d.skipped
+            .iter()
+            .find(|s| s.decision == id)
+            .unwrap()
+            .reason
+            .clone()
+    };
+    assert!(
+        why("d_9001").contains("answer"),
+        "a sentence is not an answer"
+    );
+    assert!(
+        why("d_9002").contains("answer"),
+        "an answer outside the three"
+    );
     assert!(why("d_9003").contains("total"), "31 is over 30");
     assert!(why("d_9004").contains("total"), "a missing number");
     assert!(why("d_9005").contains("date"));
@@ -133,7 +175,13 @@ fn the_rows_make_pages_per_job_that_pass_the_page_format() {
     let slugs: Vec<&str> = pages.keys().map(String::as_str).collect();
     assert_eq!(
         slugs,
-        ["decision-j001", "decision-j002", "idea-j001", "job-j001", "outcome-j001"]
+        [
+            "decision-j001",
+            "idea-j001",
+            "job-j001",
+            "job-j002",
+            "outcome-j001"
+        ]
     );
     for (slug, p) in &pages {
         napkin_host::brain::page::validate(p).unwrap_or_else(|e| panic!("{slug}: {e:?}"));
@@ -160,7 +208,10 @@ fn derivation_is_deterministic_and_does_not_depend_on_the_order_of_rows() {
     let one = serde_json::to_value(assemble(&derive(&a)).unwrap()).unwrap();
     let two = serde_json::to_value(assemble(&derive(&b)).unwrap()).unwrap();
     assert_eq!(one, two);
-    assert_eq!(one, serde_json::to_value(assemble(&derive(&a)).unwrap()).unwrap());
+    assert_eq!(
+        one,
+        serde_json::to_value(assemble(&derive(&a)).unwrap()).unwrap()
+    );
     // A repeated row is one line.
     let mut c = a.clone();
     c.extend(a.clone());
@@ -180,8 +231,14 @@ fn owners_follow_the_kind_of_page() {
     assert_eq!(owner_role(PageType::Lesson), "planning");
     let roles: Value = json!(["planning", "creative-director", "account-service"]);
     for t in [
-        PageType::Decision, PageType::Idea, PageType::Outcome, PageType::Lesson,
-        PageType::Client, PageType::Person, PageType::Tool, PageType::Job,
+        PageType::Decision,
+        PageType::Idea,
+        PageType::Outcome,
+        PageType::Lesson,
+        PageType::Client,
+        PageType::Person,
+        PageType::Tool,
+        PageType::Job,
     ] {
         assert!(roles.as_array().unwrap().iter().any(|r| r == owner_role(t)));
     }
