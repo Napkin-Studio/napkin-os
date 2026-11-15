@@ -61,7 +61,6 @@ pub const ACTIONS: [&str; 7] = [
 ];
 
 const MAX_NAME: usize = 120;
-const MAX_CAP: f64 = 10_000_000.0;
 pub const DEFAULT_TIME_ZONE: &str = "Europe/Dublin";
 
 /// Where a person is in their time with the agency.
@@ -103,9 +102,8 @@ impl Person {
 pub struct Settings {
     #[serde(default)]
     pub name: String,
-    /// Euros per calendar month. Stored and shown; nothing enforces it yet (the cost engine will).
-    #[serde(default)]
-    pub credit_cap_month_eur: f64,
+    // No monthly credit cap (features/align-confidential-prices.clan): no price is a setting on a screen; the
+    // spend cap is the environment's own (server/napkin/spend.py). A registry that still holds the old key reads.
     #[serde(default = "default_zone")]
     pub time_zone: String,
 }
@@ -118,7 +116,6 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             name: String::new(),
-            credit_cap_month_eur: 0.0,
             time_zone: default_zone(),
         }
     }
@@ -128,7 +125,6 @@ impl Default for Settings {
 #[derive(Deserialize, Default, Debug)]
 pub struct SettingsPatch {
     pub name: Option<String>,
-    pub credit_cap_month_eur: Option<f64>,
     pub time_zone: Option<String>,
 }
 
@@ -708,8 +704,8 @@ pub fn upsert_people(
 
 // ── the settings ────────────────────────────────────────────────────────────
 
-/// Change the agency's name, monthly credit cap or time zone, as one `set_settings` decision.
-/// A cap that is below zero or not a finite number is `400`.
+/// Change the agency's name or time zone, as one `set_settings` decision. The spend cap is the environment's
+/// own setting, never the agency's.
 pub fn set_settings(store: &dyn DocStore, ctx: &Ctx, patch: SettingsPatch) -> HostResult<Settings> {
     let who = person_of(ctx)?;
     let _g = WRITE.lock().unwrap_or_else(|e| e.into_inner());
@@ -724,14 +720,6 @@ pub fn set_settings(store: &dyn DocStore, ctx: &Ctx, patch: SettingsPatch) -> Ho
             )));
         }
         after.name = n;
-    }
-    if let Some(c) = patch.credit_cap_month_eur {
-        if !c.is_finite() || !(0.0..=MAX_CAP).contains(&c) {
-            return Err(HostError::bad_request(
-                "the monthly credit cap is an amount in euros, not below zero",
-            ));
-        }
-        after.credit_cap_month_eur = c;
     }
     if let Some(z) = &patch.time_zone {
         let z = z.trim();
@@ -754,10 +742,6 @@ pub fn set_settings(store: &dyn DocStore, ctx: &Ctx, patch: SettingsPatch) -> Ho
     let as_value = |s: &Settings| {
         let mut m = Mapping::new();
         m.insert(Value::from("name"), Value::from(s.name.as_str()));
-        m.insert(
-            Value::from("credit_cap_month_eur"),
-            Value::from(s.credit_cap_month_eur),
-        );
         m.insert(Value::from("time_zone"), Value::from(s.time_zone.as_str()));
         Value::Mapping(m)
     };

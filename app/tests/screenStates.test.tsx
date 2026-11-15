@@ -7,7 +7,7 @@
 //
 //  1. nine components; the gallery in three modes; axe finds nothing
 //  2. a failed write keeps the typed text; Try again saves once the network is back (pilot 13, in app/)
-//  3. a failed run: one plain line, estimate returned, inputs kept, Try again works (pilot 15, in app/)
+//  3. a failed run: one plain line with no figure, Try again works (pilot 15, in app/)
 //  4. Empty shows a finished J001 example and one starting verb, for every door with no tool
 //  5. no spinner for a wait under a second
 //
@@ -293,12 +293,12 @@ test('a saved report arriving after another write does not bring a failed one ba
 
 // ── 3. a failed run (pilot 15) ──────────────────────────────────────────────
 
-test('a failed run says one plain line, returns the estimate, keeps the inputs, and Try again works', async () => {
+test('a failed run says one plain line with no figure and no money word, and Try again works', async () => {
+  // features/align-confidential-prices.clan, done_when line 9: a run that did not run cost nothing and says so without a figure
   for (const why of ['provider', 'refused', 'timeout', 'other'] as const) {
     const line = runFailedLine(why)
-    assert.match(line, /reserved estimate is returned/)
-    assert.match(line, /your inputs are kept/)
-    assert.equal(line.split('. ').length, 2, 'two short sentences, one line')
+    assert.equal(line, 'That did not run. Nothing was changed.')
+    assert.doesNotMatch(line, /\d|estimate|credit|cost|price|euro/i)
   }
   let tried = 0
   const r = await draw(createElement(S.RunFailed, { why: 'provider', onRetry: () => { tried++ } }))

@@ -21,7 +21,7 @@ import threading
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import API, backend, metrics, registry, runlog, set_model_wire
+from . import API, backend, metrics, registry, runlog, set_model_wire, spend
 from .capabilities import Capabilities
 from .config import Settings
 from .doc import STAGES
@@ -128,7 +128,8 @@ class Middleware:
 
     def envelope(self, task, handler, job, result, change, caps, hits=()):
         return {"api": API, "task": task, "handler": handler, "job": job, "result": result, "change": change,
-                "trace": self.trace(caps, hits)}
+                "trace": self.trace(caps, hits),
+                "usage": spend_usage(caps, ended=(job or {}).get("state") in ENDED)}
 
     def brief_envelope(self, job, change):
         """Brief Maker's replies (§10.6): the job's own task and handler, the
@@ -272,6 +273,39 @@ def _long_summary(job) -> str:
     return f"{v['progress']['done']} of {v['progress']['total']} run(s) done"
 
 
+ENDED = ("done", "failed", "cancelled")
+ZERO = {"estimate_eur": 0.0, "charged_eur": 0.0, "route": None}
+
+
+def charged_eur(caps) -> float:
+    """What the model calls a task made actually cost (review of 15 Nov, item 2): each model's tokens at the rate the
+    spend guard prices it with (spend.model_rates, the dearest tier when the model is not in the table; dollar rates
+    stand in for euro, as in the guard). A call that never went out has no tokens and costs nothing."""
+    u = getattr(caps, "usage", None)
+    total = 0.0
+    for model, m in (getattr(u, "by_model", None) or {}).items():
+        pin, pout = spend.model_rates(model) or spend.CEILING_PER_MTOK
+        total += int(m.get("input_tokens") or 0) / 1e6 * pin + int(m.get("output_tokens") or 0) / 1e6 * pout
+    return round(total, 6)
+
+
+def spend_usage(caps, ended: bool = True) -> dict:
+    """What a task cost (features/align-confidential-prices.clan): the ceiling the spend guard counted, what its calls
+    actually cost, and the route. Every task's envelope carries it; a long job says it once, when it has ended, so a
+    poll of a running job reports zeros. The host writes it as the document's run_cost decision, one per job. Numbers
+    and a route name, never content."""
+    if caps is None or not ended:
+        return dict(ZERO)
+    charged = charged_eur(caps)
+    set_by_task = getattr(caps, "spend_usage", None)
+    if isinstance(set_by_task, dict):
+        return {**set_by_task, "charged_eur": charged}
+    if charged <= 0:
+        return dict(ZERO)
+    model = getattr(getattr(caps, "model", None), "model_id", None)
+    return {"estimate_eur": charged, "charged_eur": charged, "route": model if isinstance(model, str) else None}
+
+
 def _has_scope(obj) -> bool:
     return isinstance(obj, dict) and any(k in obj for k in ("scope", "tenant", "org", "org_id", "tenant_id"))
 
@@ -291,8 +325,11 @@ def create_app(settings: Settings | None = None, **components) -> FastAPI:
     app = FastAPI(title="napkin-middleware", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.mw = mw
 
-    def err(status, etype, message):
-        return JSONResponse({"error": {"type": etype, "message": message}}, status_code=status)
+    def err(status, etype, message, usage=None):
+        e = {"type": etype, "message": message}
+        if usage:                                   # a run charged before it failed still says what it cost
+            e["usage"] = usage
+        return JSONResponse({"error": e}, status_code=status)
 
     @app.get("/healthz")
     def healthz():
@@ -320,10 +357,11 @@ def create_app(settings: Settings | None = None, **components) -> FastAPI:
             out = await anyio.to_thread.run_sync(mw.handle, body, request.headers.get(AGENCY_HEADER))
         except TaskError as e:
             log.info("%s %s %s", e.status, task, e.etype)
-            return err(e.status, e.etype, e.message)
+            return err(e.status, e.etype, e.message, getattr(e, "usage", None))
         except Exception as e:
             log.error("500 %s %s: %s", task, type(e).__name__, e, exc_info=True)
-            return err(500, "internal", "the middleware failed to handle this task")
+            # a call made before the failure was still paid for: say what it cost, nothing else
+            return err(500, "internal", "the middleware failed to handle this task", getattr(e, "usage", None))
         log.info("200 %s %s job=%s", task, out["handler"], out["job"]["state"])
         return JSONResponse(out)
 

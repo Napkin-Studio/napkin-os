@@ -156,8 +156,11 @@ test('the stand-in middleware: a named task, a failed task once, an unknown task
     assert.equal((await (await ask('judge_work')).json()).result.fail.idea, 3)
     // Asked for a kind of work, the Judge fixture writes all thirty of its tests, and a refusal variant answers with its status.
     const judged = await fetch(`${base}/v1/tasks`, { method: 'POST', body: JSON.stringify({ request_kind: 'middleware', payload: { task: 'judge_work', input: { work: { kind: 'script' } } } }) })
-    const tests = (await judged.json()).result.tests as { id: string; value: string }[]
+    const scored = await judged.json() as { result: { tests: { id: string; value: string }[] }; usage?: unknown }
+    const tests = scored.result.tests
     assert.equal(tests.length, 30)
+    // a judge_work answer reports what the run cost, as the real middleware does (features/align-confidential-prices.clan)
+    assert.deepEqual(scored.usage, { estimate_eur: 0.05, charged_eur: 0.02, route: 'e2e-stand-in' })
     assert.equal(tests.filter(t => t.value === 'fail').length, 8)
     await control({ variant: { judge_work: 'ai-off' } })
     const refused = await ask('judge_work')

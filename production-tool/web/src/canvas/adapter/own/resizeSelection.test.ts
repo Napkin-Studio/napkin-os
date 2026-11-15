@@ -107,7 +107,7 @@ describe('how, and the count', () => {
     const rows = trayRows(planned, models, (_s, i) => `Picture ${i + 1}`)
     expect(rows[0]).toMatchObject({ name: 'Picture 1 · 9:16', words: 'Redraw · Gemini 3 Pro' })
     expect(rows[5].name).toBe('Picture 3 · 1:1')
-    expect(trayRows(planResize(sources, [shape('9:16')], 'crop', models), models, () => 'P')[0].words).toBe('Crop · free')
+    expect(trayRows(planResize(sources, [shape('9:16')], 'crop', models), models, () => 'P')[0].words).toBe('Crop')
     expect(JSON.stringify(rows)).not.toMatch(/\$|USD|credit|cost/i)
   })
   it('the preview draws a crop inside the picture and an extend or a redraw round it', () => {

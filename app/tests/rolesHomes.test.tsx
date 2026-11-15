@@ -95,12 +95,14 @@ test('every door that has no page opens its own SoonCard: its line, its verb and
   assert.ok(none.length >= 28)
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/'/g, '&#x27;')
   for (const d of none) {
-    const html = renderToStaticMarkup(createElement(DoorPage, { door: d.id, name: d.name, clients: [], go: noop }))
+    // as a role that may read a budget, which reads every example as written (the Time and money door's hours figure is
+    // that role's only: tests/noPrices.test.ts)
+    const html = renderToStaticMarkup(createElement(DoorPage, { door: d.id, name: d.name, clients: [], rights: { manage: false, budget: false, read_budget: true }, go: noop }))
     assert.match(html, /data-state="empty"/, d.id)
     assert.ok(html.includes(esc(d.line)), `${d.id} shows its own line`)
     assert.ok(html.includes(esc(d.example.lines[0])), `${d.id} shows its own example`)
     assert.ok(html.includes(`>${esc(d.verb)}<`), `${d.id} shows its own verb`)
-    assert.equal(teaserFor(d.id, d.name).example, d.example, d.id)
+    assert.equal(teaserFor(d.id, d.name, true).example, d.example, d.id)
   }
 })
 

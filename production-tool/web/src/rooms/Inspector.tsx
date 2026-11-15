@@ -162,7 +162,7 @@ function Empty({ data, cut, t }: { data: RoomData; cut: Cut; t: number }) {
         <dt><kbd>Delete</kbd></dt><dd>Remove and close the gap (Shift leaves it)</dd>
         <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>Undo</dd>
       </dl>
-      <p className="rm-faint">Editing never spends anything.</p>
+      <p className="rm-faint">Editing sends nothing to a model.</p>
     </div>
   )
 }

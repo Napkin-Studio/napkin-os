@@ -261,7 +261,8 @@ for (const size of SIZES) {
     await mgr.page.goto('/#door-agency-dashboard')
     await mgr.page.reload()
     await expect(mgr.page.getByTestId('dashboard')).toBeVisible()
-    await expect(mgr.page.getByTestId(/^tile-(stage|risk|hours|waiting|scores|results)$/)).toHaveCount(6)
+    await expect(mgr.page.getByTestId(/^tile-(stage|risk|hours|waiting|scores|results)$/)).toHaveCount(5) // stage, risk, waiting, scores, results: no hours tile
+    await expect(mgr.page.getByTestId('tile-hours')).toHaveCount(0)
     const row = mgr.page.getByTestId('tile-stage').locator(`[data-job="${job.job}"]`)
     await expect(row).toHaveAttribute('data-stage', 'client-brief')
     // the number on the tile is a link, and it opens the job page (or Live jobs, for several jobs)
@@ -685,7 +686,7 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  // A provider error: one plain line, the charge returned (crates/napkin-web/src/meter.rs), inputs kept, Try again works.
+  // A provider error: one plain line with no figure, the charge returned (crates/napkin-web/src/meter.rs), inputs kept, Try again works.
   test(t(15), async ({ browser }) => {
     const { ctx, page } = await open(browser, size)
     const job = await seedJ001(page)
@@ -707,7 +708,8 @@ for (const size of SIZES) {
       await expect(failed).toBeVisible()
       expect((await failed.locator('.bs-line').allInnerTexts()).filter(Boolean)).toHaveLength(1) // one plain line
       await expect(failed).not.toContainText(/exception|stack|[{}]/i)
-      await expect(failed).toContainText('The reserved estimate is returned')
+      await expect(failed).toContainText('That did not run. Nothing was changed.')
+      expect(await failed.innerText(), 'the line holds no digit').not.toMatch(/\d/)
       await expect.poll(async () => (await sessionOf(page)).quota.used).toBe(before) // the credits come back
       await expect(app.locator('body')).toContainText(ask) // the inputs stay
       // The provider is back: Try again runs it again, and that run is charged.

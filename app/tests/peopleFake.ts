@@ -137,6 +137,7 @@ export function fakePeopleApi(start: { people?: PersonRow[]; agencies?: AgencyAd
     list: async () => { hear('list'); return { people: structuredClone(people), agencies: structuredClone(rows) } satisfies PeopleList },
     add: async b => { hear('add', b); throw new PeopleError(409, 'not in this fake') },
     rename: async (id, name) => { hear('rename', id, name); const p = people.find(x => x.id === id)!; p.name = name; return p },
+    invite: async id => ({ person: id, link: `http://127.0.0.1/?welcome=${id}`, mailed: false }),
     remove: async id => { hear('remove', id); const p = people.find(x => x.id === id)!; p.removed_at = now; return p },
     agencies: async () => { hear('agencies'); return structuredClone(rows) },
     createAgency: async b => {

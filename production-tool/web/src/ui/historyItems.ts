@@ -2,7 +2,7 @@
 // ("why does this look like this?"). It reads the addresses each decision
 // targets and cites (model/lineage.ts), never ids in the words.
 
-import type { Cost, ProductionDocument } from '../contracts/types'
+import type { ProductionDocument } from '../contracts/types'
 import { entityOf, kindOf as kindOfDecision, type Kind } from '../model/lineage'
 import { CAST } from './agents/cast'
 import { currentRender, framesOf, refName, refsList, rendersOf, shotNumber, shotsOf, takeNumber, takesOf } from '../model/selectors'
@@ -48,7 +48,7 @@ export function historyItems(doc: ProductionDocument, docId: string): HistoryIte
     }
   }
   // Each Campaign board (features/campaign-formats.clan): its set, its sizes, and every job that made one
-  // (a crop is free; an extend, a regenerate and a full-size upscale show their cost here, and only here).
+  // (a crop, an extend, a regenerate and a full-size upscale; no cost shows in the interface, owner's rule).
   const sets = Object.values(doc.format_sets ?? {})
   for (const [i, set] of sets.entries()) {
     const sizes = Object.values(doc.sizes ?? {}).filter((s) => s.set_id === set.id)
@@ -94,17 +94,6 @@ export function who(agent: string, me: string | undefined): { label: string; det
   return { label: agent }
 }
 
-/** A job's recorded cost, for History, the one place the tool shows money (owner, 2026-10-13): what
- *  the provider confirmed, else "about" the reservation. Nothing for a free job (the mock) or an
- *  unknown price. A failed attempt the provider billed shows its cost like any other, with no words. */
-export function jobCost(cost: Cost | undefined): string | undefined {
-  if (!cost) return undefined
-  const fmt = (v: number) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
-  if (cost.confirmed != null) return cost.confirmed > 0 ? fmt(cost.confirmed) : undefined
-  if (cost.unknown) return undefined
-  return cost.estimate ? `about ${fmt(cost.estimate)}` : undefined
-}
-
 /** The job a decision is about: the first job it targets or cites. */
 export function jobOf(entry: ChainLike): string | undefined {
   for (const a of [...(entry.targets ?? []), ...(entry.cites ?? [])]) {
@@ -117,6 +106,12 @@ export function jobOf(entry: ChainLike): string | undefined {
 /** Long hashes and ids, shortened for reading (the full text stays in the title). */
 export function readable(s: string): string {
   return s.replace(/sha256:([0-9a-f]{8})[0-9a-f]{56}/g, 'sha256:$1…').replace(/\b([a-z]+_)([0-9A-HJKMNP-TV-Z]{20})([0-9A-HJKMNP-TV-Z]{6})\b/g, '$1…$3')
+}
+
+/** A rationale without the cost part older landings wrote into it (clan-store jobRationale before the owner's rule:
+ *  "cost <figure> confirmed", "cost <figure> estimated, not confirmed"). The cost stays recorded on the job. */
+export function withoutCost(s: string): string {
+  return s.split(' · ').filter((part) => !/^cost\b/i.test(part.trim())).join(' · ')
 }
 
 export function timeOf(iso: string): string {

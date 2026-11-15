@@ -448,7 +448,12 @@ class ModelPort:
             raise ModelError(f"purpose {purpose!r} is not a slug", "invalid_request")
         images = check_images(images)
         route = with_caller(self.routes.resolve(purpose, vision=vision), effort, max_tokens)
-        model = model or route.model
+        # A model the caller names resolves like a route's (an alias to its id on this wire) and answers to the
+        # EU pin too: refused before anything is sent when the pin cannot vouch for it.
+        model = self.routes.model_id(model) if model else route.model
+        refused = self.routes.vouch(model)
+        if refused:
+            raise ModelError(f"{purpose}: {refused}", "invalid_request")
         effort, max_tokens = route.effort, route.max_tokens
         api_schema = strip_unsupported(schema)
         digest = hashlib.sha256(json.dumps(api_schema, sort_keys=True).encode()).hexdigest()[:16]

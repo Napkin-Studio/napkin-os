@@ -7,7 +7,8 @@
 //
 // Rules (v2 section 8): short sentences, plain words, no em dashes, no words
 // like magic or effortless. Glossary words as written: Needs you, Run,
-// Credits, Job file. Content is de-identified: "Client A, an Irish whiskey".
+// Job file. No figure of money on any screen (features/align-confidential-prices.clan).
+// Content is de-identified: "Client A, an Irish whiskey".
 // A test refuses an em dash anywhere in this file's output.
 
 /** The nine, in the order v2 section 4 lists them. */
@@ -42,20 +43,15 @@ export const FAILED_SAVE = {
 export type RunFailure = 'provider' | 'refused' | 'timeout' | 'other'
 
 export const RUN_FAILED = {
-  because: {
-    provider: 'The model did not answer, so the run stopped.',
-    refused: 'The model would not do this as asked, so the run stopped.',
-    timeout: 'The run took too long, so it stopped.',
-    other: 'The run stopped.',
-  } satisfies Record<RunFailure, string>,
-  /** No credit unit exists yet (record screen-states, open question 1): the run's reserved estimate is released and said so. */
-  returned: 'The reserved estimate is returned and your inputs are kept.',
+  /** One plain line with no figure (features/align-confidential-prices.clan, done_when line 9): a run that did not run cost
+   *  the agency nothing and says so without a number. What it cost, when anything, is read in the Decisions drawer. */
+  line: 'That did not run. Nothing was changed.',
   retry: 'Try again',
 } as const
 
-/** The one plain line for a failed run. */
-export function runFailedLine(why: RunFailure): string {
-  return `${RUN_FAILED.because[why]} ${RUN_FAILED.returned}`
+/** The one plain line for a failed run, whatever stopped it (why it stopped is the run's own record, not the screen's). */
+export function runFailedLine(_why?: RunFailure): string {
+  return RUN_FAILED.line
 }
 
 // ── Missing access ──────────────────────────────────────────────────────────

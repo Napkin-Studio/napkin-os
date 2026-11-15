@@ -354,15 +354,8 @@
   function fps(){ var f = Number(get('project.frame_rate')); return (f && f>0) ? f : 25; }
   function targetDur(){ var d = Number(get('project.duration_s')); return (d && d>0) ? d : 15; }
 
-  function fmtCost(c){
-    if(!c) return 'not recorded';
-    var cur = c.currency || get('project.currency') || 'EUR';
-    if(c.unknown !== false && c.confirmed == null) {
-      var est = (c.estimate!=null) ? (' · est ' + cur + ' ' + c.estimate) : '';
-      return 'unknown' + est;
-    }
-    return cur + ' ' + c.confirmed;
-  }
+  // No cost is drawn here (features/align-confidential-prices.clan): a job's or a take's cost stays in the file as data,
+  // and a run's cost is read in the Decisions drawer only.
 
   // ── writers that keep the non-negotiables ─────────────────────────────
   // A change never overwrites an approved revision. Editing an approved script
@@ -1726,7 +1719,7 @@
       var cls = j.state==='completed' ? 'ok' : (j.state==='failed'||j.state==='uncertain') ? 'bad' : 'info';
       return '<div class="listrow"><span class="st ' + cls + '"><span class="dot"></span>' + esc(j.state) + '</span>' +
         '<span style="flex:1">' + esc(j.op||'') + ' <span class="muted">' + esc(j.provider||'') + '</span></span>' +
-        '<span class="mono muted" style="font-size:11px">' + esc(fmtCost(j.cost)) + '</span></div>';
+        '</div>';
     }).join('') : '<span class="muted">No jobs have been submitted from this file.</span>';
     h3 += '</div>';
     return h3;
@@ -1758,9 +1751,6 @@
       '<div class="pillrow"><span class="pill">' + (p.duration_s||targetDur()) + 's</span><span class="pill">' + fps() + ' fps</span></div></div>';
     h += '<div class="inspbody">';
     h += det('Client', esc(p.client||'')) + det('Brand', esc(p.brand||'')) + det('Product', esc(p.product||''));
-    h += det('Budget limit', p.budget_limit!=null ? esc((p.currency||'EUR') + ' ' + p.budget_limit) : '');
-    h += det('Confirmed spend', p.spent_confirmed!=null ? esc((p.currency||'EUR') + ' ' + p.spent_confirmed) : '<span class="muted">unknown</span>');
-    h += det('Reserved', p.spent_reserved!=null ? esc((p.currency||'EUR') + ' ' + p.spent_reserved) : '<span class="muted">none</span>');
     h += det('Channels', (p.channels||[]).join(', '));
     h += '</div>';
     return h;
@@ -1780,7 +1770,7 @@
       (Array.isArray(bt.roles) ? bt.roles.map(function(r){ return '<span class="pill on">' + esc(r.replace('_',' ')) + '</span>'; }).join('') : '') +
       '</div></div><div class="inspbody">';
     h += '<div><span class="lab">What depends on this beat</span>';
-    if(!dep.length && !cues.length) h += '<p class="muted" style="font-size:12.5px">Nothing yet. A rewrite would cost nothing downstream.</p>';
+    if(!dep.length && !cues.length) h += '<p class="muted" style="font-size:12.5px">Nothing yet. A rewrite would change nothing downstream.</p>';
     dep.forEach(function(s){ h += '<div class="listrow"><span class="pill">shot</span><span>' + esc(s.purpose || ('Shot ' + (s.order||0))) + '</span></div>'; });
     cues.forEach(function(c){ h += '<div class="listrow"><span class="pill">cue</span><span>' + esc(c.text||c.id) + '</span></div>'; });
     h += '</div>';
@@ -1851,7 +1841,6 @@
           : '<span class="st ok"><span class="dot"></span>' + esc(t.kind||'take') + '</span>';
         h += '<div class="listrow" style="flex-wrap:wrap;align-items:center">' + flag +
           '<span style="flex:1;min-width:90px" class="mono">' + esc(t.id) + '</span>' +
-          '<span class="muted" style="font-size:11.5px">' + esc(fmtCost(t.cost)) + '</span>' +
           (t.selected ? '<span class="st ok"><span class="dot"></span>Selected</span>'
                       : '<button class="btn sm" data-seltake="' + esc(t.id) + '">Select</button>') +
           '</div>';
@@ -2007,7 +1996,7 @@
 
     h += '<div><span class="lab">Motion preview</span>' +
       (b.motion_preview ? '<span class="mono">' + esc(String(b.motion_preview).slice(0,12)) + '</span>'
-        : '<p class="muted" style="font-size:12.5px">Not generated. A low-cost preview of this move needs the production service.</p>') + '</div>';
+        : '<p class="muted" style="font-size:12.5px">Not generated. A quick preview of this move needs the production service.</p>') + '</div>';
 
     h += '<div><span class="lab">Provider capability</span>';
     var pc = b.provider_capabilities;

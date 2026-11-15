@@ -160,7 +160,7 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
               <div key={r.id} className="cb-trayrow" role="listitem"><span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}</span></div>
             ))}
           </div>
-          <p className="rs-line faint">Each is its own job: one that fails says so on its card, the others carry on. What each costs is in History.</p>
+          <p className="rs-line faint">Each is its own job: one that fails says so on its card, the others carry on.</p>
           {error && <p className="cf-error" role="alert">{error}</p>}
           <footer className="cf-foot">
             <button type="button" className="btn ghost" onClick={() => setStep('pick')}>Back</button>

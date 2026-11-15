@@ -12,6 +12,7 @@
 // LocalPatchBus, live text through LocalTextBus. This store is what they call.
 import { parse as parseYaml } from 'yaml'
 import { APP_SCHEMA } from './app-template.gen'
+import { CREW } from './attribution'
 import { APP_ID, asBytes, freshHost, HostRefused, route, type NapkinHost, type RawResponse, type WasmSource } from './host'
 import { integrity } from './integrity'
 import { diffMergePatch, mergePatch } from './merge-patch'
@@ -126,6 +127,21 @@ const MOVING_SCHEMA = { $schema: 'https://json-schema.org/draft/2020-12/schema',
  * nothing is appended; it only lets a decision with no data change through the
  * host's no-op guard. */
 const RECORD_GUARD_KEY = 'record'
+
+/** Who may be named as a write's agent (features/production-platform-rules.clan, done_when 4): a person
+ * (human:<id>), the crew (attribution.ts CREW), or this store's own one move to generations. Anything else is
+ * no one the chain can show, so the write is refused before it reaches the host. */
+export function agentProblem(agent: string): string | null {
+  if (/^human:\S+$/.test(agent)) return null
+  if ((CREW as readonly string[]).includes(agent) || agent === MIGRATION_AGENT) return null
+  return `agent ${JSON.stringify(agent)} is neither a person (human:<id>) nor the crew (${CREW.join(', ')})`
+}
+
+function claimed(agent: string): string {
+  const problem = agentProblem(agent)
+  if (problem) throw new TypeError(problem)
+  return agent
+}
 
 function recordKey(agent: string, action: string): string {
   return `${agent}\u0000${action}`
@@ -328,7 +344,7 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
       // A quiet write is bookkeeping: it still names them, as the person's plain 'sync' line with
       // what it was as the rationale, never pinned, so the chain reads it as one line of work and
       // History leaves it out (web/src/ui/HistoryList.tsx).
-      const agent = why.agent?.trim() || this.personClaim()
+      const agent = claimed(why.agent?.trim() || this.personClaim())
       route(h, '/patch-data', {
         patch: mergePatchBody,
         agent,
@@ -359,7 +375,7 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     return this.serial(async () => {
       const h = this.need()
       if (!entry?.action?.trim()) throw new TypeError('record: action is required')
-      const agent = entry.agent?.trim() || this.personClaim()
+      const agent = claimed(entry.agent?.trim() || this.personClaim())
       const key = recordKey(agent, entry.action)
       if (opts.once && this.recordedKeys(h).has(key)) return false
       route(h, '/patch-data', {

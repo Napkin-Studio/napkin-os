@@ -267,7 +267,10 @@ def test_a_plan_that_cannot_be_rendered_fails_free_before_stitch(change, why):
     h = harness()
     p = plan(footage(h, "a"), footage(h, "b"))
     change(p)
-    job = render(h, p)
+    req = {**envelope("stitch", new_id("job")), "input": {"timeline": p, "ratio": "16:9"}}
+    status, job = h.call("POST", "/jobs", req, h.token)
+    if status == 400:   # a clip that is not ours is refused at the door, before any job (every URL is ours or nothing)
+        job = {"state": "failed", "error": job["error"]}
     assert job["state"] == "failed" and job["error"]["code"] == "invalid_input" and why in job["error"]["message"]
     assert h.stitched == []
 

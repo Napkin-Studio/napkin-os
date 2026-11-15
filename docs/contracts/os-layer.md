@@ -130,7 +130,7 @@ one Postgres transaction. This is the single write funnel — the version check
 | Field | Meaning |
 |---|---|
 | `id` | Stable, generated at creation, never content-derived |
-| `kind` | `edit` · `contest` · `resolve` · `verdict` · `classify` · `pin` · `finding` · `verify` · `approve` · `lease` · `backref` (§7) · `client_review` · `unlock` (§7.5) · `sign` (§7.7, the planner's signature on a brief; *added 2026-11-11*) |
+| `kind` | `edit` · `contest` · `resolve` · `verdict` · `classify` · `pin` · `finding` · `verify` · `approve` · `lease` · `backref` (§7) · `client_review` · `unlock` (§7.5) · `sign` (§7.7, the planner's signature on a brief; *added 2026-11-11*) · `run_cost` · `set_budget` (§7.11; *added 2026-11-15*) |
 | `targets[]` | Addresses this decision is about |
 | `cites[]` | Fact pins, sources, findings and decisions it rests on |
 | `superseded_by` | The decision that replaced this one |
@@ -1613,6 +1613,32 @@ five by default), and no `open_early`, a `POST /api-proxy` with an Idea room tas
 While routes are out (`routes_out` not empty) the room takes no write other than
 `routes/edit` and `merge`: the merge starts from the branches.
 
+### 7.11 What a run cost, and a job's budget (features/align-confidential-prices.clan, the price half)
+
+No price, cost, credit or budget figure is on any screen. Two decision kinds keep them, and the Decisions
+drawer is the one place they are read:
+
+- **`run_cost`**, in the work's own chain, one per middleware call that was sent and charged (review of 15 Nov):
+  `run_cost: {document, version, task, job, route, estimate_eur, charged_eur, guard, at}`, `guard` always `allowed`.
+  Numbers, names and ids only; the rationale holds no figure. The host writes it where the money is spent: Judge's
+  route (`/judge`) and every middleware call a frame sends through `POST /api-proxy`, whatever the task, from the
+  envelope's `usage` (or the error's, for a call charged before it failed). The agent is the host's, named from the
+  task (`judge` for `judge_work`, `middleware` for any other), never from a body. One per middleware job: a poll that
+  answers a job already recorded writes nothing more. A refusal, and a call that charged nothing, write nothing. The
+  frame never receives `usage` or a `price_eur`: it gets the answer, not the price. A call whose answer is lost (a
+  timeout, a 500 with no usage) is not recorded: the middleware's own run log is the record of what it spent. The
+  spend guard itself is unchanged (server/napkin/spend.py) and refuses in the same place, in one line with no figure
+  (`spend_refused: Paid runs are off here. Nothing was sent.`).
+- **`set_budget`**, in the job registry's chain, targets `[J…]`, by a person: `set_budget: {job, hours}`, words
+  with no figure. Written by `POST /jobs/{number}/budget` (the Money roles that manage jobs: account service,
+  management, producers, and the unrestricted; `403` for anyone else) and by `POST /jobs` when a job is opened
+  with `budget_hours`. `PATCH /jobs/{number}` refuses `budget_hours` (`400`). `GET /jobs/{number}/decisions`
+  sends the Money group every line with each budget's `hours`; every other role gets no `set_budget` line, no
+  `hours`, and an older line that named the budget in its words keeps only its other sentences.
+
+Neither kind is ever sent to an agent or a model: `clan_context_for_agent` leaves both out of
+`clan.decision_chain`, and leaves `price_eur` out of a verdict's `judge` block.
+
 ## 8. Routes — contract v1
 
 `/capabilities` reports `contract: 1`. A document is shown with the installed
@@ -2672,6 +2698,28 @@ another agency, a duplicate, an unknown role, a formula (a cell starting `=`, `+
 character is refused on its line; the rest are written in one change. The report:
 `{kind, dry_run, rows, ok, errors: [{line, reason}], created, updated, unchanged, committed, results: [{line, status:
 new|changed|same|error, label, reason?}], starts_directory}`.
+
+### 14.0 First day (features/first-day.clan)
+
+An invite is a record on a person already in the People store (`first_days` in `people.json`); it never adds a
+person or a role. Made and withdrawn through the store's own change path (change line and audit entry before the
+store). Same scope as the table above; a member gets `403`.
+
+| Route | Body | Reply |
+| --- | --- | --- |
+| `POST /api/admin/people/{id}/first-day` | `{first?: {path}, mail?: bool}` (`first` a document on a job of the person's agency, nameable only by an admin of that agency) | `201 {person, link, first?: {job, path}, mailed, note?}` |
+| `DELETE /api/admin/people/{id}/first-day` | none | `200`, or `404` when there is none |
+| `GET /api/t/{tenant}/me/first-day` | none | `{show_pointers}`: true only for an invited person who has not seen them |
+| `POST /api/t/{tenant}/me/first-day` | `{seen: true}` or `{opened: true}` (names no one) | `200`, the session's person's own mark |
+
+The path's tenant must be the session's. The link is `<origin>/?welcome=<sign-in name>`: no token, signature or session; it
+grants nothing and only fills the sign-in name. `GET /api/t/{tenant}/needs` gains `first_task` (a need of kind
+`first-task`, id `first:<person>`), for the invited person alone, until they press its button. No route tells an admin
+what a person has done since the invite. The person's two marks are in `first-day-marks.json` beside `people.json`, written
+only when a mark changes something and never in the store. With `mail: true` the invite is mailed (`Message::Invite`) to the
+address the People store holds for the person, never one in the request, with a link built from `NAPKIN_PUBLIC_ORIGIN`
+(`scheme://host`, never a request header; unset means no mail), at most one a person a day; `note` says plainly why when no
+mail went. The development outbox does not write an invite's address.
 
 ### 14.1 Settings (stage 2, as stage 3 left them)
 

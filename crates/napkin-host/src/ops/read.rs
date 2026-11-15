@@ -512,6 +512,26 @@ fn without_outsider_text(mut chain: Value) -> Value {
     chain
 }
 
+/// What a run cost and a job's budget, left out of what an agent reads (features/align-confidential-prices.clan): a
+/// `run_cost` or `set_budget` decision is not sent at all, and a verdict is sent without the price it was given.
+/// They are the agency's own, read in the Decisions drawer and nowhere else, never put into a prompt.
+fn without_costs(mut chain: Value) -> Value {
+    let Some(list) = chain.get_mut("decisions").and_then(Value::as_array_mut) else {
+        return chain;
+    };
+    list.retain(|d| {
+        !d.get("kind")
+            .and_then(Value::as_str)
+            .is_some_and(|k| super::judge::NEVER_SENT.contains(&k))
+    });
+    for d in list.iter_mut() {
+        if let Some(j) = d.get_mut("judge").and_then(Value::as_object_mut) {
+            j.remove("price_eur");
+        }
+    }
+    chain
+}
+
 pub fn clan_context_for_agent(doc: &Document) -> Value {
     let clan = doc.clan();
     let yaml_to_json = |p: &str| -> Value {
@@ -533,7 +553,7 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         "app": m.app.as_ref().map(|a| serde_json::json!({ "name": a.name, "app_id": a.app_id, "version": a.version })),
         "schema": schema,
         "data": with_upstream_index(clan, yaml_to_json("shared/data.yaml")),
-        "decision_chain": without_outsider_text(yaml_to_json("agent/decision-chain.yaml")),
+        "decision_chain": without_costs(without_outsider_text(yaml_to_json("agent/decision-chain.yaml"))),
         "context": clan.read_entry_string("agent/context.md").unwrap_or_default(),
         "lineage": m.lineage.as_ref().map(|l| serde_json::json!({ "parent_id": l.parent_id, "delta": l.delta })),
         "id": clan.document_id(),

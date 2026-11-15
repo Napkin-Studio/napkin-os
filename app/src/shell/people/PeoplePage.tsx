@@ -25,6 +25,9 @@ import {
   isPeopleAdmin, napkinPageCss, newAgencyLook, pillStyle, recogniseAgency, rolesLine, signInNameOf, type AgencyRow, type PersonRow,
 } from './model'
 import { PeopleImport } from './PeopleImport'
+import { InviteRow, type InviteDoc } from '../firstday/InviteRow'
+import { INVITE } from '../firstday/words'
+import { jobsView } from '../../host/http'
 import './PeoplePage.css'
 import './agencies/agencies.css'
 
@@ -85,6 +88,15 @@ export default function PeoplePage({ user, roles: myRoles = NO_ROLES, onClose, a
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
   const [roling, setRoling] = useState<{ id: string; name: string; roles: string[] } | null>(null)
   const [importing, setImporting] = useState(false)
+  const [inviting, setInviting] = useState<{ id: string; name: string; agency: string } | null>(null)
+  // the live jobs' documents the admin may name as a first thing to open: their own agency's, read when an invite opens
+  const [docs, setDocs] = useState<InviteDoc[]>([])
+  useEffect(() => {
+    if (!inviting) return
+    let live = true
+    void jobsView().then(js => { if (live) setDocs((js ?? []).flatMap(j => j.documents.map(d => ({ path: d.path, title: d.title, job: j.number, client: j.client.name })))) })
+    return () => { live = false }
+  }, [inviting])
 
   const failed = useCallback((e: unknown) => {
     if (e instanceof PeopleError && e.status === 403) { setDenied(true); return }
@@ -112,6 +124,7 @@ export default function PeoplePage({ user, roles: myRoles = NO_ROLES, onClose, a
       e.preventDefault()
       e.stopPropagation()
       if (draft) setDraft(null)
+      else if (inviting) setInviting(null)
       else if (roling) setRoling(null)
       else if (importing) setImporting(false)
       else if (editor) setEditor(null)
@@ -119,7 +132,7 @@ export default function PeoplePage({ user, roles: myRoles = NO_ROLES, onClose, a
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [draft, roling, importing, editor, onClose])
+  }, [draft, roling, inviting, importing, editor, onClose])
 
   const agencies = useMemo(() => list?.agencies ?? [], [list])
   // the one just added first, as the mock shows it
@@ -223,6 +236,10 @@ export default function PeoplePage({ user, roles: myRoles = NO_ROLES, onClose, a
                     </span>
                   </div>
                 )}
+                {inviting && (
+                  <InviteRow key={inviting.id} person={inviting.id} name={inviting.name} api={api} onClose={() => setInviting(null)}
+                    docs={inviting.agency === agencyOfUser(user) ? docs : []} />
+                )}
                 {roling && (
                   <section className="pa-sheet" aria-label="Change roles" data-testid="people-roles">
                     <h2>Roles for {roling.name}</h2>
@@ -275,6 +292,7 @@ export default function PeoplePage({ user, roles: myRoles = NO_ROLES, onClose, a
                             <span className="pa-act">
                               <button type="button" className="pa-link" data-testid="person-roles-open" onClick={() => { setFlash(null); setDraft(null); setImporting(false); setRoling({ id: p.id, name: p.name ?? p.id, roles: [...(p.roles ?? [])] }) }}>Roles</button>
                               <button type="button" className="pa-link" onClick={() => setRenaming({ id: p.id, name: p.name ?? '' })}>Rename</button>
+                              <button type="button" className="pa-link" data-testid="person-invite-open" onClick={() => { setFlash(null); setDraft(null); setRoling(null); setImporting(false); setInviting({ id: p.id, name: p.name ?? p.id, agency: p.agency }) }}>{INVITE.open}</button>
                               {!p.admin && <button type="button" className="pa-link" onClick={() => { setFlash(null); setRemoving(p) }}>Remove</button>}
                             </span>
                           </td>

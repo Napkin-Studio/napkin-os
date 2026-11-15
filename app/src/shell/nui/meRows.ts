@@ -27,12 +27,14 @@ export interface MeRow {
   mine: number
   /** The person's own timesheet reminder: no document, it opens the timesheet. */
   timesheet?: boolean
+  /** An invited person's first task (features/first-day.clan): opens its document, and pressing it takes it off the list. */
+  firstTask?: boolean
 }
 
 const plural = (n: number) => `${n} for you`
 
 /** The documents holding an item for the person, by the earliest date of those items (none last), then by title. */
-export function meRows(items: readonly LibraryItem[], documents: readonly DocumentNeeds[], timesheet: JobNeed | null = null): MeRow[] {
+export function meRows(items: readonly LibraryItem[], documents: readonly DocumentNeeds[], timesheet: JobNeed | null = null, firstTask: JobNeed | null = null): MeRow[] {
   const byPath = new Map(items.map(i => [i.path, i] as const))
   const rows: MeRow[] = []
   for (const d of documents) {
@@ -49,6 +51,8 @@ export function meRows(items: readonly LibraryItem[], documents: readonly Docume
   }
   rows.sort((a, b) => (a.due === b.due ? a.title.localeCompare(b.title) : a.due === null ? 1 : b.due === null ? -1 : a.due < b.due ? -1 : 1))
   if (timesheet) rows.unshift({ key: 'timesheet', path: '', title: 'Confirm today\'s timesheet', sub: 'Your timesheet', state: 'Today', due: timesheet.due, mine: 1, timesheet: true })
+  // an invited person's first task is the first row of all: the document the invite named, on its job
+  if (firstTask) rows.unshift({ key: firstTask.id ?? 'first-task', path: firstTask.path, title: firstTask.text, sub: `${firstTask.job}, ${firstTask.client}`, state: 'Start here', due: firstTask.due, mine: 1, firstTask: true })
   return rows
 }
 

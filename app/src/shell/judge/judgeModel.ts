@@ -50,7 +50,7 @@ export function staleLine(card: NonNullable<JudgeCardView['score']>): string | n
 /** The refusal in the host's words: the part after its code. */
 export function refusalLine(message: string): string {
   const m = /^(ai_off|not_eu|not_configured|spend_refused|judge_failed|judge_malformed)\s*:\s*(.*)$/s.exec(message.trim())
-  return m ? m[2].trim() : 'Judge could not score this just now. Nothing was changed.'
+  return m ? m[2].trim() : 'That did not run. Nothing was changed.'
 }
 
 /** The run-failed state's class for a host refusal. */

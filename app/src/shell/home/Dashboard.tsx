@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // The agency dashboard, a door on Management's home (v2 sections 4 and 6; docs/design/dashboard.html):
-// six plain tiles about the agency's live jobs, each number a link to the job behind it. It reads
+// five plain tiles about the agency's live jobs, each number a link to the job behind it. It reads
 // the job index through `GET /dashboard` and stays current by itself, so a stage change on J001 shows
 // without a reload. It shows jobs and stages, never a score or a ranking of a person.
 //
@@ -24,7 +24,7 @@ export function Dashboard({ go }: { go: (r: Route) => void }) {
   return <DashboardBody value={value} ready={ready} go={go} />
 }
 
-/** The dashboard for what the server last said: loading, no access, no answer, no jobs, or the six tiles. */
+/** The dashboard for what the server last said: loading, no access, no answer, no jobs, or the five tiles. */
 export function DashboardBody({ value, ready, go }: { value: DashboardView | 'forbidden' | null; ready: boolean; go: (r: Route) => void }) {
   if (!ready) return <Loading what="the dashboard" rows={3} />
   if (value === 'forbidden') return <MissingAccess what="the agency dashboard" who="Management" />
@@ -32,7 +32,7 @@ export function DashboardBody({ value, ready, go }: { value: DashboardView | 'fo
   if (value.live_jobs === 0) {
     return (
       <Empty
-        line="Six plain numbers about your live jobs go here, once a job is open."
+        line="Five plain numbers about your live jobs go here, once a job is open."
         example={{ title: 'Example · Client A, an Irish whiskey', lines: ['Live jobs: 1 in Brief check. Days waiting on client: 2.'] }}
         verb="Open the clients"
         onStart={() => go({ level: 'clients' })}

@@ -78,6 +78,24 @@ for (const size of SIZES) {
     await expect(booth.getByTestId('judge-test').first()).toHaveAttribute('data-value', 'fail') // the failed tests come first
     await expect(booth.getByTestId('judge-test').first()).toContainText('Fixture evidence')
     await shot(page, 'judge-card-why', size)
+    // The run's cost (features/align-confidential-prices.clan): one run_cost decision in the work's chain, by Judge, numbers
+    // and ids only, read in one place, the Decisions drawer. Neither the page nor the document's frame shows a cost.
+    const cost = (await chainOf(page, doc.token)).filter(d => d.kind === 'run_cost') as (Decision & { run_cost?: { charged_eur: number; guard: string } })[]
+    expect(cost).toHaveLength(1)
+    expect(cost[0].agent).toBe('judge')
+    expect(cost[0].run_cost).toMatchObject({ charged_eur: 0.02, guard: 'allowed' })
+    const money = /\bcosts?\b|\bprices?\b|\bcents?\b|\beuros?\b|0\.02/i
+    expect(await page.locator('body').innerText()).not.toMatch(money)
+    expect(await boothIn(page).app.locator('body').innerText()).not.toMatch(money)
+    await page.getByTestId('decisions').click()
+    const drawer = page.getByTestId('decisions-drawer')
+    await expect(drawer).toBeVisible()
+    await drawer.locator('[data-dv="time"]').click()
+    await expect(drawer.getByTestId('decision-row').filter({ hasText: 'This run cost 0.02' })).toHaveCount(1)
+    await shot(page, 'judge-decisions-cost', size)
+    await page.getByRole('button', { name: 'Close decisions' }).click()
+    await expect(drawer).toHaveCount(0)
+    expect(await page.locator('body').innerText(), 'and nowhere else on the page').not.toMatch(money)
     await ctx.close()
   })
 
@@ -177,6 +195,14 @@ for (const size of SIZES) {
     expect(await notEu.text()).toMatch(/not_eu/)
     expect((await verdicts(page, doc.token)).length, 'a refusal writes nothing').toBe(before)
     expect((await sessionOf(page)).quota.used, 'a refusal returns its credit').toBe(credits)
+    // The spend guard refuses in the same place, and says so without a figure (features/align-confidential-prices.clan).
+    await control(page, { variant: { judge_work: 'spend' } })
+    const spent = await score(page, doc.token)
+    expect(spent.status()).toBe(429)
+    const line = await spent.text()
+    expect(line).toContain('Paid runs are off here. Nothing was sent.')
+    expect(line.replace(/spend_refused/g, '')).not.toMatch(/\d/)
+    expect((await verdicts(page, doc.token)).length, 'the guard\'s refusal writes no verdict').toBe(before)
     await ctx.close()
   })
 
@@ -195,8 +221,9 @@ for (const size of SIZES) {
     await expect(failed).toBeVisible()
     expect((await failed.locator('.tb-alert-text').allInnerTexts()).filter(Boolean)).toHaveLength(1) // one plain line
     await expect(failed).not.toContainText(/exception|stack|[{}]/i)
-    await expect(failed).toContainText(/\S{3,}/)
-    expect((await sessionOf(page)).quota.used).toBe(credits) // the credits come back
+    await expect(failed).toContainText('That did not run. Nothing was changed.')
+    expect(await failed.innerText(), 'the line holds no digit').not.toMatch(/\d/)
+    expect((await sessionOf(page)).quota.used).toBe(credits) // the quota is unchanged: an API fact, not a screen
     await shot(page, 'judge-run-failed', size)
     // The creative director can still decide.
     await signIn(page, PEOPLE.creativeDirector)

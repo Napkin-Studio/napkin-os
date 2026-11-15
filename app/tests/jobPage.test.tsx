@@ -3,8 +3,9 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // features/job-page.clan in the shell: the words said about a job, the Live jobs order, what a form
-// changed, the job page in each state, the Needs you row that carries its job's link, and the one reader
-// of budget_hours in the shell. De-identified: Client A, an Irish whiskey.
+// changed, the job page in each state, the Needs you row that carries its job's link, and the job's Decisions,
+// the one place a budget is recorded and read (features/align-confidential-prices.clan). De-identified: Client A,
+// an Irish whiskey.
 
 import './domFakes.ts'
 import assert from 'node:assert/strict'
@@ -18,10 +19,12 @@ import type { JobDocument, JobEntry, JobNeed, JobView } from '../src/host/types.
 import { jobNeedRow } from '../src/shell/home/model.ts'
 import { jobHref, jobLink } from '../src/shell/home/dashboardModel.ts'
 import {
-  budgetLine, changedBriefOf, docLine, dueLine, formOf, formProblem, nextNeed, orderLive, patchOf, saveOutcome, stageLine, waitingLine,
+  changedBriefOf, docLine, dueLine, formOf, formProblem, nextNeed, orderLive, patchOf, saveOutcome, stageLine, waitingLine,
 } from '../src/shell/job/jobModel.ts'
 import { JobBody } from '../src/shell/job/JobPage.tsx'
 import { LiveJobsBody } from '../src/shell/job/LiveJobs.tsx'
+import { JobDecisionsBody } from '../src/shell/job/JobDecisions.tsx'
+import type { JobDecisionsView } from '../src/host/types.ts'
 import { BUILT_PAGES } from '../src/shell/home/doorWords.ts'
 
 const doc = (over: Partial<JobDocument> = {}): JobDocument => ({ path: 'brief.clan', title: 'Autumn launch brief', app_id: 'ie.napkin.brief-maker', needs_you: 0, locked: false, version: null, changed_since_lock: false, ...over })
@@ -55,13 +58,6 @@ test('Live jobs: soonest deadline first, none last, ties in the order opened', (
   assert.deepEqual(orderLive(jobs).map(j => j.number), ['J003', 'J002', 'J004', 'J001'])
 })
 
-test('a budget is only worded when the role was sent it', () => {
-  assert.equal(budgetLine(job()), null)
-  assert.equal(budgetLine(job('J001', { budget_hours: null })), null)
-  assert.equal(budgetLine(job('J001', { budget_hours: 120 })), '120 hours')
-  assert.equal(budgetLine(job('J001', { budget_hours: 1 })), '1 hour')
-})
-
 test('a signed brief that moved on is the Changed brief, vN to vN+1', () => {
   assert.equal(changedBriefOf(job()), null)
   const c = changedBriefOf(job('J001', { documents: [doc({ version: 1, changed_since_lock: true })] }))
@@ -77,16 +73,15 @@ test('the next action is the first need on this job', () => {
   assert.equal(nextNeed([need({ job: 'J002' }), need()], 'J001')?.action, 'Sign the brief')
 })
 
-test('the form sends only what changed, and the budget only to a role that may set it', () => {
+test('the form sends only what changed, and never a budget', () => {
   const j = job('J001', { budget_hours: 120 })
-  assert.equal(patchOf(j, formOf(j), true), null)
-  assert.deepEqual(patchOf(j, { ...formOf(j), due: '2026-12-25' }, true), { due: '2026-12-25' })
-  assert.deepEqual(patchOf(j, { ...formOf(j), due: '' }, true), { due: null })
-  assert.deepEqual(patchOf(j, { ...formOf(j), title: ' New  ', budget: '90' }, true), { title: 'New', budget_hours: 90 })
-  assert.deepEqual(patchOf(j, { ...formOf(j), budget: '90' }, false), null)
-  assert.match(formProblem({ ...formOf(j), title: ' ' }, true) ?? '', /title/)
-  assert.match(formProblem({ ...formOf(j), budget: '-3' }, true) ?? '', /budget/)
-  assert.equal(formProblem(formOf(j), true), null)
+  assert.equal(patchOf(j, formOf(j)), null)
+  assert.deepEqual(patchOf(j, { ...formOf(j), due: '2026-12-25' }), { due: '2026-12-25' })
+  assert.deepEqual(patchOf(j, { ...formOf(j), due: '' }), { due: null })
+  assert.deepEqual(patchOf(j, { ...formOf(j), title: ' New  ' }), { title: 'New' })
+  assert.deepEqual(Object.keys(formOf(j)).sort(), ['due', 'owner', 'title'], 'the form has no budget')
+  assert.match(formProblem({ ...formOf(j), title: ' ' }) ?? '', /title/)
+  assert.equal(formProblem(formOf(j)), null)
   assert.deepEqual(['saved', 'refused', 'problem', 'problem', 'failed'], [
     saveOutcome({ ok: true }), saveOutcome({ ok: false, status: 403, message: '' }), saveOutcome({ ok: false, status: 400, message: 'x' }), saveOutcome({ ok: false, status: 409, message: 'x' }), saveOutcome({ ok: false, status: 0, message: '' }),
   ])
@@ -139,12 +134,37 @@ test('a changed brief is two lines and one button, and the other need is not a s
   assert.equal((html.match(/ns-primary/g) || []).length, 1)
 })
 
-test('a role sent the budget sees it; the change form shows the budget field only to a role that may set it', () => {
+test('no role sees a budget, an hours figure or a budget field on the job page; the page opens its Decisions', () => {
   const money = page(view({ job: job('J001', { budget_hours: 120 }), can: { manage: true, budget: true } }))
-  assert.match(money, /data-testid="job-budget">120 hours/)
+  assert.doesNotMatch(money, /job-budget|job-f-budget|120|[Bb]udget|hours/, 'not even for a Money role')
+  assert.match(money, /data-testid="job-decisions-open"/)
   const none = page(view({ can: { manage: false, budget: false } }))
   assert.doesNotMatch(none, /data-testid="job-edit"/, 'no control for a role that may not change a job')
+  assert.match(none, /data-testid="job-decisions-open"/, 'every role reads the job\'s Decisions')
   assert.match(page(view()), /data-testid="job-edit"/)
+})
+
+const decisions = (over: Partial<JobDecisionsView> = {}): JobDecisionsView => ({
+  job: 'J001', can_record_budget: false,
+  decisions: [
+    { id: 'd_2', kind: 'set_budget', action: 'set_budget', who: 'cian@wk', at: '2026-11-14T09:30:00Z', what: 'Recorded the budget of J001.', hours: 80 },
+    { id: 'd_1', kind: 'edit', action: 'open_job', who: 'aoife@wk', at: '2026-11-13T09:00:00Z', what: 'Opened J001 for Client A.' },
+  ],
+  ...over,
+})
+const drawer = (v: JobDecisionsView | null | 'failed') => renderToStaticMarkup(createElement(JobDecisionsBody, { view: v, title: 'Client A · J001 brief', onClose: noop, onRecord: async () => ({ ok: true }) }))
+
+test('the job\'s Decisions: a Money role reads the budget there and may record it; a role that may not has no form', () => {
+  const money = drawer(decisions({ can_record_budget: true }))
+  assert.match(money, /data-testid="job-decisions"/)
+  assert.match(money, /data-testid="job-budget-form"/)
+  assert.match(money, /data-testid="job-decision-row" data-kind="set_budget"[^>]*>[\s\S]*?Cian recorded the budget: 80 hours/)
+  assert.match(money, /Aoife: Opened J001 for Client A\.|Opened J001 for Client A\./)
+  const reader = drawer(decisions({ can_record_budget: false, decisions: [decisions().decisions[1]] }))
+  assert.doesNotMatch(reader, /job-budget-form|[Bb]udget|hours/)
+  assert.match(drawer(null), /data-state="loading"|Reading/)
+  assert.match(drawer('failed'), /could not be read/)
+  assert.match(drawer(decisions({ decisions: [] })), /Nothing has been decided on this job yet\./)
 })
 
 test('the route strip is drawn when the job has a route, and is nothing without one', () => {
@@ -205,8 +225,8 @@ test('a role that may not open a job is not given the button, and says who may',
   assert.match(html, /data-testid="live-no-open"/)
 })
 
-// The shell's one reader of budget_hours besides the dashboard (which reads GET /dashboard) is the job page.
-test('budget_hours is read in the shell only where the server sends it to the Money roles', () => {
+// The shell reads budget_hours nowhere: a budget is a set_budget decision, read in the job's Decisions as `hours`.
+test('budget_hours is read nowhere in the shell', () => {
   // the runner bundles each test into tests/.run-*/, so the shell's source is two levels up
   const root = new URL('../../src', import.meta.url).pathname
   const hits: string[] = []
@@ -218,5 +238,5 @@ test('budget_hours is read in the shell only where the server sends it to the Mo
     }
   }
   walk(root)
-  assert.deepEqual(hits.sort(), ['host/http.ts', 'host/types.ts', 'shell/job/LiveJobs.tsx', 'shell/job/jobModel.ts'].sort())
+  assert.deepEqual(hits.sort(), ['host/types.ts'], 'only the type the server sends, read by no screen')
 })

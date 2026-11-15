@@ -81,6 +81,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/jobs/{number}", get(get_job).patch(update_job))
         .route("/t/{tenant}/jobs/{number}/stage", get(job_stage))
         .route("/t/{tenant}/jobs/{number}/route", put(set_route))
+        .route("/t/{tenant}/jobs/{number}/budget", post(set_budget))
+        .route("/t/{tenant}/jobs/{number}/decisions", get(job_decisions))
         .route("/t/{tenant}/dashboard", get(dashboard))
         .route("/t/{tenant}/judge/telemetry", get(judge_telemetry))
         .route(
@@ -124,6 +126,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .merge(crate::search::router())
         // The People page: who signs in, and their agencies (admin only; admin.rs)
         .merge(crate::admin::router())
+        // First day: an invite is a record on a person already on the People page (features/first-day.clan)
+        .merge(crate::firstday::router())
         // A route that is not built yet answers 404 from here, so the layers around
         // the API (the session, the role check) still see the request. Without it an
         // unknown path fell through to the shell's index.html and a role was never asked.
@@ -451,8 +455,9 @@ fn refuse(line: &str) -> ApiError {
     ApiError::new(403, line)
 }
 
-/// Open a job. Planning, account service, management and producers (an admin and a person with no role
-/// too); the budget in hours only by the Money roles among them. One attributed decision.
+/// Open a job. Planning, account service, management and producers (and an admin; a person with no role
+/// may not); the budget in hours only by the Money roles among them, written as a `set_budget` decision
+/// after the open (features/align-confidential-prices.clan).
 async fn create_job(
     State(ctx): Ctx,
     Acting(acting): Acting,
@@ -474,7 +479,8 @@ async fn create_job(
     Ok((StatusCode::CREATED, Json(job)))
 }
 
-/// Change a job's title, owner, deadline or budget in hours: one attributed decision on the registry.
+/// Change a job's title, owner or deadline: one attributed decision on the registry. A budget is never
+/// changed here: a Money role records it (`POST /jobs/{number}/budget`), anyone else is refused first.
 async fn update_job(
     State(ctx): Ctx,
     Acting(acting): Acting,
@@ -545,6 +551,102 @@ async fn set_route(
     let job = napkin_host::jobs::set_route(&*ws.store, &acting, &number, body.route)?;
     napkin_host::jobs::fill_signers(&*ws.store, &acting, &number, &|id| ws.session(id))?;
     Ok(Json(job))
+}
+
+#[derive(Deserialize)]
+struct BudgetBody {
+    hours: f64,
+}
+
+/// Record a job's budget in hours as one `set_budget` decision in the job's chain (features/align-confidential-
+/// prices.clan, done_when line 12). The Money roles that manage jobs only (`roles::may_set_budget`); anyone else
+/// is a 403 and nothing is written. The figure is read back in the job's Decisions, by the Money roles only.
+async fn set_budget(
+    State(ctx): Ctx,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    user: Option<Extension<crate::auth::Account>>,
+    Path((_t, number)): Path<(String, String)>,
+    Json(body): Json<BudgetBody>,
+) -> ApiResult<Json<Value>> {
+    if !crate::roles::may_set_budget(&roles_of(&user)) {
+        return Err(refuse(
+            "Only account service, management and producers record a job's budget.",
+        ));
+    }
+    let ws = ctx.workspace(&tenant);
+    napkin_host::jobs::set_budget(&*ws.store, &acting, &number, body.hours)?;
+    Ok(Json(serde_json::json!({ "ok": true, "job": number })))
+}
+
+/// The decisions of one job, newest first, in the words the host wrote and the person behind each: what the
+/// job's Decisions draws. The Money group reads every line and each budget's hours; for every other role a
+/// `set_budget` line is not there at all, and an older line that named the budget in its words ("Set the budget
+/// of J001 from none to 80 hours.", written before budgets were decisions) keeps only its other sentences. A
+/// number that is not in this agency is a 404.
+async fn job_decisions(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    user: Option<Extension<crate::auth::Account>>,
+    Path((_t, number)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    let ws = ctx.workspace(&tenant);
+    job_index(&ws)?
+        .job(&number)
+        .ok_or_else(|| napkin_host::HostError::not_found(format!("no such job: {number}")))?;
+    let roles = roles_of(&user);
+    let money = crate::roles::may_read_budget(&roles);
+    let rows: Vec<Value> = napkin_host::jobs::decisions_of(&*ws.store, &number)?
+        .into_iter()
+        .filter_map(|d| {
+            let budget = d.kind.as_deref() == Some(napkin_host::jobs::SET_BUDGET);
+            if budget && !money {
+                return None;
+            }
+            let what = if money {
+                d.rationale.clone()
+            } else {
+                without_budget(&d.rationale)?
+            };
+            let mut row = serde_json::json!({
+                "id": d.id,
+                "kind": d.kind,
+                "action": d.action,
+                "who": d.agent.strip_prefix("human:").unwrap_or(&d.agent),
+                "at": d.timestamp,
+                "what": what,
+            });
+            if money {
+                row["hours"] = d
+                    .extra
+                    .get(napkin_host::jobs::SET_BUDGET)
+                    .and_then(|v| v.get("hours"))
+                    .and_then(|h| h.as_f64())
+                    .map(Value::from)
+                    .unwrap_or(Value::Null);
+            }
+            Some(row)
+        })
+        .collect();
+    Ok(Json(serde_json::json!({
+        "job": number,
+        "decisions": rows,
+        "can_record_budget": crate::roles::may_set_budget(&roles),
+    })))
+}
+
+/// A line of a job's chain with every sentence that names a budget or hours taken out, for a role that is not
+/// sent them; `None` when nothing is left.
+fn without_budget(line: &str) -> Option<String> {
+    let kept: Vec<&str> = line
+        .split_inclusive(". ")
+        .filter(|s| {
+            let l = s.to_ascii_lowercase();
+            !(l.contains("budget") || l.contains("hour"))
+        })
+        .collect();
+    let out = kept.concat().trim().to_string();
+    (!out.is_empty()).then_some(out)
 }
 
 /// A job's stage, as its documents' decisions have it. Read-only: it is never typed in.
@@ -1461,4 +1563,33 @@ fn attachment(content_type: &str, filename: &str, bytes: Vec<u8>) -> Response {
         bytes,
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod budget_words {
+    use super::without_budget;
+
+    #[test]
+    fn an_older_line_loses_its_budget_sentence_and_keeps_the_rest() {
+        assert_eq!(
+            without_budget("Set the budget of J001 from none to 80 hours."),
+            None
+        );
+        assert_eq!(
+            without_budget(
+                "Renamed J001 from \"A\" to \"B\". Set the budget of J001 from 40 hours to 90 hours."
+            )
+            .as_deref(),
+            Some("Renamed J001 from \"A\" to \"B\".")
+        );
+        assert_eq!(
+            without_budget("Set the budget of J001 from none to 80 hours. Moved J001 from a to b.")
+                .as_deref(),
+            Some("Moved J001 from a to b.")
+        );
+        assert_eq!(
+            without_budget("Moved the deadline of J001 from x to y.").as_deref(),
+            Some("Moved the deadline of J001 from x to y.")
+        );
+    }
 }

@@ -116,10 +116,23 @@ class RunwayProvider:
     name = "runway"
 
     def __init__(self, api_key: str, assets: AssetResolver, client: Optional[httpx.Client] = None,
-                 sheet: Optional[dict] = None):
+                 sheet: Optional[dict] = None, read=None):
+        """`read(url) -> bytes`: how the adapter reads one of the job's own assets (a mask to invert, the image to
+        box). None: the relay's reader for the job in hand (providers.base.read_asset, blobs.fetch_own). The
+        adapter never GETs a URL itself: its client speaks to Runway only."""
         self._key, self._assets = api_key, assets
         self._client = client or httpx.Client(timeout=30)
         self._sheet = sheet or load_sheet("runway")
+        self._reader = read
+
+    def _read(self, url: str) -> bytes:
+        import base64
+        if url.startswith("data:"):
+            return base64.b64decode(url.split(",", 1)[1])
+        if self._reader is not None:
+            return self._reader(url)
+        from . import base
+        return base.read_asset(url)
 
     def capabilities(self) -> dict:
         return self._sheet
@@ -173,12 +186,8 @@ class RunwayProvider:
 
         url = self._assets(sha).url
         try:
-            if url.startswith("data:"):
-                return base64.b64decode(url.split(",", 1)[1])
-            resp = self._client.get(url)
-            resp.raise_for_status()
-            return resp.content
-        except (httpx.HTTPError, ValueError) as exc:  # our own asset: not a call to Runway
+            return self._read(url)
+        except Exception as exc:  # noqa: BLE001 - our own asset: not a call to Runway
             raise ProviderError("internal", f"could not read an input: {exc}", True, source="napkin") from exc
 
     def _ideogram(self, job: ProviderJob) -> tuple[str, dict]:
@@ -249,13 +258,8 @@ class RunwayProvider:
 
         url = self._assets(current.sha256).url
         try:
-            if url.startswith("data:"):
-                data = base64.b64decode(url.split(",", 1)[1])
-            else:
-                resp = self._client.get(url)
-                resp.raise_for_status()
-                data = resp.content
-        except (httpx.HTTPError, ValueError) as exc:  # our own asset: not a call to Runway
+            data = self._read(url)
+        except Exception as exc:  # noqa: BLE001 - our own asset: not a call to Runway
             raise ProviderError("internal", f"could not read the image to edit: {exc}", True, source="napkin") from exc
         try:
             png = draw_box(data, region, BOX_COLOUR, BOX_WIDTH_PX)
@@ -274,7 +278,7 @@ class RunwayProvider:
 
         url = self._assets(current.sha256).url
         try:
-            data = base64.b64decode(url.split(",", 1)[1]) if url.startswith("data:") else self._client.get(url).content
+            data = self._read(url)
             w, h = Image.open(io.BytesIO(data)).size
         except Exception as exc:
             raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc
@@ -473,35 +477,75 @@ class RunwayProvider:
 
     # The Provider interface
 
+    # What the guard assumes for a setting the provider job does not carry: the dearest case.
+    GUARD_INPUT_PX = 1_000_000   # an upscale's plate: over every model's overPx
+    GUARD_INPUT_S = 30.0         # an edit's clip when the job names no length: the longest any edit model reads
+
+    def _guard_settings(self, job: ProviderJob) -> list[dict]:
+        """Every setting the price depends on (contracts/pricing.py: model, tier, scale, duration, outputs,
+        audio, refs, input length), from the provider job; where the job does not say, each candidate the
+        price could take, so the guard's figure is the dearest of them."""
+        refs = len(job.refs) + sum(1 for x in (job.first_frame, job.last_frame, job.keyframe) if x)
+        seconds = job.duration_s
+        reads_clip = job.op in ("clip_edit", "clip_patch", "cutdown")   # billed by the clip it reads
+        base = {"durationS": seconds, "inputS": (seconds or self.GUARD_INPUT_S) if reads_clip else None,
+                "ratio": job.ratio, "outputs": job.outputs, "audio": job.audio, "refs": refs or None,
+                "scaleFactor": job.scale, "inputPx": self.GUARD_INPUT_PX}
+        q = job.quality or {}
+        tiers = [q.get("tier")] if q.get("tier") else [None]
+        sheet = effective_sheet(self._sheet, job.op, job.model)
+        spec = sheet["ops"][job.op]
+        price = ((self._sheet.get("models") or {}).get(spec["model"]) or {}).get("pricing") or {}
+        if not q.get("tier") and "byResolution" in price:
+            tiers += list(price["byResolution"])     # a tier the ratio does not name: any of them
+        qualities = [None, *(price.get("byQuality") or {})]
+        return [{**base, "resolution": t, "quality": qq} for t in tiers for qq in qualities]
+
     def _guard_estimate(self, job: ProviderJob) -> float:
-        """The spend guard's ceiling for `job`: the sheet's price for the op at the job's settings (the one
-        price function, contracts/pricing.py), or UNPRICED_EUR when it cannot price it. Never zero, never an
-        error: a guard that cannot price a job still asks."""
+        """The spend guard's ceiling for `job`: the sheet's price for the op through the one price function
+        (contracts/pricing.py), with every setting the price turns on, the dearest where the job does not
+        say, and never below what the relay's ledger reserved for it (job.price_usd). UNPRICED_EUR when the
+        sheet cannot price it. Never zero, never an error: a guard that cannot price a job still asks."""
         try:
-            sheet = effective_sheet(self._sheet, job.op, job.model)
             from contracts_dir import pricing
-            settings = {"durationS": job.duration_s, "ratio": job.ratio, "outputs": job.outputs, "audio": job.audio}
-            price = pricing().op_usd(sheet, job.op, None, settings)
-            return float(price) if price else UNPRICED_EUR
+            sheet = effective_sheet(self._sheet, job.op, job.model)
+            prices = [pricing().op_usd(sheet, job.op, None, s) for s in self._guard_settings(job)]
+            price = max((p for p in prices if p), default=None)
         except Exception:  # noqa: BLE001 - the guard must still ask, at the ceiling
-            return UNPRICED_EUR
+            price = None
+        own = float(price) if price else UNPRICED_EUR
+        return max(own, float(job.price_usd or 0))
 
     def submit(self, job: ProviderJob) -> str:
         # The spend guard (spend.py), before anything is built or sent: the sheet's estimate for the op is
         # the ceiling, a dollar price standing in for euro (only errs high). It runs beside the relay's
         # ledger admission (service.py, ledger.py): a refusal by either sends nothing.
+        # The guard reserves the amount here and it is released when nothing was sent: a request the adapter cannot
+        # build (the sheet refuses it), a connection that never opened, or an answer that is not a 2xx (Runway took
+        # no task). Only what may have been sent stays counted (the re-review of 1d637751).
+        amount = self._guard_estimate(job)
         try:
-            spend.check(self._guard_estimate(job))
+            spend.check(amount)
         except spend.SpendRefused as exc:
-            raise ProviderError("spend_stop", f"Not sent: {exc}", False, source="napkin") from None
-        build = {"clip": self._clip, "clip_edit": self._clip_edit, "upscale": self._upscale,
-                 "cutdown": self._outpaint}.get(job.op, self._image)
-        if job.op in ("region_edit", "resize") and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
-            build = self._ideogram
-        path, body = build(job)
-        resp = self._call("POST", path, json=body)
-        if resp.status_code >= 300:
-            raise _http_error(resp)
+            raise ProviderError("spend_stop", str(exc), False, source="napkin") from None
+        try:
+            build = {"clip": self._clip, "clip_edit": self._clip_edit, "upscale": self._upscale,
+                     "cutdown": self._outpaint}.get(job.op, self._image)
+            if job.op in ("region_edit", "resize") and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
+                build = self._ideogram
+            path, body = build(job)
+            try:
+                resp = self._call("POST", path, json=body)
+            except ProviderError as exc:
+                if not isinstance(exc.__cause__, (httpx.ConnectError, httpx.ConnectTimeout)):
+                    amount = 0.0      # it may have reached Runway: keep it counted
+                raise
+            if resp.status_code >= 300:
+                raise _http_error(resp)
+        except Exception:
+            if amount:
+                spend.release(amount)
+            raise
         try:  # a 2xx: Runway has the task, so whatever we cannot read must never be sent elsewhere
             task = self._ok(resp)
         except ProviderError as exc:

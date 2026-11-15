@@ -473,6 +473,33 @@ pub struct Book {
     /// them (a server that stopped between its record and its write). The next start marks them not applied.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unconfirmed: Vec<u64>,
+    /// First-day records, one per invited person (features/first-day.clan, crate::firstday): a record hangs
+    /// off a person already in this store and grants nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub first_days: Vec<FirstDayRec>,
+}
+
+/// What an admin made for a person's first day: the date it was made, by whom, and the first document to open. Nothing
+/// of what the person has done since is kept here: their own marks (saw the pointers, pressed the first task) are in a
+/// small file of their own beside this one (crate::firstday), so a mark never rewrites the store. `rev` ties those marks
+/// to this record: a new invite starts them again.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirstDayRec {
+    pub person: String,
+    pub agency: String,
+    pub made_by: String,
+    /// `YYYY-MM-DD`.
+    pub made_on: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first: Option<FirstRef>,
+    pub rev: u64,
+}
+
+/// The document named on an invite, and the job it was on when named.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirstRef {
+    pub job: String,
+    pub path: String,
 }
 
 /// The code agency `id`'s name in palette.ts.
@@ -898,6 +925,8 @@ fn audit_words(line: &serde_json::Value) -> String {
             "removed" => format!("Removed {p} (had {}).", roles(&line["before"])),
             "renamed" => format!("Renamed {p}."),
             "email changed" => format!("Changed {p}'s address."),
+            "first day invited" => format!("Invited {p} for their first day."),
+            "first day withdrawn" => format!("Withdrew {p}'s first day invite."),
             other => format!("{p}: {other}, with {}.", roles(&line["after"])),
         },
         None => format!(
@@ -1016,6 +1045,11 @@ impl People {
         self.dir.join("people.json")
     }
 
+    /// The folder the store lives in: the first-day marks are a small file beside it.
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
     /// The store as it is now (another server's write included, within [`RECHECK`]).
     pub fn book(&self) -> Book {
         let mut c = self.cache.lock().unwrap();
@@ -1047,7 +1081,7 @@ impl People {
     /// the change was: one line (an object) or one per person (an array; none when nothing changed, and then
     /// nothing is written). Each line gets when, who and what, and goes on `changes.jsonl` and on its
     /// agency's audit chain.
-    fn change<T>(
+    pub(crate) fn change<T>(
         &self,
         by: &str,
         what: &str,
@@ -1407,6 +1441,8 @@ impl People {
             let was_admin = book.people[i].is_agency_admin();
             let before = book.people[i].state();
             book.people[i].removed_at = Some(now());
+            // a removed person's first-day record goes with them
+            book.first_days.retain(|f| f.person != id);
             if was_admin && book.admins_of(&agency) == 0 {
                 return last_admin(&agency);
             }

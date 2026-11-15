@@ -23,6 +23,7 @@
 pub mod agency;
 pub mod alerts;
 pub mod audit;
+pub mod brain;
 pub mod catalog;
 pub mod clients;
 pub mod config;

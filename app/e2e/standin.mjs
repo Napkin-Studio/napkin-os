@@ -1,7 +1,8 @@
 // The stand-in middleware of the e2e stack (stack.mjs), local and free. It speaks napkin.middleware/1 only as far as the job block
 // the landing reads. Phase 2 (features/j001-phase2-suite.clan): a task with a file in seed/j001/p2/answers/ gets that file's reply
 // (see answers.mjs); POST /control {fail: <task>} makes that task return a provider error once; {variant: {<task>: <name>}} picks an
-// answer variant; GET /control/log lists the tasks asked, and nothing else (no body). Any other task gets the old canned reply, byte for byte.
+// answer variant; GET /control/log lists the tasks asked, and nothing else (no body). A judge_work answer carries a usage block (what the
+// run cost), as the real middleware's does. Any other task gets the old canned reply, byte for byte.
 // Moved out of stack.mjs so a unit test can start it on a free port (app/tests/phase2Suite.test.ts).
 
 import { createServer } from 'node:http'
@@ -98,6 +99,9 @@ export function standIn(answersDir, rubricPath = new URL('../../server/napkin/ju
         return send(200, {
           api: 'napkin.middleware/1',
           job: { id: 'job_e2e0002', state: 'done', stage: 'done', progress: { done: 1, total: 1 }, started_at: '2026-11-04T09:00:00Z' },
+          // What the spend guard let through, as the real middleware hands it back (features/align-confidential-prices.clan):
+          // the host writes it as the document's run_cost decision. A run through the stand-in is free; these are made-up figures.
+          ...(task === 'judge_work' ? { usage: { estimate_eur: 0.05, charged_eur: 0.02, route: 'e2e-stand-in' } } : {}),
           ...answer,
         })
       }

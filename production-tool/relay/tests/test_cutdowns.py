@@ -198,14 +198,19 @@ def test_a_render_of_a_clip_that_is_not_ours_fails_plainly():
     token = h.as_person()
     inp = render_input(h)
     inp["cutdown"]["clips"][0]["asset"]["url"] = "https://elsewhere.test/clip.mp4"
-    _, job = h.post_job(token, op="cutdown", expect=200, **inp)
-    assert job["state"] == "failed" and job["error"]["code"] == "invalid_input" and not h.stitched
+    _, out = h.post_job(token, op="cutdown", expect=400, **inp)   # refused at the door, before any job
+    assert out["error"]["code"] == "invalid_input" and "not one of ours" in out["error"]["message"] and not h.stitched
 
 
 def outpaint_input(h, ratio="9:16", seconds=4):
+    """An outpaint of a take `seconds` long: the take is stored as a real clip of that length, since an outpaint is
+    priced by the take Runway reads whole, measured on our copy (the re-review of 1d637751)."""
+    from test_guard_estimate import mp4
+    clip = stored_clip(h, 7 + seconds)
+    h.blobs.put(f"out/{clip['sha256']}", mp4(seconds), "video/mp4")
     return {"aspect": {"w": 9, "h": 16}, "delivery": {"width": 1080, "height": 1920},
             "cutdown": {"step": "outpaint", "lengthS": seconds, "targetRatio": ratio,
-                        "clips": [{"asset": stored_clip(h, 7), "inS": 0, "outS": seconds, "takeSize": {"w": 1280, "h": 720}, "outpaint": True}]}}
+                        "clips": [{"asset": clip, "inS": 0, "outS": seconds, "takeSize": {"w": 1280, "h": 720}, "outpaint": True}]}}
 
 
 def test_an_outpaint_is_a_paid_job_on_aleph_2_reserved_by_the_seconds_it_reads():

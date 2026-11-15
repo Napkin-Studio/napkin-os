@@ -129,8 +129,8 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
         <div className="msg">No answer from {job.provider ?? 'the provider'} in time. It may still make this, or it may not.</div>
         {!compact && <div className="code">uncertain{job.error?.providerCode ? ` · ${job.error.providerCode}` : ''}</div>}
         <div className="row">
-          <button className="btn xs" onClick={() => void runner.cancel(jobId)} title="Stop waiting for it. If the provider did take it, it may still be charged.">Stop waiting</button>
-          <button className="btn xs primary" title="Send it again. If the provider did take the first one, both may be charged." onClick={async () => {
+          <button className="btn xs" onClick={() => void runner.cancel(jobId)} title="Stop waiting for it. If the provider did take it, it may still be made.">Stop waiting</button>
+          <button className="btn xs primary" title="Send it again. If the provider did take the first one, both may be made." onClick={async () => {
             await runner.cancel(jobId)
             const id = await runner.retry(jobId)
             if (id) onRetried?.(id)

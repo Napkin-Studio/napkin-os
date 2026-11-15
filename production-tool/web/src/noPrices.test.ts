@@ -1,15 +1,19 @@
 // No price or cost anywhere in the UI (Shrey, 2026-10-13; features/runway-sheet-sync.clan): not on
-// the model menu, job buttons, the update and send trays, cards, asks or toasts. Each job's cost is
-// recorded and shown in one place only, History (ui/historyItems.ts jobCost).
+// the model menu, job buttons, the update and send trays, cards, asks or toasts. Since 13 Nov 2026
+// (owner's rule, features/production-platform-rules.clan) not in History either: each job's cost is
+// recorded on the job and shown only in the decision tree, outside this interface.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const SRC = join(__dirname)
-const ALLOWED = new Set(['ui/historyItems.ts'])
+const ALLOWED = new Set<string>()
 // A dollar sign before a number or a template value, "about $", "~$", or a flat estimate field.
-const MONEY = /\$\$\{|about \$(\d|\$\{)|~\$|\$\d+\.\d|estimateUsd|planCost|costWords/
+const MONEY = /\$\$\{|about \$(\d|\$\{)|~\$|\$\d+\.\d|estimateUsd|planCost|costWords|jobCost|history-cost/
+// The money words the merge's review found in interface copy (13 Nov 2026): "Crop · free", "cost in History",
+// "What each costs", "never spends", "may still be charged". None comes back.
+const MONEY_WORDS = /· free\b|\bFree,|costs? in History|What each costs|never spends|be charged|'free'|cost \$\{|cost \$|\bconfirmed`/
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -20,13 +24,13 @@ function files(dir: string): string[] {
 }
 
 describe('no prices in the UI', () => {
-  it('only History formats money', () => {
+  it('nothing in the interface formats money', () => {
     const found = files(SRC)
       .map((p) => relative(SRC, p).split('\\').join('/'))
       .filter((rel) => !ALLOWED.has(rel))
       .flatMap((rel) => readFileSync(join(SRC, rel), 'utf8').split('\n')
         .map((line, i) => ({ rel, line, n: i + 1 }))
-        .filter(({ line }) => MONEY.test(line) && !line.trim().startsWith('//') && !line.trim().startsWith('*')))
+        .filter(({ line }) => (MONEY.test(line) || MONEY_WORDS.test(line)) && !line.trim().startsWith('//') && !line.trim().startsWith('/*') && !line.trim().startsWith('*')))
       .map(({ rel, n, line }) => `${rel}:${n}: ${line.trim()}`)
     expect(found).toEqual([])
   })

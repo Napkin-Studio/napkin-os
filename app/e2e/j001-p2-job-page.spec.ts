@@ -114,6 +114,10 @@ for (const size of SIZES) {
     await goto(page, 'door-agency-dashboard')
     const link = page.getByTestId('tile-stage').locator(`[data-job="${job.job}"]`).getByRole('link', { name: job.job })
     await expect(link).toHaveAttribute('href', `#job-${job.job}`)
+    // five tiles and no figure of money on the dashboard (features/align-confidential-prices.clan)
+    await expect(page.getByTestId('tile-hours')).toHaveCount(0)
+    await expect(page.getByTestId('dashboard')).not.toContainText(/budget|price|cost|credit/i)
+    if (shots) await page.screenshot({ path: `${shots}/prices-dashboard-${size.tag}.png`, fullPage: true, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
     // the planner's Me row for this job's brief (the desk's Needs you); the job's page is a click from the dashboard tile above
     await signIn(page, PEOPLE.planning) // the planner's desk holds the brief's sign-off for this job
     await openMe(page)
@@ -151,7 +155,9 @@ for (const size of SIZES) {
     await fresh.ctx.close()
   })
 
-  test(s('S3', 'account service opens a job from Live jobs and sets its budget; planning changes the deadline and never sees the budget'), async ({ browser }) => {
+  // features/align-confidential-prices.clan, done_when lines 8 and 12: no budget figure on any screen; the Money roles record
+  // a job's budget in the job's Decisions, as a set_budget decision; planning gets 403 and no budget_hours anywhere.
+  test(s('S3', 'account service opens a job from Live jobs and records its budget in Decisions; planning changes the deadline and never sees a budget'), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
     await signIn(page, PEOPLE.accountService)
     const job = await seedJ001(page, { ready: true, fresh: true })
@@ -164,22 +170,38 @@ for (const size of SIZES) {
     await page.getByTestId('open-f-client').selectOption(job.client)
     await page.getByTestId('open-f-title').fill('Winter bar night')
     await page.getByTestId('open-f-due').fill('2026-12-30')
-    await page.getByTestId('open-f-budget').fill('80')
+    await expect(page.getByTestId('open-f-budget'), 'the open form has no budget field').toHaveCount(0)
     await page.getByTestId('open-save').click()
     await expect(page).toHaveURL(/#job-J\d{3,6}$/)
     await expect(page.getByTestId('job-title')).toContainText('Winter bar night')
-    await expect(page.getByTestId('job-budget')).toContainText('80 hours')
     const number = page.url().split('#job-')[1]
-    // account service changes the title, owner and deadline on the page, and the budget
+    // account service changes the deadline on the page; no budget control is there for any role
     await page.getByTestId('job-edit').click()
+    await expect(page.getByTestId('job-f-budget')).toHaveCount(0)
     await page.getByTestId('job-f-due').fill('2026-12-23')
-    await page.getByTestId('job-f-budget').fill('90')
     await page.getByTestId('job-save').click()
     await expect(page.getByTestId('job-due')).toContainText('23 Dec')
-    await expect(page.getByTestId('job-budget')).toContainText('90 hours')
-    if (shots) await page.screenshot({ path: `${shots}/job-page-money-${size.tag}.png`, fullPage: true })
+    await expect(page.getByTestId('job-budget')).toHaveCount(0)
+    if (shots) await page.screenshot({ path: `${shots}/prices-job-page-money-${size.tag}.png`, fullPage: true, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
+    // The Money role records the budget from the job's Decisions: 80 hours, as a set_budget decision.
+    await page.getByTestId('job-decisions-open').click()
+    const drawer = page.getByTestId('job-decisions')
+    await expect(drawer).toBeVisible()
+    await drawer.getByTestId('job-budget-hours').fill('80')
+    await drawer.getByTestId('job-budget-save').click()
+    await expect(drawer.locator('[data-testid="job-decision-row"][data-kind="set_budget"]')).toContainText('80 hours')
+    if (shots) await page.screenshot({ path: `${shots}/prices-job-decisions-money-${size.tag}.png`, fullPage: false, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
+    await drawer.getByRole('button', { name: 'Close decisions' }).click()
+    await expect(drawer).toHaveCount(0)
+    // The page itself shows no figure: not the budget, not hours, not a price.
+    await expect(page.getByTestId('job-file')).not.toContainText(/\b80\b|budget|hours|price|cost/i)
+    const chain = (await (await page.request.get(`${job.api}/jobs/${number}/decisions`)).json()) as { decisions: { kind: string; who: string; hours?: number | null }[] }
+    const set = chain.decisions.filter(d => d.kind === 'set_budget')
+    expect(set, 'the job\'s chain holds set_budget').toHaveLength(1)
+    expect(set[0].hours).toBe(80)
+    expect(set[0].who).toContain(PEOPLE.accountService.username)
 
-    // planning may change the deadline; the budget is not sent to it and the server refuses it
+    // planning may change the deadline; no budget figure is sent to it, and its patch and its record are refused
     await signIn(page, PEOPLE.planning)
     await goto(page, `job-${number}`)
     await expect(page.getByTestId('job-budget')).toHaveCount(0)
@@ -188,7 +210,18 @@ for (const size of SIZES) {
     await page.getByTestId('job-f-due').fill('2027-01-08')
     await page.getByTestId('job-save').click()
     await expect(page.getByTestId('job-due')).toContainText('8 Jan')
+    if (shots) await page.screenshot({ path: `${shots}/prices-job-page-planning-${size.tag}.png`, fullPage: true, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
+    await page.getByTestId('job-decisions-open').click()
+    await expect(page.getByTestId('job-decisions')).toBeVisible()
+    await expect(page.getByTestId('job-decision-row').first()).toBeVisible()
+    await expect(page.getByTestId('job-budget-form'), 'planning has no Record the budget').toHaveCount(0)
+    await expect(page.getByTestId('job-decisions')).not.toContainText(/\b80\b|budget|hours/i)
+    if (shots) await page.screenshot({ path: `${shots}/prices-job-decisions-planning-${size.tag}.png`, fullPage: false, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
     expect((await page.request.patch(`${job.api}/jobs/${number}`, { data: { budget_hours: 5 } })).status()).toBe(403)
+    expect((await page.request.post(`${job.api}/jobs/${number}/budget`, { data: { hours: 5 } })).status()).toBe(403)
+    const mine = (await (await page.request.get(`${job.api}/jobs/${number}/decisions`)).json()) as { decisions: unknown[]; can_record_budget: boolean }
+    expect(mine.can_record_budget).toBe(false)
+    expect(JSON.stringify(mine.decisions), 'no line about a budget, and no hours').not.toMatch(/budget|hour/i)
     const list = (await (await page.request.get(`${job.api}/jobs`)).json()) as { number: string; budget_hours?: number }[]
     expect(list.find(j => j.number === number), 'the job is listed').toBeTruthy()
     expect(list.every(j => !('budget_hours' in j)), 'no job in the list carries a budget for planning').toBe(true)

@@ -138,3 +138,115 @@ def test_a_second_text_refusal_on_status_fails_as_twice_refused():
     assert job["state"] == "failed" and job["error"]["code"] == "moderated"
     assert job["error"]["message"] == f"Runway refused the words twice ({TEXT})."
     assert len(h.providers["runway"].submits) == 2
+
+
+# ── the resend is new spend (features/production-platform-rules.clan, review B) ────────────────────────────
+
+def spent(h) -> float:
+    return round(h.store.counters("spend").get("usd", 0), 6)
+
+
+def test_a_resend_on_status_takes_its_own_reservation_and_the_guards_run():
+    from director import spend
+    h = harness()
+    fake = h.providers["runway"]
+    job = post_take(h)
+    first = job["cost"]["reserved"]
+    assert first > 0 and spent(h) == first
+    runs = []
+    plain = fake.submit
+    fake.submit = lambda pjob: (runs.append(spend.current_run()), plain(pjob))[1]
+    spend.set_run("another-request")           # the poll that resends is a different request
+    refuse_on_status(h, "runway-1")
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True
+    assert abs(job["cost"]["reserved"] - 2 * first) < 1e-9
+    assert abs(spent(h) - 2 * first) < 1e-9, "the billed first task and the resend are both held"
+    assert runs == [job["jobId"]], "the spend guard counts the resend against this job's run"
+    assert fake.submits[-1]["priceUsd"] == first
+
+
+def test_a_resend_the_ledger_refuses_is_not_sent():
+    h = harness()
+    fake = h.providers["runway"]
+    job = post_take(h)
+    first = job["cost"]["reserved"]
+    h.cfg["spend"]["capUsd"] = first * 1.5     # room for the first task, not for a second
+    refuse_on_status(h, "runway-1")
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "failed" and job["error"]["code"] == "spend_stop"
+    assert len(fake.submits) == 1, "nothing was sent again"
+    assert abs(spent(h) - first) < 1e-9, "the first task stays held: it was billed"
+
+
+def test_after_the_resend_lands_the_ledger_holds_both_billed_tasks():
+    """Review finding 5: both tasks are charged, so both are recorded."""
+    from providers.base import Status
+    h = harness()
+    fake = h.providers["runway"]
+    job = post_take(h)
+    first = job["cost"]["reserved"]
+    h.providers["runway"].states["runway-1"] = Status(state="moderated", error_message="Text prompt did not pass moderation",
+                                                      provider_code=TEXT, cost_usd=first)
+    h.clock.tick(6)
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True and abs(spent(h) - 2 * first) < 1e-9
+    fake.succeed("runway-2", cost=first)
+    for _ in range(6):
+        h.clock.tick(10)
+        job = h.poll(h.token, job["jobId"])
+        if job["state"] in ("completed", "failed"):
+            break
+    assert job["state"] == "completed"
+    assert abs(spent(h) - 2 * first) < 1e-9, f"two billed tasks ({2 * first}), the ledger holds {spent(h)}"
+    assert abs(job["cost"]["confirmed"] - 2 * first) < 1e-9, job["cost"]
+
+
+def test_the_plainer_resend_runs_the_hooks_before_it_is_sent():
+    """Review finding 6: before_submit runs before every send, the resend on a status refusal included."""
+    from pathlib import Path
+
+    import hooks as relay_hooks
+    loaded = relay_hooks.load(Path(__file__).resolve().parent / "fixtures" / "hooks")
+    h = harness()
+    h.relay.hooks = loaded
+    job = post_take(h)
+    loaded[0].SEEN.clear()
+    refuse_on_status(h, "runway-1")
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True
+    assert len(loaded[0].SEEN) == 1, "before_submit ran once more, for the resend"
+
+
+def test_the_first_billed_task_stays_recorded_when_the_resend_then_fails():
+    from providers.base import Status
+    h = harness()
+    job = post_take(h)
+    first = job["cost"]["reserved"]
+    h.providers["runway"].states["runway-1"] = Status(state="moderated", error_message="Text prompt did not pass moderation",
+                                                      provider_code=TEXT, cost_usd=first)
+    h.clock.tick(6)
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True
+    h.providers["runway"].states["runway-2"] = Status(state="failed", error_code="provider_failed", error_message="it broke")
+    for _ in range(6):
+        h.clock.tick(10)
+        job = h.poll(h.token, job["jobId"])
+        if job["state"] in ("completed", "failed", "uncertain"):
+            break
+    assert spent(h) >= first - 1e-9, f"the first task was billed {first}; the ledger holds {spent(h)}"
+
+
+def test_the_plainer_resend_inside_submit_runs_the_hooks_too():
+    """Re-review finding 5: the resend at submit (Runway's text check before any task) skipped _before_send."""
+    from pathlib import Path
+
+    import hooks as relay_hooks
+    loaded = relay_hooks.load(Path(__file__).resolve().parent / "fixtures" / "hooks")
+    h = harness()
+    h.relay.hooks = loaded
+    fake = refusing(h, TEXT)
+    loaded[0].SEEN.clear()
+    post_take(h)
+    assert len(fake.submits) == 2
+    assert len(loaded[0].SEEN) == 2, f"two sends, before_submit ran {len(loaded[0].SEEN)} time(s)"

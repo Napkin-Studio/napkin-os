@@ -85,10 +85,10 @@ export function availableMethods(models: Partial<Record<SizeMethod, MethodModel>
   return new Set<SizeMethod>(['crop', 'layout', 'reedit', 'reframe', ...(Object.keys(models) as SizeMethod[])])
 }
 
-/** A method in the tray's and the tile's words: "Extend · Ideogram 4.5", "Crop · free". No price. */
+/** A method in the tray's and the tile's words: "Extend · Ideogram 4.5", "Crop". No price and no money word. */
 export function methodWords(method: SizeMethod, models: Partial<Record<SizeMethod, MethodModel>>): string {
   if (PAID.has(method)) return models[method] ? `${METHOD_WORD[method]} · ${models[method]!.label}` : `${METHOD_WORD[method]} · off for your agency`
-  return method === 'crop' || method === 'layout' ? `${METHOD_WORD[method]} · free` : METHOD_WORD[method]
+  return METHOD_WORD[method]
 }
 
 /** The share of the size the master fills when extended to it (1: same shape). */

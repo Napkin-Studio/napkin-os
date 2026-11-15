@@ -104,14 +104,14 @@ async fn get_settings(
     if !admin {
         return Ok(Json(serde_json::json!({ "name": name, "look": look })));
     }
-    // The monthly cap and the time zone have no home in the agency record yet: still read from the
-    // registry, for this agency's admin only, and marked as not an authority (an open question).
+    // The time zone has no home in the agency record yet: still read from the registry, for this agency's
+    // admin only, and marked as not an authority (an open question). No monthly credit cap: no price is a
+    // setting (features/align-confidential-prices.clan).
     let (reg, _) = agency::read(ctx.workspace(&tenant).agency_store())?;
     Ok(Json(serde_json::json!({
         "name": name,
-        "credit_cap_month_eur": reg.settings.credit_cap_month_eur,
         "time_zone": reg.settings.time_zone,
-        "unverified": ["credit_cap_month_eur", "time_zone"],
+        "unverified": ["time_zone"],
         "look": look,
     })))
 }
@@ -132,8 +132,8 @@ pub fn agency_name(ctx: &AppCtx, agency: &str) -> Option<String> {
         .map(|a| a.name.clone())
 }
 
-/// Change the name, the monthly credit cap or the time zone. A cap that is not a number, or is
-/// below zero, is 400. The cap is stored and shown; nothing enforces it yet.
+/// Change the time zone (the name is the People store's). A monthly credit cap is no setting: it is refused
+/// with a 400 that says where the spend cap is kept (features/align-confidential-prices.clan).
 async fn put_settings(
     State(ctx): State<Arc<AppCtx>>,
     Acting(acting): Acting,
@@ -152,15 +152,12 @@ async fn put_settings(
             Some(_) => Err(ApiError::new(400, format!("{k} is text"))),
         }
     };
-    let cap = match obj.get("credit_cap_month_eur") {
-        None | Some(serde_json::Value::Null) => None,
-        Some(v) => Some(v.as_f64().ok_or_else(|| {
-            ApiError::new(
-                400,
-                "The monthly credit cap is an amount in euros, not below zero.",
-            )
-        })?),
-    };
+    if obj.contains_key("credit_cap_month_eur") {
+        return Err(ApiError::new(
+            400,
+            "There is no monthly credit cap here: the spend cap is set where Napkin runs.",
+        ));
+    }
     // the name is the agency record's, changed on the People page's Agencies tab by an admin there
     if text("name")?.is_some() {
         return Err(ApiError::new(
@@ -170,7 +167,6 @@ async fn put_settings(
     }
     let patch = agency::SettingsPatch {
         name: None,
-        credit_cap_month_eur: cap,
         time_zone: text("time_zone")?,
     };
     let who = acting
@@ -193,7 +189,6 @@ async fn put_settings(
     let name = agency_name(&ctx, &me.agency).unwrap_or_default();
     Ok(Json(serde_json::json!({
         "name": name,
-        "credit_cap_month_eur": s.credit_cap_month_eur,
         "time_zone": s.time_zone,
         "look": crate::look::read(&ctx, &tenant),
     })))

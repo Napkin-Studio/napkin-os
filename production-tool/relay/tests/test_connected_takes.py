@@ -69,7 +69,8 @@ def land(h, job, mime="video/mp4"):
     """The provider finishes the job with one output of `mime`."""
     rid = f"runway-{len(h.providers['runway'].submits)}"
     url = f"https://provider.test/{rid}.mp4"
-    h.blobs.remote[url] = b"take-bytes"
+    from test_guard_estimate import mp4
+    h.blobs.remote[url] = mp4(9) if mime == "video/mp4" else b"take-bytes"   # a take the relay can read the length of
     h.providers["runway"].states[rid] = Status(state="succeeded", outputs=[{"url": url, "mime": mime, "w": 1280, "h": 720}],
                                                cost_usd=0.9)
     h.clock.tick(6)

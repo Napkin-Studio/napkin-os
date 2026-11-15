@@ -23,6 +23,21 @@ os.environ.setdefault("AWS_DEFAULT_REGION", "eu-west-1")
 CDN = "https://cdn.test"
 
 
+@pytest.fixture(autouse=True)
+def paid_calls_on_for_mock_transports(monkeypatch):
+    """The spend guard fails closed (director/spend.py): with nothing set no paid call goes out. The tests that
+    drive a real adapter over a mock transport are a developer's machine turning paid calls on by hand, with a
+    cap; nothing here reaches a network. The guard's own tests (test_spend*.py, test_guard_estimate.py) clear
+    these and start from nothing set."""
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
+    monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "1000000")
+    monkeypatch.delenv("NAPKIN_SPEND_RUN_CAP_EUR", raising=False)
+    from director import spend
+    spend.reset()
+    import blobs   # local.build() turns loopback fetches on for its own server: never carried into the next test
+    monkeypatch.setattr(blobs, "_loopback_ok", False)
+
+
 class Clock:
     def __init__(self, t: float = 1_791_360_000.0):  # 2026-10-07
         self.t = t
@@ -38,6 +53,7 @@ class FakeBlobs:
     def __init__(self):
         self.objects: dict[str, tuple[bytes, str]] = {}
         self.remote: dict[str, bytes] = {}  # provider output URLs
+        self.fallback = None  # key -> bytes for an own key a test did not store; None: refused as not ours
 
     def public_url(self, key):
         return f"{CDN}/{key}"
@@ -72,6 +88,30 @@ class FakeBlobs:
     def fetch(self, url):
         key = self.key_for_url(url)
         return self.objects[key][0] if key in self.objects else self.remote[url]
+
+    def fetch_own(self, url, tenant=None):
+        """A URL a request names: only our own blobs this agency may read (blobs.own_key), never self.remote; a
+        missing object answers as a refused one."""
+        from blobs import NOT_OURS, UnsafeUrl, own_key
+        key = own_key(self, url, tenant)
+        if key not in self.objects:
+            if self.fallback is not None:   # a test's stand-in for objects it did not store (test_pathways.py)
+                return self.fallback(key)
+            raise UnsafeUrl(NOT_OURS)
+        return self.objects[key][0]
+
+    default_clip_s = 5.0   # the fake store's stand-in length for a clip a test did not store (a 5 s take)
+
+    def clip_seconds(self, url, tenant=None):
+        """blobs.clip_seconds: a stored clip's real length; a clip this fake store never held reads as
+        default_clip_s (tests that are about the length store a real MP4: test_guard_estimate.mp4)."""
+        import blobs as _blobs
+        from cliplength import measure
+        key = _blobs.own_key(self, url, tenant)
+        if key not in self.objects:
+            return self.default_clip_s
+        data = self.objects[key][0]
+        return None if len(data) > _blobs.MAX_MEASURE_BYTES else measure(data)
 
     def get(self, key):
         return self.objects[key][0] if key in self.objects else None
@@ -171,7 +211,13 @@ class Harness:
         self.people: dict[str, dict] = {}
         self.relay = Relay(store=self.store, blobs=self.blobs, registry=reg, director=PassthroughDirector(),
                            config=lambda: self.cfg, clock=self.clock, stitch=self.stitched.append,
-                           contracts=self.contracts, who=self.who)
+                           contracts=self.contracts, who=self.who, ai_switch=self.ai_switch)
+        self.client_ai_on = True   # the per-client AI switch (client_ai.py): a client whose written yes is recorded
+
+    def ai_switch(self, scope: dict, client_id: str | None = None) -> bool:
+        """The relay's view of the per-client AI switch; test_platform_rules.py turns it off."""
+        self.ai_scopes = [*getattr(self, "ai_scopes", []), scope]
+        return self.client_ai_on
 
     def who(self, method: str, path_and_query: str, headers: dict, body: bytes | None) -> dict | None:
         """The test's identity source: "Authorization: Bearer <key>" names a person from as_person().

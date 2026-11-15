@@ -63,7 +63,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         )
 }
 
-fn answer(status: StatusCode, msg: &str) -> Response {
+pub(crate) fn answer(status: StatusCode, msg: &str) -> Response {
     (
         status,
         Json(serde_json::json!({ "ok": false, "error": msg })),
@@ -71,7 +71,7 @@ fn answer(status: StatusCode, msg: &str) -> Response {
         .into_response()
 }
 
-fn refused(r: Refusal) -> Response {
+pub(crate) fn refused(r: Refusal) -> Response {
     match r {
         Refusal::Bad(m) => answer(StatusCode::BAD_REQUEST, &m),
         Refusal::Conflict(m) => answer(StatusCode::CONFLICT, &m),
@@ -93,13 +93,13 @@ fn store(ctx: &AppCtx) -> Option<&People> {
 
 /// Which agencies the signed-in person manages: every one (a Napkin admin) or their own (an agency's admin).
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum Scope {
+pub(crate) enum Scope {
     All,
     Agency(String),
 }
 
 impl Scope {
-    fn covers(&self, agency: &str) -> bool {
+    pub(crate) fn covers(&self, agency: &str) -> bool {
         match self {
             Scope::All => true,
             Scope::Agency(a) => a == agency,
@@ -109,7 +109,7 @@ impl Scope {
 
 /// The store, who is acting and what they may manage, from the session alone; 403 for anyone who is not a
 /// Napkin admin or an admin of their agency, 404 where this server keeps no people store (no roster).
-fn scope<'a>(
+pub(crate) fn scope<'a>(
     ctx: &'a AppCtx,
     account: Option<&Account>,
 ) -> Result<(&'a People, String, Scope), Box<Response>> {
@@ -153,7 +153,7 @@ fn napkin_admin<'a>(
 }
 
 /// The person `id` when the scope covers their agency; else the answer a person nobody holds gets.
-fn in_scope(people: &People, scope: &Scope, id: &str) -> Result<String, Box<Response>> {
+pub(crate) fn in_scope(people: &People, scope: &Scope, id: &str) -> Result<String, Box<Response>> {
     let id = id.trim().to_ascii_lowercase();
     let covered = people
         .book()
@@ -194,9 +194,9 @@ fn known_roles(ctx: &AppCtx, agency: &str, roles: &[String]) -> Result<Vec<Strin
     }
 }
 
-type Who = Option<Extension<Account>>;
+pub(crate) type Who = Option<Extension<Account>>;
 
-fn acct(w: &Who) -> Option<&Account> {
+pub(crate) fn acct(w: &Who) -> Option<&Account> {
     w.as_ref().map(|Extension(a)| a)
 }
 
@@ -324,7 +324,7 @@ fn row_after(people: &People, id: &str) -> Response {
 }
 
 /// A JSON body read into `T`, any shape error a `400` in plain words (axum's own would be `422`).
-fn body<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, Box<Response>> {
+pub(crate) fn body<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, Box<Response>> {
     serde_json::from_value(v).map_err(|e| {
         Box::new(answer(
             StatusCode::BAD_REQUEST,

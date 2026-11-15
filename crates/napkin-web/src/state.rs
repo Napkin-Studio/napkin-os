@@ -166,6 +166,9 @@ pub struct AppCtx {
     pub code_key: Vec<u8>,
     /// The only way mail leaves the server (`mail`): off unless a sender is configured.
     pub mail: crate::mail::Mail,
+    /// The studio's own public address (`NAPKIN_PUBLIC_ORIGIN`, `https://studio.example.com`): the only origin a mailed
+    /// link is built from, never a request header. None means no link is mailed.
+    pub public_origin: Option<String>,
     /// Unix seconds, for the code's window; a test sets it.
     pub code_clock: Arc<dyn Fn() -> u64 + Send + Sync>,
     pub events: EventBus,
@@ -217,6 +220,7 @@ impl AppCtx {
             piece_byte_cap: crate::links::PIECE_BYTES_PER_MINUTE,
             code_key: crate::links::fresh_key(),
             mail: crate::mail::Mail::off(),
+            public_origin: None,
             code_clock: Arc::new(crate::links::unix_now),
             events: EventBus::default(),
             exports: ExportStore::default(),
@@ -244,6 +248,17 @@ impl AppCtx {
     /// Mail goes through `mailer`, at most `cap` a tenant a day (`mail.rs`).
     pub fn with_mailer(mut self, mailer: Arc<dyn crate::mail::Mailer>, cap: u32) -> Self {
         self.mail = crate::mail::Mail::new(mailer, cap);
+        self
+    }
+
+    /// The studio's public origin, as `scheme://host[:port]` with no path; anything else leaves it unset.
+    pub fn with_public_origin(mut self, origin: &str) -> Self {
+        let o = origin.trim().trim_end_matches('/');
+        let ok = (o.starts_with("https://") || o.starts_with("http://"))
+            && !o.contains(['?', '#', ' '])
+            && o.splitn(3, '/').count() == 3
+            && o.splitn(4, '/').count() == 3;
+        self.public_origin = ok.then(|| o.to_string());
         self
     }
 

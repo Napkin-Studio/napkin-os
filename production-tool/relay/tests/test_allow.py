@@ -60,7 +60,7 @@ def test_google_off_still_runs_a_runway_made_edit():
     h = runway_routed()
     token = h.as_person()
     h.limits("blue", allow=RUNWAY_ONLY)
-    video = {**asset(8, "video/mp4"), "url": f"{CDN}/in/clip.mp4"}
+    video = asset(8, "video/mp4")  # in our store, by its hash
     _, job = h.post_job(token, "clip_edit", expect=200, video=video, feel={"strength": "flex"}, text="warmer")
     assert (job["provider"], job["model"]) == ("runway", "aleph2")
 

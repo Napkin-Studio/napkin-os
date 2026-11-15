@@ -364,7 +364,7 @@ export interface JobNeed {
   /** Stable, `{job}:{stage}:{role}:{kind}`. Absent from an older host. */
   id?: string
   /** A task (`gate`, `approval`, `approval-chase`) or a notice (`brief-changed`, `client-change`, `deadline`, `timesheet`). Absent from an older host. */
-  kind?: 'gate' | 'approval' | 'approval-chase' | 'brief-changed' | 'client-change' | 'deadline' | 'timesheet' | 'judge-return' | 'judge-review' | 'judge-return' | 'judge-review'
+  kind?: 'gate' | 'approval' | 'approval-chase' | 'brief-changed' | 'client-change' | 'deadline' | 'timesheet' | 'judge-return' | 'judge-review' | 'first-task'
   stage?: string
   /** An approval: whole days past the step's due date, 0 until the day after; null on a gate need. */
   days_late?: number | null
@@ -402,6 +402,8 @@ export interface NeedsAnswer {
   next_deadline: NextDeadline | null
   /** The person's own timesheet reminder, from 16:00 where they are; it is on no document. */
   timesheet: JobNeed | null
+  /** An invited person's first task (features/first-day.clan): the document the invite names, until its button is pressed. Theirs alone. */
+  first_task?: JobNeed | null
 }
 
 /** One document's line in `GET /needs`. */
@@ -464,7 +466,7 @@ export interface JobEntry {
   owner: string
   opened_on: string
   due: string | null
-  /** Sent to the Money roles only: absent for every other role. */
+  /** Sent to the Money roles only, absent for every other role, and drawn on no screen: a budget is read in the job's Decisions. */
   budget_hours?: number | null
   stage: { id: string; step: number; label: string }
   status: string
@@ -490,13 +492,18 @@ export interface JobDocument {
 }
 
 /** What this person may do with jobs; the server refuses the write in any case. */
-export interface JobRights { manage: boolean; budget: boolean }
+export interface JobRights { manage: boolean; budget: boolean; /** Reads a budget, and hours against one (the Money group). */ read_budget?: boolean }
 
 /** One job page's answer (`GET /jobs/{number}`): the job as this person may see it, what it asks of them, and what they may do. */
 export interface JobView { job: JobEntry; needs: JobNeed[]; can: JobRights }
 
 /** What a person may change on a job (`PATCH /jobs/{number}`); `due: null` clears the deadline. */
-export interface JobPatch { title?: string; owner?: string; due?: string | null; budget_hours?: number }
+export interface JobPatch { title?: string; owner?: string; due?: string | null }
+
+/** One line of a job's own decisions (`GET /jobs/{number}/decisions`). `hours` is sent with each line to the Money roles only
+ *  (a budget's, null on other lines); every other role gets no budget line at all (features/align-confidential-prices.clan). */
+export interface JobDecisionRow { id: string | null; kind: string | null; action: string; who: string; at: string; what: string; hours?: number | null }
+export interface JobDecisionsView { job: string; decisions: JobDecisionRow[]; can_record_budget: boolean }
 
 /** A job named on a dashboard tile. */
 export interface JobLine { number: string; client: string; client_id: string; line: string }
@@ -568,7 +575,7 @@ export interface JudgeCardView {
   pieces: string[]
   can_score: boolean
   why_not: string | null
-  setup: { backend: string | null; configured: boolean; price_eur: number | null; trust: 'none' | 'shadow' | 'earned'; not_trusted: string; calibration: string; rubric_version: string }
+  setup: { backend: string | null; configured: boolean; trust: 'none' | 'shadow' | 'earned'; not_trusted: string; calibration: string; rubric_version: string }
   score: null | {
     id: string; at: string; version: string
     /** The work is still the version that was scored. */

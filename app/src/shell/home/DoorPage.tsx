@@ -33,7 +33,7 @@ interface Props {
 export function DoorPage({ door, name, clients, rights = null, go }: Props) {
   const top = useRef<HTMLDivElement>(null)
   useEffect(() => { top.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true }) }, [door])
-  const teaser = teaserFor(door, name)
+  const teaser = teaserFor(door, name, rights?.read_budget)
 
   let body
   if (door === 'agency-dashboard') {

@@ -132,7 +132,7 @@ export const HOW_WORD: Record<How, string> = { regenerate: 'Redraw', extend: 'Ex
 export const HOW_LINE: Record<How, string> = {
   regenerate: 'Draws each picture again at the new shape: the same people, things and light, recomposed to fit.',
   extend: 'Keeps the picture exactly and paints what is missing round its edges.',
-  crop: 'Cuts the middle of each picture to the shape. Free, and in seconds.',
+  crop: 'Cuts the middle of each picture to the shape, in seconds.',
   auto: 'Crops when little is lost, extends when the shape is close, redraws when the picture would sit small.',
 }
 /** Said when a scamp is in the selection and the method draws (owner 2026-10-16). */
@@ -168,7 +168,7 @@ export function makeWords(n: number): string {
   return `Make ${n} ${n === 1 ? 'picture' : 'pictures'}`
 }
 
-/** A method in the panel's words: "Redraw · Gemini 3 Pro", "Extend · Ideogram 4.5", "Crop · free". No price. */
+/** A method in the panel's words: "Redraw · Gemini 3 Pro", "Extend · Ideogram 4.5", "Crop". No price and no money word. */
 export function methodLine(m: SizeMethod, models: Models): string {
   if (m === 'regenerate') return models.regenerate ? `Redraw · ${models.regenerate.label}` : 'Redraw'
   return methodWords(m, models)

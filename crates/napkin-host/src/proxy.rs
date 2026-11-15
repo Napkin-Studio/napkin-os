@@ -11,7 +11,7 @@ use crate::config::{configured, resolve_proxy, HostConfig};
 use crate::ctx::Ctx;
 use crate::error::{HostError, HostResult};
 use crate::event::HostEvent;
-use crate::ops::middleware;
+use crate::ops::{judge, middleware};
 use crate::session::Session;
 
 /// POST `payload` verbatim to the endpoint resolved for `request_kind`, add
@@ -99,12 +99,25 @@ pub fn reply_envelope(request_kind: &str, url: &str, status: u16, body: String) 
     })
 }
 
-/// `{type, message}` out of a middleware error body, when it is one.
+/// `{type, message}` out of a middleware error body, when it is one, and its `usage` when a run was charged before
+/// it failed (features/align-confidential-prices.clan): only the two figures and the route, so the host can record
+/// what the run cost. Nothing else of the body is kept.
 fn middleware_error(body: &Value) -> Option<Value> {
     let e = body.get("error")?;
     let kind = e.get("type")?.as_str()?;
     let message = e.get("message").and_then(Value::as_str).unwrap_or("");
-    Some(serde_json::json!({ "type": kind, "message": message }))
+    let mut out = serde_json::json!({ "type": kind, "message": message });
+    if let Some(u) = e.get("usage") {
+        let n = |k: &str| u.get(k).and_then(Value::as_f64);
+        if let (Some(estimate), Some(charged)) = (n("estimate_eur"), n("charged_eur")) {
+            out["usage"] = serde_json::json!({
+                "estimate_eur": estimate,
+                "charged_eur": charged,
+                "route": u.get("route").and_then(Value::as_str),
+            });
+        }
+    }
+    Some(out)
 }
 
 /// `POST /api-proxy {request_kind, payload}` — the single, uniform network
@@ -153,9 +166,62 @@ pub async fn api_proxy(
         serde_json::json!({ "request_kind": kind, "payload": payload, "clan": clan_ctx });
     let reply = proxy_call(cfg, &kind, outgoing, ctx.scope.agency.as_deref()).await;
     if kind == middleware::REQUEST_KIND {
-        return Ok(session.settle_middleware(ctx, reply));
+        // What the call cost is read before the frame is answered, and the frame never gets it (review of 15 Nov,
+        // item 1): the frame gets the answer, not the price.
+        let task = reply
+            .pointer("/data/task")
+            .and_then(Value::as_str)
+            .or_else(|| payload.get("task").and_then(Value::as_str))
+            .unwrap_or("")
+            .to_string();
+        let cost = crate::judge_run::cost_of(&reply, &task);
+        let (mut out, mut events) = session.settle_middleware(ctx, reply);
+        if let Some(cost) = cost {
+            events.extend(record_cost(ctx, session, &cost));
+        }
+        without_price(&mut out);
+        return Ok((out, events));
     }
     Ok((reply, Vec::new()))
+}
+
+/// Record a middleware call's cost where the money was spent (features/align-confidential-prices.clan; review of
+/// 15 Nov, item 1): one `run_cost` decision on the open document, written by the host as the task's agent
+/// ([`judge::RunCost::agent`]), whoever sent the call and whatever the body said. A job whose cost is already in the
+/// chain (a poll that answers it again) is not recorded twice; with no document open there is nowhere to record it,
+/// and the middleware's own run log stays the record. A write that fails does not fail the answer.
+fn record_cost(ctx: &Ctx, session: &Session, cost: &judge::RunCost) -> Vec<HostEvent> {
+    if let Some(job) = &cost.job {
+        if session
+            .read(|d| Ok(judge::cost_recorded(d, job)))
+            .unwrap_or(true)
+        {
+            return Vec::new();
+        }
+    }
+    let Ok(actor) = crate::ctx::Actor::process(cost.agent()) else {
+        return Vec::new();
+    };
+    let by = Ctx::new(actor).with_scope(ctx.scope.clone());
+    session
+        .perform(&by, |c, d| judge::run_cost_outcome(c, d, cost))
+        .map(|done| done.events)
+        .unwrap_or_default()
+}
+
+/// Take every figure of money out of what goes back to a frame: the envelope's and the error's `usage`, and a
+/// result's `price_eur` (Judge's, and its quote's). The figure is the job's, read in the Decisions drawer.
+pub fn without_price(envelope: &mut Value) {
+    for p in ["/data", "/error"] {
+        if let Some(o) = envelope.pointer_mut(p).and_then(Value::as_object_mut) {
+            o.remove("usage");
+        }
+    }
+    for p in ["/data/result", "/data/result/quote"] {
+        if let Some(o) = envelope.pointer_mut(p).and_then(Value::as_object_mut) {
+            o.remove("price_eur");
+        }
+    }
 }
 
 /// Home-screen prompt → the unified proxy with `request_kind = "agent"`.

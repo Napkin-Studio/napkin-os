@@ -153,6 +153,30 @@ fn reply(tests: Vec<Value>) -> String {
     .to_string()
 }
 
+/// What the spend guard reports it let through for a charged run (the envelope's `usage`, middleware-api.md).
+fn usage() -> Value {
+    json!({ "estimate_eur": 0.05, "charged_eur": 0.02, "route": "eu-small" })
+}
+
+/// [`reply`], from a run that was charged.
+fn charged(tests: Vec<Value>) -> String {
+    let mut v: Value = serde_json::from_str(&reply(tests)).unwrap();
+    v["usage"] = usage();
+    v.to_string()
+}
+
+/// The `run_cost` blocks of a chain, newest first.
+fn costs(path: &std::path::Path) -> Vec<Value> {
+    chain(path)
+        .iter()
+        .filter(|d| d.kind.as_deref() == Some("run_cost"))
+        .map(|d| {
+            assert_eq!(d.agent, "judge", "a run's cost is the task's agent's");
+            serde_json::to_value(d.extra.get("run_cost").unwrap()).unwrap()
+        })
+        .collect()
+}
+
 struct Cfg(String);
 impl HostConfig for Cfg {
     fn workspace(&self) -> Option<WorkspaceConfig> {
@@ -247,7 +271,12 @@ async fn the_scoring_route_keeps_each_refusal_writes_nothing_on_a_failure_and_ne
         maeve.clone(),
     );
     session.open(s.clone()).unwrap();
-    let judged = || chain(&file).iter().filter(|d| d.agent == "judge").count();
+    let judged = || {
+        chain(&file)
+            .iter()
+            .filter(|d| d.agent == "judge" && d.kind.as_deref() == Some("verdict"))
+            .count()
+    };
 
     // unset: Judge says it is not set up, and nothing is sent anywhere
     std::env::remove_var("NAPKIN_JUDGE_BACKEND");
@@ -324,12 +353,37 @@ async fn the_scoring_route_keeps_each_refusal_writes_nothing_on_a_failure_and_ne
     }
     let (got, text) = run(&session, &maeve, &Cfg(url), json!({})).await;
     assert_eq!(got, 502);
+    // a run that did not run says so in one plain line, with no figure (done_when line 9)
     assert!(
-        text.contains("judge_failed") && text.contains("Nothing was changed"),
+        text.contains("judge_failed") && text.contains("That did not run. Nothing was changed."),
         "{text}"
     );
-    assert_eq!(judged(), 0, "a refusal and a failure write nothing");
+    assert!(
+        !text.chars().any(|c| c.is_ascii_digit()),
+        "no digit: {text}"
+    );
+    assert_eq!(judged(), 0, "a refusal and a failure write no verdict");
     assert_eq!(seen.lock().unwrap().len(), 5);
+    // the spend guard refuses in the same place, in the same words, with no figure (done_when line 10); a refusal
+    // writes nothing and charges nothing: no run_cost for a call that was not sent (review of 15 Nov, item 2)
+    assert!(costs(&file).is_empty(), "{:?}", costs(&file));
+    let (url, _) = mock(vec![(
+        429,
+        json!({ "error": { "type": "spend_refused", "message": "over the cap of 12.50" } })
+            .to_string(),
+    )]);
+    let (got, text) = run(&session, &maeve, &Cfg(url), json!({})).await;
+    assert_eq!(got, 429);
+    assert!(
+        text.contains("spend_refused")
+            && text.contains("Paid runs are off here. Nothing was sent."),
+        "{text}"
+    );
+    assert!(
+        !text.chars().any(|c| c.is_ascii_digit()),
+        "the middleware's figure is not passed on: {text}"
+    );
+    assert!(costs(&file).is_empty(), "each refused click writes nothing");
 
     // a malformed answer is an error and never a pass: a test missing, doubled, unknown, a number for a value, a rubric of another version
     let full = tests_for(Kind::Script, &[]);
@@ -361,17 +415,73 @@ async fn the_scoring_route_keeps_each_refusal_writes_nothing_on_a_failure_and_ne
         assert!(text.contains("judge_malformed"), "{case}: {text}");
     }
     assert_eq!(judged(), 0);
+    assert!(
+        costs(&file).is_empty(),
+        "an answer that reported no cost writes none"
+    );
+    // a call that reported a usage block but charged nothing (the model-level guard stopped it) writes none either
+    let mut free: Value = serde_json::from_str(&reply(full.clone())).unwrap();
+    free["usage"] = json!({ "estimate_eur": 0.05, "charged_eur": 0.0, "route": "eu-small" });
+    let mut free_bad = free.clone();
+    free_bad["result"]["tests"] = json!([]);
+    let (url, _) = mock(vec![(200, free_bad.to_string())]);
+    let (got, _) = run(&session, &maeve, &Cfg(url), json!({})).await;
+    assert_eq!(got, 502);
+    assert!(costs(&file).is_empty(), "nothing charged, nothing recorded");
+
+    // Review finding (d): a charged run whose answer is malformed still writes its cost; so does a charged run the
+    // middleware itself failed after the charge (its error carries the usage block), and the cost holds no words
+    let mut bad = full.clone();
+    bad.pop();
+    let failed_after =
+        json!({ "error": { "type": "judge_malformed", "message": "x", "usage": usage() } })
+            .to_string();
+    let (url, _) = mock(vec![(200, charged(bad)), (502, failed_after)]);
+    for case in ["malformed", "failed after the charge"] {
+        let (got, text) = run(&session, &maeve, &Cfg(url.clone()), json!({})).await;
+        assert_eq!(got, 502, "{case}: {text}");
+    }
+    assert_eq!(judged(), 0, "a malformed answer is still never a pass");
+    let paid = costs(&file);
+    assert_eq!(paid.len(), 2);
+    for c in &paid[..2] {
+        assert_eq!(
+            (
+                c["charged_eur"].clone(),
+                c["estimate_eur"].clone(),
+                c["route"].clone(),
+                c["guard"].clone()
+            ),
+            (
+                json!(0.02),
+                json!(0.05),
+                json!("eu-small"),
+                json!("allowed")
+            )
+        );
+        assert_eq!(c["task"], "judge_work");
+    }
 
     // a good answer: one verdict, and the card in the reply; the request held the id and version of the document and the allow-listed work
     let (url, seen) = mock(vec![(
         200,
-        reply(tests_for(Kind::Script, &["idea.headline", "effect.tone"])),
+        charged(tests_for(Kind::Script, &["idea.headline", "effect.tone"])),
     )]);
     let (got, text) = run(&session, &maeve, &Cfg(url), json!({ "target": "script" })).await;
     assert_eq!(got, 200, "{text}");
     let card: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(card["score"]["total"], 28);
     assert_eq!(judged(), 1);
+    // one run_cost line for the run (done_when line 11), numbers and ids only, and the card names no price
+    let paid = costs(&file);
+    assert_eq!(paid.len(), 3);
+    assert_eq!(paid[0]["charged_eur"], json!(0.02));
+    assert!(!paid[0].to_string().contains("Tonight"));
+    assert!(
+        card["setup"].get("price_eur").is_none(),
+        "the card carries no price: {}",
+        card["setup"]
+    );
     let sent = seen.lock().unwrap()[0].clone();
     assert!(sent.contains("\"judge_work\""));
     assert!(
@@ -705,4 +815,118 @@ fn who_may_read_scores_a_job_view_carries_them_by_name_and_telemetry_is_for_mana
             "no test text in the index"
         );
     }
+}
+
+/// What `POST /api-proxy` hands the frame for a middleware call.
+async fn proxy(session: &Session, ctx: &Ctx, url: &str, task: &str) -> Value {
+    let body = json!({ "request_kind": "middleware", "payload": { "api": "napkin.middleware/1", "task": task, "input": { "work": { "kind": "script" } } } });
+    let r = dispatch_async(
+        ctx,
+        session,
+        &Cfg(url.to_string()),
+        HostRequest::new("/api-proxy", "", body.to_string().into_bytes()).posting(),
+    )
+    .await;
+    serde_json::from_slice(&r.body).unwrap_or(Value::Null)
+}
+
+/// Every `run_cost` decision of a chain, newest first, whole.
+fn cost_decisions(path: &std::path::Path) -> Vec<Decision> {
+    chain(path)
+        .into_iter()
+        .filter(|d| d.kind.as_deref() == Some("run_cost"))
+        .collect()
+}
+
+// Review of 15 Nov, item 1: a cost is recorded where the money is spent. A middleware call a frame sends through
+// `POST /api-proxy` that comes back charged is one run_cost decision on the open document, written by the host
+// (its agent and action are the server's, never the body's), whatever the task; the frame gets the answer and never
+// the figure. A poll that repeats a job already recorded writes nothing more; a charged failure that says what it
+// cost is recorded; a failure that says nothing (a timeout, a 500 with no usage) records nothing.
+#[tokio::test]
+async fn a_charged_middleware_call_through_the_proxy_is_recorded_and_the_frame_never_sees_the_figure(
+) {
+    let dir = tempfile::tempdir().unwrap();
+    let (_store, _, s) = tenant(dir.path(), "Tonight, try something new.");
+    let file = dir.path().join("documents").join("script.clan");
+    let maeve = Ctx::new(Actor::human("maeve@wk").unwrap());
+    let session = Session::with_ctx(
+        Arc::new(TenantStore::new(dir.path().to_path_buf())),
+        maeve.clone(),
+    );
+    session.open(s.clone()).unwrap();
+
+    // a Judge answer, sent by the frame itself: recorded, by Judge, and the frame reads no usage and no price
+    let (url, seen) = mock(vec![(200, charged(tests_for(Kind::Script, &[])))]);
+    let v = proxy(&session, &maeve, &url, "judge_work").await;
+    assert_eq!(seen.lock().unwrap().len(), 1);
+    assert_eq!(v["ok"], json!(true), "{v}");
+    let text = v.to_string();
+    for word in [
+        "usage\"",
+        "charged_eur",
+        "estimate_eur",
+        "price_eur",
+        "0.02",
+    ] {
+        assert!(!text.contains(word), "the frame got {word}: {text}");
+    }
+    let paid = cost_decisions(&file);
+    assert_eq!(paid.len(), 1);
+    assert_eq!(
+        (paid[0].agent.as_str(), paid[0].action.as_str()),
+        ("judge", "run_cost")
+    );
+    let block = serde_json::to_value(paid[0].extra.get("run_cost").unwrap()).unwrap();
+    assert_eq!(block["charged_eur"], json!(0.02));
+    assert_eq!(block["task"], "judge_work");
+    assert_eq!(block["job"], "job_1");
+
+    // any other task is recorded too, by the middleware; a poll that answers the same job again writes nothing more;
+    // a body that names its own agent does not change who wrote it
+    let mut brief: Value = serde_json::from_str(&charged(vec![])).unwrap();
+    brief["task"] = json!("draft_brief");
+    brief["handler"] = json!("draft_brief@1.0");
+    brief["job"]["id"] = json!("job_brief_7");
+    brief["result"] = json!({ "summary": "drafted" });
+    let (url, _) = mock(vec![(200, brief.to_string()), (200, brief.to_string())]);
+    let v = proxy(&session, &maeve, &url, "draft_brief").await;
+    assert!(!v.to_string().contains("charged_eur"), "{v}");
+    proxy(&session, &maeve, &url, "job_status").await;
+    let paid = cost_decisions(&file);
+    assert_eq!(paid.len(), 2, "one per job, not one per poll");
+    assert_eq!(
+        (paid[0].agent.as_str(), paid[0].action.as_str()),
+        ("middleware", "run_cost")
+    );
+    assert_eq!(
+        serde_json::to_value(paid[0].extra.get("run_cost").unwrap()).unwrap()["task"],
+        "draft_brief"
+    );
+
+    // a failure after the charge that says what it cost is recorded, and the frame's error carries no figure; a 500
+    // that says nothing, and an answer that charged nothing, record nothing
+    let charged_error =
+        json!({ "error": { "type": "judge_malformed", "message": "x", "usage": usage() } })
+            .to_string();
+    let silent =
+        json!({ "error": { "type": "internal", "message": "the middleware failed" } }).to_string();
+    let mut free: Value = serde_json::from_str(&reply(vec![])).unwrap();
+    free["usage"] = json!({ "estimate_eur": 0.05, "charged_eur": 0.0, "route": "eu-small" });
+    free["job"]["id"] = json!("job_free");
+    let (url, _) = mock(vec![
+        (502, charged_error),
+        (500, silent),
+        (200, free.to_string()),
+    ]);
+    let v = proxy(&session, &maeve, &url, "judge_work").await;
+    assert_eq!(v["ok"], json!(false));
+    assert!(!v.to_string().contains("charged_eur"), "{v}");
+    proxy(&session, &maeve, &url, "judge_work").await;
+    proxy(&session, &maeve, &url, "judge_work").await;
+    assert_eq!(
+        cost_decisions(&file).len(),
+        3,
+        "only the charged failure is added"
+    );
 }

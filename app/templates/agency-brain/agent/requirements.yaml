@@ -1,0 +1,6 @@
+# Capability requirements (CLAN spec §22) for the Napkin Brain.
+# The brain does no inference of its own. Its pages are made by code from decisions that people
+# made, and read through the host's allow list. A curator and Ask the brain come later, behind
+# the model seam and off by default.
+requires:
+  tools: []
