@@ -488,7 +488,7 @@ export interface JobDocument {
 }
 
 /** What this person may do with jobs; the server refuses the write in any case. */
-export interface JobRights { manage: boolean; budget: boolean }
+export interface JobRights { manage: boolean; budget: boolean; /** Reads a budget, and hours against one (the Money group). */ read_budget?: boolean }
 
 /** One job page's answer (`GET /jobs/{number}`): the job as this person may see it, what it asks of them, and what they may do. */
 export interface JobView { job: JobEntry; needs: JobNeed[]; can: JobRights }
