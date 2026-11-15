@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Brain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet" />
+<style>
+  /* The brain's page, in the Napkin Studio OS design language: the tokens and the warm paper are Brief Maker's.
+     This first page is static: it says what a brain is and shows the empty state. The list of pages and a page's
+     lines come in later records, and the shared Booth with Ask the brain after them. */
+  :root{
+    --ag-base:#515BFF; --ag-acc:#C8CBFF;
+    --desk:color-mix(in srgb,var(--ag-base) 6%,#F6F1E7);
+    --paper:color-mix(in srgb,var(--ag-base) 2.5%,#FFFDF8);
+    --card:#FFFFFF; --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --faint:#9A9082;
+    --line:color-mix(in srgb,var(--ag-base) 10%,#E2D9C8);
+    --font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --font-serif:"Newsreader",Georgia,"Iowan Old Style",serif;
+    --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-color-scheme="light"]){
+      --desk:color-mix(in srgb,var(--ag-base) 12%,#121110);
+      --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+      --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+      --ink:#F4EFE6; --ink-soft:#E3DCCD; --muted:#A8A092; --faint:#7C7467;
+      --line:color-mix(in srgb,var(--ag-base) 16%,#34302A);
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--desk);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  main{max-width:720px;margin:0 auto;padding:40px 20px 64px}
+  .sheet{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:32px 28px}
+  .kicker{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+  h1{font-family:var(--font-serif);font-weight:500;font-size:34px;line-height:1.15;margin:0 0 12px;letter-spacing:-.01em}
+  .lede{color:var(--ink-soft);margin:0 0 24px;max-width:56ch}
+  .rules{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+  .rules li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .rules b{display:block;font-weight:600;margin-bottom:2px}
+  .rules span{color:var(--muted);font-size:14px}
+  .empty{margin-top:28px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+  .empty strong{color:var(--ink);font-weight:600}
+  @media (max-width:480px){ main{padding:20px 12px 40px} .sheet{padding:24px 18px} h1{font-size:28px} }
+</style>
+</head>
+<body>
+<main>
+  <article class="sheet" data-adf-id="brain-sheet">
+    <p class="kicker" data-adf-id="brain-kicker">Brain</p>
+    <h1 data-adf-id="brain-title">What this agency has decided</h1>
+    <p class="lede" data-adf-id="brain-lede">Pages of short lines, each pointing at a decision a person made in a job. Nothing is written here that nobody decided.</p>
+    <ul class="rules" data-adf-id="brain-rules">
+      <li data-adf-id="brain-rule-cite"><b>Every line has a source</b><span>A line names the document and the decision it comes from. No source, no line.</span></li>
+      <li data-adf-id="brain-rule-history"><b>History is never rewritten</b><span>When something changes, the old line is struck through with the date and a link to the new one.</span></li>
+      <li data-adf-id="brain-rule-verified"><b>Verified means the client accepted it</b><span>The mark is worked out when you look, from the client's own answer.</span></li>
+      <li data-adf-id="brain-rule-own"><b>Each page has an owner role</b><span>Planning, creative or account service answers for the pages of its kind.</span></li>
+    </ul>
+    <p class="empty" data-adf-id="brain-empty"><strong>No pages yet.</strong> Pages appear after the first decisions in a job are read.</p>
+  </article>
+</main>
+</body>
+</html>
