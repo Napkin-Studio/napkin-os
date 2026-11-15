@@ -39,6 +39,8 @@ export interface PeopleApi {
   /** Check a people file (`dry`) or import it into the signed-in admin's own agency (POST /api/admin/people/import). */
   importPeople(file: Blob, dry: boolean): Promise<ImportReport>
   remove(id: string): Promise<PersonRow>
+  /** An invite for a person already on the list (POST /api/admin/people/{id}/first-day): the link carries their sign-in name and grants nothing. */
+  invite(id: string, body: { first?: { path: string }; mail?: boolean }): Promise<{ person: string; link: string; mailed: boolean; note?: string }>
   /** Every agency, in code and basic, with its draft (GET /api/admin/agencies). */
   agencies(): Promise<AgencyAdminRow[]>
   /** A basic agency, made as a draft; its id is made from the name and fixed (POST /api/admin/agencies). */
@@ -96,6 +98,7 @@ export const httpPeopleApi: PeopleApi = {
   setRoles: (id, roles) => call('PUT', `/admin/people/${encodeURIComponent(id)}/roles`, { roles }),
   importPeople: (file, dry) => call('POST', `/admin/people/import${dry ? '?dry_run=1' : ''}`, undefined, { type: 'text/csv', text: file }),
   remove: id => call('DELETE', `/admin/people/${encodeURIComponent(id)}`),
+  invite: (id, body) => call('POST', `/admin/people/${encodeURIComponent(id)}/first-day`, body),
   agencies: async () => {
     const d = await call<AgencyAdminRow[] | { agencies: AgencyAdminRow[] }>('GET', '/admin/agencies')
     return Array.isArray(d) ? d : d.agencies

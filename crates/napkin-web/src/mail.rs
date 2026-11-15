@@ -154,7 +154,13 @@ impl Mailer for Outbox {
     fn send(&self, m: &Message) -> Result<(), MailError> {
         use std::io::Write;
         let (subject, body) = render(m);
-        let line = serde_json::json!({ "to": m.to(), "subject": subject, "body": body });
+        // an invite's address is the person's own, from the People store: it is not written here
+        let to = if matches!(m, Message::Invite { .. }) {
+            None
+        } else {
+            Some(m.to())
+        };
+        let line = serde_json::json!({ "to": to, "subject": subject, "body": body });
         std::fs::OpenOptions::new()
             .create(true)
             .append(true)

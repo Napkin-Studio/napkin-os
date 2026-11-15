@@ -2695,6 +2695,28 @@ character is refused on its line; the rest are written in one change. The report
 `{kind, dry_run, rows, ok, errors: [{line, reason}], created, updated, unchanged, committed, results: [{line, status:
 new|changed|same|error, label, reason?}], starts_directory}`.
 
+### 14.0 First day (features/first-day.clan)
+
+An invite is a record on a person already in the People store (`first_days` in `people.json`); it never adds a
+person or a role. Made and withdrawn through the store's own change path (change line and audit entry before the
+store). Same scope as the table above; a member gets `403`.
+
+| Route | Body | Reply |
+| --- | --- | --- |
+| `POST /api/admin/people/{id}/first-day` | `{first?: {path}, mail?: bool}` (`first` a document on a job of the person's agency, nameable only by an admin of that agency) | `201 {person, link, first?: {job, path}, mailed, note?}` |
+| `DELETE /api/admin/people/{id}/first-day` | none | `200`, or `404` when there is none |
+| `GET /api/t/{tenant}/me/first-day` | none | `{show_pointers}`: true only for an invited person who has not seen them |
+| `POST /api/t/{tenant}/me/first-day` | `{seen: true}` or `{opened: true}` (names no one) | `200`, the session's person's own mark |
+
+The path's tenant must be the session's. The link is `<origin>/?welcome=<sign-in name>`: no token, signature or session; it
+grants nothing and only fills the sign-in name. `GET /api/t/{tenant}/needs` gains `first_task` (a need of kind
+`first-task`, id `first:<person>`), for the invited person alone, until they press its button. No route tells an admin
+what a person has done since the invite. The person's two marks are in `first-day-marks.json` beside `people.json`, written
+only when a mark changes something and never in the store. With `mail: true` the invite is mailed (`Message::Invite`) to the
+address the People store holds for the person, never one in the request, with a link built from `NAPKIN_PUBLIC_ORIGIN`
+(`scheme://host`, never a request header; unset means no mail), at most one a person a day; `note` says plainly why when no
+mail went. The development outbox does not write an invite's address.
+
 ### 14.1 Settings (stage 2, as stage 3 left them)
 
 - `GET /api/t/{tenant}/agency` answers the agency's name from its People store record (a code agency's display name,

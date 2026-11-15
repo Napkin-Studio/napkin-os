@@ -563,6 +563,11 @@ async fn needs(
         "timesheet": user.as_ref()
             .and_then(|a| reminder(&ctx, a, tz_of(&query)))
             .map(|n| crate::jobview::need_view(&n)),
+        // an invited person's first task (features/first-day.clan), built as the reminder is: from the caller's own
+        // record alone, on no document's list, gone once its button is pressed
+        "first_task": user.as_ref()
+            .and_then(|a| ctx.people().and_then(|p| crate::firstday::first_task(p, &index, a)))
+            .map(|n| crate::jobview::need_view(&n)),
     })))
 }
 

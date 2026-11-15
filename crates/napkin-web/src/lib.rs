@@ -26,6 +26,7 @@ pub mod error;
 pub mod etag;
 pub mod events;
 pub mod exports;
+pub mod firstday;
 pub mod jobview;
 pub mod links;
 pub mod live;

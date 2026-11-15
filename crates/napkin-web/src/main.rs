@@ -281,7 +281,9 @@ async fn main() {
                 .map(str::as_bytes),
         )
         // mail: off unless a sender is configured (features/client-review-full.clan)
-        .with_mailer_from_env(),
+        .with_mailer_from_env()
+        // the origin a mailed link is built from; unset means no link is mailed
+        .with_public_origin(&env_string("NAPKIN_PUBLIC_ORIGIN").unwrap_or_default()),
     );
 
     // One People store of who may sign in and with which roles (features/align-needs-lock-people.clan).

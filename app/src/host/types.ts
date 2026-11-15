@@ -362,7 +362,7 @@ export interface JobNeed {
   /** Stable, `{job}:{stage}:{role}:{kind}`. Absent from an older host. */
   id?: string
   /** A task (`gate`, `approval`, `approval-chase`) or a notice (`brief-changed`, `client-change`, `deadline`, `timesheet`). Absent from an older host. */
-  kind?: 'gate' | 'approval' | 'approval-chase' | 'brief-changed' | 'client-change' | 'deadline' | 'timesheet' | 'judge-return' | 'judge-review' | 'judge-return' | 'judge-review'
+  kind?: 'gate' | 'approval' | 'approval-chase' | 'brief-changed' | 'client-change' | 'deadline' | 'timesheet' | 'judge-return' | 'judge-review' | 'first-task'
   stage?: string
   /** An approval: whole days past the step's due date, 0 until the day after; null on a gate need. */
   days_late?: number | null
@@ -400,6 +400,8 @@ export interface NeedsAnswer {
   next_deadline: NextDeadline | null
   /** The person's own timesheet reminder, from 16:00 where they are; it is on no document. */
   timesheet: JobNeed | null
+  /** An invited person's first task (features/first-day.clan): the document the invite names, until its button is pressed. Theirs alone. */
+  first_task?: JobNeed | null
 }
 
 /** One document's line in `GET /needs`. */

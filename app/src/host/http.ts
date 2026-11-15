@@ -129,6 +129,16 @@ export async function jobNeeds(): Promise<NeedsAnswer> {
   try { return await json<NeedsAnswer>(`/needs?tz=${-new Date().getTimezoneOffset()}`) } catch { return { documents: [], aside: {}, next_deadline: null, timesheet: null } }
 }
 
+/** Whether this person's first-day pointers are still to show (`GET /me/first-day`): only an invited person who has not seen them. False when the server does not answer. */
+export async function firstDayShow(): Promise<boolean> {
+  try { return (await json<{ show_pointers: boolean }>('/me/first-day')).show_pointers === true } catch { return false }
+}
+
+/** The person's own first-day mark (`POST /me/first-day`): the pointers were seen, or the first task was pressed. Kept by the server, for every device. */
+export async function markFirstDay(mark: { seen: true } | { opened: true }): Promise<boolean> {
+  try { return (await fetch(`${await base()}/me/first-day`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mark) })).ok } catch { return false }
+}
+
 /** Set one of a document's items aside (`POST /needs/{key}/aside?path=`), the person's own and kept by the server; false when it refuses. */
 export async function setNeedAside(path: string, key: string): Promise<boolean> {
   try { return (await fetch(`${await base()}/needs/${encodeURIComponent(key)}/aside?path=${encodeURIComponent(path)}`, { method: 'POST', credentials: 'same-origin' })).ok } catch { return false }
