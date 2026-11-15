@@ -210,15 +210,17 @@ async fn post_file(
 }
 
 #[tokio::test]
-async fn the_settings_hold_a_name_a_cap_and_a_zone_and_an_admin_changes_them() {
+async fn the_settings_hold_a_name_and_a_zone_no_cap_and_an_admin_changes_them() {
     let r = rig();
     let cara = sign_in(&r, "cara@cr").await;
     let url = format!("/api/t/{}/agency", cara.tenant);
     let (st, s, _) = call(&r, "GET", &url, Some(&cara.cookie), None).await;
     assert_eq!(st, StatusCode::OK);
-    for k in ["name", "credit_cap_month_eur", "time_zone", "look"] {
+    for k in ["name", "time_zone", "look"] {
         assert!(s.get(k).is_some(), "{k}");
     }
+    // no monthly credit cap: no price is a setting (features/align-confidential-prices.clan)
+    assert!(s.get("credit_cap_month_eur").is_none(), "{s}");
     // the name is the agency record's in the People store (features/align-needs-lock-people.clan): not here
     let (st, _, _) = call(
         &r,
@@ -234,18 +236,19 @@ async fn the_settings_hold_a_name_a_cap_and_a_zone_and_an_admin_changes_them() {
         "PUT",
         &url,
         Some(&cara.cookie),
-        Some(json!({ "credit_cap_month_eur": 2500 })),
+        Some(json!({ "time_zone": "Europe/London" })),
     )
     .await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(
-        (s["name"].as_str(), s["credit_cap_month_eur"].as_f64()),
-        (Some(""), Some(2500.0))
+        (s["name"].as_str(), s["time_zone"].as_str()),
+        (Some(""), Some("Europe/London"))
     );
+    assert!(s.get("credit_cap_month_eur").is_none(), "{s}");
     for bad in [
-        json!({ "credit_cap_month_eur": -5 }),
-        json!({ "credit_cap_month_eur": "lots" }),
-        json!({ "credit_cap_month_eur": null, "time_zone": "no way" }),
+        json!({ "credit_cap_month_eur": 2500 }),
+        json!({ "credit_cap_month_eur": null, "time_zone": "Europe/Paris" }),
+        json!({ "time_zone": "no way" }),
     ] {
         let (st, _, _) = call(&r, "PUT", &url, Some(&cara.cookie), Some(bad)).await;
         assert_eq!(st, StatusCode::BAD_REQUEST);
@@ -259,7 +262,7 @@ async fn the_settings_hold_a_name_a_cap_and_a_zone_and_an_admin_changes_them() {
         (h[0].action.as_str(), h[0].who.as_str()),
         ("set_settings", "cara@cr")
     );
-    // a member reads the name and the look, not the cap; and cannot change anything
+    // a member reads the name and the look, not the zone; and cannot change anything
     invite(&r, &cara, "dan@cr", "Dan Test", &["management"]).await;
     let dan = sign_in(&r, "dan@cr").await;
     let (_, s, _) = call(&r, "GET", &url, Some(&dan.cookie), None).await;

@@ -170,7 +170,7 @@ export function ChangedBrief({ from, to, changes, onUpdate, primary = true, comp
 }
 
 // ── 7. Run failed ───────────────────────────────────────────────────────────
-/** One plain line. The reserved estimate returned. Inputs kept. Try again. */
+/** One plain line with no figure: nothing was changed. Try again. */
 export function RunFailed({ why = 'other', onRetry, primary = true, busy, compact }: {
   why?: RunFailure; onRetry?: () => void; primary?: boolean; busy?: boolean; compact?: boolean
 }) {

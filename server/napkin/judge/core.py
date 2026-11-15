@@ -297,6 +297,10 @@ def run(req, caps) -> tuple[dict, None, list]:
     pending = [t for t in tests if t["method"] == "llm"]
     code = {t["id"]: code_answer(t["id"], kind, content) for t in tests if t["method"] == "code"}
     model, phash = None, None
+    # What the spend guard let through, handed back in the envelope (app.spend_usage); the host writes it as the
+    # document's run_cost decision (features/align-confidential-prices.clan). Numbers and a route name only.
+    usage = {"estimate_eur": 0.0, "charged_eur": 0.0, "route": backend}
+    caps.spend_usage = usage
     if backend == "fixture":
         other = fixture_answers(kind, pending)
     else:
@@ -307,9 +311,18 @@ def run(req, caps) -> tuple[dict, None, list]:
         v = spend.allow(price, spend.environment(), req.doc)
         if not v:
             raise TaskError(429, "spend_refused", sentence(v.reason))
-        other = llm_answers(caps, given["work"], given["brief"], pending)
-        phash = prompt_hash(kind)
-    result = {"tests": merge(kind, code, other), "backend": backend, "model": model, "rubric_version": rubric.version(),
+        usage = {"estimate_eur": price, "charged_eur": price, "route": model if isinstance(model, str) else backend}
+        caps.spend_usage = usage
+        try:
+            other = llm_answers(caps, given["work"], given["brief"], pending)
+            phash = prompt_hash(kind)
+            tests = merge(kind, code, other)
+        except TaskError as e:
+            e.usage = usage                         # charged, then failed: the error still says what it cost
+            raise
+    if backend == "fixture":
+        tests = merge(kind, code, other)
+    result = {"tests": tests, "backend": backend, "model": model, "rubric_version": rubric.version(),
               "prompt_hash": phash, "price_eur": price_eur(backend)}
     log.info("judge_work kind=%s backend=%s tests=%d fails=%d", kind, backend, len(result["tests"]),
              sum(t["value"] == "fail" for t in result["tests"]))

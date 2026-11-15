@@ -54,18 +54,18 @@ const dash = (over: Partial<DashboardView> = {}): DashboardView => ({
   scores: null, results: null, ...over,
 })
 
-test('the dashboard has six tiles, each number a link to the job or to Live jobs', () => {
+test('the dashboard has five tiles, no hours and no budget, each number a link to the job or to Live jobs', () => {
   const t = tiles(dash())
-  assert.deepEqual(t.map(x => x.id), ['stage', 'risk', 'hours', 'waiting', 'scores', 'results'])
+  assert.deepEqual(t.map(x => x.id), ['stage', 'risk', 'waiting', 'scores', 'results'])
+  assert.doesNotMatch(JSON.stringify(t), /[Bb]udget|hours|120/, 'the hours the server still sends a Money role are on no tile')
   assert.deepEqual(t[0].numbers, [{ text: '1 in Brief check', href: '#job-J001' }])
   assert.equal(t[1].numbers[0].text, '0')
   assert.equal(t[1].line, 'No job is past a deadline.')
-  assert.equal(t[2].numbers[0].text, 'No hours yet')
-  assert.equal(t[3].numbers[0].text, '2')
+  assert.equal(t[2].numbers[0].text, '2')
   // the two tiles with no figure in Phase 1 show none: an Empty line, not a made-up number
-  assert.deepEqual([t[4].numbers, t[5].numbers], [[], []])
-  assert.match(t[4].line, /No scores yet/)
-  assert.match(t[5].line, /No results yet/)
+  assert.deepEqual([t[3].numbers, t[4].numbers], [[], []])
+  assert.match(t[3].line, /No scores yet/)
+  assert.match(t[4].line, /No results yet/)
   // several jobs behind one number: it opens Live jobs
   const two = [{ number: 'J001', client: 'A', client_id: 'cli_00000001', line: '' }, { number: 'J002', client: 'A', client_id: 'cli_00000001', line: '' }]
   assert.equal(jobHref(two), '#door-live-jobs')
@@ -93,9 +93,10 @@ test('a role that may not open it sees Missing access, and the first read is Loa
   assert.match(body(null, false), /data-state="loading"/)
 })
 
-test('with jobs the dashboard draws six tiles, each number a link, and J001 on the stage tile', () => {
+test('with jobs the dashboard draws five tiles, each number a link, and J001 on the stage tile', () => {
   const html = body(dash())
-  assert.equal((html.match(/data-testid="tile-(stage|risk|hours|waiting|scores|results)"/g) || []).length, 6)
+  assert.equal((html.match(/data-testid="tile-(stage|risk|hours|waiting|scores|results)"/g) || []).length, 5)
+  assert.doesNotMatch(html, /tile-hours|[Bb]udget/)
   assert.match(html, /<a class="db-n" href="#job-J001" data-testid="tile-number">1 in Brief check<\/a>/)
   assert.match(html, /data-job="J001" data-stage="brief-check"/)
   assert.match(html, /Signed\. Waiting for the client to confirm\./)

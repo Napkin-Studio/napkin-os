@@ -11,8 +11,13 @@
 //!
 //! It never reaches a model: an unset `NAPKIN_JUDGE_BACKEND` is refused here (`not_configured`) before
 //! anything is sent, and the middleware makes its own refusals (`ai_off`, `not_eu`, `spend_refused`).
-//! A refusal or a failure writes nothing and returns the credit (the web shell refunds on any non-200).
+//! A refusal or a failure writes no verdict and returns the credit (the web shell refunds on any non-200).
 //! The request carries no clan context: the document's id and version, and nothing else of it.
+//!
+//! What a run cost is one `run_cost` decision in the work's chain (features/align-confidential-prices.clan),
+//! written from the envelope's `usage` block whatever became of the answer: a charged run whose answer is
+//! malformed, or that the middleware failed after the charge, still records what it cost; a run the spend
+//! guard refused records that it cost nothing.
 
 use serde_json::{json, Value};
 
@@ -34,10 +39,18 @@ fn failure(reply: &Value) -> HostError {
     if let Some((status, line)) = judge::refusal(kind) {
         return HostError::new(status, line);
     }
-    HostError::new(
-        502,
-        "judge_failed: Judge could not score this just now. Nothing was changed.",
-    )
+    HostError::new(502, "judge_failed: That did not run. Nothing was changed.")
+}
+
+/// The `usage` block of a reply: the envelope's own on an answer, the error's on a failure after the charge.
+fn usage_of(reply: &Value) -> Option<judge::RunCost> {
+    let ok = reply.get("ok").and_then(Value::as_bool) == Some(true);
+    let usage = if ok {
+        reply.pointer("/data/usage")
+    } else {
+        reply.pointer("/error/usage")
+    }?;
+    judge::RunCost::from_usage(usage)
 }
 
 pub async fn run(
@@ -72,6 +85,21 @@ pub async fn run(
         ctx.scope.agency.as_deref(),
     )
     .await;
+    // What the run cost is written first, before the answer is read: a malformed answer is still a charged run.
+    let refused = reply.pointer("/error/type").and_then(Value::as_str) == Some("spend_refused");
+    let cost = if refused {
+        Some(judge::RunCost::refused())
+    } else {
+        usage_of(&reply)
+    };
+    let mut events = Vec::new();
+    if let Some(cost) = cost {
+        let by = Ctx::new(Actor::process(judge::AGENT)?)
+            .with_scope(ctx.scope.clone())
+            .with_handler(judge::HANDLER);
+        let paid = session.perform(&by, |c, d| judge::run_cost_outcome(c, d, &cost))?;
+        events.extend(paid.events);
+    }
     if reply.get("ok").and_then(Value::as_bool) != Some(true) {
         return Err(failure(&reply));
     }
@@ -87,9 +115,10 @@ pub async fn run(
     let done = session.perform(&by, |c, d| {
         judge::score_outcome(c, d, &prepared, &tally, &answered, trust)
     })?;
+    events.extend(done.events);
     let card = session.read(|d| judge::card(&*store, ctx, d, Some(&prepared.piece.key)))?;
     let mut out = card;
     out["scored"] = done.reply;
     out["clan"] = session.document_now().unwrap_or(Value::Null);
-    Ok((out, done.events))
+    Ok((out, events))
 }

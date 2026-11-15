@@ -4,7 +4,7 @@
 
 // The Live jobs door (v2 section 4; features/job-page.clan): every job in flight, soonest deadline first, a
 // job with none last, each row a link to its page (`#job-<number>`). A person who may open a job has one
-// button for it here: client, title, deadline (and the budget in hours for the Money roles). With no job it
+// button for it here: client, title, deadline (no budget: it is recorded in the job's Decisions). With no job it
 // is the Empty state, whose one verb is Open a job. The list is the server's, cut to this role's fields, and
 // stays current by itself like the dashboard.
 
@@ -19,7 +19,7 @@ import { formatRoute } from '../route'
 import { dueLine, orderLive, saveOutcome, stageLine, waitingLine } from './jobModel'
 import './job.css'
 
-type Open = (body: { client_id: string; title?: string; due?: string; budget_hours?: number }) => Promise<JobSaved & { number?: string }>
+type Open = (body: { client_id: string; title?: string; due?: string }) => Promise<JobSaved & { number?: string }>
 
 export function LiveJobs({ clients, rights, go }: { clients: readonly ClientRecord[]; rights: JobRights | null; go: (r: Route) => void }) {
   const { value, ready, reload } = useLiveRead(jobsView, true, null)
@@ -43,7 +43,7 @@ export function LiveJobsBody({ jobs, ready, clients, rights, go, reload, open }:
   }
   const may = !!rights?.manage
   const form = opening && may
-    ? <OpenForm clients={clients} mayBudget={rights?.budget ?? false} open={open} onDone={n => { setOpening(false); reload(); if (n) go({ level: 'job', number: n }) }} onCancel={() => setOpening(false)} />
+    ? <OpenForm clients={clients} open={open} onDone={n => { setOpening(false); reload(); if (n) go({ level: 'job', number: n }) }} onCancel={() => setOpening(false)} />
     : null
 
   if (jobs.length === 0) {
@@ -84,9 +84,8 @@ export function LiveJobsBody({ jobs, ready, clients, rights, go, reload, open }:
   )
 }
 
-function OpenForm({ clients, mayBudget, open, onDone, onCancel }: {
+function OpenForm({ clients, open, onDone, onCancel }: {
   clients: readonly ClientRecord[]
-  mayBudget: boolean
   open: Open
   onDone: (number?: string) => void
   onCancel: () => void
@@ -94,7 +93,6 @@ function OpenForm({ clients, mayBudget, open, onDone, onCancel }: {
   const [client, setClient] = useState(clients[0]?.id ?? '')
   const [title, setTitle] = useState('')
   const [due, setDue] = useState('')
-  const [budget, setBudget] = useState('')
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [refused, setRefused] = useState(false)
@@ -102,13 +100,11 @@ function OpenForm({ clients, mayBudget, open, onDone, onCancel }: {
 
   const run = async () => {
     if (!client) { setProblem('Pick the client the job is for.'); return }
-    if (mayBudget && budget.trim() !== '' && !(Number(budget) >= 0)) { setProblem('The budget is a number of hours.'); return }
     setBusy(true); setProblem(null); setFailed(false)
     const r = await open({
       client_id: client,
       ...(title.trim() ? { title: title.trim() } : {}),
       ...(due ? { due } : {}),
-      ...(mayBudget && budget.trim() !== '' ? { budget_hours: Number(budget) } : {}),
     })
     setBusy(false)
     const out = saveOutcome(r)
@@ -129,7 +125,6 @@ function OpenForm({ clients, mayBudget, open, onDone, onCancel }: {
       </label>
       <label className="jp-f"><span>Title</span><input data-testid="open-f-title" value={title} maxLength={80} placeholder="Autumn launch" onChange={e => setTitle(e.target.value)} /></label>
       <label className="jp-f"><span>Deadline</span><input data-testid="open-f-due" type="date" value={due} onChange={e => setDue(e.target.value)} /></label>
-      {mayBudget && <label className="jp-f"><span>Budget in hours</span><input data-testid="open-f-budget" type="number" min={0} step="any" inputMode="decimal" value={budget} onChange={e => setBudget(e.target.value)} /></label>}
       {problem && <p className="jp-problem" role="alert" data-testid="open-problem">{problem}</p>}
       {failed && <FailedSave primary={false} compact busy={busy} onRetry={() => { void run() }} />}
       <div className="jp-act">

@@ -664,17 +664,25 @@ pub fn in_group(roles: &[String], group: Group) -> bool {
 /// The roles that may open a job and change its title, owner and deadline (features/job-page.clan):
 /// planning (the planner opens the job at step 1 of v2 section 3), account service, management and
 /// producers. Creative roles, the Agency Brain and traffic may not. An allow list: a role added later is
-/// left out until it is named here. A person with no role is unrestricted, as everywhere; an admin too.
+/// left out until it is named here. A person with no role holds no role and may not
+/// (features/align-needs-lock-people.clan); an admin, a demo and an anonymous visitor are unrestricted.
 pub const JOB_MANAGERS: &[&str] = &["planning", "account-service", "management", "producer"];
 
 pub fn may_manage_jobs(roles: &[String]) -> bool {
     unrestricted(roles) || roles.iter().any(|r| JOB_MANAGERS.contains(&r.as_str()))
 }
 
-/// The budget in hours is money (the owner's answer is open; the design's default): only the Money roles
-/// set it, and only those of them who manage jobs.
+/// The budget in hours is money: only the Money roles record it, and only those of them who manage jobs
+/// (account service, management, producers), as a `set_budget` decision in the job's Decisions
+/// (features/align-confidential-prices.clan). No role means no role: a person with none may not.
 pub fn may_set_budget(roles: &[String]) -> bool {
     may_manage_jobs(roles) && in_group(roles, Group::Money)
+}
+
+/// Who reads a job's budget, in its Decisions and in `budget_hours`: the Money group (traffic too, which
+/// reads scope), and the unrestricted. Every other role is sent no figure and no line about a budget.
+pub fn may_read_budget(roles: &[String]) -> bool {
+    in_group(roles, Group::Money)
 }
 
 /// The middleware: a signed-in person's roles (the People store's, put on the
@@ -726,6 +734,37 @@ mod tests {
 
     fn tools(v: &HomeView) -> Vec<&str> {
         v.tools.iter().map(String::as_str).collect()
+    }
+
+    // features/align-confidential-prices.clan, review finding (e): with roles from the People store and "no role means
+    // no role", the budget is recorded by the Money roles that manage jobs and read by the Money group, and by nobody
+    // else; an admin, a demo and an anonymous visitor (a server with no accounts) are unrestricted, as everywhere.
+    #[test]
+    fn who_may_record_a_budget_and_who_may_read_one() {
+        let cases: &[(&[&str], bool, bool)] = &[
+            (&["account-service"], true, true),
+            (&["management"], true, true),
+            (&["producer"], true, true),
+            (&["traffic"], false, true),
+            (&["planning"], false, false),
+            (&["creative-director"], false, false),
+            (&["art-director"], false, false),
+            (&["copywriter"], false, false),
+            (&["agency-brain"], false, false),
+            (&["napkin-admin"], false, false),
+            (&[], false, false),
+            (&["acount-service"], false, false),
+            (&["planning", "traffic"], true, true),
+            (&[ADMIN], true, true),
+            (&[DEMO], true, true),
+            (&[ANONYMOUS], true, true),
+        ];
+        for (roles, record, read) in cases {
+            let roles = r(roles);
+            assert_eq!(may_set_budget(&roles), *record, "record {roles:?}");
+            assert_eq!(may_read_budget(&roles), *read, "read {roles:?}");
+            assert_eq!(job_rights(&roles).budget, *record, "{roles:?}");
+        }
     }
 
     #[test]

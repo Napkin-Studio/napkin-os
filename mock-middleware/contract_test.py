@@ -327,6 +327,15 @@ class Suite:
         u = tr.get("usage")
         check(isinstance(u, dict) and all(isinstance(u.get(k), int) and u[k] >= 0
                                           for k in ("input_tokens", "output_tokens")), "trace.usage needs ints")
+        # What the spend guard let through for this task (features/align-confidential-prices.clan): numbers and a
+        # route name, which the host writes as the document's run_cost decision. An implementation that charged
+        # nothing reports zeros.
+        c = body.get("usage")
+        check(isinstance(c, dict) and set(c) == {"estimate_eur", "charged_eur", "route"}
+              and all(isinstance(c.get(k), (int, float)) and not isinstance(c.get(k), bool) and c[k] >= 0
+                      for k in ("estimate_eur", "charged_eur"))
+              and (c["route"] is None or isinstance(c["route"], str)),
+              f"usage needs estimate_eur, charged_eur and route: {c}")
         return body
 
     def error(self, status, body, want_status, want_types):

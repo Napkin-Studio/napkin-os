@@ -67,7 +67,6 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--create);outline
 .chip{font-family:var(--f-mono);font-size:11px;color:var(--ink2);background:var(--soft-2);border-radius:999px;padding:4px 10px;white-space:nowrap}
 .chip.ok{color:var(--ok-fg);background:var(--ok-bg)}
 .chip.warn{color:var(--warn-fg);background:var(--warn-bg)}
-.chip.cost{border:1px solid var(--line-soft);background:var(--soft);padding:5px 12px;font-size:12px}
 .steps{display:flex;gap:4px;background:var(--soft-2);border-radius:999px;padding:3px}
 .steps button{height:28px;padding:0 14px;border:0;border-radius:999px;background:transparent;color:var(--ink2);font-size:12px;font-weight:600}
 .steps button[aria-current="step"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(20,22,27,.1)}
@@ -429,7 +428,7 @@ var DeckLogic = (function () {
   var GATES = {
     storyline: {
       body: 'beats', title: 'Approve the storyline', approve: 'Approve and continue', edit: ['beats', 'Edit beats'], hold: 'Nothing runs until you approve',
-      lede: 'This is the order the pitch will tell its story in. Change a beat now and every later step follows it. Changing it later costs more.',
+      lede: 'This is the order the pitch will tell its story in. Change a beat now and every later step follows it. Changing it later means more to redo.',
       next: 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.'
     },
     territories: {
@@ -489,7 +488,7 @@ var DeckLogic = (function () {
       out.picked = ids.indexOf(pick) >= 0 ? pick : ids.indexOf(g.picked) >= 0 ? g.picked : out.first_pick;
       var k = terr.length;
       out.lede = (k === 1 ? 'One territory is written.' : (NUMWORD[k] || String(k)) + ' territories are written.') +
-        (k ? ' A second model judged them without seeing who wrote them. Pick the one the idea grows from. Picking later costs more.' : '');
+        (k ? ' A second model judged them without seeing who wrote them. Pick the one the idea grows from. Picking later means more to redo.' : '');
     }
     if (body === 'idea' && isObj(g.idea)) {
       var x = g.idea, basis = own(BASIS, x.basis) ? BASIS[x.basis] : null;
@@ -1430,13 +1429,13 @@ var DeckLogic = (function () {
   var inShell = typeof window !== 'undefined' && !!window.parent && window.parent !== window;
   if (inShell && typeof document !== 'undefined' && document.documentElement) document.documentElement.classList.add('in-shell');
 
-  // The error and cost readouts: the same words in either bar.
+  // The error readout: the same words in either bar. No cost: a run's cost is read in the Decisions drawer only
+  // (features/align-confidential-prices.clan), so the run's cost_usd is never drawn here.
   function barChips(s, scr) {
     var v = s.validation, out = [];
     if (s.run.state === 'done' || scr === 'review') {
       out.push({ text: (v.errors || 0) + ' errors · ' + L.toSupply(s.raw).count + ' to supply', tone: (v.errors || 0) ? 'warn' : 'ok', cls: 'chip ' + ((v.errors || 0) ? 'warn' : 'ok') });
     }
-    if (s.run.cost_usd != null && scr !== 'start') out.push({ text: '$' + Number(s.run.cost_usd).toFixed(2) + ' so far', tone: null, cls: 'chip cost' });
     return out;
   }
 
@@ -1454,9 +1453,8 @@ var DeckLogic = (function () {
     var title = (p.client && p.project) ? esc(p.client) + ' · ' + esc(p.project) : 'New deck';
     var chips = barChips(s, scr);
     function spans(list) { return list.map(function (c) { return '<span class="' + c.cls + '">' + esc(c.text) + '</span>'; }).join(''); }
-    var first = spans(chips.filter(function (c) { return c.cls !== 'chip cost'; })), cost = spans(chips.filter(function (c) { return c.cls === 'chip cost'; }));
-    return '<header class="bar"><span class="crumb">' + title + '</span>' + first +
-      '<div class="spacer"></div>' + cost +
+    return '<header class="bar"><span class="crumb">' + title + '</span>' + spans(chips) +
+      '<div class="spacer"></div>' +
       stepsNav(scr) + '</header>';
   }
 
@@ -1965,7 +1963,7 @@ var DeckLogic = (function () {
       '<p class="note rep" data-report><span class="mono eyebrow">Report</span>' + esc(rep.line) + '</p>' +
       (supply ? '<div class="callout" data-to-supply>' + supply + (supply > 1 ? ' slides still hold' : ' slide still holds') + ' placeholders. They export as marked text.</div>' : '') +
       (counts.total || counts.supplied ? '<p class="note" style="margin-top:10px;font-size:12px" data-sourced>' + counts.verified + ' of ' + counts.total + ' to confirm verified · ' + counts.supplied + ' supplied by you · ' + counts.sourced + ' counted as sourced</p>' : '') +
-      '<p class="mono" style="margin-top:12px;font-size:11px;color:var(--ink3)">Cost to build this deck: $' + Number(s.report.cost_usd != null ? s.report.cost_usd : s.run.cost_usd || 0).toFixed(2) + '</p></div></aside></main>';
+      '</div></aside></main>';
   }
 
   // ── render and events ─────────────────────────────────────────────────

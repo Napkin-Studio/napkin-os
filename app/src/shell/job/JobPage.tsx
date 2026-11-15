@@ -7,9 +7,10 @@
 // else, so it cannot drift from the documents: the stage is read from their decisions, never typed in. It
 // reads through the same live read as the dashboard, so a stage change shows without a reload.
 //
-// What a role sees is the server's: the job arrives already cut to that role's allowed fields, so the
-// budget in hours is simply absent for a role that is not sent it. The change form shows only what the
-// server says this person may change, and the server refuses the write in any case.
+// What a role sees is the server's: the job arrives already cut to that role's allowed fields. No figure of
+// money is on this page for any role: a budget is recorded and read in the job's Decisions, the Money roles'
+// (features/align-confidential-prices.clan). The change form shows only what the server says this person may
+// change, and the server refuses the write in any case.
 //
 // States (v2 section 4): Loading, Empty (a job that is not here), Missing access, Changed brief (a signed
 // brief moved on), Failed save, and Normal with one primary button: the person's next action on this job.
@@ -24,7 +25,8 @@ import { useLiveRead } from '../home/useLiveRead'
 import { RouteStrip } from '../approvals/RouteStrip'
 import { ClientRound } from '../clientReview/RoundView'
 import type { Route } from '../route'
-import { budgetLine, changedBriefOf, docLine, dueLine, formOf, formProblem, nextNeed, patchOf, saveOutcome, stageLine, waitingLine, type JobForm } from './jobModel'
+import { changedBriefOf, docLine, dueLine, formOf, formProblem, nextNeed, patchOf, saveOutcome, stageLine, waitingLine, type JobForm } from './jobModel'
+import { JobDecisions } from './JobDecisions'
 import './job.css'
 
 interface Props {
@@ -98,7 +100,7 @@ function JobFile({ view, go, onOpenDocument, reload, save }: { view: JobView; go
   const [editing, setEditing] = useState(false)
   const changed = changedBriefOf(job)
   const need = nextNeed(needs, job.number)
-  const budget = budgetLine(job)
+  const [deciding, setDeciding] = useState(false)
 
   const work = (
     <div className="jp" data-testid="job-file">
@@ -114,7 +116,6 @@ function JobFile({ view, go, onOpenDocument, reload, save }: { view: JobView; go
         <div><dt>Owner</dt><dd>{job.owner}</dd></div>
         <div><dt>Opened</dt><dd>{dueWords(job.opened_on)}</dd></div>
         <div><dt>Deadline</dt><dd data-testid="job-due" data-late={job.at_risk || undefined}>{dueLine(job).replace(/^Due /, '')}</dd></div>
-        {budget !== null && <div><dt>Budget</dt><dd data-testid="job-budget">{budget}</dd></div>}
       </dl>
 
       {changed && (
@@ -155,8 +156,11 @@ function JobFile({ view, go, onOpenDocument, reload, save }: { view: JobView; go
         </section>
       ))}
 
+      <div className="jp-act"><button type="button" className="ch-btn" data-testid="job-decisions-open" aria-haspopup="dialog" onClick={() => setDeciding(true)}>Decisions</button></div>
+      {deciding && <JobDecisions number={job.number} title={`${job.client.name} · ${job.title}`} onClose={() => setDeciding(false)} />}
+
       {can.manage && (editing
-        ? <JobEditor job={job} mayBudget={can.budget} save={save} onDone={() => { setEditing(false); reload() }} onCancel={() => setEditing(false)} />
+        ? <JobEditor job={job} save={save} onDone={() => { setEditing(false); reload() }} onCancel={() => setEditing(false)} />
         : <div className="jp-act"><button type="button" className="ch-btn" data-testid="job-edit" data-primary onClick={() => setEditing(true)}>Change this job</button></div>)}
     </div>
   )
@@ -170,7 +174,7 @@ function JobFile({ view, go, onOpenDocument, reload, save }: { view: JobView; go
   )
 }
 
-function JobEditor({ job, mayBudget, save, onDone, onCancel }: { job: JobView['job']; mayBudget: boolean; save: Save; onDone: () => void; onCancel: () => void }) {
+function JobEditor({ job, save, onDone, onCancel }: { job: JobView['job']; save: Save; onDone: () => void; onCancel: () => void }) {
   const [form, setForm] = useState<JobForm>(() => formOf(job))
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
@@ -179,9 +183,9 @@ function JobEditor({ job, mayBudget, save, onDone, onCancel }: { job: JobView['j
   const set = (k: keyof JobForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
 
   const run = async () => {
-    const wrong = formProblem(form, mayBudget)
+    const wrong = formProblem(form)
     if (wrong) { setProblem(wrong); return }
-    const patch = patchOf(job, form, mayBudget)
+    const patch = patchOf(job, form)
     if (!patch) { onCancel(); return }
     setBusy(true); setProblem(null); setFailed(false)
     const r = await save(job.number, patch)
@@ -199,7 +203,6 @@ function JobEditor({ job, mayBudget, save, onDone, onCancel }: { job: JobView['j
       <label className="jp-f"><span>Title</span><input data-testid="job-f-title" value={form.title} onChange={set('title')} maxLength={80} /></label>
       <label className="jp-f"><span>Owner</span><input data-testid="job-f-owner" value={form.owner} onChange={set('owner')} /></label>
       <label className="jp-f"><span>Deadline</span><input data-testid="job-f-due" type="date" value={form.due} onChange={set('due')} /></label>
-      {mayBudget && <label className="jp-f"><span>Budget in hours</span><input data-testid="job-f-budget" type="number" min={0} step="any" inputMode="decimal" value={form.budget} onChange={set('budget')} /></label>}
       {problem && <p className="jp-problem" role="alert" data-testid="job-problem">{problem}</p>}
       {failed && <FailedSave primary={false} compact busy={busy} onRetry={() => { void run() }} />}
       <div className="jp-act">

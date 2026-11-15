@@ -242,17 +242,15 @@ fn settings_are_checked_and_each_change_is_a_decision() {
         &admin,
         SettingsPatch {
             name: Some("  Agency   C ".into()),
-            credit_cap_month_eur: Some(1500.0),
-            time_zone: None,
+            time_zone: Some("Europe/London".into()),
         },
     )
     .unwrap();
     assert_eq!(out.name, "Agency C");
-    assert_eq!(out.credit_cap_month_eur, 1500.0);
-    assert_eq!(out.time_zone, "Europe/Dublin");
-    for bad in [-1.0, f64::NAN, f64::INFINITY] {
+    assert_eq!(out.time_zone, "Europe/London");
+    for bad in ["", "no way", "Europe/Dublin; rm"] {
         let p = SettingsPatch {
-            credit_cap_month_eur: Some(bad),
+            time_zone: Some(bad.into()),
             ..Default::default()
         };
         assert_eq!(agency::set_settings(&s, &admin, p).unwrap_err().status, 400);
@@ -260,10 +258,9 @@ fn settings_are_checked_and_each_change_is_a_decision() {
     let h = agency::history(&s).unwrap();
     assert_eq!(h.len(), 1);
     assert_eq!(h[0].action, "set_settings");
-    assert_eq!(
-        h[0].after["credit_cap_month_eur"],
-        serde_json::json!(1500.0)
-    );
+    assert_eq!(h[0].after["time_zone"], serde_json::json!("Europe/London"));
+    // no monthly credit cap is a setting any more (features/align-confidential-prices.clan)
+    assert!(h[0].after.get("credit_cap_month_eur").is_none());
     // settings alone are not a directory: the roster stays the source until people are named
     assert!(!agency::read(&s).unwrap().0.has_directory());
 }

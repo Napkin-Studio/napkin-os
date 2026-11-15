@@ -153,6 +153,30 @@ fn reply(tests: Vec<Value>) -> String {
     .to_string()
 }
 
+/// What the spend guard reports it let through for a charged run (the envelope's `usage`, middleware-api.md).
+fn usage() -> Value {
+    json!({ "estimate_eur": 0.05, "charged_eur": 0.02, "route": "eu-small" })
+}
+
+/// [`reply`], from a run that was charged.
+fn charged(tests: Vec<Value>) -> String {
+    let mut v: Value = serde_json::from_str(&reply(tests)).unwrap();
+    v["usage"] = usage();
+    v.to_string()
+}
+
+/// The `run_cost` blocks of a chain, newest first.
+fn costs(path: &std::path::Path) -> Vec<Value> {
+    chain(path)
+        .iter()
+        .filter(|d| d.kind.as_deref() == Some("run_cost"))
+        .map(|d| {
+            assert_eq!(d.agent, "judge", "a run's cost is the task's agent's");
+            serde_json::to_value(d.extra.get("run_cost").unwrap()).unwrap()
+        })
+        .collect()
+}
+
 struct Cfg(String);
 impl HostConfig for Cfg {
     fn workspace(&self) -> Option<WorkspaceConfig> {
@@ -247,7 +271,12 @@ async fn the_scoring_route_keeps_each_refusal_writes_nothing_on_a_failure_and_ne
         maeve.clone(),
     );
     session.open(s.clone()).unwrap();
-    let judged = || chain(&file).iter().filter(|d| d.agent == "judge").count();
+    let judged = || {
+        chain(&file)
+            .iter()
+            .filter(|d| d.agent == "judge" && d.kind.as_deref() == Some("verdict"))
+            .count()
+    };
 
     // unset: Judge says it is not set up, and nothing is sent anywhere
     std::env::remove_var("NAPKIN_JUDGE_BACKEND");
@@ -324,12 +353,45 @@ async fn the_scoring_route_keeps_each_refusal_writes_nothing_on_a_failure_and_ne
     }
     let (got, text) = run(&session, &maeve, &Cfg(url), json!({})).await;
     assert_eq!(got, 502);
+    // a run that did not run says so in one plain line, with no figure (done_when line 9)
     assert!(
-        text.contains("judge_failed") && text.contains("Nothing was changed"),
+        text.contains("judge_failed") && text.contains("That did not run. Nothing was changed."),
         "{text}"
     );
-    assert_eq!(judged(), 0, "a refusal and a failure write nothing");
+    assert!(
+        !text.chars().any(|c| c.is_ascii_digit()),
+        "no digit: {text}"
+    );
+    assert_eq!(judged(), 0, "a refusal and a failure write no verdict");
     assert_eq!(seen.lock().unwrap().len(), 5);
+    // the spend guard refuses in the same place, in the same words, with no figure (done_when line 10), and its refusal
+    // is one run_cost line that cost nothing; no other refusal or failure writes one
+    let refused = costs(&file);
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert_eq!(
+        (
+            refused[0]["guard"].clone(),
+            refused[0]["charged_eur"].clone()
+        ),
+        (json!("refused"), json!(0.0))
+    );
+    let (url, _) = mock(vec![(
+        429,
+        json!({ "error": { "type": "spend_refused", "message": "over the cap of 12.50" } })
+            .to_string(),
+    )]);
+    let (got, text) = run(&session, &maeve, &Cfg(url), json!({})).await;
+    assert_eq!(got, 429);
+    assert!(
+        text.contains("spend_refused")
+            && text.contains("Paid runs are off here. Nothing was sent."),
+        "{text}"
+    );
+    assert!(
+        !text.chars().any(|c| c.is_ascii_digit()),
+        "the middleware's figure is not passed on: {text}"
+    );
+    assert_eq!(costs(&file).len(), 2);
 
     // a malformed answer is an error and never a pass: a test missing, doubled, unknown, a number for a value, a rubric of another version
     let full = tests_for(Kind::Script, &[]);
@@ -361,17 +423,65 @@ async fn the_scoring_route_keeps_each_refusal_writes_nothing_on_a_failure_and_ne
         assert!(text.contains("judge_malformed"), "{case}: {text}");
     }
     assert_eq!(judged(), 0);
+    assert_eq!(
+        costs(&file).len(),
+        2,
+        "an answer that reported no cost writes none"
+    );
+
+    // Review finding (d): a charged run whose answer is malformed still writes its cost; so does a charged run the
+    // middleware itself failed after the charge (its error carries the usage block), and the cost holds no words
+    let mut bad = full.clone();
+    bad.pop();
+    let failed_after =
+        json!({ "error": { "type": "judge_malformed", "message": "x", "usage": usage() } })
+            .to_string();
+    let (url, _) = mock(vec![(200, charged(bad)), (502, failed_after)]);
+    for case in ["malformed", "failed after the charge"] {
+        let (got, text) = run(&session, &maeve, &Cfg(url.clone()), json!({})).await;
+        assert_eq!(got, 502, "{case}: {text}");
+    }
+    assert_eq!(judged(), 0, "a malformed answer is still never a pass");
+    let paid = costs(&file);
+    assert_eq!(paid.len(), 4);
+    for c in &paid[..2] {
+        assert_eq!(
+            (
+                c["charged_eur"].clone(),
+                c["estimate_eur"].clone(),
+                c["route"].clone(),
+                c["guard"].clone()
+            ),
+            (
+                json!(0.02),
+                json!(0.05),
+                json!("eu-small"),
+                json!("allowed")
+            )
+        );
+        assert_eq!(c["task"], "judge_work");
+    }
 
     // a good answer: one verdict, and the card in the reply; the request held the id and version of the document and the allow-listed work
     let (url, seen) = mock(vec![(
         200,
-        reply(tests_for(Kind::Script, &["idea.headline", "effect.tone"])),
+        charged(tests_for(Kind::Script, &["idea.headline", "effect.tone"])),
     )]);
     let (got, text) = run(&session, &maeve, &Cfg(url), json!({ "target": "script" })).await;
     assert_eq!(got, 200, "{text}");
     let card: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(card["score"]["total"], 28);
     assert_eq!(judged(), 1);
+    // one run_cost line for the run (done_when line 11), numbers and ids only, and the card names no price
+    let paid = costs(&file);
+    assert_eq!(paid.len(), 5);
+    assert_eq!(paid[0]["charged_eur"], json!(0.02));
+    assert!(!paid[0].to_string().contains("Tonight"));
+    assert!(
+        card["setup"].get("price_eur").is_none(),
+        "the card carries no price: {}",
+        card["setup"]
+    );
     let sent = seen.lock().unwrap()[0].clone();
     assert!(sent.contains("\"judge_work\""));
     assert!(

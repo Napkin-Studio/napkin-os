@@ -39,6 +39,10 @@ pub const DECISION_KINDS: &[&str] = &[
     "client_review",
     "unlock",
     "sign",
+    // What one paid run cost, and a job's budget in hours (features/align-confidential-prices.clan):
+    // numbers and ids only, read in the Decisions drawer and never sent to an agent.
+    "run_cost",
+    "set_budget",
 ];
 
 /// Prefix every generated decision id carries.
@@ -485,7 +489,15 @@ pub(crate) mod tests {
     #[test]
     fn every_kind_the_host_writes_is_known() {
         // The Brief gate's planner signature is a `sign` decision (os-layer §7.7).
-        for k in ["approve", "client_review", "unlock", "backref", "sign"] {
+        for k in [
+            "approve",
+            "client_review",
+            "unlock",
+            "backref",
+            "sign",
+            "run_cost",
+            "set_budget",
+        ] {
             let d = Decision {
                 kind: Some(k.into()),
                 ..Default::default()

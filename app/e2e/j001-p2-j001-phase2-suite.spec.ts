@@ -119,6 +119,10 @@ for (const size of SIZES) {
         // No interface text holds an em dash (suite_copy checks the source, this reads what is drawn).
         const text = await page.evaluate(() => document.body.innerText)
         if (text.includes('—')) problems.push(`${p.name} ${mode}: an em dash is on the page`)
+        // No price, cost, credit or budget figure on any page (features/align-confidential-prices.clan): costs are read in
+        // the Decisions drawer only. The word budget alone may be a part of a client's brief, so only the shell's own phrasings are refused.
+        const price = text.match(/[€£$]\s?\d|\bcents\b|\beuros?\b|\bcredits?\b|\bprices?\b|\bcosts?\b|budget in hours|hours against budget|credit cap/i)
+        if (price) problems.push(`${p.name} ${mode}: a price is on the page (${price[0]})`)
       }
       await ctx.close()
     }

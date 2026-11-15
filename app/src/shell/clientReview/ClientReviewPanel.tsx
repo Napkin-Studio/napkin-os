@@ -183,7 +183,7 @@ export default function ClientReviewPanel({ draft, onDraft, parts, marked, known
                   value={draft.note}
                   disabled={busy}
                   onChange={e => set({ note: e.target.value })}
-                  placeholder="For example: call with Mary, the proposition is flat and the budget should be 400k"
+                  placeholder="For example: call with Mary, the proposition is flat and the tone is too loud"
                 />
               </div>
             )}

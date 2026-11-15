@@ -28,6 +28,7 @@ import type {
   JobPatch,
   JobRights,
   JobView,
+  JobDecisionsView,
   RouteStep,
   LibraryFilter,
   LibraryListing,
@@ -208,11 +209,24 @@ async function jobWrite(method: 'POST' | 'PATCH', path: string, body: unknown): 
   } catch { return { ok: false, status: 0, message: '' } }
 }
 
-/** Open a job for a client (`POST /jobs`): planning, account service, management and producers. */
-export const openJob = (body: { client_id: string; title?: string; due?: string; budget_hours?: number }) => jobWrite('POST', '', body)
+/** Open a job for a client (`POST /jobs`): planning, account service, management and producers. No budget here: it is
+ *  recorded in the job's Decisions (features/align-confidential-prices.clan). */
+export const openJob = (body: { client_id: string; title?: string; due?: string }) => jobWrite('POST', '', body)
 
-/** Change a job's title, owner, deadline or budget in hours (`PATCH /jobs/{number}`). */
+/** Change a job's title, owner or deadline (`PATCH /jobs/{number}`). */
 export const updateJob = (number: string, patch: JobPatch) => jobWrite('PATCH', `/${encodeURIComponent(number)}`, patch)
+
+/** A job's own decisions, read in its Decisions (`GET /jobs/{number}/decisions`); null when they cannot be read. A budget's
+ *  hours come to the Money roles only. */
+export async function jobDecisions(number: string): Promise<JobDecisionsView | null> {
+  try {
+    const r = await fetch(`${await base()}/jobs/${encodeURIComponent(number)}/decisions`, { credentials: 'same-origin' })
+    return r.ok ? ((await r.json()) as JobDecisionsView) : null
+  } catch { return null }
+}
+
+/** Record a job's budget in hours as a `set_budget` decision (`POST /jobs/{number}/budget`): the Money roles that manage jobs. */
+export const recordBudget = (number: string, hours: number): Promise<JobSaved> => jobWrite('POST', `/${encodeURIComponent(number)}/budget`, { hours })
 
 /** What a route save came to: done, refused with the server's own sentence (`400`), or why not (`403`, or a failure). */
 export type RouteSaved = { ok: true } | { ok: false; status: number; message: string }

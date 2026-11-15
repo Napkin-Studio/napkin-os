@@ -130,7 +130,7 @@ one Postgres transaction. This is the single write funnel — the version check
 | Field | Meaning |
 |---|---|
 | `id` | Stable, generated at creation, never content-derived |
-| `kind` | `edit` · `contest` · `resolve` · `verdict` · `classify` · `pin` · `finding` · `verify` · `approve` · `lease` · `backref` (§7) · `client_review` · `unlock` (§7.5) · `sign` (§7.7, the planner's signature on a brief; *added 2026-11-11*) |
+| `kind` | `edit` · `contest` · `resolve` · `verdict` · `classify` · `pin` · `finding` · `verify` · `approve` · `lease` · `backref` (§7) · `client_review` · `unlock` (§7.5) · `sign` (§7.7, the planner's signature on a brief; *added 2026-11-11*) · `run_cost` · `set_budget` (§7.11; *added 2026-11-15*) |
 | `targets[]` | Addresses this decision is about |
 | `cites[]` | Fact pins, sources, findings and decisions it rests on |
 | `superseded_by` | The decision that replaced this one |
@@ -1612,6 +1612,28 @@ five by default), and no `open_early`, a `POST /api-proxy` with an Idea room tas
 
 While routes are out (`routes_out` not empty) the room takes no write other than
 `routes/edit` and `merge`: the merge starts from the branches.
+
+### 7.11 What a run cost, and a job's budget (features/align-confidential-prices.clan, the price half)
+
+No price, cost, credit or budget figure is on any screen. Two decision kinds keep them, and the Decisions
+drawer is the one place they are read:
+
+- **`run_cost`**, in the work's own chain, by the task's agent (`judge`, handler `judge_work@1`), one per run
+  that reported a cost: `run_cost: {document, version, task, route, estimate_eur, charged_eur, guard, at}`,
+  `guard` `allowed` or `refused`. Numbers and ids only; the rationale holds no figure. It is written from the
+  middleware envelope's `usage` (middleware-api.md) before the answer is read, so a charged run whose answer is
+  malformed, or that failed after the charge, still records its cost; a run the spend guard refused records
+  that it cost nothing. The spend guard itself is unchanged (server/napkin/spend.py) and refuses in the same
+  place, in one line with no figure (`spend_refused: Paid runs are off here. Nothing was sent.`).
+- **`set_budget`**, in the job registry's chain, targets `[J…]`, by a person: `set_budget: {job, hours}`, words
+  with no figure. Written by `POST /jobs/{number}/budget` (the Money roles that manage jobs: account service,
+  management, producers, and the unrestricted; `403` for anyone else) and by `POST /jobs` when a job is opened
+  with `budget_hours`. `PATCH /jobs/{number}` refuses `budget_hours` (`400`). `GET /jobs/{number}/decisions`
+  sends the Money group every line with each budget's `hours`; every other role gets no `set_budget` line, no
+  `hours`, and an older line that named the budget in its words keeps only its other sentences.
+
+Neither kind is ever sent to an agent or a model: `clan_context_for_agent` leaves both out of
+`clan.decision_chain`, and leaves `price_eur` out of a verdict's `judge` block.
 
 ## 8. Routes — contract v1
 

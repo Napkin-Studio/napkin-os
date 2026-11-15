@@ -4,8 +4,9 @@
 
 // The job page and the Live jobs list, as plain functions (features/job-page.clan): the words said about
 // a job, the order Live jobs lists in, what a form changed, and what a save came to. Nothing here fetches.
-// It draws what the server sent for this person's role and nothing else: a field the role is not sent
-// (the budget in hours) is simply not there, and nothing here names a person's speed or score.
+// It draws what the server sent for this person's role and nothing else, and no figure of money for any role: a
+// budget is recorded and read in the job's Decisions (features/align-confidential-prices.clan). Nothing here names a
+// person's speed or score.
 
 import type { JobDocument, JobEntry, JobNeed, JobPatch } from '../../host/types'
 import { toolOfApp } from '../landing/tools'
@@ -31,10 +32,6 @@ export function waitingLine(j: Pick<JobEntry, 'holder' | 'waiting_on' | 'days_wa
   }
   return 'Waiting on the agency.'
 }
-
-/** The hours in words, only for a role that was sent them. */
-export const budgetLine = (j: Pick<JobEntry, 'budget_hours'>): string | null =>
-  j.budget_hours === undefined || j.budget_hours === null ? null : `${j.budget_hours} ${j.budget_hours === 1 ? 'hour' : 'hours'}`
 
 /** Live jobs: soonest deadline first, a job with none last; jobs on one date keep the order they were opened in. */
 export function orderLive<T extends { due: string | null }>(jobs: readonly T[]): T[] {
@@ -65,26 +62,24 @@ export function changedBriefOf(j: Pick<JobEntry, 'documents'>): { doc: JobDocume
 /** The person's next action on this job: the first thing the index asks of them on it. */
 export const nextNeed = (needs: readonly JobNeed[], number: string): JobNeed | null => needs.find(n => n.job === number && n.path) ?? null
 
-export interface JobForm { title: string; owner: string; due: string; budget: string }
+export interface JobForm { title: string; owner: string; due: string }
 
-export const formOf = (j: JobEntry): JobForm => ({ title: j.title, owner: j.owner, due: j.due ?? '', budget: j.budget_hours == null ? '' : String(j.budget_hours) })
+export const formOf = (j: JobEntry): JobForm => ({ title: j.title, owner: j.owner, due: j.due ?? '' })
 
-/** Only what the person changed; null when nothing is. The budget is left out for a role that may not set it. */
-export function patchOf(j: JobEntry, f: JobForm, mayBudget: boolean): JobPatch | null {
+/** Only what the person changed; null when nothing is. */
+export function patchOf(j: JobEntry, f: JobForm): JobPatch | null {
   const out: JobPatch = {}
   if (f.title.trim() !== j.title) out.title = f.title.trim()
   if (f.owner.trim() !== j.owner) out.owner = f.owner.trim()
   if (f.due !== (j.due ?? '')) out.due = f.due === '' ? null : f.due
-  if (mayBudget && f.budget.trim() !== (j.budget_hours == null ? '' : String(j.budget_hours)) && f.budget.trim() !== '') out.budget_hours = Number(f.budget)
   return Object.keys(out).length > 0 ? out : null
 }
 
 /** The first thing wrong with the form, in a sentence, or null when it may go. */
-export function formProblem(f: JobForm, mayBudget: boolean): string | null {
+export function formProblem(f: JobForm): string | null {
   if (!f.title.trim()) return 'A job needs a title.'
   if (!f.owner.trim()) return 'A job needs an owner.'
   if (f.due !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(f.due)) return 'The deadline is a date.'
-  if (mayBudget && f.budget.trim() !== '' && !(Number(f.budget) >= 0)) return 'The budget is a number of hours.'
   return null
 }
 
