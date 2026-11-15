@@ -157,7 +157,7 @@ class Cards:
             return hit, False
         if self.blobs.key_for_url(url) is None:
             return None, False  # only pictures in our own store: never an outside fetch on a job's clock
-        media_type, data = downscale(self.blobs.fetch(url))
+        media_type, data = downscale(self.blobs.fetch_own(url))
         model = self._model()
         out = self.port.call(PURPOSE, SYSTEM, {"picture": "the attached image"}, SCHEMA, usage=usage,
                              attribution=job_id or PURPOSE, images=[{"media_type": media_type, "data": data}],

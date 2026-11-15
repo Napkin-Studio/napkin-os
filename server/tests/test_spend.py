@@ -31,21 +31,44 @@ def deployed(monkeypatch, **env):
 
 # ---------------------------------------------------------------------------- the guard
 
-def test_local_has_no_cap_and_paid_calls_on():
-    assert spend.allow(1000, "local", "r1")
+def on(monkeypatch, cap="1000"):
+    """A developer's machine turning paid calls on by hand: the switch AND a named cap."""
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
+    monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", cap)
+
+
+def test_nothing_set_is_off_and_local_is_not_looser():
+    # fails closed (features/production-platform-rules.clan): nothing set is no paid call, locally or deployed
     assert spend.environment() == "local"
+    v = spend.allow(0.01, "local", "r1")
+    assert not v and v.reason == spend.PAID_OFF
+    assert not spend.allow(0.01, DEPLOYED, "r1")
+    assert spend.day_cap("local") == 0
+
+
+def test_paid_calls_need_the_switch_and_a_named_cap(monkeypatch):
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
+    assert not spend.allow(0.01, "local", "r1"), "on with no cap named stays off"
+    on(monkeypatch)
+    assert spend.allow(1000, "local", "r1") and spend.allow(0.01, DEPLOYED, "r1")
 
 
 def test_deployed_defaults_to_cap_zero_with_paid_calls_off():
     v = spend.allow(0.01, DEPLOYED, "r1")
-    assert not v and "switched off" in v.reason
+    assert not v and v.reason == spend.PAID_OFF
 
 
 def test_cap_zero_refuses_even_with_paid_calls_on(monkeypatch):
-    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
+    on(monkeypatch, "0")
     v = spend.allow(0.01, DEPLOYED, "r1")
-    assert not v and "0 euro" in v.reason
+    assert not v and v.reason == spend.DAY_LIMIT
     assert not spend.allow(0.0, DEPLOYED, "r1")      # an estimate of zero does not slip past a zero cap
+
+
+@pytest.mark.parametrize("reason", [spend.PAID_OFF, spend.DAY_LIMIT, spend.RUN_LIMIT, spend.NO_ESTIMATE])
+def test_a_refusal_holds_no_figure_and_no_money_word(reason):
+    import re
+    assert not re.search(r"\d|euro|\beur\b|dollar|usd|credit|price|cost|\u20ac|\$", reason, re.I), reason
 
 
 def test_the_switch_pauses_a_local_run_with_a_cap(monkeypatch):
@@ -89,7 +112,7 @@ def test_a_call_without_an_estimate_is_refused(amount):
 
 
 def test_check_raises_and_a_refusal_is_not_counted(monkeypatch):
-    monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "1")
+    on(monkeypatch, "1")
     with pytest.raises(spend.SpendRefused):
         spend.check(2, "r1")
     spend.check(1, "r1")
@@ -115,40 +138,41 @@ SEND = dict(model="claude-opus-5", system="s", turns=[{"role": "user", "text": "
 
 def test_anthropic_wire_refuses_when_paused(monkeypatch):
     deployed(monkeypatch)       # deployed: paid calls off by default
-    with pytest.raises(ModelError, match="not sent: paid calls are switched off") as e:
+    with pytest.raises(ModelError, match="not sent: Paid runs are off here") as e:
         AnthropicWire(Never()).send(**SEND)
     assert e.value.kind == "server"
 
 
 def test_anthropic_wire_refuses_at_cap_zero(monkeypatch):
-    deployed(monkeypatch, NAPKIN_PAID_CALLS="on")
-    with pytest.raises(ModelError, match="0 euro"):
+    deployed(monkeypatch, NAPKIN_PAID_CALLS="on", NAPKIN_SPEND_CAP_EUR="0")
+    with pytest.raises(ModelError, match="today's limit"):
         AnthropicWire(Never()).send(**SEND)
 
 
 def test_openai_wire_refuses_when_paused(monkeypatch):
     deployed(monkeypatch)
     wire = OpenAIWire("http://nim.test/v1", transport=httpx.MockTransport(never_transport))
-    with pytest.raises(ModelError, match="switched off"):
+    with pytest.raises(ModelError, match="Paid runs are off"):
         wire.send(**SEND)
 
 
 def test_tavily_and_nova_refuse_when_paused(monkeypatch):
     deployed(monkeypatch)
     r = WebResearch(None, "tvly-test", nova=True, transport=httpx.MockTransport(never_transport), nova_client=Never())
-    with pytest.raises(ResearchError, match="switched off"):
+    with pytest.raises(ResearchError, match="Paid runs are off"):
         r.search("population of ireland", "facts", "IE")      # Tavily refused, then Nova refused, nothing sent
 
 
 def test_jev_refuses_when_paused(monkeypatch):
     deployed(monkeypatch)
     jev = JevPort("key", client=Never())
-    with pytest.raises(JevError, match="switched off"):
+    with pytest.raises(JevError, match="Paid runs are off"):
         jev.ask({"text": "x"}, {"q": noul("Is it?", "yes", "no")})
 
 
 def test_a_model_call_is_counted_against_the_run(monkeypatch):
     # an allowed call spends from the run named in X-Napkin-Job
+    on(monkeypatch)
     monkeypatch.setenv("NAPKIN_SPEND_RUN_CAP_EUR", "0.0000001")
-    with pytest.raises(ModelError, match="this run"):
+    with pytest.raises(ModelError, match="This run"):
         AnthropicWire(Never()).send(**SEND)

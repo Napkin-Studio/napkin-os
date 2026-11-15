@@ -138,3 +138,42 @@ def test_a_second_text_refusal_on_status_fails_as_twice_refused():
     assert job["state"] == "failed" and job["error"]["code"] == "moderated"
     assert job["error"]["message"] == f"Runway refused the words twice ({TEXT})."
     assert len(h.providers["runway"].submits) == 2
+
+
+# ── the resend is new spend (features/production-platform-rules.clan, review B) ────────────────────────────
+
+def spent(h) -> float:
+    return round(h.store.counters("spend").get("usd", 0), 6)
+
+
+def test_a_resend_on_status_takes_its_own_reservation_and_the_guards_run():
+    from director import spend
+    h = harness()
+    fake = h.providers["runway"]
+    job = post_take(h)
+    first = job["cost"]["reserved"]
+    assert first > 0 and spent(h) == first
+    runs = []
+    plain = fake.submit
+    fake.submit = lambda pjob: (runs.append(spend.current_run()), plain(pjob))[1]
+    spend.set_run("another-request")           # the poll that resends is a different request
+    refuse_on_status(h, "runway-1")
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True
+    assert abs(job["cost"]["reserved"] - 2 * first) < 1e-9
+    assert abs(spent(h) - 2 * first) < 1e-9, "the billed first task and the resend are both held"
+    assert runs == [job["jobId"]], "the spend guard counts the resend against this job's run"
+    assert fake.submits[-1]["priceUsd"] == first
+
+
+def test_a_resend_the_ledger_refuses_is_not_sent():
+    h = harness()
+    fake = h.providers["runway"]
+    job = post_take(h)
+    first = job["cost"]["reserved"]
+    h.cfg["spend"]["capUsd"] = first * 1.5     # room for the first task, not for a second
+    refuse_on_status(h, "runway-1")
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "failed" and job["error"]["code"] == "spend_stop"
+    assert len(fake.submits) == 1, "nothing was sent again"
+    assert abs(spent(h) - first) < 1e-9, "the first task stays held: it was billed"

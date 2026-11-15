@@ -14,6 +14,18 @@ from fake_layers import FakeLayersService
 from fakes import FakeModel, FakeResearch
 
 
+@pytest.fixture(autouse=True)
+def paid_calls_on_for_fakes(monkeypatch):
+    """The spend guard fails closed (napkin/spend.py): with nothing set no paid call goes out. Tests that drive a
+    wire or adapter over a fake are a developer's machine turning paid calls on by hand, with a cap; nothing here
+    reaches a network. test_spend.py clears these and starts from nothing set."""
+    from napkin import spend
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
+    monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "1000000")
+    monkeypatch.delenv("NAPKIN_SPEND_RUN_CAP_EUR", raising=False)
+    spend.reset()
+
+
 def free_port():
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
