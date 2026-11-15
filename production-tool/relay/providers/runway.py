@@ -520,18 +520,32 @@ class RunwayProvider:
         # The spend guard (spend.py), before anything is built or sent: the sheet's estimate for the op is
         # the ceiling, a dollar price standing in for euro (only errs high). It runs beside the relay's
         # ledger admission (service.py, ledger.py): a refusal by either sends nothing.
+        # The guard reserves the amount here and it is released when nothing was sent: a request the adapter cannot
+        # build (the sheet refuses it), a connection that never opened, or an answer that is not a 2xx (Runway took
+        # no task). Only what may have been sent stays counted (the re-review of 1d637751).
+        amount = self._guard_estimate(job)
         try:
-            spend.check(self._guard_estimate(job))
+            spend.check(amount)
         except spend.SpendRefused as exc:
             raise ProviderError("spend_stop", str(exc), False, source="napkin") from None
-        build = {"clip": self._clip, "clip_edit": self._clip_edit, "upscale": self._upscale,
-                 "cutdown": self._outpaint}.get(job.op, self._image)
-        if job.op in ("region_edit", "resize") and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
-            build = self._ideogram
-        path, body = build(job)
-        resp = self._call("POST", path, json=body)
-        if resp.status_code >= 300:
-            raise _http_error(resp)
+        try:
+            build = {"clip": self._clip, "clip_edit": self._clip_edit, "upscale": self._upscale,
+                     "cutdown": self._outpaint}.get(job.op, self._image)
+            if job.op in ("region_edit", "resize") and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
+                build = self._ideogram
+            path, body = build(job)
+            try:
+                resp = self._call("POST", path, json=body)
+            except ProviderError as exc:
+                if not isinstance(exc.__cause__, (httpx.ConnectError, httpx.ConnectTimeout)):
+                    amount = 0.0      # it may have reached Runway: keep it counted
+                raise
+            if resp.status_code >= 300:
+                raise _http_error(resp)
+        except Exception:
+            if amount:
+                spend.release(amount)
+            raise
         try:  # a 2xx: Runway has the task, so whatever we cannot read must never be sent elsewhere
             task = self._ok(resp)
         except ProviderError as exc:
