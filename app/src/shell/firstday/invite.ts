@@ -7,17 +7,17 @@
 export interface InviteDoc { path: string; title: string; job: string; client: string }
 
 export interface InviteApi {
-  invite(id: string, body: { first?: { path: string }; email?: string }): Promise<{ person: string; link: string; mailed: boolean }>
+  invite(id: string, body: { first?: { path: string }; mail?: boolean }): Promise<{ person: string; link: string; mailed: boolean; note?: string }>
 }
 
-/** Ask for the link: the first thing and the address only; the server's own words when it refuses. */
-export async function makeInvite(api: InviteApi, id: string, form: { first: string; email: string }): Promise<{ ok: true; link: string; mailed: boolean } | { ok: false; error: string }> {
-  const body: { first?: { path: string }; email?: string } = {}
+/** Ask for the link: the first thing, and whether to mail it (to the address the People store holds, never one typed here). The server's own words when it refuses, or when it did not mail. */
+export async function makeInvite(api: InviteApi, id: string, form: { first: string; mail: boolean }): Promise<{ ok: true; link: string; mailed: boolean; note: string | null } | { ok: false; error: string }> {
+  const body: { first?: { path: string }; mail?: boolean } = {}
   if (form.first) body.first = { path: form.first }
-  if (form.email.trim()) body.email = form.email.trim()
+  if (form.mail) body.mail = true
   try {
     const r = await api.invite(id, body)
-    return { ok: true, link: r.link, mailed: r.mailed }
+    return { ok: true, link: r.link, mailed: r.mailed, note: r.note ?? null }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }

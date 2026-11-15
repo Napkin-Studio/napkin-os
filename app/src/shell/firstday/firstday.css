@@ -40,3 +40,6 @@
 
 .pa-fld { display: block; margin-bottom: 10px; }
 .pa-fld select, .pa-fld input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; }
+
+/* the thing a pointer is about: outlined while its card is open, with the shell's own focus colour */
+[data-fd-anchor] { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }

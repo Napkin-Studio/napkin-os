@@ -166,3 +166,39 @@ for (const size of SIZES) {
     await fresh.ctx.close(); await admin.ctx.close()
   })
 }
+
+// A pointer never covers the thing it points at, and the page may be scrolled away from it (the review of 15 Nov).
+test('S20 each pointer stands clear of its anchor at 390, 1100 and 1440 px, and the page scrolls away', async ({ browser }) => {
+  const admin = await open(browser, SIZES[1], 'light', { roster: true })
+  await signIn(admin.page, PEOPLE.admin)
+  const job = await seedJ001(admin.page, { ready: true, fresh: true })
+  for (const width of [390, 1100, 1440]) {
+    const size = { tag: String(width), width, height: width < 600 ? 844 : 900 }
+    const who = invitedFor(String(width), '20')
+    const link = await invite(admin.page, who, job)
+    const fresh = await arrive(browser, size, link, who)
+    for (let i = 0; i < POINTERS; i++) {
+      await expect(pointer(fresh.page)).toHaveAttribute('data-anchor', ['pages', 'bar', 'needs'][i])
+      const anchor = fresh.page.locator('[data-fd-anchor]')
+      await expect(anchor).toHaveCount(1)
+      await fresh.page.waitForTimeout(250)
+      const a = (await anchor.boundingBox())!
+      const c = (await pointer(fresh.page).boundingBox())!
+      const apart = c.x + c.width <= a.x || a.x + a.width <= c.x || c.y + c.height <= a.y || a.y + a.height <= c.y
+      expect(apart, `${width} px, pointer ${i + 1}: card ${JSON.stringify(c)} on anchor ${JSON.stringify(a)}`).toBe(true)
+      expect(c.x).toBeGreaterThanOrEqual(0)
+      expect(c.x + c.width).toBeLessThanOrEqual(width)
+      if (i < POINTERS - 1) await pointer(fresh.page).getByRole('button', { name: 'Next' }).click()
+    }
+    // scrolling away is allowed: the page is not pulled back to the anchor
+    await fresh.page.mouse.wheel(0, 300)
+    await fresh.page.waitForTimeout(300)
+    const y1 = await fresh.page.evaluate(() => window.scrollY)
+    await fresh.page.mouse.wheel(0, 300)
+    await fresh.page.waitForTimeout(300)
+    expect(await fresh.page.evaluate(() => window.scrollY)).toBeGreaterThanOrEqual(y1)
+    await pointer(fresh.page).getByRole('button', { name: 'Got it' }).click()
+    await fresh.ctx.close()
+  }
+  await admin.ctx.close()
+})

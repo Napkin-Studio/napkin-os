@@ -40,7 +40,7 @@ export interface PeopleApi {
   importPeople(file: Blob, dry: boolean): Promise<ImportReport>
   remove(id: string): Promise<PersonRow>
   /** An invite for a person already on the list (POST /api/admin/people/{id}/first-day): the link carries their sign-in name and grants nothing. */
-  invite(id: string, body: { first?: { path: string }; email?: string }): Promise<{ person: string; link: string; mailed: boolean }>
+  invite(id: string, body: { first?: { path: string }; mail?: boolean }): Promise<{ person: string; link: string; mailed: boolean; note?: string }>
   /** Every agency, in code and basic, with its draft (GET /api/admin/agencies). */
   agencies(): Promise<AgencyAdminRow[]>
   /** A basic agency, made as a draft; its id is made from the name and fixed (POST /api/admin/agencies). */

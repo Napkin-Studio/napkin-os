@@ -80,7 +80,6 @@ export function Pointers({ enabled }: { enabled: boolean }) {
     const el = document.querySelector(step.anchor)
     const c = card.current
     if (!el) { setSpot(null); return }
-    el.scrollIntoView?.({ block: 'nearest' })
     const avoid = Array.from(document.querySelectorAll(CLEAR)).map(n => box(n.getBoundingClientRect()))
     setSpot(placement(box(el.getBoundingClientRect()), { width: c?.offsetWidth ?? 300, height: c?.offsetHeight ?? 120 },
       { width: window.innerWidth, height: window.innerHeight }, avoid))
@@ -93,15 +92,35 @@ export function Pointers({ enabled }: { enabled: boolean }) {
     return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
   }, [place, steps.length, show])
 
-  // Esc ends them all; nothing else is taken, and focus is never held.
+  // The page may scroll away: the card is placed again where the anchor is, and it is brought into view once, when a pointer opens.
+  const stepId = step?.id
+  const stepAnchor = step?.anchor
   useEffect(() => {
-    if (!show) return
-    const onKey = (e: KeyboardEvent) => { if (pointerKey(e.key) === 'end') end() }
+    if (!enabled || !show || !stepAnchor) return
+    document.querySelector(stepAnchor)?.scrollIntoView?.({ block: 'nearest' })
+  }, [enabled, show, stepId, stepAnchor])
+
+  // The anchor wears an outline while its pointer is open, and only then.
+  useEffect(() => {
+    if (!enabled || !show || !stepAnchor) return
+    const el = document.querySelector(stepAnchor)
+    el?.setAttribute('data-fd-anchor', '')
+    return () => el?.removeAttribute('data-fd-anchor')
+  }, [enabled, show, stepAnchor])
+
+  // Esc ends them, as Got it does, only while they are open, and only when nothing else claimed it: another dialog's Esc
+  // (a modal page, a menu) is its own, and is never swallowed here.
+  useEffect(() => {
+    if (!enabled || !show) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || document.querySelector('[aria-modal="true"]')) return
+      if (pointerKey(e.key) === 'end') end()
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [show, end])
+  }, [enabled, show, end])
 
-  if (!show || !step) return null
+  if (!enabled || !show || !step) return null
   return (
     <PointerCard step={step} at={Math.min(at, steps.length - 1)} count={steps.length} still={still} spot={spot} cardRef={card}
       onNext={() => setAt(i => Math.min(i + 1, steps.length - 1))} onGotIt={end} />

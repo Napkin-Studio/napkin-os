@@ -22,6 +22,6 @@ export const INVITE = {
   make: 'Get the link',
   copy: 'Copy the link',
   copied: 'Copied',
-  email: 'Also email it (optional)',
+  mail: 'Also email it to the address held for them',
   close: 'Close',
 } as const

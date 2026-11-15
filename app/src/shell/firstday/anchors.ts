@@ -42,19 +42,25 @@ export interface Box { top: number; left: number; width: number; height: number;
 const GAP = 8
 
 /**
- * Where the card goes: 8 px below its anchor and kept on screen (Pop's rule), or above when below has no room or would
- * cover something that must stay clear (the consent question).
+ * Where the card goes: beside its anchor, never on it. Above first (the anchor stays in view below the card), then to its
+ * right, then its left, then below it, each kept on screen, off the anchor and off whatever must stay clear (the consent
+ * question); when none fits it stands at the top or bottom of the screen, whichever leaves the anchor free.
  */
 export function placement(anchor: Box, size: { width: number; height: number }, view: { width: number; height: number }, avoid: readonly Box[]): { top: number; left: number } {
-  const left = Math.max(GAP, Math.min(anchor.left, view.width - size.width - GAP))
-  const below = anchor.bottom + GAP
-  const covers = (top: number) => avoid.some(a => top < a.bottom && top + size.height > a.top && left < a.right && left + size.width > a.left)
-  const fitsBelow = below + size.height <= view.height - GAP
-  if (fitsBelow && !covers(below)) return { top: below, left }
-  const above = anchor.top - GAP - size.height
-  if (above >= GAP) return { top: above, left }
-  // neither fits: stay on screen
-  return { top: Math.max(GAP, Math.min(below, view.height - size.height - GAP)), left }
+  const clampX = (x: number) => Math.max(GAP, Math.min(x, view.width - size.width - GAP))
+  const clampY = (y: number) => Math.max(GAP, Math.min(y, view.height - size.height - GAP))
+  const meets = (p: { top: number; left: number }, o: Box) => p.top < o.bottom && p.top + size.height > o.top && p.left < o.right && p.left + size.width > o.left
+  const onScreen = (p: { top: number; left: number }) => p.top >= GAP && p.left >= GAP && p.top + size.height <= view.height - GAP && p.left + size.width <= view.width - GAP
+  const ok = (p: { top: number; left: number }) => onScreen(p) && !meets(p, anchor) && !avoid.some(a => meets(p, a))
+  const tries = [
+    { top: anchor.top - GAP - size.height, left: clampX(anchor.left) },
+    { top: clampY(anchor.top), left: anchor.right + GAP },
+    { top: clampY(anchor.top), left: anchor.left - GAP - size.width },
+    { top: anchor.bottom + GAP, left: clampX(anchor.left) },
+    { top: GAP, left: clampX(anchor.left) },
+    { top: view.height - GAP - size.height, left: clampX(anchor.left) },
+  ]
+  return tries.find(ok) ?? tries.find(p => onScreen(p) && !meets(p, anchor)) ?? { top: clampY(anchor.bottom + GAP), left: clampX(anchor.left) }
 }
 
 export { BUTTONS }

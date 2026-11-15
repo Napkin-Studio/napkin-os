@@ -15,19 +15,20 @@ export type { InviteDoc } from './invite'
 interface FormProps {
   docs: readonly InviteDoc[]
   first: string
-  email: string
+  mail: boolean
   busy: boolean
   link: string | null
   error: string | null
   copied: boolean
+  note: string | null
   onFirst: (path: string) => void
-  onEmail: (email: string) => void
+  onMail: (mail: boolean) => void
   onMake: () => void
   onCopy: () => void
   onClose: () => void
 }
 
-export function InviteForm({ docs, first, email, busy, link, error, copied, onFirst, onEmail, onMake, onCopy, onClose }: FormProps) {
+export function InviteForm({ docs, first, mail, busy, link, error, copied, note, onFirst, onMail, onMake, onCopy, onClose }: FormProps) {
   return (
     <>
       {link === null ? (
@@ -41,9 +42,8 @@ export function InviteForm({ docs, first, email, busy, link, error, copied, onFi
               </select>
             </label>
           )}
-          <label className="pa-fld">
-            {INVITE.email}
-            <input type="email" value={email} autoComplete="off" placeholder="name@place" onChange={e => onEmail(e.target.value)} />
+          <label className="pa-fld fd-mail">
+            <input type="checkbox" checked={mail} onChange={e => onMail(e.target.checked)} /> {INVITE.mail}
           </label>
           {error && <p className="pa-hint" role="alert">{error}</p>}
           <div className="pa-acts pa-end">
@@ -53,6 +53,7 @@ export function InviteForm({ docs, first, email, busy, link, error, copied, onFi
         </>
       ) : (
         <>
+          {note && <p className="pa-hint" role="status" data-testid="invite-note">{note}</p>}
           <input className="fd-invite-link" data-testid="invite-link" readOnly value={link} aria-label="The link" onFocus={e => e.currentTarget.select()} />
           <p className="pa-hint fd-invite-note">The link fills in their sign-in name. They press Sign in; nothing else is in it.</p>
           <div className="pa-acts pa-end">
@@ -69,7 +70,8 @@ export function InviteForm({ docs, first, email, busy, link, error, copied, onFi
 /** The sheet for one person. */
 export function InviteRow({ person, name, docs, api, onClose }: { person: string; name: string; docs: readonly InviteDoc[]; api: InviteApi; onClose: () => void }) {
   const [first, setFirst] = useState('')
-  const [email, setEmail] = useState('')
+  const [mail, setMail] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [link, setLink] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -77,9 +79,9 @@ export function InviteRow({ person, name, docs, api, onClose }: { person: string
 
   const make = async () => {
     setBusy(true); setError(null)
-    const r = await makeInvite(api, person, { first, email })
+    const r = await makeInvite(api, person, { first, mail })
     setBusy(false)
-    if (r.ok) setLink(r.link); else setError(r.error)
+    if (r.ok) { setLink(r.link); setNote(r.note) } else setError(r.error)
   }
   const copy = async () => {
     if (!link) return
@@ -89,8 +91,8 @@ export function InviteRow({ person, name, docs, api, onClose }: { person: string
   return (
     <section className="pa-sheet" aria-label={`Invite ${name}`} data-testid="people-invite">
       <h2>Invite {name}</h2>
-      <InviteForm docs={docs} first={first} email={email} busy={busy} link={link} error={error} copied={copied}
-        onFirst={setFirst} onEmail={setEmail} onMake={() => void make()} onCopy={() => void copy()} onClose={onClose} />
+      <InviteForm docs={docs} first={first} mail={mail} busy={busy} link={link} error={error} copied={copied} note={note}
+        onFirst={setFirst} onMail={setMail} onMake={() => void make()} onCopy={() => void copy()} onClose={onClose} />
     </section>
   )
 }
