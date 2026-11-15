@@ -287,6 +287,15 @@ def merge(kind: str, code: dict, other: dict) -> list[dict]:
     return [{"id": i, "value": both[i]["value"], "evidence": both[i]["evidence"]} for i in ids]
 
 
+def _cost_on(e: Exception, caps) -> None:
+    """A failure after calls went out still says what they cost (the error body's usage); a failure before any did,
+    and a call the model-level guard stopped, says nothing: nothing was charged."""
+    from ..app import spend_usage
+    u = spend_usage(caps)
+    if u.get("charged_eur", 0) > 0:
+        e.usage = u
+
+
 def run(req, caps) -> tuple[dict, None, list]:
     backend = backend_name()                       # unset is an error; it never falls through
     if (req.inp or {}).get("quote") is True:
@@ -297,11 +306,11 @@ def run(req, caps) -> tuple[dict, None, list]:
     pending = [t for t in tests if t["method"] == "llm"]
     code = {t["id"]: code_answer(t["id"], kind, content) for t in tests if t["method"] == "code"}
     model, phash = None, None
-    # What the spend guard let through, handed back in the envelope (app.spend_usage); the host writes it as the
-    # document's run_cost decision (features/align-confidential-prices.clan). Numbers and a route name only.
-    usage = {"estimate_eur": 0.0, "charged_eur": 0.0, "route": backend}
-    caps.spend_usage = usage
+    # What the spend guard let through, handed back in the envelope (app.spend_usage, which puts in what the calls
+    # actually cost); the host writes it as the document's run_cost decision (features/align-confidential-prices.clan).
+    # Numbers and a route name only. A refusal raises before any of it, and reports nothing.
     if backend == "fixture":
+        caps.spend_usage = {"estimate_eur": 0.0, "charged_eur": 0.0, "route": backend}
         other = fixture_answers(kind, pending)
     else:
         if not client_ai.written_yes_recorded(caps.scope, None):
@@ -311,17 +320,18 @@ def run(req, caps) -> tuple[dict, None, list]:
         v = spend.allow(price, spend.environment(), req.doc)
         if not v:
             raise TaskError(429, "spend_refused", sentence(v.reason))
-        usage = {"estimate_eur": price, "charged_eur": price, "route": model if isinstance(model, str) else backend}
-        caps.spend_usage = usage
+        caps.spend_usage = {"estimate_eur": price, "charged_eur": 0.0, "route": model if isinstance(model, str) else backend}
         try:
             other = llm_answers(caps, given["work"], given["brief"], pending)
             phash = prompt_hash(kind)
-            tests = merge(kind, code, other)
-        except TaskError as e:
-            e.usage = usage                         # charged, then failed: the error still says what it cost
+        except Exception as e:
+            _cost_on(e, caps)
             raise
-    if backend == "fixture":
+    try:
         tests = merge(kind, code, other)
+    except Exception as e:
+        _cost_on(e, caps)
+        raise
     result = {"tests": tests, "backend": backend, "model": model, "rubric_version": rubric.version(),
               "prompt_hash": phash, "price_eur": price_eur(backend)}
     log.info("judge_work kind=%s backend=%s tests=%d fails=%d", kind, backend, len(result["tests"]),
