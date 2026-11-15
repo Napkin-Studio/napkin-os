@@ -515,6 +515,15 @@ mod upstream {
     #[derive(Default)]
     struct MemStore {
         files: Mutex<HashMap<String, Vec<u8>>>,
+        /// Park the next read of this document after its bytes are taken.
+        #[allow(clippy::type_complexity)]
+        gate: Mutex<
+            Option<(
+                String,
+                std::sync::mpsc::Sender<()>,
+                std::sync::mpsc::Receiver<()>,
+            )>,
+        >,
     }
 
     impl MemStore {
@@ -525,12 +534,26 @@ mod upstream {
 
     impl PartStore for MemStore {
         fn read(&self, id: &DocId) -> HostResult<Vec<u8>> {
-            self.files
+            let bytes = self
+                .files
                 .lock()
                 .unwrap()
                 .get(id.as_str())
                 .cloned()
-                .ok_or_else(|| HostError::not_found(format!("no such document: {id}")))
+                .ok_or_else(|| HostError::not_found(format!("no such document: {id}")));
+            let gate = {
+                let mut g = self.gate.lock().unwrap();
+                if g.as_ref().is_some_and(|(d, _, _)| d == id.as_str()) {
+                    g.take()
+                } else {
+                    None
+                }
+            };
+            if let Some((_, entered, release)) = gate {
+                let _ = entered.send(());
+                let _ = release.recv();
+            }
+            bytes
         }
         fn exists(&self, id: &DocId) -> bool {
             self.files.lock().unwrap().contains_key(id.as_str())
@@ -1188,6 +1211,67 @@ mod upstream {
             library::backref_changes(&*store, &ctx, &child, "d_01JB0VERIFY", &foreign)
                 .unwrap()
                 .is_empty()
+        );
+    }
+
+    // store-scan-under-lock review (item 1): two decisions on one child each owe the parent a
+    // backref. write_backrefs_as used to run under the child's view lock, so the two read-modify-
+    // writes of the parent came one after the other; on a snapshot with the lock let go they
+    // overlap, both read the parent at the same version, and the second apply drops the first's
+    // backref. Each backref is now written under the parent's write lock, read to apply.
+    #[test]
+    fn two_backrefs_from_one_child_both_reach_the_parent() {
+        let (store, research, brief) = setup();
+        let brief = Arc::new(brief);
+        let before = chain(&research.stored(&store)).decisions.len();
+
+        // T1: POST /resolve of the carried contest; its backref's read of the parent is parked.
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        *store.gate.lock().unwrap() = Some((research.id.to_string(), entered_tx, release_rx));
+        let t1 = {
+            let brief = brief.clone();
+            std::thread::spawn(move || resolve(&brief, "f_01JA0B9Z9Z"))
+        };
+        entered_rx.recv().unwrap();
+
+        // T2: POST /verify of a carried finding, on the same child, meanwhile.
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let t2 = {
+            let brief = brief.clone();
+            std::thread::spawn(move || {
+                let v = brief.post(
+                    "/verify",
+                    &json!({ "finding": "fi_01JA0F3C", "rationale": "Checked against the panel" })
+                        .to_string(),
+                );
+                let _ = done_tx.send(());
+                v
+            })
+        };
+        // New code: T2 finishes while T1 is parked. Old code: T2 waits for the child's view lock.
+        let overlapped = done_rx
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .is_ok();
+        // with the parent's write lock the second waits for the first (it may not overlap)
+        let _ = overlapped;
+        release_tx.send(()).unwrap();
+        let r1 = t1.join().unwrap();
+        let r2 = t2.join().unwrap();
+        assert_eq!(r1["backrefs"].as_array().unwrap().len(), 1, "{r1}");
+        assert_eq!(r2["backrefs"].as_array().unwrap().len(), 1, "{r2}");
+
+        let after = chain(&research.stored(&store));
+        let actions: Vec<&str> = after
+            .decisions
+            .iter()
+            .filter(|d| d.kind.as_deref() == Some("backref"))
+            .map(|d| d.action.as_str())
+            .collect();
+        assert_eq!(
+            after.decisions.len(),
+            before + 2,
+            "both replies said a backref was written; the parent holds {actions:?}"
         );
     }
 
