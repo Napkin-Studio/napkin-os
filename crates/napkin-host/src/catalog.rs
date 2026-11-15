@@ -86,12 +86,14 @@ impl Entry {
     }
 }
 
+/// Per document id, the stamp its manifest was read at and what it said
+/// (`None`: not a CLAN file anyone can parse).
+type Kept = HashMap<String, (String, Option<Arc<Entry>>)>;
+
 /// One tenant's catalogue. Cheap to keep: about a kilobyte a document.
 #[derive(Default)]
 pub struct StoreCatalog {
-    /// Per document id, the stamp its manifest was read at and what it said
-    /// (`None`: not a CLAN file anyone can parse).
-    kept: Mutex<HashMap<String, (String, Option<Arc<Entry>>)>>,
+    kept: Mutex<Kept>,
     /// How many manifests have been read: what a test counts.
     manifests: AtomicUsize,
 }

@@ -762,10 +762,7 @@ pub fn find_upstream(
             && !foreign(ctx, doc.clan());
         is_it.then_some(doc)
     };
-    if let Some(doc) = recorded
-        .filter(|id| id != child.id())
-        .and_then(|id| is_it(id))
-    {
+    if let Some(doc) = recorded.filter(|id| id != child.id()).and_then(&is_it) {
         return Some(doc);
     }
     // The tenant's catalogue names the candidates (crate::catalog): only they are opened, each checked as
