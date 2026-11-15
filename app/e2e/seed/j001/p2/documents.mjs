@@ -10,6 +10,6 @@ export const P2_DOCS = [
   { slug: 'idea-room', app: IDEA_ROOM_APP, title: 'J001 idea room', schema: 'app/templates/idea-room/schema.json', data: IDEA_ROOM, hostOwned: HOST_OWNED, cards: TEAM_CARDS.map(c => c.text) },
   { slug: 'script-editor', app: SCRIPT_EDITOR_APP, title: 'J001 radio script', schema: 'app/templates/script-editor/schema.json', data: RADIO_SCRIPT },
   { slug: 'script-editor', app: SCRIPT_EDITOR_APP, title: 'J001 TV script', schema: 'app/templates/script-editor/schema.json', data: TV_SCRIPT },
-  { slug: 'napkin-brain', app: BRAIN_APP, title: 'Client A brain', schema: 'app/templates/agency-brain/schema.json', data: CLIENT_BRAIN },
-  { slug: 'napkin-brain', app: BRAIN_APP, title: 'Agency brain', schema: 'app/templates/agency-brain/schema.json', data: AGENCY_BRAIN },
+  { slug: 'napkin-brain', app: BRAIN_APP, title: 'Client A brain', schema: 'app/templates/agency-brain/schema.json', data: CLIENT_BRAIN, clientVault: true },
+  { slug: 'napkin-brain', app: BRAIN_APP, title: 'Agency brain', schema: 'app/templates/agency-brain/schema.json', data: AGENCY_BRAIN, agency: true },
 ]
