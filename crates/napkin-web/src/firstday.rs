@@ -5,24 +5,37 @@
 //! First day (features/first-day.clan): an admin invites a person who is already on the People page, and the
 //! person's first sign-in is explained once.
 //!
-//! An invite is a [`FirstDayRec`] on a person in the one People store (people.rs): the date it was made, an
-//! optional first document on a live job of the person's own agency, and three booleans (signed in, saw the
-//! pointers, pressed the first task). It is made and withdrawn through the store's own change path, so each
-//! change is on `changes.jsonl` and the agency's audit chain before the store takes it; the three booleans
-//! are marks the person makes on themselves and write no line, so no time of first use is kept anywhere.
+//! An invite is a [`FirstDayRec`] on a person in the one People store (people.rs): the date it was made, by whom and an
+//! optional first document on a live job of the person's own agency. It is made and withdrawn through the store's own
+//! change path, so each change is on `changes.jsonl` and the agency's audit chain before the store takes it. It holds
+//! nothing of what the person does afterwards.
 //!
-//! The link carries the sign-in name and nothing else: `/?welcome=<name>`. It holds no token, no signature and
-//! no session and grants nothing. Who a person is and what they may do comes from the People store at sign-in,
-//! as for anyone (live.rs). Inviting never adds a person or a role: a name that is not on the list is not found.
+//! The person's own two marks (saw the pointers, pressed the first task) are in `first-day-marks.json` beside the
+//! store, written whole with tmp and rename, and not at all when a mark changes nothing. They are the person's own
+//! flags, not a change to who may sign in, so they take no change number and write no line (no time of use is kept
+//! here); keeping them out of `people.json` means a mark can never revert an admin's change when two web tasks write.
+//! No route tells an admin what a person has done since the invite (the agency's audit chain keeps sign-in lines by
+//! an older design; see the record's open questions).
+//!
+//! The link carries the sign-in name and nothing else: `/?welcome=<name>`. It holds no token, no signature and no session
+//! and grants nothing. Who a person is and what they may do comes from the People store at sign-in, as for anyone
+//! (live.rs). Inviting never adds a person or a role: a name that is not on the list is not found.
+//!
+//! Mail (optional, `{mail: true}`): to the address the People store holds for the person, never one from the request,
+//! with a link built from the server's own `NAPKIN_PUBLIC_ORIGIN`, never a request header; at most one a person a
+//! day; the address is kept nowhere new. When no mail is sent the answer says why and the link is still given to copy.
 //!
 //! Who may call: [`crate::admin::scope`], from the session alone. A Napkin admin invites anyone; an admin of an
 //! agency invites their own people; anyone else gets 403. For an agency's admin a person of another agency, a
-//! person nobody holds and an agency nobody holds all answer alike.
+//! person nobody holds and an agency nobody holds all answer alike. A first document may be named only by an admin
+//! of the person's own agency, so no one learns of another agency's documents.
 //!
 //! The first task is a web-level need built as the timesheet reminder is (needs.rs): from the caller's own
 //! record, in the answer of `GET /needs`, for the invited person alone.
 
-use std::sync::Arc;
+use std::collections::BTreeMap;
+use std::path::Path as FsPath;
+use std::sync::{Arc, Mutex};
 
 use axum::extract::State;
 use axum::http::{header, HeaderMap, StatusCode};
@@ -30,7 +43,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Extension, Json, Router};
 use napkin_host::jobindex::{Audience, JobIndex, Need};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::admin::{acct, answer, body, in_scope, refused, scope, Who};
@@ -38,7 +51,7 @@ use crate::auth::Account;
 use crate::mail::Message;
 use crate::people::{FirstDayRec, FirstRef, People, Refusal};
 use crate::state::AppCtx;
-use crate::tenant::TenantId;
+use crate::tenant::{Tenant, TenantId};
 
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
@@ -46,7 +59,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
             "/admin/people/{id}/first-day",
             axum::routing::post(make).delete(withdraw),
         )
-        .route("/admin/first-days", get(list))
         .route("/t/{tenant}/me/first-day", get(mine).post(mark))
 }
 
@@ -81,14 +93,72 @@ fn origin_of(headers: &HeaderMap) -> String {
     format!("{proto}://{host}")
 }
 
-// ── the store's side: methods on the one People store ───────────────────────
+// ── the store's side: methods on the one People store, and the marks file beside it ──
+
+/// One person's marks and when an invite mail last went to them (a date, no address).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct Mark {
+    /// The record these marks belong to; a new invite has a new one and the marks start again.
+    #[serde(default)]
+    rev: u64,
+    #[serde(default)]
+    seen: bool,
+    #[serde(default)]
+    opened: bool,
+    /// `YYYY-MM-DD`: one invite mail a person a day, however many invites.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mailed_on: Option<String>,
+}
+
+const MARKS_FILE: &str = "first-day-marks.json";
+static MARKS_LOCK: Mutex<()> = Mutex::new(());
+
+fn read_marks(dir: &FsPath) -> BTreeMap<String, Mark> {
+    std::fs::read(dir.join(MARKS_FILE))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
+}
+
+fn write_marks(dir: &FsPath, marks: &BTreeMap<String, Mark>) -> Result<(), Refusal> {
+    let io = |e: std::io::Error| Refusal::Io(e.to_string());
+    let tmp = dir.join(format!(".{MARKS_FILE}.{}.tmp", std::process::id()));
+    std::fs::write(
+        &tmp,
+        serde_json::to_vec(marks).map_err(|e| Refusal::Io(e.to_string()))?,
+    )
+    .map_err(io)?;
+    std::fs::rename(&tmp, dir.join(MARKS_FILE)).map_err(io)
+}
+
+/// A first day as the person lives it: the record and their own marks for it.
+#[derive(Clone, Debug)]
+pub struct FirstDay {
+    pub rec: FirstDayRec,
+    pub seen: bool,
+    pub opened: bool,
+}
+
+fn today() -> String {
+    chrono::Utc::now().format("%Y-%m-%d").to_string()
+}
 
 impl People {
-    /// The first-day record of `person`, when one was made and the person is still on the list.
-    pub fn first_day(&self, person: &str) -> Option<FirstDayRec> {
+    /// The first day of `person`, when one was made and the person is still on the list.
+    pub fn first_day(&self, person: &str) -> Option<FirstDay> {
         let book = self.book();
         book.person(person).filter(|p| p.active())?;
-        book.first_days.iter().find(|f| f.person == person).cloned()
+        let rec = book
+            .first_days
+            .iter()
+            .find(|f| f.person == person)
+            .cloned()?;
+        let _g = MARKS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mark = read_marks(self.dir())
+            .remove(person)
+            .filter(|m| m.rev == rec.rev);
+        let (seen, opened) = mark.map_or((false, false), |m| (m.seen, m.opened));
+        Some(FirstDay { rec, seen, opened })
     }
 
     /// Make (or make again, from the start) the first-day record of `person`. On the change log and the audit
@@ -107,11 +177,12 @@ impl People {
                 person: p.id.clone(),
                 agency: p.agency.clone(),
                 made_by: by.to_string(),
-                made_on: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+                made_on: today(),
                 first,
-                signed_in: false,
-                seen: false,
-                opened: false,
+                rev: chrono::Utc::now()
+                    .timestamp_nanos_opt()
+                    .unwrap_or_default()
+                    .unsigned_abs(),
             };
             book.first_days.retain(|f| f.person != person);
             book.first_days.push(rec.clone());
@@ -135,37 +206,46 @@ impl People {
         })
     }
 
-    /// The person's own mark: signed in, saw the pointers, pressed the first task. A mark only: it changes
-    /// nobody's access and writes no line, so no time of use is kept. Not found when there is no record.
-    pub fn mark_first_day(
-        &self,
-        person: &str,
-        signed_in: bool,
-        seen: bool,
-        opened: bool,
-    ) -> Result<(), Refusal> {
-        self.change(person, "first day marked", |book| {
-            let Some(rec) = book.first_days.iter_mut().find(|f| f.person == person) else {
-                return Err(Refusal::NotFound("There is no first day to mark.".into()));
+    /// The person's own mark: saw the pointers, or pressed the first task. Nothing is written when it changes
+    /// nothing. Not found when there is no record.
+    pub fn mark_first_day(&self, person: &str, seen: bool, opened: bool) -> Result<(), Refusal> {
+        let Some(day) = self.first_day(person) else {
+            return Err(Refusal::NotFound("There is no first day to mark.".into()));
+        };
+        let _g = MARKS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut all = read_marks(self.dir());
+        let mine = all.entry(person.to_string()).or_default();
+        let before = mine.clone();
+        if mine.rev != day.rec.rev {
+            *mine = Mark {
+                rev: day.rec.rev,
+                mailed_on: mine.mailed_on.take(),
+                ..Mark::default()
             };
-            rec.signed_in |= signed_in;
-            rec.seen |= seen;
-            rec.opened |= opened;
-            Ok(((), Value::Array(Vec::new())))
-        })
+        }
+        mine.seen |= seen;
+        mine.opened |= opened;
+        if *mine == before {
+            return Ok(());
+        }
+        write_marks(self.dir(), &all)
     }
-}
 
-/// A sign-in succeeded for `username`: an invited person is marked as signed in (a yes, no date).
-pub fn note_sign_in(ctx: &AppCtx, username: &str) {
-    let Some(people) = ctx.people() else { return };
-    let waiting = people
-        .book()
-        .first_days
-        .iter()
-        .any(|f| f.person == username && !f.signed_in);
-    if waiting {
-        let _ = people.mark_first_day(username, true, false, false);
+    /// Whether an invite mail already went to `person` today.
+    fn mailed_today(&self, person: &str) -> bool {
+        let _g = MARKS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        read_marks(self.dir())
+            .get(person)
+            .and_then(|m| m.mailed_on.as_deref())
+            == Some(today().as_str())
+    }
+
+    /// An invite mail went to `person` today: a date, never the address.
+    fn note_mailed(&self, person: &str) -> Result<(), Refusal> {
+        let _g = MARKS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut all = read_marks(self.dir());
+        all.entry(person.to_string()).or_default().mailed_on = Some(today());
+        write_marks(self.dir(), &all)
     }
 }
 
@@ -182,9 +262,9 @@ struct FirstIn {
 struct InviteBody {
     #[serde(default)]
     first: Option<FirstIn>,
-    /// Where to also mail the link, when mail is on. Checked as an address and kept nowhere.
+    /// Also mail the link, to the address the People store holds for the person.
     #[serde(default)]
-    email: Option<String>,
+    mail: bool,
 }
 
 /// The agency's display name, for the mail's "from" line.
@@ -217,48 +297,90 @@ async fn make(
         Ok(b) => b,
         Err(r) => return *r,
     };
-    let Some(agency) = people.book().person(&id).map(|p| p.agency.clone()) else {
+    let Some(person) = people.book().person(&id).cloned() else {
         return refused(Refusal::NotFound(format!("{id} is not on the list.")));
     };
-    let email = match b.email.as_deref().map(str::trim).filter(|e| !e.is_empty()) {
-        Some(e) => match napkin_host::agency::clean_email(e) {
-            Ok(e) => Some(e),
-            Err(_) => return answer(StatusCode::BAD_REQUEST, "An address looks like name@place."),
-        },
-        None => None,
-    };
-    // the first document must be one of a live job in the person's own agency's workspace, whoever asks
+    let agency = person.agency.clone();
+    // the first document must be one of a live job in the person's own agency's workspace, and only an admin of that
+    // agency may name one: a present and an absent path answer the same to anyone else
     let first = match b.first {
         None => None,
-        Some(f) => match first_ref(&ctx, &agency, f.path.trim()) {
-            Ok(r) => Some(r),
-            Err(r) => return *r,
-        },
+        Some(f) => {
+            if acct(&who).map(|a| a.agency.as_str()) != Some(agency.as_str()) {
+                return answer(
+                    StatusCode::BAD_REQUEST,
+                    "That is not a document on a live job of this agency.",
+                );
+            }
+            match first_ref(&ctx, &agency, f.path.trim()) {
+                Ok(r) => Some(r),
+                Err(r) => return *r,
+            }
+        }
     };
     let rec = match people.invite(&by, &id, first) {
         Ok(r) => r,
         Err(e) => return refused(e),
     };
-    let url = link_for(&origin_of(&headers), &id);
-    let mailed = match &email {
-        Some(to) if ctx.mail.enabled() => {
-            let day = (chrono::Utc::now().timestamp().max(0) / 86_400) as u64;
-            let m = Message::Invite {
-                to: to.clone(),
-                agency: agency_name(people, &agency),
-                url: url.clone(),
-            };
-            ctx.mail
-                .send(TenantId::of_agency(&agency).as_str(), day, &m)
-                .is_ok()
-        }
-        _ => false,
+    // the link the admin copies: the studio's own address when it is set, else the address they are using
+    let copy_origin = ctx
+        .public_origin
+        .clone()
+        .unwrap_or_else(|| origin_of(&headers));
+    let url = link_for(&copy_origin, &id);
+    let (mailed, note) = if b.mail {
+        send_mail(&ctx, people, &person, &agency)
+    } else {
+        (false, None)
     };
     let mut out = json!({ "person": rec.person, "link": url, "mailed": mailed });
+    if let Some(n) = note {
+        out["note"] = json!(n);
+    }
     if let Some(f) = &rec.first {
         out["first"] = json!({ "job": f.job, "path": f.path });
     }
     (StatusCode::CREATED, Json(out)).into_response()
+}
+
+/// Mail the invite to the address the store holds, if every condition holds; else say plainly why not.
+fn send_mail(
+    ctx: &AppCtx,
+    people: &People,
+    person: &crate::people::PersonRec,
+    agency: &str,
+) -> (bool, Option<String>) {
+    let no = |why: &str| (false, Some(why.to_string()));
+    if !ctx.mail.enabled() {
+        return no("Mail is not set up on this server. Copy the link and send it yourself.");
+    }
+    let Some(origin) = ctx.public_origin.as_deref() else {
+        return no(
+            "The studio's public address is not set, so no mail was sent. Copy the link instead.",
+        );
+    };
+    let Some(to) = person.email.as_deref().filter(|e| !e.trim().is_empty()) else {
+        return no("No address is held for them, so nothing was mailed. Add one on their row, or copy the link.");
+    };
+    if people.mailed_today(&person.id) {
+        return no("An invite was already mailed to them today. Copy the link instead.");
+    }
+    let day = (chrono::Utc::now().timestamp().max(0) / 86_400) as u64;
+    let m = Message::Invite {
+        to: to.to_string(),
+        agency: agency_name(people, agency),
+        url: link_for(origin, &person.id),
+    };
+    match ctx.mail.send(TenantId::of_agency(agency).as_str(), day, &m) {
+        Ok(()) => {
+            let _ = people.note_mailed(&person.id);
+            (
+                true,
+                Some("Mailed to the address held for them.".to_string()),
+            )
+        }
+        Err(_) => no("The mail could not be sent. Copy the link instead."),
+    }
 }
 
 /// The job and path of a document that is on a job of `agency`; 400 for anything else.
@@ -305,28 +427,15 @@ async fn withdraw(
     }
 }
 
-/// `GET /admin/first-days`: who was invited, when it was made (a date) and whether they have signed in. No
-/// other field, and nobody is listed by how long anything took.
-async fn list(State(ctx): State<Arc<AppCtx>>, who: Who) -> Response {
-    let (people, _, scope) = match scope(&ctx, acct(&who)) {
-        Ok(x) => x,
-        Err(r) => return *r,
-    };
-    let rows: Vec<Value> = people
-        .book()
-        .first_days
-        .iter()
-        .filter(|f| scope.covers(&f.agency))
-        .map(|f| json!({ "person": f.person, "made_on": f.made_on, "signed_in": f.signed_in }))
-        .collect();
-    Json(rows).into_response()
-}
-
 // ── the person's own routes ─────────────────────────────────────────────────
 
 /// `GET /t/{tenant}/me/first-day`: whether this person's pointers are still to show. Only an invited person who
 /// has not seen them reads true; everyone else, and anyone signed out, reads false.
-async fn mine(State(ctx): State<Arc<AppCtx>>, user: Option<Extension<Account>>) -> Response {
+async fn mine(
+    State(ctx): State<Arc<AppCtx>>,
+    Tenant(_): Tenant,
+    user: Option<Extension<Account>>,
+) -> Response {
     let show = user
         .zip(ctx.people())
         .and_then(|(Extension(a), p)| p.first_day(&a.username))
@@ -347,6 +456,7 @@ struct MarkBody {
 /// The body names no one: a mark is always the session's person's.
 async fn mark(
     State(ctx): State<Arc<AppCtx>>,
+    Tenant(_): Tenant,
     user: Option<Extension<Account>>,
     Json(v): Json<Value>,
 ) -> Response {
@@ -369,7 +479,7 @@ async fn mark(
     if people.first_day(&me.username).is_none() {
         return answer(StatusCode::NOT_FOUND, "There is no first day to mark.");
     }
-    match people.mark_first_day(&me.username, false, b.seen, b.opened) {
+    match people.mark_first_day(&me.username, b.seen, b.opened) {
         Ok(()) => Json(json!({ "ok": true })).into_response(),
         Err(e) => refused(e),
     }
@@ -381,11 +491,11 @@ async fn mark(
 /// Its words are the allow list (the job's number, its client and the document's title). None when there is no
 /// record, no document named, the button was pressed, or the document is no longer on a job.
 pub fn first_task(ctx_people: &People, index: &JobIndex, user: &Account) -> Option<Need> {
-    let rec = ctx_people.first_day(&user.username)?;
-    if rec.opened {
+    let day = ctx_people.first_day(&user.username)?;
+    if day.opened {
         return None;
     }
-    let first = rec.first?;
+    let first = day.rec.first?;
     let job = index
         .jobs
         .iter()

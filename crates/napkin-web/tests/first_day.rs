@@ -277,10 +277,7 @@ async fn an_admin_invites_a_person_on_the_list_and_gets_a_name_link() {
     assert_eq!(v["first"]["path"], json!("doc-b1"));
     assert_eq!(v["mailed"], json!(false));
     // the link is the address and the name, nothing more
-    assert_eq!(
-        v["link"],
-        json!("http://studio.example.test/?welcome=newcomer@wk")
-    );
+    assert_eq!(v["link"], json!(format!("{ORIGIN}/?welcome=newcomer@wk")));
     // a first thing to open is optional
     add(&r, &maeve, "plain@wk", "Plain Test", &["copywriter"]).await;
     let (st, v) = invite(&r, &maeve, "plain@wk", json!({})).await;

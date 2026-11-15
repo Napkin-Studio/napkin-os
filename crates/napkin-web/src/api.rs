@@ -355,9 +355,6 @@ async fn sign_in(
         let refused = matches!(out, crate::auth::SignIn::Refused(_));
         crate::audit::note_sign_in(&ctx, &name, &crate::auth::client_ip(&headers), refused);
     }
-    if let crate::auth::SignIn::Done(a) = &out {
-        crate::firstday::note_sign_in(&ctx, &a.username);
-    }
     answer(&identity, out)
 }
 

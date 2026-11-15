@@ -479,9 +479,10 @@ pub struct Book {
     pub first_days: Vec<FirstDayRec>,
 }
 
-/// What an admin made for a person's first day: the date it was made, the first document to open, and
-/// whether the person has signed in, seen the pointers and pressed the first task. Dates and booleans only: no
-/// duration, no time of first use, nothing that scores a person.
+/// What an admin made for a person's first day: the date it was made, by whom, and the first document to open. Nothing
+/// of what the person has done since is kept here: their own marks (saw the pointers, pressed the first task) are in a
+/// small file of their own beside this one (crate::firstday), so a mark never rewrites the store. `rev` ties those marks
+/// to this record: a new invite starts them again.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FirstDayRec {
     pub person: String,
@@ -491,12 +492,7 @@ pub struct FirstDayRec {
     pub made_on: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub first: Option<FirstRef>,
-    #[serde(default)]
-    pub signed_in: bool,
-    #[serde(default)]
-    pub seen: bool,
-    #[serde(default)]
-    pub opened: bool,
+    pub rev: u64,
 }
 
 /// The document named on an invite, and the job it was on when named.
@@ -1047,6 +1043,11 @@ impl People {
 
     fn file(&self) -> PathBuf {
         self.dir.join("people.json")
+    }
+
+    /// The folder the store lives in: the first-day marks are a small file beside it.
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
     /// The store as it is now (another server's write included, within [`RECHECK`]).
