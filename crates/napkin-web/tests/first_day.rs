@@ -37,13 +37,21 @@ dara@wk\tDara\tcopywriter\n\
 barra@bq\tBarra\tadmin\n\
 niamh@bq\tNiamh\tmanagement\n";
 
-fn rig_with(mail: Option<Arc<Memory>>) -> Rig {
+const ORIGIN: &str = "https://studio.example.test";
+
+/// A rig on `roster`, mailing to memory, with the studio's public address set (or not).
+fn build(roster_text: &str, origin: Option<&str>, mailing: bool) -> Rig {
     let dir = tempfile::tempdir().unwrap();
-    let mem = mail.unwrap_or_default();
+    let mem: Arc<Memory> = Arc::default();
     let mut ctx = AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40);
-    ctx = ctx.with_mailer(mem.clone(), 50);
+    if mailing {
+        ctx = ctx.with_mailer(mem.clone(), 50);
+    }
+    if let Some(o) = origin {
+        ctx = ctx.with_public_origin(o);
+    }
     let roster = dir.path().join("accounts.tsv");
-    std::fs::write(&roster, ROSTER).unwrap();
+    std::fs::write(&roster, roster_text).unwrap();
     let identity = napkin_web::tenant::Identity {
         mode: napkin_web::tenant::Mode::Accounts {
             provider: napkin_web::auth::Provider::Roster(
@@ -61,7 +69,7 @@ fn rig_with(mail: Option<Arc<Memory>>) -> Rig {
 }
 
 fn rig() -> Rig {
-    rig_with(None)
+    build(ROSTER, Some(ORIGIN), true)
 }
 
 async fn call(
@@ -378,15 +386,6 @@ async fn a_member_writes_nothing_and_a_foreign_or_missing_person_answers_alike()
         .await;
         assert_eq!(st, StatusCode::FORBIDDEN);
     }
-    let (st, _, _) = call(
-        &r,
-        "GET",
-        "/api/admin/first-days",
-        Some(&aoife.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(st, StatusCode::FORBIDDEN);
     // a signed-out visitor is refused too
     let (st, _, _) = call(
         &r,
@@ -408,17 +407,6 @@ async fn a_member_writes_nothing_and_a_foreign_or_missing_person_answers_alike()
         |v: &(StatusCode, Value), who: &str| v.1["error"].as_str().unwrap().replace(who, "X");
     assert_eq!(words(&a, "newcomer@wk"), words(&b, "ghost@wk"));
     assert_eq!(words(&b, "ghost@wk"), words(&c, "ghost@nowhere"));
-    // and nothing was made: the first-days list is empty for the owner
-    let (st, list, _) = call(
-        &r,
-        "GET",
-        "/api/admin/first-days",
-        Some(&maeve.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(st, StatusCode::OK);
-    assert_eq!(list, json!([]));
     // withdrawing a record that is not there, from another agency, answers like one that is not there
     let (st, _, _) = call(
         &r,
@@ -498,109 +486,6 @@ async fn where_no_people_store_is_kept_there_is_no_invite() {
 }
 
 #[tokio::test]
-async fn mail_is_the_fixed_words_and_the_link_and_the_address_is_not_kept() {
-    let r = rig();
-    let maeve = sign_in(&r, "maeve@wk").await;
-    live_job(&r, &maeve).await;
-    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
-    let (st, v) = invite(
-        &r,
-        &maeve,
-        "newcomer@wk",
-        json!({ "first": { "path": "doc-b1" }, "email": "newcomer@mail.example.test" }),
-    )
-    .await;
-    assert_eq!(st, StatusCode::CREATED, "{v}");
-    assert_eq!(v["mailed"], json!(true));
-    let out = r.mail.outbox();
-    assert_eq!(out.len(), 1);
-    let Message::Invite { to, url, .. } = &out[0] else {
-        panic!("{:?}", out[0])
-    };
-    assert_eq!(to, "newcomer@mail.example.test");
-    assert_eq!(url, v["link"].as_str().unwrap());
-    let (subject, body) = napkin_web::mail::render(&out[0]);
-    for marker in ["Client A", "J001", "brief", "Newcomer"] {
-        assert!(
-            !subject.contains(marker) && !body.contains(marker),
-            "{marker} in the mail"
-        );
-    }
-    assert!(body.contains(url));
-    // the address typed for the mail is kept nowhere (the store, the log, the list)
-    let walk = |dir: &std::path::Path| -> String {
-        let mut all = String::new();
-        let mut stack = vec![dir.to_path_buf()];
-        while let Some(d) = stack.pop() {
-            for e in std::fs::read_dir(d).unwrap().flatten() {
-                let p = e.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else if let Ok(t) = std::fs::read_to_string(&p) {
-                    all.push_str(&t);
-                }
-            }
-        }
-        all
-    };
-    assert!(!walk(r.dir.path()).contains("newcomer@mail.example.test"));
-    let (_, list, _) = call(
-        &r,
-        "GET",
-        "/api/admin/first-days",
-        Some(&maeve.cookie),
-        None,
-    )
-    .await;
-    assert!(!list.to_string().contains("mail.example.test"));
-    // a bad address is refused before anything is made or sent
-    let (st, _) = invite(
-        &r,
-        &maeve,
-        "newcomer@wk",
-        json!({ "email": "not an address" }),
-    )
-    .await;
-    assert_eq!(st, StatusCode::BAD_REQUEST);
-    assert_eq!(r.mail.outbox().len(), 1);
-}
-
-#[tokio::test]
-async fn with_mail_off_the_route_still_answers_the_link() {
-    // the default rig mails to memory; build one whose mailer is Off
-    let dir = tempfile::tempdir().unwrap();
-    let ctx = AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40);
-    let roster = dir.path().join("accounts.tsv");
-    std::fs::write(&roster, ROSTER).unwrap();
-    let identity = napkin_web::tenant::Identity {
-        mode: napkin_web::tenant::Mode::Accounts {
-            provider: napkin_web::auth::Provider::Roster(
-                napkin_web::auth::Roster::open(dir.path().join("_people"), &roster).unwrap(),
-            ),
-            sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
-        },
-        secure: false,
-    };
-    let r = Rig {
-        app: napkin_web::router_with(Arc::new(ctx), None, Arc::new(identity)),
-        dir,
-        mail: Arc::default(),
-    };
-    let maeve = sign_in(&r, "maeve@wk").await;
-    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
-    let (st, v) = invite(
-        &r,
-        &maeve,
-        "newcomer@wk",
-        json!({ "email": "newcomer@mail.example.test" }),
-    )
-    .await;
-    assert_eq!(st, StatusCode::CREATED, "{v}");
-    assert_eq!(v["mailed"], json!(false));
-    assert!(v["link"].as_str().unwrap().contains("welcome=newcomer@wk"));
-}
-
-#[tokio::test]
 async fn the_mark_is_the_servers_per_person_and_only_an_invited_person_has_pointers() {
     let r = rig();
     let maeve = sign_in(&r, "maeve@wk").await;
@@ -613,15 +498,6 @@ async fn the_mark_is_the_servers_per_person_and_only_an_invited_person_has_point
         mark(&r, &dara, json!({ "seen": true })).await,
         StatusCode::OK
     );
-    let (_, list, _) = call(
-        &r,
-        "GET",
-        "/api/admin/first-days",
-        Some(&maeve.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(list, json!([]));
 
     add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
     invite(&r, &maeve, "newcomer@wk", json!({})).await;
@@ -691,81 +567,6 @@ async fn the_first_task_is_a_need_for_the_invited_person_only_and_leaves_when_pr
     // an invite with no first thing has no first task
     invite(&r, &maeve, "newcomer@wk", json!({})).await;
     assert!(needs(&r, &n).await["first_task"].is_null());
-}
-
-#[tokio::test]
-async fn nothing_about_how_long_a_person_took_is_kept_or_listed() {
-    let r = rig();
-    let maeve = sign_in(&r, "maeve@wk").await;
-    live_job(&r, &maeve).await;
-    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
-    invite(
-        &r,
-        &maeve,
-        "newcomer@wk",
-        json!({ "first": { "path": "doc-b1" } }),
-    )
-    .await;
-    let n = sign_in(&r, "newcomer@wk").await;
-    mark(&r, &n, json!({ "seen": true })).await;
-    mark(&r, &n, json!({ "opened": true })).await;
-    // the admin's list: three keys, a date (not a time) and a yes or no
-    let (_, list, _) = call(
-        &r,
-        "GET",
-        "/api/admin/first-days",
-        Some(&maeve.cookie),
-        None,
-    )
-    .await;
-    let rows = list.as_array().unwrap();
-    assert_eq!(rows.len(), 1);
-    let mut keys: Vec<&str> = rows[0]
-        .as_object()
-        .unwrap()
-        .keys()
-        .map(String::as_str)
-        .collect();
-    keys.sort();
-    assert_eq!(keys, ["made_on", "person", "signed_in"]);
-    assert_eq!(rows[0]["signed_in"], json!(true));
-    let made_on = rows[0]["made_on"].as_str().unwrap();
-    assert_eq!(made_on.len(), 10, "a date, no time: {made_on}");
-    // what the store writes for the record: dates and booleans, no duration and no time of first use
-    let file = std::fs::read_to_string(r.dir.path().join("_people").join("people.json")).unwrap();
-    let book: Value = serde_json::from_str(&file).unwrap();
-    let rec = &book["first_days"][0];
-    let mut keys: Vec<&str> = rec
-        .as_object()
-        .unwrap()
-        .keys()
-        .map(String::as_str)
-        .collect();
-    keys.sort();
-    assert_eq!(
-        keys,
-        [
-            "agency",
-            "first",
-            "made_by",
-            "made_on",
-            "opened",
-            "person",
-            "seen",
-            "signed_in"
-        ]
-    );
-    for k in ["seen", "opened", "signed_in"] {
-        assert!(rec[k].is_boolean(), "{k}");
-    }
-    assert_eq!(rec["made_on"].as_str().unwrap().len(), 10);
-    // no change line carries when the person signed in, saw or pressed
-    let log = std::fs::read_to_string(r.dir.path().join("_people").join("changes.jsonl")).unwrap();
-    assert!(
-        !log.lines().any(|l| l.contains("newcomer@wk")
-            && (l.contains("seen") || l.contains("opened") || l.contains("signed"))),
-        "{log}"
-    );
 }
 
 #[tokio::test]
@@ -839,15 +640,6 @@ async fn removing_a_person_withdraws_their_first_day_and_they_cannot_sign_in() {
     )
     .await;
     assert_eq!(st, StatusCode::OK);
-    let (_, list, _) = call(
-        &r,
-        "GET",
-        "/api/admin/first-days",
-        Some(&maeve.cookie),
-        None,
-    )
-    .await;
-    assert_eq!(list, json!([]));
     let (st, _, h) = call(
         &r,
         "POST",
@@ -860,16 +652,21 @@ async fn removing_a_person_withdraws_their_first_day_and_they_cannot_sign_in() {
     assert!(session_cookie(&h).is_none());
 }
 
+fn stored(r: &Rig) -> Value {
+    let file = std::fs::read_to_string(r.dir.path().join("_people").join("people.json")).unwrap();
+    serde_json::from_str(&file).unwrap()
+}
+
+/// Review of 15 Nov: no route tells an admin what a newcomer has done since (no list, no signed-in flag).
 #[tokio::test]
-async fn an_agencys_admin_lists_only_their_own_agencys_first_days() {
+async fn no_route_tells_an_admin_what_a_newcomer_has_done_since() {
     let r = rig();
     let maeve = sign_in(&r, "maeve@wk").await;
-    let barra = sign_in(&r, "barra@bq").await;
     add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
-    add(&r, &barra, "other@bq", "Other Test", &["copywriter"]).await;
-    invite(&r, &maeve, "newcomer@wk", json!({})).await;
-    invite(&r, &barra, "other@bq", json!({})).await;
-    let (_, a, _) = call(
+    let (_, made) = invite(&r, &maeve, "newcomer@wk", json!({})).await;
+    let n = sign_in(&r, "newcomer@wk").await;
+    mark(&r, &n, json!({ "seen": true })).await;
+    let (st, _, _) = call(
         &r,
         "GET",
         "/api/admin/first-days",
@@ -877,16 +674,328 @@ async fn an_agencys_admin_lists_only_their_own_agencys_first_days() {
         None,
     )
     .await;
-    let (_, b, _) = call(
+    assert_eq!(st, StatusCode::NOT_FOUND, "the list of first days is gone");
+    // what the invite answers and what the store keeps for the admin's side: set up, by whom, for which document
+    let mut keys: Vec<&str> = made
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort();
+    assert_eq!(keys, ["link", "mailed", "person"]);
+    let book = stored(&r);
+    let rec = &book["first_days"][0];
+    let mut keys: Vec<&str> = rec
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort();
+    assert_eq!(keys, ["agency", "made_by", "made_on", "person", "rev"]);
+    let people = call(&r, "GET", "/api/admin/people", Some(&maeve.cookie), None)
+        .await
+        .1;
+    for banned in ["seen", "opened", "signed_in", "first_day"] {
+        assert!(
+            !people.to_string().contains(banned),
+            "the People list shows {banned}"
+        );
+    }
+}
+
+/// R1: a mark that changes nothing writes nothing; the marks are in their own small file, not in people.json.
+#[tokio::test]
+async fn a_repeated_mark_writes_nothing_and_the_marks_live_beside_the_store() {
+    use std::os::unix::fs::MetadataExt;
+    let r = rig();
+    let maeve = sign_in(&r, "maeve@wk").await;
+    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
+    invite(&r, &maeve, "newcomer@wk", json!({})).await;
+    let n = sign_in(&r, "newcomer@wk").await;
+    let people = r.dir.path().join("_people");
+    let ino = |f: &str| {
+        std::fs::metadata(people.join(f))
+            .map(|m| m.ino())
+            .unwrap_or(0)
+    };
+    let before_store = std::fs::read(people.join("people.json")).unwrap();
+    assert_eq!(mark(&r, &n, json!({ "seen": true })).await, StatusCode::OK);
+    let (marks, store) = (ino("first-day-marks.json"), ino("people.json"));
+    assert_ne!(marks, 0, "the marks file is written");
+    for _ in 0..3 {
+        assert_eq!(mark(&r, &n, json!({ "seen": true })).await, StatusCode::OK);
+    }
+    assert_eq!(
+        marks,
+        ino("first-day-marks.json"),
+        "a repeat rewrote the marks"
+    );
+    assert_eq!(store, ino("people.json"), "a mark rewrote people.json");
+    assert_eq!(
+        before_store,
+        std::fs::read(people.join("people.json")).unwrap()
+    );
+    // a mark never touches the log either
+    let log = std::fs::read_to_string(people.join("changes.jsonl")).unwrap();
+    assert!(!log.contains("marked"), "{log}");
+}
+
+/// R7: the marks route is the session's: another agency's tenant in the path is refused.
+#[tokio::test]
+async fn the_marks_route_checks_the_path_tenant_against_the_session() {
+    let r = rig();
+    let maeve = sign_in(&r, "maeve@wk").await;
+    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
+    invite(&r, &maeve, "newcomer@wk", json!({})).await;
+    let n = sign_in(&r, "newcomer@wk").await;
+    let barra = sign_in(&r, "barra@bq").await;
+    for method in ["GET", "POST"] {
+        let (st, v, _) = call(
+            &r,
+            method,
+            &format!("/api/t/{}/me/first-day", barra.tenant),
+            Some(&n.cookie),
+            (method == "POST").then(|| json!({ "seen": true })),
+        )
+        .await;
+        assert_eq!(st, StatusCode::FORBIDDEN, "{method}: {v}");
+    }
+    for bad in [
+        json!({ "signed_in": true }),
+        json!({ "seen": true, "first": { "path": "x" } }),
+    ] {
+        assert_eq!(mark(&r, &n, bad).await, StatusCode::BAD_REQUEST);
+    }
+}
+
+/// R6: a person removed and added again has no old first day, and the old marks do not carry over.
+#[tokio::test]
+async fn a_person_brought_back_has_no_old_first_day() {
+    let r = rig();
+    let maeve = sign_in(&r, "maeve@wk").await;
+    invite(&r, &maeve, "dara@wk", json!({})).await;
+    let dara = sign_in(&r, "dara@wk").await;
+    mark(&r, &dara, json!({ "seen": true })).await;
+    let (st, _, _) = call(
         &r,
-        "GET",
-        "/api/admin/first-days",
-        Some(&barra.cookie),
+        "DELETE",
+        "/api/admin/people/dara@wk",
+        Some(&maeve.cookie),
         None,
     )
     .await;
-    assert_eq!(a.as_array().unwrap().len(), 1);
-    assert_eq!(a[0]["person"], json!("newcomer@wk"));
-    assert_eq!(b.as_array().unwrap().len(), 1);
-    assert_eq!(b[0]["person"], json!("other@bq"));
+    assert_eq!(st, StatusCode::OK);
+    add(&r, &maeve, "dara@wk", "Dara", &["copywriter"]).await;
+    let dara = sign_in(&r, "dara@wk").await;
+    assert_eq!(mine(&r, &dara).await["show_pointers"], json!(false));
+    // and a fresh invite starts again, whatever was marked before
+    invite(&r, &maeve, "dara@wk", json!({})).await;
+    assert_eq!(mine(&r, &dara).await["show_pointers"], json!(true));
+}
+
+async fn set_email(r: &Rig, admin: &Person, id: &str, email: &str) {
+    let (st, v, _) = call(
+        r,
+        "PATCH",
+        &format!("/api/admin/people/{id}"),
+        Some(&admin.cookie),
+        Some(json!({ "email": email })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+}
+
+/// Mail: the address is the person's own, from the People store; the link's origin is the server's configured one.
+#[tokio::test]
+async fn the_mail_goes_to_the_stored_address_with_the_configured_origin_and_keeps_no_address() {
+    let r = rig();
+    live_job(&r, &sign_in(&r, "maeve@wk").await).await;
+    let maeve = sign_in(&r, "maeve@wk").await;
+    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
+    set_email(&r, &maeve, "newcomer@wk", "newcomer@mail.example.test").await;
+    // the address is never taken from the request
+    let (st, _) = invite(
+        &r,
+        &maeve,
+        "newcomer@wk",
+        json!({ "email": "victim@outside.example.test" }),
+    )
+    .await;
+    assert_eq!(st, StatusCode::BAD_REQUEST);
+    assert!(r.mail.outbox().is_empty());
+    // the Host header is not the origin: the mail carries the configured one
+    let (st, v) = {
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/admin/people/newcomer@wk/first-day")
+            .header(header::HOST, "evil.example.test")
+            .header(header::COOKIE, &maeve.cookie)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({ "first": { "path": "doc-b1" }, "mail": true }).to_string(),
+            ))
+            .unwrap();
+        let resp = r.app.clone().oneshot(req).await.unwrap();
+        let st = resp.status();
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        (st, serde_json::from_slice::<Value>(&bytes).unwrap())
+    };
+    assert_eq!(st, StatusCode::CREATED, "{v}");
+    assert_eq!(v["mailed"], json!(true));
+    let out = r.mail.outbox();
+    assert_eq!(out.len(), 1);
+    let Message::Invite { to, url, .. } = &out[0] else {
+        panic!("{:?}", out[0])
+    };
+    assert_eq!(to, "newcomer@mail.example.test");
+    assert_eq!(url, &format!("{ORIGIN}/?welcome=newcomer@wk"));
+    assert!(!url.contains("evil"));
+    let (subject, body) = napkin_web::mail::render(&out[0]);
+    for marker in ["Client A", "J001", "brief", "Newcomer"] {
+        assert!(
+            !subject.contains(marker) && !body.contains(marker),
+            "{marker} in the mail"
+        );
+    }
+    // the address is the store's own field and is written nowhere else: not the change log, not the audit chain
+    let log = std::fs::read_to_string(r.dir.path().join("_people").join("changes.jsonl")).unwrap();
+    let invited: Vec<&str> = log.lines().filter(|l| l.contains("first day")).collect();
+    assert!(!invited.is_empty());
+    assert!(
+        invited.iter().all(|l| !l.contains("mail.example.test")),
+        "{invited:?}"
+    );
+    let (_, audit, _) = call(
+        &r,
+        "GET",
+        &format!("/api/t/{}/audit", maeve.tenant),
+        Some(&maeve.cookie),
+        None,
+    )
+    .await;
+    let first_day_lines: Vec<String> = audit["lines"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l.to_string())
+        .filter(|l| l.to_lowercase().contains("first day"))
+        .collect();
+    assert!(!first_day_lines.is_empty());
+    assert!(first_day_lines
+        .iter()
+        .all(|l| !l.contains("mail.example.test")));
+    let marks = std::fs::read_to_string(r.dir.path().join("_people").join("first-day-marks.json"))
+        .unwrap_or_default();
+    assert!(!marks.contains("mail.example.test"));
+}
+
+#[tokio::test]
+async fn one_invite_mail_a_person_a_day_and_a_plain_line_when_it_is_refused() {
+    let r = rig();
+    let maeve = sign_in(&r, "maeve@wk").await;
+    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
+    set_email(&r, &maeve, "newcomer@wk", "newcomer@mail.example.test").await;
+    let mut last = Value::Null;
+    for i in 0..10 {
+        let (st, v) = invite(&r, &maeve, "newcomer@wk", json!({ "mail": true })).await;
+        assert_eq!(st, StatusCode::CREATED, "{v}");
+        assert_eq!(v["mailed"], json!(i == 0), "{i}: {v}");
+        last = v;
+    }
+    assert_eq!(r.mail.outbox().len(), 1);
+    assert!(last["note"].as_str().unwrap().contains("already"), "{last}");
+    // another person is mailed on their own count
+    add(&r, &maeve, "plain@wk", "Plain Test", &["copywriter"]).await;
+    set_email(&r, &maeve, "plain@wk", "plain@mail.example.test").await;
+    invite(&r, &maeve, "plain@wk", json!({ "mail": true })).await;
+    assert_eq!(r.mail.outbox().len(), 2);
+}
+
+#[tokio::test]
+async fn no_mail_without_a_stored_address_a_public_origin_or_a_mailer_and_the_answer_says_why() {
+    // no address held for the person
+    let r = rig();
+    let maeve = sign_in(&r, "maeve@wk").await;
+    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
+    let (_, v) = invite(&r, &maeve, "newcomer@wk", json!({ "mail": true })).await;
+    assert_eq!(v["mailed"], json!(false));
+    assert!(v["note"].as_str().unwrap().contains("address"), "{v}");
+    assert!(
+        v["link"].as_str().unwrap().contains("welcome=newcomer@wk"),
+        "the link is still given to copy"
+    );
+    // no public origin configured
+    let r = build(ROSTER, None, true);
+    let maeve = sign_in(&r, "maeve@wk").await;
+    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
+    set_email(&r, &maeve, "newcomer@wk", "newcomer@mail.example.test").await;
+    let (st, v) = invite(&r, &maeve, "newcomer@wk", json!({ "mail": true })).await;
+    assert_eq!(st, StatusCode::CREATED, "{v}");
+    assert_eq!(v["mailed"], json!(false));
+    assert!(
+        v["note"].as_str().unwrap().contains("public address"),
+        "{v}"
+    );
+    assert!(r.mail.outbox().is_empty());
+    // mail off
+    let r = build(ROSTER, Some(ORIGIN), false);
+    let maeve = sign_in(&r, "maeve@wk").await;
+    add(&r, &maeve, "newcomer@wk", "Newcomer Test", &["copywriter"]).await;
+    set_email(&r, &maeve, "newcomer@wk", "newcomer@mail.example.test").await;
+    let (_, v) = invite(&r, &maeve, "newcomer@wk", json!({ "mail": true })).await;
+    assert_eq!(v["mailed"], json!(false));
+    assert!(v["note"].as_str().unwrap().contains("Mail"), "{v}");
+    // and without asking for mail there is no note
+    let (_, v) = invite(&r, &maeve, "newcomer@wk", json!({})).await;
+    assert!(v.get("note").is_none());
+}
+
+#[test]
+fn the_development_outbox_keeps_no_address_of_an_invite() {
+    use napkin_web::mail::{Mailer, Outbox};
+    let dir = tempfile::tempdir().unwrap();
+    let out = Outbox(dir.path().join("outbox.jsonl"));
+    out.send(&Message::Invite {
+        to: "newcomer@mail.example.test".into(),
+        agency: None,
+        url: "https://studio.example.test/?welcome=a@wk".into(),
+    })
+    .unwrap();
+    let text = std::fs::read_to_string(dir.path().join("outbox.jsonl")).unwrap();
+    assert!(text.contains("welcome=a@wk"));
+    assert!(!text.contains("mail.example.test"), "{text}");
+}
+
+/// A Napkin admin learns nothing of another agency's documents from the invite route.
+#[tokio::test]
+async fn a_napkin_admin_learns_nothing_of_another_agencys_documents() {
+    let r = build(
+        &format!("{ROSTER}engineer@napkin\tEngineer\tadmin\n"),
+        Some(ORIGIN),
+        true,
+    );
+    let barra = sign_in(&r, "barra@bq").await;
+    live_job(&r, &barra).await;
+    let eng = sign_in(&r, "engineer@napkin").await;
+    let (miss, a) = invite(
+        &r,
+        &eng,
+        "niamh@bq",
+        json!({ "first": { "path": "doc-nope" } }),
+    )
+    .await;
+    let (hit, b) = invite(
+        &r,
+        &eng,
+        "niamh@bq",
+        json!({ "first": { "path": "doc-b1" } }),
+    )
+    .await;
+    assert_eq!(miss, hit, "{a} / {b}");
+    assert_eq!(a, b);
+    // they can still invite without naming a document
+    let (st, v) = invite(&r, &eng, "niamh@bq", json!({})).await;
+    assert_eq!(st, StatusCode::CREATED, "{v}");
 }

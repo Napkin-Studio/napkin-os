@@ -15,7 +15,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import type { JobNeed } from '../src/host/types.ts'
-import { POINTERS, pointerKey, placement, stepsFrom } from '../src/shell/firstday/anchors.ts'
+import { POINTERS, pointerKey, placement, stepsFrom, type Box } from '../src/shell/firstday/anchors.ts'
 import { InviteForm } from '../src/shell/firstday/InviteRow.tsx'
 import { makeInvite } from '../src/shell/firstday/invite.ts'
 import { PointerCard } from '../src/shell/firstday/Pointers.tsx'
@@ -24,6 +24,7 @@ import { BUTTONS, POINTER_WORDS } from '../src/shell/firstday/words.ts'
 import { meRows } from '../src/shell/nui/meRows.ts'
 
 const src = resolve(process.cwd(), 'src/shell/firstday')
+const src_dir = src
 const ALL = new Set(['[data-testid="your-pages"]', '#cl-row', '[data-testid="os-bar"]', '[data-testid="me-row"]', '[data-testid="pick-up"]', '[data-testid="decisions"]'])
 const has = (present: Set<string>) => (sel: string) => present.has(sel)
 
@@ -92,21 +93,57 @@ test('with Reduce motion nothing moves in', () => {
   assert.doesNotMatch(css, /backdrop|rgba\(0, ?0, ?0|inset: 0|bounce|cubic-bezier\([^)]*-/, 'no veil, no bounce')
 })
 
-test('placement: 8 px below the anchor, kept on screen, and above when below would cover what must stay clear', () => {
-  const view = { width: 390, height: 800 }
-  const size = { width: 300, height: 120 }
-  const anchor = { top: 200, left: 10, width: 200, height: 40, bottom: 240, right: 210 }
-  assert.deepEqual(placement(anchor, size, view, []), { top: 248, left: 10 })
-  const edge = { ...anchor, left: 300, right: 500, width: 200 }
-  const p = placement(edge, size, view, [])
-  assert.ok(p.left + size.width <= view.width - 8 && p.left >= 8)
-  // the consent item sits where the card would land: the card goes above the anchor
-  const consent = { top: 250, left: 0, width: 390, height: 100, bottom: 350, right: 390 }
-  assert.equal(placement(anchor, size, view, [consent]).top, 200 - 8 - 120)
-  // no room below and none above: it stays on screen
-  const tall = { top: 380, left: 0, width: 390, height: 40, bottom: 420, right: 390 }
-  const q = placement(tall, { width: 300, height: 700 }, view, [])
-  assert.ok(q.top >= 8 && q.top + 700 <= view.height + 700)
+const box = (left: number, top: number, width: number, height: number): Box => ({ left, top, width, height, right: left + width, bottom: top + height })
+const hits = (p: { top: number; left: number }, s: { width: number; height: number }, o: Box) => p.top < o.bottom && p.top + s.height > o.top && p.left < o.right && p.left + s.width > o.left
+const SIZE = { width: 300, height: 120 }
+
+// boxes read off the desk at three widths (docs/design/first-day/desk-pointer-pages-*.png): Your pages, the circles it names
+for (const [name, view, pages, circles] of [
+  ['1440', { width: 1440, height: 900 }, box(154, 228, 1132, 60), box(154, 388, 450, 170)],
+  ['1100', { width: 1100, height: 800 }, box(40, 228, 1020, 60), box(40, 388, 450, 170)],
+  ['390', { width: 390, height: 844 }, box(16, 232, 358, 120), box(16, 452, 290, 170)],
+] as const) {
+  test(`${name}: a pointer never covers its anchor, nor the circles a pointer to Your pages names`, () => {
+    const p = placement(pages, SIZE, view, [])
+    assert.ok(!hits(p, SIZE, pages), `the card at ${JSON.stringify(p)} covers its anchor`)
+    assert.ok(!hits(p, SIZE, circles), `the card at ${JSON.stringify(p)} covers the circles`)
+    assert.ok(p.left >= 8 && p.left + SIZE.width <= view.width - 8 && p.top >= 8 && p.top + SIZE.height <= view.height - 8, 'on screen')
+  })
+  test(`${name}: the bar and a row near the bottom are not covered either`, () => {
+    for (const anchor of [box(0, 0, view.width, 62), box(16, view.height - 150, view.width - 32, 66), box(154, 640, 640, 66)]) {
+      const p = placement(anchor, SIZE, view, [])
+      assert.ok(!hits(p, SIZE, anchor), `${JSON.stringify(anchor)} is covered by ${JSON.stringify(p)}`)
+      assert.ok(p.top >= 8 && p.top + SIZE.height <= view.height - 8 && p.left >= 8 && p.left + SIZE.width <= view.width - 8, 'on screen')
+    }
+  })
+}
+
+test('placement keeps clear of what must stay clear (the consent question)', () => {
+  const view = { width: 1440, height: 900 }
+  const anchor = box(154, 400, 300, 60)
+  const consent = box(0, 200, 1440, 190)
+  const p = placement(anchor, SIZE, view, [consent])
+  assert.ok(!hits(p, SIZE, consent) && !hits(p, SIZE, anchor))
+})
+
+test('the page is not scrolled back to the anchor on every scroll, and Esc is not swallowed', () => {
+  const src = readFileSync(resolve(src_dir, 'Pointers.tsx'), 'utf8')
+  const place = src.slice(src.indexOf('const place = useCallback'), src.indexOf('}, [step])'))
+  assert.doesNotMatch(place, /scrollIntoView/, 'place() runs on every scroll event')
+  assert.doesNotMatch(src, /preventDefault|stopPropagation/, 'Esc is the page\'s too')
+  assert.match(src, /aria-modal/, 'Esc leaves another open dialog alone')
+  assert.match(src, /defaultPrevented/)
+})
+
+test('the card is drawn only while on the desk', () => {
+  const src = readFileSync(resolve(src_dir, 'Pointers.tsx'), 'utf8')
+  assert.match(src, /if \(!enabled \|\| !show/)
+})
+
+test('the anchor is outlined while its pointer is open, and the outline is taken away', () => {
+  const src = readFileSync(resolve(src_dir, 'Pointers.tsx'), 'utf8')
+  assert.match(src, /data-fd-anchor/)
+  assert.match(readFileSync(resolve(src_dir, 'firstday.css'), 'utf8'), /\[data-fd-anchor\]/)
 })
 
 test('the sign-in name starts from the link and from nothing else', () => {
@@ -137,8 +174,8 @@ test('the first task is the first row of Me, before the timesheet reminder, and 
 
 const DOCS = [{ path: 'doc-b1', title: 'J001 brief', job: 'J001', client: 'Client A' }]
 const form = (over: object = {}) => renderToStaticMarkup(createElement(InviteForm, {
-  docs: DOCS, first: '', email: '', busy: false, link: null, error: null, copied: false,
-  onFirst: () => {}, onEmail: () => {}, onMake: () => {}, onCopy: () => {}, onClose: () => {}, ...over,
+  docs: DOCS, first: '', mail: false, busy: false, link: null, error: null, copied: false, note: null,
+  onFirst: () => {}, onMail: () => {}, onMake: () => {}, onCopy: () => {}, onClose: () => {}, ...over,
 }))
 
 test('the invite on a person\'s row: a first thing to open from the live jobs, then the link to copy', () => {
@@ -159,12 +196,14 @@ test('making an invite sends the first thing and the address only, and answers t
   const api = {
     invite: async (id: string, body: unknown) => { sent.push([id, body]); return { person: id, link: 'http://x.test/?welcome=a@wk', mailed: false } },
   }
-  const ok = await makeInvite(api, 'a@wk', { first: 'doc-b1', email: '' })
-  assert.deepEqual(ok, { ok: true, link: 'http://x.test/?welcome=a@wk', mailed: false })
+  const ok = await makeInvite(api, 'a@wk', { first: 'doc-b1', mail: false })
+  assert.deepEqual(ok, { ok: true, link: 'http://x.test/?welcome=a@wk', mailed: false, note: null })
   assert.deepEqual(sent[0], ['a@wk', { first: { path: 'doc-b1' } }])
-  await makeInvite(api, 'a@wk', { first: '', email: ' a@mail.example.test ' })
-  assert.deepEqual(sent[1], ['a@wk', { email: 'a@mail.example.test' }])
-  const refused = await makeInvite({ invite: async () => { throw new Error('That is not a document of this agency.') } }, 'a@wk', { first: 'x', email: '' })
+  await makeInvite(api, 'a@wk', { first: '', mail: true })
+  assert.deepEqual(sent[1], ['a@wk', { mail: true }])
+  const said = await makeInvite({ invite: async (id: string) => ({ person: id, link: 'l', mailed: false, note: 'Mail is not set up on this server.' }) }, 'a@wk', { first: '', mail: true })
+  assert.deepEqual(said, { ok: true, link: 'l', mailed: false, note: 'Mail is not set up on this server.' })
+  const refused = await makeInvite({ invite: async () => { throw new Error('That is not a document of this agency.') } }, 'a@wk', { first: 'x', mail: false })
   assert.deepEqual(refused, { ok: false, error: 'That is not a document of this agency.' })
 })
 
