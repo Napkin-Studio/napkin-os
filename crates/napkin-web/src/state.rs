@@ -57,6 +57,10 @@ pub struct Workspace {
     /// index and rebuilt from the same documents by the same stamps. One per tenant, so a search never
     /// crosses an agency.
     pub search: napkin_host::searchindex::SearchCache,
+    /// The tenant's catalogue of manifests (napkin-host `catalog`), kept by the same stamps: what a lookup
+    /// of another document asks for candidates instead of reading the whole tenant. Fed only through the
+    /// guarded store, which [`Workspace::store`] offers it from, so it never lists or reads the registry.
+    pub catalog: Arc<napkin_host::catalog::StoreCatalog>,
     /// What the index counts days by: the real time, unless a test moved it.
     clock: JobsClock,
 }
@@ -66,8 +70,10 @@ pub type JobsClock = Arc<dyn Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync
 
 impl Workspace {
     fn new(store: Arc<dyn DocStore>, ctx: Ctx, clock: JobsClock) -> Self {
+        let catalog = Arc::new(napkin_host::catalog::StoreCatalog::new());
         Self {
-            store: Arc::new(Guarded::new(store.clone())),
+            store: Arc::new(Guarded::new(store.clone()).with_catalog(catalog.clone())),
+            catalog,
             raw: store,
             ctx,
             sessions: Mutex::new(SessionCache::default()),
@@ -424,11 +430,22 @@ fn seed_library(store: &dyn DocStore, dir: &Path) {
 /// export, a download, and any token, however old). Its people were imported into the People store once;
 /// any member could write it since 12 Nov 2026, so nothing it says is read again
 /// (features/align-needs-lock-people.clan).
-pub struct Guarded(Arc<dyn DocStore>, std::sync::OnceLock<Option<DocId>>);
+pub struct Guarded(
+    Arc<dyn DocStore>,
+    std::sync::OnceLock<Option<DocId>>,
+    Option<Arc<napkin_host::catalog::StoreCatalog>>,
+);
 
 impl Guarded {
     pub fn new(inner: Arc<dyn DocStore>) -> Self {
-        Self(inner, std::sync::OnceLock::new())
+        Self(inner, std::sync::OnceLock::new(), None)
+    }
+
+    /// This store, offering `catalog` to the lookups that ask for one. The catalogue is filled through this
+    /// store's own `documents`, `stamp` and `read`, so it holds nothing this guard refuses.
+    pub fn with_catalog(mut self, catalog: Arc<napkin_host::catalog::StoreCatalog>) -> Self {
+        self.2 = Some(catalog);
+        self
     }
 
     /// The registry's id, compared as a constant and as the store names it: either matches, so an error
@@ -512,6 +529,10 @@ impl napkin_host::Library for Guarded {
     fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
         self.0.fork_branch(parent, agent)
     }
+
+    fn catalog(&self) -> Option<&napkin_host::catalog::StoreCatalog> {
+        self.2.as_deref()
+    }
 }
 
 #[cfg(test)]
@@ -542,6 +563,10 @@ mod tests {
         }
         fn exists(&self, id: &DocId) -> bool {
             self.inner.exists(id)
+        }
+        // a stat, as the tenant store stamps: an open's stamps are not reads of the archive
+        fn stamp(&self, id: &DocId) -> HostResult<napkin_host::Stamp> {
+            self.inner.stamp(id)
         }
         fn apply(&self, change: &Change) -> HostResult<Version> {
             self.inner.apply(change)
@@ -652,5 +677,194 @@ mod tests {
         assert_eq!(first.status, 403, "{first:?}");
         assert_eq!(g.read(&id).unwrap_err().status, 403);
         assert!(!g.exists(&id));
+    }
+
+    /// A store that lists the registry among its documents, as a careless layout might, and counts every
+    /// read of it: the guard in front of it, not the layout, is what keeps the catalogue off the registry.
+    struct ListsTheRegistry {
+        inner: TenantStore,
+        registry: DocId,
+        registry_reads: AtomicUsize,
+    }
+
+    impl PartStore for ListsTheRegistry {
+        fn read(&self, id: &DocId) -> HostResult<Vec<u8>> {
+            if id == &self.registry {
+                self.registry_reads.fetch_add(1, Ordering::SeqCst);
+            }
+            self.inner.read(id)
+        }
+        fn exists(&self, id: &DocId) -> bool {
+            self.inner.exists(id)
+        }
+        fn stamp(&self, id: &DocId) -> HostResult<napkin_host::Stamp> {
+            self.inner.stamp(id)
+        }
+        fn apply(&self, change: &Change) -> HostResult<Version> {
+            self.inner.apply(change)
+        }
+    }
+
+    impl Library for ListsTheRegistry {
+        fn app_candidates(&self) -> Vec<DocId> {
+            self.inner.app_candidates()
+        }
+        fn app_template(&self, app_id: &str) -> DocId {
+            self.inner.app_template(app_id)
+        }
+        fn documents(&self) -> Vec<DocId> {
+            let mut all = self.inner.documents();
+            all.push(self.registry.clone());
+            all
+        }
+        fn new_document(&self, app_id: &str, id_short: &str) -> HostResult<DocId> {
+            self.inner.new_document(app_id, id_short)
+        }
+        fn home(&self, version_tag: &str) -> HostResult<DocId> {
+            self.inner.home(version_tag)
+        }
+        fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
+            self.inner.fork_branch(parent, agent)
+        }
+    }
+
+    /// A document whose `document_id` is `document_id`, spun off `parent` when given.
+    fn clan_named(document_id: &str, parent: Option<&str>) -> Vec<u8> {
+        let base = clan_sdk::ClanFile::from_bytes(
+            clan_sdk::create(clan_sdk::CreateOptions {
+                title: document_id.into(),
+                brief: "a document".into(),
+                document_type: None,
+                no_render: false,
+                schema: None,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let mut m = base.manifest().clone();
+        m.document_id = Some(document_id.into());
+        m.lineage = parent.map(|p| clan_sdk::Lineage {
+            parent_id: format!("rev-{p}"),
+            parent_uri: format!("clan:rev-{p}"),
+            parent_sha256: None,
+            delta: "spinoff".into(),
+            parents: vec![],
+            merge: false,
+            carried: Some(clan_sdk::Carried {
+                document_id: p.into(),
+                data_sha256: "sha256:0".into(),
+                facts_sha256: None,
+                findings_sha256: None,
+                sources_sha256: None,
+                last_decision: None,
+            }),
+            attached: vec![],
+        });
+        let mut b = clan_sdk::ClanBuilder::new(m);
+        for (p, bytes) in base.read_all_entries().unwrap() {
+            if p != clan_sdk::MANIFEST_PATH {
+                b.add_entry(p, bytes);
+            }
+        }
+        b.build().unwrap()
+    }
+
+    // The tenant's catalogue (features/store-scan-under-lock.clan) is filled through the registry guard: it
+    // never lists, reads or returns the agency registry, even from a store that lists it, and a lookup it
+    // answers still refuses another agency's document (`foreign()` on the loaded candidate).
+    #[test]
+    fn the_catalogue_never_reaches_the_registry_and_keeps_the_wall() {
+        let dir = tempfile::tempdir().unwrap();
+        let ours = TenantId::mint();
+        let inner = TenantStore::new(dir.path().join(ours.as_str()));
+        let registry = inner.home(napkin_host::agency::REGISTRY_TAG).unwrap();
+        inner
+            .apply(&Change::create(
+                registry.clone(),
+                clan_named("doc-registry", None),
+            ))
+            .unwrap();
+        // another agency's document, in this store: its chain says whose it is
+        let theirs = DocId::new("doc-theirs-file");
+        inner
+            .apply(&Change::create(
+                theirs.clone(),
+                clan_named("doc-theirs", None),
+            ))
+            .unwrap();
+        let other = TenantId::mint();
+        let s = Session::with_ctx(
+            Arc::new(TenantStore::new(dir.path().join(ours.as_str()))),
+            other.ctx(),
+        );
+        s.open(theirs.clone()).unwrap();
+        s.patch_data_as(
+            &other.ctx(),
+            r#"{"patch":{"tone":"theirs"},"agent":"human","action":"edit"}"#,
+        )
+        .unwrap();
+        // ours, made from each
+        let child_of = |parent: &str, file: &str| {
+            let id = DocId::new(format!("doc-{file}-file"));
+            inner
+                .apply(&Change::create(
+                    id.clone(),
+                    clan_named(&format!("doc-{file}"), Some(parent)),
+                ))
+                .unwrap();
+            id
+        };
+        let from_registry = child_of("doc-registry", "from-registry");
+        let from_theirs = child_of("doc-theirs", "from-theirs");
+
+        let catalog = Arc::new(napkin_host::catalog::StoreCatalog::new());
+        let listing = Arc::new(ListsTheRegistry {
+            inner,
+            registry: registry.clone(),
+            registry_reads: AtomicUsize::new(0),
+        });
+        let guarded = Guarded::new(listing.clone()).with_catalog(catalog.clone());
+        assert!(guarded.catalog().is_some());
+
+        let entries = catalog.entries(&guarded);
+        assert!(!entries.is_empty());
+        assert!(
+            entries
+                .iter()
+                .all(|e| e.id != registry && e.document_id != "doc-registry"),
+            "the registry is not in the catalogue"
+        );
+        assert!(entries.iter().any(|e| e.document_id == "doc-theirs"));
+
+        let ctx = ours.ctx();
+        let load = |id: &DocId| napkin_host::Document::load(&guarded, id.clone()).unwrap();
+        assert!(
+            napkin_host::library::find_upstream(
+                &guarded,
+                &ctx,
+                &load(&from_registry),
+                "doc-registry"
+            )
+            .is_none(),
+            "a lookup never returns the registry"
+        );
+        assert!(
+            napkin_host::library::find_upstream(&guarded, &ctx, &load(&from_theirs), "doc-theirs")
+                .is_none(),
+            "nor another agency's document the catalogue names"
+        );
+        // the agency they belong to finds it
+        assert!(napkin_host::library::find_upstream(
+            &guarded,
+            &other.ctx(),
+            &load(&from_theirs),
+            "doc-theirs"
+        )
+        .is_some());
+        assert_eq!(
+            listing.registry_reads.load(Ordering::SeqCst),
+            0,
+            "the registry was never read"
+        );
     }
 }

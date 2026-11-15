@@ -753,19 +753,32 @@ pub fn find_upstream(
         .and(m.lineage.as_ref())
         .and_then(|l| l.parent_uri.strip_prefix("clan-store:"))
         .map(DocId::new);
-    recorded
+    let is_it = |id: DocId| {
+        let doc = Document::load(store.parts(), id).ok()?;
+        let dm = doc.clan().manifest();
+        let is_it = doc.clan().document_id() == document_id
+            && dm.fork.is_none()
+            && dm.document_type.as_deref() != Some("template")
+            && !foreign(ctx, doc.clan());
+        is_it.then_some(doc)
+    };
+    if let Some(doc) = recorded.filter(|id| id != child.id()).and_then(is_it) {
+        return Some(doc);
+    }
+    // The tenant's catalogue names the candidates (crate::catalog): only they are opened, each checked as
+    // the scan checks it. With no catalogue, or none it names, the whole tenant is scanned as before.
+    // A miss answers "not there" from the catalogue's fresh stat pass, never a scan of the tenant.
+    let candidates = crate::catalog::lookup(store, "find_upstream", |e| {
+        e.document_id == document_id && e.is_document() && &e.id != child.id()
+    });
+    if let Some(ids) = candidates {
+        return ids.into_iter().find_map(is_it);
+    }
+    store
+        .documents()
         .into_iter()
-        .chain(store.documents())
         .filter(|id| id != child.id())
-        .find_map(|id| {
-            let doc = Document::load(store.parts(), id).ok()?;
-            let dm = doc.clan().manifest();
-            let is_it = doc.clan().document_id() == document_id
-                && dm.fork.is_none()
-                && dm.document_type.as_deref() != Some("template")
-                && !foreign(ctx, doc.clan());
-            is_it.then_some(doc)
-        })
+        .find_map(is_it)
 }
 
 /// What a child decided about something it carried, as its parents are told
@@ -932,14 +945,29 @@ pub fn write_backrefs(
     };
     changes
         .into_iter()
-        .filter_map(|(written, change)| match store.apply(&change) {
-            Ok(_) => Some(written),
-            Err(e) => {
-                log(&format!(
-                    "backref: {} not written: {e}",
-                    written.document_id
-                ));
-                None
+        .filter_map(|(written, change)| {
+            // Each parent is read, changed and written under its own write lock (crate::store::write_lock):
+            // two backrefs to one parent, from one child or two, or a backref and the parent's own write,
+            // never build on the same bytes. The parent was found above, outside any lock (finding it may
+            // read the tenant); here it is read again as it stands and the decision put on that.
+            let _held = crate::store::write_lock(&change.doc);
+            let applied = Document::load(store.parts(), change.doc.clone())
+                .and_then(|parent| {
+                    let d = change.decisions.first().cloned().ok_or_else(|| {
+                        HostError::internal("a backref change carries its decision")
+                    })?;
+                    with_decision(&parent, d)
+                })
+                .and_then(|fresh| store.apply(&fresh));
+            match applied {
+                Ok(_) => Some(written),
+                Err(e) => {
+                    log(&format!(
+                        "backref: {} not written: {e}",
+                        written.document_id
+                    ));
+                    None
+                }
             }
         })
         .collect()
@@ -1199,13 +1227,24 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
         crate::clients::list(store, true)
             .map(|l| l.into_iter().map(|c| (c.id.clone(), c)).collect())
             .unwrap_or_default();
-    let mut out: Vec<AttachTarget> = store
-        .documents()
+    // The catalogue names the documents of an accepted app (crate::catalog); only they are read, and
+    // each is checked below as the scan checked it. With no catalogue, every document is read.
+    let ids = crate::catalog::candidates(store, |e| {
+        e.is_document()
+            && e.app_id.as_ref().is_some_and(|a| spec.accepts.contains(a))
+            && e.document_id != here
+            && Some(&e.document_id) != made_from.as_ref()
+    })
+    .unwrap_or_else(|| store.documents());
+    let mut out: Vec<AttachTarget> = ids
         .into_iter()
         .filter(|id| id != doc.id())
         .filter_map(|id| {
-            let d = Document::load(store.parts(), id).ok()?;
-            let m = d.clan().manifest();
+            // the manifest and the chain are what is read here (no hash, no signature check): as related
+            // reads the documents it lists
+            let bytes = store.read(&id).ok()?;
+            let clan = ClanFile::from_bytes(bytes).ok()?;
+            let m = clan.manifest();
             let app = m.app.as_ref()?;
             let document_id = m.document_id().to_string();
             if m.fork.is_some()
@@ -1213,7 +1252,7 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
                 || !spec.accepts.contains(&app.app_id)
                 || document_id == here
                 || Some(&document_id) == made_from.as_ref()
-                || foreign(ctx, d.clan())
+                || foreign(ctx, &clan)
             {
                 return None;
             }
@@ -1225,8 +1264,8 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
                 locked,
                 document_id,
                 title: m.title.clone(),
-                version: kit_version(d.clan()),
-                path: d.id().to_string(),
+                version: kit_version(&clan),
+                path: id.to_string(),
                 updated_at: m.updated_at.clone(),
                 client: m.client.clone().map(|r| match registry.get(&r.id) {
                     Some(rec) => rec.as_ref(),
@@ -1319,7 +1358,12 @@ pub(crate) fn find_source(
     doc: &Document,
     document_id: &str,
 ) -> HostResult<Document> {
-    for id in store.documents() {
+    // the catalogue's candidates when it names any (crate::catalog), else every document
+    // the catalogue's candidates (crate::catalog::lookup: a miss is "not found", never a scan), else,
+    // with no catalogue, every document
+    let ids = crate::catalog::lookup(store, "find_source", |e| e.document_id == document_id)
+        .unwrap_or_else(|| store.documents());
+    for id in ids {
         if &id == doc.id() {
             continue;
         }
@@ -1508,7 +1552,14 @@ pub fn related(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Value {
         })
         .collect();
     let mut downstream = Vec::new();
-    for id in store.documents() {
+    // What was made from this document or links it: the catalogue names them (crate::catalog), else every
+    // document is read. Each one read is checked below as the scan checked it.
+    let ids = crate::catalog::candidates(store, |e| {
+        e.is_document()
+            && (e.carried.as_deref() == Some(here.as_str()) || e.attached.contains(&here))
+    })
+    .unwrap_or_else(|| store.documents());
+    for id in ids {
         if &id == doc.id() {
             continue;
         }

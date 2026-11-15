@@ -62,8 +62,89 @@ tokio::task_local! {
     static REQUEST: RefCell<Record>;
 }
 
+thread_local! {
+    /// The record of the request whose blocking part runs on this thread ([`blocking`]): a blocking
+    /// thread has no task, so what it notes is gathered here and handed back to the request.
+    static BLOCKING: RefCell<Option<Record>> = const { RefCell::new(None) };
+}
+
 fn with(f: impl FnOnce(&mut Record)) {
-    let _ = REQUEST.try_with(|r| f(&mut r.borrow_mut()));
+    let mut f = Some(f);
+    let _ = REQUEST.try_with(|r| {
+        if let Some(f) = f.take() {
+            f(&mut r.borrow_mut())
+        }
+    });
+    if let Some(f) = f {
+        BLOCKING.with(|b| {
+            if let Some(r) = b.borrow_mut().as_mut() {
+                f(r)
+            }
+        });
+    }
+}
+
+/// Run `f` on tokio's blocking pool (`spawn_blocking`), so a request that waits for a document's view lock or
+/// reads the whole tenant holds a blocking thread, never one of the runtime's workers that every other tenant's
+/// requests run on. What `f` notes (phases, bytes, the document) is added to this request's line, and every
+/// host read it makes is timed ([`reads`]). A panic in `f` is the request's panic, as it would have been inline.
+pub async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    let joined = tokio::task::spawn_blocking(move || {
+        BLOCKING.with(|b| *b.borrow_mut() = Some(Record::default()));
+        let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| reads(f)));
+        let noted = BLOCKING.with(|b| b.borrow_mut().take()).unwrap_or_default();
+        (out, noted)
+    })
+    .await;
+    let (out, noted) = match joined {
+        Ok(done) => done,
+        Err(e) => std::panic::resume_unwind(e.into_panic()),
+    };
+    with(|r| {
+        for (name, ms) in noted.phases {
+            match r.phases.iter_mut().find(|(n, _)| *n == name) {
+                Some((_, total)) => *total += ms,
+                None => r.phases.push((name, ms)),
+            }
+        }
+        if let Some(b) = noted.bytes {
+            r.bytes = Some(r.bytes.unwrap_or(0) + b);
+        }
+        for (mine, theirs) in [
+            (&mut r.doc, noted.doc),
+            (&mut r.tenant, noted.tenant),
+            (&mut r.user, noted.user),
+            (&mut r.op, noted.op),
+        ] {
+            if theirs.is_some() {
+                *mine = theirs;
+            }
+        }
+    });
+    match out {
+        Ok(v) => v,
+        Err(p) => std::panic::resume_unwind(p),
+    }
+}
+
+/// Time every read the host makes on this thread while `f` runs, as two phases: `lock` (taking the
+/// document's snapshot, the wait for its view lock included) and `work` (what the read did with the snapshot,
+/// outside the lock). Reads add up when a request makes several.
+pub fn reads<T>(f: impl FnOnce() -> T) -> T {
+    let mut last = Instant::now();
+    napkin_host::session::observe_reads(
+        Box::new(move |m| {
+            let ms = ms_since(last);
+            last = Instant::now();
+            match m {
+                OpenMark::Locked => add("lock", ms),
+                OpenMark::Worked => add("work", ms),
+                // a read begins: what came before it is not its time
+                _ => {}
+            }
+        }),
+        f,
+    )
 }
 
 /// A short, stable stand-in for `s`: the first 8 hex digits of its sha256.
@@ -132,10 +213,9 @@ pub fn note_op(path: &str) {
     with(|r| r.op = Some(op));
 }
 
-/// Open `id` in `session` (holding its view lock across the read, as
-/// [`Session::open`] does), timing each step as a phase: `lock` (the wait for
-/// the view lock), `read`, `verify` (parse and signature), `resolve` (the
-/// installed app's view) and `describe`; and noting the archive's size.
+/// Open `id` in `session`, timing each step as a phase: `read`, `verify` (parse and signature), `resolve` (the
+/// installed app's view), all outside the view lock, then `lock` (the wait for the view lock to put the
+/// snapshot in place) and `describe`; and noting the archive's size.
 pub fn open(session: &Session, id: DocId) -> HostResult<OpenResult> {
     let mut last = Instant::now();
     session.open_observed(id, &mut |m| {
@@ -150,6 +230,7 @@ pub fn open(session: &Session, id: DocId) -> HostResult<OpenResult> {
             OpenMark::Verified => "verify",
             OpenMark::Resolved => "resolve",
             OpenMark::Described => "describe",
+            OpenMark::Asking | OpenMark::Worked => return,
         };
         add(name, ms);
     })
@@ -444,7 +525,7 @@ mod tests {
             .next()
             .unwrap();
         let doc = format!("doc-{}", docs.path().file_stem().unwrap().to_str().unwrap());
-        let status = app
+        let opened = app
             .clone()
             .oneshot(
                 axum::http::Request::get(format!("/api/t/{tenant}/d/{doc}"))
@@ -453,12 +534,40 @@ mod tests {
                     .unwrap(),
             )
             .await
+            .unwrap();
+        assert_eq!(opened.status(), 200);
+        let body = axum::body::to_bytes(opened.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let token = serde_json::from_slice::<Value>(&body).unwrap()["token"]
+            .as_str()
             .unwrap()
-            .status();
-        assert_eq!(status, 200);
+            .to_string();
+
+        // A sandbox read, run on the blocking pool: its line says how long it waited for the document's view
+        // lock and how long its work took, apart (features/store-scan-under-lock.clan).
+        let read = app
+            .clone()
+            .oneshot(
+                axum::http::Request::get(format!("/s/{token}/related"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(read.status(), 200);
 
         let lines = lines.0.lock().unwrap();
-        assert_eq!(lines.len(), 1);
+        assert_eq!(lines.len(), 2);
+        let sandbox = &lines[1].1;
+        assert_eq!(sandbox["op"], "related");
+        assert_eq!(sandbox["doc"], short_hash(&doc));
+        for p in ["session", "lock", "work", "dispatch"] {
+            assert!(
+                sandbox["phases"][p].is_number(),
+                "no {p} phase in {sandbox}"
+            );
+        }
         let line = &lines[0].1;
         assert_eq!(line["route"], "/api/t/{tenant}/d/{doc}");
         assert_eq!(line["tenant"], short_hash(&tenant));

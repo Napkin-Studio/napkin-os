@@ -103,7 +103,12 @@ async fn dispatch(
     crate::timing::note_who(grant.tenant.as_str(), &grant.person);
     crate::timing::note_op(&path);
     let workspace = ctx.workspace(&grant.tenant);
-    let session = match crate::timing::phase("session", || workspace.session(&grant.doc)) {
+    // A cold session opens its document: blocking work, off the runtime's workers.
+    let session = {
+        let (ws, doc) = (workspace.clone(), grant.doc.clone());
+        crate::timing::blocking(move || crate::timing::phase("session", || ws.session(&doc))).await
+    };
+    let session = match session {
         Ok(s) => s,
         Err(e) => return refuse(status_of(e.status), &e.message),
     };
@@ -115,13 +120,17 @@ async fn dispatch(
     }
     // The grant, not the request, says who this is: an app frame cannot name
     // its own actor or scope.
-    let resp = napkin_host::dispatch_async(
-        &grant.tenant.ctx_for(&grant.person),
-        &session,
-        &*ctx.config,
-        req,
-    )
-    .await;
+    let acting = grant.tenant.ctx_for(&grant.person);
+    // The host's synchronous routes read and write the document under its view lock and may read the whole
+    // tenant: they run on the blocking pool, so a slow one never takes a runtime worker from other requests
+    // (features/store-scan-under-lock.clan). The two that await the network stay on the runtime.
+    let resp = if napkin_host::is_async(&path) || (path == "/judge" && method == Method::POST) {
+        napkin_host::dispatch_async(&acting, &session, &*ctx.config, req).await
+    } else {
+        let (app, session) = (ctx.clone(), session.clone());
+        crate::timing::blocking(move || napkin_host::dispatch(&acting, &session, &*app.config, req))
+            .await
+    };
     crate::timing::add_ms("dispatch", started);
     // The decision view says which notices of the job index are the opener's own on this document.
     let mut resp = resp;

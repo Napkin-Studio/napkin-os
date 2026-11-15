@@ -3,8 +3,10 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // Send to Judge for the open document (features/judge.clan): the score card read from the host and kept current
-// (read once, again the moment the host says the document's data changed, and on a slow poll), the one bar button,
-// and the line a failed run leaves in the OS bar's alert. The host does the scoring and the arithmetic; this holds nothing of either.
+// (read once, again the moment the host says the document's data changed, and on a slow poll only while a Judge
+// view of the shell's own shows the card), the one bar button, and the line a failed run leaves in the OS bar's
+// alert. The host does the scoring and the arithmetic; this holds nothing of either. The Booth's Judge fold polls
+// while the Booth is open: one poll per open document, not two (features/store-scan-under-lock.clan).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { host } from '../../host'
@@ -32,7 +34,7 @@ export interface Judge {
 
 type Held = { doc: string; card: JudgeCardView | null; failed: { why: 'provider' | 'refused' | 'timeout' | 'other'; line: string } | null; note: string | null }
 
-export function useJudge(docPath: string, on: boolean): Judge {
+export function useJudge(docPath: string, on: boolean, shown = false): Judge {
   // Kept with the document it was read for, like the shell's other bands: the next document starts with nothing.
   const [held, setHeld] = useState<Held>({ doc: docPath, card: null, failed: null, note: null })
   const cur: Held = held.doc === docPath ? held : { doc: docPath, card: null, failed: null, note: null }
@@ -56,11 +58,11 @@ export function useJudge(docPath: string, on: boolean): Judge {
     }
     load.current = () => { void read() }
     void read()
-    const timer = setInterval(() => { void read() }, POLL_MS)
+    const timer = shown ? setInterval(() => { void read() }, POLL_MS) : undefined
     let unlisten: (() => void) | undefined
     void httpHost.on('clan-data-changed', () => { void read() }).then(u => { if (fresh) unlisten = u; else u() }).catch(() => {})
     return () => { fresh = false; clearInterval(timer); unlisten?.() }
-  }, [docPath, on, opsOf, patch])
+  }, [docPath, on, shown, opsOf, patch])
 
   const piece = cur.card?.piece ?? undefined
   const send = useCallback(async () => {

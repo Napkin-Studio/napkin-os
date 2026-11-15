@@ -292,6 +292,18 @@ fn aside_id(path: &str, key: &str) -> String {
 /// need is for. The gate's own row is left out (it is a `gate:` item already) and so is the timesheet
 /// reminder, which is on no document. Built from the caller's own visible needs, so it names nobody else.
 pub fn notices_on(ctx: &AppCtx, index: &JobIndex, user: &Account, path: &str) -> Vec<Value> {
+    notices_by_path(ctx, index, user)
+        .remove(path)
+        .unwrap_or_default()
+}
+
+/// [`notices_on`] for every document at once, by path: the index's needs are gone through once, not once a
+/// document (the desk's `GET /needs` with `documents[]` was O(documents x needs)).
+pub fn notices_by_path(
+    ctx: &AppCtx,
+    index: &JobIndex,
+    user: &Account,
+) -> std::collections::HashMap<String, Vec<Value>> {
     use napkin_host::jobindex::Audience;
     // a need about the job itself (its deadline) sits on the job's brief, or else its first document
     let home_of = |job: &str| {
@@ -310,19 +322,20 @@ pub fn notices_on(ctx: &AppCtx, index: &JobIndex, user: &Account, path: &str) ->
         Audience::Role(r) => user.roles.iter().any(|x| x == r),
         Audience::Job => index.is_on(&n.job, &user.username),
     };
-    items_of(ctx, index, Some(user))
-        .into_iter()
-        .filter(|n| {
-            for_me(n)
-                && n.kind != "gate"
-                && n.kind != "timesheet"
-                && if n.path.is_empty() {
-                    home_of(&n.job) == Some(path)
-                } else {
-                    n.path == path
-                }
-        })
-        .map(|n| {
+    let mut out: std::collections::HashMap<String, Vec<Value>> = Default::default();
+    for n in items_of(ctx, index, Some(user)) {
+        if !for_me(&n) || n.kind == "gate" || n.kind == "timesheet" {
+            continue;
+        }
+        let at = if n.path.is_empty() {
+            match home_of(&n.job) {
+                Some(p) => p.to_string(),
+                None => continue,
+            }
+        } else {
+            n.path.clone()
+        };
+        let notice = {
             let who = match &n.audience {
                 Audience::Person(p) => serde_json::json!({ "person": p }),
                 Audience::Role(r) => serde_json::json!({ "role": r }),
@@ -336,8 +349,10 @@ pub fn notices_on(ctx: &AppCtx, index: &JobIndex, user: &Account, path: &str) ->
                 "due": n.due,
                 "job": n.job,
             })
-        })
-        .collect()
+        };
+        out.entry(at).or_default().push(notice);
+    }
+    out
 }
 
 /// A document's decision view as the sandbox sends it to the person who opened it: the host's answer, with
@@ -408,6 +423,10 @@ pub fn documents_for(
                 })
         })
     };
+    // every notice of the caller's, by document, gone through once
+    let mut by_path = user
+        .map(|a| notices_by_path(ctx, index, a))
+        .unwrap_or_default();
     let mut out = Vec::new();
     for job in &index.jobs {
         let on_job = index.sees_job(&job.number, name, roles);
@@ -420,7 +439,7 @@ pub fn documents_for(
             })
         });
         for d in &job.documents {
-            let notices = user.map_or_else(Vec::new, |a| notices_on(ctx, index, a, &d.path));
+            let notices = by_path.remove(&d.path).unwrap_or_default();
             let mut dues: Vec<&str> = Vec::new();
             let mut mine = 0usize;
             for h in d.holds.iter().filter(|h| {

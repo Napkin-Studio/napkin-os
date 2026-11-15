@@ -355,6 +355,8 @@ export interface LibraryItem {
   last_editor?: string
   /** Middleware jobs on it the host has not seen finish: the shell polls each (`settleJob`). */
   jobs?: string[]
+  /** It was spun off a parent it carries: the one kind of document the desk asks `/upstream` of. Absent when not. */
+  carried?: boolean
 }
 
 /** One thing a person is asked to do next on a job (napkin-host `jobindex::Need`). */

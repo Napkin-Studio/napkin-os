@@ -149,12 +149,15 @@ impl PartStore for TenantStore {
         Ok(Stamp::new(stat_stamp(&m)))
     }
 
-    /// The only write. Unchecked until W2-A4: `change.base` against
-    /// `self.version(&change.doc)` belongs here. The bytes go to a file of
+    /// The only write, under the document's write lock and refused (`409`) when
+    /// `change.base` is not the document as it stands ([`napkin_host::store::check_base`],
+    /// W2-A4): a change built on older bytes never lands over newer ones. The bytes go to a file of
     /// their own beside the document and are renamed over it: a reader sees
     /// the old document or the new one, never half of one, and the new file's
     /// inode is part of its [`stamp`](PartStore::stamp).
     fn apply(&self, change: &Change) -> HostResult<Version> {
+        let _held = napkin_host::store::write_lock(&change.doc);
+        napkin_host::store::check_base(self, change)?;
         let path = self.path_for(&change.doc)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| HostError::internal(e.to_string()))?;
@@ -287,6 +290,28 @@ mod tests {
         );
         assert!(b.read(&id).is_err());
         assert_eq!(a.read(&id).unwrap(), b"tenant a's bytes");
+    }
+
+    // W2-A4 (features/store-scan-under-lock.clan): a change built on bytes that are no longer the
+    // document's is refused, never written over the newer ones; a create over a document that exists too.
+    #[test]
+    fn a_change_on_an_older_version_is_refused() {
+        let (_d, s, _root) = store();
+        let id = doc_id("raced");
+        s.apply(&Change::create(id.clone(), b"one".to_vec()))
+            .unwrap();
+        let first = Version::of_archive(b"one");
+        s.apply(&Change::replace(id.clone(), first.clone(), b"two".to_vec()))
+            .unwrap();
+        let stale = s
+            .apply(&Change::replace(id.clone(), first, b"lost?".to_vec()))
+            .unwrap_err();
+        assert_eq!(stale.status, 409, "{stale:?}");
+        assert_eq!(s.read(&id).unwrap(), b"two");
+        let again = s
+            .apply(&Change::create(id.clone(), b"over".to_vec()))
+            .unwrap_err();
+        assert_eq!(again.status, 409);
     }
 
     #[test]

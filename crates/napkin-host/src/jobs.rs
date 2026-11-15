@@ -557,6 +557,8 @@ fn next_ordinal(reg: &Registry) -> u32 {
 /// otherwise), so a job never holds another client's work.
 pub fn link_document(store: &dyn DocStore, doc: &DocId, number: &str) -> HostResult<()> {
     let job = get(store, number)?;
+    // read, changed and written under the document's write lock: a write meanwhile is not lost
+    let _held = crate::store::write_lock(doc);
     let bytes = store.read(doc)?;
     let version = Version::of_archive(&bytes);
     let clan = ClanFile::from_bytes(bytes)?;

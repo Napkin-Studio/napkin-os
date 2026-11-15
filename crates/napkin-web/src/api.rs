@@ -847,14 +847,17 @@ async fn spinoff_targets(
     Tenant(tenant): Tenant,
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Json<Vec<SpinoffTarget>>> {
-    let (ws, session, id) = doc_session(&ctx, &tenant, &doc)?;
-    // The session may not have this document open yet; opening is what makes
-    // `app_id` answerable.
-    session.open(id)?;
-    Ok(Json(library::spinoff_targets(
-        &*ws.store,
-        session.app_id().as_deref(),
-    )))
+    crate::timing::blocking(move || {
+        let (ws, session, id) = doc_session(&ctx, &tenant, &doc)?;
+        // The session may not have this document open yet; opening is what makes
+        // `app_id` answerable.
+        session.open(id)?;
+        Ok(Json(library::spinoff_targets(
+            &*ws.store,
+            session.app_id().as_deref(),
+        )))
+    })
+    .await
 }
 
 #[derive(Deserialize)]
@@ -945,14 +948,13 @@ async fn open_document(
     Extension(Person(person)): Extension<Person>,
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Json<OpenView>> {
-    let ws = ctx.workspace(&tenant);
-    Ok(Json(open_view(
-        &ctx,
-        &tenant,
-        &person,
-        &ws,
-        DocId::new(doc),
-    )?))
+    // An open reads and verifies the archive: blocking work, off the runtime's workers.
+    let open = crate::timing::blocking(move || {
+        let ws = ctx.workspace(&tenant);
+        open_view(&ctx, &tenant, &person, &ws, DocId::new(doc))
+    })
+    .await?;
+    Ok(Json(open))
 }
 
 #[derive(Deserialize)]
@@ -1266,8 +1268,12 @@ async fn edit_mode(
     Path((_t, doc)): Path<(String, String)>,
     Json(body): Json<EditMode>,
 ) -> ApiResult<Json<Value>> {
-    let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
-    session.set_edit_mode(body.active);
+    crate::timing::blocking(move || {
+        let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
+        session.set_edit_mode(body.active);
+        Ok::<_, ApiError>(())
+    })
+    .await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 

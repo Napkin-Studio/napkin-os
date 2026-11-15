@@ -402,11 +402,17 @@
       BF.client=!!m.on; bfDraw('judge'); bfDraw('versions');
     });
     // Read again when the document changes, when the page reads the host again, and now and then (a lock, a score
-    // or a version made from outside this page tells the page nothing), as the shell's band did.
+    // or a version made from outside this page tells the page nothing), as the shell's band did. The now and then
+    // is while the Booth is open only: it is the one Judge poll of an open document (the shell's own reads on a
+    // change, features/store-scan-under-lock.clan), and a hidden Booth shows no card.
     // The versions are read once for the fold's summary, on every data change, and while the fold is open.
     window.addEventListener('clan:dataupdated', function(){ bfReadJudge(); bfReadVersions(); });
     window.addEventListener('clan:viewloaded', function(){ bfReadJudge(); if(BF.versions.open) bfReadVersions(); });
-    setInterval(function(){ if(document.hidden) return; bfReadJudge(); if(BF.versions.open) bfReadVersions(); }, BF_POLL_MS);
+    setInterval(function(){
+      if(document.hidden) return;
+      if(typeof BOOTH!=='undefined'&&BOOTH&&BOOTH.open===false) return;
+      bfReadJudge(); if(BF.versions.open) bfReadVersions();
+    }, BF_POLL_MS);
     bfReadJudge(); bfReadVersions();
   }
 </script>

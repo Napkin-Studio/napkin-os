@@ -59,7 +59,9 @@ export function useDeskFacts(items: readonly LibraryItem[] | null, enabled: bool
     try {
       const [view, up] = await slot.current(async () => {
         const doc = await host.docOps!(item.path)
-        return Promise.all([doc.decisions(), doc.upstream().catch(() => null)])
+        // what it was made from is asked of a document that carries a parent, and of no other
+        // (features/store-scan-under-lock.clan): `upstream` reads the tenant for it
+        return Promise.all([doc.decisions(), item.carried ? doc.upstream().catch(() => null) : Promise.resolve(null)])
       })
       if (view.problem) return
       const f = factsOf(view, up)
