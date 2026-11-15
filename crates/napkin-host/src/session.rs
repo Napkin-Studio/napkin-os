@@ -1204,4 +1204,302 @@ mod tests {
             "the write is in what the session reads back"
         );
     }
+
+    // ── The view lock is not held across a scan or a read (store-scan-under-lock) ──
+
+    /// One parked call: the store says it has entered, then waits until the test lets it go.
+    struct Park {
+        armed: std::sync::atomic::AtomicBool,
+        entered: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+        release: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+    }
+
+    impl Park {
+        fn new() -> Self {
+            Self {
+                armed: std::sync::atomic::AtomicBool::new(false),
+                entered: Mutex::new(None),
+                release: Mutex::new(None),
+            }
+        }
+
+        /// Arm the next call; the receiver hears when it has entered, the sender lets it go.
+        fn arm(&self) -> (std::sync::mpsc::Receiver<()>, std::sync::mpsc::Sender<()>) {
+            let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+            let (release_tx, release_rx) = std::sync::mpsc::channel();
+            *self.entered.lock().unwrap() = Some(entered_tx);
+            *self.release.lock().unwrap() = Some(release_rx);
+            self.armed.store(true, std::sync::atomic::Ordering::SeqCst);
+            (entered_rx, release_tx)
+        }
+
+        fn hold_if_armed(&self) {
+            if self.armed.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                if let Some(tx) = self.entered.lock().unwrap().take() {
+                    let _ = tx.send(());
+                }
+                if let Some(rx) = self.release.lock().unwrap().take() {
+                    let _ = rx.recv();
+                }
+            }
+        }
+    }
+
+    /// A store whose `documents()` (the scan every whole-tenant read starts with) or whose `read` of one
+    /// document can be parked, so a test can look at the session while a scan or an open is inside it.
+    struct Parked {
+        inner: FsStore,
+        scan: Park,
+        read_of: Mutex<Option<DocId>>,
+        read: Park,
+    }
+
+    impl crate::store::PartStore for Parked {
+        fn read(&self, id: &DocId) -> HostResult<Vec<u8>> {
+            let bytes = self.inner.read(id)?;
+            if self.read_of.lock().unwrap().as_ref() == Some(id) {
+                self.read.hold_if_armed();
+            }
+            Ok(bytes)
+        }
+        fn exists(&self, id: &DocId) -> bool {
+            self.inner.exists(id)
+        }
+        fn apply(&self, change: &Change) -> HostResult<Version> {
+            self.inner.apply(change)
+        }
+    }
+
+    impl crate::store::Library for Parked {
+        fn app_candidates(&self) -> Vec<DocId> {
+            self.inner.app_candidates()
+        }
+        fn app_template(&self, app_id: &str) -> DocId {
+            self.inner.app_template(app_id)
+        }
+        fn documents(&self) -> Vec<DocId> {
+            self.scan.hold_if_armed();
+            self.inner.documents()
+        }
+        fn new_document(&self, app_id: &str, id_short: &str) -> HostResult<DocId> {
+            self.inner.new_document(app_id, id_short)
+        }
+        fn home(&self, version_tag: &str) -> HostResult<DocId> {
+            self.inner.home(version_tag)
+        }
+        fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
+            self.inner.fork_branch(parent, agent)
+        }
+    }
+
+    /// A document of `app_id` in the store's documents folder, filed under job J001, with `data` and,
+    /// when given, `lineage`.
+    fn stored(
+        dir: &std::path::Path,
+        file: &str,
+        app_id: &str,
+        data: Value,
+        lineage: Option<clan_sdk::Lineage>,
+    ) -> (DocId, String) {
+        let base = ClanFile::from_bytes(
+            clan_sdk::create(clan_sdk::CreateOptions {
+                title: file.into(),
+                brief: "a document".into(),
+                document_type: None,
+                no_render: false,
+                schema: None,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let mut m = base.manifest().clone();
+        m.app = Some(clan_sdk::AppInfo {
+            home: None,
+            name: app_id.into(),
+            app_id: app_id.into(),
+            version: "0.1.0".into(),
+            icon: None,
+            entry: "human/index.html".into(),
+            schema: None,
+            prompt_templates: vec![],
+            data_seed: None,
+            spinoff: None,
+            // the room lets a deck be linked, so `/attach-targets` reads the tenant
+            attach: Some(clan_sdk::AttachSpec {
+                accepts: vec!["ie.napkin.deck-maker".into()],
+                ..Default::default()
+            }),
+        });
+        m.job = Some("J001".into());
+        m.lineage = lineage;
+        let mut b = clan_sdk::ClanBuilder::new(m);
+        for (p, bytes) in base.read_all_entries().unwrap() {
+            if p != clan_sdk::MANIFEST_PATH && p != "shared/data.yaml" {
+                b.add_entry(p, bytes);
+            }
+        }
+        b.add_entry(
+            "shared/data.yaml",
+            serde_yaml::to_string(&data).unwrap().into_bytes(),
+        );
+        let docs = dir.join("documents");
+        std::fs::create_dir_all(&docs).unwrap();
+        let id = DocId::from(docs.join(file));
+        let bytes = b.build().unwrap();
+        let doc_id = ClanFile::from_bytes(bytes.clone())
+            .unwrap()
+            .document_id()
+            .to_string();
+        std::fs::write(id.as_str(), bytes).unwrap();
+        (id, doc_id)
+    }
+
+    /// An Idea room spun off a brief (it carries the brief, so `/upstream`, `/related` and `/judge` look the
+    /// brief up in the store), filed under a job with an open contest (so `/decisions` reads the job index),
+    /// open in a session with the job index behind it, as the web server holds one.
+    fn room_on_a_parked_store() -> (tempfile::TempDir, Arc<Parked>, Arc<Session>, DocId) {
+        let dir = tempfile::tempdir().unwrap();
+        let (brief, brief_id) = stored(
+            dir.path(),
+            "brief.clan",
+            crate::ops::gate::BRIEF_MAKER,
+            serde_json::json!({ "insight": "Younger drinkers think it is for someone else." }),
+            None,
+        );
+        let lineage = clan_sdk::Lineage {
+            parent_id: brief_id.clone(),
+            parent_uri: format!("clan-store:{}", brief.as_str()),
+            parent_sha256: None,
+            delta: "spinoff".into(),
+            parents: vec![],
+            merge: false,
+            carried: Some(clan_sdk::Carried {
+                document_id: brief_id.clone(),
+                data_sha256: "sha256:0".into(),
+                facts_sha256: None,
+                findings_sha256: None,
+                sources_sha256: None,
+                last_decision: None,
+            }),
+            attached: vec![],
+        };
+        let (room, _) = stored(
+            dir.path(),
+            "room.clan",
+            crate::ops::ideas::IDEA_ROOM,
+            serde_json::json!({
+                "upstream": { brief_id: { "insight": "Younger drinkers think it is for someone else." } },
+                "selection": { "contested": [
+                    { "id": "c1", "key": "tone", "status": "open", "values": [] }
+                ] },
+            }),
+            Some(lineage),
+        );
+        let store = Arc::new(Parked {
+            inner: FsStore::new(dir.path().to_path_buf()),
+            scan: Park::new(),
+            read_of: Mutex::new(None),
+            read: Park::new(),
+        });
+        let clock: Arc<dyn Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync> =
+            Arc::new(chrono::Utc::now);
+        let session = Arc::new(
+            Session::new(store.clone())
+                .with_jobs(Arc::new(crate::jobindex::IndexCache::new()), clock),
+        );
+        session.open(room.clone()).unwrap();
+        (dir, store, session, room)
+    }
+
+    fn get(session: &Session, path: &str) -> crate::routes::HostResponse {
+        crate::routes::handle(
+            session,
+            &crate::config::NoConfig,
+            crate::routes::HostRequest::new(path, "", Vec::new()),
+        )
+    }
+
+    // The design's test 1: while a read route scans the tenant, the document's view lock is free, so the
+    // routes that do no work (`/capabilities`) are not queued behind it. Deterministic: the scan is parked
+    // in the store until the test has looked.
+    #[test]
+    fn the_view_lock_is_free_while_a_read_scans_the_tenant() {
+        let (_dir, store, session, _room) = room_on_a_parked_store();
+        let mut held = Vec::new();
+        for path in [
+            "/related",
+            "/attach-targets",
+            "/upstream",
+            "/judge",
+            "/decisions",
+        ] {
+            let (entered, release) = store.scan.arm();
+            let scan = {
+                let session = session.clone();
+                std::thread::spawn(move || get(&session, path).status)
+            };
+            if entered
+                .recv_timeout(std::time::Duration::from_secs(60))
+                .is_err()
+            {
+                store
+                    .scan
+                    .armed
+                    .store(false, std::sync::atomic::Ordering::SeqCst);
+                scan.join().unwrap();
+                panic!("{path} never read the tenant: the fixture is wrong");
+            }
+            // Inside the scan now. Look at the lock without waiting for it, and answer a no-work route
+            // only when it is free (else it would wait for the scan this thread holds parked).
+            let free = session.view.try_lock().is_ok();
+            let capabilities = free.then(|| get(&session, "/capabilities").status);
+            release.send(()).unwrap();
+            assert_eq!(scan.join().unwrap(), 200, "{path} answers");
+            if !free || capabilities != Some(200) {
+                held.push(path);
+            }
+        }
+        assert!(
+            held.is_empty(),
+            "the view lock is held across the scan of {held:?}"
+        );
+    }
+
+    // The design's test 2: an open reads, parses and verifies outside the lock. A write through the same
+    // session while the open is parked in its read completes, and when the open goes on its install is
+    // refused (an install happened since it started): the write's version stands.
+    #[test]
+    fn an_open_does_not_hold_the_lock_while_it_reads_and_a_write_meanwhile_stands() {
+        let (_dir, store, session, room) = room_on_a_parked_store();
+        *store.read_of.lock().unwrap() = Some(room.clone());
+        let (entered, release) = store.read.arm();
+        let open = {
+            let (session, room) = (session.clone(), room.clone());
+            std::thread::spawn(move || session.open(room).unwrap())
+        };
+        entered.recv().unwrap();
+        let free = session.view.try_lock().is_ok();
+        let wrote = free.then(|| session.set_context("written while the open read", false));
+        release.send(()).unwrap();
+        let opened = open.join().unwrap();
+        assert!(free, "the view lock is held while the open reads");
+        wrote.unwrap().unwrap();
+        let on_disk = crate::store::PartStore::version(&*store, &room).unwrap();
+        assert_eq!(
+            session.current_version().unwrap(),
+            on_disk,
+            "the write's version stands"
+        );
+        assert!(session
+            .entry_string("agent/context.md")
+            .unwrap()
+            .contains("written while the open read"));
+        assert_eq!(
+            opened.manifest.id,
+            session
+                .read(|d| Ok(d.clan().manifest().id.clone()))
+                .unwrap(),
+            "the open answers from the snapshot that stands"
+        );
+    }
 }
