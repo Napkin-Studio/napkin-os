@@ -189,6 +189,7 @@ def key(var: str) -> str:
 
 
 def fetch(url: str) -> bytes:
-    """What the mock reads its input with."""
+    """What the mock reads its input with: http_fetch (a data: URI decoded in place, else public https only, no
+    redirect)."""
     from blobs import http_fetch
     return http_fetch(url)

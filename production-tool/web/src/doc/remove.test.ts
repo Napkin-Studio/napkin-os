@@ -345,13 +345,13 @@ describe('cancel', () => {
     expect(s.get().jobs[j.id].state).toBe('cancelled')
   })
 
-  it('says "may still be charged" when the provider cannot cancel (results.cancel false)', () => {
+  it('says "may still be made", with no money word, when the provider cannot cancel (results.cancel false)', () => {
     // No routed sheet says so today; a Runway that could not cancel stands in for one.
     const sheets = { ...SHEETS, runway: { ...SHEETS.runway, results: { ...SHEETS.runway.results, cancel: false } } }
     const runway = effectiveConfig('live', 'runway', sheets)
     expect(runway.routing.clip?.[0]).toBe('runway')
-    expect(mayStillCharge({ op: 'clip' }, runway, sheets)).toMatch(/Runway .*may still be charged/)
-    expect(cancelText({ op: 'clip', provider: 'runway' }, runway, true, sheets)).toMatch(/^Stop making this and remove it\? Runway .*may still be charged/)
+    expect(mayStillCharge({ op: 'clip' }, runway, sheets)).toMatch(/Runway .*may still be made\.$/)
+    expect(cancelText({ op: 'clip', provider: 'runway' }, runway, true, sheets)).toMatch(/^Stop making this and remove it\? Runway .*may still be made\.$/)
     expect(mayStillCharge({ op: 'clip' }, runway)).toBeNull()
     expect(cancelText({ op: 'generate', provider: 'mock' }, runway, false, sheets)).toBe('Stop making this?')
   })

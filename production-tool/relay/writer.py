@@ -26,7 +26,7 @@ from pathlib import Path
 
 from contracts import Contracts
 
-WRITE_MODEL = "claude-sonnet-5-5"
+WRITE_MODEL = "sonnet-5.5"  # an alias: the routes resolve it per wire, eu. under the pin (model_routes.py)
 PROMPT_VERSION = "skye.v3"  # skye.v1 and v2 stay bundled: ModelWriter(prompt_version="skye.v2") rolls back
 PURPOSE = "writer"
 PROMPTS = Path(__file__).parent / "prompts"

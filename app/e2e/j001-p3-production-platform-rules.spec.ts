@@ -4,6 +4,16 @@
 // design (routes, selectors, test ids): the owning record changes them to what it builds, then removes the fixme. Facts read through a document's
 // chain and the API do not move with the screen and are the part to keep.
 // No paid provider and no model: the mock provider and the stand-in middleware answer from files, keys unset, the spend cap 0.
+//
+// Still fixme after production-platform-rules (2026-11-15), and why. The rules themselves are proven below the screen:
+// relay/tests/test_platform_rules.py, test_spend*.py, test_guard_estimate.py, test_fetch_sites.py, clan-store's
+// attribution.test.ts (every write kind, person and crew) and web/src/ui/refusalWords.test.ts with app/tests/shellRules.test.ts.
+// - 75 reads the chain of J001's Production document, and no job lists an ie.napkin.production document yet: that link is
+//   phase3-doors'. Until then the chain can be read through the tool's own API (save a project in /production/, then
+//   GET /production/api/projects and /production/api/clan/{project}, unzip, read agent/decision-chain.yaml).
+// - 79's API half needs a run that reaches limit_reached or spend_stop on the stack: its relay has only the mock, priced 0,
+//   and no fault switch (`params.force`), which is media-router's or spend-guard-unified's; its screen half needs the
+//   run-hero door and the refusal test id (phase3-doors).
 
 import { expect, test } from '@playwright/test'
 import { SIZES, chainOf } from './pilot'

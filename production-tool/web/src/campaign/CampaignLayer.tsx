@@ -408,7 +408,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
                     <button key={m} type="button" role="menuitemradio" aria-checked={size.method === m} className="pt-menurow" disabled={off || size.method === m}
                       title={PAID.has(m) && !models[m] ? 'Off for your agency' : undefined}
                       onClick={() => pickMethod(m)}>
-                      {METHOD_WORD[m]}<span className="hint">{PAID.has(m) ? models[m]?.label ?? 'off' : 'free'}</span>{size.method === m && ' ✓'}
+                      {METHOD_WORD[m]}{PAID.has(m) && <span className="hint">{models[m]?.label ?? 'off'}</span>}{size.method === m && ' ✓'}
                     </button>
                   )
                 })}

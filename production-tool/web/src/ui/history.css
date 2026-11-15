@@ -32,7 +32,6 @@
 .history-agent { font-weight: 700; color: var(--ink); }
 .history-model { font-family: var(--f-mono); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
 .history-pin { font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--ink2); }
-.history-cost { font-family: var(--f-mono); font-size: 10.5px; white-space: nowrap; }
 .history-head time { font-family: var(--f-mono); font-size: 11px; }
 .history-action { margin-top: 2px; color: var(--ink); line-height: 1.4; }
 .history-why { margin-top: 4px; line-height: 1.4; overflow-wrap: anywhere; color: var(--ink2); }

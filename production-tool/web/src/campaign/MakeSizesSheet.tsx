@@ -162,7 +162,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot">
-              <span className="cf-note">{makeable.length} of {rows.length} can be made now{paidCount ? `; ${paidCount} on a model (cost in History)` : ''}. Each lands on a Campaign board beside the master.</span>
+              <span className="cf-note">{makeable.length} of {rows.length} can be made now{paidCount ? `; ${paidCount} on a model` : ''}. Each lands on a Campaign board beside the master.</span>
               <span className="pt-grow" />
               <button type="button" className="btn ghost" onClick={() => setStep(master.media === 'image' ? 'protect' : 'plan')}>Back</button>
               <button type="button" className="btn primary" disabled={busy || !makeable.length} onClick={() => void send()}>

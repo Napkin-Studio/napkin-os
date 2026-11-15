@@ -1,0 +1,10 @@
+# Napkin Brain pipeline contract. Travels into every brain.
+# The brain declares no task yet: its pages are made by code in the host, not by a model.
+# The curator and Ask the brain add their tasks here, behind the spend guard (server/napkin/spend.py).
+pipeline: napkin-agency-brain
+version: 1
+request_kind: middleware
+
+tasks: {}
+
+errors: non-2xx status; a 200 body must never contain an `error` key.

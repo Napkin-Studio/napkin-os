@@ -64,8 +64,13 @@ class ClaudeDirector:
 
     def use_config(self, cfg: dict) -> None:
         d = self.director
-        d.per_click_model = cfg.get("perClickModel") or d.per_click_model
-        d.shot_list_model = cfg.get("shotListModel") or d.shot_list_model
+        for field, attr in (("perClickModel", "per_click_model"), ("shotListModel", "shot_list_model")):
+            want = cfg.get(field)
+            refused = want and d.port.routes.vouch(want) if hasattr(d, "port") else None
+            if refused:   # a config edit cannot move client text off the EU pin: the model in force stays
+                log.error("config %s %s refused: %s; keeping %s", field, want, refused, getattr(d, attr))
+            elif want:
+                setattr(d, attr, want)
         version = cfg.get("promptVersion")
         if version:
             require_prompt(version)  # an older prompt under contract 3 is refused, loudly
@@ -111,12 +116,35 @@ class ClaudeDirector:
         return out
 
 
+def pinned_routes(api: str, env=None):
+    """The routes every model call of the relay resolves through (director, Skye, the cutter, cards): the routes
+    file (NAPKIN_MODEL_ROUTES) under the EU pin (NAPKIN_MODEL_PIN=eu). Start-up stops (RoutesError) on a route,
+    or on a model the relay names itself, that the pin cannot vouch for (features/production-platform-rules.clan,
+    ADR-004). Unset is NAPKIN_MODEL_PIN=eu."""
+    from writer import WRITE_MODEL
+
+    from director.model_routes import Routes, RoutesError
+    env = os.environ if env is None else env
+    # Pinned unless a developer says otherwise: unset is eu (fails closed). Only an explicit `off` unpins, for a
+    # developer's own model login with no client material; a deployed relay never sets it.
+    pin = (env.get("NAPKIN_MODEL_PIN") or "eu").strip().lower()
+    if pin == "off":
+        log.error("model routes: NAPKIN_MODEL_PIN=off: the EU pin is OFF, client text may leave the EU")
+    routes = Routes(api, PER_CLICK, source=env.get("NAPKIN_MODEL_ROUTES") or None, pin=None if pin == "off" else pin)
+    bad = [f"{who}: {why}" for who, m in (("the director", PER_CLICK), ("the shot list", SHOT_LIST), ("Skye", WRITE_MODEL))
+           if (why := routes.vouch(m))]
+    if bad:
+        raise RoutesError("; ".join(bad))
+    log.warning("model routes: pin %s on the %s wire", routes.pin or "none", api)
+    return routes
+
+
 def make(wire=None):
     api = os.environ.get("NAPKIN_MODEL_API", "").strip()
     if wire is None and not api and not os.environ.get("ANTHROPIC_API_KEY"):
         log.warning("no model configured (NAPKIN_MODEL_API, ANTHROPIC_API_KEY): the passthrough director runs")
         return PassthroughDirector()
     wire = wire or build_wire(settings_from_env())
-    port = ModelPort(wire, PER_CLICK, timeout=TIMEOUT_S)
+    port = ModelPort(wire, PER_CLICK, timeout=TIMEOUT_S, routes=pinned_routes(wire.api))
     return ClaudeDirector(Director(port, PROMPTS, load_sheets(), per_click_model=PER_CLICK,
                                    shot_list_model=SHOT_LIST, prompt_version=PROMPT_VERSION))

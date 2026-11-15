@@ -478,12 +478,12 @@ def test_only_runs_of_twenty_characters_or_more_count_as_given():
 def test_a_slow_frame_fetch_goes_to_the_passthrough_and_says_so(monkeypatch):
     h = harness()
     wire = dex(h, CAMERA)
-    slow = h.blobs.fetch
+    slow = h.blobs.fetch_own   # the frame is a URL the request names: read with fetch_own (review C)
 
     def fetch(url):
         time.sleep(0.3)
         return slow(url)
-    monkeypatch.setattr(h.blobs, "fetch", fetch)
+    monkeypatch.setattr(h.blobs, "fetch_own", fetch)
     monkeypatch.setattr(h.relay, "FRAME_FETCH_S", 0.05)
     job = post(h, h.as_person(), edit_input())
     assert not wire.calls

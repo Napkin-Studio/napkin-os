@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { LocalPatchBus, agentKind, cardsFromRationale, crewFor, jobRationale, landingWhy, opVerb, recordJobOutcome, sawPart, type JobEntry } from '../src/index'
-import { MAYA, id, jobValue, sha, store } from './fixtures'
+import { CREW, HostRefused, LocalPatchBus, MIGRATION_AGENT, agentKind, cardsFromRationale, crewFor, jobRationale, landingWhy, opVerb, recordJobOutcome, sawPart, type Doc, type JobEntry } from '../src/index'
+import { APP_ID, freshHost, route } from '../src/host'
+import { AT, MAYA, defaults, example, id, jobValue, sha, store, wasmBytes } from './fixtures'
 
 /** patch.schema.json Why.rationale maxLength. */
 const RATIONALE_MAX = 2000
@@ -172,5 +173,101 @@ describe('attribution: people and the crew', () => {
       expect(e.rationale).toBe(why.rationale)
       expect(cardsFromRationale(e.rationale ?? '').cards).toHaveLength(3)
     })
+  })
+})
+
+// Every write to a Production .clan names an agent and an action, for people and for the crew
+// (features/production-platform-rules.clan, done_when 4): each write kind the Production line adds
+// (format sizes, type layers, the timeline, takes), as a person and as a crew member, and a write
+// that names neither, or names an agent that is neither a person nor the crew, is refused.
+describe('every write kind the line adds names an agent and an action', () => {
+  type Any = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+  const ME = `human:${MAYA.id}`
+  const named = (d: { agent?: string; action?: string }) => !!d.agent?.trim() && !!d.action?.trim()
+  const known = (agent: string) => agent === ME || agent === MIGRATION_AGENT || (CREW as readonly string[]).includes(agent)
+
+  async function campaign() {
+    const ad = example<Doc>('document.campaign.json')
+    const s = store()
+    await s.create({ person: MAYA })
+    const { upstream: _up, ...rest } = ad as Any
+    const wipe = Object.fromEntries(['scripts', 'storyboards', 'videos', 'links'].map((m) => [m, Object.fromEntries(Object.keys(s.get()[m as 'links']).map((k) => [k, null]))]))
+    await s.patch(wipe, { action: 'delete the defaults' })
+    await s.patch({ project: rest.project, assets: rest.assets, boards: rest.boards }, { action: 'bring in the key visual' })
+    await s.patch({ scripts: rest.scripts, storyboards: rest.storyboards, videos: rest.videos }, { action: 'plan the film' })
+    return { s, rest, bus: new LocalPatchBus(s) }
+  }
+
+  it('format sizes and type layers, by a person and by the crew', async () => {
+    const { s, rest, bus } = await campaign()
+    await s.patch({ format_sets: rest.format_sets, sizes: rest.sizes, links: rest.links }, { action: 'make all sizes' })
+    const size = Object.keys(rest.sizes)[0]
+    const v = () => (s.get().sizes[size] as Any).v as number
+    let r = await bus.apply({ patches: [{ op: 'set', entity: 'sizes', id: size, path: 'status', value: 'ready', base_version: v() }], why: { action: 'render size', agent: 'wren' } })
+    expect(r.refused).toEqual([])
+    r = await bus.apply({ patches: [{ op: 'set', entity: 'sizes', id: size, path: 'layers', value: { line: { text: 'First light.', scale: 1.1 } }, base_version: v() }], why: { action: 'set type layers' } })
+    expect(r.refused).toEqual([])
+    r = await bus.apply({ patches: [{ op: 'set', entity: 'sizes', id: size, path: 'layers', value: { legal: { hidden: false } }, base_version: v() }], why: { action: 'retouch type layers', agent: 'rhea' } })
+    expect(r.refused).toEqual([])
+    const chain = await s.chain()
+    expect(chain.length).toBeGreaterThan(0)
+    for (const d of chain) expect([d.agent, d.action, named(d) && known(d.agent)]).toEqual([d.agent, d.action, true])
+    expect(chain.map((d) => [d.agent, d.action])).toEqual(expect.arrayContaining([
+      [ME, 'make all sizes'], ['wren', 'render size'], [ME, 'set type layers'], ['rhea', 'retouch type layers'],
+    ]))
+  })
+
+  it('takes and the timeline, by a person and by the crew', async () => {
+    const s = store()
+    await s.create({ person: MAYA })
+    const bus = new LocalPatchBus(s)
+    const video = defaults(s).video
+    const G = id('gen', 1)
+    const ITEM = id('item', 1)
+    const gen = { kind: 'clip', shot_ids: [id('shot', 1)], state: 'making', created_at: AT, by: ME }
+    let r = await bus.apply({ patches: [{ op: 'create', entity: 'generations', id: G, value: gen, base_version: 0 }], why: { action: 'make box 1' } })
+    expect(r.refused).toEqual([])
+    r = await bus.apply({ patches: [
+      { op: 'set', entity: 'generations', id: G, path: 'state', value: 'ready', base_version: 1 },
+      { op: 'set', entity: 'generations', id: G, path: 'asset', value: sha(7), base_version: 1 },
+      { op: 'set', entity: 'generations', id: G, path: 'duration_s', value: 4, base_version: 1 },
+    ], why: { action: 'render take v1', agent: 'wren' } })
+    expect(r.refused).toEqual([])
+    const vv = () => (s.get().videos[video] as Any).v as number
+    r = await bus.apply({ patches: [{ op: 'set', entity: 'videos', id: video, path: `timeline/${ITEM}`, value: { track: 'V1', start_s: 0, source: { generation_id: G, in_s: 0, out_s: 2 } }, base_version: vv() }], why: { action: 'assemble first cut' } })
+    expect(r.refused).toEqual([])
+    r = await bus.apply({ patches: [{ op: 'set', entity: 'videos', id: video, path: `timeline/${ITEM}/source/out_s`, value: 3, base_version: vv() }], why: { action: 'edit the cut', agent: 'edie' } })
+    expect(r.refused).toEqual([])
+    const chain = await s.chain()
+    for (const d of chain) expect([d.agent, d.action, named(d) && known(d.agent)]).toEqual([d.agent, d.action, true])
+    expect(chain.map((d) => [d.agent, d.action])).toEqual(expect.arrayContaining([
+      [ME, 'make box 1'], ['wren', 'render take v1'], [ME, 'assemble first cut'], ['edie', 'edit the cut'],
+    ]))
+  })
+
+  it('a write with no action, or an agent that is neither a person nor the crew, is refused and leaves the chain as it was', async () => {
+    const s = store()
+    await s.create({ person: MAYA })
+    const before = (await s.chain()).length
+    await expect(s.patch({ project: { title: 'No action' } }, { action: ' ' })).rejects.toThrow(/action/)
+    await expect(s.patch({ project: { title: 'Nobody' } }, { action: 'rename', agent: 'maya' })).rejects.toThrow(/agent/)
+    await expect(s.record({ action: 'note', agent: 'somebody' })).rejects.toThrow(/agent/)
+    await expect(s.record({ action: '' })).rejects.toThrow(/action/)
+    const bus = new LocalPatchBus(s)
+    const r = await bus.apply({ patches: [{ op: 'set', entity: 'project', id: 'project', path: 'title', value: 'Ghost', base_version: (s.get().project as Any).v ?? 0 }], why: { action: 'rename', agent: 'ghost' } })
+    expect(r.applied).toBe(false)
+    expect((await s.chain()).length).toBe(before)
+    expect(s.get().project.title).not.toBe('Ghost')
+  })
+
+  it('the host itself refuses a write that names no agent or no action (ADR-004)', async () => {
+    const h = await freshHost(wasmBytes())
+    try {
+      h.newDocument(APP_ID, 'Client A')
+      expect(() => route(h, '/patch-data', { patch: { project: { title: 'x' } }, agent: '', action: 'rename' })).toThrow(HostRefused)
+      expect(() => route(h, '/patch-data', { patch: { project: { title: 'x' } }, agent: 'human:p_maya001', action: '' })).toThrow(HostRefused)
+    } finally {
+      h.free()
+    }
   })
 })
