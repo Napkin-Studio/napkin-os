@@ -63,7 +63,7 @@ export const DOORS: readonly Door[] = [
     example: { title: A, lines: ['Scope: three territories, two rounds of changes.'] } },
   { id: 'agency-dashboard', name: 'Agency dashboard', homes: ['management'], appId: null, line: 'Five plain numbers about the agency go here.', verb: 'See the J001 numbers',
     example: { title: A, lines: ['Live jobs: 1. Briefs signed this month: 1.'] } },
-  { id: 'time-money', name: 'Time and money', homes: ['management'], appId: null, line: 'Hours and spend against each job go here.', verb: 'Open job J001',
+  { id: 'time-money', name: 'Time and money', homes: ['management'], appId: null, line: 'Hours against each job go here.', verb: 'Open job J001',
     example: { title: A, lines: ['J001: 41 of 60 hours used.'] } },
   { id: 'traffic-board', name: 'Traffic board', homes: ['management', 'traffic'], appId: null, line: 'Who is on what, and when it is due, goes here.', verb: 'Open the board',
     example: { title: A, lines: ['Brief, Aoife, done. Territories, Ciaran, due Friday.'] } },

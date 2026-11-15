@@ -83,7 +83,8 @@ fn by_judge() -> Ctx {
 fn a_runs_cost_is_one_run_cost_decision_by_the_tasks_agent_with_numbers_and_ids_only() {
     let (_dir, session, id) = fixture();
     let usage = json!({ "estimate_eur": 0.05, "charged_eur": 0.02, "route": "eu-small" });
-    let cost = RunCost::from_usage(&usage).expect("a usage block is a cost");
+    let cost =
+        RunCost::from_usage(&usage, "judge_work", Some("job_7")).expect("a usage block is a cost");
     let version = session.current_version().unwrap();
     session
         .perform(&by_judge(), |c, d| judge::run_cost_outcome(c, d, &cost))
@@ -111,6 +112,7 @@ fn a_runs_cost_is_one_run_cost_decision_by_the_tasks_agent_with_numbers_and_ids_
             "document",
             "estimate_eur",
             "guard",
+            "job",
             "route",
             "task",
             "version"
@@ -121,6 +123,7 @@ fn a_runs_cost_is_one_run_cost_decision_by_the_tasks_agent_with_numbers_and_ids_
     assert_eq!(block["route"], "eu-small");
     assert_eq!(block["guard"], "allowed");
     assert_eq!(block["task"], "judge_work");
+    assert_eq!(block["job"], "job_7");
     assert_eq!(block["version"], version.as_str());
     assert_eq!(
         block["document"],
@@ -133,22 +136,23 @@ fn a_runs_cost_is_one_run_cost_decision_by_the_tasks_agent_with_numbers_and_ids_
         d.rationale
     );
 
-    // a run the guard refused costs nothing and says so
-    let refused = RunCost::refused();
+    // another task's cost is the middleware's, not Judge's: the host names the agent from the task, never a body
+    let other = RunCost::from_usage(&usage, "draft_brief", None).unwrap();
     session
-        .perform(&by_judge(), |c, d| judge::run_cost_outcome(c, d, &refused))
+        .perform(&by_judge(), |c, d| judge::run_cost_outcome(c, d, &other))
         .unwrap();
-    let c = chain(&id);
-    let block = serde_json::to_value(c.decisions[0].extra.get("run_cost").unwrap()).unwrap();
-    assert_eq!(
-        (block["guard"].clone(), block["charged_eur"].clone()),
-        (json!("refused"), json!(0.0))
-    );
+    assert_eq!(chain(&id).decisions[0].agent, "middleware");
 
-    // a usage block that is not numbers is no cost: nothing is invented
-    assert!(RunCost::from_usage(&json!({ "charged_eur": "a lot" })).is_none());
-    assert!(RunCost::from_usage(&json!(null)).is_none());
-    assert!(RunCost::from_usage(&json!({ "charged_eur": -1.0, "estimate_eur": 0.0 })).is_none());
+    // nothing charged is no cost (a refusal, a call the model-level guard stopped), and a usage block that is not
+    // numbers is no cost either: nothing is invented (review of 15 Nov, item 2)
+    for u in [
+        json!({ "estimate_eur": 0.05, "charged_eur": 0.0, "route": "eu-small" }),
+        json!({ "charged_eur": "a lot" }),
+        json!(null),
+        json!({ "charged_eur": -1.0, "estimate_eur": 0.0 }),
+    ] {
+        assert!(RunCost::from_usage(&u, "judge_work", None).is_none(), "{u}");
+    }
 }
 
 // Review finding (a): the decision chain is sent to agents with every request (`clan.decision_chain`); a run's
@@ -158,6 +162,8 @@ fn no_run_cost_no_budget_and_no_verdict_price_reaches_an_agent() {
     let (_dir, session, _id) = fixture();
     let cost = RunCost::from_usage(
         &json!({ "estimate_eur": 0.05, "charged_eur": 0.02, "route": "eu-small" }),
+        "judge_work",
+        None,
     )
     .unwrap();
     session

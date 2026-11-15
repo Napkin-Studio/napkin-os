@@ -345,12 +345,15 @@ pub struct JobRights {
     pub manage: bool,
     /// Set the budget in hours.
     pub budget: bool,
+    /// Read a budget and hours against it (the Money group): a screen shows such a figure only when this is true.
+    pub read_budget: bool,
 }
 
 pub fn job_rights(roles: &[String]) -> JobRights {
     JobRights {
         manage: may_manage_jobs(roles),
         budget: may_set_budget(roles),
+        read_budget: may_read_budget(roles),
     }
 }
 
@@ -960,7 +963,8 @@ mod tests {
             v.jobs,
             JobRights {
                 manage: false,
-                budget: false
+                budget: false,
+                read_budget: false
             }
         );
         assert!(allowed(&[], "/t/x/jobs/J001", None));

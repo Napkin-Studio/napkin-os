@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from napkin import client_ai, registry
+from napkin import client_ai, registry, spend
 from napkin.app import Middleware
 from napkin.config import Settings, _default_pipelines
 from napkin.judge import calibrate, core, rubric
@@ -378,17 +378,67 @@ def test_trust_is_earned_only_when_every_number_clears():
 # The host writes it as the document's run_cost decision; the middleware only reports what the spend guard let
 # through. Numbers and a route name, never content.
 
-def test_the_envelope_hands_back_the_runs_cost_and_the_fixture_backend_costs_nothing(yes, monkeypatch):
+def test_the_envelope_hands_back_what_the_run_actually_cost_and_the_fixture_backend_costs_nothing(yes, monkeypatch):
+    # review of 15 Nov, item 2: charged_eur is what the calls that went out cost (their tokens at the model's rate, as
+    # the spend guard prices them), not the configured price; the configured price is the guard's estimate
     monkeypatch.setenv("NAPKIN_JUDGE_PRICE_EUR", "0.04")
     out = middleware().handle(body())
     u = out["usage"]
     assert set(u) == {"estimate_eur", "charged_eur", "route"}
-    assert u["estimate_eur"] == 0.04 and u["charged_eur"] == 0.04
+    assert u["estimate_eur"] == 0.04
+    assert 0 < u["charged_eur"] != 0.04, u
+    # three calls of 100 tokens in and 50 out (tests/fakes.py), at the rate the guard uses for the model
+    m = out["trace"]["model"]
+    pin, pout = spend.model_rates(m) or spend.CEILING_PER_MTOK
+    assert u["charged_eur"] == round(300 / 1e6 * pin + 150 / 1e6 * pout, 6)
     assert isinstance(u["route"], str) and u["route"]
     assert CANARY not in json.dumps(u)
     monkeypatch.setenv("NAPKIN_JUDGE_BACKEND", "fixture")
     out = middleware().handle(body())
     assert out["usage"] == {"estimate_eur": 0.0, "charged_eur": 0.0, "route": "fixture"}
+
+
+def test_a_call_the_model_level_guard_stopped_charges_nothing(yes, monkeypatch):
+    # the judge-level guard let the run through, the model-level guard then stopped every call: nothing went out, so
+    # the error carries no usage and the host writes no run_cost
+    from napkin import model as model_mod
+    def stop(**_):
+        raise model_mod.ModelError("judge_idea: not sent: the spend cap", "server")
+    monkeypatch.setattr(model_mod, "guard_spend", stop)
+    jm = JudgeModel()
+    e = refused(middleware(jm), 502, "provider_error")
+    assert jm.calls == [], "nothing was sent"
+    assert not getattr(e, "usage", None), "nothing was charged, so nothing is reported"
+
+
+def test_a_500_after_a_charged_call_still_says_what_it_cost(yes, monkeypatch):
+    # a failure nobody named (a 500) after a call went out: the error body still carries what was spent
+    monkeypatch.setenv("NAPKIN_JUDGE_PRICE_EUR", "0.04")
+    def boom(*a, **k):
+        raise RuntimeError("a bug after the call")
+    monkeypatch.setattr(core, "merge", boom)
+    from fastapi.testclient import TestClient
+    from napkin.app import create_app
+    app = create_app(Settings(pipelines=_default_pipelines()), model_client=JudgeModel(), layer_store=layer_store())
+    r = TestClient(app).post("/v1/tasks", json=body())
+    assert r.status_code == 500
+    err = r.json()["error"]
+    assert err["type"] == "internal" and err["usage"]["charged_eur"] > 0
+    assert set(err["usage"]) == {"estimate_eur", "charged_eur", "route"}
+
+
+def test_any_tasks_envelope_reports_what_its_model_calls_cost_once_the_job_has_ended():
+    # not only Judge: every task's envelope says what its calls cost, and a long job says it once, when it ends
+    from types import SimpleNamespace
+    from napkin.app import spend_usage
+    from napkin.model import Usage
+    u = Usage()
+    u.add(1000, 500, "claude-sonnet-4-5")
+    caps = SimpleNamespace(usage=u, model=SimpleNamespace(model_id="claude-sonnet-4-5"))
+    done = spend_usage(caps)
+    assert done["charged_eur"] > 0 and done["estimate_eur"] == done["charged_eur"]
+    assert spend_usage(caps, ended=False) == {"estimate_eur": 0.0, "charged_eur": 0.0, "route": None}
+    assert spend_usage(SimpleNamespace(usage=Usage())) == {"estimate_eur": 0.0, "charged_eur": 0.0, "route": None}
 
 
 def test_every_task_envelope_carries_a_usage_block_of_zeros_when_nothing_was_charged(monkeypatch):
@@ -406,7 +456,7 @@ def test_a_charged_run_whose_answer_is_malformed_still_reports_its_cost(yes, mon
         out.pop(next(iter(out)))
         return out
     e = refused(middleware(JudgeModel(mutate=drop_one)), 502, "judge_malformed")
-    assert e.usage["charged_eur"] == 0.04 and e.usage["estimate_eur"] == 0.04
+    assert e.usage["charged_eur"] > 0 and e.usage["estimate_eur"] == 0.04
     # and over HTTP, the error body carries it beside the type and the message, and nothing else
     from fastapi.testclient import TestClient
     from napkin.app import create_app
@@ -415,7 +465,7 @@ def test_a_charged_run_whose_answer_is_malformed_still_reports_its_cost(yes, mon
     r = TestClient(app).post("/v1/tasks", json=body())
     assert r.status_code == 502
     err = r.json()["error"]
-    assert set(err) == {"type", "message", "usage"} and err["usage"]["charged_eur"] == 0.04
+    assert set(err) == {"type", "message", "usage"} and err["usage"]["charged_eur"] > 0
     assert CANARY not in r.text
     # a refusal before any charge carries no usage: nothing was spent
     monkeypatch.setenv("NAPKIN_PAID_CALLS", "off")

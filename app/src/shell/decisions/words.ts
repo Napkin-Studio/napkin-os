@@ -219,9 +219,8 @@ function linkLine(block: DecisionBlock, view: DecisionsView): string | null {
 }
 
 /** What one run cost, said in the one place costs are read: the Decisions drawer (features/align-confidential-prices.clan).
- *  A figure that is not a number is never shown; a run the spend guard refused cost nothing. */
-export function runCostLine(c: { charged_eur?: unknown; guard?: unknown } | null | undefined): string {
-  if (c?.guard === 'refused') return 'a run was refused before it started. It cost nothing'
+ *  A figure that is not a number is never shown. A refusal writes no run_cost at all. */
+export function runCostLine(c: { charged_eur?: unknown } | null | undefined): string {
   const n = typeof c?.charged_eur === 'number' && Number.isFinite(c.charged_eur) && c.charged_eur >= 0 ? c.charged_eur : 0
   return `this run cost ${n.toFixed(2)}`
 }
@@ -234,7 +233,7 @@ export function budgetWords(c: { hours?: unknown } | null | undefined): string {
 
 export function didWhat(block: DecisionBlock, view: DecisionsView): string {
   const d = block.decision
-  if (d.kind === 'run_cost') return runCostLine(d.run_cost as { charged_eur?: unknown; guard?: unknown } | undefined)
+  if (d.kind === 'run_cost') return runCostLine(d.run_cost as { charged_eur?: unknown } | undefined)
   if (d.kind === 'set_budget') return budgetWords(d.set_budget as { hours?: unknown } | undefined)
   const t = mainTarget(block)
   const what = t ? strip(t.label) : 'the document'

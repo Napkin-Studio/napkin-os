@@ -945,51 +945,68 @@ pub fn score_outcome(
 
 // ── what a run cost ─────────────────────────────────────────────────────────
 
-/// What one run cost, as the middleware's task envelope reports it (`usage`, docs/contracts/middleware-api.md):
-/// what the spend guard counted, what was charged, the route, and whether the guard let it go. Numbers and a
-/// name, no content.
+/// What one run cost, as the middleware's task envelope reports it (`usage`, docs/contracts/middleware-api.md): what
+/// the spend guard counted, what the calls that went out cost, the route, the task and the middleware's job. Numbers,
+/// a name and ids, no content. Only a call that was sent and charged is a cost (review of 15 Nov, item 2): a refusal,
+/// and a call that charged nothing, are not.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RunCost {
     pub estimate_eur: f64,
     pub charged_eur: f64,
     pub route: Option<String>,
-    /// `allowed` or `refused`.
-    pub guard: &'static str,
+    /// The middleware task that ran (`judge_work`, `draft_brief`, …): a name the host checks, never trusted as prose.
+    pub task: String,
+    /// The middleware's job id, when it gave one: one cost per job, however often the job is polled.
+    pub job: Option<String>,
+}
+
+/// A short machine name: letters, digits, `_`, `-`, `.`, `@`, at most 80 characters.
+fn plain_id(s: &str) -> Option<String> {
+    (!s.is_empty()
+        && s.len() <= 80
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "_-.@".contains(c)))
+    .then(|| s.to_string())
 }
 
 impl RunCost {
-    /// Read a `usage` block. `None` when there is none, or when its figures are not numbers at or above zero:
-    /// nothing is invented.
-    pub fn from_usage(usage: &Value) -> Option<RunCost> {
+    /// Read a `usage` block for `task` (and the middleware's `job`). `None` when there is none, when its figures are
+    /// not numbers at or above zero, or when nothing was charged: nothing is invented and nothing free is recorded.
+    pub fn from_usage(usage: &Value, task: &str, job: Option<&str>) -> Option<RunCost> {
         let n = |k: &str| {
             usage
                 .get(k)
                 .and_then(Value::as_f64)
                 .filter(|v| v.is_finite() && *v >= 0.0)
         };
+        let charged_eur = n("charged_eur").filter(|c| *c > 0.0)?;
         let route = usage
             .get("route")
             .and_then(Value::as_str)
             .filter(|r| !r.is_empty() && r.len() <= 120 && !r.chars().any(char::is_control))
             .map(str::to_string);
         Some(RunCost {
-            estimate_eur: n("estimate_eur")?,
-            charged_eur: n("charged_eur")?,
+            estimate_eur: n("estimate_eur").unwrap_or(charged_eur),
+            charged_eur,
             route,
-            guard: "allowed",
+            task: plain_id(task).unwrap_or_else(|| "unknown".into()),
+            job: job.and_then(plain_id),
         })
     }
 
-    /// A run the spend guard stopped before anything was sent: nothing was charged.
-    pub fn refused() -> RunCost {
-        RunCost {
-            estimate_eur: 0.0,
-            charged_eur: 0.0,
-            route: None,
-            guard: "refused",
+    /// Who the cost is written as: Judge for its own task, the middleware for any other. The host names it from the
+    /// task; nothing in a request body does.
+    pub fn agent(&self) -> &'static str {
+        if self.task == TASK {
+            AGENT
+        } else {
+            MIDDLEWARE_AGENT
         }
     }
 }
+
+/// The agent a cost of any task but Judge's is written as.
+pub const MIDDLEWARE_AGENT: &str = "middleware";
 
 /// The kind and action of a run's cost.
 pub const RUN_COST: &str = "run_cost";
@@ -998,33 +1015,50 @@ pub const RUN_COST: &str = "run_cost";
 /// cost and a job's budget are the agency's own, read in the Decisions drawer and nowhere else.
 pub const NEVER_SENT: &[&str] = &[RUN_COST, crate::jobs::SET_BUDGET];
 
-/// Write one `run_cost` decision in the work's own chain, by the task's agent: `{document, version, task, route,
-/// estimate_eur, charged_eur, guard, at}`, numbers and ids only, and words with no figure. The Decisions drawer is the
-/// one place it is read.
+/// Whether the work's chain already holds the cost of the middleware's job `job`.
+pub fn cost_recorded(doc: &Document, job: &str) -> bool {
+    review::chain_of(doc).is_ok_and(|c| {
+        c.decisions.iter().any(|d| {
+            d.kind.as_deref() == Some(RUN_COST)
+                && d.extra
+                    .get(RUN_COST)
+                    .and_then(|b| b.get("job"))
+                    .and_then(|j| j.as_str())
+                    == Some(job)
+        })
+    })
+}
+
+/// Write one `run_cost` decision in the work's own chain, by the task's agent ([`RunCost::agent`]): `{document,
+/// version, task, job, route, estimate_eur, charged_eur, guard, at}`, numbers and ids only, and words with no figure.
+/// The Decisions drawer is the one place it is read.
 pub fn run_cost_outcome(ctx: &Ctx, doc: &Document, c: &RunCost) -> HostResult<Outcome> {
     let now = review::now();
     let id = doc.clan().document_id().to_string();
     let mut d = review::decided(
         ctx,
-        AGENT,
+        c.agent(),
         RUN_COST,
         RUN_COST,
         vec![id.clone()],
         Vec::new(),
-        "What one run of Judge cost, as the spend guard reported it.".into(),
+        "What one run cost, as the middleware reported it.".into(),
         &now,
     );
-    d.handler = Some(HANDLER.into());
+    if c.task == TASK {
+        d.handler = Some(HANDLER.into());
+    }
     d.extra.insert(
         RUN_COST.into(),
         to_yaml(&json!({
             "document": id,
             "version": doc.version().as_str(),
-            "task": TASK,
+            "task": c.task,
+            "job": c.job,
             "route": c.route,
             "estimate_eur": c.estimate_eur,
             "charged_eur": c.charged_eur,
-            "guard": c.guard,
+            "guard": "allowed",
             "at": now,
         }))?,
     );
