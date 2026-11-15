@@ -1374,11 +1374,14 @@ mod upstream {
         // The test app has no card on the home, so its name stands for its noun.
         assert_eq!(reply["action"], "update_from_campaign_research", "{reply}");
         assert_eq!(reply["document_id"], research.doc);
-        assert_eq!(reply["decisions_taken"], 3, "{reply}");
+        // The resolve, the two verdicts, and the backref the brief's /verify left on the research: that
+        // backref used to be written over by the research's next write from its older snapshot (a lost
+        // write, features/store-scan-under-lock.clan review), so this said 3.
+        assert_eq!(reply["decisions_taken"], 4, "{reply}");
 
         let now = brief.stored(&store);
         let c = chain(&now);
-        assert_eq!(c.decisions.len(), before + 4);
+        assert_eq!(c.decisions.len(), before + 5);
         let d = &c.decisions[0];
         assert_eq!(d.id.as_deref(), reply["decision"].as_str());
         assert_eq!(d.kind.as_deref(), Some("edit"));

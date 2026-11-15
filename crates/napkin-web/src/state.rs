@@ -564,6 +564,10 @@ mod tests {
         fn exists(&self, id: &DocId) -> bool {
             self.inner.exists(id)
         }
+        // a stat, as the tenant store stamps: an open's stamps are not reads of the archive
+        fn stamp(&self, id: &DocId) -> HostResult<napkin_host::Stamp> {
+            self.inner.stamp(id)
+        }
         fn apply(&self, change: &Change) -> HostResult<Version> {
             self.inner.apply(change)
         }

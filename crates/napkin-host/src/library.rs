@@ -955,14 +955,29 @@ pub fn write_backrefs(
     };
     changes
         .into_iter()
-        .filter_map(|(written, change)| match store.apply(&change) {
-            Ok(_) => Some(written),
-            Err(e) => {
-                log(&format!(
-                    "backref: {} not written: {e}",
-                    written.document_id
-                ));
-                None
+        .filter_map(|(written, change)| {
+            // Each parent is read, changed and written under its own write lock (crate::store::write_lock):
+            // two backrefs to one parent, from one child or two, or a backref and the parent's own write,
+            // never build on the same bytes. The parent was found above, outside any lock (finding it may
+            // read the tenant); here it is read again as it stands and the decision put on that.
+            let _held = crate::store::write_lock(&change.doc);
+            let applied = Document::load(store.parts(), change.doc.clone())
+                .and_then(|parent| {
+                    let d = change.decisions.first().cloned().ok_or_else(|| {
+                        HostError::internal("a backref change carries its decision")
+                    })?;
+                    with_decision(&parent, d)
+                })
+                .and_then(|fresh| store.apply(&fresh));
+            match applied {
+                Ok(_) => Some(written),
+                Err(e) => {
+                    log(&format!(
+                        "backref: {} not written: {e}",
+                        written.document_id
+                    ));
+                    None
+                }
             }
         })
         .collect()

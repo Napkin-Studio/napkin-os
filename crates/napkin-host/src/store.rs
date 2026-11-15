@@ -63,6 +63,94 @@ impl From<PathBuf> for DocId {
     }
 }
 
+// ── One writer at a time per document ──────────────────────────────────────
+
+/// Who holds one document's write lock, and how many times (it is re-entrant on its own thread).
+#[derive(Default)]
+struct Held {
+    by: Option<std::thread::ThreadId>,
+    depth: usize,
+}
+
+#[derive(Default)]
+struct DocLock {
+    held: std::sync::Mutex<Held>,
+    free: std::sync::Condvar,
+}
+
+fn locks() -> &'static std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<DocLock>>>
+{
+    static LOCKS: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<DocLock>>>,
+    > = std::sync::OnceLock::new();
+    LOCKS.get_or_init(Default::default)
+}
+
+/// One document's write lock, held until dropped. See [`write_lock`].
+pub struct WriteGuard(std::sync::Arc<DocLock>);
+
+impl Drop for WriteGuard {
+    fn drop(&mut self) {
+        let mut h = self.0.held.lock().unwrap_or_else(|e| e.into_inner());
+        h.depth -= 1;
+        if h.depth == 0 {
+            h.by = None;
+            self.0.free.notify_one();
+        }
+    }
+}
+
+/// Take document `id`'s write lock: every read-modify-write of a document takes it around its read of
+/// the document, its change and the store's apply, whichever session or route makes it, so two of them
+/// never build on the same bytes and one never writes over the other (features/store-scan-under-lock.clan,
+/// review of 15 Nov). Held only for that short section, never across a scan of the tenant. Re-entrant on
+/// its own thread: an apply under a caller's lock takes it again. Ordering: a document's write lock is
+/// taken before its session's view lock, never after. One table for the process, keyed by the id.
+pub fn write_lock(id: &DocId) -> WriteGuard {
+    let lock = locks()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(id.as_str().to_string())
+        .or_default()
+        .clone();
+    let me = std::thread::current().id();
+    {
+        let mut h = lock.held.lock().unwrap_or_else(|e| e.into_inner());
+        while h.by.is_some_and(|by| by != me) {
+            h = lock.free.wait(h).unwrap_or_else(|e| e.into_inner());
+        }
+        h.by = Some(me);
+        h.depth += 1;
+    }
+    WriteGuard(lock)
+}
+
+/// The check every store makes at apply (W2-A4), under the document's write lock: `change.base` against
+/// what the store holds now. `Base::At(v)` needs the document at `v`; `Base::Absent`, no document. Anything
+/// else is `409`: the change was built on bytes that are no longer the document's, and writing it would
+/// put old bytes back over a newer write. The caller reads again and retries, or says so.
+pub fn check_base(store: &dyn PartStore, change: &Change) -> HostResult<()> {
+    let stale = || {
+        crate::error::HostError::conflict(format!(
+            "{} changed since this was read; read it again and retry",
+            change.doc
+        ))
+    };
+    match &change.base {
+        Base::At(v) => match store.version(&change.doc) {
+            Ok(now) if &now == v => Ok(()),
+            _ => Err(stale()),
+        },
+        Base::Absent => {
+            if store.exists(&change.doc) {
+                Err(stale())
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
 /// See [`PartStore::stamp`]: opaque, compared for equality only.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Stamp(String);
@@ -204,11 +292,11 @@ impl PartStore for FsStore {
         path_of(id).exists()
     }
 
-    /// A file write. Deliberately unchecked for now: `change.base` says what
-    /// the writer expected to find, and comparing it with
-    /// `self.version(&change.doc)` right here — re-read from disk, not
-    /// remembered from open — is the whole of W2-A4.
+    /// A file write, under the document's write lock, refused (`409`) when
+    /// `change.base` is not what is on disk now ([`check_base`], W2-A4).
     fn apply(&self, change: &Change) -> HostResult<Version> {
+        let _held = write_lock(&change.doc);
+        check_base(self, change)?;
         let path = path_of(&change.doc);
         // An install lands in a directory nobody has made yet.
         if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {

@@ -27,7 +27,7 @@ use crate::error::{HostError, HostResult};
 use crate::event::HostEvent;
 use crate::library::{self, Backref, BackrefWritten};
 use crate::ops::{edit, middleware, read, Outcome};
-use crate::store::{DocId, DocStore};
+use crate::store::{write_lock, DocId, DocStore};
 use crate::view::{self, ViewSource};
 
 pub use crate::ops::{attribute, content_type_for, sanitize_asset_name};
@@ -139,10 +139,11 @@ pub struct ViewState {
     pub open: Option<Arc<Document>>,
     /// Whether the edit bridge is live (`clan://edit-mode`).
     pub edit_mode: bool,
-    /// How many snapshots have been put in, by an open or a write: an open
-    /// that read before the count moved does not put its older read over the
-    /// newer one ([`Session::open_observed`]).
+    /// How many snapshots have been put in, by an open or a write.
     pub installs: u64,
+    /// The store's stamp of the bytes the snapshot was built from, when known: what a write compares with
+    /// the stamp on disk to know whether another writer moved the document since ([`Session::perform`]).
+    pub stamp: Option<crate::store::Stamp>,
 }
 
 /// Where [`Session::open_observed`] has got to: each step of an open, as it
@@ -327,8 +328,37 @@ impl Session {
         ctx: &Ctx,
         op: impl FnOnce(&Ctx, &Document) -> HostResult<Outcome>,
     ) -> HostResult<Applied> {
+        // The document's write lock first, then the view: the order every writer keeps. Under it no other
+        // writer, in this session or outside it (a backref, a job link, another session), changes the
+        // document until this write is in.
+        let id = self.current_id().ok_or_else(HostError::no_file_open)?;
+        let _held = write_lock(&id);
         let mut view = self.view.lock().unwrap();
         let doc = view.open.clone().ok_or_else(HostError::no_file_open)?;
+        if doc.id() != &id {
+            // another document was opened meanwhile: write to it, under its own lock
+            drop(view);
+            drop(_held);
+            return self.perform(ctx, op);
+        }
+        // Built on the document as it is on disk now, never on an older snapshot: a write from outside
+        // this session since the snapshot was taken is read in first.
+        let doc = if self.on_disk_is(&id, &view)? {
+            doc
+        } else {
+            let bytes = self.store.parts().read(&id)?;
+            let stamp = self.store.parts().stamp(&id).ok();
+            let fresh = view::resolve(
+                &*self.store,
+                Document::from_bytes(id.clone(), bytes)?,
+                NAPKIN_PUBLIC_KEY,
+            );
+            let fresh = Arc::new(fresh);
+            view.open = Some(fresh.clone());
+            view.stamp = stamp;
+            view.installs += 1;
+            fresh
+        };
         let outcome = op(ctx, &doc)?;
         let events = outcome.events();
         let noop = outcome.is_noop();
@@ -343,16 +373,31 @@ impl Session {
         })
     }
 
+    /// Whether the snapshot in `view` is the document `id` as the store holds it now: by the stamp when
+    /// both are known, else by the version.
+    fn on_disk_is(&self, id: &DocId, view: &ViewState) -> HostResult<bool> {
+        let Some(open) = view.open.as_ref() else {
+            return Ok(false);
+        };
+        if let (Some(kept), Ok(now)) = (&view.stamp, self.store.parts().stamp(id)) {
+            return Ok(kept == &now);
+        }
+        Ok(self.store.parts().version(id)? == *open.version())
+    }
+
     /// Apply one change through the store — the only write a session makes —
     /// and, when it is to the open document, put in the snapshot at the
     /// version the store now reports. The snapshot it replaces is not
-    /// touched: a read still working on it finishes on it.
+    /// touched: a read still working on it finishes on it. The store refuses
+    /// a change whose base is not what it holds (`409`).
     fn commit(&self, view: &mut ViewState, change: &Change) -> HostResult<()> {
         let version = self.store.apply(change)?;
         if let Some(open) = view.open.as_ref() {
             if open.id() == &change.doc {
                 let next = open.advance(change, version)?;
                 view.open = Some(Arc::new(next));
+                // taken under the document's write lock: the stamp of exactly these bytes
+                view.stamp = self.store.parts().stamp(&change.doc).ok();
                 view.installs += 1;
             }
         }
@@ -414,11 +459,10 @@ impl Session {
     /// write had moved on took the open document back a version, and the reply
     /// to the write carried the old data (UAT round 12: the desk re-read a
     /// Research document while its report was being written, and the page was
-    /// handed the document without it). So the read is put in only if no
-    /// snapshot went in since the open began (the install count, under the
-    /// lock); if one did (a write's, which is newer than anything this open
-    /// could have read, or another open's), it stands, and the open answers
-    /// from it.
+    /// handed the document without it). So the read goes in under the
+    /// document's write lock, and only if the store's stamp has not moved since
+    /// before the read; if it has, the document is read again under that lock.
+    /// What goes in is always the document as the store holds it then.
     pub fn open(&self, id: DocId) -> HostResult<OpenResult> {
         self.open_observed(id, &mut |_| {})
     }
@@ -433,35 +477,41 @@ impl Session {
         id: DocId,
         mark: &mut dyn FnMut(OpenMark),
     ) -> HostResult<OpenResult> {
-        loop {
-            let began = self.view.lock().unwrap().installs;
-            // One read: the snapshot holds the bytes it was built from (#10).
-            let bytes = self.store.parts().read(&id)?;
-            mark(OpenMark::Read { bytes: bytes.len() });
-            let doc = Document::from_bytes(id.clone(), bytes)?;
-            mark(OpenMark::Verified);
-            let doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
-            mark(OpenMark::Resolved);
-            let shown = {
-                let mut state = self.view.lock().unwrap();
-                mark(OpenMark::Locked);
-                if state.installs == began {
-                    let doc = Arc::new(doc);
-                    state.open = Some(doc.clone());
-                    state.installs += 1;
-                    Some(doc)
-                } else {
-                    // A write or another open put a snapshot in meanwhile: it
-                    // stands. When it is of another document, read again.
-                    state.open.clone().filter(|d| d.id() == &id)
-                }
-            };
-            if let Some(doc) = shown {
-                let result = read::describe(&doc);
-                mark(OpenMark::Described);
-                return Ok(result);
+        // The stamp before the read: if it is the stamp at install, under the document's write lock, the
+        // bytes read are the document as it stands and nothing newer exists.
+        let before = self.store.parts().stamp(&id).ok();
+        // One read: the snapshot holds the bytes it was built from (#10).
+        let bytes = self.store.parts().read(&id)?;
+        mark(OpenMark::Read { bytes: bytes.len() });
+        let doc = Document::from_bytes(id.clone(), bytes)?;
+        mark(OpenMark::Verified);
+        let mut doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
+        mark(OpenMark::Resolved);
+        let doc = {
+            let _held = write_lock(&id);
+            let mut now = self.store.parts().stamp(&id).ok();
+            if now.is_none() || now != before {
+                // Written since the read (by this session or any other writer): read it again, now that
+                // no writer can move it, so what goes in is the newest and never older than what stands.
+                let bytes = self.store.parts().read(&id)?;
+                now = self.store.parts().stamp(&id).ok();
+                doc = view::resolve(
+                    &*self.store,
+                    Document::from_bytes(id.clone(), bytes)?,
+                    NAPKIN_PUBLIC_KEY,
+                );
             }
-        }
+            let mut state = self.view.lock().unwrap();
+            mark(OpenMark::Locked);
+            let doc = Arc::new(doc);
+            state.open = Some(doc.clone());
+            state.stamp = now;
+            state.installs += 1;
+            doc
+        };
+        let result = read::describe(&doc);
+        mark(OpenMark::Described);
+        Ok(result)
     }
 
     // ── Reading ─────────────────────────────────────────────────────────────
