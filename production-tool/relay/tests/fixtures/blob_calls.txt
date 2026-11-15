@@ -1,0 +1,73 @@
+# Every blob-store call outside blobs.py (tests/test_fetch_sites.py): <file> <function> <method>, then why.
+# CALLER: a name a request supplied, which passes blobs.own_key first. Every other line: INTERNAL, a key the relay
+# builds from what it owns (the agency workspace, a job id, a hash it computed, a URL already checked at the door by
+# Relay._check_urls). Add a line, with its kind, for each new call.
+cards.py _make fetch_own
+cards.py _make key_for_url
+cards.py _make put
+cards.py cached get_json
+dogfood.py _put put
+dogfood.py consent put
+dogfood.py consented exists
+library.py entry get_json
+library.py index get_json
+library.py publish exists
+library.py publish get_json_tagged
+library.py publish put
+library.py publish put_json_if
+local.py build key_for_url
+local.py do_PUT accept_upload
+local.py work put
+projects.py _rows get_json
+projects.py canvas get_json
+projects.py put_canvas put
+projects.py read get
+projects.py save get_json_tagged
+projects.py save put
+projects.py save put_json_if
+service.py _advance_connected get_json
+service.py _advance_connected public_url
+service.py _advance_patch get_json
+service.py _advance_patch public_url
+service.py _advance_stitch get_json
+service.py _advance_stitch public_url
+service.py _after_cut public_url
+service.py _check_connected key_for_url
+service.py _fetch exists
+service.py _fetch fetch
+service.py _fetch public_url
+service.py _fetch put
+service.py _frame_image key_for_url
+service.py _keep_png exists
+service.py _keep_png public_url
+service.py _keep_png put
+service.py _own fetch_own
+service.py _patch_admit key_for_url
+service.py _put_made public_url
+service.py _put_made put
+service.py _run_cut key_for_url
+service.py _run_cutdown_render key_for_url
+service.py _run_cutdown_render put
+service.py _run_land key_for_url
+service.py _run_splice key_for_url
+service.py _run_stills key_for_url
+service.py _run_stitch key_for_url
+service.py _run_take_cuts key_for_url
+service.py _run_timeline key_for_url
+service.py _run_timeline put
+service.py _stored_clip_seconds clip_seconds
+service.py _true_shape exists
+service.py _true_shape public_url
+service.py _true_shape put
+service.py mirror_clan put
+service.py upload exists
+service.py upload presign_put
+service.py upload public_url
+# library.py publish exists: CALLER, a ref the request names: own_key first (the one check)
+# library.py publish key_for_url: CALLER, replaced by own_key
+# service.py upload exists: CALLER, in/<the request sha>: own_key first, the hold decides what is said
+# service.py upload presign_put: CALLER, in/<the request sha>: own_key first
+# service.py _stored_clip_seconds clip_seconds: CALLER, the request video: clip_seconds goes through own_key
+# service.py _own fetch_own: CALLER, fetch_own goes through own_key
+# cards.py _make fetch_own: CALLER, fetch_own goes through own_key
+# local.py do_PUT accept_upload: CALLER, local dev server only: the PUT path a presigned URL names, bound to its hash

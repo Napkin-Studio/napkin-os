@@ -216,3 +216,37 @@ def test_the_plainer_resend_runs_the_hooks_before_it_is_sent():
     job = h.poll(h.token, job["jobId"])
     assert job["state"] == "submitted" and job["softened"] is True
     assert len(loaded[0].SEEN) == 1, "before_submit ran once more, for the resend"
+
+
+def test_the_first_billed_task_stays_recorded_when_the_resend_then_fails():
+    from providers.base import Status
+    h = harness()
+    job = post_take(h)
+    first = job["cost"]["reserved"]
+    h.providers["runway"].states["runway-1"] = Status(state="moderated", error_message="Text prompt did not pass moderation",
+                                                      provider_code=TEXT, cost_usd=first)
+    h.clock.tick(6)
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True
+    h.providers["runway"].states["runway-2"] = Status(state="failed", error_code="provider_failed", error_message="it broke")
+    for _ in range(6):
+        h.clock.tick(10)
+        job = h.poll(h.token, job["jobId"])
+        if job["state"] in ("completed", "failed", "uncertain"):
+            break
+    assert spent(h) >= first - 1e-9, f"the first task was billed {first}; the ledger holds {spent(h)}"
+
+
+def test_the_plainer_resend_inside_submit_runs_the_hooks_too():
+    """Re-review finding 5: the resend at submit (Runway's text check before any task) skipped _before_send."""
+    from pathlib import Path
+
+    import hooks as relay_hooks
+    loaded = relay_hooks.load(Path(__file__).resolve().parent / "fixtures" / "hooks")
+    h = harness()
+    h.relay.hooks = loaded
+    fake = refusing(h, TEXT)
+    loaded[0].SEEN.clear()
+    post_take(h)
+    assert len(fake.submits) == 2
+    assert len(loaded[0].SEEN) == 2, f"two sends, before_submit ran {len(loaded[0].SEEN)} time(s)"
