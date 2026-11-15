@@ -50,7 +50,7 @@ pub const SET_ROUTE: &str = "set_route";
 pub const MOVE_DEADLINE: &str = "move_deadline";
 /// The action opening a job records.
 pub const OPEN_JOB: &str = "open_job";
-/// The action a change to a job's title, owner or budget records (a deadline alone is `move_deadline`).
+/// The action a change to a job's title or owner records (a deadline alone is `move_deadline`).
 pub const UPDATE_JOB: &str = "update_job";
 
 /// The two parties of a step.
@@ -162,12 +162,13 @@ fn data_yaml(reg: &Registry) -> HostResult<Vec<u8>> {
         .map_err(|e| HostError::internal(e.to_string()))
 }
 
-fn rebuilt(clan: &ClanFile, data: Vec<u8>, decision: Option<Decision>) -> HostResult<Vec<u8>> {
+/// `decisions` are written oldest first, so the last one is the chain's newest.
+fn rebuilt(clan: &ClanFile, data: Vec<u8>, decisions: Vec<Decision>) -> HostResult<Vec<u8>> {
     let mut manifest = clan.manifest().clone();
     manifest.next_revision();
     manifest.updated_at = chrono::Utc::now().to_rfc3339();
     let mut chain = chain_of(clan)?;
-    if let Some(d) = decision {
+    for d in decisions {
         chain.prepend(d);
     }
     let mut b = ClanBuilder::new(manifest);
@@ -195,7 +196,7 @@ fn write_registry(
     store: &dyn DocStore,
     reg: &Registry,
     base: Option<Version>,
-    decision: Option<Decision>,
+    decisions: Vec<Decision>,
 ) -> HostResult<()> {
     let id = registry_id(store)?;
     let data = data_yaml(reg)?;
@@ -209,11 +210,11 @@ fn write_registry(
                 schema: None,
             })?;
             let clan = ClanFile::from_bytes(bytes)?;
-            Change::create(id, rebuilt(&clan, data, decision)?)
+            Change::create(id, rebuilt(&clan, data, decisions)?)
         }
         Some(v) => {
             let clan = ClanFile::from_bytes(store.read(&id)?)?;
-            let bytes = rebuilt(&clan, data, decision)?;
+            let bytes = rebuilt(&clan, data, decisions)?;
             if store.version(&id)? != v {
                 return Err(HostError::conflict(
                     "the job list changed while you were saving; try again",
@@ -343,11 +344,17 @@ pub fn create_job(store: &dyn DocStore, ctx: &Ctx, new: NewJob) -> HostResult<Jo
         ),
         now,
     );
-    write_registry(store, &reg, base, Some(decision))?;
+    // A budget given at the open is a budget like any other: one set_budget decision, after the open.
+    let mut written = vec![decision];
+    if let Some(h) = record.budget_hours {
+        written.push(budget_decision(ctx, &who, &record.number, h, now)?);
+    }
+    write_registry(store, &reg, base, written)?;
     Ok(record)
 }
 
-/// What a person may change on a job after it is opened. A field left out is not touched.
+/// What a person may change on a job after it is opened. A field left out is not touched. `budget_hours` is
+/// here only to be refused: a budget is a `set_budget` decision ([`set_budget`]).
 #[derive(Deserialize, Default, Debug)]
 pub struct JobPatch {
     pub title: Option<String>,
@@ -366,7 +373,7 @@ where
     Option::<T>::deserialize(d).map(Some)
 }
 
-/// Change a job's title, owner, deadline or budget in hours, as a person, recording one decision on the
+/// Change a job's title, owner or deadline, as a person, recording one decision on the
 /// registry's chain: who, what (`Moved the deadline of J001 from 2026-11-20 to 2026-11-27.`), when. A bad
 /// value is a `400`, an unknown job a `404`, a registry that moved under the write a `409`, no person a `403`.
 pub fn update_job(
@@ -405,12 +412,9 @@ pub fn update_job(
             return Err(HostError::bad_request("due is a date, YYYY-MM-DD"));
         }
     }
-    if patch
-        .budget_hours
-        .is_some_and(|h| !h.is_finite() || !(0.0..=MAX_HOURS).contains(&h))
-    {
+    if patch.budget_hours.is_some() {
         return Err(HostError::bad_request(
-            "budget_hours is a number of hours, not below zero",
+            "a budget is recorded as a decision (POST /jobs/{number}/budget), not changed here",
         ));
     }
     let _guard = WRITE.lock().unwrap_or_else(|e| e.into_inner());
@@ -444,16 +448,6 @@ pub fn update_job(
         job.due = due;
         fields.push("due");
     }
-    if let Some(h) = patch.budget_hours.filter(|h| Some(*h) != job.budget_hours) {
-        said.push(format!(
-            "Set the budget of {number} from {} to {h} hours.",
-            job.budget_hours
-                .map(|b| format!("{b} hours"))
-                .unwrap_or_else(|| "none".into())
-        ));
-        job.budget_hours = Some(h);
-        fields.push("budget_hours");
-    }
     let record = job.clone();
     if fields.is_empty() {
         return Ok(record);
@@ -472,8 +466,81 @@ pub fn update_job(
         said.join(" "),
         chrono::Utc::now(),
     );
-    write_registry(store, &reg, base, Some(decision))?;
+    write_registry(store, &reg, base, vec![decision])?;
     Ok(record)
+}
+
+/// The kind and action of a budget recorded on a job (features/align-confidential-prices.clan).
+pub const SET_BUDGET: &str = "set_budget";
+
+/// One `set_budget` decision: `{job, hours}` in its block, and words with no figure, so the hours are read only
+/// from the block, by the roles that are sent them.
+fn budget_decision(
+    ctx: &Ctx,
+    who: &str,
+    number: &str,
+    hours: f64,
+    now: chrono::DateTime<chrono::Utc>,
+) -> HostResult<Decision> {
+    let mut d = registry_decision(
+        ctx,
+        who,
+        SET_BUDGET,
+        number,
+        "budget_hours",
+        format!("Recorded the budget of {number}."),
+        now,
+    );
+    d.kind = Some(SET_BUDGET.into());
+    d.extra.insert(
+        SET_BUDGET.into(),
+        serde_yaml::to_value(serde_json::json!({ "job": number, "hours": hours }))
+            .map_err(|e| HostError::internal(e.to_string()))?,
+    );
+    Ok(d)
+}
+
+/// Record a job's budget in hours as one `set_budget` decision, by a person, in the job's chain (the registry's,
+/// filtered by job). The job keeps the figure as data, which only the Money roles are sent. A bad value is a `400`,
+/// an unknown job a `404`, no person a `403`. Who may is the web shell's to check (roles.rs, `may_set_budget`).
+pub fn set_budget(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    number: &str,
+    hours: f64,
+) -> HostResult<JobRecord> {
+    let who = person_of(ctx)?;
+    if !hours.is_finite() || !(0.0..=MAX_HOURS).contains(&hours) {
+        return Err(HostError::bad_request(
+            "a budget is a number of hours, not below zero",
+        ));
+    }
+    let _guard = WRITE.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut reg, base) = read_registry(store)?;
+    let job = reg
+        .jobs
+        .iter_mut()
+        .find(|j| j.number == number)
+        .ok_or_else(|| HostError::not_found(format!("no such job: {number}")))?;
+    job.budget_hours = Some(hours);
+    let record = job.clone();
+    let d = budget_decision(ctx, &who, number, hours, chrono::Utc::now())?;
+    write_registry(store, &reg, base, vec![d])?;
+    Ok(record)
+}
+
+/// The decisions of one job, newest first: the registry's chain, the entries that name it.
+pub fn decisions_of(store: &dyn DocStore, number: &str) -> HostResult<Vec<Decision>> {
+    let id = registry_id(store)?;
+    if !store.exists(&id) {
+        return Ok(Vec::new());
+    }
+    let clan = ClanFile::from_bytes(store.read(&id)?)?;
+    Ok(chain_of(&clan)?
+        .decisions
+        .into_iter()
+        .filter(|d| d.targets.iter().any(|t| t == number))
+        .collect())
 }
 
 fn next_ordinal(reg: &Registry) -> u32 {
@@ -696,7 +763,7 @@ pub fn set_route_at(
         ),
         now,
     );
-    write_registry(store, &reg, base, Some(decision))?;
+    write_registry(store, &reg, base, vec![decision])?;
     Ok(record)
 }
 
@@ -734,7 +801,7 @@ pub fn move_deadline(
         ),
         chrono::Utc::now(),
     );
-    write_registry(store, &reg, base, Some(decision))?;
+    write_registry(store, &reg, base, vec![decision])?;
     Ok(record)
 }
 

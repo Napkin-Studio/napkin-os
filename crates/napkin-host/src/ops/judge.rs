@@ -739,7 +739,7 @@ pub fn backend_set() -> Option<String> {
     }
 }
 
-/// What one run costs, as a person set it (euro), shown before the run.
+/// What one run costs, as a person set it (euro). Never shown: the spend guard reads its own copy.
 pub fn price_set() -> Option<f64> {
     std::env::var(ENV_PRICE)
         .ok()
@@ -764,7 +764,7 @@ pub fn refusal(kind: &str) -> Option<(u16, &'static str)> {
         }
         "spend_refused" => Some((
             429,
-            "spend_refused: the spend cap stops this run before it starts.",
+            "spend_refused: Paid runs are off here. Nothing was sent.",
         )),
         _ => None,
     }
@@ -889,6 +889,7 @@ fn write(doc: &Document, d: Decision, reply: Value, delta: &str) -> HostResult<O
     let clan = doc.clan();
     let now = review::now();
     let id = d.id.clone().unwrap_or_default();
+    let kind = d.kind.clone().unwrap_or_else(|| "verdict".into());
     let bytes = assemble(
         clan,
         data_of(clan)?,
@@ -898,7 +899,7 @@ fn write(doc: &Document, d: Decision, reply: Value, delta: &str) -> HostResult<O
         &now,
         false,
     )?;
-    let notice = json!({ "ok": true, "source": "judge", "kind": "verdict", "decision": id });
+    let notice = json!({ "ok": true, "source": "judge", "kind": kind, "decision": id });
     let change = doc
         .change(bytes)?
         .with_event(HostEvent::DataChanged(notice));
@@ -940,6 +941,95 @@ pub fn score_outcome(
     let id = d.id.clone();
     let reply = json!({ "ok": true, "decision": id, "total": t.total, "route": route.id() });
     write(doc, d, reply, "a piece of work scored")
+}
+
+// ── what a run cost ─────────────────────────────────────────────────────────
+
+/// What one run cost, as the middleware's task envelope reports it (`usage`, docs/contracts/middleware-api.md):
+/// what the spend guard counted, what was charged, the route, and whether the guard let it go. Numbers and a
+/// name, no content.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunCost {
+    pub estimate_eur: f64,
+    pub charged_eur: f64,
+    pub route: Option<String>,
+    /// `allowed` or `refused`.
+    pub guard: &'static str,
+}
+
+impl RunCost {
+    /// Read a `usage` block. `None` when there is none, or when its figures are not numbers at or above zero:
+    /// nothing is invented.
+    pub fn from_usage(usage: &Value) -> Option<RunCost> {
+        let n = |k: &str| {
+            usage
+                .get(k)
+                .and_then(Value::as_f64)
+                .filter(|v| v.is_finite() && *v >= 0.0)
+        };
+        let route = usage
+            .get("route")
+            .and_then(Value::as_str)
+            .filter(|r| !r.is_empty() && r.len() <= 120 && !r.chars().any(char::is_control))
+            .map(str::to_string);
+        Some(RunCost {
+            estimate_eur: n("estimate_eur")?,
+            charged_eur: n("charged_eur")?,
+            route,
+            guard: "allowed",
+        })
+    }
+
+    /// A run the spend guard stopped before anything was sent: nothing was charged.
+    pub fn refused() -> RunCost {
+        RunCost {
+            estimate_eur: 0.0,
+            charged_eur: 0.0,
+            route: None,
+            guard: "refused",
+        }
+    }
+}
+
+/// The kind and action of a run's cost.
+pub const RUN_COST: &str = "run_cost";
+
+/// The decision kinds that are never sent to an agent or a model (features/align-confidential-prices.clan): what a run
+/// cost and a job's budget are the agency's own, read in the Decisions drawer and nowhere else.
+pub const NEVER_SENT: &[&str] = &[RUN_COST, crate::jobs::SET_BUDGET];
+
+/// Write one `run_cost` decision in the work's own chain, by the task's agent: `{document, version, task, route,
+/// estimate_eur, charged_eur, guard, at}`, numbers and ids only, and words with no figure. The Decisions drawer is the
+/// one place it is read.
+pub fn run_cost_outcome(ctx: &Ctx, doc: &Document, c: &RunCost) -> HostResult<Outcome> {
+    let now = review::now();
+    let id = doc.clan().document_id().to_string();
+    let mut d = review::decided(
+        ctx,
+        AGENT,
+        RUN_COST,
+        RUN_COST,
+        vec![id.clone()],
+        Vec::new(),
+        "What one run of Judge cost, as the spend guard reported it.".into(),
+        &now,
+    );
+    d.handler = Some(HANDLER.into());
+    d.extra.insert(
+        RUN_COST.into(),
+        to_yaml(&json!({
+            "document": id,
+            "version": doc.version().as_str(),
+            "task": TASK,
+            "route": c.route,
+            "estimate_eur": c.estimate_eur,
+            "charged_eur": c.charged_eur,
+            "guard": c.guard,
+            "at": now,
+        }))?,
+    );
+    let reply = json!({ "ok": true, "decision": d.id });
+    write(doc, d, reply, "a run's cost recorded")
 }
 
 // ── reading the scores back ─────────────────────────────────────────────────
@@ -1288,13 +1378,13 @@ fn card_of(e: &ScoreEntry, current: bool, brief_moved: bool) -> Value {
     })
 }
 
-/// The setup, as the screen needs it before a run: the backend, the price, the trust and what earns it.
+/// The setup, as the screen needs it before a run: the backend, the trust and what earns it. No price: a run's cost
+/// is a `run_cost` decision, read in the Decisions drawer only (features/align-confidential-prices.clan).
 pub fn setup_view() -> Value {
     let backend = backend_set();
     json!({
         "backend": backend,
         "configured": backend.is_some(),
-        "price_eur": price_set(),
         "trust": trust_for("-"),
         "not_trusted": NOT_TRUSTED,
         "calibration": CALIBRATION_LINE,

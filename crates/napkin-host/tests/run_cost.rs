@@ -156,7 +156,10 @@ fn a_runs_cost_is_one_run_cost_decision_by_the_tasks_agent_with_numbers_and_ids_
 #[test]
 fn no_run_cost_no_budget_and_no_verdict_price_reaches_an_agent() {
     let (_dir, session, _id) = fixture();
-    let cost = RunCost::from_usage(&json!({ "estimate_eur": 0.05, "charged_eur": 0.02, "route": "eu-small" })).unwrap();
+    let cost = RunCost::from_usage(
+        &json!({ "estimate_eur": 0.05, "charged_eur": 0.02, "route": "eu-small" }),
+    )
+    .unwrap();
     session
         .perform(&by_judge(), |c, d| judge::run_cost_outcome(c, d, &cost))
         .unwrap();
@@ -166,9 +169,21 @@ fn no_run_cost_no_budget_and_no_verdict_price_reaches_an_agent() {
         .iter()
         .map(|d| d["kind"].as_str().unwrap_or(""))
         .collect();
-    assert_eq!(kinds, ["verdict", "edit"], "the cost and the budget are left out, and nothing else");
+    assert_eq!(
+        kinds,
+        ["verdict", "edit"],
+        "the cost and the budget are left out, and nothing else"
+    );
     let text = sent.to_string();
-    for word in ["run_cost", "set_budget", "charged_eur", "estimate_eur", "price_eur", "0.02", "0.04"] {
+    for word in [
+        "run_cost",
+        "set_budget",
+        "charged_eur",
+        "estimate_eur",
+        "price_eur",
+        "0.02",
+        "0.04",
+    ] {
         assert!(!text.contains(word), "{word} reached an agent");
     }
     // the verdict itself still travels, its score kept

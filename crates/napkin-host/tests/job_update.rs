@@ -248,7 +248,11 @@ fn a_budget_is_one_set_budget_decision_by_a_person_in_the_jobs_chain() {
     open(&store, &me);
     let cian = ctx("cian@wk");
     let job = jobs::set_budget(&store, &cian, "J001", 80.0).unwrap();
-    assert_eq!(job.budget_hours, Some(80.0), "the job keeps the figure as data");
+    assert_eq!(
+        job.budget_hours,
+        Some(80.0),
+        "the job keeps the figure as data"
+    );
     assert_eq!(jobs::get(&store, "J001").unwrap().budget_hours, Some(80.0));
     let c = chain(&store);
     assert_eq!(c.decisions.len(), 2, "one entry for the budget");

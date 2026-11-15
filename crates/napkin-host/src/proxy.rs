@@ -99,12 +99,25 @@ pub fn reply_envelope(request_kind: &str, url: &str, status: u16, body: String) 
     })
 }
 
-/// `{type, message}` out of a middleware error body, when it is one.
+/// `{type, message}` out of a middleware error body, when it is one, and its `usage` when a run was charged before
+/// it failed (features/align-confidential-prices.clan): only the two figures and the route, so the host can record
+/// what the run cost. Nothing else of the body is kept.
 fn middleware_error(body: &Value) -> Option<Value> {
     let e = body.get("error")?;
     let kind = e.get("type")?.as_str()?;
     let message = e.get("message").and_then(Value::as_str).unwrap_or("");
-    Some(serde_json::json!({ "type": kind, "message": message }))
+    let mut out = serde_json::json!({ "type": kind, "message": message });
+    if let Some(u) = e.get("usage") {
+        let n = |k: &str| u.get(k).and_then(Value::as_f64);
+        if let (Some(estimate), Some(charged)) = (n("estimate_eur"), n("charged_eur")) {
+            out["usage"] = serde_json::json!({
+                "estimate_eur": estimate,
+                "charged_eur": charged,
+                "route": u.get("route").and_then(Value::as_str),
+            });
+        }
+    }
+    Some(out)
 }
 
 /// `POST /api-proxy {request_kind, payload}` — the single, uniform network
