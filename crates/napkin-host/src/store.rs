@@ -130,6 +130,14 @@ pub trait Library: Send + Sync {
 
     /// Where a fork branch for `agent` belongs, relative to `parent`.
     fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId;
+
+    /// The catalogue of this store's manifests, when it keeps one
+    /// ([`crate::catalog`]): what the reads that look another document up ask
+    /// for candidates instead of opening every document. `None` (the default):
+    /// they scan, as before.
+    fn catalog(&self) -> Option<&crate::catalog::StoreCatalog> {
+        None
+    }
 }
 
 /// A store that is both — what every shell actually has, and what the library
