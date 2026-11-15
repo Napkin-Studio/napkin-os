@@ -128,7 +128,7 @@ class Middleware:
 
     def envelope(self, task, handler, job, result, change, caps, hits=()):
         return {"api": API, "task": task, "handler": handler, "job": job, "result": result, "change": change,
-                "trace": self.trace(caps, hits)}
+                "trace": self.trace(caps, hits), "usage": spend_usage(caps)}
 
     def brief_envelope(self, job, change):
         """Brief Maker's replies (§10.6): the job's own task and handler, the
@@ -272,6 +272,14 @@ def _long_summary(job) -> str:
     return f"{v['progress']['done']} of {v['progress']['total']} run(s) done"
 
 
+def spend_usage(caps) -> dict:
+    """What the spend guard let through for this task (features/align-confidential-prices.clan): the ceiling it
+    counted, what is charged, and the route. A task that charged nothing reports zeros. The host writes it as the
+    document's run_cost decision; it holds numbers and a route name, never content."""
+    u = getattr(caps, "spend_usage", None) if caps is not None else None
+    return dict(u) if isinstance(u, dict) else {"estimate_eur": 0.0, "charged_eur": 0.0, "route": None}
+
+
 def _has_scope(obj) -> bool:
     return isinstance(obj, dict) and any(k in obj for k in ("scope", "tenant", "org", "org_id", "tenant_id"))
 
@@ -291,8 +299,11 @@ def create_app(settings: Settings | None = None, **components) -> FastAPI:
     app = FastAPI(title="napkin-middleware", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.mw = mw
 
-    def err(status, etype, message):
-        return JSONResponse({"error": {"type": etype, "message": message}}, status_code=status)
+    def err(status, etype, message, usage=None):
+        e = {"type": etype, "message": message}
+        if usage:                                   # a run charged before it failed still says what it cost
+            e["usage"] = usage
+        return JSONResponse({"error": e}, status_code=status)
 
     @app.get("/healthz")
     def healthz():
@@ -320,7 +331,7 @@ def create_app(settings: Settings | None = None, **components) -> FastAPI:
             out = await anyio.to_thread.run_sync(mw.handle, body, request.headers.get(AGENCY_HEADER))
         except TaskError as e:
             log.info("%s %s %s", e.status, task, e.etype)
-            return err(e.status, e.etype, e.message)
+            return err(e.status, e.etype, e.message, getattr(e, "usage", None))
         except Exception as e:
             log.error("500 %s %s: %s", task, type(e).__name__, e, exc_info=True)
             return err(500, "internal", "the middleware failed to handle this task")
