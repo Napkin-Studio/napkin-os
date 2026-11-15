@@ -162,3 +162,11 @@ def test_start_up_logs_one_line_saying_which_mode_the_guard_is_in(tmp_path, monk
     assert lines == [spend.describe()] and "OFF" in lines[0]
     src = (Path(__file__).resolve().parent.parent / "handler.py").read_text()
     assert "log.warning(spend.describe())" in src, "the Lambda logs the same line at start-up"
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes", "ON", " on "])
+def test_only_on_turns_paid_calls_on(monkeypatch, value):
+    """Review finding 11: the switch reads `on` and nothing else (case and spaces aside)."""
+    monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "5")
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", value)
+    assert spend.paid_calls_on() is (value.strip().lower() == "on")

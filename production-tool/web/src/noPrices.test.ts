@@ -13,7 +13,7 @@ const ALLOWED = new Set<string>()
 const MONEY = /\$\$\{|about \$(\d|\$\{)|~\$|\$\d+\.\d|estimateUsd|planCost|costWords|jobCost|history-cost/
 // The money words the merge's review found in interface copy (13 Nov 2026): "Crop · free", "cost in History",
 // "What each costs", "never spends", "may still be charged". None comes back.
-const MONEY_WORDS = /· free\b|costs? in History|What each costs|never spends|be charged|'free'/
+const MONEY_WORDS = /· free\b|\bFree,|costs? in History|What each costs|never spends|be charged|'free'|cost \$\{|cost \$|\bconfirmed`/
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

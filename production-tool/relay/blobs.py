@@ -13,6 +13,7 @@ import hashlib
 import http.client
 import ipaddress
 import json
+import re
 import socket
 import ssl
 import threading
@@ -23,8 +24,6 @@ from pathlib import Path
 FETCH_TIMEOUT_S = 60
 MAX_FETCH_BYTES = 200 * 1024 * 1024
 _LOCAL_LOCK = threading.Lock()
-# Keys a URL from a request may name (fetch_own): saved projects are a person's own, never read on a URL's word.
-NOT_ON_A_URL = ("clan/",)
 _loopback_ok = False   # local.py serves its own blobs on localhost: only it turns this on
 
 
@@ -36,6 +35,18 @@ def allow_loopback(on: bool) -> None:
     """local.py only: its blobs and the mock's inputs are served on http://localhost."""
     global _loopback_ok
     _loopback_ok = bool(on)
+
+
+# IPv6 ranges that carry or translate to an IPv4 address, or are deprecated site-local: is_global passes some of them
+# (64:ff9b::/96 NAT64, ::a.b.c.d IPv4-compatible, fec0::/10), so they are refused whatever they embed.
+_V6_REFUSED = [ipaddress.ip_network(n) for n in ("::/96", "::ffff:0:0/96", "64:ff9b::/96", "64:ff9b:1::/48",
+                                                 "2002::/16", "2001::/32", "fec0::/10", "100::/64")]
+
+
+def _public(ip) -> bool:
+    if ip.version == 6 and any(ip in n for n in _V6_REFUSED):
+        return False
+    return ip.is_global and not ip.is_multicast
 
 
 def _vetted_address(host: str, port: int) -> str:
@@ -50,7 +61,7 @@ def _vetted_address(host: str, port: int) -> str:
         raise UnsafeUrl(f"{host} does not resolve")
     for a in addrs:
         ip = ipaddress.ip_address(a.split("%", 1)[0])
-        if not (ip.is_global or (_loopback_ok and ip.is_loopback)):
+        if not (_public(ip) or (_loopback_ok and ip.is_loopback)):
             raise UnsafeUrl(f"{host} resolves to an address the relay does not fetch from")
     return addrs[0]
 
@@ -115,14 +126,30 @@ def http_fetch(url: str) -> bytes:
     return data
 
 
-def own_key(blobs, url: str) -> str:
-    """The key of one of the relay's own blobs a request's URL names, or UnsafeUrl before any request: a URL
-    the relay fetches on a caller's word must be its own (features/production-platform-rules.clan, review C)."""
+# Keys a request's URL may name. in/ and out/ are content-addressed (in/sha256:<hex>, out/sha256:<hex>) and ads/ holds
+# stitched and cut films: CloudFront serves all three publicly by design (infra/envs/hackathon/storage.tf), so reading
+# one here tells the caller nothing the CDN would not. Everything else is private: tenants/<id>/ (saved projects, the
+# library, canvases) is read only by its own agency; clan/, library/, dogfood/ and cards/ never on a URL's word.
+SHA_KEY = re.compile(r"^(in|out)/sha256:[0-9a-f]{64}$")
+ADS_KEY = re.compile(r"^ads/[A-Za-z0-9_-]+(/[A-Za-z0-9_@-]+)*\.[a-z0-9]{2,5}$")
+TENANT_KEY = re.compile(r"^tenants/([0-9a-f-]{36})/[A-Za-z0-9_./@-]+$")
+NOT_OURS = "That file is not one of ours, so it was not read."
+
+
+def own_key(blobs, url: str, tenant: str | None = None) -> str:
+    """The key of one of the relay's own blobs a request's URL names, or UnsafeUrl before any read: a public
+    artifact (in/, out/ by hash, ads/), or the calling agency's own tenants/<tenant>/ space. The answer turns on the
+    key alone, never on whether the object exists, so it is no oracle (features/production-platform-rules.clan,
+    review C and the review of 25e7c870)."""
     key = blobs.key_for_url(url or "") if isinstance(url, str) else None
-    if not key or key.startswith(NOT_ON_A_URL) or any(p in ("", ".", "..") for p in key.split("/")) \
-            or "\\" in key or "%" in key or "?" in key or "#" in key:
-        raise UnsafeUrl("That picture is not one of this tool's own files, so it was not read.")
-    return key
+    if not key or any(p in ("", ".", "..") for p in key.split("/")) or any(c in key for c in "\\%?#"):
+        raise UnsafeUrl(NOT_OURS)
+    if SHA_KEY.match(key) or ADS_KEY.match(key):
+        return key
+    m = TENANT_KEY.match(key)
+    if m and tenant and m.group(1) == tenant:
+        return key
+    raise UnsafeUrl(NOT_OURS)
 
 
 def s3_client(region: str | None = None):
@@ -206,9 +233,19 @@ class S3Blobs:
             return self.s3.get_object(Bucket=self.bucket, Key=key)["Body"].read()
         return http_fetch(url)
 
-    def fetch_own(self, url: str) -> bytes:
-        """A URL a request names: one of our own blobs, read by key, or UnsafeUrl before any request."""
-        return self.s3.get_object(Bucket=self.bucket, Key=own_key(self, url))["Body"].read()
+    def fetch_own(self, url: str, tenant: str | None = None) -> bytes:
+        """A URL a request names: one of our own blobs the calling agency may read (own_key), or UnsafeUrl
+        before any read. A missing object answers the same as a refused one."""
+        key = own_key(self, url, tenant)
+        try:
+            return self.s3.get_object(Bucket=self.bucket, Key=key)["Body"].read()
+        except self.s3.exceptions.NoSuchKey:
+            raise UnsafeUrl(NOT_OURS) from None
+
+    def clip_seconds(self, url: str, tenant: str | None = None) -> float | None:
+        """A stored clip's real length (cliplength.py), from our own bytes: never from the request."""
+        from cliplength import mp4_seconds
+        return mp4_seconds(self.fetch_own(url, tenant))
 
     def get(self, key: str) -> bytes | None:
         try:
@@ -303,9 +340,17 @@ class LocalBlobs:
             return self.path(key).read_bytes()
         return http_fetch(url)
 
-    def fetch_own(self, url: str) -> bytes:
-        """A URL a request names: one of our own blobs, read by key, or UnsafeUrl before any request."""
-        return self.path(own_key(self, url)).read_bytes()
+    def fetch_own(self, url: str, tenant: str | None = None) -> bytes:
+        """A URL a request names: one of our own blobs the calling agency may read (own_key), or UnsafeUrl."""
+        p = self.path(own_key(self, url, tenant))
+        if not p.exists():
+            raise UnsafeUrl(NOT_OURS)
+        return p.read_bytes()
+
+    def clip_seconds(self, url: str, tenant: str | None = None) -> float | None:
+        """A stored clip's real length (cliplength.py), from our own bytes: never from the request."""
+        from cliplength import mp4_seconds
+        return mp4_seconds(self.fetch_own(url, tenant))
 
     def get(self, key: str) -> bytes | None:
         p = self.path(key)

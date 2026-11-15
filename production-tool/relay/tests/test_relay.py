@@ -477,9 +477,9 @@ def test_stitch_starts_the_lambda_and_completes_from_its_result(h):
 def test_stitch_rejects_clips_that_are_not_ours(h):
     token = h.as_person()
     inp = {"clips": [{"asset": {"sha256": "sha256:" + "c" * 64, "url": "https://evil.test/x.mp4", "mime": "video/mp4"}}]}
-    _, job = h.post_job(token, op="stitch", expect=200, **inp)
-    assert job["state"] == "failed" and job["error"]["code"] == "invalid_input"
-    assert h.relay.remaining(job["participantId"])["render"] == 3
+    _, out = h.post_job(token, op="stitch", expect=400, **inp)   # refused at the door (every URL is ours or nothing)
+    assert out["error"]["code"] == "invalid_input" and "not one of ours" in out["error"]["message"]
+    assert h.relay.remaining(h.relay.me(h.people[token])["participantId"])["render"] == 3
 
 
 def test_config_route_and_api_prefix(h):

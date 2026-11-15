@@ -95,10 +95,6 @@ function seconds(from: string, to?: string): string | null {
   return ms < 60_000 ? `${Math.round(ms / 1000)} s` : `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1000)} s`
 }
 
-function money(n: number): string {
-  return `$${n < 1 ? n.toFixed(3).replace(/0$/, '') : n.toFixed(2)}`
-}
-
 /** What the rationale puts before the cards the director was given (always its last part). */
 export const SAW = ' · saw: '
 const CARD_SEP = ' ¦ '
@@ -124,7 +120,7 @@ export function cardsFromRationale(rationale: string): { rest: string; cards: Se
 
 /** What the director decided and what the provider made, in one line: the
  * director's rationale, the refs it used for what, the prompt (abbreviated),
- * the model, cost and time, the outputs or the error, then the cards. */
+ * the model and time, the outputs or the error, then the cards. The cost stays on the job (jobs[].cost). */
 export function jobRationale(job: JobEntry, cards?: DirectorCard[]): string {
   const parts: string[] = []
   const a = job.director
@@ -147,9 +143,8 @@ export function jobRationale(job: JobEntry, cards?: DirectorCard[]): string {
     parts.push(`director ${a.model} · ${a.promptVersion}${typeof a.latencyMs === 'number' ? ` · ${(a.latencyMs / 1000).toFixed(1)} s` : ''}`)
   }
   if (job.provider || job.model) parts.push(`${job.model ?? 'unknown'} on ${job.provider ?? 'the relay'}`)
-  const c = job.cost
-  if (c?.confirmed !== undefined) parts.push(`cost ${money(c.confirmed)} confirmed`)
-  else if (c?.estimate !== undefined) parts.push(`cost ${money(c.estimate)} estimated, not confirmed`)
+  // No cost in the words a person reads (the owner's rule: no price, cost or credit in the interface). The figure
+  // stays recorded on the job itself (the document's jobs[<id>].cost), which no screen prints.
   const t = seconds(job.created_at, job.updated_at)
   if (t) parts.push(t)
   for (const o of job.outputs ?? []) parts.push(`out ${o}`)

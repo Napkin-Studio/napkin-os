@@ -53,6 +53,7 @@ class FakeBlobs:
     def __init__(self):
         self.objects: dict[str, tuple[bytes, str]] = {}
         self.remote: dict[str, bytes] = {}  # provider output URLs
+        self.fallback = None  # key -> bytes for an own key a test did not store; None: refused as not ours
 
     def public_url(self, key):
         return f"{CDN}/{key}"
@@ -88,10 +89,26 @@ class FakeBlobs:
         key = self.key_for_url(url)
         return self.objects[key][0] if key in self.objects else self.remote[url]
 
-    def fetch_own(self, url):
-        """A URL a request names: only our own blobs (blobs.own_key), never self.remote."""
+    def fetch_own(self, url, tenant=None):
+        """A URL a request names: only our own blobs this agency may read (blobs.own_key), never self.remote; a
+        missing object answers as a refused one."""
+        from blobs import NOT_OURS, UnsafeUrl, own_key
+        key = own_key(self, url, tenant)
+        if key not in self.objects:
+            if self.fallback is not None:   # a test's stand-in for objects it did not store (test_pathways.py)
+                return self.fallback(key)
+            raise UnsafeUrl(NOT_OURS)
+        return self.objects[key][0]
+
+    default_clip_s = 5.0   # the fake store's stand-in length for a clip a test did not store (a 5 s take)
+
+    def clip_seconds(self, url, tenant=None):
+        """blobs.clip_seconds: a stored clip's real length; a clip this fake store never held reads as
+        default_clip_s (tests that are about the length store a real MP4: test_guard_estimate.mp4)."""
         from blobs import own_key
-        return self.objects[own_key(self, url)][0]
+        from cliplength import mp4_seconds
+        key = own_key(self, url, tenant)
+        return mp4_seconds(self.objects[key][0]) if key in self.objects else self.default_clip_s
 
     def get(self, key):
         return self.objects[key][0] if key in self.objects else None

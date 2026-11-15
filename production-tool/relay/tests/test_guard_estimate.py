@@ -140,3 +140,53 @@ def test_through_the_relay_the_guard_counts_at_least_the_jobs_reservation(monkey
     job = post(h, h.as_person(), edit_input())
     assert job["state"] == "submitted", job
     assert asked and asked[-1] >= job["cost"]["reserved"] > 0
+
+
+# ── review finding 4: the guard trusts the caller's clip length ──────────────────────────────────────
+
+def mp4(seconds: float, timescale: int = 1000) -> bytes:
+    """A minimal MP4 the relay can read the length of: ftyp, then moov with an mvhd (version 0)."""
+    import struct
+    mvhd_body = struct.pack(">B3sIIII", 0, b"\0\0\0", 0, 0, timescale, int(seconds * timescale)) + b"\0" * 80
+    mvhd = struct.pack(">I4s", 8 + len(mvhd_body), b"mvhd") + mvhd_body
+    moov = struct.pack(">I4s", 8 + len(mvhd), b"moov") + mvhd
+    return b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom" + moov
+
+
+@pytest.mark.parametrize("declared", [None, 1, 2, 5, 30])
+def test_clip_edit_is_priced_by_the_stored_clips_real_length_not_the_request(monkeypatch, declared):
+    import copy as _copy
+
+    from conftest import envelope
+    from director import new_id
+    from test_pathways import EDITOR_ALLOW, INPUTS, SHOT, pathway
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
+    monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "1000")
+    asked = []
+    real = spend.check
+    monkeypatch.setattr(spend, "check", lambda amount, *a, **k: (asked.append(amount), real(amount, *a, **k))[1])
+    h, _ = pathway("runway")
+    h.limits("blue", allow=EDITOR_ALLOW)
+    inp = _copy.deepcopy(INPUTS["clip_edit"])
+    h.blobs.put(f"in/{inp['video']['sha256']}", mp4(30), "video/mp4")       # the clip Runway will read: 30 s
+    if declared is not None:
+        inp["shot"] = {**SHOT, "duration_s": declared, "action": "the sea at dusk", "refs": []}
+    status, job = h.call("POST", "/jobs", {**envelope("clip_edit", new_id("job")), "input": inp}, h.as_person())
+    full = pricing().op_usd(effective_sheet(load_sheet("runway"), "clip_edit", job.get("model")), "clip_edit", None, {"inputS": 30})
+    assert job["cost"]["estimate"] >= full, job["cost"]
+    assert asked and asked[-1] >= full, f"declared {declared}: guard asked {asked}, a 30 s clip is {full}"
+
+
+def test_a_clip_edit_whose_length_cannot_be_read_is_refused():
+    import copy as _copy
+
+    from conftest import envelope
+    from director import new_id
+    from test_pathways import EDITOR_ALLOW, INPUTS, pathway
+    h, stand = pathway("runway")
+    h.limits("blue", allow=EDITOR_ALLOW)
+    inp = _copy.deepcopy(INPUTS["clip_edit"])
+    h.blobs.put(f"in/{inp['video']['sha256']}", b"not a video", "video/mp4")
+    status, job = h.call("POST", "/jobs", {**envelope("clip_edit", new_id("job")), "input": inp}, h.as_person())
+    assert status == 400 and job["error"]["code"] == "invalid_input", job
+    assert stand.to("runway") == []

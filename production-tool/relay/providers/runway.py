@@ -116,10 +116,23 @@ class RunwayProvider:
     name = "runway"
 
     def __init__(self, api_key: str, assets: AssetResolver, client: Optional[httpx.Client] = None,
-                 sheet: Optional[dict] = None):
+                 sheet: Optional[dict] = None, read=None):
+        """`read(url) -> bytes`: how the adapter reads one of the job's own assets (a mask to invert, the image to
+        box). None: the relay's reader for the job in hand (providers.base.read_asset, blobs.fetch_own). The
+        adapter never GETs a URL itself: its client speaks to Runway only."""
         self._key, self._assets = api_key, assets
         self._client = client or httpx.Client(timeout=30)
         self._sheet = sheet or load_sheet("runway")
+        self._reader = read
+
+    def _read(self, url: str) -> bytes:
+        import base64
+        if url.startswith("data:"):
+            return base64.b64decode(url.split(",", 1)[1])
+        if self._reader is not None:
+            return self._reader(url)
+        from . import base
+        return base.read_asset(url)
 
     def capabilities(self) -> dict:
         return self._sheet
@@ -173,12 +186,8 @@ class RunwayProvider:
 
         url = self._assets(sha).url
         try:
-            if url.startswith("data:"):
-                return base64.b64decode(url.split(",", 1)[1])
-            resp = self._client.get(url)
-            resp.raise_for_status()
-            return resp.content
-        except (httpx.HTTPError, ValueError) as exc:  # our own asset: not a call to Runway
+            return self._read(url)
+        except Exception as exc:  # noqa: BLE001 - our own asset: not a call to Runway
             raise ProviderError("internal", f"could not read an input: {exc}", True, source="napkin") from exc
 
     def _ideogram(self, job: ProviderJob) -> tuple[str, dict]:
@@ -249,13 +258,8 @@ class RunwayProvider:
 
         url = self._assets(current.sha256).url
         try:
-            if url.startswith("data:"):
-                data = base64.b64decode(url.split(",", 1)[1])
-            else:
-                resp = self._client.get(url)
-                resp.raise_for_status()
-                data = resp.content
-        except (httpx.HTTPError, ValueError) as exc:  # our own asset: not a call to Runway
+            data = self._read(url)
+        except Exception as exc:  # noqa: BLE001 - our own asset: not a call to Runway
             raise ProviderError("internal", f"could not read the image to edit: {exc}", True, source="napkin") from exc
         try:
             png = draw_box(data, region, BOX_COLOUR, BOX_WIDTH_PX)
@@ -274,7 +278,7 @@ class RunwayProvider:
 
         url = self._assets(current.sha256).url
         try:
-            data = base64.b64decode(url.split(",", 1)[1]) if url.startswith("data:") else self._client.get(url).content
+            data = self._read(url)
             w, h = Image.open(io.BytesIO(data)).size
         except Exception as exc:
             raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc

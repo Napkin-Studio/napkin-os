@@ -450,3 +450,121 @@ def test_service_py_runs_the_hooks_only_through_the_loader():
     """The contract a later record reads: two hook points in service.py, both through hooks/."""
     src = (RELAY / "service.py").read_text()
     assert src.count("relay_hooks.before_submit(") == 1 and src.count("relay_hooks.after_complete(") == 1
+
+
+# ── the security review of 25e7c870 (findings 6, 7, 8 and 10) ────────────────────────────────────────
+
+class RecordingWire:
+    api = "bedrock"
+
+    def __init__(self, guard: bool = False):
+        self.sent, self.guard = [], guard
+
+    def send(self, **kw):
+        if self.guard:
+            from director.model import guard_spend
+            guard_spend(model=kw["model"], system=kw["system"], turns=kw["turns"], max_tokens=kw["max_tokens"],
+                        purpose=kw["purpose"], headers=kw.get("headers"))
+        self.sent.append(kw["purpose"])
+        raise ModelError("recorded", "server")
+
+
+def model_relay(wire, hooks=None):
+    import cutdowns
+    import writer as writers
+    h = Harness(base_config(routing={"generate": ["mock"], "shot_list": [], "stitch": [], "write": []}))
+    h.relay.director = make_director(wire=wire)
+    h.relay.writer, h.relay.cutter = writers.make(h.relay.director), cutdowns.make(h.relay.director)
+    if hooks is not None:
+        h.relay.hooks = hooks
+    token = h.as_person()
+    h.limits("blue", allow={"claude": True, "makers": []})
+    return h, token
+
+
+def test_before_submit_hears_every_job_that_sends_to_a_model_or_a_provider():
+    """Finding 6: shot_list, write and Dex's cutdown plan never reached before_submit."""
+    from test_write import post_write
+    loaded = relay_hooks.load(FIXTURE_HOOKS)
+    wire = RecordingWire()
+    h, token = model_relay(wire, loaded)
+    heard = {}
+    from test_cutdowns import master, plan_input
+    paths = {"shot_list": lambda: h.post_job(token, op="shot_list"),
+             "write": lambda: post_write(h, token, expect=None),
+             "cutdown plan": lambda: h.post_job(token, op="cutdown", **plan_input(master())),
+             "generate": lambda: h.post_job(token, op="generate")}
+    for name, post in paths.items():
+        loaded[0].SEEN.clear()
+        del wire.sent[:]
+        post()
+        heard[name] = (len(loaded[0].SEEN), list(wire.sent))
+    silent = [n for n, (ran, sent) in heard.items() if not ran]
+    assert not silent, f"no before_submit for {silent}: {heard}"
+
+
+def test_a_hook_that_refuses_stops_a_model_only_job_before_the_model():
+    from service import ApiError
+
+    class Refuse:
+        __name__ = "relay_hooks.10_refuse_all"
+
+        @staticmethod
+        def before_submit(job, ctx):
+            raise ApiError("not_allowed", "A rule refused this job.")
+    wire = RecordingWire()
+    h, token = model_relay(wire, [Refuse])
+    _, job = h.post_job(token, op="shot_list")
+    assert job["state"] == "failed" and job["error"]["message"] == "A rule refused this job."
+    assert wire.sent == []
+
+
+def test_each_model_only_job_is_its_own_run_for_the_run_cap(monkeypatch):
+    """Finding 7: model-only jobs shared run '-', so with a run cap the fourth shot list was refused."""
+    monkeypatch.setenv("NAPKIN_SPEND_RUN_CAP_EUR", "2")
+    spend.reset()
+    spend.set_run("-")
+    wire = RecordingWire(guard=True)
+    h, token = model_relay(wire)
+    counts = []
+    for _ in range(4):
+        before = len(wire.sent)
+        h.post_job(token, op="shot_list")
+        counts.append(len(wire.sent) - before)
+    assert all(n > 0 for n in counts), f"a later shot list was refused by an earlier one's run: {counts} {dict(spend._run)}"
+
+
+@pytest.mark.parametrize("model", ["us.anthropic.claude-opus-5", "apac.anthropic.claude-sonnet-5-5",
+                                   "anthropic.claude-sonnet-5-5", "claude-opus-5",
+                                   "arn:aws:bedrock:us-east-1:111122223333:inference-profile/us.anthropic.claude-opus-5"])
+def test_start_up_stops_on_any_route_that_is_not_an_eu_profile(pin, model):
+    """Finding 8: only `global.` was refused; the pin is an allow list."""
+    pin.setenv("NAPKIN_MODEL_PIN", "eu")
+    pin.setenv("NAPKIN_MODEL_ROUTES", json.dumps({"purposes": {"writer": {"model": model}}}))
+    with pytest.raises(RoutesError):
+        make_director(wire=Wire())
+
+
+@pytest.mark.parametrize("value", ["us", "none", "false", "0", "global", "off", "Off", "OFF ", "unpinned"])
+def test_no_value_turns_the_pin_off(pin, value):
+    pin.setenv("NAPKIN_MODEL_PIN", value)
+    with pytest.raises(RoutesError):
+        pinned_routes("bedrock")
+
+
+@pytest.mark.parametrize("value", ["eu", "EU", " eu ", "", " "])
+def test_eu_however_written_or_unset_is_pinned(pin, value):
+    pin.setenv("NAPKIN_MODEL_PIN", value)
+    assert pinned_routes("bedrock").pin == "eu"
+
+
+def test_post_jobs_with_another_agencys_job_id_is_404_not_an_oracle():
+    """Finding 10: 409 'That jobId is taken.' told blue that red's job id exists."""
+    h = Harness()
+    bob = h.as_person("bob", "red")
+    _, theirs = h.post_job(bob, expect=200)
+    alice = h.as_person("alice", "blue")
+    status, out = h.post_job(alice, job_id=theirs["jobId"])
+    assert status == 404 and out["error"]["message"] == "No such job.", out
+    ann = h.as_person("ann", "red")
+    assert h.post_job(ann, job_id=theirs["jobId"])[0] == 409   # within the agency it is still taken

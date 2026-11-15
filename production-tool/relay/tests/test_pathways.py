@@ -124,6 +124,9 @@ EDITOR_OPS = ("region_edit", "upscale")
 
 def pathway(name: str, **cfg_over) -> tuple[Harness, StandIns]:
     h = Harness({**pathway_config(name), **cfg_over}, providers=())
+    # Our own assets: what the relay stored, else a small picture (the adapter reads them through the relay's
+    # reader, blobs.fetch_own, never over its own client).
+    h.blobs.fallback = lambda key: MP4 if key.endswith(".mp4") else PNG
     stand = StandIns(h.blobs)
     client = httpx.Client(transport=httpx.MockTransport(stand))
     reg = Registry()
@@ -354,6 +357,9 @@ def test_the_recorded_director_output_runs_on_its_pathway(fixture_name):
     from test_director import FakeWire, fixture
 
     f = fixture(fixture_name)
+    # The recordings name the live site's own files; on this harness the relay's own base is the CDN (every URL a
+    # request names must be one of the relay's own: features/production-platform-rules.clan).
+    f = json.loads(json.dumps(f).replace("https://hack.napkin.ie/", f"{CDN}/"))
     h, stand = pathway("runway")
     sheets = {n: load_sheet(n) for n in ("mock", "runway")}
     h.relay.director = ClaudeDirector(Director(ModelPort(FakeWire(f["reply"]), "claude-haiku-4-5", timeout=5),

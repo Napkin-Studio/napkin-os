@@ -137,8 +137,22 @@ def job_op() -> str | None:
     return _job_op.get()
 
 
-def set_job_context(op: str, assets: list[dict]) -> None:
-    """Before `submit`: the job's op and its assetRefs ({sha256, url, mime})."""
+_asset_reader: contextvars.ContextVar = contextvars.ContextVar("asset_reader", default=None)
+
+
+def set_job_context(op: str, assets: list[dict], reader=None) -> None:
+    """Before `submit`: the job's op, its assetRefs ({sha256, url, mime}) and how an adapter reads one of them
+    (`reader(url) -> bytes`: the relay's blobs.fetch_own for the job's agency; features/production-platform-rules.clan)."""
     _job_op.set(op)
     _asset_urls.set({a["sha256"]: a["url"] for a in assets})
     _asset_mimes.set({a["sha256"]: a["mime"] for a in assets if a.get("mime")})
+    _asset_reader.set(reader)
+
+
+def read_asset(url: str) -> bytes:
+    """The bytes of one of the job's assets, through the relay's reader, never over the network on the URL's word.
+    No reader set: nothing is read."""
+    reader = _asset_reader.get()
+    if reader is None:
+        raise ProviderError("internal", "the relay set no asset reader for this provider job")
+    return reader(url)

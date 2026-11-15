@@ -3,6 +3,7 @@ unbuilt ops, asks (needs_input, the answer route, first answer wins, Change), as
 mapping and director.v6."""
 
 import json
+import re
 
 import pytest
 
@@ -66,6 +67,8 @@ def test_an_op_not_built_yet_is_422_capability_missing_before_quota(h, op):
         inp = json.loads((contracts_dir() / "examples" / f"job-request.{op}.json").read_text())["input"]
         if op == "resize":
             inp["resize"]["method"] = "reedit"
+        # the example names the live site's own files; here the relay's own base is the CDN
+        inp = json.loads(re.sub(r"https://[^/\"]+/(in|out|ads)/", lambda m: f"{CDN}/{m.group(1)}/", json.dumps(inp)))
     _, out = h.call("POST", "/jobs", {**envelope(op, new_id("job")), "input": inp}, token, expect=422)
     assert out["error"]["code"] == "capability_missing"
     assert h.relay.remaining(h.people[token]["pid"]) == h.cfg["quotas"]

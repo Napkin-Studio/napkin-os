@@ -4,7 +4,8 @@
     verdict = spend.allow(0.04, spend.environment(), job_id)
     if not verdict: refuse the call (verdict.reason says why; spend.check() raises SpendRefused)
 
-It caps money, in euro, and holds one pause switch. It never calls a provider and never reads a key.
+It caps money, in euro, and holds one pause switch. No exchange rate exists here: a dollar price counts as the same
+number of euro (the owner decides whether that is acceptable; it errs high while a dollar is worth less than a euro). It never calls a provider and never reads a key.
 It fails CLOSED (features/production-platform-rules.clan): a paid call goes out only when the environment
 says so in both of the first two settings. Nothing set, on a laptop or a server, means nothing is paid.
 
@@ -41,7 +42,7 @@ import time
 from dataclasses import dataclass
 
 LOCAL = frozenset({"", "local", "dev", "development", "test"})
-_ON = frozenset({"1", "on", "true", "yes"})
+_ON = frozenset({"on"})   # only `on` turns paid calls on: 1, true and yes do not (the review of 25e7c870)
 _OFF = frozenset({"0", "off", "false", "no"})
 
 log = logging.getLogger("napkin.spend")

@@ -177,3 +177,42 @@ def test_a_resend_the_ledger_refuses_is_not_sent():
     assert job["state"] == "failed" and job["error"]["code"] == "spend_stop"
     assert len(fake.submits) == 1, "nothing was sent again"
     assert abs(spent(h) - first) < 1e-9, "the first task stays held: it was billed"
+
+
+def test_after_the_resend_lands_the_ledger_holds_both_billed_tasks():
+    """Review finding 5: both tasks are charged, so both are recorded."""
+    from providers.base import Status
+    h = harness()
+    fake = h.providers["runway"]
+    job = post_take(h)
+    first = job["cost"]["reserved"]
+    h.providers["runway"].states["runway-1"] = Status(state="moderated", error_message="Text prompt did not pass moderation",
+                                                      provider_code=TEXT, cost_usd=first)
+    h.clock.tick(6)
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True and abs(spent(h) - 2 * first) < 1e-9
+    fake.succeed("runway-2", cost=first)
+    for _ in range(6):
+        h.clock.tick(10)
+        job = h.poll(h.token, job["jobId"])
+        if job["state"] in ("completed", "failed"):
+            break
+    assert job["state"] == "completed"
+    assert abs(spent(h) - 2 * first) < 1e-9, f"two billed tasks ({2 * first}), the ledger holds {spent(h)}"
+    assert abs(job["cost"]["confirmed"] - 2 * first) < 1e-9, job["cost"]
+
+
+def test_the_plainer_resend_runs_the_hooks_before_it_is_sent():
+    """Review finding 6: before_submit runs before every send, the resend on a status refusal included."""
+    from pathlib import Path
+
+    import hooks as relay_hooks
+    loaded = relay_hooks.load(Path(__file__).resolve().parent / "fixtures" / "hooks")
+    h = harness()
+    h.relay.hooks = loaded
+    job = post_take(h)
+    loaded[0].SEEN.clear()
+    refuse_on_status(h, "runway-1")
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True
+    assert len(loaded[0].SEEN) == 1, "before_submit ran once more, for the resend"

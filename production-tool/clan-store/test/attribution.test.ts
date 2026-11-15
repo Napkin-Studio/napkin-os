@@ -52,8 +52,9 @@ describe('attribution: people and the crew', () => {
     expect(r).toContain('prompt: "@hero in a yellow raincoat')
     expect(r).toContain('director claude-sonnet-5-5 · director.v6 · 2.3 s')
     expect(r).toContain('gen4_image on runway')
-    expect(r).toContain('cost $0.07 confirmed')
     expect(r).toContain('41 s')
+    // No cost in the words a person reads (the owner's rule; review finding 3): the figure stays on the job (jobs[].cost).
+    expect(r).not.toMatch(/\$|cost|0\.07|0\.08|confirmed|estimated/)
   })
 
   it('names each reference Dex added beyond what the shot asked for, with why (owner 2026-10-15)', () => {
