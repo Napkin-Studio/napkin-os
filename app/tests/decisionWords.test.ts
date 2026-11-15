@@ -218,7 +218,8 @@ import { budgetWords, runCostLine } from '../src/shell/decisions/words.ts'
 test('a run_cost decision reads "this run cost 0.02" in the Decisions drawer; a refused run cost nothing', () => {
   assert.equal(runCostLine({ charged_eur: 0.02, estimate_eur: 0.05, guard: 'allowed' }), 'this run cost 0.02')
   assert.equal(runCostLine({ charged_eur: 0, guard: 'allowed' }), 'this run cost 0.00')
-  assert.equal(runCostLine({ charged_eur: 0, guard: 'refused' }), 'a run was refused before it started. It cost nothing')
+  // a refusal writes no run_cost at all (review of 15 Nov, item 2): a guard of refused reads as any other, by its figure
+  assert.equal(runCostLine({ charged_eur: 0, guard: 'refused' }), 'this run cost 0.00')
   assert.equal(runCostLine(undefined), 'this run cost 0.00')
   assert.equal(runCostLine({ charged_eur: 'lots' }), 'this run cost 0.00', 'a figure that is not a number is never shown')
   const b = { decision: { id: 'd_c', kind: 'run_cost', agent: 'judge', action: 'run_cost', targets: ['doc'], rationale: 'The cost of one run.', timestamp: '2026-11-14T09:00:00Z', run_cost: { charged_eur: 0.02, guard: 'allowed' } }, who: { kind: 'agent' } } as never
