@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
+import { RELAY_REFUSAL_FILES, figureIn, relayRefusals } from '../../production-tool/web/src/ui/refusalWords'
 
 // `npm test` runs from app/, and the bundled test does not sit where its source does.
 const src = resolve(process.cwd(), 'src')
@@ -154,4 +155,16 @@ test('the shell names no run cost, budget hours or credit cap anywhere else: the
     ['components/states/words.ts', /reserved estimate|[Cc]redit/],
   ]
   for (const [f, re] of gone) assert.doesNotMatch(readFileSync(join(src, f), 'utf8'), re, f)
+})
+
+// Phase 3 test 79's unit half, joined here (features/production-platform-rules.clan, done_when 7): the Production line's
+// limit_reached and spend_stop refusals hold no digit and no currency word. The rule and the walk are the web's own
+// (production-tool/web/src/ui/refusalWords.ts, tested there too); this runs them over the relay's source from the shell's tests.
+test('79 Production refusals (limit_reached, spend_stop) hold no figure and no currency word', () => {
+  const tool = resolve(process.cwd(), '..', 'production-tool')
+  const sources = Object.fromEntries(RELAY_REFUSAL_FILES.map(p => [p, readFileSync(join(tool, p), 'utf8')]))
+  const lines = relayRefusals(sources)
+  assert.ok(lines.some(l => l.code === 'limit_reached') && lines.some(l => l.code === 'spend_stop'), 'the walk finds both codes')
+  const bad = lines.flatMap(l => { const why = figureIn(l.text); return why ? [`${l.where}: ${why} in "${l.text}"`] : [] })
+  assert.deepEqual(bad, [])
 })

@@ -224,6 +224,18 @@ class Routes:
             self._doc, self._mtime, self.error = doc, mtime, None
             log.warning("model routes: reloaded %s", self._path)
 
+    def vouch(self, model: str) -> str | None:
+        """Why the pin cannot vouch for a model a caller names itself (an explicit id or alias, not a route), or
+        None when it can or no pin is set. An allow list: on the bedrock wire only an `eu.` inference profile; any
+        other wire only with its recorded exception (features/production-platform-rules.clan)."""
+        if self.pin != "eu":
+            return None
+        if self.api not in EU_WIRES:
+            return None if f"wire:{self.api}" in self.exceptions else (
+                f"the {self.api} wire is not EU-pinned: client text would leave the EU")
+        mid = self.model_id(model)
+        return None if mid.startswith("eu.") else f"{mid} is not an EU inference profile: not EU-pinned"
+
     def model_id(self, name: str) -> str:
         a = ALIASES.get(name)
         if a is None:

@@ -114,6 +114,9 @@ class ProviderJob:
     # draft?}) the relay resolved, and a draft's Runway task id when Remake as Final promotes it.
     quality: Optional[dict] = None
     draft_task: Optional[str] = None
+    # What the relay's ledger reserved for this call, in USD (service.py _submit): the spend guard never asks
+    # for less (features/production-platform-rules.clan). Not sent to the provider.
+    price_usd: Optional[float] = None
 
     @classmethod
     def from_director(cls, op: str, job: dict) -> "ProviderJob":
@@ -130,7 +133,7 @@ class ProviderJob:
             keyframe=job.get("keyframe"), angle=job.get("angle"), ratio=job.get("ratio"),
             duration_s=job.get("durationS"), seed=job.get("seed"), audio=job.get("audio"),
             outputs=job.get("outputs"), strength=job.get("strength"), scale=job.get("scale"),
-            quality=job.get("quality"), draft_task=job.get("draftTask"),
+            quality=job.get("quality"), draft_task=job.get("draftTask"), price_usd=job.get("priceUsd"),
         )
 
 

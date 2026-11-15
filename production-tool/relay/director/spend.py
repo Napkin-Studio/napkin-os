@@ -5,23 +5,34 @@
     if not verdict: refuse the call (verdict.reason says why; spend.check() raises SpendRefused)
 
 It caps money, in euro, and holds one pause switch. It never calls a provider and never reads a key.
+It fails CLOSED (features/production-platform-rules.clan): a paid call goes out only when the environment
+says so in both of the first two settings. Nothing set, on a laptop or a server, means nothing is paid.
 
-  NAPKIN_PAID_CALLS         on | off. One switch for every paid call. Unset: on locally, off when deployed.
-  NAPKIN_SPEND_CAP_EUR      the most one environment spends in a UTC day. Unset: no cap locally, 0 when
-                            deployed. 0 refuses every paid call. A value that is not a number counts as 0.
+  NAPKIN_PAID_CALLS         on | off. One switch for every paid call. Unset, or anything but on: off.
+  NAPKIN_SPEND_CAP_EUR      the most one environment spends in a UTC day. Paid calls stay off until it is
+                            named. Unset, 0, or a value that is not a number: 0, which refuses every paid call.
   NAPKIN_SPEND_RUN_CAP_EUR  the most one run spends. Unset: no run cap (the day cap still applies).
-  NAPKIN_ENV                the environment's name ("napkin-staging", ...). Unset, "local", "dev" and "test"
-                            are local; any other name is deployed.
+  NAPKIN_ENV                the environment's name ("napkin-staging", ...), the key of its totals. It loosens
+                            nothing: an unset or unknown name is held to the same two settings as any other.
 
-Totals are kept in memory, per process: a second task counts its own spend, so the cap is per
-task until the cost engine (Phase 3) keeps one ledger. That engine can implement allow() with
-this signature. An estimate that is too high only refuses early; callers pass a ceiling, never zero.
+A developer turns paid calls on by hand: NAPKIN_PAID_CALLS=on NAPKIN_SPEND_CAP_EUR=5. Napkin's own offline
+provider and the passthrough director never ask, so tests and the e2e stack run free with nothing set. describe() is the
+one line a process logs at start-up saying which mode the guard is in.
+
+A refusal's reason is one plain line with no figure and no money word (the interface shows it); the cap
+and the amount go to the log only.
+
+Totals are kept in memory, per process: a second task counts its own spend, and a restart (a Lambda cold
+start) begins at zero, so the cap is per process until the cost engine (Phase 3) keeps one ledger. That
+engine can implement allow() with this signature. An estimate that is too high only refuses early; callers
+pass a ceiling, never zero.
 
 The relay runs a copy, production-tool/relay/director/spend.py, held in step by a test.
 """
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 import contextvars
@@ -32,6 +43,14 @@ from dataclasses import dataclass
 LOCAL = frozenset({"", "local", "dev", "development", "test"})
 _ON = frozenset({"1", "on", "true", "yes"})
 _OFF = frozenset({"0", "off", "false", "no"})
+
+log = logging.getLogger("napkin.spend")
+
+# The lines a person reads when a paid call is refused: no figure, no money word (Phase 3 test 79).
+PAID_OFF = "Paid runs are off here. Nothing was sent."
+DAY_LIMIT = "Paid runs have reached today's limit here. Nothing was sent."
+RUN_LIMIT = "This run has reached its limit for paid calls. Nothing was sent."
+NO_ESTIMATE = "This call could not be checked before sending, so nothing was sent."
 
 _lock = threading.Lock()
 _day: dict[tuple[str, str], float] = {}   # (environment, UTC date) -> euro
@@ -68,22 +87,31 @@ def environment() -> str:
 
 
 def is_local(env: str) -> bool:
+    """A name a developer's machine uses. The guard does not read it: it loosens nothing (fails closed)."""
     return (env or "").strip().lower() in LOCAL
 
 
-def paid_calls_on(env: str) -> bool:
-    v = (os.environ.get("NAPKIN_PAID_CALLS") or "").strip().lower()
-    if v in _ON:
-        return True
-    if v in _OFF:
+def _named_cap() -> bool:
+    """NAPKIN_SPEND_CAP_EUR holds a number the environment chose (0 included)."""
+    v = (os.environ.get("NAPKIN_SPEND_CAP_EUR") or "").strip()
+    try:
+        n = float(v)
+    except ValueError:
         return False
-    return is_local(env)      # unset: on locally, off when deployed; an unreadable value is "off" when deployed
+    return math.isfinite(n) and n >= 0
 
 
-def _cap(name: str, env: str, deployed_default: float | None) -> float | None:
+def paid_calls_on(env: str | None = None) -> bool:
+    """On only when NAPKIN_PAID_CALLS says on AND NAPKIN_SPEND_CAP_EUR names a cap, in every environment.
+    Unset, unreadable or a cap left out: off."""
+    v = (os.environ.get("NAPKIN_PAID_CALLS") or "").strip().lower()
+    return v in _ON and _named_cap()
+
+
+def _cap(name: str, unset: float | None) -> float | None:
     v = (os.environ.get(name) or "").strip()
     if not v:
-        return None if is_local(env) else deployed_default
+        return unset
     try:
         n = float(v)
     except ValueError:
@@ -91,12 +119,26 @@ def _cap(name: str, env: str, deployed_default: float | None) -> float | None:
     return n if math.isfinite(n) and n >= 0 else 0.0
 
 
-def day_cap(env: str) -> float | None:
-    return _cap("NAPKIN_SPEND_CAP_EUR", env, 0.0)
+def day_cap(env: str | None = None) -> float:
+    """The day's cap in euro: unset or unreadable is 0 (refuses every paid call), never "no cap"."""
+    return _cap("NAPKIN_SPEND_CAP_EUR", 0.0)
 
 
-def run_cap(env: str) -> float | None:
-    return _cap("NAPKIN_SPEND_RUN_CAP_EUR", env, None)
+def run_cap(env: str | None = None) -> float | None:
+    return _cap("NAPKIN_SPEND_RUN_CAP_EUR", None)
+
+
+def describe(env: str | None = None) -> str:
+    """One line for the start-up log: which mode the guard is in, and why."""
+    env = environment() if env is None else env
+    name = env if os.environ.get("NAPKIN_ENV") else f"{env} (NAPKIN_ENV unset)"
+    if not paid_calls_on(env):
+        why = ("NAPKIN_PAID_CALLS is not on" if (os.environ.get("NAPKIN_PAID_CALLS") or "").strip().lower() not in _ON
+               else "NAPKIN_SPEND_CAP_EUR names no cap")
+        return f"spend guard: environment {name}: paid calls OFF ({why}); every paid call is refused"
+    rcap = run_cap(env)
+    return (f"spend guard: environment {name}: paid calls ON, day cap {day_cap(env):g} euro, run cap "
+            f"{'none' if rcap is None else f'{rcap:g} euro'}; totals are per process and start at zero")
 
 
 def allow(amount: float, env: str, run: str) -> Verdict:
@@ -106,21 +148,25 @@ def allow(amount: float, env: str, run: str) -> Verdict:
     try:
         amount = float(amount)
     except (TypeError, ValueError):
-        return Verdict(False, "the call has no cost estimate, so it is not sent")
+        return Verdict(False, NO_ESTIMATE)
     if not math.isfinite(amount) or amount < 0:
-        return Verdict(False, "the call has no cost estimate, so it is not sent")
+        return Verdict(False, NO_ESTIMATE)
     if not paid_calls_on(env):
-        return Verdict(False, "paid calls are switched off (NAPKIN_PAID_CALLS)")
+        return Verdict(False, PAID_OFF)
     today = time.strftime("%Y-%m-%d", time.gmtime())
     with _lock:
         cap = day_cap(env)
         spent = _day.get((env, today), 0.0)
-        if cap is not None and (cap <= 0 or spent + amount > cap):
-            return Verdict(False, f"the daily spend cap for {env} is {cap:g} euro (NAPKIN_SPEND_CAP_EUR)")
+        if cap <= 0 or spent + amount > cap:
+            log.warning("spend guard: %s refused %.4f: the day cap is %g euro, %.4f spent (NAPKIN_SPEND_CAP_EUR)",
+                        env, amount, cap, spent)
+            return Verdict(False, DAY_LIMIT)
         rcap = run_cap(env)
         rspent = _run.get((env, run), 0.0)
         if rcap is not None and (rcap <= 0 or rspent + amount > rcap):
-            return Verdict(False, f"the spend cap for this run is {rcap:g} euro (NAPKIN_SPEND_RUN_CAP_EUR)")
+            log.warning("spend guard: %s run %s refused %.4f: the run cap is %g euro, %.4f spent "
+                        "(NAPKIN_SPEND_RUN_CAP_EUR)", env, run, amount, rcap, rspent)
+            return Verdict(False, RUN_LIMIT)
         _day[(env, today)] = spent + amount
         _run[(env, run)] = rspent + amount
     return Verdict(True)

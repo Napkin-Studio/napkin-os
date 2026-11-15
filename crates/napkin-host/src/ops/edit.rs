@@ -362,6 +362,8 @@ impl PatchData {
 pub fn patch_data(ctx: &Ctx, doc: &Document, input: PatchData) -> HostResult<Outcome> {
     // An approved visual brief is one exact version: it takes no write until a new version is started.
     super::gate::refuse_write_when_approved_for(doc, &input.keys)?;
+    // A brain's lines are appended and superseded, never edited or deleted (features/brain-append-only.clan).
+    crate::brain::refuse_unless_append(doc, &input.patch, &input.append_keys)?;
     // A document with facts or findings members has a host-owned projection
     // of them in its data (Contract 3 §5). No agent or human patch writes it —
     // it is rebuilt from the members, never edited.

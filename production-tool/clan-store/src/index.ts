@@ -1,7 +1,7 @@
 export type { Doc, DocAsset, DocumentStore, Entity, MapName, Person, Project, Why } from './types'
 export { MAP_NAMES } from './types'
 export {
-  ClanDocumentStore, CONTRACT, UnsupportedContract, assertIntegrity, newProjectData, newUlidId, MIGRATION_AGENT, MIGRATION_ACTION,
+  ClanDocumentStore, CONTRACT, UnsupportedContract, agentProblem, assertIntegrity, newProjectData, newUlidId, MIGRATION_AGENT, MIGRATION_ACTION,
   type BeforeBytes, type ChainEntry, type ClanStoreApi, type ClanStoreOptions, type MirrorPost, type MirrorReason,
 } from './store'
 export { indexedDbPersistence, memoryPersistence, type Persistence, type Saved } from './persist'

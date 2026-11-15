@@ -37,6 +37,9 @@ def clean_env(monkeypatch):
     for k in ("NAPKIN_JUDGE_BACKEND", "NAPKIN_JUDGE_FIXTURE", "NAPKIN_MODEL_PIN", "NAPKIN_SPEND_CAP_EUR",
               "NAPKIN_PAID_CALLS", "NAPKIN_JUDGE_PRICE_EUR", "NAPKIN_ENV"):
         monkeypatch.delenv(k, raising=False)
+    # the spend guard fails closed: these fakes stand for a machine that turned paid calls on, with a cap
+    monkeypatch.setenv("NAPKIN_PAID_CALLS", "on")
+    monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "1000000")
 
 
 class JudgeModel(FakeModel):
@@ -216,7 +219,7 @@ def test_the_spend_guard_refuses_before_any_model_call(yes, monkeypatch):
     monkeypatch.setenv("NAPKIN_SPEND_CAP_EUR", "0")
     model = JudgeModel()
     e = refused(middleware(model), 429, "spend_refused")
-    assert "cap" in e.message
+    assert "today's limit" in e.message and not re.search(r"\d|euro", e.message)
     assert model.calls == []
     monkeypatch.delenv("NAPKIN_SPEND_CAP_EUR")
     monkeypatch.setenv("NAPKIN_PAID_CALLS", "off")

@@ -121,7 +121,7 @@ def test_the_model_writer_asks_sonnet_with_skye_v3_and_the_relay_owns_target_and
     inp["write"]["target"] = target
     out = w.write({"op": "write", "jobId": new_id("job"), "input": inp})
     [asked] = port.asked
-    assert asked["purpose"] == "writer" and asked["model"] == "claude-sonnet-5-5"
+    assert asked["purpose"] == "writer" and asked["model"] == "sonnet-5.5"   # an alias the routes resolve
     assert asked["system"].startswith("# Skye · scripts (skye.v3)")
     assert asked["payload"]["input"]["write"]["context"]["refs"] == [{"name": "maya_front", "role": "character"}]
     assert [d["target"] for d in out["writes"]] == [target]

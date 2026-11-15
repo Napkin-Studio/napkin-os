@@ -1,0 +1,289 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Napkin Brain",
+  "description": "What an agency has decided, as pages of cited lines. One brain per client and one for the agency. A derived line holds no words from a source: it stores ids, a rule and typed slots, and its sentence is rendered when a page is read, so a part marked confidential later leaves every page without rewriting history.",
+  "type": "object",
+  "properties": {
+    "vault": {
+      "type": "object",
+      "description": "Whose brain this is. A client's brain names its client; the agency's names none.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "agency",
+            "client"
+          ]
+        },
+        "client": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^cli_[0-9a-f]{8}$"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "pages": {
+      "type": "object",
+      "description": "Pages by slug.",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,79}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/page"
+      }
+    },
+    "sources": {
+      "type": "object",
+      "description": "Where each source document was read up to, by document id, so an ingest can resume.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "head": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "required": [
+          "head"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "proposals": {
+      "type": "array",
+      "description": "Lines a curator proposed and an owner has not yet approved. Empty until the curator exists.",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "definitions": {
+    "id": {
+      "type": "string",
+      "description": "An id: a document, decision, line, rule or client id. No spaces, no longer than 64 characters.",
+      "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+    },
+    "page": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "decision",
+            "idea",
+            "outcome",
+            "lesson",
+            "client",
+            "person",
+            "tool",
+            "job"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "summary": {
+          "type": "string",
+          "description": "Twenty words or fewer.",
+          "pattern": "^\\S+(\\s+\\S+){0,19}$"
+        },
+        "owner_role": {
+          "$ref": "#/definitions/id"
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,79}$"
+          }
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/line"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "summary",
+        "owner_role",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "cite": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "A decision in a document.",
+          "properties": {
+            "doc": {
+              "$ref": "#/definitions/id"
+            },
+            "decision": {
+              "$ref": "#/definitions/id"
+            }
+          },
+          "required": [
+            "doc",
+            "decision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "A layer fact pin.",
+          "properties": {
+            "fact": {
+              "$ref": "#/definitions/id"
+            }
+          },
+          "required": [
+            "fact"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "slot": {
+      "description": "An id, an enum word, a date or a number. Never a sentence.",
+      "oneOf": [
+        {
+          "$ref": "#/definitions/id"
+        },
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "line": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Derived by code from a cited decision. Holds no words from a source.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/id"
+            },
+            "kind": {
+              "const": "derived"
+            },
+            "rule": {
+              "$ref": "#/definitions/id"
+            },
+            "cites": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/definitions/cite"
+              }
+            },
+            "slots": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/slot"
+              }
+            },
+            "state": {
+              "enum": [
+                "current",
+                "superseded"
+              ]
+            },
+            "superseded_by": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+            },
+            "at": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}(T[0-9:.]+Z)?$"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "rule",
+            "cites",
+            "slots",
+            "state",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Written by a person, or proposed and approved by one. Its words are the person's own.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/id"
+            },
+            "kind": {
+              "const": "curated"
+            },
+            "rule": {
+              "$ref": "#/definitions/id"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "approved_by": {
+              "$ref": "#/definitions/id"
+            },
+            "cites": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/definitions/cite"
+              }
+            },
+            "slots": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/slot"
+              }
+            },
+            "state": {
+              "enum": [
+                "current",
+                "superseded"
+              ]
+            },
+            "superseded_by": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+            },
+            "at": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}(T[0-9:.]+Z)?$"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "text",
+            "approved_by",
+            "cites",
+            "state",
+            "at"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

@@ -37,10 +37,10 @@ from pathlib import Path
 
 import cards
 import identity
-from blobs import LocalBlobs
+from blobs import LocalBlobs, allow_loopback
 from contracts import Contracts
 from contracts_dir import contracts_dir
-from director import load_director
+from director import load_director, spend
 from providers import load_registry
 from providers.base import Status, asset_url
 from runtime import CachedConfig
@@ -153,6 +153,10 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
     cfg_file = os.environ.get("LOCAL_CONFIG")
     load = (lambda: json.loads(Path(cfg_file).read_text())) if cfg_file else default_config
     blobs = LocalBlobs(data_dir, f"http://localhost:{port}")
+    # Local only: the mock's outputs and this server's own blobs are on http://localhost. Lambda never sets it, so
+    # there a fetch is public https only (blobs.http_fetch, features/production-platform-rules.clan).
+    allow_loopback(True)
+    log.warning(spend.describe())  # one line: which mode the euro guard is in (features/production-platform-rules.clan)
     registry = load_registry()
     from providers import _seam
     _seam.LOCAL_READER = lambda url: blobs.path(blobs.key_for_url(url)).read_bytes()

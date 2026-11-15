@@ -207,7 +207,7 @@ def test_stitch_leaves_the_end_card_shot_to_stitchs_own_card_and_keeps_its_paylo
 
 
 class Wire:
-    api = "anthropic"
+    api = "bedrock"   # the relay pins to the EU by default (claude.pinned_routes): the Lambda's wire
 
     def send(self, **kw):
         return Reply(json.dumps({"op": "generate", "question": None, "rationale": "x", "confidence": 1}), "ok", (1, 1))
