@@ -437,7 +437,7 @@ test('two states true at once make one line, the more urgent first, and the othe
   assert.equal(p.all('[data-testid="booth-state"]').length, 1, 'one element, not a pile')
   const line = p.one('[data-testid="booth-state"]')
   assert.equal(line.getAttribute('data-state'), 'run-failed', 'the more urgent first')
-  assert.match(words(line), /The model did not answer/)
+  assert.match(words(line), /^That did not run\. Nothing was changed\./, 'the failed run, said with no figure (features/align-confidential-prices.clan)')
   assert.match(words(line.querySelector('.bs-small:last-child')), /^Also: The brief changed to v2\.$/)
   assert.equal(line.querySelectorAll('button').length, 1, 'one action: the top state\'s')
   line.querySelector('button').click()

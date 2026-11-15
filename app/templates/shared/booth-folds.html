@@ -116,7 +116,8 @@
     return null;
   }
   // The host's refusal, in its words: the part after its code.
-  function bfRefusal(m){ var x=/^(ai_off|not_eu|not_configured|spend_refused|judge_failed|judge_malformed)\s*:\s*([\s\S]*)$/.exec(String(m||'').trim()); return x?x[2].trim():'Judge could not score this just now. Nothing was changed.'; }
+  var BF_DID_NOT_RUN='That did not run. Nothing was changed.';
+  function bfRefusal(m){ var x=/^(ai_off|not_eu|not_configured|spend_refused|judge_failed|judge_malformed)\s*:\s*([\s\S]*)$/.exec(String(m||'').trim()); return x?x[2].trim():BF_DID_NOT_RUN; }
   // What the band said before there was a score: Judge is not set up here, or answers from fixtures.
   function bfSetupLine(setup){
     if(!setup) return '';
@@ -306,14 +307,14 @@
       else if(j&&j.kind) st.card=j;
       return j;
     });
-    st.run.then(null, function(){ st.line=st.line||'Judge could not score this just now. Nothing was changed.'; }).then(function(){ st.run=null; bfJudgeHold(false); bfReadJudge(); });
+    st.run.then(null, function(){ st.line=st.line||BF_DID_NOT_RUN; }).then(function(){ st.run=null; bfJudgeHold(false); bfReadJudge(); });
     return st.run;
   }
   function bfJudgeSend(){ var card=BF.judge.card; boothJudgeSend(card&&card.piece?{target:card.piece}:{}).then(null, function(){}); }
   function bfOverrule(route){
     var st=BF.judge, reason=String(st.reason||'').trim(); if(!reason) return;
     bfPost('/judge/overrule',{reason:reason, route:route}).then(function(j){
-      if(j&&j.ok===false){ var m=bfRefusal(j.error); st.line=m.indexOf('Judge could not score')===0?'The overrule did not go through. Nothing was changed.':m; return; }
+      if(j&&j.ok===false){ var m=bfRefusal(j.error); st.line=m===BF_DID_NOT_RUN?'The overrule did not go through. Nothing was changed.':m; return; }
       st.asking=false; st.reason=''; st.line='';
     }, function(){ st.line='The overrule did not go through. Nothing was changed.'; }).then(function(){ bfDraw('judge'); bfReadJudge(); });
   }

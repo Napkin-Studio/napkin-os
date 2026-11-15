@@ -219,8 +219,9 @@ for (const size of SIZES) {
     if (shots) await page.screenshot({ path: `${shots}/prices-job-decisions-planning-${size.tag}.png`, fullPage: false, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
     expect((await page.request.patch(`${job.api}/jobs/${number}`, { data: { budget_hours: 5 } })).status()).toBe(403)
     expect((await page.request.post(`${job.api}/jobs/${number}/budget`, { data: { hours: 5 } })).status()).toBe(403)
-    const mine = await (await page.request.get(`${job.api}/jobs/${number}/decisions`)).text()
-    expect(mine).not.toMatch(/budget|hours/i)
+    const mine = (await (await page.request.get(`${job.api}/jobs/${number}/decisions`)).json()) as { decisions: unknown[]; can_record_budget: boolean }
+    expect(mine.can_record_budget).toBe(false)
+    expect(JSON.stringify(mine.decisions), 'no line about a budget, and no hours').not.toMatch(/budget|hour/i)
     const list = (await (await page.request.get(`${job.api}/jobs`)).json()) as { number: string; budget_hours?: number }[]
     expect(list.find(j => j.number === number), 'the job is listed').toBeTruthy()
     expect(list.every(j => !('budget_hours' in j)), 'no job in the list carries a budget for planning').toBe(true)

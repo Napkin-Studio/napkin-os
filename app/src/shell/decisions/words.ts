@@ -218,8 +218,24 @@ function linkLine(block: DecisionBlock, view: DecisionsView): string | null {
   return `took the newer ${it}`
 }
 
+/** What one run cost, said in the one place costs are read: the Decisions drawer (features/align-confidential-prices.clan).
+ *  A figure that is not a number is never shown; a run the spend guard refused cost nothing. */
+export function runCostLine(c: { charged_eur?: unknown; guard?: unknown } | null | undefined): string {
+  if (c?.guard === 'refused') return 'a run was refused before it started. It cost nothing'
+  const n = typeof c?.charged_eur === 'number' && Number.isFinite(c.charged_eur) && c.charged_eur >= 0 ? c.charged_eur : 0
+  return `this run cost ${n.toFixed(2)}`
+}
+
+/** A budget recorded on a job, said where budgets are read: the job's Decisions, for the Money roles. */
+export function budgetWords(c: { hours?: unknown } | null | undefined): string {
+  const h = typeof c?.hours === 'number' && Number.isFinite(c.hours) ? c.hours : null
+  return h === null ? 'recorded the budget' : `recorded the budget: ${h} ${h === 1 ? 'hour' : 'hours'}`
+}
+
 export function didWhat(block: DecisionBlock, view: DecisionsView): string {
   const d = block.decision
+  if (d.kind === 'run_cost') return runCostLine(d.run_cost as { charged_eur?: unknown; guard?: unknown } | undefined)
+  if (d.kind === 'set_budget') return budgetWords(d.set_budget as { hours?: unknown } | undefined)
   const t = mainTarget(block)
   const what = t ? strip(t.label) : 'the document'
   const client = clientLineOf(block, view)
