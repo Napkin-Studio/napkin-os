@@ -369,17 +369,22 @@ async fn the_scoring_route_keeps_each_refusal_writes_nothing_on_a_failure_and_ne
     let refused = costs(&file);
     assert_eq!(refused.len(), 1, "{refused:?}");
     assert_eq!(
-        (refused[0]["guard"].clone(), refused[0]["charged_eur"].clone()),
+        (
+            refused[0]["guard"].clone(),
+            refused[0]["charged_eur"].clone()
+        ),
         (json!("refused"), json!(0.0))
     );
     let (url, _) = mock(vec![(
         429,
-        json!({ "error": { "type": "spend_refused", "message": "over the cap of 12.50" } }).to_string(),
+        json!({ "error": { "type": "spend_refused", "message": "over the cap of 12.50" } })
+            .to_string(),
     )]);
     let (got, text) = run(&session, &maeve, &Cfg(url), json!({})).await;
     assert_eq!(got, 429);
     assert!(
-        text.contains("spend_refused") && text.contains("Paid runs are off here. Nothing was sent."),
+        text.contains("spend_refused")
+            && text.contains("Paid runs are off here. Nothing was sent."),
         "{text}"
     );
     assert!(
@@ -418,13 +423,19 @@ async fn the_scoring_route_keeps_each_refusal_writes_nothing_on_a_failure_and_ne
         assert!(text.contains("judge_malformed"), "{case}: {text}");
     }
     assert_eq!(judged(), 0);
-    assert_eq!(costs(&file).len(), 2, "an answer that reported no cost writes none");
+    assert_eq!(
+        costs(&file).len(),
+        2,
+        "an answer that reported no cost writes none"
+    );
 
     // Review finding (d): a charged run whose answer is malformed still writes its cost; so does a charged run the
     // middleware itself failed after the charge (its error carries the usage block), and the cost holds no words
     let mut bad = full.clone();
     bad.pop();
-    let failed_after = json!({ "error": { "type": "judge_malformed", "message": "x", "usage": usage() } }).to_string();
+    let failed_after =
+        json!({ "error": { "type": "judge_malformed", "message": "x", "usage": usage() } })
+            .to_string();
     let (url, _) = mock(vec![(200, charged(bad)), (502, failed_after)]);
     for case in ["malformed", "failed after the charge"] {
         let (got, text) = run(&session, &maeve, &Cfg(url.clone()), json!({})).await;
@@ -435,8 +446,18 @@ async fn the_scoring_route_keeps_each_refusal_writes_nothing_on_a_failure_and_ne
     assert_eq!(paid.len(), 4);
     for c in &paid[..2] {
         assert_eq!(
-            (c["charged_eur"].clone(), c["estimate_eur"].clone(), c["route"].clone(), c["guard"].clone()),
-            (json!(0.02), json!(0.05), json!("eu-small"), json!("allowed"))
+            (
+                c["charged_eur"].clone(),
+                c["estimate_eur"].clone(),
+                c["route"].clone(),
+                c["guard"].clone()
+            ),
+            (
+                json!(0.02),
+                json!(0.05),
+                json!("eu-small"),
+                json!("allowed")
+            )
         );
         assert_eq!(c["task"], "judge_work");
     }

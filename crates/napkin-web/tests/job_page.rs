@@ -462,7 +462,7 @@ fn plant_old_line(r: &Rig, tenant: &str, rationale: &str, fields: &str) {
     let mut chain =
         DecisionChain::from_yaml(&clan.read_entry("agent/decision-chain.yaml").unwrap()).unwrap();
     chain.prepend(Decision {
-        id: Some("d_oldbudget01".into()),
+        id: Some("d_olderline01".into()),
         kind: Some("edit".into()),
         agent: "cian@wk".into(),
         actor: Some("human:cian@wk".into()),
@@ -530,9 +530,23 @@ async fn a_budget_is_recorded_in_the_jobs_decisions_by_the_money_roles_and_read_
         .await;
         assert_eq!(s, StatusCode::FORBIDDEN, "{role:?} may not record a budget");
     }
-    let (s, _) = jobs(&r, cian, "POST", "/J001/budget", Some(json!({ "hours": -3 }))).await;
+    let (s, _) = jobs(
+        &r,
+        cian,
+        "POST",
+        "/J001/budget",
+        Some(json!({ "hours": -3 })),
+    )
+    .await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    let (s, _) = jobs(&r, cian, "POST", "/J404/budget", Some(json!({ "hours": 3 }))).await;
+    let (s, _) = jobs(
+        &r,
+        cian,
+        "POST",
+        "/J404/budget",
+        Some(json!({ "hours": 3 })),
+    )
+    .await;
     assert_eq!(s, StatusCode::NOT_FOUND);
     for (role, h) in [
         ("producer", 60),
@@ -551,7 +565,11 @@ async fn a_budget_is_recorded_in_the_jobs_decisions_by_the_money_roles_and_read_
         assert_eq!(s, StatusCode::OK, "{role} {v}");
     }
     let (_, one) = jobs(&r, cian, "GET", "/J001", None).await;
-    assert_eq!(one["job"]["budget_hours"], json!(80.0), "the job keeps the last figure as data");
+    assert_eq!(
+        one["job"]["budget_hours"],
+        json!(80.0),
+        "the job keeps the last figure as data"
+    );
 
     // (b) a line an older build wrote names the budget in its words
     plant_old_line(
@@ -570,14 +588,22 @@ async fn a_budget_is_recorded_in_the_jobs_decisions_by_the_money_roles_and_read_
     assert_eq!(set.len(), 5, "40 at the open, then four: {d}");
     assert_eq!(set[0]["hours"], json!(80.0), "newest first");
     assert_eq!(set[4]["hours"], json!(40.0));
-    assert!(set.iter().all(|x| x["who"].as_str().unwrap().contains('@')), "each by a person");
-    assert!(rows
-        .iter()
-        .any(|x| x["what"].as_str().unwrap().contains("Set the budget of J001 from none to 80 hours.")));
+    assert!(
+        set.iter().all(|x| x["who"].as_str().unwrap().contains('@')),
+        "each by a person"
+    );
+    assert!(rows.iter().any(|x| x["what"]
+        .as_str()
+        .unwrap()
+        .contains("Set the budget of J001 from none to 80 hours.")));
     // traffic is in the Money group: it reads the figures, and may not record one
     let (_, t) = jobs(&r, &who["traffic"], "GET", "/J001/decisions", None).await;
     assert_eq!(t["can_record_budget"], json!(false));
-    assert!(t["decisions"].as_array().unwrap().iter().any(|x| x["hours"] == json!(80.0)));
+    assert!(t["decisions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|x| x["hours"] == json!(80.0)));
 
     // everyone else reads the job's other lines with no budget in them at all: no set_budget line, no hours, and the
     // older line keeps only its sentence that is not about the budget
@@ -592,22 +618,42 @@ async fn a_budget_is_recorded_in_the_jobs_decisions_by_the_money_roles_and_read_
         let (s, d) = jobs(&r, &who[role], "GET", "/J001/decisions", None).await;
         assert_eq!(s, StatusCode::OK, "{role:?} {d}");
         assert_eq!(d["can_record_budget"], json!(false), "{role:?}");
-        let text = d.to_string();
-        for word in ["set_budget", "budget", "hours", "\"hours\""] {
-            assert!(!text.to_lowercase().contains(word), "{role:?} reads {word}: {text}");
+        let text = d["decisions"].to_string();
+        for word in ["set_budget", "budget", "hour"] {
+            assert!(
+                !text.to_lowercase().contains(word),
+                "{role:?} reads {word}: {text}"
+            );
         }
         let rows = d["decisions"].as_array().unwrap();
-        assert!(rows.iter().any(|x| x["what"] == "Renamed J001 from \"A\" to \"B\"."), "{role:?} {text}");
-        assert!(rows.iter().any(|x| x["action"] == "open_job"), "{role:?} {text}");
+        assert!(
+            rows.iter()
+                .any(|x| x["what"] == "Renamed J001 from \"A\" to \"B\"."),
+            "{role:?} {text}"
+        );
+        assert!(
+            rows.iter().any(|x| x["action"] == "open_job"),
+            "{role:?} {text}"
+        );
         let (_, list) = jobs(&r, &who[role], "GET", "", None).await;
         assert!(
-            list.as_array().unwrap().iter().all(|j| j.get("budget_hours").is_none()),
+            list.as_array()
+                .unwrap()
+                .iter()
+                .all(|j| j.get("budget_hours").is_none()),
             "{role:?}"
         );
     }
     // a job of another agency is not found
     let (s, _) = jobs(&r, &who["management"], "GET", "/J404/decisions", None).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
-    let (s, _) = jobs(&r, &sign_in(&r, "kai@other").await, "GET", "/J001/decisions", None).await;
+    let (s, _) = jobs(
+        &r,
+        &sign_in(&r, "kai@other").await,
+        "GET",
+        "/J001/decisions",
+        None,
+    )
+    .await;
     assert_eq!(s, StatusCode::NOT_FOUND);
 }

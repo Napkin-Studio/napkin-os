@@ -664,17 +664,25 @@ pub fn in_group(roles: &[String], group: Group) -> bool {
 /// The roles that may open a job and change its title, owner and deadline (features/job-page.clan):
 /// planning (the planner opens the job at step 1 of v2 section 3), account service, management and
 /// producers. Creative roles, the Agency Brain and traffic may not. An allow list: a role added later is
-/// left out until it is named here. A person with no role is unrestricted, as everywhere; an admin too.
+/// left out until it is named here. A person with no role holds no role and may not
+/// (features/align-needs-lock-people.clan); an admin, a demo and an anonymous visitor are unrestricted.
 pub const JOB_MANAGERS: &[&str] = &["planning", "account-service", "management", "producer"];
 
 pub fn may_manage_jobs(roles: &[String]) -> bool {
     unrestricted(roles) || roles.iter().any(|r| JOB_MANAGERS.contains(&r.as_str()))
 }
 
-/// The budget in hours is money (the owner's answer is open; the design's default): only the Money roles
-/// set it, and only those of them who manage jobs.
+/// The budget in hours is money: only the Money roles record it, and only those of them who manage jobs
+/// (account service, management, producers), as a `set_budget` decision in the job's Decisions
+/// (features/align-confidential-prices.clan). No role means no role: a person with none may not.
 pub fn may_set_budget(roles: &[String]) -> bool {
     may_manage_jobs(roles) && in_group(roles, Group::Money)
+}
+
+/// Who reads a job's budget, in its Decisions and in `budget_hours`: the Money group (traffic too, which
+/// reads scope), and the unrestricted. Every other role is sent no figure and no line about a budget.
+pub fn may_read_budget(roles: &[String]) -> bool {
+    in_group(roles, Group::Money)
 }
 
 /// The middleware: a signed-in person's roles (the People store's, put on the
