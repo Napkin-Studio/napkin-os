@@ -14,7 +14,10 @@
 .sb-planning { max-width: 420px; height: 220px; border-radius: var(--r-card); overflow: hidden; }
 .sb-empty { max-width: 460px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
 .sb-empty p { margin: 0; color: var(--ink2); font-size: 13px; line-height: 1.45; }
-.sb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px 36px; align-items: start; }
+/* stretch: the cards of a row share one height, so the "One video" bracket under them is one straight line
+   (it stepped across a shorter card). The left gutter holds the first column's + and link handles, which sit
+   left of their card (half off-screen at 1600 px; live test 2026-11-16). */
+.sb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px 36px; align-items: stretch; padding-left: 40px; }
 @media (min-width: 1400px) { .sb-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .sb-card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-soft); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .sb-card.on { border: 2px solid var(--tool); padding: 11px; }

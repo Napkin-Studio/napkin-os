@@ -639,8 +639,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
               <div className="ie-action">
                 <b>Change whole frame</b>
                 <div className="row">
-                  <input className="input" aria-label="Describe the change to the whole frame" placeholder="e.g. warmer light, keep the bottle" value={whole} maxLength={1000}
-                    disabled={!current || running} onChange={(e) => setWhole(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && whole.trim() && !running) setTray('whole') }} />
+                  {/* Two lines, as Fill's: the one-line field cut its own placeholder off (live test 2026-11-16). */}
+                  <textarea className="input ie-whole" rows={2} aria-label="Describe the change to the whole frame" placeholder="e.g. warmer light, keep the bottle" value={whole} maxLength={1000}
+                    disabled={!current || running} onChange={(e) => setWhole(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (whole.trim() && !running) setTray('whole') } }} />
                   <button ref={wholeBtn} type="button" className="btn sm" disabled={!current || !whole.trim() || running} onClick={() => setTray('whole')}>Change</button>
                 </div>
               </div>

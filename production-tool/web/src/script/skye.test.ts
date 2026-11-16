@@ -222,8 +222,10 @@ describe('Write with Skye: a real script from an idea (urgent P0 2026-11-04)', (
     // Keep applies the drafted screenplay to the scene (nothing changed until Keep).
     await keep(store, sug)
     await store.flush()
+    // The draft's slugline is the scene's heading (the scene had none), the rest its words (finding 27).
+    expect(store.get().scenes[sceneId].heading).toBe('INT. GYM - DAY')
     const text = store.get().scenes[sceneId].text ?? ''
-    expect(text).toContain('INT. GYM - DAY')
+    expect(text).not.toContain('INT. GYM - DAY')
     expect(text.toLowerCase()).toContain('gym')
   })
 

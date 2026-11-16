@@ -7,7 +7,7 @@ import { useDoc, useServices } from '../app/context'
 import { shotNumber } from '../model/selectors'
 import { clipLen, MAX_SPEED, MIN_SPEED, type Cut, type CutClip, type TextStyle } from './cut'
 import { editCut } from './editOps'
-import { genTitle, shotTitle, type Gen } from './model'
+import { genTitle, sharesBox, shotTitle, type Gen } from './model'
 import { tc } from './media'
 import type { RoomData } from './Rooms'
 import type { Picked } from './Timeline'
@@ -57,7 +57,7 @@ export function Inspector({ data, cut, picked, t, onPick, onChange, onFeel, onSw
     if (!c) return <Empty data={data} cut={cut} t={t} />
     const g = data.gens.find((x) => x.id === c.genId)
     const n = c.follows?.shotId ? shotNumber(doc, c.follows.shotId) : 0
-    const others = g ? data.gens.filter((x) => x.boxKey === g.boxKey && x.state === 'ready' && x.id !== g.id) : []
+    const others = g ? data.gens.filter((x) => sharesBox(g, x) && x.state === 'ready' && x.id !== g.id) : []
     const src = g ? `${genTitle(g, data.boxes)}${n ? ` · shot ${n}` : ''}` : 'A take'
     const short = handleShort(c)
     return (

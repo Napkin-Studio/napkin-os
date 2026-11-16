@@ -229,6 +229,13 @@ describe('the actions (3.12), none with a price', () => {
     expect(actions.textContent).toContain('Only the blue area changes')
     expect(actions.textContent).not.toMatch(/\$|credit|cost|price/i)
   })
+  it('Change whole frame has room for its words: a two-line field, its whole placeholder (live test 2026-11-16)', async () => {
+    const { el } = await open()
+    const box = el.querySelector('[aria-label="Describe the change to the whole frame"]') as HTMLTextAreaElement
+    expect(box.tagName).toBe('TEXTAREA')
+    expect(box.getAttribute('rows')).toBe('2')
+    expect(box.placeholder).toBe('e.g. warmer light, keep the bottle')
+  })
   it('an agency with Magnific and Ideogram off: Upscale says why and cannot run', async () => {
     const { el } = await open(undefined, ['runway', 'google'])
     const actions = el.querySelector('[aria-label="Actions"]')!

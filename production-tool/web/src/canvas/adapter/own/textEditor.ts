@@ -6,7 +6,7 @@
 // a letter), so no canvas or app shortcut fires while typing. The colour picker
 // taking the window's focus is not a click elsewhere: the session stays open.
 
-import { LINE_HEIGHT, resolveInk, TEXT_FONT } from '../../../../../canvas-engine/src'
+import { LINE_HEIGHT, resolveInk, TEXT_FONT, wrapLines } from '../../../../../canvas-engine/src'
 import type { OwnAdapter } from './adapter'
 
 /** Above the node cards and the boards' tools while typing. */
@@ -47,7 +47,8 @@ export function mountTextEditor(host: HTMLElement, adapter: OwnAdapter): TextEdi
     if (!el || !s) return
     const v = adapter.view()
     const size = s.look.size * v.zoom
-    const lines = el.value.split('\n')
+    // Laid out as it will be drawn: wrapped at the text's widest (canvas-engine wrapLines, TEXT_MAX_EM).
+    const lines = wrapLines(el.value, s.look.size, adapter.text.measure, TEXT_FONT)
     const w = Math.max(...lines.map((l) => adapter.text.measure(l, s.look.size, TEXT_FONT))) * v.zoom
     Object.assign(el.style, {
       left: `${(s.x + v.scrollX) * v.zoom}px`,
@@ -64,12 +65,12 @@ export function mountTextEditor(host: HTMLElement, adapter: OwnAdapter): TextEdi
     const f = document.createElement('textarea')
     f.className = 'own-text-editor'
     f.setAttribute('aria-label', s.fresh ? 'New text' : 'Edit text')
-    f.setAttribute('wrap', 'off')
+    f.setAttribute('wrap', 'soft')
     f.spellcheck = true
     f.value = s.plain
     f.style.cssText = [
       'position:absolute', `z-index:${EDITOR_Z}`, 'margin:0', 'padding:0', 'border:0', 'background:transparent', 'resize:none', 'overflow:hidden',
-      'white-space:pre', `font-family:${TEXT_FONT}, sans-serif`, `line-height:${LINE_HEIGHT}`, 'caret-color:currentColor', 'box-sizing:content-box',
+      'white-space:pre-wrap', 'overflow-wrap:normal', `font-family:${TEXT_FONT}, sans-serif`, `line-height:${LINE_HEIGHT}`, 'caret-color:currentColor', 'box-sizing:content-box',
       // Keyboard focus is always visible: the field typed in has the tool colour round it.
       'outline:2px solid var(--tool, #2F64F5)', 'outline-offset:4px', 'border-radius:2px',
     ].join(';')

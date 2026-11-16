@@ -65,3 +65,12 @@ test('with the Production Tool served, the Production quadrant is open, not Soon
   assert.doesNotMatch(on, /data-testid="quadrant-prod"[^>]*aria-disabled/)
   assert.match(on, /Production Tool for [^"]*, nothing yet/)
 })
+
+test('a Soon quadrant dims its words and icon, never its fill (the desk would print through)', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  // npm test runs from app/, and the bundled test does not sit where its source does.
+  const css = readFileSync(resolve(process.cwd(), 'src', 'shell', 'nui', 'shell.css'), 'utf8')
+  assert.match(css, /\.dial \.dz\[aria-disabled="true"\] > :not\(path\) \{ opacity: \.55; \}/)
+  assert.doesNotMatch(css, /\.dial \.dz\[aria-disabled="true"\] \{ opacity/)
+})

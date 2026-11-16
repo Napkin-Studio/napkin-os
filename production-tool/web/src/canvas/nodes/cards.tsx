@@ -20,6 +20,7 @@ import { CardChromeContext, type Agent, type CardKind } from './cardChrome'
 import { useBlobUrl } from '../../ui/hooks'
 import { useProjectName } from '../../ui/useDownload'
 import { shotsWords } from '../../jobs/runs'
+import { plannedLine, stripOf } from './strip'
 
 /** @names in blue (mock Main). */
 const withRefs = (t: string): ReactNode[] => t.split(/(@[a-z][a-z0-9_]*)/g).map((p, i) => (p.startsWith('@') ? <span key={i} className="pt-mention">{p}</span> : p))
@@ -32,7 +33,7 @@ export function Card({ icon, title, meta, extra, onOpen, children, style, classN
     <article className={`bl-card ${className}`} style={style}>
       <div className="bl-cardhead">
         {chrome.icon(icon)}
-        <b>{title}</b>
+        <b title={title}>{title}</b>
         {meta}
         <span className="pt-grow" />
         {extra}
@@ -125,6 +126,7 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
   const behind = staleList(doc).filter((m) => (m.target.kind === 'frame' && mine.has(doc.frames[m.target.id]?.shot_id ?? '')) || (m.target.kind === 'shot' && mine.has(m.target.id))).length
   const planning = runningOn(doc, 'shot_list', 'storyboard', sb?.id)
   const drawingIdx = shots.findIndex((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
+  const strip = stripOf(shots.length)
   return (
     <Card icon="storyboard" title={`Storyboard · ${chrome.title(sb?.title, 'Storyboard', project)}`}
       meta={<span className="pt-mono">{sb?.ratio ?? '16:9'} · {shots.length} shots · {Math.round(total)} s</span>}
@@ -132,12 +134,13 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
       <InputsStrip nodeId={sb?.id} />
       {shots.length ? (
         <div className="bl-strip">
-          {shots.slice(0, 6).map((s, i) => <FrameTile key={s.id} shot={s} n={i + 1} drawing={i === drawingIdx} />)}
+          {shots.slice(0, strip.shown).map((s, i) => <FrameTile key={s.id} shot={s} n={i + 1} drawing={i === drawingIdx} />)}
+          {strip.more > 0 && <figure className="bl-frame bl-more" title={`${strip.more} more shots: open the Storyboard to see them all`}><span className="bl-noframe">+{strip.more}</span><figcaption>more</figcaption></figure>}
         </div>
       ) : <Start kind="storyboard" id={sb?.id} fallback={<p className="bl-excerpt faint">No shots yet · write the script, then plan shots.</p>} />}
       {planning ? <AtWork agent="dex" line="Dex is planning the shots from the script" />
         : shots.length ? (
-          <div className="bl-line">{chrome.agent('dex', false)}<span>Dex planned {shots.length} shots from the script{drawingIdx >= 0 ? ` · frame ${drawingIdx + 1} is being drawn` : ''}</span></div>
+          <div className="bl-line">{chrome.agent('dex', false)}<span>{plannedLine(shots)}{drawingIdx >= 0 ? ` · frame ${drawingIdx + 1} is being drawn` : ''}</span></div>
         ) : null}
     </Card>
   )
@@ -176,16 +179,20 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
   const takeRunning = take ? shotsWords(doc, take.shot_ids) : undefined
   const total = shots.reduce((a, s) => a + s.duration_s, 0)
   // The main video is named after its storyboard (mock Main); another after its own title.
-  const title = sb && video?.id === mainVideo(doc)?.id ? chrome.title(sb.title, 'Storyboard', project) : chrome.title(video?.title, 'Video', project)
+  // A video's own shot list (implicit, made straight from the script) is not a storyboard with a name: it named
+  // the card "Video · Video" while Dex planned (live test 2026-11-16).
+  const title = sb && !sb.implicit && video?.id === mainVideo(doc)?.id ? chrome.title(sb.title, 'Storyboard', project) : chrome.title(video?.title, 'Video', project)
+  // Dex planning this video's shots (straight from the script: on its own shot list, or on the video itself).
+  const planning = !shots.length && (runningOn(doc, 'shot_list', 'storyboard', sb?.id) || runningOn(doc, 'shot_list', 'video', video?.id))
   // A video a script drives with no storyboard yet (mock Asks): "from Script · no storyboard".
   const fromScript = !sb && !!video && Object.values(doc.links ?? {}).some((l) => l.role === 'drives' && l.from.kind === 'script' && l.to.kind === 'video' && l.to.id === video.id)
   // Dex's ask on a video with no storyboard (3.17) is read whole: the card grows over what is below it.
-  const asking = !!video && !!chrome.PromptStart && isEmptyNode(doc, 'video', video.id) && (!sb || !!waitsOnScriptAsk(doc, video.id))
+  const asking = !planning && !!video && !!chrome.PromptStart && isEmptyNode(doc, 'video', video.id) && (!sb || !!waitsOnScriptAsk(doc, video.id))
   return (
     <Card icon="video" title={`Video · ${title}`} meta={fromScript ? <span className="pt-mono">from Script · no storyboard</span> : undefined} onOpen={onOpen}
       className={asking ? 'asking' : ''} style={asking ? { minHeight: 194 } : { height: 194 }}>
       <InputsStrip nodeId={video?.id} />
-      <Start kind="video" id={video?.id} fallback={
+      {planning ? <AtWork agent="dex" line="Dex is planning the shots from the script" /> : <Start kind="video" id={video?.id} fallback={
         <div className="bl-videorow">
           <span className="bl-poster">
             {adUrl ? <video src={adUrl} muted preload="metadata" /> : url ? <img src={url} alt="" /> : null}
@@ -196,7 +203,7 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
             <span>{render ? `Last ad render: v${render.version}` : 'No ad yet'}</span>
           </span>
         </div>
-      } />
+      } />}
       {takeRunning ? <AtWork agent="wren" warm line={`Fin is filming ${takeRunning} as one take`} />
         : clipRunning && <AtWork agent="wren" warm line={`Fin is filming clip ${clipRunning.i + 1}`} />}
     </Card>

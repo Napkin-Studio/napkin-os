@@ -4,7 +4,9 @@
 //
 // The open project has its own route, /p/:project (the canvas), /p/:project/storyboard and
 // /p/:project/video (the editors over it), so a reload, a link or Share returns there (live test
-// 2026-11-16: all of them stayed at the base). The Script editor is /p/:project/script/:script.
+// 2026-11-16: all of them stayed at the base). The Video editor's rooms each have one too,
+// /p/:project/video/make, /edit and /sound, so Back and a reload come back to the same room.
+// The Script editor is /p/:project/script/:script.
 // Ids in URLs are document ids, never shot numbers; query parameters carry focus, never content
 // (?shot=<shotId>).
 //
@@ -15,9 +17,13 @@
 /** The editors over the canvas with a route of their own (the canvas is the project's route). */
 export type StageRoute = 'storyboard' | 'video'
 
+/** The Video editor's rooms (rooms/Rooms.tsx): Make, Edit, and Sound over them. */
+export type RoomRoute = 'make' | 'edit' | 'sound'
+const ROOMS: readonly RoomRoute[] = ['make', 'edit', 'sound']
+
 export type Route =
   | { kind: 'none' }
-  | { kind: 'project'; projectId: string; stage?: StageRoute }
+  | { kind: 'project'; projectId: string; stage?: StageRoute; room?: RoomRoute }
   | { kind: 'script'; projectId: string; scriptId: string; shot?: string }
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/
@@ -44,14 +50,15 @@ export function parseRoute(url: { pathname: string; search?: string }, base: str
       return ''
     }
   })
-  if ((parts.length === 2 || parts.length === 3) && parts[0] === 'p' && ID.test(parts[1])) {
+  if ((parts.length >= 2 && parts.length <= 4) && parts[0] === 'p' && ID.test(parts[1])) {
     if (parts.length === 2) return { kind: 'project', projectId: parts[1] }
-    if (parts[2] === 'storyboard' || parts[2] === 'video') return { kind: 'project', projectId: parts[1], stage: parts[2] }
+    if (parts.length === 3 && (parts[2] === 'storyboard' || parts[2] === 'video')) return { kind: 'project', projectId: parts[1], stage: parts[2] }
+    if (parts.length === 4 && parts[2] === 'video' && (ROOMS as readonly string[]).includes(parts[3])) return { kind: 'project', projectId: parts[1], stage: 'video', room: parts[3] as RoomRoute }
+    if (parts.length === 4 && parts[2] === 'script' && ID.test(parts[3])) {
+      const shot = new URLSearchParams(url.search ?? '').get('shot')
+      return { kind: 'script', projectId: parts[1], scriptId: parts[3], ...(shot && ID.test(shot) ? { shot } : {}) }
+    }
     return { kind: 'none' }
-  }
-  if (parts.length === 4 && parts[0] === 'p' && parts[2] === 'script' && ID.test(parts[1]) && ID.test(parts[3])) {
-    const shot = new URLSearchParams(url.search ?? '').get('shot')
-    return { kind: 'script', projectId: parts[1], scriptId: parts[3], ...(shot && ID.test(shot) ? { shot } : {}) }
   }
   return { kind: 'none' }
 }
@@ -60,7 +67,7 @@ export function parseRoute(url: { pathname: string; search?: string }, base: str
 export function formatRoute(r: Route, base: string = import.meta.env.BASE_URL): string {
   const b = baseOf(base)
   if (r.kind === 'none') return b
-  if (r.kind === 'project') return `${b}p/${encodeURIComponent(r.projectId)}${r.stage ? `/${r.stage}` : ''}`
+  if (r.kind === 'project') return `${b}p/${encodeURIComponent(r.projectId)}${r.stage ? `/${r.stage}` : ''}${r.stage === 'video' && r.room ? `/${r.room}` : ''}`
   const q = r.shot ? `?shot=${encodeURIComponent(r.shot)}` : ''
   return `${b}p/${encodeURIComponent(r.projectId)}/script/${encodeURIComponent(r.scriptId)}${q}`
 }
@@ -70,10 +77,13 @@ export function scriptRoute(projectId: string, scriptId: string, shot?: string):
   return { kind: 'script', projectId, scriptId, ...(shot ? { shot } : {}) }
 }
 
-/** The open project's route at a stage: the canvas is the project itself. */
-export function projectRoute(projectId: string, stage: 'character' | StageRoute = 'character'): Route {
-  return { kind: 'project', projectId, ...(stage === 'character' ? {} : { stage }) }
+/** The open project's route at a stage: the canvas is the project itself; the Video editor in one of its rooms. */
+export function projectRoute(projectId: string, stage: 'character' | StageRoute = 'character', room?: RoomRoute): Route {
+  return { kind: 'project', projectId, ...(stage === 'character' ? {} : { stage }), ...(stage === 'video' && room ? { room } : {}) }
 }
+
+/** The Video editor's room a route names; Make when it names none. */
+export const routeRoom = (r: Route): RoomRoute => (r.kind === 'project' && r.stage === 'video' && r.room) || 'make'
 
 /** The project a route belongs to, if any. */
 export const routeProject = (r: Route): string | undefined => (r.kind === 'none' ? undefined : r.projectId)
@@ -82,7 +92,9 @@ export const routeProject = (r: Route): string | undefined => (r.kind === 'none'
  *  project (the Script editor's) stays, and so does the right project route. */
 export function routeFor(projectId: string, stage: 'character' | StageRoute, now: Route): Route | null {
   if (now.kind === 'script' && now.projectId === projectId) return null
-  const want = projectRoute(projectId, stage)
+  // In the Video editor the room in the URL stays (rooms/Rooms.tsx writes it as the person switches).
+  const room = stage === 'video' && now.kind === 'project' && now.projectId === projectId && now.stage === 'video' ? now.room : undefined
+  const want = projectRoute(projectId, stage, room)
   return sameRoute(want, now) ? null : want
 }
 

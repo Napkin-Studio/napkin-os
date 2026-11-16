@@ -185,6 +185,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenFile={onOpenFile}
         onOffline={onOffline}
         onSay={setRegistryNote}
+        productionHref={live.has('prod') ? toolHref({ id: 'prod' }) ?? undefined : undefined}
       />
     )
   }

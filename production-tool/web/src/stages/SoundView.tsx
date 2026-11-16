@@ -38,13 +38,14 @@ export function SoundView({ shots }: { shots: Shot[] }) {
           <p className="snd-empty">No mix yet. Edie builds the mix from the takes in it, and measures it against the loudness target you pick.</p>
           <div className="pt-label">Loudness target</div>
           <div className="snd-targets">
-            {['Online · −14 LUFS', 'TV · −23 LUFS', 'Radio · −18 LUFS'].map((t) => <button key={t} type="button" className="btn" disabled title="Not in this version yet">{t}</button>)}
+            {['Online · −14 LUFS', 'TV · −23 LUFS', 'Radio · −18 LUFS'].map((t) => <button key={t} type="button" className="btn snd-later" disabled title="Not in this version yet">{t}</button>)}
           </div>
+          <p className="snd-why">Picking a loudness target comes in a later version.</p>
         </section>
       </div>
       <div className="snd-main">
         <section className="pt-card snd-lanes">
-          <div className="snd-head"><b>Sound</b><button type="button" className="btn sm" disabled title="Not in this version yet">+ Line</button><button type="button" className="btn sm" disabled title="Not in this version yet">+ Effect</button></div>
+          <div className="snd-head"><b>Sound</b><span className="snd-why">Adding lines and effects here comes in a later version</span><button type="button" className="btn sm snd-later" disabled title="Not in this version yet">+ Line</button><button type="button" className="btn sm snd-later" disabled title="Not in this version yet">+ Effect</button></div>
           {LANES.map((l) => (
             <div key={l.name} className="snd-lane">
               <span className="snd-lanename"><b>{l.name}</b><small>{l.sub}</small></span>

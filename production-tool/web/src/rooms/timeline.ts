@@ -13,7 +13,7 @@ import {
   clipEnd, EMPTY_CUT, pack, r3, sortV1,
   type Cut, type CutClip, type CutEndCard, type CutText, type Transition,
 } from './cut'
-import { shotWindow, type Box, type Gen } from './model'
+import { boxName, inBox, sharesBox, shotWindow, type Box, type Gen } from './model'
 
 // ── The document's cut ↔ the plain cut ────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ export const newItemId = () => newUlidId('item')
 
 /** The take a box puts in the first cut: its newest ready take. */
 export function topTake(gens: Gen[], boxKey: string): Gen | undefined {
-  return gens.find((g) => g.boxKey === boxKey && g.state === 'ready' && !!g.asset)
+  return gens.find((g) => inBox(g, boxKey) && g.state === 'ready' && !!g.asset)
 }
 
 /**
@@ -170,7 +170,11 @@ export function readyTakes(cut: Cut, gens: Gen[], dismissed: ReadonlySet<string>
 export function newerTake(c: CutClip, gens: Gen[]): Gen | undefined {
   const own = gens.find((g) => g.id === c.genId)
   if (!own) return undefined
-  const newer = gens.filter((g) => g.boxKey === own.boxKey && g.state === 'ready' && g.id !== own.id && (g.createdAt ?? '') > (own.createdAt ?? ''))
+  // A newer take of a box the clip's take belongs to, that has footage for the clip's shot (a take made together
+  // whose shots were made apart since is a take of each of their boxes).
+  const shotId = c.follows?.shotId
+  const covers = (g: Gen) => !shotId || g.shotIds.includes(shotId) || g.segments.some((s) => s.shotId === shotId)
+  const newer = gens.filter((g) => sharesBox(own, g) && covers(g) && g.state === 'ready' && g.id !== own.id && (g.createdAt ?? '') > (own.createdAt ?? ''))
   return newer[0]
 }
 
@@ -301,3 +305,22 @@ export function whereWords(plan: Plan, t: number, nameOf: (genId: Id) => string)
 }
 
 export { clipEnd }
+
+// ── Brackets ──────────────────────────────────────────────────────────────────────────────────────────
+
+/** The Edit room's brackets over V1: neighbouring clips, end to end, of one take, whose shots sit in one box
+ *  that is made together NOW. A box made apart since its take was made draws none (live test 2026-11-16,
+ *  finding 22: "Box 1 · made together" stayed over four clips after Made apart). */
+export function cutBrackets(v1: CutClip[], gens: Gen[], boxes: Box[]): { from: number; to: number; label: string }[] {
+  const boxOf = (c: CutClip) => (c.follows?.shotId ? boxes.find((b) => b.shotIds.includes(c.follows!.shotId!)) : undefined)
+  const out: { from: number; to: number; label: string }[] = []
+  let i = 0
+  while (i < v1.length) {
+    const b = boxOf(v1[i])
+    let j = i
+    while (j + 1 < v1.length && v1[j + 1].genId === v1[i].genId && Math.abs(v1[j + 1].startS - clipEnd(v1[j])) < 0.01 && !!b && boxOf(v1[j + 1]) === b) j++
+    if (j > i && b?.together && gens.some((g) => g.id === v1[i].genId)) out.push({ from: v1[i].startS, to: clipEnd(v1[j]), label: `${boxName(b)} · made together` })
+    i = j + 1
+  }
+  return out
+}

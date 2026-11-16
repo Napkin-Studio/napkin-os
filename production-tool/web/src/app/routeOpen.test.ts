@@ -28,6 +28,11 @@ describe('opening the project a link names', () => {
     expect(b.shell.openFromServer).toHaveBeenCalled()
     expect(b.ui.stage).toBe('character')
   })
+  it('a room\'s route opens the Video editor (the room is read from the route there)', async () => {
+    const a = fakes(projectRoute('p1', 'video', 'edit'), true)
+    expect(await openRouteProject(a.shell as never, a.router as never)).toBe(true)
+    expect(a.ui.stage).toBe('video')
+  })
   it('the Script editor opens over the Storyboard; no route opens nothing', async () => {
     const a = fakes(scriptRoute('p1', 'script_1'), true)
     expect(await openRouteProject(a.shell as never, a.router as never)).toBe(true)

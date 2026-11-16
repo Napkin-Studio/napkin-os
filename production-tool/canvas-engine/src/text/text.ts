@@ -34,9 +34,31 @@ export interface TextLook {
   color: string
 }
 
-/** The box a text takes: its widest line, and its lines at LINE_HEIGHT. Never narrower than a caret's room. */
+/** A text wraps at this many font sizes wide: a long one-line note ran on under the nodes beside it
+ *  (live test 2026-11-16). */
+export const TEXT_MAX_EM = 24
+
+/**
+ * A text's lines as drawn: each typed line, wrapped at spaces to `maxW` (a word longer than that keeps
+ * its own line, never cut). The box, the renderer and the editor all lay a text out with this.
+ */
+export function wrapLines(plain: string, size: number, measure: Measure = approxMeasure, family = TEXT_FONT, maxW = size * TEXT_MAX_EM): string[] {
+  const out: string[] = []
+  for (const para of plain.split('\n')) {
+    if (measure(para, size, family) <= maxW) { out.push(para); continue }
+    let line = ''
+    for (const word of para.split(/(?<= )/)) {
+      const next = line + word
+      if (line && measure(next.trimEnd(), size, family) > maxW) { out.push(line.trimEnd()); line = word.trimStart() } else line = next
+    }
+    out.push(line.trimEnd())
+  }
+  return out
+}
+
+/** The box a text takes: its widest line once wrapped, and its lines at LINE_HEIGHT. Never narrower than a caret's room. */
 export function textBox(plain: string, size: number, measure: Measure = approxMeasure, family = TEXT_FONT): { w: number; h: number } {
-  const lines = plain.split('\n')
+  const lines = wrapLines(plain, size, measure, family)
   const w = Math.max(size * 0.5, ...lines.map((l) => measure(l, size, family)))
   return { w: Math.ceil(w), h: lines.length * size * LINE_HEIGHT }
 }

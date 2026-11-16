@@ -90,16 +90,36 @@ export async function keepSuggestion(bus: LocalPatchBus, text: LocalTextBus, sug
       beats.push({ id, prose: b.prose })
     })
   }
+  // A scene draft that opens with its own scene heading ("EXT. CITY STREET - DUSK") on a scene with none
+  // yet: that line is the scene's heading, not its first action line (live test 2026-11-16: the draft sat
+  // under the placeholder and the outline said SCENE WITH NO HEADING). Same step.
+  let prose = proposed.prose
+  const scene = target.kind === 'scene' ? (doc.scenes[target.id] as (Entity & { heading?: string }) | undefined) : undefined
+  const first = prose.content?.[0]
+  const firstLine = first ? blockText(first).trim() : ''
+  if (scene && !scene.heading?.trim() && firstLine && HEADING.test(firstLine) && firstLine.length <= 200) {
+    patches.push({ op: 'set', entity: 'scenes', id: scene.id, path: 'heading', value: firstLine.replace(/^\./, '').toUpperCase(), base_version: scene.v })
+    prose = { ...prose, content: (prose.content ?? []).slice(1) }
+  }
   const r = await bus.apply({
     patches,
     why: { action: `keep_suggestion ${target.kind}s[${target.id}]`, cites: [`${bus.store.documentId()}#suggestions[${sugId}]`] },
   })
   if (!r.applied) return r
   await text.edit([{ kind, id: target.id }, ...beats.map((b) => ({ kind: 'beat' as const, id: b.id }))], 'skye', (frag) => {
-    hydrate(frag(kind, target.id), proposed.prose)
+    hydrate(frag(kind, target.id), prose)
     for (const b of beats) hydrate(frag('beat', b.id), b.prose)
   }, { label: 'keep Skye\'s draft', joinStep: true })
   return r
+}
+
+/** A screenplay scene heading (INT./EXT./I/E/EST., or Fountain's forced '.HEADING'). */
+const HEADING = /^(?:(?:INT|EXT|INT\.?\/EXT|I\/E|EST)[. ]|\.[A-Za-z0-9])/i
+
+/** A prose block's words, its text nodes joined. */
+function blockText(b: { text?: string; content?: unknown[] }): string {
+  if (typeof b.text === 'string') return b.text
+  return (b.content ?? []).map((c) => blockText(c as { text?: string; content?: unknown[] })).join('')
 }
 
 interface Proposed {

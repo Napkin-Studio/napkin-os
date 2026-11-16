@@ -56,7 +56,7 @@ export function AssetsDrawer({ ctrl, onClose, onBoards, onPicture, onCanvas }: {
       </div>
       <div className="ad-tabs" role="tablist" aria-label="Where from">
         {TABS.map((t) => (
-          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.label}</button>
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} title={t.label} onClick={() => setTab(t.id)}>{t.label}</button>
         ))}
       </div>
       {tab === 'project' && (
@@ -167,11 +167,14 @@ function CleanUp({ onCanvas }: { onCanvas: string[] }) {
     setNote(`Removed ${gone.length} unused ${gone.length === 1 ? 'picture' : 'pictures'}.`)
   }
   return (
-    <div className="ad-clean">
-      <button type="button" className="btn sm ghost" onClick={start} title="Remove pictures nothing uses any more">Clean up</button>
+    <section className="ad-clean" aria-label="Unused pictures">
+      {/* Its own labelled place, not a lone button under the last group (live test 2026-11-16). */}
+      <div className="pt-label ad-section"><span>Unused pictures</span></div>
+      <p className="ad-meta">Pictures nothing uses any more stay in this browser until you clean them up.</p>
+      <button type="button" className="btn sm" onClick={start} title="Remove pictures nothing uses any more">Clean up unused pictures</button>
       {cleaning && <InlineConfirm text={`Remove ${cleaning.length} unused ${cleaning.length === 1 ? 'picture' : 'pictures'} from this browser? Named images and anything on the canvas or in the storyboard stay.`} yes="Remove" onYes={() => void clean(cleaning)} onNo={() => setCleaning(null)} />}
       {note && <span className="ad-meta">{note}</span>}
-    </div>
+    </section>
   )
 }
 

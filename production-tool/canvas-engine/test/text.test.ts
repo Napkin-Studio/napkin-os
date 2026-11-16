@@ -10,7 +10,7 @@ import { SceneStore, type Step } from '../src/model/store'
 import { Renderer, type DrawContext } from '../src/render/renderer'
 import { SelectTool } from '../src/select/select'
 import { SceneUndo } from '../src/undo/sceneUndo'
-import { LINE_HEIGHT, TEXT_SIZES, TextTool, textBox } from '../src/text/text'
+import { LINE_HEIGHT, TEXT_MAX_EM, TEXT_SIZES, TextTool, textBox, wrapLines } from '../src/text/text'
 import { boundEnds, linkRoute, sceneLinkEnv } from '../src/render/links'
 
 const measure = (line: string, size: number) => line.length * size * 0.5
@@ -160,5 +160,24 @@ describe('a text as a link end (owner 2026-10-16)', () => {
     select.set(['t'])
     select.deleteSelected()
     expect(boundEnds((id) => scene.get(id), scene.get('L')!)).toBeNull()
+  })
+})
+
+describe('a long note wraps (live test 2026-11-16: one line ran on under the nodes)', () => {
+  const m = (l: string, size: number) => l.length * size * 0.5
+  it('wraps at spaces to TEXT_MAX_EM font sizes, and the box is its wrapped lines', () => {
+    const plain = 'hair bright red raincoat black boots warm brown eyes and a small yellow umbrella in one hand'
+    const lines = wrapLines(plain, 20, m)
+    expect(lines.length).toBeGreaterThan(1)
+    for (const l of lines) expect(m(l, 20)).toBeLessThanOrEqual(20 * TEXT_MAX_EM)
+    expect(lines.join(' ')).toBe(plain)
+    const box = textBox(plain, 20, m)
+    expect(box.w).toBeLessThanOrEqual(20 * TEXT_MAX_EM)
+    expect(box.h).toBe(lines.length * 20 * LINE_HEIGHT)
+  })
+  it('keeps short lines, typed line breaks and a word longer than the width whole', () => {
+    expect(wrapLines('Rain\n\nThen sun', 20, m)).toEqual(['Rain', '', 'Then sun'])
+    const long = 'x'.repeat(80)
+    expect(wrapLines(`a ${long} b`, 20, m)).toEqual(['a', long, 'b'])
   })
 })

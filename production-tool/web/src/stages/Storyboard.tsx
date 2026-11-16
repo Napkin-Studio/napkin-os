@@ -34,6 +34,8 @@ import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { currentFrame, currentTake, framesOf, jobsList, mainStoryboard, openAsks, openStoryboard, refsList, scriptOfStoryboard, scriptText, shotNumber, shotsOf, storyboardSeconds, takesOf } from '../model/selectors'
 import { canvasActions } from '../canvas/chrome/actions'
+import { marksNow } from './marksNow'
+import { titleOf } from './shotTitle'
 import { jobCtx, LOCAL_PERSON } from '../jobs/runner'
 import { addShot, answerShotAsk, setRatio, setTarget } from './storyboardEdits'
 import { scriptRoute } from '../app/route'
@@ -54,7 +56,7 @@ import { PromptStart } from '../ui/prompt/PromptStart'
 import { moveOnStoryboard, useShotSort } from './shotDrag'
 import { ShotSort } from './ShotSort'
 import { lastWorkedModel } from '../jobs/follow'
-import { frameMarks, joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
+import { joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
 import { canJoin } from '../jobs/runs'
 import { videoOfStoryboard } from '../model/selectors'
 import { FrontButtons } from './FrontsNeeded'
@@ -93,7 +95,7 @@ export function Storyboard() {
   const film = videoJoin(doc, linked?.id, config) === 'film'
   const vModel = film ? videoModel(doc, linked?.id, config, lastWorkedModel(doc, 'clip', config)) : null
   const vPlan = vModel ? videoPlan(doc, linked?.id, vModel) : undefined
-  const marks = vPlan ? frameMarks(doc, linked?.id, vPlan) : {}
+  const marks = vPlan ? marksNow(doc, linked?.id, vPlan) : {}
   // The same strips as the Video timeline, as a light bracket under the cards that will be one video.
   const units = vPlan && linked ? videoUnits(doc, ui, linked.id, vPlan) : []
   const facts = vPlan && linked ? videoShots(doc, linked.id) : []
@@ -307,11 +309,6 @@ function CrewLine({ row }: { row: TrayRow }) {
 }
 
 const cap = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)
-/** A card's title: the first words of its action, else its size. */
-function titleOf(s: Shot): string {
-  const words = (s.action ?? '').replace(/@\w+/g, '').replace(/\s+/g, ' ').trim().split(/[.;,:—-]/)[0].trim()
-  return words ? cap(words.length > 26 ? `${words.slice(0, 25).replace(/\s+\S*$/, '')}…` : words) : cap(cameraLabel('size', s.camera.size))
-}
 
 /** The card under the pointer while it is dragged (3.11): tilted, blue outline, shadow. */
 function LiftedCard({ shot, index }: { shot: Shot; index: number }) {

@@ -8,6 +8,7 @@ import type { UiState } from '../doc/ui'
 import { lastWorkedModel } from '../jobs/follow'
 import { videoJoin, videoModel, videoPlan, videoRows, type Row } from '../jobs/runView'
 import { shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { withoutAsides } from '../stages/shotTitle'
 import { changeLabel, type DeltaRow } from './delta'
 import type { ShotWindow } from './cut'
 
@@ -17,8 +18,11 @@ export type GenKind = GenerationKind
 export interface Gen {
   id: Id
   kind: GenKind
-  /** The box it belongs to (boxKey of its shots). */
+  /** The box it belongs to (boxKey of its shots): the Bin files it here and numbers it within it. */
   boxKey: string
+  /** Every box of the film it has footage for, boxKey first. A take made together whose shots were later made
+   *  apart is one take of each of those boxes (each plays its own window); absent means [boxKey]. */
+  boxKeys?: string[]
   shotIds: Id[]
   /** v1, v2… within its box, oldest first. */
   version: number
@@ -53,8 +57,20 @@ export interface Box {
 
 export const boxKeyOf = (shotIds: Id[]) => shotIds.join(',')
 
+/** The rooms' top-bar chip: the film's ratio and its length now (its shots), with the target beside it when
+ *  the shots run over or short ("16:9 · 24 s · target 15 s"). It once showed the target alone as if it were
+ *  the length (live test 2026-11-16: "15 s" on a 24 s, 7-shot film). */
+export function filmMeta(ratio: string, lengthS: number | undefined, targetS: number): string {
+  if (lengthS === undefined || lengthS <= 0) return `${ratio} · target ${Math.round(targetS)} s`
+  const len = Math.round(lengthS * 10) / 10
+  return Math.abs(len - targetS) >= 0.5 ? `${ratio} · ${len} s · target ${Math.round(targetS)} s` : `${ratio} · ${len} s`
+}
+
 /** A shot's title: its words, else "Shot n". */
-export const shotTitle = (s: Pick<Shot, 'action' | 'direction'> | undefined, n: number) => (s?.action?.trim() || s?.direction?.trim() || `Shot ${n}`)
+/** A shot's name in the rooms: its words with a name's description in brackets left out (stages/shotTitle
+ *  withoutAsides, the Storyboard's rule), else its direction, else "Shot n". */
+export const shotTitle = (s: Pick<Shot, 'action' | 'direction'> | undefined, n: number) =>
+  withoutAsides(s?.action ?? '') || withoutAsides(s?.direction ?? '') || `Shot ${n}`
 
 /** Whether a model can repeat a take exactly (its clip sheet's seed). */
 export function repeatsTake(provider: string | undefined, model: string | undefined): boolean {
@@ -111,13 +127,18 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
     if (g.kind === 'render' || g.kind === 'upload' || g.kind === 'combine') continue
     const run = g.box_id ? runs[g.box_id] : undefined
     const key = boxKeyOf(run?.shot_ids ?? g.shot_ids)
-    const box = boxes.find((b) => b.key === key) ?? boxes.find((b) => b.shotIds.includes(g.shot_ids[0]))
     const durationS = g.duration_s ?? (g.asset ? d.assets[g.asset]?.duration_s : undefined) ?? 0
     const segments = g.segments?.length
       ? g.segments.map((x) => ({ shotId: x.shot_id, inS: x.in_s, outS: x.out_s }))
       : g.shot_ids.length === 1 ? [{ shotId: g.shot_ids[0], inS: 0, outS: durationS }] : []
+    // Its box: the one with exactly its shots; else (its shots were made apart, or regrouped since) every box
+    // whose shots have footage in it, in film order, so each of them lists it and plays its own window.
+    const exact = boxes.find((b) => b.key === key)
+    const shown = segments.length ? segments.map((x) => x.shotId) : g.shot_ids
+    const covering = exact ? [exact.key] : boxes.filter((b) => b.shotIds.some((id) => shown.includes(id))).map((b) => b.key)
+    const boxKeys = covering.length ? covering : [key]
     out.push({
-      id: g.id, kind: g.kind, boxKey: box?.key ?? key, shotIds: g.shot_ids, version: 0,
+      id: g.id, kind: g.kind, boxKey: boxKeys[0], ...(boxKeys.length > 1 ? { boxKeys } : {}), shotIds: g.shot_ids, version: 0,
       ...(g.parent_id ? { parentId: g.parent_id } : {}),
       delta: (g.delta ?? []).map((x) => deltaRow(x, g.patched?.find((p) => p.job_id === g.job_id))), label: g.label ?? '', ...(g.asset ? { asset: g.asset } : {}),
       durationS, segments, state: g.state, ...(g.job_id ? { jobId: g.job_id } : {}), createdAt: g.created_at,
@@ -204,4 +225,26 @@ export function newestFirst(a: Pick<Gen, 'createdAt' | 'id' | 'state'>, b: Pick<
 export function shotWindow(g: Pick<Gen, 'segments' | 'durationS'>, shotId: Id | undefined): ShotWindow {
   const s = g.segments.find((x) => x.shotId === shotId)
   return s ? { inS: s.inS, outS: s.outS } : { inS: 0, outS: g.durationS }
+}
+
+/** Whether a take is one of a box's takes: its own box, or a box made apart from the take's (rooms boxKeys). */
+export const inBox = (g: Pick<Gen, 'boxKey' | 'boxKeys'>, key: string | undefined) => !!key && (g.boxKeys ?? [g.boxKey]).includes(key)
+
+/** Whether two takes are takes of one box (a clip's take and a newer one, a take and its others). */
+export const sharesBox = (a: Pick<Gen, 'boxKey' | 'boxKeys'>, b: Pick<Gen, 'boxKey' | 'boxKeys'>) => (a.boxKeys ?? [a.boxKey]).some((k) => inBox(b, k))
+
+/** The part of a take a box plays: the whole take when the box is all of it; when the box holds only some of
+ *  the take's shots (made apart since), from the first of those shots' windows to the last (live test
+ *  2026-11-16: a one-shot box played the whole 15 s take). */
+export function boxWindow(g: Pick<Gen, 'segments' | 'durationS'>, box: Pick<Box, 'shotIds'> | undefined): ShotWindow | undefined {
+  if (!box || g.segments.length < 2) return undefined
+  const mine = g.segments.filter((s) => box.shotIds.includes(s.shotId))
+  if (!mine.length || mine.length === g.segments.length) return undefined
+  return { inS: Math.min(...mine.map((s) => s.inS)), outS: Math.max(...mine.map((s) => s.outS)) }
+}
+
+/** A take's cut marks for the scrub bar, inside a box's window: each shot after the first where it starts. */
+export function boxBeats(g: Pick<Gen, 'segments'>, box: Pick<Box, 'shotIds'> | undefined, shotNo: (id: Id) => number): { atS: number; label: string }[] | undefined {
+  const segs = box ? g.segments.filter((s) => box.shotIds.includes(s.shotId)) : g.segments
+  return segs.length > 1 ? segs.slice(1).map((s) => ({ atS: s.inS, label: `Shot ${shotNo(s.shotId)}` })) : undefined
 }

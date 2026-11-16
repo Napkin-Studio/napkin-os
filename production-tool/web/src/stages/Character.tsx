@@ -412,7 +412,7 @@ export function Character({ initial, active, onPictureEditor }: {
   // A node made from an editor (the Video editor's Make a storyboard from these shots): its Undo here.
   useEffect(() => canvasActions.onMade((m) => {
     const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
-    offerUndo({ label: m.label, at: { x: m.el.x + m.el.width / 2, y: m.el.y }, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([m.el.id]) })
+    offerUndo({ label: m.label, at: { x: m.el.x + m.el.width / 2, y: m.el.y }, above: true, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([m.el.id]) })
   }), [canvas, offerUndo])
 
   /** Make video from a script, a storyboard or both (3.5): one undo step, said with Undo. */
@@ -424,7 +424,7 @@ export function Character({ initial, active, onPictureEditor }: {
       if (!made) throw new Error('Make video needs the canvas.')
       const r = await made
       const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
-      offerUndo({ label: r.label, at: { x: r.el.x + r.el.width / 2, y: r.el.y }, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([r.el.id]) })
+      offerUndo({ label: r.label, at: { x: r.el.x + r.el.width / 2, y: r.el.y }, above: true, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([r.el.id]) })
     } catch (err) {
       setPlaceError(errText(err))
     }
@@ -618,7 +618,7 @@ export function Character({ initial, active, onPictureEditor }: {
             const stacked = !!(e as El & { stack?: unknown }).stack
             return (
               <span key={e.id}>
-                {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} />}
+                {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} width={e.width * zoom} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
                 {img && img.kind !== 'drawn' && !stacked && <VersionChip nodeId={img.id} at={toView({ x: e.x + e.width, y: e.y })} />}
               </span>
@@ -729,7 +729,7 @@ export function Character({ initial, active, onPictureEditor }: {
           })()}
           {undo?.at && (() => {
             const p = toView(undo.at)
-            return <UndoChip className="oncanvas" label={undo.label} onUndo={runUndo} style={{ left: p.x, top: p.y }} />
+            return <UndoChip className={`oncanvas ${undo.above ? 'above' : ''}`} label={undo.label} onUndo={runUndo} style={{ left: p.x, top: p.y }} />
           })()}
         </div>
         {placing && (
@@ -800,10 +800,14 @@ function VersionChip({ nodeId, at }: { nodeId: string; at: Pt }) {
 /** The height of the @name line under a picture (styles.css .refchips): what sits below it starts here. */
 const NAME_LINE = 16
 
-function NameChip({ r, at }: { r: NamedRef; at: Pt }) {
+/** A picture's name under it, never wider than the picture: views placed side by side ran their names into
+ *  each other ("@mira_three-quarter@mira_side", live test 2026-11-16), so a long one ends in an ellipsis
+ *  and says itself in full in its title. */
+export function NameChip({ r, at, width }: { r: NamedRef; at: Pt; width: number }) {
+  const name = `@${nameOf(r)}`
   return (
-    <div className="refchips" style={{ left: at.x, top: at.y }}>
-      <span className="tagchip" title="Its name: write it with @ in instructions and shots">@{nameOf(r)}</span>
+    <div className="refchips" style={{ left: at.x, top: at.y, maxWidth: Math.max(32, Math.round(width)) }}>
+      <span className="tagchip" title={`${name}: its name; write it with @ in instructions and shots`}>{name}</span>
     </div>
   )
 }

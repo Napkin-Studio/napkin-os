@@ -4,7 +4,7 @@
 // AgentKind 'director'), in the tool's cobalt. Nell (id 'ellis') and Jude are the house sheet's
 // looks; the names follow the job (owner, 2026-10-15). Ids stay as stored: wren is Fin, ellis is Nell.
 
-import type { CrewId, DocJob, JobState, ModelChoice } from '../../contracts/types'
+import type { CrewId, DocJob, ErrorCode, JobState, ModelChoice } from '../../contracts/types'
 import type { JobPurpose } from '../../doc/ui'
 import { fellBack } from '../modelChoice'
 
@@ -80,6 +80,8 @@ export function workOf(op: DocJob['op'] | undefined, state?: JobState): Work {
 }
 
 const FAILED: JobState[] = ['failed', 'cancelled']
+/** Codes that mean the job was refused, not lost: nothing was made, and the message says why. */
+const REFUSED: ErrorCode[] = ['invalid_input', 'not_allowed', 'blocked', 'moderated', 'capability_missing', 'flag_off', 'limit_reached', 'spend_stop', 'quota_exhausted']
 
 /** What a job is, in words: 'frame 2', 'the clip for shot 3', 'the ad'. */
 export function jobWhat(job: Pick<DocJob, 'op'>, ctx: JobPurpose | undefined, shotOrder?: number): string {
@@ -108,10 +110,16 @@ const VERB: Partial<Record<DocJob['op'], string>> = { write: 'writing', shot_lis
  * (ui-behaviour 5.2). Words only; the job is not touched. A job the relay made on Runway after
  * its pick could not says so (features/runway-fallback.clan).
  */
-export function whoIsWorking(job: Pick<DocJob, 'op'> & Partial<Pick<DocJob, 'provider' | 'crew'>>, state: JobState,
+export function whoIsWorking(job: Pick<DocJob, 'op'> & Partial<Pick<DocJob, 'provider' | 'crew' | 'error'>>, state: JobState,
   ctx?: JobPurpose & { fallbackFrom?: ModelChoice }, shotOrder?: number): { agent: CastKey; state: AgentState; line: string } {
   const what = jobWhat(job, ctx, shotOrder)
-  if (FAILED.includes(state)) return { agent: 'jude', state: 'needs-you', line: state === 'cancelled' ? `${capital(what)} was stopped` : `${capital(what)} did not come back` }
+  if (FAILED.includes(state)) {
+    if (state === 'cancelled') return { agent: 'jude', state: 'needs-you', line: `${capital(what)} was stopped` }
+    // Refused before it was made (the relay said no at submit, or the provider's checks did): say so and why,
+    // never "did not come back" (live test 2026-11-16).
+    if (job.error && REFUSED.includes(job.error.code)) return { agent: 'jude', state: 'needs-you', line: `${capital(what)} was refused: ${job.error.message}` }
+    return { agent: 'jude', state: 'needs-you', line: `${capital(what)} did not come back` }
+  }
   const maker: CastKey = job.op === 'shot_list' ? 'dex' : job.crew ? castOf(job.crew) : MAKER_OF[job.op] ?? 'dex'
   const name = CAST[maker].given
   if (state === 'needs_input') return { agent: maker, state: 'needs-you', line: `Waiting for you: ${name} has a question about ${what}` }

@@ -9,8 +9,10 @@
 // selection carries across: a clip picked in Edit opens its box in Make.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { useConfig, useDoc, useJobsTick, useRoute, useRouter, useServices, useUi } from '../app/context'
+import { projectRoute, routeRoom, type RoomRoute } from '../app/route'
 import { isActive } from '../jobs/runner'
+import { takeShotOut } from '../jobs/runView'
 import { purposeOf } from '../model/purpose'
 import { whoIsWorking } from '../ui/agents/cast'
 import { jobsList, mainVideo, openVideo, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
@@ -22,7 +24,7 @@ import { Bin } from './Bin'
 import { ChangeDrawer, type ChangeOpen } from './ChangeDrawer'
 import { EditRoom, RenderAd } from './EditRoom'
 import { MakeRoom } from './MakeRoom'
-import { jobWord, roomBoxes, roomGens, type Box, type Gen } from './model'
+import { filmMeta, jobWord, roomBoxes, roomGens, type Box, type Gen } from './model'
 import './rooms.css'
 
 export type RoomName = 'make' | 'edit'
@@ -41,12 +43,14 @@ export interface RoomData {
   title: string
   ratio: string
   targetS: number
+  /** The film's length now: its shots' lengths, the end card included. */
+  lengthS?: number
   boxes: Box[]
   gens: Gen[]
 }
 
 export function Rooms() {
-  const { ui: uiStore } = useServices()
+  const { ui: uiStore, doc: docStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
   const { config, controls } = useConfig()
@@ -65,13 +69,30 @@ export function Rooms() {
     title: video.title && video.title !== 'Video' ? video.title : isMain && sb && !sb.implicit && sb.title !== 'Storyboard' ? sb.title : nodeTitle(video.title, 'Video', projectName),
     ratio: sb?.ratio ?? video.ratio ?? '16:9',
     targetS: sb?.target_s ?? video.target_s ?? 15,
+    lengthS: shots.reduce((a, s) => a + (s.duration_s ?? 0), 0),
     boxes, gens,
   } : null
 
-  const [room, setRoom] = useState<RoomName>('make')
+  // The room is the route's (/p/:id/video/make, /edit, /sound): reload, Back and Share return to it. It is
+  // written in place as the person switches. Outside a video route (tests) it is kept here.
+  const router = useRouter()
+  const route = useRoute()
+  const routed = route.kind === 'project' && route.stage === 'video' ? route : null
+  const [kept, setKept] = useState<RoomRoute>('make')
+  const now: RoomRoute = routed ? routeRoom(routed) : kept
+  // Sound opens over the picture room the person was in; Back to the picture returns there.
+  const [picture, setPicture] = useState<RoomName>(now === 'sound' ? 'make' : now)
+  const goRoom = useCallback((r: RoomRoute) => {
+    if (r !== 'sound') setPicture(r)
+    if (routed) router.replace(projectRoute(routed.projectId, 'video', r))
+    else setKept(r)
+  }, [routed, router])
+  const room: RoomName = now === 'sound' ? picture : now
+  const sound = now === 'sound'
+  const setRoom = useCallback((r: RoomName) => goRoom(r), [goRoom])
+  const setSound = useCallback((on: boolean) => goRoom(on ? 'sound' : picture), [goRoom, picture])
   const [sel, setSel] = useState<Selection>(() => ({ shotId: shots[0]?.id, boxKey: boxes[0]?.key }))
   const [change, setChange] = useState<ChangeOpen | null>(null)
-  const [sound, setSound] = useState(false)
   const back = useCallback(() => uiStore.update((u) => { u.stage = 'character' }, 'stage'), [uiStore])
   // A drawer or sheet registers here, so Esc closes it before it means Back.
   const closers = useRef<(() => void)[]>([])
@@ -100,7 +121,7 @@ export function Rooms() {
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [change, sound, back])
+  }, [change, sound, back, setRoom, setSound])
 
   if (!controls.video) return <div className="panel"><div className="empty-state"><b>Video is off right now.</b></div></div>
   if (!data) return (
@@ -137,7 +158,7 @@ export function Rooms() {
       {room === 'edit' && change && !sound && (
         <div className="rm-drawerwrap" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) setChange(null) }}>
           <ChangeDrawer data={data} open={change} onClose={() => setChange(null)} variant="drawer"
-            onMade={() => setChange(null)} onApart={(shotId) => { setChange(null); setSel((s) => ({ ...s, shotId })); setRoom('make') }} />
+            onMade={() => setChange(null)} onApart={(shotId) => { setChange(null); void takeShotOut(docStore, video!.id, shotId).then(() => { setSel({ shotId }); setRoom('make') }) }} />
         </div>
       )}
     </div>
@@ -156,7 +177,7 @@ function RoomsBar({ data, room, onRoom, onBack, sound, onSound, primary }: {
           <span>Canvas</span>
         </button>
         <h1 className="rm-title" title={data.title}>{data.title}</h1>
-        <span className="rm-meta pt-mono">{data.ratio} · {Math.round(data.targetS)} s</span>
+        <span className="rm-meta pt-mono" title="The film's length now, and the length it is aiming for">{filmMeta(data.ratio, data.lengthS, data.targetS)}</span>
       </div>
       <div className="rm-switch" role="group" aria-label="Room">
         <button type="button" aria-pressed={room === 'make' && !sound} onClick={() => onRoom('make')} title="Make: ask for footage (1)">Make</button>
