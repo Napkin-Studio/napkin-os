@@ -5,7 +5,7 @@
 // changes the next take only: the takes there are never marked out of date.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useConfig, useDoc, useServices, useUi } from '../app/context'
+import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { choiceToSend, controlsFor, modelChoicesFor } from '../capabilities'
 import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type ModelChoice, type Shot } from '../contracts/types'
 import { updateDoc } from '../doc/store'
@@ -21,7 +21,7 @@ import { Float, MenuItem } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import { ChangeDrawer, type ChangeOpen } from './ChangeDrawer'
 import { cameraWord } from './delta'
-import { boxName, genTitle, shotTitle, type Box, type Gen } from './model'
+import { boxName, genTitle, makingLine, shotTitle, type Box, type Gen } from './model'
 import { Compare, TakePlayer } from './Players'
 import { Poster } from './Poster'
 import type { RoomData, Selection } from './Rooms'
@@ -285,6 +285,11 @@ function TakeRow({ g, data, picked, ticked, onTick, onPlay, onChange, onAddToEdi
   const [menu, setMenu] = useState<false | 'menu' | 'lineage'>(false)
   const close = useCallback(() => setMenu(false), [])
   const ready = g.state === 'ready'
+  // While it is being made, the runner says where it is (a landed take not yet downloaded: Checking, with why).
+  const { runner } = useServices()
+  const doc = useDoc()
+  useJobsTick()
+  const making = g.state === 'making' ? makingLine(g.jobId ? runner.liveInfo(g.jobId) : undefined, g.jobId ? doc.jobs[g.jobId]?.state : undefined) : undefined
   const parent = g.parentId ? data.gens.find((x) => x.id === g.parentId) : undefined
   const kids = data.gens.filter((x) => x.parentId === g.id)
   return (
@@ -295,7 +300,7 @@ function TakeRow({ g, data, picked, ticked, onTick, onPlay, onChange, onAddToEdi
       <button type="button" className="rm-takebtn" onClick={onPlay} disabled={!ready} title={`v${g.version} · ${g.label}`}>
         <Poster sha={g.asset} atS={g.segments[0]?.inS ?? 0} words={g.state === 'making' ? '' : 'v' + g.version} className="rm-takethumb" />
         {g.state === 'making' && <span className="rm-spin" aria-hidden="true" />}
-        <span className="rm-takelabel rm-clamp2"><b>v{g.version}</b> · {g.state === 'making' ? 'Making' : g.label}</span>
+        <span className="rm-takelabel rm-clamp2" title={making}><b>v{g.version}</b> · {making ?? g.label}</span>
       </button>
       <button type="button" className="rm-iconbtn ghost" aria-label={`More for v${g.version}`} aria-haspopup="menu" disabled={!ready} onClick={() => setMenu(menu ? false : 'menu')}>⋯</button>
       <Float anchor={ref} open={!!menu} onClose={close} align="end" role={menu === 'lineage' ? 'dialog' : 'menu'} label={`v${g.version}`} className="rm-lineage">

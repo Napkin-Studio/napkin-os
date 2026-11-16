@@ -22,7 +22,7 @@ import { Bin } from './Bin'
 import { ChangeDrawer, type ChangeOpen } from './ChangeDrawer'
 import { EditRoom, RenderAd } from './EditRoom'
 import { MakeRoom } from './MakeRoom'
-import { roomBoxes, roomGens, type Box, type Gen } from './model'
+import { jobWord, roomBoxes, roomGens, type Box, type Gen } from './model'
 import './rooms.css'
 
 export type RoomName = 'make' | 'edit'
@@ -191,7 +191,7 @@ function JobsPill({ data }: { data: RoomData }) {
     const shotId = j.node.kind === 'shot' ? j.node.id : undefined
     return whoIsWorking(j, j.state, purposeOf(j) ?? undefined, shotId ? shotNumber(doc, shotId) || undefined : undefined).line
   }
-  const word = (s: string) => (s === 'queued' || s === 'submitting' ? 'Sending' : s === 'fetching' || s === 'validating' ? 'Checking' : s === 'completed' ? 'Ready' : 'Making')
+  const word = jobWord
   return (
     <>
       <button ref={ref} type="button" className={`rm-jobs ${n ? 'busy' : ''}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}

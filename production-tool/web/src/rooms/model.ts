@@ -144,6 +144,19 @@ function deltaRow(x: GenerationDelta, own?: { in_s: number; out_s: number }): De
   return { field: x.field, from: scalar(x.from), to: scalar(to), ...(x.shot_id ? { shot_id: x.shot_id } : {}) }
 }
 
+/** A job in flight, in the rooms' words (the Jobs pill and a take being made agree): Sending, Making,
+ *  Checking (a landed result being fetched or checked) or Ready. */
+export function jobWord(state: string | undefined): 'Sending' | 'Making' | 'Checking' | 'Ready' {
+  return state === 'queued' || state === 'submitting' ? 'Sending' : state === 'fetching' || state === 'validating' ? 'Checking' : state === 'completed' ? 'Ready' : 'Making'
+}
+
+/** A take being made, as its row says it: the runner's state for its job, and the runner's note when it has
+ *  one ("Checking · Could not download it yet; trying again."), not a bare "Making" (live test 2026-11-16). */
+export function makingLine(live: { state?: string; note?: string } | undefined, docState?: string): string {
+  const word = jobWord(live?.state ?? docState)
+  return live?.note ? `${word} · ${live.note}` : word
+}
+
 /** v1…vn per box, oldest first; and each take's label from its delta. */
 export function numberAndLabel(gens: Gen[], shotNo: (id: Id) => number) {
   const byBox = new Map<string, Gen[]>()
