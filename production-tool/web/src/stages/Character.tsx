@@ -44,14 +44,14 @@ import { AskCard } from '../ui/AskCard'
 import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
-import { showStartCard } from './startCard'
+import { scriptToWrite, showStartCard } from './startCard'
 import { ImageEditor, VersionRow } from './ImageEditor'
 import { editablePicture } from '../canvas/nodes/dblclick'
 import { pickPictureVersionStep } from './imageEditor/apply'
 import { Float } from '../ui/Float'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
-import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList } from '../model/selectors'
+import { currentPictureFrame, keyNamed, keysList, mainStoryboard, pictureVersions, refsList } from '../model/selectors'
 import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
@@ -517,15 +517,19 @@ export function Character({ initial, active, onPictureEditor }: {
   const rows = useMemo(() => boardRows(doc, own, counts, rail), [doc, own, counts, rail])
   const open = useCallback((editor: 'script' | 'storyboard' | 'video', id?: string) => {
     if (editor === 'script') {
-      const sc = id ?? mainScript(docStore.get())?.id
-      if (sc) router.push(scriptRoute(project.id, sc))
+      if (id) return router.push(scriptRoute(project.id, id))
+      // A blank project has no script yet: on our own engine one is made as + Node → Script makes it.
+      const env = canvas?.engine === 'own' ? { canvas, doc: docStore } : null
+      void scriptToWrite(docStore.get(), env)
+        .then((sc) => { if (sc) router.push(scriptRoute(project.id, sc)) })
+        .catch((e) => console.warn('the script was not made', e))
       return
     }
     uiStore.update((u) => {
       if (id) u.openNode = { ...u.openNode, [editor]: id }
       u.stage = editor
     }, 'stage')
-  }, [docStore, router, project.id, uiStore])
+  }, [docStore, router, project.id, uiStore, canvas])
   const pickBoard = useCallback((row: BoardRow) => {
     setBoard(row.id)
     if (row.target.kind === 'open') return open(row.target.editor)
