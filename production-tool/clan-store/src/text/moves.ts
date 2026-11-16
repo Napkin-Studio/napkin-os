@@ -94,27 +94,52 @@ export async function keepSuggestion(bus: LocalPatchBus, text: LocalTextBus, sug
   // yet: that line is the scene's heading, not its first action line (live test 2026-11-16: the draft sat
   // under the placeholder and the outline said SCENE WITH NO HEADING). Same step.
   let prose = proposed.prose
-  const scene = target.kind === 'scene' ? (doc.scenes[target.id] as (Entity & { heading?: string }) | undefined) : undefined
+  const scene = target.kind === 'scene' ? (doc.scenes[target.id] as (Entity & { heading?: string; script_id: string; rank: string }) | undefined) : undefined
   const first = prose.content?.[0]
   const firstLine = first ? blockText(first).trim() : ''
-  if (scene && !scene.heading?.trim() && firstLine && HEADING.test(firstLine) && firstLine.length <= 200) {
+  if (scene && !scene.heading?.trim() && isHeading(firstLine)) {
     patches.push({ op: 'set', entity: 'scenes', id: scene.id, path: 'heading', value: firstLine.replace(/^\./, '').toUpperCase(), base_version: scene.v })
     prose = { ...prose, content: (prose.content ?? []).slice(1) }
+  }
+  // Each later heading line starts a scene of its own, after this one, with the lines under it (Skye's
+  // Format as screenplay, features/script-freeform.clan): a draft of two scenes lands as two scenes, never
+  // as one scene with a heading for an action line. Same step.
+  const scenes: { id: string; prose: Prose }[] = []
+  if (scene) {
+    const blocks = prose.content ?? []
+    const cuts = blocks.map((b, i) => (i > 0 && b.type === 'action' && isHeading(blockText(b).trim()) ? i : -1)).filter((i) => i > 0)
+    if (cuts.length) {
+      const newId = opts.newId ?? ((p: string) => newUlidId(p))
+      const siblings = Object.values(doc.scenes as unknown as Record<string, { script_id: string; rank: string }>).filter((s) => s.script_id === scene.script_id)
+      const next = siblings.map((s) => s.rank).filter((r) => r > String(scene.rank)).sort()[0] ?? null
+      const ranks = ranksBetween(String(scene.rank), next, cuts.length)
+      cuts.forEach((at, k) => {
+        const id = newId('scene')
+        const heading = blockText(blocks[at]).trim().replace(/^\./, '').toUpperCase()
+        patches.push({ op: 'create', entity: 'scenes', id, value: { script_id: scene.script_id, rank: ranks[k], heading }, base_version: 0 })
+        scenes.push({ id, prose: { ...prose, content: blocks.slice(at + 1, cuts[k + 1] ?? blocks.length) } })
+      })
+      prose = { ...prose, content: blocks.slice(0, cuts[0]) }
+    }
   }
   const r = await bus.apply({
     patches,
     why: { action: `keep_suggestion ${target.kind}s[${target.id}]`, cites: [`${bus.store.documentId()}#suggestions[${sugId}]`] },
   })
   if (!r.applied) return r
-  await text.edit([{ kind, id: target.id }, ...beats.map((b) => ({ kind: 'beat' as const, id: b.id }))], 'skye', (frag) => {
+  await text.edit([{ kind, id: target.id }, ...beats.map((b) => ({ kind: 'beat' as const, id: b.id })), ...scenes.map((s) => ({ kind: 'scene' as const, id: s.id }))], 'skye', (frag) => {
     hydrate(frag(kind, target.id), prose)
     for (const b of beats) hydrate(frag('beat', b.id), b.prose)
+    for (const s of scenes) hydrate(frag('scene', s.id), s.prose)
   }, { label: 'keep Skye\'s draft', joinStep: true })
   return r
 }
 
 /** A screenplay scene heading (INT./EXT./I/E/EST., or Fountain's forced '.HEADING'). */
 const HEADING = /^(?:(?:INT|EXT|INT\.?\/EXT|I\/E|EST)[. ]|\.[A-Za-z0-9])/i
+
+/** A line that is a scene heading, short enough to be one. */
+const isHeading = (line: string) => !!line && line.length <= 200 && HEADING.test(line)
 
 /** A prose block's words, its text nodes joined. */
 function blockText(b: { text?: string; content?: unknown[] }): string {
