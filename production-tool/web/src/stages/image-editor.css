@@ -166,6 +166,7 @@
 .ie-action > b, .ie-action .row > b { font-size: 13px; font-weight: 600; }
 .ie-action.on { border: 1.5px solid var(--tool); }
 .ie-action .row { gap: 8px; }
+.ie-action .ie-whole { flex: 1; min-width: 0; resize: none; min-height: 44px; line-height: 1.35; }
 .ie-action .textarea { resize: none; min-height: 0; font-size: 13px; }
 .ie-action .input { flex: 1; min-width: 0; height: 32px; font-size: 12px; }
 .ie-action .pt-seg { padding: 2px; border: 0; }
