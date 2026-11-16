@@ -34,7 +34,7 @@ describe('the Video node while Dex plans straight from the script', () => {
       const sb = mainStoryboard(d)!
       Object.assign(sb, { implicit: true, title: 'Video' })
       videoId = mainVideo(d)!.id
-      const j = job(d, 'shot_list', [], null, { state: 'running', crew: 'dex', node: { kind: 'storyboard', id: sb.id } })
+      const j = job(d, 'shot_list', [], null, { state: 'submitted', crew: 'dex', node: { kind: 'storyboard', id: sb.id } })
       d.jobs[j.id] = j
     }, 'test')
     const ui = new SnapshotStore<UiState>(initialUi())
