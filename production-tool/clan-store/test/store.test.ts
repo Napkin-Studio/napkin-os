@@ -328,6 +328,10 @@ describe('size and time, worst case', () => {
     const doc = s.documentId()
     const sizes = ['wide', 'medium', 'close']
     for (let i = 0; i < 300; i++) {
+      // The store's awaits settle as microtasks, so this loop never lets the worker read a message.
+      // On a slow machine it runs past 60 s, and Vitest then fails the run with
+      // `Timeout calling "onTaskUpdate"` though every test passed. Give the loop back now and then.
+      if (i % 20 === 0) await new Promise((resolve) => setImmediate(resolve))
       const sid = id('shot', i % SHOTS)
       await s.patch({ shots: { [sid]: { camera: { size: sizes[i % 3] } } } }, {
         action: `set shots[${sid}].camera.size`, agent: i % 2 ? 'human:p_maya001' : 'dex', rationale: words(120),
