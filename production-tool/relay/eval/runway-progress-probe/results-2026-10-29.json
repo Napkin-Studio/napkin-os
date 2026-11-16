@@ -1,0 +1,252 @@
+{
+ "image1": {
+  "label": "image1",
+  "model": "gemini_image3.1_flash",
+  "taskId": "6b630362-cb94-400c-926e-a205acdf0df9",
+  "samples": [
+   {
+    "t": 6.66,
+    "status": "RUNNING",
+    "progress": 0.13,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 13.13,
+    "status": "SUCCEEDED",
+    "progress": null,
+    "keys": [
+     "cost",
+     "createdAt",
+     "id",
+     "status"
+    ]
+   }
+  ],
+  "final": {
+   "status": "SUCCEEDED",
+   "cost": {
+    "credits": 7
+   },
+   "failure": null,
+   "failureCode": null,
+   "createdAt": "2026-10-29T12:23:37.695Z",
+   "outputs": 1
+  },
+  "duration_s": 13.13
+ },
+ "image2": {
+  "label": "image2",
+  "model": "gemini_image3.1_flash",
+  "taskId": "f54afb4e-39e3-4c72-b5f1-9670a75ba764",
+  "samples": [
+   {
+    "t": 6.09,
+    "status": "RUNNING",
+    "progress": 0.13,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 13.03,
+    "status": "SUCCEEDED",
+    "progress": null,
+    "keys": [
+     "cost",
+     "createdAt",
+     "id",
+     "status"
+    ]
+   }
+  ],
+  "final": {
+   "status": "SUCCEEDED",
+   "cost": {
+    "credits": 7
+   },
+   "failure": null,
+   "failureCode": null,
+   "createdAt": "2026-10-29T12:23:38.209Z",
+   "outputs": 1
+  },
+  "duration_s": 13.03
+ },
+ "image3": {
+  "label": "image3",
+  "model": "gemini_image3.1_flash",
+  "taskId": "cd39e305-ff75-4332-b505-98fe443ba691",
+  "samples": [
+   {
+    "t": 6.62,
+    "status": "RUNNING",
+    "progress": 0.13,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 13.04,
+    "status": "SUCCEEDED",
+    "progress": null,
+    "keys": [
+     "cost",
+     "createdAt",
+     "id",
+     "status"
+    ]
+   }
+  ],
+  "final": {
+   "status": "SUCCEEDED",
+   "cost": {
+    "credits": 7
+   },
+   "failure": null,
+   "failureCode": null,
+   "createdAt": "2026-10-29T12:23:38.703Z",
+   "outputs": 1
+  },
+  "duration_s": 13.04
+ },
+ "clip": {
+  "label": "clip",
+  "model": "veo3.1_fast",
+  "taskId": "6346e2a2-010f-43b2-92f9-d0eadb1bdb55",
+  "samples": [
+   {
+    "t": 6.47,
+    "status": "RUNNING",
+    "progress": 0.03,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 12.97,
+    "status": "RUNNING",
+    "progress": 0.12,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 19.88,
+    "status": "RUNNING",
+    "progress": 0.23,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 26.7,
+    "status": "RUNNING",
+    "progress": 0.34,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 33.43,
+    "status": "RUNNING",
+    "progress": 0.5,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 40.01,
+    "status": "RUNNING",
+    "progress": 0.61,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 46.86,
+    "status": "RUNNING",
+    "progress": 0.72,
+    "keys": [
+     "createdAt",
+     "estimatedCost",
+     "id",
+     "progress",
+     "status"
+    ]
+   },
+   {
+    "t": 53.61,
+    "status": "SUCCEEDED",
+    "progress": null,
+    "keys": [
+     "cost",
+     "createdAt",
+     "id",
+     "status"
+    ]
+   }
+  ],
+  "final": {
+   "status": "SUCCEEDED",
+   "cost": {
+    "credits": 40
+   },
+   "failure": null,
+   "failureCode": null,
+   "createdAt": "2026-10-29T12:23:52.946Z",
+   "outputs": 1
+  },
+  "duration_s": 53.61
+ },
+ "_account": {
+  "concurrency": {
+   "veo3.1_fast": 20,
+   "gemini_image3.1_flash": 20
+  },
+  "note": "tier, balance and usage left out on purpose"
+ },
+ "_run": {
+  "date": "2026-10-29",
+  "by": "claude, at the owner's request",
+  "spent_credits": 61,
+  "estimated_usd": 0.81,
+  "note": "one clip and three identical images: evidence for the shape of progress, too few runs for percentiles"
+ }
+}
