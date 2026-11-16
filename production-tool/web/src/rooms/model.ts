@@ -53,6 +53,15 @@ export interface Box {
 
 export const boxKeyOf = (shotIds: Id[]) => shotIds.join(',')
 
+/** The rooms' top-bar chip: the film's ratio and its length now (its shots), with the target beside it when
+ *  the shots run over or short ("16:9 · 24 s · target 15 s"). It once showed the target alone as if it were
+ *  the length (live test 2026-11-16: "15 s" on a 24 s, 7-shot film). */
+export function filmMeta(ratio: string, lengthS: number | undefined, targetS: number): string {
+  if (lengthS === undefined || lengthS <= 0) return `${ratio} · target ${Math.round(targetS)} s`
+  const len = Math.round(lengthS * 10) / 10
+  return Math.abs(len - targetS) >= 0.5 ? `${ratio} · ${len} s · target ${Math.round(targetS)} s` : `${ratio} · ${len} s`
+}
+
 /** A shot's title: its words, else "Shot n". */
 export const shotTitle = (s: Pick<Shot, 'action' | 'direction'> | undefined, n: number) => (s?.action?.trim() || s?.direction?.trim() || `Shot ${n}`)
 
