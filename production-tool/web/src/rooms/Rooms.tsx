@@ -9,7 +9,8 @@
 // selection carries across: a clip picked in Edit opens its box in Make.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { useConfig, useDoc, useJobsTick, useRoute, useRouter, useServices, useUi } from '../app/context'
+import { projectRoute, routeRoom, type RoomRoute } from '../app/route'
 import { isActive } from '../jobs/runner'
 import { takeShotOut } from '../jobs/runView'
 import { purposeOf } from '../model/purpose'
@@ -72,10 +73,26 @@ export function Rooms() {
     boxes, gens,
   } : null
 
-  const [room, setRoom] = useState<RoomName>('make')
+  // The room is the route's (/p/:id/video/make, /edit, /sound): reload, Back and Share return to it. It is
+  // written in place as the person switches. Outside a video route (tests) it is kept here.
+  const router = useRouter()
+  const route = useRoute()
+  const routed = route.kind === 'project' && route.stage === 'video' ? route : null
+  const [kept, setKept] = useState<RoomRoute>('make')
+  const now: RoomRoute = routed ? routeRoom(routed) : kept
+  // Sound opens over the picture room the person was in; Back to the picture returns there.
+  const [picture, setPicture] = useState<RoomName>(now === 'sound' ? 'make' : now)
+  const goRoom = useCallback((r: RoomRoute) => {
+    if (r !== 'sound') setPicture(r)
+    if (routed) router.replace(projectRoute(routed.projectId, 'video', r))
+    else setKept(r)
+  }, [routed, router])
+  const room: RoomName = now === 'sound' ? picture : now
+  const sound = now === 'sound'
+  const setRoom = useCallback((r: RoomName) => goRoom(r), [goRoom])
+  const setSound = useCallback((on: boolean) => goRoom(on ? 'sound' : picture), [goRoom, picture])
   const [sel, setSel] = useState<Selection>(() => ({ shotId: shots[0]?.id, boxKey: boxes[0]?.key }))
   const [change, setChange] = useState<ChangeOpen | null>(null)
-  const [sound, setSound] = useState(false)
   const back = useCallback(() => uiStore.update((u) => { u.stage = 'character' }, 'stage'), [uiStore])
   // A drawer or sheet registers here, so Esc closes it before it means Back.
   const closers = useRef<(() => void)[]>([])
@@ -104,7 +121,7 @@ export function Rooms() {
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [change, sound, back])
+  }, [change, sound, back, setRoom, setSound])
 
   if (!controls.video) return <div className="panel"><div className="empty-state"><b>Video is off right now.</b></div></div>
   if (!data) return (

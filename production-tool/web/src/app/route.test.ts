@@ -1,7 +1,7 @@
 // Routes under both bases: '/' (dev, tests) and '/production/' (behind napkin-web).
 
 import { describe, expect, it } from 'vitest'
-import { formatRoute, parseRoute, projectRoute, routeFor, routeProject, Router, scriptRoute, type HistoryLike } from './route'
+import { formatRoute, parseRoute, projectRoute, routeFor, routeProject, routeRoom, Router, scriptRoute, type HistoryLike } from './route'
 
 const P = 'p_01HZY'
 const S = 'script_01J0000000000000000000000A'
@@ -31,6 +31,30 @@ describe('parseRoute and formatRoute', () => {
       expect(parseRoute({ pathname: `${base}p/${P}/sound` }, base)).toEqual({ kind: 'none' })
     })
   }
+
+  for (const base of ['/', '/production/']) {
+    it(`each Video editor room has its own route under ${base} (reload, Back and Share return to the room)`, () => {
+      for (const room of ['make', 'edit', 'sound'] as const) {
+        const r = projectRoute(P, 'video', room)
+        expect(formatRoute(r, base)).toBe(`${base}p/${P}/video/${room}`)
+        expect(parseRoute({ pathname: formatRoute(r, base) }, base)).toEqual(r)
+        expect(routeRoom(r)).toBe(room)
+        expect(routeProject(r)).toBe(P)
+      }
+      // The Video editor with no room is Make; a room is only a Video editor's.
+      expect(routeRoom(projectRoute(P, 'video'))).toBe('make')
+      expect(formatRoute(projectRoute(P, 'storyboard', 'edit'), base)).toBe(`${base}p/${P}/storyboard`)
+      expect(parseRoute({ pathname: `${base}p/${P}/video/cut` }, base)).toEqual({ kind: 'none' })
+      expect(parseRoute({ pathname: `${base}p/${P}/storyboard/edit` }, base)).toEqual({ kind: 'none' })
+    })
+  }
+
+  it('the open project keeps the Video editor\'s room in the URL, and drops it on leaving', () => {
+    expect(routeFor(P, 'video', projectRoute(P, 'video', 'edit'))).toBeNull()
+    expect(routeFor(P, 'video', projectRoute(P, 'video', 'sound'))).toBeNull()
+    expect(routeFor(P, 'character', projectRoute(P, 'video', 'edit'))).toEqual(projectRoute(P))
+    expect(routeFor(P, 'video', projectRoute('p_other', 'video', 'edit'))).toEqual(projectRoute(P, 'video'))
+  })
 
   it('the open project writes its route, and leaves the Script editor\'s alone', () => {
     expect(routeFor(P, 'character', { kind: 'none' })).toEqual(projectRoute(P))
