@@ -5,7 +5,7 @@
 // picture goes into the blob store with its asset row like the Image editor's registerAsset. Loaded only
 // under import.meta.env.DEV (main.tsx), as window.__seed; never in a build.
 
-import { newUlidId, ranksBetween } from '../../../clan-store/src'
+import { newProjectData, newUlidId, ranksBetween } from '../../../clan-store/src'
 import type { Job, Mime, ProductionDocument, Shot } from '../contracts/types'
 import type { Services } from '../app/context'
 import { systemUpdate } from '../doc/store'
@@ -65,6 +65,16 @@ export async function seedFrame(shell: Shell, opts: SeedFrameOpts = {}): Promise
   let shotIds: string[] = []
   let frameId = ''
   await systemUpdate(services.doc, (d: ProductionDocument) => {
+    // A new project starts blank (the app asks clan-store for blank since 2026-11-04): give it the three
+    // stages (script, storyboard, video, linked) a non-blank project starts with, as clan-store makes them.
+    if (!mainStoryboard(d)) {
+      const person = { id: String(d.project.created_by ?? 'human:e2e').replace(/^human:/, ''), handle: 'e2e', tenant_id: String(d.project.tenant_id ?? '') }
+      const stages = newProjectData({ person, title: d.project.title ?? 'e2e', newId: newUlidId, now: new Date().toISOString() }) as unknown as ProductionDocument
+      Object.assign(d.scripts, stages.scripts)
+      Object.assign(d.storyboards, stages.storyboards)
+      Object.assign(d.videos, stages.videos)
+      Object.assign(d.links, stages.links)
+    }
     const sb = mainStoryboard(d)
     if (!sb) throw new Error('This project has no storyboard.')
     sb.ratio = ratio as typeof sb.ratio
@@ -90,7 +100,8 @@ export function installSeed(shell: Shell) {
     /** A project open on the canvas (a new one unless one is open), for specs that drop pictures there. */
     canvas: async () => {
       if (!shell.get().session) await shell.newProject()
-      shell.get().session?.services.ui.update((u) => { u.stage = 'character' }, 'e2e seed')
+      // A new project is blank (2026-11-04), so the first-run Start card would sit where specs drop pictures.
+      shell.get().session?.services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
     },
     /** Opens the storyboard stage (the Image editor opens from a shot there). */
     storyboard: () => shell.get().session?.services.ui.update((u) => { u.stage = 'storyboard' }, 'e2e seed'),
