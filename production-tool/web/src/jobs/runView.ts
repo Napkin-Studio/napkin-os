@@ -71,7 +71,7 @@ export function writeJoins(x: ProductionDocument, videoId: Id, joins: [Id, SeamK
   for (const [id, r] of Object.entries(v.runs)) {
     if (r.planned_by === 'human' && r.state === 'planned' && !r.job_id && r.shot_ids.some((s) => inWrite.has(s))) delete v.runs[id]
   }
-  for (const g of write) v.runs[newUlidId('run')] = { shot_ids: g, mode: g.length > 1 ? 'take' : 'alone', model: '', state: 'planned', planned_by: 'human' }
+  for (const g of write) v.runs[newUlidId('run')] = { shot_ids: g, mode: g.length > 1 ? 'take_refs' : 'alone', model: '', state: 'planned', planned_by: 'human' }
 }
 
 /** ✂ Split here: the video before `shotId` ends there (a cut, by a person; one History entry, one undo step). */
@@ -292,8 +292,10 @@ export function frameMarks(d: ProductionDocument, videoId: Id | undefined, plan:
     const take = currentTake(d, s.id, videoId)
     const seg = shotSegment(take, s.id)
     if (seg) {
-      // The box's first shot pins the take on its frame; the others guide it.
-      out[s.id] = take!.segments![0].shot_id === s.id ? 'pin' : 'guide'
+      // A take made with no frame pinned (take_refs, features/join-or-cut-shots.clan) is guided by every frame;
+      // an older pinned take was pinned on its first shot's frame and guided by the others.
+      const run = take!.box_id && videoId ? d.videos[videoId]?.runs?.[take!.box_id] : undefined
+      out[s.id] = run?.mode !== 'take_refs' && take!.segments![0].shot_id === s.id ? 'pin' : 'guide'
       continue
     }
     const run = plan?.runs.find((r) => r.shotIds.includes(s.id))
