@@ -2,7 +2,7 @@
 // and the double-click rule, with real pointer events on our own engine; Apply puts v2 in place with v1
 // in its versions; the document's Undo takes the Apply back and the canvas shows v1 again.
 import type { Page } from '@playwright/test'
-import { expect, stroke, test } from '../fixtures'
+import { expect, settled, stroke, test } from '../fixtures'
 
 declare global {
   interface Window {
@@ -15,9 +15,12 @@ interface OnCanvas { id: string; node: string; sha: string; x: number; y: number
 
 async function openCanvas(page: Page) {
   await page.goto('/?engine=own&mockDelay=300')
-  await page.waitForFunction(() => !!window.__seed, null, { timeout: 30_000 })
-  await page.evaluate(() => window.__seed.canvas())
-  await page.waitForFunction(() => !!window.__canvas)
+  // This spec runs first, so it meets the dev server's first dependency scan and the reload that
+  // follows it: seed again when that reload takes the page away (fixtures.ts, settled).
+  await settled(page, async () => {
+    await page.evaluate(() => window.__seed.canvas())
+    await page.waitForFunction(() => !!window.__canvas)
+  })
 }
 
 /** Drops pictures (a file drop: the one synthetic event here) at a page point. */

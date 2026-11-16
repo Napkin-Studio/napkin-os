@@ -27,7 +27,7 @@ declare global {
 }
 
 /** Runs `fn` again when the dev server reloads the page under it (its first dependency scan does). */
-async function settled<T>(page: Page, fn: () => Promise<T>): Promise<T> {
+export async function settled<T>(page: Page, fn: () => Promise<T>): Promise<T> {
   for (let i = 0; ; i++) {
     try {
       await page.waitForFunction(() => !!window.__seed, null, { timeout: 30_000 })
