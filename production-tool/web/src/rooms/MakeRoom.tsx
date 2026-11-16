@@ -7,15 +7,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useServices, useUi } from '../app/context'
 import { choiceToSend, controlsFor, modelChoicesFor } from '../capabilities'
-import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type Config, type ModelChoice, type ProductionDocument, type Shot } from '../contracts/types'
+import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type ModelChoice, type Shot } from '../contracts/types'
 import { updateDoc } from '../doc/store'
-import { lastWorkedModel } from '../jobs/follow'
 import { drawFrame, selectedFrame } from '../jobs/frames'
 import { makeClip, videoQuality } from '../jobs/clips'
-import { makeRuns, modelEntry } from '../jobs/runs'
+import { makeRuns } from '../jobs/runs'
 import { joinSelection, separateSelection, videoJoin } from '../jobs/runView'
 import { isRunning, jobAt, shotRefSet } from '../jobs/select'
 import { refName, refsList, shotNumber, shotsOf } from '../model/selectors'
+import { boxModel, boxModelNote, boxModelWhyNot, entryOf } from './boxModel'
 import { roomEmpty } from './emptyState'
 import { Float, MenuItem } from '../ui/Float'
 import { useSending } from '../ui/hooks'
@@ -490,40 +490,6 @@ function RefPicker({ shot, max }: { shot: Shot; max: number }) {
   )
 }
 
-
-const entryOf = (m: ModelChoice) => modelEntry(m.provider as Parameters<typeof modelEntry>[0], m.model)
-
-/** What the box sends decides which models can make it: from words alone, references with no frame, a
- *  first frame, several shots as one video. Why this model cannot, or undefined when it can. */
-function boxModelWhyNot(doc: ProductionDocument, box: Box, m: ModelChoice): string | undefined {
-  const e = entryOf(m)
-  const noFrame = !selectedFrame(doc, box.shotIds[0]) && !startPicture(doc, box.shotIds[0])
-  const hasRefs = box.shotIds.some((id) => shotRefLinks(doc, id).length > 0 || /@[a-z]/.test(doc.shots[id]?.action ?? ''))
-  if (box.together && !e?.video.take?.ok) return "Can't make several shots as one video"
-  if (noFrame && e && !e.words) return 'Needs a start frame'
-  if (noFrame && hasRefs && e && !e.video.refsWithoutFrame) return "Can't use references without a start frame"
-  return undefined
-}
-
-/** With a start frame on a model that takes no references beside it, the frame carries the character: the
- *  relay keeps the frame and says the refs in words (relay/director/director.py _clip_frame_only). That is
- *  how every Veo clip from a storyboard is made, so it is a note, not a refusal. Refusing it left a box made
- *  together with no model at all (full test, 2026-11-04). */
-function boxModelNote(doc: ProductionDocument, box: Box, m: ModelChoice): string | undefined {
-  const e = entryOf(m)
-  const hasFrame = !!selectedFrame(doc, box.shotIds[0]) || !!startPicture(doc, box.shotIds[0])
-  const hasRefs = box.shotIds.some((id) => shotRefLinks(doc, id).length > 0 || /@[a-z]/.test(doc.shots[id]?.action ?? ''))
-  return hasFrame && hasRefs && e && !e.video.firstFrameWithRefs ? 'The character comes from the start frame' : undefined
-}
-
-/** The model a box is made on: the one picked for it, else the last that worked, unless that one cannot
- *  make this box (Veo for shots made together); then the first that can. */
-function boxModel(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): ModelChoice | undefined {
-  const options = modelChoicesFor('clip', config)
-  const wanted = picked ?? lastWorkedModel(doc, 'clip', config) ?? options[0]
-  if (wanted && !boxModelWhyNot(doc, box, wanted)) return wanted
-  return options.find((o) => !boxModelWhyNot(doc, box, o)) ?? wanted
-}
 
 /** The Box tab: made together or apart, the model (only those that can make it, the others greyed with why),
  *  and the limits. */
