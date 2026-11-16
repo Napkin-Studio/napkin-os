@@ -18,7 +18,7 @@ import type { ChangeOpen } from './ChangeDrawer'
 import { clipEnd, clipLen, fitWords, handleShort, type CutClip } from './cut'
 import { appendTake, assembleFirstCut, editCut } from './editOps'
 import { Inspector } from './Inspector'
-import { boxName, type Gen } from './model'
+import { boxName, sharesBox, type Gen } from './model'
 import { NewTakeSheet } from './NewTakeSheet'
 import { tc } from './media'
 import { isStill, useAssetUrl } from './media'
@@ -76,7 +76,7 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register }: {
     for (const c of v1) {
       const g = data.gens.find((x) => x.id === c.genId)
       const busy = jobAt(doc, ui, (x) => x.for === 'remake' && x.parentId === c.genId)
-      if ((busy && isMoving(doc, busy)) || data.gens.some((x) => x.state === 'making' && g && x.boxKey === g.boxKey)) out.add(c.id)
+      if ((busy && isMoving(doc, busy)) || data.gens.some((x) => x.state === 'making' && g && sharesBox(g, x))) out.add(c.id)
     }
     return out
   }, [v1, data.gens, doc, ui])
