@@ -18,7 +18,7 @@
 #                   Every Generate, frame and clip costs money; a hard spend stop applies
 #                   (PRODUCTION_SPEND_CAP, default 50 USD; warning at 80%).
 #
-# Open http://127.0.0.1:${PRODUCTION_WEB_PORT:-8091}/production/?engine=own and sign in with
+# Open http://127.0.0.1:${PRODUCTION_WEB_PORT:-8091}/production/ and sign in with
 # the roster name printed at start (default dev@napkin).
 #
 # Settings (environment): PRODUCTION_WEB_PORT (8091), PRODUCTION_RELAY_PORT (8788),
@@ -175,7 +175,7 @@ start() {
   done
   listening "$web_port" && listening "$relay_port" || die "did not come up; see $state/web.log and $state/relay.log"
   say "up in $(cat "$state/mode") mode"
-  say "open http://127.0.0.1:$web_port/production/?engine=own and sign in as $sign_in"
+  say "open http://127.0.0.1:$web_port/production/ and sign in as $sign_in"
   [[ "$live" == 1 ]] && say "LIVE: Runway costs money; spend stop ${PRODUCTION_SPEND_CAP:-50} USD"
   return 0
 }
