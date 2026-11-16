@@ -64,6 +64,11 @@
   --pen-green: #15803D;
   --pen-amber: #C27803;
   --pen-grey: #6B7180;
+  /* The shell's agency layer (app/src/shell/agency/palette.ts), carried so the palette stays the
+     shell's; the tool does not paint with it yet. */
+  --agency: #14161B;
+  --agency-fg: #FFFFFF;
+  --agency-soft: #F2F3F6;
   color-scheme: light;
 }
 
@@ -111,6 +116,9 @@
   --pen-green: #4ADE80;
   --pen-amber: #F5A524;
   --pen-grey: #A6ACB8;
+  --agency: #F2F3F5;
+  --agency-fg: #14161B;
+  --agency-soft: #22262D;
   color-scheme: dark;
 }
 

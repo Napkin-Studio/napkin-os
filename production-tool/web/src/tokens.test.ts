@@ -58,7 +58,9 @@ describe('the tokens are the shell\'s', () => {
     expect(dark.get('action')).toBe('#d63b1f')
   })
   it('the crew colours are the shell figures\'', () => {
-    const shell = block(read('../../../app/src/studio/AgentFigure.css'), '.agent-figure,')
+    // The shell moved to role spheres (#151); the tool keeps its crew until its own rework, so its colours
+    // are checked against the shell's sheet as it was, frozen in agents/house-sheet.fixture.html (2026-11-11).
+    const shell = block(read('./ui/agents/house-sheet.fixture.html'), '.agent-figure,')
     const ours = block(read('./ui/agents/AgentFigure.css'), '.agent-figure,')
     for (const k of ['af-cobalt', 'af-coral', 'af-marigold', 'af-iris', 'af-mint', 'af-mark']) expect(ours.get(k)).toBe(shell.get(k))
   })
