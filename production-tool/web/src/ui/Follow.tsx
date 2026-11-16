@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { cancelFollow, followState, planSize, planWords, type FollowScope } from '../jobs/follow'
+import { ctxReader } from '../jobs/runner'
 import { behindCount, notMadeCount } from './behind'
 import { SplitButton } from './SplitButton'
 import { useUpdate } from './useUpdate'
@@ -20,7 +21,7 @@ export function UpdateFollows() {
   useJobsTick()
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const run = ui.following
-  const state = followState(doc, (id) => ui.jobCtx[id], run)
+  const state = followState(doc, ctxReader(doc, ui), run)
   if (!run || !state) return null
   const label = run.cancel ? 'Stopping…' : run.reviewing ? 'Update · check the plan' : state.failed ? 'Update paused' : run.awaiting && !state.running ? 'Update · your turn' : `Updating · ${Math.min(state.done + 1, run.total ?? state.done + 1)} of ${run.total ?? '…'}`
   return (
@@ -34,9 +35,10 @@ export function UpdateFollows() {
   )
 }
 
-/** The one place to start an update of the whole project: a bar floating on the stage while anything is
- *  out of date or not made yet. `dock`: top on the Video stage, where the bottom is the player's controls. */
-export function RemakeBar({ dock = 'bottom' }: { dock?: 'top' | 'bottom' } = {}) {
+/** The one place to start an update of the whole project: a bar while anything is out of date or not made
+ *  yet. `dock`: floating at the bottom of the stage, or `inline` in the Video editor's timeline head (it
+ *  floated over the top bar there and hid Picture | Sound, 2026-10-15). */
+export function RemakeBar({ dock = 'bottom' }: { dock?: 'bottom' | 'inline' } = {}) {
   const update = useUpdate()
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +58,7 @@ export function RemakeBar({ dock = 'bottom' }: { dock?: 'top' | 'bottom' } = {})
     }
   }
   return (
-    <div className={`remakebar ${dock === 'top' ? 'top' : ''}`} role="region" aria-label="Update" onClick={(e) => e.stopPropagation()}>
+    <div className={`remakebar ${dock === 'inline' ? 'inline' : ''}`} role="region" aria-label="Update" onClick={(e) => e.stopPropagation()}>
       {n > 0 && (
         <>
           <span className="dot" aria-hidden="true" />
@@ -65,7 +67,7 @@ export function RemakeBar({ dock = 'bottom' }: { dock?: 'top' | 'bottom' } = {})
           <SplitButton kind="dark" menuLabel="More ways to update" onClick={() => void go({ kind: 'direct' })}
             title={`Make ${planWords(direct)} again, only what is out of date: your words and model for each`}
             items={carry > n ? [{
-              label: `Update ${n} and carry forward (${carry})`, hint: update.cost({ kind: 'carry' }), icon: '⇥',
+              label: `Update ${n} and carry forward (${carry})`, icon: '⇥',
               onSelect: () => void go({ kind: 'carry' }),
             }] : []}>
             Update {n}

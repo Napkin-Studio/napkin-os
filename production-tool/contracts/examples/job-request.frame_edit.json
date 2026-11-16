@@ -1,0 +1,43 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7F00000000000000000FE01",
+  "op": "frame_edit",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_frameedit01",
+  "purpose": "change frame",
+  "node": {
+    "kind": "shot",
+    "id": "shot_01K7B00000000000000000SH04"
+  },
+  "parentIds": [],
+  "input": {
+    "text": "make this an overhead aerial shot",
+    "image": {
+      "sha256": "sha256:4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+      "url": "https://cdn.napkin.test/out/sha256:4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+      "mime": "image/png"
+    },
+    "aspect": { "w": 1344, "h": 756 },
+    "shot": {
+      "id": "shot_01K7B00000000000000000SH04",
+      "kind": "shot",
+      "duration_s": 3,
+      "camera": { "size": "medium", "angle": "eye_level", "movement": "static" },
+      "action": "@maya_front runs along the beach at golden hour.",
+      "refs": ["maya_front"]
+    },
+    "refs": [
+      {
+        "id": "ref_01K7B00000000000000000RF01",
+        "name": "maya_front",
+        "role": "character",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
+          "url": "https://cdn.napkin.test/in/sha256:ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
+          "mime": "image/png"
+        }
+      }
+    ]
+  }
+}

@@ -27,7 +27,8 @@ export const TOOLS: readonly Tool[] = [
   { id: 'idea', name: 'Idea', full: 'Idea', appId: null, noun: ['idea', 'ideas'] },
   { id: 'deck', name: 'Deck', full: 'Deck Maker', appId: 'ie.napkin.deck-maker', noun: ['deck', 'decks'] },
   { id: 'prod', name: 'Prod', full: 'Production Tool', appId: null, noun: ['production', 'productions'] },
-  // Advertising Studio's id is the one it has always carried (examples/make_advertising_studio.rs).
+  // Advertising Studio is retired (the Production Tool replaces it; features/os-sign-in.clan D15) and no
+  // longer built. Its id stays so the ads its old documents made still file under Ads.
   { id: 'ads', name: 'Ads', full: 'Advertising Studio', appId: 'ie.napkin.film', noun: ['ad', 'ads'] },
 ]
 

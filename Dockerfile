@@ -58,6 +58,34 @@ COPY --from=device /out/wasm/ ./src/wasm/
 COPY --from=device /out/apps/ ./public/apps/
 RUN npm run build
 
+# ── the Production Tool ──────────────────────────────────────────────────────
+# The tool's web app (production-tool/web), served by napkin-web at /production
+# and talking to the relay through napkin-web's /production/api proxy
+# (features/os-sign-in.clan). It bundles the CLAN store
+# (production-tool/clan-store), which loads napkin-wasm: the device stage's
+# bindings, so there is no second Rust build. It also bundles our own canvas
+# engine (production-tool/canvas-engine, features/canvas-engine.clan), which
+# the app's src/canvas/adapter/own imports. Each package resolves its own
+# node_modules, and the app imports ../contracts. canvas-engine installs its dev
+# dependencies too: the app's `tsc -b` type-checks the engine's sources, which
+# need its @types (rbush). Only web/dist leaves this stage.
+FROM node:20-bookworm-slim AS production
+WORKDIR /src/production-tool
+COPY production-tool/clan-store/package.json production-tool/clan-store/package-lock.json ./clan-store/
+COPY production-tool/canvas-engine/package.json production-tool/canvas-engine/package-lock.json ./canvas-engine/
+COPY production-tool/web/package.json production-tool/web/package-lock.json ./web/
+RUN cd clan-store && npm ci --no-audit --no-fund \
+ && cd ../canvas-engine && npm ci --no-audit --no-fund \
+ && cd ../web && npm ci --no-audit --no-fund
+COPY production-tool/contracts/ ./contracts/
+COPY production-tool/clan-store/ ./clan-store/
+COPY production-tool/canvas-engine/ ./canvas-engine/
+COPY production-tool/web/ ./web/
+COPY --from=device /out/wasm/ ./clan-store/src/wasm/
+WORKDIR /src/production-tool/web
+RUN VITE_RELAY_URL=/production/api VITE_BASE=/production/ npm run build:web \
+ && test -f dist/index.html
+
 # ── the host, and the seed template ──────────────────────────────────────────
 FROM rust:1-slim-bookworm AS host
 # `ring` (via rustls) needs a C compiler; nothing here needs OpenSSL.
@@ -94,6 +122,8 @@ COPY --from=host /src/target/release/napkin-web /usr/local/bin/napkin-web
 COPY --from=device /out/apps/ /srv/napkin/seed/
 RUN rm -f /srv/napkin/seed/*.example.clan
 COPY --from=shell /src/app/dist/ /srv/napkin/dist/
+# The Production Tool at /production (served only when NAPKIN_PRODUCTION_RELAY_URL is set).
+COPY --from=production /src/production-tool/web/dist/ /srv/napkin/production/
 # Who may sign in when NAPKIN_AUTH=roster (staging): user@agency<TAB>Display name.
 # UAT's deploy passes ROSTER=accounts.uat.tsv: the studio's accounts and a mock sign-in per agency.
 ARG ROSTER=accounts.napkin.tsv
@@ -102,6 +132,7 @@ COPY infra/scripts/${ROSTER} /srv/napkin/accounts.tsv
 ENV NAPKIN_WEB_DATA=/data \
     NAPKIN_WEB_STATIC=/srv/napkin/dist \
     NAPKIN_WEB_SEED=/srv/napkin/seed \
+    NAPKIN_PRODUCTION_STATIC=/srv/napkin/production \
     PORT=8080
 # Unprivileged, and the uid the EFS access point writes as (infra/modules/services).
 # With a home: tools it runs (Chromium, for PDF export) expect one, though the

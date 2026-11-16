@@ -8,7 +8,9 @@ import { modelLabel } from '../capabilities'
 import type { AgentBlock, DocJob, JobInputRef, Provider, ProductionDocument, Region, View } from '../contracts/types'
 import type { UiState } from '../doc/ui'
 import { nameOf } from '../lib/names'
-import { CAST, jobWhat } from '../ui/agents/cast'
+import { purposeOf } from '../model/purpose'
+import { refsList } from '../model/selectors'
+import { CAST, castOf, jobWhat } from '../ui/agents/cast'
 import type { ProvenanceOf } from './arrowHit'
 
 export interface CardInput {
@@ -38,7 +40,6 @@ export interface ArrowCard {
   passthrough?: string
   /** "Ran at 14:05 · took 12 s". */
   when?: string
-  cost?: string
 }
 
 /** What a source node is, when it is not a named image (the canvas knows; tests pass a map). */
@@ -92,34 +93,25 @@ export function directorPrompt(agent: AgentBlock | undefined): string | undefine
   return typeof p === 'string' && p.trim() ? p.trim() : undefined
 }
 
-function costWords(job: DocJob | undefined): string | undefined {
-  const c = job?.cost
-  if (!c || c.unknown) return undefined
-  const fmt = (v: number) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
-  // Nothing charged (the mock) says nothing.
-  if (c.confirmed != null) return c.confirmed > 0 ? fmt(c.confirmed) : undefined
-  if (c.estimate) return `about ${fmt(c.estimate)}`
-  return undefined
-}
-
 /** The card for one provenance arrow. */
-export function arrowCard(doc: ProductionDocument, ui: Pick<UiState, 'jobCtx'>, link: ProvenanceOf, opts: CardOptions = {}): ArrowCard {
-  const job = doc.jobs.find((j) => j.id === link.to)
-  const ctx = ui.jobCtx[link.to]
-  const input = ctx?.request.input ?? {}
-  const op = job?.op ?? ctx?.request.op ?? 'generate'
+export function arrowCard(doc: ProductionDocument, ui: Pick<UiState, 'jobs'>, link: ProvenanceOf, opts: CardOptions = {}): ArrowCard {
+  const job: DocJob | undefined = doc.jobs[link.to]
+  const request = ui.jobs[link.to]?.request
+  const input = request?.input ?? {}
+  const op = job?.op ?? request?.op ?? 'generate'
   const fmtTime = opts.fmtTime ?? defaultTime
 
   // Who and on what; a pick that ran elsewhere says so.
   const provider = job?.provider
-  const who = provider ? `${CAST.dex.given} · ${modelWords(provider, job?.model)}` : `${CAST.dex.given} · model not known yet`
-  const picked = ctx?.request.modelChoice
+  const agent = CAST[castOf(job?.crew)].given
+  const who = provider ? `${agent} · ${modelWords(provider, job?.model)}` : `${agent} · model not known yet`
+  const picked = request?.modelChoice
   const fallback = picked && provider && picked.provider !== provider
     ? `Made on ${providerName(provider)}: ${picked.provider} could not take ${modelLabel(picked.provider, picked.model) ?? picked.model}`
     : undefined
 
   // The inputs, by name where they have one; this arrow's own source marked.
-  const named = (nodeId: string) => doc.refs.find((r) => r.node === nodeId)
+  const named = (nodeId: string) => refsList(doc).find((r) => r.node === nodeId)
   const fromLabel = (nodeId: string): string => {
     const r = named(nodeId)
     if (r) return `@${nameOf(r)}`
@@ -141,14 +133,14 @@ export function arrowCard(doc: ProductionDocument, ui: Pick<UiState, 'jobCtx'>, 
   }
   if (op === 'view' || op === 'region_edit') add(fromLabel(link.from), true) // the image itself
   for (const r of input.refs ?? []) {
-    const node = r.name ? doc.refs.find((x) => x.id === r.id)?.node : r.id
+    const node = r.name ? doc.refs[r.id]?.node : r.id
     add(r.name ? `@${r.name}` : REF_KIND[r.kind], node === link.from)
   }
   if (!from.some((f) => f.here)) add(fromLabel(link.from), true)
 
   // What it changed.
   let changed: string | undefined
-  let title = capital(jobWhat({ op }, ctx))
+  let title = capital(jobWhat({ op }, (job && purposeOf(job)) ?? undefined))
   if (op === 'view' && input.view) {
     title = `The ${VIEW[input.view]} view`
     changed = `Turned ${fromLabel(link.from)} to the ${VIEW[input.view]} view`
@@ -160,8 +152,8 @@ export function arrowCard(doc: ProductionDocument, ui: Pick<UiState, 'jobCtx'>, 
   }
 
   const words = clip(input.text ?? job?.text, 400)
-  const told = clip(directorPrompt(job?.agent), 600)
-  const passthrough = job && !job.agent && (job.state === 'completed' || job.provider) ? 'No director: your words went to the model as written.' : undefined
+  const told = clip(directorPrompt(job?.director), 600)
+  const passthrough = job && !job.director && (job.state === 'completed' || job.provider) ? 'No director: your words went to the model as written.' : undefined
 
   let state: string | undefined
   if (!job) state = 'No record of this step in the document.'
@@ -184,8 +176,7 @@ export function arrowCard(doc: ProductionDocument, ui: Pick<UiState, 'jobCtx'>, 
   if (told) card.told = told
   else if (passthrough) card.passthrough = passthrough
   if (when) card.when = when
-  const cost = costWords(job)
-  if (cost) card.cost = cost
+  // No cost on the canvas (owner, 2026-10-13): each job's cost shows only in History.
   return card
 }
 
@@ -201,6 +192,6 @@ export function cardLines(c: ArrowCard): string[] {
     c.changed && `What it changed: ${c.changed}`,
     c.told && `What the model was told: ${c.told}`,
     c.passthrough,
-    [c.when, c.cost].filter(Boolean).join(' · ') || undefined,
+    c.when,
   ].filter((l): l is string => !!l)
 }

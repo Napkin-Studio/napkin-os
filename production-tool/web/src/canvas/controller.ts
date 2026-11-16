@@ -1,14 +1,15 @@
-// The canvas's logic over the Excalidraw API. The canvas is free: draw, write or
+// The canvas's logic over the CanvasAdapter (features/canvas-core.clan). The canvas is free: draw, write or
 // drop pictures anywhere. Every picture, drawing, note and result is a node;
 // select any of them and Generate puts a new node beside them (or where you
 // click), with a curved arrow from each input. Any image can be named
 // key_variant (maya_front), set as a key's front, and turned into the other
 // views. The React component only renders overlays and calls in.
 
-import { CaptureUpdateAction, convertToExcalidrawElements, getVisibleSceneBounds, newElementWith } from '@excalidraw/excalidraw'
-import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import type { ExcalidrawImageElement } from '@excalidraw/excalidraw/element/types'
-import type { CustomData, Job, JobInputRef, Key, LibraryEntry, ProductionDocument, RefRole, Variant, View, ModelChoice } from '../contracts/types'
+import type { CanvasAdapter, CanvasAsset } from './core/canvasAdapter'
+import {
+  AGENCY_SHELF, type Ask, type Aspect, type CustomData, type Job, type JobInput, type JobInputRef, type Key, type LibraryEntry, type Mime, type NamedRef,
+  type ProductionDocument, type Ratio, type RefRole, type Variant, type View, type ModelChoice,
+} from '../contracts/types'
 import type { Services } from '../app/context'
 import { getBlob, idbLocation, putBlob, putBlobAs } from '../lib/blobs'
 import { idbPut } from '../lib/idb'
@@ -18,19 +19,29 @@ import { systemUpdate } from '../doc/store'
 import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
 import { namedInput } from '../jobs/select'
+import { landingWhy } from '../jobs/landing'
+import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/fitting'
+import { bringIntoView } from './boards/boards'
+import { boardForRole, placeOnBoard, roleOfElement } from './boards/arrange'
+import { applySketchFrame } from '../jobs/handlers'
+import { LOCAL_PERSON } from '../jobs/runner'
+import { purposeOf } from '../model/purpose'
+import { currentPictureFrame, keyNamed, mainStoryboard, refsList } from '../model/selectors'
+import { cropLoss } from '../lib/runwaySizes'
+import { BIG_CROP, BIG_CROP_LINE, aspectLabel, boxOf, exactRatio, exportPlan, intersects, lockAspect, membersOf, ratioFor, type Boxed, type Rect } from './core/sketch'
+import { SKETCH_ASK, sketchAsk } from '../ui/asks'
 import {
-  alive, bindArrow, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor, idOf,
-  imageOf, makeArrow, makeGenPlaceholder, nextSlot, textOf, type El,
+  alive, assetData, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, idOf,
+  imageOf, isText, makeArrow, makeGenPlaceholder, nextSlot, textOf, type El,
 } from './scene'
-import { instruction, planSelection } from './selection'
+import { instruction, planSelection, type CanvasPlan } from './selection'
 import { CanvasDocSync } from './sync'
+import { lifeOf, liveGet } from '../model/live'
+import { resizableKind, type Source as ResizeSource } from '../campaign/resizeSelection'
 import { frameText } from './text'
 
-
-export interface CanvasSnapshot {
-  elements: El[]
-  files: BinaryFiles
-}
+/** The scene as this browser keeps it (engine-owned shape; core/canvasAdapter.ts). */
+export type { CanvasSnapshot } from './core/canvasAdapter'
 
 export const OTHER_VIEWS: View[] = ['three-quarter', 'side', 'back']
 const NODE = { w: 300, h: 400 }
@@ -41,40 +52,78 @@ export interface GeneratePreview {
   drawings: number
   notes: string[]
   pending: number
+  /** The sketch area it exports (a person's frame counts: it becomes one), with its size label. */
+  sketch?: { label: string; aspect: Aspect; frame: boolean }
+  /** More than one area: one Generate takes one. */
+  areas: number
+  /** The crop warning when the relay's crop would take most of the picture (frame-aspect, open question 7). */
+  cropLine?: string
+}
+
+/** What a Generate did: sent a job, or (a sketch with no words and nothing linked) asked first. */
+export type GenerateResult = { jobId: string } | { ask: Ask }
+
+const ONE_AREA = 'Pick one sketch area for one Generate.'
+
+/** A named picture moved to its role's board: what moved, where, and how to put it back. */
+export interface Routed {
+  ids: string[]
+  frameId: string
+  title: string
+  before: Map<string, Partial<El>>
 }
 
 export class CanvasController {
-  readonly api: ExcalidrawImperativeAPI
+  private readonly canvas: CanvasAdapter
   private readonly s: Services
   private readonly processing = new Set<string>()
-  /** File ids restoreFiles has looked for once already. */
+  /** Pictures (by sha256) restoreFiles has looked for once already. */
   private readonly restoreTried = new Set<string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private syncTimer: ReturnType<typeof setTimeout> | null = null
   /** Deletes and their undo (ours or Excalidraw's Ctrl+Z) kept in step with the document. */
   readonly sync: CanvasDocSync
+  /** Each Drawing's members as last seen (ids, and boxes from the frame's corner), so a change re-exports its picture. */
+  private readonly drawnSeen = new Map<string, string>()
 
-  constructor(api: ExcalidrawImperativeAPI, services: Services) {
-    this.api = api
+  constructor(canvas: CanvasAdapter, services: Services) {
+    this.canvas = canvas
     this.s = services
-    this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId) })
+    this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId), drawnBy: () => this.person() })
+    this.reportLife()
     this.sync.gens(this.els())
+    this.sync.sketches(this.els())
+    void this.sync.nodes(this.els())
+    void this.refreshDrawings()
+    void this.sync.texts(this.els())
+  }
+
+  /** The canvas this controller works on (Resize… places its results on it). */
+  get canvasAdapter(): CanvasAdapter {
+    return this.canvas
   }
 
   private els(): El[] {
-    return this.api.getSceneElementsIncludingDeleted() as El[]
+    return this.canvas.elements({ includeDeleted: true })
+  }
+
+  /** The scene's elements that are not deleted. */
+  liveElements(): El[] {
+    return this.canvas.elements()
   }
 
   private setEls(els: El[], undoable = true) {
-    this.api.updateScene({ elements: els, captureUpdate: undoable ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER })
+    this.canvas.transact(() => els, { undoable })
   }
 
   private patchEl(id: string, fn: (e: El) => El, undoable = false) {
     this.setEls(this.els().map((e) => (e.id === id ? fn(e) : e)), undoable)
   }
 
+  /** The document as the canvas has it alive (model/live.ts): no reference of a deleted picture. */
   private doc(): ProductionDocument {
-    return this.s.doc.get()
+    this.reportLife()
+    return liveGet(this.s.doc)
   }
 
   /** The element of a node (pic, drawn, note or gen) by its node id. */
@@ -87,23 +136,23 @@ export class CanvasController {
   /**
    * Put back the pictures of image elements whose file the scene lacks: a canvas that came from the
    * server (features/personal-workspaces.clan) carries its elements only. Each picture is found by
-   * the node's asset, else by the file id made from its hash, among this browser's blobs.
+   * the node's asset, else by the document's assets the engine recognises it as, among this browser's blobs.
    */
   async restoreFiles(): Promise<number> {
-    const files = this.api.getFiles()
-    const lacking = alive(this.els()).filter((e) => e.type === 'image' && (e as ExcalidrawImageElement).fileId
-      && !files[(e as ExcalidrawImageElement).fileId!] && !this.restoreTried.has((e as ExcalidrawImageElement).fileId!)) as ExcalidrawImageElement[]
-    if (!lacking.length) return 0
-    for (const el of lacking) this.restoreTried.add(el.fileId!)
-    const byFileId = new Map(this.doc().assets.map((a) => [fileIdFor(a.sha256) as string, a.sha256]))
-    const add: Parameters<ExcalidrawImperativeAPI['addFiles']>[0] = []
-    for (const el of lacking) {
-      const c = cd(el) as { asset?: string } | undefined
-      const sha = c?.asset ?? byFileId.get(el.fileId!)
-      const blob = sha ? await getBlob(sha) : undefined
-      if (sha && blob) add.push({ ...(await fileData(sha, blob)), id: el.fileId! })
+    const known = Object.keys(this.doc().assets)
+    const lacking = new Set<string>()
+    for (const e of alive(this.els())) {
+      const img = this.canvas.imageOf(e, known)
+      if (img?.sha256 && !img.loaded && !this.restoreTried.has(img.sha256)) lacking.add(img.sha256)
     }
-    if (add.length) this.api.addFiles(add)
+    if (!lacking.size) return 0
+    for (const sha of lacking) this.restoreTried.add(sha)
+    const add: CanvasAsset[] = []
+    for (const sha of lacking) {
+      const blob = await getBlob(sha)
+      if (blob) add.push(await assetData(sha, blob))
+    }
+    if (add.length) this.canvas.addAssets(add)
     return add.length
   }
 
@@ -113,15 +162,26 @@ export class CanvasController {
   }
 
   async save() {
-    const elements = this.els().filter((e) => !e.isDeleted)
-    const used = new Set(elements.map((e) => (e as ExcalidrawImageElement).fileId).filter(Boolean) as string[])
-    const files: BinaryFiles = {}
-    for (const [k, v] of Object.entries(this.api.getFiles())) if (used.has(k)) files[k] = v
-    await idbPut('kv', this.s.project.canvasKey, { elements, files } satisfies CanvasSnapshot)
+    await idbPut('kv', this.s.project.canvasKey, this.canvas.serialize())
+  }
+
+  /**
+   * Tell the document's readers which nodes are alive on the canvas (model/live.ts): a reference whose
+   * picture is deleted stops counting at once, and comes back with the canvas's undo. Nothing is written.
+   */
+  reportLife() {
+    const ids = new Set<string>()
+    for (const e of this.canvas.elements()) {
+      ids.add(e.id)
+      const own = idOf(e)
+      if (own) ids.add(own)
+    }
+    lifeOf(this.s.doc).set(ids)
   }
 
   /** Called on every scene change (throttled by the component). */
   onChange() {
+    this.reportLife()
     this.scheduleSave()
     void this.intakePictures()
     void this.restoreFiles().catch(() => {})
@@ -130,14 +190,19 @@ export class CanvasController {
   }
 
   private syncNow() {
+    this.reportLife()
     if (this.syncTimer) clearTimeout(this.syncTimer)
     this.syncTimer = null
     void this.sync.gens(this.els())
+    void this.sync.sketches(this.els())
+    void this.sync.nodes(this.els())
+    void this.refreshDrawings().catch((e) => console.warn('Could not update a drawing’s picture', e))
+    void this.sync.texts(this.els())
   }
 
   // ── delete and undo ──
 
-  /** What deleting these elements takes with it: a drawing's strokes, and the arrows to and from them. */
+  /** What deleting these elements takes with it: a drawing's strokes, and the arrows and links to and from them. */
   private deletionOf(ids: string[]): string[] {
     const els = alive(this.els())
     const out = new Set(ids)
@@ -148,6 +213,9 @@ export class CanvasController {
     for (const e of els) {
       const c = cd(e)
       if (c?.kind === 'provenance' && (owned.has(c.from) || owned.has(c.to))) out.add(e.id)
+      // A link or arrow bound to something that goes, goes with it (canvas-edit-tools).
+      const b = e as El & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null }
+      if ((b.startBinding?.elementId && out.has(b.startBinding.elementId)) || (b.endBinding?.elementId && out.has(b.endBinding.elementId))) out.add(e.id)
     }
     return [...out]
   }
@@ -157,56 +225,69 @@ export class CanvasController {
     const gone = this.deletionOf(ids)
     if (!gone.length) return null
     const els = this.els()
-    const shown = alive(els).filter((e) => gone.includes(e.id) && cd(e)?.kind !== 'provenance' && !e.frameId)
-    const b = bounds(shown.length ? shown : alive(els).filter((e) => gone.includes(e.id)))
-    const label = shown.length === 1 ? (cd(shown[0])?.kind === 'gen' ? 'Image deleted' : 'Deleted') : `${shown.length} deleted`
-    this.setEls(els.map((e) => (gone.includes(e.id) ? newElementWith(e, { isDeleted: true }) : e)))
-    this.api.updateScene({ appState: { selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER })
+    // What the person picked: not the strokes, arrows and links that went along with it.
+    const shown = alive(els).filter((e) => gone.includes(e.id) && (ids.includes(e.id) || cd(e)?.kind !== 'link') && cd(e)?.kind !== 'provenance' && !(e.frameId && gone.includes(e.frameId)))
+    const node = shown.length === 1 ? cd(shown[0])?.kind : undefined
+    const NODE_WORD: Record<string, string> = { script: 'Script deleted', storyboard: 'Storyboard deleted', video: 'Video deleted', gen: 'Image deleted', link: 'Link deleted' }
+    // A link is drawn between its ends, wherever its own box says: the chip goes between them.
+    const byId = new Map(alive(els).map((e) => [e.id, e]))
+    const placed = shown.flatMap((e) => {
+      const ends = e as El & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null }
+      const a = cd(e)?.kind === 'link' ? byId.get(ends.startBinding?.elementId ?? '') : undefined
+      const z = cd(e)?.kind === 'link' ? byId.get(ends.endBinding?.elementId ?? '') : undefined
+      return a && z ? [a, z] : [e]
+    })
+    const b = bounds(placed.length ? placed : alive(els).filter((e) => gone.includes(e.id)))
+    const label = shown.length === 1 ? NODE_WORD[node ?? ''] ?? 'Deleted' : `${shown.length} deleted`
+    this.setEls(els.map((e) => (gone.includes(e.id) ? this.canvas.patch(e, { isDeleted: true }) : e)))
+    this.canvas.select([])
     this.syncNow()
     return { ids: gone, at: { x: b.minX + b.w / 2, y: b.minY + b.h / 2 }, label }
   }
 
   /** Undo a delete from the inline Undo (Ctrl+Z does the same through Excalidraw). */
   undelete(ids: string[]) {
-    this.setEls(this.els().map((e) => (ids.includes(e.id) && e.isDeleted ? newElementWith(e, { isDeleted: false }) : e)))
+    this.setEls(this.els().map((e) => (ids.includes(e.id) && e.isDeleted ? this.canvas.patch(e, { isDeleted: false }) : e)))
     this.syncNow()
   }
 
   /** The selected elements that the Delete key and 🗑 act on: everything but the tool's arrows. */
   deletable(selected: El[]): El[] {
-    return selected.filter((e) => cd(e)?.kind !== 'provenance')
+    const out = selected.filter((e) => cd(e)?.kind !== 'provenance')
+    // A sketch area takes the ink drawn in it (the rule its move uses, boards/fitting): left behind,
+    // the drawing lay loose where the white area had been (owner, 2026-10-15).
+    const areas = out.filter((e) => cd(e)?.kind === 'sketch')
+    if (!areas.length) return out
+    const live = alive(this.els())
+    const loose = live.filter((e) => !e.frameId || boardFrame(live, e.frameId))
+    const ids = new Set(out.map((e) => e.id))
+    for (const a of areas) for (const m of membersOf(loose as unknown as Boxed[], boxOf(a as unknown as Boxed)) as unknown as El[]) {
+      if (!ids.has(m.id)) { ids.add(m.id); out.push(m) }
+    }
+    return out
   }
 
   // ── pictures: downscale ≤1536 px, hash, keep as a node ──
 
   private addAsset(sha: string, blob: Blob, origin: 'uploaded' | 'drawn', size?: { w: number; h: number }) {
     systemUpdate(this.s.doc, (d) => {
-      if (!d.assets.some((a) => a.sha256 === sha)) {
-        d.assets.push({ sha256: sha, kind: 'image', mime: blob.type || 'image/png', bytes: blob.size, ...(size ?? {}), origin, locations: [idbLocation(sha)] })
+      if (!d.assets[sha]) {
+        d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, ...(size ?? {}), origin, locations: [idbLocation(sha)] }
       }
     }, 'add picture')
   }
 
   private async intakePictures() {
-    const files = this.api.getFiles()
-    const fresh = alive(this.els()).filter(
-      (e) => e.type === 'image' && !cd(e) && (e as ExcalidrawImageElement).fileId && files[(e as ExcalidrawImageElement).fileId!] && !this.processing.has(e.id),
-    ) as ExcalidrawImageElement[]
+    const fresh = alive(this.els()).filter((e) => e.type === 'image' && !cd(e) && !this.processing.has(e.id) && this.canvas.imageDataURL(e))
     for (const el of fresh) {
       this.processing.add(el.id)
       try {
-        const file = files[el.fileId!]
-        const original = await dataURLToBlob(file.dataURL)
-        const { blob, w, h, changed } = await downscale(original)
+        const original = await dataURLToBlob(this.canvas.imageDataURL(el)!)
+        const { blob, w, h } = await downscale(original)
         const sha = await putBlob(blob)
-        let fileId = el.fileId!
-        if (changed) {
-          const data = await fileData(sha, blob)
-          this.api.addFiles([data])
-          fileId = data.id
-        }
+        this.canvas.addAssets([await assetData(sha, blob)])
         const customData: CustomData = { kind: 'pic', id: newId('node'), asset: sha }
-        this.patchEl(el.id, (e) => newElementWith(e as ExcalidrawImageElement, { fileId, status: 'saved', customData }), true)
+        this.patchEl(el.id, (e) => this.canvas.patch(this.canvas.withAsset(e, sha), { customData }), true)
         this.addAsset(sha, blob, 'uploaded', { w, h })
       } catch (e) {
         console.warn('Could not take in a picture', e)
@@ -223,12 +304,16 @@ export class CanvasController {
     if (!strokes.length) return null
     const b = bounds(strokes)
     const pad = 16
-    const blob = (await downscale(await exportElements(strokes, this.api.getFiles()))).blob
+    const blob = (await downscale(await exportElements(this.canvas, strokes))).blob
     const sha = await putBlob(blob)
-    const [frame] = convertToExcalidrawElements(
-      [{ type: 'frame', x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: 'Drawing', children: [], customData: { kind: 'drawn', id: newId('node'), asset: sha } }],
+    const made = this.canvas.frameAround(
+      { x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: 'Drawing', customData: { kind: 'drawn', id: newId('node'), asset: sha } },
     )
-    const next = els.map((e) => (ids.includes(e.id) ? newElementWith(e, { frameId: frame.id }) : e))
+    // Ink drawn on a board is on it (board-move): the Drawing made of it stays on that board, so it moves with it.
+    const home = strokes[0].frameId ?? null
+    const onBoard = !!home && strokes.every((e) => (e.frameId ?? null) === home) && !!boardFrame(els, home)
+    const frame = onBoard ? this.canvas.patch(made, { frameId: home }) : made
+    const next = els.map((e) => (ids.includes(e.id) ? this.canvas.patch(e, { frameId: frame.id }) : e))
     this.setEls([frame, ...next]) // frames sit below their children
     this.addAsset(sha, blob, 'drawn')
     return frame
@@ -241,16 +326,34 @@ export class CanvasController {
       const c = cd(f) as Extract<CustomData, { kind: 'drawn' }>
       const kids = childrenOf(els, f.id).filter((k) => k.type !== 'text')
       if (!kids.length) continue
-      const blob = (await downscale(await exportElements(kids, this.api.getFiles()))).blob
+      const blob = (await downscale(await exportElements(this.canvas, kids))).blob
       const sha = await putBlob(blob)
       if (sha === c.asset) continue
-      this.patchEl(f.id, (e) => newElementWith(e, { customData: { ...c, asset: sha } }))
+      this.patchEl(f.id, (e) => this.canvas.patch(e, { customData: { ...c, asset: sha } }))
       this.addAsset(sha, blob, 'drawn')
       // A name on the drawing follows its new picture.
       systemUpdate(this.s.doc, (d) => {
-        for (const r of d.refs) if (r.node === c.id) r.asset = sha
+        for (const r of Object.values(d.refs)) if (r.node === c.id) r.asset = sha
       }, 'name')
     }
+  }
+
+  /**
+   * Re-export the Drawings whose strokes changed since they were last seen: a stroke joined,
+   * left, moved, was scaled or erased (features/container-select.clan). Moving a whole Drawing
+   * changes nothing here. The first sight of a Drawing only records it.
+   */
+  async refreshDrawings() {
+    const els = alive(this.els())
+    const changed: string[] = []
+    for (const f of els.filter((e) => cd(e)?.kind === 'drawn')) {
+      const kids = childrenOf(els, f.id).filter((k) => k.type !== 'text')
+      const seen = kids.map((k) => `${k.id}:${k.x - f.x},${k.y - f.y},${k.width},${k.height}`).sort().join(' ')
+      const was = this.drawnSeen.get(f.id)
+      this.drawnSeen.set(f.id, seen)
+      if (was !== undefined && was !== seen) changed.push(f.id)
+    }
+    if (changed.length) await this.refreshDrawn(changed)
   }
 
   /** Give a text element a node id, so arrows can name it. */
@@ -259,24 +362,33 @@ export class CanvasController {
     const c = cd(el)
     if (c?.kind === 'note') return c.id
     const id = newId('node')
-    this.patchEl(elId, (e) => newElementWith(e, { customData: { kind: 'note', id } }))
+    this.patchEl(elId, (e) => this.canvas.patch(e, { customData: { kind: 'note', id } }))
     return id
   }
 
   // ── Generate from any selection ──
 
   /** What a Generate on these elements would use (for the popover). */
-  preview(elIds: string[]): GeneratePreview {
+  preview(elIds: string[], model?: string): GeneratePreview {
     const doc = this.doc()
-    const plan = planSelection(this.els(), elIds)
+    const els = this.els()
+    const frames = this.userFramesIn(elIds)
+    const plan = planSelection(els, elIds.filter((id) => !frames.some((f) => f.id === id)))
+    const areas = plan.sketches.map((s) => ({ aspect: doc.sketches[s.sketchId]?.aspect ?? this.aspectOfEl(els.find((e) => e.id === s.elId)!), frame: false }))
+      .concat(frames.map((f) => ({ aspect: this.aspectOfEl(f), frame: true })))
+    const area = areas.length === 1 ? areas[0] : undefined
+    const loss = area ? cropLoss(area.aspect, model) : 0
     return {
       inputs: plan.images.map((i) => {
-        const r = doc.refs.find((x) => x.node === i.nodeId)
+        const r = this.nameOn(i.nodeId, doc)
         return { nodeId: i.nodeId, kind: i.kind, ...(r ? { name: nameOf(r) } : {}) }
       }),
-      drawings: plan.strokes.length ? 1 : 0,
+      drawings: plan.strokes.length && !area ? 1 : 0,
       notes: plan.notes.map((n) => n.text),
       pending: plan.pending.length,
+      areas: areas.length,
+      ...(area ? { sketch: { label: aspectLabel(area.aspect), aspect: area.aspect, frame: area.frame } } : {}),
+      ...(loss > BIG_CROP ? { cropLine: BIG_CROP_LINE } : {}),
     }
   }
 
@@ -292,15 +404,30 @@ export class CanvasController {
    * One new image from the selected nodes and the typed words. `at` is the spot the participant
    * clicked (top-left of the new node); without it the node goes beside the selection.
    */
-  /** `modelChoice`: the model picked on the Generate popover (absent: the routed default). */
-  async generate(elIds: string[], typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice } = {}) {
-    const doc = this.doc()
+  /** `modelChoice`: the model picked on the Generate popover (absent: the routed default). `layoutOnly`: the
+   *  answer to Fin's ask on a sketch with no words ("Use it as a layout only"). */
+  async generate(elIds: string[], typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice; layoutOnly?: boolean } = {}): Promise<GenerateResult> {
     let plan = planSelection(this.els(), elIds)
     if (plan.pending.length) throw new Error('One of these is still being made. Wait for it, or leave it out.')
+    // A person's own frame used in Generate becomes a sketch area (one undo step), its strokes where they are.
+    const frames = this.userFramesIn(elIds)
+    if (frames.length + plan.sketches.length > 1) throw new Error(ONE_AREA)
+    if (frames.length) {
+      const area = await this.frameToArea(frames[0])
+      elIds = [...elIds.filter((id) => id !== frames[0].id), area.id]
+      plan = planSelection(this.els(), elIds)
+    }
+    if (plan.sketches.length) return await this.generateSketch(plan, typed, opts)
+    const doc = this.doc()
     // Loose strokes become one drawing node first.
     if (plan.strokes.length) {
       const frame = await this.wrapDrawing(plan.strokes)
-      if (frame) plan = planSelection(this.els(), [...elIds.filter((id) => !plan.strokes.includes(id)), frame.id])
+      if (frame) {
+        const kept = elIds.filter((id) => !plan.strokes.includes(id))
+        // The Drawing is selected, not its strokes, so the next drag moves it whole.
+        this.canvas.select([...kept, frame.id])
+        plan = planSelection(this.els(), [...kept, frame.id])
+      }
     }
     await this.refreshDrawn(plan.images.filter((i) => i.kind === 'drawn').map((i) => i.elId))
     plan = planSelection(this.els(), plan.images.map((i) => i.elId).concat(plan.notes.map((n) => n.elId)))
@@ -316,7 +443,7 @@ export class CanvasController {
     }
     const refs: JobInputRef[] = []
     for (const i of plan.images) {
-      const named = this.doc().refs.find((r) => r.node === i.nodeId)
+      const named = this.nameOn(i.nodeId)
       if (named) {
         refs.push(await namedInput(this.s.relay, this.doc(), named))
         continue
@@ -342,17 +469,254 @@ export class CanvasController {
       ...plan.notes.map((n, k) => ({ el: this.els().find((e) => e.id === n.elId)!, id: noteIds[k] })),
     ]
     const jobId = newId('job')
-    const slot = opts.at ? { ...opts.at, ...NODE } : nextSlot(this.els(), bounds(sources.map((s) => s.el)), NODE)
+    // The shape: the first picture or drawing's, snapped to the nearest of the four; words only, the storyboard's.
+    const first = plan.images[0]
+    const ratio: Ratio = first ? ratioFor(this.aspectOfImage(first.elId, first.asset)) : mainStoryboard(doc)?.ratio ?? '16:9'
+    const size = nodeSize(ratio === '16:9' ? { w: 16, h: 9 } : ratio === '9:16' ? { w: 9, h: 16 } : ratio === '1:1' ? { w: 1, h: 1 } : { w: 4, h: 5 })
+    const slot = opts.at ? { ...opts.at, ...size } : nextSlot(this.els(), bounds(sources.map((s) => s.el)), size)
     this.placeGen(jobId, 'generate', sources.map((s) => s.id), sources, slot)
-    const input = { refs, ratio: '4:5' as const, ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
+    const input = { refs, ratio, ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
     await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId, opts.modelChoice)
+    return { jobId }
+  }
+
+  // ── Resize selected pictures (features/resize-selection.clan) ──
+
+  /**
+   * The selected things Resize… and Make all sizes work from, each with its picture and pixels: a picture
+   * or result as it is, a Drawing frame's strokes rendered again, a sketch area's region exported (the
+   * scamp's picture). Things that are not one are left out.
+   */
+  async resizeSources(elIds: readonly string[], strokeIds: readonly string[] = []): Promise<ResizeSource[]> {
+    const out: ResizeSource[] = []
+    // Loose strokes: one drawing, its picture rendered now (for the preview); wrapped as a Drawing when sent.
+    const strokes = alive(this.els()).filter((e) => strokeIds.includes(e.id))
+    if (strokes.length) {
+      const blob = (await downscale(await exportElements(this.canvas, strokes))).blob
+      const sha = await putBlob(blob)
+      const dims = await this.pixelsOf(sha, { ...strokes[0], ...this.boxOf(strokes) } as El)
+      out.push({ elId: strokes[0].id, nodeId: '', asset: sha, ...dims, kind: 'drawing', strokes: strokes.map((e) => e.id) })
+    }
+    const drawn = alive(this.els()).filter((e) => elIds.includes(e.id) && cd(e)?.kind === 'drawn').map((e) => e.id)
+    if (drawn.length) await this.refreshDrawn(drawn)
+    for (const id of elIds) {
+      const e = alive(this.els()).find((x) => x.id === id)
+      const kind = e ? resizableKind(e) : null
+      if (!e || !kind) continue
+      const c = cd(e)!
+      if (kind === 'sketch') {
+        const area = await this.exportSketch(e)
+        out.push({ elId: e.id, nodeId: (c as { id: string }).id, asset: area.sha, w: area.w, h: area.h, kind })
+        continue
+      }
+      const asset = (c as { asset?: string }).asset
+      if (!asset) continue
+      const dims = await this.pixelsOf(asset, e)
+      const nodeId = (c as { id: string }).id
+      const named = this.nameOn(nodeId)
+      out.push({ elId: e.id, nodeId, asset, ...dims, kind, ...(named ? { named } : {}) })
+    }
+    return out
+  }
+
+  /** Loose strokes Resize… sends: wrapped as one Drawing frame (as Generate does), the source as it is then. */
+  async wrapForResize(src: ResizeSource): Promise<ResizeSource> {
+    if (!src.strokes?.length) return src
+    const frame = await this.wrapDrawing(src.strokes)
+    if (!frame) throw new Error('Those strokes are gone.')
+    const c = cd(frame) as { id: string; asset: string }
+    const dims = await this.pixelsOf(c.asset, frame)
+    return { elId: frame.id, nodeId: c.id, asset: c.asset, ...dims, kind: 'drawing' }
+  }
+
+  private boxOf(els: readonly El[]): { x: number; y: number; width: number; height: number } {
+    const b = bounds(els)
+    return { x: b.minX, y: b.minY, width: b.w, height: b.h }
+  }
+
+  /** A picture's pixels: as the document has them, else measured from this browser's copy, else its node's shape. */
+  private async pixelsOf(sha: string, el: El): Promise<{ w: number; h: number }> {
+    const a = this.doc().assets[sha]
+    if (a?.w && a?.h) return { w: a.w, h: a.h }
+    const blob = await getBlob(sha)
+    if (blob && typeof createImageBitmap !== 'undefined') {
+      try {
+        const bmp = await createImageBitmap(blob)
+        const dims = { w: bmp.width, h: bmp.height }
+        bmp.close?.()
+        return dims
+      } catch {
+        // not a picture this browser can read: the node's shape
+      }
+    }
+    return this.aspectOfEl(el)
+  }
+
+  /** A sketch area's picture: its region with its strokes, at its shape (as Generate sends it). */
+  private async exportSketch(areaEl: El): Promise<{ sha: string; w: number; h: number }> {
+    const els = alive(this.els())
+    const c = cd(areaEl) as { id: string }
+    const aspect = this.doc().sketches[c.id]?.aspect ?? this.aspectOfEl(areaEl)
+    const rect: Rect = { x: areaEl.x, y: areaEl.y, w: areaEl.width, h: areaEl.height }
+    const members = membersOf(els as unknown as Boxed[], rect).filter((e) => e.id !== areaEl.id)
+    const ex = exportPlan(rect, aspect)
+    const blob = await this.canvas.exportRegion({ rect, elementIds: members.map((e) => e.id), outW: ex.outW, outH: ex.outH, background: '#ffffff' })
+    const sha = await putBlob(blob)
+    this.addAsset(sha, blob, 'drawn', { w: ex.outW, h: ex.outH })
+    return { sha, w: ex.outW, h: ex.outH }
+  }
+
+  // ── sketch areas (features/frame-aspect.clan; ui-behaviour 3.7) ──
+
+  /** The person this browser acts for, as the document names them. */
+  private person(): string {
+    const me = this.s.ui.get().me
+    return me ? `human:${me.participantId}` : LOCAL_PERSON
+  }
+
+  /** An element's shape in whole units. */
+  private aspectOfEl(e: El): Aspect {
+    return { w: Math.max(1, Math.round(Math.abs(e.width))), h: Math.max(1, Math.round(Math.abs(e.height))) }
+  }
+
+  /** An image input's shape: its picture's measured size, else its node's. */
+  private aspectOfImage(elId: string, asset: string): Aspect {
+    const a = this.doc().assets[asset]
+    if (a?.w && a?.h) return { w: a.w, h: a.h }
+    const el = this.els().find((e) => e.id === elId)
+    return el ? this.aspectOfEl(el) : { w: 1, h: 1 }
+  }
+
+  /** The person's own Excalidraw frames this selection uses: selected, or holding a selected stroke. */
+  private userFramesIn(elIds: readonly string[]): El[] {
+    const live = new Map(alive(this.els()).map((e) => [e.id, e]))
+    const out = new Map<string, El>()
+    const own = (e: El | undefined) => !!e && e.type === 'frame' && !cd(e)
+    for (const id of elIds) {
+      const e = live.get(id)
+      if (!e) continue
+      if (own(e)) out.set(e.id, e)
+      else if (e.frameId && own(live.get(e.frameId))) out.set(e.frameId, live.get(e.frameId)!)
+    }
+    return [...out.values()]
+  }
+
+  /**
+   * A person's frame becomes a sketch area, in one undo step: a white area with the frame's exact
+   * bounds and aspect (and its ratio when it is one of the four), and the frame's strokes taken out
+   * of it where they are. Frames never used in Generate stay frames.
+   */
+  async frameToArea(frame: El): Promise<El> {
+    const sketchId = newId('sketch')
+    const aspect = this.aspectOfEl(frame)
+    const ratio = exactRatio(aspect)
+    const area = this.canvas.sketchArea({ x: frame.x, y: frame.y, w: frame.width, h: frame.height, sketchId })
+    // Later elements draw on top, and a frame sits AFTER its children, so the area goes before the first of
+    // the frame and its strokes, never at the frame's own slot (that covered the drawing: 2026-11-02).
+    const all = this.els()
+    const first = all.findIndex((e) => e.id === frame.id || e.frameId === frame.id)
+    const next: El[] = []
+    all.forEach((e, i) => {
+      if (i === first) next.push(area)
+      if (e.id === frame.id) next.push(this.canvas.patch(e, { isDeleted: true }))
+      else next.push(e.frameId === frame.id ? this.canvas.patch(e, { frameId: null }) : e)
+    })
+    this.setEls(next)
+    await systemUpdate(this.s.doc, (d) => {
+      d.sketches[sketchId] = { id: sketchId, v: 1, field_v: {}, aspect, ...(ratio ? { ratio } : {}), drawn_by: this.person() }
+    }, 'sketch area')
+    void this.sync.sketches(this.els())
+    return area
+  }
+
+  /** What an area's Generate sends: exactly the area, its strokes clipped to it, at its shape, as a layout. */
+  private async generateSketch(plan: CanvasPlan, typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice; layoutOnly?: boolean }): Promise<GenerateResult> {
+    const doc = this.doc()
+    const els = alive(this.els())
+    const s = plan.sketches[0]
+    const areaEl = els.find((e) => e.id === s.elId)
+    if (!areaEl) throw new Error('That sketch area is gone.')
+    const sketch = doc.sketches[s.sketchId]
+    const aspect = sketch?.aspect ?? this.aspectOfEl(areaEl)
+    const rect: Rect = { x: areaEl.x, y: areaEl.y, w: areaEl.width, h: areaEl.height }
+    // Words typed inside the area go as words, as a drawing's do.
+    const written = els.filter((e) => isText(e) && e.id !== areaEl.id && intersects(boxOf(e as unknown as Boxed), rect)).map((e) => textOf(e)).filter(Boolean)
+    const notes = plan.notes.filter((n) => !els.some((e) => e.id === n.elId && intersects(boxOf(e as unknown as Boxed), rect)))
+    const text = instruction(typed, [...notes, ...written.map((w) => ({ text: w }))])
+    const said = mentions(doc, text)
+    if (said.unknown.length) throw new Error(`@${said.unknown[0]} is not a name in this project. Name an image first, or check the spelling.`)
+    // Nothing says what it is: Fin asks first, and nothing is sent (or spent) until someone answers.
+    if (!text && !plan.images.length && !said.found.length && !opts.layoutOnly) return { ask: await this.askAboutSketch(s.sketchId) }
+
+    const limits = opts.limits ?? { max: 14, characters: 14 }
+    if (plan.images.length + 1 > limits.max) throw new Error(`Pick at most ${limits.max} pictures and drawings for one Generate.`)
+    await this.refreshDrawn(plan.images.filter((i) => i.kind === 'drawn').map((i) => i.elId))
+    const members = membersOf(els as unknown as Boxed[], rect).filter((e) => e.id !== areaEl.id)
+    const ex = exportPlan(rect, aspect)
+    const blob = await this.canvas.exportRegion({ rect, elementIds: members.map((e) => e.id), outW: ex.outW, outH: ex.outH, background: '#ffffff' })
+    const sha = await putBlob(blob)
+    this.addAsset(sha, blob, 'drawn', { w: ex.outW, h: ex.outH })
+    const refs: JobInputRef[] = [{ id: s.sketchId, role: 'layout', kind: 'drawing', asset: await assetRef(this.s.relay, sha) }]
+    for (const i of plan.images) {
+      const named = this.nameOn(i.nodeId)
+      if (named) refs.push(await namedInput(this.s.relay, this.doc(), named))
+      else refs.push({ id: i.nodeId, role: i.kind === 'pic' ? 'other' : 'character', kind: i.kind === 'drawn' ? 'drawing' : i.kind === 'gen' ? 'generated' : 'picture', asset: await assetRef(this.s.relay, i.asset) })
+    }
+    for (const r of said.found) if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(this.s.relay, this.doc(), r))
+
+    const noteIds = notes.map((n) => n.nodeId ?? this.noteId(n.elId))
+    const live = this.els()
+    const sources: { el: El; id: string }[] = [
+      { el: areaEl, id: s.sketchId },
+      ...plan.images.map((i) => ({ el: live.find((e) => e.id === i.elId)!, id: i.nodeId })),
+      ...notes.map((n, k) => ({ el: live.find((e) => e.id === n.elId)!, id: noteIds[k] })),
+    ]
+    const jobId = newId('job')
+    // The new frame sits to the right of the area, at its true shape.
+    const size = nodeSize(aspect)
+    const slot = opts.at ? { ...opts.at, ...size } : nextSlot(this.els(), bounds([areaEl]), size)
+    this.placeGen(jobId, 'generate', sources.map((x) => x.id), sources, slot)
+    const ratio = exactRatio(aspect)
+    const input: JobInput = { refs, ...(ratio ? { ratio } : { aspect }), ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
+    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'sketch', sketchId: s.sketchId }, jobId, opts.modelChoice)
+    return { jobId }
+  }
+
+  /**
+   * Put resized sketch areas back on their shape: anchored top-left, led by the width (core/sketch.ts
+   * lockAspect). Called once on pointer-up, as a system write, so the resize stays one undo step of
+   * the person's and two browsers correcting it write the same thing. Returns how many moved.
+   */
+  lockAreas(): number {
+    const d = this.doc()
+    let moved = 0
+    const next = this.els().map((e) => {
+      const c = cd(e)
+      if (c?.kind !== 'sketch' || e.isDeleted || e.type !== 'rectangle') return e
+      const s = d.sketches[c.id]
+      const r = s && lockAspect({ x: e.x, y: e.y, w: e.width, h: e.height }, s.aspect)
+      if (!r) return e
+      moved++
+      return this.canvas.patch(e, { height: r.h })
+    })
+    if (moved) this.setEls(next, false)
+    return moved
+  }
+
+  /** Fin's ask on a sketch with no words and nothing linked: an asks[id] row on the sketch, with no job. */
+  private async askAboutSketch(sketchId: string): Promise<Ask> {
+    const open = Object.values(this.doc().asks).find((a) => a.node.kind === 'sketch' && a.node.id === sketchId && a.state === 'open' && !a.job_id)
+    if (open) return open
+    const ask = sketchAsk(sketchId)
+    await systemUpdate(this.s.doc, (d) => { d.asks[ask.id] = ask }, SKETCH_ASK)
+    return ask
   }
 
   // ── names: key_variant on any image ──
 
   /** The name on a node, if it has one. */
-  nameOn(nodeId: string) {
-    return this.doc().refs.find((r) => r.node === nodeId)
+  nameOn(nodeId: string, doc = this.doc()): NamedRef | undefined {
+    return refsList(doc).find((r) => r.node === nodeId)
   }
 
   /**
@@ -367,76 +731,181 @@ export class CanvasController {
     if (!img?.asset) throw new Error('Name a picture once it is finished.')
     const asset = img.asset
     const name = `${key}_${variant}`
-    systemUpdate(this.s.doc, (d) => {
+    const write = (d: ProductionDocument) => {
       const now = new Date().toISOString()
-      const mine = d.refs.find((r) => r.node === nodeId)
-      const other = d.refs.find((r) => nameOf(r) === name && r !== mine)
+      const refs = Object.values(d.refs)
+      const mine = refs.find((r) => r.node === nodeId)
+      const other = refs.find((r) => nameOf(r) === name && r !== mine)
+      // A ref has its key's role; a new key gets `role`.
+      let k = keyNamed(d, key)
+      if (!k) {
+        const id = newId('key')
+        k = d.keys[id] = { id, v: 1, field_v: {}, key, role }
+      }
       if (other) {
         // The name moves here: one image per name.
-        if (other.asset !== asset) markStale(d, other.asset, other.id, `@${name} now shows another image.`, now)
-        if (mine) d.refs = d.refs.filter((r) => r !== mine)
+        if (other.asset && other.asset !== asset) markStale(d, other.asset, { kind: 'ref', id: other.id }, `@${name} now shows another image.`, now)
+        if (mine) delete d.refs[mine.id]
         Object.assign(other, { asset, node: nodeId, named_at: now })
       } else if (mine) {
-        Object.assign(mine, { key, variant, named_at: now })
+        Object.assign(mine, { key, variant, role: k.role, named_at: now })
       } else {
-        d.refs.push({ id: newId('ref'), key, variant, asset, node: nodeId, named_at: now })
+        const id = newId('ref')
+        d.refs[id] = { id, v: 1, field_v: {}, key, variant, role: k.role, asset, node: nodeId, named_at: now }
       }
-      if (!d.keys.some((k) => k.key === key)) d.keys.push({ key, role })
-      d.keys = d.keys.filter((k) => d.refs.some((r) => r.key === k.key) || k.library)
-    }, 'name')
+      dropUnusedKeys(d)
+    }
+    // To its role's board first, with the document as the name will leave it, so the key-group reaction
+    // finds the view already in its row (and the move is this person's own undo step).
+    const after = structuredClone(this.doc())
+    write(after)
+    this.routeNamed([nodeId], after)
+    void systemUpdate(this.s.doc, (d) => write(d as unknown as ProductionDocument), 'name')
+  }
+
+  private readonly routedCbs = new Set<(r: Routed) => void>()
+
+  /** Hear when a named picture went to its role's board (the stage says "Moved to Characters · Undo"). */
+  onRouted(cb: (r: Routed) => void): () => void {
+    this.routedCbs.add(cb)
+    return () => void this.routedCbs.delete(cb)
+  }
+
+  /**
+   * After naming or a role (board-autolayout): each of these pictures (node ids) that sits on no board
+   * goes to the first board (by rank) for its role, in its key's row, as its own undoable canvas step
+   * (the name stays). With no such board it stays loose; one already on a board stays (BA3). Only the
+   * client that named it moves it (this runs from the local action, never from a remote change).
+   */
+  routeNamed(nodeIds: readonly string[], doc: ProductionDocument = this.doc()): Routed | null {
+    if (this.canvas.engine !== 'own') return null
+    const els = this.els()
+    const loose = nodeIds.map((n) => this.nodeEl(n)).filter((e): e is El => !!e && !e.isDeleted && !(e.frameId && boardFrame(els, e.frameId)))
+    if (!loose.length) return null
+    const role = roleOfElement(doc, loose[0])
+    const board = boardForRole(els, doc, role)
+    if (!board) return null
+    const ids = loose.filter((e) => boardForRole(els, doc, roleOfElement(doc, e))?.id === board.id).map((e) => e.id)
+    const before = new Map<string, Partial<El>>()
+    let fit: ReturnType<typeof placeOnBoard> | null = null
+    this.canvas.transact((all) => {
+      fit = placeOnBoard(all, doc, board.id, ids)
+      for (const id of fit.fields.keys()) {
+        const e = all.find((x) => x.id === id)
+        if (e) before.set(id, id === board.id ? { x: e.x, y: e.y, width: e.width, height: e.height } : { x: e.x, y: e.y, frameId: e.frameId ?? null })
+      }
+      return withFields(this.canvas, all, fit.fields)
+    }, { undoable: true })
+    if (fit) tellFull(board.id, fit)
+    const title = (board as El & { name?: string }).name || 'the board'
+    const r: Routed = { ids, frameId: board.id, title, before }
+    for (const cb of this.routedCbs) cb(r)
+    return r
+  }
+
+  /** Take a routing back (its Undo chip): the pictures and the board where they were. */
+  unroute(r: Routed) {
+    this.canvas.transact((all) => withFields(this.canvas, all, r.before), { undoable: true })
   }
 
   /** Take the name off a node. The key goes too when nothing else uses it and it was never published. */
   unname(nodeId: string) {
     systemUpdate(this.s.doc, (d) => {
-      d.refs = d.refs.filter((r) => r.node !== nodeId)
-      d.keys = d.keys.filter((k) => d.refs.some((r) => r.key === k.key) || k.library)
+      for (const r of Object.values(d.refs)) if (r.node === nodeId) delete d.refs[r.id]
+      dropUnusedKeys(d)
     }, 'name')
   }
 
+  /** A key's role, and its refs' with it. */
   setRole(key: Key, role: RefRole) {
-    systemUpdate(this.s.doc, (d) => {
-      const k = d.keys.find((x) => x.key === key)
+    const write = (d: ProductionDocument) => {
+      const k = keyNamed(d, key)
       if (k) k.role = role
-    }, 'name')
+      for (const r of Object.values(d.refs)) if (r.key === key) r.role = role
+    }
+    const after = structuredClone(this.doc())
+    write(after)
+    this.routeNamed(Object.values(after.refs).filter((r) => r.key === key && r.node).map((r) => r.node!), after)
+    void systemUpdate(this.s.doc, (d) => write(d as unknown as ProductionDocument), 'name')
   }
 
   // ── views: any named image is a key's front; the others are generated from it ──
 
-  /** Generate the other views of a key from its front (any image named key_front). */
-  async makeViews(key: Key, views: View[] = OTHER_VIEWS, modelChoice?: ModelChoice) {
+  /** What every view of a key is made from: its front's picture and shape, and the key's other named pictures. */
+  private async viewInputs(key: Key) {
     const doc = this.doc()
     const front = refByName(doc, `${key}_front`)
     if (!front) throw new Error(`Set an image as ${key}'s front first.`)
     const frontEl = front.node ? this.nodeEl(front.node) : undefined
+    if (!front.asset) throw new Error(`${key}'s front has no picture.`)
     const image = await assetRef(this.s.relay, front.asset)
     // Other variants of the key keep the identity (up to 3, KEY_EXTRAS in lib/names.ts).
     const refs: JobInputRef[] = []
-    for (const r of doc.refs.filter((x) => x.key === key && x.id !== front.id).slice(0, 3)) refs.push(await namedInput(this.s.relay, doc, r))
+    for (const r of refsList(doc).filter((x) => x.key === key && x.id !== front.id && x.asset).slice(0, 3)) refs.push(await namedInput(this.s.relay, doc, r))
+    // The views keep the front's exact shape, so they line up with it (frame-aspect).
+    const known = doc.assets[front.asset]
+    const aspect: Aspect = known?.w && known?.h ? { w: known.w, h: known.h } : frontEl ? this.aspectOfEl(frontEl) : { w: 4, h: 5 }
+    return { front, frontEl, image, refs, aspect, parents: front.node ? [front.node] : [] }
+  }
+
+  /** Generate the other views of a key from its front (any image named key_front). */
+  async makeViews(key: Key, views: View[] = OTHER_VIEWS, modelChoice?: ModelChoice) {
+    const { front, frontEl, image, refs, aspect, parents } = await this.viewInputs(key)
     const els = this.els()
     const anchor = frontEl ? bounds([frontEl]) : { maxX: 0, minY: 0 }
+    const size = nodeSize(aspect)
     // A row to the right of the front, clear of anything already there.
-    const slot = nextSlot(els, anchor, { w: NODE.w * views.length + 40 * (views.length - 1), h: NODE.h })
+    const slot = nextSlot(els, anchor, { w: size.w * views.length + 40 * (views.length - 1), h: size.h })
     const placed: { jobId: string; view: View }[] = []
+    let prev: El | undefined
     let x = slot.x
     for (const view of views) {
       const jobId = newId('job')
-      const parents = front.node ? [front.node] : []
-      const gen = makeGenPlaceholder(jobId, 'view', parents, { x, y: slot.y }, NODE, view)
-      x += NODE.w + 40
-      let all = [...this.els(), gen]
+      let gen = makeGenPlaceholder(this.canvas, jobId, 'view', parents, { x, y: slot.y }, size, view)
+      x += size.w + 40
+      let all = this.onSourceBoard([...this.els(), gen], gen, frontEl, prev)
+      gen = all.find((e) => e.id === gen.id) ?? gen
       if (frontEl && front.node) {
-        const arrow = makeArrow(frontEl, gen, front.node, jobId, 0, true)
-        all = bindArrow([...all, arrow], arrow)
+        const arrow = makeArrow(this.canvas, frontEl, gen, front.node, jobId, 0, true)
+        all = this.canvas.bindArrow([...all, arrow], arrow)
       }
       this.setEls(all)
+      prev = all.find((e) => e.id === gen.id)
       placed.push({ jobId, view })
     }
     this.reveal([...placed.map((p) => p.jobId), ...(frontEl ? [frontEl.id] : [])])
-    for (const p of placed) {
-      // Same ratio as the front, so the views line up (the relay refuses a view without one).
-      await this.s.runner.submit('view', { view: p.view, image, ...(refs.length ? { refs } : {}), ratio: '4:5' }, front.node ? [front.node] : [], { for: 'canvas' }, p.jobId, modelChoice)
+    // Every view is written down at once, before any of them is answered: one at a time, a reload
+    // while the first was being directed left the others placed and never sent (2026-10-15).
+    // The front's own shape: the relay asks for the nearest size and crops back to it.
+    await Promise.all(placed.map((p) => this.s.runner.submit('view', { view: p.view, image, ...(refs.length ? { refs } : {}), aspect }, parents, { for: 'canvas' }, p.jobId, modelChoice)))
+  }
+
+  /** Make a view whose placeholder never started (runner.adopt), into that same placeholder. */
+  async remakeView(jobId: string, modelChoice?: ModelChoice) {
+    const c = cd(this.nodeEl(jobId))
+    if (c?.kind !== 'gen' || c.op !== 'view' || !c.view) throw new Error('This is not a view.')
+    const key = c.parentIds[0] ? this.nameOn(c.parentIds[0])?.key : undefined
+    if (!key) throw new Error('Its front has no name now: name the front, then make the views again.')
+    const { image, refs, aspect, parents } = await this.viewInputs(key)
+    await this.s.runner.submit('view', { view: c.view, image, ...(refs.length ? { refs } : {}), aspect }, parents, { for: 'canvas' }, jobId, modelChoice)
+  }
+
+  /**
+   * Placeholders with no job in the document and none running here (the page closed before it was
+   * written down): each is asked of the relay, which either has it (it is followed and lands) or never
+   * got it (its card says so). Run when the canvas opens.
+   */
+  async recoverPlaceholders(): Promise<number> {
+    const doc = this.doc()
+    let n = 0
+    for (const e of alive(this.els())) {
+      const c = cd(e)
+      if (c?.kind !== 'gen' || c.state === 'completed' || this.canvas.imageOf(e)?.sha256) continue
+      if (doc.jobs[c.id] || this.s.runner.liveInfo(c.id)) continue
+      const r = await this.s.runner.adopt(c.id, c.parentIds)
+      if (r === 'adopted' || r === 'unstarted') n++
     }
+    return n
   }
 
   // ── the library: a key's refs out to the workspace, and back into a document ──
@@ -444,15 +913,16 @@ export class CanvasController {
   /** Publish a key's refs as the next library version. */
   async publish(key: Key) {
     const doc = this.doc()
-    const k = doc.keys.find((x) => x.key === key)
-    const refs = doc.refs.filter((r) => r.key === key)
+    const k = keyNamed(doc, key)
+    const refs = refsList(doc).filter((r) => r.key === key && r.asset)
     if (!k || !refs.length) throw new Error(`Name at least one image ${key}_… first.`)
     const out = []
-    for (const r of refs) out.push({ variant: r.variant, asset: await assetRef(this.s.relay, r.asset) })
-    const entry = await this.s.relay.publish(key, { role: k.role, baseVer: k.library?.ver ?? 0, refs: out })
+    for (const r of refs) out.push({ variant: r.variant, asset: await assetRef(this.s.relay, r.asset!) })
+    const shelf = k.library?.shelf ?? AGENCY_SHELF
+    const entry = await this.s.relay.publish(key, { kind: 'key', role: k.role, baseVer: k.library?.ver ?? 0, refs: out }, shelf)
     systemUpdate(this.s.doc, (d) => {
-      const kk = d.keys.find((x) => x.key === key)
-      if (kk) kk.library = { workspace: entry.workspace, ver: entry.ver, by: entry.by, at: entry.at }
+      const kk = keyNamed(d, key)
+      if (kk) kk.library = libraryCopy(entry)
     }, 'publish')
   }
 
@@ -462,49 +932,52 @@ export class CanvasController {
    * document already has are replaced, and what was made from them is marked out of date.
    */
   async importEntry(entry: LibraryEntry) {
-    const files: Parameters<ExcalidrawImperativeAPI['addFiles']>[0] = []
+    const pictures: CanvasAsset[] = []
     const got: { variant: Variant; sha: string; w: number; h: number }[] = []
-    for (const r of entry.refs) {
+    for (const r of entry.refs ?? []) {
       const blob = await this.s.relay.fetchOutput(r.asset)
       const sha = await putBlob(blob)
       await putBlobAs(r.asset.sha256, blob)
-      files.push(await fileData(sha, blob))
+      pictures.push(await assetData(sha, blob))
       const bmp = await createImageBitmap(blob).catch(() => null)
       got.push({ variant: r.variant, sha, w: bmp?.width ?? NODE.w, h: bmp?.height ?? NODE.h })
       bmp?.close?.()
       this.addAsset(sha, blob, 'uploaded', bmp ? { w: bmp.width, h: bmp.height } : undefined)
     }
-    this.api.addFiles(files)
-    const [vx0, vy0] = getVisibleSceneBounds(this.api.getAppState())
+    this.canvas.addAssets(pictures)
+    const { minX: vx0, minY: vy0 } = this.canvas.visibleBounds()
     const start = nextSlot(this.els(), { maxX: vx0, minY: vy0 + 40 }, { w: (NODE.w + 40) * got.length, h: NODE.h })
     const nodes: { nodeId: string; variant: Variant; sha: string }[] = []
     const added: El[] = []
     got.forEach((g, i) => {
       const nodeId = newId('node')
       const h = Math.round((NODE.w * g.h) / Math.max(1, g.w))
-      const [el] = convertToExcalidrawElements(
-        [{ type: 'image', x: start.x + i * (NODE.w + 40), y: start.y, width: NODE.w, height: h, fileId: fileIdFor(g.sha), customData: { kind: 'pic', id: nodeId, asset: g.sha } }],
-      )
-      added.push(newElementWith(el as ExcalidrawImageElement, { status: 'saved' }))
+      added.push(this.canvas.imageNode(
+        { x: start.x + i * (NODE.w + 40), y: start.y, width: NODE.w, height: h, assetSha: g.sha, customData: { kind: 'pic', id: nodeId, asset: g.sha }, status: 'saved' },
+      ))
       nodes.push({ nodeId, variant: g.variant, sha: g.sha })
     })
     for (const el of added) this.processing.add(el.id)
     this.setEls([...this.els(), ...added])
     systemUpdate(this.s.doc, (d) => {
       const now = new Date().toISOString()
+      const lib = libraryCopy(entry)
+      let k = keyNamed(d, entry.key)
+      if (!k) {
+        const id = newId('key')
+        k = d.keys[id] = { id, v: 1, field_v: {}, key: entry.key, role: entry.role ?? 'character' }
+      }
+      Object.assign(k, { ...(entry.role ? { role: entry.role } : {}), library: lib })
       for (const n of nodes) {
-        const existing = d.refs.find((r) => r.key === entry.key && r.variant === n.variant)
+        const existing = Object.values(d.refs).find((r) => r.key === entry.key && r.variant === n.variant)
         if (existing) {
-          if (existing.asset !== n.sha) markStale(d, existing.asset, existing.id, `@${entry.key}_${n.variant} was replaced from the library.`, now)
-          Object.assign(existing, { asset: n.sha, node: n.nodeId, named_at: now })
+          if (existing.asset && existing.asset !== n.sha) markStale(d, existing.asset, { kind: 'ref', id: existing.id }, `@${entry.key}_${n.variant} was replaced from the library.`, now)
+          Object.assign(existing, { asset: n.sha, node: n.nodeId, role: k.role, named_at: now })
         } else {
-          d.refs.push({ id: newId('ref'), key: entry.key, variant: n.variant, asset: n.sha, node: n.nodeId, named_at: now })
+          const id = newId('ref')
+          d.refs[id] = { id, v: 1, field_v: {}, key: entry.key, variant: n.variant, role: k.role, asset: n.sha, node: n.nodeId, named_at: now }
         }
       }
-      const lib = { workspace: entry.workspace, ver: entry.ver, by: entry.by, at: entry.at }
-      const k = d.keys.find((x) => x.key === entry.key)
-      if (k) Object.assign(k, { role: entry.role, library: lib })
-      else d.keys.push({ key: entry.key, role: entry.role, library: lib })
     }, 'import')
     this.reveal(added.map((e) => e.id))
   }
@@ -512,24 +985,55 @@ export class CanvasController {
   // ── jobs that land on the canvas ──
 
   private placeGen(jobId: string, op: 'generate' | 'view', parentIds: string[], sources: { el: El; id: string }[], at: { x: number; y: number; w: number; h: number }, view?: View) {
-    const gen = makeGenPlaceholder(jobId, op, parentIds, at, { w: at.w, h: at.h }, view)
-    let els = [...this.els(), gen]
+    let gen = makeGenPlaceholder(this.canvas, jobId, op, parentIds, at, { w: at.w, h: at.h }, view)
+    let els = this.onSourceBoard([...this.els(), gen], gen, sources[0]?.el)
+    gen = els.find((e) => e.id === gen.id) ?? gen
     sources.forEach((s, i) => {
-      const arrow = makeArrow(s.el, gen, s.id, jobId, i)
-      els = bindArrow([...els, arrow], arrow)
+      const arrow = makeArrow(this.canvas, s.el, gen, s.id, jobId, i)
+      els = this.canvas.bindArrow([...els, arrow], arrow)
     })
     this.setEls(els)
     this.reveal([gen.id, ...sources.map((s) => s.el.id)])
   }
 
-  /** Make sure new results land in view: zoom out to them and their inputs when any part is off-screen. */
+  /**
+   * A new result whose source sits on a board goes on that board too (owner decision 2026-10-15):
+   * beside the source when that is clear (the board growing toward it), else the board's next free slot,
+   * or just outside a board that cannot grow. `els` already holds `gen`; returns them with it placed.
+   */
+  private onSourceBoard(els: El[], gen: El, source: El | undefined, after?: El): El[] {
+    const frameId = source?.frameId
+    if (!frameId || !boardFrame(els, frameId)) return els
+    // The next free slot after what it follows (the source, or the view made before it), in that row;
+    // wrapping below the row from the source's left (owner BA1, BA4). Nothing already there moves.
+    const box = (e: El) => ({ x: e.x, y: e.y, w: e.width, h: e.height })
+    const fit = fitInto(els, frameId, [[gen.id]], undefined, () => ({ after: box(after ?? source), rowStart: source.x }))
+    tellFull(frameId, fit)
+    return withFields(this.canvas, els, fit.fields)
+  }
+
+  /** Screen pixels on the left the chrome covers (the board rail): reveal keeps new results right of it. */
+  private inset = 0
+
+  setInset(px: number) {
+    this.inset = px
+  }
+
+  /**
+   * Make sure new results land in view with their inputs. On our own engine: the smallest pan (a zoom out
+   * only when they don't fit), right of the rail. Elsewhere: zoom out to them when any part is off-screen.
+   */
   reveal(ids: string[]) {
     const els = alive(this.els()).filter((e) => ids.includes(e.id))
     if (!els.length) return
-    const [vx0, vy0, vx1, vy1] = getVisibleSceneBounds(this.api.getAppState())
     const b = bounds(els)
+    if (this.canvas.engine === 'own') {
+      bringIntoView(this.canvas, b, this.inset, !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches))
+      return
+    }
+    const { minX: vx0, minY: vy0, maxX: vx1, maxY: vy1 } = this.canvas.visibleBounds()
     if (b.minX >= vx0 && b.minY >= vy0 && b.maxX <= vx1 && b.maxY <= vy1) return
-    this.api.scrollToContent(els, { fitToViewport: true, viewportZoomFactor: 0.85, animate: true })
+    this.canvas.fit(els, { zoomFactor: 0.85, animate: true })
   }
 
   /** A failed canvas job was retried as a new job: move the node and its arrows to the new id. */
@@ -539,17 +1043,17 @@ export class CanvasController {
     if (!old) return
     const c = cd(old) as Extract<CustomData, { kind: 'gen' }>
     this.sync.moved.add(oldId)
-    const gen = makeGenPlaceholder(newJobId, c.op, c.parentIds, { x: old.x, y: old.y }, { w: old.width, h: old.height }, c.view)
-    let next: El[] = els.map((e) => (e.id === old.id ? newElementWith(e, { isDeleted: true }) : e))
+    const gen = makeGenPlaceholder(this.canvas, newJobId, c.op, c.parentIds, { x: old.x, y: old.y }, { w: old.width, h: old.height }, c.view, c.shape)
+    let next: El[] = els.map((e) => (e.id === old.id ? this.canvas.patch(e, { isDeleted: true }) : e))
     next.push(gen)
     const into = els.filter((e) => !e.isDeleted && cd(e)?.kind === 'provenance' && (cd(e) as { to: string }).to === oldId)
     into.forEach((a, i) => {
       const from = (cd(a) as { from: string }).from
       const fromEl = byOwnId(els, from)
-      next = next.map((e) => (e.id === a.id ? newElementWith(e, { isDeleted: true }) : e))
+      next = next.map((e) => (e.id === a.id ? this.canvas.patch(e, { isDeleted: true }) : e))
       if (fromEl) {
-        const arrow = makeArrow(fromEl, gen, from, newJobId, i, c.op === 'view')
-        next = bindArrow([...next, arrow], arrow)
+        const arrow = makeArrow(this.canvas, fromEl, gen, from, newJobId, i, c.op === 'view')
+        next = this.canvas.bindArrow([...next, arrow], arrow)
       }
     })
     this.setEls(next, false)
@@ -561,14 +1065,53 @@ export class CanvasController {
     const next = this.els().map((e) => {
       const c = cd(e)
       if (c?.kind !== 'gen' || e.isDeleted) return e
-      const j = doc.jobs.find((x) => x.id === c.id)
+      const j = doc.jobs[c.id]
       if (j && j.state !== c.state && j.state !== 'completed') {
         changed = true
-        return newElementWith(e, { customData: { ...c, state: j.state } })
+        return this.canvas.patch(e, { customData: { ...c, state: j.state } })
       }
       return e
     })
     if (changed) this.setEls(next, false)
+  }
+
+  /**
+   * A canvas picture shows its current version (features/edit-canvas-pictures.clan): the document says
+   * which (its frames with node, the latest picked); the element follows, in the same spot and width,
+   * never as a canvas undo step, so the document's undo and redo of an Apply move the canvas too.
+   * Returns how many pictures changed.
+   */
+  async syncPictureVersions(doc: ProductionDocument = this.doc()): Promise<number> {
+    const want = new Map<string, string>()
+    for (const f of Object.values(doc.frames)) if (f.node) want.set(f.node, currentPictureFrame(doc, f.node)!.asset)
+    if (!want.size) return 0
+    const change = alive(this.els()).filter((e) => {
+      const img = imageOf(e)
+      const sha = img && img.kind !== 'drawn' ? want.get(img.id) : undefined
+      return !!sha && sha !== img!.asset
+    })
+    if (!change.length) return 0
+    const add: CanvasAsset[] = []
+    for (const e of change) {
+      const sha = want.get(imageOf(e)!.id)!
+      const blob = await getBlob(sha)
+      if (blob) add.push(await assetData(sha, blob))
+    }
+    if (add.length) this.canvas.addAssets(add)
+    const ids = new Set(change.map((e) => e.id))
+    let n = 0
+    const next = this.els().map((e) => {
+      if (!ids.has(e.id)) return e
+      const c = cd(e) as Extract<CustomData, { kind: 'pic' | 'gen' }>
+      const sha = want.get(c.id)
+      if (!sha || c.asset === sha) return e
+      n++
+      const a = doc.assets[sha]
+      const height = a?.w && a?.h ? Math.round((e.width * a.h) / a.w) : e.height
+      return this.canvas.patch(this.canvas.withAsset(e, sha), { height, customData: { ...c, asset: sha } })
+    })
+    if (n) this.setEls(next, false)
+    return n
   }
 
   /** A canvas job finished: put the image in its node and size it. A view of a key is named key_view when that name is free. */
@@ -579,24 +1122,57 @@ export class CanvasController {
     const blob = await getBlob(out.sha256)
     if (!blob) return
     await putBlobAs(out.sha256, blob)
-    const data = await fileData(out.sha256, blob)
-    this.api.addFiles([data])
+    this.canvas.addAssets([await assetData(out.sha256, blob)])
     const c = cd(el) as Extract<CustomData, { kind: 'gen' }>
     const h = out.w && out.h ? Math.round((el.width * out.h) / out.w) : el.height
-    this.patchEl(el.id, (e) => newElementWith(e as ExcalidrawImageElement, {
-      fileId: fileIdFor(out.sha256), status: 'saved', height: h,
+    const landed = this.els().map((e) => (e.id === el.id ? this.canvas.patch(this.canvas.withAsset(e, out.sha256), {
+      height: h,
       customData: { ...c, state: 'completed', asset: out.sha256, ...(job.kind === 'mock' ? { mock: true } : {}) },
-    }))
-    if (c.op === 'view' && c.view) {
-      const source = this.doc().refs.find((r) => r.node === c.parentIds[0])
-      const key = source?.key
-      if (key && !refByName(this.doc(), `${key}_${c.view}`)) this.name(job.jobId, key, c.view)
+    }) : e))
+    // Landed taller than its placeholder on a board: the board grows to hold it when it can.
+    this.setEls(el.frameId ? withFields(this.canvas, landed, holdFields(landed, el.frameId)) : landed, false)
+    // The landing is the crew's decision, citing the job and the refs it used, as for frames and clips.
+    const why = landingWhy(this.s.doc, job.jobId, c.op === 'view' && c.view ? `the ${c.view} view on the canvas` : 'a picture on the canvas')
+    if (this.s.doc.record) {
+      const docId = this.s.doc.documentId?.()
+      await this.s.doc.record(why.action, why.rationale, {
+        agent: why.agent, cites: why.cites, ...(docId ? { targets: [`${docId}#jobs[${job.jobId}]`] } : {}),
+      }).catch((e) => console.warn('could not record the canvas landing', e))
     }
+    // A Generate on a sketch area lands as a frame made from it, with its crop (frame-aspect).
+    const p = this.doc().jobs[job.jobId] ? purposeOf(this.doc().jobs[job.jobId]) : null
+    if (p?.for === 'sketch') await systemUpdate(this.s.doc, (d) => { applySketchFrame(d, job, p.sketchId) }, 'frame')
+    if (c.op === 'view' && c.view) this.claimViewName(job.jobId)
+  }
+
+  /**
+   * A finished view takes its name (key_view, the key of the front it was made from) when the name
+   * is free, or when the picture holding it is gone from the canvas: views made again after the
+   * first ones were deleted stayed unnamed, so they formed no key group (no Stack, no link to the
+   * Script as one character; owner, 2026-10-15). A name a picture on the canvas still holds stays.
+   */
+  claimViewName(nodeId: string): boolean {
+    const el = this.nodeEl(nodeId)
+    const c = el ? cd(el) : undefined
+    if (c?.kind !== 'gen' || c.op !== 'view' || !c.view || !imageOf(el)?.asset || this.nameOn(nodeId)) return false
+    const key = c.parentIds[0] ? this.nameOn(c.parentIds[0])?.key : undefined
+    if (!key) return false
+    const held = refByName(this.doc(), `${key}_${c.view}`)
+    if (held?.node && this.nodeEl(held.node)) return false
+    this.name(nodeId, key, c.view)
+    return true
+  }
+
+  /** On open: every finished, unnamed view takes its free name (claimViewName). How many did. */
+  claimViewNames(): number {
+    let n = 0
+    for (const e of alive(this.els())) if (this.claimViewName(e.id)) n++
+    return n
   }
 
   scrollTo(nodeId: string) {
     const el = byOwnId(this.els(), nodeId)
-    if (el) this.api.scrollToContent(el, { animate: true, fitToViewport: true, viewportZoomFactor: 0.5 })
+    if (el) this.canvas.fit([el], { zoomFactor: 0.5, animate: true })
   }
 
   /** The text of a note node or loose text element (for labels). */
@@ -604,6 +1180,23 @@ export class CanvasController {
     const el = this.els().find((e) => e.id === elId)
     return el ? textOf(el) : ''
   }
+}
+
+/** What a document keeps of the library version it copied (key.library). */
+function libraryCopy(entry: LibraryEntry) {
+  return { shelf: entry.shelf, key: entry.key, ver: entry.ver, by: entry.by, at: entry.at }
+}
+
+/** Keys no ref uses and never published go. */
+function dropUnusedKeys(d: ProductionDocument) {
+  const used = new Set(Object.values(d.refs).map((r) => r.key))
+  for (const k of Object.values(d.keys)) if (!used.has(k.key) && !k.library) delete d.keys[k.id]
+}
+
+/** A node's size on the canvas at this shape: 300 wide (as before), at most 400 tall. */
+export function nodeSize(aspect: Aspect): { w: number; h: number } {
+  const w = aspect.h > aspect.w * (NODE.h / NODE.w) ? Math.round((NODE.h * aspect.w) / aspect.h) : NODE.w
+  return { w, h: Math.round((w * aspect.h) / aspect.w) }
 }
 
 export function viewLabel(v: View): string {

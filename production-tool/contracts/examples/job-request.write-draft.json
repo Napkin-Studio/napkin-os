@@ -1,0 +1,32 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7C00000000000000000WR02",
+  "op": "write",
+  "projectId": "proj_01K7A00000000000000000PR01",
+  "nonce": "n_wr1te0002",
+  "purpose": "Skye drafts the first scene from a line",
+  "node": {
+    "kind": "script",
+    "id": "script_01K7A00000000000000000SC01"
+  },
+  "parentIds": [],
+  "input": {
+    "write": {
+      "intent": "draft",
+      "mode": "draft",
+      "target": {
+        "kind": "scene",
+        "id": "scene_01K7A00000000000000000SN01"
+      },
+      "base_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "instruction": "A runner drinks Lumen water at dawn on the cliffs.",
+      "lines": [],
+      "context": {
+        "script_title": "First Light",
+        "target_s": 15,
+        "neighbours": "",
+        "refs": []
+      }
+    }
+  }
+}

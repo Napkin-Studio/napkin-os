@@ -1,0 +1,18 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000CQ02",
+  "op": "clip",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_quality02a",
+  "purpose": "clip for shot 1",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "parentIds": [
+    "job_01K7B00000000000000000CQ01"
+  ],
+  "input": {},
+  "quality": "final",
+  "promoteFrom": "job_01K7B00000000000000000CQ01"
+}

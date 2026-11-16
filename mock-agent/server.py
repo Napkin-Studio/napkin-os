@@ -11,23 +11,25 @@ both listen on :8787, so run one at a time.
 Behind `serve.py --mock-agent` since 2026-09-29: `serve.py` with no flag starts the
 real engine (audit C7); NAPKIN_BACKEND=api starts this agent on the Messages API.
 
-Two ways it can reach Claude, chosen automatically:
+It drafts through the Anthropic Messages API (streamed), with credentials
+(ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or an `ant auth login` profile;
+engine/.env is read) and the `anthropic` package. It is the only path that can
+put the digest prefix behind a cache breakpoint, which is most of what a draft
+costs. On your Claude Code login instead, point it at the one local model
+backend (features/model-mock.clan), which answers through `claude -p`:
 
-  * **The Anthropic Messages API** — whenever there are credentials
-    (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or an `ant auth login` profile;
-    engine/.env is read) and the `anthropic` package is installed. Preferred:
-    it is the only path that can put the digest prefix behind a cache
-    breakpoint, which is most of what a draft costs.
-  * **The Claude Code CLI** — headless `claude -p`, billed to your Claude
-    subscription, no key and no packages needed. Also the only path that can
-    run agentic retrieval, which needs Read/Grep/Glob.
+    scripts/model-local run python3 mock-agent/server.py     # or: python3 serve.py --mock-agent
+
+Until 2026-10-15 it also drafted through its own `claude -p` call when there
+were no credentials; that wrapper is gone. Agentic retrieval (below) still
+runs Claude Code itself, since it needs Read/Grep/Glob.
 
 Run:
     python3 mock-agent/server.py            # listens on :8787 (the default agent URL)
     NAPKIN_MOCK_MODEL=sonnet python3 mock-agent/server.py
     ANTHROPIC_MODEL=claude-opus-4-8 python3 mock-agent/server.py
 
-Install the API path with:  pip install -r mock-agent/requirements.txt
+Install with:  pip install -r mock-agent/requirements.txt
 
 It prints how much context each call carries, so we can see how much an agent
 actually needs.
@@ -230,9 +232,10 @@ def approx_tokens(chars: int) -> int:
 # read back at 0.1x on every draft and regenerate after. Concatenating the two
 # into one user message — as the CLI path must — throws that away.
 #
-# Backend B (the Claude Code CLI, below) stays for two reasons: it needs no key
-# and no packages, and agentic retrieval needs Read/Grep/Glob, which one
-# Messages call cannot do without a tool loop.
+# Locally, ANTHROPIC_BASE_URL points this same client at the one local model
+# backend (scripts/model-local), which answers on the developer's Claude Code
+# login. The Claude Code CLI (below) runs only agentic retrieval, which needs
+# Read/Grep/Glob, which one Messages call cannot do without a tool loop.
 
 # Friendly name -> model id. Ids are complete as written; never date-suffixed.
 MODEL_IDS = {
@@ -275,6 +278,13 @@ def _credentials() -> bool:
         return False
 
 
+def _local_backend() -> bool:
+    """ANTHROPIC_BASE_URL is a loopback URL: the local model backend (scripts/model-local)."""
+    from urllib.parse import urlsplit
+    host = urlsplit(os.environ.get("ANTHROPIC_BASE_URL", "").strip()).hostname or ""
+    return host in ("localhost", "::1") or host.startswith("127.")
+
+
 HAS_CREDENTIALS = _credentials()
 USE_API = HAS_CREDENTIALS and _sdk_installed()
 # Deployments set NAPKIN_BACKEND=api: the Claude Code CLI is a developer's
@@ -282,7 +292,7 @@ USE_API = HAS_CREDENTIALS and _sdk_installed()
 # In this mode there is no CLI fallback and a missing key is fatal at boot,
 # which is where you want to find out — not on someone's first draft.
 API_ONLY = os.environ.get("NAPKIN_BACKEND", "").strip().lower() == "api"
-BACKEND_LABEL = f"api {api_model()}" if USE_API else f"cli {MODEL}"
+BACKEND_LABEL = f"{'local' if _local_backend() else 'api'} {api_model()}"
 
 _CLIENT = [None]
 # Cleared for the process the first time the account turns out not to have the
@@ -370,40 +380,35 @@ def call_claude_api(prefix: str, suffix: str, task: str = "draft_brief") -> dict
 
 
 def synthesize(prefix: str, suffix: str, task: str = "draft_brief") -> dict:
-    """The drafting call: API when there are credentials, else the CLI."""
-    if USE_API:
-        try:
-            return call_claude_api(prefix, suffix, task)
-        except Exception as e:
-            if API_ONLY or not shutil.which("claude"):
-                raise
-            print(f"  … API call failed ({e.__class__.__name__}: {e}) "
-                  "— falling back to the Claude Code CLI", flush=True)
-    if API_ONLY:
-        raise RuntimeError("NAPKIN_BACKEND=api but no usable Anthropic credentials")
-    return call_claude(prefix + suffix)
+    """The drafting call, on the Messages API (the key, or the local model backend)."""
+    if not USE_API:
+        raise RuntimeError("no Anthropic credentials or no `anthropic` package: set ANTHROPIC_API_KEY, or run on "
+                           "your Claude Code login with scripts/model-local run python3 mock-agent/server.py")
+    return call_claude_api(prefix, suffix, task)
 
 
-# ── Backend B: the Claude Code CLI ───────────────────────────────────────────
+# ── Agentic retrieval: the Claude Code CLI with Read/Grep/Glob ───────────────
 
 def cli_env() -> dict:
-    """The environment for `claude -p`: the parent's, minus ANTHROPIC_API_KEY. With the
-    key present the CLI bills the key (which may have no credit) instead of the logged-in
-    account this backend exists to use (audit F14). engine/parse_brief.py does the same."""
+    """The environment for `claude -p`: the parent's, minus ANTHROPIC_API_KEY and
+    ANTHROPIC_BASE_URL. With the key present the CLI bills the key (which may have no
+    credit) instead of the logged-in account (audit F14); with the base URL it would call
+    the local model backend, which refuses tools."""
     env = {**os.environ}
     env.pop("ANTHROPIC_API_KEY", None)
+    env.pop("ANTHROPIC_BASE_URL", None)
     return env
 
 
-def call_claude(prompt: str, attempts: int = 2, model=None, tools="",
+def call_claude(prompt: str, *, tools: str, attempts: int = 2, model=None,
                 max_turns=1, cwd=None, timeout=180):
-    """Run Claude Code headless; return the parsed JSON envelope. Retries once on
-    a transient non-zero exit (overload / rate limit hiccups).
+    """Run Claude Code headless with `tools`; return the parsed JSON envelope. Retries
+    once on a transient non-zero exit (overload / rate limit hiccups).
 
-    Defaults are the drafting call: no tools, one turn, single text completion.
-    The retrieval call passes tools="Read,Grep,Glob" and max_turns>1; `--tools`
+    Only agentic retrieval uses it: tools="Read,Grep,Glob" and max_turns>1; `--tools`
     also makes Claude Code ignore user/project settings and confines the file
-    tools to `cwd`, so the retriever can only see the staged corpus."""
+    tools to `cwd`, so the retriever can only see the staged corpus. Drafting is a
+    Messages call (synthesize)."""
     cmd = [
         "claude", "-p", prompt,
         "--model", model or MODEL,
@@ -808,21 +813,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if API_ONLY and not USE_API:
+    if not USE_API:
         missing = ("the `anthropic` package (pip install -r mock-agent/requirements.txt)"
                    if HAS_CREDENTIALS else
                    "ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN, or an `ant auth login` profile)")
-        sys.exit(f"NAPKIN_BACKEND=api, but {missing} is missing. Refusing to start.")
+        sys.exit(f"{missing} is missing. Refusing to start. On your Claude Code login instead: "
+                 "scripts/model-local run python3 mock-agent/server.py (or python3 serve.py --mock-agent).")
     print(f"Napkin agent on http://localhost:{PORT}  ({BACKEND_LABEL})")
     if API_ONLY:
-        print("  NAPKIN_BACKEND=api — no CLI fallback, digests only.")
-    if HAS_CREDENTIALS and not _sdk_installed():
-        print("  ! credentials found but the anthropic package is not installed —"
-              " falling back to the CLI.")
-        print("    pip install anthropic   (or: pip install -r mock-agent/requirements.txt)")
-    elif not USE_API:
-        print("  no Anthropic credentials — set ANTHROPIC_API_KEY (engine/.env is read)"
-              " or run `ant auth login` to use the API.")
+        print("  NAPKIN_BACKEND=api — digests only (no agentic retrieval).")
     if RETRIEVE == "agentic" and not shutil.which("claude"):
         print("  ! retrieval: agentic needs the `claude` CLI for Read/Grep/Glob"
               " — digests only.")

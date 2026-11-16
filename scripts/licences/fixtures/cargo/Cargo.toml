@@ -1,0 +1,7 @@
+# Fixture workspace for scripts/licences/test_check.py: per-root tiering.
+#   app (client root) -> lib (default features)
+#   srv (server root) -> lib with feature "net" -> netdep (optional)
+#   lib -> mac (proc macro: build tier), lib -> wasmonly (wasm32 only)
+[workspace]
+resolver = "2"
+members = ["app", "srv", "lib", "netdep", "mac", "wasmonly"]

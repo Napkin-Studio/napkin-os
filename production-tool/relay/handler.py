@@ -5,7 +5,11 @@
 
 Environment (infra/envs/hackathon/relay.tf):
   BUCKET, PUBLIC_BASE_URL (or PUBLIC_BASE_URL_PARAM, an SSM name), JOBS_TABLE, QUOTAS_TABLE, BLOCKED_TABLE,
-  STITCH_FUNCTION, SECRET_ARNS, CONFIG_KEY (default config.json)
+  TENANTS_TABLE, STITCH_FUNCTION, SECRET_ARNS, CONFIG_KEY (default config.json)
+
+SECRET_ARNS names TOKEN_SECRET too: the key napkin-web's X-Napkin-Identity assertions are signed
+with ("new,old" during a rotation). One EnvSecrets re-reads every secret at most every 5 minutes,
+called before each verification, so a rotation reaches warm instances (features/os-sign-in.clan).
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ import os
 import boto3
 
 import cards
+import identity
 from blobs import S3Blobs, s3_client
 from contracts import Contracts
 from director import load_director
@@ -48,11 +53,14 @@ def _build() -> Relay:
         name = os.environ["PUBLIC_BASE_URL_PARAM"]
         public_base = boto3.client("ssm").get_parameter(Name=name)["Parameter"]["Value"]
 
-    EnvSecrets()()  # keys into the environment before the adapters start
+    secrets = EnvSecrets()
+    secrets()  # keys into the environment before the adapters start
+    identity.use_secrets(secrets)  # and again (at most every 5 minutes) before each assertion check
     blobs = S3Blobs(bucket, public_base, client=s3)
     director = load_director()
     return Relay(
-        store=DynamoStore(os.environ["JOBS_TABLE"], os.environ["QUOTAS_TABLE"], os.environ["BLOCKED_TABLE"]),
+        store=DynamoStore(os.environ["JOBS_TABLE"], os.environ["QUOTAS_TABLE"], os.environ["BLOCKED_TABLE"],
+                          tenants_table=os.environ.get("TENANTS_TABLE")),
         blobs=blobs,
         registry=load_registry(),
         director=director,
@@ -83,7 +91,7 @@ def handler(event, context):
         body = base64.b64decode(body)
     elif isinstance(body, str):
         body = body.encode()
-    status, out, ctx = relay().http(method, path, event.get("headers") or {}, body)
+    status, out, ctx = relay().http(method, path, event.get("headers") or {}, body, event.get("rawQueryString") or "")
     ctx["kind"] = "request"
     print(json.dumps({k: v for k, v in ctx.items() if v is not None}, default=str))
     resp = {"statusCode": status, "headers": {"Content-Type": "application/json", "Cache-Control": "no-store"}}

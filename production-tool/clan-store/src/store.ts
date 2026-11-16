@@ -1,18 +1,24 @@
-// ClanDocumentStore: the Production Tool document as a real .clan.
+// ClanDocumentStore: the Production Tool document (contract 3) as a real .clan.
 //
 // napkin-wasm holds the archive; every write is a `/patch-data` with the
-// participant's handle as the agent, so the SDK records it in the decision
-// chain and checks it against the schema the document carries. Before it
-// gets there, the merged result is validated here against the locked
-// contract (ajv), so an invalid patch is refused with the contract's words
-// and leaves the document as it was.
+// writer's claim as the agent, so the SDK records it in the decision chain,
+// with the targets and cites the buses derive (contracts/collab.md §8), and
+// checks it against the schema the document carries. Before it gets there the
+// merged result is validated here against the contract (ajv) and the rules the
+// schema cannot say (integrity.ts), so a bad write is refused with the
+// contract's words and leaves the document as it was.
+//
+// The app writes through the buses (src/bus): field patches through
+// LocalPatchBus, live text through LocalTextBus. This store is what they call.
 import { parse as parseYaml } from 'yaml'
 import { APP_SCHEMA } from './app-template.gen'
-import { APP_ID, freshHost, route, type NapkinHost, type WasmSource } from './host'
-import { mergePatch } from './merge-patch'
+import { APP_ID, asBytes, freshHost, HostRefused, route, type NapkinHost, type RawResponse, type WasmSource } from './host'
+import { integrity } from './integrity'
+import { diffMergePatch, mergePatch } from './merge-patch'
+import { migrateToGenerations, needsGenerations } from './migrate'
 import { indexedDbPersistence, type Persistence } from './persist'
-import type { Doc, DocumentStore, Participant, Verdict, Why } from './types'
-import { assertValid, problems } from './validate'
+import { MAP_NAMES, type Doc, type DocumentStore, type Person, type Why } from './types'
+import { assertValid, InvalidDocument } from './validate'
 
 export interface ClanStoreOptions {
   /** Where napkin_wasm_bg.wasm comes from. Browser default: beside the glue. */
@@ -21,6 +27,12 @@ export interface ClanStoreOptions {
   persistence?: Persistence | null
   /** Saves after a write wait this long for the next one (ms). */
   saveDebounceMs?: number
+  /** Who is writing (recorded as human:<id>). Can be set later with setPerson(). */
+  person?: Person
+  /** Ids for a new project's first entities; tests pass a fixed one. */
+  newId?: (prefix: string) => string
+  /** The time, as ISO 8601. */
+  now?: () => string
 }
 
 /** One entry of agent/decision-chain.yaml, as `/chain` gives it. */
@@ -35,31 +47,160 @@ export interface ChainEntry {
   actor?: string
   claimed_agent?: string
   pinned?: boolean
+  targets?: string[]
+  cites?: string[]
+  reasoning?: Record<string, unknown>
   [k: string]: unknown
 }
 
-export type MirrorPost = (bytes: Uint8Array, meta: { handle: string; reason: 'interval' | 'accept' | 'manual' }) => Promise<void>
+/**
+ * Why the bytes are posted: the 5-minute interval, a lock (accept), a person's Save (manual), and,
+ * with the canvas checkpoint (features/engine-store.clan), a handoff and an export.
+ */
+export type MirrorReason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export'
 
-/** Verdict entries in the chain are written with this action shape:
- * `<kind> <target.kind> <target.id>`, the note as the rationale. */
-export function verdictAction(v: Verdict): string {
-  return `${v.kind} ${v.target.kind} ${v.target.id}`
+export type MirrorPost = (bytes: Uint8Array, meta: { handle: string; reason: MirrorReason }) => Promise<void>
+
+/**
+ * Called before the bytes leave at one of the four checkpoint moments (a mirror post of any reason,
+ * and exportClan as 'export'), so a quiet asset (the canvas checkpoint) can be written first.
+ */
+export type BeforeBytes = (reason: MirrorReason) => Promise<void>
+
+/**
+ * The store's public API (features/engine-store.clan): what ClanDocumentStore does on its own
+ * thread and what the store Worker's proxy (production-tool/web/src/store/client.ts) does from the
+ * main thread. The buses and the web app's ModelStore depend on this, never on the class.
+ */
+export interface ClanStoreApi {
+  load(): Promise<Doc | null>
+  open(bytes: Uint8Array): Promise<Doc>
+  create(init: { person: Person; title?: string; ratio?: string; target_s?: number; blank?: boolean }): Promise<Doc>
+  get(): Doc
+  documentId(): string
+  setPerson(person: Person): void
+  personClaim(): string
+  patch(mergePatchBody: object, why: Why): Promise<Doc>
+  record(entry: { action: string; rationale?: string; agent?: string; pinned?: boolean; targets?: string[]; cites?: string[] }, opts?: { once?: boolean }): Promise<boolean>
+  exportClan(): Promise<Uint8Array>
+  onChange(cb: (d: Doc) => void): () => void
+  chain(): Promise<ChainEntry[]>
+  flush(): Promise<void>
+  startMirror(post: MirrorPost, opts?: { everyMs?: number; onError?: (e: unknown) => void }): () => void
+  stopMirror(): void
+  mirrorNow(reason?: Exclude<MirrorReason, 'interval'>): Promise<void>
+  /** Store a binary under human/assets/<name> with no decision entry (a quiet write). */
+  writeAsset(name: string, bytes: Uint8Array): Promise<void>
+  /** The bytes of human/assets/<name>, or null. */
+  readAsset(name: string): Promise<Uint8Array | null>
+  setBeforeBytes(fn: BeforeBytes | null): void
+  dispose(): void
 }
 
-/** The data key named in a verdict's no-op `append_keys`. It is never in the
- * patch, so nothing is appended; it only lets a decision with no data change
- * through the host's no-op guard. See README "Gaps". */
-const VERDICT_GUARD_KEY = 'verdict'
+/** The contract this build reads. */
+export const CONTRACT = '3'
 
-const VERDICT_KINDS = new Set(['accept', 'reject', 'select'])
+/** A .clan made under another contract: refused, never read or overwritten (features/contract-v3.clan). */
+export class UnsupportedContract extends Error {
+  readonly found: string | null
+  constructor(found: string | null) {
+    super(found
+      ? `This project was made with an older version of the Production Tool (contract ${found}); this one reads contract ${CONTRACT}, so it cannot open it.`
+      : `This file is not a Production Tool project this build can read (contract ${CONTRACT}).`)
+    this.name = 'UnsupportedContract'
+    this.found = found
+  }
+}
+
+/** Who records the move to generations, and its decision (features/make-and-edit.clan). */
+export const MIGRATION_AGENT = 'clan-store'
+export const MIGRATION_ACTION = 'move takes and the edl to generations and the timeline'
+/** The schema a document holds for the one write that moves it: any object (the data is checked by ajv first). */
+const MOVING_SCHEMA = { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object' }
+
+/** The data key named in a record's no-op `append_keys`: never in the patch, so
+ * nothing is appended; it only lets a decision with no data change through the
+ * host's no-op guard. */
+const RECORD_GUARD_KEY = 'record'
 
 function recordKey(agent: string, action: string): string {
   return `${agent}\u0000${action}`
 }
 
-export class ClanDocumentStore implements DocumentStore {
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+/** The last id's time and random digits, so ids made in one millisecond still sort in the order
+ * they were made (a monotonic ULID). "The first created" (selectors' first(), mainScript) relies
+ * on it; without it two ids from the same millisecond sorted at random. */
+let lastMs = -1
+const lastRand: number[] = []
+
+/** A prefixed ULID (common id): 48 bits of time, 80 of randomness. Within one millisecond (or when
+ * the clock steps back) the random part counts up by one from the previous id. */
+export function newUlidId(prefix: string, now = Date.now()): string {
+  let ms = now
+  if (ms <= lastMs) {
+    ms = lastMs
+    let i = lastRand.length - 1
+    while (i >= 0 && lastRand[i] === 31) lastRand[i--] = 0
+    if (i >= 0) lastRand[i]++
+  } else {
+    const r = new Uint8Array(16)
+    crypto.getRandomValues(r)
+    lastRand.splice(0, lastRand.length, ...Array.from(r, (b) => b % 32))
+    lastMs = ms
+  }
+  let t = ''
+  let x = ms
+  for (let i = 0; i < 10; i++) {
+    t = CROCKFORD[x % 32] + t
+    x = Math.floor(x / 32)
+  }
+  return `${prefix}_${t}${lastRand.map((d) => CROCKFORD[d]).join('')}`
+}
+
+/** A new project's data. With `blank`, an empty document: the canvas starts blank and the person adds
+ * Script, Storyboard, Video and other nodes from the "+ Node" menu (owner 2026-11-03: a blank canvas,
+ * the user adds nodes as they please) — the app's new-project path asks for this. Otherwise the three
+ * stages a project used to be born with — a script driving a storyboard, the storyboard rendering a
+ * video — which an import and the tests still want. */
+export function newProjectData(args: { person: Person; title: string; newId: (p: string) => string; now: string; ratio?: string; target_s?: number; blank?: boolean }): Doc {
+  const { person, newId, now } = args
+  const doc = {
+    contract_version: '3',
+    app: 'production-tool',
+    project: { id: newId('proj'), tenant_id: person.tenant_id, title: args.title, created_by: `human:${person.id}`, created_at: now },
+    assets: {},
+    ...Object.fromEntries(MAP_NAMES.map((m) => [m, {}])),
+  } as unknown as Doc
+  if (args.blank) return doc
+  const ratio = args.ratio ?? '16:9'
+  const target_s = args.target_s ?? 15
+  const e = (id: string, rest: Record<string, unknown>) => ({ id, v: 1, field_v: {}, ...rest })
+  const script = newId('script')
+  const storyboard = newId('storyboard')
+  const video = newId('video')
+  const drives = newId('link')
+  const renders = newId('link')
+  doc.scripts[script] = e(script, { title: 'Script', target_s })
+  doc.storyboards[storyboard] = e(storyboard, { title: 'Storyboard', ratio, target_s })
+  doc.videos[video] = e(video, { title: 'Video', ratio, target_s, timeline: {} })
+  doc.links[drives] = e(drives, { from: { kind: 'script', id: script }, to: { kind: 'storyboard', id: storyboard }, role: 'drives' })
+  doc.links[renders] = e(renders, { from: { kind: 'storyboard', id: storyboard }, to: { kind: 'video', id: video }, role: 'renders' })
+  return doc
+}
+
+/** Refuse a write whose result breaks a rule the schema cannot say, unless the
+ * document already broke it (a restored document is never locked out). */
+export function assertIntegrity(before: Doc | null, after: Doc, what = 'the patched document') {
+  const had = new Set(before ? integrity(before) : [])
+  const fresh = integrity(after).filter((p) => !had.has(p))
+  if (fresh.length) throw new InvalidDocument(fresh, what)
+}
+
+export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
   private host: NapkinHost | null = null
   private doc: Doc | null = null
+  private docId: string | null = null
   private listeners = new Set<(d: Doc) => void>()
   private queue: Promise<unknown> = Promise.resolve()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -67,19 +208,28 @@ export class ClanDocumentStore implements DocumentStore {
   private readonly persistence: Persistence | null
   private readonly debounceMs: number
   private readonly wasm?: WasmSource
+  private readonly newId: (prefix: string) => string
+  private readonly now: () => string
+  private person: Person | null
   private mirror: { post: MirrorPost; timer: ReturnType<typeof setInterval> | null; lastPosted: string | null; onError: (e: unknown) => void } | null = null
   private revision = 0
   /** `agent action` of every entry in the chain, built on first need. */
   private recorded: Set<string> | null = null
+  private beforeBytes: BeforeBytes | null = null
 
   constructor(opts: ClanStoreOptions = {}) {
     this.wasm = opts.wasm
     this.persistence = opts.persistence === undefined ? indexedDbPersistence() : opts.persistence
     this.debounceMs = opts.saveDebounceMs ?? 300
+    this.person = opts.person ?? null
+    this.newId = opts.newId ?? ((p) => newUlidId(p))
+    this.now = opts.now ?? (() => new Date().toISOString())
   }
 
   // ── DocumentStore ─────────────────────────────────────────────────────────
 
+  /** Restore the last document. Throws UnsupportedContract (and keeps the saved
+   * bytes) when it was made under another contract. */
   load(): Promise<Doc | null> {
     return this.serial(async () => {
       let saved = null
@@ -94,7 +244,8 @@ export class ClanDocumentStore implements DocumentStore {
   }
 
   /** Open a .clan from bytes (an import, or an offline copy). It becomes the
-   * current document and is saved. */
+   * current document and is saved. Throws UnsupportedContract for another
+   * contract's document, leaving the current one (and the bytes) as they were. */
   open(bytes: Uint8Array): Promise<Doc> {
     return this.serial(async () => {
       const d = await this.openBytesNow(bytes)
@@ -103,28 +254,26 @@ export class ClanDocumentStore implements DocumentStore {
     })
   }
 
-  create(init: { participant: Participant }): Promise<Doc> {
+  /** Open bytes without making them current: what contract they hold, or the refusal. */
+  static contractOf(data: unknown): string | null {
+    const v = (data as { contract_version?: unknown } | null)?.contract_version
+    return typeof v === 'string' ? v : null
+  }
+
+  create(init: { person: Person; title?: string; ratio?: string; target_s?: number; blank?: boolean }): Promise<Doc> {
     return this.serial(async () => {
-      const { participant } = init
-      const first: Doc = {
-        contract_version: '2',
-        app: 'production-tool',
-        participant: { id: participant.id, handle: participant.handle },
-        stage: { current: 'character' },
-        assets: [],
-        keys: [],
-        refs: [],
-        jobs: [],
-      }
+      this.person = init.person
+      const first = newProjectData({ person: init.person, title: init.title ?? 'Untitled ad', newId: this.newId, now: this.now(), ratio: init.ratio, target_s: init.target_s, blank: init.blank })
       assertValid(first, 'the new document')
+      assertIntegrity(null, first, 'the new document')
       const h = await freshHost(this.wasm)
       try {
-        h.newDocument(APP_ID, `Production Tool · ${participant.handle}`)
+        h.newDocument(APP_ID, first.project.title)
+        const m = (parseYaml(h.entry('manifest.yaml')) ?? {}) as { document_id?: string; id?: string }
+        const docId = m.document_id || m.id
         route(h, '/patch-data', {
-          patch: first,
-          agent: participant.handle,
-          action: 'started the document',
-          rationale: '',
+          patch: first, agent: `human:${init.person.id}`, action: 'start the project', rationale: '',
+          ...(docId ? { targets: [`${docId}#project`] } : {}),
         })
       } catch (e) {
         h.free()
@@ -143,6 +292,26 @@ export class ClanDocumentStore implements DocumentStore {
     return this.doc
   }
 
+  /** The document id addresses start with (<doc-id>#…): stable across revisions. */
+  documentId(): string {
+    if (!this.docId) {
+      const m = (parseYaml(this.need().entry('manifest.yaml')) ?? {}) as { document_id?: string; id?: string }
+      this.docId = m.document_id || m.id || ''
+    }
+    return this.docId
+  }
+
+  /** Who is writing. */
+  setPerson(person: Person) {
+    this.person = person
+  }
+
+  /** The claim a person's write carries. */
+  personClaim(): string {
+    if (!this.person) throw new Error('no person: create() or setPerson() first')
+    return `human:${this.person.id}`
+  }
+
   patch(mergePatchBody: object, why: Why): Promise<Doc> {
     return this.serial(async () => {
       const h = this.need()
@@ -150,11 +319,14 @@ export class ClanDocumentStore implements DocumentStore {
         throw new TypeError('a merge patch is an object')
       }
       if (!why?.action?.trim()) throw new TypeError('why.action is required: it is the decision-chain entry')
-      const next = mergePatch(this.get(), mergePatchBody)
+      if ('upstream' in mergePatchBody) throw new InvalidDocument(['/upstream is read-only: the host writes it at spin-off'], 'the patch')
+      const before = this.get()
+      const next = mergePatch(before, mergePatchBody)
       assertValid(next, 'the patched document')
+      assertIntegrity(before, next)
       // A body without `agent` writes the data and no decision (the host's
       // rule), which is what a quiet write is.
-      const agent = why.agent?.trim() || this.get().participant.handle
+      const agent = why.agent?.trim() || this.personClaim()
       route(h, '/patch-data', why.quiet
         ? { patch: mergePatchBody }
         : {
@@ -163,9 +335,15 @@ export class ClanDocumentStore implements DocumentStore {
             action: why.action,
             rationale: why.rationale ?? '',
             ...(why.pinned ? { pinned: true } : {}),
+            ...(why.targets?.length ? { targets: why.targets } : {}),
+            ...(why.cites?.length ? { cites: why.cites } : {}),
+            ...(why.reasoning ? { reasoning: why.reasoning } : {}),
           })
       if (!why.quiet) this.recorded?.add(recordKey(agent, why.action))
-      this.doc = this.readData()
+      // The SDK applied the same RFC 7396 merge to the same data, so the result
+      // is `next`; reading data.yaml back would parse the whole document again
+      // on every write (store.test.ts checks the bytes reopen to the same data).
+      this.doc = next
       this.changed()
       this.scheduleSave()
       return this.doc
@@ -173,25 +351,26 @@ export class ClanDocumentStore implements DocumentStore {
   }
 
   /**
-   * A decision that changes no data: who did what, and why. With `once`, it is
-   * written only if the chain has no entry by the same agent with the same
-   * action (so a job's director and provider entries survive reloads and
-   * repeated polls without doubling). Resolves true when it was written.
+   * A decision that changes no data: pin_decision, an ignored check's note, a
+   * job that failed. With `once`, it is written only if the chain has no entry
+   * by the same agent with the same action. Resolves true when it was written.
    */
-  record(entry: { action: string; rationale?: string; agent?: string; pinned?: boolean }, opts: { once?: boolean } = {}): Promise<boolean> {
+  record(entry: { action: string; rationale?: string; agent?: string; pinned?: boolean; targets?: string[]; cites?: string[] }, opts: { once?: boolean } = {}): Promise<boolean> {
     return this.serial(async () => {
       const h = this.need()
       if (!entry?.action?.trim()) throw new TypeError('record: action is required')
-      const agent = entry.agent?.trim() || this.get().participant.handle
+      const agent = entry.agent?.trim() || this.personClaim()
       const key = recordKey(agent, entry.action)
       if (opts.once && this.recordedKeys(h).has(key)) return false
       route(h, '/patch-data', {
         patch: {},
-        append_keys: [VERDICT_GUARD_KEY],
+        append_keys: [RECORD_GUARD_KEY],
         agent,
         action: entry.action,
         rationale: entry.rationale ?? '',
         ...(entry.pinned ? { pinned: true } : {}),
+        ...(entry.targets?.length ? { targets: entry.targets } : {}),
+        ...(entry.cites?.length ? { cites: entry.cites } : {}),
       })
       this.recorded?.add(key)
       this.revision++
@@ -201,30 +380,47 @@ export class ClanDocumentStore implements DocumentStore {
     })
   }
 
-  verdict(v: Verdict): Promise<void> {
+  async exportClan(): Promise<Uint8Array> {
+    await this.runBeforeBytes('export')
+    await this.queue.catch(() => {})
+    return this.bytes()
+  }
+
+  /**
+   * Store a binary under human/assets/<name> through the host's /upload-asset with no agent: no
+   * decision entry. The data is unchanged, so listeners are not called; the bytes are saved and the
+   * next interval mirror posts them.
+   */
+  writeAsset(name: string, bytes: Uint8Array): Promise<void> {
     return this.serial(async () => {
       const h = this.need()
-      if (!VERDICT_KINDS.has(v?.kind)) throw new TypeError('verdict.kind is accept, reject or select')
-      if (!v.target?.kind || !v.target?.id) throw new TypeError('verdict.target needs kind and id')
-      route(h, '/patch-data', {
-        patch: {},
-        append_keys: [VERDICT_GUARD_KEY],
-        agent: this.get().participant.handle,
-        action: verdictAction(v),
-        rationale: v.note ?? '',
-        pinned: true,
-      })
-      this.recorded?.add(recordKey(this.get().participant.handle, verdictAction(v)))
+      const resp = h.handle('/upload-asset', `name=${encodeURIComponent(name)}`, bytes) as RawResponse
+      if (resp.status !== 200) throw new HostRefused(resp.status, new TextDecoder().decode(asBytes(resp.body)) || `/upload-asset: ${resp.status}`)
       this.revision++
-      this.changed()
       this.scheduleSave()
-      if (v.kind === 'accept' && this.mirror) void this.postMirror('accept')
     })
   }
 
-  async exportClan(): Promise<Uint8Array> {
+  /** The bytes of human/assets/<name>, or null when the document has none. */
+  async readAsset(name: string): Promise<Uint8Array | null> {
     await this.queue.catch(() => {})
-    return this.bytes()
+    const h = this.need()
+    const resp = h.handle(`/assets/${name}`, '', new Uint8Array()) as RawResponse
+    return resp.status === 200 ? asBytes(resp.body) : null
+  }
+
+  /** What runs before the bytes leave at a checkpoint moment (the canvas checkpoint). */
+  setBeforeBytes(fn: BeforeBytes | null): void {
+    this.beforeBytes = fn
+  }
+
+  private async runBeforeBytes(reason: MirrorReason) {
+    if (!this.beforeBytes || !this.host || !this.doc) return
+    try {
+      await this.beforeBytes(reason)
+    } catch (e) {
+      console.warn(`could not write before the ${reason} bytes`, e)
+    }
   }
 
   onChange(cb: (d: Doc) => void): () => void {
@@ -251,8 +447,7 @@ export class ClanDocumentStore implements DocumentStore {
 
   /**
    * Post the .clan bytes every `everyMs` (when something changed since the
-   * last post) and on each accept verdict. `post` is the caller's: the relay
-   * route it calls is a proposal (README, "Mirror"). Returns the stop.
+   * last post) and on mirrorNow('accept'). Returns the stop.
    */
   startMirror(post: MirrorPost, opts: { everyMs?: number; onError?: (e: unknown) => void } = {}): () => void {
     this.stopMirror()
@@ -269,7 +464,7 @@ export class ClanDocumentStore implements DocumentStore {
   }
 
   /** Post the bytes now, whatever changed (e.g. on a lock: reason 'accept'). */
-  mirrorNow(reason: 'accept' | 'manual' = 'manual'): Promise<void> {
+  mirrorNow(reason: Exclude<MirrorReason, 'interval'> = 'manual'): Promise<void> {
     return this.postMirror(reason)
   }
 
@@ -281,6 +476,7 @@ export class ClanDocumentStore implements DocumentStore {
     this.host?.free()
     this.host = null
     this.doc = null
+    this.docId = null
     this.listeners.clear()
   }
 
@@ -301,6 +497,7 @@ export class ClanDocumentStore implements DocumentStore {
     this.host?.free()
     this.host = h
     this.recorded = null
+    this.docId = null
   }
 
   private recordedKeys(h: NapkinHost): Set<string> {
@@ -313,33 +510,56 @@ export class ClanDocumentStore implements DocumentStore {
 
   private async openBytesNow(bytes: Uint8Array): Promise<Doc> {
     const h = await freshHost(this.wasm)
-    h.upload(bytes, 'production-tool')
-    // A document keeps the schema it was made with; one made under an older schema moves to the
-    // app's when it opens (2026-10-09: scripts grew from 600 to 1500 characters, and saves of the
-    // longer script were rolled back). Loosening only, so the data already there still fits.
-    let upgraded = false
-    try {
-      upgraded = !!route<{ changed?: boolean }>(h, '/patch-schema', APP_SCHEMA)?.changed
-    } catch (e) {
-      console.warn('kept the document\'s own schema: it did not move to the app\'s', e)
-    }
-    const prev = this.host
-    this.host = h
     let data: Doc
     try {
-      data = this.readData()
+      h.upload(bytes, 'production-tool')
+      data = readData(h)
     } catch (e) {
-      this.host = prev
       h.free()
       throw e
     }
-    const p = problems(data)
-    if (p.length) {
-      // Restored work is never thrown away; the next write must make it valid.
-      console.warn(`restored document does not match document.schema.json: ${p.join('; ')}`)
+    // Contract 3 reads contract 3 only. Nothing is written to a document made
+    // under another contract: not the schema move below, not a save.
+    const found = ClanDocumentStore.contractOf(data)
+    if (found !== CONTRACT) {
+      h.free()
+      throw new UnsupportedContract(found)
     }
-    prev?.free()
-    this.recorded = null
+    // Make and Edit (features/make-and-edit.clan): a document with takes and an edl moves once to
+    // generations and a timeline, in this host, before anything else reads it. Its own schema forbids
+    // the new shape and the app's forbids the old, so the one write goes through a schema that holds
+    // both (any object; ajv and the integrity rules check the result first), then to the app's. Any
+    // refusal leaves the saved bytes as they were: nothing is saved until the move has succeeded.
+    let moved = false
+    if (needsGenerations(data)) {
+      try {
+        const next = migrateToGenerations(data)
+        assertValid(next, 'the document moved to generations')
+        assertIntegrity(data, next, 'the document moved to generations')
+        route(h, '/patch-schema', MOVING_SCHEMA)
+        route(h, '/patch-data', {
+          patch: diffMergePatch(data, next),
+          agent: MIGRATION_AGENT,
+          action: MIGRATION_ACTION,
+          rationale: 'Every take became a generation (the takes of a box made together, one), and each video\'s edl its timeline (features/make-and-edit.clan).',
+        })
+        route(h, '/patch-schema', APP_SCHEMA)
+        data = readData(h)
+        moved = true
+      } catch (e) {
+        h.free()
+        throw e
+      }
+    }
+    // A document keeps the schema it was made with; one made under an older
+    // contract-3 schema moves to the app's when it opens (loosening only).
+    let upgraded = moved
+    try {
+      upgraded = !!route<{ changed?: boolean }>(h, '/patch-schema', APP_SCHEMA)?.changed || moved
+    } catch (e) {
+      console.warn('kept the document\'s own schema: it did not move to the app\'s', e)
+    }
+    this.swapHost(h)
     this.doc = data
     this.changed()
     if (upgraded) this.scheduleSave()
@@ -348,10 +568,7 @@ export class ClanDocumentStore implements DocumentStore {
 
   /** shared/data.yaml of the open document, as the SDK wrote it. */
   private readData(): Doc {
-    const yaml = this.host!.entry('shared/data.yaml')
-    const data = (parseYaml(yaml) ?? {}) as Doc & { $schema?: unknown }
-    delete data.$schema
-    return data
+    return readData(this.host!)
   }
 
   private bytes(): Uint8Array {
@@ -388,7 +605,7 @@ export class ClanDocumentStore implements DocumentStore {
     try {
       await this.persistence.write({
         bytes: this.bytes(),
-        handle: this.doc.participant.handle,
+        handle: this.person?.handle ?? this.doc.project.created_by,
         savedAt: new Date().toISOString(),
       })
     } catch (e) {
@@ -397,20 +614,31 @@ export class ClanDocumentStore implements DocumentStore {
     }
   }
 
-  private async postMirror(reason: 'interval' | 'accept' | 'manual') {
+  private async postMirror(reason: MirrorReason) {
     const m = this.mirror
     if (!m && reason !== 'manual') return
+    if (!this.host || !this.doc) return
+    // The checkpoint moment: a quiet asset may be written first, and goes with these bytes.
+    await this.runBeforeBytes(reason)
+    await this.queue.catch(() => {})
     if (!this.host || !this.doc) return
     const rev = String(this.revision)
     if (reason === 'interval' && m?.lastPosted === rev) return
     const post = m?.post
     if (!post) throw new Error('no mirror: call startMirror() first')
     try {
-      await post(this.bytes(), { handle: this.doc.participant.handle, reason })
+      await post(this.bytes(), { handle: this.person?.handle ?? this.doc.project.created_by, reason })
       if (m) m.lastPosted = rev
     } catch (e) {
       m?.onError(e)
       if (reason === 'manual') throw e
     }
   }
+}
+
+function readData(h: NapkinHost): Doc {
+  const yaml = h.entry('shared/data.yaml')
+  const data = (parseYaml(yaml) ?? {}) as Doc & { $schema?: unknown }
+  delete data.$schema
+  return data
 }

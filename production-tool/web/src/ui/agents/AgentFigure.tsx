@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // Copied from app/src/studio/AgentFigure.tsx (the apps don't import across each
-// other, as ui/Mark.tsx copies StudioMark); agents.test.ts checks Ellis and Jude
+// other, as ui/Mark.tsx copies StudioMark); agents.test.ts checks Nell and Jude
 // still draw as the house sheet does. Changes here: the cast comes from cast.ts,
 // and one more mark, 'frame' (Dex's viewfinder).
 
@@ -203,7 +203,7 @@ export function AgentFigure({ agent, size = 64, state = 'idle', walking = false,
   const look = a.look
   const body = BODIES[look.shape]
   const label = `${a.given}, ${a.role}${state === 'needs-you' ? ' — needs you' : state === 'working' ? ' — working' : ''}`
-  const delay = { '--af-phase': phaseOf(agent) } as CSSProperties
+  const delay = { '--af-phase': a.phase ?? phaseOf(agent) } as CSSProperties
 
   const leg = (side: 'l' | 'r') => {
     const x = CX + (side === 'l' ? -LEG_DX : LEG_DX)

@@ -13,9 +13,9 @@ import pytest
 from contracts import Contracts, api
 from contracts_dir import contracts_dir
 from director import PassthroughDirector, new_id
-from identity import person
+from identity import person, tenant_id
 from providers import Registry
-from providers.base import Status
+from providers.base import Status, job_op
 from service import Relay
 from store import MemoryStore
 
@@ -48,7 +48,7 @@ class FakeBlobs:
     def exists(self, key):
         return key in self.objects
 
-    def presign_put(self, key, mime):
+    def presign_put(self, key, mime, sha256):
         return f"https://bucket.s3.test/{key}?X-Amz-Signature=x"
 
     def put(self, key, data, mime):
@@ -91,6 +91,7 @@ class FakeProvider:
     def __init__(self, name: str, sheet: dict, blobs: FakeBlobs):
         self.name, self.sheet, self.blobs = name, sheet, blobs
         self.submits: list[dict] = []
+        self.ops: list[str | None] = []  # the op each submit ran as (the relay's job context)
         self.status_calls: list[str] = []
         self.cancels: list[str] = []
         self.submit_effect = None       # an exception to raise
@@ -101,6 +102,7 @@ class FakeProvider:
 
     def submit(self, job):
         self.submits.append(job)
+        self.ops.append(job_op())
         if self.submit_effect is not None:
             raise self.submit_effect
         rid = f"{self.name}-{len(self.submits)}"
@@ -131,13 +133,12 @@ def sheets() -> dict:
 
 def front_sheet() -> dict:
     """The provider in front of the floor in these tests: the mock sheet, priced, slotted and polled
-    like a paid provider (0.15 an image, 2 slots, 2 s polls), so a chain has a first provider whose
-    failure sends the job to Runway (features/runway-fallback.clan)."""
+    like a paid provider (0.15 a job, 0.30 on mock-hq, 2 slots, 2 s polls), so a chain has a first
+    provider whose failure sends the job to Runway (features/runway-fallback.clan). Its prices are
+    the catalogue's, through contracts/pricing.py, like Runway's (features/runway-sheet-sync.clan)."""
     sheet = copy.deepcopy(sheets()["mock"])
-    for op, spec in sheet["ops"].items():
-        spec["estimateUsd"] = 0.9 if op in ("clip", "clip_edit") else 0.15
-        for alt in spec.get("alternates", []):
-            alt["estimateUsd"] = spec["estimateUsd"] * 2
+    sheet["models"]["mock"]["pricing"] = {"unit": "image", "credits": 15, "source": []}
+    sheet["models"]["mock-hq"]["pricing"] = {"unit": "image", "credits": 30, "source": []}
     sheet["concurrency"] = {"image": 2, "video": 2}
     sheet["results"]["minPollS"] = 2
     return sheet
@@ -172,17 +173,36 @@ class Harness:
                            config=lambda: self.cfg, clock=self.clock, stitch=self.stitched.append,
                            contracts=self.contracts, who=self.who)
 
-    def who(self, headers: dict) -> dict | None:
-        """The test's identity source: "Authorization: Bearer <key>" names a person from as_person()."""
+    def who(self, method: str, path_and_query: str, headers: dict, body: bytes | None) -> dict | None:
+        """The test's identity source: "Authorization: Bearer <key>" names a person from as_person().
+        (The real seam's assertion is tested in test_identity.py.)"""
         auth = headers.get("authorization", "")
         return self.people.get(auth[7:]) if auth.startswith("Bearer ") else None
+
+    def tenant(self, agency: str, enabled: bool = True) -> str:
+        """Turn an agency on (or off) in the tenants table; its tenant id. The relay caches 30 s."""
+        tid = tenant_id(agency)
+        self.store.put_tenant({"tenantId": tid, "agency": agency, "enabled": enabled})
+        self.relay._tenants.pop(tid, None)
+        return tid
+
+    def limits(self, agency: str, **fields) -> str:
+        """Set fields of an agency's tenant item as scripts/tenants.py would (capUsdMonthly, dailyQuotas,
+        allow: features/tenant-limits.clan); its tenant id. The relay's 30 s cache is cleared."""
+        tid = tenant_id(agency)
+        item = self.store.tenant(tid) or {"tenantId": tid, "agency": agency, "enabled": True}
+        self.store.put_tenant({**item, **fields})
+        self.relay._tenants.pop(tid, None)
+        return tid
 
     # every response is checked against relay-api.schema.json
     def call(self, method, path, body=None, token=None, expect=None, headers=None):
         headers = {**({"Authorization": f"Bearer {token}"} if token else {}), **(headers or {})}
         raw = json.dumps(body).encode() if body is not None else None
         status, out, ctx = self.relay.http(method, path, headers, raw)
-        if status >= 400:
+        if status == 409 and path.endswith("/answer") and "answeredBy" in out:
+            assert not self.contracts.errors(api("AnswerConflict"), out), out
+        elif status >= 400:
             assert not self.contracts.errors(api("ErrorResponse"), out), out
         elif status == 204:
             assert out is None
@@ -190,7 +210,7 @@ class Harness:
             name = {"/me": "Me", "/uploads": "UploadResponse", "/library": "LibraryIndex",
                     "/projects": "ProjectList"}.get(path, "Job")
             if path.startswith("/library/"):
-                name = "LibraryEntry"
+                name = "LibraryIndex" if path.count("/") == 2 else "LibraryEntry"
             if path.startswith("/clan/"):
                 name = "ProjectCanvas" if path.endswith("/canvas") else None  # GET /clan/{project} is the bytes
             if path in ("/config", "/health"):
@@ -205,10 +225,13 @@ class Harness:
             assert status == expect, (status, out)
         return status, out
 
-    def as_person(self, handle="alice", team="blue") -> str:
-        """A key the harness's identity source maps to this person (who sends it is them)."""
+    def as_person(self, handle="alice", team="blue", name=None, enable=True) -> str:
+        """A key the harness's identity source maps to this person (who sends it is them).
+        Their agency is turned on unless enable=False (test_tenants.py turns it off itself)."""
         key = f"{team}/{handle}"
-        self.people[key] = person(handle, team)
+        self.people[key] = person(handle, team, name)
+        if enable and not self.store.tenant(tenant_id(team)):
+            self.tenant(team)
         return key
 
     def post_job(self, token, op="generate", job_id=None, expect=None, **inp):
@@ -241,7 +264,18 @@ def job_request(op: str, job_id: str, **inp) -> dict:
             "shot_list": {"script": "A hero walks in. She smiles. The logo shows.", "targetS": 15},
             "stitch": {"clips": [{"asset": {**asset(4, "video/mp4"), "url": f"{CDN}/out/{asset(4)['sha256']}"}, "trimS": 4}]},
         }[op]
-    return {"contractVersion": "2", "jobId": job_id, "op": op, "parentIds": [], "input": inp}
+    return {**envelope(op, job_id), "input": inp}
+
+
+PROJECT = "proj_01K7A0000000000000000PR001"
+NODE_KIND = {"frame": "storyboard", "shot_list": "storyboard", "clip": "video", "clip_edit": "video", "stitch": "video"}
+
+
+def envelope(op: str, job_id: str) -> dict:
+    """A contract-3 JobRequest without its input: the project, the node it runs for, a nonce."""
+    kind = NODE_KIND.get(op, "sketch")
+    return {"contractVersion": "3", "jobId": job_id, "op": op, "projectId": PROJECT,
+            "nonce": "n_" + job_id[-12:], "node": {"kind": kind, "id": new_id(kind)}, "parentIds": []}
 
 
 @pytest.fixture

@@ -492,3 +492,42 @@ def test_the_openai_wire_sends_no_cache_marker():
     ModelPort(wire, "m", 30).call("p", "sys", {}, SCHEMA, usage=u, attribution="t")
     assert seen[0]["messages"][0] == {"role": "system", "content": "sys"} and "cache_control" not in json.dumps(seen[0])
     assert (u.cache_read, u.cache_write) == (0, 0)
+
+
+# ---------------------------------------------------------------------------- loopback guard
+
+@pytest.mark.parametrize("marker", ["AWS_LAMBDA_FUNCTION_NAME", "ECS_CONTAINER_METADATA_URI",
+                                    "ECS_CONTAINER_METADATA_URI_V4"])
+def test_a_loopback_model_url_is_refused_when_deployed(monkeypatch, marker):
+    for m in ("AWS_LAMBDA_FUNCTION_NAME", "ECS_CONTAINER_METADATA_URI", "ECS_CONTAINER_METADATA_URI_V4"):
+        monkeypatch.delenv(m, raising=False)
+    monkeypatch.setenv(marker, "x")
+    for url in ("http://127.0.0.1:8000", "http://localhost:8000/v1", "http://[::1]:1", "http://0.0.0.0:1",
+                "http://127.1.2.3"):
+        with pytest.raises(ValueError, match="loopback.*deployed"):
+            build_wire(Settings(model_api="anthropic", model_base_url=url), client=FakeSDK([]))
+    with pytest.raises(ValueError, match="NAPKIN_MODEL_BASE_URL"):
+        build_wire(Settings(model_api="openai", model_base_url="http://localhost:1/v1"))
+    with pytest.raises(ValueError, match="NAPKIN_MODEL_BASE_URL"):
+        build_wire(Settings(model_api="bedrock", model_region="eu-west-1", model_base_url="http://127.0.0.1:1"),
+                   client=FakeSDK([]))
+    # The variable the SDK reads itself counts too.
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8797")
+    with pytest.raises(ValueError, match="ANTHROPIC_BASE_URL"):
+        build_wire(Settings(model_api="anthropic"), client=FakeSDK([]))
+    monkeypatch.delenv("ANTHROPIC_BASE_URL")
+    monkeypatch.setenv("ANTHROPIC_BEDROCK_BASE_URL", "http://localhost:8797")
+    with pytest.raises(ValueError, match="ANTHROPIC_BEDROCK_BASE_URL"):
+        build_wire(Settings(model_api="bedrock", model_region="eu-west-1"), client=FakeSDK([]))
+    monkeypatch.delenv("ANTHROPIC_BEDROCK_BASE_URL")
+    # A real endpoint is fine when deployed.
+    assert build_wire(Settings(model_api="openai", model_base_url="http://nim.internal:8000/v1")).api == "openai"
+    assert build_wire(Settings(model_api="anthropic", model_base_url="https://api.anthropic.com"),
+                      client=FakeSDK([])).api == "anthropic"
+
+
+def test_a_loopback_model_url_is_fine_locally(monkeypatch):
+    for m in ("AWS_LAMBDA_FUNCTION_NAME", "ECS_CONTAINER_METADATA_URI", "ECS_CONTAINER_METADATA_URI_V4"):
+        monkeypatch.delenv(m, raising=False)
+    assert build_wire(Settings(model_api="anthropic", model_base_url="http://127.0.0.1:8797"),
+                      client=FakeSDK([])).api == "anthropic"

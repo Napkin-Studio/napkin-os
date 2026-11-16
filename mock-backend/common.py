@@ -171,6 +171,7 @@ class Response:
     headers: dict = field(default_factory=dict)
     close: bool = False
     note: str = ""                 # metadata for the log line (never content)
+    events: list | None = None     # [(event, data)]: sent as text/event-stream instead of `body`
 
 
 def json_response(status: int, body: dict, **headers) -> Response:
@@ -278,11 +279,16 @@ class ClaudeCall:
     trace_tools: bool = False                    # stream the CLI's events so tool uses can be counted
 
 
+# What scripts/model-local.env points the services at. The CLI must reach the real backend on the
+# developer's own login, never route back into this mock, and never bill (or fail on) the dummy key.
+CHILD_ENV_DROPPED = ("ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_BEDROCK_BASE_URL",
+                     "ANTHROPIC_BEDROCK_MANTLE_BASE_URL", "AWS_ENDPOINT_URL_BEDROCK_RUNTIME")
+
+
 def child_env() -> dict:
     env = dict(os.environ)
-    # The CLI must reach the real backend, never route back into this mock.
-    env.pop("ANTHROPIC_BASE_URL", None)
-    env.pop("OPENAI_BASE_URL", None)
+    for k in CHILD_ENV_DROPPED:
+        env.pop(k, None)
     return env
 
 

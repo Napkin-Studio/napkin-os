@@ -18,11 +18,11 @@ const MAKER: Record<string, string> = {
   brief: 'make_brief_maker.rs',
   research: 'make_campaign_research.rs',
   deck: 'make_deck_maker.rs',
-  ads: 'make_advertising_studio.rs',
 }
 
 test('every tool with an app names an id its maker really builds', () => {
-  for (const t of TOOLS.filter(t => t.appId)) {
+  // Ads keeps the retired Advertising Studio's id for its old documents; nothing builds it any more.
+  for (const t of TOOLS.filter(t => t.appId && t.id !== 'ads')) {
     const file = MAKER[t.id]
     assert.ok(file, `no maker listed for tool ${t.id}`)
     const src = readFileSync(resolve(examples, file), 'utf8')

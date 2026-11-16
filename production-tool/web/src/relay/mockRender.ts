@@ -1,7 +1,9 @@
 // The mock's pictures and clips, drawn on a canvas in the browser. Every
 // output carries a big "MOCK" stamp so it can never pass for a real result.
 
-import type { JobRequest, Ratio, View } from '../contracts/types'
+import type { Aspect, JobRequest, KeyframeRef, Ratio, StitchTransition, View } from '../contracts/types'
+import { aspectOfRatio, centreCrop, sameShape } from '../canvas/core/sketch'
+import { runwaySize } from '../lib/runwaySizes'
 import { END_CARD_S } from '../jobs/clips'
 import type { MockRenderer, RenderedOutput } from './mock'
 
@@ -38,7 +40,6 @@ function sizeFor(ratio: Ratio | undefined, long = 1024): { w: number; h: number 
     case '1:1': return { w: long, h: long }
     case '4:5': return { w: Math.round(long * 0.8), h: long }
     case '16:9': return { w: long, h: Math.round((long * 9) / 16) }
-    case '3:1': return { w: long, h: Math.round(long / 3) }
     case '9:16': return { w: Math.round((long * 9) / 16), h: long }
     default: return { w: 768, h: 1024 }
   }
@@ -110,22 +111,49 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
 
 const VIEW_LABEL: Record<View, string> = { front: 'front', 'three-quarter': '3/4', side: 'side', back: 'back' }
 
+/**
+ * The size an image job comes back at from the relay (features/frame-aspect.clan): Runway's size for the
+ * job's shape (input.aspect, else input.ratio), centre-cropped to the shape, with croppedFrom when it was
+ * cut. This mock draws the cropped size straight away (no crop in the browser, so no sha per browser).
+ */
+export function mockImageSize(input: { aspect?: Aspect; ratio?: Ratio }, fallback: { w: number; h: number }): { w: number; h: number; croppedFrom?: Aspect } {
+  const target = input.aspect ?? (input.ratio ? aspectOfRatio(input.ratio) : undefined)
+  if (!target) return fallback
+  const size = runwaySize(target, 'gemini_image3_pro')
+  if (sameShape(size, target)) return { ...size }
+  const box = centreCrop(size, target)
+  return { w: box.w, h: box.h, croppedFrom: size }
+}
+
 async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutput> {
   const inp = req.input
   const n = req.jobId.charCodeAt(req.jobId.length - 1)
   if (req.op === 'generate' && (inp.refs ?? []).length >= 2) {
     // Several inputs: lay them over each other, the first on top.
-    const { c, ctx } = canvas(768, 1024)
-    paper(ctx, 768, 1024, n)
+    const { w, h, croppedFrom } = mockImageSize(inp, { w: 768, h: 1024 })
+    const { c, ctx } = canvas(w, h)
+    paper(ctx, w, h, n)
     const refs = inp.refs ?? []
     const imgs = (await Promise.all(refs.map((r) => bitmap(input, r.asset.sha256)))).filter(Boolean) as ImageBitmap[]
     imgs.forEach((img, i) => {
       ctx.globalAlpha = i === 0 ? 1 : 0.55
-      contain(ctx, img, 40, 40, 688, 900, { scale: 1 - i * 0.12 })
+      contain(ctx, img, w * 0.05, h * 0.04, w * 0.9, h * 0.88, { scale: 1 - i * 0.12 })
     })
     ctx.globalAlpha = 1
-    stamp(ctx, 768, 1024, `${refs.length} inputs · ${inp.text ?? ''}`)
-    return { blob: await toBlob(c), mime: 'image/png', w: 768, h: 1024 }
+    stamp(ctx, w, h, `${refs.length} inputs · ${inp.text ?? ''}`)
+    return { blob: await toBlob(c), mime: 'image/png', w, h, ...(croppedFrom ? { croppedFrom } : {}) }
+  }
+  if (req.op === 'upscale') {
+    // Upscale (features/image-editor.clan): each side grows by the scale, as Magnific's does.
+    const img = await bitmap(input, inp.image?.sha256)
+    const k = inp.scale ?? 2
+    const w = (img?.width ?? 768) * k
+    const h = (img?.height ?? 432) * k
+    const { c, ctx } = canvas(w, h)
+    paper(ctx, w, h, n)
+    if (img) ctx.drawImage(img, 0, 0, w, h)
+    stamp(ctx, w, h, `upscaled ${k}×`)
+    return { blob: await toBlob(c), mime: 'image/png', w, h }
   }
   if (req.op === 'region_edit') {
     const img = await bitmap(input, inp.image?.sha256)
@@ -134,7 +162,27 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
     const { c, ctx } = canvas(w, h)
     paper(ctx, w, h, n)
     if (img) ctx.drawImage(img, 0, 0)
-    if (inp.region) {
+    const mask = await bitmap(input, inp.mask?.sha256)
+    if (mask) {
+      // The painted area, filled with bold stripes (magenta for Fill, cyan for Remove), fully opaque: a
+      // result that goes missing on its way to Apply is plain to see (fix/editor-apply-keeps-edits).
+      const { ctx: tc } = canvas(w, h)
+      tc.drawImage(mask, 0, 0, w, h)
+      const md = tc.getImageData(0, 0, w, h)
+      const out = ctx.getImageData(0, 0, w, h)
+      const [a, b] = inp.remove ? [[0, 200, 220], [10, 40, 60]] : [[230, 0, 160], [255, 230, 0]]
+      const band = Math.max(6, Math.round(Math.min(w, h) / 40))
+      for (let i = 0; i < w * h; i++) {
+        if (md.data[i * 4] <= 127) continue
+        const col = ((((i % w) + ((i / w) | 0)) / band) | 0) % 2 ? b : a
+        out.data[i * 4] = col[0]; out.data[i * 4 + 1] = col[1]; out.data[i * 4 + 2] = col[2]; out.data[i * 4 + 3] = 255
+      }
+      ctx.putImageData(out, 0, 0)
+    } else if (!inp.region) {
+      ctx.fillStyle = 'rgba(255,79,46,0.35)' // Change whole frame: the whole picture, tinted plainly
+      ctx.fillRect(0, 0, w, h)
+    }
+    if (inp.region && !mask) {
       const r = inp.region
       ctx.fillStyle = 'rgba(255,79,46,0.28)'
       ctx.fillRect(r.x * w, r.y * h, r.w * w, r.h * h)
@@ -147,35 +195,51 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
     stamp(ctx, w, h, `edit · ${inp.text ?? ''}`)
     return { blob: await toBlob(c), mime: 'image/png', w, h }
   }
-  if (req.op === 'frame') {
-    const { w, h } = sizeFor(inp.ratio ?? '9:16')
+  if (req.op === 'frame_edit') {
+    // Change this frame: the current frame at its own size, dimmed where a box was marked, with the words.
+    const img = await bitmap(input, inp.image?.sha256)
+    const w = img?.width ?? inp.aspect?.w ?? 768
+    const h = img?.height ?? inp.aspect?.h ?? 432
     const { c, ctx } = canvas(w, h)
-    paper(ctx, w, h, (inp.shot?.order ?? 1) * 3 + n)
+    paper(ctx, w, h, n)
+    if (img) ctx.drawImage(img, 0, 0)
+    ctx.fillStyle = 'rgba(255,79,46,0.18)'
+    const r = inp.region ?? { x: 0, y: 0, w: 1, h: 1 }
+    ctx.fillRect(r.x * w, r.y * h, r.w * w, r.h * h)
+    stamp(ctx, w, h, `frame edit · ${inp.text ?? ''}`)
+    return { blob: await toBlob(c), mime: 'image/png', w, h }
+  }
+  if (req.op === 'frame') {
+    const { w, h, croppedFrom } = mockImageSize(inp.aspect || inp.ratio ? inp : { ratio: '9:16' }, sizeFor('9:16'))
+    const { c, ctx } = canvas(w, h)
+    paper(ctx, w, h, (inp.shot?.id.charCodeAt(inp.shot.id.length - 1) ?? 1) * 3 + n)
     // The shot's first named ref stands in for the character.
     const img = await bitmap(input, inp.refs?.[0]?.asset.sha256)
-    const scale = { wide: 0.45, medium: 0.7, close: 1.05, extreme_close: 1.6, over_shoulder: 0.8, insert: 0.6 }[inp.shot?.composition ?? 'medium'] ?? 0.7
+    const scales: Record<string, number> = { wide: 0.45, medium: 0.7, close: 1.05, extreme_close: 1.6, over_shoulder: 0.8, insert: 0.6 }
+    const scale = scales[inp.shot?.camera.size ?? 'medium'] ?? 0.7
     if (img) contain(ctx, img, 0, h * 0.08, w, h * 0.84, { scale })
     ctx.fillStyle = INK
     ctx.font = `600 ${Math.round(w * 0.04)}px Geist, Helvetica, Arial, sans-serif`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
     wrapText(ctx, inp.text || inp.shot?.action || '', w * 0.06, h * 0.04, w * 0.88, w * 0.05, 3)
-    stamp(ctx, w, h, `shot ${inp.shot?.order ?? ''} · ${inp.shot?.composition ?? ''} · ${inp.shot?.camera_move ?? ''}`)
-    return { blob: await toBlob(c), mime: 'image/png', w, h }
+    stamp(ctx, w, h, `shot · ${inp.shot?.camera.size ?? ''} · ${inp.shot?.camera.movement ?? ''}`)
+    return { blob: await toBlob(c), mime: 'image/png', w, h, ...(croppedFrom ? { croppedFrom } : {}) }
   }
   // generate, view
-  const { c, ctx } = canvas(768, 1024)
-  paper(ctx, 768, 1024, n)
+  const { w, h, croppedFrom } = mockImageSize(inp, { w: 768, h: 1024 })
+  const { c, ctx } = canvas(w, h)
+  paper(ctx, w, h, n)
   const source = req.op === 'view' ? inp.image?.sha256 : inp.refs?.[0]?.asset.sha256
   const img = await bitmap(input, source)
   const view = inp.view
   if (img) {
     if (view === 'back') ctx.filter = 'grayscale(1) brightness(0.8)'
-    contain(ctx, img, 60, 60, 648, 860, { mirror: view === 'side', scale: view === 'three-quarter' ? 0.92 : 1 })
+    contain(ctx, img, w * 0.08, h * 0.06, w * 0.84, h * 0.84, { mirror: view === 'side', scale: view === 'three-quarter' ? 0.92 : 1 })
     ctx.filter = 'none'
   }
-  stamp(ctx, 768, 1024, req.op === 'view' ? `view · ${VIEW_LABEL[view ?? 'front']}` : `generated · ${inp.text ?? ''}`)
-  return { blob: await toBlob(c), mime: 'image/png', w: 768, h: 1024 }
+  stamp(ctx, w, h, req.op === 'view' ? `view · ${VIEW_LABEL[view ?? 'front']}` : `generated · ${inp.text ?? ''}`)
+  return { blob: await toBlob(c), mime: 'image/png', w, h, ...(croppedFrom ? { croppedFrom } : {}) }
 }
 
 // ── Clips: a canvas animation recorded with MediaRecorder ───────────────────
@@ -283,8 +347,29 @@ async function renderClip(req: JobRequest, input: Input): Promise<RenderedOutput
       return out
     }
   }
+  // Remake just this shot (features/connected-video.clan): the take's window played again, retinted.
+  const win = inp.window && 'source' in inp.window ? inp.window : undefined
+  if (inp.mode === 'redo_window' && win) {
+    const blob = await input(win.source.sha256)
+    if (blob && blob.type.startsWith('video/')) {
+      const v = await loadVideo(blob)
+      v.currentTime = win.inS
+      await v.play().catch(() => undefined)
+      const out = await record(w, h, Math.min(CLIP_MAX_S, Math.max(0.5, win.outS - win.inS)), (ctx, t) => {
+        ctx.filter = 'hue-rotate(200deg)'
+        contain(ctx, v, 0, 0, w, h)
+        ctx.filter = 'none'
+        timecode(ctx, w, h, t, win.withLast ? 'remade · lands on the next' : 'remade shot')
+      })
+      v.pause()
+      URL.revokeObjectURL(v.src)
+      return out
+    }
+  }
+  if ((inp.mode === 'take' || inp.mode === 'take_refs') && inp.shots?.length) return renderTake(req, input)
   const img = (await bitmap(input, inp.image?.sha256)) ?? (await bitmap(input, inp.refs?.[0]?.asset.sha256))
-  const move = inp.shot?.camera_move ?? 'push_in'
+  const end = await keyframe(input, inp.lastFrame)
+  const move = inp.shot?.camera.movement ?? 'push_in'
   return record(w, h, seconds, (ctx, t) => {
     const p = t / seconds
     ctx.fillStyle = '#0F1114'
@@ -304,7 +389,67 @@ async function renderClip(req: JobRequest, input: Input): Promise<RenderedOutput
     ctx.translate(-w / 2, -h / 2)
     if (img) contain(ctx, img, 0, 0, w, h, { scale: 1.02 })
     ctx.restore()
-    timecode(ctx, w, h, t, `shot ${inp.shot?.order ?? ''} · ${move}`)
+    // A clip with a last frame lands on it: its last half second dissolves into the next shot's frame.
+    const landing = end ? Math.max(0, Math.min(1, (t - (seconds - LAND_S)) / LAND_S)) : 0
+    if (end && landing > 0) {
+      ctx.globalAlpha = landing
+      contain(ctx, end, 0, 0, w, h, { scale: 1.02 })
+      ctx.globalAlpha = 1
+    }
+    timecode(ctx, w, h, t, end ? `shot · ${move} · lands on the next frame` : `shot · ${move}`)
+  })
+}
+
+/** How long a mock clip takes to land on its last frame. */
+const LAND_S = 0.5
+/** The longest mock take (a real take is at most the sheet's take.maxS). */
+const TAKE_MAX_S = 15
+
+/** A keyframe as a picture: a still, or (a frame of a take) nothing in the mock. */
+async function keyframe(input: Input, k: KeyframeRef | undefined): Promise<ImageBitmap | null> {
+  return k && 'sha256' in k ? bitmap(input, k.sha256) : null
+}
+
+/** One take of several shots (mode take or take_refs): one clip, a visibly different picture per shot,
+ *  cutting at the prompt's times (input.cuts), "SHOT k" stamped. A take starts on its first frame; a take
+ *  from pictures shows each shot's frame from the references, in order. */
+async function renderTake(req: JobRequest, input: Input): Promise<RenderedOutput> {
+  const inp = req.input
+  const { w, h } = sizeFor(inp.ratio ?? '9:16', 640)
+  const shots = inp.shots ?? []
+  const sum = shots.reduce((a, s) => a + s.duration_s, 0)
+  const total = Math.min(TAKE_MAX_S, Math.ceil(sum - 1e-6))
+  let at = 0
+  const starts = inp.cuts?.map((c) => c.atS) ?? shots.map((s) => { const a = at; at += s.duration_s; return a })
+  const pics = inp.mode === 'take_refs'
+    ? await Promise.all((inp.refs ?? []).slice(0, shots.length).map((r) => bitmap(input, r.asset.sha256)))
+    : [await bitmap(input, inp.image?.sha256)]
+  return record(w, h, total, (ctx, t) => {
+    let k = 0
+    while (k + 1 < starts.length && t >= starts[k + 1]) k++
+    const p = (t - starts[k]) / Math.max(0.5, (starts[k + 1] ?? total) - starts[k])
+    ctx.fillStyle = '#0F1114'
+    ctx.fillRect(0, 0, w, h)
+    const img = pics[k] ?? pics[0]
+    ctx.save()
+    ctx.filter = inp.mode === 'take' && k > 0 ? `hue-rotate(${k * 55}deg)` : 'none'
+    const zoom = k % 2 ? 1.25 - 0.15 * p : 1 + 0.15 * p
+    ctx.translate(w / 2, h / 2)
+    ctx.scale(zoom, zoom)
+    ctx.translate(-w / 2, -h / 2)
+    if (img) contain(ctx, img, 0, 0, w, h, { scale: 1.02 })
+    ctx.restore()
+    ctx.filter = 'none'
+    ctx.save()
+    ctx.fillStyle = 'rgba(20,22,27,0.75)'
+    ctx.fillRect(12, 12, 132, 30)
+    ctx.fillStyle = '#fff'
+    ctx.font = '700 16px Geist, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(`SHOT ${k + 1}`, 22, 27)
+    ctx.restore()
+    timecode(ctx, w, h, t, 'one take')
   })
 }
 
@@ -344,36 +489,86 @@ function endCard(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillText('MOCK render', w / 2, h * 0.62)
 }
 
+/** A stitch clip's place in the mock ad: when it starts, how long its slot is, and the join into it. */
+export interface StitchSlot { start: number; dur: number; kind: 'cut' | 'dissolve' | 'dip'; s: number }
+
+/** Like stitch.py's joins(): the slots one after another (a transition overlaps the outgoing clip's
+ *  out-handle, so it never changes the length); a transition is at most the incoming slot and 2 s long,
+ *  0.5 s when the request names none, and the first clip always starts on a cut. */
+export function stitchTimeline(clips: { dur: number; transition?: StitchTransition }[]): StitchSlot[] {
+  let start = 0
+  return clips.map((c, i) => {
+    // A continue is a cut where the clip before landed on this one's first frame (the real stitch drops the
+    // shared frame; at the mock's frame rate the slot stays as it is).
+    const t = c.transition
+    const kind = i > 0 && t && t.kind !== 'cut' && t.kind !== 'continue' ? t.kind : 'cut'
+    const s = kind === 'cut' ? 0 : Math.min(c.transition?.s ?? 0.5, c.dur, 2)
+    const slot: StitchSlot = { start, dur: c.dur, kind: s > 0 ? kind : 'cut', s }
+    start += c.dur
+    return slot
+  })
+}
+
+/** What the mock ad shows at t: the clip whose slot holds t, and in a transition's first s seconds the
+ *  outgoing one too, with how far through it is (p, 0 to 1). idx -1: the end card. */
+export function stitchAt(slots: StitchSlot[], t: number): { idx: number; prev?: number; p?: number } {
+  const idx = slots.findIndex((x) => t >= x.start && t < x.start + x.dur)
+  if (idx < 0) return { idx: -1 }
+  const x = slots[idx]
+  return x.kind !== 'cut' && t - x.start < x.s ? { idx, prev: idx - 1, p: (t - x.start) / x.s } : { idx }
+}
+
+/** Stitch's fit speed: the window over its slot, within 1/1.33 to 1.33 (else the stitch trims: played as is). */
+export function speedFor(windowS: number, slotS: number): number {
+  const r = windowS / slotS
+  return r >= 1 / 1.33 - 1e-6 && r <= 1.33 + 1e-6 ? r : 1
+}
+
 async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutput> {
   const { w, h } = sizeFor(req.input.ratio ?? '9:16', 640)
-  const clips: { v: HTMLVideoElement; dur: number }[] = []
+  const clips: { v: HTMLVideoElement; dur: number; inS: number; outS?: number; transition?: StitchTransition }[] = []
   for (const c of req.input.clips ?? []) {
     const blob = await input(c.asset.sha256)
     if (!blob) continue
     const v = await loadVideo(blob)
     const full = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : CLIP_MAX_S
-    // Like the real stitch (stitch.py): each clip is cut to its shot's length (trimS).
-    clips.push({ v, dur: c.trimS ? Math.min(full, c.trimS) : full })
+    const inS = c.inS ?? 0
+    // Like the real stitch (stitch.py): each clip starts at its in point and fills its shot's length (trimS),
+    // held on its last frame (or its out point's) when it runs out.
+    const dur = c.trimS ?? (c.outS !== undefined && c.outS > inS ? c.outS - inS : Math.max(0.1, full - inS))
+    // fit speed (an end-framed clip): the whole window retimed to the slot, so it still lands on its frame.
+    if (c.fit === 'speed') v.playbackRate = speedFor((c.outS !== undefined && c.outS > inS ? c.outS : full) - inS, dur)
+    clips.push({ v, dur, inS, ...(c.outS !== undefined ? { outS: c.outS } : {}), ...(c.transition ? { transition: c.transition } : {}) })
   }
+  const slots = stitchTimeline(clips)
   const total = clips.reduce((s, c) => s + c.dur, 0) + END_CARD_S
-  let current = -1
+  const started = new Set<number>()
   const out = await record(w, h, total, async (ctx, t) => {
-    let acc = 0
-    let idx = -1
-    for (let i = 0; i < clips.length; i++) {
-      if (t < acc + clips[i].dur) { idx = i; break }
-      acc += clips[i].dur
-    }
+    const { idx, prev, p } = stitchAt(slots, t)
     if (idx >= 0) {
-      if (idx !== current) {
-        clips[current]?.v.pause()
-        current = idx
-        clips[idx].v.currentTime = 0
+      if (!started.has(idx)) {
+        started.add(idx)
+        clips[idx].v.currentTime = clips[idx].inS
         await clips[idx].v.play().catch(() => undefined)
       }
-      contain(ctx, clips[idx].v, 0, 0, w, h)
+      clips.forEach((c, i) => {
+        if (i !== idx && i !== prev) c.v.pause()
+        if (c.outS !== undefined && c.v.currentTime >= c.outS) c.v.pause() // nothing past the out point
+      })
+      if (prev !== undefined && p !== undefined && slots[idx].kind === 'dissolve') {
+        contain(ctx, clips[prev].v, 0, 0, w, h)
+        ctx.globalAlpha = p
+        contain(ctx, clips[idx].v, 0, 0, w, h)
+        ctx.globalAlpha = 1
+      } else if (prev !== undefined && p !== undefined) { // a dip: out to black, then in from it
+        contain(ctx, clips[p < 0.5 ? prev : idx].v, 0, 0, w, h)
+        ctx.fillStyle = `rgba(0,0,0,${p < 0.5 ? 2 * p : 2 * (1 - p)})`
+        ctx.fillRect(0, 0, w, h)
+      } else {
+        contain(ctx, clips[idx].v, 0, 0, w, h)
+      }
     } else {
-      clips[current]?.v.pause()
+      clips.forEach((c) => c.v.pause())
       // The end card, as its last frame (the real one is stitch.py's roll-up card).
       endCard(ctx, w, h)
     }

@@ -10,16 +10,18 @@ import { BetaTag } from '../dogfood/Dogfood'
 import { errorShown, setScreen } from '../dogfood/recorder'
 import type { SavedProject } from '../contracts/types'
 import { homeItems, itemId } from '../projects/homeList'
+import { behindNapkinOs, signOut } from '../relay/access'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
-import { clock, displayName, edited, greeting, stageChip } from './homeWords'
+import { clock, edited, FIRST_AD, greetName, greeting, refusalNotice, stageChip } from './homeWords'
 import { AgentFigure } from './agents/AgentFigure'
-import { sayer, type CastKey } from './agents/cast'
+import { DataSharing } from './DataSharing'
+import { sayer } from './agents/cast'
+import { CrewLine, CrewRow } from './HomeCrew'
 import { useBlobUrl } from './hooks'
 import { StudioMark } from './Mark'
+import { Account, MarkTile } from './chrome/Bar'
 import './home.css'
-
-const CREW: CastKey[] = ['dex', 'ellis', 'jude']
 
 export function Home() {
   const shell = useShell()
@@ -48,7 +50,7 @@ export function Home() {
   }, [shell, signedIn])
   const all = homeItems(projects, saved)
   const shown = homeItems(projects, saved, ui.homeSort, query)
-  const who = displayName(ui.me?.handle)
+  const who = greetName(ui.me)
   const first = all.length === 0
 
   const act = (what: string, p: Promise<unknown>) => {
@@ -82,7 +84,7 @@ export function Home() {
 
           {state.notice && (
             <div className="hm-notice" role="status">
-              <span>☁ {state.notice}. <span className="faint">Not you? Sign out and pick another name.</span></span>
+              <span>{refusalNotice(state.notice)} <span className="faint">It was left as it was.</span></span>
               <button className="btn xs ghost" onClick={() => shell.say(null)}>OK</button>
             </div>
           )}
@@ -98,10 +100,10 @@ export function Home() {
 
           {first ? (
             <div className="hm-empty">
-              <div className="hm-crew">{CREW.map((k) => <AgentFigure key={k} agent={k} size={46} />)}</div>
+              <CrewRow />
               <span className="hm-sayer">{sayer('dex')}</span>
               <b>Let's make your first ad</b>
-              <p>Draw or drop your characters and write a few lines of script. I plan the shots, draw the frames and make the clips; Ellis reads your notes back and Jude checks each result.</p>
+              <p>{FIRST_AD}</p>
               <div className="row" style={{ marginTop: 6 }}>
                 <button className="btn primary" onClick={newProject} disabled={!!state.busy}>＋ New project</button>
                 <button className="btn" onClick={chooseFile} disabled={!!state.busy}>Open a file…</button>
@@ -114,9 +116,9 @@ export function Home() {
                   <span className="eyebrow">New project</span>
                   <h2>Make a new ad</h2>
                   <p>Draw or drop your characters on the canvas, write the script, and the crew plans the shots, draws the frames and makes the clips.</p>
-                  <button className="hm-go" tabIndex={-1} disabled={!!state.busy}>＋ New project</button>
+                  <button className="btn primary hm-go" tabIndex={-1} disabled={!!state.busy}>＋ New project</button>
                   <div className="hm-say"><b>{sayer('dex')}</b>Bring a picture or a line of script. I'll take it from there.</div>
-                  <div className="hm-crewline" aria-hidden>{CREW.map((k) => <AgentFigure key={k} agent={k} size={48} decorative />)}</div>
+                  <CrewLine />
                 </div>
                 <div className="hm-open" role="button" tabIndex={0} onClick={chooseFile} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), chooseFile())}>
                   <span className="hm-ico" aria-hidden>⇪</span>
@@ -163,11 +165,12 @@ function HomeBar() {
   const shell = useShell()
   const { relay, app } = shell.deps
   const ui = useSyncExternalStore(app.subscribe, app.get)
-  const [menu, setMenu] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const allow = ui.me?.allow
   return (
     <header className="hm-bar">
       <span className="hm-brand">
-        <StudioMark size={22} />
+        <MarkTile />
         <span className="hm-studio">Napkin Studio</span>
         <span className="hm-tool">Production</span>
         <BetaTag screen={{ stage: 'home' }} />
@@ -175,15 +178,17 @@ function HomeBar() {
       </span>
       <span />
       <span className="hm-right">
-        <span className="topmenu">
-          <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
-          {menu && (
-            <span className="menu" role="menu">
-              <span className="handle menu-head">@{ui.me?.handle ?? 'guest'}</span>
-            </span>
+        {/* The account menu every bar has: who you are, the theme, Reduce motion, the projects. */}
+        <Account>
+          {/* Who receives the agency's material (features/tenant-limits.clan). */}
+          {allow && <button type="button" className="pt-menurow" onClick={() => setSharing(true)}>Data sharing</button>}
+          {/* Napkin OS's sign-out, only when napkin-web serves the tool (features/os-sign-in.clan). */}
+          {behindNapkinOs(import.meta.env.VITE_RELAY_URL as string | undefined) && (
+            <button type="button" className="pt-menurow" onClick={() => void signOut()}>Sign out</button>
           )}
-        </span>
+        </Account>
       </span>
+      {sharing && allow && <DataSharing allow={allow} onClose={() => setSharing(false)} />}
     </header>
   )
 }

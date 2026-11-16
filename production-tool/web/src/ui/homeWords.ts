@@ -38,3 +38,29 @@ export function displayName(handle: string | undefined) {
   if (!handle || handle === 'guest') return 'there'
   return handle.slice(0, 1).toUpperCase() + handle.slice(1)
 }
+
+/** Home's notice when a project cannot be opened (made under another contract, projects/session.ts
+ *  ProjectRefused): the reason as one sentence. */
+export function refusalNotice(message: string): string {
+  const t = message.trim()
+  return /[.!?]$/.test(t) ? t : `${t}.`
+}
+
+/** The person's own name from their Napkin OS account (Me.name), when they have one; else the handle. */
+function ownName(me: { name?: string } | null | undefined): string | null {
+  const name = me?.name?.trim()
+  return name ? name : null
+}
+
+/** Who Home greets: "Shrey" from Me.name, else the handle as displayName says it. */
+export function greetName(me: { handle?: string; name?: string } | null | undefined): string {
+  return ownName(me) ?? displayName(me?.handle)
+}
+
+/** Who the ⋯ menu says is signed in: Me.name, else "@handle" ("@guest" with nobody). */
+export function menuName(me: { handle?: string; name?: string } | null | undefined): string {
+  return ownName(me) ?? `@${me?.handle ?? 'guest'}`
+}
+
+/** Dex's first-visit line on Home: what to bring, and who does what with it (the crew row above names each). */
+export const FIRST_AD = 'Draw or drop your characters and write a few lines of script. Skye drafts the rest, I plan the shots, Fin films the frames and clips, Rhea retouches them and Edie edits the ad. Nell notes what you ask for and reads it back; Jude judges each result.'

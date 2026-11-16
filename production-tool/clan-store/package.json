@@ -20,13 +20,19 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/y-tiptap": "^3.0.10",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "fflate": "^0.8.2",
-    "yaml": "^2.8.1"
+    "y-protocols": "^1.0.7",
+    "yaml": "^2.8.1",
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
     "@types/node": "^24.12.3",
+    "esbuild": "^0.28.2",
     "fake-indexeddb": "^6.2.2",
     "typescript": "~6.0.2",
     "vitest": "^3.2.4"
