@@ -618,7 +618,7 @@ export function Character({ initial, active, onPictureEditor }: {
             const stacked = !!(e as El & { stack?: unknown }).stack
             return (
               <span key={e.id}>
-                {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} />}
+                {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} width={e.width * zoom} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
                 {img && img.kind !== 'drawn' && !stacked && <VersionChip nodeId={img.id} at={toView({ x: e.x + e.width, y: e.y })} />}
               </span>
@@ -800,10 +800,14 @@ function VersionChip({ nodeId, at }: { nodeId: string; at: Pt }) {
 /** The height of the @name line under a picture (styles.css .refchips): what sits below it starts here. */
 const NAME_LINE = 16
 
-function NameChip({ r, at }: { r: NamedRef; at: Pt }) {
+/** A picture's name under it, never wider than the picture: views placed side by side ran their names into
+ *  each other ("@mira_three-quarter@mira_side", live test 2026-11-16), so a long one ends in an ellipsis
+ *  and says itself in full in its title. */
+export function NameChip({ r, at, width }: { r: NamedRef; at: Pt; width: number }) {
+  const name = `@${nameOf(r)}`
   return (
-    <div className="refchips" style={{ left: at.x, top: at.y }}>
-      <span className="tagchip" title="Its name: write it with @ in instructions and shots">@{nameOf(r)}</span>
+    <div className="refchips" style={{ left: at.x, top: at.y, maxWidth: Math.max(32, Math.round(width)) }}>
+      <span className="tagchip" title={`${name}: its name; write it with @ in instructions and shots`}>{name}</span>
     </div>
   )
 }
