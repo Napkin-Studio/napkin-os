@@ -9,3 +9,14 @@ export function stripOf(count: number, tiles = STRIP_TILES): { shown: number; mo
   if (count <= tiles) return { shown: count, more: 0 }
   return { shown: tiles - 1, more: count - (tiles - 1) }
 }
+
+/** The Storyboard node's line under its strip: how many shots Dex planned, counting his own (a shot he wrote
+ *  keeps last_writer 'dex'; one added by hand has none, one a person rewrote is theirs). "Dex planned 7 shots"
+ *  read wrong when 3 of them were added by hand in the Make room (live test 2026-11-16). */
+export function plannedLine(shots: readonly { last_writer?: unknown }[]): string {
+  const dex = shots.filter((s) => s.last_writer === 'dex').length
+  const n = shots.length
+  const many = (k: number) => `${k} ${k === 1 ? 'shot' : 'shots'}`
+  if (!dex) return many(n)
+  return dex === n ? `Dex planned ${many(n)} from the script` : `Dex planned ${dex} of the ${many(n)} from the script`
+}

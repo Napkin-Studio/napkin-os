@@ -89,6 +89,10 @@ describe('who is shown for a job (ui-behaviour 5.1)', () => {
       .toBe('Fin made the clip for shot 3 · Made on Runway: Mock could not')
     expect(whoIsWorking({ op: 'clip', provider: 'mock' }, 'submitted', ctx, 3).line).toBe('Fin is making the clip for shot 3')
     expect(whoIsWorking({ op: 'clip', provider: 'runway' }, 'failed', ctx, 3).line).toBe('The clip for shot 3 did not come back')
+    // Refused at submit: says so, and why (live test 2026-11-16).
+    const refused = { op: 'clip' as const, provider: 'runway', error: { code: 'invalid_input' as const, message: '@mira is not one of the images this step was given.', retryable: false } }
+    expect(whoIsWorking(refused, 'failed', ctx, 3).line).toBe('The clip for shot 3 was refused: @mira is not one of the images this step was given.')
+    expect(whoIsWorking({ ...refused, error: { code: 'provider_failed' as const, message: 'x', retryable: true } }, 'failed', ctx, 3).line).toBe('The clip for shot 3 did not come back')
   })
 })
 

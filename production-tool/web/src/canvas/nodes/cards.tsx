@@ -20,7 +20,7 @@ import { CardChromeContext, type Agent, type CardKind } from './cardChrome'
 import { useBlobUrl } from '../../ui/hooks'
 import { useProjectName } from '../../ui/useDownload'
 import { shotsWords } from '../../jobs/runs'
-import { stripOf } from './strip'
+import { plannedLine, stripOf } from './strip'
 
 /** @names in blue (mock Main). */
 const withRefs = (t: string): ReactNode[] => t.split(/(@[a-z][a-z0-9_]*)/g).map((p, i) => (p.startsWith('@') ? <span key={i} className="pt-mention">{p}</span> : p))
@@ -140,7 +140,7 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
       ) : <Start kind="storyboard" id={sb?.id} fallback={<p className="bl-excerpt faint">No shots yet · write the script, then plan shots.</p>} />}
       {planning ? <AtWork agent="dex" line="Dex is planning the shots from the script" />
         : shots.length ? (
-          <div className="bl-line">{chrome.agent('dex', false)}<span>Dex planned {shots.length} shots from the script{drawingIdx >= 0 ? ` · frame ${drawingIdx + 1} is being drawn` : ''}</span></div>
+          <div className="bl-line">{chrome.agent('dex', false)}<span>{plannedLine(shots)}{drawingIdx >= 0 ? ` · frame ${drawingIdx + 1} is being drawn` : ''}</span></div>
         ) : null}
     </Card>
   )
