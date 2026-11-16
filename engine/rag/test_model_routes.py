@@ -87,6 +87,21 @@ def test_explicit_model_and_only_model_bypass_routes(monkeypatch):
     assert seen == [("claude-opus-4-6", None)]
 
 
+def test_a_pinned_call_takes_the_pinned_effort_and_a_routed_one_its_route(monkeypatch):
+    """pinned_effort sets the effort of this thread's pinned-model calls only, and is put back after."""
+    import brief_llm as L
+    seen = []
+    monkeypatch.setattr(L, "_call_link", lambda provider, model, user, **k: seen.append((model, getattr(L._EFFORT_TL, "effort", None))) or '{"ok": 1}')
+    with L.pinned_effort("high"):
+        L._json_call("u", model="claude-opus-5-5", only_model=True)
+        L._json_call("u", route="judge", exclude="claude-opus-5-5")
+    L._json_call("u", model="claude-opus-5-5", only_model=True)
+    assert seen[0] == ("claude-opus-5-5", "high")
+    assert seen[1][1] == "low"
+    assert seen[-1] == ("claude-opus-5-5", None)
+    assert getattr(L._PINNED_EFFORT_TL, "effort", None) is None
+
+
 def test_effort_reaches_the_api_and_the_cli(monkeypatch):
     """On a thinking model the API call carries output_config.effort and the CLI --effort;
     on Opus 4.6 neither; after the call the thread's effort is cleared."""

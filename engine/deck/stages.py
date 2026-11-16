@@ -29,7 +29,6 @@ Calls go through ``brief_llm`` so transport (CLI login or API), retries, the Cla
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -95,15 +94,13 @@ def _call(stage: str, user: str, system: str) -> tuple[dict, dict]:
 
     Usage comes from a private ledger (brief_llm._stats_scope), not snapshots of the global one:
     _stats_snapshot() on a fresh process deadlocks (it takes the stats lock, then _ledger() resets
-    the empty ledger under the same lock). The effort goes through BRIEF_CLI_EFFORT, the one
-    setting a pinned-model call honours (route efforts apply to routed calls only).
+    the empty ledger under the same lock). The effort goes through brief_llm.pinned_effort, which a
+    pinned-model call honours (route efforts apply to routed calls only).
 
     A reply that is not usable JSON gets one repair call (REPAIR_SYSTEM): the bad text goes back and valid JSON only is
     asked for (investor level A failed at stage i on this). The extra call's tokens are in the usage. ``usage['usd']`` is
     the ledger's real figure when the transport gives one, else an ESTIMATE from tokens (spec.estimate_usd, ``usd_estimated``)."""
     import brief_llm as L
-    os.environ["BRIEF_CLI_EFFORT"] = EFFORT[stage]
-    L.CLI_TIMEOUT_S = max(L.CLI_TIMEOUT_S, 600.0)   # a high-effort storyline can run past the 240 s default (read at import)
     t = time.time()
     bad: list = []
 
@@ -118,7 +115,7 @@ def _call(stage: str, user: str, system: str) -> tuple[dict, dict]:
         return L._json_call(text, system=sysmsg, model=MODELS[stage], only_model=True, parse=reader, max_tokens=16000, retries=retries)
 
     repaired = False
-    with L._stats_scope() as led:
+    with L.pinned_effort(EFFORT[stage]), L._stats_scope() as led:
         obj = ask(user, system, 2)
         if obj is None and bad and str(bad[-1]).strip():
             repaired = True

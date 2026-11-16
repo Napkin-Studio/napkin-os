@@ -585,6 +585,29 @@ ROUTE_EFFORT = {"hero_judge": "low", "judge": "low", "mechanical": "low", "synth
 GROUNDED_FIELDS = ("reasons_to_believe", "desired_response")
 HERO_FIELDS = ("insight", "smp")
 _EFFORT_TL = threading.local()       # the effort of the call in flight on this thread
+_PINNED_EFFORT_TL = threading.local()  # the effort a caller set for its pinned-model calls (pinned_effort)
+
+
+class pinned_effort:
+    """`with pinned_effort("high"):` gives this thread's pinned-model calls (model= with no route) that
+    effort on a thinking model; routed calls keep ROUTE_EFFORT. The Deck Maker's stages set theirs this
+    way (engine/deck/stages.py). It replaced BRIEF_CLI_EFFORT, which only the removed claude -p transport
+    read (features/model-mock.clan: one local model backend, scripts/model-local)."""
+
+    def __init__(self, effort):
+        """The effort to use, or None for the model's own default."""
+        self.effort = effort
+
+    def __enter__(self):
+        """Set it for this thread, keeping any outer one."""
+        self.prev = getattr(_PINNED_EFFORT_TL, "effort", None)
+        _PINNED_EFFORT_TL.effort = self.effort
+        return self
+
+    def __exit__(self, *exc):
+        """Put the outer one back."""
+        _PINNED_EFFORT_TL.effort = self.prev
+        return False
 
 
 def routes_active() -> bool:
@@ -729,7 +752,7 @@ def _json_call(user, system=None, retries=1, model=None, accept=None, max_tokens
             return None
     else:
         chain = _model_chain(model)
-    _EFFORT_TL.effort = ROUTE_EFFORT.get(route) if routed is not None else None
+    _EFFORT_TL.effort = ROUTE_EFFORT.get(route) if routed is not None else getattr(_PINNED_EFFORT_TL, "effort", None)
     try:
         reader = parse or (functools.partial(_loads_lenient, whole=True) if whole else _loads_lenient)
         for provider, m in chain:
