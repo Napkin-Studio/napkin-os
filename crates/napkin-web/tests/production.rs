@@ -125,7 +125,7 @@ fn identity(dir: &std::path::Path) -> napkin_web::tenant::Identity {
     napkin_web::tenant::Identity {
         mode: napkin_web::tenant::Mode::Accounts {
             provider: napkin_web::auth::Provider::Roster(
-                napkin_web::auth::Roster::new(roster).unwrap(),
+                napkin_web::auth::Roster::open(dir.join("_people"), &roster).unwrap(),
             ),
             sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
         },
