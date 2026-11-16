@@ -8,6 +8,7 @@ import type { UiState } from '../doc/ui'
 import { lastWorkedModel } from '../jobs/follow'
 import { videoJoin, videoModel, videoPlan, videoRows, type Row } from '../jobs/runView'
 import { shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { withoutAsides } from '../stages/shotTitle'
 import { changeLabel, type DeltaRow } from './delta'
 import type { ShotWindow } from './cut'
 
@@ -66,7 +67,10 @@ export function filmMeta(ratio: string, lengthS: number | undefined, targetS: nu
 }
 
 /** A shot's title: its words, else "Shot n". */
-export const shotTitle = (s: Pick<Shot, 'action' | 'direction'> | undefined, n: number) => (s?.action?.trim() || s?.direction?.trim() || `Shot ${n}`)
+/** A shot's name in the rooms: its words with a name's description in brackets left out (stages/shotTitle
+ *  withoutAsides, the Storyboard's rule), else its direction, else "Shot n". */
+export const shotTitle = (s: Pick<Shot, 'action' | 'direction'> | undefined, n: number) =>
+  withoutAsides(s?.action ?? '') || withoutAsides(s?.direction ?? '') || `Shot ${n}`
 
 /** Whether a model can repeat a take exactly (its clip sheet's seed). */
 export function repeatsTake(provider: string | undefined, model: string | undefined): boolean {
