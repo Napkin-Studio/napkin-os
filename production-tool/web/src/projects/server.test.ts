@@ -222,6 +222,35 @@ describe('a project saved in one browser opens in another', () => {
   })
 })
 
+describe('a fresh browser brings the pictures down', () => {
+  it('several at once, never more than FETCH_AT_ONCE, and every one is kept', async () => {
+    const { fetchAssets, FETCH_AT_ONCE } = await import('./serverAssets')
+    const pics = await Promise.all(Array.from({ length: 14 }, async (_, i) => {
+      const bytes = new TextEncoder().encode(`picture ${i} ${Math.random()}`)
+      const hex = await sha256Hex(bytes)
+      return { bytes, a: { sha256: `sha256:${hex}`, kind: 'image', mime: 'image/png', origin: 'generated', locations: [`${CDN}/out/${i}`] } as DocAsset }
+    }))
+    const byUrl = new Map(pics.map((p, i) => [`${CDN}/out/${i}`, p.bytes]))
+    let now = 0
+    let most = 0
+    const server = {
+      where: async () => null,
+      download: async (url: string) => {
+        now++
+        most = Math.max(most, now)
+        await new Promise((r) => setTimeout(r, 5))
+        now--
+        return byUrl.get(url) ?? null
+      },
+    }
+    const doc = { refs: {}, shots: {}, frames: {}, takes: {}, renders: {}, exports: {}, assets: Object.fromEntries(pics.map((p) => [p.a.sha256, p.a])) } as unknown as ProductionDocument
+    expect(await fetchAssets(doc, server)).toBe(14)
+    expect(most).toBeGreaterThan(1)
+    expect(most).toBeLessThanOrEqual(FETCH_AT_ONCE)
+    for (const p of pics) expect(await getBlob(p.a.sha256)).toBeDefined()
+  })
+})
+
 describe('a save from somewhere else is never overwritten', () => {
   async function twoBrowsers() {
     forgetSent()
