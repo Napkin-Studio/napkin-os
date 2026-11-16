@@ -1,28 +1,33 @@
-// The Make room (board Make room): ask for footage. The player, the Boxes strip (one box is one generation; a
-// line inside a box is a cut), each box's takes stack (newest first, each with its change label), Compare,
-// and the Direct panel's Shot, Box and Change tabs. Make sends one generation: the new take lands on its
+// The Make room (board Make room): ask for footage. The player with each shot's window, the strip of every
+// shot in story order (features/join-or-cut-shots.clan: a box is one generation; between every two shots a
+// gap toggle joins them into one video or cuts them apart), each box's takes (in the Box tab, ticked two at a
+// time for Compare), and the Direct panel's Shot, Box and Change tabs. Make sends one generation: the new take lands on its
 // box's stack and in the Bin, never over an old one, and the Edit room's cut is not touched. Changing a shot
 // changes the next take only: the takes there are never marked out of date.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
-import { choiceToSend, controlsFor, modelChoicesFor } from '../capabilities'
+import { choiceToSend, clipRefCapacity, controlsFor, modelChoicesFor } from '../capabilities'
 import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type ModelChoice, type Shot } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { drawFrame, selectedFrame } from '../jobs/frames'
 import { makeClip, videoQuality } from '../jobs/clips'
 import { makeRuns } from '../jobs/runs'
-import { joinSelection, separateSelection, splitBoxAt, takeShotOut, videoJoin } from '../jobs/runView'
+import { joinHere, separateSelection, splitBoxAt, splitHere, takeShotOut, videoJoin } from '../jobs/runView'
 import { isRunning, jobAt, shotRefSet } from '../jobs/select'
 import { refName, refsList, shotNumber, shotsOf } from '../model/selectors'
-import { boxModel, boxModelNote, boxModelWhyNot, entryOf } from './boxModel'
+import { boxModelCant, boxModelLimit, boxModelNote, entryOf, takeLimits } from './boxModel'
+import { boxHow, boxLimit, boxPictures, boxWords, flipWords, fromWords, guideLine, roomBoxModel, stripGaps, withPick, type BoxLimit, type Gap } from './joinCut'
+import { CutIcon, GapButton, GapTip, JoinIcon, LimitPanel, StripShot, TakeStills } from './Strip'
+import { StripPlayer } from './StripPlayer'
+import { Mentions } from './Mentions'
 import { roomEmpty } from './emptyState'
 import { Float, MenuItem } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import { ChangeDrawer, type ChangeOpen } from './ChangeDrawer'
 import { cameraWord } from './delta'
-import { boxBeats, boxName, boxWindow, genTitle, inBox, makingLine, shotTitle, type Box, type Gen } from './model'
-import { Compare, TakePlayer } from './Players'
+import { boxName, boxWindow, genTitle, inBox, makingLine, shotTitle, type Box, type Gen } from './model'
+import { Compare } from './Players'
 import { Poster } from './Poster'
 import type { RoomData, Selection } from './Rooms'
 import { appendTake } from './editOps'
@@ -42,7 +47,7 @@ const MOVES: CameraMovement[] = CAMERA_MOVEMENTS.filter((m) => m !== 'crane_down
 const SPEEDS = [{ id: 'slow', label: 'Slow' }, { id: 'normal', label: 'Normal' }, { id: 'fast', label: 'Fast' }] as const
 
 
-export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseChange, onRoom, register }: {
+export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseChange, onRoom, register, onDone }: {
   data: RoomData
   shots: Shot[]
   sel: Selection
@@ -52,6 +57,8 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   onCloseChange: () => void
   onRoom: (r: 'make' | 'edit') => void
   register: (close: () => void) => () => void
+  /** A join or cut was made: Fin says so in the Booth, with Undo. */
+  onDone?: (text: string) => void
 }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
@@ -67,24 +74,77 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   }
   const box = data.boxes.find((b) => b.key === sel.boxKey) ?? data.boxes.find((b) => b.shotIds.includes(sel.shotId ?? '')) ?? data.boxes[0]
   const shot = (sel.shotId && box?.shotIds.includes(sel.shotId) ? doc.shots[sel.shotId] : undefined) ?? (box ? doc.shots[box.shotIds[0]] : undefined)
-  const shown = data.gens.find((g) => g.id === sel.genId && g.state === 'ready') ?? data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready')
-  // The box it plays for: the selected one when the take is one of its takes (a take made together, its shots
-  // made apart since, plays only the selected box's window), else its own.
-  const shownBox = shown ? (box && inBox(shown, box.key) ? box : data.boxes.find((b) => b.key === shown.boxKey)) : undefined
-  const span = shown ? boxWindow(shown, shownBox) : undefined
+  const shown = data.gens.find((g) => g.id === sel.genId && g.state === 'ready' && inBox(g, box?.key)) ?? data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready')
   const [ticked, setTicked] = useState<string[]>([])
   const [comparing, setComparing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [making, send] = useSending()
+  // The model picked for a box, kept by shot: a joined box keeps the earlier box's model (joinCut pickedFor).
   const [models, setModels] = useState<Record<string, ModelChoice>>({})
+  // The gap whose tip shows, and the gap to focus again after a keyboard flip (its button is drawn anew).
+  const [tip, setTip] = useState<{ gap: Gap; el: HTMLElement } | null>(null)
+  const refocus = useRef<string | null>(null)
+  // Takes made since the room opened show their stills on the box ("Just made").
+  const [openedAt] = useState(() => new Date().toISOString())
   useEffect(() => (comparing ? register(() => setComparing(false)) : undefined), [comparing, register])
+  useEffect(() => {
+    const id = refocus.current
+    if (!id) return
+    const el = document.querySelector<HTMLButtonElement>(`.jc-gap[data-gap="${id}"]`)
+    if (!el) return
+    refocus.current = null
+    el.focus()
+  })
 
   const pickShot = (b: Box, id: string) => { onSel({ ...sel, boxKey: b.key, shotId: id }); setTab('shot') }
   const pickBox = (b: Box) => { onSel({ ...sel, boxKey: b.key, shotId: b.shotIds.includes(sel.shotId ?? '') ? sel.shotId : b.shotIds[0] }); setTab('box') }
   const pickTake = (g: Gen, b?: Box) => onSel({ ...sel, genId: g.id, boxKey: b && inBox(g, b.key) ? b.key : g.boxKey })
   const tick = (id: string) => setTicked((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t.slice(-1), id]))
   const busy = (id: string) => isRunning(doc, jobAt(doc, ui, (c) => (c.for === 'clip' && c.shotId === id) || (c.for === 'run' && !!doc.videos[c.videoId]?.runs?.[c.runId]?.shot_ids.includes(id))))
+
+  // The strip: a gap before every shot but the first; what each box sends and its limits on its model.
+  const gaps = stripGaps(doc, data.boxes, data.videoId, config)
+  const gapAt = new Map(gaps.map((g) => [g.shotId, g]))
+  const declined = ui.declinedAdds ?? {}
+  const facts = new Map(data.boxes.map((b) => {
+    const pics = boxPictures(doc, b, declined)
+    const model = roomBoxModel(doc, b, config, models)
+    return [b.key, { pics, model, limit: boxLimit(doc, b, model, config, pics), words: boxWords(doc, b, pics) }] as const
+  }))
+  const tipWords = tip ? flipWords(doc, ui, data.videoId, config, tip.gap, models) : undefined
+  // The boxes a flip would touch, drawn dashed while its tip shows.
+  const preview = tip && !tip.gap.blocked ? new Map(data.boxes.filter((b) => {
+    const i = shots.findIndex((s) => s.id === tip.gap.shotId)
+    return b.shotIds.includes(tip.gap.shotId) || (i > 0 && b.shotIds.includes(shots[i - 1].id))
+  }).map((b) => [b.key, tip.gap.joined ? 'cut' : 'join'] as const)) : undefined
+
+  /** Flip a gap: a cut there joins the two shots into one video; a join there cuts them apart. One History
+   *  entry, one undo step (jobs/runView joinHere / splitHere); Fin says so in the Booth with Undo. */
+  const flip = async (g: Gap, keyboard: boolean) => {
+    if (g.blocked) return
+    setError(null)
+    setNotice(null)
+    try {
+      if (g.joined) await splitHere(docStore, data.videoId, g.shotId)
+      else await joinHere(docStore, data.videoId, g.shotId)
+      onDone?.(g.joined ? `Cut between shots ${g.n - 1} and ${g.n}: two videos now.` : `Joined shots ${g.n - 1} and ${g.n}: one video now.`)
+      if (keyboard) refocus.current = g.shotId
+      else setTip(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  }
+  /** The limit panel's "Cut before shot N". */
+  const cutBefore = async (shotId: string) => {
+    const n = shotNumber(doc, shotId)
+    try {
+      await splitHere(docStore, data.videoId, shotId)
+      onDone?.(`Cut before shot ${n}: two videos now.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  }
 
   /** One shot out of its box (Change tab's "Make shot N apart instead", the Shot tab), or the box split before a
    *  shot: the join changes, then the shot's new box is picked on the Box tab, where Make is (finding 10). */
@@ -103,12 +163,15 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
     }
   })
 
-  /** Make on a box: one generation of its shots. It lands as a new take; the cut is not touched. */
+  /** Make on a box: one generation of its shots. It lands as a new take; the cut is not touched. A box past
+   *  its model's limits is never sent (its Make is off; the box says why). */
   const make = (b: Box) => send(async () => {
     setError(null)
     setNotice(null)
     try {
-      const choice = choiceToSend('clip', config, boxModel(doc, b, config, models[b.key]))
+      const f = facts.get(b.key)
+      if (f?.limit?.hard) { setError(f.limit.why); return }
+      const choice = choiceToSend('clip', config, roomBoxModel(doc, b, config, models))
       if (videoJoin(doc, data.videoId, config) === 'film') {
         const failed = await makeRuns(deps, { videoId: data.videoId, shotIds: [b.shotIds[0]], config, again: true, busy, ...(choice ? { modelChoice: choice } : {}), quality: videoQuality(doc, data.videoId) })
         if (failed.length) setError(failed.join(' '))
@@ -164,26 +227,22 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   }, 'stage')
 
   const compareGens = ticked.map((id) => data.gens.find((g) => g.id === id)).filter((g): g is Gen => !!g && g.state === 'ready')
-  const beats = shown ? boxBeats(shown, span ? shownBox : undefined, (id) => shotNumber(doc, id)) : undefined
+  const tipEnd = () => setTip(null)
 
   return (
     <div className="rm-make">
-      <section className="rm-centre" aria-label="Takes and boxes">
+      <section className="rm-centre jc-centre" aria-label="Takes and boxes">
         <ClipChoice videoId={data.videoId} />
         {comparing && compareGens.length === 2 ? (
           <Compare a={{ sha: compareGens[1].asset, label: `${genTitle(compareGens[1], data.boxes)} · ${compareGens[1].label}` }}
             b={{ sha: compareGens[0].asset, label: `${genTitle(compareGens[0], data.boxes)} · ${compareGens[0].label}` }}
             onClose={() => setComparing(false)} />
         ) : (
-          <TakePlayer key={`${shown?.id ?? 'none'}:${span ? shownBox?.key : ''}`} sha={shown?.asset} label={shown ? `${shownBox ? boxName(shownBox) : 'Take'} · v${shown.version}` : ''} beats={beats}
-            {...(span ? { span } : {})}
-            className="rm-mainplayer" empty={empty.player}>
-            <button type="button" className="btn" disabled={compareGens.length !== 2} onClick={() => setComparing(true)}
-              title={compareGens.length === 2 ? 'Play the two ticked takes side by side' : 'Tick two takes under a box to compare them'}>
-              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="3" width="5" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.3" /><rect x="7.5" y="3" width="5" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>
-              Compare
-            </button>
-          </TakePlayer>
+          <StripPlayer key={`${shown?.id ?? 'none'}:${box?.key ?? ''}`} box={box?.endCard ? undefined : box} take={shown} shotId={sel.shotId} words={!!box && fromWords(doc, box)}>
+            {compareGens.length === 2 && (
+              <button type="button" className="btn sm" onClick={() => setComparing(true)} title="Play the two ticked takes side by side">Compare</button>
+            )}
+          </StripPlayer>
         )}
         {error && <div role="alert" className="rm-error">{error}<FrontButtons text={error} /></div>}
         {notice && <div role="status" className="rm-note">{notice}</div>}
@@ -201,23 +260,34 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
             )}
           </div>
         )}
-        <div className="rm-boxeshead">
+        <div className="boxes-h jc-bh">
           <b>Boxes</b>
-          <span className="rm-faint">A box is one video made at once. A line inside a box is a cut. Tick two takes to compare.</span>
+          <span>Shots in story order. <span className="jc-key"><JoinIcon /></span> joined: one video. <span className="jc-key cut"><CutIcon /></span> cut: a new video. Click a gap to switch it.</span>
         </div>
-        <div className="rm-boxes" role="list" aria-label="Boxes">
-          {data.boxes.map((b) => b.endCard ? (
-            <EndCardTile key={b.key} b={b} shot={doc.shots[b.shotIds[0]]} onEdit={() => onRoom('edit')} />
-          ) : (
-            <BoxCard key={b.key} b={b} data={data} sel={sel} selected={b.key === box?.key} making={making || b.shotIds.some(busy)}
-              onShot={(id) => pickShot(b, id)} onBox={() => pickBox(b)} onMake={() => void make(b)}
-              takes={data.gens.filter((g) => inBox(g, b.key))} ticked={ticked} onTick={tick} onTake={(g) => pickTake(g, b)}
-              onChange={(g) => onChange({ parentId: g.id, ...(sel.shotId && g.shotIds.includes(sel.shotId) ? { shotId: sel.shotId } : {}) })}
-              onAddToEdit={(g) => void appendTake(docStore, doc, data, g, b)} />
-          ))}
-          <button type="button" className="rm-box rm-newbox" role="listitem" disabled={making} onClick={() => void newBox()}
+        <div className="jc-strip" role="group" aria-label="Shots in story order">
+          {data.boxes.map((b, i) => {
+            const before = i > 0 ? gapAt.get(b.shotIds[0]) : undefined
+            const f = facts.get(b.key)!
+            return (
+              <div key={b.key} className="jc-unit">
+                {before && <GapButton gap={before} onFlip={(g, k) => void flip(g, k)} onTip={(g, el) => setTip({ gap: g, el })} onTipEnd={tipEnd} />}
+                {b.endCard ? <EndCardTile b={b} shot={doc.shots[b.shotIds[0]]} onEdit={() => onRoom('edit')} /> : (
+                  <BoxCard b={b} sel={tab === 'shot' ? sel : { ...sel, shotId: undefined }} since={openedAt} selected={b.key === box?.key} making={making || b.shotIds.some(busy)} words={f.words} limit={f.limit}
+                    model={f.model} gaps={gapAt} preview={preview?.get(b.key)} takes={data.gens.filter((g) => inBox(g, b.key))}
+                    onShot={(id) => pickShot(b, id)} onBox={() => pickBox(b)} onMake={() => void make(b)} onTake={(g) => pickTake(g, b)}
+                    onFlip={(g, k) => void flip(g, k)} onTip={(g, el) => setTip({ gap: g, el })} onTipEnd={tipEnd}
+                    onUse={f.limit?.alt ? () => setModels(withPick(models, b, f.limit!.alt!.choice)) : undefined}
+                    onCut={f.limit?.cutBefore ? () => void cutBefore(f.limit!.cutBefore!) : undefined} />
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <div className="jc-after">
+          <button type="button" className="btn" disabled={making} onClick={() => void newBox()}
             title="A new box: a video made from your words and references, no storyboard frame needed">+ New box</button>
         </div>
+        {tip && tipWords && <GapTip anchor={tip.el} words={tipWords} />}
       </section>
       <aside className="rm-direct" aria-label="Direct">
         <div className="rm-tabs" role="tablist" aria-label="Direct">
@@ -231,7 +301,12 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
           {tab === 'shot' && shot && box && <ShotTab key={shot.id} shot={shot} n={shotNumber(doc, shot.id)} box={box} data={data} onBox={() => setTab('box')}
             onOut={() => void reshape(shot.id, 'out')} onSplit={() => void reshape(shot.id, 'split')} busy={making}
             onAddShot={() => void send(async () => { const id = await addShotToBox(docStore, data.videoId, box.shotIds); onSel({ shotId: id }) })} />}
-          {tab === 'box' && box && <BoxTab key={box.key} box={box} data={data} shots={shots} model={models[box.key]} onModel={(m) => setModels({ ...models, [box.key]: m })} onMake={() => void make(box)} making={making} />}
+          {tab === 'box' && box && !box.endCard && <BoxTab key={box.key} box={box} data={data} sel={sel} facts={facts.get(box.key)!}
+            onModel={(m) => setModels(withPick(models, box, m))} onMake={() => void make(box)} making={making || box.shotIds.some(busy)}
+            ticked={ticked} onTick={tick} onTake={(g) => pickTake(g, box)}
+            onChange={(g) => onChange({ parentId: g.id, ...(sel.shotId && g.shotIds.includes(sel.shotId) ? { shotId: sel.shotId } : {}) })}
+            onAddToEdit={(g) => void appendTake(docStore, doc, data, g, box)}
+            onSeparate={() => void separateSelection(docStore, data.videoId, box.shotIds).then(() => onDone?.(`${boxName(box)}’s shots are separate videos now.`))} />}
           {tab === 'change' && (() => {
             const parent = change ? data.gens.find((g) => g.id === change.parentId) : (shown && inBox(shown, box?.key) ? shown : data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready'))
             if (!parent) return <p className="rm-note rm-pad">Make a take of this box first. Then change one thing and make it again.</p>
@@ -245,17 +320,22 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   )
 }
 
-function BoxCard({ b, data, selected, sel, making, takes, ticked, onShot, onBox, onMake, onTick, onTake, onChange, onAddToEdit }: {
-  b: Box; data: RoomData; selected: boolean; sel: Selection; making: boolean; takes: Gen[]; ticked: string[]
-  onShot: (id: string) => void; onBox: () => void; onMake: () => void; onTick: (id: string) => void; onTake: (g: Gen) => void
-  onChange: (g: Gen) => void; onAddToEdit: (g: Gen) => void
+type BoxFacts = { pics: ReturnType<typeof boxPictures>; model: ModelChoice | undefined; limit: BoxLimit | undefined; words: { title: string; sub: string } }
+
+/** A box of the strip (mock join-or-cut-v1): what Make will do (no prices), its shots with the joined gaps
+ *  between them, its limits on its model, the stills of its newest take (one per shot window), and Make. */
+function BoxCard({ b, selected, sel, since, making, takes, words, limit, model, gaps, preview, onShot, onBox, onMake, onTake, onFlip, onTip, onTipEnd, onUse, onCut }: {
+  b: Box; selected: boolean; sel: Selection; since: string; making: boolean; takes: Gen[]
+  words: { title: string; sub: string }; limit?: BoxLimit; model?: ModelChoice; gaps: Map<string, Gap>; preview?: 'join' | 'cut'
+  onShot: (id: string) => void; onBox: () => void; onMake: () => void; onTake: (g: Gen) => void
+  onFlip: (g: Gap, keyboard: boolean) => void; onTip: (g: Gap, el: HTMLElement) => void; onTipEnd: () => void
+  onUse?: () => void; onCut?: () => void
 }) {
   const doc = useDoc()
-  const [all, setAll] = useState(false)
-  const shown = all ? takes : takes.slice(0, 3)
-  const title = `${boxName(b)} · ${b.together ? 'Made together' : 'One shot'} · ${Math.round(b.lengthS * 10) / 10} s`
   const differs = useMemo(() => nextDiffers(doc, b, takes), [doc, b, takes])
-  const has = takes.some((g) => g.state === 'ready')
+  const top = takes.find((g) => g.state === 'ready')
+  const has = !!top
+  const over = !!limit?.hard
   // A Make the relay refused or that failed (no take for it): said on the box, never silent.
   const ui = useUi()
   const lastJob = jobAt(doc, ui, (c) => (c.for === 'clip' && b.shotIds.includes(c.shotId)) || (c.for === 'run' && !!doc.videos[c.videoId]?.runs?.[c.runId]?.shot_ids.some((id) => b.shotIds.includes(id))))
@@ -263,39 +343,41 @@ function BoxCard({ b, data, selected, sel, making, takes, ticked, onShot, onBox,
   // A take that landed after the failure answers it: the note goes (it stayed under a good take, full test 2026-11-04).
   const answered = !!failedJob?.created_at && takes.some((g) => g.state === 'ready' && !!g.createdAt && g.createdAt > failedJob.created_at!)
   const failedLine = !answered && failedJob?.state === 'failed' && failedJob.error ? plainJobError(failedJob.error, failedJob.op).message : undefined
+  const makingNow = takes.find((g) => g.state === 'making')
+  const fresh = !!top?.createdAt && top.createdAt > since
+  const modelLabel = b.together && model && !fromWords(doc, b) ? entryOf(model)?.label : undefined
+  const title = `${boxName(b)}: ${words.title}`
   return (
-    <section className={`rm-box ${selected ? 'sel' : ''}`} role="listitem" aria-label={title}>
-      <header className="rm-boxtop">
-        <button type="button" className="rm-boxtitle rm-clamp2" title={`${title}. Open the Box tab`} onClick={onBox}>{title}</button>
-        <button type="button" className="btn primary rm-make-btn" disabled={making} onClick={onMake}
-          title={differs ? `The next take differs: ${differs}` : has ? 'Make another take of this box' : 'Make this box'}>
-          {making ? 'Making…' : differs || has ? 'Make new take' : 'Make'}
-        </button>
-      </header>
-      {differs && <div className="rm-differs rm-clamp2" title={`Next take differs: ${differs}`}>Next take differs: {differs}</div>}
-      {failedLine && <div className="rm-error" role="alert">The last Make did not work: {failedLine}<FrontButtons text={failedLine} /></div>}
-      <div className="rm-shots">
+    <section className={`jc-box ${b.together ? 'multi' : 'one'} ${selected ? 'sel' : ''} ${over ? 'over' : ''} ${preview ? `pv pv-${preview}` : ''}`} aria-label={title}>
+      <button type="button" className="jc-bhd" onClick={onBox} title={`${title}. Open the Box tab`}>
+        <span className="jc-kick">{boxName(b)}</span>
+        <b>{words.title}</b>
+        <span className="jc-sub"><Mentions text={words.sub} /></span>
+      </button>
+      <div className="jc-row">
         {b.shotIds.map((id, i) => {
-          const s = doc.shots[id]
-          const n = shotNumber(doc, id)
+          const g = i > 0 ? gaps.get(id) : undefined
           return (
-            <div key={id} className="rm-shotwrap">
-              {i > 0 && <span className="rm-cutline" title="A cut" aria-label="A cut"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle cx="3" cy="3" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.1" /><circle cx="3" cy="9" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.1" /><path d="M4.5 4 11 9.5M4.5 8 11 2.5" stroke="currentColor" strokeWidth="1.1" /></svg></span>}
-              <button type="button" className={`rm-shotcard ${sel.shotId === id ? 'sel' : ''}`} onClick={() => onShot(id)} aria-pressed={sel.shotId === id}>
-                <Poster sha={selectedFrame(doc, id)?.asset} words={shotTitle(s, n)} className="rm-shotthumb" />
-                <span className="rm-shotname rm-clamp2" title={`Shot ${n} · ${shotTitle(s, n)}`}><b>{n}</b> {shotTitle(s, n)}</span>
-                <span className="rm-camchip rm-clamp1" title={`Camera: ${cameraWord('size', s?.camera.size)} · ${cameraWord('movement', s?.camera.movement)}`}>{cameraWord('size', s?.camera.size)} · {cameraWord('movement', s?.camera.movement)}</span>
-              </button>
-            </div>
+            <Fragment key={id}>
+              {g && <GapButton gap={g} suggest={over && limit?.cutBefore === id} onFlip={onFlip} onTip={onTip} onTipEnd={onTipEnd} />}
+              <StripShot id={id} picked={sel.shotId === id && selected} onPick={() => onShot(id)} />
+            </Fragment>
           )
         })}
       </div>
-      <div className="rm-stack" aria-label={`Takes of ${boxName(b)}`}>
-        {!takes.length && <p className="rm-note">No takes yet.</p>}
-        {shown.map((g) => <TakeRow key={g.id} g={g} data={data} atS={boxWindow(g, b)?.inS} picked={sel.genId === g.id} ticked={ticked.includes(g.id)} onTick={() => onTick(g.id)} onPlay={() => onTake(g)}
-          onChange={() => onChange(g)} onAddToEdit={() => onAddToEdit(g)} />)}
-        {takes.length > 3 && <button type="button" className="btn ghost rm-wide" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${takes.length} takes`}</button>}
-      </div>
+      {limit && <LimitPanel limit={limit} onUse={onUse} onCut={onCut} cutN={limit.cutBefore ? shotNumber(doc, limit.cutBefore) : undefined} />}
+      {differs && <div className="rm-differs rm-clamp2" title={`Next take differs: ${differs}`}>Next take differs: {differs}</div>}
+      {failedLine && <div className="rm-error" role="alert">The last Make did not work: {failedLine}<FrontButtons text={failedLine} /></div>}
+      {top && b.together && fresh && <TakeStills take={top} box={b} fresh={fresh} />}
+      <footer className="jc-bft">
+        <button type="button" className="btn primary sm" disabled={making || over} onClick={onMake}
+          title={over ? limit!.why : differs ? `The next take differs: ${differs}` : has ? 'Make another take of this box' : 'Make this box'}>
+          {making ? 'Making…' : differs || has ? 'Make new take' : 'Make'}
+        </button>
+        {makingNow && <span className="jc-tk making" title={makingNow.label}>v{makingNow.version}</span>}
+        {top && !(b.together && fresh) && <button type="button" className="jc-tk" onClick={() => onTake(top)} title={`Play v${top.version} · ${top.label}`}>v{top.version}</button>}
+        {modelLabel && <span className="jc-model" title={modelLabel}>{modelLabel}</span>}
+      </footer>
     </section>
   )
 }
@@ -348,7 +430,7 @@ function TakeRow({ g, data, atS, picked, ticked, onTick, onPlay, onChange, onAdd
 
 function EndCardTile({ b, shot, onEdit }: { b: Box; shot?: Shot; onEdit: () => void }) {
   return (
-    <section className="rm-box endcard" role="listitem" aria-label="End card">
+    <section className="rm-box endcard" aria-label="End card">
       <header className="rm-boxtop"><span className="rm-boxtitle rm-clamp2">End card · {Math.round(b.lengthS * 10) / 10} s</span></header>
       <div className="rm-cardtile" aria-hidden="true"><span className="rm-clamp2">{shot?.action?.trim() || 'Card'}</span></div>
       <p className="rm-note">Not made by a model. Its words, logo and colour are set in the Edit room.</p>
@@ -445,14 +527,17 @@ function ShotTab({ shot, n, box, data, onBox, onAddShot, onOut, onSplit, busy }:
             onDragOver={(e) => { if (e.dataTransfer.types.includes(IMG_DRAG)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setOver(true) } }}
             onDragLeave={() => setOver(false)}
             onDrop={(e) => { const refId = e.dataTransfer.getData(IMG_DRAG); setOver(false); if (refId) { e.preventDefault(); void setStartFrame(docStore, shot.id, refId) } }}>
-            <span className="rm-rowname">Starts on</span><Poster sha={frame?.asset ?? start?.sha} words="Optional: drop a Bin picture" />
+            <span className="rm-rowname">{box.together ? 'Guide' : 'Starts on'}</span><Poster sha={frame?.asset ?? start?.sha} words="Optional: drop a Bin picture" />
             {start?.refId && <button type="button" className="btn link" onClick={() => void setStartFrame(docStore, shot.id, null)}>Clear</button>}
           </div>
           <div className={`rm-well ${box.together ? 'off' : ''}`}><span className="rm-rowname">Ends on</span>
             {box.together ? <div className="rm-poster empty"><span className="rm-clamp2">Not when shots are made together</span></div> : <Poster sha={nextFrame?.asset} words="Nothing set" />}
           </div>
         </div>
-        {box.together && <p className="rm-note">This model can't end on a set frame when shots are made together.</p>}
+        {box.together && (frame || start)
+          ? <p className="rm-note">Image {box.shotIds.filter((id, k) => k <= i && (!!selectedFrame(doc, id) || !!startPicture(doc, id))).length} of {boxName(box)}’s guides. Shot {n} follows it; it is not pinned, and no shot made together ends on a set frame.</p>
+          : box.together ? <p className="rm-note">No frame: shot {n} is made from its words, with the others as one video.</p>
+            : frame || start ? <p className="rm-note">The video starts on this frame.</p> : null}
         {box.together && <button type="button" className="btn link rm-linkrow" onClick={onBox}>Box settings</button>}
       </fieldset>
       {box.together && (
@@ -530,61 +615,97 @@ function RefPicker({ shot, max }: { shot: Shot; max: number }) {
 }
 
 
-/** The Box tab: made together or apart, the model (only those that can make it, the others greyed with why),
- *  and the limits. */
-function BoxTab({ box, data, shots, model, onModel, onMake, making }: {
-  box: Box; data: RoomData; shots: Shot[]; model?: ModelChoice; onModel: (m: ModelChoice) => void; onMake: () => void; making: boolean
+/** The Box tab (mock join-or-cut-v1): what the box is, One video / Separate videos, what Fin sends (each frame
+ *  as Image k → shot n, then the characters' pictures), the models (those that cannot make it greyed with why;
+ *  the one it is on marked when it is past its limits), Make, and the box's takes, ticked two for Compare. */
+function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick, onTake, onChange, onAddToEdit, onSeparate }: {
+  box: Box; data: RoomData; sel: Selection; facts: BoxFacts; onModel: (m: ModelChoice) => void; onMake: () => void; making: boolean
+  ticked: string[]; onTick: (id: string) => void; onTake: (g: Gen) => void; onChange: (g: Gen) => void; onAddToEdit: (g: Gen) => void; onSeparate: () => void
 }) {
-  const { doc: docStore } = useServices()
   const doc = useDoc()
   const { config } = useConfig()
+  const [all, setAll] = useState(false)
   const options = modelChoicesFor('clip', config)
-  const current = boxModel(doc, box, config, model)
-  const i = shots.findIndex((s) => s.id === box.shotIds[0])
-  const next = shots[i + box.shotIds.length]
-  const take = (m: ModelChoice) => entryOf(m)?.video.take
-  const why = (m: ModelChoice) => boxModelWhyNot(doc, box, m)
-  const hint = (m: ModelChoice) => boxModelNote(doc, box, m)
-  const t = current ? take(current) : undefined
+  const current = facts.model
+  const takes = data.gens.filter((g) => inBox(g, box.key))
+  const shownTakes = all ? takes : takes.slice(0, 3)
+  const over = !!facts.limit?.hard
+  const guides = facts.pics.filter((p) => p.kind === 'frame')
+  const cast = facts.pics.filter((p) => p.kind !== 'frame')
+  const left = new Set(facts.limit?.leftOut ?? [])
   return (
-    <div className="rm-tab">
+    <div className="rm-tab jc-boxtab">
       <div className="rm-tabhead">
         <span className="rm-kicker pt-mono">{boxName(box)}</span>
-        <b className="rm-clamp2">{box.together ? `Made together · ${box.shotIds.length} shots · ${Math.round(box.lengthS * 10) / 10} s` : `One shot · ${Math.round(box.lengthS * 10) / 10} s`}</b>
+        <b className="rm-clamp2">{facts.words.title}</b>
       </div>
       <fieldset className="rm-field">
         <legend className="rm-label">How it is made</legend>
-        <div className="rm-seg" role="radiogroup" aria-label="How it is made">
-          {/* Boxes group shots only with connected video on (rooms/model.ts roomBoxes): without it a join was
-              written and never shown, so the click looked dead (full test, 2026-11-04). Say so instead. */}
-          <button type="button" role="radio" aria-checked={box.together} className={box.together ? 'on' : ''} disabled={box.together || !next || next.kind === 'end_card' || !config.flags.connectedVideo}
-            onClick={() => void joinSelection(docStore, data.videoId, [...box.shotIds, next!.id])}
-            title={box.together ? undefined : !config.flags.connectedVideo ? 'Making several shots as one video is off in this build' : next && next.kind !== 'end_card' ? `Make it one video with shot ${i + box.shotIds.length + 1}` : 'There is no shot after it to join'}>Made together</button>
-          <button type="button" role="radio" aria-checked={!box.together} className={!box.together ? 'on' : ''} disabled={!box.together}
-            onClick={() => void separateSelection(docStore, data.videoId, box.shotIds)}>Made apart</button>
+        <div className="jc-seg" role="radiogroup" aria-label="How it is made">
+          <button type="button" role="radio" aria-checked={box.together} className={box.together ? 'on' : ''} disabled={!box.together}
+            title={box.together ? undefined : 'Join it to the shot beside it with the gap in the strip'}>One video</button>
+          <button type="button" role="radio" aria-checked={!box.together} className={!box.together ? 'on' : ''} disabled={!box.together || making}
+            onClick={box.together ? onSeparate : undefined}>Separate videos</button>
         </div>
-        <p className="rm-note">{box.together ? 'One video, cut where the lines are. A change to one shot remakes the box.' : 'This shot is made on its own.'}</p>
+        <p className="rm-note">{boxHow(doc, box, facts.pics)}</p>
       </fieldset>
+      {box.together && facts.pics.length > 0 && (
+        <fieldset className="rm-field">
+          <legend className="rm-label">What Fin sends</legend>
+          <div className="jc-guides">
+            {guides.map((p) => (
+              <div key={p.id} className={`jc-gi ${p.shotId && left.has(p.shotId) ? 'out' : ''}`}>
+                <Poster sha={p.sha} className="jc-giimg" />
+                <span><b>{p.label}</b> → shot {shotNumber(doc, p.shotId!)}{p.shotId && left.has(p.shotId) ? ' · left out' : ''}</span>
+              </div>
+            ))}
+            {cast.map((p) => (
+              <div key={p.id} className="jc-gi">
+                <Poster sha={p.sha} className="jc-giimg sq" />
+                <span title={guideLine(doc, p)}>{p.label}</span>
+              </div>
+            ))}
+          </div>
+        </fieldset>
+      )}
       <fieldset className="rm-field">
         <legend className="rm-label">Model</legend>
-        <div className="rm-models" role="radiogroup" aria-label="Model">
+        <div className="jc-models" role="radiogroup" aria-label="Model">
           {options.map((o) => {
-            const no = why(o) ?? undefined
-            const note = no ? undefined : hint(o)
+            const cant = boxModelCant(doc, box, o)
+            const lim = cant ? undefined : boxLimit(doc, box, o, config, facts.pics)
+            const why = cant ?? (lim?.hard ? boxModelLimit(box, o) : undefined)
+            const t = takeLimits(o)
+            const pics = clipRefCapacity(o, false, config).max
+            const cap = box.together && !cant && t ? `Up to ${t.maxS} s · ${t.maxShots} shots · ${pics} pictures${lim && !lim.hard && lim.leftOut.length ? ' · leaves a frame out' : ''}` : undefined
+            const note = why ? undefined : cap ?? boxModelNote(doc, box, o)
             const on = current?.provider === o.provider && current.model === o.model
+            const isDefault = options[0] === o
             return (
-              <button key={`${o.provider}:${o.model}`} type="button" role="radio" aria-checked={on} disabled={!!no} className={`rm-modelrow ${on ? 'on' : ''}`} onClick={() => onModel({ provider: o.provider, model: o.model })}>
-                <span className="rm-clamp1" title={o.label}>{o.label}</span>
-                {(no ?? note) && <span className="rm-faint rm-clamp2">{no ?? note}</span>}
+              <button key={`${o.provider}:${o.model}`} type="button" role="radio" aria-checked={on} disabled={!!why && !on}
+                className={`jc-mrow ${on ? 'on' : ''} ${why ? 'no' : ''} ${on && why ? 'bad' : ''}`} onClick={() => onModel({ provider: o.provider, model: o.model })}>
+                <span className="rm-clamp1" title={o.label}>{o.label}{isDefault && <i>default</i>}</span>
+                {(why ?? note) && <small className="rm-clamp2">{why ?? note}</small>}
               </button>
             )
           })}
         </div>
-        {box.together && t?.ok && <p className="rm-note">Up to {t.maxShots ?? 6} shots or {t.maxS ?? 15} s together.</p>}
       </fieldset>
-      <button type="button" className="btn primary rm-wide" disabled={making} onClick={onMake}>{making ? 'Making…' : data.gens.some((g) => inBox(g, box.key)) ? 'Make new take' : 'Make'}</button>
-      <p className="rm-note">A new take lands on this box's stack and in the Bin. Your cut stays as it is.</p>
+      <button type="button" className="btn primary rm-wide" disabled={making || over} onClick={onMake} title={over ? facts.limit!.why : undefined}>
+        {making ? 'Making…' : takes.some((g) => g.state === 'ready') ? 'Make new take' : 'Make'}
+      </button>
+      <p className="rm-note">A new take lands on this box and in the Bin. Your cut stays as it is.</p>
+      {takes.length > 0 && (
+        <fieldset className="rm-field">
+          <legend className="rm-label">Takes</legend>
+          <div className="rm-stack jc-stack" aria-label={`Takes of ${boxName(box)}`}>
+            {shownTakes.map((g) => <TakeRow key={g.id} g={g} data={data} atS={boxWindow(g, box)?.inS} picked={sel.genId === g.id} ticked={ticked.includes(g.id)} onTick={() => onTick(g.id)} onPlay={() => onTake(g)}
+              onChange={() => onChange(g)} onAddToEdit={() => onAddToEdit(g)} />)}
+            {takes.length > 3 && <button type="button" className="btn ghost rm-wide" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${takes.length} takes`}</button>}
+          </div>
+          <p className="rm-note">Tick two takes to compare them.</p>
+        </fieldset>
+      )}
     </div>
   )
 }
-

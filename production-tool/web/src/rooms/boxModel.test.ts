@@ -7,7 +7,7 @@ import type { Config, ProductionDocument } from '../contracts/types'
 import { modelEntry } from '../jobs/runs'
 import { MAYA, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addFrame, addShots } from '../test/model'
-import { boxModel, boxModelWhyNot } from './boxModel'
+import { boxModel, boxModelLimit, boxModelWhyNot } from './boxModel'
 import type { Box } from './model'
 
 const on: Config = { ...CONFIGS.live, flags: { ...CONFIGS.live.flags, connectedVideo: true } }
@@ -31,11 +31,15 @@ describe('a 15 s box of 4 shots made together', () => {
     expect(boxModelWhyNot(doc, box, wan3)).toBeUndefined()
     expect(boxModelWhyNot(doc, box, veo)).toBe("Can't make several shots as one video")
   })
-  it('never picks it, even when it was picked before or is the first offered', () => {
-    const picked = boxModel(doc, box, on, omni)
-    expect(picked?.model).not.toBe('gemini_omni_flash_1.1')
-    expect(boxModelWhyNot(doc, box, picked!)).toBeUndefined()
-    expect(modelChoicesFor('clip', on).some((o) => o.model === picked!.model)).toBe(true)
+  it('never falls on it unpicked; picked, it is kept and the box says it is too long (join-or-cut-shots)', () => {
+    const unpicked = boxModel(doc, box, on)
+    expect(boxModelWhyNot(doc, box, unpicked!)).toBeUndefined()
+    expect(modelChoicesFor('clip', on).some((o) => o.model === unpicked!.model)).toBe(true)
+    // A joined box keeps the earlier box's model: it is never quietly swapped (Make waits on the box's limits).
+    expect(boxModel(doc, box, on, omni)).toEqual(omni)
+    expect(boxModelLimit(box, omni)).toBe('Longer than Gemini Omni Flash 1.1 makes in one go (10 s)')
+    // A model that cannot make shots together at all is still never kept.
+    expect(boxModel(doc, box, on, veo)?.model).not.toBe('veo3.1_fast')
   })
   it('a 10 s box keeps Omni Flash, and more shots than a model takes is greyed too', () => {
     const short = together([2.5, 2.5, 2.5, 2.5])

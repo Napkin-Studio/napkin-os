@@ -13,7 +13,7 @@ import { jobCtx } from '../jobs/runner'
 import { shotNumber } from '../model/selectors'
 import type { CastKey } from '../ui/agents/cast'
 import { Booth } from '../ui/booth/Booth'
-import { BoothAgent, BoothAsk, BoothBox, BoothSection, ChoiceCard, NoteCard, ScopeChip } from '../ui/booth/BoothParts'
+import { BoothAgent, BoothAsk, BoothBox, BoothSection, ChoiceCard, DoneCard, NoteCard, ScopeChip } from '../ui/booth/BoothParts'
 import { ago, useChain, useLater } from '../ui/booth/hooks'
 import { agentNotes, groupFailures, stageWaiting, triesWords, videoAddresses } from '../ui/booth/notes'
 import { useBooth } from '../ui/booth/useBooth'
@@ -30,11 +30,14 @@ export const EDIE_LINE = 'Questions about the cut wait here. Nothing changes unt
 /** A take is one of a box's takes: its own box, or a box made apart from it. */
 const inBox = (g: Gen, key: string | undefined) => !!key && (g.boxKey === key || (g.boxKeys ?? []).includes(key))
 
-export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady }: {
+export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady, done, onUndo }: {
   room: RoomName
   data: RoomData
   sel: Selection
   change: ChangeOpen | null
+  /** The last join or cut in the Make room's strip (features/join-or-cut-shots.clan): said here, with Undo. */
+  done?: { id: number; text: string } | null
+  onUndo?: () => void
   /** Open the Change tab (Make) on a take, with words for its next take. */
   onChange: (c: ChangeOpen) => void
   /** 'Make shot N apart': the shot out into a box of its own (jobs/runView takeShotOut). */
@@ -144,9 +147,10 @@ export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady 
       )}
       {count > 0 && <BoothSection label="Waiting for you" count={count} />}
       {ordered.map((x) => x.node)}
-      {notes.length > 0 && <BoothSection label="Notes" />}
+      {(notes.length > 0 || !!done) && <BoothSection label="Notes" />}
+      {done && <DoneCard key={done.id} agent="wren" text={`${done.text} Nothing is sent until you press Make.`} onUndo={onUndo} />}
       {notes.map((n) => <NoteCard key={`${n.agent}:${n.id}`} agent={n.agent} label={n.label} body={n.body} time={ago(n.at)} />)}
-      {!count && !notes.length && <p className="bt-quiet">Nothing waiting. {room === 'make' ? 'Takes that need you come here.' : 'Questions about the cut come here.'}</p>}
+      {!count && !notes.length && !done && <p className="bt-quiet">Nothing waiting. {room === 'make' ? 'Takes that need you come here.' : 'Questions about the cut come here.'}</p>}
     </Booth>
   )
 }
