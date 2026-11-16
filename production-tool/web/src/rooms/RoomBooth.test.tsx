@@ -41,6 +41,10 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 30)) })
+/** Wait (up to 3 s) until `ok` holds: the store and the chain take longer on a busy machine. */
+const until = async (ok: () => boolean) => {
+  for (let i = 0; i < 100 && !ok(); i++) await act(async () => { await new Promise((r) => setTimeout(r, 30)) })
+}
 
 async function project(width = 1600) {
   Object.defineProperty(window, 'innerWidth', { value: width, configurable: true })
@@ -90,7 +94,7 @@ describe("Dex's Booth in the Storyboard", () => {
     const docId = services.clan!.documentId()
     await services.clan!.record('plan 3 shots on the storyboard', undefined, { agent: 'dex', targets: [`${docId}#storyboards[${sb}]`] })
     render(createElement(DexBooth, { storyboardId: sb, onShotAsk: (_a: Ask, shotId: string, o: 'keep' | 'remove') => { answered.push(`${o}:${shotId}`) } }))
-    await act(async () => { await new Promise((r) => setTimeout(r, 400)) })
+    await until(() => !!el.querySelector('.booth [data-booth-note]') && el.querySelectorAll('.booth .bc.ask').length === 2)
     const booth = el.querySelector('.booth') as HTMLElement
     expect(booth.querySelector('.bt-agent')?.textContent).toContain('Dex · directs')
     expect(booth.querySelector('textarea')).toBeNull()
@@ -101,7 +105,7 @@ describe("Dex's Booth in the Storyboard", () => {
     await act(async () => { buttonIn(cards[0], 'Keep').click() })
     expect(answered).toEqual([`keep:${shots[1]}`])
     await act(async () => { buttonIn(cards[1], 'Clear').click() })
-    await settle()
+    await until(() => booth.querySelectorAll('.bc.ask').length === 1)
     expect(booth.querySelectorAll('.bc.ask')).toHaveLength(1)
     expect([...booth.querySelectorAll('[data-booth-note] .bc-note')].map((n) => n.textContent)).toEqual(['Planned 3 shots on the storyboard.'])
     expect(el.querySelector('.booth-col')?.getAttribute('style')).toContain('--bw: 420px')
@@ -144,7 +148,7 @@ describe('the Booth in the Video rooms', () => {
     expect(cards[0].querySelector('.bc-tries')?.textContent).toBe('Tried 2 times, stopped the same way each time.')
     expect(el.querySelector('.booth .bt-sec')?.textContent).toBe('Waiting for you1')
     await act(async () => { buttonIn(cards[0], 'Clear').click() })
-    await settle()
+    await until(() => el.querySelectorAll('.booth .bc.ask').length === 0)
     expect(el.querySelectorAll('.booth .bc.ask')).toHaveLength(0)
     expect(Object.values(services.ui.get().jobs).filter((j) => j.dismissed)).toHaveLength(2)
   })

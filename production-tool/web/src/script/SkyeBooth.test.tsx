@@ -101,6 +101,10 @@ async function open(words: string, opts: { width?: number; booth?: AppUi['booth'
 }
 
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 30)) })
+/** Wait (up to 3 s) until `ok` holds: the store's async steps take longer on a busy machine. */
+const until = async (ok: () => boolean) => {
+  for (let i = 0; i < 100 && !ok(); i++) await act(async () => { await new Promise((r) => setTimeout(r, 30)) })
+}
 const booth = (el: HTMLElement) => el.querySelector('.se .booth') as HTMLElement
 const buttonIn = (at: Element, name: string) => [...at.querySelectorAll('button')].find((b) => b.textContent === name) as HTMLButtonElement
 /** Type into a React-controlled textarea. */
@@ -140,7 +144,7 @@ describe("Skye's box in the Booth", () => {
     expect(box.placeholder).toBe('Tell Skye what to write or change…')
     await act(async () => { typeInto(box, '30 s ad: a woman finds a lost puppy in the rain.') })
     await act(async () => { buttonIn(b, 'Ask Skye').click() })
-    await settle()
+    await until(() => sent.length > 0)
     expect(sent).toHaveLength(1)
     expect(sent[0].write).toMatchObject({ intent: 'draft', mode: 'draft', instruction: '30 s ad: a woman finds a lost puppy in the rain.', target: { kind: 'scene' } })
     expect(box.value).toBe('')
@@ -164,7 +168,7 @@ describe("Skye's box in the Booth", () => {
     expect([...b.querySelectorAll('.bt-verbs button')].map((x) => x.textContent)).toEqual(['Tighten', 'Make it 30 s', 'Add a beat', 'Write the VO', 'Say it another way'])
     await act(async () => { typeInto(b.querySelector('textarea') as HTMLTextAreaElement, 'slow this down') })
     await act(async () => { buttonIn(b, 'Ask Skye').click() })
-    await settle()
+    await until(() => sent.length > 0)
     expect(sent).toHaveLength(1)
     expect(sent[0].write).toMatchObject({ intent: 'instruct', mode: 'revise', instruction: 'slow this down', target: { kind: 'scene', id: sceneId }, selection: { from, text: 'She drinks Lumen water' } })
     // × puts it back on the whole script.
@@ -180,7 +184,7 @@ describe("Skye's drafts and edits are cards: nothing changes until Keep", () => 
     const sceneId = await addScene(store, scriptId)
     const input = await writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'draft', { mode: 'draft', instruction: 'A lost puppy in the rain.' })
     await act(async () => { await land(services, scriptId, input) })
-    await settle()
+    await until(() => !!booth(el).querySelector('[data-suggestion]'))
     const card = booth(el).querySelector('[data-suggestion]') as HTMLElement
     expect(card.querySelector('.bc-who')?.textContent).toBe('Skye · draft')
     expect(card.querySelector('.bc-note')?.textContent).toBe('From your words: A lost puppy in the rain.')
@@ -190,13 +194,13 @@ describe("Skye's drafts and edits are cards: nothing changes until Keep", () => 
     await act(async () => { buttonIn(card, 'Why').click() })
     expect(card.querySelector('.bc-why')?.textContent).toContain(Object.values(store.get().suggestions)[0].note)
     await act(async () => { buttonIn(card, 'Keep').click() })
-    await settle()
+    await until(() => !!booth(el).querySelector('.bc.done'))
     expect(sceneWords(services, sceneId)).not.toBe('')
     expect(booth(el).querySelector('[data-suggestion]')).toBeNull()
     const done = booth(el).querySelector('.bc.done') as HTMLElement
     expect(done.textContent).toContain('Kept. Skye’s draft is on the page.')
     await act(async () => { buttonIn(done, 'Undo').click() })
-    await settle()
+    await until(() => sceneWords(services, sceneId) === '')
     expect(sceneWords(services, sceneId)).toBe('')
   })
 
@@ -206,14 +210,14 @@ describe("Skye's drafts and edits are cards: nothing changes until Keep", () => 
     await act(async () => { await store.checkpointText() })
     const input = await writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'rephrase')
     await act(async () => { await land(services, scriptId, input) })
-    await settle()
+    await until(() => !!booth(el).querySelector('[data-suggestion]'))
     const card = booth(el).querySelector('[data-suggestion]') as HTMLElement
     expect(card.querySelector('.bc-who')?.textContent).toBe('Skye · edit')
     expect(card.querySelector('.bc-diff del')).not.toBeNull()
     expect(card.querySelector('.bc-diff ins')).not.toBeNull()
     expect(card.querySelector('.where')?.textContent).toBe('Replaces the page')
     await act(async () => { buttonIn(card, 'Discard').click() })
-    await settle()
+    await until(() => !!booth(el).querySelector('.bc.done'))
     expect(Object.values(store.get().suggestions)[0].state).toBe('dropped')
     expect(sceneWords(services, sceneId)).toBe('A runner crests the cliff. She drinks Lumen water.')
     expect(booth(el).querySelector('.bc.done')?.textContent).toContain('Discarded. The page is as it was.')
@@ -255,7 +259,7 @@ describe('the Booth comes back on a part of the page', () => {
     const second = el.querySelectorAll('.se-page .ProseMirror > *')[1] as HTMLElement
     expect(second.textContent).toBe('She drinks Lumen water.')
     await act(async () => { second.click() })
-    await act(async () => { await new Promise((r) => setTimeout(r, 320)) })
+    await until(() => !!booth(el).querySelector('[aria-label="This part"]'))
     expect(col().dataset.boothOpen).toBe('true')
     expect(services.ui.get().booth).toEqual({ [`human:${MAYA.id}`]: 'shown' })
     const b = booth(el)
