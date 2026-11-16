@@ -588,6 +588,11 @@ def _hook_repo(tmp_path: Path) -> tuple[Path, str]:
     for rel in (".githooks/pre-push", "scripts/licences/check.py"):
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / rel, repo / rel)
+    # The hook runs its secret scan through scripts/check.sh before the licence guard, and no
+    # variable skips that. These tests are about the guard, so the fixture's check.sh passes.
+    stub = repo / "scripts" / "check.sh"
+    stub.write_text("#!/usr/bin/env bash\nexit 0\n")
+    stub.chmod(0o755)
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", "tools")
     return repo, git(repo, "rev-parse", "HEAD").strip()

@@ -139,6 +139,14 @@ shipped_by = "fonts.googleapis.com"
 licence = "OFL-1.1"
 source_url = "https://github.com/vercel/geist-font/blob/main/LICENSE.txt"
 
+# The serif of develop's new interface: app/index.html, the app templates and design/new-ui.
+# OFL.txt at the source read on 2026-11-16.
+[[family]]
+name = "Newsreader"
+shipped_by = "fonts.googleapis.com"
+licence = "OFL-1.1"
+source_url = "https://github.com/productiontype/Newsreader/blob/master/OFL.txt"
+
 # app/public/mock-clan/human/index.html (ships in the app's public/ folder)
 [[family]]
 name = "Inter"
