@@ -255,6 +255,15 @@ def test_blind_pack_sets_are_the_same_size_and_keep_the_best_pipeline_cards():
     assert sorted(c["line"] for c in kept) == ["p1", "p2", "p3"]   # scores 30, 25, 28: the top three
 
 
+def test_blind_pack_shows_the_plain_prompt_in_the_pipeline_shape_when_it_gave_one():
+    base = [{"name": "b", "thought": "a long paragraph", "why": "another paragraph", "proposition": "One thought.", "tension": "X, but Y."}]
+    pipe = [{"name": "p", "thought": "Its one thought.", "why": "A, but B.", "tension": "A, but B.", "score": {"total": 1}}]
+    pack, key = compare.blind_pack(pipe, base, seed=2)
+    shown = {key[s]: pack[s][0] for s in pack}
+    assert shown["plain_prompt"] == {"line": "b", "thought": "One thought.", "why": "X, but Y."}
+    assert shown["pipeline"] == {"line": "p", "thought": "Its one thought.", "why": "A, but B."}
+
+
 def test_pack_seed_varies_by_brief_so_the_plain_prompt_is_not_always_set_a():
     base = [{"name": "b", "thought": "u", "why": "w"}]
     pipe = [{"name": "p", "thought": "t", "why": "w", "score": {"total": 1}}]

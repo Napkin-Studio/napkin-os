@@ -17,8 +17,12 @@ def baseline(task: dict, llm) -> list[dict]:
 
 
 def _plain(t: dict) -> dict:
-    """What a grader sees: a line, the thought and why. No tier, score, badge or id that gives the arm away."""
-    return {"line": t.get("name") or t.get("line") or t.get("thought"), "thought": t.get("thought"), "why": t.get("why")}
+    """What a grader sees: a line, the thought and why. No tier, score, badge or id that gives the arm away.
+
+    Both arms show the same shape, a one-sentence proposition and the tension it answers, when the plain prompt gave
+    them: a paragraph beside a sentence tells the grader which set is which (16 Nov re-run)."""
+    return {"line": t.get("name") or t.get("line") or t.get("thought"), "thought": t.get("proposition") or t.get("thought"),
+            "why": t.get("tension") or t.get("why")}
 
 
 def pack_seed(*parts) -> int:
