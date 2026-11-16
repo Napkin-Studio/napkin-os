@@ -149,8 +149,7 @@ describe("Skye's box in the Booth", () => {
   it('with words selected on the page, asks about the selection only (instruct, revise) and offers the five verbs', async () => {
     const { el, services, sceneId } = await open('A runner crests the cliff. She drinks Lumen water.')
     const sent = spySubmit(services)
-    await act(async () => { (el.querySelector('.sp-static') as HTMLElement).click() })
-    await settle()
+    // The free page is an editor from the start (features/script-freeform.clan): select in it.
     const pm = el.querySelector('.se-page .ProseMirror') as HTMLElement & { editor?: import('@tiptap/core').Editor }
     const editor = pm.editor!
     expect(editor).toBeTruthy()
@@ -253,7 +252,7 @@ describe('the Booth comes back on a part of the page', () => {
     const { el, services } = await open('A runner crests the cliff.\nShe drinks Lumen water.', { booth: { [`human:${MAYA.id}`]: 'hidden' } })
     const col = () => el.querySelector('.se .booth-col') as HTMLElement
     expect(col().dataset.boothOpen).toBe('false')
-    const second = el.querySelectorAll('.se-page .sp-static p')[1] as HTMLElement
+    const second = el.querySelectorAll('.se-page .ProseMirror > *')[1] as HTMLElement
     expect(second.textContent).toBe('She drinks Lumen water.')
     await act(async () => { second.click() })
     await act(async () => { await new Promise((r) => setTimeout(r, 320)) })
