@@ -35,6 +35,7 @@ import { mediaItem } from '../media/names'
 import { currentFrame, currentTake, framesOf, jobsList, mainStoryboard, openAsks, openStoryboard, refsList, scriptOfStoryboard, scriptText, shotNumber, shotsOf, storyboardSeconds, takesOf } from '../model/selectors'
 import { canvasActions } from '../canvas/chrome/actions'
 import { marksNow } from './marksNow'
+import { titleOf } from './shotTitle'
 import { jobCtx, LOCAL_PERSON } from '../jobs/runner'
 import { addShot, answerShotAsk, setRatio, setTarget } from './storyboardEdits'
 import { scriptRoute } from '../app/route'
@@ -308,11 +309,6 @@ function CrewLine({ row }: { row: TrayRow }) {
 }
 
 const cap = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)
-/** A card's title: the first words of its action, else its size. */
-function titleOf(s: Shot): string {
-  const words = (s.action ?? '').replace(/@\w+/g, '').replace(/\s+/g, ' ').trim().split(/[.;,:—-]/)[0].trim()
-  return words ? cap(words.length > 26 ? `${words.slice(0, 25).replace(/\s+\S*$/, '')}…` : words) : cap(cameraLabel('size', s.camera.size))
-}
 
 /** The card under the pointer while it is dragged (3.11): tilted, blue outline, shadow. */
 function LiftedCard({ shot, index }: { shot: Shot; index: number }) {
