@@ -13,7 +13,7 @@ import {
   clipEnd, EMPTY_CUT, pack, r3, sortV1,
   type Cut, type CutClip, type CutEndCard, type CutText, type Transition,
 } from './cut'
-import { shotWindow, type Box, type Gen } from './model'
+import { inBox, sharesBox, shotWindow, type Box, type Gen } from './model'
 
 // ── The document's cut ↔ the plain cut ────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ export const newItemId = () => newUlidId('item')
 
 /** The take a box puts in the first cut: its newest ready take. */
 export function topTake(gens: Gen[], boxKey: string): Gen | undefined {
-  return gens.find((g) => g.boxKey === boxKey && g.state === 'ready' && !!g.asset)
+  return gens.find((g) => inBox(g, boxKey) && g.state === 'ready' && !!g.asset)
 }
 
 /**
@@ -170,7 +170,11 @@ export function readyTakes(cut: Cut, gens: Gen[], dismissed: ReadonlySet<string>
 export function newerTake(c: CutClip, gens: Gen[]): Gen | undefined {
   const own = gens.find((g) => g.id === c.genId)
   if (!own) return undefined
-  const newer = gens.filter((g) => g.boxKey === own.boxKey && g.state === 'ready' && g.id !== own.id && (g.createdAt ?? '') > (own.createdAt ?? ''))
+  // A newer take of a box the clip's take belongs to, that has footage for the clip's shot (a take made together
+  // whose shots were made apart since is a take of each of their boxes).
+  const shotId = c.follows?.shotId
+  const covers = (g: Gen) => !shotId || g.shotIds.includes(shotId) || g.segments.some((s) => s.shotId === shotId)
+  const newer = gens.filter((g) => sharesBox(own, g) && covers(g) && g.state === 'ready' && g.id !== own.id && (g.createdAt ?? '') > (own.createdAt ?? ''))
   return newer[0]
 }
 

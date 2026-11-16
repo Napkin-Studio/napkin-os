@@ -21,7 +21,7 @@ import { Float, MenuItem } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import { ChangeDrawer, type ChangeOpen } from './ChangeDrawer'
 import { cameraWord } from './delta'
-import { boxName, genTitle, makingLine, shotTitle, type Box, type Gen } from './model'
+import { boxBeats, boxName, boxWindow, genTitle, inBox, makingLine, shotTitle, type Box, type Gen } from './model'
 import { Compare, TakePlayer } from './Players'
 import { Poster } from './Poster'
 import type { RoomData, Selection } from './Rooms'
@@ -67,8 +67,11 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   }
   const box = data.boxes.find((b) => b.key === sel.boxKey) ?? data.boxes.find((b) => b.shotIds.includes(sel.shotId ?? '')) ?? data.boxes[0]
   const shot = (sel.shotId && box?.shotIds.includes(sel.shotId) ? doc.shots[sel.shotId] : undefined) ?? (box ? doc.shots[box.shotIds[0]] : undefined)
-  const shown = data.gens.find((g) => g.id === sel.genId && g.state === 'ready') ?? data.gens.find((g) => g.boxKey === box?.key && g.state === 'ready')
-  const shownBox = shown ? data.boxes.find((b) => b.key === shown.boxKey) : undefined
+  const shown = data.gens.find((g) => g.id === sel.genId && g.state === 'ready') ?? data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready')
+  // The box it plays for: the selected one when the take is one of its takes (a take made together, its shots
+  // made apart since, plays only the selected box's window), else its own.
+  const shownBox = shown ? (box && inBox(shown, box.key) ? box : data.boxes.find((b) => b.key === shown.boxKey)) : undefined
+  const span = shown ? boxWindow(shown, shownBox) : undefined
   const [ticked, setTicked] = useState<string[]>([])
   const [comparing, setComparing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,7 +82,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
 
   const pickShot = (b: Box, id: string) => { onSel({ ...sel, boxKey: b.key, shotId: id }); setTab('shot') }
   const pickBox = (b: Box) => { onSel({ ...sel, boxKey: b.key, shotId: b.shotIds.includes(sel.shotId ?? '') ? sel.shotId : b.shotIds[0] }); setTab('box') }
-  const pickTake = (g: Gen) => onSel({ ...sel, genId: g.id, boxKey: g.boxKey })
+  const pickTake = (g: Gen, b?: Box) => onSel({ ...sel, genId: g.id, boxKey: b && inBox(g, b.key) ? b.key : g.boxKey })
   const tick = (id: string) => setTicked((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t.slice(-1), id]))
   const busy = (id: string) => isRunning(doc, jobAt(doc, ui, (c) => (c.for === 'clip' && c.shotId === id) || (c.for === 'run' && !!doc.videos[c.videoId]?.runs?.[c.runId]?.shot_ids.includes(id))))
 
@@ -144,7 +147,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   }, 'stage')
 
   const compareGens = ticked.map((id) => data.gens.find((g) => g.id === id)).filter((g): g is Gen => !!g && g.state === 'ready')
-  const beats = shown && shown.segments.length > 1 ? shown.segments.slice(1).map((s) => ({ atS: s.inS, label: `Shot ${shotNumber(doc, s.shotId)}` })) : undefined
+  const beats = shown ? boxBeats(shown, span ? shownBox : undefined, (id) => shotNumber(doc, id)) : undefined
 
   return (
     <div className="rm-make">
@@ -155,7 +158,8 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
             b={{ sha: compareGens[0].asset, label: `${genTitle(compareGens[0], data.boxes)} · ${compareGens[0].label}` }}
             onClose={() => setComparing(false)} />
         ) : (
-          <TakePlayer key={shown?.id ?? 'none'} sha={shown?.asset} label={shown ? `${shownBox ? boxName(shownBox) : 'Take'} · v${shown.version}` : ''} beats={beats}
+          <TakePlayer key={`${shown?.id ?? 'none'}:${span ? shownBox?.key : ''}`} sha={shown?.asset} label={shown ? `${shownBox ? boxName(shownBox) : 'Take'} · v${shown.version}` : ''} beats={beats}
+            {...(span ? { span } : {})}
             className="rm-mainplayer" empty={empty.player}>
             <button type="button" className="btn" disabled={compareGens.length !== 2} onClick={() => setComparing(true)}
               title={compareGens.length === 2 ? 'Play the two ticked takes side by side' : 'Tick two takes under a box to compare them'}>
@@ -190,9 +194,9 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
           ) : (
             <BoxCard key={b.key} b={b} data={data} sel={sel} selected={b.key === box?.key} making={making || b.shotIds.some(busy)}
               onShot={(id) => pickShot(b, id)} onBox={() => pickBox(b)} onMake={() => void make(b)}
-              takes={data.gens.filter((g) => g.boxKey === b.key)} ticked={ticked} onTick={tick} onTake={pickTake}
+              takes={data.gens.filter((g) => inBox(g, b.key))} ticked={ticked} onTick={tick} onTake={(g) => pickTake(g, b)}
               onChange={(g) => onChange({ parentId: g.id, ...(sel.shotId && g.shotIds.includes(sel.shotId) ? { shotId: sel.shotId } : {}) })}
-              onAddToEdit={(g) => void appendTake(docStore, doc, data, g)} />
+              onAddToEdit={(g) => void appendTake(docStore, doc, data, g, b)} />
           ))}
           <button type="button" className="rm-box rm-newbox" role="listitem" disabled={making} onClick={() => void newBox()}
             title="A new box: a video made from your words and references, no storyboard frame needed">+ New box</button>
@@ -211,7 +215,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
             onAddShot={() => void send(async () => { const id = await addShotToBox(docStore, data.videoId, box.shotIds); onSel({ shotId: id }) })} />}
           {tab === 'box' && box && <BoxTab key={box.key} box={box} data={data} shots={shots} model={models[box.key]} onModel={(m) => setModels({ ...models, [box.key]: m })} onMake={() => void make(box)} making={making} />}
           {tab === 'change' && (() => {
-            const parent = change ? data.gens.find((g) => g.id === change.parentId) : (shown && shown.boxKey === box?.key ? shown : data.gens.find((g) => g.boxKey === box?.key && g.state === 'ready'))
+            const parent = change ? data.gens.find((g) => g.id === change.parentId) : (shown && inBox(shown, box?.key) ? shown : data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready'))
             if (!parent) return <p className="rm-note rm-pad">Make a take of this box first. Then change one thing and make it again.</p>
             const open: ChangeOpen = change ?? { parentId: parent.id, ...(shot && parent.shotIds.includes(shot.id) ? { shotId: shot.id } : {}) }
             return <ChangeDrawer key={`${open.parentId}:${open.shotId ?? ''}`} data={data} open={open} variant="tab" onClose={() => { onCloseChange(); setTab('shot') }}
@@ -270,7 +274,7 @@ function BoxCard({ b, data, selected, sel, making, takes, ticked, onShot, onBox,
       </div>
       <div className="rm-stack" aria-label={`Takes of ${boxName(b)}`}>
         {!takes.length && <p className="rm-note">No takes yet.</p>}
-        {shown.map((g) => <TakeRow key={g.id} g={g} data={data} picked={sel.genId === g.id} ticked={ticked.includes(g.id)} onTick={() => onTick(g.id)} onPlay={() => onTake(g)}
+        {shown.map((g) => <TakeRow key={g.id} g={g} data={data} atS={boxWindow(g, b)?.inS} picked={sel.genId === g.id} ticked={ticked.includes(g.id)} onTick={() => onTick(g.id)} onPlay={() => onTake(g)}
           onChange={() => onChange(g)} onAddToEdit={() => onAddToEdit(g)} />)}
         {takes.length > 3 && <button type="button" className="btn ghost rm-wide" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${takes.length} takes`}</button>}
       </div>
@@ -278,8 +282,8 @@ function BoxCard({ b, data, selected, sel, making, takes, ticked, onShot, onBox,
   )
 }
 
-function TakeRow({ g, data, picked, ticked, onTick, onPlay, onChange, onAddToEdit }: {
-  g: Gen; data: RoomData; picked: boolean; ticked: boolean; onTick: () => void; onPlay: () => void; onChange: () => void; onAddToEdit: () => void
+function TakeRow({ g, data, atS, picked, ticked, onTick, onPlay, onChange, onAddToEdit }: {
+  g: Gen; data: RoomData; atS?: number; picked: boolean; ticked: boolean; onTick: () => void; onPlay: () => void; onChange: () => void; onAddToEdit: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [menu, setMenu] = useState<false | 'menu' | 'lineage'>(false)
@@ -298,7 +302,7 @@ function TakeRow({ g, data, picked, ticked, onTick, onPlay, onChange, onAddToEdi
         <input type="checkbox" checked={ticked} disabled={!ready} onChange={onTick} aria-label={`Tick v${g.version} to compare`} />
       </label>
       <button type="button" className="rm-takebtn" onClick={onPlay} disabled={!ready} title={`v${g.version} · ${g.label}`}>
-        <Poster sha={g.asset} atS={g.segments[0]?.inS ?? 0} words={g.state === 'making' ? '' : 'v' + g.version} className="rm-takethumb" />
+        <Poster sha={g.asset} atS={atS ?? g.segments[0]?.inS ?? 0} words={g.state === 'making' ? '' : 'v' + g.version} className="rm-takethumb" />
         {g.state === 'making' && <span className="rm-spin" aria-hidden="true" />}
         <span className="rm-takelabel rm-clamp2" title={making}><b>v{g.version}</b> · {making ?? g.label}</span>
       </button>
@@ -374,7 +378,7 @@ function ShotTab({ shot, n, box, data, onBox, onAddShot }: { shot: Shot; n: numb
   // frame-first flow), so the ceiling is the frame/image character limit, not the clip model's video
   // ref capacity (which is 0 for Veo). controlsFor reads the generate op (owner 2026-11-04).
   const refsMax = controlsFor(config).generateCharacters || 4
-  const differs = nextDiffers(doc, box, data.gens.filter((g) => g.boxKey === box.key))
+  const differs = nextDiffers(doc, box, data.gens.filter((g) => inBox(g, box.key)))
   return (
     <div className="rm-tab">
       <div className="rm-tabhead">
@@ -548,7 +552,7 @@ function BoxTab({ box, data, shots, model, onModel, onMake, making }: {
         </div>
         {box.together && t?.ok && <p className="rm-note">Up to {t.maxShots ?? 6} shots or {t.maxS ?? 15} s together.</p>}
       </fieldset>
-      <button type="button" className="btn primary rm-wide" disabled={making} onClick={onMake}>{making ? 'Making…' : data.gens.some((g) => g.boxKey === box.key) ? 'Make new take' : 'Make'}</button>
+      <button type="button" className="btn primary rm-wide" disabled={making} onClick={onMake}>{making ? 'Making…' : data.gens.some((g) => inBox(g, box.key)) ? 'Make new take' : 'Make'}</button>
       <p className="rm-note">A new take lands on this box's stack and in the Bin. Your cut stays as it is.</p>
     </div>
   )

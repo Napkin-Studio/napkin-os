@@ -9,7 +9,7 @@ import { shotNumber } from '../model/selectors'
 import { Float, MenuItem } from '../ui/Float'
 import { GEN_DRAG } from './Bin'
 import { clipEnd, clipLen, endCardStart, handleShort, MAX_TRANSITION_S, sortV1, type Cut, type CutClip, type CutText, type Transition } from './cut'
-import { boxName, shotTitle, type Gen } from './model'
+import { boxName, sharesBox, shotTitle, type Gen } from './model'
 import { Poster } from './Poster'
 import { tc } from './media'
 import type { RoomData } from './Rooms'
@@ -219,7 +219,7 @@ function ClipBlock({ c, n, x, pps, data, picked, making, ready, takeS, actions, 
   const narrow = w < 64
   const thumb = w >= 132
   const g = data.gens.find((x) => x.id === c.genId)
-  const takes = g ? data.gens.filter((x) => x.boxKey === g.boxKey && x.state === 'ready').length : 0
+  const takes = g ? data.gens.filter((x) => sharesBox(g, x) && x.state === 'ready').length : 0
 
   const trim = (edge: 'head' | 'tail') => (e: React.PointerEvent) => dragSeconds(e, pps, (ds) => {
     const s = snapTo(edge === 'head' ? c.startS + ds : clipEnd(c) + ds) - (edge === 'head' ? c.startS : clipEnd(c))

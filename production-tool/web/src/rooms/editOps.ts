@@ -8,13 +8,14 @@ import {
   addText, applySwap, cutLength, moveV1, pack, planSwap, removeClip, removeText, setEndCard, setFades, setTransition, sortV1, split,
   trimHead, trimTail, updateText, type Cut, type CutClip, type CutEndCard, type CutText, type SwapChoice, type Transition,
 } from './cut'
-import { boxName, shotWindow, type Gen } from './model'
+import { boxName, inBox, shotWindow, type Box, type Gen } from './model'
 import type { RoomData } from './Rooms'
 import { assemble, endCardFrom, newItemId, readCut, writeCut } from './timeline'
 
-/** Clips for every shot of a take, at its cuts, in shot order: a box made together unpacks into one clip per shot. */
-export function clipsOf(g: Gen, startS: number, boxId?: string): CutClip[] {
-  const shots = g.segments.length ? g.segments.map((s) => s.shotId) : g.shotIds
+/** Clips for every shot of a take, at its cuts, in shot order: a box made together unpacks into one clip per shot.
+ *  `only`: just those shots' windows (a box made apart from the take adds its own shots, not the whole take). */
+export function clipsOf(g: Gen, startS: number, boxId?: string, only?: readonly string[]): CutClip[] {
+  const shots = (g.segments.length ? g.segments.map((s) => s.shotId) : g.shotIds).filter((id) => !only || only.includes(id))
   const out: CutClip[] = []
   let at = startS
   for (const shotId of shots) {
@@ -26,13 +27,15 @@ export function clipsOf(g: Gen, startS: number, boxId?: string): CutClip[] {
   return out
 }
 
-/** Add to edit: the take's clips at the end of V1. */
-export function appendTake(store: DocumentStore, d: ProductionDocument, data: RoomData, g: Gen) {
-  const box = data.boxes.find((b) => b.key === g.boxKey)
+/** Add to edit: the take's clips at the end of V1; from a box that holds only some of its shots (made apart
+ *  since), just that box's shots. */
+export function appendTake(store: DocumentStore, d: ProductionDocument, data: RoomData, g: Gen, from?: Box) {
+  const box = from && inBox(g, from.key) ? from : data.boxes.find((b) => b.key === g.boxKey)
+  const only = box && box.key !== g.boxKey ? box.shotIds : undefined
   const boxId = d.generations[g.id]?.box_id
   return writeCut(store, data.videoId, `add ${box ? boxName(box).toLowerCase() : 'a take'} v${g.version} to the cut`, (cut) => {
     const end = cut.v1.length ? Math.max(...cut.v1.map((c) => c.startS + (c.outS - c.inS) / c.speed + c.holdS)) : 0
-    return { ...cut, v1: sortV1([...cut.v1, ...clipsOf(g, end, boxId)]) }
+    return { ...cut, v1: sortV1([...cut.v1, ...clipsOf(g, end, boxId, only)]) }
   })
 }
 
