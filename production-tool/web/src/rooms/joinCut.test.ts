@@ -9,7 +9,7 @@ import { CONFIGS } from '../contracts/load'
 import type { Config, JobInput, ModelChoice, ProductionDocument, Shot } from '../contracts/types'
 import { SnapshotDocumentStore } from '../doc/store'
 import { makeRuns } from '../jobs/runs'
-import { joinHere, splitHere } from '../jobs/runView'
+import { joinHere, setGap, splitHere } from '../jobs/runView'
 import { mainScript, mainVideo } from '../model/selectors'
 import { MAYA, addRef, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addFrame, addShots } from '../test/model'
@@ -59,6 +59,22 @@ describe('the gap toggles', () => {
     expect(shape(a.boxes())).toEqual([3, 1])
     await splitHere(a.store, a.videoId, a.shots[1].id)
     expect(shape(a.boxes())).toEqual([1, 2, 1])
+  })
+
+  it('a flip changes that gap only, even where the crew joined a scene shown whole across new angles', async () => {
+    const a = film([3, 3, 3, 3])
+    // One scene, four camera sizes: the crew's own joins are cuts between new angles, yet the planner shows the
+    // scene as one box. Cutting before shot 3 must leave shots 1-2 and 3-4 each one video.
+    a.store.update((d) => { a.shots.forEach((s, i) => Object.assign(d.shots[s.id], { scene_id: 'scene_one', camera: { size: ['wide', 'close', 'medium', 'wide'][i] } })) })
+    expect(shape(a.boxes())).toEqual([4])
+    await setGap(a.store, a.videoId, a.shots[2].id, 'cut', a.boxes().map((b) => b.shotIds))
+    expect(shape(a.boxes())).toEqual([2, 2])
+    await setGap(a.store, a.videoId, a.shots[1].id, 'cut', a.boxes().map((b) => b.shotIds))
+    expect(shape(a.boxes())).toEqual([1, 1, 2])
+    await setGap(a.store, a.videoId, a.shots[2].id, 'continue', a.boxes().map((b) => b.shotIds))
+    expect(shape(a.boxes())).toEqual([1, 3])
+    const gaps = stripGaps(a.store.get(), a.boxes(), a.videoId, on)
+    expect(flipWords(a.store.get(), ui, a.videoId, on, gaps[0], {}).sub).toBe('One video · 4 shots · 12 s, every frame a guide.')
   })
 
   it('a gap before an end card is always a cut, and says why', () => {
@@ -129,7 +145,7 @@ describe('a joined run is one generation with every frame as a guide', () => {
     const lim = boxLimit(a.store.get(), box, omni, on)!
     expect(lim.hard).toBe(false)
     expect(lim.leftOut).toEqual([a.shots[1].id, a.shots[2].id])
-    expect(lim.why).toBe('Gemini Omni Flash 1.1 takes 5 pictures. This box has 7: the characters’ first, then the frames in order, so the frames of shots 2, 3 are left out.')
+    expect(lim.why).toBe('Gemini Omni Flash 1.1 takes 5 pictures. This box has 7: the characters’ first, then the frames in order, so the frames of shots 2 and 3 are left out.')
     expect(lim.alt?.label).toBe('WAN 3')
     // With three views, one frame is left out and named.
     const b = film([3, 3, 3], { views: 3 })

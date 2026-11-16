@@ -584,3 +584,10 @@
 .jc-mrow.bad small { color: var(--warn); }
 .jc-mrow:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
 :root[data-theme='dark'] .jc-tip .w { color: #9a5b00; }
+/* A box is as wide as its shots: its header, footer and notes never widen it (they ellipsize or wrap). */
+.jc-box > .jc-bhd, .jc-box > .jc-bft, .jc-box > .rm-differs, .jc-box > .rm-error { width: 0; min-width: 100%; box-sizing: border-box; }
+.jc-box.multi > .jc-bft { flex-wrap: nowrap; }
+/* A box wider than the strip (6 shots in a narrow centre) keeps its shots together and wraps them inside it. */
+.jc-unit { max-width: 100%; }
+.jc-box { max-width: 100%; }
+.jc-row { flex-wrap: wrap; row-gap: 10px; }

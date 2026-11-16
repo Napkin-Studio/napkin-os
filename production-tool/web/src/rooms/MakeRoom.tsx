@@ -13,10 +13,10 @@ import { updateDoc } from '../doc/store'
 import { drawFrame, selectedFrame } from '../jobs/frames'
 import { makeClip, videoQuality } from '../jobs/clips'
 import { makeRuns } from '../jobs/runs'
-import { joinHere, separateSelection, splitBoxAt, splitHere, takeShotOut, videoJoin } from '../jobs/runView'
+import { separateSelection, setGap, splitBoxAt, takeShotOut, videoJoin } from '../jobs/runView'
 import { isRunning, jobAt, shotRefSet } from '../jobs/select'
 import { refName, refsList, shotNumber, shotsOf } from '../model/selectors'
-import { boxModelCant, boxModelLimit, boxModelNote, entryOf, takeLimits } from './boxModel'
+import { boxModel, boxModelCant, boxModelLimit, boxModelNote, entryOf, takeLimits } from './boxModel'
 import { boxHow, boxLimit, boxPictures, boxWords, flipWords, fromWords, guideLine, roomBoxModel, stripGaps, withPick, type BoxLimit, type Gap } from './joinCut'
 import { CutIcon, GapButton, GapTip, JoinIcon, LimitPanel, StripShot, TakeStills } from './Strip'
 import { StripPlayer } from './StripPlayer'
@@ -126,8 +126,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
     setError(null)
     setNotice(null)
     try {
-      if (g.joined) await splitHere(docStore, data.videoId, g.shotId)
-      else await joinHere(docStore, data.videoId, g.shotId)
+      await setGap(docStore, data.videoId, g.shotId, g.joined ? 'cut' : 'continue', data.boxes.map((b) => b.shotIds))
       onDone?.(g.joined ? `Cut between shots ${g.n - 1} and ${g.n}: two videos now.` : `Joined shots ${g.n - 1} and ${g.n}: one video now.`)
       if (keyboard) refocus.current = g.shotId
       else setTip(null)
@@ -139,7 +138,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   const cutBefore = async (shotId: string) => {
     const n = shotNumber(doc, shotId)
     try {
-      await splitHere(docStore, data.videoId, shotId)
+      await setGap(docStore, data.videoId, shotId, 'cut', data.boxes.map((b) => b.shotIds), `cut before shot ${n}`)
       onDone?.(`Cut before shot ${n}: two videos now.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
@@ -627,6 +626,8 @@ function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick
   const [all, setAll] = useState(false)
   const options = modelChoicesFor('clip', config)
   const current = facts.model
+  // The model the box is made on when none is picked for it: the one marked default.
+  const fallback = boxModel(doc, box, config)
   const takes = data.gens.filter((g) => inBox(g, box.key))
   const shownTakes = all ? takes : takes.slice(0, 3)
   const over = !!facts.limit?.hard
@@ -680,7 +681,7 @@ function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick
             const cap = box.together && !cant && t ? `Up to ${t.maxS} s · ${t.maxShots} shots · ${pics} pictures${lim && !lim.hard && lim.leftOut.length ? ' · leaves a frame out' : ''}` : undefined
             const note = why ? undefined : cap ?? boxModelNote(doc, box, o)
             const on = current?.provider === o.provider && current.model === o.model
-            const isDefault = options[0] === o
+            const isDefault = !!fallback && fallback.provider === o.provider && fallback.model === o.model
             return (
               <button key={`${o.provider}:${o.model}`} type="button" role="radio" aria-checked={on} disabled={!!why && !on}
                 className={`jc-mrow ${on ? 'on' : ''} ${why ? 'no' : ''} ${on && why ? 'bad' : ''}`} onClick={() => onModel({ provider: o.provider, model: o.model })}>

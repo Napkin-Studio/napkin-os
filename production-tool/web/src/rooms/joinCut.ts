@@ -9,7 +9,7 @@ import type { Config, Id, ModelChoice, ProductionDocument, Shot } from '../contr
 import type { UiState } from '../doc/ui'
 import { selectedFrame } from '../jobs/frames'
 import { joinBlock } from '../jobs/runs'
-import { videoShots, writeJoins } from '../jobs/runView'
+import { gapJoins, videoShots, writeJoins } from '../jobs/runView'
 import { shotRefSet } from '../jobs/select'
 import { shotNumber } from '../model/selectors'
 import { boxModel, boxModelCant, boxModelWhyNot, entryOf, takeLimits } from './boxModel'
@@ -49,7 +49,8 @@ export function stripGaps(doc: Doc, boxes: Box[], videoId: Id, config: Pick<Conf
 /** The boxes as they would be once this gap is flipped (the same join model, on a copy of the document). */
 export function boxesAfterFlip(doc: Doc, ui: Pick<UiState, 'jobs'>, videoId: Id, config: Config, gap: Pick<Gap, 'shotId' | 'joined'>): Box[] {
   const copy = structuredClone(doc)
-  writeJoins(copy, videoId, [[gap.shotId, gap.joined ? 'cut' : 'continue']])
+  const shown = roomBoxes(doc, ui, videoId, config).map((b) => b.shotIds)
+  writeJoins(copy, videoId, gapJoins(doc, videoId, gap.shotId, gap.joined ? 'cut' : 'continue', shown))
   return roomBoxes(copy, ui, videoId, config)
 }
 
@@ -123,11 +124,11 @@ export function boxWords(doc: Doc, box: Box, pics: BoxPicture[] = boxPictures(do
 /** The Box tab's line under One video / Separate videos. */
 export function boxHow(doc: Doc, box: Box, pics: BoxPicture[] = boxPictures(doc, box)): string {
   const cast = castWords(pics)
-  const theirs = cast ? `${cast}’s pictures` : 'the named pictures'
+  const withCast = cast ? `, with ${cast}’s pictures` : ''
   if (fromWords(doc, box)) {
-    return box.together ? `One generation from the shots’ words, in order, with ${theirs}. Cut where the lines are.` : `Made on its own from its words${cast ? ` and ${theirs}` : ''}.`
+    return box.together ? `One generation from the shots’ words, in order${withCast}. Cut where the lines are.` : `Made on its own from its words${cast ? ` and ${cast}’s pictures` : ''}.`
   }
-  return box.together ? `One generation. Every shot’s frame goes in as a guide, in shot order, with ${theirs}. No frame is pinned.` : 'Made on its own, starting on its frame.'
+  return box.together ? `One generation. Every shot’s frame goes in as a guide, in shot order${withCast}. No frame is pinned.` : 'Made on its own, starting on its frame.'
 }
 
 /** What a box made together is past on its model, and what fixes it (mock state `limit`). */
@@ -170,7 +171,8 @@ export function boxLimit(doc: Doc, box: Box, m: ModelChoice | undefined, config:
     : undefined
   const n = (id: Id) => shotNumber(doc, id)
   const lastLeft = p.leftOut.at(-1)
-  const leftWords = p.leftOut.length === 1 ? `shot ${n(p.leftOut[0])}’s frame` : `the frames of shots ${p.leftOut.map(n).join(', ')}`
+  const nums = p.leftOut.map(n)
+  const leftWords = nums.length === 1 ? `shot ${nums[0]}’s frame` : `the frames of shots ${nums.slice(0, -1).join(', ')} and ${nums.at(-1)}`
   if (!longer && !more) {
     return { hard: false, why: `${e.label} takes ${p.cap} pictures. This box has ${p.count}: the characters’ first, then the frames in order, so ${leftWords} ${p.leftOut.length === 1 ? 'is' : 'are'} left out.`,
       leftOut: p.leftOut, pictures: p.count, picturesMax: p.cap, ...(alt ? { alt } : {}) }

@@ -74,6 +74,30 @@ export function writeJoins(x: ProductionDocument, videoId: Id, joins: [Id, SeamK
   for (const g of write) v.runs[newUlidId('run')] = { shot_ids: g, mode: g.length > 1 ? 'take_refs' : 'alone', model: '', state: 'planned', planned_by: 'human' }
 }
 
+/** The joins that set one gap as the person sees it (the Make room's gap toggles, features/join-or-cut-shots.clan):
+ *  the gap before `shotId` becomes `kind`, and the boxes on each side keep every other gap as `shown` (the
+ *  boxes on screen), their outer edges included. Without this the crew's own joins inside a box shown whole
+ *  (a match or a new angle in one scene) were written as cuts, and one flip split other gaps too. */
+export function gapJoins(d: ProductionDocument, videoId: Id | undefined, shotId: Id, kind: SeamKind, shown: Id[][]): [Id, SeamKind][] {
+  const order = videoShots(d, videoId).map((s) => s.id)
+  const i = order.indexOf(shotId)
+  if (i <= 0) return [[shotId, kind]]
+  const near = shown.filter((b) => b.includes(shotId) || b.includes(order[i - 1]))
+  const joins = new Map<Id, SeamKind>()
+  for (const b of near) b.forEach((id, k) => joins.set(id, k === 0 ? 'cut' : 'continue'))
+  const last = order.indexOf(near.flat().reduce((a, id) => (order.indexOf(id) > order.indexOf(a) ? id : a), shotId))
+  if (order[last + 1]) joins.set(order[last + 1], 'cut')
+  joins.set(shotId, kind)
+  return [...joins].filter(([id]) => order.indexOf(id) > 0)
+}
+
+/** A gap of the Make room's strip set to joined or cut (one History entry, one undo step). */
+export function setGap(store: DocumentStore, videoId: Id, shotId: Id, kind: SeamKind, shown: Id[][], why?: string) {
+  const n = shotNumber(store.get(), shotId)
+  const words = why ?? (kind === 'continue' ? `join shot ${n - 1} and shot ${n} into one video` : `split the video between shot ${n - 1} and shot ${n}`)
+  return updateDoc(store, (x) => writeJoins(x, videoId, gapJoins(store.get(), videoId, shotId, kind, shown)), words)
+}
+
 /** ✂ Split here: the video before `shotId` ends there (a cut, by a person; one History entry, one undo step). */
 export function splitHere(store: DocumentStore, videoId: Id, shotId: Id) {
   const n = shotNumber(store.get(), shotId)

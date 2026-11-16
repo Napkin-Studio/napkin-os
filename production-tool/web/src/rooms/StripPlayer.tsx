@@ -69,7 +69,9 @@ export function StripPlayer({ box, take, shotId, words, children }: {
   const frameUrl = useAssetUrl(frame?.asset)
   const tag = made ? `${name} · v${take!.version} · shot ${n(cur?.shotId)}` : `${name} · not made yet · ${words ? `shot ${n(frameShot)}` : `frame of shot ${n(frameShot)}`}`
   const len = Math.max(0, hi - lo)
-  const note = !box ? '' : made ? (ids.length > 1 ? `Take v${take!.version} of ${name}: one video, ${ids.length} shot windows.` : `Take v${take!.version} of ${name}: one shot.`)
+  const covered = wins.map((w) => `shot ${n(w.shotId)}`)
+  const note = !box ? '' : made ? (wins.length < ids.length ? `Take v${take!.version} was made before the join: it has ${covered.join(' and ')} only. Make makes all ${ids.length} as one video.`
+    : ids.length > 1 ? `Take v${take!.version} of ${name}: one video, ${ids.length} shot windows.` : `Take v${take!.version} of ${name}: one shot.`)
     : ids.length > 1 ? `${name}’s ${ids.length} shots will be one video; these are the windows each shot gets.` : `${name} is one shot, made on its own.`
   return (
     <div className="jc-player">
