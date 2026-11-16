@@ -179,16 +179,20 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
   const takeRunning = take ? shotsWords(doc, take.shot_ids) : undefined
   const total = shots.reduce((a, s) => a + s.duration_s, 0)
   // The main video is named after its storyboard (mock Main); another after its own title.
-  const title = sb && video?.id === mainVideo(doc)?.id ? chrome.title(sb.title, 'Storyboard', project) : chrome.title(video?.title, 'Video', project)
+  // A video's own shot list (implicit, made straight from the script) is not a storyboard with a name: it named
+  // the card "Video · Video" while Dex planned (live test 2026-11-16).
+  const title = sb && !sb.implicit && video?.id === mainVideo(doc)?.id ? chrome.title(sb.title, 'Storyboard', project) : chrome.title(video?.title, 'Video', project)
+  // Dex planning this video's shots (straight from the script: on its own shot list, or on the video itself).
+  const planning = !shots.length && (runningOn(doc, 'shot_list', 'storyboard', sb?.id) || runningOn(doc, 'shot_list', 'video', video?.id))
   // A video a script drives with no storyboard yet (mock Asks): "from Script · no storyboard".
   const fromScript = !sb && !!video && Object.values(doc.links ?? {}).some((l) => l.role === 'drives' && l.from.kind === 'script' && l.to.kind === 'video' && l.to.id === video.id)
   // Dex's ask on a video with no storyboard (3.17) is read whole: the card grows over what is below it.
-  const asking = !!video && !!chrome.PromptStart && isEmptyNode(doc, 'video', video.id) && (!sb || !!waitsOnScriptAsk(doc, video.id))
+  const asking = !planning && !!video && !!chrome.PromptStart && isEmptyNode(doc, 'video', video.id) && (!sb || !!waitsOnScriptAsk(doc, video.id))
   return (
     <Card icon="video" title={`Video · ${title}`} meta={fromScript ? <span className="pt-mono">from Script · no storyboard</span> : undefined} onOpen={onOpen}
       className={asking ? 'asking' : ''} style={asking ? { minHeight: 194 } : { height: 194 }}>
       <InputsStrip nodeId={video?.id} />
-      <Start kind="video" id={video?.id} fallback={
+      {planning ? <AtWork agent="dex" line="Dex is planning the shots from the script" /> : <Start kind="video" id={video?.id} fallback={
         <div className="bl-videorow">
           <span className="bl-poster">
             {adUrl ? <video src={adUrl} muted preload="metadata" /> : url ? <img src={url} alt="" /> : null}
@@ -199,7 +203,7 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
             <span>{render ? `Last ad render: v${render.version}` : 'No ad yet'}</span>
           </span>
         </div>
-      } />
+      } />}
       {takeRunning ? <AtWork agent="wren" warm line={`Fin is filming ${takeRunning} as one take`} />
         : clipRunning && <AtWork agent="wren" warm line={`Fin is filming clip ${clipRunning.i + 1}`} />}
     </Card>

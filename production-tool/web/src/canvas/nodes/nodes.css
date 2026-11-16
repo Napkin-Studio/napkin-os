@@ -31,7 +31,11 @@
 :where(.node-layer) :where(.bl-cardhead) { display: flex; align-items: center; gap: 8px; }
 :where(.node-layer) :where(.bl-cardhead b) { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* The head's facts ("16:9 · 7 shots · 24 s") stay on one line beside the title, never under Open. */
-:where(.node-layer) :where(.bl-cardhead > .pt-mono) { white-space: nowrap; flex: none; }
+/* The title gives way first; a long fact ("from Script · no storyboard") ends in an ellipsis rather than
+   standing in a narrow column or pushing Open out of the card (live test 2026-11-16). */
+:where(.node-layer) :where(.bl-cardhead b) { flex: 0 3 auto; }
+:where(.node-layer) :where(.bl-cardhead > .pt-mono) { white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+:where(.node-layer) :where(.bl-cardhead > .btn) { flex: none; }
 :where(.node-layer) :where(.pt-grow) { flex: 1; }
 :where(.node-layer) :where(.pt-mono) { font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
 :where(.node-layer) :where(.pt-mention) { color: var(--tool-ink); }

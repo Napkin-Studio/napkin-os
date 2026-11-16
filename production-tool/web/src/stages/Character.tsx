@@ -412,7 +412,7 @@ export function Character({ initial, active, onPictureEditor }: {
   // A node made from an editor (the Video editor's Make a storyboard from these shots): its Undo here.
   useEffect(() => canvasActions.onMade((m) => {
     const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
-    offerUndo({ label: m.label, at: { x: m.el.x + m.el.width / 2, y: m.el.y }, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([m.el.id]) })
+    offerUndo({ label: m.label, at: { x: m.el.x + m.el.width / 2, y: m.el.y }, above: true, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([m.el.id]) })
   }), [canvas, offerUndo])
 
   /** Make video from a script, a storyboard or both (3.5): one undo step, said with Undo. */
@@ -424,7 +424,7 @@ export function Character({ initial, active, onPictureEditor }: {
       if (!made) throw new Error('Make video needs the canvas.')
       const r = await made
       const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
-      offerUndo({ label: r.label, at: { x: r.el.x + r.el.width / 2, y: r.el.y }, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([r.el.id]) })
+      offerUndo({ label: r.label, at: { x: r.el.x + r.el.width / 2, y: r.el.y }, above: true, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([r.el.id]) })
     } catch (err) {
       setPlaceError(errText(err))
     }
@@ -729,7 +729,7 @@ export function Character({ initial, active, onPictureEditor }: {
           })()}
           {undo?.at && (() => {
             const p = toView(undo.at)
-            return <UndoChip className="oncanvas" label={undo.label} onUndo={runUndo} style={{ left: p.x, top: p.y }} />
+            return <UndoChip className={`oncanvas ${undo.above ? 'above' : ''}`} label={undo.label} onUndo={runUndo} style={{ left: p.x, top: p.y }} />
           })()}
         </div>
         {placing && (

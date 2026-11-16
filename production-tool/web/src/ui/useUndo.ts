@@ -12,6 +12,8 @@ export interface UndoOffer {
   key?: string
   /** On the canvas: the scene point where the thing was. */
   at?: { x: number; y: number }
+  /** On the canvas: sit above `at` rather than centred on it (a node just made: never over its header). */
+  above?: boolean
   /**
    * Has the step been taken back some other way (⌘Z, the undo buttons)? Then the offer leaves at
    * once: "2 deleted · Undo" never stays once the things are back. Read by offerGone.
