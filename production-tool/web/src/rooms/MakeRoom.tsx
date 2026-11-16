@@ -236,7 +236,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
             const parent = change ? data.gens.find((g) => g.id === change.parentId) : (shown && inBox(shown, box?.key) ? shown : data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready'))
             if (!parent) return <p className="rm-note rm-pad">Make a take of this box first. Then change one thing and make it again.</p>
             const open: ChangeOpen = change ?? { parentId: parent.id, ...(shot && parent.shotIds.includes(shot.id) ? { shotId: shot.id } : {}) }
-            return <ChangeDrawer key={`${open.parentId}:${open.shotId ?? ''}`} data={data} open={open} variant="tab" onClose={() => { onCloseChange(); setTab('shot') }}
+            return <ChangeDrawer key={`${open.parentId}:${open.shotId ?? ''}:${open.words ?? ''}`} data={data} open={open} variant="tab" onClose={() => { onCloseChange(); setTab('shot') }}
               onMade={(g) => { onCloseChange(); if (g) { onSel({ ...sel, genId: g }); } }} onApart={(shotId) => void reshape(shotId, 'out')} />
           })()}
         </div>

@@ -28,6 +28,8 @@ export interface ChangeOpen {
   /** The clip in the cut it was opened from (Edit), for the ad-time readout. */
   clip?: { startS: number; inS: number; speed: number }
   mark?: { inS: number; outS: number }
+  /** Words for the next take (Fin's box in the Booth): the Words row opens with them. */
+  words?: string
 }
 
 const STRENGTHS: { id: Strength; label: string }[] = [
@@ -59,7 +61,7 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
   const [shotId, setShotId] = useState<string | undefined>(open.shotId ?? parent?.shotIds[0])
   const shot = shotId ? doc.shots[shotId] : undefined
   const [move, setMove] = useState<CameraMovement | null>(null)
-  const [words, setWords] = useState(shot?.action ?? '')
+  const [words, setWords] = useState(open.words ?? shot?.action ?? '')
   const [feel, setFeel] = useState('')
   const [strength, setStrength] = useState<Strength>('flex')
   const [note, setNote] = useState('')

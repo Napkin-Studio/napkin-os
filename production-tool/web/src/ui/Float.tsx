@@ -77,13 +77,13 @@ export function Float({ anchor, open, onClose, align = 'start', side = 'below', 
 
   // A menu takes the focus on its first item, so the keyboard can go straight on.
   useEffect(() => {
-    if (open && role === 'menu') panel.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus()
+    if (open && role === 'menu') panel.current?.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled)')?.focus()
   }, [open, role])
 
   if (!open) return null
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (role !== 'menu' || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return
-    const items = [...(panel.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? [])]
+    const items = [...(panel.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)') ?? [])]
     if (!items.length) return
     e.preventDefault()
     const i = items.indexOf(document.activeElement as HTMLElement)

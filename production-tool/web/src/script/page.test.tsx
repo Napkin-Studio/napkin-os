@@ -110,15 +110,17 @@ describe('Plan shots and what comes next (ui-behaviour 3.10, 3.5)', () => {
     await settle()
     const plan = button(el, 'Plan shots')!
     expect(plan.disabled).toBe(true)
-    expect(el.querySelector('.se-why')?.textContent).toBe('Write the script first')
+    expect(el.querySelector('.se-why')?.textContent).toBe('Write something first')
     expect(el.querySelector('.se-next')).toBeNull()
   })
 
   it('a script with words and no storyboard: Dex says what is next, and Plan shots makes the storyboard and plans on it', async () => {
     const { el, services, scriptId } = await open(secondScript('EXT. CLIFFS - DAWN. A runner crests the cliff and drinks Lumen water.'))
     await settle()
-    expect(el.querySelector('.se-next')?.textContent).toMatch(/Dex · directs: Ready when you are: Plan shots turns this into about 6 shots\./)
-    expect(el.querySelector('.se-next')?.textContent).toContain('Make video')
+    expect(el.querySelector('.se-next')?.textContent).toMatch(/Dex · directs: I'll read your words as they are and plan about 6 shots\. Nothing needs a heading or an element first\./)
+    // Make video sits beside Plan shots in the bar (mock state 'prose'), not on Dex's line.
+    expect(el.querySelector('.se-next')?.textContent).not.toContain('Make video')
+    expect(button(el, 'Make video')!.disabled).toBe(false)
     const plan = button(el, 'Plan shots')!
     expect(plan.disabled).toBe(false)
     expect(el.querySelector('.se-why')).toBeNull()
@@ -138,31 +140,11 @@ describe('the Script editor page', () => {
     const { el } = await open()
     await settle()
     expect(el.textContent).toContain('Script · ')
-    expect(el.textContent).toContain('Paste a script, or write the idea in a line.')
+    // A plain page (features/script-freeform.clan, mock state 'empty').
+    expect(el.textContent).toContain('Just write.')
     expect(el.textContent).toContain('←Canvas')
     expect(el.textContent).toContain('Plan shots')
     expect(el.textContent).not.toMatch(/\$|free|cost/i)
-  })
-
-  it('a non-empty script still has an obvious Write with Skye, seeded with the idea already typed (urgent P0 2026-11-04)', async () => {
-    // The user's situation: a script with content, so the empty-only start box is gone.
-    const { el } = await open(secondScript('Write a script for a man putting in work at the gym'))
-    await settle()
-    // The empty-state prompt is NOT shown, but a persistent Write with Skye is.
-    expect(el.textContent).not.toContain('Paste a script, or write the idea in a line.')
-    const write = el.querySelector('button.se-write') as HTMLButtonElement
-    expect(write, 'the Write with Skye button is in the top bar').not.toBeNull()
-    expect(write.textContent).toContain('Write with Skye')
-    expect(write.disabled).toBe(false)
-    // There is no write panel until it is pressed.
-    expect(el.querySelector('[data-write-skye]')).toBeNull()
-    await act(async () => { write.click() })
-    await settle()
-    // The panel opens, seeded with the idea the writer already typed (no retyping).
-    const box = el.querySelector('[data-write-skye] textarea.pstart-input') as HTMLTextAreaElement
-    expect(box, 'the write prompt box opened').not.toBeNull()
-    expect(box.value).toBe('Write a script for a man putting in work at the gym')
-    expect(el.querySelector('[data-write-skye]')?.textContent).toContain('Skye')
   })
 
   it('shows imported scenes, and the shots; the current shot opens its editor', async () => {
@@ -214,7 +196,7 @@ describe('the Script editor page', () => {
     expect(el.querySelector('.av-row.open .av-marker')?.textContent).toBe('0:00')
   })
 
-  it('the facts list a name with no ref yet, with the shots that use it', async () => {
+  it("'This script' at the foot of Skye's Booth lists a name with no ref yet, with the shots that use it", async () => {
     const { services, el, render } = await open()
     const store = services.clan!
     await act(async () => {
@@ -226,7 +208,9 @@ describe('the Script editor page', () => {
     })
     render()
     await settle()
-    expect(el.querySelector('.se-facts .se-ref')?.textContent).toBe('@joggerno ref yet1')
+    const ref = el.querySelector('.booth .bt-facts .bt-ref')
+    expect(ref?.textContent).toBe('@jogger · no ref yet')
+    expect(ref?.getAttribute('title')).toBe('In shot 1')
   })
 
   it('← Canvas leaves the route and goes back to the canvas', async () => {
@@ -251,9 +235,9 @@ describe('the Script editor page', () => {
     })
     render()
     await settle()
-    const refs = () => [...el.querySelectorAll('.se-facts .se-ref')].map((r) => r.textContent)
-    expect(refs()).toEqual(['@loc_beachlocation'])
-    expect(el.querySelector('.se-refs .pt-label')?.textContent).toContain('References · 1')
+    const refs = () => [...el.querySelectorAll('.booth .bt-facts .bt-ref')].map((r) => r.textContent)
+    expect(refs()).toEqual(['@loc_beach'])
+    expect(el.querySelector('.bt-facts [aria-label="References · 1"]')).not.toBeNull()
     await act(async () => {
       await updateDoc(services.doc, (d) => { delete d.links[linkId] }, 'unlink')
       await services.doc.flush()
@@ -329,21 +313,20 @@ describe("Skye's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writ
     return { jobId, askId: q }
   }
 
-  it('a question whose item is gone shows at the top of the page; the facts wait for you with the question', async () => {
+  it("a question whose item is gone waits in Skye's Booth (features/script-freeform.clan)", async () => {
     const { services, el, render, scriptId } = await open()
     let askId = ''
     await act(async () => { askId = (await waitingWrite(services, scriptId, { kind: 'scene', id: id('scene') })).askId })
     render()
     await settle()
-    const top = el.querySelector(`.se-asks [data-ask="${askId}"]`)
-    expect(top?.textContent).toContain('Open on the hall or on the samurai?')
-    expect([...top!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(expect.arrayContaining(['The hall', 'The samurai']))
-    const facts = el.querySelector('.se-facts')!.textContent
-    expect(facts).toContain('Waiting for you: Open on the hall or on the samurai?')
-    expect(facts).not.toContain("I'm writing that now")
+    const card = el.querySelector(`.booth [data-ask="${askId}"]`)
+    expect(card?.textContent).toContain('Open on the hall or on the samurai?')
+    expect([...card!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(expect.arrayContaining(['The hall', 'The samurai']))
+    expect(el.querySelector('.booth .bt-sec')?.textContent).toBe('Waiting for you1')
+    expect(el.querySelector('.booth')!.textContent).not.toContain("I'm writing that now")
   })
 
-  it('a question on a scene that is on the page shows on that scene', async () => {
+  it('a question on a scene that is on the page waits in the Booth too, never on the page', async () => {
     const { services, el, render, scriptId } = await open()
     let askId = ''
     await act(async () => {
@@ -353,8 +336,8 @@ describe("Skye's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writ
     })
     render()
     await settle()
-    expect(el.querySelector(`.sp-scene [data-ask="${askId}"]`)).not.toBeNull()
-    expect(el.querySelector('.se-asks')).toBeNull()
+    expect(el.querySelector(`.booth [data-ask="${askId}"]`)).not.toBeNull()
+    expect(el.querySelector(`.se-page [data-ask="${askId}"]`)).toBeNull()
   })
 
   it("the tray's Show brings the question into view with the focus on its first answer", async () => {

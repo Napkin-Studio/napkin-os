@@ -32,6 +32,7 @@ import { errorShown } from '../dogfood/recorder'
 import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
+import { DexBooth } from './DexBooth'
 import { currentFrame, currentTake, framesOf, jobsList, mainStoryboard, openAsks, openStoryboard, refsList, scriptOfStoryboard, scriptText, shotNumber, shotsOf, storyboardSeconds, takesOf } from '../model/selectors'
 import { canvasActions } from '../canvas/chrome/actions'
 import { marksNow } from './marksNow'
@@ -228,6 +229,7 @@ export function Storyboard() {
         {shots.length > 0 && <button className="btn" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
       </div>
       <ScopeLine nodeId={sb?.id} shotNumber={(id) => shotNumber(doc, id)} />
+      <div className="booth-row">
       <div className="panel sb-body pt-grid">
         {error && <div role="alert" className="sb-error">{error}<FrontButtons text={error} /></div>}
         {deleted && (
@@ -273,6 +275,9 @@ export function Storyboard() {
         </div>
         </ShotSort>
         {shots.length > 0 && <Thumbs compact target={{ kind: 'shot-list', jobId: lastPlan?.id, model: lastPlan?.director?.model, promptVersion: lastPlan?.director?.promptVersion, shots: shots.length }} />}
+      </div>
+      {/* Dex's Booth (features/script-freeform.clan): his questions and notes on these shots. */}
+      <DexBooth storyboardId={sb?.id} onShotAsk={(a, shotId, option) => void answerAsk(a, shotId, option)} />
       </div>
     </div>
   )
