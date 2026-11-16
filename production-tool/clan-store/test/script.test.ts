@@ -39,6 +39,38 @@ describe('keepSuggestion with a length and new beats', () => {
   })
 })
 
+describe('keepSuggestion of a scene draft that opens with a heading', () => {
+  async function draft(heading: string, lines: string[]) {
+    const { bus, text, undo, script } = await project()
+    const scene = id('scene', 1)
+    await bus.apply({ patches: [{ op: 'create', entity: 'scenes', id: scene, value: { script_id: script, rank: 'a0', heading }, base_version: 0 }], why: { action: 'create scene' } })
+    const job = id('job', 8)
+    const sug = id('sug', 8)
+    await bus.apply({ patches: [
+      { op: 'create', entity: 'jobs', id: job, value: jobValue(8, { op: 'write', crew: 'skye', node: { kind: 'script', id: script } }), base_version: 0 },
+      { op: 'create', entity: 'suggestions', id: sug, value: {
+        target: { kind: 'scene', id: scene }, crew: 'skye', job_id: job, for: `human:${MAYA.id}`, base_hash: await proseHash(text.prose('scene', scene)),
+        proposed: { prose: proseFromLines('action', lines), text: lines.join('\n') }, note: 'A draft.', state: 'open' }, base_version: 0 },
+    ], why: { action: 'write a suggestion', agent: 'skye' } }, { undo: false })
+    await keepSuggestion(bus, text, sug)
+    return { bus, undo, scene }
+  }
+
+  it('makes that line the scene heading, no placeholder left, in one undo step (live test 2026-11-16)', async () => {
+    const { bus, undo, scene } = await draft('', ['EXT. CITY STREET - DUSK', 'Rain hammers the pavement.', 'She stops.'])
+    expect(bus.doc().scenes[scene]).toMatchObject({ heading: 'EXT. CITY STREET - DUSK', text: 'Rain hammers the pavement.\nShe stops.' })
+    await undo.undo()
+    expect(bus.doc().scenes[scene].heading).toBe('')
+  })
+
+  it('leaves a scene that has a heading, and a draft that opens with action, as they are', async () => {
+    const kept = await draft('INT. CAR - NIGHT', ['EXT. CITY STREET - DUSK', 'Rain.'])
+    expect(kept.bus.doc().scenes[kept.scene]).toMatchObject({ heading: 'INT. CAR - NIGHT', text: 'EXT. CITY STREET - DUSK\nRain.' })
+    const plain = await draft('', ['Rain hammers the pavement.'])
+    expect(plain.bus.doc().scenes[plain.scene]).toMatchObject({ heading: '', text: 'Rain hammers the pavement.' })
+  })
+})
+
 async function project() {
   const s = store()
   await s.create({ person: MAYA })
