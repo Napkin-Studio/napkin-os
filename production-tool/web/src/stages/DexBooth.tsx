@@ -12,7 +12,7 @@ import { mainStoryboard, openAsks, shotNumber, shotsOf } from '../model/selector
 import { Booth } from '../ui/booth/Booth'
 import { BoothAgent, BoothAsk, BoothSection, ChoiceCard, NoteCard } from '../ui/booth/BoothParts'
 import { ago, useChain, useLater } from '../ui/booth/hooks'
-import { agentNotes, stageWaiting, storyboardAddresses } from '../ui/booth/notes'
+import { agentNotes, groupFailures, stageWaiting, storyboardAddresses, triesWords } from '../ui/booth/notes'
 import { useBooth } from '../ui/booth/useBooth'
 
 export const DEX_LINE = 'My notes and questions on the shots and frames wait here.'
@@ -38,7 +38,7 @@ export function DexBooth({ storyboardId, onShotAsk }: { storyboardId: Id | undef
     const n = ctx?.for === 'frame' ? shotNumber(doc, ctx.shotId) : 0
     return { q: j.op === 'shot_list' ? 'The plan did not work.' : n ? `Shot ${n}’s frame did not draw.` : 'That did not work.', body: j.error ? plainJobError(j.error, j.op).message : undefined }
   }
-  const clear = (jobId: string) => uiStore.update((u) => { u.jobs[jobId] = { ...u.jobs[jobId], dismissed: true } })
+  const clear = (jobIds: string[]) => uiStore.update((u) => { for (const id of jobIds) u.jobs[id] = { ...u.jobs[id], dismissed: true } })
 
   type Item = { id: string; node: React.ReactNode }
   const items: Item[] = order([
@@ -50,10 +50,9 @@ export function DexBooth({ storyboardId, onShotAsk }: { storyboardId: Id | undef
           onLater={() => later(a.id)} choices={[{ label: 'Keep', primary: true, run: () => onShotAsk(a, shotId, 'keep') }, { label: 'Remove', run: () => onShotAsk(a, shotId, 'remove') }]} />
       ) }
     }),
-    ...waiting.failed.map((j): Item => {
-      const w = failedWords(j)
-      return { id: j.id, node: <ChoiceCard key={j.id} id={j.id} agent="dex" label="stopped" q={w.q} body={w.body} time={ago(j.updated_at ?? j.created_at)} onLater={() => later(j.id)} choices={[{ label: 'Clear', primary: true, run: () => clear(j.id) }]} /> }
-    }),
+    ...groupFailures(waiting.failed, failedWords).map((g): Item => ({ id: g.id, node: <ChoiceCard key={g.id} id={g.id} agent={"dex"} label="stopped" q={g.q}
+        body={g.jobs.length > 1 ? <>{g.body}{g.body ? ' ' : ''}<span className="bc-tries">{triesWords(g.jobs.length)}</span></> : g.body}
+        time={ago(g.at)} onLater={() => later(g.id)} choices={[{ label: 'Clear', primary: true, run: () => clear(g.jobs.map((j) => j.id)) }]} /> })),
   ], (x) => x.id)
   const notes = agentNotes(chain, 'dex', storyboardAddresses(doc, docId, storyboardId), doc)
   const count = items.length

@@ -133,6 +133,22 @@ describe('the Booth in the Video rooms', () => {
     expect(opened).toEqual([{ parentId: t.id, shotId: shots[1], verb: 'words', words: 'she looks up at the rain' }])
   })
 
+  it('Make: the same take stopping the same way twice is one card, and Clear clears both', async () => {
+    const { services, shots, el, render } = await project()
+    await failed(services, shots[0], 'clip')
+    await failed(services, shots[0], 'clip')
+    render(createElement(RoomBooth, { room: 'make', data: data(shots), sel: {}, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
+    await settle()
+    const cards = el.querySelectorAll('.booth .bc.ask')
+    expect(cards).toHaveLength(1)
+    expect(cards[0].querySelector('.bc-tries')?.textContent).toBe('Tried 2 times, stopped the same way each time.')
+    expect(el.querySelector('.booth .bt-sec')?.textContent).toBe('Waiting for you1')
+    await act(async () => { buttonIn(cards[0], 'Clear').click() })
+    await settle()
+    expect(el.querySelectorAll('.booth .bc.ask')).toHaveLength(0)
+    expect(Object.values(services.ui.get().jobs).filter((j) => j.dismissed)).toHaveLength(2)
+  })
+
   it('Make: with no take of the box yet, the box waits for one', async () => {
     const { shots, el, render } = await project()
     render(createElement(RoomBooth, { room: 'make', data: data(shots), sel: { shotId: shots[0], boxKey: shots[0] }, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))

@@ -15,7 +15,7 @@ import type { CastKey } from '../ui/agents/cast'
 import { Booth } from '../ui/booth/Booth'
 import { BoothAgent, BoothAsk, BoothBox, BoothSection, ChoiceCard, NoteCard, ScopeChip } from '../ui/booth/BoothParts'
 import { ago, useChain, useLater } from '../ui/booth/hooks'
-import { agentNotes, stageWaiting, videoAddresses } from '../ui/booth/notes'
+import { agentNotes, groupFailures, stageWaiting, triesWords, videoAddresses } from '../ui/booth/notes'
 import { useBooth } from '../ui/booth/useBooth'
 import type { ChangeOpen } from './ChangeDrawer'
 import { boxName, type Gen } from './model'
@@ -62,7 +62,7 @@ export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady 
     if (ctx?.for === 'stitch') return (ctx.videoId ?? data.videoId) === data.videoId
     return (job.node.kind === 'video' && job.node.id === data.videoId) || (job.node.kind === 'shot' && ids.has(job.node.id))
   })
-  const clear = (jobId: string) => uiStore.update((u) => { u.jobs[jobId] = { ...u.jobs[jobId], dismissed: true } })
+  const clear = (jobIds: string[]) => uiStore.update((u) => { for (const id of jobIds) u.jobs[id] = { ...u.jobs[id], dismissed: true } })
   const failedWords = (j: DocJob) => {
     const ctx = jobCtx(doc, ui, j.id)
     const g = data.gens.find((x) => x.jobId === j.id)
@@ -78,10 +78,9 @@ export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady 
   type Item = { id: string; node: ReactNode; ask?: boolean }
   const items: Item[] = [
     ...waiting.asks.map(({ job, ask }): Item => ({ id: ask.id, ask: true, node: <BoothAsk key={ask.id} ask={ask} onLater={() => later(ask.id)} time={ago(job.created_at)} /> })),
-    ...waiting.failed.filter((j) => (room === 'edit') === (j.op === 'stitch')).map((j): Item => {
-      const w = failedWords(j)
-      return { id: j.id, node: <ChoiceCard key={j.id} id={j.id} agent={agent} label="stopped" q={w.q} body={w.body} time={ago(j.updated_at ?? j.created_at)} onLater={() => later(j.id)} choices={[{ label: 'Clear', primary: true, run: () => clear(j.id) }]} /> }
-    }),
+    ...groupFailures(waiting.failed.filter((j) => (room === 'edit') === (j.op === 'stitch')), failedWords).map((g): Item => ({ id: g.id, node: <ChoiceCard key={g.id} id={g.id} agent={agent} label="stopped" q={g.q}
+        body={g.jobs.length > 1 ? <>{g.body}{g.body ? ' ' : ''}<span className="bc-tries">{triesWords(g.jobs.length)}</span></> : g.body}
+        time={ago(g.at)} onLater={() => later(g.id)} choices={[{ label: 'Clear', primary: true, run: () => clear(g.jobs.map((j) => j.id)) }]} /> })),
   ]
 
   // Make: the Change tab offers to make a shot filmed with others on its own; the offer waits here too.

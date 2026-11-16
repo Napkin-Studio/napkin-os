@@ -68,3 +68,21 @@ export function stageWaiting(doc: Doc, stage: StageName, ctxOf: (id: string) => 
   })
   return { asks, failed: g.needsYou.filter((r) => here(r.job, r.ctx)).map((r) => r.job) }
 }
+
+/** Failures that read the same (the same take tried again and stopped the same way) as one: the newest first,
+ *  with every job it stands for, so one Clear clears them all. */
+export function groupFailures(jobs: DocJob[], wordsOf: (j: DocJob) => { q: string; body?: string }): { id: string; jobs: DocJob[]; q: string; body?: string; at?: string }[] {
+  const out = new Map<string, { id: string; jobs: DocJob[]; q: string; body?: string; at?: string }>()
+  const at = (j: DocJob) => j.updated_at ?? j.created_at
+  for (const j of [...jobs].sort((a, b) => ((at(a) ?? '') < (at(b) ?? '') ? 1 : -1))) {
+    const w = wordsOf(j)
+    const key = `${w.q}\n${w.body ?? ''}`
+    const g = out.get(key)
+    if (g) g.jobs.push(j)
+    else out.set(key, { id: j.id, jobs: [j], q: w.q, ...(w.body ? { body: w.body } : {}), at: at(j) })
+  }
+  return [...out.values()]
+}
+
+/** "Tried 2 times, stopped the same way each time." for a group of more than one. */
+export const triesWords = (n: number) => (n > 1 ? `Tried ${n} times, stopped the same way each time.` : '')
