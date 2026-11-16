@@ -50,7 +50,8 @@ export type Intent =
   | { kind: 'ink-move'; id: number; points: InPoint[]; predicted?: InPoint[] }
   | { kind: 'ink-end'; id: number }
   | { kind: 'ink-cancel'; id: number }
-  | { kind: 'press'; id: number; x: number; y: number; by: PointerKind }
+  /** t: the pointer event's own time (ms), when the press came from one: a double press is judged on it. */
+  | { kind: 'press'; id: number; x: number; y: number; by: PointerKind; t?: number }
   | { kind: 'drag'; id: number; x: number; y: number }
   | { kind: 'release'; id: number; x: number; y: number }
   /** A press is called off (a palm, or a second finger, during a finger's grab): drop its preview. */
@@ -186,7 +187,7 @@ export class InputRouter {
         return out
       }
       this.penInk = this.tool === 'ink'
-      out.push(this.penInk ? { kind: 'ink-start', id: p.id, at: { x: p.x, y: p.y, pressure: p.pressure || 0.5 }, by: 'pen' } : { kind: 'press', id: p.id, x: p.x, y: p.y, by: 'pen' })
+      out.push(this.penInk ? { kind: 'ink-start', id: p.id, at: { x: p.x, y: p.y, pressure: p.pressure || 0.5 }, by: 'pen' } : { kind: 'press', id: p.id, x: p.x, y: p.y, by: 'pen', t: p.t })
       return out
     }
     if (p.phase === 'move') {
@@ -231,7 +232,7 @@ export class InputRouter {
       const ink = !pan && this.tool === 'ink'
       this.mouse = { id: p.id, ink, pan, x: p.x, y: p.y }
       if (pan) return []
-      return [ink ? { kind: 'ink-start', id: p.id, at: { x: p.x, y: p.y, pressure: 0.5 }, by: 'mouse' } : { kind: 'press', id: p.id, x: p.x, y: p.y, by: 'mouse' }]
+      return [ink ? { kind: 'ink-start', id: p.id, at: { x: p.x, y: p.y, pressure: 0.5 }, by: 'mouse' } : { kind: 'press', id: p.id, x: p.x, y: p.y, by: 'mouse', t: p.t }]
     }
     const m = this.mouse
     if (!m || m.id !== p.id) return []

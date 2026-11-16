@@ -31,6 +31,14 @@ export default defineConfig({
   server: {
     fs: { allow: ['..'] },
   },
+  // Dev server only: crawl the canvas engines and the store Worker from the start. They load by dynamic
+  // import (src/canvas/adapter/index.ts), so without this Vite found their packages (yjs, @tldraw/store,
+  // rbush…) only when a canvas first opened, re-bundled, and reloaded the page under the person or a
+  // test (the canvas-picture e2e failed on "Execution context was destroyed" once the own engine became
+  // the default). Builds are unaffected.
+  optimizeDeps: {
+    entries: ['index.html', 'src/canvas/adapter/own/engine.ts', 'src/canvas/adapter/excalidraw/engine.ts', 'src/store/worker.ts'],
+  },
   test: {
     environment: 'node',
     // DOM tests say '// @vitest-environment happy-dom' at their top; the default stays node.

@@ -276,7 +276,7 @@ export const ownEngine: CanvasEngine = {
           hover = null
           break
         case 'press':
-          adapter.press(toScene(i.x, i.y), { shift, by: i.by })
+          adapter.press(toScene(i.x, i.y), { shift, by: i.by, ...(i.t !== undefined ? { t: i.t } : {}) })
           break
         case 'drag':
           adapter.drag(toScene(i.x, i.y))

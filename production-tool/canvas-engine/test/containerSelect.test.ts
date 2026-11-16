@@ -180,6 +180,29 @@ describe('double press', () => {
     click(20, -10, 100)
     expect(tool.scope).toBeNull()
   })
+
+  it('a double press is judged on the events’ own times: handled late on a busy thread, it still counts', () => {
+    // The press events are 200 ms apart, but the second is handled 900 ms after the first (a busy main thread).
+    const late = drawing()
+    late.tool.press({ x: 100, y: 150 }, { zoom: 1, t: 0 })
+    late.tool.release({ x: 100, y: 150 })
+    late.tool.press({ x: 100, y: 150 }, { zoom: 1, t: 200 })
+    late.tool.release({ x: 100, y: 150 })
+    expect(late.tool.scope).toBe('D')
+    // Events further apart than a double press are two presses, however fast they are handled.
+    const slow = drawing()
+    slow.tool.press({ x: 100, y: 150 }, { zoom: 1, t: 0 })
+    slow.tool.release({ x: 100, y: 150 })
+    slow.tool.press({ x: 100, y: 150 }, { zoom: 1, t: DOUBLE_PRESS_MS + 1 })
+    slow.tool.release({ x: 100, y: 150 })
+    expect(slow.tool.scope).toBeNull()
+    // An event time is never compared with a handling time.
+    const mixed = drawing()
+    mixed.tool.press({ x: 100, y: 150 }, { zoom: 1, t: 5000 })
+    mixed.tool.release({ x: 100, y: 150 })
+    mixed.click(100, 150, 5100)
+    expect(mixed.tool.scope).toBeNull()
+  })
 })
 
 describe('groups and sketch areas follow the same rule', () => {

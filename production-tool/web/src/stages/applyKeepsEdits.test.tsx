@@ -140,6 +140,10 @@ async function open(kind: Kind, opts: { remove?: boolean; jobState?: 'completed'
 }
 
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 30)) })
+/** Waits until `done()` holds (a busy machine takes longer than one settle), up to `ms`. */
+const until = async (done: () => boolean, ms = 3000) => {
+  for (const end = Date.now() + ms; !done() && Date.now() < end;) await settle()
+}
 const byText = (el: HTMLElement, text: string) => [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === text)
 const apply = async (el: HTMLElement) => {
   act(() => byText(el, 'Apply as new version')!.click())
@@ -153,6 +157,7 @@ describe('Apply keeps the result in its mask (the owner, 2026-10-16: "I save it,
       it(`${what}: v2 has the result inside the mask and v1 outside`, async () => {
         const { el, saved } = await open(kind, { remove })
         await apply(el)
+        await until(() => saved()?.version === 2)
         const v2 = composed.at(-1)!
         expect(v2.at(0.52, 0.5)).toBe(RESULT)
         expect(v2.at(0.05, 0.05)).toBe(V1)
@@ -163,6 +168,7 @@ describe('Apply keeps the result in its mask (the owner, 2026-10-16: "I save it,
         act(() => byText(el, 'Clear mask')!.click())
         await settle()
         await apply(el)
+        await until(() => saved()?.version === 2 || !!el.querySelector('[role="alert"]'))
         expect(el.querySelector('[role="alert"]')).toBeNull()
         expect(composed.at(-1)!.at(0.52, 0.5)).toBe(RESULT)
         expect(saved()?.version).toBe(2)

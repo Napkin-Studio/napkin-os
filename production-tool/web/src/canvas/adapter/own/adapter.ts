@@ -553,7 +553,7 @@ export class OwnAdapter implements CanvasAdapter {
   // ── select, group and the sketch area tool (features/canvas-edit-tools.clan) ──
 
   /** The router's press, drag and release: the sketch area tool's while it is the tool, else the select tool's. */
-  press(p: Pt, opts: { shift?: boolean; by?: 'mouse' | 'pen' | 'touch' } = {}) {
+  press(p: Pt, opts: { shift?: boolean; by?: 'mouse' | 'pen' | 'touch'; t?: number } = {}) {
     if (this.texting()) this.textPress = p
     else if (this.sketching()) this.sketch.press(p)
     else this.selector.press(p, { ...opts, zoom: this.vp.zoom })
