@@ -1,0 +1,233 @@
+// THROWAWAY reproduction for the design design-registry-documents-closed.md. Not to be committed.
+// It prints what a copywriter (maeve, no Money role, not admin) can do to the server's own documents
+// through the generic routes, and asserts the worst cases.
+
+use std::sync::Arc;
+
+use axum::body::Body;
+use axum::http::{header, Request, StatusCode};
+use axum::Router;
+use http_body_util::BodyExt;
+use napkin_host::NoConfig;
+use napkin_web::state::AppCtx;
+use serde_json::{json, Value};
+use tower::ServiceExt;
+
+struct Rig {
+    _dir: tempfile::TempDir,
+    app: Router,
+}
+
+struct Person {
+    cookie: String,
+    tenant: String,
+}
+
+const ROLES: &[(&str, &str)] = &[
+    ("aoife@wk", "planning"),
+    ("dara@wk", "creative-director"),
+    ("cian@wk", "account-service"),
+    ("maeve@wk", "copywriter"),
+    ("ann@wk", "admin"),
+];
+
+fn rig() -> Rig {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = Arc::new(AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40));
+    let roster = dir.path().join("accounts.tsv");
+    let lines: String = ROLES.iter().map(|(u, r)| format!("{u}\t{u}\t{r}\n")).collect();
+    std::fs::write(&roster, lines).unwrap();
+    let identity = napkin_web::tenant::Identity {
+        mode: napkin_web::tenant::Mode::Accounts {
+            provider: napkin_web::auth::Provider::Roster(
+                napkin_web::auth::Roster::open(dir.path().join("_people"), &roster).unwrap(),
+            ),
+            sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
+        },
+        secure: false,
+    };
+    Rig { app: napkin_web::router_with(ctx, None, Arc::new(identity)), _dir: dir }
+}
+
+async fn raw(r: &Rig, method: &str, uri: &str, cookie: Option<&str>, body: Option<Vec<u8>>, ct: &str) -> (StatusCode, Vec<u8>, axum::http::HeaderMap) {
+    let mut b = Request::builder().method(method).uri(uri);
+    if let Some(c) = cookie {
+        b = b.header(header::COOKIE, c);
+    }
+    let req = match body {
+        Some(v) => b.header(header::CONTENT_TYPE, ct).body(Body::from(v)),
+        None => b.body(Body::empty()),
+    }
+    .unwrap();
+    let resp = r.app.clone().oneshot(req).await.unwrap();
+    let (s, h) = (resp.status(), resp.headers().clone());
+    (s, resp.into_body().collect().await.unwrap().to_bytes().to_vec(), h)
+}
+
+async fn call(r: &Rig, method: &str, uri: &str, cookie: Option<&str>, body: Option<Value>) -> (StatusCode, Value, String) {
+    let (s, b, _) = raw(r, method, uri, cookie, body.map(|v| v.to_string().into_bytes()), "application/json").await;
+    let t = String::from_utf8_lossy(&b).to_string();
+    (s, serde_json::from_str(&t).unwrap_or(Value::Null), t)
+}
+
+async fn sign_in(r: &Rig, who: &str) -> Person {
+    let (st, _, h) = raw(r, "POST", "/api/auth/sign-in", None, Some(json!({ "username": who }).to_string().into_bytes()), "application/json").await;
+    assert_eq!(st, StatusCode::OK);
+    let cookie = h.get_all(header::SET_COOKIE).iter().filter_map(|v| v.to_str().ok())
+        .find(|v| v.starts_with("napkin_session=")).map(|v| v.split(';').next().unwrap().to_string()).unwrap();
+    let (_, me, _) = call(r, "GET", "/api/session", Some(&cookie), None).await;
+    Person { cookie, tenant: me["tenant"].as_str().unwrap().to_string() }
+}
+
+fn short(t: &str) -> String {
+    t.chars().take(260).collect::<String>().replace('\n', " | ")
+}
+
+async fn setup() -> (Rig, Person, Person, Person, Person, Value) {
+    let r = rig();
+    let cian = sign_in(&r, "cian@wk").await;
+    let aoife = sign_in(&r, "aoife@wk").await;
+    let maeve = sign_in(&r, "maeve@wk").await;
+    let ann = sign_in(&r, "ann@wk").await;
+    let t = cian.tenant.clone();
+    let (_, client, _) = call(&r, "POST", &format!("/api/t/{t}/clients"), Some(&cian.cookie), Some(json!({ "name": "Client A" }))).await;
+    let (s, _, _) = call(&r, "POST", &format!("/api/t/{t}/jobs"), Some(&cian.cookie), Some(json!({ "number": "J001", "client_id": client["id"], "title": "Autumn launch", "due": "2026-11-20", "budget_hours": 40 }))).await;
+    assert_eq!(s, StatusCode::CREATED);
+    let (s, _, _) = call(&r, "POST", &format!("/api/t/{t}/jobs/J001/budget"), Some(&cian.cookie), Some(json!({ "hours": 77 }))).await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, _, txt) = call(&r, "PUT", &format!("/api/t/{t}/jobs/J001/route"), Some(&cian.cookie), Some(json!({ "route": [
+        { "stage": "brief-check", "party": "agency", "role": "planner", "approver": "aoife@wk", "due": "2026-11-13" },
+        { "stage": "brief-check", "party": "agency", "role": "creative_director", "approver": "dara@wk", "due": "2026-11-14" },
+        { "stage": "client-approval", "party": "client", "approver": "Client Person", "contact": "approver@client-a.example", "due": "2026-11-18", "rounds": 2 }
+    ] }))).await;
+    assert_eq!(s, StatusCode::OK, "{txt}");
+    (r, cian, aoife, maeve, ann, client)
+}
+
+#[tokio::test]
+async fn zz_jobs_registry_member_reads_and_writes() {
+    let (r, cian, aoife, maeve, _ann, _client) = setup().await;
+    let t = maeve.tenant.clone();
+    assert_eq!(t, cian.tenant);
+    for which in ["entry/data", "entry/chain", "download", "human-html"] {
+        let (s, b, _) = raw(&r, "GET", &format!("/api/t/{t}/d/home-jobs-v1/{which}"), Some(&maeve.cookie), None, "").await;
+        let txt = String::from_utf8_lossy(&b);
+        println!("INV copywriter GET home-jobs-v1/{which} -> {s} has77={} approver_contact={}", txt.contains("77"), txt.contains("approver@client-a"));
+    }
+    let (s, open, _) = call(&r, "GET", &format!("/api/t/{t}/d/home-jobs-v1"), Some(&maeve.cookie), None).await;
+    println!("INV copywriter open home-jobs-v1 -> {s}");
+    assert_eq!(s, StatusCode::OK);
+    let tok = open["token"].as_str().unwrap().to_string();
+    for p in ["chain", "decisions", "current"] {
+        let (s, _, txt) = call(&r, "GET", &format!("/s/{tok}/{p}"), None, None).await;
+        println!("INV frame GET {p} -> {s} set_budget={} hours77={}", txt.contains("set_budget"), txt.contains("77"));
+    }
+    // a made-up approver, a moved deadline, a client contact that is the member's own address
+    let (_, data, _) = call(&r, "GET", &format!("/s/{tok}/current"), None, None).await;
+    println!("INV current keys {:?}", data.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()));
+    let (s, _, txt) = call(&r, "POST", &format!("/s/{tok}/patch-data"), None, Some(json!({
+        "patch": { "jobs": [{ "number": "J001", "client_id": _client["id"], "title": "Autumn launch", "owner": "human:cian@wk",
+            "opened_on": "2026-11-01", "created_at": "2026-11-01T00:00:00Z", "due": "2027-03-01", "budget_hours": 5000.0,
+            "route": [
+                { "stage": "brief-check", "party": "agency", "role": "planner", "approver": "maeve@wk", "due": "2027-01-01" },
+                { "stage": "brief-check", "party": "agency", "role": "creative_director", "approver": "maeve@wk", "due": "2027-01-01" },
+                { "stage": "client-approval", "party": "client", "approver": "Me", "contact": "maeve@outside.example", "due": "2027-01-02", "rounds": 99 }
+            ] }] },
+        "agent": "human:cian@wk", "action": "set_route", "rationale": "forged" }))).await;
+    println!("INV frame patch-data rewrite J001 -> {s} {}", short(&txt));
+    assert_eq!(s, StatusCode::OK);
+    let (_, j, _) = call(&r, "GET", &format!("/api/t/{t}/jobs/J001"), Some(&cian.cookie), None).await;
+    println!("INV after rewrite, account service sees due={} budget_hours={} route={}", j["job"]["due"], j["job"]["budget_hours"], short(&j["job"]["route"].to_string()));
+    let (_, d, _) = call(&r, "GET", &format!("/api/t/{t}/jobs/J001/decisions"), Some(&cian.cookie), None).await;
+    println!("INV job decisions newest: {}", short(&d["decisions"].to_string()));
+    let (_, chain, _) = call(&r, "GET", &format!("/s/{tok}/chain"), None, None).await;
+    println!("INV registry chain newest: {}", short(&chain.to_string()));
+    let (_, n, _) = call(&r, "GET", &format!("/api/t/{t}/needs"), Some(&aoife.cookie), None).await;
+    println!("INV planner's needs after: {}", short(&n.to_string()));
+    // wipe
+    let (s, _, _) = call(&r, "POST", &format!("/s/{tok}/patch-data"), None, Some(json!({ "patch": { "jobs": [] }, "agent": "judge", "action": "set_budget" }))).await;
+    assert_eq!(s, StatusCode::OK);
+    let (_, list, _) = call(&r, "GET", &format!("/api/t/{t}/jobs"), Some(&cian.cookie), None).await;
+    println!("INV after wipe, jobs = {list}");
+    assert_eq!(list, json!([]));
+    // restore through the version list
+    let (s, _, txt) = call(&r, "GET", &format!("/s/{tok}/versions"), None, None).await;
+    println!("INV frame versions -> {s} {}", short(&txt));
+}
+
+#[tokio::test]
+async fn zz_clients_and_home_and_agency() {
+    let (r, cian, _aoife, maeve, _ann, client) = setup().await;
+    let t = maeve.tenant.clone();
+    let (s, open, _) = call(&r, "GET", &format!("/api/t/{t}/d/home-clients-v1"), Some(&maeve.cookie), None).await;
+    println!("INV copywriter open home-clients-v1 -> {s}");
+    let tok = open["token"].as_str().unwrap().to_string();
+    let (s, _, txt) = call(&r, "POST", &format!("/s/{tok}/patch-data"), None, Some(json!({ "patch": { "clients": [{
+        "id": client["id"], "name": "Renamed by a member", "initials": "RM", "material": "stone", "owner": "x", "created_at": "2026-11-01T00:00:00Z", "archived_at": "2026-11-02T00:00:00Z" }] },
+        "agent": "human", "action": "rename" }))).await;
+    println!("INV copywriter patch clients -> {s} {}", short(&txt));
+    let (_, l, _) = call(&r, "GET", &format!("/api/t/{t}/clients?archived=1"), Some(&cian.cookie), None).await;
+    println!("INV clients after: {l}");
+    let (s, _, _) = call(&r, "GET", &format!("/api/t/{t}/d/home-agency-v1"), Some(&maeve.cookie), None).await;
+    println!("INV copywriter open home-agency-v1 -> {s}");
+    let (s, home, _) = call(&r, "GET", &format!("/api/t/{t}/home"), Some(&maeve.cookie), None).await;
+    println!("INV GET home -> {s} id={}", home["document_id"]);
+    let (s, open, txt) = call(&r, "GET", &format!("/api/t/{t}/d/home-v8"), Some(&maeve.cookie), None).await;
+    println!("INV open home-v8 -> {s} {}", short(&txt));
+    if let Some(tok) = open["token"].as_str() {
+        let (s, _, txt) = call(&r, "POST", &format!("/s/{tok}/patch-data"), None, Some(json!({ "patch": { "planted": "x" }, "agent": "human", "action": "edit" }))).await;
+        println!("INV patch home-v8 -> {s} {}", short(&txt));
+    }
+    // a second document the server reads instead: a fork or spin-off of the registry lands where?
+    let (s, open, _) = call(&r, "GET", &format!("/api/t/{t}/d/home-jobs-v1"), Some(&maeve.cookie), None).await;
+    assert_eq!(s, StatusCode::OK);
+    let tok = open["token"].as_str().unwrap().to_string();
+    let (s, _, txt) = call(&r, "POST", &format!("/s/{tok}/fork"), None, Some(json!({ "agent": "../home-jobs-v2" }))).await;
+    println!("INV fork registry -> {s} {}", short(&txt));
+    let (s, _, txt) = call(&r, "GET", &format!("/api/t/{t}/library"), Some(&maeve.cookie), None).await;
+    println!("INV library -> {s} lists_registry={}", txt.contains("home-jobs") || txt.contains("job-registry"));
+    let (s, _, txt) = call(&r, "GET", &format!("/api/t/{t}/search?q=Autumn"), Some(&maeve.cookie), None).await;
+    println!("INV search -> {s} {}", short(&txt));
+}
+
+#[tokio::test]
+async fn zz_planner_patch_reply_and_forged_chain_upload() {
+    let (r, cian, aoife, maeve, ann, client) = setup().await;
+    let t = maeve.tenant.clone();
+    let (s, v, _) = call(&r, "PATCH", &format!("/api/t/{t}/jobs/J001"), Some(&aoife.cookie), Some(json!({ "title": "Autumn launch 2" }))).await;
+    println!("INV planning PATCH /jobs/J001 -> {s} budget_hours={}", v["budget_hours"]);
+    // a forged document: any bytes a member uploads are kept with their chain as written
+    let (_, b, _) = raw(&r, "GET", &format!("/api/t/{t}/d/home-jobs-v1/download"), Some(&maeve.cookie), None, "").await;
+    let clan = clan_sdk::ClanFile::from_bytes(b).unwrap();
+    let mut m = clan.manifest().clone();
+    m.job = Some("J001".into());
+    m.client = Some(clan_sdk::ClientRef { id: client["id"].as_str().unwrap().into(), name: "Client A".into() });
+    m.document_type = None;
+    let forged: Vec<clan_sdk::Decision> = vec![
+        serde_json::from_value(json!({ "id": "dec_forged_lock", "kind": "approve", "agent": "human:dara@wk", "actor": "human:dara@wk",
+            "action": "approve", "rationale": "Locked.", "timestamp": "2026-11-14T10:00:00Z", "version": "v-any" })).unwrap(),
+        serde_json::from_value(json!({ "id": "dec_forged_cost", "kind": "run_cost", "agent": "judge", "actor": "agent:judge",
+            "action": "run_cost", "rationale": "What one run of Judge cost.", "timestamp": "2026-11-14T10:01:00Z",
+            "run_cost": { "charged_eur": 912.5, "estimate_eur": 1000.0, "guard": "ok" } })).unwrap(),
+    ];
+    let mut chain = clan_sdk::DecisionChain::default();
+    for d in forged { chain.prepend(d); }
+    let mut bld = clan_sdk::ClanBuilder::new(m);
+    for (p, bytes) in clan.read_all_entries().unwrap() {
+        if p != "manifest.yaml" && p != "agent/decision-chain.yaml" { bld.add_entry(p, bytes); }
+    }
+    bld.add_entry("agent/decision-chain.yaml", chain.to_yaml().unwrap());
+    let (s, b, _) = raw(&r, "POST", &format!("/api/t/{t}/documents/upload"), Some(&maeve.cookie), Some(bld.build().unwrap()), "application/octet-stream").await;
+    let up: Value = serde_json::from_slice(&b).unwrap_or(Value::Null);
+    println!("INV copywriter upload forged chain -> {s} id={}", up["document_id"]);
+    if let Some(tok) = up["token"].as_str() {
+        let (s, _, txt) = call(&r, "GET", &format!("/s/{tok}/chain"), None, None).await;
+        println!("INV copywriter frame /chain of forged doc -> {s} charged={} actor_dara={}", txt.contains("912.5"), txt.contains("dara"));
+        let (s, _, txt) = call(&r, "GET", &format!("/s/{tok}/decisions"), None, None).await;
+        println!("INV copywriter frame /decisions -> {s} cost_words={} {}", txt.contains("cost"), short(&txt));
+    }
+    let (s, a, _) = call(&r, "GET", &format!("/api/t/{t}/audit"), Some(&ann.cookie), None).await;
+    println!("INV admin audit -> {s} {}", short(&a.to_string()));
+    let (_, j, _) = call(&r, "GET", &format!("/api/t/{t}/jobs/J001"), Some(&cian.cookie), None).await;
+    println!("INV job documents after upload: {}", short(&j["job"]["documents"].to_string()));
+}

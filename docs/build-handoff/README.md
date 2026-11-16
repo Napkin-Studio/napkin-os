@@ -3,12 +3,15 @@
 Everything a person or an agent needs to carry on the build on `spike/fabletest` from another machine.
 
 ## Start here
+0. `HANDOFF.md` in this folder (16 Nov): what was done, what is left, the order to pick it up in, and how the build is run. Read it first.
 1. `BUILD-LOG.md`, the last entry: what is built, what failed, and the numbered next action.
 2. `docs/napkin-os-build-prompt-v3.1.md`: the governing prompt (it wins over v2 and v3).
 3. This folder:
    - `builder-brief.md`: the shared brief every builder agent is given. Its last sections (Phase 2 addendum, Design addendum of 13 Nov, Speed addendum) win over the earlier text. Paths in it are for the Mac the build ran on; change them for yours.
    - `design-brief.md`: the brief every design agent is given.
    - `develop-alignment-audit.md`: every screen this build added, compared with develop (13 Nov).
+   - `phase3-audit.md` and `phase4-audit.md`: the audits behind the Phase 3 and 4 designs.
+   - `designs/`: design documents written outside the records, and the spend ledger.
    - `progress.html` and `progress.py`: the progress page and the script that recomputes its numbers (edit `REPO` and `PAGE` at the top).
 4. The feature records under `features/`: `scripts/feature list`, `scripts/feature show <slug>`. A record's design is the spec for its builder.
 
@@ -26,6 +29,6 @@ Open the repo on this branch and say: "Read docs/build-handoff/README.md and BUI
 Rust with the wasm32 target, Node 22, uv 0.13 or newer (older uv skips the dev groups), gitleaks for the `secrets` suite (`GITLEAKS_BIN`), Chrome for Playwright (`channel: 'chrome'` in a throwaway config), about 100 GB of free disk for worktree build folders.
 
 ## Not in the repo
-- Branches in flight when this was written exist only on the first machine unless pushed: `feat/align-confidential-prices`, `feat/align-landing-look`, `fix/store-scan-under-lock`.
+- `feat/align-confidential-prices` is held, unmerged and only on the build machine (`HANDOFF.md`, section 4). Every other branch of this build is merged into `spike/fabletest`.
 - The Deck Maker and Production UI prompt is Shrey's and runs as its own track with pull requests into develop.
-- Phase 3 and 4 audits are being written to `/tmp/phase3-audit.md` and `/tmp/phase4-audit.md`; copy them here when they exist.
+- The designs that were kept outside the repo are now in `designs/`: the registry documents (not approved), the store scan fix, the allow-listed agent context, first day, Napkin Brain, and the spend ledger.

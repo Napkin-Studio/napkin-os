@@ -382,3 +382,19 @@ None is verified or merged.
 - The pre-push hook's Rust suite no longer hangs. The push still needs a named person's licence approval.
 - Merged: the lock order follow-up (`fix/store-lock-order`, Opus): a document's write lock is always taken before a session's view lock; write locks are keyed by tenant and id; `/snapshot` and `/patch` return a refused write. The deadlock the review showed (reachable only where one Session holds every document, the desktop app) is closed and is a test. Fable re-check: safe, no finding. On the merged branch: rust, wasm, desktop, secrets and copy pass. Minor, not new: when a `perform` writes its own document and then a second one that is refused (409), the first write has landed and the caller gets an error; only `routes_start` has that shape.
 - Spend since the resume, by the ledger's rule (every agent token at its model's output price): about 21 of the 1,200 available to agents.
+
+## 2026-11-16 · Handoff · session 6
+
+**Owner's word (Sai, in chat).** Write a handoff for another agent: what was done, what is left, the order to pick it up in, and instructions. Merge whatever worktrees and branches the build had, then push as `spike/fabletest`, with no pull request.
+
+**Done.**
+- `docs/build-handoff/HANDOFF.md` is the handoff. The folder's README points to it.
+- The designs kept in `~/napkin-share` on the build machine are copied to `docs/build-handoff/designs/`: registry-documents-closed (NOT approved) with its throwaway reproduction test, store-scan-under-lock, the allow-listed agent context, first-day, napkin-brain, and the spend ledger.
+- Branches and worktrees, checked: 30 of 31 local branches and all 32 worktrees are already ancestors of `spike/fabletest`; no worktree holds uncommitted product work (only reviewers' probe tests). `origin/develop` is 0 commits ahead. So there was nothing left to merge but one branch.
+- NOT merged: `feat/align-confidential-prices` (23fa385b, 18 commits). The fifth review's verdict is NOT SAFE, it carries two regressions, Sai's decision of 15 Nov was that it stays unmerged, and a trial merge conflicts in about 20 files. It is still only on the build machine.
+
+**No code changed this session.** No builder, reviewer or test stack ran. No full e2e has run since the store scan and lock order merges; that is the next agent's first step.
+
+**The push.** See the line below this entry's commit in `git log`, or `git status -sb`: the pre-push hook refuses this push until a person sets `NAPKIN_LICENCE_APPROVED=Shrey` (59 changes in `licences/*.toml`, all from the Production line; Shrey is the only approver in `licences/policy.toml`). The agent did not set it.
+
+**Next action.** `docs/build-handoff/HANDOFF.md`, section 5.
