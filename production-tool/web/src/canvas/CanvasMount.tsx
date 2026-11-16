@@ -5,8 +5,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useServices } from '../app/context'
-import { converting, engineChoice, engineToMount, loadEngine } from './adapter'
-import { idbPut } from '../lib/idb'
+import { converting, engineChoice, engineOf, loadEngine, mountPlan } from './adapter'
+import { idbGet, idbPut } from '../lib/idb'
 import type { CanvasChrome } from './chrome/controls'
 import type { CanvasAdapter, CanvasSnapshot } from './core/canvasAdapter'
 import { BoardLayer } from './boards/BoardLayer'
@@ -58,13 +58,20 @@ export function CanvasMount({ initial, onReady, onChrome, onChange, theme, railI
     el.appendChild(slot)
     let mine: CanvasAdapter | null = null
     const choice = engineChoice(globalThis.location?.search ?? '', remoteConfig?.flags)
-    const id = engineToMount(choice, initial)
-    // An Excalidraw scene opened on the own engine: its original is kept beside it, untouched.
-    const kept = converting(id, initial) && project?.canvasKey
-      ? idbPut('kv', `${project.canvasKey}.excalidraw`, initial).catch((e) => console.warn('the Excalidraw original was not kept', e))
-      : Promise.resolve()
-    void kept.then(() => loadEngine(id))
-      .then((engine) => engine.mount(slot, { initial, onChange: () => { cbs.current.onChange(); bump() }, theme, openScene }))
+    const keptKey = project?.canvasKey ? `${project.canvasKey}.excalidraw` : null
+    // On the Excalidraw fallback a converted project opens the original kept when it was converted.
+    const original = choice === 'excalidraw' && engineOf(initial) === 'own' && keptKey
+      ? idbGet<CanvasSnapshot>('kv', keptKey).catch(() => undefined)
+      : Promise.resolve(undefined)
+    void original.then((kept) => {
+      const plan = mountPlan(choice, initial, kept)
+      // An Excalidraw scene opened on the own engine: its original is kept beside it, untouched.
+      const keep = converting(plan.id, plan.initial) && keptKey
+        ? idbPut('kv', keptKey, plan.initial).catch((e) => console.warn('the Excalidraw original was not kept', e))
+        : Promise.resolve()
+      return keep.then(() => loadEngine(plan.id))
+        .then((engine) => engine.mount(slot, { initial: plan.initial, onChange: () => { cbs.current.onChange(); bump() }, theme, openScene }))
+    })
       .then((a) => {
         mine = a
         if (gone) {

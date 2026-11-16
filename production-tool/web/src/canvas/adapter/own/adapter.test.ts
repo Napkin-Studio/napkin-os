@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { PointerSample, SceneStep } from '../../core/canvasAdapter'
-import { converting, engineChoice, engineOf, engineToMount, loadEngine } from '../index'
+import { converting, engineChoice, engineOf, engineToMount, loadEngine, mountPlan } from '../index'
 import * as Y from 'yjs'
 import { SceneStore } from '../../../../../canvas-engine/src'
 import { OwnAdapter } from './adapter'
@@ -215,6 +215,18 @@ describe('choosing the engine', () => {
     expect(engineToMount('excalidraw', own)).toBe('own')
     expect(engineToMount('excalidraw', null)).toBe('excalidraw')
     expect(converting('excalidraw', ex)).toBe(false)
+  })
+
+  it('on the Excalidraw fallback a converted project opens its kept original; nothing else changes', () => {
+    const ex = { elements: [{ id: 'a', type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }], files: {} }
+    const own = { elements: [{ id: 'o', type: 'rectangle', x: 5, y: 5, width: 1, height: 1 }], files: {}, engine: 'own' as const }
+    expect(mountPlan('excalidraw', own, ex)).toEqual({ id: 'excalidraw', initial: ex })
+    expect(mountPlan('excalidraw', own, null)).toEqual({ id: 'own', initial: own }) // nothing kept: the own scene
+    expect(mountPlan('excalidraw', own, own)).toEqual({ id: 'own', initial: own }) // only an Excalidraw original counts
+    expect(mountPlan('own', own, ex)).toEqual({ id: 'own', initial: own })
+    expect(mountPlan('own', ex, undefined)).toEqual({ id: 'own', initial: ex }) // the default converts
+    expect(mountPlan('excalidraw', ex, undefined)).toEqual({ id: 'excalidraw', initial: ex })
+    expect(mountPlan('own', null)).toEqual({ id: 'own', initial: null })
   })
 
   it('loads the own engine by dynamic import', async () => {

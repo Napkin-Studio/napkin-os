@@ -69,6 +69,17 @@ export function engineToMount(choice: EngineId, initial: CanvasSnapshot | null |
   return initial?.elements?.length ? engineOf(initial) : choice
 }
 
+/**
+ * What to mount, given the Excalidraw original kept when a scene was converted (`kept`, CanvasMount's
+ * `<canvasKey>.excalidraw`): on the Excalidraw fallback a converted project opens that original, the
+ * rollback (its own-engine scene stays in the live store and the .clan checkpoint); otherwise
+ * engineToMount's engine with the saved scene.
+ */
+export function mountPlan(choice: EngineId, initial: CanvasSnapshot | null | undefined, kept?: CanvasSnapshot | null): { id: EngineId; initial: CanvasSnapshot | null } {
+  if (choice === 'excalidraw' && engineOf(initial) === 'own' && kept?.elements?.length && engineOf(kept) === 'excalidraw') return { id: 'excalidraw', initial: kept }
+  return { id: engineToMount(choice, initial), initial: initial ?? null }
+}
+
 /** Is this mount turning an Excalidraw scene into an own-engine one? */
 export const converting = (mounted: EngineId, initial: CanvasSnapshot | null | undefined) =>
   mounted === 'own' && !!initial?.elements?.length && engineOf(initial) === 'excalidraw'
