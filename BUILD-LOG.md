@@ -397,4 +397,6 @@ None is verified or merged.
 
 **The push.** See the line below this entry's commit in `git log`, or `git status -sb`: the pre-push hook refuses this push until a person sets `NAPKIN_LICENCE_APPROVED=Shrey` (59 changes in `licences/*.toml`, all from the Production line; Shrey is the only approver in `licences/policy.toml`). The agent did not set it.
 
+**Found while preparing the push: the `licences` suite fails (3 failed, 110 passed).** It had never run on this machine. (1) Newsreader, a Google Fonts family in 21 files of develop's new UI, is not in `licences/fonts.toml`: it needs an entry approved by Shrey, which an agent does not add. (2) Two pre-push tests fail because their throwaway repo has no `scripts/check.sh` for the hook's secret scan: a fixture fault an agent can fix, not fixed this session. Both come from merging the Production line's licence gate with develop's interface and this build's hook. So the hook refuses the push on the checks too, not only on the approval. The `image` suite passes (1,204 s). The other twelve suites were not re-run today. Details: `docs/build-handoff/HANDOFF.md`, section 1.
+
 **Next action.** `docs/build-handoff/HANDOFF.md`, section 5.

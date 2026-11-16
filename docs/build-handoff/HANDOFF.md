@@ -20,6 +20,19 @@ wins wherever the two differ.
   `NAPKIN_LICENCE_APPROVED=Shrey` (the only name in `licences/policy.toml` `approvers`), because
   the Production line changed `licences/*.toml`. That is a person's approval. An agent never sets
   it and never uses `--no-verify`.
+- **The push has a second blocker: the `licences` suite fails on this branch** (run 16 Nov; it had
+  never been run on the build machine). 3 failed, 110 passed:
+  1. `test_repo_tree_passes`: the Google Fonts family Newsreader is used in 21 files (develop's new
+     UI: `app/index.html:15`, `app/templates/*/index.html`, `design/new-ui/`) and is not in
+     `licences/fonts.toml`. Develop has the font and no licence gate; the Production line has the
+     gate and not the font; the merge brought them together. The fix is one `[[family]]` entry
+     with its licence and `source_url`, approved by Shrey. An agent does not add it.
+  2. `test_pre_push_refuses_a_policy_change_without_napkin_licence_approved` and
+     `test_pre_push_ignores_pushes_that_leave_licences_alone`: their throwaway repo has no
+     `scripts/check.sh`, and this build's hook runs the secret scan through it before anything
+     else (`.githooks/pre-push:68`). A test fixture fault from the same merge; an agent can fix it
+     (give the fixture repo `scripts/check.sh`, `.gitleaks.toml` and a gitleaks it can find).
+  The `image` suite passes (20 minutes). The other twelve suites were not re-run on 16 Nov.
 
 ## 2. What was done
 
