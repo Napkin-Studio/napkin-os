@@ -10,7 +10,9 @@
 .ad-x:hover { background: var(--soft); }
 .ad-tabs { display: flex; gap: 2px; padding: 3px; border-radius: var(--r-pill); background: var(--soft); }
 .ad-tabs { justify-content: space-between; }
-.ad-tabs button { flex: none; height: 28px; border: 0; border-radius: var(--r-pill); background: transparent; font-size: 11.5px; color: var(--ink2); cursor: pointer; white-space: nowrap; padding: 0 7px; }
+/* The four tabs share the row: each may shrink, ending in an ellipsis (its title says it in full), so From
+   Napkin is never cut off at the panel's edge (live test 2026-11-16). */
+.ad-tabs button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; height: 28px; border: 0; border-radius: var(--r-pill); background: transparent; font-size: 11.5px; color: var(--ink2); cursor: pointer; white-space: nowrap; padding: 0 7px; }
 .ad-tabs button.on { background: var(--card); color: var(--tool-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(20, 30, 60, 0.10); }
 .ad-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .ad-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-pill); color: var(--ink3); }
@@ -27,7 +29,8 @@
 .ad-actions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
 .ad-error { color: var(--danger); font-size: 12px; font-weight: 600; }
 .ad-empty { margin: 4px 2px; font-size: 13px; line-height: 1.45; color: var(--ink2); }
-.ad-clean { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-top: 8px; }
+.ad-clean { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.ad-clean .ad-section { align-self: stretch; margin-top: 0; }
 .ad-foot { padding-top: 10px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--ink2); }
 
 /* A character's card (mock Voices.dc.html), beside the drawer. */
