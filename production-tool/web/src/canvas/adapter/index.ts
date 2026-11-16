@@ -1,7 +1,9 @@
 // The engine loader (features/engine-adapter.clan): the one door into
-// src/canvas/adapter/ from the rest of the app. It picks the engine (Excalidraw
-// by default; the own engine with config flags.ownCanvas or a per-person
-// ?engine=own) and loads it by dynamic import, so each engine is its own chunk.
+// src/canvas/adapter/ from the rest of the app. It picks the engine (our own by
+// default, owner 2026-11-16, features/production-tool-land.clan; Excalidraw only
+// as the fallback: a per-person ?engine=excalidraw, or config flags.ownCanvas
+// false as the remote kill switch) and loads it by dynamic import, so each
+// engine is its own chunk.
 // eslint.config.js refuses any import of src/canvas/adapter/<engine>/ from outside
 // this folder.
 
@@ -20,7 +22,8 @@ function local(): Pick<Storage, 'getItem' | 'setItem'> | null {
 
 /**
  * ?engine=own or ?engine=excalidraw for one person (remembered in this browser, since the app's
- * routes drop the query), else the remote config's ownCanvas, else Excalidraw.
+ * routes drop the query), else the own engine unless the remote config turns it off
+ * (flags.ownCanvas false, the kill switch; absent means on).
  */
 export function engineChoice(search: string, flags?: { ownCanvas?: boolean } | null, store = local()): EngineId {
   const asked = new URLSearchParams(search).get('engine')
@@ -39,16 +42,11 @@ export function engineChoice(search: string, flags?: { ownCanvas?: boolean } | n
     kept = null
   }
   if (kept === 'own' || kept === 'excalidraw') return kept
-  return flags?.ownCanvas ? 'own' : 'excalidraw'
+  return flags?.ownCanvas === false ? 'excalidraw' : 'own'
 }
 
 // Read the query when the app loads, before its router replaces the URL.
 engineChoice(globalThis.location?.search ?? '', null)
-
-/** ?engine=own in the address this page was loaded with: this person asked for the own engine now. */
-export const askedOwn = (search: string) => new URLSearchParams(search).get('engine') === 'own'
-const ASKED_OWN = askedOwn(globalThis.location?.search ?? '')
-export const askedOwnAtLoad = () => ASKED_OWN
 
 export async function loadEngine(id: EngineId): Promise<CanvasEngine> {
   if (id === 'own') return (await import('./own/engine')).ownEngine
@@ -61,14 +59,13 @@ export function engineOf(snapshot: CanvasSnapshot | null | undefined): EngineId 
 }
 
 /**
- * The engine to mount: a saved scene opens in the engine that made it, so neither engine ever
- * writes over the other's scene (an Excalidraw project reaches the own engine only as a converted
- * copy, engine-import). The choice applies to a project with nothing drawn yet.
+ * The engine to mount. On the own engine (the default) every project opens there: an Excalidraw
+ * scene opens converted (the OwnAdapter imports it, engine-import) and CanvasMount keeps the
+ * Excalidraw original beside it first. On the Excalidraw fallback a scene the own engine made still
+ * opens on the own engine, which is the only one that reads it.
  */
-export function engineToMount(choice: EngineId, initial: CanvasSnapshot | null | undefined, asked = false): EngineId {
-  // Asked for in the address (?engine=own), an Excalidraw scene opens converted on the own engine
-  // (the OwnAdapter imports it); CanvasMount keeps the Excalidraw original beside it first.
-  if (asked && choice === 'own') return 'own'
+export function engineToMount(choice: EngineId, initial: CanvasSnapshot | null | undefined): EngineId {
+  if (choice === 'own') return 'own'
   return initial?.elements?.length ? engineOf(initial) : choice
 }
 

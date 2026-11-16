@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { PointerSample, SceneStep } from '../../core/canvasAdapter'
-import { askedOwn, converting, engineChoice, engineOf, engineToMount, loadEngine } from '../index'
+import { converting, engineChoice, engineOf, engineToMount, loadEngine } from '../index'
 import * as Y from 'yjs'
 import { SceneStore } from '../../../../../canvas-engine/src'
 import { OwnAdapter } from './adapter'
@@ -175,39 +175,46 @@ describe('the own engine mount', () => {
 })
 
 describe('choosing the engine', () => {
-  it('?engine= wins for one person, then the remote flag, then Excalidraw', () => {
-    expect(engineChoice('', null)).toBe('excalidraw')
-    expect(engineChoice('', { ownCanvas: true })).toBe('own')
-    expect(engineChoice('?engine=own', { ownCanvas: false })).toBe('own')
-    expect(engineChoice('?engine=excalidraw', { ownCanvas: true })).toBe('excalidraw')
-    expect(engineChoice('?engine=other', null)).toBe('excalidraw')
+  it('the own engine by default; ?engine= wins for one person; ownCanvas false is the kill switch', () => {
+    expect(engineChoice('', null, null)).toBe('own')
+    expect(engineChoice('', {}, null)).toBe('own')
+    expect(engineChoice('', { ownCanvas: true }, null)).toBe('own')
+    expect(engineChoice('', { ownCanvas: false }, null)).toBe('excalidraw')
+    expect(engineChoice('?engine=own', { ownCanvas: false }, null)).toBe('own')
+    expect(engineChoice('?engine=excalidraw', null, null)).toBe('excalidraw')
+    expect(engineChoice('?engine=excalidraw', { ownCanvas: true }, null)).toBe('excalidraw')
+    expect(engineChoice('?engine=other', null, null)).toBe('own')
   })
 
   it('remembers ?engine= in this browser, since the app’s routes drop the query', () => {
     const kv = new Map<string, string>()
     const store = { getItem: (k: string) => kv.get(k) ?? null, setItem: (k: string, v: string) => void kv.set(k, v) }
-    expect(engineChoice('?engine=own', null, store)).toBe('own')
-    expect(engineChoice('', { ownCanvas: false }, store)).toBe('own')
     expect(engineChoice('?engine=excalidraw', null, store)).toBe('excalidraw')
+    expect(engineChoice('', null, store)).toBe('excalidraw') // remembered beats the default
     expect(engineChoice('', { ownCanvas: true }, store)).toBe('excalidraw')
-    expect(engineChoice('', { ownCanvas: true }, null)).toBe('own')
+    expect(engineChoice('?engine=own', null, store)).toBe('own')
+    expect(engineChoice('', { ownCanvas: false }, store)).toBe('own') // remembered beats the kill switch
   })
 
-  it('a saved scene opens in the engine that made it; the choice applies to an empty project', () => {
+  it('every project opens on the own engine; an Excalidraw scene converts, its original kept', () => {
     const ex = { elements: [{ id: 'a', type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }], files: {} }
     const own = { ...ex, engine: 'own' as const }
     expect(engineOf(ex)).toBe('excalidraw')
-    expect(engineToMount('own', ex)).toBe('excalidraw')
-    expect(engineToMount('excalidraw', own)).toBe('own')
+    expect(engineToMount('own', ex)).toBe('own')
+    expect(converting('own', ex)).toBe(true) // CanvasMount keeps the original before it mounts
+    expect(engineToMount('own', own)).toBe('own')
+    expect(converting('own', own)).toBe(false)
     expect(engineToMount('own', { elements: [], files: {} })).toBe('own')
     expect(engineToMount('own', null)).toBe('own')
-    // Asked for in the address (?engine=own): an Excalidraw scene opens converted, its original kept.
-    expect(engineToMount('own', ex, true)).toBe('own')
-    expect(engineToMount('excalidraw', ex, true)).toBe('excalidraw')
-    expect(converting('own', ex)).toBe(true)
-    expect(converting('own', own)).toBe(false)
-    expect(askedOwn('?engine=own')).toBe(true)
-    expect(askedOwn('?engine=excalidraw')).toBe(false)
+  })
+
+  it('on the Excalidraw fallback an Excalidraw scene stays, and an own scene still opens on the own engine', () => {
+    const ex = { elements: [{ id: 'a', type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }], files: {} }
+    const own = { ...ex, engine: 'own' as const }
+    expect(engineToMount('excalidraw', ex)).toBe('excalidraw')
+    expect(engineToMount('excalidraw', own)).toBe('own')
+    expect(engineToMount('excalidraw', null)).toBe('excalidraw')
+    expect(converting('excalidraw', ex)).toBe(false)
   })
 
   it('loads the own engine by dynamic import', async () => {

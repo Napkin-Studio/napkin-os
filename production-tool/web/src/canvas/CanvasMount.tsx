@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useServices } from '../app/context'
-import { askedOwnAtLoad, converting, engineChoice, engineToMount, loadEngine } from './adapter'
+import { converting, engineChoice, engineToMount, loadEngine } from './adapter'
 import { idbPut } from '../lib/idb'
 import type { CanvasChrome } from './chrome/controls'
 import type { CanvasAdapter, CanvasSnapshot } from './core/canvasAdapter'
@@ -58,7 +58,7 @@ export function CanvasMount({ initial, onReady, onChrome, onChange, theme, railI
     el.appendChild(slot)
     let mine: CanvasAdapter | null = null
     const choice = engineChoice(globalThis.location?.search ?? '', remoteConfig?.flags)
-    const id = engineToMount(choice, initial, askedOwnAtLoad())
+    const id = engineToMount(choice, initial)
     // An Excalidraw scene opened on the own engine: its original is kept beside it, untouched.
     const kept = converting(id, initial) && project?.canvasKey
       ? idbPut('kv', `${project.canvasKey}.excalidraw`, initial).catch((e) => console.warn('the Excalidraw original was not kept', e))

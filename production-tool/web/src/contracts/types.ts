@@ -433,7 +433,7 @@ export interface Flags {
   clipPatch?: boolean
   /** Shots made as runs that join (features/connected-video.clan). Optional; absent means off. */
   connectedVideo?: boolean
-  /** Our own canvas engine for new projects (features/canvas-engine.clan). Optional; absent means off. */
+  /** Our own canvas engine, the default (features/production-tool-land.clan). Optional; absent means on; false is the kill switch (Excalidraw). */
   ownCanvas?: boolean
   /** The Video editor as two rooms, Make and Edit, over one Bin (features/make-and-edit.clan). Optional; absent means off. */
   makeAndEdit?: boolean
