@@ -57,7 +57,7 @@ def test_v6_is_the_default_and_the_configs_name_v9():
     assert PROMPT_VERSION == "director.v6"
     for name in ("config.testing.json", "config.live.json", "config.pathway.runway.json"):
         director = json.loads((EXAMPLES / name).read_text())["director"]
-        assert director["promptVersion"] == "director.v9"
+        assert director["promptVersion"] == "director.v11"
         assert director["perClickModel"] == "eu.anthropic.claude-sonnet-5-5"
 
 

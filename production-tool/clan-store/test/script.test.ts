@@ -69,6 +69,22 @@ describe('keepSuggestion of a scene draft that opens with a heading', () => {
     const plain = await draft('', ['Rain hammers the pavement.'])
     expect(plain.bus.doc().scenes[plain.scene]).toMatchObject({ heading: '', text: 'Rain hammers the pavement.' })
   })
+
+  it('starts a scene at each later heading line, after this one, in the same undo step (Format as screenplay)', async () => {
+    const { bus, undo, scene } = await draft('', ['EXT. CITY STREET - DUSK', 'Rain.', 'She stops.', 'EXT. OLD STONE BRIDGE - CONTINUOUS', 'The sky turns gold.', 'int. car - night', 'Quiet.'])
+    const d = bus.doc()
+    const scenes = Object.values(d.scenes as unknown as Record<string, { id: string; rank: string; heading: string; text?: string }>).sort((a, b) => (a.rank < b.rank ? -1 : 1))
+    expect(scenes.map((s) => [s.heading, s.text])).toEqual([
+      ['EXT. CITY STREET - DUSK', 'Rain.\nShe stops.'],
+      ['EXT. OLD STONE BRIDGE - CONTINUOUS', 'The sky turns gold.'],
+      ['INT. CAR - NIGHT', 'Quiet.'],
+    ])
+    expect(scenes[0].id).toBe(scene)
+    expect(integrity(d as never)).toEqual([])
+    await undo.undo()
+    expect(Object.keys(bus.doc().scenes)).toEqual([scene])
+    expect(bus.doc().scenes[scene].heading).toBe('')
+  })
 })
 
 async function project() {

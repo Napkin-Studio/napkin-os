@@ -13,6 +13,7 @@ import { useConfig, useDoc, useJobsTick, useRoute, useRouter, useServices, useUi
 import { projectRoute, routeRoom, type RoomRoute } from '../app/route'
 import { isActive } from '../jobs/runner'
 import { takeShotOut } from '../jobs/runView'
+import { undo } from '../doc/undo'
 import { purposeOf } from '../model/purpose'
 import { whoIsWorking } from '../ui/agents/cast'
 import { jobsList, mainVideo, openVideo, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
@@ -24,6 +25,7 @@ import { Bin } from './Bin'
 import { ChangeDrawer, type ChangeOpen } from './ChangeDrawer'
 import { EditRoom, RenderAd } from './EditRoom'
 import { MakeRoom } from './MakeRoom'
+import { RoomBooth } from './RoomBooth'
 import { filmMeta, jobWord, roomBoxes, roomGens, type Box, type Gen } from './model'
 import './rooms.css'
 
@@ -93,6 +95,9 @@ export function Rooms() {
   const setSound = useCallback((on: boolean) => goRoom(on ? 'sound' : picture), [goRoom, picture])
   const [sel, setSel] = useState<Selection>(() => ({ shotId: shots[0]?.id, boxKey: boxes[0]?.key }))
   const [change, setChange] = useState<ChangeOpen | null>(null)
+  const [ready, setReady] = useState<{ clipId: string; takeId: string; n: number } | null>(null)
+  // The last join or cut made in the strip: Fin says so in the Booth, with Undo (features/join-or-cut-shots.clan).
+  const [done, setDone] = useState<{ id: number; text: string } | null>(null)
   const back = useCallback(() => uiStore.update((u) => { u.stage = 'character' }, 'stage'), [uiStore])
   // A drawer or sheet registers here, so Esc closes it before it means Back.
   const closers = useRef<(() => void)[]>([])
@@ -148,11 +153,19 @@ export function Rooms() {
           <SoundView shots={shots} />
         </div>
       ) : (
-        <div className="rm-body" data-room={room}>
-          <Bin data={data} sel={sel} room={room} onPick={(g) => setSel((s) => ({ ...s, genId: g.id, boxKey: g.boxKey, shotId: g.shotIds.includes(s.shotId ?? '') ? s.shotId : g.shotIds[0] }))} />
-          {room === 'make'
-            ? <MakeRoom data={data} shots={shots} sel={sel} onSel={setSel} change={change} onChange={openChange} onCloseChange={() => setChange(null)} onRoom={setRoom} register={register} />
-            : <EditRoom data={data} sel={sel} onSel={setSel} onChange={openChange} onSound={() => setSound(true)} register={register} />}
+        <div className="booth-row">
+          <div className="rm-body" data-room={room}>
+            <Bin data={data} sel={sel} room={room} onPick={(g) => setSel((s) => ({ ...s, genId: g.id, boxKey: g.boxKey, shotId: g.shotIds.includes(s.shotId ?? '') ? s.shotId : g.shotIds[0] }))} />
+            {room === 'make'
+              ? <MakeRoom data={data} shots={shots} sel={sel} onSel={setSel} change={change} onChange={openChange} onCloseChange={() => setChange(null)} onRoom={setRoom} register={register}
+                  onDone={(text) => setDone((d) => ({ id: (d?.id ?? 0) + 1, text }))} />
+              : <EditRoom data={data} sel={sel} onSel={setSel} onChange={openChange} onSound={() => setSound(true)} register={register} ready={ready} />}
+          </div>
+          {/* The Booth (features/script-freeform.clan): Fin in Make, Edie in Edit. */}
+          <RoomBooth room={room} data={data} sel={sel} change={room === 'make' ? change : null} onChange={openChange}
+            done={room === 'make' ? done : null} onUndo={() => { setDone(null); void undo(docStore) }}
+            onApart={(shotId) => void takeShotOut(docStore, data.videoId, shotId).then(() => { setChange(null); setSel({ shotId }) })}
+            onReady={(clipId, takeId) => setReady((r) => ({ clipId, takeId, n: (r?.n ?? 0) + 1 }))} />
         </div>
       )}
       {room === 'edit' && change && !sound && (

@@ -264,7 +264,7 @@ def test_the_v9_cases_hold_the_passthrough_to_each_models_pictures():
     model that cannot carry a character without a frame (Veo) refuses instead of sending it as words (the
     owner's @on ad came out a generic person, 2026-11): the web makes a storyboard frame first."""
     data = load()
-    v9 = {c["id"] for c in data["cases"] if c.get("since") == "director.v9"}
+    v9 = {c["id"] for c in data["cases"] if c.get("since") == "director.v9" and c["op"] != "shot_list"}
     assert v9 == {"clip_hailuo_refs_no_frame", "clip_omni_refs_no_frame", "clip_kling_o3_frame_refs",
                   "clip_veo_no_frame_words", "clip_edit_kling_adds_hat"}
     rows = table(data, ["passthrough"])["passthrough"]
@@ -285,3 +285,65 @@ def test_a_v9_answer_that_sends_the_wrong_pictures_scores_so():
     kept = {"providerJob": {"prompt": "@baby_front grabs cereal in a kitchen.",
                             "refs": [{"name": "baby_front", "role": "character"}, {"name": "baby_side", "role": "character"}]}}
     assert score(case, kept)["exact_refs"] is True and score(case, kept)["frame"] is True
+
+
+# ── Free prose to shots (features/script-freeform.clan, owner 2026-11-16) ──
+# A script written freely (prose and bullets, no scene heading, no screenplay element) is planned from its
+# words as they are. Offline: the passthrough's plan, and hand-written replies (fixtures here, not
+# recordings) through director.v9's checks; the live recording waits for the owner's say.
+
+import re  # noqa: E402
+
+from eval.director_eval import Replay, answer, score  # noqa: E402
+
+FREE = next(c for c in load()["cases"] if c["id"] == "shot_list_free_prose")
+
+
+def _plan(*actions, seconds=None, question=None, heading=None):
+    seconds = seconds or [30 / len(actions)] * len(actions)
+    shots = [{"kind": "shot", "duration_s": s, "camera": {"size": "medium"}, "action": a, "refs": [],
+              **({"scene_heading": heading} if heading and i == 0 else {})} for i, (a, s) in enumerate(zip(actions, seconds))]
+    out = {"op": "shot_list", "question": question, "rationale": "fixture", "confidence": 0.8}
+    if question is None:
+        out["shots"] = shots
+    return __import__("json").dumps(out)
+
+
+GOOD = ("A woman in a red raincoat steps off a green tram into heavy rain and opens a small yellow umbrella.",
+        "She walks past a bakery window, warm light, and glances in at the bread.",
+        "A whimper under the bridge railing: a soaked puppy, shivering.",
+        "She kneels and holds the umbrella over the puppy, not over herself.",
+        "She carries the puppy across the old stone bridge as the rain stops and the sky turns gold.",
+        "On screen: Someone's always looking out for you.")
+
+
+def test_the_free_prose_case_has_no_heading_and_no_screenplay_element():
+    lines = [x.strip() for x in FREE["input"]["script"].split("\n") if x.strip()]
+    assert FREE["op"] == "shot_list" and FREE["since"] == "director.v9" and "provider" not in FREE
+    assert not any(re.match(r"^(INT|EXT|EST|I/E)[. ]", x, re.I) for x in lines)
+    assert not any(x.isupper() for x in lines)  # no CHARACTER cue
+    assert any(x.startswith("- ") for x in lines)  # bullets, as written
+
+
+def test_the_passthrough_plans_free_prose_from_its_words():
+    checks = score(FREE, answer(FREE, load(), "passthrough"))
+    assert all(checks.values()), checks
+
+
+def test_a_plan_that_reads_the_words_as_they_are_passes_v9s_checks_and_the_eval():
+    out = answer(FREE, load(), "director.v9", Replay(_plan(*GOOD)))
+    assert "error" not in out, out
+    checks = score(FREE, out)
+    assert set(checks) == {"valid", "plans", "count", "length", "words", "order", "no_headings"}
+    assert all(checks.values()), checks
+
+
+def test_the_eval_fails_a_plan_that_invents_a_heading_drops_words_reorders_or_asks():
+    data = load()
+    assert not score(FREE, answer(FREE, data, "director.v9", Replay(_plan(*GOOD, heading="EXT. CITY STREET - DUSK"))))["no_headings"]
+    assert not score(FREE, answer(FREE, data, "director.v9", Replay(_plan(*GOOD[:-1]))))["words"]
+    assert not score(FREE, answer(FREE, data, "director.v9", Replay(_plan(*reversed(GOOD)))))["order"]
+    question = {"id": "q_01HZY3V9Q8W3N5R2T6Y7U8I9O0", "kind": "ambiguity", "text": "Which street?", "options": [
+        {"id": "a", "label": "One street", "value": "one"}, {"id": "b", "label": "Two streets", "value": "two"}], "allow_text": False}
+    asked = score(FREE, answer(FREE, data, "director.v9", Replay(_plan(*GOOD, question=question))))
+    assert asked.get("valid") is False or not asked["plans"]

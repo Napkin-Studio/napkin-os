@@ -29,6 +29,16 @@ director.v8) scores keeps_refs (every ref the shot's words name is sent, by its 
 Clips that carry characters (features/runway-video-models.clan): a case with `expect_refs` and `frame`
 (`since` director.v9, often on a `model` pick) scores exact_refs (exactly those pictures besides the clip
 go) and frame (a firstFrame exactly when expected). No v9 reply is recorded yet: record with a model login.
+
+Each shot follows its own frame (features/join-or-cut-shots.clan): a take_refs case with `ties` (`since`
+director.v11) scores ties: shot k's timed line ends "follows image k (@tag)" exactly when the take carries
+shot k's frame (a ref with role composition labelled "Shot k frame"). Not recorded yet: no live or paid eval.
+
+Free prose to shots (features/script-freeform.clan, owner 2026-11-16): a shot_list case (`since` director.v9)
+plans a script written as prose and bullets, with no scene heading or screenplay element. It scores plans (shots,
+no question), count (within `expect.shots`), length (the shots add up to the target within half a second), words
+(each `must` group in some shot's words), order (those words in the script's order) and no_headings (no
+scene_heading and none of `forbid` invented). Not recorded yet: record live on the owner's say.
 """
 
 from __future__ import annotations
@@ -131,7 +141,7 @@ def director(wire, version: str, model: str) -> Director:
 def answer(case: dict, data: dict, version: str, wire=None, model: str = MODELS["sonnet"]) -> dict:
     """The director's whole output for one case (providerJob, question, frameEdit), or {"error": ...}
     when the director refused its own answer."""
-    sheet = load_sheets()[case["provider"]]
+    sheet = load_sheets()[case["provider"]] if case.get("provider") else None  # a shot_list has no provider
     if case.get("model"):  # a pick: the director sees the sheet as that model runs it, as in the relay
         sheet = effective_sheet(sheet, case["op"], case["model"])
     inp = job_input(case, data)
@@ -142,8 +152,9 @@ def answer(case: dict, data: dict, version: str, wire=None, model: str = MODELS[
             return {"error": str(e)[:300]}
     try:
         d = director(wire, version, model)
-        d.sheets = {**d.sheets, case["provider"]: sheet}
-        return d.run(case["op"], inp, case["provider"], job_id=case["id"], images=frame_images(case, data)).output
+        if sheet is not None:
+            d.sheets = {**d.sheets, case["provider"]: sheet}
+        return d.run(case["op"], inp, case.get("provider"), job_id=case["id"], images=frame_images(case, data)).output
     except (DirectorError, ModelError) as e:
         return {"error": str(e)[:300]}
 
@@ -162,6 +173,8 @@ def score(case: dict, out: dict) -> dict:
         return _score_frame_edit(case, out)
     if case["op"] == "clip_patch":
         return _score_clip_patch(case, out)
+    if case["op"] == "shot_list":
+        return _score_shot_list(case, out)
     job = out.get("providerJob") or {}
     prompt = _words(job.get("prompt"))
     roles = {r["name"]: r["role"] for r in job.get("refs") or []}
@@ -183,6 +196,13 @@ def score(case: dict, out: dict) -> dict:
         res["exact_refs"] = sorted(n for n, r in roles.items() if r != "current") == sorted(case["expect_refs"])
     if "frame" in case:
         res["frame"] = bool(job.get("firstFrame")) == case["frame"]
+    if "ties" in case:
+        # Each shot follows its own frame (since director.v11, features/join-or-cut-shots.clan): shot k's line
+        # says "follows image k" and the frame's tag exactly when the take carries that shot's frame.
+        import connected
+        refs = case["input"].get("refs") or []
+        tags = names.wire_tags(refs)
+        res["ties"] = connected.ties_problem(job.get("prompt") or "", {"refs": [{**r, "tag": tags[r["id"]]} for r in refs]}) is None
     return res
 
 
@@ -234,6 +254,26 @@ def _score_clip_patch(case: dict, out: dict) -> dict:
     res["relay_keyframe"] = not any(k in job for k in ("keyframe", "keyframes", "mask", "region", "ratio"))
     res["take"] = not job or [r.get("role") for r in job.get("refs") or []] == ["current"]
     res["length"] = len(prompt) - _given_words(prompt, case["input"]) <= case.get("budget", 250)
+    return res
+
+
+def _score_shot_list(case: dict, out: dict) -> dict:
+    """Plan shots from the words as they are: plans (shots and no question), count, length, words, order and
+    no_headings (see the module's note)."""
+    shots = out.get("shots") or []
+    texts = [_words(" ".join([s.get("action") or "", s.get("direction") or ""] + [b.get("text") or "" for b in s.get("beats") or []]))
+             for s in shots]
+    low, high = case.get("expect", {}).get("shots", [1, 24])
+    target = case["input"].get("targetS") or 15
+    first = [next((i for i, t in enumerate(texts) if any(p in t for p in group)), None) for group in case.get("must", [])]
+    res = {"valid": True}
+    res["plans"] = bool(shots) and out.get("question") is None
+    res["count"] = low <= len(shots) <= high
+    res["length"] = abs(sum(s.get("duration_s") or 0 for s in shots) - target) <= 0.5
+    res["words"] = all(i is not None for i in first)
+    res["order"] = res["words"] and first == sorted(first)
+    res["no_headings"] = not any(s.get("scene_heading") for s in shots) and not any(
+        w in t for t in texts for w in case.get("forbid", []))
     return res
 
 

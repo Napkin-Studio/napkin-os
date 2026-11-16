@@ -179,9 +179,10 @@ def test_only_the_v6_and_later_prompts_are_bundled():
     """Contract 3 runs director.v6: the older prompts write fields contract 3 refuses. director.v6.1
     (frame-aspect) is v6 plus the true-shape crop; director.v7 (frame-change-edit) adds Change this
     frame; director.v8 (canvas-nodes) holds a shot's required refs; director.v9 (runway-video-models) says
-    which pictures each clip model carries. The older ones stay, so a rollback is a config change."""
+    which pictures each clip model carries; director.v11 (join-or-cut-shots) ties each line of a take to its
+    frame. The older ones stay, so a rollback is a config change."""
     assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == [
-        "director.v10.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.md"]
+        "director.v10.md", "director.v11.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.md"]
 
 
 def test_v7_is_v6_1_with_the_words_first_no_prices_and_a_frame_edit_section():
