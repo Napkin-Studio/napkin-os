@@ -246,6 +246,23 @@ def test_blind_pack_hides_the_arm_and_keeps_a_key():
     assert compare.blind_pack(cards.cards(res), base, seed=3)[1] == key
 
 
+def test_blind_pack_sets_are_the_same_size_and_keep_the_best_pipeline_cards():
+    pipe = [{"name": f"p{i}", "thought": f"t{i}", "why": "w", "score": {"total": s}} for i, s in enumerate([20, 30, 25, 28, 10])]
+    base = [{"name": f"b{i}", "thought": f"u{i}", "why": "w"} for i in range(3)]
+    pack, key = compare.blind_pack(pipe, base, seed=5)
+    assert [len(v) for v in pack.values()] == [3, 3]
+    kept = pack[next(s for s, arm in key.items() if arm == "pipeline")]
+    assert sorted(c["line"] for c in kept) == ["p1", "p2", "p3"]   # scores 30, 25, 28: the top three
+
+
+def test_pack_seed_varies_by_brief_so_the_plain_prompt_is_not_always_set_a():
+    base = [{"name": "b", "thought": "u", "why": "w"}]
+    pipe = [{"name": "p", "thought": "t", "why": "w", "score": {"total": 1}}]
+    firsts = {compare.blind_pack(pipe, base, seed=compare.pack_seed("brief", i))[1]["Set A"] for i in range(12)}
+    assert firsts == {"pipeline", "plain_prompt"}
+    assert compare.pack_seed("x", "IE") == compare.pack_seed("x", "IE")
+
+
 def test_choice_spreads_over_tensions_and_relaxes_only_to_reach_three():
     kept = [{"id": f"s{i}", "line": f"l{i}", "tension": ten, "mechanism": f"m{i}", "tier": "stretch", "breaks": ["c1"]}
             for i, ten in enumerate(["t1", "t1", "t1", "t2", "t3"])]

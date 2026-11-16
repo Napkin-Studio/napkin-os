@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import random
+import zlib
 
 from .llm import prompt
 
@@ -20,10 +21,20 @@ def _plain(t: dict) -> dict:
     return {"line": t.get("name") or t.get("line") or t.get("thought"), "thought": t.get("thought"), "why": t.get("why")}
 
 
+def pack_seed(*parts) -> int:
+    """A shuffle seed that differs per brief, so the plain prompt is not Set A in every pack (a grader would learn it)."""
+    return zlib.crc32(json.dumps(parts, sort_keys=True, ensure_ascii=False, default=str).encode())
+
+
 def blind_pack(pipeline_cards: list[dict], baseline_terrs: list[dict], seed: int = 1) -> tuple[dict, dict]:
-    """Returns (pack, key): the pack has two shuffled sets labelled Set A and Set B; the key says which is which."""
+    """Returns (pack, key): the pack has two shuffled sets labelled Set A and Set B; the key says which is which.
+
+    Both sets hold the same number of territories: the pipeline keeps its best by advisory score, as many as the plain
+    prompt wrote (three), because five against three tells the grader which set is which."""
     rng = random.Random(seed)
-    arms = [("pipeline", [_plain(c) for c in pipeline_cards]), ("plain_prompt", [_plain(t) for t in baseline_terrs])]
+    n = min(len(pipeline_cards), len(baseline_terrs)) or max(len(pipeline_cards), len(baseline_terrs))
+    best = sorted(pipeline_cards, key=lambda c: -((c.get("score") or {}).get("total") or 0))[:n]
+    arms = [("pipeline", [_plain(c) for c in best]), ("plain_prompt", [_plain(t) for t in baseline_terrs[:n]])]
     rng.shuffle(arms)
     pack = {"Set A": arms[0][1], "Set B": arms[1][1]}
     key = {"Set A": arms[0][0], "Set B": arms[1][0]}

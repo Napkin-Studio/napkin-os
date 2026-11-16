@@ -42,7 +42,7 @@ def main(argv=None) -> int:
     res = pipeline.run({"fields": fields, "category": a.category, "market": a.market, "prompt": a.prompt, "brand": a.brand}, llm)
     print(cards.render_text(res))
     base = compare.baseline({"fields": fields, "category": a.category, "market": a.market, "prompt": a.prompt}, llm)
-    pack, key = compare.blind_pack(cards.cards(res), base)
+    pack, key = compare.blind_pack(cards.cards(res), base, seed=compare.pack_seed(a.brief, a.category, a.market, a.prompt, a.brand))
     if a.out:
         out = Path(a.out)
         out.write_text(json.dumps({**res, "usage": llm.usage}, indent=1, ensure_ascii=False))
