@@ -233,7 +233,7 @@ describe('the actions (3.12), none with a price', () => {
     const { el } = await open()
     const box = el.querySelector('[aria-label="Describe the change to the whole frame"]') as HTMLTextAreaElement
     expect(box.tagName).toBe('TEXTAREA')
-    expect(box.rows).toBe(2)
+    expect(box.getAttribute('rows')).toBe('2')
     expect(box.placeholder).toBe('e.g. warmer light, keep the bottle')
   })
   it('an agency with Magnific and Ideogram off: Upscale says why and cannot run', async () => {
