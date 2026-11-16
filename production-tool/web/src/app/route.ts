@@ -2,16 +2,22 @@
 // history API, under the build's base (import.meta.env.BASE_URL: '/' in dev and tests,
 // '/production/' behind napkin-web, which serves index.html for any /production/* path).
 //
-// Only the editors have routes for now. The project itself stays at the base URL until
-// canvas-nodes gives the canvas its own (/p/:project). Ids in URLs are document ids, never
-// shot numbers; query parameters carry focus, never content (?shot=<shotId>).
+// The open project has its own route, /p/:project (the canvas), /p/:project/storyboard and
+// /p/:project/video (the editors over it), so a reload, a link or Share returns there (live test
+// 2026-11-16: all of them stayed at the base). The Script editor is /p/:project/script/:script.
+// Ids in URLs are document ids, never shot numbers; query parameters carry focus, never content
+// (?shot=<shotId>).
 //
 // The project id in a route is the id Shell.open takes: the project's entry in this
 // browser, which for a server project is the same SavedProject id (projects/shell.ts
 // openFromServer opens it "under the same id"), never the document's proj_ id.
 
+/** The editors over the canvas with a route of their own (the canvas is the project's route). */
+export type StageRoute = 'storyboard' | 'video'
+
 export type Route =
   | { kind: 'none' }
+  | { kind: 'project'; projectId: string; stage?: StageRoute }
   | { kind: 'script'; projectId: string; scriptId: string; shot?: string }
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/
@@ -38,6 +44,11 @@ export function parseRoute(url: { pathname: string; search?: string }, base: str
       return ''
     }
   })
+  if ((parts.length === 2 || parts.length === 3) && parts[0] === 'p' && ID.test(parts[1])) {
+    if (parts.length === 2) return { kind: 'project', projectId: parts[1] }
+    if (parts[2] === 'storyboard' || parts[2] === 'video') return { kind: 'project', projectId: parts[1], stage: parts[2] }
+    return { kind: 'none' }
+  }
   if (parts.length === 4 && parts[0] === 'p' && parts[2] === 'script' && ID.test(parts[1]) && ID.test(parts[3])) {
     const shot = new URLSearchParams(url.search ?? '').get('shot')
     return { kind: 'script', projectId: parts[1], scriptId: parts[3], ...(shot && ID.test(shot) ? { shot } : {}) }
@@ -49,6 +60,7 @@ export function parseRoute(url: { pathname: string; search?: string }, base: str
 export function formatRoute(r: Route, base: string = import.meta.env.BASE_URL): string {
   const b = baseOf(base)
   if (r.kind === 'none') return b
+  if (r.kind === 'project') return `${b}p/${encodeURIComponent(r.projectId)}${r.stage ? `/${r.stage}` : ''}`
   const q = r.shot ? `?shot=${encodeURIComponent(r.shot)}` : ''
   return `${b}p/${encodeURIComponent(r.projectId)}/script/${encodeURIComponent(r.scriptId)}${q}`
 }
@@ -56,6 +68,22 @@ export function formatRoute(r: Route, base: string = import.meta.env.BASE_URL): 
 /** The Script editor's route: what 'Open script', canvas-nodes' NodeRegistry and 'Copy link to this' call. */
 export function scriptRoute(projectId: string, scriptId: string, shot?: string): Route {
   return { kind: 'script', projectId, scriptId, ...(shot ? { shot } : {}) }
+}
+
+/** The open project's route at a stage: the canvas is the project itself. */
+export function projectRoute(projectId: string, stage: 'character' | StageRoute = 'character'): Route {
+  return { kind: 'project', projectId, ...(stage === 'character' ? {} : { stage }) }
+}
+
+/** The project a route belongs to, if any. */
+export const routeProject = (r: Route): string | undefined => (r.kind === 'none' ? undefined : r.projectId)
+
+/** Where the URL should be with this project open at `stage`, or null to leave it: an editor route of this
+ *  project (the Script editor's) stays, and so does the right project route. */
+export function routeFor(projectId: string, stage: 'character' | StageRoute, now: Route): Route | null {
+  if (now.kind === 'script' && now.projectId === projectId) return null
+  const want = projectRoute(projectId, stage)
+  return sameRoute(want, now) ? null : want
 }
 
 export function sameRoute(a: Route, b: Route): boolean {

@@ -1,7 +1,7 @@
 // Routes under both bases: '/' (dev, tests) and '/production/' (behind napkin-web).
 
 import { describe, expect, it } from 'vitest'
-import { formatRoute, parseRoute, Router, scriptRoute, type HistoryLike } from './route'
+import { formatRoute, parseRoute, projectRoute, routeFor, routeProject, Router, scriptRoute, type HistoryLike } from './route'
 
 const P = 'p_01HZY'
 const S = 'script_01J0000000000000000000000A'
@@ -19,6 +19,28 @@ describe('parseRoute and formatRoute', () => {
       expect(parseRoute({ pathname: base }, base)).toEqual({ kind: 'none' })
     })
   }
+
+  for (const base of ['/', '/production/']) {
+    it(`the project and its editors have routes under ${base} (reload, links and Share return there)`, () => {
+      for (const [stage, path] of [['character', ''], ['storyboard', '/storyboard'], ['video', '/video']] as const) {
+        const r = projectRoute(P, stage)
+        expect(formatRoute(r, base)).toBe(`${base}p/${P}${path}`)
+        expect(parseRoute({ pathname: formatRoute(r, base) }, base)).toEqual(r)
+        expect(routeProject(r)).toBe(P)
+      }
+      expect(parseRoute({ pathname: `${base}p/${P}/sound` }, base)).toEqual({ kind: 'none' })
+    })
+  }
+
+  it('the open project writes its route, and leaves the Script editor\'s alone', () => {
+    expect(routeFor(P, 'character', { kind: 'none' })).toEqual(projectRoute(P))
+    expect(routeFor(P, 'storyboard', projectRoute(P))).toEqual(projectRoute(P, 'storyboard'))
+    expect(routeFor(P, 'video', projectRoute(P, 'video'))).toBeNull()
+    expect(routeFor(P, 'storyboard', scriptRoute(P, S))).toBeNull()
+    expect(routeFor(P, 'character', scriptRoute('p_other', S))).toEqual(projectRoute(P))
+    expect(routeFor(P, 'character', projectRoute('p_other', 'video'))).toEqual(projectRoute(P))
+    expect(routeProject({ kind: 'none' })).toBeUndefined()
+  })
 
   it('is none outside the base, for unknown paths and for bad ids', () => {
     expect(parseRoute({ pathname: `/p/${P}/script/${S}` }, '/production/')).toEqual({ kind: 'none' })

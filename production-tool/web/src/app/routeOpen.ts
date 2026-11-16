@@ -1,4 +1,5 @@
-// Opening the project a link names (features/script-editor.clan): the project id in a route is
+// Opening the project a link names (features/script-editor.clan, production-tool-land.clan): a project
+// route (/p/:project[/storyboard|/video]) or the Script editor's. The project id in a route is
 // the id Shell.open takes. A project of this browser opens as it is; one only on the relay comes
 // down first (Shell.openFromServer, under the same id). The editor then shows over the
 // Storyboard stage, which is where '← Storyboard' returns. A link this browser cannot open
@@ -10,7 +11,7 @@ import type { Router } from './route'
 /** True when the link's project is open now. */
 export async function openRouteProject(shell: Shell, router: Router): Promise<boolean> {
   const r = router.get()
-  if (r.kind !== 'script') return false
+  if (r.kind === 'none') return false
   try {
     if (shell.index.get(r.projectId)) await shell.open(r.projectId)
     else {
@@ -24,6 +25,8 @@ export async function openRouteProject(shell: Shell, router: Router): Promise<bo
     return false
   }
   const session = shell.get().session
-  session?.services.ui.update((u) => { u.stage = 'storyboard' })
+  // The Script editor shows over the Storyboard stage; a project route names its stage (the canvas when none).
+  const stage = r.kind === 'script' ? 'storyboard' : r.stage ?? 'character'
+  session?.services.ui.update((u) => { u.stage = stage })
   return true
 }

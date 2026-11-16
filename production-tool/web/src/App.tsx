@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { useConfig, useRoute, useServices, useShell, useUi } from './app/context'
+import { useConfig, useRoute, useRouter, useServices, useShell, useUi } from './app/context'
+import { routeFor } from './app/route'
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
 import { Character } from './stages/Character'
@@ -48,6 +49,12 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
   // The beta's record: where the person is, and what went wrong in front of them.
   useEffect(() => { setScreen({ stage, project: project.id }) }, [stage, project.id])
+  // The URL follows the open project and its stage (reload, links and Share return here), in place.
+  const router = useRouter()
+  useEffect(() => {
+    const next = routeFor(project.id, stage, route)
+    if (next) router.replace(next)
+  }, [project.id, stage, route, router])
   useEffect(() => { if (trouble) errorShown('clan-write', trouble) }, [trouble])
   useEffect(() => { if (storeNote) errorShown('store', storeNote) }, [storeNote])
 

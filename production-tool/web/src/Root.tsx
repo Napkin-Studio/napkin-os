@@ -6,7 +6,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { App } from './App'
 import { DogfoodGate } from './dogfood/Dogfood'
 import { RouterContext, ServicesContext, ShellContext } from './app/context'
-import type { Router } from './app/route'
+import { routeProject, type Router } from './app/route'
 import type { Shell } from './projects/shell'
 import { Home } from './ui/Home'
 import { MarkTile } from './ui/chrome/Bar'
@@ -24,10 +24,12 @@ export function Root({ shell, access, router }: { shell: Shell; access: AccessSt
     if (app.motion === 'still') document.documentElement.dataset.motion = 'still'
     else delete document.documentElement.dataset.motion
   }, [app.motion])
-  // An editor's route belongs to its open project: on Home, or in another project, it goes.
+  // A project's route belongs to it being open: on Home, or in another project, it goes (the open project's
+  // App writes its own; app/useProjectRoute).
   const open = state.view === 'project' ? state.session?.id : undefined
   useEffect(() => {
-    if (route.kind === 'script' && route.projectId !== open && !state.busy) router.replace({ kind: 'none' })
+    const of = routeProject(route)
+    if (of && of !== open && !state.busy) router.replace({ kind: 'none' })
   }, [route, open, state.busy, router])
   let body
   if (relay.kind === 'http' && (why !== 'ok' || !app.me)) body = <NoAccess why={why === 'ok' ? 'signed_out' : why} />
