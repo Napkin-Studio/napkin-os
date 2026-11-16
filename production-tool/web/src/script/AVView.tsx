@@ -27,6 +27,7 @@ import { FragmentEditor } from './FragmentEditor'
 import type { MentionHooks } from './mentions'
 import { AUDIO_KINDS, nextMomentTime, setBeatTime, tieLine, timeLabel } from './moments'
 import { ShotEditor } from './ShotEditor'
+import { TypedText } from './TypedText'
 import { TimePill } from './TimePill'
 import type { RemoveItem } from './ScriptEditor'
 
@@ -161,7 +162,7 @@ function AVRow({ shot, number, start, end, line, doc, store, chain, current, set
           </>
         ) : (
           <button className="av-line" onClick={() => setCurrent(shot.id)}>
-            {(shot.action ?? '').split('\n')[0] || <i className="faint">No action yet</i>}
+            {(shot.action ?? '').split('\n')[0] ? <TypedText text={(shot.action ?? '').split('\n')[0]} names={mentions.names()} /> : <i className="faint">No action yet</i>}
             {moments.length > 0 && <span className="faint"> · {moments.length} {moments.length === 1 ? 'moment' : 'moments'}</span>}
           </button>
         )}
