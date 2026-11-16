@@ -33,14 +33,16 @@
 .sp-rows .sp-scene.free:not(:has(p:not([data-type="action"]))) :is(.fragment, .sp-static) p { margin: 0 0 14px; }
 .sp-rows .sp-scene.free .fragment { min-height: 1.7em; }
 .sp-rows .fragment:focus-visible { outline: none; }
+/* Lines wrap in the editor as on the static page (Tiptap's break-spaces would wrap a word early). */
+.sp-rows .fragment { white-space: pre-wrap; }
 
 /* The line the Format menu works on. */
 .sp-rows > .fmt-cur { position: absolute; width: 2px; border-radius: 2px; background: var(--tool); pointer-events: none; }
 .ol-para.on > .ol-btn, .ol-line.on > .ol-btn { background: var(--tool-soft); color: var(--tool-ink); }
 
 /* A line written as a bullet: a bullet, its marker kept in the text (extensions.ts bulletPlugin). */
-.sp-rows p.fp-li { position: relative; padding-left: 22px; margin-bottom: 6px; }
-.sp-rows p.fp-li + p:not(.fp-li) { margin-top: 14px; }
+.sp-rows p.fp-li, .sp-rows .sp-scene.free:not(:has(p:not([data-type="action"]))) :is(.fragment, .sp-static) p.fp-li { position: relative; padding-left: 22px; margin-bottom: 6px; }
+.sp-rows p.fp-li + p:not(.fp-li), .sp-rows .sp-scene.free:not(:has(p:not([data-type="action"]))) :is(.fragment, .sp-static) p.fp-li + p:not(.fp-li) { margin-top: 14px; }
 .fp-mark { display: inline-block; position: relative; width: 22px; margin-left: -22px; overflow: hidden; vertical-align: top; color: transparent; white-space: pre; }
 .fp-mark::before { content: ""; position: absolute; left: 6px; top: 0.72em; width: 5px; height: 5px; border-radius: 50%; background: var(--ink2); }
 
@@ -88,6 +90,9 @@
 .se-outline.nothing .se-keycard { margin-top: 10px; }
 
 @media (max-width: 1179px) {
+  /* The outline (and the facts) are sheets here: the page takes the row (look.css kept three columns). */
+  .se-body { grid-template-columns: minmax(0, 1fr); }
+  .se-page { padding: 16px 16px 48px 56px; }
   .sp-rows { padding: 44px 48px 56px; }
   .sp-hint { left: 48px; right: 48px; top: 44px; }
   .sp-rows .sp-scene::before { left: -30px; }
