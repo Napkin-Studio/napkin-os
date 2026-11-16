@@ -46,7 +46,7 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
   onClose: () => void
   /** The take was sent: its job id. */
   onMade: (jobId?: string) => void
-  /** "Make shot n apart instead": the box tab with that shot. */
+  /** "Make shot n apart instead": that shot is taken out into a box of its own (jobs/runView takeShotOut). */
   onApart?: (shotId: string) => void
 }) {
   const services = useServices()

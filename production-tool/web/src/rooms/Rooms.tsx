@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { isActive } from '../jobs/runner'
+import { takeShotOut } from '../jobs/runView'
 import { purposeOf } from '../model/purpose'
 import { whoIsWorking } from '../ui/agents/cast'
 import { jobsList, mainVideo, openVideo, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
@@ -48,7 +49,7 @@ export interface RoomData {
 }
 
 export function Rooms() {
-  const { ui: uiStore } = useServices()
+  const { ui: uiStore, doc: docStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
   const { config, controls } = useConfig()
@@ -140,7 +141,7 @@ export function Rooms() {
       {room === 'edit' && change && !sound && (
         <div className="rm-drawerwrap" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) setChange(null) }}>
           <ChangeDrawer data={data} open={change} onClose={() => setChange(null)} variant="drawer"
-            onMade={() => setChange(null)} onApart={(shotId) => { setChange(null); setSel((s) => ({ ...s, shotId })); setRoom('make') }} />
+            onMade={() => setChange(null)} onApart={(shotId) => { setChange(null); void takeShotOut(docStore, video!.id, shotId).then(() => { setSel({ shotId }); setRoom('make') }) }} />
         </div>
       )}
     </div>

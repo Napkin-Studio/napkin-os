@@ -12,7 +12,7 @@ import { updateDoc } from '../doc/store'
 import { drawFrame, selectedFrame } from '../jobs/frames'
 import { makeClip, videoQuality } from '../jobs/clips'
 import { makeRuns } from '../jobs/runs'
-import { joinSelection, separateSelection, videoJoin } from '../jobs/runView'
+import { joinSelection, separateSelection, splitBoxAt, takeShotOut, videoJoin } from '../jobs/runView'
 import { isRunning, jobAt, shotRefSet } from '../jobs/select'
 import { refName, refsList, shotNumber, shotsOf } from '../model/selectors'
 import { boxModel, boxModelNote, boxModelWhyNot, entryOf } from './boxModel'
@@ -85,6 +85,23 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   const pickTake = (g: Gen, b?: Box) => onSel({ ...sel, genId: g.id, boxKey: b && inBox(g, b.key) ? b.key : g.boxKey })
   const tick = (id: string) => setTicked((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t.slice(-1), id]))
   const busy = (id: string) => isRunning(doc, jobAt(doc, ui, (c) => (c.for === 'clip' && c.shotId === id) || (c.for === 'run' && !!doc.videos[c.videoId]?.runs?.[c.runId]?.shot_ids.includes(id))))
+
+  /** One shot out of its box (Change tab's "Make shot N apart instead", the Shot tab), or the box split before a
+   *  shot: the join changes, then the shot's new box is picked on the Box tab, where Make is (finding 10). */
+  const reshape = (shotId: string, how: 'out' | 'split') => send(async () => {
+    setError(null)
+    try {
+      if (how === 'out') await takeShotOut(docStore, data.videoId, shotId)
+      else await splitBoxAt(docStore, data.videoId, shotId)
+      onCloseChange()
+      onSel({ shotId })
+      setTab('box')
+      const n = shotNumber(docStore.get(), shotId)
+      setNotice(how === 'out' ? `Shot ${n} is a box of its own now. Make it from the Box tab; the takes you have stay.` : `The box now ends before shot ${n}. Each part is made on its own Make.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  })
 
   /** Make on a box: one generation of its shots. It lands as a new take; the cut is not touched. */
   const make = (b: Box) => send(async () => {
@@ -212,6 +229,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
           {tab === 'shot' && !(shot && box) && <p className="rm-note rm-pad">{shots.length ? 'Select a shot in a box to direct it.' : 'No shots yet. Once the Storyboard has them, select one here to direct it.'}</p>}
           {tab === 'box' && !box && <p className="rm-note rm-pad">{shots.length ? 'Select a box to set how it is made.' : 'No boxes yet: each shot becomes a box once the Storyboard has shots.'}</p>}
           {tab === 'shot' && shot && box && <ShotTab key={shot.id} shot={shot} n={shotNumber(doc, shot.id)} box={box} data={data} onBox={() => setTab('box')}
+            onOut={() => void reshape(shot.id, 'out')} onSplit={() => void reshape(shot.id, 'split')} busy={making}
             onAddShot={() => void send(async () => { const id = await addShotToBox(docStore, data.videoId, box.shotIds); onSel({ shotId: id }) })} />}
           {tab === 'box' && box && <BoxTab key={box.key} box={box} data={data} shots={shots} model={models[box.key]} onModel={(m) => setModels({ ...models, [box.key]: m })} onMake={() => void make(box)} making={making} />}
           {tab === 'change' && (() => {
@@ -219,7 +237,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
             if (!parent) return <p className="rm-note rm-pad">Make a take of this box first. Then change one thing and make it again.</p>
             const open: ChangeOpen = change ?? { parentId: parent.id, ...(shot && parent.shotIds.includes(shot.id) ? { shotId: shot.id } : {}) }
             return <ChangeDrawer key={`${open.parentId}:${open.shotId ?? ''}`} data={data} open={open} variant="tab" onClose={() => { onCloseChange(); setTab('shot') }}
-              onMade={(g) => { onCloseChange(); if (g) { onSel({ ...sel, genId: g }); } }} onApart={(shotId) => { onCloseChange(); onSel({ ...sel, shotId }); setTab('box') }} />
+              onMade={(g) => { onCloseChange(); if (g) { onSel({ ...sel, genId: g }); } }} onApart={(shotId) => void reshape(shotId, 'out')} />
           })()}
         </div>
       </aside>
@@ -356,7 +374,9 @@ function nextDiffers(d: ReturnType<typeof useDoc>, b: Box, takes: Gen[]): string
 
 /** The Shot tab: the shot's camera, its start and end frames, its cast and look, its length. Changes apply
  *  to the next take only. */
-function ShotTab({ shot, n, box, data, onBox, onAddShot }: { shot: Shot; n: number; box: Box; data: RoomData; onBox: () => void; onAddShot: () => void }) {
+function ShotTab({ shot, n, box, data, onBox, onAddShot, onOut, onSplit, busy }: {
+  shot: Shot; n: number; box: Box; data: RoomData; onBox: () => void; onAddShot: () => void; onOut: () => void; onSplit: () => void; busy: boolean
+}) {
   const { doc: docStore, clan } = useServices()
   const mentions = useMemo(() => (clan ? scriptMentionHooks(clan, undefined) : undefined), [clan])
   const [over, setOver] = useState(false)
@@ -435,6 +455,16 @@ function ShotTab({ shot, n, box, data, onBox, onAddShot }: { shot: Shot; n: numb
         {box.together && <p className="rm-note">This model can't end on a set frame when shots are made together.</p>}
         {box.together && <button type="button" className="btn link rm-linkrow" onClick={onBox}>Box settings</button>}
       </fieldset>
+      {box.together && (
+        <fieldset className="rm-field">
+          <legend className="rm-label">In this box</legend>
+          <p className="rm-note">Shot {n} is made with {box.shotIds.length - 1 === 1 ? 'one other shot' : `${box.shotIds.length - 1} other shots`} as one video.</p>
+          <div className="rm-row wrap">
+            <button type="button" className="btn" disabled={busy} onClick={onOut} title={`Shot ${n} becomes a box of its own; the shots around it stay as they are`}>Make shot {n} on its own</button>
+            {i > 0 && <button type="button" className="btn" disabled={busy} onClick={onSplit} title={`The box ends after shot ${n - 1}; shot ${n} and the shots after it are the next box`}>Split the box before shot {n}</button>}
+          </div>
+        </fieldset>
+      )}
       <fieldset className="rm-field">
         <legend className="rm-label">Length</legend>
         <div className="rm-row">

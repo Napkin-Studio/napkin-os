@@ -124,6 +124,24 @@ export function separateSelection(store: DocumentStore, videoId: Id, ids: Id[]) 
   return updateDoc(store, (x) => writeJoins(x, videoId, joins), `make ${shotsWords(d, [...at].map((i) => shots[i].id))} separately`)
 }
 
+/** One shot out of its box: that shot is made on its own; the shots before and after it stay as they are
+ *  (made together on each side when they were). One History entry, one undo step (live test 2026-11-16). */
+export function takeShotOut(store: DocumentStore, videoId: Id, shotId: Id) {
+  const n = shotNumber(store.get(), shotId)
+  const shots = videoShots(store.get(), videoId)
+  const i = shots.findIndex((s) => s.id === shotId)
+  const joins: [Id, SeamKind][] = []
+  if (i > 0) joins.push([shotId, 'cut'])
+  if (i >= 0 && shots[i + 1]) joins.push([shots[i + 1].id, 'cut'])
+  return updateDoc(store, (x) => writeJoins(x, videoId, joins), `make shot ${n} on its own`)
+}
+
+/** Split a box before a shot: the box ends after the shot before it; each side stays made together. */
+export function splitBoxAt(store: DocumentStore, videoId: Id, shotId: Id) {
+  const n = shotNumber(store.get(), shotId)
+  return updateDoc(store, (x) => writeJoins(x, videoId, [[shotId, 'cut']]), `split the box before shot ${n}`)
+}
+
 /** Every shot on its own ("Make every shot separately"): a cut at every gap. */
 export function separateAll(store: DocumentStore, videoId: Id) {
   const shots = videoShots(store.get(), videoId)
