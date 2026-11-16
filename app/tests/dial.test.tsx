@@ -57,3 +57,11 @@ test('a quadrant counts its work in its own noun', () => {
   assert.match(html, /class="dz-sub">1 brief</)
 })
 
+
+test('with the Production Tool served, the Production quadrant is open, not Soon', () => {
+  const soon = dial([])
+  assert.match(soon, /data-testid="quadrant-prod"[^>]*aria-disabled="true"/)
+  const on = dial([], new Set(['brief', 'research', 'deck', 'prod']))
+  assert.doesNotMatch(on, /data-testid="quadrant-prod"[^>]*aria-disabled/)
+  assert.match(on, /Production Tool for [^"]*, nothing yet/)
+})

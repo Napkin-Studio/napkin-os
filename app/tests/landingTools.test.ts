@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test } from 'node:test'
 
-import { TOOLS } from '../src/shell/landing/tools.ts'
+import { PRODUCTION_PATH, TOOLS, liveTools, toolHref } from '../src/shell/landing/tools.ts'
 
 // `npm test` runs from app/, and the bundled test does not sit where its source does.
 const examples = resolve(process.cwd(), '..', 'crates', 'clan-sdk', 'examples')
@@ -32,4 +32,13 @@ test('every tool with an app names an id its maker really builds', () => {
 
 test('Idea and Prod have no app yet, and every other tool has one', () => {
   assert.deepEqual(TOOLS.filter(t => !t.appId).map(t => t.id), ['idea', 'prod'])
+})
+
+test('Prod opens the Production Tool at /production when the server serves it, and is Soon when not', () => {
+  const installed = [{ app_id: 'ie.napkin.brief-maker' }]
+  assert.deepEqual([...liveTools(installed, false)].sort(), ['brief'])
+  assert.deepEqual([...liveTools(installed, true)].sort(), ['brief', 'prod'])
+  assert.equal(toolHref({ id: 'prod' }), PRODUCTION_PATH)
+  assert.equal(PRODUCTION_PATH, '/production/')
+  for (const t of TOOLS.filter(t => t.id !== 'prod')) assert.equal(toolHref(t), null, `${t.id} opens as a page here`)
 })

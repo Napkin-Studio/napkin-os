@@ -3,8 +3,10 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // The six tools a client's circle carries, and the one table that says which
-// installed app each is. Idea and Prod are dimmed "Soon": Idea is not built,
-// and the Production Tool has its own stack and no client link yet.
+// installed app each is. Idea is dimmed "Soon": it is not built. Prod is the
+// Production Tool, which is not an installed app: napkin-web serves it at
+// /production (features/os-sign-in.clan), and its tile opens it there, in the
+// tool's own UI, when the server says it is served (features/production-tool-land.clan).
 
 import type { InstalledApp } from '../../host'
 import type { ToolId } from '../route'
@@ -41,4 +43,19 @@ export const toolOfApp = (appId: string | null | undefined): Tool | undefined =>
 /** A tool is live when it has an app and that app is installed; otherwise it is "Soon". */
 export function isLive(tool: Tool, installed: readonly Pick<InstalledApp, 'app_id'>[]): boolean {
   return tool.appId !== null && installed.some(a => a.app_id === tool.appId)
+}
+
+/** The Production Tool's path on this origin. */
+export const PRODUCTION_PATH = '/production/'
+
+/** Where a tool opens with a full page load, outside the shell (Prod: the Production Tool), or null
+ *  when it opens as the shell's own tool page. */
+export const toolHref = (tool: { id: string }): string | null => (tool.id === 'prod' ? PRODUCTION_PATH : null)
+
+/** The tools a person can open now: each whose app is installed, and Prod when this server serves
+ *  the Production Tool to this person (/api/session `production`). */
+export function liveTools(installed: readonly Pick<InstalledApp, 'app_id'>[], production: boolean): Set<string> {
+  const live = new Set(TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string))
+  if (production) live.add('prod')
+  return live
 }

@@ -271,7 +271,7 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
               </button>
             )
           })}
-          {installed.length > 0 && upcoming(installed).map(t => <SoonCard key={t.app_id} teaser={t} />)}
+          {installed.length > 0 && upcoming(installed).filter(t => !(production && t.app_id === 'ie.napkin.production-tool')).map(t => <SoonCard key={t.app_id} teaser={t} />)}
         </div>
       )}
 

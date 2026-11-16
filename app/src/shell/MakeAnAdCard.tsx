@@ -10,9 +10,7 @@
 // when /api/session says `production: true`. It replaces Advertising Studio.
 
 import type { CSSProperties } from 'react'
-
-/** The tool's path on this origin. */
-export const PRODUCTION_PATH = '/production/'
+import { PRODUCTION_PATH } from './landing/tools'
 
 /** Production's colour on the home: the tool's own accent. */
 const TINT = { '--tc': '#E4572E' } as CSSProperties
