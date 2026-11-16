@@ -155,7 +155,16 @@ export async function makeTake(
   // connected.shape empties them and says the names in words), but the relay resolves each @name in the cuts
   // against the pictures given first: with none, "@bolt is not one of the images this step was given" refused
   // every take of a character (full test, 2026-11-04). makeClip sends them beside a frame the same way.
-  for (const s of shots) for (const r of await refsFor(deps.relay, d, s)) if (!refs.some((x) => x.id === r.id)) refs.push(r)
+  // Offered refs too, as makeClip sends them (live test 2026-11-16): a character that reaches the shots only
+  // through the Script's input link is 'offered' (select.ts shotRefSet), and without it a frameless take of
+  // @mira went with no pictures and the relay refused "@mira is not one of the images this step was given".
+  // What the person unticked on a shot (ui declinedAdds) stays out, as for a clip.
+  const declined = deps.ui.get().declinedAdds
+  for (const s of shots) {
+    for (const r of await refsFor(deps.relay, d, s, opts.texts?.[s.id], { offer: true, declined: declined?.[s.id] })) {
+      if (!refs.some((x) => x.id === r.id)) refs.push(r)
+    }
+  }
   const { starts } = takeTiming(shots.map((s) => s.duration_s))
   // Each shot's line: its action, then any words given for it only (Make clip's box).
   const line = (s: Shot, i: number) => [s.action?.trim() || s.direction?.trim() || `Shot ${i + 1}`, opts.texts?.[s.id]?.trim()].filter(Boolean).join(' ')
