@@ -2,8 +2,10 @@
 // entities through PatchBus, their text through TextBus in the same step (joinStep), so
 // a span of text is never in two places and ⌘Z takes the whole action back.
 
+import { Node as ProseNode } from '@tiptap/pm/model'
+import { Transform } from '@tiptap/pm/transform'
 import {
-  EMPTY_PROSE, hydrate, landPlan, moveShot as storeMoveShot, newUlidId, rankBetween, type Patch, type PMNode, type Prose, type ShotPlace,
+  EMPTY_PROSE, hydrate, landPlan, moveShot as storeMoveShot, newUlidId, rankBetween, textSchema, type Patch, type PMNode, type Prose, type ShotPlace,
 } from '../../../clan-store/src'
 import type { BeatKind, ProductionDocument, Scene } from '../contracts/types'
 import { proseFromText } from '../model/diff'
@@ -14,6 +16,7 @@ import { keepBeatsInside } from './moments'
 import { updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import { editShot } from '../jobs/stale'
+import { plainSlice } from './extensions'
 
 type Doc = ProductionDocument
 
@@ -67,6 +70,88 @@ export async function splitScene(store: ModelStore, sceneId: string, blockIndex:
   }, { label: `create scenes[${id}]`, joinStep: true })
   await store.flush()
   return id
+}
+
+/** The page a script with no scenes yet is written on: one scene, named by the script, so two people opening
+ *  the same empty script write on the same page. */
+export const pageSceneId = (scriptId: string) => `scene_${scriptId.slice(scriptId.indexOf('_') + 1)}`
+
+/**
+ * The free page (features/script-freeform.clan): a script with no scenes gets one, with no heading, to write
+ * on. Quiet and not an undo step: the page is there to type on, not an action of the person's. Resolves its id,
+ * or null when the script has scenes already (or is gone).
+ */
+export async function ensurePage(store: ModelStore, scriptId: string): Promise<string | null> {
+  await store.flush()
+  const d = docOf(store)
+  if (!d.scripts[scriptId] || scenesOf(d, scriptId).length) return null
+  const id = pageSceneId(scriptId)
+  if (d.scenes[id]) return null
+  const r = await store.bus.apply({ patches: [{ op: 'create', entity: 'scenes', id, value: { script_id: scriptId, rank: rankBetween(null, null), heading: '' }, base_version: 0 }], why: { action: `create scenes[${id}]`, quiet: true } }, { undo: false })
+  if (!r.applied) return null
+  await store.flush()
+  return id
+}
+
+/** Where a screenplay paste went, so 'Keep it as plain text' can put it back as words. */
+export interface ScreenplayPaste {
+  /** The scene it was pasted into, and the place in its words (positions before the paste). */
+  sceneId: string
+  at: { from: number; to: number }
+  text: string
+  /** The scenes the import wrote (importFountain's ids): the pasted-into scene first when it was reused. */
+  ids: string[]
+}
+
+/** Plain lines put into prose at a place (positions in that prose), as the editor's paste does. */
+export function linesAt(prose: Prose, at: { from: number; to: number }, text: string): Prose {
+  const slice = plainSlice(textSchema(), text)
+  const was = ProseNode.fromJSON(textSchema(), prose.content?.length ? prose : { type: 'doc', content: [{ type: 'action' }] })
+  if (!slice) return was.toJSON() as Prose
+  const end = was.content.size
+  const from = Math.max(0, Math.min(at.from, end))
+  return new Transform(was).replace(from, Math.max(from, Math.min(at.to, end)), slice).doc.toJSON() as Prose
+}
+
+/**
+ * 'Keep it as plain text' after a screenplay paste (features/script-freeform.clan, mock state 'screenplay'):
+ * the scenes the paste made go, and its words land in the scene they were pasted into, one block per line
+ * exactly as written, where they were pasted. One undo step.
+ */
+export async function keepPasteAsPlain(store: ModelStore, paste: ScreenplayPaste): Promise<void> {
+  await store.flush()
+  const d = docOf(store)
+  const scene = d.scenes[paste.sceneId]
+  if (!scene) throw new Error('That scene is gone.')
+  const reused = paste.ids[0] === paste.sceneId
+  const patches: Patch[] = paste.ids.filter((id) => id !== paste.sceneId && d.scenes[id]).map((id) => ({ op: 'delete', entity: 'scenes', id, base_version: d.scenes[id].v }))
+  if (reused && scene.heading) patches.push({ op: 'set', entity: 'scenes', id: scene.id, path: 'heading', value: '', base_version: scene.v })
+  const next = linesAt(reused ? EMPTY_PROSE : store.text.prose('scene', scene.id), reused ? { from: 1, to: 1 } : paste.at, paste.text)
+  const label = `keep a paste as plain text in scenes[${scene.id}]`
+  if (patches.length) {
+    const r = await store.bus.apply({ patches, why: { action: label } })
+    if (!r.applied) throw new Error(r.refused.map((x) => x.message).join('; ') || 'That paste could not change.')
+    await store.text.edit([{ kind: 'scene', id: scene.id }], store.clan.personClaim(), (frag) => hydrate(frag('scene', scene.id), next), { label, joinStep: true })
+  } else await store.text.replace('scene', scene.id, next, store.clan.personClaim(), { label })
+  await store.flush()
+}
+
+/**
+ * A scene heading made plain text again (Format ▸ Plain text or Action on a heading): it becomes the first line
+ * of the scene's words and the scene has no heading. One undo step.
+ */
+export async function headingToLine(store: ModelStore, sceneId: string): Promise<void> {
+  await store.flush()
+  const scene = docOf(store).scenes[sceneId]
+  if (!scene) throw new Error('That scene is gone.')
+  const heading = scene.heading.trim()
+  if (!heading) return
+  const prose = store.text.prose('scene', sceneId)
+  const next: Prose = { type: 'doc', content: [{ type: 'action', content: [{ type: 'text', text: heading }] }, ...(prose.content ?? [])] }
+  const r = await store.bus.apply({ patches: [{ op: 'set', entity: 'scenes', id: sceneId, path: 'heading', value: '', base_version: scene.v }], why: { action: `set scenes[${sceneId}] heading` } })
+  if (!r.applied) throw new Error(r.refused.map((x) => x.message).join('; ') || 'That heading could not change.')
+  await store.text.edit([{ kind: 'scene', id: sceneId }], store.clan.personClaim(), (frag) => hydrate(frag('scene', sceneId), next), { label: `set scenes[${sceneId}] heading`, joinStep: true })
+  await store.flush()
 }
 
 /** A new empty scene after `afterSceneId` (or at the end). Resolves its id. */
@@ -232,7 +317,7 @@ export function fountainProse(d: Doc, blocks: { type: string; text: string; dual
  * scene a scene entity after the ones there (an empty first scene is used, not left behind).
  * Refused, naming the scene, when a scene is too big. Resolves the line that counts what was left out.
  */
-export async function importFountain(store: ModelStore, scriptId: string, parsed: FountainScript): Promise<{ scenes: number; dropped: string }> {
+export async function importFountain(store: ModelStore, scriptId: string, parsed: FountainScript): Promise<{ scenes: number; dropped: string; ids: string[] }> {
   await store.flush()
   const d = docOf(store)
   const script = d.scripts[scriptId]
@@ -240,7 +325,8 @@ export async function importFountain(store: ModelStore, scriptId: string, parsed
   checkSizes(parsed, (sc) => JSON.stringify(fountainProse(d, sc.blocks)).length)
   if (!parsed.scenes.length) throw new Error('That file has no script in it.')
   const existing = scenesOf(d, scriptId)
-  const reuse = existing.length === 1 && !existing[0].heading.trim() && !store.text.prose('scene', existing[0].id).content?.length ? existing[0] : undefined
+  // The one empty scene (the free page with no words yet) takes the first scene, not left behind.
+  const reuse = existing.length === 1 && !existing[0].heading.trim() && !store.text.prose('scene', existing[0].id).content?.some((b) => b.content?.length) ? existing[0] : undefined
   const last = reuse ? null : existing.at(-1)?.rank ?? null
   const ranks: string[] = []
   let prev = last
@@ -268,7 +354,7 @@ export async function importFountain(store: ModelStore, scriptId: string, parsed
     parsed.scenes.forEach((sc, i) => hydrate(frag('scene', ids[i]), fountainProse(d, sc.blocks)))
   }, { label: why.action, joinStep: true })
   await store.flush()
-  return { scenes: parsed.scenes.length, dropped: droppedLine(parsed.dropped) }
+  return { scenes: parsed.scenes.length, dropped: droppedLine(parsed.dropped), ids }
 }
 
 /** A shot's seconds: its clip is marked, and beats past its new end come back inside it, one step. */

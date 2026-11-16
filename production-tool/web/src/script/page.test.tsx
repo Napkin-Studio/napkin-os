@@ -110,15 +110,17 @@ describe('Plan shots and what comes next (ui-behaviour 3.10, 3.5)', () => {
     await settle()
     const plan = button(el, 'Plan shots')!
     expect(plan.disabled).toBe(true)
-    expect(el.querySelector('.se-why')?.textContent).toBe('Write the script first')
+    expect(el.querySelector('.se-why')?.textContent).toBe('Write something first')
     expect(el.querySelector('.se-next')).toBeNull()
   })
 
   it('a script with words and no storyboard: Dex says what is next, and Plan shots makes the storyboard and plans on it', async () => {
     const { el, services, scriptId } = await open(secondScript('EXT. CLIFFS - DAWN. A runner crests the cliff and drinks Lumen water.'))
     await settle()
-    expect(el.querySelector('.se-next')?.textContent).toMatch(/Dex · directs: Ready when you are: Plan shots turns this into about 6 shots\./)
-    expect(el.querySelector('.se-next')?.textContent).toContain('Make video')
+    expect(el.querySelector('.se-next')?.textContent).toMatch(/Dex · directs: I'll read your words as they are and plan about 6 shots\. Nothing needs a heading or an element first\./)
+    // Make video sits beside Plan shots in the bar (mock state 'prose'), not on Dex's line.
+    expect(el.querySelector('.se-next')?.textContent).not.toContain('Make video')
+    expect(button(el, 'Make video')!.disabled).toBe(false)
     const plan = button(el, 'Plan shots')!
     expect(plan.disabled).toBe(false)
     expect(el.querySelector('.se-why')).toBeNull()
@@ -138,31 +140,11 @@ describe('the Script editor page', () => {
     const { el } = await open()
     await settle()
     expect(el.textContent).toContain('Script · ')
-    expect(el.textContent).toContain('Paste a script, or write the idea in a line.')
+    // A plain page (features/script-freeform.clan, mock state 'empty').
+    expect(el.textContent).toContain('Just write.')
     expect(el.textContent).toContain('←Canvas')
     expect(el.textContent).toContain('Plan shots')
     expect(el.textContent).not.toMatch(/\$|free|cost/i)
-  })
-
-  it('a non-empty script still has an obvious Write with Skye, seeded with the idea already typed (urgent P0 2026-11-04)', async () => {
-    // The user's situation: a script with content, so the empty-only start box is gone.
-    const { el } = await open(secondScript('Write a script for a man putting in work at the gym'))
-    await settle()
-    // The empty-state prompt is NOT shown, but a persistent Write with Skye is.
-    expect(el.textContent).not.toContain('Paste a script, or write the idea in a line.')
-    const write = el.querySelector('button.se-write') as HTMLButtonElement
-    expect(write, 'the Write with Skye button is in the top bar').not.toBeNull()
-    expect(write.textContent).toContain('Write with Skye')
-    expect(write.disabled).toBe(false)
-    // There is no write panel until it is pressed.
-    expect(el.querySelector('[data-write-skye]')).toBeNull()
-    await act(async () => { write.click() })
-    await settle()
-    // The panel opens, seeded with the idea the writer already typed (no retyping).
-    const box = el.querySelector('[data-write-skye] textarea.pstart-input') as HTMLTextAreaElement
-    expect(box, 'the write prompt box opened').not.toBeNull()
-    expect(box.value).toBe('Write a script for a man putting in work at the gym')
-    expect(el.querySelector('[data-write-skye]')?.textContent).toContain('Skye')
   })
 
   it('shows imported scenes, and the shots; the current shot opens its editor', async () => {

@@ -7,8 +7,9 @@ import type { Id, ProductionDocument } from '../contracts/types'
 import { clipMode, countWords, planShotsBlocked, scriptOfVideo, shotCount } from '../jobs/scriptVideo'
 import { runningPlan } from '../jobs/plan'
 import { storyboardOfVideo } from '../jobs/prompt'
-import { currentFrame, currentTake, shotsOf, staleList } from '../model/selectors'
+import { currentFrame, currentTake, scenesOf, shotsOf, staleList } from '../model/selectors'
 import { drivenStoryboard } from '../canvas/nodes/make'
+import { scriptIsFree } from './freeText'
 
 type Doc = ProductionDocument
 
@@ -30,9 +31,19 @@ export function videoOfScript(d: Doc, scriptId: Id, storyboardId?: Id): Id | und
     ?? vids.find((v) => scriptOfVideo(d, v.id) === scriptId)?.id
 }
 
+/** Dex's line before anything is planned (features/script-freeform.clan): free text is read as it is; a
+ *  screenplay keeps its scenes. `pasted`: it just came in as a paste. */
+export function planLine(d: Doc, scriptId: Id, hasVideo: boolean, pasted = false): string {
+  const shots = countWords(shotCount(d, scriptId), 'shot')
+  if (scriptIsFree(d, scriptId)) return `I'll read your words as they are and plan ${shots}. Nothing needs a heading or an element first.`
+  const n = scenesOf(d, scriptId).filter((s) => s.heading.trim()).length
+  if (!n) return `Plan shots turns your screenplay into ${shots}.${hasVideo ? '' : ' Make video goes straight to the clips.'}`
+  return `Your screenplay ${pasted ? 'came in with' : 'has'} its ${n} ${n === 1 ? 'scene' : 'scenes'}. Plan shots turns it into ${shots}${hasVideo ? '.' : '; Make video goes straight to the clips.'}`
+}
+
 /** The next step for this script, or null when there is none to show (no words yet, or Dex is planning).
  *  `behind`: the editor's own reading that the storyboard is behind the script (Update storyboard). */
-export function nextStep(d: Doc, scriptId: Id, storyboardId?: Id, behind = false): NextStep | null {
+export function nextStep(d: Doc, scriptId: Id, storyboardId?: Id, behind = false, opts: { pasted?: boolean } = {}): NextStep | null {
   if (planShotsBlocked(d, scriptId)) return null
   const sb = storyboardId ? d.storyboards[storyboardId] : drivenStoryboard(d, scriptId)
   if (sb && runningPlan(d, sb.id)) return null
@@ -40,7 +51,7 @@ export function nextStep(d: Doc, scriptId: Id, storyboardId?: Id, behind = false
   const toVideo: NextAction = video ? 'open-video' : 'make-video'
   const shots = sb ? shotsOf(d, sb.id).filter((s) => s.kind !== 'end_card') : []
   if (!shots.length) {
-    return { step: 'plan', line: `Ready when you are: Plan shots turns this into ${countWords(shotCount(d, scriptId), 'shot')}.`, actions: ['plan', toVideo] }
+    return { step: 'plan', line: planLine(d, scriptId, !!video, opts.pasted), actions: ['plan', toVideo] }
   }
   if (behind || staleList(d).some((m) => m.target.kind === ('storyboard' as string) && m.target.id === sb!.id)) {
     return { step: 'behind', line: 'The script changed since I planned. Update storyboard re-plans the shots it touches.', actions: ['update', 'open-storyboard'] }

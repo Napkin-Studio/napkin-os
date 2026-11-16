@@ -3,6 +3,9 @@
 // its old place stays a dashed slot, a blue drop line opens where it will land, and the numbers
 // hold until the drop. Keyboard: focus a handle, Space, ↑↓, then Space to drop or Esc to cancel.
 // A drop is one rank write (and the scene when it crosses scenes): script/edits.ts moveShotTo.
+//
+// Free text (features/script-freeform.clan) lists its paragraphs (¶1, ¶2, …); a screenplay with no shots yet
+// lists each scene's lines under its heading; once Dex has planned, scenes and their shots.
 
 import { useMemo, useState, type ReactNode } from 'react'
 import {
@@ -10,7 +13,7 @@ import {
   type DragEndEvent, type DragOverEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, type SortingStrategy } from '@dnd-kit/sortable'
-import type { CameraSize } from '../contracts/types'
+import type { CameraSize, Scene } from '../contracts/types'
 import type { ShotPlace } from '../../../clan-store/src'
 import { neighboursAt, sceneAt, type ScriptRow } from './compose'
 
@@ -27,12 +30,20 @@ export interface OutlineProps {
   disabled?: boolean
   footer?: ReactNode
   onAddScene?: () => void
+  /** Free text: its paragraphs, in order (the outline lists them instead of scenes). */
+  paragraphs?: { sceneId: string; index: number; text: string }[]
+  /** A screenplay scene's lines to list under its heading (none once there are shots). */
+  linesOf?: (scene: Scene) => { index: number; text: string }[]
+  /** A paragraph or line picked: the caret goes there. */
+  onLine?: (sceneId: string, index: number) => void
+  /** The line the page is working on now (the Format menu's), marked. */
+  currentLine?: { sceneId: string; index: number }
 }
 
 const words = (s: CameraSize) => s.replace(/_/g, ' ')
 const cap = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)
 
-export function Outline({ rows, current, onShot, onScene, onMove, writer, disabled, footer, onAddScene }: OutlineProps) {
+export function Outline({ rows, current, onShot, onScene, onMove, writer, disabled, footer, onAddScene, paragraphs, linesOf, onLine, currentLine }: OutlineProps) {
   const shotRows = rows.filter((r): r is Extract<ScriptRow, { kind: 'shot' }> => r.kind === 'shot')
   const ids = useMemo(() => shotRows.map((r) => r.id), [shotRows])
   const maxS = Math.max(0, ...shotRows.map((r) => r.shot.duration_s))
@@ -62,9 +73,36 @@ export function Outline({ rows, current, onShot, onScene, onMove, writer, disabl
     onMove(from, { ...place, sceneId: sceneAt(rows, place.beforeId, place.afterId) })
   }
   const dragging = active ? shotRows.find((r) => r.id === active) : undefined
+  const sceneCount = rows.filter((r) => r.kind === 'scene').length
+  const lines = (r: Extract<ScriptRow, { kind: 'scene' }>) => linesOf?.(r.scene) ?? []
+  const nothing = paragraphs ? !paragraphs.length : !shotRows.length && rows.every((r) => r.kind !== 'scene' || (!r.scene.heading.trim() && !lines(r).length))
+  const count = nothing ? 'nothing yet'
+    : paragraphs ? `${paragraphs.length} ${paragraphs.length === 1 ? 'paragraph' : 'paragraphs'}`
+      : shotRows.length ? `${sceneCount} ${sceneCount === 1 ? 'scene' : 'scenes'} · ${shotRows.length} ${shotRows.length === 1 ? 'shot' : 'shots'}`
+        : `${sceneCount} ${sceneCount === 1 ? 'scene' : 'scenes'}`
+  const lineItem = (sceneId: string, l: { index: number; text: string }, mark?: string) => (
+    <li key={`${sceneId}:${l.index}`} className={`${mark ? 'ol-para' : 'ol-line'} ${currentLine?.sceneId === sceneId && currentLine.index === l.index ? 'on' : ''}`}>
+      <button className="ol-btn" onClick={() => onLine?.(sceneId, l.index)} title={l.text}>
+        {mark && <span className="ol-n">{mark}</span>}
+        <span className="ol-words">{l.text}</span>
+      </button>
+    </li>
+  )
+  if (nothing || paragraphs) {
+    return (
+      <nav className={`se-outline ${nothing ? 'nothing' : ''}`} aria-label="Outline">
+        <div className="ol-head"><span>Outline</span><span>{count}</span></div>
+        {nothing
+          ? <div className="ol-empty">Your outline builds as you write: paragraphs now, scenes and shots once there are some.</div>
+          : <ol className="ol">{paragraphs!.map((p, i) => lineItem(p.sceneId, p, `¶${i + 1}`))}</ol>}
+        {!nothing && <span className="ol-fill" />}
+        {footer}
+      </nav>
+    )
+  }
   return (
     <nav className="se-outline" aria-label="Outline">
-      <div className="ol-head"><span>Outline</span><span>{rows.filter((r) => r.kind === 'scene').length} scenes · {shotRows.length} shots</span></div>
+      <div className="ol-head"><span>Outline</span><span>{count}</span></div>
       <DndContext sensors={sensors} collisionDetection={closestCenter}
         onDragStart={(e: DragStartEvent) => setActive(String(e.active.id))}
         onDragOver={(e: DragOverEvent) => setOver(e.over ? String(e.over.id) : null)}
@@ -77,15 +115,19 @@ export function Outline({ rows, current, onShot, onScene, onMove, writer, disabl
           <ol className="ol">
             {rows.map((r) => {
               if (r.kind === 'scene') {
-                return (
+                // A scene with no heading (free words before a screenplay) lists only its lines.
+                const under = lines(r).map((l) => lineItem(r.id, l))
+                if (!r.scene.heading.trim() && (under.length || !shotRows.length)) return under
+                return [
                   <li key={r.id} className="ol-scene">
                     <button className="ol-btn" onClick={() => onScene(r.id)} title={r.scene.heading || `Scene ${r.number}`}>
                       <span className="ol-n">{r.number}</span>
                       <span className="ol-heading">{r.scene.heading || 'Scene with no heading'}</span>
                       {writer(r.scene.last_writer, { kind: 'scene', id: r.id, label: r.scene.heading || `Scene ${r.number}` })}
                     </button>
-                  </li>
-                )
+                  </li>,
+                  ...under,
+                ]
               }
               if (r.kind === 'shot') {
                 return (
