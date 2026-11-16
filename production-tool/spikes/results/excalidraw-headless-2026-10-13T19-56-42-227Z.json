@@ -1,0 +1,987 @@
+{
+  "spike": "excalidraw",
+  "label": "HEADLESS CHROMIUM ON A DESKTOP - NOT A DEVICE MEASUREMENT",
+  "at": "2026-10-13T19:56:42.227Z",
+  "browser": "153.0.8010.52",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "results": {
+    "g9": {
+      "bindingA": {
+        "historyClearMs": {
+          "count": 210,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0.1,
+          "max": 0.1,
+          "mean": 0
+        },
+        "applyMs": {
+          "count": 220,
+          "p50": 0.2,
+          "p95": 0.4,
+          "p99": 0.58,
+          "max": 0.8,
+          "mean": 0.25
+        },
+        "depth": 210,
+        "onChangeWrites": [
+          {
+            "id": "b6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a1",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b1",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b1",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a10",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a11",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a10",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a11",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          }
+        ]
+      },
+      "bindingB": {
+        "historyClearMs": {
+          "count": 220,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0.1,
+          "max": 0.1,
+          "mean": 0
+        },
+        "applyMs": {
+          "count": 210,
+          "p50": 0.3,
+          "p95": 0.5,
+          "p99": 0.69,
+          "max": 0.8,
+          "mean": 0.32
+        },
+        "depth": 220,
+        "onChangeWrites": [
+          {
+            "id": "b0",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b1",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a1",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b1",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          }
+        ]
+      },
+      "a": {
+        "ops": 196,
+        "latencyOneWayMs": {
+          "count": 40,
+          "p50": 3.1,
+          "p95": 4.26,
+          "p99": 10.16,
+          "max": 13.85,
+          "mean": 3.33
+        },
+        "undoDepth": 210,
+        "localSteps": 196,
+        "digest": "a0 50.00 776.00 222.00 147.00 D a0\na1 1347.00 765.00 69.00 211.00 D b1a\na10 491.00 998.00 363.00 201.00 D b5t\na11 1206.00 1083.00 275.00 248.00 D b5u\na12 2646.00 925.00 355.00 243.00 D b5v\na13 251.00 1095.00 155.00 234.00 D b5w\na14 738.00 1030.00 52.00 249.00 D b5x\na15 1795.00 946.00 96.00 80.00 D b5z\na16 1015.00 124.00 131.00 299.00 L b61\na17 704.00 86.00 150.00 284.00 D b62\na18 1227.00 1520.00 298.00 122.00 D b63\na19 247.00 600.00 158.00 51.00 L b65\na2 1466.00 222.00 185.00 104.00 D b1c\na20 747.00 1204.00 55.00 211.00 D b67\na21 466.00 244.00 290.00 135.00 L b69\na22 1110.00 354.00 126.00 294.00 L b6B\na23 552.00 757.00 189.00 113.00 L b6C\na24 628.00 1296.00 265.00 240.00 L b6D\na25 2029.00 1222.00 47.00 173.00 L b6E\na26 2109.00 129.00 215.00 146.00 L b6F\na27 2768.00 1231.00 155.00 221.00 L b6G\na28 2504.00 121.00 286.00 273.00 L b6H\na29 2330.00 144.00 160.00 249.00 L b6I\na3 1467.00 108.00 318.00 299.00 D b1e\na30 1324.00 322.00 129.00 272.00 D b5j\na31 -20.00 -16.00 87.00 128.00 L b5k\na32 371.00 693.00 200.00 110.00 L b5l\na33 2812.00 65.00 164.00 176.00 L b5m\na34 2528.00 776.00 308.00 98.00 D b5o\na35 2788.00 860.00 287.00 44.00 L b5p\na36 2062.00 669.00 387.00 185.00 L b5q\na37 107.00 649.00 62.00 205.00 L b5r\na38 440.00 1308.00 105.00 75.00 L b5s\na39 1976.00 427.00 210.00 140.00 L b5wV\na4 -154.00 1527.00 64.00 284.00 D b5kV\na40 1905.00 422.00 385.00 73.00 L b6J\na41 1754.00 191.00 280.00 120.00 L b6K\na42 1046.00 597.00 310.00 242.00 L b6M\na5 2597.00 1560.00 219.00 247.00 D b5lV\na6 33.00 296.00 283.00 210.00 D b5mV\na7 1542.00 831.00 374.00 97.00 D b5n\na8 302.00 309.00 47.00 107.00 D b5oV\na9 2388.00 292.00 181.00 198.00 D b5sV\nb0 329.00 58.00 157.00 269.00 L b1Z\nb1 1869.00 1561.00 284.00 131.00 D b1b\nb10 2621.00 370.00 393.00 147.00 D b5y\nb11 495.00 1006.00 230.00 170.00 D b60\nb12 2519.00 629.00 91.00 95.00 D b64\nb13 283.00 841.00 199.00 130.00 D b66\nb14 2815.00 205.00 334.00 128.00 D b68\nb15 955.00 473.00 237.00 285.00 D b6A\nb16 1711.00 1440.00 321.00 281.00 L b5h\nb17 2767.00 648.00 213.00 164.00 L b5i\nb18 2235.00 268.00 224.00 274.00 D b5nV\nb19 2083.00 864.00 313.00 182.00 L b5tV\nb2 69.00 837.00 221.00 261.00 D b1d\nb20 2575.00 431.00 320.00 56.00 L b5uV\nb21 2623.00 1591.00 305.00 295.00 L b5vV\nb22 2808.00 897.00 108.00 162.00 L b6L\nb3 1863.00 775.00 315.00 45.00 L b5xV\nb4 804.00 676.00 280.00 42.00 D b5hV\nb5 2302.00 440.00 229.00 205.00 D b5iV\nb6 756.00 244.00 73.00 105.00 D b5jV\nb7 774.00 243.00 210.00 154.00 D b5qV\nb8 2688.00 1163.00 275.00 276.00 L b5pV\nb9 1961.00 221.00 229.00 150.00 D b5rV\n--\nb0 b16 b17 a31 a32 a33 a35 b8 a36 a37 a38 b19 b20 b21 a39 b3 a16 a19 a21 a22 a23 a24 a25 a26 a27 a28 a29 a40 a41 b22 a42"
+      },
+      "b": {
+        "ops": 196,
+        "latencyOneWayMs": {
+          "count": 40,
+          "p50": 1.95,
+          "p95": 2.81,
+          "p99": 6.65,
+          "max": 8.95,
+          "mean": 2.12
+        },
+        "undoDepth": 220,
+        "localSteps": 196,
+        "digest": "a0 50.00 776.00 222.00 147.00 D a0\na1 1347.00 765.00 69.00 211.00 D b1a\na10 491.00 998.00 363.00 201.00 D b5t\na11 1206.00 1083.00 275.00 248.00 D b5u\na12 2646.00 925.00 355.00 243.00 D b5v\na13 251.00 1095.00 155.00 234.00 D b5w\na14 738.00 1030.00 52.00 249.00 D b5x\na15 1795.00 946.00 96.00 80.00 D b5z\na16 1015.00 124.00 131.00 299.00 L b61\na17 704.00 86.00 150.00 284.00 D b62\na18 1227.00 1520.00 298.00 122.00 D b63\na19 247.00 600.00 158.00 51.00 L b65\na2 1466.00 222.00 185.00 104.00 D b1c\na20 747.00 1204.00 55.00 211.00 D b67\na21 466.00 244.00 290.00 135.00 L b69\na22 1110.00 354.00 126.00 294.00 L b6B\na23 552.00 757.00 189.00 113.00 L b6C\na24 628.00 1296.00 265.00 240.00 L b6D\na25 2029.00 1222.00 47.00 173.00 L b6E\na26 2109.00 129.00 215.00 146.00 L b6F\na27 2768.00 1231.00 155.00 221.00 L b6G\na28 2504.00 121.00 286.00 273.00 L b6H\na29 2330.00 144.00 160.00 249.00 L b6I\na3 1467.00 108.00 318.00 299.00 D b1e\na30 1324.00 322.00 129.00 272.00 D b5j\na31 -20.00 -16.00 87.00 128.00 L b5k\na32 371.00 693.00 200.00 110.00 L b5l\na33 2812.00 65.00 164.00 176.00 L b5m\na34 2528.00 776.00 308.00 98.00 D b5o\na35 2788.00 860.00 287.00 44.00 L b5p\na36 2062.00 669.00 387.00 185.00 L b5q\na37 107.00 649.00 62.00 205.00 L b5r\na38 440.00 1308.00 105.00 75.00 L b5s\na39 1976.00 427.00 210.00 140.00 L b5wV\na4 -154.00 1527.00 64.00 284.00 D b5kV\na40 1905.00 422.00 385.00 73.00 L b6J\na41 1754.00 191.00 280.00 120.00 L b6K\na42 1046.00 597.00 310.00 242.00 L b6M\na5 2597.00 1560.00 219.00 247.00 D b5lV\na6 33.00 296.00 283.00 210.00 D b5mV\na7 1542.00 831.00 374.00 97.00 D b5n\na8 302.00 309.00 47.00 107.00 D b5oV\na9 2388.00 292.00 181.00 198.00 D b5sV\nb0 329.00 58.00 157.00 269.00 L b1Z\nb1 1869.00 1561.00 284.00 131.00 D b1b\nb10 2621.00 370.00 393.00 147.00 D b5y\nb11 495.00 1006.00 230.00 170.00 D b60\nb12 2519.00 629.00 91.00 95.00 D b64\nb13 283.00 841.00 199.00 130.00 D b66\nb14 2815.00 205.00 334.00 128.00 D b68\nb15 955.00 473.00 237.00 285.00 D b6A\nb16 1711.00 1440.00 321.00 281.00 L b5h\nb17 2767.00 648.00 213.00 164.00 L b5i\nb18 2235.00 268.00 224.00 274.00 D b5nV\nb19 2083.00 864.00 313.00 182.00 L b5tV\nb2 69.00 837.00 221.00 261.00 D b1d\nb20 2575.00 431.00 320.00 56.00 L b5uV\nb21 2623.00 1591.00 305.00 295.00 L b5vV\nb22 2808.00 897.00 108.00 162.00 L b6L\nb3 1863.00 775.00 315.00 45.00 L b5xV\nb4 804.00 676.00 280.00 42.00 D b5hV\nb5 2302.00 440.00 229.00 205.00 D b5iV\nb6 756.00 244.00 73.00 105.00 D b5jV\nb7 774.00 243.00 210.00 154.00 D b5qV\nb8 2688.00 1163.00 275.00 276.00 L b5pV\nb9 1961.00 221.00 229.00 150.00 D b5rV\n--\nb0 b16 b17 a31 a32 a33 a35 b8 a36 a37 a38 b19 b20 b21 a39 b3 a16 a19 a21 a22 a23 a24 a25 a26 a27 a28 a29 a40 a41 b22 a42"
+      },
+      "converged": true,
+      "elements": 66,
+      "diffSample": []
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "spike": "excalidraw",
+  "label": "HEADLESS CHROMIUM ON A DESKTOP - NOT A DEVICE MEASUREMENT",
+  "at": "2026-10-13T19:54:20.420Z",
+  "browser": "153.0.8010.52",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "results": {
+    "g1": {
+      "inputToPaint": {
+        "count": 2380,
+        "p50": 32.2,
+        "p95": 33.9,
+        "p99": 34.64,
+        "max": 178.3,
+        "mean": 33.27
+      },
+      "penMode": true,
+      "penDetected": true
+    },
+    "g1Control": {
+      "count": 2399,
+      "p50": 15.299999997019768,
+      "p95": 16.200000002980232,
+      "p99": 16.900000005960464,
+      "max": 17.5,
+      "mean": 15.116798666223927,
+      "strokes": 20
+    }
+  }
+}

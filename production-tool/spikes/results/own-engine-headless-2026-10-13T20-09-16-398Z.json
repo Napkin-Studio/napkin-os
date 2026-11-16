@@ -1,0 +1,182 @@
+{
+  "spike": "own-engine",
+  "label": "HEADLESS CHROMIUM ON A DESKTOP - NOT A DEVICE MEASUREMENT",
+  "at": "2026-10-13T20:09:16.398Z",
+  "browser": "153.0.8010.52",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "results": {
+    "g5": [
+      {
+        "id": "U1",
+        "title": "A moves X while B moves Y; A undoes; only X returns",
+        "status": "pass",
+        "ms": 44.3999999910593
+      },
+      {
+        "id": "U2",
+        "title": "A moves X while B moves Y; B undoes; only Y returns",
+        "status": "pass",
+        "ms": 49.6000000089407
+      },
+      {
+        "id": "U3",
+        "title": "B moves Y before A moves X; A undoes; only X returns",
+        "status": "pass",
+        "ms": 68.20000000298023
+      },
+      {
+        "id": "U4",
+        "title": "A moves X twice with B moving Y between; A undoes twice, one move at a time",
+        "status": "pass",
+        "ms": 99.3999999910593
+      },
+      {
+        "id": "U5",
+        "title": "A draws, B moves A's stroke, A undoes: the stroke is removed on both",
+        "status": "pass",
+        "ms": 49.20000000298023
+      },
+      {
+        "id": "U6",
+        "title": "A draws, B moves it, A undoes, then B undoes its move: the stroke stays gone",
+        "status": "pass",
+        "ms": 66.5
+      },
+      {
+        "id": "U7",
+        "title": "A multi-element drag undoes in one step",
+        "status": "pass",
+        "ms": 49.900000005960464
+      },
+      {
+        "id": "U8",
+        "title": "Make video (scene + field patch + document step) undoes in one step",
+        "status": "pass",
+        "ms": 50.099999994039536
+      },
+      {
+        "id": "U9",
+        "title": "Make video, undo, redo: all three parts come back",
+        "status": "pass",
+        "ms": 50.20000000298023
+      },
+      {
+        "id": "U10",
+        "title": "Make video, then B edits elsewhere and moves the patch version on; A's undo rebases and leaves B's edits",
+        "status": "pass",
+        "ms": 83.79999999701977
+      },
+      {
+        "id": "U11",
+        "title": "Delete a finished gen, undo: it comes back on the canvas and in the document (real CanvasDocSync)",
+        "status": "pass",
+        "ms": 32.6000000089407
+      },
+      {
+        "id": "U12",
+        "title": "Delete a gen still generating: its job is cancelled; undo restores it in the document",
+        "status": "pass",
+        "ms": 33
+      },
+      {
+        "id": "U13",
+        "title": "Redo after a remote edit to another element",
+        "status": "pass",
+        "ms": 84.29999999701977
+      },
+      {
+        "id": "U14",
+        "title": "Redo after B moved the same element: B's later write wins (last writer per element)",
+        "status": "pass",
+        "ms": 82.80000001192093
+      },
+      {
+        "id": "U15",
+        "title": "Undo with no local history does nothing",
+        "status": "pass",
+        "ms": 32.8999999910593
+      },
+      {
+        "id": "U16",
+        "title": "Remote changes never enter the local undo stack",
+        "status": "pass",
+        "ms": 18.100000008940697
+      },
+      {
+        "id": "U17",
+        "title": "The inline Undo after a delete restores as a forward local write",
+        "status": "pass",
+        "ms": 48.79999999701977
+      },
+      {
+        "id": "U18",
+        "title": "After the inline Undo, Ctrl+Z removes the element again",
+        "status": "pass",
+        "ms": 66.79999999701977
+      },
+      {
+        "id": "U19",
+        "title": "Undo across a corner resize with ratio correction: one step back to the original size",
+        "status": "skipped",
+        "ms": 0
+      },
+      {
+        "id": "U20",
+        "title": "A side resize with ratio correction reaches the other client with no separate correction update",
+        "status": "skipped",
+        "ms": 0
+      },
+      {
+        "id": "U21",
+        "title": "The engine's own history never acts (desktop layout)",
+        "status": "skipped",
+        "ms": 0
+      },
+      {
+        "id": "U22",
+        "title": "The engine's own history never acts (mobile layout)",
+        "status": "skipped",
+        "ms": 0
+      }
+    ],
+    "tools": {
+      "found": [
+        "script",
+        "picture",
+        "document",
+        "video",
+        "storyboard"
+      ],
+      "g7": {
+        "opens": [
+          {
+            "id": "n260",
+            "kind": "script",
+            "how": "button"
+          }
+        ]
+      },
+      "g8": {
+        "linksMade": [],
+        "refusals": [],
+        "preview": null,
+        "onPointerUpdateMissing": []
+      },
+      "g6": {
+        "created": null,
+        "afterResize": null,
+        "resized": false,
+        "multi": {
+          "includesStroke": false,
+          "before": [],
+          "after": []
+        },
+        "offRatioPassesPerDrag": [],
+        "ratioLockResent": 0
+      }
+    }
+  }
+}

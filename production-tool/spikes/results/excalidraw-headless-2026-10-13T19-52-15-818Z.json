@@ -1,0 +1,248 @@
+{
+  "spike": "excalidraw",
+  "label": "HEADLESS CHROMIUM ON A DESKTOP - NOT A DEVICE MEASUREMENT",
+  "at": "2026-10-13T19:52:15.818Z",
+  "browser": "153.0.8010.52",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "results": {
+    "g3_nodes0": {
+      "info": {
+        "context": {
+          "spike": "excalidraw",
+          "commit": "d5df837-dirty",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+          "devicePixelRatio": 1,
+          "viewport": {
+            "w": 1366,
+            "h": 900
+          },
+          "pointer": {
+            "coalesced": true,
+            "predicted": true,
+            "maxTouchPoints": 0
+          },
+          "at": "2026-10-13T19:52:16.804Z",
+          "production": true,
+          "headless": true,
+          "seed": 1,
+          "fingerprint": "f8082c81"
+        },
+        "elements": 5310,
+        "excalidraw": "0.18.1",
+        "penMode": false,
+        "penDetected": false
+      },
+      "runs": {
+        "panWorking": {
+          "frames": {
+            "count": 191,
+            "p50": 33.3,
+            "p95": 33.4,
+            "p99": 50,
+            "max": 50,
+            "mean": 26.26,
+            "pctUnder16_7": 44.5,
+            "longFrames": 48,
+            "durationMs": 5016.5
+          },
+          "drift": {
+            "count": 7680,
+            "p50": 0.01,
+            "p95": 0.01,
+            "p99": 0.01,
+            "max": 0.01,
+            "mean": 0,
+            "frames": 192,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 191,
+            "elapsedMs": 5016.5
+          },
+          "maxMountedOverlays": 104,
+          "overlayRemounts": 16
+        },
+        "panFit": {
+          "frames": {
+            "count": 245,
+            "p50": 16.7,
+            "p95": 49.9,
+            "p99": 83.36,
+            "max": 166.6,
+            "mean": 20.48,
+            "pctUnder16_7": 83.67,
+            "longFrames": 16,
+            "durationMs": 5016.4
+          },
+          "drift": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "frames": 246,
+            "pctWithin4px": null
+          },
+          "driver": {
+            "events": 245,
+            "elapsedMs": 5016.4
+          },
+          "maxMountedOverlays": 0,
+          "overlayRemounts": 29
+        },
+        "pinch": {
+          "frames": {
+            "count": 181,
+            "p50": 16.7,
+            "p95": 16.8,
+            "p99": 16.8,
+            "max": 16.8,
+            "mean": 16.67,
+            "pctUnder16_7": 94.48,
+            "longFrames": 0,
+            "durationMs": 3016.5
+          },
+          "drift": {
+            "count": 1476,
+            "p50": 0.01,
+            "p95": 0.01,
+            "p99": 0.01,
+            "max": 0.01,
+            "mean": 0.01,
+            "frames": 182,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 181,
+            "elapsedMs": 3016.5,
+            "finalZoom": 1.999861
+          },
+          "maxMountedOverlays": 36,
+          "overlayRemounts": 35
+        }
+      }
+    },
+    "g3_nodes1": {
+      "info": {
+        "context": {
+          "spike": "excalidraw",
+          "commit": "d5df837-dirty",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+          "devicePixelRatio": 1,
+          "viewport": {
+            "w": 1366,
+            "h": 900
+          },
+          "pointer": {
+            "coalesced": true,
+            "predicted": true,
+            "maxTouchPoints": 0
+          },
+          "at": "2026-10-13T19:52:32.675Z",
+          "production": true,
+          "headless": true,
+          "seed": 1,
+          "fingerprint": "f8082c81"
+        },
+        "elements": 5810,
+        "excalidraw": "0.18.1",
+        "penMode": false,
+        "penDetected": false
+      },
+      "runs": {
+        "panWorking": {
+          "frames": {
+            "count": 175,
+            "p50": 33.3,
+            "p95": 38.35,
+            "p99": 50.1,
+            "max": 66.7,
+            "mean": 28.67,
+            "pctUnder16_7": 31.43,
+            "longFrames": 46,
+            "durationMs": 5016.5
+          },
+          "drift": {
+            "count": 7040,
+            "p50": 0,
+            "p95": 0.01,
+            "p99": 0.01,
+            "max": 0.01,
+            "mean": 0,
+            "frames": 176,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 175,
+            "elapsedMs": 5016.5
+          },
+          "maxMountedOverlays": 259,
+          "overlayRemounts": 16
+        },
+        "panFit": {
+          "frames": {
+            "count": 241,
+            "p50": 16.7,
+            "p95": 50,
+            "p99": 110.02,
+            "max": 200,
+            "mean": 21.44,
+            "pctUnder16_7": 85.89,
+            "longFrames": 16,
+            "durationMs": 5166.6
+          },
+          "drift": {
+            "count": 2440,
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "max": 0,
+            "mean": 0,
+            "frames": 242,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 241,
+            "elapsedMs": 5166.6
+          },
+          "maxMountedOverlays": 500,
+          "overlayRemounts": 30
+        },
+        "pinch": {
+          "frames": {
+            "count": 180,
+            "p50": 16.7,
+            "p95": 16.7,
+            "p99": 16.8,
+            "max": 33.3,
+            "mean": 16.76,
+            "pctUnder16_7": 95.56,
+            "longFrames": 0,
+            "durationMs": 3016.6
+          },
+          "drift": {
+            "count": 3280,
+            "p50": 0,
+            "p95": 0.01,
+            "p99": 0.01,
+            "max": 0.01,
+            "mean": 0,
+            "frames": 181,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 180,
+            "elapsedMs": 3016.5999999999985,
+            "finalZoom": 1.999861
+          },
+          "maxMountedOverlays": 195,
+          "overlayRemounts": 35
+        }
+      }
+    }
+  }
+}

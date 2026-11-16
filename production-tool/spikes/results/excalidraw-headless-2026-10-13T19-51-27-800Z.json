@@ -1,0 +1,146 @@
+{
+  "spike": "excalidraw",
+  "label": "HEADLESS CHROMIUM ON A DESKTOP - NOT A DEVICE MEASUREMENT",
+  "at": "2026-10-13T19:51:27.800Z",
+  "browser": "153.0.8010.52",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "results": {
+    "g5": [
+      {
+        "id": "U1",
+        "title": "A moves X while B moves Y; A undoes; only X returns",
+        "status": "pass",
+        "ms": 212.80000001192093
+      },
+      {
+        "id": "U2",
+        "title": "A moves X while B moves Y; B undoes; only Y returns",
+        "status": "pass",
+        "ms": 147.70000000298023
+      },
+      {
+        "id": "U3",
+        "title": "B moves Y before A moves X; A undoes; only X returns",
+        "status": "pass",
+        "ms": 181.80000001192093
+      },
+      {
+        "id": "U4",
+        "title": "A moves X twice with B moving Y between; A undoes twice, one move at a time",
+        "status": "pass",
+        "ms": 248
+      },
+      {
+        "id": "U5",
+        "title": "A draws, B moves A's stroke, A undoes: the stroke is removed on both",
+        "status": "pass",
+        "ms": 149.40000000596046
+      },
+      {
+        "id": "U6",
+        "title": "A draws, B moves it, A undoes, then B undoes its move: the stroke stays gone",
+        "status": "pass",
+        "ms": 181.90000000596046
+      },
+      {
+        "id": "U7",
+        "title": "A multi-element drag undoes in one step",
+        "status": "pass",
+        "ms": 148
+      },
+      {
+        "id": "U8",
+        "title": "Make video (scene + field patch + document step) undoes in one step",
+        "status": "pass",
+        "ms": 148.20000000298023
+      },
+      {
+        "id": "U9",
+        "title": "Make video, undo, redo: all three parts come back",
+        "status": "pass",
+        "ms": 148.40000000596046
+      },
+      {
+        "id": "U10",
+        "title": "Make video, then B edits elsewhere and moves the patch version on; A's undo rebases and leaves B's edits",
+        "status": "pass",
+        "ms": 215.40000000596046
+      },
+      {
+        "id": "U11",
+        "title": "Delete a finished gen, undo: it comes back on the canvas and in the document (real CanvasDocSync)",
+        "status": "pass",
+        "ms": 115.70000000298023
+      },
+      {
+        "id": "U12",
+        "title": "Delete a gen still generating: its job is cancelled; undo restores it in the document",
+        "status": "pass",
+        "ms": 115.29999999701977
+      },
+      {
+        "id": "U13",
+        "title": "Redo after a remote edit to another element",
+        "status": "pass",
+        "ms": 215.8999999910593
+      },
+      {
+        "id": "U14",
+        "title": "Redo after B moved the same element: B's later write wins (last writer per element)",
+        "status": "pass",
+        "ms": 215.70000000298023
+      },
+      {
+        "id": "U15",
+        "title": "Undo with no local history does nothing",
+        "status": "pass",
+        "ms": 116.6000000089407
+      },
+      {
+        "id": "U16",
+        "title": "Remote changes never enter the local undo stack",
+        "status": "pass",
+        "ms": 81.5
+      },
+      {
+        "id": "U17",
+        "title": "The inline Undo after a delete restores as a forward local write",
+        "status": "pass",
+        "ms": 148.80000001192093
+      },
+      {
+        "id": "U18",
+        "title": "After the inline Undo, Ctrl+Z removes the element again",
+        "status": "pass",
+        "ms": 181
+      },
+      {
+        "id": "U19",
+        "title": "Undo across a corner resize with ratio correction: one step back to the original size",
+        "status": "pass",
+        "ms": 349.09999999403954
+      },
+      {
+        "id": "U20",
+        "title": "A side resize with ratio correction reaches the other client with no separate correction update",
+        "status": "pass",
+        "ms": 315.09999999403954
+      },
+      {
+        "id": "U21",
+        "title": "The engine's own history never acts (desktop layout)",
+        "status": "pass",
+        "ms": 417.29999999701977
+      },
+      {
+        "id": "U22",
+        "title": "The engine's own history never acts (mobile layout)",
+        "status": "pass",
+        "ms": 414
+      }
+    ]
+  }
+}

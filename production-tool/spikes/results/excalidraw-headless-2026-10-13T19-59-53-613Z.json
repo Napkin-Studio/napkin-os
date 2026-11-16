@@ -1,0 +1,149 @@
+{
+  "spike": "excalidraw",
+  "label": "HEADLESS CHROMIUM ON A DESKTOP - NOT A DEVICE MEASUREMENT",
+  "at": "2026-10-13T19:59:53.613Z",
+  "browser": "153.0.8010.52",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "results": {
+    "tools": {
+      "found": [
+        "document",
+        "video",
+        "script",
+        "picture",
+        "storyboard"
+      ],
+      "g7": {
+        "opens": [
+          {
+            "id": "n390",
+            "kind": "script",
+            "how": "button"
+          },
+          {
+            "id": "n390",
+            "kind": "script",
+            "how": "dblclick"
+          }
+        ]
+      },
+      "g8": {
+        "linksMade": [
+          {
+            "id": "link-mv73uogi-e42v",
+            "from": "n390",
+            "to": "n170",
+            "role": "drives"
+          }
+        ],
+        "refusals": [
+          "A video cannot feed a script",
+          "A script cannot feed a reference"
+        ],
+        "preview": {
+          "wrapperMs": {
+            "count": 60,
+            "p50": 15.549999997019768,
+            "p95": 16.399999991059303,
+            "p99": 16.622999998778102,
+            "max": 16.799999997019768,
+            "mean": 15.218333333233993
+          },
+          "updateMs": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null
+          },
+          "gapPx": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null
+          }
+        },
+        "onPointerUpdateMissing": []
+      },
+      "g6": {
+        "created": {
+          "id": "sketch-mv73uq4n",
+          "ratio": "16:9",
+          "w": 666.6666666666667,
+          "h": 375.00000000000006,
+          "error": 0,
+          "screen": {
+            "left": 300,
+            "top": 300,
+            "width": 400.00000000000006,
+            "height": 225.00000000000003
+          }
+        },
+        "afterResize": {
+          "id": "sketch-mv73uq4n",
+          "ratio": "16:9",
+          "w": 933.3333333333334,
+          "h": 525,
+          "error": 2.220446049250313e-16,
+          "screen": {
+            "left": 300,
+            "top": 300,
+            "width": 560,
+            "height": 315
+          }
+        },
+        "resized": true,
+        "multi": {
+          "includesStroke": true,
+          "before": [
+            {
+              "id": "sketch-mv73urp3",
+              "ratio": "16:9",
+              "w": 333.33333333333337
+            },
+            {
+              "id": "sketch-mv73us9i",
+              "ratio": "9:16",
+              "w": 150
+            },
+            {
+              "id": "sketch-mv73ustv",
+              "ratio": "1:1",
+              "w": 200
+            }
+          ],
+          "after": [
+            {
+              "id": "sketch-mv73urp3",
+              "ratio": "16:9",
+              "w": 378.2954103805695,
+              "error": 0
+            },
+            {
+              "id": "sketch-mv73us9i",
+              "ratio": "9:16",
+              "w": 170.23293467125623,
+              "error": 2.220446049250313e-16
+            },
+            {
+              "id": "sketch-mv73ustv",
+              "ratio": "1:1",
+              "w": 226.97724622834164,
+              "error": 0
+            }
+          ]
+        },
+        "offRatioPassesPerDrag": [
+          0
+        ],
+        "ratioLockResent": 58
+      }
+    }
+  }
+}

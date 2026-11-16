@@ -1,0 +1,993 @@
+{
+  "spike": "excalidraw",
+  "label": "HEADLESS CHROMIUM ON A DESKTOP - NOT A DEVICE MEASUREMENT",
+  "at": "2026-10-13T20:00:30.213Z",
+  "browser": "153.0.8010.52",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "results": {
+    "g5": [
+      {
+        "id": "U1",
+        "title": "A moves X while B moves Y; A undoes; only X returns",
+        "status": "pass",
+        "ms": 227.90000000596046
+      },
+      {
+        "id": "U2",
+        "title": "A moves X while B moves Y; B undoes; only Y returns",
+        "status": "pass",
+        "ms": 147.90000000596046
+      },
+      {
+        "id": "U3",
+        "title": "B moves Y before A moves X; A undoes; only X returns",
+        "status": "pass",
+        "ms": 182.1000000089407
+      },
+      {
+        "id": "U4",
+        "title": "A moves X twice with B moving Y between; A undoes twice, one move at a time",
+        "status": "pass",
+        "ms": 249.09999999403954
+      },
+      {
+        "id": "U5",
+        "title": "A draws, B moves A's stroke, A undoes: the stroke is removed on both",
+        "status": "pass",
+        "ms": 148.79999999701977
+      },
+      {
+        "id": "U6",
+        "title": "A draws, B moves it, A undoes, then B undoes its move: the stroke stays gone",
+        "status": "pass",
+        "ms": 181.8999999910593
+      },
+      {
+        "id": "U7",
+        "title": "A multi-element drag undoes in one step",
+        "status": "pass",
+        "ms": 148.79999999701977
+      },
+      {
+        "id": "U8",
+        "title": "Make video (scene + field patch + document step) undoes in one step",
+        "status": "pass",
+        "ms": 148.59999999403954
+      },
+      {
+        "id": "U9",
+        "title": "Make video, undo, redo: all three parts come back",
+        "status": "pass",
+        "ms": 148.8999999910593
+      },
+      {
+        "id": "U10",
+        "title": "Make video, then B edits elsewhere and moves the patch version on; A's undo rebases and leaves B's edits",
+        "status": "pass",
+        "ms": 215.59999999403954
+      },
+      {
+        "id": "U11",
+        "title": "Delete a finished gen, undo: it comes back on the canvas and in the document (real CanvasDocSync)",
+        "status": "pass",
+        "ms": 115.70000000298023
+      },
+      {
+        "id": "U12",
+        "title": "Delete a gen still generating: its job is cancelled; undo restores it in the document",
+        "status": "pass",
+        "ms": 115.29999999701977
+      },
+      {
+        "id": "U13",
+        "title": "Redo after a remote edit to another element",
+        "status": "pass",
+        "ms": 215.69999998807907
+      },
+      {
+        "id": "U14",
+        "title": "Redo after B moved the same element: B's later write wins (last writer per element)",
+        "status": "pass",
+        "ms": 215.5
+      },
+      {
+        "id": "U15",
+        "title": "Undo with no local history does nothing",
+        "status": "pass",
+        "ms": 115.40000000596046
+      },
+      {
+        "id": "U16",
+        "title": "Remote changes never enter the local undo stack",
+        "status": "pass",
+        "ms": 82.09999999403954
+      },
+      {
+        "id": "U17",
+        "title": "The inline Undo after a delete restores as a forward local write",
+        "status": "pass",
+        "ms": 149.30000001192093
+      },
+      {
+        "id": "U18",
+        "title": "After the inline Undo, Ctrl+Z removes the element again",
+        "status": "pass",
+        "ms": 181.70000000298023
+      },
+      {
+        "id": "U19",
+        "title": "Undo across a corner resize with ratio correction: one step back to the original size",
+        "status": "pass",
+        "ms": 365.5
+      },
+      {
+        "id": "U20",
+        "title": "A side resize with ratio correction reaches the other client with no separate correction update",
+        "status": "pass",
+        "ms": 315.70000000298023
+      },
+      {
+        "id": "U21",
+        "title": "The engine's own history never acts (desktop layout)",
+        "status": "pass",
+        "ms": 432.09999999403954
+      },
+      {
+        "id": "U22",
+        "title": "The engine's own history never acts (mobile layout)",
+        "status": "pass",
+        "ms": 415.80000001192093
+      }
+    ],
+    "g5NegativeControl": [
+      {
+        "id": "U21",
+        "title": "The engine's own history never acts (desktop layout)",
+        "status": "fail",
+        "error": "desktop: the engine's undo/redo buttons are visible",
+        "ms": 462.90000000596046
+      },
+      {
+        "id": "U22",
+        "title": "The engine's own history never acts (mobile layout)",
+        "status": "fail",
+        "error": "mobile: 5 undo/redo shortcut(s) reached the engine",
+        "ms": 397.3999999910593
+      }
+    ],
+    "g3_nodes0": {
+      "info": {
+        "context": {
+          "spike": "excalidraw",
+          "commit": "a2e5fa6",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+          "devicePixelRatio": 1,
+          "viewport": {
+            "w": 1366,
+            "h": 900
+          },
+          "pointer": {
+            "coalesced": true,
+            "predicted": true,
+            "maxTouchPoints": 0
+          },
+          "at": "2026-10-13T20:00:37.162Z",
+          "production": true,
+          "headless": true,
+          "seed": 1,
+          "fingerprint": "f8082c81"
+        },
+        "elements": 5310,
+        "excalidraw": "0.18.1",
+        "penMode": false,
+        "penDetected": false
+      },
+      "runs": {
+        "panWorking": {
+          "frames": {
+            "count": 153,
+            "p50": 33.3,
+            "p95": 50,
+            "p99": 66.7,
+            "max": 83.3,
+            "mean": 32.79,
+            "pctUnder16_7": 22.22,
+            "longFrames": 57,
+            "durationMs": 5016.5
+          },
+          "drift": {
+            "count": 6160,
+            "p50": 0,
+            "p95": 0.01,
+            "p99": 0.01,
+            "max": 0.01,
+            "mean": 0,
+            "frames": 154,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 153,
+            "elapsedMs": 5016.5
+          },
+          "maxMountedOverlays": 102,
+          "overlayRemounts": 16
+        },
+        "panFit": {
+          "frames": {
+            "count": 239,
+            "p50": 16.7,
+            "p95": 50,
+            "p99": 120.68,
+            "max": 200,
+            "mean": 21.2,
+            "pctUnder16_7": 89.12,
+            "longFrames": 14,
+            "durationMs": 5066.5
+          },
+          "drift": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "frames": 240,
+            "pctWithin4px": null
+          },
+          "driver": {
+            "events": 239,
+            "elapsedMs": 5066.5
+          },
+          "maxMountedOverlays": 0,
+          "overlayRemounts": 30
+        },
+        "pinch": {
+          "frames": {
+            "count": 179,
+            "p50": 16.7,
+            "p95": 16.7,
+            "p99": 16.8,
+            "max": 50,
+            "mean": 16.85,
+            "pctUnder16_7": 95.53,
+            "longFrames": 1,
+            "durationMs": 3016.5
+          },
+          "drift": {
+            "count": 1476,
+            "p50": 0.01,
+            "p95": 0.01,
+            "p99": 0.01,
+            "max": 0.01,
+            "mean": 0.01,
+            "frames": 180,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 179,
+            "elapsedMs": 3016.5,
+            "finalZoom": 1.999723
+          },
+          "maxMountedOverlays": 36,
+          "overlayRemounts": 35
+        }
+      }
+    },
+    "g3_nodes1": {
+      "info": {
+        "context": {
+          "spike": "excalidraw",
+          "commit": "a2e5fa6",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+          "devicePixelRatio": 1,
+          "viewport": {
+            "w": 1366,
+            "h": 900
+          },
+          "pointer": {
+            "coalesced": true,
+            "predicted": true,
+            "maxTouchPoints": 0
+          },
+          "at": "2026-10-13T20:00:53.324Z",
+          "production": true,
+          "headless": true,
+          "seed": 1,
+          "fingerprint": "f8082c81"
+        },
+        "elements": 5810,
+        "excalidraw": "0.18.1",
+        "penMode": false,
+        "penDetected": false
+      },
+      "runs": {
+        "panWorking": {
+          "frames": {
+            "count": 154,
+            "p50": 33.3,
+            "p95": 50.1,
+            "p99": 66.65,
+            "max": 83.2,
+            "mean": 32.57,
+            "pctUnder16_7": 24.03,
+            "longFrames": 57,
+            "durationMs": 5016.5
+          },
+          "drift": {
+            "count": 6200,
+            "p50": 0,
+            "p95": 0.01,
+            "p99": 0.01,
+            "max": 0.01,
+            "mean": 0,
+            "frames": 155,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 154,
+            "elapsedMs": 5016.5
+          },
+          "maxMountedOverlays": 260,
+          "overlayRemounts": 16
+        },
+        "panFit": {
+          "frames": {
+            "count": 240,
+            "p50": 16.7,
+            "p95": 50,
+            "p99": 100.1,
+            "max": 183.4,
+            "mean": 21.11,
+            "pctUnder16_7": 87.5,
+            "longFrames": 16,
+            "durationMs": 5066.6
+          },
+          "drift": {
+            "count": 2400,
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "max": 0,
+            "mean": 0,
+            "frames": 241,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 240,
+            "elapsedMs": 5066.6
+          },
+          "maxMountedOverlays": 500,
+          "overlayRemounts": 30
+        },
+        "pinch": {
+          "frames": {
+            "count": 180,
+            "p50": 16.7,
+            "p95": 16.71,
+            "p99": 16.8,
+            "max": 33.4,
+            "mean": 16.76,
+            "pctUnder16_7": 95,
+            "longFrames": 1,
+            "durationMs": 3016.6
+          },
+          "drift": {
+            "count": 3280,
+            "p50": 0,
+            "p95": 0.01,
+            "p99": 0.01,
+            "max": 0.01,
+            "mean": 0,
+            "frames": 181,
+            "pctWithin4px": 100
+          },
+          "driver": {
+            "events": 180,
+            "elapsedMs": 3016.6000000000004,
+            "finalZoom": 1.999861
+          },
+          "maxMountedOverlays": 195,
+          "overlayRemounts": 35
+        }
+      }
+    },
+    "g1": {
+      "inputToPaint": {
+        "count": 2380,
+        "p50": 32.3,
+        "p95": 33.8,
+        "p99": 34.62,
+        "max": 182.8,
+        "mean": 33.32
+      },
+      "penMode": true,
+      "penDetected": true
+    },
+    "g1Control": {
+      "count": 2399,
+      "p50": 15.399999991059303,
+      "p95": 16.199999989569186,
+      "p99": 16.60200000852346,
+      "max": 29.900000005960464,
+      "mean": 15.248937057369249,
+      "strokes": 20
+    },
+    "tools": {
+      "found": [
+        "document",
+        "video",
+        "script",
+        "picture",
+        "storyboard"
+      ],
+      "g7": {
+        "opens": [
+          {
+            "id": "n390",
+            "kind": "script",
+            "how": "button"
+          },
+          {
+            "id": "n390",
+            "kind": "script",
+            "how": "dblclick"
+          }
+        ]
+      },
+      "g8": {
+        "linksMade": [
+          {
+            "id": "link-mv73y2m2-3fmp",
+            "from": "n390",
+            "to": "n170",
+            "role": "drives"
+          }
+        ],
+        "refusals": [
+          "A video cannot feed a script",
+          "A script cannot feed a reference"
+        ],
+        "preview": {
+          "wrapperMs": {
+            "count": 60,
+            "p50": 15.75,
+            "p95": 16.505000000447033,
+            "p99": 17.24100000053644,
+            "max": 17.299999997019768,
+            "mean": 15.60666666875283
+          },
+          "updateMs": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null
+          },
+          "gapPx": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null
+          }
+        },
+        "onPointerUpdateMissing": []
+      },
+      "g6": {
+        "created": {
+          "id": "sketch-mv73y4am",
+          "ratio": "16:9",
+          "w": 666.6666666666667,
+          "h": 375.00000000000006,
+          "error": 0,
+          "screen": {
+            "left": 300,
+            "top": 300,
+            "width": 400.00000000000006,
+            "height": 225.00000000000003
+          }
+        },
+        "afterResize": {
+          "id": "sketch-mv73y4am",
+          "ratio": "16:9",
+          "w": 933.3333333333334,
+          "h": 525,
+          "error": 2.220446049250313e-16,
+          "screen": {
+            "left": 300,
+            "top": 300,
+            "width": 560,
+            "height": 315
+          }
+        },
+        "resized": true,
+        "multi": {
+          "includesStroke": true,
+          "before": [
+            {
+              "id": "sketch-mv73y5tq",
+              "ratio": "16:9",
+              "w": 333.33333333333337
+            },
+            {
+              "id": "sketch-mv73y6e2",
+              "ratio": "9:16",
+              "w": 150
+            },
+            {
+              "id": "sketch-mv73y6yf",
+              "ratio": "1:1",
+              "w": 200
+            }
+          ],
+          "after": [
+            {
+              "id": "sketch-mv73y5tq",
+              "ratio": "16:9",
+              "w": 378.2954103805695,
+              "error": 0
+            },
+            {
+              "id": "sketch-mv73y6e2",
+              "ratio": "9:16",
+              "w": 170.23293467125623,
+              "error": 2.220446049250313e-16
+            },
+            {
+              "id": "sketch-mv73y6yf",
+              "ratio": "1:1",
+              "w": 226.97724622834164,
+              "error": 0
+            }
+          ]
+        },
+        "offRatioPassesPerDrag": [
+          0
+        ],
+        "ratioLockResent": 58
+      }
+    },
+    "g9": {
+      "bindingA": {
+        "historyClearMs": {
+          "count": 1175,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0.1,
+          "max": 0.1,
+          "mean": 0
+        },
+        "applyMs": {
+          "count": 1408,
+          "p50": 0.4,
+          "p95": 0.9,
+          "p99": 1.29,
+          "max": 2.1,
+          "mean": 0.49
+        },
+        "depth": 1175,
+        "indexRepairs": 6612,
+        "onChangeWrites": [
+          {
+            "id": "b6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a1",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b1",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          }
+        ]
+      },
+      "bindingB": {
+        "historyClearMs": {
+          "count": 1174,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0.1,
+          "max": 0.1,
+          "mean": 0
+        },
+        "applyMs": {
+          "count": 1409,
+          "p50": 0.5,
+          "p95": 0.8,
+          "p99": 1.39,
+          "max": 2.3,
+          "mean": 0.48
+        },
+        "depth": 1174,
+        "indexRepairs": 5360,
+        "onChangeWrites": [
+          {
+            "id": "b0",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b1",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b2",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b3",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b5",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a4",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b7",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b8",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "b9",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          },
+          {
+            "id": "a6",
+            "fields": [
+              "version",
+              "versionNonce",
+              "index",
+              "updated"
+            ]
+          }
+        ]
+      },
+      "a": {
+        "ops": 1175,
+        "latencyOneWayMs": {
+          "count": 235,
+          "p50": 2.5,
+          "p95": 4.45,
+          "p99": 6.98,
+          "max": 14.6,
+          "mean": 2.75
+        },
+        "undoDepth": 1175,
+        "localSteps": 1175,
+        "digest": "a0 50.00 776.00 222.00 147.00 D a0\na1 1347.00 765.00 69.00 211.00 D b1a\na10 491.00 998.00 363.00 201.00 D bem\na100 171.00 167.00 51.00 185.00 D c2Ce\na101 370.00 1540.00 229.00 87.00 D c2Cf\na102 2239.00 970.00 311.00 282.00 D c2Ci\na103 1076.00 172.00 161.00 150.00 D c2Cj\na104 2908.00 1221.00 267.00 71.00 D c2Ck\na105 1996.00 469.00 368.00 52.00 L c2Cm\na106 1220.00 1349.00 137.00 179.00 D c2Co\na107 2187.00 1287.00 121.00 153.00 D c2Cp\na108 79.00 1335.00 203.00 253.00 L c2Cr\na109 2610.00 553.00 318.00 174.00 D c2Cs\na11 1206.00 1083.00 275.00 248.00 D ben\na110 2926.00 998.00 239.00 287.00 L c2Cu\na111 1291.00 911.00 268.00 90.00 L c2Cv\na112 -203.00 486.00 184.00 296.00 D c2Cw\na113 758.00 1202.00 288.00 78.00 D c2Cx\na114 2471.00 421.00 200.00 280.00 L c2Cz\na115 -146.00 911.00 137.00 193.00 L c2D3\na116 1666.00 1475.00 46.00 204.00 L c2D5\na117 1589.00 338.00 292.00 53.00 L c2D6\na118 385.00 827.00 132.00 274.00 L c2DA\na119 990.00 606.00 41.00 203.00 D c2DB\na12 2646.00 925.00 355.00 243.00 D beo\na120 2295.00 1495.00 289.00 278.00 D c2DD\na121 2341.00 1545.00 345.00 281.00 L c2DE\na122 2336.00 1558.00 259.00 153.00 L c2DF\na123 1963.00 1528.00 384.00 252.00 L c2DH\na124 305.00 421.00 367.00 177.00 L c2DI\na125 1884.00 1126.00 236.00 187.00 L c2DJ\na126 1119.00 207.00 258.00 242.00 L c2DK\na127 2740.00 690.00 307.00 160.00 D c2DN\na128 1229.00 1350.00 163.00 232.00 D c2DP\na129 2920.00 586.00 397.00 267.00 L c2DR\na13 251.00 1095.00 155.00 234.00 D beq\na130 61.00 1338.00 166.00 184.00 D c2DT\na131 1966.00 891.00 296.00 104.00 D c2DU\na132 1673.00 544.00 46.00 125.00 L c2DW\na133 267.00 1177.00 304.00 299.00 D c2Da\na134 1753.00 1318.00 376.00 66.00 D c2Db\na135 23.00 379.00 188.00 211.00 L c2Dc\na136 1226.00 1216.00 114.00 74.00 L c2Df\na137 2567.00 411.00 358.00 283.00 L c2Dg\na138 1684.00 1344.00 176.00 63.00 L c2Dl\na139 1702.00 1152.00 325.00 260.00 L c2Dm\na14 738.00 1030.00 52.00 249.00 D bes\na140 2909.00 72.00 153.00 234.00 L c2Dn\na141 1774.00 399.00 201.00 90.00 D c2Do\na142 507.00 601.00 255.00 130.00 L c2Dp\na143 894.00 405.00 48.00 257.00 D c2Dr\na144 787.00 1001.00 341.00 41.00 D c2Ds\na145 2379.00 771.00 162.00 214.00 L c2Dv\na146 88.00 95.00 298.00 287.00 D c2Dx\na147 1522.00 1474.00 291.00 131.00 L c2E0\na148 1804.00 802.00 160.00 186.00 D c2E1\na149 2738.00 934.00 53.00 138.00 L c2E4\na15 1795.00 946.00 96.00 80.00 D c1JA\na150 3036.00 1424.00 51.00 83.00 L c2E5\na151 2055.00 1267.00 385.00 280.00 D c2E7\na152 63.00 549.00 219.00 232.00 D c2E9\na153 632.00 1662.00 309.00 136.00 L c2EB\na154 777.00 903.00 65.00 142.00 L c2ED\na155 921.00 488.00 66.00 287.00 L c2EG\na156 1821.00 366.00 100.00 151.00 L c2EI\na157 1348.00 1736.00 41.00 95.00 L c2EK\na158 276.00 612.00 345.00 210.00 L c2EL\na159 2058.00 611.00 174.00 96.00 L c2EM\na16 1018.00 80.00 131.00 299.00 D c1JF\na160 2155.00 338.00 337.00 153.00 D c2EO\na161 2096.00 891.00 261.00 153.00 D c2ES\na162 2117.00 819.00 359.00 66.00 L c2ET\na163 90.00 710.00 324.00 286.00 D c2EU\na164 2163.00 401.00 301.00 289.00 L c2EV\na165 1115.00 912.00 206.00 244.00 D c2EX\na166 454.00 633.00 146.00 57.00 L c2Ea\na167 571.00 -60.00 81.00 185.00 D c2Eb\na168 3086.00 479.00 339.00 76.00 L c2Ed\na169 556.00 1079.00 85.00 139.00 L c2Eg\na17 704.00 86.00 150.00 284.00 D bep\na170 42.00 1021.00 174.00 274.00 L c2Ei\na171 2046.00 589.00 148.00 123.00 L c2Ej\na172 1579.00 908.00 319.00 123.00 D c2El\na173 1467.00 569.00 155.00 53.00 L c2Eq\na174 340.00 124.00 209.00 78.00 L c2Es\na175 913.00 1093.00 186.00 123.00 L c2DX\na176 2826.00 1341.00 253.00 286.00 L c2Eu\na177 2760.00 369.00 357.00 286.00 L c2Ew\na178 2996.00 1197.00 397.00 113.00 L c2F5\na179 60.00 1159.00 371.00 169.00 L c2F8\na18 1227.00 1520.00 298.00 122.00 D ber\na180 1951.00 1106.00 242.00 74.00 D c2F9\na181 1018.00 468.00 187.00 252.00 L c2FC\na182 2440.00 863.00 87.00 222.00 L c2FD\na183 2001.00 243.00 117.00 85.00 D c2FF\na184 1640.00 120.00 211.00 211.00 D c2FG\na185 503.00 352.00 315.00 255.00 D c2FI\na186 1479.00 957.00 310.00 256.00 L c2FK\na187 2108.00 980.00 115.00 227.00 D c2FL\na188 700.00 1574.00 63.00 144.00 L c2FN\na189 2835.00 292.00 271.00 173.00 L c2FR\na19 496.00 463.00 179.00 182.00 L c1J8\na190 2614.00 1061.00 42.00 298.00 L c2FU\na191 2427.00 558.00 82.00 70.00 L c2FV\na192 2085.00 266.00 395.00 124.00 L c2FX\na193 1040.00 1670.00 150.00 296.00 L c2Fd\na194 378.00 913.00 105.00 279.00 L c2Fe\na195 2031.00 1376.00 99.00 214.00 L c2Fg\na196 1889.00 581.00 91.00 243.00 L c2Fi\na197 2474.00 850.00 370.00 48.00 L c2Fj\na198 2444.00 490.00 186.00 278.00 L c2Fk\na2 1466.00 222.00 185.00 104.00 D b1c\na20 747.00 1204.00 55.00 211.00 D c1JC\na21 599.00 271.00 159.00 64.00 D c1JG\na22 1181.00 812.00 187.00 92.00 D c1JI\na23 552.00 757.00 189.00 113.00 D c1JJ\na24 911.00 195.00 144.00 188.00 D c1JK\na25 2141.00 1361.00 47.00 173.00 D c1JL\na26 2238.00 316.00 215.00 146.00 D c1JM\na27 2326.00 1360.00 329.00 161.00 D c1JN\na28 2742.00 152.00 121.00 282.00 D c1JO\na29 2476.00 338.00 160.00 249.00 D c1JP\na3 1467.00 108.00 318.00 299.00 D b1e\na30 1324.00 322.00 129.00 272.00 D c1JS\na31 259.00 475.00 95.00 102.00 D c1JT\na32 371.00 693.00 200.00 110.00 D c1JU\na33 3009.00 149.00 164.00 176.00 D c1JV\na34 2528.00 776.00 308.00 98.00 D c1JX\na35 2956.00 814.00 235.00 40.00 D c1JY\na36 2155.00 670.00 387.00 185.00 D c1JZ\na37 107.00 649.00 306.00 255.00 D c1Ja\na38 312.00 1348.00 115.00 96.00 D c1Jb\na39 1706.00 562.00 113.00 47.00 D c1Jf\na4 -154.00 1527.00 64.00 284.00 D bed\na40 1759.00 458.00 367.00 108.00 D c1Jg\na41 1798.00 659.00 173.00 126.00 D c1Jh\na42 831.00 1189.00 310.00 242.00 D c1Jj\na43 2176.00 1954.00 174.00 299.00 D c1Jm\na44 1079.00 520.00 184.00 223.00 D c1Jn\na45 1420.00 735.00 322.00 184.00 D c1Jo\na46 1311.00 1293.00 197.00 265.00 D c1Jp\na47 933.00 606.00 276.00 146.00 D c1Ju\na48 2453.00 1448.00 250.00 60.00 D c1Jw\na49 1232.00 1055.00 277.00 199.00 D c1Jx\na5 2597.00 1560.00 219.00 247.00 D bee\na50 1572.00 1488.00 254.00 278.00 D c1Jy\na51 969.00 126.00 226.00 72.00 D c1Jz\na52 2151.00 377.00 111.00 282.00 L c1eI\na53 2223.00 522.00 92.00 80.00 D c1eL\na54 390.00 226.00 322.00 146.00 D c1eM\na55 2891.00 1444.00 86.00 105.00 D c1eO\na56 2245.00 247.00 146.00 289.00 D c1eP\na57 3256.00 1031.00 133.00 268.00 L c1eR\na58 2673.00 555.00 314.00 46.00 D c1eW\na59 2368.00 1087.00 199.00 83.00 D c1eX\na6 33.00 296.00 283.00 210.00 D bef\na60 1330.00 748.00 95.00 169.00 D c1eZ\na61 -21.00 302.00 317.00 65.00 D c1eb\na62 589.00 507.00 107.00 268.00 D c1ec\na63 1120.00 245.00 386.00 186.00 D c1ef\na64 3046.00 1265.00 201.00 148.00 D c1eg\na65 2795.00 1145.00 179.00 76.00 D c1eh\na66 1213.00 597.00 178.00 78.00 D c1ej\na67 2680.00 1638.00 114.00 146.00 D c2Ba\na68 1949.00 182.00 218.00 159.00 D c2Bc\na69 1127.00 1157.00 191.00 114.00 D c2Bf\na7 1542.00 831.00 374.00 97.00 D beg\na70 1051.00 1350.00 54.00 66.00 D c2Bg\na71 745.00 935.00 117.00 155.00 D c2Bh\na72 2402.00 915.00 295.00 168.00 D c2Bl\na73 2684.00 1632.00 381.00 208.00 L c2Bm\na74 2462.00 343.00 335.00 88.00 D c2Bo\na75 240.00 611.00 330.00 275.00 D c2Bp\na76 916.00 1250.00 353.00 122.00 D c2Br\na77 1522.00 439.00 196.00 159.00 D c2Bu\na78 3555.00 178.00 212.00 253.00 L c2By\na79 598.00 488.00 141.00 86.00 D c2C0\na8 302.00 309.00 47.00 107.00 D beh\na80 1004.00 327.00 197.00 175.00 D c2C1\na81 271.00 1171.00 268.00 158.00 L c2C2\na82 1476.00 -40.00 310.00 119.00 L c2C7\na83 1800.00 1432.00 238.00 64.00 L c2C8\na84 1612.00 131.00 81.00 287.00 D c2C9\na85 2102.00 200.00 151.00 209.00 D c2CB\na86 357.00 426.00 192.00 137.00 L c2CD\na87 944.00 285.00 295.00 84.00 D c2CG\na88 965.00 1208.00 306.00 188.00 L c2CJ\na89 2075.00 53.00 380.00 222.00 D c2CL\na9 2388.00 292.00 181.00 198.00 D bel\na90 522.00 999.00 286.00 222.00 D c2CN\na91 -502.00 858.00 109.00 202.00 D c2CQ\na92 2827.00 699.00 74.00 144.00 L c2CR\na93 459.00 838.00 122.00 149.00 D c2CS\na94 2583.00 603.00 350.00 220.00 D c2CU\na95 352.00 -1.00 383.00 259.00 D c2CW\na96 99.00 1715.00 88.00 239.00 D c2CZ\na97 566.00 263.00 161.00 194.00 D c2Cb\na98 2539.00 909.00 122.00 55.00 D c2Cc\na99 3033.00 1598.00 163.00 232.00 L c2Cd\nb0 291.00 87.00 90.00 62.00 D b1Z\nb1 1869.00 1561.00 284.00 131.00 D b1b\nb10 2621.00 370.00 393.00 147.00 D c1J9\nb100 2920.00 300.00 91.00 133.00 D c2DS\nb101 1733.00 857.00 374.00 263.00 D c2DV\nb102 763.00 1581.00 219.00 267.00 L c2DY\nb103 1192.00 55.00 317.00 161.00 D c2DZ\nb104 2021.00 379.00 92.00 163.00 L c2Dd\nb105 2521.00 355.00 329.00 132.00 D c2De\nb106 1847.00 682.00 329.00 70.00 D c2Dh\nb107 1935.00 711.00 71.00 281.00 D c2Di\nb108 2011.00 349.00 195.00 58.00 L c2Dj\nb109 1933.00 252.00 282.00 190.00 L c2Dk\nb11 495.00 1006.00 230.00 170.00 D c1JD\nb110 351.00 327.00 365.00 241.00 D c2Dq\nb111 1590.00 1128.00 287.00 187.00 D c2Dt\nb112 422.00 814.00 188.00 245.00 L c2Du\nb113 2563.00 1017.00 123.00 239.00 D c2Dw\nb114 2449.00 1485.00 202.00 65.00 D c2Dy\nb115 1885.00 155.00 115.00 155.00 L c2Dz\nb116 2645.00 1615.00 48.00 220.00 L c2Bn\nb117 1989.00 582.00 218.00 82.00 D c2E2\nb118 1316.00 1323.00 177.00 186.00 L c2E3\nb119 1521.00 1176.00 369.00 106.00 L c2E6\nb12 2519.00 629.00 91.00 95.00 D bet\nb120 1193.00 1320.00 79.00 55.00 D c2E8\nb121 -4.00 76.00 351.00 292.00 L c2EA\nb122 2212.00 1527.00 321.00 116.00 L c2EC\nb123 3271.00 333.00 135.00 221.00 L c2EE\nb124 664.00 803.00 263.00 122.00 L c2EF\nb125 638.00 1006.00 263.00 128.00 L c2EH\nb126 2484.00 198.00 350.00 89.00 L c2EJ\nb127 2443.00 841.00 209.00 103.00 L c2EN\nb128 439.00 613.00 71.00 122.00 L c2EP\nb129 163.00 886.00 376.00 75.00 L c2EQ\nb13 283.00 841.00 199.00 130.00 D c1JB\nb130 1267.00 583.00 276.00 278.00 L c2ER\nb131 1052.00 790.00 362.00 176.00 L c2EW\nb132 2352.00 1133.00 99.00 276.00 L c2EY\nb133 -118.00 1420.00 189.00 73.00 L c2EZ\nb134 1351.00 1056.00 135.00 163.00 L c2Ec\nb135 3167.00 712.00 278.00 253.00 L c2Ee\nb136 2494.00 -61.00 242.00 57.00 L c2Ef\nb137 1475.00 1346.00 147.00 169.00 D c2Eh\nb138 2890.00 717.00 113.00 262.00 L c2Ek\nb139 2671.00 1623.00 67.00 220.00 D c2Em\nb14 2815.00 205.00 334.00 128.00 D c1JE\nb140 852.00 645.00 94.00 153.00 D c2En\nb141 696.00 675.00 377.00 160.00 L c2Eo\nb142 1969.00 572.00 180.00 46.00 L c2Ep\nb143 1356.00 1042.00 330.00 199.00 L c2Er\nb144 1938.00 135.00 339.00 147.00 L c2Et\nb145 2524.00 1673.00 201.00 161.00 L c2Ev\nb146 2053.00 1359.00 44.00 225.00 L c2Ex\nb147 890.00 655.00 157.00 300.00 D c2Ey\nb148 1754.00 678.00 290.00 282.00 D c2Ez\nb149 2008.00 325.00 311.00 298.00 L c2F0\nb15 955.00 473.00 237.00 285.00 D c1JH\nb150 1868.00 1189.00 344.00 164.00 L c2F1\nb151 661.00 412.00 218.00 195.00 L c2F2\nb152 563.00 326.00 239.00 265.00 L c2F3\nb153 1908.00 149.00 273.00 156.00 D c2F4\nb154 2145.00 357.00 72.00 217.00 L c2F6\nb155 2064.00 460.00 240.00 269.00 L c2F7\nb156 2371.00 90.00 189.00 162.00 L c2FA\nb157 2887.00 1386.00 388.00 246.00 L c2FB\nb158 1009.00 1218.00 242.00 239.00 L c2FE\nb159 2602.00 1286.00 171.00 175.00 L c2FH\nb16 1872.00 1764.00 198.00 150.00 D c1JQ\nb160 1680.00 196.00 284.00 51.00 L c2FJ\nb161 1977.00 1320.00 266.00 226.00 L c2FM\nb162 2222.00 358.00 209.00 40.00 L c2FO\nb163 2121.00 1393.00 101.00 269.00 L c2FP\nb164 1154.00 545.00 302.00 274.00 L c2FQ\nb165 839.00 339.00 221.00 140.00 L c2FS\nb166 1144.00 1023.00 224.00 242.00 D c2FT\nb167 550.00 720.00 249.00 206.00 L c2FW\nb168 2547.00 1056.00 218.00 287.00 L c2FY\nb169 1748.00 1078.00 303.00 94.00 L c2FZ\nb17 2767.00 648.00 213.00 164.00 D c1JR\nb170 2011.00 247.00 379.00 160.00 L c2Fa\nb171 2138.00 1136.00 59.00 262.00 L c2Fb\nb172 1482.00 647.00 327.00 125.00 L c2Fc\nb173 498.00 203.00 391.00 98.00 L c2Ff\nb174 1677.00 418.00 363.00 183.00 L c2Fh\nb18 2235.00 268.00 224.00 274.00 D c1JW\nb19 2023.00 1181.00 372.00 208.00 D c1Jc\nb2 69.00 837.00 221.00 261.00 D b1d\nb20 2699.00 618.00 342.00 265.00 D c1Jd\nb21 2877.00 1337.00 305.00 295.00 D c1Je\nb22 2925.00 1043.00 252.00 115.00 D c1Ji\nb23 254.00 647.00 217.00 266.00 D c1Jk\nb24 1811.00 709.00 364.00 238.00 D c1Jl\nb25 1289.00 1553.00 274.00 192.00 D c1Jq\nb26 1526.00 1760.00 395.00 232.00 D c1Jr\nb27 2913.00 251.00 66.00 54.00 D c1Js\nb28 2471.00 1128.00 367.00 139.00 D c1Jt\nb29 1782.00 126.00 336.00 271.00 D c1Jv\nb3 2434.00 841.00 207.00 191.00 D beZ\nb30 2191.00 44.00 162.00 44.00 D c1K0\nb31 473.00 792.00 167.00 118.00 D c1K1\nb32 1784.00 1064.00 142.00 169.00 D c1K2\nb33 2547.00 1415.00 96.00 50.00 L c1eJ\nb34 132.00 266.00 186.00 50.00 D c1eK\nb35 1185.00 1112.00 270.00 198.00 D c1eN\nb36 1334.00 559.00 74.00 218.00 D c1eQ\nb37 1790.00 163.00 203.00 106.00 D c1eS\nb38 2337.00 1558.00 367.00 274.00 D c1eT\nb39 2695.00 820.00 269.00 268.00 D c1eU\nb4 804.00 676.00 280.00 42.00 D bea\nb40 448.00 657.00 155.00 251.00 D c1eV\nb41 540.00 1368.00 200.00 292.00 D c1eY\nb42 1876.00 1302.00 314.00 282.00 L c1ea\nb43 503.00 939.00 234.00 195.00 D c1ed\nb44 2610.00 939.00 336.00 82.00 L c1ee\nb45 1602.00 909.00 199.00 76.00 D c1ei\nb46 2456.00 -536.00 54.00 165.00 L c2BY\nb47 3197.00 296.00 350.00 299.00 D c2BZ\nb48 1554.00 928.00 153.00 140.00 D c2Bb\nb49 1260.00 1244.00 279.00 233.00 D c2Bd\nb5 2302.00 440.00 229.00 205.00 D beb\nb50 449.00 262.00 278.00 136.00 L c2Be\nb51 1186.00 794.00 274.00 285.00 L c2Bi\nb52 -347.00 1673.00 171.00 62.00 L c2Bj\nb53 1961.00 466.00 134.00 41.00 D c2Bk\nb54 1892.00 410.00 367.00 88.00 D c2Bq\nb55 2477.00 264.00 296.00 160.00 D c2Bs\nb56 449.00 528.00 350.00 46.00 D c2Bt\nb57 1609.00 811.00 319.00 212.00 D c2Bv\nb58 999.00 586.00 249.00 177.00 D c2Bw\nb59 400.00 1309.00 88.00 223.00 L c2Bx\nb6 756.00 244.00 73.00 105.00 D bec\nb60 1892.00 1189.00 46.00 155.00 D c2Bz\nb61 301.00 810.00 76.00 145.00 D c2C3\nb62 2801.00 774.00 66.00 169.00 D c2C4\nb63 -245.00 176.00 236.00 159.00 D c2C5\nb64 3269.00 901.00 255.00 162.00 L c2C6\nb65 2446.00 1547.00 244.00 152.00 L c2CA\nb66 231.00 1176.00 167.00 97.00 L c2CC\nb67 1250.00 792.00 336.00 155.00 L c2CE\nb68 2380.00 1112.00 295.00 178.00 L c2CF\nb69 1255.00 466.00 324.00 136.00 L c2CH\nb7 774.00 243.00 210.00 154.00 D bei\nb70 2294.00 372.00 221.00 140.00 D c2CI\nb71 3058.00 1226.00 62.00 97.00 L c2CK\nb72 648.00 933.00 89.00 287.00 L c2CM\nb73 2694.00 1098.00 253.00 174.00 D c2CO\nb74 1522.00 -92.00 55.00 130.00 D c2CP\nb75 1604.00 150.00 53.00 213.00 D c2CT\nb76 1680.00 748.00 281.00 298.00 D c2CV\nb77 1949.00 1167.00 118.00 59.00 D c2CX\nb78 -12.00 1020.00 101.00 265.00 D c2CY\nb79 1428.00 1006.00 271.00 140.00 L c2Ca\nb8 2184.00 1240.00 241.00 164.00 D bej\nb80 2068.00 1379.00 387.00 180.00 D c2Cg\nb81 2511.00 1045.00 374.00 226.00 L c2Ch\nb82 1283.00 860.00 77.00 108.00 L c2Cl\nb83 1314.00 872.00 279.00 173.00 L c2Cn\nb84 -124.00 1551.00 197.00 229.00 D c2Cq\nb85 2671.00 1186.00 109.00 239.00 D c2Ct\nb86 2818.00 1085.00 87.00 165.00 D c2Cy\nb87 2222.00 279.00 105.00 270.00 L c2D0\nb88 -174.00 169.00 148.00 78.00 L c2D1\nb89 2508.00 253.00 66.00 173.00 L c2D2\nb9 1961.00 221.00 229.00 150.00 D bek\nb90 1585.00 -105.00 325.00 285.00 L c2D4\nb91 925.00 1112.00 246.00 103.00 D c2D7\nb92 2015.00 850.00 107.00 163.00 D c2D8\nb93 798.00 1567.00 188.00 273.00 D c2D9\nb94 -92.00 1740.00 138.00 141.00 D c2DC\nb95 767.00 1068.00 79.00 285.00 L c2DG\nb96 2368.00 779.00 158.00 288.00 D c2DL\nb97 2889.00 203.00 226.00 150.00 D c2DM\nb98 541.00 193.00 352.00 160.00 L c2DO\nb99 1817.00 1414.00 147.00 208.00 D c2DQ\n--\na19 a52 b33 a57 b42 b44 b46 b50 b51 b52 a73 b116 b59 a78 a81 b64 a82 a83 b65 b66 a86 b67 b68 b69 a88 b71 b72 a92 b79 a99 b81 b82 a105 b83 a108 a110 a111 a114 b87 b88 b89 a115 b90 a116 a117 a118 a121 a122 b95 a123 a124 a125 a126 b98 a129 a132 a175 b102 a135 b104 a136 a137 b108 b109 a138 a139 a140 a142 b112 a145 b115 a147 b118 a149 a150 b119 b121 a153 b122 a154 b123 b124 a155 b125 a156 b126 a157 a158 a159 b127 b128 b129 b130 a162 a164 b131 b132 b133 a166 b134 a168 b135 b136 a169 a170 a171 b138 b141 b142 a173 b143 a174 b144 a176 b145 a177 b146 b149 b150 b151 b152 a178 b154 b155 a179 b156 b157 a181 a182 b158 b159 b160 a186 b161 a188 b162 b163 b164 a189 b165 a190 a191 b167 a192 b168 b169 b170 b171 b172 a193 a194 b173 a195 b174 a196 a197 a198"
+      },
+      "b": {
+        "ops": 1174,
+        "latencyOneWayMs": {
+          "count": 235,
+          "p50": 2.3,
+          "p95": 4.1,
+          "p99": 5.92,
+          "max": 9.95,
+          "mean": 2.53
+        },
+        "undoDepth": 1174,
+        "localSteps": 1174,
+        "digest": "a0 50.00 776.00 222.00 147.00 D a0\na1 1347.00 765.00 69.00 211.00 D b1a\na10 491.00 998.00 363.00 201.00 D bem\na100 171.00 167.00 51.00 185.00 D c2Ce\na101 370.00 1540.00 229.00 87.00 D c2Cf\na102 2239.00 970.00 311.00 282.00 D c2Ci\na103 1076.00 172.00 161.00 150.00 D c2Cj\na104 2908.00 1221.00 267.00 71.00 D c2Ck\na105 1996.00 469.00 368.00 52.00 L c2Cm\na106 1220.00 1349.00 137.00 179.00 D c2Co\na107 2187.00 1287.00 121.00 153.00 D c2Cp\na108 79.00 1335.00 203.00 253.00 L c2Cr\na109 2610.00 553.00 318.00 174.00 D c2Cs\na11 1206.00 1083.00 275.00 248.00 D ben\na110 2926.00 998.00 239.00 287.00 L c2Cu\na111 1291.00 911.00 268.00 90.00 L c2Cv\na112 -203.00 486.00 184.00 296.00 D c2Cw\na113 758.00 1202.00 288.00 78.00 D c2Cx\na114 2471.00 421.00 200.00 280.00 L c2Cz\na115 -146.00 911.00 137.00 193.00 L c2D3\na116 1666.00 1475.00 46.00 204.00 L c2D5\na117 1589.00 338.00 292.00 53.00 L c2D6\na118 385.00 827.00 132.00 274.00 L c2DA\na119 990.00 606.00 41.00 203.00 D c2DB\na12 2646.00 925.00 355.00 243.00 D beo\na120 2295.00 1495.00 289.00 278.00 D c2DD\na121 2341.00 1545.00 345.00 281.00 L c2DE\na122 2336.00 1558.00 259.00 153.00 L c2DF\na123 1963.00 1528.00 384.00 252.00 L c2DH\na124 305.00 421.00 367.00 177.00 L c2DI\na125 1884.00 1126.00 236.00 187.00 L c2DJ\na126 1119.00 207.00 258.00 242.00 L c2DK\na127 2740.00 690.00 307.00 160.00 D c2DN\na128 1229.00 1350.00 163.00 232.00 D c2DP\na129 2920.00 586.00 397.00 267.00 L c2DR\na13 251.00 1095.00 155.00 234.00 D beq\na130 61.00 1338.00 166.00 184.00 D c2DT\na131 1966.00 891.00 296.00 104.00 D c2DU\na132 1673.00 544.00 46.00 125.00 L c2DW\na133 267.00 1177.00 304.00 299.00 D c2Da\na134 1753.00 1318.00 376.00 66.00 D c2Db\na135 23.00 379.00 188.00 211.00 L c2Dc\na136 1226.00 1216.00 114.00 74.00 L c2Df\na137 2567.00 411.00 358.00 283.00 L c2Dg\na138 1684.00 1344.00 176.00 63.00 L c2Dl\na139 1702.00 1152.00 325.00 260.00 L c2Dm\na14 738.00 1030.00 52.00 249.00 D bes\na140 2909.00 72.00 153.00 234.00 L c2Dn\na141 1774.00 399.00 201.00 90.00 D c2Do\na142 507.00 601.00 255.00 130.00 L c2Dp\na143 894.00 405.00 48.00 257.00 D c2Dr\na144 787.00 1001.00 341.00 41.00 D c2Ds\na145 2379.00 771.00 162.00 214.00 L c2Dv\na146 88.00 95.00 298.00 287.00 D c2Dx\na147 1522.00 1474.00 291.00 131.00 L c2E0\na148 1804.00 802.00 160.00 186.00 D c2E1\na149 2738.00 934.00 53.00 138.00 L c2E4\na15 1795.00 946.00 96.00 80.00 D c1JA\na150 3036.00 1424.00 51.00 83.00 L c2E5\na151 2055.00 1267.00 385.00 280.00 D c2E7\na152 63.00 549.00 219.00 232.00 D c2E9\na153 632.00 1662.00 309.00 136.00 L c2EB\na154 777.00 903.00 65.00 142.00 L c2ED\na155 921.00 488.00 66.00 287.00 L c2EG\na156 1821.00 366.00 100.00 151.00 L c2EI\na157 1348.00 1736.00 41.00 95.00 L c2EK\na158 276.00 612.00 345.00 210.00 L c2EL\na159 2058.00 611.00 174.00 96.00 L c2EM\na16 1018.00 80.00 131.00 299.00 D c1JF\na160 2155.00 338.00 337.00 153.00 D c2EO\na161 2096.00 891.00 261.00 153.00 D c2ES\na162 2117.00 819.00 359.00 66.00 L c2ET\na163 90.00 710.00 324.00 286.00 D c2EU\na164 2163.00 401.00 301.00 289.00 L c2EV\na165 1115.00 912.00 206.00 244.00 D c2EX\na166 454.00 633.00 146.00 57.00 L c2Ea\na167 571.00 -60.00 81.00 185.00 D c2Eb\na168 3086.00 479.00 339.00 76.00 L c2Ed\na169 556.00 1079.00 85.00 139.00 L c2Eg\na17 704.00 86.00 150.00 284.00 D bep\na170 42.00 1021.00 174.00 274.00 L c2Ei\na171 2046.00 589.00 148.00 123.00 L c2Ej\na172 1579.00 908.00 319.00 123.00 D c2El\na173 1467.00 569.00 155.00 53.00 L c2Eq\na174 340.00 124.00 209.00 78.00 L c2Es\na175 913.00 1093.00 186.00 123.00 L c2DX\na176 2826.00 1341.00 253.00 286.00 L c2Eu\na177 2760.00 369.00 357.00 286.00 L c2Ew\na178 2996.00 1197.00 397.00 113.00 L c2F5\na179 60.00 1159.00 371.00 169.00 L c2F8\na18 1227.00 1520.00 298.00 122.00 D ber\na180 1951.00 1106.00 242.00 74.00 D c2F9\na181 1018.00 468.00 187.00 252.00 L c2FC\na182 2440.00 863.00 87.00 222.00 L c2FD\na183 2001.00 243.00 117.00 85.00 D c2FF\na184 1640.00 120.00 211.00 211.00 D c2FG\na185 503.00 352.00 315.00 255.00 D c2FI\na186 1479.00 957.00 310.00 256.00 L c2FK\na187 2108.00 980.00 115.00 227.00 D c2FL\na188 700.00 1574.00 63.00 144.00 L c2FN\na189 2835.00 292.00 271.00 173.00 L c2FR\na19 496.00 463.00 179.00 182.00 L c1J8\na190 2614.00 1061.00 42.00 298.00 L c2FU\na191 2427.00 558.00 82.00 70.00 L c2FV\na192 2085.00 266.00 395.00 124.00 L c2FX\na193 1040.00 1670.00 150.00 296.00 L c2Fd\na194 378.00 913.00 105.00 279.00 L c2Fe\na195 2031.00 1376.00 99.00 214.00 L c2Fg\na196 1889.00 581.00 91.00 243.00 L c2Fi\na197 2474.00 850.00 370.00 48.00 L c2Fj\na198 2444.00 490.00 186.00 278.00 L c2Fk\na2 1466.00 222.00 185.00 104.00 D b1c\na20 747.00 1204.00 55.00 211.00 D c1JC\na21 599.00 271.00 159.00 64.00 D c1JG\na22 1181.00 812.00 187.00 92.00 D c1JI\na23 552.00 757.00 189.00 113.00 D c1JJ\na24 911.00 195.00 144.00 188.00 D c1JK\na25 2141.00 1361.00 47.00 173.00 D c1JL\na26 2238.00 316.00 215.00 146.00 D c1JM\na27 2326.00 1360.00 329.00 161.00 D c1JN\na28 2742.00 152.00 121.00 282.00 D c1JO\na29 2476.00 338.00 160.00 249.00 D c1JP\na3 1467.00 108.00 318.00 299.00 D b1e\na30 1324.00 322.00 129.00 272.00 D c1JS\na31 259.00 475.00 95.00 102.00 D c1JT\na32 371.00 693.00 200.00 110.00 D c1JU\na33 3009.00 149.00 164.00 176.00 D c1JV\na34 2528.00 776.00 308.00 98.00 D c1JX\na35 2956.00 814.00 235.00 40.00 D c1JY\na36 2155.00 670.00 387.00 185.00 D c1JZ\na37 107.00 649.00 306.00 255.00 D c1Ja\na38 312.00 1348.00 115.00 96.00 D c1Jb\na39 1706.00 562.00 113.00 47.00 D c1Jf\na4 -154.00 1527.00 64.00 284.00 D bed\na40 1759.00 458.00 367.00 108.00 D c1Jg\na41 1798.00 659.00 173.00 126.00 D c1Jh\na42 831.00 1189.00 310.00 242.00 D c1Jj\na43 2176.00 1954.00 174.00 299.00 D c1Jm\na44 1079.00 520.00 184.00 223.00 D c1Jn\na45 1420.00 735.00 322.00 184.00 D c1Jo\na46 1311.00 1293.00 197.00 265.00 D c1Jp\na47 933.00 606.00 276.00 146.00 D c1Ju\na48 2453.00 1448.00 250.00 60.00 D c1Jw\na49 1232.00 1055.00 277.00 199.00 D c1Jx\na5 2597.00 1560.00 219.00 247.00 D bee\na50 1572.00 1488.00 254.00 278.00 D c1Jy\na51 969.00 126.00 226.00 72.00 D c1Jz\na52 2151.00 377.00 111.00 282.00 L c1eI\na53 2223.00 522.00 92.00 80.00 D c1eL\na54 390.00 226.00 322.00 146.00 D c1eM\na55 2891.00 1444.00 86.00 105.00 D c1eO\na56 2245.00 247.00 146.00 289.00 D c1eP\na57 3256.00 1031.00 133.00 268.00 L c1eR\na58 2673.00 555.00 314.00 46.00 D c1eW\na59 2368.00 1087.00 199.00 83.00 D c1eX\na6 33.00 296.00 283.00 210.00 D bef\na60 1330.00 748.00 95.00 169.00 D c1eZ\na61 -21.00 302.00 317.00 65.00 D c1eb\na62 589.00 507.00 107.00 268.00 D c1ec\na63 1120.00 245.00 386.00 186.00 D c1ef\na64 3046.00 1265.00 201.00 148.00 D c1eg\na65 2795.00 1145.00 179.00 76.00 D c1eh\na66 1213.00 597.00 178.00 78.00 D c1ej\na67 2680.00 1638.00 114.00 146.00 D c2Ba\na68 1949.00 182.00 218.00 159.00 D c2Bc\na69 1127.00 1157.00 191.00 114.00 D c2Bf\na7 1542.00 831.00 374.00 97.00 D beg\na70 1051.00 1350.00 54.00 66.00 D c2Bg\na71 745.00 935.00 117.00 155.00 D c2Bh\na72 2402.00 915.00 295.00 168.00 D c2Bl\na73 2684.00 1632.00 381.00 208.00 L c2Bm\na74 2462.00 343.00 335.00 88.00 D c2Bo\na75 240.00 611.00 330.00 275.00 D c2Bp\na76 916.00 1250.00 353.00 122.00 D c2Br\na77 1522.00 439.00 196.00 159.00 D c2Bu\na78 3555.00 178.00 212.00 253.00 L c2By\na79 598.00 488.00 141.00 86.00 D c2C0\na8 302.00 309.00 47.00 107.00 D beh\na80 1004.00 327.00 197.00 175.00 D c2C1\na81 271.00 1171.00 268.00 158.00 L c2C2\na82 1476.00 -40.00 310.00 119.00 L c2C7\na83 1800.00 1432.00 238.00 64.00 L c2C8\na84 1612.00 131.00 81.00 287.00 D c2C9\na85 2102.00 200.00 151.00 209.00 D c2CB\na86 357.00 426.00 192.00 137.00 L c2CD\na87 944.00 285.00 295.00 84.00 D c2CG\na88 965.00 1208.00 306.00 188.00 L c2CJ\na89 2075.00 53.00 380.00 222.00 D c2CL\na9 2388.00 292.00 181.00 198.00 D bel\na90 522.00 999.00 286.00 222.00 D c2CN\na91 -502.00 858.00 109.00 202.00 D c2CQ\na92 2827.00 699.00 74.00 144.00 L c2CR\na93 459.00 838.00 122.00 149.00 D c2CS\na94 2583.00 603.00 350.00 220.00 D c2CU\na95 352.00 -1.00 383.00 259.00 D c2CW\na96 99.00 1715.00 88.00 239.00 D c2CZ\na97 566.00 263.00 161.00 194.00 D c2Cb\na98 2539.00 909.00 122.00 55.00 D c2Cc\na99 3033.00 1598.00 163.00 232.00 L c2Cd\nb0 291.00 87.00 90.00 62.00 D b1Z\nb1 1869.00 1561.00 284.00 131.00 D b1b\nb10 2621.00 370.00 393.00 147.00 D c1J9\nb100 2920.00 300.00 91.00 133.00 D c2DS\nb101 1733.00 857.00 374.00 263.00 D c2DV\nb102 763.00 1581.00 219.00 267.00 L c2DY\nb103 1192.00 55.00 317.00 161.00 D c2DZ\nb104 2021.00 379.00 92.00 163.00 L c2Dd\nb105 2521.00 355.00 329.00 132.00 D c2De\nb106 1847.00 682.00 329.00 70.00 D c2Dh\nb107 1935.00 711.00 71.00 281.00 D c2Di\nb108 2011.00 349.00 195.00 58.00 L c2Dj\nb109 1933.00 252.00 282.00 190.00 L c2Dk\nb11 495.00 1006.00 230.00 170.00 D c1JD\nb110 351.00 327.00 365.00 241.00 D c2Dq\nb111 1590.00 1128.00 287.00 187.00 D c2Dt\nb112 422.00 814.00 188.00 245.00 L c2Du\nb113 2563.00 1017.00 123.00 239.00 D c2Dw\nb114 2449.00 1485.00 202.00 65.00 D c2Dy\nb115 1885.00 155.00 115.00 155.00 L c2Dz\nb116 2645.00 1615.00 48.00 220.00 L c2Bn\nb117 1989.00 582.00 218.00 82.00 D c2E2\nb118 1316.00 1323.00 177.00 186.00 L c2E3\nb119 1521.00 1176.00 369.00 106.00 L c2E6\nb12 2519.00 629.00 91.00 95.00 D bet\nb120 1193.00 1320.00 79.00 55.00 D c2E8\nb121 -4.00 76.00 351.00 292.00 L c2EA\nb122 2212.00 1527.00 321.00 116.00 L c2EC\nb123 3271.00 333.00 135.00 221.00 L c2EE\nb124 664.00 803.00 263.00 122.00 L c2EF\nb125 638.00 1006.00 263.00 128.00 L c2EH\nb126 2484.00 198.00 350.00 89.00 L c2EJ\nb127 2443.00 841.00 209.00 103.00 L c2EN\nb128 439.00 613.00 71.00 122.00 L c2EP\nb129 163.00 886.00 376.00 75.00 L c2EQ\nb13 283.00 841.00 199.00 130.00 D c1JB\nb130 1267.00 583.00 276.00 278.00 L c2ER\nb131 1052.00 790.00 362.00 176.00 L c2EW\nb132 2352.00 1133.00 99.00 276.00 L c2EY\nb133 -118.00 1420.00 189.00 73.00 L c2EZ\nb134 1351.00 1056.00 135.00 163.00 L c2Ec\nb135 3167.00 712.00 278.00 253.00 L c2Ee\nb136 2494.00 -61.00 242.00 57.00 L c2Ef\nb137 1475.00 1346.00 147.00 169.00 D c2Eh\nb138 2890.00 717.00 113.00 262.00 L c2Ek\nb139 2671.00 1623.00 67.00 220.00 D c2Em\nb14 2815.00 205.00 334.00 128.00 D c1JE\nb140 852.00 645.00 94.00 153.00 D c2En\nb141 696.00 675.00 377.00 160.00 L c2Eo\nb142 1969.00 572.00 180.00 46.00 L c2Ep\nb143 1356.00 1042.00 330.00 199.00 L c2Er\nb144 1938.00 135.00 339.00 147.00 L c2Et\nb145 2524.00 1673.00 201.00 161.00 L c2Ev\nb146 2053.00 1359.00 44.00 225.00 L c2Ex\nb147 890.00 655.00 157.00 300.00 D c2Ey\nb148 1754.00 678.00 290.00 282.00 D c2Ez\nb149 2008.00 325.00 311.00 298.00 L c2F0\nb15 955.00 473.00 237.00 285.00 D c1JH\nb150 1868.00 1189.00 344.00 164.00 L c2F1\nb151 661.00 412.00 218.00 195.00 L c2F2\nb152 563.00 326.00 239.00 265.00 L c2F3\nb153 1908.00 149.00 273.00 156.00 D c2F4\nb154 2145.00 357.00 72.00 217.00 L c2F6\nb155 2064.00 460.00 240.00 269.00 L c2F7\nb156 2371.00 90.00 189.00 162.00 L c2FA\nb157 2887.00 1386.00 388.00 246.00 L c2FB\nb158 1009.00 1218.00 242.00 239.00 L c2FE\nb159 2602.00 1286.00 171.00 175.00 L c2FH\nb16 1872.00 1764.00 198.00 150.00 D c1JQ\nb160 1680.00 196.00 284.00 51.00 L c2FJ\nb161 1977.00 1320.00 266.00 226.00 L c2FM\nb162 2222.00 358.00 209.00 40.00 L c2FO\nb163 2121.00 1393.00 101.00 269.00 L c2FP\nb164 1154.00 545.00 302.00 274.00 L c2FQ\nb165 839.00 339.00 221.00 140.00 L c2FS\nb166 1144.00 1023.00 224.00 242.00 D c2FT\nb167 550.00 720.00 249.00 206.00 L c2FW\nb168 2547.00 1056.00 218.00 287.00 L c2FY\nb169 1748.00 1078.00 303.00 94.00 L c2FZ\nb17 2767.00 648.00 213.00 164.00 D c1JR\nb170 2011.00 247.00 379.00 160.00 L c2Fa\nb171 2138.00 1136.00 59.00 262.00 L c2Fb\nb172 1482.00 647.00 327.00 125.00 L c2Fc\nb173 498.00 203.00 391.00 98.00 L c2Ff\nb174 1677.00 418.00 363.00 183.00 L c2Fh\nb18 2235.00 268.00 224.00 274.00 D c1JW\nb19 2023.00 1181.00 372.00 208.00 D c1Jc\nb2 69.00 837.00 221.00 261.00 D b1d\nb20 2699.00 618.00 342.00 265.00 D c1Jd\nb21 2877.00 1337.00 305.00 295.00 D c1Je\nb22 2925.00 1043.00 252.00 115.00 D c1Ji\nb23 254.00 647.00 217.00 266.00 D c1Jk\nb24 1811.00 709.00 364.00 238.00 D c1Jl\nb25 1289.00 1553.00 274.00 192.00 D c1Jq\nb26 1526.00 1760.00 395.00 232.00 D c1Jr\nb27 2913.00 251.00 66.00 54.00 D c1Js\nb28 2471.00 1128.00 367.00 139.00 D c1Jt\nb29 1782.00 126.00 336.00 271.00 D c1Jv\nb3 2434.00 841.00 207.00 191.00 D beZ\nb30 2191.00 44.00 162.00 44.00 D c1K0\nb31 473.00 792.00 167.00 118.00 D c1K1\nb32 1784.00 1064.00 142.00 169.00 D c1K2\nb33 2547.00 1415.00 96.00 50.00 L c1eJ\nb34 132.00 266.00 186.00 50.00 D c1eK\nb35 1185.00 1112.00 270.00 198.00 D c1eN\nb36 1334.00 559.00 74.00 218.00 D c1eQ\nb37 1790.00 163.00 203.00 106.00 D c1eS\nb38 2337.00 1558.00 367.00 274.00 D c1eT\nb39 2695.00 820.00 269.00 268.00 D c1eU\nb4 804.00 676.00 280.00 42.00 D bea\nb40 448.00 657.00 155.00 251.00 D c1eV\nb41 540.00 1368.00 200.00 292.00 D c1eY\nb42 1876.00 1302.00 314.00 282.00 L c1ea\nb43 503.00 939.00 234.00 195.00 D c1ed\nb44 2610.00 939.00 336.00 82.00 L c1ee\nb45 1602.00 909.00 199.00 76.00 D c1ei\nb46 2456.00 -536.00 54.00 165.00 L c2BY\nb47 3197.00 296.00 350.00 299.00 D c2BZ\nb48 1554.00 928.00 153.00 140.00 D c2Bb\nb49 1260.00 1244.00 279.00 233.00 D c2Bd\nb5 2302.00 440.00 229.00 205.00 D beb\nb50 449.00 262.00 278.00 136.00 L c2Be\nb51 1186.00 794.00 274.00 285.00 L c2Bi\nb52 -347.00 1673.00 171.00 62.00 L c2Bj\nb53 1961.00 466.00 134.00 41.00 D c2Bk\nb54 1892.00 410.00 367.00 88.00 D c2Bq\nb55 2477.00 264.00 296.00 160.00 D c2Bs\nb56 449.00 528.00 350.00 46.00 D c2Bt\nb57 1609.00 811.00 319.00 212.00 D c2Bv\nb58 999.00 586.00 249.00 177.00 D c2Bw\nb59 400.00 1309.00 88.00 223.00 L c2Bx\nb6 756.00 244.00 73.00 105.00 D bec\nb60 1892.00 1189.00 46.00 155.00 D c2Bz\nb61 301.00 810.00 76.00 145.00 D c2C3\nb62 2801.00 774.00 66.00 169.00 D c2C4\nb63 -245.00 176.00 236.00 159.00 D c2C5\nb64 3269.00 901.00 255.00 162.00 L c2C6\nb65 2446.00 1547.00 244.00 152.00 L c2CA\nb66 231.00 1176.00 167.00 97.00 L c2CC\nb67 1250.00 792.00 336.00 155.00 L c2CE\nb68 2380.00 1112.00 295.00 178.00 L c2CF\nb69 1255.00 466.00 324.00 136.00 L c2CH\nb7 774.00 243.00 210.00 154.00 D bei\nb70 2294.00 372.00 221.00 140.00 D c2CI\nb71 3058.00 1226.00 62.00 97.00 L c2CK\nb72 648.00 933.00 89.00 287.00 L c2CM\nb73 2694.00 1098.00 253.00 174.00 D c2CO\nb74 1522.00 -92.00 55.00 130.00 D c2CP\nb75 1604.00 150.00 53.00 213.00 D c2CT\nb76 1680.00 748.00 281.00 298.00 D c2CV\nb77 1949.00 1167.00 118.00 59.00 D c2CX\nb78 -12.00 1020.00 101.00 265.00 D c2CY\nb79 1428.00 1006.00 271.00 140.00 L c2Ca\nb8 2184.00 1240.00 241.00 164.00 D bej\nb80 2068.00 1379.00 387.00 180.00 D c2Cg\nb81 2511.00 1045.00 374.00 226.00 L c2Ch\nb82 1283.00 860.00 77.00 108.00 L c2Cl\nb83 1314.00 872.00 279.00 173.00 L c2Cn\nb84 -124.00 1551.00 197.00 229.00 D c2Cq\nb85 2671.00 1186.00 109.00 239.00 D c2Ct\nb86 2818.00 1085.00 87.00 165.00 D c2Cy\nb87 2222.00 279.00 105.00 270.00 L c2D0\nb88 -174.00 169.00 148.00 78.00 L c2D1\nb89 2508.00 253.00 66.00 173.00 L c2D2\nb9 1961.00 221.00 229.00 150.00 D bek\nb90 1585.00 -105.00 325.00 285.00 L c2D4\nb91 925.00 1112.00 246.00 103.00 D c2D7\nb92 2015.00 850.00 107.00 163.00 D c2D8\nb93 798.00 1567.00 188.00 273.00 D c2D9\nb94 -92.00 1740.00 138.00 141.00 D c2DC\nb95 767.00 1068.00 79.00 285.00 L c2DG\nb96 2368.00 779.00 158.00 288.00 D c2DL\nb97 2889.00 203.00 226.00 150.00 D c2DM\nb98 541.00 193.00 352.00 160.00 L c2DO\nb99 1817.00 1414.00 147.00 208.00 D c2DQ\n--\na19 a52 b33 a57 b42 b44 b46 b50 b51 b52 a73 b116 b59 a78 a81 b64 a82 a83 b65 b66 a86 b67 b68 b69 a88 b71 b72 a92 b79 a99 b81 b82 a105 b83 a108 a110 a111 a114 b87 b88 b89 a115 b90 a116 a117 a118 a121 a122 b95 a123 a124 a125 a126 b98 a129 a132 a175 b102 a135 b104 a136 a137 b108 b109 a138 a139 a140 a142 b112 a145 b115 a147 b118 a149 a150 b119 b121 a153 b122 a154 b123 b124 a155 b125 a156 b126 a157 a158 a159 b127 b128 b129 b130 a162 a164 b131 b132 b133 a166 b134 a168 b135 b136 a169 a170 a171 b138 b141 b142 a173 b143 a174 b144 a176 b145 a177 b146 b149 b150 b151 b152 a178 b154 b155 a179 b156 b157 a181 a182 b158 b159 b160 a186 b161 a188 b162 b163 b164 a189 b165 a190 a191 b167 a192 b168 b169 b170 b171 b172 a193 a194 b173 a195 b174 a196 a197 a198"
+      },
+      "converged": true,
+      "elements": 374,
+      "diffSample": []
+    }
+  }
+}
