@@ -29,7 +29,9 @@
   padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow: clip; color: var(--ink);
 }
 :where(.node-layer) :where(.bl-cardhead) { display: flex; align-items: center; gap: 8px; }
-:where(.node-layer) :where(.bl-cardhead b) { font-weight: 600; font-size: 14px; white-space: nowrap; }
+:where(.node-layer) :where(.bl-cardhead b) { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* The head's facts ("16:9 · 7 shots · 24 s") stay on one line beside the title, never under Open. */
+:where(.node-layer) :where(.bl-cardhead > .pt-mono) { white-space: nowrap; flex: none; }
 :where(.node-layer) :where(.pt-grow) { flex: 1; }
 :where(.node-layer) :where(.pt-mono) { font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
 :where(.node-layer) :where(.pt-mention) { color: var(--tool-ink); }
@@ -37,8 +39,12 @@
 :where(.node-layer) :where(.bl-excerpt.faint, .bl-meta) { font-size: 12px; color: var(--ink3); }
 :where(.node-layer) :where(.bl-av) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; font-size: 11.5px; }
 :where(.node-layer) :where(.bl-avhead, .bl-avcell) { padding: 6px 8px; }
+/* A long row ends in an ellipsis after three lines instead of being cut mid-letter by the card. */
+:where(.node-layer) :where(.bl-avcell) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; min-width: 0; overflow-wrap: anywhere; }
 :where(.node-layer) :where(.bl-strip) { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-:where(.node-layer) :where(.bl-frame) { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+:where(.node-layer) :where(.bl-frame) { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 11px; min-width: 0; }
+:where(.node-layer) :where(.bl-frame figcaption) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:where(.node-layer) :where(.bl-more .bl-noframe) { font-family: var(--f-mono); font-size: 12px; color: var(--ink2); }
 :where(.node-layer) :where(.bl-frame img, .bl-noframe) { width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); font-size: 10px; color: var(--ink3); }
 :where(.node-layer) :where(.bl-line, .bl-atwork) { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); }
 :where(.node-layer) :where(.bl-videorow) { display: flex; gap: 10px; }

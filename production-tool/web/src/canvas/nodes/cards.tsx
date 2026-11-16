@@ -20,6 +20,7 @@ import { CardChromeContext, type Agent, type CardKind } from './cardChrome'
 import { useBlobUrl } from '../../ui/hooks'
 import { useProjectName } from '../../ui/useDownload'
 import { shotsWords } from '../../jobs/runs'
+import { stripOf } from './strip'
 
 /** @names in blue (mock Main). */
 const withRefs = (t: string): ReactNode[] => t.split(/(@[a-z][a-z0-9_]*)/g).map((p, i) => (p.startsWith('@') ? <span key={i} className="pt-mention">{p}</span> : p))
@@ -32,7 +33,7 @@ export function Card({ icon, title, meta, extra, onOpen, children, style, classN
     <article className={`bl-card ${className}`} style={style}>
       <div className="bl-cardhead">
         {chrome.icon(icon)}
-        <b>{title}</b>
+        <b title={title}>{title}</b>
         {meta}
         <span className="pt-grow" />
         {extra}
@@ -125,6 +126,7 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
   const behind = staleList(doc).filter((m) => (m.target.kind === 'frame' && mine.has(doc.frames[m.target.id]?.shot_id ?? '')) || (m.target.kind === 'shot' && mine.has(m.target.id))).length
   const planning = runningOn(doc, 'shot_list', 'storyboard', sb?.id)
   const drawingIdx = shots.findIndex((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
+  const strip = stripOf(shots.length)
   return (
     <Card icon="storyboard" title={`Storyboard · ${chrome.title(sb?.title, 'Storyboard', project)}`}
       meta={<span className="pt-mono">{sb?.ratio ?? '16:9'} · {shots.length} shots · {Math.round(total)} s</span>}
@@ -132,7 +134,8 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
       <InputsStrip nodeId={sb?.id} />
       {shots.length ? (
         <div className="bl-strip">
-          {shots.slice(0, 6).map((s, i) => <FrameTile key={s.id} shot={s} n={i + 1} drawing={i === drawingIdx} />)}
+          {shots.slice(0, strip.shown).map((s, i) => <FrameTile key={s.id} shot={s} n={i + 1} drawing={i === drawingIdx} />)}
+          {strip.more > 0 && <figure className="bl-frame bl-more" title={`${strip.more} more shots: open the Storyboard to see them all`}><span className="bl-noframe">+{strip.more}</span><figcaption>more</figcaption></figure>}
         </div>
       ) : <Start kind="storyboard" id={sb?.id} fallback={<p className="bl-excerpt faint">No shots yet · write the script, then plan shots.</p>} />}
       {planning ? <AtWork agent="dex" line="Dex is planning the shots from the script" />
