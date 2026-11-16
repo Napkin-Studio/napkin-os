@@ -331,7 +331,7 @@ export class SelectTool {
   /** A marquee started on the empty inside of the entered container: it selects only members. */
   private marqueeIn: Set<string> | null = null
   /** The last press, for double-press detection: when, where (screen px at its zoom), and by what. */
-  private lastPress: { t: number; p: Pt; zoom: number; by?: PointerKind } | null = null
+  private lastPress: { t: number; ev: boolean; p: Pt; zoom: number; by?: PointerKind } | null = null
 
   private readonly above: ((x: number, y: number) => ElementRecord | undefined) | undefined
 
@@ -472,13 +472,16 @@ export class SelectTool {
     return !!(this.preview || this.scaling || this.resizing || this.marquee || this.lasso)
   }
 
-  /** Is this press the second of a double press (time and screen distance, any pointer)? Records it either way. */
-  private doublePress(p: Pt, zoom: number, by?: PointerKind): boolean {
-    const t = this.now()
+  /** Is this press the second of a double press (time and screen distance, any pointer)? Records it either way.
+   *  `at`: the pointer event's own time. Judged on event times when both presses have one, so a busy main thread
+   *  that handles the second press late still sees a double press; else on handling time (this.now()). */
+  private doublePress(p: Pt, zoom: number, by?: PointerKind, at?: number): boolean {
+    const ev = at !== undefined
+    const t = ev ? at : this.now()
     const last = this.lastPress
-    const twice = !!last && t - last.t <= DOUBLE_PRESS_MS && (last.by ?? 'mouse') === (by ?? 'mouse')
+    const twice = !!last && last.ev === ev && t - last.t >= 0 && t - last.t <= DOUBLE_PRESS_MS && (last.by ?? 'mouse') === (by ?? 'mouse')
       && Math.hypot((p.x - last.p.x) * zoom, (p.y - last.p.y) * zoom) <= DOUBLE_PRESS_PX
-    this.lastPress = twice ? null : { t, p, zoom, by }
+    this.lastPress = twice ? null : { t, ev, p, zoom, by }
     return twice
   }
 
@@ -802,11 +805,11 @@ export class SelectTool {
     return r.moves(found, this)
   }
 
-  press(p: Pt, opts: { shift?: boolean; by?: PointerKind; zoom?: number } = {}) {
+  press(p: Pt, opts: { shift?: boolean; by?: PointerKind; zoom?: number; t?: number } = {}) {
     this.flushNudge()
     const zoom = opts.zoom ?? 1
     const by = opts.by ?? 'mouse'
-    const at: PressAt = { p, zoom, shift: !!opts.shift, by, twice: this.doublePress(p, zoom, by) }
+    const at: PressAt = { p, zoom, shift: !!opts.shift, by, twice: this.doublePress(p, zoom, by, opts.t) }
     const { row: r, found } = this.resolve(at)
     this.pressed = r.name
     r.start(this, found, at)
