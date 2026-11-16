@@ -151,7 +151,8 @@ describe("a take's timing and windows", () => {
 // ── The driver ──────────────────────────────────────────────────────────────
 
 const on: Config = { ...CONFIGS.live, flags: { ...CONFIGS.live.flags, connectedVideo: true } }
-const off: Config = CONFIGS.live
+// The live config has connected video on since the full test (2026-11-04); "off" is it without the flag.
+const off: Config = { ...CONFIGS.live, flags: { ...CONFIGS.live.flags, connectedVideo: undefined } }
 
 /** Shots of `lengths` on the main storyboard, each with a picked frame, in one scene, same setup. */
 function film(lengths: number[], extra: (i: number) => Partial<Shot> = () => ({}), prep?: (d: ProductionDocument, shots: Shot[]) => void) {

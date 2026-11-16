@@ -211,12 +211,18 @@ export async function removeMention(store: ModelStore, shotId: string, targetId:
   await store.flush()
 }
 
-/** Prose blocks from Fountain blocks: @words that name a ref become mentions (model/diff.ts). */
-export function fountainProse(d: Doc, blocks: { type: string; text: string }[]): Prose {
+/** Prose blocks from Fountain blocks: @words that name a ref become mentions (model/diff.ts); a dual
+ *  dialogue block carries the `dual` mark on its words (clan-store Dual), so a plain one is untouched. */
+export function fountainProse(d: Doc, blocks: { type: string; text: string; dual?: boolean }[]): Prose {
   const content: PMNode[] = []
   for (const b of blocks) {
     const p = proseFromText(d, [{ type: b.type, text: b.text }])
-    content.push(...(p.content ?? []))
+    for (const node of p.content ?? []) {
+      if (b.dual && node.type === 'dialogue' && node.content?.length) {
+        node.content = node.content.map((n) => (n.type === 'text' ? { ...n, marks: [...(n.marks ?? []), { type: 'dual' }] } : n))
+      }
+      content.push(node)
+    }
   }
   return { type: 'doc', content }
 }

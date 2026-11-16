@@ -10,8 +10,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
-import { isMoving } from '../jobs/select'
-import { mainVideo, openVideo, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { isActive } from '../jobs/runner'
+import { purposeOf } from '../model/purpose'
+import { whoIsWorking } from '../ui/agents/cast'
+import { jobsList, mainVideo, openVideo, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
 import { nodeTitle } from '../ui/chrome/panels'
 import { useProjectName } from '../ui/useDownload'
 import { Float } from '../ui/Float'
@@ -20,7 +22,7 @@ import { Bin } from './Bin'
 import { ChangeDrawer, type ChangeOpen } from './ChangeDrawer'
 import { EditRoom, RenderAd } from './EditRoom'
 import { MakeRoom } from './MakeRoom'
-import { boxName, genTitle, roomBoxes, roomGens, type Box, type Gen } from './model'
+import { roomBoxes, roomGens, type Box, type Gen } from './model'
 import './rooms.css'
 
 export type RoomName = 'make' | 'edit'
@@ -101,7 +103,13 @@ export function Rooms() {
   }, [change, sound, back])
 
   if (!controls.video) return <div className="panel"><div className="empty-state"><b>Video is off right now.</b></div></div>
-  if (!data) return <div className="panel"><div className="empty-state"><b>No video here yet.</b></div></div>
+  if (!data) return (
+    <div className="panel"><div className="empty-state">
+      <b>No video here yet.</b>
+      <p>Select a storyboard or script on the canvas and choose Make video.</p>
+      <button type="button" className="btn" onClick={back}>‹ Back to the canvas</button>
+    </div></div>
+  )
 
   const openChange = (c: ChangeOpen) => {
     setChange(c)
@@ -168,20 +176,22 @@ function RoomsBar({ data, room, onRoom, onBack, sound, onSound, primary }: {
 
 /** The takes being made, in plain states. No prices: credits are only in History. */
 function JobsPill({ data }: { data: RoomData }) {
+  void data
   const doc = useDoc()
   const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
-  const making = data.gens.filter((g) => g.state === 'making')
-  const n = making.length
-  const stateWords = (g: Gen) => {
-    const j = g.jobId ? doc.jobs[g.jobId] : undefined
-    if (!j) return 'Making'
-    if (j.state === 'queued' || j.state === 'submitting') return 'Sending'
-    if (j.state === 'fetching' || j.state === 'validating') return 'Checking'
-    if (j.state === 'completed') return 'Ready'
-    return isMoving(doc, j.id) ? 'Making' : 'Waiting'
+  // Everything being made — frames AND clips — read from the document's active jobs, the same source the
+  // crew status line reads, so the pill and that line always agree. The old pill counted only clip takes
+  // in state 'making', so a queued clip (or a frame job, which the frame-first flow now makes) showed as
+  // "Nothing is being made" while a clip was in fact starting (owner 2026-11-04).
+  const active = jobsList(doc).filter((j) => isActive(j.state))
+  const n = active.length
+  const lineOf = (j: (typeof active)[number]) => {
+    const shotId = j.node.kind === 'shot' ? j.node.id : undefined
+    return whoIsWorking(j, j.state, purposeOf(j) ?? undefined, shotId ? shotNumber(doc, shotId) || undefined : undefined).line
   }
+  const word = (s: string) => (s === 'queued' || s === 'submitting' ? 'Sending' : s === 'fetching' || s === 'validating' ? 'Checking' : s === 'completed' ? 'Ready' : 'Making')
   return (
     <>
       <button ref={ref} type="button" className={`rm-jobs ${n ? 'busy' : ''}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}
@@ -191,10 +201,10 @@ function JobsPill({ data }: { data: RoomData }) {
       </button>
       <Float anchor={ref} open={open} onClose={close} role="dialog" label="Being made" align="end" className="rm-jobsfloat">
         <div className="rm-floathead">Being made</div>
-        {making.map((g) => (
-          <div key={g.id} className="rm-jobrow">
-            <span className="rm-clamp1" title={genTitle(g, data.boxes)}>{boxName(data.boxes.find((b) => b.key === g.boxKey) ?? { n: 0, endCard: false })} · v{g.version}</span>
-            <span className="rm-pill">{stateWords(g)}</span>
+        {active.map((j) => (
+          <div key={j.id} className="rm-jobrow">
+            <span className="rm-clamp1" title={lineOf(j)}>{lineOf(j)}</span>
+            <span className="rm-pill">{word(j.state)}</span>
           </div>
         ))}
         {!n && <p className="rm-note">Nothing is being made.</p>}

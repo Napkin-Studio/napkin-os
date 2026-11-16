@@ -61,6 +61,21 @@ describe('the element cycle', () => {
     expect(types(e)).toEqual(['character', 'dialogue', 'action'])
   })
 
+  it('a transition and centred block are reachable and Tab steps on from them', () => {
+    const e = editor('scene')
+    // The element bar sets the block type; from a transition, Tab → Action and Shift-Tab → Dialogue.
+    e.commands.setContent({ type: 'doc', content: [{ type: 'action', content: [{ type: 'text', text: 'CUT TO:' }] }] })
+    e.commands.focus('end')
+    e.chain().focus().setNode('transition').run()
+    expect(types(e)).toEqual(['transition'])
+    press(e, 'Tab')
+    expect(types(e)).toEqual(['action'])
+    e.chain().focus().setNode('centered').run()
+    expect(types(e)).toEqual(['centered'])
+    press(e, 'Tab', { shiftKey: true })
+    expect(types(e)).toEqual(['dialogue'])
+  })
+
   it('Escape, then Tab, leaves the editor (Tab is not taken)', () => {
     const e = editor('scene')
     e.commands.focus()

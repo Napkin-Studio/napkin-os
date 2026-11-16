@@ -368,6 +368,11 @@ export const ownEngine: CanvasEngine = {
       }
     }
     live.addEventListener('wheel', onWheel, { passive: false })
+    // The native context menu would fire on a right-press and tear the gesture down before it moves
+    // anything, so a right-drag never completed. Suppress it: a right-press runs the same press/drag/
+    // release as the left button (input/router.ts), so right-drag moves like left-drag.
+    const onContextMenu = (e: MouseEvent) => e.preventDefault()
+    live.addEventListener('contextmenu', onContextMenu)
     // Keys on the canvas: this person's undo and redo, and Delete. Never while an IME is composing.
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || e.keyCode === 229) return
@@ -439,6 +444,7 @@ export const ownEngine: CanvasEngine = {
       cancelAnimationFrame(ticking)
       for (const [name, fn] of handlers) live.removeEventListener(name, fn as EventListener)
       live.removeEventListener('wheel', onWheel)
+      live.removeEventListener('contextmenu', onContextMenu)
       host.removeEventListener('keydown', onKey)
       renderer.destroy()
       adapter.useRenderer(null)

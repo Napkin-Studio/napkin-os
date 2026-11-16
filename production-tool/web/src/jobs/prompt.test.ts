@@ -11,7 +11,7 @@ import { mainScript, mainStoryboard, mainVideo, refsList, scenesOf } from '../mo
 import type { ModelStore } from '../model/store'
 import { MockRelay } from '../relay/mock'
 import { addScene } from '../script/edits'
-import { addShots, asset, id, job, MAYA, modelStore } from '../test/model'
+import { addShots, asset, id, job, MAYA, modelStore, seedStages } from '../test/model'
 import type { FrameDeps } from './frames'
 import {
   isPastedScript, nameMadePicture, pictureFromWords, pictureJob, promptRefs, scriptFromLine, storyboardFromLine, suggestName,
@@ -24,6 +24,7 @@ async function project(): Promise<{ store: ModelStore; deps: FrameDeps; sent: Se
   const store = modelStore()
   await store.create(MAYA, 'First Light')
   await store.flush()
+  await seedStages(store)
   const relay = new MockRelay({ renderer: { async render() { return [] } }, persistKey: null })
   const sent: Sent[] = []
   const runner = {
@@ -63,20 +64,25 @@ async function refLink(store: ModelStore, refId: string, to: LinkEndpoint) {
 }
 
 describe('script from a line', () => {
-  it('writes the line as the first scene\'s words and asks Skye for a draft on that scene', async () => {
+  it('carries the line as the write job\'s instruction, never planted in the scene (owner bug 2026-11-03)', async () => {
     const { store, deps, sent } = await project()
     const scriptId = mainScript(doc(store))!.id
     const r = await scriptFromLine(deps, store, scriptId, 'A runner drinks Lumen water at dawn on the cliffs.')
     expect('jobId' in r).toBe(true)
     const scene = scenesOf(doc(store), scriptId)[0]
-    expect(scene.text).toContain('A runner drinks Lumen water at dawn')
+    // The prompt is the brief, not the scene's prose: the scene stays empty so the draft is not
+    // diffed against the prompt.
+    expect(scene.text?.trim() ?? '').toBe('')
     expect(sent).toHaveLength(1)
     expect(sent[0].op).toBe('write')
     expect(sent[0].purpose).toEqual({ for: 'write', scriptId })
     const w = sent[0].input.write!
     expect(w.intent).toBe('draft')
+    expect(w.mode).toBe('draft')
     expect(w.target).toEqual({ kind: 'scene', id: scene.id })
-    expect(w.lines.map((l) => l.text).join(' ')).toContain('A runner drinks Lumen water')
+    expect(w.instruction).toContain('A runner drinks Lumen water')
+    // The item's own lines stay empty — the brief is never in them.
+    expect(w.lines.map((l) => l.text).join(' ').trim()).toBe('')
   })
 
   it('imports a pasted Fountain script and starts nothing', async () => {

@@ -116,6 +116,9 @@
 .rm-chip.on, .rm-chip.on:hover:not(:disabled) { background: var(--plan); color: var(--paper); border-color: var(--plan); font-weight: 600; }
 .rm-chip.static { cursor: default; min-height: 32px; }
 .rm-chip.was:not(.on) { border-style: dashed; }
+/* Inherited from the script/storyboard: shown so a linked character reads as used, not removable here. */
+.rm-chip.auto { border-style: dashed; color: var(--faint); }
+.rm-inherited { margin-top: 6px; align-items: center; }
 .rm-bin .rm-chip { padding: 0 12px; }
 .rm-bingrid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-content: start; padding: 2px; }
 @media (max-width: 1279px) { .rm-bingrid { grid-template-columns: minmax(0, 1fr); } }

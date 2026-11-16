@@ -68,14 +68,19 @@ const nameKey = (store: DocumentStore, key: string, how: 'person' | 'system' = '
     d.keys[k] = { id: k, v: 1, field_v: {}, key, role: 'prop' }
   }, `name ${key}`)
 
-/** The script's words: one scene with this text (written through the text bus). */
+/** The script's words: one scene with this text (written through the text bus). A new project is blank
+ *  (owner 2026-11-03), so the script is added first when there is none, as a person adds the node. */
 const writeScript = (store: DocumentStore, text: string) => updateDoc(store, (d) => {
   const sc = scenesOf(d)[0]
-  if (sc) sc.text = text
-  else {
-    const sid = id('scene')
-    d.scenes[sid] = { id: sid, v: 1, field_v: {}, script_id: mainScript(d)!.id, rank: 'a0', heading: 'INT. CITY - DAY', text }
+  if (sc) { sc.text = text; return }
+  let script = mainScript(d)
+  if (!script) {
+    const scriptId = id('script')
+    d.scripts[scriptId] = { id: scriptId, v: 1, field_v: {}, title: 'Script', target_s: 15 }
+    script = d.scripts[scriptId]
   }
+  const sid = id('scene')
+  d.scenes[sid] = { id: sid, v: 1, field_v: {}, script_id: script.id, rank: 'a0', heading: 'INT. CITY - DAY', text }
 }, 'write')
 
 describe('the project index', () => {

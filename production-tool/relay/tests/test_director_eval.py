@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from director.director import (Director, DirectorError, _donors_are_objects,
-                               _one_character_line, _tag_anchors, _within_budget)
+                               _one_character_line, _tag_anchors, _views_are_one, _within_budget)
 from eval.director_eval import load, table, totals
 from providers import load_sheets
 
@@ -110,6 +110,40 @@ def test_one_line_names_every_picture_of_the_character():
                      "The character is @a_back, exactly as in that picture. Full-bleed."}
     _one_character_line(job)
     assert job["prompt"] == "A sofa. The character is @a_front, @a_side and @a_back, exactly as in those pictures. Full-bleed."
+
+
+def _sha(c: str) -> str:
+    return "sha256:" + c * 64
+
+
+def test_views_of_one_character_are_said_as_one_character():
+    # 2026-11-04: @bolt's four views, listed as four characters, came back as four robots.
+    views = [("bolt_front", "1"), ("bolt_three-quarter", "2"), ("bolt_side", "3"), ("bolt_back", "4")]
+    payload = {"refs": [{"name": n, "role": "character", "asset": {"sha256": _sha(c)}} for n, c in views]}
+    wire = ["bolt_front", "bolt_three_quart", "bolt_side", "bolt_back"]
+    job = {"prompt": "A workshop. The character is @bolt_front, @bolt_three_quart, @bolt_side and @bolt_back, exactly as in those pictures. Full-bleed.",
+           "refs": [{"name": w, "sha256": _sha(c), "role": "character"} for w, (_, c) in zip(wire, views)]}
+    _views_are_one(job, "frame", payload)
+    assert "views of one single character" in job["prompt"] and "exactly one of it" in job["prompt"]
+    assert job["prompt"].startswith("A workshop. The character is the one in @bolt_front, @bolt_three_quart, @bolt_side and @bolt_back")
+    assert job["prompt"].endswith("Full-bleed.")
+
+
+def test_two_different_characters_stay_two():
+    payload = {"refs": [{"name": "bolt_front", "asset": {"sha256": _sha("1")}}, {"name": "maya_front", "asset": {"sha256": _sha("2")}}]}
+    job = {"prompt": "The character is @bolt_front and @maya_front, exactly as in those pictures.",
+           "refs": [{"name": "bolt_front", "sha256": _sha("1"), "role": "character"}, {"name": "maya_front", "sha256": _sha("2"), "role": "character"}]}
+    before = job["prompt"]
+    _views_are_one(job, "frame", payload)
+    assert job["prompt"] == before
+
+
+def test_views_said_elsewhere_get_the_line_added():
+    payload = {"refs": [{"name": "bolt_front", "asset": {"sha256": _sha("1")}}, {"name": "bolt_side", "asset": {"sha256": _sha("2")}}]}
+    job = {"prompt": "@bolt_front rolls out of the door.",
+           "refs": [{"name": "bolt_front", "sha256": _sha("1"), "role": "character"}, {"name": "bolt_side", "sha256": _sha("2"), "role": "character"}]}
+    _views_are_one(job, "clip", payload)
+    assert job["prompt"] == "@bolt_front rolls out of the door. @bolt_front and @bolt_side are views of one single character from different sides: show exactly one of it, never copies."
 
 
 # ── Change this frame (features/frame-change-edit.clan) ──────────────────────────────────────
@@ -226,15 +260,21 @@ def test_a_reply_that_swaps_samurai_for_one_view_fails_the_eval():
 
 def test_the_v9_cases_hold_the_passthrough_to_each_models_pictures():
     """Clips that carry characters (features/runway-video-models.clan): with no model, the passthrough
-    already sends exactly the pictures each case's model carries, so the relay's fallback keeps the baby."""
+    sends exactly the pictures each case's model carries, so the relay's fallback keeps the baby. The one
+    model that cannot carry a character without a frame (Veo) refuses instead of sending it as words (the
+    owner's @on ad came out a generic person, 2026-11): the web makes a storyboard frame first."""
     data = load()
     v9 = {c["id"] for c in data["cases"] if c.get("since") == "director.v9"}
     assert v9 == {"clip_hailuo_refs_no_frame", "clip_omni_refs_no_frame", "clip_kling_o3_frame_refs",
                   "clip_veo_no_frame_words", "clip_edit_kling_adds_hat"}
     rows = table(data, ["passthrough"])["passthrough"]
-    for cid in v9:
+    refuse = {c["id"] for c in data["cases"] if c.get("expect_refuse")}
+    assert refuse == {"clip_veo_no_frame_words"}
+    for cid in v9 - refuse:
         assert rows[cid]["valid"] and rows[cid]["exact_refs"], (cid, rows[cid])
         assert rows[cid].get("frame", True), (cid, rows[cid])
+    for cid in refuse:
+        assert rows[cid]["valid"] is False, (cid, rows[cid])
 
 
 def test_a_v9_answer_that_sends_the_wrong_pictures_scores_so():

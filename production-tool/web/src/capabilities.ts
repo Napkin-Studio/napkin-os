@@ -151,6 +151,25 @@ export function modelChoicesFor(op: Op, config: Config, sheets: Sheets = SHEETS)
   return out
 }
 
+// ── Clip reference capacity (features/runway-video-models.clan) ──
+
+/** How many reference pictures a clip can actually carry on a model, given whether it has a first frame.
+ *  This is the VIDEO capacity, not the image-ref ceiling: a model carries refs beside a frame only where
+ *  video.firstFrameWithRefs (Kling O3), and with no frame only where video.refsWithoutFrame (Hailuo 3,
+ *  Omni Flash 1.1, WAN 3, Seedance). Veo carries none either way. Mirrors the relay's director._refs_go,
+ *  so the UI never promises refs the clip then drops. `choice` absent: the routed first clip model. */
+export function clipRefCapacity(choice: ModelChoice | undefined, hasFrame: boolean, config?: Config, sheets: Sheets = SHEETS): { carries: boolean; max: number } {
+  const pick = choice ?? (config ? modelChoicesFor('clip', config, sheets)[0] : undefined)
+  if (!pick) return { carries: false, max: 0 }
+  const sheet = sheets[pick.provider]
+  const e = opEntries('clip', pick.provider, sheets).find((x) => x.model === pick.model)
+  if (!sheet || !e) return { carries: false, max: 0 }
+  const video = ('video' in e && e.video) || sheet.video
+  const refs = ('refs' in e && e.refs) || sheet.refs
+  const carries = hasFrame ? !!video.firstFrameWithRefs : !!video.refsWithoutFrame
+  return { carries, max: carries ? (refs.maxCharacter ?? refs.max ?? 0) : 0 }
+}
+
 // ── Clip quality (features/clip-quality.clan) ──
 
 export const QUALITY_NAMES: Record<ClipQuality, string> = { draft: 'Draft', standard: 'Standard', final: 'Final' }

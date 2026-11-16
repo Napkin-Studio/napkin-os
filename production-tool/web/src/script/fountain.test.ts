@@ -1,6 +1,8 @@
 // Fountain import (features/script-editor.clan). Every fixture here is ours.
 
 import { describe, expect, it } from 'vitest'
+import type { ProductionDocument } from '../contracts/types'
+import { fountainProse } from './edits'
 import { checkSizes, droppedLine, FountainTooBig, parseFountain, sceneFlat } from './fountain'
 
 const SCRIPT = `Title: First Light
@@ -63,28 +65,28 @@ describe('parseFountain', () => {
     expect(s.scenes.map((x) => x.heading)).toEqual(['EXT. BEACH - DAWN', 'INSIDE THE CAR', 'INT./EXT. CAR - DAY', 'I/E VAN - NIGHT', 'EST. CITY - DUSK'])
   })
 
-  it('keeps characters, parentheticals and dialogue; transitions become action lines', () => {
+  it('keeps characters, parentheticals and dialogue; a transition keeps its own block', () => {
     expect(s.scenes[0].blocks).toEqual([
       { type: 'action', text: '@maya_front walks the waterline. The light is low and gold.' },
       { type: 'character', text: 'MAYA' },
       { type: 'parenthetical', text: 'quietly' },
       { type: 'dialogue', text: "It's perfect." },
-      { type: 'action', text: 'CUT TO:' },
+      { type: 'transition', text: 'CUT TO:' },
     ])
   })
 
-  it('a forced @NAME character loses its @; dual dialogue is two plain lines', () => {
+  it('a forced @NAME character loses its @; a dual cue marks its dialogue dual', () => {
     expect(s.scenes[1].blocks).toContainEqual({ type: 'character', text: 'McCLANE' })
     expect(s.scenes[2].blocks).toEqual([
       { type: 'character', text: 'BRICK' },
-      { type: 'dialogue', text: 'Dual one.' },
+      { type: 'dialogue', text: 'Dual one.', dual: true },
       { type: 'character', text: 'STEEL' },
       { type: 'dialogue', text: 'Dual two.' },
     ])
   })
 
-  it('centred text and forced action are action lines', () => {
-    expect(s.scenes[3].blocks).toEqual([{ type: 'action', text: 'THE END' }])
+  it('centred text keeps its own block; forced action stays action', () => {
+    expect(s.scenes[3].blocks).toEqual([{ type: 'centered', text: 'THE END' }])
     expect(s.scenes[4].blocks).toEqual([{ type: 'action', text: 'SHOUTING FROM BELOW' }])
   })
 
@@ -92,6 +94,24 @@ describe('parseFountain', () => {
     expect(s.dropped).toEqual({ sections: 1, synopses: 1, notes: 1, boneyard: 1 })
     expect(droppedLine(s.dropped)).toBe('Left out 1 section, 1 synopsis, 1 note and 1 boneyard block.')
     expect(s.scenes.some((x) => x.heading.includes('NOWHERE'))).toBe(false)
+  })
+
+  it('fountainProse puts the dual mark on a dual dialogue block, and leaves a plain one untouched', () => {
+    const d = { refs: {}, keys: {} } as unknown as ProductionDocument
+    const prose = fountainProse(d, [
+      { type: 'character', text: 'BRICK' },
+      { type: 'dialogue', text: 'Dual one.', dual: true },
+      { type: 'dialogue', text: 'Plain.' },
+      { type: 'transition', text: 'CUT TO:' },
+      { type: 'centered', text: 'THE END' },
+    ])
+    expect(prose.content).toEqual([
+      { type: 'character', content: [{ type: 'text', text: 'BRICK' }] },
+      { type: 'dialogue', content: [{ type: 'text', text: 'Dual one.', marks: [{ type: 'dual' }] }] },
+      { type: 'dialogue', content: [{ type: 'text', text: 'Plain.' }] },
+      { type: 'transition', content: [{ type: 'text', text: 'CUT TO:' }] },
+      { type: 'centered', content: [{ type: 'text', text: 'THE END' }] },
+    ])
   })
 
   it('text before the first heading is a scene with no heading', () => {

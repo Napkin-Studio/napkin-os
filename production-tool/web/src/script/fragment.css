@@ -8,6 +8,11 @@
 .fragment p[data-type="parenthetical"]::before, .sp-static p[data-type="parenthetical"]::before { content: "("; }
 .fragment p[data-type="parenthetical"]::after, .sp-static p[data-type="parenthetical"]::after { content: ")"; }
 .fragment p[data-type="dialogue"], .sp-static p[data-type="dialogue"] { margin: 0 0 0.6em; padding: 0 18% 0 22%; }
+/* Dual (simultaneous) dialogue: a subtle rule marks the shared speech. */
+.fragment p[data-type="dialogue"] span[data-dual], .sp-static p[data-type="dialogue"] span[data-dual] { border-left: 2px solid var(--tool); padding-left: 6px; }
+/* A transition (CUT TO:) right-aligns and upper-cases; centred text centres. */
+.fragment p[data-type="transition"], .sp-static p[data-type="transition"] { margin: 0.9em 0 0.6em; text-align: right; text-transform: uppercase; letter-spacing: 0.02em; }
+.fragment p[data-type="centered"], .sp-static p[data-type="centered"] { margin: 0.9em 0 0.6em; text-align: center; }
 .fragment p[data-type="direction"], .sp-static p[data-type="direction"] {
   margin-top: 0.4em; padding: 8px 10px 8px 10px; border-left: 2px solid var(--tool); background: var(--tool-soft); border-radius: 0 8px 8px 0; font-family: var(--f-display);
 }

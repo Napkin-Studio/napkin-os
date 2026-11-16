@@ -136,7 +136,10 @@ def answer(case: dict, data: dict, version: str, wire=None, model: str = MODELS[
         sheet = effective_sheet(sheet, case["op"], case["model"])
     inp = job_input(case, data)
     if version == "passthrough":  # never shown a picture
-        return PassthroughDirector().direct({"op": case["op"], "input": inp, "jobId": case["id"]}, sheet)
+        try:
+            return PassthroughDirector().direct({"op": case["op"], "input": inp, "jobId": case["id"]}, sheet)
+        except (DirectorError, ModelError) as e:  # the passthrough refuses too (a character with no frame)
+            return {"error": str(e)[:300]}
     try:
         d = director(wire, version, model)
         d.sheets = {**d.sheets, case["provider"]: sheet}

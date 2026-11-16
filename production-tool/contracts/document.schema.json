@@ -2961,6 +2961,10 @@
           "$ref": "common.schema.json#/$defs/sha256",
           "description": "The hash of the target's prose the suggestion was written against: a different hash makes it stale."
         },
+        "mode": {
+          "enum": ["revise", "draft"],
+          "description": "How the draft is meant to land: `draft` is a whole-block insertion (Keep / Discard, no word-diff); `revise` is a rewrite shown as a word-diff (Keep / Keep mine). Absent reads as `revise`."
+        },
         "proposed": {
           "type": "object",
           "properties": {

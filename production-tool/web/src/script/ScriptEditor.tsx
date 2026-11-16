@@ -41,10 +41,11 @@ import { addBeat, addScene, importFountain, insertShot, moveShotTo, setHeading, 
 import { refNames, TAB_NEXT, type KeyHooks } from './extensions'
 import { FragmentEditor } from './FragmentEditor'
 import { parseFountain } from './fountain'
+import { fountainOut, screenplayHtml } from './fountainOut'
 import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
 import { SkyeBar, SuggestionCard } from './SkyeUI'
-import { draftFromLine, fitSeconds, handsOff, NEW_SCENE_LINE, NOT_HERE, SKYE, skyeAsks, skyeState, startWrite, waitingLine } from './skye'
+import { draftFromLine, fitSeconds, handsOff, NEW_SCENE_LINE, NOT_HERE, pickedIdea, SKYE, skyeAsks, skyeState, startWrite, waitingLine } from './skye'
 import { answerLocalAsk, nameAsks, settleNameAsks } from './nameAsks'
 import { linkForMention, linkWords } from '../text/mention/source'
 import { scopeOf, scopeRefs, type ScopeItem } from '../model/scope'
@@ -56,7 +57,7 @@ import { typedSpans, type MentionHooks } from './mentions'
 import { ShotEditor } from './ShotEditor'
 import './script.css'
 import './look.css'
-import { PromptStart } from '../ui/prompt/PromptStart'
+import { PromptStart, ScriptWritePrompt } from '../ui/prompt/PromptStart'
 import { LengthPicker } from './LengthPicker'
 import { setScriptTarget } from './length'
 import { canvasActions } from '../canvas/chrome/actions'
@@ -143,6 +144,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const [notice, setNotice] = useState<{ text: string; undo?: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<{ text: string; yes: string; go: () => void } | null>(null)
+  const [writing, setWriting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [chain] = useState(() => new CaretChain())
   const person = ui.me ? `human:${ui.me.participantId}` : LOCAL_PERSON
@@ -284,10 +286,14 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const drafts = (kind: WriteTarget['kind'], id: string) => [
     ...Object.values(doc.suggestions)
       .filter((x) => x.target.kind === kind && x.target.id === id && (x.state === 'open' || x.state === 'stale'))
-      .map((x) => (
-        <SuggestionCard key={x.id} sug={x} store={store} me={person} currentProse={() => store.text.prose(kind, id)} onWhy={openWhy} say={say}
-          askAgain={() => void ask(x.target, ui.jobs[x.job_id]?.request?.input.write?.intent ?? 'tighten')} />
-      )),
+      .map((x) => {
+        // Ask again re-runs the original write: a draft re-drafts from its brief, a revise rewrites again.
+        const orig = ui.jobs[x.job_id]?.request?.input.write
+        return (
+          <SuggestionCard key={x.id} sug={x} store={store} me={person} currentProse={() => store.text.prose(kind, id)} onWhy={openWhy} say={say}
+            askAgain={() => void ask(x.target, orig?.intent ?? 'tighten', { ...(orig?.mode ? { mode: orig.mode } : {}), ...(orig?.instruction ? { instruction: orig.instruction } : {}) })} />
+        )
+      }),
     ...placedAt(kind, id).map((q) => <div key={q.ask.id} className="se-ask"><AskCard ask={q.ask} /></div>),
   ]
   const behind = !!sb && (staleList(doc).some((m) => m.target.kind === ('storyboard' as string) && m.target.id === sb.id)
@@ -340,6 +346,28 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     const r = await importFountain(store, scriptId, parsed)
     say([`Imported ${r.scenes} ${r.scenes === 1 ? 'scene' : 'scenes'}.`, r.dropped].filter(Boolean).join(' '))
   })
+  const fileName = () => (title || 'script').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'script'
+  const exportFountain = () => attempt(async () => {
+    const text = fountainOut(doc, scriptId)
+    if (!text.trim()) throw new Error('There is nothing to export yet.')
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${fileName()}.fountain`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    say('Exported the Fountain file.')
+  })
+  const exportPdf = () => attempt(async () => {
+    const html = screenplayHtml(doc, scriptId)
+    const w = window.open('', '_blank')
+    if (!w) throw new Error('Allow pop-ups to export a PDF, or use Import ▸ Export Fountain.')
+    w.document.write(html)
+    w.document.close()
+    // Let the page lay out, then open the print dialog (Save as PDF).
+    w.setTimeout(() => w.print(), 250)
+    say('Opened the print view — choose “Save as PDF”.')
+  })
 
   if (!composed) {
     return (
@@ -365,6 +393,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   })()
   const empty = !composed.shots.length && Object.values(doc.scenes).every((s) => s.script_id !== scriptId || (!s.heading.trim() && !s.text?.trim()))
   const title = nodeTitle(composed.script.title, 'Script', projectName)
+  // 'Write with Skye' is always reachable: the empty-only PromptStart is gone once the script has content.
+  const writePanel = !phone && writing && <ScriptWritePrompt scriptId={scriptId} seed={pickedIdea(doc, scriptId)} onClose={() => setWriting(false)} />
 
   // Where the work started: the top of the page, in place of the empty script's start.
   const waitingHere = topQs.length > 0 && (
@@ -381,6 +411,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         e.preventDefault()
         void doImport(f)
       }}>
+      {writePanel}
       {!phone && view === 'screenplay' && <ElementBar focus={focus} composed={composed} store={store} chain={chain} onError={setError} say={say} />}
       {(view === 'av' && !phone) && waitingHere}
       {view === 'av' && !phone ? (
@@ -417,7 +448,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         }}
         undo={!phone}
         history={{ on: history, toggle: () => { setHistoryFocus(undefined); setHistory((h) => !h) } }}
-        moreTip={phone ? 'More: copy link' : 'More: import Fountain, copy link'}
+        moreTip={phone ? 'More: copy link' : 'More: import and export Fountain, export PDF, copy link'}
         moreHead={storyboardsOf(doc, scriptId).length > 1 && (
           <label className="se-from">Shots from
             <select className="select xs" value={sb?.id ?? ''} onChange={(e) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { view, ...u.script?.[scriptId], storyboard: e.target.value } } })}>
@@ -428,6 +459,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         more={(close) => (
           <>
             {!phone && <MenuItem icon="⇪" onSelect={() => { close(); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
+            <MenuItem icon="⬇" onSelect={() => { close(); void exportFountain() }}>Export Fountain…</MenuItem>
+            <MenuItem icon="🖨" onSelect={() => { close(); void exportPdf() }}>Export PDF…</MenuItem>
             <MenuItem icon={<LinkIcon />} onSelect={() => {
               close()
               const url = new URL(formatRoute(route), location.origin).href
@@ -437,6 +470,11 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         )}
         primary={!phone && (
           <>
+            {/* Always reachable: ask Skye to write a script from an idea, empty or not. */}
+            <button className="btn se-write" aria-expanded={writing} aria-pressed={writing} disabled={skye.off}
+              data-tip={skye.off ? NOT_HERE : 'Ask Skye to draft a script'} onClick={() => setWriting((w) => !w)}>
+              <AgentFigure agent="skye" size={18} decorative /> Write with Skye
+            </button>
             {/* Why Plan shots is off: its tooltip, and read with it (a disabled button never says why). */}
             {blocked && !planning && <span className="pt-sr se-why" id="se-plan-why">{blocked}</span>}
             <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
@@ -807,6 +845,11 @@ function ElementBar({ focus, composed, store, chain, onError, say }: { focus: Fo
     { t: 'action', label: 'Action', act: () => setType('action') },
     { t: 'character', label: 'Character', act: () => setType('character') },
     { t: 'dialogue', label: 'Dialogue', act: () => setType('dialogue') },
+    // Transition and centred text live in the unplanned scene text; the bar sets them, Tab steps on.
+    ...(kind === 'scene' ? [
+      { t: 'transition', label: 'Transition', act: () => setType('transition') },
+      { t: 'centered', label: 'Centred', act: () => setType('centered') },
+    ] : []),
     { t: 'shot', label: 'Shot', act: () => {
       const sb = composed.storyboard
       if (!sb) return onError('This script drives no storyboard yet.')

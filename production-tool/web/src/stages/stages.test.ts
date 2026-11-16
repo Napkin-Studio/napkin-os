@@ -21,7 +21,7 @@ import { MockRelay } from '../relay/mock'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { id, MAYA, scriptWords, SHA, wasm } from '../test/model'
+import { id, MAYA, scriptWords, seedStages, SHA, wasm } from '../test/model'
 import { insertMention, removeMention } from '../script/edits'
 import { addShot, moveShot, setRatio, setTarget } from './storyboardEdits'
 import { editShot } from '../jobs/stale'
@@ -32,7 +32,7 @@ const makeClan: MakeClan = (persistence, opts = {}) =>
 
 const ME = { participantId: MAYA.id, handle: 'maya', team: 'napkin', workspace: MAYA.tenant_id, tenant: { id: MAYA.tenant_id, agency: 'napkin' }, allow: { claude: true, makers: ['runway', 'google'] }, quotas: null, projects: 0 }
 
-async function newProject() {
+async function newProject(seed = true) {
   const storage = memoryStorage()
   const index = new ProjectIndex(storage, () => new Date('2026-10-13T10:00:00Z'))
   const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: ME }, null)
@@ -41,21 +41,23 @@ async function newProject() {
   await shell.newProject()
   const s = shell.get().session
   if (!s) throw new Error('no project open')
+  // A new project opens blank (owner 2026-11-03). The panel tests below work on the three stages, so
+  // they add them, as a person does from the "+ Node" menu; the blank-open test passes seed = false.
+  if (seed) await seedStages(s.services.doc)
   return s.services
 }
 
 describe('a new project', () => {
-  it('opens on the canvas stage with one script, one storyboard and one video', async () => {
-    const { doc, ui } = await newProject()
+  it('opens blank on the canvas stage: no script, storyboard or video until the person adds one', async () => {
+    const { doc, ui } = await newProject(false)
     expect(ui.get().stage).toBe('character')
     const d = doc.get()
-    expect(Object.keys(d.scripts)).toHaveLength(1)
-    expect(Object.keys(d.storyboards)).toHaveLength(1)
-    expect(Object.keys(d.videos)).toHaveLength(1)
-    expect(mainScript(d)).toBeDefined()
-    expect(mainStoryboard(d)).toBeDefined()
-    expect(mainVideo(d)).toBeDefined()
-    expect(shotsOf(d)).toEqual([])
+    expect(Object.keys(d.scripts)).toHaveLength(0)
+    expect(Object.keys(d.storyboards)).toHaveLength(0)
+    expect(Object.keys(d.videos)).toHaveLength(0)
+    expect(mainScript(d)).toBeUndefined()
+    expect(mainStoryboard(d)).toBeUndefined()
+    expect(mainVideo(d)).toBeUndefined()
     // Nothing to film yet: the Video stage stays shut.
     expect(storyboardReady(d)).toBe(false)
   })

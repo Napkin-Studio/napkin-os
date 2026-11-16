@@ -65,4 +65,32 @@ describe('the editors mount clan-store\'s node set', () => {
       expect(getSchema(editorExtensions({ kind })).nodeFromJSON(prose).toJSON()).toEqual(prose)
     })
   }
+
+  it('a scene with a transition, centred text and dual dialogue round-trips and flattens right', () => {
+    // A dialogue whose words carry the dual mark, plus the two new blocks. y-tiptap writes a mark's
+    // attrs as {}, so the stored (read-back) form carries attrs: {} on the dual mark.
+    const stored: Prose = { type: 'doc', content: [
+      { type: 'character', content: [t('MAYA')] },
+      { type: 'dialogue', content: [{ ...t('Together now.'), marks: [{ type: 'dual', attrs: {} }] }] },
+      { type: 'transition', content: [t('CUT TO:')] },
+      { type: 'centered', content: [t('THE END')] },
+    ] }
+    const doc = new Y.Doc()
+    const f = doc.getXmlFragment('x/scene2')
+    doc.transact(() => hydrate(f, stored))
+    // The dual mark and the new blocks survive the Yjs round-trip, and re-hydrating is stable.
+    expect(proseOf(f)).toEqual(stored)
+    const doc2 = new Y.Doc()
+    const f2 = doc2.getXmlFragment('x/scene3')
+    doc2.transact(() => hydrate(f2, proseOf(f)))
+    expect(proseOf(f2)).toEqual(stored)
+    // The editor's schema accepts the mark written without attrs (fountainProse's form).
+    const pre: Prose = { type: 'doc', content: [{ type: 'dialogue', content: [{ ...t('Together now.'), marks: [{ type: 'dual' }] }] }] }
+    expect(() => getSchema(editorExtensions({ kind: 'scene' })).nodeFromJSON(pre)).not.toThrow()
+    // checkpoint keeps the prose, upper-cases the transition in the flat copy, and the dual mark
+    // leaves the flat text untouched.
+    const r = checkpoint('scene', proseOf(f), { refs: {} })
+    expect(r.fields.prose).toEqual(stored)
+    expect(r.fields.text).toBe('MAYA\nTogether now.\nCUT TO:\nTHE END')
+  })
 })

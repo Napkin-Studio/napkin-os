@@ -33,6 +33,7 @@ import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { currentFrame, currentTake, framesOf, jobsList, mainStoryboard, openAsks, openStoryboard, refsList, scriptOfStoryboard, scriptText, shotNumber, shotsOf, storyboardSeconds, takesOf } from '../model/selectors'
+import { canvasActions } from '../canvas/chrome/actions'
 import { jobCtx, LOCAL_PERSON } from '../jobs/runner'
 import { addShot, answerShotAsk, setRatio, setTarget } from './storyboardEdits'
 import { scriptRoute } from '../app/route'
@@ -173,7 +174,20 @@ export function Storyboard() {
     await updateDoc(docStore, (d) => {
       for (const s of shotsOf(d, sb?.id)) d.shots[s.id].status = 'locked'
     }, 'lock storyboard')
-    uiStore.update((u) => { u.stage = 'video' })
+    // A blank canvas has no Video node (owner 2026-11-03), so Make clips on a storyboard with none makes
+    // one first, the canvas's own Make video (one undo step, the renders link), and opens it. Before,
+    // it opened the Video editor on "No video here yet." with no way back (full test, 2026-11-04).
+    let videoId = videoOfStoryboard(docStore.get(), sb?.id)?.id
+    if (!videoId && sb) {
+      const script = scriptOfStoryboard(docStore.get(), sb.id)
+      const made = canvasActions.makeVideo({ storyboardId: sb.id, ...(script ? { scriptId: script.id } : {}) })
+      if (!made) throw new Error('Make the video from the canvas: select this storyboard there and choose Make video.')
+      videoId = (await made).videoId
+    }
+    uiStore.update((u) => {
+      if (videoId) u.openNode = { ...u.openNode, video: videoId }
+      u.stage = 'video'
+    })
   }
 
   if (!controls.storyboard) {

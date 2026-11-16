@@ -262,17 +262,29 @@ def test_clips_that_cannot_take_refs_send_the_frame_and_name_the_character_in_wo
     assert "@" not in body["promptText"]
 
 
-def test_a_clip_straight_from_the_script_goes_to_text_to_video_and_says_the_names_in_words():
-    """ui-behaviour 3.5: no frame, so Veo 3.1 makes it from words alone; the refs cannot go with it."""
+def test_a_clip_with_a_character_and_no_frame_is_refused_not_sent_character_less():
+    """The owner's @on ad came out a generic person, 2026-11: a clip that names a character but has no
+    first frame cannot carry it on Veo 3.1 (no refsWithoutFrame), and naming it in words alone loses it.
+    The relay refuses rather than send a character-less clip; the web makes a storyboard frame first, which
+    carries the character. Here, with no frame and no model, the job fails loudly instead of lying."""
     h, stand = pathway("runway")
     job = run(h, "clip", {"shot": SHOT, "refs": MAYA, "ratio": "16:9"})
+    assert job["state"] == "failed", (job.get("error"), stand.sent)
+    assert job["error"]["code"] == "internal"
+    assert not stand.to("runway")  # nothing character-less reached the provider
+
+
+def test_a_clip_straight_from_the_script_with_no_cast_goes_to_text_to_video():
+    """ui-behaviour 3.5: no frame and no character, so Veo 3.1 makes it from words alone."""
+    h, stand = pathway("runway")
+    job = run(h, "clip", {"shot": {**SHOT, "action": "A runner crests the cliff at dawn.", "refs": []},
+                          "ratio": "16:9"})
     assert job["state"] == "completed", (job.get("error"), stand.sent)
     sent = stand.to("runway")
     assert [s["endpoint"] for s in sent] == ["POST /v1/text_to_video"]
     assert not sent[0]["errors"], sent[0]["errors"]
     body = sent[0]["body"]
-    assert "promptImage" not in body and "referenceImages" not in body
-    assert "@" not in body["promptText"] and "maya" in body["promptText"]
+    assert "promptImage" not in body and "referenceImages" not in body and "@" not in body["promptText"]
     sheet = h.relay.registry.sheet("runway")
     assert job["cost"]["estimate"] == pricing().op_usd(sheet, "clip", None, sent_settings("clip", body))
 

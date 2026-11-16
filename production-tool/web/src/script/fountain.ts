@@ -3,13 +3,18 @@
 //
 // What it keeps: the title page's Title; each scene heading (INT., EXT., INT./EXT., I/E,
 // EST., or forced with a leading '.') as one scene; character, parenthetical and dialogue
-// blocks (a forced '@NAME' loses its '@', dual dialogue's '^' becomes two plain lines);
-// action, with transitions and centred text as action lines. What it drops, and counts:
-// sections ('#'), synopses ('='), notes ([[…]]) and the boneyard (/* … */).
+// blocks (a forced '@NAME' loses its '@'); dual dialogue's '^' marks the shared dialogue dual;
+// transitions (CUT TO:) and centred text ('> … <') as their own blocks, not downgraded to action.
+// What it drops, and counts: sections ('#'), synopses ('='), notes ([[…]]) and the boneyard (/* … */).
 
 import { LIMITS, MAX_PROSE_BYTES } from '../../../clan-store/src'
 
-export type FountainBlock = { type: 'action' | 'character' | 'parenthetical' | 'dialogue'; text: string }
+export type FountainBlock = {
+  type: 'action' | 'character' | 'parenthetical' | 'dialogue' | 'transition' | 'centered'
+  text: string
+  /** dialogue (and its character cue): the second, simultaneous speaker of a dual pair (Fountain '^'). */
+  dual?: boolean
+}
 export interface FountainScene { heading: string; blocks: FountainBlock[] }
 export interface Dropped { sections: number; synopses: number; notes: number; boneyard: number }
 export interface FountainScript { title?: string; scenes: FountainScene[]; dropped: Dropped }
@@ -58,6 +63,8 @@ export function parseFountain(source: string): FountainScript {
   const scenes: FountainScene[] = []
   const cur = () => scenes.at(-1) ?? (scenes.push({ heading: '', blocks: [] }), scenes.at(-1)!)
   let speaking = false
+  let dual = false
+  const DUAL = /\^\s*$/
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]
     const line = raw.trim()
@@ -65,6 +72,7 @@ export function parseFountain(source: string): FountainScript {
     const nextLine = (lines[i + 1] ?? '').trim()
     if (!line) {
       speaking = false
+      dual = false
       continue
     }
     if (/^#/.test(line)) {
@@ -78,7 +86,7 @@ export function parseFountain(source: string): FountainScript {
     if (/^={3,}$/.test(line)) continue // a page break
     if (speaking) {
       if (/^\(.*\)$/.test(line)) cur().blocks.push({ type: 'parenthetical', text: clean(line.slice(1, -1)) })
-      else cur().blocks.push({ type: 'dialogue', text: clean(line) })
+      else cur().blocks.push({ type: 'dialogue', text: clean(line), ...(dual ? { dual: true } : {}) })
       continue
     }
     const heading = prevBlank || i === 0 ? fountainHeading(line) : null
@@ -91,19 +99,21 @@ export function parseFountain(source: string): FountainScript {
       continue
     }
     if (line.startsWith('@') && nextLine) {
+      dual = DUAL.test(line)
       cur().blocks.push({ type: 'character', text: characterName(line.slice(1)) })
       speaking = true
       continue
     }
     if (line.startsWith('>') && line.endsWith('<')) {
-      cur().blocks.push({ type: 'action', text: clean(line.slice(1, -1)) })
+      cur().blocks.push({ type: 'centered', text: clean(line.slice(1, -1)) })
       continue
     }
     if (line.startsWith('>') || (prevBlank && TRANSITION.test(line))) {
-      cur().blocks.push({ type: 'action', text: clean(line.replace(/^>\s*/, '')) })
+      cur().blocks.push({ type: 'transition', text: clean(line.replace(/^>\s*/, '')) })
       continue
     }
     if (prevBlank && nextLine && CHARACTER.test(line.replace(/\(.*\)/g, '()')) && !/[a-z]/.test(line.replace(/\(.*\)/g, ''))) {
+      dual = DUAL.test(line)
       cur().blocks.push({ type: 'character', text: characterName(line) })
       speaking = true
       continue
@@ -141,9 +151,12 @@ export class FountainTooBig extends Error {
   }
 }
 
-/** The flat text checkpoint would write for a scene's blocks. */
+/** The flat text checkpoint would write for a scene's blocks (clan-store checkpoint scene branch). */
 export function sceneFlat(blocks: FountainBlock[]): string {
-  return blocks.map((b) => (b.type === 'character' ? b.text.toUpperCase() : b.type === 'parenthetical' ? `(${b.text})` : b.text)).join('\n')
+  return blocks.map((b) =>
+    b.type === 'character' || b.type === 'transition' ? b.text.toUpperCase()
+      : b.type === 'parenthetical' ? `(${b.text})`
+        : b.text).join('\n')
 }
 
 /** Refuse, naming the scene, any scene past 20,000 flat characters or 64 KB of prose. */

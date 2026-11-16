@@ -6,16 +6,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useServices, useUi } from '../app/context'
-import { choiceToSend, modelChoicesFor } from '../capabilities'
-import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type ModelChoice, type Shot } from '../contracts/types'
+import { choiceToSend, controlsFor, modelChoicesFor } from '../capabilities'
+import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type Config, type ModelChoice, type ProductionDocument, type Shot } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { lastWorkedModel } from '../jobs/follow'
-import { selectedFrame } from '../jobs/frames'
+import { drawFrame, selectedFrame } from '../jobs/frames'
 import { makeClip, videoQuality } from '../jobs/clips'
 import { makeRuns, modelEntry } from '../jobs/runs'
 import { joinSelection, separateSelection, videoJoin } from '../jobs/runView'
-import { isRunning, jobAt } from '../jobs/select'
-import { refName, refsList, shotNumber } from '../model/selectors'
+import { isRunning, jobAt, shotRefSet } from '../jobs/select'
+import { refName, refsList, shotNumber, shotsOf } from '../model/selectors'
 import { roomEmpty } from './emptyState'
 import { Float, MenuItem } from '../ui/Float'
 import { useSending } from '../ui/hooks'
@@ -72,6 +72,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   const [ticked, setTicked] = useState<string[]>([])
   const [comparing, setComparing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [making, send] = useSending()
   const [models, setModels] = useState<Record<string, ModelChoice>>({})
   useEffect(() => (comparing ? register(() => setComparing(false)) : undefined), [comparing, register])
@@ -85,15 +86,30 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   /** Make on a box: one generation of its shots. It lands as a new take; the cut is not touched. */
   const make = (b: Box) => send(async () => {
     setError(null)
+    setNotice(null)
     try {
-      const choice = models[b.key] ?? choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config))
+      const choice = choiceToSend('clip', config, boxModel(doc, b, config, models[b.key]))
       if (videoJoin(doc, data.videoId, config) === 'film') {
         const failed = await makeRuns(deps, { videoId: data.videoId, shotIds: [b.shotIds[0]], config, again: true, busy, ...(choice ? { modelChoice: choice } : {}), quality: videoQuality(doc, data.videoId) })
         if (failed.length) setError(failed.join(' '))
       } else {
-        // No frame: the clip is made from the shot's words and references (a new box, or straight from the script).
-        const fromWords = !selectedFrame(doc, b.shotIds[0]) && !startPicture(doc, b.shotIds[0]) && !!doc.shots[b.shotIds[0]]?.action?.trim()
-        await makeClip(deps, b.shotIds[0], { videoId: data.videoId, ...(choice ? { modelChoice: choice } : {}), ...(fromWords ? { fromWords } : {}) })
+        const shotId = b.shotIds[0]
+        const shot = doc.shots[shotId]
+        const hasFrame = !!selectedFrame(doc, shotId) || !!startPicture(doc, shotId)
+        // A character can only reach a clip through a frame (a clip from words is text-to-video, which
+        // drops every reference). So a character shot with no frame makes the FRAME first — image
+        // generation DOES use the @on views, so the character appears — and the person animates that
+        // frame next. Without this, Make quietly produced a character-less video (owner 2026-11-04).
+        const hasCharacter = (() => { try { return !!shot && shotRefSet(doc, shot).some((x) => x.ref.role === 'character') } catch { return false } })()
+        const idx = shot ? shotsOf(doc, shot.storyboard_id).findIndex((s) => s.id === shotId) : -1
+        if (shot && !hasFrame && hasCharacter && idx >= 0) {
+          await drawFrame(deps, idx, 'first', { storyboardId: shot.storyboard_id })
+          setNotice('Making the picture of your character first — animate it once it lands (a clip can only show @names through a frame).')
+        } else {
+          // No frame and no character: the clip is made from the shot's words (a new box, or straight from the script).
+          const fromWords = !hasFrame && !!shot?.action?.trim()
+          await makeClip(deps, shotId, { videoId: data.videoId, ...(choice ? { modelChoice: choice } : {}), ...(fromWords ? { fromWords } : {}) })
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
@@ -149,6 +165,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
           </TakePlayer>
         )}
         {error && <div role="alert" className="rm-error">{error}<FrontButtons text={error} /></div>}
+        {notice && <div role="status" className="rm-note">{notice}</div>}
         {empty.kind === 'no-shots' && (
           <div className="rm-emptystate" role="status">
             {empty.planning ? <p>Dex is planning the shots from the script…</p> : (
@@ -221,7 +238,9 @@ function BoxCard({ b, data, selected, sel, making, takes, ticked, onShot, onBox,
   const ui = useUi()
   const lastJob = jobAt(doc, ui, (c) => (c.for === 'clip' && b.shotIds.includes(c.shotId)) || (c.for === 'run' && !!doc.videos[c.videoId]?.runs?.[c.runId]?.shot_ids.some((id) => b.shotIds.includes(id))))
   const failedJob = lastJob ? doc.jobs[lastJob] : undefined
-  const failedLine = failedJob?.state === 'failed' && failedJob.error ? plainJobError(failedJob.error, failedJob.op).message : undefined
+  // A take that landed after the failure answers it: the note goes (it stayed under a good take, full test 2026-11-04).
+  const answered = !!failedJob?.created_at && takes.some((g) => g.state === 'ready' && !!g.createdAt && g.createdAt > failedJob.created_at!)
+  const failedLine = !answered && failedJob?.state === 'failed' && failedJob.error ? plainJobError(failedJob.error, failedJob.op).message : undefined
   return (
     <section className={`rm-box ${selected ? 'sel' : ''}`} role="listitem" aria-label={title}>
       <header className="rm-boxtop">
@@ -346,8 +365,10 @@ function ShotTab({ shot, n, box, data, onBox, onAddShot }: { shot: Shot; n: numb
   const start = frame ? undefined : startPicture(doc, shot.id)
   const i = box.shotIds.indexOf(shot.id)
   const nextFrame = i >= 0 && i < box.shotIds.length - 1 ? selectedFrame(doc, box.shotIds[i + 1]) : undefined
-  const model = modelEntry(...(lastModel(doc, config)))
-  const refsMax = model?.refsMax ?? 4
+  // The references on a shot go onto its FRAME (image generation carries them into the clip via the
+  // frame-first flow), so the ceiling is the frame/image character limit, not the clip model's video
+  // ref capacity (which is 0 for Veo). controlsFor reads the generate op (owner 2026-11-04).
+  const refsMax = controlsFor(config).generateCharacters || 4
   const differs = nextDiffers(doc, box, data.gens.filter((g) => g.boxKey === box.key))
   return (
     <div className="rm-tab">
@@ -429,6 +450,10 @@ function RefPicker({ shot, max }: { shot: Shot; max: number }) {
   const [why, setWhy] = useState<string | null>(null)
   const links = shotRefLinks(doc, shot.id)
   const chosen = new Set(links.map((l) => l.from.id))
+  // References this shot inherits from the script/storyboard it belongs to (not chosen here): a
+  // character linked to the Script reaches every shot its Video makes, so it shows as used, not lost
+  // (owner 2026-11-04). Guarded: shotRefSet throws on an @name with no picture.
+  const inherited = (() => { try { return shotRefSet(doc, shot).filter((x) => !chosen.has(x.ref.id)) } catch { return [] as ReturnType<typeof shotRefSet> } })()
   const all = refsList(doc).filter((r) => r.asset && !chosen.has(r.id))
   const typed = q.trim().replace(/^@/, '').toLowerCase()
   const offer = typed ? all.filter((r) => refName(r).includes(typed)).slice(0, 8) : []
@@ -443,8 +468,14 @@ function RefPicker({ shot, max }: { shot: Shot; max: number }) {
             <button type="button" className="rm-chipx" aria-label={`Remove ${label(l)}`} onClick={() => void removeShotRef(docStore, l.id)}>×</button>
           </span>
         ))}
-        {!links.length && <span className="rm-faint">None chosen. Names typed with @ in the words go too.</span>}
+        {!links.length && !inherited.length && <span className="rm-faint">None chosen. Names typed with @ in the words go too.</span>}
       </div>
+      {inherited.length > 0 && (
+        <div className="rm-chiprow wrap rm-inherited">
+          <span className="rm-faint">From the script:</span>
+          {inherited.map((x) => <span key={x.ref.id} className="rm-chip static auto" title="Linked to the Script that drives this video">@{refName(x.ref)}</span>)}
+        </div>
+      )}
       <input className="input rm-refsearch" aria-label="Add a reference" placeholder={full ? `Up to ${max} for this model` : 'Add a reference: type @name'} disabled={full}
         value={q} onChange={(e) => setQ(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && offer[0]) add(offer[0].id) }} />
@@ -459,9 +490,39 @@ function RefPicker({ shot, max }: { shot: Shot; max: number }) {
   )
 }
 
-function lastModel(doc: ReturnType<typeof useDoc>, config: ReturnType<typeof useConfig>['config']): [Parameters<typeof modelEntry>[0], string] {
-  const m = lastWorkedModel(doc, 'clip', config) ?? modelChoicesFor('clip', config)[0]
-  return [(m?.provider ?? 'mock') as Parameters<typeof modelEntry>[0], m?.model ?? '']
+
+const entryOf = (m: ModelChoice) => modelEntry(m.provider as Parameters<typeof modelEntry>[0], m.model)
+
+/** What the box sends decides which models can make it: from words alone, references with no frame, a
+ *  first frame, several shots as one video. Why this model cannot, or undefined when it can. */
+function boxModelWhyNot(doc: ProductionDocument, box: Box, m: ModelChoice): string | undefined {
+  const e = entryOf(m)
+  const noFrame = !selectedFrame(doc, box.shotIds[0]) && !startPicture(doc, box.shotIds[0])
+  const hasRefs = box.shotIds.some((id) => shotRefLinks(doc, id).length > 0 || /@[a-z]/.test(doc.shots[id]?.action ?? ''))
+  if (box.together && !e?.video.take?.ok) return "Can't make several shots as one video"
+  if (noFrame && e && !e.words) return 'Needs a start frame'
+  if (noFrame && hasRefs && e && !e.video.refsWithoutFrame) return "Can't use references without a start frame"
+  return undefined
+}
+
+/** With a start frame on a model that takes no references beside it, the frame carries the character: the
+ *  relay keeps the frame and says the refs in words (relay/director/director.py _clip_frame_only). That is
+ *  how every Veo clip from a storyboard is made, so it is a note, not a refusal. Refusing it left a box made
+ *  together with no model at all (full test, 2026-11-04). */
+function boxModelNote(doc: ProductionDocument, box: Box, m: ModelChoice): string | undefined {
+  const e = entryOf(m)
+  const hasFrame = !!selectedFrame(doc, box.shotIds[0]) || !!startPicture(doc, box.shotIds[0])
+  const hasRefs = box.shotIds.some((id) => shotRefLinks(doc, id).length > 0 || /@[a-z]/.test(doc.shots[id]?.action ?? ''))
+  return hasFrame && hasRefs && e && !e.video.firstFrameWithRefs ? 'The character comes from the start frame' : undefined
+}
+
+/** The model a box is made on: the one picked for it, else the last that worked, unless that one cannot
+ *  make this box (Veo for shots made together); then the first that can. */
+function boxModel(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): ModelChoice | undefined {
+  const options = modelChoicesFor('clip', config)
+  const wanted = picked ?? lastWorkedModel(doc, 'clip', config) ?? options[0]
+  if (wanted && !boxModelWhyNot(doc, box, wanted)) return wanted
+  return options.find((o) => !boxModelWhyNot(doc, box, o)) ?? wanted
 }
 
 /** The Box tab: made together or apart, the model (only those that can make it, the others greyed with why),
@@ -473,21 +534,12 @@ function BoxTab({ box, data, shots, model, onModel, onMake, making }: {
   const doc = useDoc()
   const { config } = useConfig()
   const options = modelChoicesFor('clip', config)
-  const current = model ?? lastWorkedModel(doc, 'clip', config) ?? options[0]
+  const current = boxModel(doc, box, config, model)
   const i = shots.findIndex((s) => s.id === box.shotIds[0])
   const next = shots[i + box.shotIds.length]
-  const take = (m: ModelChoice) => modelEntry(m.provider as Parameters<typeof modelEntry>[0], m.model)?.video.take
-  // What the box sends decides which models can make it: from words alone, references with no frame, a first frame.
-  const noFrame = !selectedFrame(doc, box.shotIds[0]) && !startPicture(doc, box.shotIds[0])
-  const hasRefs = box.shotIds.some((id) => shotRefLinks(doc, id).length > 0 || /@[a-z]/.test(doc.shots[id]?.action ?? ''))
-  const why = (m: ModelChoice) => {
-    const e = modelEntry(m.provider as Parameters<typeof modelEntry>[0], m.model)
-    if (box.together && !take(m)?.ok) return "Can't make several shots as one video"
-    if (noFrame && e && !e.words) return 'Needs a start frame'
-    if (noFrame && hasRefs && e && !e.video.refsWithoutFrame) return "Can't use references without a start frame"
-    if (!noFrame && hasRefs && e && !e.video.firstFrameWithRefs) return "Can't use references with a start frame"
-    return undefined
-  }
+  const take = (m: ModelChoice) => entryOf(m)?.video.take
+  const why = (m: ModelChoice) => boxModelWhyNot(doc, box, m)
+  const hint = (m: ModelChoice) => boxModelNote(doc, box, m)
   const t = current ? take(current) : undefined
   return (
     <div className="rm-tab">
@@ -498,9 +550,11 @@ function BoxTab({ box, data, shots, model, onModel, onMake, making }: {
       <fieldset className="rm-field">
         <legend className="rm-label">How it is made</legend>
         <div className="rm-seg" role="radiogroup" aria-label="How it is made">
-          <button type="button" role="radio" aria-checked={box.together} className={box.together ? 'on' : ''} disabled={box.together || !next || next.kind === 'end_card'}
+          {/* Boxes group shots only with connected video on (rooms/model.ts roomBoxes): without it a join was
+              written and never shown, so the click looked dead (full test, 2026-11-04). Say so instead. */}
+          <button type="button" role="radio" aria-checked={box.together} className={box.together ? 'on' : ''} disabled={box.together || !next || next.kind === 'end_card' || !config.flags.connectedVideo}
             onClick={() => void joinSelection(docStore, data.videoId, [...box.shotIds, next!.id])}
-            title={box.together ? undefined : next && next.kind !== 'end_card' ? `Make it one video with shot ${i + box.shotIds.length + 1}` : 'There is no shot after it to join'}>Made together</button>
+            title={box.together ? undefined : !config.flags.connectedVideo ? 'Making several shots as one video is off in this build' : next && next.kind !== 'end_card' ? `Make it one video with shot ${i + box.shotIds.length + 1}` : 'There is no shot after it to join'}>Made together</button>
           <button type="button" role="radio" aria-checked={!box.together} className={!box.together ? 'on' : ''} disabled={!box.together}
             onClick={() => void separateSelection(docStore, data.videoId, box.shotIds)}>Made apart</button>
         </div>
@@ -510,12 +564,13 @@ function BoxTab({ box, data, shots, model, onModel, onMake, making }: {
         <legend className="rm-label">Model</legend>
         <div className="rm-models" role="radiogroup" aria-label="Model">
           {options.map((o) => {
-            const no = why(o)
+            const no = why(o) ?? undefined
+            const note = no ? undefined : hint(o)
             const on = current?.provider === o.provider && current.model === o.model
             return (
               <button key={`${o.provider}:${o.model}`} type="button" role="radio" aria-checked={on} disabled={!!no} className={`rm-modelrow ${on ? 'on' : ''}`} onClick={() => onModel({ provider: o.provider, model: o.model })}>
                 <span className="rm-clamp1" title={o.label}>{o.label}</span>
-                {no && <span className="rm-faint rm-clamp2">{no}</span>}
+                {(no ?? note) && <span className="rm-faint rm-clamp2">{no ?? note}</span>}
               </button>
             )
           })}

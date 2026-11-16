@@ -46,7 +46,29 @@ def test_write_is_skyes_internal_job_on_the_text_quota_with_no_spend(h):
     assert draft["base_hash"] == BASE  # echoed: a draft lands after a reload, and goes stale on Keep if the text moved
     assert draft["lines"][0]["text"] == "@maya_front walks the waterline."
     assert draft["note"] == "I tightened it."
-    assert job["director"]["promptVersion"] == "skye.v3"
+    assert job["director"]["promptVersion"] == "skye.v4"
+
+
+def test_a_draft_writes_from_the_instruction_not_the_items_words(h):
+    # Owner's named bug (2026-11-03): a draft's brief is the instruction, never the item's prose, so
+    # the prompt is never diffed as the writer's own words. The draft is a short screenplay from it.
+    token = h.as_person()
+    _, job = post_write(h, token, intent="draft", text="", instruction="A runner drinks Lumen water at dawn.")
+    assert job["state"] == "completed"
+    draft = job["writes"][0]
+    assert draft["mode"] == "draft"
+    # A slugline first, then the brief turned into scene action — more than one line, not an echo.
+    assert draft["lines"][0]["text"] == "INT. DAWN - DAY"
+    assert len(draft["lines"]) >= 2
+    assert "runner drinks Lumen water" in " ".join(l["text"] for l in draft["lines"])
+
+
+def test_the_mode_is_echoed_on_every_draft(h):
+    token = h.as_person()
+    _, revise = post_write(h, token, intent="tighten")
+    assert revise["writes"][0]["mode"] == "revise"  # the default for a non-draft intent
+    _, drafted_job = post_write(h, token, intent="draft", instruction="An idea.")
+    assert drafted_job["writes"][0]["mode"] == "draft"
 
 
 def test_fit_seconds_sets_the_length_and_add_beat_keeps_beats_inside_it(h):
@@ -122,7 +144,7 @@ def test_the_model_writer_asks_sonnet_with_skye_v3_and_the_relay_owns_target_and
     out = w.write({"op": "write", "jobId": new_id("job"), "input": inp})
     [asked] = port.asked
     assert asked["purpose"] == "writer" and asked["model"] == "claude-sonnet-5-5"
-    assert asked["system"].startswith("# Skye · scripts (skye.v3)")
+    assert asked["system"].startswith("# Skye · scripts (skye.v4)")
     assert asked["payload"]["input"]["write"]["context"]["refs"] == [{"name": "maya_front", "role": "character"}]
     assert [d["target"] for d in out["writes"]] == [target]
     assert out["writes"][0]["base_hash"] == BASE
@@ -145,10 +167,21 @@ def test_every_passthrough_intent_validates_against_the_contract():
     from writer import check
 
     c = Contracts()
-    for intent in ("draft", "tighten", "fit_seconds", "add_beat", "write_vo", "rephrase", "cut_name"):
+    for intent in ("draft", "tighten", "fit_seconds", "add_beat", "write_vo", "rephrase", "cut_name", "instruct"):
         out = PassthroughWriter().write({"input": write_input(intent, seconds=2, name="maya_front")})
         assert out["writes"], intent
         assert check(c, out) == [], (intent, check(c, out))
+
+
+def test_a_free_instruct_lands_as_a_revise_with_its_note(h):
+    # The 'Tell Skye' field: a free instruction on a selection, a revise (word-diff). The passthrough
+    # cannot follow it, so it returns the words unchanged; the mode is echoed for the landing code.
+    token = h.as_person()
+    _, job = post_write(h, token, intent="instruct", mode="revise", instruction="make her sound colder")
+    assert job["state"] == "completed"
+    draft = job["writes"][0]
+    assert draft["mode"] == "revise"
+    assert draft["note"] == "I did what you asked."
 
 
 def test_settle_keeps_new_beats_inside_the_length():
@@ -158,7 +191,7 @@ def test_settle_keeps_new_beats_inside_the_length():
 
 
 def test_the_prompt_file_is_versioned_and_says_no_chat():
-    for v in ("skye.v1", "skye.v2", "skye.v3"):
+    for v in ("skye.v1", "skye.v2", "skye.v3", "skye.v4"):
         text = (Path(__file__).parent.parent / "prompts" / f"{v}.md").read_text()
         assert "You never chat" in text and "No prices, no costs" in text
 
@@ -250,6 +283,25 @@ def test_v3_says_never_ask_to_do_what_was_pressed_and_v2_still_loads():
     assert "no question with one option" in v3 and "one line is enough to draft from" in v3
     old = ModelWriter(FakePort({"writes": []}), contracts_dir(), prompt_version="skye.v2")
     assert old.system.startswith("# Skye · scripts (skye.v2)")
+
+
+def test_v4_teaches_the_instruction_field_and_a_real_short_draft_and_v3_still_loads():
+    v4 = (Path(__file__).parent.parent / "prompts" / "skye.v4.md").read_text()
+    # The real draft reads the brief (instruction), never echoes it, and writes a slugline + action.
+    assert "input.write.instruction" in v4 and "never copy it back verbatim" in v4
+    assert "slugline" in v4 and "real short screenplay" in v4
+    old = ModelWriter(FakePort({"writes": []}), contracts_dir(), prompt_version="skye.v3")
+    assert old.system.startswith("# Skye · scripts (skye.v3)")
+
+
+def test_the_passthrough_draft_is_a_short_screenplay_from_the_brief_not_an_echo(h):
+    # The deterministic draft: a slugline from the brief, then action — never a single echoed line.
+    token = h.as_person()
+    _, job = post_write(h, token, intent="draft", text="", instruction="a man putting in work at the gym")
+    assert job["state"] == "completed"
+    lines = job["writes"][0]["lines"]
+    assert lines[0]["text"] == "INT. GYM - DAY"
+    assert len(lines) >= 2 and lines[1]["text"] != "a man putting in work at the gym"  # not a verbatim echo
 
 
 def test_the_relay_drafts_through_a_one_option_nudge_with_no_needs_input(h):

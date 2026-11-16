@@ -1,7 +1,7 @@
 // Finding the job that belongs at a spot in the UI (pending or failed), and
 // what a job sends about a shot and its names (contract 3).
 
-import type { Id, JobInputRef, JobShot, NamedRef, ProductionDocument, Ratio, Shot } from '../contracts/types'
+import type { Id, JobInputRef, JobShot, NamedRef, ProductionDocument, Ratio, RefRole, Shot } from '../contracts/types'
 import type { JobCtx, UiState } from '../doc/ui'
 import { KEY_EXTRAS, MENTION, NoFrontError } from '../lib/names'
 import { scopeOf, type ScopeItem } from '../model/scope'
@@ -74,6 +74,16 @@ export async function namedInput(relay: Relay, doc: ProductionDocument, r: Named
   const origin = doc.assets[r.asset]?.origin
   const kind = origin === 'drawn' ? 'drawing' : origin === 'generated' || origin === 'mock' ? 'generated' : 'picture'
   return { id: r.id, name: refName(r), role: r.role, ...(r.label ? { label: r.label } : {}), kind, asset: await assetRef(relay, r.asset) }
+}
+
+/** An asset-bearing scope item (a linked frame, a rendered ad, a format set's master) as a job input:
+ *  a picture a generation can build on, under `role`, so storyboard references reach the job too, not
+ *  only character refs — they showed as linked in the inputs strip but were dropped (owner 2026-11-04). */
+export async function assetInput(relay: Relay, doc: ProductionDocument, it: ScopeItem, role: RefRole): Promise<JobInputRef> {
+  if (!it.asset) throw new Error('This input has no picture.')
+  const origin = doc.assets[it.asset]?.origin
+  const kind = origin === 'drawn' ? 'drawing' : origin === 'generated' || origin === 'mock' ? 'generated' : 'picture'
+  return { id: it.id, role, ...(it.label ? { label: it.label.slice(0, 120) } : {}), kind, asset: await assetRef(relay, it.asset) }
 }
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

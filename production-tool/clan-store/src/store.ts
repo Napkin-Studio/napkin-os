@@ -75,7 +75,7 @@ export type BeforeBytes = (reason: MirrorReason) => Promise<void>
 export interface ClanStoreApi {
   load(): Promise<Doc | null>
   open(bytes: Uint8Array): Promise<Doc>
-  create(init: { person: Person; title?: string; ratio?: string; target_s?: number }): Promise<Doc>
+  create(init: { person: Person; title?: string; ratio?: string; target_s?: number; blank?: boolean }): Promise<Doc>
   get(): Doc
   documentId(): string
   setPerson(person: Person): void
@@ -158,10 +158,21 @@ export function newUlidId(prefix: string, now = Date.now()): string {
   return `${prefix}_${t}${lastRand.map((d) => CROCKFORD[d]).join('')}`
 }
 
-/** A new project's data: one script, storyboard and video, the script driving
- * the storyboard and the storyboard rendering the video (today's three stages). */
-export function newProjectData(args: { person: Person; title: string; newId: (p: string) => string; now: string; ratio?: string; target_s?: number }): Doc {
+/** A new project's data. With `blank`, an empty document: the canvas starts blank and the person adds
+ * Script, Storyboard, Video and other nodes from the "+ Node" menu (owner 2026-11-03: a blank canvas,
+ * the user adds nodes as they please) — the app's new-project path asks for this. Otherwise the three
+ * stages a project used to be born with — a script driving a storyboard, the storyboard rendering a
+ * video — which an import and the tests still want. */
+export function newProjectData(args: { person: Person; title: string; newId: (p: string) => string; now: string; ratio?: string; target_s?: number; blank?: boolean }): Doc {
   const { person, newId, now } = args
+  const doc = {
+    contract_version: '3',
+    app: 'production-tool',
+    project: { id: newId('proj'), tenant_id: person.tenant_id, title: args.title, created_by: `human:${person.id}`, created_at: now },
+    assets: {},
+    ...Object.fromEntries(MAP_NAMES.map((m) => [m, {}])),
+  } as unknown as Doc
+  if (args.blank) return doc
   const ratio = args.ratio ?? '16:9'
   const target_s = args.target_s ?? 15
   const e = (id: string, rest: Record<string, unknown>) => ({ id, v: 1, field_v: {}, ...rest })
@@ -170,13 +181,6 @@ export function newProjectData(args: { person: Person; title: string; newId: (p:
   const video = newId('video')
   const drives = newId('link')
   const renders = newId('link')
-  const doc = {
-    contract_version: '3',
-    app: 'production-tool',
-    project: { id: newId('proj'), tenant_id: person.tenant_id, title: args.title, created_by: `human:${person.id}`, created_at: now },
-    assets: {},
-    ...Object.fromEntries(MAP_NAMES.map((m) => [m, {}])),
-  } as unknown as Doc
   doc.scripts[script] = e(script, { title: 'Script', target_s })
   doc.storyboards[storyboard] = e(storyboard, { title: 'Storyboard', ratio, target_s })
   doc.videos[video] = e(video, { title: 'Video', ratio, target_s, timeline: {} })
@@ -256,10 +260,10 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     return typeof v === 'string' ? v : null
   }
 
-  create(init: { person: Person; title?: string; ratio?: string; target_s?: number }): Promise<Doc> {
+  create(init: { person: Person; title?: string; ratio?: string; target_s?: number; blank?: boolean }): Promise<Doc> {
     return this.serial(async () => {
       this.person = init.person
-      const first = newProjectData({ person: init.person, title: init.title ?? 'Untitled ad', newId: this.newId, now: this.now(), ratio: init.ratio, target_s: init.target_s })
+      const first = newProjectData({ person: init.person, title: init.title ?? 'Untitled ad', newId: this.newId, now: this.now(), ratio: init.ratio, target_s: init.target_s, blank: init.blank })
       assertValid(first, 'the new document')
       assertIntegrity(null, first, 'the new document')
       const h = await freshHost(this.wasm)

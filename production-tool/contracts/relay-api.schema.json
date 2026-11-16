@@ -2385,16 +2385,25 @@
     },
     "WriteInput": {
       "type": "object",
-      "description": "write (Skye, features/script-editor.clan): what to draft or rewrite, and the words around it. base_hash comes back on each write, so a draft lands right after a reload.",
+      "description": "write (Skye, features/script-editor.clan): what to draft or rewrite, and the words around it. base_hash comes back on each write, so a draft lands right after a reload. `mode` tells the relay and the landing code how the draft is meant to be shown: `revise` rewrites the item's own lines and lands as a word-diff; `draft` writes fresh lines from `instruction` (never the item's words) and lands as a whole-block insertion to Keep or Discard.",
       "properties": {
         "intent": {
-          "enum": ["draft", "tighten", "fit_seconds", "add_beat", "write_vo", "rephrase", "cut_name"]
+          "enum": ["draft", "tighten", "fit_seconds", "add_beat", "write_vo", "rephrase", "cut_name", "instruct"]
+        },
+        "mode": {
+          "enum": ["revise", "draft"],
+          "description": "How Skye works and how her result lands. `draft` reads `instruction`, writes whole new lines, lands as an insertion (Keep / Discard). `revise` reads the item's `lines`, rewrites them, lands as a word-diff (Keep / Keep mine). Absent reads as `draft` for the `draft` intent, `revise` for the rest."
         },
         "target": {
           "$ref": "#/$defs/WriteTarget"
         },
         "base_hash": {
           "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "instruction": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "draft: the brief Skye writes from (the prompt, 'continue', 'write the VO over this'), or a person's free 'Tell Skye' ask. It is never planted in the document and never diffed as the writer's own words."
         },
         "lines": {
           "$ref": "#/$defs/WriteLines"
@@ -2467,7 +2476,7 @@
       "items": {
         "type": "object",
         "properties": {
-          "type": { "enum": ["action", "character", "parenthetical", "dialogue", "direction"] },
+          "type": { "enum": ["action", "character", "parenthetical", "dialogue", "direction", "transition", "centered"] },
           "text": { "type": "string", "maxLength": 4000 }
         },
         "required": ["type", "text"],
@@ -2480,6 +2489,10 @@
       "properties": {
         "target": { "$ref": "#/$defs/WriteTarget" },
         "base_hash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "mode": {
+          "enum": ["revise", "draft"],
+          "description": "Echoed from the input by the relay, so the draft lands the right way after a reload: `draft` is a whole-block insertion, `revise` a word-diff."
+        },
         "lines": { "$ref": "#/$defs/WriteLines" },
         "note": { "type": "string", "maxLength": 200 },
         "reasoning": { "type": "string", "maxLength": 2000 },

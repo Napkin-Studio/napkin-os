@@ -196,11 +196,12 @@ function shapePlugin(kind: FragmentKind): Plugin {
 
 // ── ScriptKeys ──────────────────────────────────────────────────────────────
 
-/** The screenplay elements' Tab cycle (Trelby): Action → Character → Dialogue → Action. */
-export const TAB_NEXT: Record<string, string> = { action: 'character', character: 'dialogue', dialogue: 'action', parenthetical: 'dialogue' }
-export const TAB_PREV: Record<string, string> = { action: 'dialogue', character: 'action', dialogue: 'character', parenthetical: 'character' }
+/** The screenplay elements' Tab cycle (Trelby): Action → Character → Dialogue → Action. Transition and
+ * centred text are set from the element bar; once in them, Tab steps on to Action and Shift-Tab back. */
+export const TAB_NEXT: Record<string, string> = { action: 'character', character: 'dialogue', dialogue: 'action', parenthetical: 'dialogue', transition: 'action', centered: 'action' }
+export const TAB_PREV: Record<string, string> = { action: 'dialogue', character: 'action', dialogue: 'character', parenthetical: 'character', transition: 'dialogue', centered: 'dialogue' }
 /** What Enter at the end of a block makes next: Character → Dialogue → Action. */
-export const ENTER_NEXT: Record<string, string> = { action: 'action', character: 'dialogue', parenthetical: 'dialogue', dialogue: 'action' }
+export const ENTER_NEXT: Record<string, string> = { action: 'action', character: 'dialogue', parenthetical: 'dialogue', dialogue: 'action', transition: 'action', centered: 'action' }
 
 /** A scene heading at the start of a line: INT., EXT., INT./EXT., I/E, EST., or a forced '.' heading. */
 export const HEADING = /^(?:(?:INT\.\/EXT|INT\/EXT|I\/E|INT|EXT|EST)[. ]\s*\S.*|\.[A-Za-z0-9].*)$/i

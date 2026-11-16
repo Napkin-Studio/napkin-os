@@ -58,7 +58,7 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { addFrame, addShots, asset, job, MAYA, SHA, wasm } from '../test/model'
+import { addFrame, addShots, asset, job, MAYA, seedStages, SHA, wasm } from '../test/model'
 import type { EditSession } from './imageEditor/edits'
 import { ImageEditor } from './ImageEditor'
 import type { EditTarget } from '../model/purpose'
@@ -93,6 +93,7 @@ async function open(kind: Kind, opts: { remove?: boolean; jobState?: 'completed'
   const shell = new Shell({ relay, app, index, storage, remoteConfig: null, makeClan, summaryDelayMs: 1 })
   await shell.newProject()
   const services: Services = shell.get().session!.services
+  await seedStages(services.doc) // a new project is blank (owner 2026-11-03); this test works on the stages
   await putBlobAs(V1, new Blob(['v1'], { type: 'image/png' }))
   await putBlobAs(RESULT, new Blob(['result'], { type: 'image/png' }))
   let shotId = ''

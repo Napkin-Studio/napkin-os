@@ -1138,7 +1138,7 @@
       "since": "director.v9",
       "op": "clip",
       "provider": "runway",
-      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). Veo unchanged: a clip from words alone takes no pictures; the baby is said in words.",
+      "why": "features/runway-video-models.clan; the owner's @on ad came out a generic person, 2026-11. Veo cannot carry a character without a first frame, and naming it in words alone loses it: the director blocks (a storyboard frame is made first) rather than send a character-less clip, and the passthrough refuses.",
       "input": {
         "shot": {
           "id": "shot_01M5BABY000000000000000001",
@@ -1171,19 +1171,7 @@
           }
         ]
       },
-      "must": [
-        [
-          "cereal"
-        ],
-        [
-          "baby"
-        ]
-      ],
-      "forbid": [
-        "@baby"
-      ],
-      "expect_refs": [],
-      "frame": false,
+      "expect_refuse": true,
       "budget": 500
     },
     {

@@ -203,12 +203,23 @@ button.sp-pill { border: 0; cursor: pointer; font: inherit; font-size: 11px; }
 /* Skye in the text */
 .skyebar { z-index: 70; display: flex; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 10px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); font-size: 12px; white-space: nowrap; }
 .skyebar-line { padding: 0 6px; color: var(--ink2); }
+/* 'Write with Skye' in the top bar: Skye's figure beside a plain label; always reachable. */
+.se-write { display: inline-flex; align-items: center; gap: 6px; }
+.se-write[aria-pressed="true"] { background: var(--soft); }
+.pstart-close { margin-left: auto; }
+/* The free 'Tell Skye' field beside the canned verbs. */
+.skyebar-tell { width: 140px; height: 26px; margin-left: 4px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--r-pill, 13px); background: var(--paper); font-family: var(--f-display); font-size: 12.5px; color: var(--ink); }
+.skyebar-tell:focus { outline: none; border-color: var(--create); }
+.skyebar-tell:disabled { opacity: 0.5; }
 .sugcard { margin: 6px 0 4px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line-soft); border-left: 3px solid var(--create); background: var(--card); font-family: var(--f-display); font-size: 13px; }
 .sugcard.stale { border-left-color: var(--warn); opacity: 0.9; }
 .sugcard.others { display: flex; align-items: center; gap: 6px; border-left-color: var(--line); }
 .sug-words { white-space: pre-wrap; line-height: 1.5; }
 .sug-words del { color: var(--ink3); text-decoration: line-through; }
 .sug-words ins { text-decoration: underline; text-decoration-color: var(--create); text-decoration-thickness: 2px; text-underline-offset: 3px; color: var(--ink); }
+/* A draft insertion: Skye's whole-block lines, shown as hers, never diffed against the prompt. */
+.sugcard.draft .sug-words { display: flex; flex-direction: column; gap: 2px; }
+.sug-words ins.sug-line { display: block; text-decoration: none; color: var(--ink); border-left: 2px solid var(--create); padding-left: 8px; }
 .sug-meta { color: var(--ink2); font-size: 12px; }
 .sug-bubble { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 12.5px; }
 .sug-bubble .spacer { flex: 1; }

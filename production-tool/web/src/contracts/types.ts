@@ -850,6 +850,9 @@ export interface Suggestion extends EntityBase {
   job_id: Id
   for: PersonRef
   base_hash: Sha256
+  /** How the draft is meant to land: `draft` is a whole-block insertion (Keep / Discard, no word-diff);
+   *  `revise` is a rewrite shown as a word-diff (Keep / Keep mine). Absent reads as `revise`. */
+  mode?: WriteMode
   proposed: {
     prose: Prose
     text: string
@@ -1131,13 +1134,20 @@ export interface CutdownPlan {
   crops: { shotId: Id; aspect: Aspect; keys: CropKey[]; subject?: PxBox; cuts: boolean; why?: string }[]
 }
 
-export type WriteIntent = 'draft' | 'tighten' | 'fit_seconds' | 'add_beat' | 'write_vo' | 'rephrase' | 'cut_name'
+export type WriteIntent = 'draft' | 'tighten' | 'fit_seconds' | 'add_beat' | 'write_vo' | 'rephrase' | 'cut_name' | 'instruct'
+/** How Skye works and how her result lands. `draft` reads `instruction` and writes whole new lines
+ *  (an insertion, Keep / Discard); `revise` rewrites the item's own `lines` (a word-diff, Keep / Keep mine). */
+export type WriteMode = 'revise' | 'draft'
 export interface WriteTarget { kind: 'scene' | 'shot' | 'beat'; id: Id }
-export interface WriteLine { type: 'action' | 'character' | 'parenthetical' | 'dialogue' | 'direction'; text: string }
+export interface WriteLine { type: 'action' | 'character' | 'parenthetical' | 'dialogue' | 'direction' | 'transition' | 'centered'; text: string }
 export interface WriteInput {
   intent: WriteIntent
+  /** draft reads instruction and inserts; revise rewrites lines as a word-diff. Absent reads as draft for the draft intent, revise otherwise. */
+  mode?: WriteMode
   target: WriteTarget
   base_hash: Sha256
+  /** draft, or a free 'Tell Skye' ask: the brief Skye writes from. Never planted in the document, never diffed as the writer's own words. */
+  instruction?: string
   lines: WriteLine[]
   selection?: { from: number; to: number; text: string }
   seconds?: number
@@ -1147,10 +1157,16 @@ export interface WriteInput {
   explicit?: boolean
   context: { script_title?: string; target_s?: number; scene_heading?: string; neighbours: string; refs: { name: string; role: RefRole; label?: string }[] }
 }
+/** The mode a write runs in: explicit, else draft for the draft intent and revise for the rest. */
+export function writeMode(w: { intent: WriteInput['intent']; mode?: WriteInput['mode'] }): WriteMode {
+  return w.mode ?? (w.intent === 'draft' ? 'draft' : 'revise')
+}
 /** One of Skye's drafts: lands as a suggestion; nothing changes until Keep. */
 export interface Write {
   target: WriteTarget
   base_hash: Sha256
+  /** The write's mode, echoed from the input by the relay, so the draft lands the right way after a reload. */
+  mode?: WriteMode
   lines: WriteLine[]
   note: string
   reasoning?: string

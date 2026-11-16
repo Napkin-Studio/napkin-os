@@ -263,6 +263,12 @@ export function scopeOf(d: Doc, nodeId: Id, opts: ScopeOptions = {}): ScopeItem[
   // Upstream: what the driving script or rendering storyboard has linked in, up the chain, once.
   const visited = new Set([nodeId])
   const stack = own.filter((l) => UPSTREAM.includes(l.role)).map((l) => l.from.id)
+  // An implicit storyboard is part of its video and has no drives/renders link of its own (it is owned
+  // by `video_id`): walk up to the video so it inherits the video's scope, and the script that drives
+  // the video. Without this, a shot made "straight from the script" carried none of the script's
+  // references — @on linked to the Script reached no shot (owner 2026-11-04).
+  const selfSb = d.storyboards?.[nodeId]
+  if (selfSb?.implicit && selfSb.video_id) stack.push(selfSb.video_id)
   while (stack.length) {
     const up = stack.shift()!
     if (visited.has(up)) continue

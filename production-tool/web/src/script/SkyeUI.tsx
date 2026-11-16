@@ -7,12 +7,13 @@
 import { useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import { proseHash, StaleSuggestion, type Prose } from '../../../clan-store/src'
-import type { Suggestion, WriteIntent, WriteTarget } from '../contracts/types'
+import type { Suggestion, WriteIntent, WriteMode, WriteTarget } from '../contracts/types'
 import type { ModelStore } from '../model/store'
 import { AgentAvatar } from '../ui/agents/AgentFigure'
 import type { HistoryFocus } from '../ui/History'
-import { HANDS_OFF_LINE, keep, keepMineDraft, linesOf, QUOTA_OUT, SKYE, SKYE_OPTIONS, wordDiff } from './skye'
+import { discardDraft, HANDS_OFF_LINE, keep, keepMineDraft, linesOf, QUOTA_OUT, SKYE, SKYE_OPTIONS, TELL_SKYE_PLACEHOLDER, wordDiff } from './skye'
 
+type StartOpts = { selection?: { from: number; to: number; text: string }; seconds?: number; explicit?: boolean; instruction?: string; mode?: WriteMode }
 
 /** The bar on a selection inside one item. */
 export function SkyeBar({ editor, target, seconds, handsOff, off, quota, working, onStart }: {
@@ -23,9 +24,10 @@ export function SkyeBar({ editor, target, seconds, handsOff, off, quota, working
   off: boolean
   quota: boolean
   working: boolean
-  onStart: (intent: WriteIntent, opts: { selection?: { from: number; to: number; text: string }; seconds?: number; explicit?: boolean }) => void
+  onStart: (intent: WriteIntent, opts: StartOpts) => void
 }) {
   const [asked, setAsked] = useState(false)
+  const [tell, setTell] = useState('')
   const [, setTick] = useState(0)
   useEffect(() => {
     if (!editor) return
@@ -43,6 +45,14 @@ export function SkyeBar({ editor, target, seconds, handsOff, off, quota, working
   const at = editor.view.coordsAtPos(from)
   const selection = { from, to, text: editor.state.doc.textBetween(from, to, '\n').slice(0, 4000) }
   const style = { position: 'fixed' as const, left: Math.max(8, at.left), top: Math.max(8, at.top - 44) }
+  // A free 'Tell Skye' ask: the typed words ride as the instruction (reusing the draft/instruction
+  // field), on the same selection, as a revise. The five canned verbs stay one tap.
+  const sendTell = () => {
+    const instruction = tell.trim()
+    if (!instruction || working) return
+    onStart('instruct', { selection, instruction, mode: 'revise', ...(handsOff ? { explicit: true } : {}) })
+    setTell('')
+  }
   return (
     <div className="skyebar" role="toolbar" aria-label={SKYE} style={style} onMouseDown={(e) => e.preventDefault()}>
       <AgentAvatar agent="skye" size={20} decorative />
@@ -52,12 +62,19 @@ export function SkyeBar({ editor, target, seconds, handsOff, off, quota, working
             <span className="skyebar-line">{HANDS_OFF_LINE}</span>
             <button className="btn xs" onClick={() => setAsked(true)}>Ask her</button>
           </>
-        ) : SKYE_OPTIONS.map((o) => (
-          <button key={o.intent} className="btn xs ghost" disabled={working}
-            onClick={() => onStart(o.intent, { selection, ...(o.intent === 'fit_seconds' ? { seconds } : {}), ...(handsOff ? { explicit: true } : {}) })}>
-            {o.label(seconds)}
-          </button>
-        ))}
+        ) : (
+          <>
+            {SKYE_OPTIONS.map((o) => (
+              <button key={o.intent} className="btn xs ghost" disabled={working}
+                onClick={() => onStart(o.intent, { selection, ...(o.intent === 'fit_seconds' ? { seconds } : {}), ...(handsOff ? { explicit: true } : {}) })}>
+                {o.label(seconds)}
+              </button>
+            ))}
+            <input className="skyebar-tell" type="text" value={tell} placeholder={TELL_SKYE_PLACEHOLDER} aria-label="Tell Skye"
+              disabled={working} onChange={(e) => setTell(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); sendTell() } }} />
+          </>
+        )}
     </div>
   )
 }
@@ -98,6 +115,10 @@ export function SuggestionCard({ sug, store, me, currentProse, onWhy, say, askAg
       </div>
     )
   }
+  // A draft (mode 'draft') is a whole-block insertion written from a brief: Skye's words are shown as
+  // hers, never diffed against the prompt (owner's named bug, 2026-11-03), and the choice is Keep /
+  // Discard. A revise (mode 'revise', the default) is a rewrite shown as a word-diff, Keep / Keep mine.
+  const isDraft = sug.mode === 'draft'
   const before = linesOf(store.get(), currentProse()).map((l) => l.text).join('\n')
   const diff = wordDiff(before, sug.proposed.text)
   const run = async (fn: () => Promise<{ line: string }>, undo = true) => {
@@ -113,9 +134,11 @@ export function SuggestionCard({ sug, store, me, currentProse, onWhy, say, askAg
     }
   }
   return (
-    <div className={`sugcard ${stale ? 'stale' : ''}`} role="group" aria-label={`${SKYE}: ${sug.note}`}>
+    <div className={`sugcard ${isDraft ? 'draft' : ''} ${stale ? 'stale' : ''}`} role="group" aria-label={`${SKYE}: ${sug.note}`}>
       <div className="sug-words">
-        {diff.map((p, i) => (p.kind === 'same' ? <span key={i}>{p.text}</span> : p.kind === 'gone' ? <del key={i}>{p.text}</del> : <ins key={i}>{p.text}</ins>))}
+        {isDraft
+          ? sug.proposed.text.split('\n').map((line, i) => <ins key={i} className="sug-line">{line || ' '}</ins>)
+          : diff.map((p, i) => (p.kind === 'same' ? <span key={i}>{p.text}</span> : p.kind === 'gone' ? <del key={i}>{p.text}</del> : <ins key={i}>{p.text}</ins>))}
         {sug.proposed.duration_s !== undefined && <span className="sug-meta"> · {sug.proposed.duration_s} s</span>}
         {(sug.proposed.new_beats ?? []).map((b, i) => <ins key={`b${i}`} className="sug-beat"> + {b.kind} at 0:{String(Math.floor(b.at_s)).padStart(2, '0')}{b.at_s % 1 ? '.5' : ''}</ins>)}
       </div>
@@ -125,6 +148,11 @@ export function SuggestionCard({ sug, store, me, currentProse, onWhy, say, askAg
         <span className="spacer" />
         {stale ? (
           <button className="btn xs" onClick={askAgain}>Ask again</button>
+        ) : isDraft ? (
+          <>
+            <button className="btn xs primary" disabled={busy} onClick={() => void run(() => keep(store, sug.id))}>Keep</button>
+            <button className="btn xs" disabled={busy} onClick={() => void run(() => discardDraft(store, sug.id))}>Discard</button>
+          </>
         ) : (
           <>
             <button className="btn xs primary" disabled={busy} onClick={() => void run(() => keep(store, sug.id))}>Keep</button>

@@ -21,7 +21,7 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { addShots, asset, id, job, MAYA, SHA, wasm } from '../test/model'
+import { addShots, asset, id, job, MAYA, seedStages, SHA, wasm } from '../test/model'
 import { systemUpdate, updateDoc } from '../doc/store'
 import { addScene, importFountain } from './edits'
 import { parseFountain } from './fountain'
@@ -71,6 +71,7 @@ async function open(pick?: (services: import('../app/context').Services) => Prom
   await shell.newProject()
   const session = shell.get().session!
   const services = session.services
+  await seedStages(services.doc) // a new project is blank (owner 2026-11-03); the Script page needs its script
   const h = memoryHistory()
   const router = new Router({ base: '/', history: h.history, location: h.location, win: h.win as never })
   const scriptId = pick ? await pick(services) : mainScript(services.doc.get())!.id
@@ -141,6 +142,27 @@ describe('the Script editor page', () => {
     expect(el.textContent).toContain('←Canvas')
     expect(el.textContent).toContain('Plan shots')
     expect(el.textContent).not.toMatch(/\$|free|cost/i)
+  })
+
+  it('a non-empty script still has an obvious Write with Skye, seeded with the idea already typed (urgent P0 2026-11-04)', async () => {
+    // The user's situation: a script with content, so the empty-only start box is gone.
+    const { el } = await open(secondScript('Write a script for a man putting in work at the gym'))
+    await settle()
+    // The empty-state prompt is NOT shown, but a persistent Write with Skye is.
+    expect(el.textContent).not.toContain('Paste a script, or write the idea in a line.')
+    const write = el.querySelector('button.se-write') as HTMLButtonElement
+    expect(write, 'the Write with Skye button is in the top bar').not.toBeNull()
+    expect(write.textContent).toContain('Write with Skye')
+    expect(write.disabled).toBe(false)
+    // There is no write panel until it is pressed.
+    expect(el.querySelector('[data-write-skye]')).toBeNull()
+    await act(async () => { write.click() })
+    await settle()
+    // The panel opens, seeded with the idea the writer already typed (no retyping).
+    const box = el.querySelector('[data-write-skye] textarea.pstart-input') as HTMLTextAreaElement
+    expect(box, 'the write prompt box opened').not.toBeNull()
+    expect(box.value).toBe('Write a script for a man putting in work at the gym')
+    expect(el.querySelector('[data-write-skye]')?.textContent).toContain('Skye')
   })
 
   it('shows imported scenes, and the shots; the current shot opens its editor', async () => {

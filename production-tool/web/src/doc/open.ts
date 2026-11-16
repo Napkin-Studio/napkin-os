@@ -45,7 +45,9 @@ export async function openDocument({ project, person, title, undo, make, storage
   const tryClan = async () => {
     const clan = build()
     const loaded = await clan.load()
-    if (!loaded) await clan.create(person, title)
+    // A brand-new project opens on a blank canvas; the person adds nodes from the "+ Node" menu
+    // (owner 2026-11-03). An existing project loads whatever it was saved with.
+    if (!loaded) await clan.create(person, title, true)
     return clan
   }
   try {
@@ -70,7 +72,7 @@ export async function openDocument({ project, person, title, undo, make, storage
     if (!loaded) {
       const kept = await storage.get<{ contract_version?: string }>(docKeyFor(project)).catch(() => undefined)
       if (kept && kept.contract_version !== CURRENT) return { refused: new UnsupportedContract(kept.contract_version ?? null).message }
-      await doc.create(person, title)
+      await doc.create(person, title, true)
     }
     return { doc, clan: null, storeNote: NO_HISTORY }
   }

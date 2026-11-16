@@ -154,7 +154,7 @@ export function checkpoint(kind: FragmentKind, prose: Prose, opts: { refs: RefNa
   } else if (kind === 'scene') {
     const lines = blocks.map((b) => {
       const t = text(b)
-      if (b.type === 'character') return t.toUpperCase()
+      if (b.type === 'character' || b.type === 'transition') return t.toUpperCase()
       if (b.type === 'parenthetical') return `(${t})`
       return t
     })

@@ -6,8 +6,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { strToU8, unzipSync, zipSync } from 'fflate'
 import { ClanDocumentStore, newUlidId, rankBetween, ranksBetween, type Persistence, type Person, type SerializedUndo } from '../../../clan-store/src'
-import type { DocAsset, DocJob, Frame, Generation, ProductionDocument, Shot } from '../contracts/types'
+import type { DocAsset, DocJob, Frame, Generation, ProductionDocument, Ratio, Shot } from '../contracts/types'
 import { pickInCut } from '../doc/cutWrites'
+import { updateDoc, type DocumentStore } from '../doc/store'
 import { mainScript, mainStoryboard, mainVideo, scenesOf } from '../model/selectors'
 import { ModelStore } from '../model/store'
 
@@ -48,6 +49,31 @@ export function job(d: ProductionDocument, op: DocJob['op'], inputs: string[], o
     op, state, node: { kind: 'storyboard', id: mainStoryboard(d)!.id }, started_by: `human:${MAYA.id}`, tenant_id: TENANT, nonce: id('n'),
     crew: 'wren', parent_ids: [], input_hashes: inputs, outputs: out && state === 'completed' ? [out] : [], created_at: T, ...extra,
   }) as DocJob
+}
+
+/**
+ * Seed a blank project with today's three stages (script → storyboard → video), as newProjectData
+ * once did before the canvas went blank (owner 2026-11-03). Tests that need the stages call this
+ * after `store.create()`; those that want a blank canvas do not. Idempotent: it adds nothing when a
+ * main script already exists.
+ */
+export async function seedStages(store: DocumentStore, opts: { ratio?: Ratio; target_s?: number } = {}): Promise<void> {
+  if (mainScript(store.get())) return
+  const ratio = opts.ratio ?? '16:9'
+  const target_s = opts.target_s ?? 15
+  await updateDoc(store, (d) => {
+    const script = id('script')
+    const storyboard = id('storyboard')
+    const video = id('video')
+    const drives = id('link')
+    const renders = id('link')
+    d.scripts[script] = { id: script, v: 1, field_v: {}, title: 'Script', target_s } as unknown as ProductionDocument['scripts'][string]
+    d.storyboards[storyboard] = { id: storyboard, v: 1, field_v: {}, title: 'Storyboard', ratio, target_s } as unknown as ProductionDocument['storyboards'][string]
+    d.videos[video] = { id: video, v: 1, field_v: {}, title: 'Video', ratio, target_s, timeline: {} } as unknown as ProductionDocument['videos'][string]
+    d.links[drives] = { id: drives, v: 1, field_v: {}, from: { kind: 'script', id: script }, to: { kind: 'storyboard', id: storyboard }, role: 'drives' } as unknown as ProductionDocument['links'][string]
+    d.links[renders] = { id: renders, v: 1, field_v: {}, from: { kind: 'storyboard', id: storyboard }, to: { kind: 'video', id: video }, role: 'renders' } as unknown as ProductionDocument['links'][string]
+  }, 'seed the three stages')
+  await store.flush()
 }
 
 /** `n` new shots at the end of the main storyboard, in rank order. */

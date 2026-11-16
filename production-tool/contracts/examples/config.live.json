@@ -10,6 +10,6 @@
   "inFlightPerParticipant": 2,
   "jobTimeoutS": { "image": 180, "video": 600 },
   "spend": { "capUsd": 1300, "warnUsd": 1000 },
-  "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": true, "moreOptions": false },
+  "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": true, "moreOptions": false, "ownCanvas": true, "makeAndEdit": true, "connectedVideo": true },
   "banner": ""
 }

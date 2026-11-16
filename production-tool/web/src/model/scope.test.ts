@@ -48,6 +48,18 @@ describe('scopeOf', () => {
     expect(items.find((i) => i.id === LOC_BEACH)!.usedBy).toEqual([S15])
   })
 
+  it('an implicit storyboard sees its video\'s driving script, so a shot made straight from the script still gets the script\'s refs (owner 2026-11-04)', () => {
+    const d = fresh()
+    const g = link({ kind: 'ref', id: GOLDEN }, { kind: 'script', id: SCRIPT }, 'lighting')
+    const drives = link({ kind: 'script', id: SCRIPT }, { kind: 'video', id: VIDEO }, 'drives')
+    d.links[g.id] = g
+    d.links[drives.id] = drives
+    const sbId = 'storyboard_01K7A0000000000000000IMPL'
+    d.storyboards[sbId] = { id: sbId, v: 1, field_v: {}, title: 'Video', ratio: '16:9', target_s: 10, implicit: true, video_id: VIDEO } as never
+    // Before the fix the implicit storyboard had no link into it, so it inherited nothing from the script.
+    expect(scopeOf(d, sbId).find((i) => i.id === GOLDEN)).toMatchObject({ via: 'upstream' })
+  })
+
   it('a reference named in the text but not linked shows as a mention, with its shots', () => {
     const it = scopeOf(ex, SB).find((i) => i.id === BOTTLE)!
     expect(it).toMatchObject({ via: 'mention', name: 'product_bottle', usedBy: [S16] })

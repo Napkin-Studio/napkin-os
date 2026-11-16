@@ -3,8 +3,8 @@
 // is its video's cut item for it (its edl pick: the video its storyboard renders,
 // selectors videoOfShot); the ad is a render of a video (contract 3).
 
-import type { ClipQuality, Generation, Id, JobInput, JobInputRef, ModelChoice, ProductionDocument, Shot, StitchTransition } from '../contracts/types'
-import { DEFAULT_QUALITY, resolveQuality } from '../capabilities'
+import type { ClipQuality, Config, Generation, Id, JobInput, JobInputRef, ModelChoice, ProductionDocument, Shot, StitchTransition } from '../contracts/types'
+import { clipRefCapacity, DEFAULT_QUALITY, resolveQuality } from '../capabilities'
 import { systemUpdate } from '../doc/store'
 import type { JobPurpose } from '../model/purpose'
 import { currentTake, cutItemFor, mainVideo, shotSegment, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
@@ -78,7 +78,7 @@ export function traySummary(sources: ClipSource[]): string {
 export async function makeClip(
   deps: FrameDeps,
   shotId: string,
-  extra: { text?: string; reviewIds?: string[]; parentTake?: Generation; followRun?: string; modelChoice?: ModelChoice; videoId?: string; fromWords?: boolean; quality?: ClipQuality; endShotId?: Id } = {},
+  extra: { text?: string; reviewIds?: string[]; parentTake?: Generation; followRun?: string; modelChoice?: ModelChoice; videoId?: string; fromWords?: boolean; quality?: ClipQuality; endShotId?: Id; config?: Config } = {},
 ): Promise<string> {
   const d = liveGet(deps.doc)
   const shot = d.shots[shotId]
@@ -94,6 +94,16 @@ export async function makeClip(
   const image = frame ? await assetRef(deps.relay, frame.asset) : start ? await assetRef(deps.relay, start.sha) : undefined
   const text = extra.text?.trim()
   const refs = await refsFor(deps.relay, d, shot, text, { offer: true, declined: deps.ui.get().declinedAdds?.[shot.id] })
+  // Belt and braces (the owner's @on ad came out a generic person, 2026-11): a clip made from words alone
+  // (no frame) that names a required character cannot carry it on a model without refsWithoutFrame, so refuse
+  // here with a clear message rather than submit a character-less job. The Make room makes a frame first; this
+  // fires on the bulk "straight from the script" paths, which pass `config`. Offered refs do not count, and a
+  // words clip with no cast is left alone.
+  if (source === 'words' && (extra.modelChoice || extra.config)
+      && refs.some((r) => r.role === 'character' && !r.optional)
+      && !clipRefCapacity(extra.modelChoice, false, extra.config).carries) {
+    throw new Error("Can't use references without a start frame")
+  }
   const ratio = ratioOf(d, videoOfShot(d, shot.id, extra.videoId)?.id, shot.storyboard_id)
   // The frame it lands on: only from a frame of its own (a clip from words takes none).
   const end = extra.endShotId && image ? selectedFrame(d, extra.endShotId) : undefined
@@ -140,17 +150,24 @@ export async function makeTake(
     for (const [i, f] of frames.entries()) {
       if (f) refs.push({ id: f.id, role: 'composition', kind: 'generated', label: `Shot ${i + 1} frame`, asset: await assetRef(deps.relay, f.asset) })
     }
-    for (const s of shots) for (const r of await refsFor(deps.relay, d, s)) if (!refs.some((x) => x.id === r.id)) refs.push(r)
   }
+  // The pictures the shots name go in both modes. A take pinned on a frame sends none to the model (the relay's
+  // connected.shape empties them and says the names in words), but the relay resolves each @name in the cuts
+  // against the pictures given first: with none, "@bolt is not one of the images this step was given" refused
+  // every take of a character (full test, 2026-11-04). makeClip sends them beside a frame the same way.
+  for (const s of shots) for (const r of await refsFor(deps.relay, d, s)) if (!refs.some((x) => x.id === r.id)) refs.push(r)
   const { starts } = takeTiming(shots.map((s) => s.duration_s))
   // Each shot's line: its action, then any words given for it only (Make clip's box).
   const line = (s: Shot, i: number) => [s.action?.trim() || s.direction?.trim() || `Shot ${i + 1}`, opts.texts?.[s.id]?.trim()].filter(Boolean).join(' ')
   const cuts = shots.map((s, i) => ({ atS: starts[i], text: clipText(line(s, i), 600) }))
   const ratio = ratioOf(d, videoId, shots[0].storyboard_id)
   const max = opts.refsMax ?? 10
+  // Character refs go first, so when the model carries fewer pictures than the run offers, the storyboard
+  // frames are dropped before the characters (a take must keep its character: the owner's @on ad, 2026-11).
+  const ordered = [...refs.filter((r) => r.role === 'character'), ...refs.filter((r) => r.role !== 'character')]
   const input: JobInput = {
     shot: jobShot(d, shots[0]), shots: shots.map((s) => jobShot(d, s)), mode, cuts,
-    ...(image ? { image } : {}), ...(refs.length ? { refs: refs.slice(0, max) } : {}), ...(ratio ? { ratio } : {}),
+    ...(image ? { image } : {}), ...(ordered.length ? { refs: ordered.slice(0, max) } : {}), ...(ratio ? { ratio } : {}),
   }
   const parents = frames.map((f) => f?.job_id).filter(Boolean) as string[]
   const quality = opts.quality ?? videoQuality(d, videoId)

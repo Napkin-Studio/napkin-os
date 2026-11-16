@@ -80,7 +80,7 @@ function Signed({ agent, state = 'idle', children }: { agent: CastKey; state?: '
 }
 
 /** The box: Enter sends (Shift+Enter a new line), @ lists the references to pull in. */
-function PromptBox({ placeholder, hint, submit, busy, label, autoFocus = false, multiline = false }: {
+function PromptBox({ placeholder, hint, submit, busy, label, autoFocus = false, multiline = false, initial = '' }: {
   placeholder: string
   hint?: string
   submit: (words: string) => Promise<void> | void
@@ -88,9 +88,11 @@ function PromptBox({ placeholder, hint, submit, busy, label, autoFocus = false, 
   label: string
   autoFocus?: boolean
   multiline?: boolean
+  /** Seed the box (e.g. an idea the writer already typed), still editable. */
+  initial?: string
 }) {
   const doc = useDoc()
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initial)
   const [caret, setCaret] = useState(0)
   const [pick, setPick] = useState(0)
   const area = useRef<HTMLTextAreaElement>(null)
@@ -138,7 +140,7 @@ function AtWork({ agent, line }: { agent: CastKey; line: string }) {
 
 // ── script ──────────────────────────────────────────────────────────────────
 
-function ScriptStart({ scriptId, place }: { scriptId: Id; place: 'card' | 'editor' }) {
+function ScriptStart({ scriptId, place, seed, onClose }: { scriptId: Id; place: 'card' | 'editor'; seed?: string; onClose?: () => void }) {
   const services = useServices()
   const router = useContext(RouterContext)
   const [busy, setBusy] = useState(false)
@@ -154,6 +156,8 @@ function ScriptStart({ scriptId, place }: { scriptId: Id; place: 'card' | 'edito
       if ('pasted' in r) setNote(`Pasted ${r.pasted} ${r.pasted === 1 ? 'scene' : 'scenes'}.${r.dropped ? ` ${r.dropped}` : ''}`)
       // On the canvas the draft is read and kept in the Script editor, where it lands.
       if (place === 'card') router?.push(scriptRoute(services.project.id, scriptId))
+      // Skye's draft lands as a suggestion in the editor; close the write panel so it is visible.
+      else if (onClose && !('pasted' in r)) onClose()
     } catch (e) {
       setError(message(e))
     } finally {
@@ -161,14 +165,30 @@ function ScriptStart({ scriptId, place }: { scriptId: Id; place: 'card' | 'edito
     }
   }
   return (
-    <section className="pstart-card" aria-label="Start the script">
-      <Signed agent="skye" />
+    <section className="pstart-card" aria-label="Write with Skye">
+      <Signed agent="skye">
+        {onClose && <button type="button" className="askcard-latr pstart-close" onClick={onClose} aria-label="Close">Cancel</button>}
+      </Signed>
       <PromptBox placeholder={PROMPT_COPY.script.placeholder} hint={PROMPT_COPY.script.hint} label="The script, or the idea in a line"
-        submit={submit} busy={busy} autoFocus={place === 'editor'} multiline={place === 'editor'} />
+        submit={submit} busy={busy} autoFocus={place === 'editor'} multiline={place === 'editor'} initial={seed} />
       {busy && <AtWork agent="skye" line={PROMPT_COPY.script.busy} />}
       {note && <div className="pstart-note" role="status">{note}</div>}
       {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
+  )
+}
+
+/**
+ * 'Write with Skye' in the Script editor, reachable whether the script is empty or has content (the
+ * empty-only PromptStart is gone once there is content). Seeded with the idea the writer already typed.
+ * Skye drafts a short script from the brief; it lands as a Keep / Discard suggestion in the editor.
+ */
+export function ScriptWritePrompt({ scriptId, seed, onClose }: { scriptId: Id; seed?: string; onClose?: () => void }) {
+  const guard = { onKeyDown: (e: React.KeyboardEvent) => e.stopPropagation(), onPointerDown: (e: React.PointerEvent) => e.stopPropagation() }
+  return (
+    <div className="pstart pstart-editor" data-prompt-start="script" data-write-skye="" {...guard}>
+      <ScriptStart scriptId={scriptId} place="editor" seed={seed} onClose={onClose} />
+    </div>
   )
 }
 

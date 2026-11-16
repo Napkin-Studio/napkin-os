@@ -27,7 +27,7 @@ from pathlib import Path
 from contracts import Contracts
 
 WRITE_MODEL = "claude-sonnet-5-5"
-PROMPT_VERSION = "skye.v3"  # skye.v1 and v2 stay bundled: ModelWriter(prompt_version="skye.v2") rolls back
+PROMPT_VERSION = "skye.v4"  # skye.v1–v3 stay bundled: ModelWriter(prompt_version="skye.v3") rolls back
 PURPOSE = "writer"
 PROMPTS = Path(__file__).parent / "prompts"
 ASK_HOOK = "[ask]"
@@ -67,17 +67,24 @@ def keep_names(before: str, lines: list[dict]) -> list[dict]:
     return [{**x, "text": MENTION.sub(back, x["text"])} for x in lines]
 
 
+def mode_of(w: dict) -> str:
+    """How the write runs: explicit, else draft for the draft intent and revise for the rest."""
+    return w.get("mode") or ("draft" if w.get("intent") == "draft" else "revise")
+
+
 def settle(inp: dict, out: dict) -> dict:
-    """The relay's part of the answer: target and base_hash from the input, other targets dropped,
-    the person's @names kept (keep_names), new beats inside the shot, notes cut to 200 characters."""
+    """The relay's part of the answer: target, base_hash and mode from the input (echoed, so a draft
+    lands the right way after a reload), other targets dropped, the person's @names kept (keep_names),
+    new beats inside the shot, notes cut to 200 characters."""
     w = inp["write"]
     before = " ".join(x["text"] for x in w["lines"])
     target = w["target"]
+    mode = mode_of(w)
     writes = []
     for d in out.get("writes") or []:
         if d.get("target", target) != target:
             continue
-        d = {**d, "target": target, "base_hash": w["base_hash"], "note": (d.get("note") or "")[:200]}
+        d = {**d, "target": target, "base_hash": w["base_hash"], "mode": mode, "note": (d.get("note") or "")[:200]}
         if d.get("lines"):
             d["lines"] = keep_names(before, d["lines"])
         if d.get("new_beats"):
@@ -146,6 +153,21 @@ def _first_sentence(text: str) -> str:
     return parts[0] if parts else text
 
 
+WHERE = re.compile(r"\b(?:at|in|inside)\s+(?:the\s+)?([a-z][a-z'-]+)", re.IGNORECASE)
+
+
+def _draft_script(instruction: str | None) -> list[dict]:
+    """A short screenplay from a brief: a slugline, the premise as action, a close. Mirrors the web
+    mock (mockWrite.draftScript); the real model writes a proper draft (prompts/skye.v4.md)."""
+    brief = (instruction or "").strip()
+    where = WHERE.findall(brief)
+    slug = f"INT. {(where[-1] if where else 'location').upper()} - DAY"
+    premise = (brief[:1].upper() + brief[1:]).rstrip(". ") + "." if brief else "An idea in a line."
+    return [{"type": "action", "text": slug},
+            {"type": "action", "text": premise},
+            {"type": "action", "text": "We stay on the effort, then cut to the end card."}]
+
+
 class PassthroughWriter:
     """No model: a plain, predictable draft for each intent (the local relay; the tests)."""
 
@@ -157,7 +179,9 @@ class PassthroughWriter:
         w = inp["write"]
         lines = [dict(x) for x in w["lines"]]
         words = " ".join(x["text"] for x in lines)
-        if ASK_HOOK in words and not inp.get("answer"):
+        # The brief a draft writes from (the hook may be planted there, as a draft carries no item words).
+        brief = (w.get("instruction") or "").strip()
+        if ASK_HOOK in f"{words} {brief}" and not inp.get("answer"):
             return {"writes": [], "question": {
                 "id": "q_00000000000000000000000000", "kind": "block", "text": "Who is this scene about?",
                 "why": "There is not enough here to draft from.",
@@ -167,7 +191,8 @@ class PassthroughWriter:
         intent = w["intent"]
         note = {"tighten": "I tightened it.", "fit_seconds": f"I tightened it to fit {w.get('seconds', 0):g} s.",
                 "rephrase": "I said it another way.", "add_beat": "I added a beat.", "write_vo": "I wrote the VO.",
-                "draft": "I drafted it from your line.", "cut_name": f"I cut @{w.get('name', '')}."}[intent]
+                "draft": "I drafted it from your line.", "cut_name": f"I cut @{w.get('name', '')}.",
+                "instruct": "I did what you asked."}[intent]
         draft: dict = {"target": w["target"], "base_hash": w["base_hash"], "note": note}
         if intent in ("tighten", "fit_seconds"):
             draft["lines"] = [{**x, "text": _first_sentence(x["text"])} if x["type"] == "action" else x for x in lines]
@@ -175,12 +200,18 @@ class PassthroughWriter:
                 draft["duration_s"] = round(min(30.0, max(0.5, float(w["seconds"]))), 1)
         elif intent == "rephrase":
             draft["lines"] = [{**x, "text": " ".join(reversed(SENTENCE.split(x["text"].strip())))} if x["type"] == "action" else x for x in lines]
+        elif intent == "instruct":
+            # A free 'Tell Skye' ask: the model follows the instruction. The passthrough cannot, so it
+            # returns the words unchanged (the instruction is carried for the model; mode is echoed).
+            draft["lines"] = lines
         elif intent == "cut_name":
             name = w.get("name", "")
             draft["lines"] = [{**x, "text": re.sub(rf"\s*@{re.escape(name)}(?![a-z0-9_-])", "", x["text"]).strip()} for x in lines]
         elif intent == "draft":
-            idea = words.strip() or "An idea in a line."
-            draft["lines"] = [{"type": "action", "text": idea}, {"type": "action", "text": "We hold on it, then cut to the end card."}]
+            # A draft writes a short screenplay from the instruction (the brief), never the item's words,
+            # so the prompt is never diffed as the writer's own prose (owner's named bug, 2026-11-03).
+            # The real model writes a proper draft (prompts/skye.v4.md); this stub keeps the shape.
+            draft["lines"] = _draft_script(inp["write"].get("instruction"))
         else:
             draft["lines"] = lines
             kind = "vo" if intent == "write_vo" else "moment"

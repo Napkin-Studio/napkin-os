@@ -133,9 +133,16 @@ def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
         return
     if words_only and job.get("refs"):
         # A clip straight from the script (no frame, ui-behaviour 3.5) on a model whose text endpoint
-        # takes no pictures (Veo, Kling): the refs go, and their names are said in words.
+        # takes no pictures (Veo, Kling): a location or object ref goes, its name said in words. A
+        # character cannot survive this way (it comes out a generic person, not the mascot: the owner's
+        # @on ad, 2026-11): refuse rather than bake it into words, so a storyboard frame is made first
+        # (the web does this in the Make room; this is the relay's defence in depth).
+        if any(ref["role"] == "character" for ref in job["refs"]):
+            model = job.get("model") or (sheet["ops"].get("clip") or {}).get("model") or "this model"
+            raise DirectorError(f"a clip with a character and no first frame cannot carry the character "
+                                f"on {model}; make a storyboard frame first")
         for ref in job["refs"]:
-            words = ref["name"].split("_")[0] if ref["role"] == "character" else ref["name"].replace("_", " ")
+            words = ref["name"].replace("_", " ")
             job["prompt"] = re.sub(rf"@{re.escape(ref['name'])}\b", words, job["prompt"])
         job["refs"] = []
         return
@@ -284,6 +291,33 @@ def _one_character_line(job: dict) -> None:
         first = False
         return f"The character is {tags}, exactly as in those pictures. "
     job["prompt"] = _CHARACTER_LINE.sub(once, job["prompt"]).strip()
+
+
+_CHARACTER_LIST = re.compile(r"The character is ((?:@[a-z][a-z0-9_]{2,15})(?:(?:, | and |, and )@[a-z][a-z0-9_]{2,15})+), exactly as in those pictures\.")
+
+
+def _views_are_one(job: dict, op: str, payload: dict) -> None:
+    """Views of one character are ONE character (owner 2026-11-04: @bolt's four views, named as "The
+    character is @bolt_front, @bolt_three_quart, @bolt_side and @bolt_back", came back as four robots on
+    one workbench). Input refs are `key_variant`; character refs that share a key are said once, as one
+    character seen from different sides. A view job makes one view of one picture and is left alone."""
+    if op == "view":
+        return
+    key_of = {r["asset"]["sha256"]: (r.get("name") or "").rsplit("_", 1)[0]
+              for r in payload.get("refs") or [] if "_" in (r.get("name") or "") and r.get("asset")}
+    groups: dict[str, list[str]] = {}
+    for r in job.get("refs") or []:
+        key = key_of.get(r["sha256"])
+        if key and r.get("role") == "character":
+            groups.setdefault(key, []).append(r["name"])
+    for tags in (t for t in groups.values() if len(t) > 1):
+        said = ", ".join(f"@{n}" for n in tags[:-1]) + f" and @{tags[-1]}"
+        line = f"{said} are views of one single character from different sides: show exactly one of it, never copies."
+        m = _CHARACTER_LIST.search(job["prompt"])
+        if m and set(re.findall(r"@([a-z0-9_]+)", m.group(1))) == set(tags):
+            job["prompt"] = job["prompt"][:m.start()] + f"The character is the one in {said}, exactly as in those pictures; they are views of one single character from different sides, so show exactly one of it, never copies." + job["prompt"][m.end():]
+        else:
+            job["prompt"] = f"{job['prompt'].rstrip()} {line}"
 
 
 def _donors_are_objects(job: dict, payload: dict) -> None:
@@ -614,6 +648,15 @@ class Director:
         _clip_frame_only(job, op, sheet)
         _hold_refs(asked, job, payload, output, sheet)
         if op == "clip":
+            # Defence in depth (the owner's @on ad came out a generic person, 2026-11): a clip that asks for
+            # a character but has no first frame, on a model that cannot carry references without one, would
+            # reach the model with the character dropped. Key on the INPUT refs, not the job's: a prompt-
+            # obedient Dex already sent refs=[], so checking the output is too late. The web makes a storyboard
+            # frame first (it carries the character); here we refuse rather than make a character-less clip.
+            if not job.get("firstFrame") and not sheet["video"].get("refsWithoutFrame") and any(
+                    r.get("role") == "character" and not r.get("optional") for r in payload.get("refs") or []):
+                raise DirectorError(f"a clip with a character and no first frame cannot carry the character "
+                                    f"on {job['model']}; make a storyboard frame first")
             # A take, a landing frame or a take's window (features/connected-video.clan): the frames, refs and
             # length are the mode's, whatever was written; a take prompt that does not time the plan is refused.
             import connected
@@ -640,6 +683,7 @@ class Director:
             _one_character_line(job)
             _donors_are_objects(job, payload)
             _within_budget(job, op, payload)
+        _views_are_one(job, op, payload)  # the relay's own words: outside the director's budget
         self._check_provider_limits(op, sheet, job, payload)
         # A named input picture this job does not send (a model that takes no refs, Veo 3.1 Fast) is said
         # in words. A name in none of the input, or @current/@anchor/@previous without their picture (the

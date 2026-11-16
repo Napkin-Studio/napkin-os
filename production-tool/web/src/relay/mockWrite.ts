@@ -1,10 +1,25 @@
 // The in-browser mock relay's Skye (features/script-editor.clan): a plain, predictable draft per
-// intent, as the relay's PassthroughWriter answers with no model (relay/writer.py). The target
-// and base_hash are the input's, echoed, as the relay does.
+// intent, as the relay's PassthroughWriter answers with no model (relay/writer.py). The target,
+// base_hash and mode are the input's, echoed, as the relay does.
 
 import type { Write, WriteInput } from '../contracts/types'
+import { writeMode } from '../contracts/types'
 
 const firstSentence = (t: string) => t.trim().split(/(?<=[.!?])\s+/)[0] ?? t
+
+/** A short screenplay from a brief: a slugline, the premise as action, a close. The real model writes
+ *  a proper draft (relay prompts/skye.v4.md); this deterministic stub keeps the shape for the mock. */
+export function draftScript(instruction: string | undefined): { type: 'action'; text: string }[] {
+  const brief = (instruction ?? '').trim()
+  const where = [...brief.matchAll(/\b(?:at|in|inside)\s+(?:the\s+)?([a-z][a-z'-]+)/gi)].at(-1)?.[1]
+  const slug = `INT. ${(where ?? 'location').toUpperCase()} - DAY`
+  const premise = brief ? `${brief.charAt(0).toUpperCase()}${brief.slice(1)}`.replace(/[.\s]+$/, '') + '.' : 'An idea in a line.'
+  return [
+    { type: 'action', text: slug },
+    { type: 'action', text: premise },
+    { type: 'action', text: 'We stay on the effort, then cut to the end card.' },
+  ]
+}
 
 const NOTE: Record<WriteInput['intent'], (w: WriteInput) => string> = {
   tighten: () => 'I tightened it.',
@@ -14,12 +29,13 @@ const NOTE: Record<WriteInput['intent'], (w: WriteInput) => string> = {
   write_vo: () => 'I wrote the VO.',
   draft: () => 'I drafted it from your line.',
   cut_name: (w) => `I cut @${w.name ?? ''}.`,
+  instruct: () => 'I did what you asked.',
 }
 
 export function mockWrites(w: WriteInput): Write[] {
   const lines = w.lines.map((l) => ({ ...l }))
   const words = lines.map((l) => l.text).join(' ')
-  const d: Write = { target: w.target, base_hash: w.base_hash, note: NOTE[w.intent](w), lines }
+  const d: Write = { target: w.target, base_hash: w.base_hash, mode: writeMode(w), note: NOTE[w.intent](w), lines }
   switch (w.intent) {
     case 'tighten':
     case 'fit_seconds':
@@ -35,7 +51,8 @@ export function mockWrites(w: WriteInput): Write[] {
       break
     }
     case 'draft':
-      d.lines = [{ type: 'action', text: words.trim() || 'An idea in a line.' }, { type: 'action', text: 'We hold on it, then cut to the end card.' }]
+      // A draft writes a short screenplay from the brief (instruction), never the item's own words.
+      d.lines = draftScript(w.instruction)
       break
     case 'add_beat':
       d.new_beats = [{ kind: 'moment', at_s: 0.5, text: 'A beat to breathe.' }]

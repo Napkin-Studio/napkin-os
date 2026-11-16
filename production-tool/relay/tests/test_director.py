@@ -181,7 +181,7 @@ def test_only_the_v6_and_later_prompts_are_bundled():
     frame; director.v8 (canvas-nodes) holds a shot's required refs; director.v9 (runway-video-models) says
     which pictures each clip model carries. The older ones stay, so a rollback is a config change."""
     assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == [
-        "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.md"]
+        "director.v10.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.md"]
 
 
 def test_v7_is_v6_1_with_the_words_first_no_prices_and_a_frame_edit_section():

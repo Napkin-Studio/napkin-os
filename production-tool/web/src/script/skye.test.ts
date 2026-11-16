@@ -8,13 +8,14 @@ import type { Job } from '../contracts/types'
 import { mainScript } from '../model/selectors'
 import { MockRelay } from '../relay/mock'
 import { mockWrites } from '../relay/mockWrite'
-import { addShots, asset, id, MAYA, modelStore, SHA } from '../test/model'
+import { addShots, asset, id, MAYA, modelStore, seedStages, SHA } from '../test/model'
 import { makeAjv, SCHEMA } from '../test/schemas'
-import { fitSeconds, handsOff, keep, keepMineDraft, landWrites, NEW_SCENE_LINE, neighbours, proposedOf, sceneForJob, skyeAsks, skyeState, waitingLine, wordDiff, writeInput } from './skye'
+import { discardDraft, DISCARDED_LINE, draftFromBrief, fitSeconds, handsOff, keep, keepMineDraft, landWrites, NEW_SCENE_LINE, neighbours, pickedIdea, proposedOf, sceneForJob, skyeAsks, skyeState, waitingLine, wordDiff, writeInput } from './skye'
 
 async function project() {
   const store = modelStore()
   await store.create(MAYA, 'First Light')
+  await seedStages(store)
   const ref = id('ref')
   await store.change((d) => {
     d.assets[SHA('a')] = asset(SHA('a'))
@@ -128,6 +129,130 @@ describe('drafts land as suggestions, and Keep is one step', () => {
     const beat = id('beat')
     expect(proposedOf(store.get(), { target: { kind: 'beat', id: beat }, base_hash: SHA('b'), note: 'n', lines: [{ type: 'action', text: 'a' }, { type: 'action', text: 'b' }] })).toBeNull()
     expect(proposedOf(store.get(), { target: { kind: 'shot', id: shots[0] }, base_hash: SHA('b'), note: 'n', lines: [{ type: 'character', text: 'MAYA' }] })).toBeNull()
+  })
+})
+
+describe('a draft from a brief (owner bug 2026-11-03)', () => {
+  // The draft deps mirror ScriptEditor's skyeDeps: a recording runner over the real store.
+  function draftDeps(store: ReturnType<typeof modelStore>) {
+    const sent: { mode?: string; instruction?: string; intent: string }[] = []
+    const runner = {
+      submit: async (_op: string, input: { write?: { intent: string; mode?: string; instruction?: string } }) => {
+        const w = input.write!
+        sent.push({ intent: w.intent, mode: w.mode, instruction: w.instruction })
+        const jobId = id('job')
+        await store.change((d) => { d.jobs[jobId] = { id: jobId, v: 1, field_v: {}, op: 'write', state: 'submitted', node: { kind: 'script', id: mainScript(store.get())!.id }, started_by: `human:${MAYA.id}`, tenant_id: MAYA.tenant_id, nonce: 'n_draft01', crew: 'skye', parent_ids: [], input_hashes: [], created_at: '2026-10-13T10:00:00Z' } as never }, { action: 'sync', quiet: true, undo: false })
+        return jobId
+      },
+    }
+    return { deps: { runner, doc: store } as never, sent }
+  }
+
+  it('carries the brief as the instruction and never plants it in the scene', async () => {
+    const { store, scriptId } = await project()
+    const sceneId = id('scene')
+    await store.change((d) => { d.scenes[sceneId] = { id: sceneId, v: 1, field_v: {}, script_id: scriptId, rank: 'a0', heading: '' } as never }, { action: 'add scene' })
+    await store.flush()
+    const { deps, sent } = draftDeps(store)
+    await draftFromBrief(deps, store, scriptId, sceneId, 'A runner drinks Lumen water at dawn.')
+    expect(sent).toEqual([{ intent: 'draft', mode: 'draft', instruction: 'A runner drinks Lumen water at dawn.' }])
+    // The scene is never given the prompt as its prose.
+    expect((store.text.prose('scene', sceneId).content ?? [])).toEqual([])
+  })
+
+  it('clears a typed brief out of the scene before drafting (the Enter path), in one undo step', async () => {
+    const { store, scriptId } = await project()
+    const sceneId = id('scene')
+    await store.change((d) => { d.scenes[sceneId] = { id: sceneId, v: 1, field_v: {}, script_id: scriptId, rank: 'a0', heading: '' } as never }, { action: 'add scene' })
+    await store.text.replace('scene', sceneId, proseFromLines('action', ['A runner drinks Lumen water at dawn.']), `human:${MAYA.id}`)
+    await store.flush()
+    const { deps, sent } = draftDeps(store)
+    await draftFromBrief(deps, store, scriptId, sceneId, 'A runner drinks Lumen water at dawn.')
+    expect(sent[0].instruction).toContain('A runner drinks Lumen water')
+    expect((store.text.prose('scene', sceneId).content ?? [])).toEqual([])
+  })
+
+  it('refuses an empty brief', async () => {
+    const { store, scriptId } = await project()
+    const sceneId = id('scene')
+    await store.change((d) => { d.scenes[sceneId] = { id: sceneId, v: 1, field_v: {}, script_id: scriptId, rank: 'a0', heading: '' } as never }, { action: 'add scene' })
+    await store.flush()
+    const { deps } = draftDeps(store)
+    await expect(draftFromBrief(deps, store, scriptId, sceneId, '   ')).rejects.toThrow(/idea in a line/)
+  })
+
+  it('a draft lands with mode draft, shown whole, and Discard drops it with no hands_off', async () => {
+    const { store, scriptId } = await project()
+    const sceneId = id('scene')
+    await store.change((d) => { d.scenes[sceneId] = { id: sceneId, v: 1, field_v: {}, script_id: scriptId, rank: 'a0', heading: '' } as never }, { action: 'add scene' })
+    await store.flush()
+    const input = await writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'draft', { mode: 'draft', instruction: 'A runner at dawn.' })
+    expect(input.mode).toBe('draft')
+    expect(input.instruction).toBe('A runner at dawn.')
+    const [sug] = await landWrites(store, jobOf(store, mockWrites(input)))
+    await store.flush()
+    expect(store.get().suggestions[sug]).toMatchObject({ mode: 'draft', state: 'open' })
+    // Discard drops it without putting skye in hands_off (unlike Keep mine).
+    const r = await discardDraft(store, sug)
+    expect(r.line).toBe(DISCARDED_LINE)
+    expect(store.get().suggestions[sug].state).toBe('dropped')
+    expect(handsOff(store.get(), { kind: 'scene', id: sceneId })).toBe(false)
+    // One undo step brings the draft back.
+    await store.undo()
+    expect(store.get().suggestions[sug].state).toBe('open')
+  })
+})
+
+describe('Write with Skye: a real script from an idea (urgent P0 2026-11-04)', () => {
+  it('drafts a short screenplay (slugline + action, not one empty line) and Keep applies it to the scene', async () => {
+    const { store, scriptId } = await project()
+    // A non-empty script (project already has shots); add the scene the draft lands on.
+    const sceneId = id('scene')
+    await store.change((d) => { d.scenes[sceneId] = { id: sceneId, v: 1, field_v: {}, script_id: scriptId, rank: 'a0', heading: '' } as never }, { action: 'add scene' })
+    await store.flush()
+    const input = await writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'draft', { mode: 'draft', instruction: 'a man putting in work at the gym' })
+    expect(input.instruction).toBe('a man putting in work at the gym')
+    const writes = mockWrites(input)
+    // A real short screenplay: a slugline, then more lines — never one echoed line.
+    expect(writes[0].lines.length).toBeGreaterThanOrEqual(2)
+    expect(writes[0].lines[0].text).toBe('INT. GYM - DAY')
+    const [sug] = await landWrites(store, jobOf(store, writes))
+    await store.flush()
+    expect(store.get().suggestions[sug]).toMatchObject({ mode: 'draft', state: 'open' })
+    // Keep applies the drafted screenplay to the scene (nothing changed until Keep).
+    await keep(store, sug)
+    await store.flush()
+    const text = store.get().scenes[sceneId].text ?? ''
+    expect(text).toContain('INT. GYM - DAY')
+    expect(text.toLowerCase()).toContain('gym')
+  })
+
+  it('pickedIdea returns the idea the writer already typed, not a heading', async () => {
+    const store = modelStore()
+    await store.create(MAYA, 'Gym')
+    await seedStages(store)
+    const scriptId = mainScript(store.get())!.id
+    const sceneId = id('scene')
+    await store.change((d) => {
+      d.scenes[sceneId] = { id: sceneId, v: 1, field_v: {}, script_id: scriptId, rank: 'a0', heading: 'INT. GYM - DAY', text: 'Write a script for a man putting in work at the gym' } as never
+    }, { action: 'typed idea' })
+    await store.flush()
+    expect(pickedIdea(store.get(), scriptId)).toBe('Write a script for a man putting in work at the gym')
+  })
+})
+
+describe("the 'Tell Skye' free instruction", () => {
+  it('carries the typed words as the instruction on a revise, and the mock echoes the mode', async () => {
+    const { store, shots, scriptId } = await project()
+    const input = await writeInput(store, scriptId, { kind: 'shot', id: shots[1] }, 'instruct',
+      { mode: 'revise', instruction: 'make her sound colder', selection: { from: 0, to: 5, text: 'walks' } })
+    expect(input.intent).toBe('instruct')
+    expect(input.mode).toBe('revise')
+    expect(input.instruction).toBe('make her sound colder')
+    // The item's own lines still travel (a revise rewrites them); the mock echoes the mode and a note.
+    const [w] = mockWrites(input)
+    expect(w.mode).toBe('revise')
+    expect(w.note).toBe('I did what you asked.')
   })
 })
 

@@ -24,7 +24,7 @@ import { describeAsset, forgetSent, MissingPictures } from './serverAssets'
 import type { MakeClan } from './session'
 import { Shell } from './shell'
 import { canvasKeyFor, clanDbFor, memoryStorage } from './storage'
-import { id, MAYA, wasm } from '../test/model'
+import { id, MAYA, seedStages, wasm } from '../test/model'
 
 const makeClan: MakeClan = (persistence, opts = {}) =>
   new ModelStore(new ClanDocumentStore({ wasm: wasm(), persistence, saveDebounceMs: 0, person: opts.person }), { debounceMs: 1, undo: opts.undo })
@@ -128,6 +128,7 @@ async function made(fake: FakeRelay) {
   const laptop = browser(fake)
   const p = await laptop.shell.newProject()
   const s = services(laptop.shell)
+  await seedStages(s.doc) // a new project is blank (owner 2026-11-03); this fixture works on the stages
   const front = await picture(`maya front ${Math.random()}`)
   const frame = await picture(`frame ${Math.random()}`)
   const frameBytes = new Uint8Array(await (await getBlob(frame.sha256))!.arrayBuffer())

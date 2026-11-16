@@ -23,11 +23,11 @@ import { keyNamed, mainScript, mainStoryboard, ownShotsOf, refsList, scenesOf, s
 import type { ModelStore } from '../model/store'
 import { addScene, importFountain } from '../script/edits'
 import { parseFountain } from '../script/fountain'
-import { startWrite } from '../script/skye'
+import { draftFromBrief } from '../script/skye'
 import { drawFrame, type FrameDeps } from './frames'
 import { checkFronts, runningPlan } from './plan'
 import { isActive } from './runner'
-import { jobShot, namedInput, subjectPictures } from './select'
+import { assetInput, jobShot, namedInput, subjectPictures } from './select'
 import { liveGet } from '../model/live'
 
 type Doc = ProductionDocument
@@ -50,19 +50,28 @@ export function unknownName(d: Doc, words: string): string | null {
   return said.unknown.length ? `No reference called @${said.unknown[0]}. Name a picture first, or check the spelling.` : null
 }
 
-/** The node's scope as job refs: its linked references (and a linked key's pictures), then those the words name. */
+/** The node's scope as job refs: its linked references (a linked key's pictures) and its linked frames
+ *  and rendered ads, then those the words name. A storyboard frame linked in is a composition picture:
+ *  a generation can build on it alongside the character refs (it showed as a linked input but never
+ *  reached the job before — references dropping, owner 2026-11-04). */
 export async function promptRefs(relay: FrameDeps['relay'], d: Doc, nodeId: Id, words = ''): Promise<JobInputRef[]> {
+  const items = scopeOf(d, nodeId)
   const picked: NamedRef[] = []
   const add = (r: NamedRef | undefined) => { if (r?.asset && !picked.includes(r)) picked.push(r) }
-  for (const it of scopeRefs(scopeOf(d, nodeId))) {
+  for (const it of scopeRefs(items)) {
     // A linked key's views come as their own items, past its 4 held back (lib/names keyViews).
     if (it.kind === 'ref') { if (!it.held) add(d.refs[it.id]) }
     else if (it.kind === 'key' && it.name && !it.sends) { try { subjectPictures(d, it.name).forEach(add) } catch { /* a key with no front sends none */ } }
   }
   mentions(d, words).found.forEach(add)
   const out: JobInputRef[] = []
-  for (const r of picked.slice(0, 14)) out.push(await namedInput(relay, d, r))
-  return out
+  for (const r of picked) out.push(await namedInput(relay, d, r))
+  // Linked frames (a storyboard's or shot's) and rendered ads are pictures too: send them as
+  // composition references so a generation can build on a storyboard, not only character refs.
+  for (const it of items) {
+    if (it.asset && (it.kind === 'frame' || it.kind === 'render')) out.push(await assetInput(relay, d, it, 'composition'))
+  }
+  return out.slice(0, 14)
 }
 
 // ── script ──────────────────────────────────────────────────────────────────
@@ -76,8 +85,10 @@ export function isPastedScript(text: string): boolean {
 export type ScriptStart = { pasted: number; dropped: string } | { jobId: string; sceneId: Id }
 
 /**
- * An empty script from its one box (3.10): a pasted script imports; a line becomes the first scene's
- * words (the person's) and Skye drafts from it in place, as a suggestion on that scene.
+ * An empty script from its one box (3.10): a pasted script imports; a line is the brief Skye drafts
+ * from, in place, as a suggestion on the first scene. The line is carried as the write job's
+ * instruction, never planted in the scene (owner's named bug, 2026-11-03): a draft is a whole-block
+ * insertion, not the prompt diffed as the writer's own prose. draftFromBrief is the one entry.
  */
 export async function scriptFromLine(deps: FrameDeps, store: ModelStore, scriptId: Id, line: string): Promise<ScriptStart> {
   const words = line.trim()
@@ -89,13 +100,7 @@ export async function scriptFromLine(deps: FrameDeps, store: ModelStore, scriptI
   }
   await store.flush()
   const sceneId = scenesOf(store.get(), scriptId)[0]?.id ?? await addScene(store, scriptId)
-  await updateDoc(store, (d) => {
-    const s = d.scenes[sceneId]
-    if (!s) throw new Error('This script is gone.')
-    s.text = words.slice(0, 4000)
-  }, `write scenes[${sceneId}]`)
-  await store.flush()
-  const jobId = await startWrite(deps, store, scriptId, { kind: 'scene', id: sceneId }, 'draft')
+  const jobId = await draftFromBrief({ ...deps, doc: store }, store, scriptId, sceneId, words)
   return { jobId, sceneId }
 }
 

@@ -7,8 +7,9 @@
 // relay echoes it on each draft, so a draft lands after a reload and goes stale if the words
 // moved), the rows around it (at most 4,000 characters) and the names of the references.
 
-import { flatText, keepMine, keepSuggestion, newUlidId, proseHash, rankBetween, shapeProblem, type FragmentKind, type Prose } from '../../../clan-store/src'
-import type { Ask, Id, Job, JobState, ProductionDocument, Suggestion, Write, WriteInput, WriteIntent, WriteLine, WriteTarget } from '../contracts/types'
+import { EMPTY_PROSE, flatText, keepMine, keepSuggestion, newUlidId, proseHash, rankBetween, shapeProblem, type FragmentKind, type Prose } from '../../../clan-store/src'
+import type { Ask, Id, Job, JobState, ProductionDocument, Suggestion, Write, WriteInput, WriteIntent, WriteMode, WriteLine, WriteTarget } from '../contracts/types'
+import { writeMode } from '../contracts/types'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import type { FrameDeps } from '../jobs/frames'
@@ -32,6 +33,8 @@ export const SKYE_OPTIONS: { intent: WriteIntent; label: (seconds: number) => st
   { intent: 'write_vo', label: () => 'Write the VO' },
   { intent: 'rephrase', label: () => 'Say it another way' },
 ]
+/** The free 'Tell Skye' field beside the canned verbs: the typed words ride as the write's instruction. */
+export const TELL_SKYE_PLACEHOLDER = 'Tell Skye…'
 export const HANDS_OFF_LINE = 'Skye is leaving this alone. Ask her anyway?'
 export const NOT_HERE = "Skye isn't available here yet"
 export const QUOTA_OUT = "Skye has used today's writing allowance"
@@ -90,17 +93,21 @@ export function handsOff(d: Doc, target: WriteTarget): boolean {
   return !!map[target.id]?.hands_off?.includes('skye')
 }
 
-/** The write request for one press. */
-export async function writeInput(store: ModelStore, scriptId: Id, target: WriteTarget, intent: WriteIntent, opts: { selection?: { from: number; to: number; text: string }; seconds?: number; name?: string; explicit?: boolean } = {}): Promise<WriteInput> {
+/** The write request for one press. `instruction` carries a draft's brief or a free 'Tell Skye' ask;
+ *  it is never planted in the document, so the item's `lines` stay the writer's own. */
+export async function writeInput(store: ModelStore, scriptId: Id, target: WriteTarget, intent: WriteIntent, opts: { mode?: WriteMode; instruction?: string; selection?: { from: number; to: number; text: string }; seconds?: number; name?: string; explicit?: boolean } = {}): Promise<WriteInput> {
   const d = store.get()
   const prose = store.text.prose(KIND[target.kind], target.id)
   const script = d.scripts[scriptId]
   const sceneId = target.kind === 'scene' ? target.id : target.kind === 'shot' ? d.shots[target.id]?.scene_id : d.shots[d.beats[target.id]?.shot_id ?? '']?.scene_id
   const refs = writeRefs(d)
+  const mode = writeMode({ intent, mode: opts.mode })
   return {
     intent,
+    mode,
     target,
     base_hash: await proseHash(prose),
+    ...(opts.instruction?.trim() ? { instruction: opts.instruction.trim().slice(0, 4000) } : {}),
     lines: linesOf(d, prose),
     ...(opts.selection ? { selection: { ...opts.selection, text: opts.selection.text.slice(0, 4000) } } : {}),
     ...(opts.seconds ? { seconds: Math.min(60, Math.max(0.5, opts.seconds)) } : {}),
@@ -213,7 +220,7 @@ export async function landWrites(store: DocumentStore, job: Job): Promise<string
     if (!proposed) continue
     const id = newUlidId('sug')
     ids.push(id)
-    made.push({ id, v: 1, field_v: {}, target: w.target, crew: 'skye', job_id: job.jobId, for: job.startedBy, base_hash: w.base_hash, proposed, note: w.note.slice(0, 200), state: 'open' })
+    made.push({ id, v: 1, field_v: {}, target: w.target, crew: 'skye', job_id: job.jobId, for: job.startedBy, base_hash: w.base_hash, ...(w.mode ? { mode: w.mode } : {}), proposed, note: w.note.slice(0, 200), state: 'open' })
   }
   if (made.length) {
     const n = made.length
@@ -253,9 +260,54 @@ async function landAsFirstScene(store: DocumentStore, job: Job, scriptId: Id, w:
   return id
 }
 
-/** An empty script's one line: the draft lands on the first scene (made if there is none). */
-export async function draftFromLine(deps: FrameDeps, store: ModelStore, scriptId: Id, sceneId: Id): Promise<string> {
-  return startWrite(deps, store, scriptId, { kind: 'scene', id: sceneId }, 'draft')
+/**
+ * The one entry for a draft from a brief (owner's named bug, 2026-11-03): the brief is carried as the
+ * write job's `instruction`, never planted in the scene, so the draft is not diffed against the prompt.
+ * The brief is the line the person typed; the scene it lands on is cleared first so Skye's draft is a
+ * whole-block insertion, not a rewrite of the prompt. `scriptFromLine`, `draftFromLine` and the
+ * empty-script Enter path all come through here, so none can regress on its own.
+ */
+export async function draftFromBrief(deps: FrameDeps & { doc: ModelStore | DocumentStore }, store: ModelStore, scriptId: Id, sceneId: Id, brief: string): Promise<string> {
+  const instruction = brief.trim().slice(0, 4000)
+  if (!instruction) throw new Error('Write the idea in a line first.')
+  // The scene holds the brief the person typed; take it out so the draft inserts into empty words,
+  // never diffed against the prompt (owner's named bug). One undo step, the person's. flatText reads a
+  // block's inline nodes, so the scene's words are each block's text joined, not the block array.
+  const refs = refNames(store.get())
+  const words = (store.text.prose('scene', sceneId).content ?? []).map((b) => flatText(b.content, refs)).join('\n')
+  if (words.trim()) {
+    await store.text.replace('scene', sceneId, EMPTY_PROSE, store.clan.personClaim(), { label: 'clear the brief before the draft', undo: true })
+    await store.flush()
+  }
+  return startWrite(deps, store, scriptId, { kind: 'scene', id: sceneId }, 'draft', { mode: 'draft', instruction })
+}
+
+/** The empty-script Enter path (ScriptEditor): the line in the scene is the brief. One entry: draftFromBrief. */
+export async function draftFromLine(deps: FrameDeps & { doc: ModelStore | DocumentStore }, store: ModelStore, scriptId: Id, sceneId: Id): Promise<string> {
+  const refs = refNames(store.get())
+  const brief = (store.text.prose('scene', sceneId).content ?? []).map((b) => flatText(b.content, refs)).join('\n')
+  return draftFromBrief(deps, store, scriptId, sceneId, brief)
+}
+
+/**
+ * The idea the writer already typed, to seed 'Write with Skye' so they never retype it: the longest
+ * words they put in a scene, shot or beat that are not just a scene heading. '' when they typed none.
+ */
+export function pickedIdea(d: Doc, scriptId: Id): string {
+  const c = composeScript(d, scriptId)
+  if (!c) return ''
+  const texts: string[] = []
+  for (const r of c.rows) {
+    if (r.kind === 'scene') { if (r.scene.text?.trim()) texts.push(r.scene.text.trim()) }
+    else if (r.kind === 'shot' || r.kind === 'end_card') { if (r.shot.action?.trim()) texts.push(r.shot.action.trim()) }
+    else if (r.kind === 'beat') { if (r.beat.text?.trim()) texts.push(r.beat.text.trim()) }
+  }
+  return texts.filter((t) => t.split('\n').some((line) => !headingHint(line))).sort((a, b) => b.length - a.length)[0] ?? ''
+}
+
+/** A line that reads as a scene heading (so it is not mistaken for the typed idea). */
+function headingHint(line: string): boolean {
+  return /^(?:(?:INT|EXT|INT\.?\/EXT|I\/E|EST)[. ]|\.[A-Za-z0-9])/i.test(line.trim())
 }
 
 /** Keep: the words, the length and new beats, as Skye's, decided by the person; one undo step. */
@@ -281,6 +333,28 @@ export async function keepMineDraft(store: ModelStore, sugId: string): Promise<{
   if (!r.applied) throw new Error(r.refused.map((x) => x.message).join('; ') || 'That could not be kept.')
   await store.flush()
   return { line: keptMineLine(sug?.target.kind ?? 'shot') }
+}
+
+export const DISCARDED_LINE = 'Discarded Skye\'s draft.'
+
+/**
+ * Discard a draft (a whole-block insertion, mode 'draft'): the suggestion is dropped and nothing lands.
+ * Unlike Keep mine, Skye is not asked to leave the item alone — the writer may ask her again. One undo step.
+ */
+export async function discardDraft(store: ModelStore, sugId: string): Promise<{ line: string }> {
+  await store.flush()
+  const sug = store.get().suggestions[sugId]
+  if (!sug) return { line: DISCARDED_LINE }
+  const r = await store.bus.apply({
+    patches: [
+      { op: 'set', entity: 'suggestions', id: sugId, path: 'state', value: 'dropped', base_version: sug.v },
+      { op: 'set', entity: 'suggestions', id: sugId, path: 'decided_by', value: store.clan.personClaim(), base_version: sug.v },
+    ],
+    why: { action: `discard suggestions[${sugId}]`, cites: [`${store.documentId()}#suggestions[${sugId}]`] },
+  }, { undo: true })
+  if (!r.applied) throw new Error(r.refused.map((x) => x.message).join('; ') || 'That could not be discarded.')
+  await store.flush()
+  return { line: DISCARDED_LINE }
 }
 
 

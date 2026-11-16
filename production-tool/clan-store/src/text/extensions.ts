@@ -5,7 +5,7 @@
 // list, so a fragment written in an editor and a fragment rebuilt from a .clan
 // are the same shape. Change this list and the parity test (text.test.ts)
 // says whether old prose still round-trips.
-import { getSchema, Node, type AnyExtension } from '@tiptap/core'
+import { getSchema, Mark, Node, type AnyExtension } from '@tiptap/core'
 import type { Schema } from '@tiptap/pm/model'
 
 const block = (name: string, content: string, extra: Partial<Parameters<typeof Node.create>[0]> = {}) =>
@@ -36,6 +36,19 @@ export const Parenthetical = block('parenthetical', 'text*', { marks: '' })
 export const Dialogue = block('dialogue', 'inline*')
 /** A shot's performance direction (at most one block, after the action). */
 export const Direction = block('direction', 'inline*')
+/** A screenplay transition (CUT TO:, DISSOLVE TO:). Unplanned scene text only; upper-cased in the flat copy. */
+export const Transition = block('transition', 'inline*')
+/** Centred text (>  THE END  <). Unplanned scene text only. */
+export const Centered = block('centered', 'inline*')
+
+/** Dual (simultaneous) dialogue (Fountain `^`): a mark on the dialogue the two speakers share, so a
+ * plain dialogue block keeps its shape and only a dual one carries it. The character cue above a dual
+ * dialogue is the second speaker; the cue has no marks, so the pairing is read from the dialogue. */
+export const Dual = Mark.create({
+  name: 'dual',
+  parseHTML: () => [{ tag: 'span[data-dual]' }],
+  renderHTML: () => ['span', { 'data-dual': 'true' }, 0],
+})
 
 /** `@name` stored as the ref's id, so a rename changes every mention. `label`
  * is the name when it was inserted: shown only when the ref is gone. */
@@ -64,7 +77,7 @@ export const HardBreak = Node.create({
   renderText: () => '\n',
 })
 
-export const TEXT_EXTENSIONS: AnyExtension[] = [DocNode, TextNode, Action, Character, Parenthetical, Dialogue, Direction, Mention, HardBreak]
+export const TEXT_EXTENSIONS: AnyExtension[] = [DocNode, TextNode, Action, Character, Parenthetical, Dialogue, Direction, Transition, Centered, Mention, HardBreak, Dual]
 
 let cached: Schema | null = null
 /** The ProseMirror schema of TEXT_EXTENSIONS, built once. */
@@ -77,7 +90,7 @@ export const FRAGMENT_BLOCKS = {
   /** shots/<id>: action blocks, then at most one direction block. */
   shot: ['action', 'direction'],
   /** scenes/<id>: unplanned screenplay text no shot owns yet. */
-  scene: ['action', 'character', 'parenthetical', 'dialogue'],
+  scene: ['action', 'character', 'parenthetical', 'dialogue', 'transition', 'centered'],
   /** beats/<id>: one block. A line is dialogue; every other kind is action. */
   beat: ['action', 'dialogue'],
   /** reviews/<id>: the note's words. */

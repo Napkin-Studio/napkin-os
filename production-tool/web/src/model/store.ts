@@ -90,11 +90,11 @@ export class ModelStore implements DocumentStore {
     return this.opened()
   }
 
-  async create(person: Person, title?: string): Promise<Doc> {
+  async create(person: Person, title?: string, blank = false): Promise<Doc> {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
     this.pending = []
-    await this.clan.create({ person, title })
+    await this.clan.create({ person, title, blank })
     return this.opened()
   }
 

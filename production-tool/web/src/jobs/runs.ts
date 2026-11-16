@@ -14,7 +14,7 @@
 // shot alone, and a take's segments meet on a cut until take.withLast is proven (paid test P1).
 
 import { newUlidId } from '../../../clan-store/src'
-import { choiceToSend, modelChoicesFor, modelLabel, resolveQuality, type Sheets } from '../capabilities'
+import { choiceToSend, clipRefCapacity, modelChoicesFor, modelLabel, resolveQuality, type Sheets } from '../capabilities'
 import { SHEETS } from '../contracts/load'
 import type { CapabilitySheet, ClipQuality, Config, Id, ModelChoice, ProductionDocument, Provider, RunMode, Seam, SeamKind, Shot, VideoJoin, VideoRun } from '../contracts/types'
 import { landUpdate, systemUpdate } from '../doc/store'
@@ -79,15 +79,22 @@ export function modelEntry(provider: Provider, model: string, sheets: Sheets = S
   const e = [op, ...(op.alternates ?? [])].find((x) => x.model === model)
   if (!e) return null
   const cat = sheet.models[model]
+  const video = ('video' in e && e.video) || sheet.video
+  const refs = ('refs' in e && e.refs) || sheet.refs
+  // The clip's true VIDEO ref capacity, not the image-ref ceiling (features/runway-video-models.clan): a
+  // model carries references beside a first frame only where video.firstFrameWithRefs (Kling O3), and with
+  // no frame only where video.refsWithoutFrame (Hailuo 3, Omni Flash 1.1, WAN 3, Seedance). Veo carries
+  // none either way, so it reports 0 — not the sheet's image ceiling of 14, which promised refs that drop.
+  const refsMax = video.firstFrameWithRefs || video.refsWithoutFrame ? (refs.maxCharacter ?? refs.max ?? 0) : 0
   return {
     provider,
     model,
     label: modelLabel(provider, model, sheets) ?? model,
-    video: ('video' in e && e.video) || sheet.video,
+    video,
     ...((e.durationsS ?? cat?.durationsS) ? { durationsS: e.durationsS ?? cat?.durationsS } : {}),
     ...('minS' in e && e.minS !== undefined ? { minS: e.minS } : {}),
     ...('maxS' in e && e.maxS !== undefined ? { maxS: e.maxS } : {}),
-    refsMax: (('refs' in e && e.refs) || sheet.refs).max,
+    refsMax,
     ...('textEndpoint' in e && e.textEndpoint ? { words: true } : {}),
   }
 }
@@ -384,7 +391,10 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
       : choiceToSend('clip', opts.config, { provider: r.model.provider, model: r.model.model }, sheets)
     if (isTakeRun(r)) {
       try {
-        await makeTake(deps, opts.videoId, ids[i], { modelChoice: pick, quality, ...(opts.texts ? { texts: opts.texts } : {}) })
+        // A take_refs run (no first frame) sends the storyboard frames and character pictures as references:
+        // cap them at what the run's model can actually carry without a frame, so characters are not dropped.
+        const cap = clipRefCapacity({ provider: r.model.provider, model: r.model.model }, false, opts.config, sheets)
+        await makeTake(deps, opts.videoId, ids[i], { modelChoice: pick, quality, refsMax: cap.max, ...(opts.texts ? { texts: opts.texts } : {}) })
       } catch (e) {
         failed.push(`${name(shotIds)}: ${e instanceof Error ? e.message : 'that did not work.'}`)
       }
@@ -394,7 +404,7 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
       const parent = opts.again ? currentTake(d, id, opts.videoId) : undefined
       try {
         await makeClip(deps, id, {
-          modelChoice: pick, quality, videoId: opts.videoId, fromWords: opts.fromWords,
+          modelChoice: pick, quality, videoId: opts.videoId, fromWords: opts.fromWords, config: opts.config,
           ...(r.lands[id] ? { endShotId: r.lands[id] } : {}),
           ...(parent ? { parentTake: parent } : {}),
           ...(opts.texts?.[id] ? { text: opts.texts[id] } : {}),
@@ -427,7 +437,7 @@ export async function makeClips(deps: FrameDeps, opts: {
   for (const [i, s] of opts.shots.entries()) {
     if (!opts.ids.includes(s.id) || takesOf(d, s.id).length || opts.busy(s.id)) continue
     try {
-      await makeClip(deps, s.id, { modelChoice: opts.modelChoice, ...(opts.quality ? { quality: opts.quality } : {}), videoId: opts.videoId, fromWords: opts.fromWords })
+      await makeClip(deps, s.id, { modelChoice: opts.modelChoice, ...(opts.quality ? { quality: opts.quality } : {}), videoId: opts.videoId, fromWords: opts.fromWords, config: opts.config })
     } catch (e) {
       failed.push(`Shot ${i + 1}: ${e instanceof Error ? e.message : 'that did not work.'}`)
     }

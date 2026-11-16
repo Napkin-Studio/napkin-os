@@ -351,9 +351,12 @@ def test_a_ref_model_clip_with_no_frame_that_leaves_out_the_character_is_refused
 
 
 @pytest.mark.parametrize("model", ["veo3.1", "veo3.1_fast", "klingO3_pro", "kling3.0_standard"])
-def test_a_clip_with_no_frame_on_a_words_only_model_says_the_character_in_words(model):
-    job = direct(model, image=False)
-    assert job["refs"] == [] and "@baby_front" not in job["prompt"] and "baby" in job["prompt"]
+def test_a_clip_with_no_frame_and_a_character_on_a_words_only_model_is_refused(model):
+    # The character cannot be carried without a first frame on these models, and naming it in words alone
+    # loses it (a generic person, not the mascot: the owner's @on ad, 2026-11). The director refuses rather
+    # than bake it into words; the web makes a storyboard frame first, which carries the character.
+    with pytest.raises(DirectorError, match="make a storyboard frame first"):
+        direct(model, image=False)
 
 
 def test_kling_o3_keeps_the_frame_and_the_character_pictures():
@@ -368,11 +371,20 @@ def test_a_frame_on_any_other_model_goes_alone_as_before(model):
     assert job["firstFrame"] == FRAME and job["refs"] == []
 
 
-@pytest.mark.parametrize("model,refs", [("hailuo3", ["baby_front"]), ("wan3", ["baby_front"]), ("veo3.1", []), ("kling3.0_pro", [])])
+@pytest.mark.parametrize("model,refs", [("hailuo3", ["baby_front"]), ("wan3", ["baby_front"])])
 def test_the_passthrough_sends_the_same_pictures(model, refs):
     sheet = effective_sheet(SHEET, "clip", model)
     out = PassthroughDirector().direct({"op": "clip", "input": clip_input(False), "jobId": "job_1"}, sheet)
     assert [r["name"] for r in out["providerJob"]["refs"]] == refs
+
+
+@pytest.mark.parametrize("model", ["veo3.1", "kling3.0_pro"])
+def test_the_passthrough_refuses_a_character_with_no_frame_on_a_words_only_model(model):
+    # Defence in depth: the passthrough refuses too, so an agency with Claude off never ships a
+    # character-less clip either (the owner's @on ad, 2026-11).
+    sheet = effective_sheet(SHEET, "clip", model)
+    with pytest.raises(DirectorError, match="make a storyboard frame first"):
+        PassthroughDirector().direct({"op": "clip", "input": clip_input(False), "jobId": "job_1"}, sheet)
 
 
 def test_v9_is_v8_with_the_clip_and_edit_rules():

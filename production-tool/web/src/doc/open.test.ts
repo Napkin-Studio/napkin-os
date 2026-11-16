@@ -4,7 +4,6 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { memoryPersistence } from '../../../clan-store/src'
-import { mainStoryboard } from '../model/selectors'
 import { ModelStore } from '../model/store'
 import { memoryStorage, clanDbFor, docKeyFor } from '../projects/storage'
 import { MAYA, modelStore, v2Clan } from '../test/model'
@@ -58,10 +57,13 @@ describe('openDocument', () => {
     expect(opened.clan).not.toBeNull()
     expect(opened.storeNote).toBeNull()
     expect((await opened.clan!.chain()).map((e) => e.action)).toContain('start the project')
-    const sb = mainStoryboard(opened.doc.get())!.id
+    // A new project opens blank — no script, storyboard or video yet (owner 2026-11-03: a blank canvas).
+    const d = opened.doc.get()
+    expect([Object.keys(d.scripts), Object.keys(d.storyboards), Object.keys(d.videos)]).toEqual([[], [], []])
+    const pid = d.project.id
     await opened.clan!.close()
     const again = await openDocument({ project: PROJECT, person: MAYA, make, storage }) as OpenedDocument
-    expect(mainStoryboard(again.doc.get())!.id).toBe(sb)
+    expect(again.doc.get().project.id).toBe(pid)
   })
 
   it('an empty document says its contract', () => {

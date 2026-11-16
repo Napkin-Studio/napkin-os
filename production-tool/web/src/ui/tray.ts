@@ -35,7 +35,10 @@ export function trayGroups(jobs: DocJob[], ctxOf: (id: string) => JobCtx | undef
     const ctx = ctxOf(job.id)
     const row = { job, state, ctx, queuePosition: live?.queuePosition }
     if (state === 'needs_input') waiting.push(row)
-    else if (isActive(state)) working.push(row)
+    // Count a job as being made when EITHER the live state or the document state is active, so a clip the
+    // document still reports as 'queued' (what the "waiting to start" status line reads) shows here too —
+    // the tray and the status line were disagreeing while a clip was starting (owner 2026-11-04).
+    else if (isActive(state) || isActive(job.state)) working.push(row)
     // A failure the user has not cleared or sent again (Retry and Try another model set dismissed).
     else if (state === 'failed' && ctx && !ctx.dismissed) needsYou.push(row)
   }

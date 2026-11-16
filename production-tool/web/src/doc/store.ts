@@ -11,9 +11,10 @@ import type { Doc, DocumentStore, WriteWhy } from './types'
 
 export type { DocumentStore } from './types'
 
-/** A new project's data (one script, storyboard and video, linked), as clan-store's create() makes it. */
-export function emptyDocument(person: Person, title = 'Untitled ad'): ProductionDocument {
-  return newProjectData({ person, title, newId, now: new Date().toISOString() }) as unknown as ProductionDocument
+/** A new project's data, as clan-store's create() makes it: the three stages (script, storyboard,
+ *  video, linked), or an empty document with `blank` (the app's new-project path asks for blank). */
+export function emptyDocument(person: Person, title = 'Untitled ad', blank = false): ProductionDocument {
+  return newProjectData({ person, title, newId, now: new Date().toISOString(), blank }) as unknown as ProductionDocument
 }
 
 /** Something that keeps a snapshot between reloads. */
@@ -121,8 +122,8 @@ export class SnapshotDocumentStore extends SnapshotStore<ProductionDocument> imp
     return (await this.restore((v) => (needsGenerations(v) ? migrateToGenerations(v) : v))) && this.get().contract_version === '3' ? this.get() : null
   }
 
-  async create(person: Person, title?: string): Promise<Doc> {
-    this.replace(emptyDocument(person, title))
+  async create(person: Person, title?: string, blank = false): Promise<Doc> {
+    this.replace(emptyDocument(person, title, blank))
     return this.get()
   }
 
