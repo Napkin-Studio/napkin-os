@@ -17,7 +17,7 @@ import { localPoints, strokeScale } from '../model/points'
 import { BLOCKS, linkRoute, midway, routeKey, type LinkEnv, type LinkRoute } from './links'
 import { photoEdge, recordBounds } from '../model/bounds'
 import { LIGHT_INK, resolveInk, type InkPalette } from '../ink/palette'
-import { LINE_HEIGHT, TEXT_FONT } from '../text/text'
+import { approxMeasure, LINE_HEIGHT, TEXT_FONT, wrapLines } from '../text/text'
 import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import type { Bitmap, Level } from './bitmaps'
@@ -51,6 +51,8 @@ export interface PathLike {
 
 /** The part of CanvasRenderingContext2D the renderer uses. */
 export interface DrawContext {
+  /** A canvas's text measure (the browser's); a bare context falls back to approxMeasure. */
+  measureText?(text: string): { width: number }
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
   save(): void
   restore(): void
@@ -818,7 +820,9 @@ export class Renderer {
         const size = r.style.fontSize ?? 20
         ctx.font = `${size}px ${r.style.fontFamily ?? TEXT_FONT}, sans-serif`
         const plain = typeof r.props.plain === 'string' ? r.props.plain : ''
-        plain.split('\n').forEach((line, i) => ctx.fillText(line, r.x, r.y + size * (LINE_HEIGHT * i + 1)))
+        // Wrapped at the text's own box (textBox made it with wrapLines), so what is drawn is what is hit.
+        const family = r.style.fontFamily ?? TEXT_FONT
+        wrapLines(plain, size, (l) => { const m = ctx.measureText?.(l)?.width; return typeof m === 'number' ? m : approxMeasure(l, size, family) }, family, r.w + 1).forEach((line, i) => ctx.fillText(line, r.x, r.y + size * (LINE_HEIGHT * i + 1)))
         return
       }
       case 'arrow':
