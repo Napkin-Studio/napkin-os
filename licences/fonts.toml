@@ -139,6 +139,13 @@ shipped_by = "fonts.googleapis.com"
 licence = "OFL-1.1"
 source_url = "https://github.com/vercel/geist-font/blob/main/LICENSE.txt"
 
+# The new UI's display serif (develop #151: app/index.html, the Brief Maker, design/new-ui/guide).
+[[family]]
+name = "Newsreader"
+shipped_by = "fonts.googleapis.com"
+licence = "OFL-1.1"
+source_url = "https://github.com/productiontype/Newsreader/blob/master/OFL.txt"
+
 # app/public/mock-clan/human/index.html (ships in the app's public/ folder)
 [[family]]
 name = "Inter"
