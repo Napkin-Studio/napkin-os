@@ -130,7 +130,8 @@
 .bt-meter { display: flex; gap: 2px; height: 8px; position: relative; }
 .bt-meter .seg { flex-basis: 0; background: var(--learn); border-radius: 3px; min-width: 2px; }
 .bt-meter .seg.cur { background: var(--tool); }
-.bt-meter .seg.rest { background: transparent; }
+/* Under the target: the rest of it is a faint track up to the target's mark. */
+.bt-meter .seg.rest { background: var(--soft-2); }
 .bt-meter .target { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }
 .bt-refs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .bt-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: var(--r-pill); background: var(--soft-2); color: var(--ink2); white-space: nowrap; border: 0; font-family: inherit; }

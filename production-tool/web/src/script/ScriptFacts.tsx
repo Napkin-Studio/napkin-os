@@ -31,7 +31,8 @@ export function ScriptFacts({ composed, doc, store, current, onError, say }: {
   const shots = composed.shots
   const target = sb?.target_s ?? composed.script.target_s
   const rough = !shots.length ? roughSeconds(scriptText(doc, scriptId)) : null
-  const est = Math.round((rough ?? composed.total_s) * 10) / 10
+  // A rough length from the words is said in whole seconds (the mock's "about 38 s"); planned shots to a tenth.
+  const est = rough !== null ? Math.round(rough) : Math.round(composed.total_s * 10) / 10
   const over = Math.round((est - target) * 10) / 10
   const segs = meterSegments(doc, composed)
   const setLength = (seconds: number) => {
