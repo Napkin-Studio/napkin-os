@@ -13,7 +13,7 @@ import {
   clipEnd, EMPTY_CUT, pack, r3, sortV1,
   type Cut, type CutClip, type CutEndCard, type CutText, type Transition,
 } from './cut'
-import { inBox, sharesBox, shotWindow, type Box, type Gen } from './model'
+import { boxName, inBox, sharesBox, shotWindow, type Box, type Gen } from './model'
 
 // ── The document's cut ↔ the plain cut ────────────────────────────────────────────────────────────────
 
@@ -305,3 +305,22 @@ export function whereWords(plan: Plan, t: number, nameOf: (genId: Id) => string)
 }
 
 export { clipEnd }
+
+// ── Brackets ──────────────────────────────────────────────────────────────────────────────────────────
+
+/** The Edit room's brackets over V1: neighbouring clips, end to end, of one take, whose shots sit in one box
+ *  that is made together NOW. A box made apart since its take was made draws none (live test 2026-11-16,
+ *  finding 22: "Box 1 · made together" stayed over four clips after Made apart). */
+export function cutBrackets(v1: CutClip[], gens: Gen[], boxes: Box[]): { from: number; to: number; label: string }[] {
+  const boxOf = (c: CutClip) => (c.follows?.shotId ? boxes.find((b) => b.shotIds.includes(c.follows!.shotId!)) : undefined)
+  const out: { from: number; to: number; label: string }[] = []
+  let i = 0
+  while (i < v1.length) {
+    const b = boxOf(v1[i])
+    let j = i
+    while (j + 1 < v1.length && v1[j + 1].genId === v1[i].genId && Math.abs(v1[j + 1].startS - clipEnd(v1[j])) < 0.01 && !!b && boxOf(v1[j + 1]) === b) j++
+    if (j > i && b?.together && gens.some((g) => g.id === v1[i].genId)) out.push({ from: v1[i].startS, to: clipEnd(v1[j]), label: `${boxName(b)} · made together` })
+    i = j + 1
+  }
+  return out
+}

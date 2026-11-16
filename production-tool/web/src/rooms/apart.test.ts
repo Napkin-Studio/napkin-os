@@ -10,7 +10,7 @@ import { addShots, id, job, MAYA, modelStore, SHA, T } from '../test/model'
 import { appendTake } from './editOps'
 import { boxBeats, boxKeyOf, boxWindow, inBox, roomGens, type Box } from './model'
 import type { RoomData } from './Rooms'
-import { assemble, newerTake, readCut, topTake } from './timeline'
+import { assemble, cutBrackets, newerTake, readCut, topTake } from './timeline'
 
 function gen(d: ProductionDocument, shots: Shot[], sha: string, extra: Partial<Generation> = {}): Generation {
   const j = job(d, 'clip', [], sha)
@@ -100,5 +100,21 @@ describe('a take made together, its shots made apart since', () => {
     const clip = (shotId: string) => ({ id: 'c', genId: old.id, inS: 0, outS: 3, startS: 0, speed: 1, holdS: 0, fadeInS: 0, fadeOutS: 0, follows: { shotId } })
     expect(newerTake(clip(shots[1].id), gens)?.id).toBe(lone.id)
     expect(newerTake(clip(shots[0].id), gens)).toBeUndefined()
+  })
+})
+
+describe('the Edit room brackets', () => {
+  it('draw over the clips of a box made together now, and none once its shots are made apart', async () => {
+    const { store, boxes, shots, videoId } = await madeApart()
+    const together: Box = { key: boxKeyOf(shots.map((s) => s.id)), n: 1, shotIds: shots.map((s) => s.id), together: true, endCard: false, lengthS: 9 }
+    const gens = roomGens(store.get(), { jobs: {} }, videoId, [together])
+    let n = 0
+    const v1 = assemble(store.get(), videoId, [together], gens, () => `c${++n}`).v1
+    expect(cutBrackets(v1, gens, [together])).toEqual([{ from: 0, to: 9, label: 'Box 1 · made together' }])
+    // The same three clips, the shots now three boxes of one shot each: no bracket.
+    expect(cutBrackets(v1, roomGens(store.get(), { jobs: {} }, videoId, boxes), boxes)).toEqual([])
+    // Shots 1-2 together again, shot 3 apart: the bracket covers shots 1-2 only.
+    const two: Box[] = [{ ...together, key: boxKeyOf([shots[0].id, shots[1].id]), shotIds: [shots[0].id, shots[1].id], lengthS: 6 }, boxes[2]]
+    expect(cutBrackets(v1, roomGens(store.get(), { jobs: {} }, videoId, two), two)).toEqual([{ from: 0, to: 6, label: 'Box 1 · made together' }])
   })
 })

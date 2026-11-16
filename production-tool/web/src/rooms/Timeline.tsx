@@ -9,10 +9,11 @@ import { shotNumber } from '../model/selectors'
 import { Float, MenuItem } from '../ui/Float'
 import { GEN_DRAG } from './Bin'
 import { clipEnd, clipLen, endCardStart, handleShort, MAX_TRANSITION_S, sortV1, type Cut, type CutClip, type CutText, type Transition } from './cut'
-import { boxName, sharesBox, shotTitle, type Gen } from './model'
+import { sharesBox, shotTitle, type Gen } from './model'
 import { Poster } from './Poster'
 import { tc } from './media'
 import type { RoomData } from './Rooms'
+import { cutBrackets } from './timeline'
 
 export type Picked = { kind: 'clip'; id: string } | { kind: 'text'; id: string } | { kind: 'card' } | null
 
@@ -83,22 +84,8 @@ export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, 
     const r = el.getBoundingClientRect()
     return Math.max(0, (clientX - r.left + el.scrollLeft) / pps)
   }
-  // Boxes made together, as brackets over their clips: runs of neighbouring clips of one take.
-  const brackets = useMemo(() => {
-    const out: { from: number; to: number; label: string }[] = []
-    let i = 0
-    while (i < v1.length) {
-      let j = i
-      while (j + 1 < v1.length && v1[j + 1].genId === v1[i].genId && Math.abs(v1[j + 1].startS - clipEnd(v1[j])) < 0.01) j++
-      const g = data.gens.find((x) => x.id === v1[i].genId)
-      if (j > i && g) {
-        const b = data.boxes.find((x) => x.key === g.boxKey)
-        out.push({ from: v1[i].startS, to: clipEnd(v1[j]), label: `${b ? boxName(b) : 'One take'} · made together` })
-      }
-      i = j + 1
-    }
-    return out
-  }, [v1, data.gens, data.boxes])
+  // Boxes made together, as brackets over their clips (cutBrackets: from the boxes as they are now).
+  const brackets = useMemo(() => cutBrackets(v1, data.gens, data.boxes), [v1, data.gens, data.boxes])
 
   const seekDrag = (e: React.PointerEvent) => {
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
