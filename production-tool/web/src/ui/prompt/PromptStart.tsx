@@ -105,7 +105,7 @@ function PromptBox({ placeholder, hint, submit, busy, label, autoFocus = false, 
     const r = insertMention(text, at.from, caret, name)
     setText(r.text)
     setCaret(r.caret)
-    requestAnimationFrame(() => { area.current?.focus(); area.current?.setSelectionRange(r.caret, r.caret) })
+    requestAnimationFrame(() => { area.current?.focus({ preventScroll: true }); area.current?.setSelectionRange(r.caret, r.caret) })
   }
   return (
     <div className="pstart-box">
@@ -410,7 +410,7 @@ function DescribeBox({ value, onChange, disabled, onSubmit }: { value: string; o
     const r = insertMention(value, at.from, caret, name)
     onChange(r.text)
     setCaret(r.caret)
-    requestAnimationFrame(() => { area.current?.focus(); area.current?.setSelectionRange(r.caret, r.caret) })
+    requestAnimationFrame(() => { area.current?.focus({ preventScroll: true }); area.current?.setSelectionRange(r.caret, r.caret) })
   }
   return (
     <div className="pstart-box">

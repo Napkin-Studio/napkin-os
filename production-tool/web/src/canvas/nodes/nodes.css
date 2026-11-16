@@ -24,7 +24,9 @@
 :where(.node-layer) :where(.bl-card) {
   position: absolute; left: 0; right: 0; top: 0; box-sizing: border-box;
   background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-soft);
-  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; color: var(--ink);
+  /* clip, not hidden: a hidden-overflow box can still be scrolled (focus, scrollIntoView), and an editor's
+     return left the Script and Video cards scrolled 251/187 px sideways, shifted or blank (live test 2026-11-16). */
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow: clip; color: var(--ink);
 }
 :where(.node-layer) :where(.bl-cardhead) { display: flex; align-items: center; gap: 8px; }
 :where(.node-layer) :where(.bl-cardhead b) { font-weight: 600; font-size: 14px; white-space: nowrap; }
