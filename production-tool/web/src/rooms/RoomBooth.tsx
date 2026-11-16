@@ -67,8 +67,11 @@ export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady 
     const ctx = jobCtx(doc, ui, j.id)
     const g = data.gens.find((x) => x.jobId === j.id)
     const box = g ? data.boxes.find((b) => b.key === g.boxKey) : undefined
-    const n = ctx?.for === 'clip' ? shotNumber(doc, ctx.shotId) : 0
-    const q = j.op === 'stitch' ? 'The render did not work.' : box ? `The last Make of ${boxName(box)} did not work.` : n ? `Shot ${n}’s take did not work.` : 'That did not work.'
+    const shotsOfJob = ctx?.for === 'clip' ? [ctx.shotId] : ctx?.for === 'run' ? doc.videos[ctx.videoId]?.runs?.[ctx.runId]?.shot_ids ?? [] : ctx?.for === 'remake' ? genOf(ctx.parentId)?.shotIds ?? [] : []
+    const ns = shotsOfJob.map((id) => shotNumber(doc, id)).filter((n) => n > 0)
+    const which = ns.length > 1 ? `shots ${ns[0]} to ${ns.at(-1)}` : ns.length ? `shot ${ns[0]}` : ''
+    const q = j.op === 'stitch' ? 'The render did not work.' : box ? `The last Make of ${boxName(box)} did not work.`
+      : which ? `${ctx?.for === 'remake' ? 'The new take of' : 'The take of'} ${which} did not work.` : 'That did not work.'
     return { q, body: j.error ? plainJobError(j.error, j.op).message : undefined }
   }
 

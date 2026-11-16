@@ -21,7 +21,10 @@
 }
 /* The Storyboard: the Booth floats as a card in its column, 16px from the edges. */
 .booth-storyboard .booth { top: 16px; right: 16px; bottom: 16px; }
-/* The rooms: a flush column like the inspector. */
+/* The rooms: a flush column like the inspector; their 44px controls stay the Booth's own size here. */
+.rooms .booth .btn { min-height: 0; height: 32px; padding: 0 12px; font-size: 12.5px; }
+.rooms .booth .btn.sm { height: 30px; }
+.rooms .booth .btn.why, .rooms .booth .btn.link { padding: 0 4px; }
 .booth-col.flush { width: var(--bw); }
 .booth-col.flush.booth-off { width: var(--bgut, 0px); }
 .flush .booth { border-radius: 0; border-width: 0 0 0 1px; box-shadow: none; background: var(--paper); }
@@ -52,6 +55,7 @@
 .bt-box:focus-within { border-color: var(--ink3); }
 .bt-box textarea { border: 0; outline: none; background: transparent; resize: none; width: 100%; min-height: 44px; font: inherit; font-size: 13.5px; line-height: 1.5; color: var(--ink); padding: 0; }
 .bt-box textarea::placeholder { color: var(--ink3); }
+.bt-box textarea:focus, .bt-box textarea:focus-visible { outline: none; }
 .bt-box textarea:disabled { opacity: .6; }
 .bt-box .row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .bt-box .row .sp { flex: 1; }
@@ -189,6 +193,7 @@ button.bt-pill { cursor: pointer; }
 .se[data-view='av'] .se-body:has(> .booth-col) { grid-template-columns: minmax(0, 1fr) auto; }
 .se-page { position: relative; }
 /* The part the Booth is on (script/ScriptEditor.tsx PartMark): a tint and a line, never over the words' colour. */
+.se-selmark { position: absolute; pointer-events: none; background: color-mix(in srgb, var(--tool) 22%, transparent); border-bottom: 1.5px solid var(--tool); z-index: 0; }
 .se-partmark { position: absolute; pointer-events: none; border-left: 2px solid var(--tool); border-radius: 0 6px 6px 0; background: color-mix(in srgb, var(--tool) 9%, transparent); z-index: 0; }
 @media (max-width: 1179px) {
   .se-body:has(> .booth-col) { grid-template-columns: minmax(0, 1fr) auto; }

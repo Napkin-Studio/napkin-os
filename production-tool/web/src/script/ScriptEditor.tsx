@@ -917,15 +917,20 @@ function PartMark({ part, focus }: { part: Extract<SkyeScope, { kind: 'part' }>;
       const host = editor?.view.dom
       const block = same && host ? (part.target.kind === 'scene' ? host.children[part.block] : host) : null
       const page = block?.closest('.se-page') as HTMLElement | null
-      if (!block || !page) return setBox(null)
+      if (!block || !page) return setBox((b) => (b ? null : b))
       const r = block.getBoundingClientRect()
       const p = page.getBoundingClientRect()
-      setBox({ top: r.top - p.top + page.scrollTop - 4, left: r.left - p.left + page.scrollLeft - 8, width: r.width + 16, height: r.height + 8 })
+      const next = { top: Math.round(r.top - p.top + page.scrollTop - 4), left: Math.round(r.left - p.left + page.scrollLeft - 8), width: Math.round(r.width + 16), height: Math.round(r.height + 8) }
+      setBox((b) => (b && b.top === next.top && b.left === next.left && b.width === next.width && b.height === next.height ? b : next))
     }
     place()
+    const t = setInterval(place, 400)
     window.addEventListener('resize', place)
-    return () => window.removeEventListener('resize', place)
-  })
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('resize', place)
+    }
+  }, [part, focus])
   return box ? <span className="se-partmark" aria-hidden="true" style={box} /> : null
 }
 

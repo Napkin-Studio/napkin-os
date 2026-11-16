@@ -65,7 +65,7 @@ export function BoothBox({ placeholder, button, scope, onSend, disabled, busy, h
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() } }} />
       {hint && <div className="bt-hint">{hint}</div>}
-      <div className="row">{scope}<span className="sp" /><button type="submit" className="btn sm dark" disabled={disabled || busy || !text.trim()}>{busy ? 'Asking…' : button}</button></div>
+      <div className="row">{scope}<span className="sp" /><button type="submit" className="btn sm dark" disabled={disabled || busy}>{busy ? 'Asking…' : button}</button></div>
     </form>
   )
 }

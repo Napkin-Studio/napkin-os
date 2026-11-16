@@ -4,7 +4,8 @@
 // Why, landing on the page only on Keep (with Undo); her questions waiting; 'This script' at the foot.
 // The flows are skye.ts's (draft from a brief, revise, the free instruct); no relay or prompt change.
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { Editor } from '@tiptap/core'
 import { proseHash, StaleSuggestion } from '../../../clan-store/src'
 import type { Ask, Id, ProductionDocument, Suggestion, WriteIntent, WriteMode, WriteTarget } from '../contracts/types'
@@ -79,6 +80,39 @@ function useSelection(editor: Editor | null, target: WriteTarget | null): [Extra
     }
   }, [editor, target?.kind, target?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   return [sel, () => setSel(null)]
+}
+
+/** The person's selection, still marked on the page while they type in the Booth (the editor's own
+ *  selection hides when it loses the focus). Drawn over the page, under nothing that takes a click. */
+function SelectionMark({ editor, span }: { editor: Editor | null; span: Span }) {
+  const [rects, setRects] = useState<{ top: number; left: number; width: number; height: number }[]>([])
+  const page = editor && !editor.isDestroyed ? editor.view.dom.closest('.se-page') as HTMLElement | null : null
+  useLayoutEffect(() => {
+    const place = () => {
+      if (!editor || editor.isDestroyed || !page || editor.isFocused) return setRects((was) => (was.length ? [] : was))
+      try {
+        const a = editor.view.domAtPos(span.from)
+        const b = editor.view.domAtPos(span.to)
+        const r = document.createRange()
+        r.setStart(a.node, a.offset)
+        r.setEnd(b.node, b.offset)
+        const p = page.getBoundingClientRect()
+        const next = [...r.getClientRects()].filter((x) => x.width > 1).map((x) => ({ top: Math.round(x.top - p.top + page.scrollTop), left: Math.round(x.left - p.left + page.scrollLeft), width: Math.round(x.width), height: Math.round(x.height) }))
+        setRects((was) => (JSON.stringify(was) === JSON.stringify(next) ? was : next))
+      } catch {
+        setRects((was) => (was.length ? [] : was))
+      }
+    }
+    place()
+    const t = setInterval(place, 400)
+    window.addEventListener('resize', place)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('resize', place)
+    }
+  }, [editor, page, span.from, span.to])
+  if (!page || !rects.length) return null
+  return createPortal(<>{rects.map((r, i) => <span key={i} className="se-selmark" aria-hidden="true" style={r} />)}</>, page)
 }
 
 export function SkyeBooth(p: SkyeBoothProps) {
@@ -172,6 +206,7 @@ export function SkyeBooth(p: SkyeBoothProps) {
   return (
     <Booth state={booth} scoped={scoped} count={count} asks={count}
       footer={<ScriptFacts composed={composed} doc={doc} store={store} current={p.current} onError={p.onError} say={p.say} />}>
+      {scope.kind === 'selection' && <SelectionMark editor={p.editor} span={scope.span} />}
       <BoothAgent agent="skye" line={SKYE_LINE} needsYou={count > 0} />
       {scope.kind === 'part' && (
         <article className="bc" aria-label="This part">

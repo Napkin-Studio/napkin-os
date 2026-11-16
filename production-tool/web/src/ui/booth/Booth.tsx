@@ -43,7 +43,7 @@ export function Booth({ state, scoped = false, count = 0, asks = 0, children, fo
   count?: number
   /** Questions waiting: a new one while hidden pings the dot, then brings the Booth in after about 1 s. */
   asks?: number
-  children: ReactNode
+  children?: ReactNode
   /** Kept at the foot of the Booth's body. */
   footer?: ReactNode
 }) {
@@ -67,7 +67,7 @@ export function Booth({ state, scoped = false, count = 0, asks = 0, children, fo
   useLayoutEffect(() => {
     const at = () => {
       const top = colRef.current?.getBoundingClientRect().top ?? 0
-      setEdgeTop(Math.max(96, Math.round(top + 16)))
+      setEdgeTop(Math.max(96, Math.round(top)))
     }
     at()
     window.addEventListener('resize', at)
