@@ -1204,6 +1204,47 @@
         "hat_front"
       ],
       "budget": 250
+    },
+    {
+      "id": "shot_list_free_prose",
+      "since": "director.v9",
+      "op": "shot_list",
+      "why": "features/script-freeform.clan (owner 2026-11-16): a script is written freely, as prose and bullets with no scene heading or screenplay element, and Plan shots reads the words as they are. Dex plans shots from the prose in its order, keeps the words, invents no scene heading and asks nothing.",
+      "input": {
+        "script": "A woman in a red raincoat finds a lost puppy in the rain. 30 seconds, one street, dusk. No dialogue, one line at the end.\nShe steps off a green tram into heavy rain and opens a small yellow umbrella.\n- walks past a bakery window, warm light, glances in at the bread\n- a whimper under the bridge railing: a soaked puppy, shivering\n- she kneels and holds the umbrella over it, not over herself\nShe carries the puppy across the old stone bridge as the rain stops and the sky turns gold.\nEnd line: Someone's always looking out for you.",
+        "targetS": 30
+      },
+      "expect": {
+        "shots": [
+          4,
+          12
+        ]
+      },
+      "must": [
+        [
+          "tram"
+        ],
+        [
+          "bakery"
+        ],
+        [
+          "whimper",
+          "soaked"
+        ],
+        [
+          "kneels"
+        ],
+        [
+          "gold"
+        ],
+        [
+          "looking out for you"
+        ]
+      ],
+      "forbid": [
+        "int.",
+        "ext."
+      ]
     }
   ],
   "frames": {

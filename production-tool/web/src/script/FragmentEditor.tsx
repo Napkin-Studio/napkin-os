@@ -88,7 +88,10 @@ export function FragmentEditor({ store, kind, id, label, className, compact, pla
   }, [editor, chain, chainKey])
 
   useEffect(() => {
-    if (editor && autoFocus) editor.commands.focus(autoFocus)
+    if (!editor || !autoFocus) return
+    // After the view is mounted (EditorContent mounts it): before that the editor has no commands.
+    const t = setTimeout(() => { if (!editor.isDestroyed && editor.isInitialized) editor.commands.focus(autoFocus) }, 0)
+    return () => clearTimeout(t)
     // Only when it mounts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor])
