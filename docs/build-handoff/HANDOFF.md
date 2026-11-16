@@ -14,25 +14,16 @@ wins wherever the two differ.
   work). The one left out on purpose is `feat/align-confidential-prices`: see section 4.
 - **Nothing is running.** No builder, no reviewer, no test stack.
 - **`origin/develop` is fully merged in** (up to 0b0d4342, 13 Nov; zero commits behind on 16 Nov).
-- **The push.** Before 16 Nov, origin held this branch at e405c27b (13 Nov) and about 730 commits
-  were local only, 457 of them Shrey's Production line (`origin/feat/make-and-edit`). Read the
-  last `BUILD-LOG.md` entry to see whether the push has gone through since. It needs
-  `NAPKIN_LICENCE_APPROVED=Shrey` (the only name in `licences/policy.toml` `approvers`), because
-  the Production line changed `licences/*.toml`. That is a person's approval. An agent never sets
-  it and never uses `--no-verify`.
-- **The push has a second blocker: the `licences` suite fails on this branch** (run 16 Nov; it had
-  never been run on the build machine). 3 failed, 110 passed:
-  1. `test_repo_tree_passes`: the Google Fonts family Newsreader is used in 21 files (develop's new
-     UI: `app/index.html:15`, `app/templates/*/index.html`, `design/new-ui/`) and is not in
-     `licences/fonts.toml`. Develop has the font and no licence gate; the Production line has the
-     gate and not the font; the merge brought them together. The fix is one `[[family]]` entry
-     with its licence and `source_url`, approved by Shrey. An agent does not add it.
-  2. `test_pre_push_refuses_a_policy_change_without_napkin_licence_approved` and
-     `test_pre_push_ignores_pushes_that_leave_licences_alone`: their throwaway repo has no
-     `scripts/check.sh`, and this build's hook runs the secret scan through it before anything
-     else (`.githooks/pre-push:68`). A test fixture fault from the same merge; an agent can fix it
-     (give the fixture repo `scripts/check.sh`, `.gitleaks.toml` and a gitleaks it can find).
-  The `image` suite passes (20 minutes). The other twelve suites were not re-run on 16 Nov.
+- **Pushed on 16 Nov.** Origin holds this branch at 0ce7c600 or later, with all fourteen check
+  suites green in the pre-push hook. Two things were fixed for that: Newsreader (OFL-1.1) was
+  listed in `licences/fonts.toml`, and the hook tests' fixture repo was given a
+  `scripts/check.sh`. Sai pushed by his own hand with `NAPKIN_LICENCE_APPROVED=Shrey`, since the
+  Production line changed `licences/*.toml`. Shrey should confirm the Newsreader entry.
+- **A later push that changes `licences/*.toml` needs that approval again.** It is a person's.
+  An agent never sets it and never uses `--no-verify`. A push that leaves licences alone needs
+  nothing but green checks.
+- The terraform suite rewrites `infra/envs/hackathon/.terraform.lock.hcl`. Restore it with
+  `git checkout --`; do not commit it.
 
 ## 2. What was done
 
