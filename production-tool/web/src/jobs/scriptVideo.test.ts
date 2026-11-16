@@ -72,10 +72,10 @@ async function videoFrom(store: ModelStore, scriptId: string): Promise<string> {
 }
 
 describe('Plan shots from a script (3.10)', () => {
-  it('says "Write the script first" while the script has no words', async () => {
+  it('says "Write something first" while the script has no words', async () => {
     const { store } = await project()
     const sc = await newScript(store, '')
-    expect(planShotsBlocked(doc(store), sc)).toBe('Write the script first')
+    expect(planShotsBlocked(doc(store), sc)).toBe('Write something first')
   })
 
   it('a script with words and no storyboard gets one, linked, and Dex plans on it', async () => {
@@ -256,7 +256,8 @@ describe('the Script editor\'s next step', () => {
     await store.flush()
     const plan = nextStep(doc(store), sc)!
     expect(plan.step).toBe('plan')
-    expect(plan.line).toMatch(/^Ready when you are: Plan shots turns this into about \d+ shots\.$/)
+    // Free words are read as they are (features/script-freeform.clan).
+    expect(plan.line).toMatch(/^I'll read your words as they are and plan about \d+ shots\. Nothing needs a heading or an element first\.$/)
     expect(plan.actions).toEqual(['plan', 'open-video'])
     // While Dex plans there is nothing to do.
     await planFromScript(deps, sc)

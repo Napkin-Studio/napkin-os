@@ -1,0 +1,97 @@
+/* The free page (features/script-freeform.clan; mock ~/Documents/napkin-design-mocks/script-freeform-v1,
+   states empty, prose, screenplay, format). Over look.css: one white sheet; free text as written in Geist,
+   screenplay elements in Geist Mono; the element bar is the top bar's Format menu now. */
+
+/* The sheet */
+.se-page { padding: 8px 0 56px; }
+.se-page > .sp-rows { max-width: 760px; }
+.sp-rows {
+  position: relative; box-sizing: border-box; min-height: 100%;
+  padding: 56px 72px 72px; border-radius: 4px;
+  font-family: var(--f-mono); font-size: 14px; line-height: 1.6;
+}
+.sp-rows > section.sp-scene:first-of-type { margin-top: 0; }
+
+/* A screenplay scene: heading and elements in Geist Mono, the scene's number in the margin. */
+.sp-rows .sp-scene { margin: 26px 0 0; }
+.sp-rows .sp-scene::before { left: -36px; top: 1px; width: auto; font-size: 12px; text-align: left; }
+.sp-rows .sp-heading { font-family: var(--f-mono); font-size: 14px; font-weight: 700; letter-spacing: 0; line-height: 1.6; padding: 0; margin: 0 0 12px; }
+.sp-rows .sp-heading::placeholder { font-weight: 400; text-transform: none; }
+.sp-rows .fragment, .sp-rows .sp-static { font-family: var(--f-mono); font-size: 14px; line-height: 1.6; }
+.sp-rows .fragment p, .sp-rows .sp-static p { margin: 0 0 12px; }
+.sp-rows .fragment p[data-type="character"], .sp-rows .sp-static p[data-type="character"] { margin: 16px 0 0 38%; padding: 0; }
+.sp-rows .fragment p[data-type="parenthetical"], .sp-rows .sp-static p[data-type="parenthetical"] { margin: 0 0 0 31%; padding: 0; color: var(--ink2); }
+.sp-rows .fragment p[data-type="dialogue"], .sp-rows .sp-static p[data-type="dialogue"] { margin: 0 22% 12px 24%; padding: 0; }
+.sp-rows .fragment p[data-type="transition"], .sp-rows .sp-static p[data-type="transition"] { margin: 0 0 12px; text-align: right; letter-spacing: 0; }
+.sp-rows .fragment p[data-type="centered"], .sp-rows .sp-static p[data-type="centered"] { margin: 0 12% 12px; text-align: center; }
+
+/* Free text: no heading and nothing but plain lines, so no number, no field, the words as written in Geist.
+   The moment a line becomes a screenplay element the scene reads as a screenplay (before the page catches up). */
+.sp-rows .sp-scene.free { margin: 0; counter-increment: none; }
+.sp-rows .sp-scene.free::before { content: none; }
+.sp-rows .sp-scene.free:not(:has(p:not([data-type="action"]))) :is(.fragment, .sp-static) { font-family: var(--f-display); font-size: 16px; line-height: 1.7; }
+.sp-rows .sp-scene.free:not(:has(p:not([data-type="action"]))) :is(.fragment, .sp-static) p { margin: 0 0 14px; }
+.sp-rows .sp-scene.free .fragment { min-height: 1.7em; }
+.sp-rows .fragment:focus-visible { outline: none; }
+
+/* The line the Format menu works on. */
+.sp-rows > .fmt-cur { position: absolute; width: 2px; border-radius: 2px; background: var(--tool); pointer-events: none; }
+.ol-para.on > .ol-btn, .ol-line.on > .ol-btn { background: var(--tool-soft); color: var(--tool-ink); }
+
+/* A line written as a bullet: a bullet, its marker kept in the text (extensions.ts bulletPlugin). */
+.sp-rows p.fp-li { position: relative; padding-left: 22px; margin-bottom: 6px; }
+.sp-rows p.fp-li + p:not(.fp-li) { margin-top: 14px; }
+.fp-mark { display: inline-block; position: relative; width: 22px; margin-left: -22px; overflow: hidden; vertical-align: top; color: transparent; white-space: pre; }
+.fp-mark::before { content: ""; position: absolute; left: 6px; top: 0.72em; width: 5px; height: 5px; border-radius: 50%; background: var(--ink2); }
+
+/* The empty page: a calm invitation over the first line; it goes the moment there is a word. */
+.sp-hint { position: absolute; left: 72px; right: 72px; top: 56px; pointer-events: none; font-family: var(--f-display); }
+.sp-hint .big { font-size: 22px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.2; color: var(--ink2); }
+.sp-hint p { margin: 14px 0 0; max-width: 470px; font-size: 14px; line-height: 1.6; color: var(--ink2); }
+.sp-hint .ways { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+.sp-hint .ways span { padding: 4px 10px; border: 1px dashed var(--line); border-radius: var(--r-pill); font-size: 12px; color: var(--ink2); }
+.sp-rows:not(:has(.is-editor-empty)) .sp-hint { display: none; }
+
+/* After a screenplay paste: what happened, and the way back to plain text. */
+.sp-note { display: flex; align-items: center; gap: 8px; margin: -28px 0 22px; font-family: var(--f-display); font-size: 12px; line-height: 1.4; color: var(--ink2); }
+.sp-note .dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--tool); }
+.sp-note .linkbtn { padding: 0 6px; border: 0; background: transparent; font: inherit; color: var(--tool-ink); text-decoration: none; cursor: pointer; white-space: nowrap; }
+.sp-note .linkbtn:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* The top bar: Format beside the view switch; why Plan shots is off, said beside it. */
+.se-fmt { gap: 4px; }
+.se-fmt svg { width: 12px; height: 12px; }
+.se-fmt[aria-expanded="true"] { background: var(--tool-soft); border-color: var(--tool); color: var(--tool-ink); }
+.ptbar .se-why { font-size: 12px; color: var(--ink2); }
+
+/* The Format menu */
+.float.se-fmtmenu { width: 340px; min-width: 340px; padding: 6px; }
+.se-fmtmenu .fmi { min-height: 36px; padding: 8px 12px; border-radius: 10px; font-weight: 400; }
+.se-fmtmenu .fmi-ico { width: 14px; text-align: left; color: var(--tool-ink); font-weight: 700; }
+.se-fmtmenu .fmi.on { color: var(--tool-ink); font-weight: 600; }
+.se-fmtmenu .se-fmtskye { align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
+.se-fmtmenu .se-fmtskye b { display: block; font-weight: 600; }
+.se-fmtmenu .se-fmtskye small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--ink2); }
+.se-fmthead { padding: 8px 12px 4px; font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); }
+.se-fmtfoot { display: flex; align-items: center; gap: 6px; padding: 8px 12px 6px; font-size: 12px; color: var(--ink3); }
+.se-fmtfoot kbd { font-family: var(--f-mono); font-size: 10.5px; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--card); color: var(--ink2); }
+
+/* The outline: a white card; paragraphs (¶1, …) for free text, scenes and their lines for a screenplay. */
+@media (min-width: 1180px) { .se-outline { background: var(--card); border-radius: var(--r-board); padding: 14px 12px 12px; backdrop-filter: none; } }
+.se-outline .ol-head { justify-content: flex-start; align-items: baseline; gap: 8px; }
+.se-outline .ol-head span:last-child { font-size: 11px; }
+.ol-empty { padding: 4px 8px; font-size: 12.5px; line-height: 1.45; color: var(--ink3); }
+.ol-para .ol-btn, .ol-line .ol-btn { gap: 8px; padding: 6px 8px; font-size: 12.5px; }
+.ol-para .ol-n { min-width: 18px; }
+.ol-line .ol-btn { padding-left: 26px; }
+.ol-scene .ol-btn { gap: 8px; padding: 6px 8px; font-family: var(--f-mono); font-size: 11.5px; font-weight: 600; color: var(--ink2); }
+.se-outline.nothing .se-keycard { margin-top: 10px; }
+
+@media (max-width: 1179px) {
+  .sp-rows { padding: 44px 48px 56px; }
+  .sp-hint { left: 48px; right: 48px; top: 44px; }
+  .sp-rows .sp-scene::before { left: -30px; }
+}
+@media (max-width: 599px) {
+  .sp-rows { padding: 24px 16px 32px; }
+}

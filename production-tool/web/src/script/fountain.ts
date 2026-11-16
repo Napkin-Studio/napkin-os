@@ -20,7 +20,8 @@ export interface Dropped { sections: number; synopses: number; notes: number; bo
 export interface FountainScript { title?: string; scenes: FountainScene[]; dropped: Dropped }
 
 const HEADING = /^(?:INT\.?\/EXT|INT\/EXT|I\/E|INT|EXT|EST)[. ]/i
-const TRANSITION = /^[A-Z0-9 .'-]+TO:$/
+/** A transition: CUT TO:, DISSOLVE TO: and the like, and the closing ones a script ends on (FADE OUT.). */
+const TRANSITION = /^(?:[A-Z0-9 .'-]+TO:|FADE OUT\.?|FADE TO BLACK\.?|CUT TO BLACK\.?)$/
 const CHARACTER = /^(?=.*[A-Z])[A-Z0-9 ._'()-]+(?:\s*\(.*\))?\s*\^?$/
 
 /** The heading a line forces or names, or null. */

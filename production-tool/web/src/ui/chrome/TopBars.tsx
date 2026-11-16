@@ -202,7 +202,7 @@ export function CanvasBar({ presence }: { presence?: string }) {
  *  own controls, Undo/Redo, History, More, the primary and the account.
  *  Compact: History goes icon-only and the meta pills move into More's head. Tight: the way back is the
  *  arrow alone, the view switch and History move into More, Undo/Redo too on a fine pointer. */
-export function EditorBar({ className = '', back, onBack, icon, title, meta, view, right, undo = false, history, moreHead, more, moreTip, primary }: {
+export function EditorBar({ className = '', back, onBack, icon, title, meta, view, afterView, right, undo = false, history, moreHead, more, moreTip, primary }: {
   className?: string
   back: string
   onBack: () => void
@@ -211,6 +211,8 @@ export function EditorBar({ className = '', back, onBack, icon, title, meta, vie
   meta?: ReactNode
   /** The one view switch (Screenplay | Video · Audio, Picture | Sound): the bar's, or More's at tight. */
   view?: { label: string; options: { id: string; label: string }[]; value: string; onPick: (id: string) => void }
+  /** Beside the view switch (the Script editor's Format menu); hidden at tight, as the switch is. */
+  afterView?: ReactNode
   right?: ReactNode
   undo?: boolean
   history?: HistoryToggle
@@ -233,6 +235,7 @@ export function EditorBar({ className = '', back, onBack, icon, title, meta, vie
       <h1 className="pt-title" title={title}>{title}</h1>
       {full && meta}
       {view && !tight && <ViewSwitch view={view} />}
+      {!tight && afterView}
       <span className="pt-grow" />
       <Presence />
       <JobTray />

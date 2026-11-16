@@ -37,27 +37,28 @@ import { useBlobUrl } from '../ui/hooks'
 import { CAST, type CastKey } from '../ui/agents/cast'
 import { CaretChain, caretKey } from './caret'
 import { composeScript, roughSeconds, storyboardsOf, type ComposedScript, type ScriptRow } from './compose'
-import { addBeat, addScene, importFountain, insertShot, moveShotTo, setHeading, setShotSeconds, splitScene } from './edits'
-import { refNames, TAB_NEXT, type KeyHooks } from './extensions'
+import { addBeat, ensurePage, importFountain, keepPasteAsPlain, moveShotTo, setHeading, setShotSeconds, splitScene, type ScreenplayPaste } from './edits'
+import { bulletMarker, refNames, type KeyHooks } from './extensions'
 import { FragmentEditor } from './FragmentEditor'
 import { parseFountain } from './fountain'
 import { fountainOut, screenplayHtml } from './fountainOut'
-import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
 import { SkyeBar, SuggestionCard } from './SkyeUI'
-import { draftFromLine, fitSeconds, handsOff, NEW_SCENE_LINE, NOT_HERE, pickedIdea, SKYE, skyeAsks, skyeState, startWrite, waitingLine } from './skye'
+import { fitSeconds, handsOff, NEW_SCENE_LINE, NOT_HERE, SKYE, skyeAsks, skyeState, startWrite, waitingLine } from './skye'
 import { answerLocalAsk, nameAsks, settleNameAsks } from './nameAsks'
 import { linkForMention, linkWords } from '../text/mention/source'
 import { scopeOf, scopeRefs, type ScopeItem } from '../model/scope'
 import { AVView } from './AVView'
 import { TimePill } from './TimePill'
 import { nextMomentTime, setBeatTime, UNPLANNED_MOMENT } from './moments'
+import { FORMAT_INSTRUCTION, FormatButton } from './Format'
+import { hasWords, paragraphs, sceneIsFree, sceneLines, scriptIsFree } from './freeText'
 import { scriptMentionHooks } from './mentionHooks'
 import { typedSpans, type MentionHooks } from './mentions'
 import { ShotEditor } from './ShotEditor'
 import './script.css'
 import './look.css'
-import { PromptStart, ScriptWritePrompt } from '../ui/prompt/PromptStart'
+import './page.css'
 import { LengthPicker } from './LengthPicker'
 import { setScriptTarget } from './length'
 import { canvasActions } from '../canvas/chrome/actions'
@@ -144,7 +145,12 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const [notice, setNotice] = useState<{ text: string; undo?: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<{ text: string; yes: string; go: () => void } | null>(null)
-  const [writing, setWriting] = useState(false)
+  // A screenplay just pasted: the note over the page, with 'Keep it as plain text' (mock state 'screenplay').
+  const [pasted, setPasted] = useState<(ScreenplayPaste & { scenes: number; dropped: string; words: string }) | null>(null)
+  // The line the Format menu works on, while it is open: marked in the outline too.
+  const [fmtLine, setFmtLine] = useState<{ sceneId: string; index: number } | null>(null)
+  // Each scene's editor while it is mounted, so the outline can put the caret on a paragraph.
+  const [editors] = useState(() => new Map<string, Editor>())
   const fileRef = useRef<HTMLInputElement>(null)
   const [chain] = useState(() => new CaretChain())
   const person = ui.me ? `human:${ui.me.participantId}` : LOCAL_PERSON
@@ -233,6 +239,14 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     document.querySelector(`[data-shot="${current}"]`)?.scrollIntoView?.({ block: 'center' })
   }, [view, current])
 
+  // A script with no scenes opens on a plain page to write on (features/script-freeform.clan): one scene with
+  // no heading, made quietly, so typing or pasting needs nothing picked first.
+  const noScenes = !!composed && !composed.rows.some((r) => r.kind === 'scene')
+  useEffect(() => {
+    if (phone || !noScenes) return
+    void ensurePage(store, scriptId).catch(() => {})
+  }, [phone, noScenes, store, scriptId])
+
   // ⌘[ / Ctrl+[ goes back; Esc never leaves (ui-behaviour 2.3).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -301,7 +315,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   // Plan shots needs words; with none it is off and says so (ui-behaviour 3.10).
   const blocked = planShotsBlocked(doc, scriptId)
   const plan = () => attempt(async () => {
-    if (blocked) throw new Error('Write the script first: Plan shots reads its words.')
+    if (blocked) throw new Error('Write something first: Plan shots reads the words.')
     // The storyboard this script drives (more than one per project; features/canvas-nodes.clan); with
     // none, Dex plans on a new one, made beside the script on the canvas with its drives link.
     if (sb) {
@@ -330,7 +344,10 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     await made
     goTo('character')
   })
-  const next = nextStep(doc, scriptId, sb?.id, behind)
+  // The paste note goes once the words change after it (mock state 'screenplay').
+  const pasteNote = pasted && pasted.words === scriptText(doc, scriptId) ? pasted : null
+  const next = nextStep(doc, scriptId, sb?.id, behind, { pasted: !!pasteNote })
+  const nextVideoId = nextVideo(doc, scriptId, sb?.id)
   const onNext = (a: NextAction) => {
     if (a === 'plan' || a === 'update') return void plan()
     if (a === 'make-video') return void makeVideo()
@@ -391,10 +408,35 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     const [k, id] = (focus?.key ?? ':').split(':')
     return k === 'scene' || k === 'shot' || k === 'beat' ? { kind: k, id } : null
   })()
-  const empty = !composed.shots.length && Object.values(doc.scenes).every((s) => s.script_id !== scriptId || (!s.heading.trim() && !s.text?.trim()))
+  const empty = !hasWords(doc, scriptId)
   const title = nodeTitle(composed.script.title, 'Script', projectName)
-  // 'Write with Skye' is always reachable: the empty-only PromptStart is gone once the script has content.
-  const writePanel = !phone && writing && <ScriptWritePrompt scriptId={scriptId} seed={pickedIdea(doc, scriptId)} onClose={() => setWriting(false)} />
+  // Format as screenplay (Skye's 'instruct' write; features/script-freeform.clan): on the scene the caret is in,
+  // else on each scene of free text with words. Her draft waits until it is kept.
+  const formatWithSkye = () => {
+    const [k, id] = (focus?.key ?? ':').split(':')
+    const focused = k === 'scene' || k === 'heading' ? doc.scenes[id] : undefined
+    const scenes = focused && sceneIsFree(focused) ? [focused] : composed.rows.flatMap((r) => (r.kind === 'scene' && sceneIsFree(r.scene) && r.scene.text?.trim() ? [r.scene] : []))
+    const targets = scenes.length ? scenes : focused ? [focused] : []
+    if (!targets.length) return setError('Write something first: Skye lays out the words on the page.')
+    void attempt(async () => {
+      for (const sc of targets) await startWrite(skyeDeps, store, scriptId, { kind: 'scene', id: sc.id }, 'instruct', { instruction: FORMAT_INSTRUCTION, mode: 'revise' })
+    })
+  }
+  // The outline's paragraph or line: the caret goes to its start.
+  const toLine = (sceneId: string, index: number) => {
+    setSheet(null)
+    const go = () => {
+      const ed = editors.get(sceneId)
+      if (!ed || ed.isDestroyed) return
+      let pos = 1
+      ed.state.doc.forEach((_b, offset, i) => { if (i === index) pos = offset + 1 })
+      ed.chain().focus().setTextSelection(pos).scrollIntoView().run()
+    }
+    if (editors.has(sceneId)) return go()
+    setActive(caretKey('scene', sceneId))
+    chain.focus(caretKey('scene', sceneId), 'start')
+    setTimeout(go, 0)
+  }
 
   // Where the work started: the top of the page, in place of the empty script's start.
   const waitingHere = topQs.length > 0 && (
@@ -403,7 +445,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     </div>
   )
   const page = (
-    <main className="se-page" aria-label={view === 'av' ? 'Video and audio' : 'Screenplay'}
+    <main className="se-page" aria-label={view === 'av' ? 'Video and audio' : 'Page'}
       onDragOver={(e) => { if ([...e.dataTransfer.items].some((i) => i.kind === 'file')) e.preventDefault() }}
       onDrop={(e) => {
         const f = [...e.dataTransfer.files].find((x) => /\.(fountain|spmd|txt)$/i.test(x.name))
@@ -411,19 +453,44 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         e.preventDefault()
         void doImport(f)
       }}>
-      {writePanel}
-      {!phone && view === 'screenplay' && <ElementBar focus={focus} composed={composed} store={store} chain={chain} onError={setError} say={say} />}
       {(view === 'av' && !phone) && waitingHere}
       {view === 'av' && !phone ? (
         <AVView composed={composed} doc={doc} store={store} chain={chain} current={current} setCurrent={(id) => setCurrent(id)}
           mentions={mentions} say={say} onError={setError} disabled={!!planning} onRemove={removeItem} />
-      ) : <div className="sp-rows">
+      ) : <div className={`sp-rows ${empty ? 'empty' : ''}`} data-page={scriptIsFree(doc, scriptId) ? 'free' : 'screenplay'}
+        onMouseDown={(e) => {
+          // A click on the sheet below the words puts the caret at their end, as on paper.
+          if (phone || e.target !== e.currentTarget) return
+          const last = [...composed.rows].reverse().find((r) => r.kind === 'scene')
+          if (!last) return
+          e.preventDefault()
+          setActive(caretKey('scene', last.id))
+          chain.focus(caretKey('scene', last.id), 'end')
+        }}>
+        {pasteNote && !phone && (
+          <div className="sp-note" role="status">
+            <span className="dot" aria-hidden="true" />
+            <span>Pasted as a screenplay: its {pasteNote.scenes} {pasteNote.scenes === 1 ? 'scene' : 'scenes'}, characters and dialogue kept as they were.{pasteNote.dropped ? ` ${pasteNote.dropped}` : ''}</span>
+            <button type="button" className="linkbtn" onClick={() => {
+              setPasted(null)
+              void attempt(() => keepPasteAsPlain(store, pasteNote))
+            }}>Keep it as plain text</button>
+          </div>
+        )}
+        {empty && !phone && (
+          <div className="sp-hint" aria-hidden="true">
+            <div className="big">Just write.</div>
+            <p>An idea, notes, bullets or a whole screenplay: type or paste it here and it stays as you wrote it. Nothing to pick first.</p>
+            <p>Want a draft? Tell Skye in the Booth. Her words wait there until you keep them.</p>
+            <div className="ways"><span>Prose and bullets stay prose</span><span>A pasted screenplay keeps its layout</span><span>Fountain files too</span></div>
+          </div>
+        )}
         {waitingHere}
-        {empty && !phone && <PromptStart kind="script" nodeId={scriptId} place="editor" />}
         {composed.rows.map((r) => (
-          <Row key={`${r.kind}:${r.id}`} row={r} doc={doc} store={store} chain={chain} readOnly={phone}
+          <Row key={`${r.kind}:${r.id}`} row={r} doc={doc} store={store} chain={chain} readOnly={phone} lone={composed.rows.filter((x) => x.kind === 'scene').length === 1}
             current={current} active={active} setCurrent={setCurrent} setActive={setActive} mentions={mentions} drafts={drafts} whyOf={whyOf}
-            onDraft={empty ? (sceneId) => void attempt(() => draftFromLine(skyeDeps, store, scriptId, sceneId)) : undefined}
+            onPasted={(p) => setPasted({ ...p, words: scriptText(store.get(), scriptId) })} onEditorOf={(sceneId, e) => { if (e) editors.set(sceneId, e); else editors.delete(sceneId) }}
+            onHeadingFocus={(sceneId) => setFocus({ key: `heading:${sceneId}`, editor: null })}
             hooksFor={hooksFor} focusOn={focusOn} say={say} onError={setError} onRemove={removeItem} />
         ))}
       </div>}
@@ -444,8 +511,17 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         view={phone ? undefined : {
           label: 'Script view', value: view,
           onPick: (v) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: v as typeof view } } }),
-          options: [{ id: 'screenplay', label: 'Screenplay' }, { id: 'av', label: 'Video · Audio' }],
+          // 'Page' (owner 2026-11-16): free text or a screenplay, the same page; the stored view id stays.
+          options: [{ id: 'screenplay', label: 'Page' }, { id: 'av', label: 'Video · Audio' }],
         }}
+        afterView={!phone && view === 'screenplay' && (
+          <FormatButton focus={focus} composed={composed} store={store} chain={chain} onError={setError} say={say}
+            onSkye={formatWithSkye} skyeOff={skye.off || empty}
+            onOpenChange={(o) => {
+              const [k, id] = (focus?.key ?? ':').split(':')
+              setFmtLine(o && k === 'scene' && focus?.editor && !focus.editor.isDestroyed ? { sceneId: id, index: focus.editor.state.selection.$from.index(0) } : null)
+            }} />
+        )}
         undo={!phone}
         history={{ on: history, toggle: () => { setHistoryFocus(undefined); setHistory((h) => !h) } }}
         moreTip={phone ? 'More: copy link' : 'More: import and export Fountain, export PDF, copy link'}
@@ -470,13 +546,12 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         )}
         primary={!phone && (
           <>
-            {/* Always reachable: ask Skye to write a script from an idea, empty or not. */}
-            <button className="btn se-write" aria-expanded={writing} aria-pressed={writing} disabled={skye.off}
-              data-tip={skye.off ? NOT_HERE : 'Ask Skye to draft a script'} onClick={() => setWriting((w) => !w)}>
-              <AgentFigure agent="skye" size={18} decorative /> Write with Skye
+            {/* Why Plan shots is off, said beside it (a disabled button never says why). */}
+            {blocked && !planning && <span className="se-why" id="se-plan-why">{blocked}</span>}
+            {/* Make video straight from the words (3.5): beside Plan shots, off while there are none. */}
+            <button type="button" className="btn se-makevideo" disabled={!!blocked || !!planning} onClick={() => void (nextVideoId ? goTo('video', nextVideoId) : makeVideo())}>
+              {nextVideoId ? 'Open the video' : 'Make video'}
             </button>
-            {/* Why Plan shots is off: its tooltip, and read with it (a disabled button never says why). */}
-            {blocked && !planning && <span className="pt-sr se-why" id="se-plan-why">{blocked}</span>}
             <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
               data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
               {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
@@ -494,8 +569,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
           <AgentFigure agent="dex" size={22} decorative />
           <span><span className="who">{sayer('dex')}:</span> {next.line}</span>
           <span className="pt-grow" />
-          {/* Plan shots and Update storyboard are the bar's primary: the line does not repeat them. */}
-          {next.actions.filter((a) => a !== 'plan' && a !== 'update').map((a) => <button key={a} type="button" className="btn sm" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
+          {/* Plan shots, Update storyboard and Make video are in the bar: the line does not repeat them. */}
+          {next.actions.filter((a) => a !== 'plan' && a !== 'update' && a !== 'make-video' && !(a === 'open-video' && nextVideoId)).map((a) => <button key={a} type="button" className="btn sm" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
         </div>
       )}
       {confirm && (
@@ -516,7 +591,9 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
           <>
             <button className="se-handle left" aria-expanded={sheet === 'outline'} onClick={() => setSheet(sheet === 'outline' ? null : 'outline')}>Outline</button>
             <Outline rows={composed.rows} current={current} disabled={!!planning}
-              onAddScene={() => void attempt(() => addScene(store, scriptId).then((id) => chain.focus(caretKey('heading', id), 'end')))}
+              paragraphs={scriptIsFree(doc, scriptId) ? paragraphs(doc, scriptId) : undefined}
+              linesOf={(sc) => (composed.shots.length ? [] : sceneLines(doc, sc))}
+              onLine={toLine} currentLine={fmtLine ?? undefined}
               onShot={(id) => { setCurrent(id); setSheet(null); chain.focus(caretKey('shot', id), 'end') }}
               onScene={(id) => { setSheet(null); chain.focus(caretKey('heading', id), 'end') }}
               onMove={(id, place) => void attempt(() => moveShotTo(store, id, place))}
@@ -576,8 +653,14 @@ interface RowProps {
   mentions: MentionHooks
   drafts(kind: WriteTarget['kind'], id: string): ReactNode
   whyOf(kind: 'scene' | 'shot', id: string, label: string): () => void
-  onDraft?: (sceneId: string) => void
   onRemove: RemoveItem
+  /** The script has this one scene: its empty heading is not offered (the free page). */
+  lone?: boolean
+  /** A screenplay was pasted into a scene and imported with its layout. */
+  onPasted?: (p: ScreenplayPaste & { scenes: number; dropped: string }) => void
+  /** A scene's editor mounted (or went: null). */
+  onEditorOf?: (sceneId: string, editor: Editor | null) => void
+  onHeadingFocus?: (sceneId: string) => void
 }
 
 function Row(p: RowProps) {
@@ -588,8 +671,12 @@ function Row(p: RowProps) {
   return null
 }
 
-/** A scene: its heading (one line, a field) and the text no shot owns yet (live text). */
-function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActive, hooksFor, focusOn, say, onError, mentions, drafts, onDraft, onRemove }: RowProps & { scene: Scene; number: number }) {
+/**
+ * A scene: its heading (one line, a field) and the text no shot owns yet (live text). A scene with no heading
+ * and only plain lines is free text (features/script-freeform.clan): no heading field, its words as written,
+ * always open to type in. Once it has a heading or screenplay elements it keeps the screenplay layout.
+ */
+function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActive, hooksFor, focusOn, say, onError, mentions, drafts, onRemove, lone, onPasted, onEditorOf, onHeadingFocus }: RowProps & { scene: Scene; number: number }) {
   const key = caretKey('scene', scene.id)
   const headingKey = caretKey('heading', scene.id)
   const input = useRef<HTMLInputElement>(null)
@@ -603,8 +690,11 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
       el.setSelectionRange(at, at)
     },
   }), [chain, headingKey])
-  const editing = active === key
   const hasText = !!(scene.prose?.content?.length || scene.text?.trim())
+  const free = sceneIsFree(scene) && draft === null
+  // The heading field shows once there is a heading (or one is being typed); an empty scene among others offers it.
+  const showHeading = !!scene.heading.trim() || draft !== null || (!lone && !hasText)
+  const editing = active === key || (free && !readOnly)
   const sceneHooks = hooksFor(key, {
     sceneHeading: (heading, blockIndex) => {
       void splitScene(store, scene.id, blockIndex, heading).then((id) => {
@@ -613,40 +703,38 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
       }, (e) => onError(e instanceof Error ? e.message : 'That scene could not be made.'))
       return true
     },
-    pasteScript: (text) => {
+    pasteScript: (text, editor) => {
+      // A pasted screenplay or Fountain keeps its layout; anything else stays as written (extensions.ts).
       const parsed = parseFountain(text)
       if (!parsed.scenes.some((s) => s.heading)) return false
-      void importFountain(store, scene.script_id, parsed).then((r) => say(`Pasted ${r.scenes} ${r.scenes === 1 ? 'scene' : 'scenes'}.${r.dropped ? ` ${r.dropped}` : ''}`), (e) => onError(e instanceof Error ? e.message : 'That paste could not be kept.'))
+      // A paste over selected words replaces them, as any paste does.
+      const { from, to } = editor.state.selection
+      if (from !== to) editor.commands.deleteSelection()
+      const at = { from, to: from }
+      void importFountain(store, scene.script_id, parsed).then(
+        (r) => onPasted?.({ sceneId: scene.id, at, text, ids: r.ids, scenes: r.scenes, dropped: r.dropped }),
+        (e) => onError(e instanceof Error ? e.message : 'That paste could not be kept.'))
       return true
     },
     lineBeat: () => false,
-    enter: (editor) => {
-      // An empty script's one line: Enter asks Skye for a draft from it, in place.
-      if (!onDraft) return false
-      const blocks = editor.state.doc.childCount
-      const atEnd = editor.state.selection.$from.parentOffset === editor.state.selection.$from.parent.content.size
-      if (blocks !== 1 || !atEnd || !editor.state.doc.textContent.trim()) return false
-      void store.checkpointText().then(() => onDraft(scene.id))
-      return true
-    },
     moment: () => {
       say(UNPLANNED_MOMENT)
       return true
     },
     remove: (how) => {
-      // An empty scene's text: back to its heading, or the scene goes when that is empty too.
-      if (how === 'empty' && scene.heading.trim()) return chain.move(key, 'up')
+      // An empty scene's text: back to its heading, or the scene goes when that is empty too. The free page stays.
+      if (how === 'empty' && (scene.heading.trim() || lone)) return scene.heading.trim() ? chain.move(key, 'up') : false
       const took = onRemove('scene', scene.id, how)
       if (took) chain.move(headingKey, 'up')
       return took
     },
   })
   return (
-    <section className="sp-scene" aria-label={`Scene ${number}`}>
-      {!readOnly && <button type="button" className="sp-del" aria-label={`Delete scene ${number}`} title="Delete this scene (⌘⇧⌫)" onClick={() => onRemove('scene', scene.id, 'button')}>×</button>}
-      <input ref={input} className="sp-heading" aria-label={`Scene ${number} heading`} placeholder="INT. PLACE - DAY" readOnly={readOnly}
+    <section className={`sp-scene ${free ? 'free' : ''}`} aria-label={free ? 'Your words' : `Scene ${number}`} data-scene={scene.id}>
+      {!readOnly && !free && <button type="button" className="sp-del" aria-label={`Delete scene ${number}`} title="Delete this scene (⌘⇧⌫)" onClick={() => onRemove('scene', scene.id, 'button')}>×</button>}
+      {showHeading && <input ref={input} className="sp-heading" aria-label={`Scene ${number} heading`} placeholder="Scene heading" readOnly={readOnly}
         value={draft ?? scene.heading}
-        onFocus={() => setDraft(scene.heading)}
+        onFocus={() => { setDraft(scene.heading); onHeadingFocus?.(scene.id) }}
         onBlur={() => setDraft(null)}
         onChange={(e) => {
           setDraft(e.target.value)
@@ -664,11 +752,12 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
             e.preventDefault()
             if (onRemove('scene', scene.id, e.shiftKey ? 'command' : 'empty')) chain.move(headingKey, 'up')
           }
-        }} />
+        }} />}
       {editing && !readOnly ? (
-        <FragmentEditor store={store} kind="scene" id={scene.id} label={`Scene ${number}: unplanned script`} className="sp-text"
-          chain={chain} chainKey={key} keys={sceneHooks} onEditor={focusOn(key)} mentions={mentions}
-          placeholder={(type, i) => (i === 0 && type === 'action' ? 'Write what happens. INT. or EXT. starts a scene; Tab for Character.' : '')}
+        <FragmentEditor store={store} kind="scene" id={scene.id} label={free ? 'Your words' : `Scene ${number}: unplanned script`} className="sp-text"
+          chain={chain} chainKey={key} keys={sceneHooks} mentions={mentions} autoFocus={free && lone && !hasText ? 'end' : undefined}
+          onEditor={(e) => { focusOn(key)(e); onEditorOf?.(scene.id, e) }}
+          placeholder={(type, i) => (free || i !== 0 || type !== 'action' ? '' : 'Write what happens.')}
           onNotice={say} />
       ) : (
         <>
@@ -713,7 +802,14 @@ function StaticProse({ prose, doc, mentions }: { prose?: { content?: PMNodeLike[
     }
     return null
   })
-  return <>{(prose?.content ?? []).map((b, i) => <p key={i} data-type={b.type}>{inline(b.content)}</p>)}</>
+  // A line written as a bullet shows as one, its marker kept (extensions.ts bulletPlugin).
+  const bullet = (b: PMNodeLike) => (b.type === 'action' && b.content?.[0]?.type === 'text' ? bulletMarker(b.content[0].text ?? '') : 0)
+  return <>{(prose?.content ?? []).map((b, i) => {
+    const n = bullet(b)
+    if (!n) return <p key={i} data-type={b.type}>{inline(b.content)}</p>
+    const [first, ...rest] = b.content ?? []
+    return <p key={i} data-type={b.type} className="fp-li"><span className="fp-mark">{(first.text ?? '').slice(0, n)}</span>{inline([{ ...first, text: (first.text ?? '').slice(n) }, ...rest])}</p>
+  })}</>
 }
 
 /** Plain text with its typed @names marked: in scope (`names`) or underlined; null names marks nothing. */
@@ -812,67 +908,6 @@ function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, 
         placeholder={beat.kind === 'line' ? 'What they say…' : 'What happens…'} />
       {!readOnly && <button type="button" className="sp-del" aria-label={beat.kind === 'line' ? 'Delete this line' : `Delete this ${beat.kind}`} title="Delete (⌘⇧⌫)" onClick={() => onRemove('beat', beatId, 'button')}>×</button>}
       {drafts('beat', beatId)}
-    </div>
-  )
-}
-
-/** The element bar (Trelby's): Scene, Action, Character, Dialogue, Shot, with a hint for the next one. */
-function ElementBar({ focus, composed, store, chain, onError, say }: { focus: Focus; composed: ComposedScript; store: ModelStore; chain: CaretChain; onError: (m: string | null) => void; say: (m: string) => void }) {
-  useEditorTick(focus?.editor ?? null)
-  const editor = focus?.editor && !focus.editor.isDestroyed ? focus.editor : null
-  const [kind, id] = (focus?.key ?? ':').split(':')
-  const block = editor?.state.selection.$from.parent.type.name
-  const blockIndex = editor ? editor.state.selection.$from.index(0) : 0
-  const now = kind === 'scene' ? block : kind === 'shot' ? (block === 'direction' ? 'direction' : 'action') : kind === 'beat' ? 'dialogue' : undefined
-  const next = kind === 'scene' && block ? TAB_NEXT[block] : kind === 'shot' && block === 'action' ? 'direction' : undefined
-  const run = (fn: () => Promise<unknown>) => {
-    onError(null)
-    Promise.resolve().then(fn).catch((e) => onError(e instanceof Error ? e.message : 'That did not work.'))
-  }
-  const sceneOf = () => (kind === 'scene' ? id : kind === 'shot' ? store.get().shots[id]?.scene_id : undefined)
-  const setType = (t: string) => {
-    if (kind === 'scene' && editor) editor.chain().focus().setNode(t).run()
-    else if (kind === 'shot' && t !== 'action') run(() => addBeat(store, id, 'line', { at_s: 0 }).then((b) => chain.focus(caretKey('beat', b), 'start')))
-    else if (kind === 'shot' && editor) editor.commands.focus()
-  }
-  const items: { t: string; label: string; act: () => void }[] = [
-    { t: 'scene', label: 'Scene', act: () => {
-      if (kind === 'scene' && editor) {
-        const line = editor.state.selection.$from.parent.textContent.trim()
-        run(() => splitScene(store, id, blockIndex, line.toUpperCase()).then((sid) => chain.focus(caretKey('heading', sid), 'end')))
-      } else run(() => addScene(store, composed.script.id, sceneOf()).then((sid) => chain.focus(caretKey('heading', sid), 'end')))
-    } },
-    { t: 'action', label: 'Action', act: () => setType('action') },
-    { t: 'character', label: 'Character', act: () => setType('character') },
-    { t: 'dialogue', label: 'Dialogue', act: () => setType('dialogue') },
-    // Transition and centred text live in the unplanned scene text; the bar sets them, Tab steps on.
-    ...(kind === 'scene' ? [
-      { t: 'transition', label: 'Transition', act: () => setType('transition') },
-      { t: 'centered', label: 'Centred', act: () => setType('centered') },
-    ] : []),
-    { t: 'shot', label: 'Shot', act: () => {
-      const sb = composed.storyboard
-      if (!sb) return onError('This script drives no storyboard yet.')
-      if (kind === 'scene') run(() => insertShot(store, { sceneId: id, blockIndex, storyboardId: sb.id }).then((sid) => chain.focus(caretKey('shot', sid), 'end')))
-      else if (kind === 'shot') run(() => insertShot(store, { afterShotId: id }).then((sid) => chain.focus(caretKey('shot', sid), 'start')))
-      else {
-        const last = composed.shots.filter((s) => s.kind !== 'end_card').at(-1)
-        if (last) run(() => insertShot(store, { afterShotId: last.id }).then((sid) => chain.focus(caretKey('shot', sid), 'start')))
-      }
-    } },
-    { t: 'moment', label: 'Moment', act: () => {
-      const shotId = kind === 'shot' ? id : kind === 'beat' ? store.get().beats[id]?.shot_id : undefined
-      if (!shotId) return say(UNPLANNED_MOMENT)
-      run(() => addBeat(store, shotId, 'moment', { at_s: nextMomentTime(store.get(), shotId) }).then((b) => chain.focus(caretKey('beat', b), 'start')))
-    } },
-  ]
-  return (
-    <div className="se-elements" role="toolbar" aria-label="Element">
-      {items.map((x) => (
-        <button key={x.t} className={`chip ${now === x.t ? 'on' : ''}`} aria-pressed={now === x.t}
-          onMouseDown={(e) => e.preventDefault()} onClick={x.act}>{x.label}</button>
-      ))}
-      {next && <span className="faint se-hint">Tab for {next === 'direction' ? 'Direction' : next[0].toUpperCase() + next.slice(1)}</span>}
     </div>
   )
 }
@@ -1063,7 +1098,7 @@ function KeysLegend({ compact }: { compact?: boolean }) {
     return (
       <div className="se-keycard" aria-label="Keys">
         <div className="pt-label">Keys</div>
-        <div><span>Next element</span><kbd>Tab</kbd></div>
+        <div><span>Next element (screenplay)</span><kbd>Tab</kbd></div>
         <div><span>Mention a ref</span><kbd>@</kbd></div>
         <div><span>Add a moment</span><kbd>⌥M</kbd></div>
       </div>
