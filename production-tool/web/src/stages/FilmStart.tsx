@@ -5,11 +5,11 @@
 // the Script agent drafts from the words. Add pictures opens Assets; drawing or dropping anything on the
 // canvas takes the card away (stages/startCard.ts showStartCard).
 
-import { useContext, useEffect, useRef, useState } from 'react'
-import { RouterContext, useConfig, useServices } from '../app/context'
-import { scriptRoute } from '../app/route'
+import { useEffect, useRef, useState } from 'react'
+import { useConfig, useServices } from '../app/context'
 import type { Ratio } from '../contracts/types'
-import type { NodeEnv } from '../canvas/nodes/nodes'
+import { cardOf, type NodeEnv } from '../canvas/nodes/nodes'
+import { briefOfElement } from '../brief/canvas'
 import { scriptFromLine } from '../jobs/prompt'
 import { briefChoices, offersStartFromBrief } from '../brief/start'
 import { osBriefSource, type BriefSource, type OsBriefItem } from '../brief/os'
@@ -33,7 +33,6 @@ export function StartCard({ env, onPictures, src = devSource() ?? OS }: {
 }) {
   const services = useServices()
   const { config } = useConfig()
-  const router = useContext(RouterContext)
   const name = useProjectName()
   const [offers, setOffers] = useState(false)
   const [briefs, setBriefs] = useState<{ items: OsBriefItem[]; empty?: string } | null>(null)
@@ -72,8 +71,16 @@ export function StartCard({ env, onPictures, src = devSource() ?? OS }: {
     try {
       const out = await startFilm(env, src, { seconds, ratio, ...(withBrief ? { brief: { documentId: picked!.documentId, how: mode as 'link' | 'spinoff' } } : {}) })
       const words = line.trim()
+      // The draft fills in place on the Script node (owner 2026-11-18): Keep or Discard there; the Script editor
+      // opens only when the person opens it.
       if (words && services.clan) await scriptFromLine(services, services.clan, out.scriptId, words)
-      router?.push(scriptRoute(services.project.id, out.scriptId))
+      // The film laid out in view, nothing selected: the person watches the nodes fill (mock canvas-filling).
+      if (env) {
+        const ids = new Set([out.scriptId, out.storyboardId, out.briefId].filter(Boolean))
+        const els = env.canvas.elements().filter((e) => !e.isDeleted && ids.has(cardOf(e)?.id ?? briefOfElement(e) ?? ''))
+        env.canvas.select([])
+        if (els.length) env.canvas.fit(els, { zoomFactor: 0.8, animate: false })
+      }
     } catch (e) {
       setError(message(e))
     } finally {

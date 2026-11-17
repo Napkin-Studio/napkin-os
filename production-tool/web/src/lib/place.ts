@@ -8,6 +8,8 @@ export interface Anchor {
   top: number
   /** Bottom of the selection. */
   bottom: number
+  /** Line the bar's left edge up with this (a node's left edge, mock production-new-ui-v2) instead of centring it. */
+  left?: number
 }
 
 /**
@@ -25,7 +27,7 @@ export function placeFloating(anchor: Anchor, size: { w: number; h: number }, bo
     const maxTop = box.h - size.h - margin
     return maxTop < margin ? margin : Math.min(Math.max(y, margin), maxTop)
   }
-  const left = clampLeft(anchor.x - size.w / 2)
+  const left = clampLeft(anchor.left ?? anchor.x - size.w / 2)
   const aboveTop = anchor.top - gap - size.h
   const rows: { top: number; below: boolean }[] = []
   if (aboveTop >= margin) rows.push({ top: clampTop(aboveTop), below: false })

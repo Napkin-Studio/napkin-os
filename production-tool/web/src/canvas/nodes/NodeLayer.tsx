@@ -561,6 +561,12 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   // ⌘Z took the merge back: its words leave with it.
   const saying = said && !(said.links.length && said.links.every((id) => !els.some((e) => e.id === id && !e.isDeleted))) ? said : null
   const saidGroup = saying ? groups.find((g) => g.key === saying.key) : undefined
+  // One node selected: what feeds it stays lit, every other node steps back (mock production-new-ui-v2 canvas-node).
+  const picked = !source ? nodes.filter((e) => selected.has(e.id)) : []
+  const focus = picked.length === 1 ? cardOf(picked[0]) : undefined
+  const docLinks = Object.values(services.doc.get().links ?? {})
+  const lit = (c: NonNullable<ReturnType<typeof cardOf>>) => !focus || (c.kind === focus.kind && c.id === focus.id)
+    || docLinks.some((l) => l.to.kind === focus.kind && l.to.id === focus.id && l.from.kind === c.kind && l.from.id === c.id)
   return (
     <div className={`node-layer ${source ? 'linking' : ''} ${inking ? 'inking' : ''}`} ref={root}>
       {nodes.map((e) => {
@@ -571,12 +577,10 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         const check = checks.get(e.id)
         const state = !source ? '' : e.id === source.id ? 'source' : check?.ok ? 'target' : 'dim'
         return (
-          <div key={e.id} className={`bl-cardbox ${on ? 'selected' : ''} ${state} ${fresh.has(e.id) ? 'new' : ''}`} data-node={c.kind} data-id={c.id}
+          <div key={e.id} className={`bl-cardbox ${on ? 'selected' : ''} ${state} ${!lit(c) ? 'ctxdim' : ''} ${fresh.has(e.id) ? 'new' : ''}`} data-node={c.kind} data-id={c.id}
             style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
             <NodeCard kind={c.kind} id={c.id} onOpen={() => open(c.kind, c.id)} />
             {fresh.has(e.id) && <span className="nl-new">New</span>}
-            {on && !linking && <button type="button" className="nl-linkin" style={{ top: e.height + 10 }} title="Link something into this node (a picture, a script…)"
-              onPointerDown={(ev) => ev.stopPropagation()} onClick={() => linkInto(e)}>+ Link input</button>}
             {on && !linking && <span className="nl-port" role="button" aria-label={`Link from this ${c.kind}`} title="Drag to link (L)"
               style={{ left: e.width - 16, top: e.height / 2 }}
               onPointerDown={(ev) => startLink(e, ev)} onPointerMove={follow} onPointerUp={endLink} />}
@@ -588,7 +592,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         const p = toLocal(e.x + (moving?.ids.has(e.id) ? moving.dx : 0), e.y + (moving?.ids.has(e.id) ? moving.dy : 0))
         const state = !source ? '' : e.id === source.id ? 'source' : 'dim'
         return (
-          <div key={e.id} className={`bl-cardbox ${selected.has(e.id) ? 'selected' : ''} ${state}`} data-node="brief" data-id={id}
+          <div key={e.id} className={`bl-cardbox ${selected.has(e.id) ? 'selected' : ''} ${state} ${focus && !docLinks.some((l) => l.from.kind === 'brief' && l.from.id === id && l.to.kind === focus.kind && l.to.id === focus.id) ? 'ctxdim' : ''}`} data-node="brief" data-id={id}
             style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
             <BriefCard doc={live} id={id} openUrl={briefOpenUrl(live, id)} />
           </div>

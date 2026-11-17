@@ -6,13 +6,15 @@
 // (cardChrome.ts), which the chrome provides (this file imports no chrome), with
 // plain defaults.
 
-import { useContext, type CSSProperties, type ReactNode } from 'react'
-import { useDoc, useJobsTick, useUi } from '../../app/context'
+import { useContext, useState, type CSSProperties, type ReactNode } from 'react'
+import { useDoc, useJobsTick, useServices, useUi } from '../../app/context'
+import { discardDraft, keep as keepDraft } from '../../script/skye'
+import { draftLines } from '../../script/skyeBooth'
 import { cameraLabel } from '../../jobs/frameEdit'
 import { askOf } from '../../jobs/runner'
 import { isRunning, jobAt } from '../../jobs/select'
 import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, mainVideo, scenesOf, shotsOf, staleList, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
-import type { ProductionDocument, Shot } from '../../contracts/types'
+import type { ProductionDocument, Shot, Suggestion } from '../../contracts/types'
 import { InputsStrip } from '../../stages/InputsStrip'
 import { isEmptyNode } from './nodes'
 import { waitsOnScriptAsk } from '../../jobs/scriptVideo'
@@ -99,10 +101,13 @@ export function ScriptCard({ id, onOpen, openButton }: { id?: string; onOpen: ()
   const sound = (s: Shot) => beatsOf(doc, s.id).filter((b) => b.kind !== 'moment' && b.kind !== 'camera')
     .map((b) => (b.kind === 'line' || b.kind === 'vo' ? `${b.kind === 'vo' ? 'VO: ' : b.speaker ? `${cap(b.speaker.toLowerCase())}: ` : ''}"${b.text ?? ''}"` : b.text ?? '')).filter(Boolean).join(' ')
   const words = scenes.map((s) => s.text ?? '').join(' ').trim()
+  // The Script agent's draft fills in place on the node (owner 2026-11-18; mock canvas-filling): Keep or Discard here.
+  const sceneIds = new Set(scenes.map((s) => s.id))
+  const draft = Object.values(doc.suggestions ?? {}).find((s) => s.state === 'open' && s.mode === 'draft' && s.target.kind === 'scene' && sceneIds.has(s.target.id))
   return (
     <Card icon="script" kind="Script" name={chrome.title(script?.title, 'Script', project)} meta={`${Math.round(script?.target_s ?? 15)} s`} onOpen={onOpen} openButton={openButton}
       className={writing ? 'writing' : ''} tag={waiting ? 'Needs your call' : undefined} inputs={<InputsStrip nodeId={script?.id} />} style={{ height: 380 }}>
-      {shots.length ? (
+      {draft ? <DraftOnNode sug={draft} /> : shots.length ? (
         <div className="bl-av">
           <span className="bl-avhead">Video</span><span className="bl-avhead">Audio</span>
           {shots.slice(0, 3).map((s) => (
@@ -226,4 +231,32 @@ export function NodeCard({ kind, id, onOpen, openButton }: { kind: CardKind; id?
   if (kind === 'script') return <ScriptCard id={id} onOpen={onOpen} openButton={openButton} />
   if (kind === 'storyboard') return <StoryboardCard id={id} onOpen={onOpen} openButton={openButton} />
   return <VideoCard id={id} onOpen={onOpen} openButton={openButton} />
+}
+
+/** The Script agent's draft on the Script node, filling in place, with Keep and Discard (script/skye.ts keep,
+ *  discardDraft): nothing lands on the script until Keep. */
+function DraftOnNode({ sug }: { sug: Suggestion }) {
+  const doc = useDoc()
+  const { clan } = useServices()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const lines = draftLines(doc, sug).lines.map((l) => l.text).filter(Boolean)
+  const act = (fn: () => Promise<unknown>) => async () => {
+    if (!clan) return
+    setBusy(true)
+    setError(null)
+    try { await fn() } catch (e) { setError(e instanceof Error ? e.message : 'That did not work.') } finally { setBusy(false) }
+  }
+  const stop = (e: React.PointerEvent) => e.stopPropagation()
+  return (
+    <div className="bl-draft" data-suggestion={sug.id}>
+      <span className="bl-draft-hd">Script agent · draft</span>
+      <p className="bl-excerpt">{withRefs(short(lines.join(' '), 300))}</p>
+      <span className="bl-draft-acts">
+        <button type="button" className="k" disabled={busy || !clan} onPointerDown={stop} onClick={act(() => keepDraft(clan!, sug.id))}>Keep</button>
+        <button type="button" disabled={busy || !clan} onPointerDown={stop} onClick={act(() => discardDraft(clan!, sug.id))}>Discard</button>
+      </span>
+      {error && <span className="bl-draft-err" role="alert">{error}</span>}
+    </div>
+  )
 }
