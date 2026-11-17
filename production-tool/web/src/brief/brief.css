@@ -1,0 +1,39 @@
+/* The Brief node: Brief Maker's manila identity, so it reads as a document from another tool, in both themes
+   (mock production-new-ui-v2 css/pt.css, the .bn-* rules; tokens --bm-manila* from app/src/shell/nui/tokens.css). */
+.bn-card { position: relative; height: 100%; box-sizing: border-box; background: #F3E8CC; border: 1px solid #C4AA75; border-radius: 3px 6px 6px 6px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 6px 18px -8px rgba(50,38,18,.25); color: #141413; display: flex; flex-direction: column; font-family: var(--font-ui); }
+.selected .bn-card { box-shadow: 0 0 0 2px #141413, 0 6px 18px -8px rgba(50,38,18,.25); }
+.bn-tab { position: absolute; top: -17px; left: -1px; height: 17px; padding: 0 9px; font: 600 9.5px/17px var(--font-mono); letter-spacing: .1em; background: #E7D5AC; border: 1px solid #C4AA75; border-bottom: 0; border-radius: 3px 3px 0 0; color: #3b2f17; }
+.bn-needs { position: absolute; top: -12px; right: 8px; padding: 2px 8px; border-radius: 999px; background: #B45309; color: #fff; font: 700 9px/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.bn-head { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 6px; border-bottom: 1px solid rgba(196,170,117,.6); }
+.bn-head b { font: 600 15px var(--font-serif); color: #141413; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bn-head b::after { content: "."; color: #C9462A; }
+.bn-head span { font: 500 10px var(--font-mono); color: #6D655A; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.bn-body { padding: 4px 12px 6px; flex: 1; min-height: 0; overflow: hidden; }
+.bn-row { display: grid; grid-template-columns: 86px 1fr; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(196,170,117,.35); font: 400 11.5px/1.35 var(--font-ui); }
+.bn-row:last-child { border-bottom: 0; }
+.bn-row span:first-child { font: 600 8.5px/1.6 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: #8a6d35; }
+.bn-foot { display: flex; justify-content: space-between; gap: 8px; padding: 6px 12px 8px; border-top: 1px solid rgba(196,170,117,.6); font: 500 10px var(--font-mono); color: #6D655A; }
+.bn-link { color: #141413; text-decoration: underline; cursor: pointer; }
+
+/* The Booth on a selected Brief node: the source card and the read-only spine. */
+.bb-src { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #C4AA75; border-radius: 6px; background: #F3E8CC; color: #141413; position: relative; margin-top: 8px; }
+:root[data-theme='dark'] .bb-src { background: color-mix(in srgb, #E7D5AC 14%, var(--paper)); color: var(--ink); }
+.bb-src .tab { position: absolute; top: -9px; left: 10px; padding: 0 6px; background: #E7D5AC; border: 1px solid #C4AA75; border-radius: 3px; font: 600 9px/14px var(--font-mono); letter-spacing: .1em; color: #3b2f17; }
+.bb-src .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bb-src .t b { font: 600 16px var(--font-serif); }
+.bb-src .t small { font-size: 12px; color: inherit; opacity: .75; }
+.bb-sec { display: flex; flex-direction: column; gap: 8px; }
+.bb-sec + .bb-sec { border-top: 1px solid var(--line); padding-top: 14px; }
+.bb-sec h4 { margin: 0; font: 600 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+.bb-sec h4 .r { margin-left: auto; text-transform: none; letter-spacing: 0; font: 500 11.5px var(--font-ui); color: var(--faint); }
+.spine-row { display: grid; grid-template-columns: 96px 1fr 18px; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; line-height: 1.45; }
+.spine-row .lbl { font: 600 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.spine-row ul { margin: 0; padding-left: 16px; }
+.spine-row del { color: var(--alert); }
+.spine-row ins { color: var(--ok); text-decoration: none; }
+.src-mini { border: 0; background: none; color: var(--faint); cursor: help; padding: 0; font-size: 13px; }
+.bb-hint { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.bb-changed { border-left: 3px solid var(--needs, var(--warn)); padding: 4px 0 4px 12px; display: flex; flex-direction: column; gap: 6px; }
+.bb-changed > b { color: var(--needs, var(--warn)); }
+.bb-acts { display: flex; gap: 6px; flex-wrap: wrap; }

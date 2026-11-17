@@ -324,7 +324,7 @@ export const PROVIDER_CHOICES: { id: ProviderChoice; label: string }[] = [
 
 const ALL_FLAGS_ON: Flags = {
   storyboard: true, video: true, stitch: true, regionEditFrames: true, regionEditCanvas: true,
-  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true, clipPatch: true,
+  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true, clipPatch: true, makeAndEdit: true, briefNode: true,
 }
 
 function routeAll(provider: Provider, sheets: Sheets): Config['routing'] {

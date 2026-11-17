@@ -11,7 +11,10 @@ import type { Services } from '../app/context'
 import { systemUpdate } from '../doc/store'
 import { applyFrame } from '../jobs/handlers'
 import { idbLocation, putBlob } from '../lib/blobs'
-import { mainStoryboard, shotsOf } from '../model/selectors'
+import { mainScript, mainStoryboard, shotsOf } from '../model/selectors'
+import type { NodeEnv } from '../canvas/nodes/nodes'
+import { addBrief, newBrief } from '../brief/model'
+import { linkBrief, placeBrief } from '../brief/canvas'
 import type { Shell } from '../projects/shell'
 
 export interface SeedFrameOpts {
@@ -102,6 +105,19 @@ export function installSeed(shell: Shell) {
       if (!shell.get().session) await shell.newProject()
       // A new project is blank (2026-11-04), so the first-run Start card would sit where specs drop pictures.
       shell.get().session?.services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+    },
+    /** A Brief node from Brief Maker's data, placed on the canvas and linked into the main script (the
+     *  paired screenshots of features/production-new-ui.clan). Needs the canvas open on our own engine. */
+    brief: async (data: unknown, title = 'Colour of the market') => {
+      const env = (window as unknown as { __canvasEnv?: NodeEnv }).__canvasEnv
+      const services = shell.get().session?.services
+      if (!env || !services) throw new Error('open a project on the canvas first')
+      services.ui.update((u) => { u.configChoice = 'allon' }, 'e2e seed')
+      const b = await addBrief(services.doc, newBrief({ documentId: 'doc-seed', title, appId: 'ie.napkin.brief-maker', dataSha256: `sha256:${'b'.repeat(64)}`, data }, 'link'))
+      const el = placeBrief(env, b.id)
+      const script = mainScript(services.doc.get())
+      if (script) await linkBrief(env, b.id, { kind: 'script', id: script.id }).catch(() => undefined)
+      return { briefId: b.id, elementId: el.id }
     },
     /** Opens the storyboard stage (the Image editor opens from a shot there). */
     storyboard: () => shell.get().session?.services.ui.update((u) => { u.stage = 'storyboard' }, 'e2e seed'),

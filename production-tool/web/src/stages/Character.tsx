@@ -46,6 +46,11 @@ import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
 import { scriptToWrite, showStartCard } from './startCard'
 import { useBriefSpinoff } from '../brief/useBriefSpinoff'
+import { BriefBooth } from '../brief/BriefBooth'
+import { briefOfElement } from '../brief/canvas'
+import { Booth } from '../ui/booth/Booth'
+import { useBooth } from '../ui/booth/useBooth'
+import { boothEarned } from '../ui/booth/state'
 import { ImageEditor, VersionRow } from './ImageEditor'
 import { editablePicture } from '../canvas/nodes/dblclick'
 import { pickPictureVersionStep } from './imageEditor/apply'
@@ -238,6 +243,13 @@ export function Character({ initial, active, onPictureEditor }: {
   }, [vs, canvas])
 
   const els = useMemo(() => (vs ? alive(vs.els) : []), [vs])
+  // The canvas's Booth (features/production-new-ui.clan, the Booth rule): only for a selected Brief node, whose
+  // whole spine needs room; with nothing of that selected the canvas takes the full width.
+  const booth = useBooth('canvas')
+  const selBrief = useMemo(() => {
+    const ids = vs?.selected ?? []
+    return ids.length === 1 ? briefOfElement(els.find((e) => e.id === ids[0])) : null
+  }, [vs, els])
   // The picture open in the Image editor, as the canvas shows it now; gone from the canvas, the editor closes.
   const editingPic = useMemo(() => {
     if (!editing) return null
@@ -476,6 +488,11 @@ export function Character({ initial, active, onPictureEditor }: {
   const showHint = showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
   // A brief spun off from Brief Maker (?brief=<doc id>): its Brief node and a new Script, once (features/brief-node.clan).
   useBriefSpinoff(canvas?.engine === 'own' ? { canvas, doc: docStore } : null, config.flags)
+  // Dev only: the canvas for window.__seed.brief (dev/seed.ts), so a Brief node can be put on it in a screenshot.
+  useEffect(() => {
+    if (!import.meta.env.DEV || !canvas) return
+    ;(window as unknown as { __canvasEnv?: unknown }).__canvasEnv = { canvas, doc: docStore }
+  }, [canvas, docStore])
 
   // Our own engine has the boards as real frames and the nodes as real elements (art-boards,
   // canvas-nodes): the rail jumps to the frames, and nothing is drawn over the canvas for them.
@@ -607,6 +624,7 @@ export function Character({ initial, active, onPictureEditor }: {
   return (
     <div className="character">
       <CardChromeContext.Provider value={PRODUCTION_CARD_CHROME}>
+      <div className="cv-row">
       <div className="canvas-wrap pt-grid" ref={wrap} style={grid}>
         {frames.length > 0 && <BoardsLayer part="frames" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <CanvasMount initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} railInset={railInset} />
@@ -633,7 +651,7 @@ export function Character({ initial, active, onPictureEditor }: {
             const top = toView({ x: b.minX + b.w / 2, y: b.minY })
             return r.count ? <ResizeFor ctrl={ctrl} items={r.items} strokes={r.strokes} total={r.total} onSent={onResized} at={{ x: top.x, top: top.y, bottom: toView({ x: b.minX, y: b.maxY }).y }} onClose={() => setResizing(null)} /> : null
           })()}
-          {ctrl && canvas && ownSel && !resizing && !confirming && !placing && !which && (() => {
+          {ctrl && canvas && ownSel && !selBrief && !resizing && !confirming && !placing && !which && (() => {
             const b = bounds(ownSel.els)
             const top = toView({ x: b.minX + b.w / 2, y: b.minY })
             const ids = ownSel.els.map((e) => e.id)
@@ -669,7 +687,7 @@ export function Character({ initial, active, onPictureEditor }: {
               }} />
             )
           })()}
-          {ctrl && selected.length > 0 && !ownSel && !confirming && !placing && (
+          {ctrl && selected.length > 0 && !ownSel && !selBrief && !confirming && !placing && (
             <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits} onEdit={setEditing} gather={gather} onGather={onGather}
               onSizes={own ? (el) => {
                 // A picture, or a scamp's picture (a Drawing's strokes, a sketch area's region) as the master.
@@ -770,6 +788,10 @@ export function Character({ initial, active, onPictureEditor }: {
           : <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow={narrow} keys={!own} />}
         <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
+      </div>
+      <Booth state={booth} earned={boothEarned({ selection: !!selBrief })}>
+        {selBrief && <BriefBooth briefId={selBrief} onClose={() => canvas?.select([])} />}
+      </Booth>
       </div>
       </CardChromeContext.Provider>
       {editingPic && <ImageEditor target={{ kind: 'picture', nodeId: editingPic.nodeId }} picture={editingPic.picture} onBack={() => setEditing(null)} />}

@@ -250,7 +250,10 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 
 /* ── Character stage ─────────────────────────────────────────────────────── */
 .character { position: absolute; inset: 0; display: flex; flex-direction: column; }
-.canvas-wrap { flex: 1; position: relative; min-height: 0; }
+.canvas-wrap { flex: 1; position: relative; min-height: 0; min-width: 0; }
+/* The canvas and its Booth side by side (the Booth pushes the canvas aside, never over it). */
+.cv-row { flex: 1; display: flex; min-height: 0; }
+.booth-canvas .booth { top: 12px; right: 12px; bottom: 12px; background: var(--paper); }
 /* Excalidraw's own accent (its variables, not ours): selection and its panel in the tool's blue. */
 .canvas-wrap .excalidraw { --color-primary: var(--tool); --color-primary-darker: #2453D6; --color-primary-darkest: #1E4ED8; --color-primary-light: var(--tool-soft); }
 .overlay-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }

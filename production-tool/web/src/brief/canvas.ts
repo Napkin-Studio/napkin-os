@@ -14,7 +14,7 @@ import { addBrief, briefFromDocument, newBrief } from './model'
 import type { OsBriefRead } from './os'
 
 /** The card's box on the canvas (the compact card; the Booth shows the whole spine). */
-export const BRIEF_CARD = { w: 280, h: 196 } as const
+export const BRIEF_CARD = { w: 300, h: 132 } as const
 /** The gap between the Brief card and the Script it feeds. */
 const GAP = 72
 

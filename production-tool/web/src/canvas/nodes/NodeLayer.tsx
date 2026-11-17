@@ -35,7 +35,8 @@ import { pictureToOpen } from './dblclick'
 import './nodes.css'
 import { keyViews } from '../../lib/names'
 import { liveGet } from '../../model/live'
-import { BriefCardMin } from '../../brief/BriefCardMin'
+import { BriefCard } from '../../brief/BriefCard'
+import { briefOpenUrl } from '../../brief/feedWords'
 import { briefOfElement } from '../../brief/canvas'
 
 type Local = { x: number; y: number }
@@ -57,7 +58,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const doc = useStoredDoc()
   // What the layer draws reads the document as the canvas has it alive (model/live.ts).
   const live = useDoc()
-  // The Brief node's minimal card, until the new UI's compact card (features/brief-node.clan).
+  // The Brief node's compact card (features/brief-node.clan; production-new-ui mock v2.1).
   const briefCards = !!useConfig().config.flags.briefNode
   const services = useServices()
   const router = useContext(RouterContext)
@@ -589,7 +590,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         return (
           <div key={e.id} className={`bl-cardbox ${selected.has(e.id) ? 'selected' : ''} ${state}`} data-node="brief" data-id={id}
             style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
-            <BriefCardMin doc={live} id={id} />
+            <BriefCard doc={live} id={id} openUrl={briefOpenUrl(live, id)} />
           </div>
         )
       })}

@@ -5,8 +5,9 @@
 // The Production Tool is a React app outside the shell runtime, so the hidden/shown state is the
 // person's own in this tool's app UI (doc/ui.ts AppUi.booth), keyed by who is signed in; not clan:booth.
 
-/** Where the Booth is: the Script editor (Skye), the Storyboard editor (Dex), or a Video room (Fin, Edie). */
-export type BoothPlace = 'script' | 'storyboard' | 'room'
+/** Where the Booth is: the Script editor, the Storyboard editor, a Video room, or the canvas (a selected
+ *  Brief node, the Assets library opened on purpose; features/production-new-ui.clan). */
+export type BoothPlace = 'script' | 'storyboard' | 'room' | 'canvas'
 
 /** At or below this width the Booth stays a column: no Hide, no edge tab (booth.clan). */
 export const BOOTH_NARROW = 1100
@@ -22,7 +23,7 @@ export const EDGE_GUTTER = 44
 export function boothWidth(place: BoothPlace, scoped: boolean, windowWidth: number): number {
   if (windowWidth <= BOOTH_NARROW) return NARROW_WIDTH
   if (place === 'room') return 380
-  if (place === 'storyboard') return 420
+  if (place === 'storyboard' || place === 'canvas') return 420
   return scoped ? 440 : 420
 }
 
@@ -34,7 +35,7 @@ export function boothCanHide(place: BoothPlace, windowWidth: number): boolean {
 
 /** The gutter the hidden Booth leaves (px). */
 export function boothGutter(place: BoothPlace): number {
-  return place === 'script' ? 0 : EDGE_GUTTER
+  return place === 'script' || place === 'canvas' ? 0 : EDGE_GUTTER
 }
 
 /** Whose remembered state: the signed-in person, else this browser's local person. */
