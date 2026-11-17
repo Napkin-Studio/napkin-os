@@ -697,6 +697,9 @@ var DeckLogic = (function () {
     return false;
   }
 
+  /** A frozen Style Pack or Brand Clan: it holds a kit block with a version (deck-look-kits). */
+  function isKit(doc) { return isObj(doc) && isObj(doc.kit) && Number.isInteger(doc.kit.version); }
+
   /**
    * What one frozen upstream document is: a brief (at least one brief field is filled), research
    * (usable content: a finding that is not rejected, or, when findings are not carried, a report,
@@ -736,6 +739,7 @@ var DeckLogic = (function () {
     var up = data && isObj(data.upstream) ? data.upstream : {};
     var brief = null, research = null;
     Object.keys(up).forEach(function (id) {
+      if (isKit(up[id])) return; // a Style Pack or Brand Clan says how the deck looks: it is never the brief or the research
       var c = classifyUpstream(up[id]);
       if (c.brief && !brief) brief = c.brief;
       if (c.research && !research) research = c.research;
@@ -953,11 +957,72 @@ var DeckLogic = (function () {
   /** The strengthen request: recorded only, it launches nothing (launching needs the server feature). */
   function researchRequest(at) { return { research_request: { status: 'asked', at: at } }; }
 
-  /** The upstream sources the host says have changed since this deck: GET /upstream's `upstream` entries. */
+  var KIT_APPS = { 'ie.napkin.style-pack': 'Style Pack', 'ie.napkin.brand': 'brand kit' };
+
+  /** The upstream sources the host says have changed since this deck: GET /upstream's `upstream` entries (kits have their own notice). */
   function upstreamChanged(res) {
     var list = isObj(res) && Array.isArray(res.upstream) ? res.upstream : [];
-    return list.filter(function (e) { return isObj(e) && e.status === 'changed'; })
+    return list.filter(function (e) { return isObj(e) && e.status === 'changed' && !KIT_APPS[e.app_id]; })
       .map(function (e) { return { title: String(e.title || (e.direct ? 'the brief' : 'a source')) }; });
+  }
+
+  /**
+   * The notices for an attached Style Pack or Brand Clan that moved on (GET /upstream, with the frozen copy in `data.upstream`).
+   * An entry names `app_id`, `title`, `document_id`, `status`, and the source's `version` (kit.version), `published` (true when its
+   * kit.published matches its head) and `changelog` (its entries). A published version offers Update; unpublished changes are named
+   * and ask for nothing. The words never change; pictures are never remade by an update, the person chooses (Q6). Never throws.
+   * [{ kind: pack|brand, document_id, published, canUpdate, text }]
+   */
+  function kitNotices(res, data) {
+    var list = isObj(res) && Array.isArray(res.upstream) ? res.upstream : [];
+    var up = data && isObj(data.upstream) ? data.upstream : {};
+    return list.filter(function (e) { return isObj(e) && e.status === 'changed' && KIT_APPS[e.app_id]; }).map(function (e) {
+      var pack = e.app_id === 'ie.napkin.style-pack', noun = KIT_APPS[e.app_id], name = String(e.title || noun);
+      var froz = isObj(up[e.document_id]) && isObj(up[e.document_id].kit) ? up[e.document_id].kit.version : null;
+      var uses = Number.isInteger(froz) ? ' (this deck uses v' + froz + ')' : '';
+      var last = Array.isArray(e.changelog) && e.changelog.length ? e.changelog[e.changelog.length - 1] : null;
+      var said = last && last.summary ? ' What changed: ' + String(last.summary).replace(/[.\s]+$/, '') + '.' : '';
+      var published = e.published === true || (isObj(e.published) && !!e.published.revision);
+      var ver = Number.isInteger(e.version) ? e.version : null, text;
+      if (!published) {
+        text = 'The ' + noun + ' "' + name + '" has changes' + (Number.isInteger(froz) ? ' since v' + froz : '') + ' that are not published yet.';
+      } else if (pack) {
+        text = 'The ' + noun + ' "' + name + '" has ' + (ver ? 'v' + ver : 'a newer version') + uses + '.' + said +
+          ' Update to use it: the words stay the same; pictures made with the old one stay until you choose to remake them.';
+      } else {
+        text = 'The ' + noun + ' "' + name + '" has ' + (ver ? 'v' + ver : 'a newer version') + uses + '.' + said + ' Update changes colours, type and logos only.';
+      }
+      return { kind: pack ? 'pack' : 'brand', document_id: String(e.document_id || ''), published: published, canUpdate: published && !!e.document_id, text: text };
+    });
+  }
+
+  /**
+   * The Start screen's "Look" panel. The agency row shows once the deck has met an agency look (a build stamped meta.theme.agency, the runner
+   * reported run.agency_look, or the person already chose): an agency with a look gets it on every new deck, and a deck opts out with
+   * look.agency_look.use false. The kit rows (Style Pack, brand kit) show only with inputs.library.enabled on (ADR 0027).
+   * { agency: { use, shown }, kits: { shown, pack: {name, version}|null, brand: {name, version}|null } }
+   */
+  function lookPanel(data) {
+    var x = isObj(data) ? data : {};
+    var al = isObj(x.look) && isObj(x.look.agency_look) ? x.look.agency_look : {};
+    var lib = !!(isObj(x.inputs) && isObj(x.inputs.library) && x.inputs.library.enabled === true);
+    var up = isObj(x.upstream) ? x.upstream : {}, pack = null, brand = null;
+    Object.keys(up).forEach(function (id) {
+      var k = up[id];
+      if (!isKit(k)) return;
+      if (isObj(k.pack) && !pack) pack = { name: String(k.pack.name || 'Style Pack'), version: k.kit.version };
+      else if (!isObj(k.pack) && !brand) brand = { name: String((isObj(k.brand) && k.brand.name) || 'Brand kit'), version: k.kit.version };
+    });
+    var theme = isObj(x.deck) && isObj(x.deck.meta) && isObj(x.deck.meta.theme) ? x.deck.meta.theme : {};
+    var known = isObj(x.look) && isObj(x.look.agency_look) || isObj(theme.agency) || (isObj(x.run) && isObj(x.run.agency_look));
+    return { agency: { use: al.use !== false, shown: !!known }, kits: { shown: lib, pack: lib ? pack : null, brand: lib ? brand : null } };
+  }
+
+  /** The patch for the per-deck opt-out: look.agency_look.use, with who and when (look is appearance: no reason asked). */
+  function agencyPatch(use, by, at) {
+    var row = { use: !!use, via: 'start' };
+    if (by) { row.by = by; row.at = at; }
+    return { look: { agency_look: row } };
   }
 
   // ── the agent circle: who is working and what they are doing (features/deck-maker-circle-ui.clan) ──
@@ -1370,7 +1435,7 @@ var DeckLogic = (function () {
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
-    researchRequest: researchRequest, upstreamChanged: upstreamChanged,
+    researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, gateRequest: gateRequest,
@@ -1399,6 +1464,7 @@ var DeckLogic = (function () {
   var view = { screen: null, slide: null, tab: 'evidence', present: 0, appendix: false };
   var qdraft = {}; // free-text answers typed but not saved, by question id
   var pending = {}; // inputs picked on the Start screen, written when Build is pressed
+  var kitChanged = []; // Style Pack / Brand Clan notices (L.kitNotices); empty when the call fails or nothing moved
   var upChanged = []; // sources the host says changed since this deck; empty when the call fails or is absent
   var upLoaded = false;
   var clanScheme = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
@@ -1588,13 +1654,31 @@ var DeckLogic = (function () {
     var attached = '<span class="pill ok">Brought in</span>', opt = '<span class="pill plain">Optional</span>';
     var r = u.research, b = u.brief;
     var changed = upChanged.length ? '<div class="upnote" role="status" data-up-changed><b>' + esc(upChanged.map(function (c) { return c.title; }).join(', ')) + ' changed since this deck.</b> This deck keeps it as it was; it does not take the newer one on its own.</div>' : '';
-    return '<div class="eyebrow dark">Bring in a brief or research (optional)</div>' + changed + '<div class="two">' +
+    var kitNote = kitChanged.map(function (n) {
+      return '<div class="upnote" role="status" data-kit-notice="' + esc(n.kind) + '">' + esc(n.text) +
+        (n.canUpdate ? ' <button class="btn sm" data-kit-update="' + esc(n.document_id) + '">Update</button>' : '') + '</div>';
+    }).join('');
+    return '<div class="eyebrow dark">Bring in a brief or research (optional)</div>' + changed + kitNote + '<div class="two">' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Research</b><div class="spacer"></div>' + (r ? attached : opt) + '</div>' +
         (r ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(r.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (r.findings == null ? 'report brought in' : esc(r.findings) + ' findings · ' + esc(r.rejected) + ' rejected') + '</div></div></div>' +
           '<p class="note" style="margin-top:10px">Rejected findings are never used on a slide.' + (r.findings == null ? ' Finding counts show once the Research Tool shares them.' : '') + '</p>' : '<p class="note">No research brought in. Start one from a Research Tool document with Spin off.</p>') + '</section>' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Brief</b><div class="spacer"></div>' + (b ? attached : opt) + '</div>' +
         (b ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(b.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(b.fields_filled) + ' of ' + esc(b.fields_total) + ' fields · ' + esc(b.mandatories) + ' mandatories</div></div></div>' +
           '<p class="note" style="margin-top:10px">Mandatories become requirements the deck must answer.</p>' : '<p class="note">No brief brought in. The deck builds from your prompt and documents.</p>') + '</section></div>';
+  }
+
+  /** Start's "Look" card: the per-deck opt-out of the agency look, and (with the library on) the attached Style Pack and brand kit. */
+  function lookSection(s) {
+    var lp = L.lookPanel(s.raw), rows = '';
+    if (!lp.agency.shown && !lp.kits.shown) return '';
+    if (lp.agency.shown) rows += '<label style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" id="agencyLook"' + (lp.agency.use ? ' checked' : '') + ' />' +
+      '<span><b style="font-size:14px;font-weight:600">Use my agency\'s look</b><br><span class="note">If your agency has set up a look, every new deck wears it. Untick to use the standard look for this deck only.</span></span></label>';
+    if (lp.kits.shown) {
+      var line = function (k, noun) { return k ? '<div class="doc" style="margin-top:8px"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(k.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + noun + ' v' + esc(k.version) + '</div></div></div>' : ''; };
+      rows += line(lp.kits.pack, 'Style Pack') + line(lp.kits.brand, 'Brand kit');
+    }
+    return '<section class="card sec" data-look-panel><div class="sec-h"><span class="mono eyebrow">Look</span><b>How it looks</b><div class="spacer"></div></div>' + rows +
+      '<p class="note" style="margin-top:8px">A look never changes what a slide says.</p></section>';
   }
 
   function start(s) {
@@ -1616,7 +1700,7 @@ var DeckLogic = (function () {
       '<div class="eyebrow">New deck</div>' +
       '<h1 style="margin:10px 0 6px">What are we pitching?</h1>' +
       '<p class="lede" style="margin-bottom:28px">Tell us in a line or paste everything you have, and attach any documents. A brief or research is optional. Nothing else is used, so every line on a slide traces back to what you gave.</p>' +
-      '<div class="stack">' + typeSelector(s) +
+      '<div class="stack">' + typeSelector(s) + lookSection(s) +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">01</span><b>Your prompt</b><div class="spacer"></div>' +
         '<span class="pill ' + (hasText ? 'ok' : 'plain') + '">' + (hasText ? 'Ready' : 'A line is enough') + '</span></div>' +
         '<div class="three">' + field('client', 'Client', p.client) + field('project', 'Project', p.project) + field('agency', 'Agency (optional)', p.agency, 'Shows as [Agency]') + '</div>' +
@@ -2088,8 +2172,8 @@ var DeckLogic = (function () {
       if (typeof fetch !== 'function') return;
       Promise.resolve(fetch(clanScheme + '/upstream')).then(function (r) { return r && r.ok ? r.json() : null; })
         .then(function (v) {
-          var next = L.upstreamChanged(v);
-          if (next.length) { upChanged = next; render(); }
+          var next = L.upstreamChanged(v), kits = L.kitNotices(v, s.raw);
+          if (next.length || kits.length) { upChanged = next; kitChanged = kits; render(); }
         }, function () { /* no host: no notice */ }).catch(function () { /* never throw */ });
     } catch (e) { /* no host: no notice */ }
   }
@@ -2113,6 +2197,11 @@ var DeckLogic = (function () {
   }
 
   function now() { return new Date().toISOString(); }
+
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t && t.id === 'agencyLook') { put(L.agencyPatch(t.checked, null, now()), 'agency look ' + (t.checked ? 'on' : 'off') + ' for this deck', 'look'); render(); }
+  });
 
   document.addEventListener('click', function (e) {
     var t = e.target.closest('button'); if (!t) return;
@@ -2165,6 +2254,15 @@ var DeckLogic = (function () {
       if (!patch) { toast('Write an answer first, or skip.'); return; }
       delete qdraft[qid];
       put(patch, (a.qskip ? 'skip' : (qid.indexOf('q_supply_') === 0 ? 'supply' : 'answer')) + ' question ' + qid, qid.indexOf('q_supply_') === 0 ? 'supplied by the person' : 'intake');
+      return;
+    }
+    if (a.kitUpdate) {
+      // The person chose to take the newer kit: the host's attach update. Pictures are not remade by it.
+      try {
+        Promise.resolve(fetch(clanScheme + '/attach/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ document_id: a.kitUpdate }) }))
+          .then(function (r) { if (r && r.ok) { kitChanged = []; upLoaded = false; toast('Updated. The words stay the same; pictures stay until you remake them.'); render(); } else toast('Could not update.'); },
+            function () { toast('Could not update.'); });
+      } catch (err) { toast('Could not update.'); }
       return;
     }
     if (t.id === 'strengthen') {

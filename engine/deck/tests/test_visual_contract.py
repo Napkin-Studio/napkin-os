@@ -513,9 +513,9 @@ def test_the_template_schema_uses_only_keywords_the_frontend_checker_reads():
     assert used <= CHECKED | ANNOTATIONS, used - CHECKED - ANNOTATIONS
 
 
-def test_template_version_is_0_3_0_in_the_packer():
+def test_template_version_is_0_4_0_in_the_packer():
     text = (ROOT / "crates" / "clan-sdk" / "examples" / "make_deck_maker.rs").read_text()
-    assert 'version: "0.3.0".into()' in text and 'assert_eq!(app_block.version, "0.3.0"' in text
+    assert 'version: "0.4.0".into()' in text and 'assert_eq!(app_block.version, "0.4.0"' in text
     assert "0.2.1" not in text
 
 

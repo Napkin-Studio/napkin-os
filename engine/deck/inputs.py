@@ -301,23 +301,89 @@ def _is_brief_data(d: dict) -> bool:
     return isinstance(d, dict) and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
 
 
-def from_upstream(data: dict, members: dict | None = None, docs: dict | None = None, doc_facts: dict | None = None) -> Inputs:
+#: Presentation kits a Deck may hold (deck-look-kits). A kit tells the deck how to look: it is never the brief,
+#: never the research, and none of its words or figures is evidence (ADR 0023 as amended by ADR 0027).
+BRAND_APP, STYLE_PACK_APP = "ie.napkin.brand", "ie.napkin.style-pack"
+KIT_APPS = (BRAND_APP, STYLE_PACK_APP)
+#: The brand layer's reference on a pin (Contract 6, section 2): ``fact://brand/<slug>/<key>@v``.
+_BRAND_REF = "fact://brand/"
+
+
+def _is_kit(key: str, entry, apps: dict | None) -> bool:
+    """True when an upstream entry is a kit. The runner's app map (``lineage.attached[].app_id``) decides when it
+    names the entry; with no map (or an entry it does not name) the shape does: a kit holds ``kit.version``."""
+    if apps and key in apps:
+        return apps[key] in KIT_APPS
+    return isinstance(entry, dict) and isinstance(entry.get("kit"), dict) and "version" in entry["kit"]
+
+
+def _is_brand_pin(pin: dict) -> bool:
+    """A pin the brand layer owns, by its reference or its layer."""
+    refs = [pin.get(k) for k in ("ref", "uri", "id")]
+    return any(isinstance(r, str) and r.startswith(_BRAND_REF) for r in refs) or pin.get("layer") == "brand"
+
+
+def _drop_kit_pins(members: dict, kit_pins: set) -> tuple[dict, list]:
+    """``members`` without the pins that arrived with a kit, and without the sources only those pins cite.
+    Returns (members, dropped pin ids). A Brand Clan attach merges its pins into the deck's facts; the deck's
+    facts are research, so they leave here, before anything reads them."""
+    rows = _unwrap(members.get("facts"), "facts")
+    gone = [p for p in rows if isinstance(p, dict) and (p.get("id") in kit_pins or _is_brand_pin(p))]
+    if not gone:
+        return members, []
+    gone_ids = {p.get("id") for p in gone}
+    kept = [p for p in rows if p.get("id") not in gone_ids]
+
+    def cited(pins):
+        out = set()
+        for p in pins:
+            for k in ("source", "source_id"):
+                if p.get(k):
+                    out.add(p[k])
+            out.update(p.get("sources") or [])
+        return out
+
+    only_brand = cited(gone) - cited(kept)
+    out = {**members, "facts": kept}
+    if members.get("sources") is not None:
+        out["sources"] = [s for s in _unwrap(members.get("sources"), "sources") if s.get("id") not in only_brand]
+    return out, sorted(i for i in gone_ids if i)
+
+
+def from_upstream(data: dict, members: dict | None = None, docs: dict | None = None, doc_facts: dict | None = None,
+                  apps: dict | None = None, kit_pins: set | list | None = None) -> Inputs:
     """Build the Inputs from a Deck document: ``data`` is its data (``upstream.<source document id>``
     frozen sources, ``inputs.prompt``, ``intake``); ``members`` its merged ``facts``, ``findings``,
     ``sources`` and ``decisions`` (the whole carried decision chain), each a list or wrapped in its
     top-level key. ``docs`` (doc key -> {name, text, chars}) and ``doc_facts`` are what the server
     extracted from the attached documents. The brief goes through ``brief_from_data`` (CLAN_FIELDS)
     and the research through ``parse_research``, so there is one mapping. A finding rejected in
-    the chain stays rejected. With no brief upstream the brief fields are empty."""
+    the chain stays rejected. With no brief upstream the brief fields are empty.
+
+    ``apps`` (``{source document id: app_id}``, from ``lineage.attached``) says what each entry is. A Brand Clan
+    or Style Pack is a kit: never the brief or the research, and every pin that arrived with a kit is dropped from
+    the facts (``kit_pins``: the ids the runner knows came with one; a pin marked with the brand layer's reference
+    is dropped too). Without ``apps`` a kit is recognised by its ``kit.version`` block."""
     data, members = data or {}, members or {}
     up = data.get("upstream") or {}
+    kits = [k for k, v in up.items() if _is_kit(k, v, apps)]
+    up = {k: v for k, v in up.items() if k not in kits}
     brief_id, brief_data = next(((k, v) for k, v in up.items() if _is_brief_data(v)), (None, None))
     research_id = next((k for k, v in up.items() if k != brief_id and isinstance(v, dict) and v), None)
+    dropped: list = []
+    if kits:
+        members, dropped = _drop_kit_pins(members, set(kit_pins or ()))
+    elif kit_pins:
+        members, dropped = _drop_kit_pins(members, set(kit_pins))
     if brief_data is not None:
         fields, htw, oq, cov = brief_from_data(brief_data)
     else:
         fields, htw, oq, cov = empty_brief(), {}, [], {"brief_fields": len(BRIEF_FIELDS), "brief_fields_filled": 0,
                                                        "how_to_win_points": 0, "open_questions": 0, "brief_source": "none"}
+    if kits:
+        cov["kits_ignored"] = sorted(kits)
+    if dropped:
+        cov["kit_pins_dropped"] = dropped
     prompt = ((data.get("inputs") or {}).get("prompt") or {})
     intake = data.get("intake") or {}
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=str(prompt.get("text") or ""),

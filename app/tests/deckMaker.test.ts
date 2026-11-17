@@ -48,6 +48,9 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   answerPatch(qid: string, answer: unknown, at: string): unknown
   researchRequest(at: string): unknown
   upstreamChanged(res: unknown): { title: string }[]
+  kitNotices(res: unknown, data: unknown): { kind: string; document_id: string; published: boolean; canUpdate: boolean; text: string }[]
+  lookPanel(data: unknown): { agency: { use: boolean; shown: boolean }; kits: { shown: boolean; pack: { name: string; version: number } | null; brand: { name: string; version: number } | null } }
+  agencyPatch(use: boolean, by: string | null, at: string): unknown
   DECK_TYPES: { id: string; label: string; one_line: string }[]
   deckTypeOf(data: unknown): { id: string; source: string; quote: string; skipped: boolean; hasQuestion: boolean }
   typeHints(type: string): { type: string; items: string[]; line: string }
@@ -278,6 +281,61 @@ test('upstreamChanged lists only changed sources and survives junk', () => {
   assert.deepEqual(plain(L.upstreamChanged({ upstream: [{ status: 'changed', title: 'T' }, { status: 'same' }] })), [{ title: 'T' }])
   assert.deepEqual(plain(L.upstreamChanged(null)), [])
   assert.deepEqual(plain(L.upstreamChanged({ upstream: 5 })), [])
+})
+
+const PACK_FROZEN = { pack: { name: 'Demo pack' }, kit: { version: 3, stewards: ['human:demo'] }, look: ['natural light'] }
+const BRAND_FROZEN = { brand: { name: 'Demo brand' }, kit: { version: 5 }, visual: { colours: [] } }
+
+test('an attached Style Pack or Brand Clan is never read as the brief or the research', () => {
+  const u = L.upstreamSummary({ upstream: { 'pack-1': PACK_FROZEN, 'brand-1': BRAND_FROZEN, 'res-1': { findings: [{ id: 'fi_1', status: 'verified' }] } } })
+  assert.equal(u.research?.name, 'Research')
+  assert.equal(L.upstreamSummary({ upstream: { 'pack-1': PACK_FROZEN, 'brand-1': BRAND_FROZEN } }).any, false)
+})
+
+test('a changed Style Pack: a published version offers Update, unpublished changes only say so', () => {
+  const data = { upstream: { 'pack-1': PACK_FROZEN } }
+  const [pub] = L.kitNotices({ upstream: [{ status: 'changed', app_id: 'ie.napkin.style-pack', title: 'Demo pack', document_id: 'pack-1', version: 4, published: true, changelog: [{ version: 4, summary: 'Warmer light.' }] }] }, data)
+  assert.equal(pub.text, 'The Style Pack "Demo pack" has v4 (this deck uses v3). What changed: Warmer light. Update to use it: the words stay the same; pictures made with the old one stay until you choose to remake them.')
+  assert.equal(pub.canUpdate, true)
+  const [draft] = L.kitNotices({ upstream: [{ status: 'changed', app_id: 'ie.napkin.style-pack', title: 'Demo pack', document_id: 'pack-1', version: 4, published: false }] }, data)
+  assert.equal(draft.text, 'The Style Pack "Demo pack" has changes since v3 that are not published yet.')
+  assert.equal(draft.canUpdate, false)
+})
+
+test('a changed Brand Clan says it changes colours, type and logos only', () => {
+  const [n] = L.kitNotices({ upstream: [{ status: 'changed', app_id: 'ie.napkin.brand', title: 'Demo brand', document_id: 'brand-1', version: 6, published: { revision: 'sha256:x' } }] }, { upstream: { 'brand-1': BRAND_FROZEN } })
+  assert.equal(n.text, 'The brand kit "Demo brand" has v6 (this deck uses v5). Update changes colours, type and logos only.')
+  assert.equal(n.kind, 'brand')
+  assert.equal(n.canUpdate, true)
+})
+
+test('kit notices ignore current kits and other sources, and survive junk; upstreamChanged leaves kits to them', () => {
+  assert.deepEqual(plain(L.kitNotices({ upstream: [{ status: 'current', app_id: 'ie.napkin.style-pack' }, { status: 'changed', app_id: 'ie.napkin.campaign-research', title: 'R' }] }, {})), [])
+  assert.deepEqual(plain(L.kitNotices(null, null)), [])
+  assert.deepEqual(plain(L.upstreamChanged({ upstream: [{ status: 'changed', app_id: 'ie.napkin.style-pack', title: 'P' }, { status: 'changed', app_id: 'ie.napkin.campaign-research', title: 'R' }] })), [{ title: 'R' }])
+})
+
+test('the Start look panel: the agency opt-out shows once the deck has met an agency look, the kits only with the library on', () => {
+  const base = { upstream: { 'pack-1': PACK_FROZEN, 'brand-1': BRAND_FROZEN } }
+  const off = L.lookPanel(base)
+  assert.equal(off.agency.use, true)
+  assert.equal(off.agency.shown, false)
+  assert.equal(L.lookPanel({ deck: { meta: { theme: { agency: { id: 'a', rev: 1 } } } } }).agency.shown, true)
+  assert.equal(L.lookPanel({ run: { agency_look: { id: 'a' } } }).agency.shown, true)
+  assert.equal(off.kits.shown, false)
+  assert.equal(off.kits.pack, null)
+  const on = L.lookPanel({ ...base, inputs: { library: { enabled: true } }, look: { agency_look: { use: false } } })
+  assert.equal(on.agency.use, false)
+  assert.equal(on.agency.shown, true)
+  assert.deepEqual(plain(on.kits), { shown: true, pack: { name: 'Demo pack', version: 3 }, brand: { name: 'Demo brand', version: 5 } })
+  assert.equal(L.lookPanel(null).agency.use, true)
+})
+
+test('the agency opt-out writes only look.agency_look, as appearance', () => {
+  assert.deepEqual(plain(L.agencyPatch(false, null, 't')), { look: { agency_look: { use: false, via: 'start' } } })
+  assert.deepEqual(plain(L.agencyPatch(true, 'human:demo', 't')), { look: { agency_look: { use: true, via: 'start', by: 'human:demo', at: 't' } } })
+  assert.match(html, /id="agencyLook"/)
+  assert.match(html, /data-kit-update/)
 })
 
 test('the researchRequest patch is only { status: asked, at }', () => {

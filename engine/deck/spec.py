@@ -376,7 +376,9 @@ PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "a
 
 #: Theme (contract section 6.1 and 6.2). COLOR_ROLES equals ``theme.COLOR_FIELDS``.
 COLOR_ROLES = ("ink", "paper", "panel", "rule", "mute", "accent", "accent_ink", "on_dark", "on_dark_mute", "accent_on_dark")
-THEME_SOURCES = ("default", "brand_clan", "agency_look", "brand_file", "master")
+THEME_SOURCES = ("default", "brand_clan", "style_pack", "agency_look", "brand_file", "master")
+#: The tiers that can give a token (meta.theme.from), highest first; "derived" is a token no tier gave (look.py).
+THEME_TIERS = ("master", "brand_clan", "brand_file", "style_pack", "agency_look", "default")
 LOGO_PLACEMENTS = ("cover_only", "cover_and_footer", "none")
 ACCENT_USES = ("fill", "outline")
 HEADER_POSITIONS = ("left", "center")

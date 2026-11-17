@@ -13,92 +13,11 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { parseYaml } from './deckMakerYaml'
+import { validate, type Schema } from './schemaCheck'
 
 let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
 const dir = new URL('templates/deck-maker/', root)
-
-// ------------------------------------------------- JSON Schema subset (draft-07)
-
-type Schema = {
-  type?: string | string[]
-  enum?: unknown[]
-  required?: string[]
-  properties?: Record<string, Schema>
-  additionalProperties?: Schema | boolean
-  items?: Schema
-  maxItems?: number
-  oneOf?: Schema[]
-  const?: unknown
-  pattern?: string
-  minimum?: number
-  maximum?: number
-  minItems?: number
-  minLength?: number
-  maxLength?: number
-  propertyNames?: Schema
-  default?: unknown
-  uniqueItems?: boolean
-  if?: Schema
-  then?: Schema
-}
-
-function typeOk(v: unknown, t: string): boolean {
-  if (t === 'null') return v === null
-  if (t === 'array') return Array.isArray(v)
-  if (t === 'object') return typeof v === 'object' && v !== null && !Array.isArray(v)
-  if (t === 'integer') return Number.isInteger(v)
-  return typeof v === t
-}
-
-function check(v: unknown, s: Schema, path: string, errs: string[]): void {
-  if (s.type !== undefined) {
-    const ts = Array.isArray(s.type) ? s.type : [s.type]
-    if (!ts.some(t => typeOk(v, t))) { errs.push(`${path}: expected ${ts.join('|')}`); return }
-  }
-  if (s.enum && !s.enum.some(e => e === v)) errs.push(`${path}: ${JSON.stringify(v)} is not one of ${JSON.stringify(s.enum)}`)
-  if ('const' in s && s.const !== v) errs.push(`${path}: ${JSON.stringify(v)} is not ${JSON.stringify(s.const)}`)
-  if (s.if && s.then) {
-    const e: string[] = []
-    check(v, s.if, path, e)
-    if (e.length === 0) check(v, s.then, path, errs)
-  }
-  if (typeof v === 'string') {
-    if (s.pattern !== undefined && !new RegExp(s.pattern).test(v)) errs.push(`${path}: does not match ${s.pattern}`)
-    if (s.minLength !== undefined && v.length < s.minLength) errs.push(`${path}: shorter than ${s.minLength}`)
-    if (s.maxLength !== undefined && v.length > s.maxLength) errs.push(`${path}: longer than ${s.maxLength}`)
-  }
-  if (typeof v === 'number') {
-    if (s.minimum !== undefined && v < s.minimum) errs.push(`${path}: under ${s.minimum}`)
-    if (s.maximum !== undefined && v > s.maximum) errs.push(`${path}: over ${s.maximum}`)
-  }
-  if (s.oneOf) {
-    const hits = s.oneOf.filter(o => { const e: string[] = []; check(v, o, path, e); return e.length === 0 })
-    if (hits.length !== 1) errs.push(`${path}: matches ${hits.length} of ${s.oneOf.length} oneOf branches`)
-  }
-  if (Array.isArray(v)) {
-    if (s.maxItems !== undefined && v.length > s.maxItems) errs.push(`${path}: more than ${s.maxItems} items`)
-    if (s.minItems !== undefined && v.length < s.minItems) errs.push(`${path}: fewer than ${s.minItems} items`)
-    if (s.uniqueItems && new Set(v.map(x => JSON.stringify(x))).size !== v.length) errs.push(`${path}: items are not unique`)
-    if (s.items) v.forEach((x, i) => check(x, s.items!, `${path}[${i}]`, errs))
-  } else if (typeof v === 'object' && v !== null) {
-    const o = v as Record<string, unknown>
-    for (const k of s.required ?? []) if (!(k in o)) errs.push(`${path}: missing required "${k}"`)
-    for (const [k, x] of Object.entries(o)) {
-      if (s.propertyNames) check(k, s.propertyNames, `${path}.${k} (name)`, errs)
-      const p = s.properties?.[k]
-      if (p) check(x, p, `${path}.${k}`, errs)
-      else if (typeof s.additionalProperties === 'object') check(x, s.additionalProperties, `${path}.${k}`, errs)
-      else if (s.additionalProperties === false) errs.push(`${path}: unexpected "${k}"`)
-    }
-  }
-}
-
-function validate(data: unknown, schema: Schema): string[] {
-  const errs: string[] = []
-  check(data, schema, '$', errs)
-  return errs
-}
 
 // ---------------------------------------------------------------------- tests
 
@@ -299,4 +218,21 @@ test('exports take the older `true` and file-name shapes as well as the object',
   assert.notDeepEqual(validate(d, schema), [])
   d.exports = { pdf: { url: 'x' } }
   assert.notDeepEqual(validate(d, schema), [])
+})
+
+test('the Deck template is 0.4.0 and takes a Brand Clan and a Style Pack one at a time (deck-look-kits)', () => {
+  const rs = readFileSync(new URL('../crates/clan-sdk/examples/make_deck_maker.rs', root), 'utf8')
+  assert.match(rs, /version: "0\.4\.0"\.into\(\)/)
+  assert.match(rs, /assert_eq!\(app_block\.version, "0\.4\.0"/)
+  assert.match(rs, /BRAND_APP_ID\.into\(\),\s+STYLE_PACK_APP_ID\.into\(\)/)
+  assert.match(rs, /many: vec!\[RESEARCH_APP_ID\.into\(\)\]/)
+})
+
+test('look.agency_look is a per-deck opt-out that defaults to on, and a bad value is caught', () => {
+  const look = (schema.properties!.look as Schema).properties!.agency_look as Schema
+  assert.deepEqual(look.default, { use: true })
+  const wrap: Schema = { type: 'object', properties: { agency_look: look } }
+  assert.deepEqual(validate({ agency_look: { use: false, via: 'start' } }, wrap), [])
+  assert.equal(validate({ agency_look: { use: 'no' } }, wrap).length, 1)
+  assert.equal(validate({ agency_look: { use: true, colour: 'red' } }, wrap).length, 1)
 })

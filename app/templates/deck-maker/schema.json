@@ -345,10 +345,7 @@
                     "type": "string"
                   },
                   "n": {
-                    "type": [
-                      "integer",
-                      "string"
-                    ]
+                    "type": "integer"
                   },
                   "name": {
                     "type": "string"
@@ -402,10 +399,7 @@
                     ],
                     "properties": {
                       "n": {
-                        "type": [
-                          "integer",
-                          "string"
-                        ]
+                        "type": "integer"
                       },
                       "channel": {
                         "type": "string"
@@ -741,6 +735,7 @@
                   "enum": [
                     "default",
                     "brand_clan",
+                    "style_pack",
                     "agency_look",
                     "brand_file",
                     "master"
@@ -995,6 +990,49 @@
                   "type": "array",
                   "items": {
                     "type": "string"
+                  }
+                },
+                "from": {
+                  "type": "object",
+                  "description": "Which tier gave each token: a colour role, head, body or logo. Written by the runner (deck-look-kits). meta.theme.source is the highest tier that gave any token.",
+                  "additionalProperties": {
+                    "enum": [
+                      "brand_clan",
+                      "brand_file",
+                      "master",
+                      "style_pack",
+                      "agency_look",
+                      "default",
+                      "derived"
+                    ]
+                  }
+                },
+                "style_pack": {
+                  "type": "object",
+                  "description": "The Style Pack the deck's look and pictures used: its document, version and computed style hash (deck-look-kits).",
+                  "properties": {
+                    "document_id": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "hash": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}$"
+                    }
+                  }
+                },
+                "agency": {
+                  "type": "object",
+                  "description": "The agency look the deck wore: its id and revision, so Review can say the look changed since the last build (deck-look-kits).",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "rev": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -2808,6 +2846,37 @@
                 "co_branded"
               ],
               "default": "agency"
+            },
+            "by": {
+              "type": "string",
+              "pattern": "^human:.+$",
+              "description": "Who chose it, as human:<id>. Absent: nobody chose, the default is in force."
+            },
+            "at": {
+              "type": "string",
+              "description": "When the choice was made (ISO 8601)."
+            },
+            "via": {
+              "enum": [
+                "question",
+                "start",
+                "review"
+              ],
+              "description": "Where the choice was made: an intake question, the Start screen or Review."
+            }
+          }
+        },
+        "agency_look": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Should the deck wear the agency's look? true (the default): an agency that has set up a look gets it on every new deck, with no switch to find; false: this deck opts out and uses the default theme. An agency with no look set up changes nothing (deck-look-kits, Sai, 17 Nov 2026).",
+          "default": {
+            "use": true
+          },
+          "properties": {
+            "use": {
+              "type": "boolean",
+              "default": true
             },
             "by": {
               "type": "string",

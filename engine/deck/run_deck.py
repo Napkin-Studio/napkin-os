@@ -31,7 +31,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import assemble, inputs, intake, profiles, qa_render, render_hyperframes, render_pptx, render_web, spec, validate
+from . import assemble, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, spec, validate
 
 #: Stage a0 (intake) comes first: it fills the brief fields the brief does not supply.
 STAGE_FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.json", "c": "c_territories.json", "d": "d_idea.json"}
@@ -55,6 +55,29 @@ def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:
     deck["meta"]["built_from"] = {**deck["meta"]["built_from"], "type": profile["id"], "profile": rec}
     if profile["arrange"] == "spine" or choice["source"] in ("answer", "skipped"):
         deck["meta"]["profile"] = rec
+
+
+def _stamp_look(a, deck: dict, brand: dict | None, rep: dict) -> None:
+    """Resolve the deck's look (look.py) and stamp it: ``meta.brand`` (what the renderers read) and ``meta.theme`` (what a reader
+    sees). With no --style, no agency look and no --brand nothing is written, so today's decks and every golden are unchanged."""
+    style = None
+    if a.style:
+        from visuals import style as vstyle   # noqa: PLC0415 (a sibling package of engine/deck, imported only when a pack is given)
+        try:
+            style = vstyle.load(a.style)
+        except vstyle.StyleError as e:   # a pack that breaks its rules is not used: the deck still builds, and says so
+            rep["style_pack"] = {"used": False, "error": str(e)}
+        else:
+            rep["style_pack"] = {"used": True, "hash": style.hash, "warnings": style.warnings, "sent_references": [r.name for r in style.references],
+                                 "withheld_references": style.withheld}
+    agency = json.loads(a.agency_look.expanduser().read_text()) if a.agency_look else None
+    got = look.resolve(wears=a.wears, strict_brand=a.strict_brand, brand_file=brand, brand=look.brand_tokens(None), style=style,
+                       agency=agency, use_agency=not a.no_agency_look)
+    if got.brand:
+        deck["meta"]["brand"] = got.brand
+    if got.theme:
+        deck["meta"]["theme"] = got.theme
+        rep["look"] = {"source": got.theme["source"], "problems": got.problems, "derived": got.theme["derived"]}
 
 
 def _qa_line(summary: dict, n_slides: int) -> str:
@@ -259,6 +282,14 @@ def main(argv=None):
     ap.add_argument("--doc", action="append", default=[], metavar="KEY=PATH",
                     help="a client document (PDF page by page, or text), cited as doc:KEY#pN; repeatable")
     ap.add_argument("--brand", type=Path, help="brand JSON: name, colors (THEME keys, accent_ink), head/body fonts, logo files")
+    ap.add_argument("--style", type=Path, help="a Style Pack: a folder (style.yaml and images) or a Style Pack .clan; its deck colours and type "
+                                               "(empty by default) rank above the agency look (deck-look-kits)")
+    ap.add_argument("--agency-look", type=Path, help="the signed-in person's agency look, JSON (id, rev, accent, base, accent_ink, accent_use, surface): "
+                                                     "it dresses the deck automatically unless --no-agency-look; an agency with no look passes none")
+    ap.add_argument("--no-agency-look", action="store_true", help="this deck opts out of the agency look (look.agency_look.use false)")
+    ap.add_argument("--wears", choices=look.WEARS, default="agency",
+                    help="whose brand the deck wears: agency (default; a client kit gives only its logo and imagery bans), client or co_branded")
+    ap.add_argument("--strict-brand", action="store_true", help="only the kit's given tokens: ignore Style Pack literals and the agency look")
     ap.add_argument("--no-qa", action="store_true", help="skip stage h, the rendered-slide QA (qa.json)")
     a = ap.parse_args(argv)
     if a.prompt_text and a.prompt_file:
@@ -352,6 +383,7 @@ def main(argv=None):
         rep["supply_questions"] = supply + [c for c in intake.gap_questions(assemble.investor_gaps(deck)) if c["id"] not in have]
     rep["confirm"] = intake.confirm_summary(deck, intake.stamp_confirm(deck, inp))   # what to confirm, and how much a person has verified or supplied
     _stamp_type(deck, profile, choice)
+    brand = None
     if a.brand:   # colours, fonts and logos: the logo files are read here so the deck carries them
         brand = json.loads(a.brand.read_text())
         for k in ("logo_dark_svg", "logo_light_svg"):
@@ -360,7 +392,7 @@ def main(argv=None):
         for k in ("logo_dark_png", "logo_light_png"):
             if brand.get(k):
                 brand[k] = str(Path(brand[k]).expanduser())
-        deck["meta"]["brand"] = brand
+    _stamp_look(a, deck, brand, rep)
     ep = a.stages / "e_copy.json"   # stage e: tighten over-budget presented slides; recorded edits are re-applied by title
     if ep.exists():
         ecopy = json.loads(ep.read_text())

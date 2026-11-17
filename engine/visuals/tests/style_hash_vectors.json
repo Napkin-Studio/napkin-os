@@ -1,0 +1,32 @@
+{
+ "about": "Hashes the Territory tool's style._hash gave (work/deck-maker-session, 17 Nov 2026) for folders with the six keys and no references key; the same content must keep its hash here. Images are base64.",
+ "vectors": [
+  {
+   "id": "default",
+   "yaml": null,
+   "images": {},
+   "hash": "4ba913ca"
+  },
+  {
+   "id": "six_keys",
+   "yaml": "look: [natural light, unstaged]\npalette: [warm ochre]\nthis_not_that:\n  - {this: ordinary kitchens, not: studio sets}\n  - candid faces, not posed smiles\nfinish: rough\nbanned_imagery: [stock handshake]\nnotes: Irish everyday settings\n",
+   "images": {},
+   "hash": "3045721c"
+  },
+  {
+   "id": "empty_keys",
+   "yaml": "look: []\n",
+   "images": {},
+   "hash": "fc93e43b"
+  },
+  {
+   "id": "with_images_all_own",
+   "yaml": "look: [documentary stills]\nfinish: photo-real\nreferences:\n  b.png: {rights: own, why: shot by the studio, by: 'human:demo'}\n  a.jpg: {rights: own, why: shot by the studio, by: 'human:demo'}\n",
+   "images": {
+    "b.png": "iVBORw0KGgoCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC",
+    "a.jpg": "iVBORw0KGgoBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+   },
+   "hash": "7c26a510"
+  }
+ ]
+}

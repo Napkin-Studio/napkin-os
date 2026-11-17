@@ -191,6 +191,11 @@ jobs:
           BRIEF_TESTS_OFFLINE: "1"
         run: python -m pytest -q -p no:cacheprovider
 
+      # The shared Style Pack reader (engine/visuals): the hash both the Territory tool and the Deck use.
+      - name: Style Pack reader tests
+        working-directory: engine
+        run: PYTHONPATH=. python -m pytest -q -p no:cacheprovider visuals/tests
+
       - name: Agent-server tests
         working-directory: engine/agent-server
         env:
