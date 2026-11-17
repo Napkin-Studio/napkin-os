@@ -1,26 +1,23 @@
-import { readFileSync } from 'node:fs'
+// @vitest-environment happy-dom
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { NapkinLoader } from './NapkinLoader'
 
-// The approved artboard (ui-behaviour 6.8): one SVG pattern, copied verbatim.
-const ARTBOARD = readFileSync(new URL('../../../../../docs/production-tool/ui-mocks/Loader.dc.html', import.meta.url), 'utf8')
-const CSS = readFileSync(new URL('./loader.css', import.meta.url), 'utf8')
-
-describe('the Napkin loader', () => {
-  it('draws the artboard\'s SVG, with only size, work and state changed', () => {
-    const theirs = ARTBOARD.match(/<svg class="napkin-loader" data-work="\{\{k\.id\}\}" data-state="\{\{ui\.state\}\}" width="14" height="14"[^>]*>.*?<\/svg>/s)![0]
-      .replace('{{k.id}}', 'plan').replace('{{ui.state}}', 'run').replace('width="14" height="14"', 'width="20" height="20"')
-    expect(renderToStaticMarkup(createElement(NapkinLoader, { work: 'plan', size: 20 }))).toBe(theirs)
+// The working sign is the shell's Deep O (features/production-new-ui.clan), never the quadrant loader.
+describe('the working sign', () => {
+  it('draws the Deep O, turning while a job runs', () => {
+    const html = renderToStaticMarkup(createElement(NapkinLoader, { work: 'plan', size: 20 }))
+    expect(html).toContain('class="deep-o-static"')
+    expect(html).toContain('data-state="working"')
+    expect(html).toMatch(/deep-o-spin|deep-o-dash/)
+    expect(html).not.toContain('nl-c0')
   })
-  it('keeps the artboard\'s CSS block as it is', () => {
-    const block = ARTBOARD.match(/\/\* napkin-loader \*\/.*?\/\* \/napkin-loader \*\//s)![0]
-    expect(CSS).toContain(block)
-  })
-  it('is still for queued and finish, and for reduced motion', () => {
+  it('is still for queued, finish and flat', () => {
+    for (const p of [{ state: 'queued' as const }, { state: 'finish' as const }, { flat: true }]) {
+      const html = renderToStaticMarkup(createElement(NapkinLoader, p))
+      expect(html).not.toMatch(/deep-o-spin|deep-o-dash/)
+    }
     expect(renderToStaticMarkup(createElement(NapkinLoader, { state: 'queued' }))).toContain('data-state="queued"')
-    expect(CSS).toMatch(/@media \(prefers-reduced-motion: reduce\)/)
-    expect(CSS).toContain('[data-motion="still"] .napkin-loader')
   })
 })

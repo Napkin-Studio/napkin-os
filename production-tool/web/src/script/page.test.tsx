@@ -114,10 +114,10 @@ describe('Plan shots and what comes next (ui-behaviour 3.10, 3.5)', () => {
     expect(el.querySelector('.se-next')).toBeNull()
   })
 
-  it('a script with words and no storyboard: Dex says what is next, and Plan shots makes the storyboard and plans on it', async () => {
+  it('a script with words and no storyboard: The Director agent says what is next, and Plan shots makes the storyboard and plans on it', async () => {
     const { el, services, scriptId } = await open(secondScript('EXT. CLIFFS - DAWN. A runner crests the cliff and drinks Lumen water.'))
     await settle()
-    expect(el.querySelector('.se-next')?.textContent).toMatch(/Dex · directs: I'll read your words as they are and plan about 6 shots\. Nothing needs a heading or an element first\./)
+    expect(el.querySelector('.se-next')?.textContent).toMatch(/Director agent: I'll read your words as they are and plan about 6 shots\. Nothing needs a heading or an element first\./)
     // Make video sits beside Plan shots in the bar (mock state 'prose'), not on Dex's line.
     expect(el.querySelector('.se-next')?.textContent).not.toContain('Make video')
     expect(button(el, 'Make video')!.disabled).toBe(false)
@@ -142,7 +142,7 @@ describe('the Script editor page', () => {
     expect(el.textContent).toContain('Script · ')
     // A plain page (features/script-freeform.clan, mock state 'empty').
     expect(el.textContent).toContain('Just write.')
-    expect(el.textContent).toContain('←Canvas')
+    expect(el.textContent).toContain('›Canvas›')
     expect(el.textContent).toContain('Plan shots')
     expect(el.textContent).not.toMatch(/\$|free|cost/i)
   })
@@ -196,7 +196,7 @@ describe('the Script editor page', () => {
     expect(el.querySelector('.av-row.open .av-marker')?.textContent).toBe('0:00')
   })
 
-  it("'This script' at the foot of Skye's Booth lists a name with no ref yet, with the shots that use it", async () => {
+  it("'This script' at the foot of the Script agent's Booth lists a name with no ref yet, with the shots that use it", async () => {
     const { services, el, render } = await open()
     const store = services.clan!
     await act(async () => {
@@ -216,7 +216,7 @@ describe('the Script editor page', () => {
   it('← Canvas leaves the route and goes back to the canvas', async () => {
     const { el, router, services } = await open()
     await settle()
-    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === '←Canvas')!.click() })
+    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === 'Canvas')!.click() })
     expect(router.get()).toEqual({ kind: 'none' })
     expect(services.ui.get().stage).toBe('character')
   })
@@ -293,7 +293,7 @@ describe('the Script editor page', () => {
   })
 })
 
-describe("Skye's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writing that now')", () => {
+describe("The Script agent's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writing that now')", () => {
   /** Skye's write job waiting on her question, as the runner writes it: the job at needs_input, its open ask,
    *  and this browser's request naming the item it was for. */
   const waitingWrite = async (services: import('../app/context').Services, scriptId: string, target: { kind: 'scene' | 'shot' | 'beat'; id: string }) => {
@@ -313,7 +313,7 @@ describe("Skye's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writ
     return { jobId, askId: q }
   }
 
-  it("a question whose item is gone waits in Skye's Booth (features/script-freeform.clan)", async () => {
+  it("a question whose item is gone waits in the Script agent's Booth (features/script-freeform.clan)", async () => {
     const { services, el, render, scriptId } = await open()
     let askId = ''
     await act(async () => { askId = (await waitingWrite(services, scriptId, { kind: 'scene', id: id('scene') })).askId })

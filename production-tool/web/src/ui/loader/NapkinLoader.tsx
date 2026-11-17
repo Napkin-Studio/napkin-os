@@ -1,36 +1,26 @@
-// The loader is the Napkin logo at work (ui-behaviour 6; approved artboard Loader): four quadrant
-// cards round a centre pin; the leading card is the department of the work (create, plan, learn,
-// produce). One SVG pattern, copied verbatim; only width, height, data-work and data-state change.
-// The words always sit beside it (a status line, a label): the SVG itself is aria-hidden.
-// It turns in two places only (owner, 2026-10-15; ui-behaviour 6.5): the busy pointer's badge
-// and the top bar's job button. Everywhere else a job runs, the crew member doing it shows working
-// (ui/agents/AgentFigure). places.test.ts holds that.
+// The working sign is the Deep O (features/production-new-ui.clan; app/src/brand/deepOSvg.ts, the shell's
+// own mark), in the agency's colours: it replaces the October quadrant loader. It turns in two places
+// only (owner, 2026-10-15; ui-behaviour 6.5): the busy pointer's badge and the bar's job chip; the
+// medallion shows the same state. Everywhere else a job runs, the agent doing it shows working (its role
+// sphere). places.test.ts holds that. The words always sit beside it: the mark itself says nothing.
 
 import type { Work } from '../agents/cast'
-import './loader.css'
+import { DeepO } from '../shell/look'
 
 export type LoaderState = 'run' | 'finish' | 'queued'
 
-const CARD = 'M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z'
-
 export function NapkinLoader({ work = 'create', state = 'run', size = 20, flat = false }: {
+  /** The department of the work: kept for the record (data-work); the Deep O draws every job the same. */
   work?: Work
   state?: LoaderState
-  /** The full logo, still, no pulse even under reduced motion (nl-flat): the job button when nothing runs. */
+  /** Still, awake: the job chip when nothing runs but something waits. */
   flat?: boolean
-  /** 14 (the busy pointer's badge), 20 (the top bar's job button). */
   size?: 14 | 20
 }) {
+  const mark = flat ? 'awake' : state === 'finish' ? 'done' : state === 'queued' ? 'awake' : 'working'
   return (
-    <svg className={flat ? 'napkin-loader nl-flat' : 'napkin-loader'} data-work={work} data-state={state}
-      width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <g className="nl-spin">
-        <g className="nl-c nl-c3" transform="rotate(90 16 16)"><path className="nl-s" d={CARD} fill="#8B919E" /></g>
-        <g className="nl-c nl-c2" transform="rotate(180 16 16)"><path className="nl-s" d={CARD} fill="#DADDE3" /></g>
-        <g className="nl-c nl-c1" transform="rotate(270 16 16)"><path className="nl-s" d={CARD} fill="#14161B" /></g>
-        <g className="nl-c nl-c0"><path className="nl-s" d={CARD} fill="#FF4F2E" /></g>
-      </g>
-      <circle className="nl-pin" cx="16" cy="16" r="2.4" fill="#14161B" stroke="#FFFFFF" strokeWidth="1.5" />
-    </svg>
+    <span className="napkin-loader" data-work={work} data-state={state} aria-hidden="true">
+      <DeepO size={size} state={mark} />
+    </span>
   )
 }

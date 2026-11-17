@@ -23,7 +23,7 @@ import { framesOf, shotsOf, staleList, takesOf, scriptText } from '../model/sele
 import { answerShotAsk } from '../stages/storyboardEdits'
 import { sayer } from '../ui/agents/cast'
 import { MenuItem } from '../ui/Float'
-import { HistoryPanel, type HistoryFocus } from '../ui/History'
+import { DecisionsDrawer, type HistoryFocus } from '../ui/History'
 import { BackButton } from '../ui/chrome/Bar'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { LinkIcon } from '../ui/chrome/MoreMenu'
@@ -329,11 +329,11 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     // none, Dex plans on a new one, made beside the script on the canvas with its drives link.
     if (sb) {
       const r = await planOrJoin(deps, { storyboardId: sb.id })
-      if (r.joined) say('Dex is already planning these shots.')
+      if (r.joined) say('The Director agent is already planning these shots.')
       return
     }
     const r = await planFromScript(deps, scriptId)
-    if (r.made) say('Dex is planning the shots on a new storyboard, beside this script on the canvas.')
+    if (r.made) say('The Director agent is planning the shots on a new storyboard, beside this script on the canvas.')
   })
   // Out of the editor to the canvas, or to an editor over it (ui-behaviour 2.2).
   const goTo = (stage: 'character' | 'storyboard' | 'video', id?: string) => {
@@ -426,7 +426,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     const focused = k === 'scene' || k === 'heading' ? doc.scenes[id] : undefined
     const scenes = focused && sceneIsFree(focused) ? [focused] : composed.rows.flatMap((r) => (r.kind === 'scene' && sceneIsFree(r.scene) && r.scene.text?.trim() ? [r.scene] : []))
     const targets = scenes.length ? scenes : focused ? [focused] : []
-    if (!targets.length) return setError('Write something first: Skye lays out the words on the page.')
+    if (!targets.length) return setError('Write something first: The Script agent lays out the words on the page.')
     void attempt(async () => {
       for (const sc of targets) await startWrite(skyeDeps, store, scriptId, { kind: 'scene', id: sc.id }, 'instruct', { instruction: FORMAT_INSTRUCTION, mode: 'revise' })
     })
@@ -486,7 +486,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
           <div className="sp-hint" aria-hidden="true">
             <div className="big">Just write.</div>
             <p>An idea, notes, bullets or a whole screenplay: type or paste it here and it stays as you wrote it. Nothing to pick first.</p>
-            <p>Want a draft? Tell Skye in the Booth. Her words wait there until you keep them.</p>
+            <p>Want a draft? Tell the Script agent in the Booth. Its words wait there until you keep them.</p>
             <div className="ways"><span>Prose and bullets stay prose</span><span>A pasted screenplay keeps its layout</span><span>Fountain files too</span></div>
           </div>
         )}
@@ -621,7 +621,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             })}
             onWhy={openWhy} onError={setError} say={say} />
         )}
-        {history && <HistoryPanel key={historyFocus?.addresses.join() ?? 'all'} store={store} focus={historyFocus} onClose={() => { setHistory(false); setHistoryFocus(undefined) }} />}
+        {history && <DecisionsDrawer key={historyFocus?.addresses.join() ?? 'all'} store={store} focus={historyFocus} onClose={() => { setHistory(false); setHistoryFocus(undefined) }} />}
       </div>
     </div>
   )

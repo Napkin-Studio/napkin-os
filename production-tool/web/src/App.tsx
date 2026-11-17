@@ -6,7 +6,7 @@ import type { CanvasSnapshot } from './canvas/controller'
 import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
 import { Video } from './stages/Video'
-import { HistoryPanel } from './ui/History'
+import { DecisionsDrawer } from './ui/History'
 import { RemakeBar } from './ui/Follow'
 import { CanvasBar } from './ui/chrome/TopBars'
 import { BusyPointer } from './ui/loader/BusyPointer'
@@ -80,7 +80,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         </div>}
         {/* The Video editor shows it in its timeline head (stages/Video.tsx). */}
         {stage === 'storyboard' && <RemakeBar />}
-        {panel === 'history' && <HistoryPanel store={clan} onClose={() => setPanel(null)} />}
+        {panel === 'history' && <DecisionsDrawer store={clan} onClose={() => setPanel(null)} />}
       </div>
       {script && <Suspense fallback={<div className="se" role="status" aria-busy="true" />}><ScriptEditor key={script} scriptId={script} /></Suspense>}
       <UpdateBox />

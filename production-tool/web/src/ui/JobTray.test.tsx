@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { DocJob, JobState } from '../contracts/types'
 import type { JobCtx } from '../doc/ui'
 import { JobButton } from './JobTray'
-import { jobLine, jobLook, trayGroups } from './tray'
+import { chipText, jobLine, jobLook, trayGroups } from './tray'
 
 // The job button (features/topbar-declutter.clan; owner 2026-10-15: "The button which shows agent
 // working can be just the icon rotating"): the Napkin logo alone in the bar, no words and no count.
@@ -24,34 +24,35 @@ const visibleText = (html: string) => html.replace(/<[^>]+>/g, '').trim()
 
 describe('the job button is the Napkin logo alone', () => {
   it('3 running: the turning logo, no visible words or count; the line is in the tooltip and the label', () => {
-    const html = button([job('a', 'frame', 'submitted'), job('b', 'clip', 'submitted'), job('c', 'clip', 'fetching')], 'Wren is making frame 3')
+    const html = button([job('a', 'frame', 'submitted'), job('b', 'clip', 'submitted'), job('c', 'clip', 'fetching')], 'The Camera agent is making frame 3')
     expect(html).toContain('class="napkin-loader"')
     expect(html).toContain('data-state="run"')
     expect(html).toContain('data-spin="run"')
     expect(visibleText(html)).toBe('')
-    expect(html).toContain('aria-label="Wren is making frame 3 · 3 running"')
-    expect(html).toContain('data-tip="Wren is making frame 3 · 3 running"')
+    expect(html).toContain('aria-label="The Camera agent is making frame 3 · 3 running"')
+    expect(html).toContain('data-tip="The Camera agent is making frame 3 · 3 running"')
     expect(html).not.toContain('aria-live')
     expect(html).not.toContain('jb-mark')
   })
-  it('only a queued job (the screenshot\'s "Skye is waiting to start a draft"): the still logo, no words', () => {
-    const html = button([job('a', 'script_draft' as DocJob['op'], 'queued')], 'Skye is waiting to start a draft')
+  it('only a queued job (the screenshot\'s "The Script agent is waiting to start a draft"): the still logo, no words', () => {
+    const html = button([job('a', 'script_draft' as DocJob['op'], 'queued')], 'The Script agent is waiting to start a draft')
     expect(html).toContain('data-state="queued"')
     expect(visibleText(html)).toBe('')
-    expect(html).toContain('aria-label="Skye is waiting to start a draft"')
+    expect(html).toContain('aria-label="The Script agent is waiting to start a draft"')
   })
   it('a question waiting for you, nothing running: the still logo with the brand-orange needs-you mark', () => {
-    const html = button([job('q', 'shot_list', 'needs_input')], 'Dex is waiting for you')
-    expect(html).toContain('napkin-loader nl-flat')
+    const html = button([job('q', 'shot_list', 'needs_input')], 'The Director agent is waiting for you')
+    expect(html).toContain('class="napkin-loader"')
+    expect(html).toContain('data-state="awake"')
     expect(html).toContain('data-mark="ask"')
     expect(html).toContain('class="jb-mark"')
     expect(visibleText(html)).toBe('')
   })
   it('running with a question waiting: the turning logo keeps the orange mark', () => {
-    const html = button([job('a', 'frame', 'submitted'), job('q', 'shot_list', 'needs_input')], 'Wren is making frame 1')
+    const html = button([job('a', 'frame', 'submitted'), job('q', 'shot_list', 'needs_input')], 'The Camera agent is making frame 1')
     expect(html).toContain('data-spin="run"')
     expect(html).toContain('data-mark="ask"')
-    expect(html).toContain('aria-label="Wren is making frame 1 · 1 running · Waiting for you"')
+    expect(html).toContain('aria-label="The Camera agent is making frame 1 · 1 running · Waiting for you"')
   })
   it('a failure and nothing running: the still logo with the red mark, "1 failed" in words', () => {
     const html = button([job('f', 'frame', 'failed')])
@@ -75,5 +76,30 @@ describe('the job tray keeps its words off the bar', () => {
   it('the phone bar has the same button, without the ask dock or Show', () => {
     expect(readFileSync(new URL('../stages/PhoneReview.tsx', import.meta.url), 'utf8')).toContain('<JobTray phone />')
     expect(src).toContain('{!phone && <AskDock />}')
+  })
+})
+
+describe('the job chip says what is running (features/production-new-ui.clan)', () => {
+  it('"Your call" while a question waits, "Working · frame 3" while one runs, else the failures', () => {
+    expect(chipText(1, 2, 0, 'frame 3')).toBe('Your call · 1')
+    expect(chipText(0, 1, 0, 'frame 3')).toBe('Working · frame 3')
+    expect(chipText(0, 3, 1, 'frame 3')).toBe('Working · frame 3 · 3 jobs')
+    expect(chipText(0, 0, 2, undefined)).toBe('2 failed')
+    expect(chipText(0, 0, 0, undefined)).toBe('')
+  })
+  it('the chip shows its words beside the Deep O', () => {
+    const html = renderToStaticMarkup(createElement(JobButton, { look: { spin: 'run' }, line: 'The Camera agent is drawing frame 3', chip: 'Working · frame 3', open: false, onClick: () => {} }))
+    expect(html).toContain('<span class="jb-text" aria-hidden="true">Working · frame 3</span>')
+    expect(html).toContain('deep-o-static')
+  })
+})
+
+describe('the job chip says what is happening (features/production-new-ui.clan)', () => {
+  it('Your call while a question waits, Working with the lead job, else the failures', async () => {
+    const { chipText } = await import('./tray')
+    expect(chipText(1, 2, 0, 'frame 3')).toBe('Your call · 1')
+    expect(chipText(0, 1, 0, 'frame 3')).toBe('Working · frame 3')
+    expect(chipText(0, 3, 0, 'frame 3')).toBe('Working · frame 3 · 3 jobs')
+    expect(chipText(0, 0, 2, undefined)).toBe('2 failed')
   })
 })

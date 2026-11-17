@@ -1,64 +1,39 @@
-// The canvas top bar and every editor's top bar (ui-behaviour 3.1, 2.3; mocks Main, Assets,
-// Storyboard, ScriptScreenplay; features/topbar-declutter.clan). Each bar keeps a small fixed set:
-// the way back, the title, at most one view switch, the job button, History, More, one primary and
-// the account. Everything else is in More. Three fit levels (fit.ts) decide what goes icon-only or
-// into More as the window narrows. No spend, cost or limit anywhere (principle 4).
+// The canvas's bar and every editor's bar (features/production-new-ui.clan; the mock is the spec): the
+// shell bar of the new UI (ui/shell/ShellBar) with the document's ▾ menu holding what More held (Export,
+// Save now, Copy link, the editor's own rows), and, under an editor's bar, the band row with its own
+// controls (the view switch, Format, meta, Undo/Redo). History is the Decisions drawer, opened from the
+// bar's Decisions button. No spend, cost or limit in any bar (principle 4); costs show only in Decisions.
 
 import { useState, type ReactNode } from 'react'
 import { usePanels } from './panels'
 import { useDoc, useServices, useShell, useShowMock } from '../../app/context'
+import { Band, Icon, ShellBar, type Crumb } from '../shell/ShellBar'
+import { ICON } from '../shell/bar'
 import { exportBundle, download } from '../../export'
 import { downloadAllMedia } from '../../media/download'
 import { viewsOnCanvas } from '../../media/names'
 import { idbGet } from '../../lib/idb'
 import type { CanvasSnapshot } from '../../canvas/controller'
-import { openAsks } from '../../model/selectors'
 import { BetaTag } from '../../dogfood/Dogfood'
 import { MenuItem } from '../Float'
 import { JobTray } from '../JobTray'
-import { SaveStatus } from '../SaveButton'
 import { UndoButtons, UndoMenuItems } from '../UndoButtons'
 import { saveTime, useSave } from '../useSave'
-import { Account, BackButton, BarSep, Brand, HomeMark, NodeIcon, Presence, type NodeKind } from './Bar'
+import { NodeIcon, Presence, type NodeKind } from './Bar'
 import { undoInMore, useFitLevel } from './fit'
-import { LinkIcon, MoreMenu } from './MoreMenu'
+import { LinkIcon } from './MoreMenu'
 
-
-const HISTORY_TIP = 'History: every decision, who made it and why'
-const HistoryIcon = () => <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M7 4v3.2l2.2 1.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>
 
 /** Whose History a bar opens: the app's panel, or the Script editor's own. */
 export interface HistoryToggle { on: boolean; toggle: () => void }
 
-function useHistoryToggle(own?: HistoryToggle): HistoryToggle {
-  const { history, toggle } = usePanels()
-  return own ?? { on: history, toggle: () => toggle('history') }
-}
-
-/** History: words at full, the clock alone at compact (its name in the tooltip and label). */
-function HistoryButton({ iconOnly, own }: { iconOnly: boolean; own?: HistoryToggle }) {
-  const h = useHistoryToggle(own)
-  return (
-    <button type="button" className={`btn pt-hist ${iconOnly ? 'icon' : ''} ${h.on ? 'on' : ''}`} aria-pressed={h.on} aria-label={iconOnly ? 'History' : undefined}
-      data-tip={HISTORY_TIP} onClick={h.toggle}>
-      <HistoryIcon />{!iconOnly && 'History'}
-    </button>
-  )
-}
-
-/** History as a row of More, where the bar has no room for it (tight). */
-function HistoryItem({ close, own }: { close: () => void; own?: HistoryToggle }) {
-  const h = useHistoryToggle(own)
-  return <MenuItem icon={<HistoryIcon />} hint={h.on ? 'open' : undefined} onSelect={() => { close(); h.toggle() }}>History</MenuItem>
-}
-
-function AssetsButton({ iconOnly }: { iconOnly: boolean }) {
+/** Assets and characters: the library, opened on purpose (it opens in the Booth beside the canvas). */
+export function AssetsButton() {
   const { assets, toggle } = usePanels()
   return (
-    <button type="button" className={`btn pt-assets ${iconOnly ? 'icon' : ''} ${assets ? 'on' : ''}`} aria-pressed={assets} aria-label={iconOnly ? 'Assets' : undefined}
-      data-tip="Assets: your references, the team library and uploads" onClick={() => toggle('assets')}>
-      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M5 2v10" stroke="currentColor" strokeWidth="1.3" /></svg>
-      {!iconOnly && 'Assets'}
+    <button type="button" className={`tba-btn pt-assets ${assets ? 'on' : ''}`} aria-pressed={assets}
+      title="Assets and characters: your references, the team library and uploads" onClick={() => toggle('assets')}>
+      <Icon d={ICON.image} /><span className="lt">Assets</span>
     </button>
   )
 }
@@ -138,124 +113,75 @@ async function copyLink(url: string): Promise<string> {
   }
 }
 
-function ShareButton() {
-  const [said, setSaid] = useState<string | null>(null)
-  const share = async () => {
-    setSaid(await copyLink(location.href))
-    setTimeout(() => setSaid(null), 2400)
-  }
-  return <button type="button" className="btn pt-share" onClick={() => void share()} aria-live="polite">{said ?? 'Share'}</button>
-}
-
-/** "2 questions waiting", only while asks are open, with ‹ › (ui-behaviour 3.17); its position is in its
- *  label. Compact and tight: the count alone. */
-function AsksPill({ short }: { short: boolean }) {
-  const doc = useDoc()
-  const asks = openAsks(doc)
-  const [at, setAt] = useState(0)
-  if (!asks.length) return null
-  const i = Math.min(at, asks.length - 1)
-  const words = `${asks.length} ${asks.length === 1 ? 'question' : 'questions'} waiting`
-  return (
-    <div className="pt-asks" role="group" aria-label={`${words}, ${i + 1} of ${asks.length}`} data-tip={`${words} · ${i + 1} of ${asks.length}`}>
-      <span className="dot" aria-hidden="true" />
-      <b>{short ? asks.length : words}</b>
-      <button type="button" aria-label="Previous question" onClick={() => setAt((i - 1 + asks.length) % asks.length)}>‹</button>
-      <button type="button" aria-label="Next question" onClick={() => setAt((i + 1) % asks.length)}>›</button>
-    </div>
-  )
-}
-
-/** The canvas's bar: Home, the brand and project, the questions, the people here, the job button, the
- *  save state, History, Assets, Share, More (Export, Save now), you. */
+/** The canvas's bar: the shell bar, with Canvas as where you are, the job chip and Assets; the ▾ menu
+ *  holds Export's rows and Save now. The questions waiting are the Decisions count (and an amber tag on
+ *  the node that asks). */
 export function CanvasBar({ presence }: { presence?: string }) {
-  const shell = useShell()
   const { project, relay } = useServices()
   const mock = useShowMock()
-  const { level } = useFitLevel()
-  const name = shell.index.get(project.id)?.name
-  const tight = level === 'tight'
   return (
-    <header className="ptbar" data-float-avoid="" data-fit={level} data-bar="canvas">
-      <HomeMark onClick={() => void shell.goHome()} />
-      <Brand project={name} wordmark={!tight} />
-      <BetaTag screen={{ stage: 'canvas', project: project.id }} />
-      {mock && relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
-      <AsksPill short={level !== 'full'} />
-      <span className="pt-grow" />
-      <Presence line={presence} />
-      <JobTray />
-      <SaveStatus dot={tight} />
-      <HistoryButton iconOnly={level !== 'full'} />
-      <AssetsButton iconOnly={level !== 'full'} />
-      {!tight && <ShareButton />}
-      <MoreMenu where="canvas" tip={tight ? 'More: export, save now, copy link' : 'More: export, save now'}>
-        {(close) => <CanvasMoreItems close={close} share={tight} />}
-      </MoreMenu>
-      <Account />
-    </header>
+    <ShellBar bar="canvas" className="ptbar" crumb={[{ label: 'Canvas' }]}
+      menu={(close) => <CanvasMoreItems close={close} share />}
+      job={<JobTray />}
+      tools={<>
+        {mock && relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
+        <BetaTag screen={{ stage: 'canvas', project: project.id }} />
+        <AssetsButton />
+      </>}
+      presence={<Presence line={presence} />} />
   )
 }
 
-/** An editor's bar: ← back, the node mark and its title (it shrinks first, with an ellipsis), the meta
- *  pills and the view switch; then presence, the job button (the same slot on every bar), the editor's
- *  own controls, Undo/Redo, History, More, the primary and the account.
- *  Compact: History goes icon-only and the meta pills move into More's head. Tight: the way back is the
- *  arrow alone, the view switch and History move into More, Undo/Redo too on a fine pointer. */
-export function EditorBar({ className = '', back, onBack, icon, title, meta, view, afterView, right, undo = false, history, moreHead, more, moreTip, primary }: {
+/** An editor's bar: the shell bar with the crumb (← where back goes › this editor's title), the job chip and
+ *  the one primary; the ▾ menu holds the editor's own rows (and, on a tight window, the view switch and
+ *  Undo/Redo). Under it, the band row: the meta pills, the view switch, the editor's own controls, Undo/Redo. */
+export function EditorBar({ className = '', back, onBack, icon, title, meta, view, afterView, right, undo = false, history, moreHead, more, primary }: {
   className?: string
   back: string
   onBack: () => void
   icon: NodeKind
   title: string
   meta?: ReactNode
-  /** The one view switch (Screenplay | Video · Audio, Picture | Sound): the bar's, or More's at tight. */
+  /** The one view switch (Screenplay | Video · Audio, Picture | Sound): the band's, or the menu's at tight. */
   view?: { label: string; options: { id: string; label: string }[]; value: string; onPick: (id: string) => void }
   /** Beside the view switch (the Script editor's Format menu); hidden at tight, as the switch is. */
   afterView?: ReactNode
   right?: ReactNode
   undo?: boolean
+  /** The editor's own Decisions (the Script editor narrows it to one item for "Why?"). */
   history?: HistoryToggle
-  /** Always at the head of More (Script's Shots from). */
+  /** Always at the head of the ▾ menu (Script's Shots from). */
   moreHead?: ReactNode
-  /** The editor's own rows of More (every editor has Copy link to this). */
+  /** The editor's own rows of the ▾ menu (every editor has Copy link to this). */
   more?: (close: () => void) => ReactNode
   moreTip?: string
   primary?: ReactNode
 }) {
   const { level, coarse } = useFitLevel()
-  const full = level === 'full'
   const tight = level === 'tight'
   const undoMore = undo && undoInMore(level, coarse)
+  const crumb: Crumb[] = [{ label: back, onClick: onBack }, { label: title }]
   return (
-    <header className={`ptbar ${className}`} data-float-avoid="" data-fit={level} data-bar={icon}>
-      <BackButton label={back} onClick={onBack} short={tight} />
-      <BarSep />
-      <NodeIcon kind={icon} />
-      <h1 className="pt-title" title={title}>{title}</h1>
-      {full && meta}
-      {view && !tight && <ViewSwitch view={view} />}
-      {!tight && afterView}
-      <span className="pt-grow" />
-      <Presence />
-      <JobTray />
-      {right}
-      {undo && !undoMore && <UndoButtons />}
-      {!tight && <HistoryButton iconOnly={!full} own={history} />}
-      <MoreMenu where={icon} tip={moreTip ?? 'More: copy link'} head={(!full && meta) || moreHead ? <>{!full && meta}{moreHead}</> : undefined}>
-        {(close) => (
+    <div className={`ptbar nui-bars ${className}`} data-bar={icon} data-fit={level}>
+      <ShellBar bar={icon} crumb={crumb} history={history} job={<JobTray />} primary={primary} presence={<Presence />}
+        menu={(close) => (
           <>
+            {moreHead && <><div className="pt-morehead">{moreHead}</div><div className="pt-menusep" /></>}
             {view && tight && <ViewItems view={view} close={close} />}
             {more?.(close)}
-            {(undoMore || tight) && <div className="pt-menusep" />}
-            {undoMore && <UndoMenuItems close={close} />}
-            {tight && <HistoryItem close={close} own={history} />}
+            {undoMore && <><div className="pt-menusep" /><UndoMenuItems close={close} /></>}
           </>
-        )}
-      </MoreMenu>
-      {primary}
-      <Account />
-    </header>
+        )} />
+      <Band label={`${title}: controls`}>
+        <h1 className="pt-title sr-title" title={title}>{title}</h1>
+        {meta}
+        {view && !tight && <ViewSwitch view={view} />}
+        {!tight && afterView}
+        <span className="band-grow" />
+        {right}
+        {undo && !undoMore && <UndoButtons />}
+      </Band>
+    </div>
   )
 }
 

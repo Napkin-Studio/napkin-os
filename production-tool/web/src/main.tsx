@@ -4,6 +4,8 @@ import './excalidrawAssets'
 import './theme'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// The new UI's tokens from the shell's own file, then the tool's (features/production-new-ui.clan).
+import '@napkin/app/shell/nui/tokens.css'
 import './styles.css'
 import { idbPersister, SnapshotStore } from './doc/store'
 import { initialAppUi, splitUi, type AppUi } from './doc/ui'

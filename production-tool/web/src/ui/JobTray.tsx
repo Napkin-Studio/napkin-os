@@ -16,11 +16,11 @@ import { jobsList, shotNumber } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
 import { AskDock } from './AskDock'
 import { hereOf, homeOf, sameHome, showAsk } from './askPlaces'
-import { whoIsWorking, workOf, type Work } from './agents/cast'
+import { jobWhat, whoIsWorking, workOf, type Work } from './agents/cast'
 import { NapkinLoader } from './loader/NapkinLoader'
 import { Float } from './Float'
 import { fmtElapsed, useElapsed } from './hooks'
-import { jobLine, jobLook, trayGroups, WAITING, whereIs, type TrayRow } from './tray'
+import { chipText, jobLine, jobLook, trayGroups, WAITING, whereIs, type TrayRow } from './tray'
 import { plainJobError } from '../jobs/errorWords'
 
 export function JobTray({ phone = false }: {
@@ -46,7 +46,8 @@ export function JobTray({ phone = false }: {
   return (
     <>
       {look && (
-        <JobButton ref={ref} look={look} line={line} open={open} work={g.working[0] ? workOf(g.working[0].job.op, g.working[0].state) : undefined}
+        <JobButton ref={ref} look={look} line={line} chip={chipText(g.waiting.length, g.working.length, g.needsYou.length, g.working[0] ? what(g.working[0]) : undefined)}
+          open={open} work={g.working[0] ? workOf(g.working[0].job.op, g.working[0].state) : undefined}
           onClick={() => setOpen(!open)} />
       )}
       <span className="pt-sr" role="status" aria-live="polite">{empty ? '' : line}</span>
@@ -64,17 +65,23 @@ export function JobTray({ phone = false }: {
     </>
   )
 
+  function what(r: TrayRow) {
+    const shotId = r.ctx && 'shotId' in r.ctx ? r.ctx.shotId : undefined
+    return jobWhat(r.job, r.ctx, shotNumber(doc, shotId) || undefined)
+  }
+
   function who(r: TrayRow) {
     const shotId = r.ctx && 'shotId' in r.ctx ? r.ctx.shotId : undefined
     return whoIsWorking(r.job, r.state, r.ctx, shotNumber(doc, shotId) || undefined)
   }
 }
 
-/** The button itself, pure for the tests: 32px (44 on touch), the logo and its mark, no words. */
-export function JobButton({ ref, look, line, open, work, onClick }: {
+/** The chip itself, pure for the tests: the Deep O (turning while a job runs) and its words. */
+export function JobButton({ ref, look, line, chip, open, work, onClick }: {
   ref?: Ref<HTMLButtonElement>
   look: NonNullable<ReturnType<typeof jobLook>>
   line: string
+  chip?: string
   open: boolean
   work?: Work
   onClick: () => void
@@ -85,6 +92,7 @@ export function JobButton({ ref, look, line, open, work, onClick }: {
       {look.spin === 'still'
         ? <NapkinLoader state="queued" flat size={20} />
         : <NapkinLoader work={work} state={look.spin} size={20} />}
+      {chip && <span className="jb-text" aria-hidden="true">{chip}</span>}
       {look.mark && <span className="jb-mark" aria-hidden="true" />}
     </button>
   )
