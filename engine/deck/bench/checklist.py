@@ -27,6 +27,7 @@ from .packets import run_ids
 
 DECK = Path(__file__).resolve().parents[1]
 ITEMS_PATH = DECK / "checklist.json"
+PER_SLIDE_PREFIXES = ("q_", "l_", "w_", "t_", "p_")   # checks that judge presented slides
 CONTENT_EXCLUDED = ("title", "appendix", "close")   # content slides: presented slides other than these (Q7)
 CREATIVE_TYPES = ("territory", "idea", "execution", "audience")   # look.pictures.on creative (contract 6.3)
 COVER_TYPES = ("title", "appendix")                                # creative_cover adds these
@@ -361,6 +362,8 @@ def l_variety(r: Run) -> dict:
         return na(NA_LAYOUT)
     if len(r.presented) < 5:
         return na("fewer than 5 presented slides")
+    if any(i not in lay[0] for i in r.presented):
+        return na("a presented slide has no layout record: its layout is unknown, not a layout of its own")
     thr = _thr(r, "l_variety")
     seq = [lay[0].get(i, {}).get("id") for i in r.presented]
     size = min(thr["window"], len(seq))
@@ -454,6 +457,8 @@ def w_density_met(r: Run) -> dict:
     if not isinstance(pref, dict) or not pref.get("level"):
         return na("deck.meta.preferences.density is absent: the build applied no density")
     level = pref["level"]
+    if not r.content:
+        return na("no presented content slide")
     bad, top = [], 0
     for i in r.content:
         n = _words(r.deck["slides"][i])
@@ -483,16 +488,19 @@ def w_line_length(r: Run) -> dict:
         return na(NA_PPTX)
     from .. import qa_render
     limit = _thr(r, "w_line_length")["max_line_in"]
-    bad, widest = [], 0.0
+    bad, widest, seen = [], 0.0, 0
     slides = list(r.prs.slides)
     for i in r.presented:
         if r.number(i) > len(slides):
             continue
         for col in qa_render.body_columns(slides[r.number(i) - 1]):
+            seen += 1
             if col["lines"] > 1:
                 widest = max(widest, col["text_in"])
                 if col["text_in"] > limit:
                     bad.append(i)
+    if not seen:
+        return na("no body text frame on a presented slide: nothing measured")
     return _verdict(bad, r.ids, round(widest, 2), limit)
 
 
@@ -571,6 +579,8 @@ def t_title_range(r: Run) -> dict:
     thr = _thr(r, "t_title_range")
     boxes = _title_boxes(r)
     sized = {i: boxes[i]["size_pt"] for i in r.content if i in boxes and boxes[i]["size_pt"] is not None}
+    if not sized:
+        return na("no presented content slide has a sized Title shape: nothing measured")
     bad = [i for i, s in sized.items() if not thr["min_pt"] <= s <= thr["max_pt"]]
     return _verdict(bad, r.ids, [min(sized.values(), default=None), max(sized.values(), default=None)], [thr["min_pt"], thr["max_pt"]])
 
@@ -598,6 +608,8 @@ def t_two_families(r: Run) -> dict:
     fams = qa_render.font_families(r.prs)
     used = sorted({f for i in r.presented for f in fams.get(r.number(i), [])})
     limit = _thr(r, "t_two_families")["max_families"]
+    if not used:
+        return na("no explicit font name on a presented slide: nothing measured")
     if len(used) <= limit:
         return yes(measured=used)
     return no([i for i in r.presented if fams.get(r.number(i))], used, limit)
@@ -620,6 +632,8 @@ def p_where_asked(r: Run) -> dict:
     else:
         types = CREATIVE_TYPES + (COVER_TYPES if on == "creative_cover" else ())
         wanted = [i for i in r.presented if r.deck["slides"][i]["type"] in types]
+    if not wanted:
+        return na("the picture preference asks for no picture on any presented slide")
     have = {s for s, _, _ in r.image_slots()}
     bad = [i for i in wanted if i not in have]
     return _verdict(bad, r.ids, len(wanted) - len(bad), len(wanted))
@@ -746,6 +760,9 @@ def run_checklist(run_dir: Path, items: dict | None = None, deck_id: str | None 
     r = Run(run_dir, items)
     results = {}
     for it in items["items"]:
+        if not r.presented and it["id"].startswith(PER_SLIDE_PREFIXES):   # nothing presented: nothing to pass
+            results[it["id"]] = na("no presented slide")
+            continue
         res = CHECKS[it["id"]](r)
         if it["kind"] == "metric" and res["answer"] == "yes":
             raise AssertionError(f"{it['id']}: a metric never answers yes")

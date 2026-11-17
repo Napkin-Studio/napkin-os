@@ -1718,6 +1718,8 @@ class Renderer:
     def render(self, out: Path, layouts_out: Path | None = None):
         """Render every slide in order and save the .pptx; with ``layouts_out``, also write the layout record there
         (after the save, so the .pptx is the same bytes either way)."""
+        if layouts_out is not None:
+            Path(layouts_out).unlink(missing_ok=True)   # a failed render must not leave an older record beside it
         nums = {sid: i for i, sid in enumerate(self.deck["order"], 1)}
         for sid in self.deck["order"]:
             self.slide(sid, self.deck["slides"][sid], nums[sid])

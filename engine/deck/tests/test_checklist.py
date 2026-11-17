@@ -390,10 +390,10 @@ def test_compare_transitions_and_formats():
     b = _file({"a": "yes", "b": "no", "c": "n/a", "d": "yes", "m": 0.5, "only_b": "yes"})
     a = _file({"a": "no", "b": "yes", "c": "yes", "d": "n/a", "m": 0.75, "only_a": "yes"})
     a["decks"]["new"] = a["decks"]["d"]
-    diff = cmp.compare(b, a)
+    diff = cmp.compare(b, a, direction={})
     ch = {c["item"]: (c["from"], c["to"]) for c in diff["decks"]["d"]["changes"]}
     assert ch == {"a": ("yes", "no"), "b": ("no", "yes"), "c": ("n/a", "yes"), "d": ("yes", "n/a")}
-    assert diff["decks"]["d"]["metrics"] == [{"item": "m", "before": 0.5, "after": 0.75, "delta": 0.25}]
+    assert diff["decks"]["d"]["metrics"] == [{"item": "m", "before": 0.5, "after": 0.75, "delta": 0.25, "direction": None, "worse": False, "lost": False}]
     assert diff["decks"]["d"]["only_before"] == ["only_b"] and diff["decks"]["d"]["only_after"] == ["only_a"]
     assert diff["only_after"] == ["new"] and diff["regressions"] == 1
     assert "| d |" in cmp.render(diff, "md") and "yes -> no" in cmp.render(diff, "text")
@@ -441,3 +441,91 @@ def test_no_network_and_no_model_imports(tmp_path, monkeypatch):
     code = "import sys, deck.bench.checklist, deck.bench.compare, deck.bench.fixtures; assert 'deck.stages' not in sys.modules"
     assert subprocess.run([sys.executable, "-c", code], cwd=DECK_DIR.parent, capture_output=True).returncode == 0
     assert json.loads((tmp_path / "o.json").read_text())["decks"]["run"]["summary"]["yes"] > 10
+
+
+# ---------------------------------------------------------------- review fixes
+
+PER_SLIDE = [i for i in IDS if i.startswith(cl.PER_SLIDE_PREFIXES)]
+
+
+def _only_appendix(deck):
+    deck["order"] = ["s1"]
+    deck["slides"] = {"s1": _slide(1, "appendix")}
+
+
+def _empty(deck):
+    deck["order"], deck["slides"] = [], {}
+
+
+@pytest.mark.parametrize("edit", [_only_appendix, _empty], ids=["appendix_only", "empty"])
+def test_a_deck_with_nothing_presented_passes_nothing(tmp_path, edit):
+    res = cl.run_checklist(make(tmp_path, deck_edit=edit, pptx=None))["results"]
+    assert [i for i in PER_SLIDE if res[i]["answer"] == "yes"] == []
+    assert all(res[i]["answer"] == "n/a" and res[i]["reason"] == "no presented slide" for i in PER_SLIDE)
+    assert not any(v["answer"] == "value" for k, v in res.items() if k.startswith("m_share") or k == "m_median_words")
+
+
+def test_nothing_measured_is_na(tmp_path):
+    def two(deck):   # presented: a title and a close only, so no content slide
+        deck["order"] = ["s1", "s6"]
+        deck["slides"] = {"s1": _slide(1, "title"), "s6": _slide(6, "close")}
+        deck["meta"]["preferences"] = {"density": {"level": "lean"}, "pictures": {"on": "creative"}}
+    r = cl.run_checklist(make(tmp_path / "a", deck_edit=two))["results"]
+    assert r["w_density_met"]["answer"] == "n/a" and r["p_where_asked"]["answer"] == "n/a"
+    assert r["t_title_range"]["answer"] == "n/a"          # no content slide to measure
+    run = make(tmp_path / "b")
+    prs = Presentation(run / "deck.pptx")
+    for sl in prs.slides:
+        for sh in list(sl.shapes):
+            sh._element.getparent().remove(sh._element)   # slides with no text at all
+    prs.save(run / "deck.pptx")
+    r = cl.run_checklist(run)["results"]
+    for i in ("t_two_families", "w_line_length", "t_title_range"):
+        assert r[i]["answer"] == "n/a", i
+
+
+def test_variety_with_a_slide_missing_from_the_sidecar_is_na(tmp_path):
+    lay = {"version": 1, "theme": "napkin", "slides": {f"s{i}": {"id": l, "chosen": l, "fallback": False, "relaxed": False}
+                                                      for i, l in enumerate(LAYOUT_SEQ, 1) if i != 3}}
+    assert answer(make(tmp_path, layouts=lay), "l_variety")["answer"] == "n/a"
+
+
+def test_a_failed_render_leaves_no_old_layout_record(tmp_path, monkeypatch):
+    from deck.inputs import Inputs
+    old = tmp_path / "layouts.json"
+    old.write_text('{"stale": true}')
+    monkeypatch.setattr(render_pptx.Renderer, "slide", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    with pytest.raises(RuntimeError):
+        render_pptx.render(_golden_deck(), Inputs(brief={}), tmp_path / "d.pptx", layouts_out=old)
+    assert not old.exists()
+
+
+def test_compare_flags_lost_coverage_and_n_a_to_no():
+    b = _file({"a": "yes", "b": "n/a", "c": "yes", "gone": "yes"})
+    b["decks"]["old"] = b["decks"]["d"]
+    a = _file({"a": "n/a", "b": "no", "c": "yes"})
+    diff = cmp.compare(b, a, direction={})
+    assert diff["lost_coverage"] == 3          # yes to n/a, the item missing after, the deck missing after
+    assert diff["regressions"] == 1            # n/a to no
+    assert cmp.failed(diff)
+    assert not cmp.failed(cmp.compare(_file({"a": "yes"}), _file({"a": "yes"}), direction={}))
+    assert cmp.compare(_file({"a": "yes"}, 1), _file({"a": "yes"}, 2), direction={})["lost_coverage"] == 1
+    assert cmp.compare(_file({"m": 0.5}), _file({"m": "n/a"}), direction={"m": "lower"})["lost_coverage"] == 1
+
+
+def test_every_metric_has_a_direction_and_compare_flags_the_worse_way(tmp_path):
+    dirs = {i["id"]: i.get("direction") for i in ITEMS["items"] if i["kind"] == "metric"}
+    assert dirs == {"m_usd": "lower", "m_seconds": "lower", "m_share_le_30": "higher", "m_share_le_60": "higher",
+                    "m_median_words": "lower", "m_creative_pictured": "higher"}
+    base = _file({"m_usd": 1.0, "m_share_le_30": 0.5})
+    worse = cmp.compare(base, _file({"m_usd": 1.5, "m_share_le_30": 0.4}), direction=dirs)
+    assert worse["metric_regressions"] == 2 and cmp.failed(worse)
+    better = cmp.compare(base, _file({"m_usd": 0.5, "m_share_le_30": 0.9}), direction=dirs)
+    assert better["metric_regressions"] == 0 and not cmp.failed(better)
+    assert cmp.compare(base, _file({"m_usd": 1.05, "m_share_le_30": 0.5}), tolerance=0.1, direction=dirs)["metric_regressions"] == 0
+    b, a = tmp_path / "b.json", tmp_path / "a.json"
+    b.write_text(json.dumps(base))
+    a.write_text(json.dumps(_file({"m_usd": 1.5, "m_share_le_30": 0.5})))
+    assert bench_main(["compare", str(b), str(a)]) == 0
+    assert bench_main(["compare", str(b), str(a), "--fail-on-regress"]) == 1
+    assert bench_main(["compare", str(b), str(a), "--fail-on-regress", "--tolerance", "1"]) == 0

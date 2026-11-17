@@ -51,7 +51,8 @@ def main(argv=None) -> int:
     k.add_argument("before", type=Path)
     k.add_argument("after", type=Path)
     k.add_argument("--format", choices=("text", "md", "json"), default="text")
-    k.add_argument("--fail-on-regress", action="store_true", help="exit 1 when any yes became no")
+    k.add_argument("--fail-on-regress", action="store_true", help="exit 1 on a regression, a worse metric or lost coverage")
+    k.add_argument("--tolerance", type=float, default=0.0, help="a metric may move the worse way by this much (default 0)")
     a = ap.parse_args(argv)
     try:
         if a.cmd == "checklist":
@@ -67,9 +68,9 @@ def main(argv=None) -> int:
                 print(f"{n}: {p}")
             return 0
         if a.cmd == "compare":
-            diff = compare_mod.compare(json.loads(a.before.read_text()), json.loads(a.after.read_text()))
+            diff = compare_mod.compare(json.loads(a.before.read_text()), json.loads(a.after.read_text()), a.tolerance)
             print(compare_mod.render(diff, a.format))
-            return 1 if a.fail_on_regress and diff["regressions"] else 0
+            return 1 if a.fail_on_regress and compare_mod.failed(diff) else 0
         if a.cmd == "design":
             out = experiment.design(a.clients.split(","), a.arms.split(","), [int(x) for x in a.seeds.split(",")], judges=a.judges)
         elif a.cmd == "gold":

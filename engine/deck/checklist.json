@@ -391,7 +391,8 @@
    "inputs": [
     "deck.json"
    ],
-   "na_when": "no presented content slide"
+   "na_when": "no presented content slide",
+   "direction": "higher"
   },
   {
    "id": "m_share_le_60",
@@ -402,7 +403,8 @@
    "inputs": [
     "deck.json"
    ],
-   "na_when": "no presented content slide"
+   "na_when": "no presented content slide",
+   "direction": "higher"
   },
   {
    "id": "m_median_words",
@@ -413,7 +415,8 @@
    "inputs": [
     "deck.json"
    ],
-   "na_when": "no presented content slide"
+   "na_when": "no presented content slide",
+   "direction": "lower"
   },
   {
    "id": "t_title_one_place",
@@ -499,7 +502,8 @@
     "deck.json"
    ],
    "na_when": "no presented slide of a picture type",
-   "today": "0.0 on every fixture: nothing draws a picture yet"
+   "today": "0.0 on every fixture: nothing draws a picture yet",
+   "direction": "higher"
   },
   {
    "id": "p_only_creative",
@@ -607,7 +611,8 @@
    "inputs": [
     "report.json"
    ],
-   "na_when": "report.json is missing"
+   "na_when": "report.json is missing",
+   "direction": "lower"
   },
   {
    "id": "m_seconds",
@@ -619,7 +624,8 @@
     "report.json"
    ],
    "na_when": "report.json is missing",
-   "depends_on": "time"
+   "depends_on": "time",
+   "direction": "lower"
   }
  ]
 }

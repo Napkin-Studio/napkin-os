@@ -215,7 +215,7 @@ python3 -m deck.bench compare BEFORE.json AFTER.json [--format text|md|json] [--
   the pixel items and `m_seconds`. `compare` is not a CI gate.
 - `deck/issues.py` holds `severity()` (contract section 7 default) and `slide_id_of()`; `qa_render` gained the pure measures
   `title_box`, `body_columns` and `font_families` (they add nothing to qa.json).
-- Tests: `tests/test_checklist.py` (58 tests). The full deck suite is 488 offline tests.
+- Tests: `tests/test_checklist.py` (65 tests). The full deck suite is 495 offline tests.
 
 ## The evaluation bench (`deck/bench`)
 
