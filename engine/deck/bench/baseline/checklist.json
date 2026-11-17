@@ -1,6 +1,6 @@
 {
  "version": 1,
- "items_version": 1,
+ "items_version": 2,
  "decks": {
   "agency_pitch": {
    "run_dir": "agency_pitch",
@@ -116,17 +116,7 @@
      "limit": 0
     },
     "w_line_length": {
-     "answer": "no",
-     "slides": [
-      "s01",
-      "s04",
-      "s05",
-      "s08",
-      "s09",
-      "s10"
-     ],
-     "measured": 11.53,
-     "limit": 4.9
+     "answer": "yes"
     },
     "m_share_le_30": {
      "answer": "value",
@@ -165,8 +155,8 @@
      "slides": [
       "s01"
      ],
-     "measured": 44.0,
-     "limit": 60
+     "measured": 1.22,
+     "limit": 1.4
     },
     "t_two_families": {
      "answer": "yes",
@@ -222,7 +212,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 3.1,
+     "value": 5.5,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -232,26 +222,43 @@
       "fit": null,
       "e": null,
       "red_team": null,
-      "assemble": 0.01,
+      "assemble": 0.0,
       "validate": 0.01,
-      "render_pptx": 0.21,
+      "render_pptx": 0.24,
       "render_web": 0.0,
-      "render_pdf_png": 2.58,
-      "qa_render": 0.32
+      "render_pdf_png": 4.93,
+      "qa_render": 0.34
      }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "363d4221c4e6"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
     }
    },
    "summary": {
-    "yes": 21,
-    "no": 5,
-    "na": 15,
+    "yes": 22,
+    "no": 4,
+    "na": 18,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 14,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 3.1
+     "m_seconds": 5.5,
+     "w_words_sha": "363d4221c4e6"
     }
    }
   },
@@ -328,7 +335,6 @@
     "l_variety": {
      "answer": "no",
      "slides": [
-      "s01",
       "s02",
       "s03",
       "s04",
@@ -339,7 +345,7 @@
       "s09",
       "s10"
      ],
-     "measured": 5,
+     "measured": 4,
      "limit": 6
     },
     "l_in_library": {
@@ -371,17 +377,7 @@
      "answer": "yes"
     },
     "w_line_length": {
-     "answer": "no",
-     "slides": [
-      "s01",
-      "s02",
-      "s03",
-      "s05",
-      "s08",
-      "s10"
-     ],
-     "measured": 11.71,
-     "limit": 4.9
+     "answer": "yes"
     },
     "m_share_le_30": {
      "answer": "value",
@@ -411,8 +407,8 @@
      "slides": [
       "s01"
      ],
-     "measured": 44.0,
-     "limit": 60
+     "measured": 1.22,
+     "limit": 1.4
     },
     "t_two_families": {
      "answer": "yes",
@@ -468,7 +464,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 2.7,
+     "value": 5.7,
      "stages": {
       "inputs": 0.0,
       "a0": 0,
@@ -479,24 +475,41 @@
       "red_team": null,
       "assemble": 0.0,
       "validate": 0.01,
-      "render_pptx": 0.11,
+      "render_pptx": 0.18,
       "render_web": 0.0,
-      "render_pdf_png": 2.28,
-      "qa_render": 0.28
+      "render_pdf_png": 5.04,
+      "qa_render": 0.47
      }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "2003ece26ded"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
     }
    },
    "summary": {
-    "yes": 23,
-    "no": 3,
-    "na": 15,
+    "yes": 24,
+    "no": 2,
+    "na": 18,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
      "m_median_words": 4,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 2.7
+     "m_seconds": 5.7,
+     "w_words_sha": "2003ece26ded"
     }
    }
   },
@@ -572,7 +585,7 @@
     },
     "l_variety": {
      "answer": "n/a",
-     "reason": "fewer than 5 presented slides"
+     "reason": "fewer than 5 presented content slides"
     },
     "l_in_library": {
      "answer": "yes"
@@ -633,8 +646,8 @@
      "slides": [
       "s01"
      ],
-     "measured": 44.0,
-     "limit": 60
+     "measured": 1.22,
+     "limit": 1.4
     },
     "t_two_families": {
      "answer": "yes",
@@ -690,7 +703,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 1.9,
+     "value": 5.2,
      "stages": {
       "inputs": 0.0,
       "i": 0,
@@ -699,24 +712,41 @@
       "red_team": null,
       "assemble": 0.0,
       "validate": 0.01,
-      "render_pptx": 0.04,
+      "render_pptx": 0.12,
       "render_web": 0.0,
-      "render_pdf_png": 1.78,
-      "qa_render": 0.12
+      "render_pdf_png": 4.84,
+      "qa_render": 0.23
      }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "20fddf54b073"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
     }
    },
    "summary": {
     "yes": 24,
     "no": 1,
-    "na": 16,
+    "na": 19,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 10,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 1.9
+     "m_seconds": 5.2,
+     "w_words_sha": "20fddf54b073"
     }
    }
   },
@@ -834,18 +864,7 @@
      "limit": 0
     },
     "w_line_length": {
-     "answer": "no",
-     "slides": [
-      "s01",
-      "s04",
-      "s06",
-      "s07",
-      "s14",
-      "s15",
-      "s16"
-     ],
-     "measured": 11.53,
-     "limit": 4.9
+     "answer": "yes"
     },
     "m_share_le_30": {
      "answer": "value",
@@ -885,8 +904,8 @@
      "slides": [
       "s01"
      ],
-     "measured": 44.0,
-     "limit": 60
+     "measured": 1.22,
+     "limit": 1.4
     },
     "t_two_families": {
      "answer": "yes",
@@ -942,7 +961,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 3.2,
+     "value": 7.5,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -953,25 +972,42 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "validate": 0.01,
-      "render_pptx": 0.17,
+      "validate": 0.02,
+      "render_pptx": 0.29,
       "render_web": 0.0,
-      "render_pdf_png": 2.6,
-      "qa_render": 0.44
+      "render_pdf_png": 6.44,
+      "qa_render": 0.67
      }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "d62d948a67a9"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
     }
    },
    "summary": {
-    "yes": 21,
-    "no": 5,
-    "na": 15,
+    "yes": 22,
+    "no": 4,
+    "na": 18,
     "metrics": {
      "m_share_le_30": 0.933,
      "m_share_le_60": 1.0,
      "m_median_words": 9,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 3.2
+     "m_seconds": 7.5,
+     "w_words_sha": "d62d948a67a9"
     }
    }
   },
@@ -1089,16 +1125,7 @@
      "limit": 0
     },
     "w_line_length": {
-     "answer": "no",
-     "slides": [
-      "s01",
-      "s05",
-      "s08",
-      "s09",
-      "s10"
-     ],
-     "measured": 11.53,
-     "limit": 4.9
+     "answer": "yes"
     },
     "m_share_le_30": {
      "answer": "value",
@@ -1137,8 +1164,8 @@
      "slides": [
       "s01"
      ],
-     "measured": 44.0,
-     "limit": 60
+     "measured": 1.22,
+     "limit": 1.4
     },
     "t_two_families": {
      "answer": "yes",
@@ -1194,7 +1221,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 2.7,
+     "value": 5.6,
      "stages": {
       "inputs": 0.0,
       "a0": 0,
@@ -1205,26 +1232,43 @@
       "fit": null,
       "e": null,
       "red_team": null,
-      "assemble": 0.0,
-      "validate": 0.01,
-      "render_pptx": 0.13,
+      "assemble": 0.01,
+      "validate": 0.02,
+      "render_pptx": 0.24,
       "render_web": 0.0,
-      "render_pdf_png": 2.28,
-      "qa_render": 0.29
+      "render_pdf_png": 4.92,
+      "qa_render": 0.44
      }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "9e74ee2219de"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
     }
    },
    "summary": {
-    "yes": 21,
-    "no": 5,
-    "na": 15,
+    "yes": 22,
+    "no": 4,
+    "na": 18,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 14,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 2.7
+     "m_seconds": 5.6,
+     "w_words_sha": "9e74ee2219de"
     }
    }
   },
@@ -1336,18 +1380,7 @@
      "limit": 0
     },
     "w_line_length": {
-     "answer": "no",
-     "slides": [
-      "s01",
-      "s02",
-      "s03",
-      "s04",
-      "s08",
-      "s09",
-      "s10"
-     ],
-     "measured": 11.43,
-     "limit": 4.9
+     "answer": "yes"
     },
     "m_share_le_30": {
      "answer": "value",
@@ -1383,8 +1416,8 @@
      "slides": [
       "s01"
      ],
-     "measured": 44.0,
-     "limit": 60
+     "measured": 1.22,
+     "limit": 1.4
     },
     "t_two_families": {
      "answer": "yes",
@@ -1440,7 +1473,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 2.9,
+     "value": 5.8,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -1451,26 +1484,43 @@
       "fit": null,
       "e": null,
       "red_team": null,
-      "assemble": 0.0,
+      "assemble": 0.01,
       "validate": 0.01,
-      "render_pptx": 0.17,
+      "render_pptx": 0.18,
       "render_web": 0.0,
-      "render_pdf_png": 2.39,
-      "qa_render": 0.33
+      "render_pdf_png": 5.11,
+      "qa_render": 0.44
      }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "529b08c764da"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
     }
    },
    "summary": {
-    "yes": 22,
-    "no": 4,
-    "na": 15,
+    "yes": 23,
+    "no": 3,
+    "na": 18,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
      "m_median_words": 11,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 2.9
+     "m_seconds": 5.8,
+     "w_words_sha": "529b08c764da"
     }
    }
   }
