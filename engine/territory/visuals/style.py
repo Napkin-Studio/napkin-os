@@ -19,9 +19,10 @@ MAX_DATA_URI = 5 * 1024 * 1024           # Runway: a data URI may be at most 5MB
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 FINISHES = ("rough", "photo-real")
 KNOWN_KEYS = ("look", "palette", "this_not_that", "finish", "banned_imagery", "notes")
+DEFAULT_SOURCE = "default until Laurence answers"   # shown on the board and in the manifest; Laurence's pack replaces it (--style <folder>)
 GUARD_VERSION = "1"                      # bump when the guard rails below change: it moves the style hash
 
-#: always in the prompt, whatever the style pack says (a "Guinness" logo once slipped into a frame)
+#: always in the prompt, whatever the style pack says (a real brand's logo once slipped into a frame)
 GUARD_RAILS = "No logos, no brand names, no readable signage or text anywhere in the frame."
 
 DEFAULT = {"look": ["natural light", "unstaged", "documentary stills"], "palette": [], "this_not_that": [],
@@ -42,7 +43,7 @@ class Style:
     notes: str = ""
     references: list = field(default_factory=list)       # Paths actually sent, at most 14, sorted by file name
     ignored_references: list = field(default_factory=list)   # names beyond the cap
-    source: str = "built-in default"
+    source: str = DEFAULT_SOURCE
     hash: str = ""
 
     def summary(self) -> dict:
@@ -78,10 +79,10 @@ def _hash(d: dict, refs: list[Path]) -> str:
 
 
 def load(style_dir: str | Path | None) -> Style:
-    """Read a style pack. ``None`` or a missing folder gives the built-in default (no references): the first run, before
+    """Read a style pack. ``None`` or a missing folder gives the default pack (no references; labelled "default until Laurence answers"): the first run, before
     Laurence's pack arrives. A folder that exists but has no style.yaml is an error: a half-made pack must not pass silently."""
     if style_dir is None:
-        raw, refs, src = dict(DEFAULT), [], "built-in default"
+        raw, refs, src = dict(DEFAULT), [], DEFAULT_SOURCE
     else:
         d = Path(style_dir)
         if not d.is_dir():
