@@ -3,7 +3,7 @@ plus tension, tier, assumes, score and proof_cases. Cards are deliberately rough
 from __future__ import annotations
 
 
-def card(t: dict, result: dict) -> dict:
+def card(t: dict, result: dict, frames: list | None = None) -> dict:
     risks = []
     if t.get("assumption_dependent"):
         risks.append("assumption-dependent: rests on an assumed audience or an invented tension")
@@ -20,11 +20,24 @@ def card(t: dict, result: dict) -> dict:
             "risks": risks, "sketch": t.get("line"),
             "tension": t.get("tension_text"), "tier": t["tier"], "assumes": assumes, "score": t.get("score"),
             "proof_cases": [proof] if proof else [], "ready": t.get("ready", False),
-            "vote": None}                                    # kill / keep / combine, set by a person
+            "vote": None,                                    # kill / keep / combine, set by a person
+            "frames": list(frames or []),                    # {path, shot, model, style_version, flagged, ...}: territory.visuals.board
+            "visual": deck_visual(frames or [], t.get("line"))}
 
 
-def cards(result: dict) -> list[dict]:
-    return [card(t, result) for t in result.get("territories", [])]
+def deck_visual(frames: list, name: str | None) -> dict | None:
+    """The Deck Maker image slot (deck.schema.json ``visual``: kind image_prompt, prompt, status) plus an ``image`` path:
+    the first frame no check or person has flagged. None when there is none, so a flagged frame never flows into a deck."""
+    ok = next((f for f in frames if not f.get("flagged")), None)
+    if not ok:
+        return None
+    return {"kind": "image_prompt", "prompt": f"Mood frame for '{name}': {ok.get('prompt', '')}".strip(), "status": "illustrative, not final",
+            "image": ok["path"]}
+
+
+def cards(result: dict, frames: dict | None = None) -> list[dict]:
+    """``frames`` maps a territory id to its frames list (territory.visuals.board.frames_for); absent, every card has none."""
+    return [card(t, result, (frames or {}).get(t["id"])) for t in result.get("territories", [])]
 
 
 def render_text(result: dict) -> str:
