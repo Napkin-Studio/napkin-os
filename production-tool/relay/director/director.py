@@ -59,6 +59,7 @@ NO_RATIO_MODELS = {"ideogram_4_5"}
 KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
 # director.v5 on (features/director-v5.clan): what the director may add beyond the participant's words,
 # per op. The prompt states these; the code refuses past 1.5 times (the relay then makes the job as written).
+TAKE_LINE_BUDGET = 120
 ADD_BUDGET = {"generate": 250, "view": 200, "frame": 500, "region_edit": 250, "clip": 300, "clip_edit": 250, "clip_patch": 250}
 # A prompt file split by "<!-- ops: a b -->" markers: the part before the first is for every op.
 SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
@@ -76,6 +77,10 @@ READINGS = ("camera", "local", "both")
 MOVE_LEAVES = {"movement", "movement_speed"}
 # Words that name the continuity frames a frame_edit never has (the old framing would come back).
 CONTINUITY_WORDS = re.compile(r"@(?:anchor|previous)\b|\b(?:anchor|previous) (?:frame|shot|picture|image)\b", re.I)
+# An edit's closing line, which a redraw never says: it brings the old people back (features/frame-edit-or-redraw.clan).
+EVERYTHING_STAYS = re.compile(r"everything else(?: in @[a-z0-9_]+)? stays(?: exactly)? as it is", re.I)
+# A recast ask's options (frame_edit and the Image editor's region_edit on a shot's frame).
+RECAST_VALUES = ("redraw", "edit")
 # Words that take one thing from a picture: "like @x", "@x's", "the dress of @x", "from @x", "as in @x".
 DONOR = re.compile(r"(?:\blike|\bfrom|\bas in|\bof)\s+@([a-z][a-z0-9_]{2,15})\b|@([a-z][a-z0-9_]{2,15})'s\b")
 
@@ -370,6 +375,10 @@ def _within_budget(job: dict, op: str, payload: dict) -> None:
     budget = ADD_BUDGET.get(op)
     if budget is None:
         return
+    if op == "clip" and payload.get("mode") in ("take", "take_refs"):
+        # A take's timed lines are Dex's own words, one per shot: the anchor block's 300 and 120 a line
+        # (features/frame-edit-or-redraw.clan; a 3-shot take on Omni Flash fell back at 556 added, 2026-11-17).
+        budget += TAKE_LINE_BUDGET * len(payload.get("shots") or [])
     prompt = job.get("prompt") or ""
     added = len(prompt) - _given_words(prompt, payload)
     if added > budget * 1.5:
@@ -612,6 +621,12 @@ class Director:
         if output.get("question") is not None:
             if "providerJob" in output or "shots" in output:
                 raise DirectorError("answered with a question and a job; send one or the other")
+            if output["question"]["kind"] == "recast":
+                if op != "region_edit" or not payload.get("shot") or payload.get("region") or payload.get("mask"):
+                    raise DirectorError("a recast ask is only for a change to a whole storyboard frame")
+                if payload.get("answer"):
+                    raise DirectorError("asked again after the person chose")
+                self._check_recast_ask(output["question"])
             if op == "clip_patch":
                 if payload.get("answer"):  # "fix" (or words) was chosen; "remake" never comes back to Dex
                     raise DirectorError("asked again after the person chose to fix this moment")
@@ -707,18 +722,29 @@ class Director:
         any, is dropped). Raises DirectorError, and the passthrough then makes the job."""
         edit, question = output.get("frameEdit"), output.get("question")
         answer = payload.get("answer") or {}
-        chosen = answer.get("value") if answer.get("value") in READINGS else None
+        value = answer.get("value")
+        chosen = value if value in READINGS else None
+        redraw = payload.get("mode") == "redraw" or value == "redraw"  # features/frame-edit-or-redraw.clan
         if question is not None:
-            if chosen:
-                raise DirectorError(f"asked again after the person chose {chosen}")
+            if redraw:
+                raise DirectorError("a redraw never asks")
+            if value:
+                raise DirectorError(f"asked again after the person chose {value}")
             if edit is not None or "providerJob" in output:
                 raise DirectorError("answered with a question and a reading; send one or the other")
-            self._check_frame_edit_ask(question)
+            if question["kind"] == "recast":
+                self._check_recast_ask(question)
+            else:
+                self._check_frame_edit_ask(question)
             return None
         if edit is None:
             raise DirectorError("a frame_edit answer needs frameEdit, its reading of the words")
         reading = edit["reading"]
         edit.pop("words_as_given", None)  # the passthrough's mark ("Dex sent your words as they are"), never Dex's
+        if redraw:
+            return self._check_redraw(payload, output, edit)
+        if reading == "redraw":
+            raise DirectorError("only a redraw is read as redraw; the person chose to edit")
         if chosen and reading != chosen:
             raise DirectorError(f"read the words as {reading}, but the person chose {chosen}")
         patch = edit.get("camera") or {}
@@ -761,6 +787,52 @@ class Director:
             job.pop("mask", None)
             job.pop("region", None)
         return run_as
+
+    @staticmethod
+    def _check_redraw(payload: dict, output: dict, edit: dict) -> str:
+        """Redraw frame (features/frame-edit-or-redraw.clan): drawn again from the shot and the words, as frame,
+        with the current frame for its place and light only. Never a previous frame, an anchor or the edit's
+        "everything else stays": the old people would come back (live test 2026-11-17, T1 against T3)."""
+        if edit["reading"] != "redraw":
+            raise DirectorError(f"a redraw is read as redraw, not {edit['reading']}")
+        was = ((payload.get("shot") or {}).get("camera")) or {}
+        changed = {k: v for k, v in (edit.get("camera") or {}).items() if was.get(k) != v}
+        if changed:
+            edit["camera"] = changed
+        else:
+            edit.pop("camera", None)
+        edit["runAs"] = "frame"
+        if payload.get("region") or payload.get("mask"):
+            edit["maskUnused"] = True  # the whole frame is drawn again
+        else:
+            edit.pop("maskUnused", None)
+        job = output.get("providerJob")
+        if job is None:
+            raise DirectorError("a redraw runs as frame and needs a providerJob")
+        if CONTINUITY_WORDS.search(job["prompt"]):
+            raise DirectorError("a redraw names no anchor or previous frame")
+        if EVERYTHING_STAYS.search(job["prompt"]):
+            raise DirectorError("a redraw never says everything else stays as it is")
+        image = payload["image"]["sha256"]
+        job["refs"] = [{"sha256": image, "name": "current", "role": "current"},
+                       *[r for r in job.get("refs") or [] if r["sha256"] != image and r.get("name") not in ("previous", "anchor")]]
+        job.pop("mask", None)
+        job.pop("region", None)
+        return "frame"
+
+    @staticmethod
+    def _check_recast_ask(question: dict) -> None:
+        """A recast (features/frame-edit-or-redraw.clan): the words swap who is in the picture, which an edit
+        cannot do. Options redraw and edit, each id its value, redraw recommended, no typed answer, no cost."""
+        options = question.get("options") or []
+        values = [o.get("value") for o in options]
+        if sorted(values) != sorted(RECAST_VALUES) or any(o["id"] != o.get("value") for o in options):
+            raise DirectorError(f"a recast offers redraw and edit, each id its value: {values}")
+        if question.get("recommended_option_id") != "redraw":
+            raise DirectorError("a recast recommends redraw")
+        question["options"] = sorted(({k: v for k, v in o.items() if k != "cost"} for o in options),
+                                     key=lambda o: RECAST_VALUES.index(o["value"]))
+        question["allow_text"] = False
 
     @staticmethod
     def _check_frame_edit_ask(question: dict) -> None:

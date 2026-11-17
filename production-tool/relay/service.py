@@ -51,6 +51,7 @@ import connected
 import cutdowns
 import soften
 import projects
+import sameness
 import time_rules
 import timeline_layers
 from blobs import checksum_header
@@ -173,6 +174,17 @@ def crew_for(op: str) -> str:
             "upscale": "rhea", "region_edit": "rhea", "clip_patch": "edie", "stitch": "edie", "cutdown": "edie", "read": "ellis",
             "transcribe": "ellis", "check": "jude"}.get(op, "wren")
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
+
+def whole_picture_models(sheet: dict, op: str) -> list[str]:
+    """The models of `op` that change a picture from words alone, with no mask (sheet mask "none"), in the
+    sheet's order: the op's own model first, then its alternates (features/frame-edit-or-redraw.clan)."""
+    spec = (sheet.get("ops") or {}).get(op) or {}
+    if not spec:
+        return []
+    own = spec.get("mask", sheet.get("mask", "none"))
+    rows = [(spec["model"], own), *((a["model"], a.get("mask", own)) for a in spec.get("alternates", []))]
+    return [m for m, mask in rows if mask == "none"]
+
 # The provider every job falls back to, once, when the op routes to it (features/runway-fallback.clan).
 FLOOR = "runway"
 NO_FALLBACK = {"moderated", "invalid_input"}  # the floor would refuse the same
@@ -498,6 +510,13 @@ class Relay:
         spec = ((sheet or {}).get("ops") or {}).get(op)
         if spec is None:
             return None
+        if op == "region_edit" and not (inp.get("region") or inp.get("mask")):
+            # A change to the whole picture with nothing marked runs on a model that edits from words alone.
+            # A mask model (Ideogram 4.5) given no mask returned the frame unchanged, and charged for it
+            # (2026-11-17; features/frame-edit-or-redraw.clan).
+            whole = [m for m in whole_picture_models(sheet, op) if self._model_on(provider, m, allow)]
+            if whole:
+                return pick["model"] if pick and pick["provider"] == provider and pick["model"] in whole else whole[0]
         if pick and pick["provider"] == provider:
             model = pick["model"] if self._model_on(provider, pick["model"], allow) else None
         elif op == "clip_edit" and (inp.get("region") or inp.get("mask")) and spec.get("regionModel"):
@@ -1294,6 +1313,9 @@ class Relay:
             spend_delta = confirmed - cost.get("reserved", 0)
             cost["confirmed"] = confirmed
             cost["unknown"] = False
+        if state == "completed" and job["op"] in ("frame_edit", "region_edit") and changes.get("outputs"):
+            if self._came_back_same(job, changes["outputs"][0]):
+                changes["unchanged"] = True
         saved = self._save(job, state=state, error=error, cost=cost, _queue=None, _released=True,
                            queuePosition=None, **changes)
         if saved is None:
@@ -1313,6 +1335,19 @@ class Relay:
                          job["cost"].get("reserved", 0),
                          confirmed / job["cost"]["reserved"] if job["cost"].get("reserved") else 0.0)
         return self._with_poll(saved)
+
+    def _came_back_same(self, job: dict, out: dict) -> bool:
+        """The edited picture is the one sent, almost pixel for pixel (sameness.py): the client offers no
+        Apply. Only pictures in our own store are read, and a picture that cannot be read is not the same."""
+        sent = ((job.get("_req") or {}).get("input") or {}).get("image") or {}
+        urls = [sent.get("url"), out.get("url")]
+        if not all(urls) or any(self.blobs.key_for_url(u) is None for u in urls):
+            return False
+        try:
+            return sameness.same_picture(self.blobs.fetch(urls[0]), self.blobs.fetch(urls[1]))
+        except Exception as e:  # never fails the job: the person still sees the picture
+            log.warning("job %s: could not compare the edit with its frame: %s", job["jobId"], e)
+            return False
 
     def _fail(self, job: dict, code: str, message: str, *, retryable: bool = False,
               provider_code: str | None = None, **kw) -> dict:
@@ -2221,6 +2256,9 @@ class Relay:
         cfg = self.config()
         chose = next((o for o in q.get("options", []) if o["id"] == body.get("optionId")), None)
         remake = job["op"] == "clip_patch" and ((chose or {}).get("value") or {}).get("route") == "remake"
+        # The Image editor's whole-frame change on a shot's frame, when the words swap who is in it: redraw the
+        # frame on the Storyboard instead (features/frame-edit-or-redraw.clan). This job ends here, free.
+        redraw = job["op"] == "region_edit" and (chose or {}).get("value") == "redraw"
         if job["op"] == "clip_patch" and not remake:
             self._claim_take(cfg, job["jobId"], job["_lock"])  # the take again, or 409 while another fix runs
         req = json.loads(json.dumps(job["_req"]))
@@ -2230,6 +2268,8 @@ class Relay:
             return self._answer_conflict(self.store.get_job(job["jobId"]))
         if remake:  # the whole clip, through the send tray: this job ends here, free, the quota back
             return 200, public(self._cancel_waiting(saved, handoff={"op": "clip"}))
+        if redraw:
+            return 200, public(self._cancel_waiting(saved, handoff={"op": "frame_edit", "mode": "redraw"}))
         starter = saved["participantId"]
         if not self.store.incr(f"inflight#{starter}", "n", 1, cfg["inFlightPerParticipant"]):
             failed = self._fail(saved, "queue_full", "Its starter has too many jobs running; answer again soon.",

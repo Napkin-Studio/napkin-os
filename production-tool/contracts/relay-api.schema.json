@@ -401,11 +401,6 @@
                   "anyOf": [
                     {
                       "required": [
-                        "mode"
-                      ]
-                    },
-                    {
-                      "required": [
                         "lastFrame"
                       ]
                     },
@@ -414,6 +409,71 @@
                         "cuts"
                       ]
                     }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "clip",
+                  "frame_edit"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "if": {
+              "properties": {
+                "op": {
+                  "const": "frame_edit"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "input": {
+                  "properties": {
+                    "mode": {
+                      "enum": [
+                        "edit",
+                        "redraw"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "input": {
+                  "properties": {
+                    "mode": {
+                      "not": {
+                        "enum": [
+                          "edit",
+                          "redraw"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "input": {
+                "not": {
+                  "required": [
+                    "mode"
                   ]
                 }
               }
@@ -1040,9 +1100,11 @@
             "take_refs",
             "frames",
             "alone",
-            "redo_window"
+            "redo_window",
+            "edit",
+            "redraw"
           ],
-          "description": "clip (features/connected-video.clan, behind flags.connectedVideo): how the clip joins the film, as the web's run planner chose. take: one generation over the run's shots (input.shots, 2 to the model's video.take.maxShots, together at most take.maxS), pinned on the first shot's frame (input.image), no refs, a timed 'Shot k [a-b s]' prompt; the job's cuts say where the model cut. take_refs: the same with no frame, the storyboard frames and named pictures as references in beat order, up to refs.max. frames: one shot from its own frame, landing on input.lastFrame when given. alone: today's clip, no last frame. redo_window: one shot's window of a take made again (input.window). Absent: alone, or frames when lastFrame is given."
+          "description": "frame_edit (features/frame-edit-or-redraw.clan): edit keeps the picture and changes what the words name (absent reads as edit); redraw draws the frame again from the shot and the words, with input.image for its place and light only and never a previous frame. clip (features/connected-video.clan, behind flags.connectedVideo): how the clip joins the film, as the web's run planner chose. take: one generation over the run's shots (input.shots, 2 to the model's video.take.maxShots, together at most take.maxS), pinned on the first shot's frame (input.image), no refs, a timed 'Shot k [a-b s]' prompt; the job's cuts say where the model cut. take_refs: the same with no frame, the storyboard frames and named pictures as references in beat order, up to refs.max. frames: one shot from its own frame, landing on input.lastFrame when given. alone: today's clip, no last frame. redo_window: one shot's window of a take made again (input.window). Absent: alone, or frames when lastFrame is given."
         },
         "lastFrame": {
           "$ref": "#/$defs/KeyframeRef",
@@ -1847,16 +1909,26 @@
         },
         "handoff": {
           "type": "object",
-          "description": "clip_patch only: the person chose to remake the whole clip when asked, so this job was cancelled (free, the quota back) and the client sends the op named here through the send tray.",
+          "description": "The person chose another op when asked, so this job was cancelled (free, the quota back) and the client sends the op named here. clip_patch: remake the whole clip (op clip, through the send tray). region_edit on a shot's frame: redraw it instead (op frame_edit, mode redraw, on the Storyboard; features/frame-edit-or-redraw.clan).",
           "properties": {
             "op": {
-              "const": "clip"
+              "enum": [
+                "clip",
+                "frame_edit"
+              ]
+            },
+            "mode": {
+              "const": "redraw"
             }
           },
           "required": [
             "op"
           ],
           "additionalProperties": false
+        },
+        "unchanged": {
+          "type": "boolean",
+          "description": "frame_edit and region_edit: the picture came back the same as the one sent (almost no pixel moved), so the client offers no Apply. The provider still charged for it (features/frame-edit-or-redraw.clan)."
         },
         "remake": {
           "type": "object",
