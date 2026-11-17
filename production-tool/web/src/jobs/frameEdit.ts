@@ -24,7 +24,7 @@ import type {
 import { routedSheet } from '../capabilities'
 import { landUpdate, updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
-import { currentFrame, currentTake, framesOf, shotName, shotNumber } from '../model/selectors'
+import { currentFrame, currentTake, framesOf, shotName, shotNumber, shotsOf } from '../model/selectors'
 import type { JobPurpose } from '../model/purpose'
 import { assetRef } from './assets'
 import { croppedTo, landingWhy } from './handlers'
@@ -66,7 +66,8 @@ export const frameEditCopy = {
   kept: 'Kept',
   made: 'New',
   keptWhat: (chips: string[]) => ['the place', 'the light', ...chips].join(', '),
-  newWhat: 'who is in it and where they stand, as you said',
+  /** The New line of a Redraw result: Dex's own sentence of who is where; an older job without one says what changed. */
+  newWhat: (who: string | undefined) => who?.trim() || 'who is in it and where they stand',
   edited: (n: number) => `Dex edited frame ${n}; everything else in it stays.`,
   notMeant: 'Not what you meant?',
   redrawLink: 'Redraw the frame',
@@ -186,9 +187,32 @@ export function cameraDiff(camera: Camera, patch: CameraPatch | undefined): { ro
 
 // ── the request ────────────────────────────────────────────────────────────────────────────────
 
+/** The frame came from a redraw (Change this frame, Redraw frame): its people are the ones the person asked for. */
+export function wasRedrawn(frame: Frame | undefined): boolean {
+  return !!frame?.edits?.some((e) => e.op === 'frame_edit' && (e.params as { reading?: string } | undefined)?.reading === 'redraw')
+}
+
+/** A redraw's cast (features/frame-edit-or-redraw.clan, 2026-11-17): the current frame of the nearest shot on the
+ *  same storyboard and in the same scene whose picked frame was itself redrawn, the one before before the one
+ *  after at each distance. Undefined when none was, so the old people never come back. */
+export function castFrameFor(d: ProductionDocument, shotId: string): Frame | undefined {
+  const shot = d.shots[shotId]
+  if (!shot) return undefined
+  const row = shotsOf(d, shot.storyboard_id).filter((s) => !shot.scene_id || s.scene_id === shot.scene_id)
+  const at = row.findIndex((s) => s.id === shotId)
+  if (at < 0) return undefined
+  for (let far = 1; far < row.length; far++) {
+    for (const i of [at - far, at + far]) {
+      const frame = i >= 0 && i < row.length ? currentFrame(d, row[i].id) : undefined
+      if (frame && wasRedrawn(frame)) return frame
+    }
+  }
+  return undefined
+}
+
 /** The frame_edit request for shot `shotId`: its picked frame (with its own shape), the shot as a job sends
  *  it, the refs it names, the words, and a box or mask when one was marked. No anchor or previous frame:
- *  the old framing must not come back. */
+ *  the old framing must not come back. A redraw takes a redrawn neighbour's frame as its cast (castFrameFor). */
 export async function frameEditInput(relay: FrameDeps['relay'], d: ProductionDocument, shotId: string, text: string,
   marked: { region?: Region; mask?: string; mode?: FrameEditMode } = {}): Promise<JobInput> {
   const shot = d.shots[shotId]
@@ -199,9 +223,11 @@ export async function frameEditInput(relay: FrameDeps['relay'], d: ProductionDoc
   if (!words) throw new Error('Say what to change.')
   const refs = await refsFor(relay, d, shot, words)
   const aspect = ownAspect(d, frame.asset)
+  const cast = marked.mode === 'redraw' ? castFrameFor(d, shotId) : undefined
   return {
     text: words.slice(0, 1000),
     ...(marked.mode === 'redraw' ? { mode: 'redraw' as const } : {}),
+    ...(cast && cast.asset !== frame.asset ? { castFrame: await assetRef(relay, cast.asset, d) } : {}),
     image: await assetRef(relay, frame.asset, d),
     ...(aspect ? { aspect } : {}),
     shot: jobShot(d, shot),

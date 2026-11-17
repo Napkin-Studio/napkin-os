@@ -8,7 +8,8 @@ import { purposeOf, purposeWords } from '../model/purpose'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { addKey, addRef, addScene, addShots as planShots, snapshotDoc } from '../test/jobFixtures'
 import {
-  applyFrameEditStep, cameBackSame, changeFrame, frameEditCopy, frameEditMode, frameEditOf, framePriceUsd, landFrameEdit, proposalOf,
+  applyFrameEditStep, cameBackSame, castFrameFor, changeFrame, frameEditCopy, frameEditInput, frameEditMode, frameEditOf, framePriceUsd,
+  landFrameEdit, proposalOf, wasRedrawn,
 } from './frameEdit'
 import { mockFrameEdit, mockRecasts } from './frameWords'
 import { drawFrame, type FrameDeps } from './frames'
@@ -20,7 +21,7 @@ import { wireJobs } from './wire'
 const SWAP = 'An Indian seller is selling the cloth to Nigerian buyers'
 const flush = () => new Promise((r) => setTimeout(r, 0))
 
-async function onMock() {
+async function onMock(shots = 1) {
   let t = 1_000_000
   let same = false
   const renderer: MockRenderer = {
@@ -38,7 +39,8 @@ async function onMock() {
     addKey(d, 'hero')
     addRef(d, 'hero', 'front', front)
     addScene(d, script)
-    planShots(d, mockShotList(script, 5, ['hero_front']).slice(0, 1))
+    const [one] = mockShotList(script, 5, ['hero_front'])
+    planShots(d, Array.from({ length: shots }, (_, i) => (i ? { ...one, action: `Shot ${i + 1} at the stall.` } : one)))
   })
   const land = async () => {
     t += 5000
@@ -47,8 +49,10 @@ async function onMock() {
     await runner.pollNow()
     await flush()
   }
-  await drawFrame(deps, 0, 'first')
-  await land()
+  for (let i = 0; i < shots; i++) {
+    await drawFrame(deps, i, i ? 'next' : 'first')
+    await land()
+  }
   return { deps, doc, ui, runner, relay, land, shotId: shotsOf(doc.get())[0].id, sameNext: () => { same = true } }
 }
 
@@ -168,5 +172,48 @@ describe('the price on the mock provider', () => {
   it('is not shown when the routed model costs nothing, and is Runway\'s when Runway is routed', () => {
     expect(framePriceUsd({ routing: { frame_edit: ['mock'] } } as never)).toBeUndefined()
     expect(framePriceUsd({ routing: { frame_edit: ['runway'] } } as never)).toBe(0.2)
+  })
+})
+
+// A redraw keeps a redrawn neighbour's people (features/frame-edit-or-redraw.clan, 2026-11-17: shot 4 of the market).
+describe('the cast frame', () => {
+  const markRedrawn = (doc: ReturnType<typeof snapshotDoc>, shotId: string) =>
+    updateDoc(doc, (d) => { currentFrame(d, shotId)!.edits = [{ op: 'frame_edit', params: { reading: 'redraw' } }] })
+
+  it('is the picked frame of the nearest redrawn shot, the one before before the one after, and none otherwise', async () => {
+    const { doc } = await onMock(4)
+    const ids = shotsOf(doc.get()).map((s) => s.id)
+    expect(ids).toHaveLength(4)
+    expect(castFrameFor(doc.get(), ids[1])).toBeUndefined()
+    await markRedrawn(doc, ids[2])
+    expect(wasRedrawn(currentFrame(doc.get(), ids[2]))).toBe(true)
+    expect(castFrameFor(doc.get(), ids[1])?.id).toBe(currentFrame(doc.get(), ids[2])!.id)
+    await markRedrawn(doc, ids[0])
+    expect(castFrameFor(doc.get(), ids[1])?.id).toBe(currentFrame(doc.get(), ids[0])!.id)
+    expect(castFrameFor(doc.get(), ids[3])?.id).toBe(currentFrame(doc.get(), ids[2])!.id)
+  })
+
+  it('goes only with a redraw, as castFrame', async () => {
+    const { doc, relay } = await onMock(2)
+    const [first, second] = shotsOf(doc.get()).map((s) => s.id)
+    await markRedrawn(doc, second)
+    const edit = await frameEditInput(relay, doc.get(), first, SWAP)
+    expect(edit.castFrame).toBeUndefined()
+    const redraw = await frameEditInput(relay, doc.get(), first, SWAP, { mode: 'redraw' })
+    expect(redraw.castFrame?.sha256).toBe(currentFrame(doc.get(), second)!.asset)
+  })
+
+  it('a redraw next to a redrawn shot sends it, and the result says who is where', async () => {
+    const { deps, doc, ui, land } = await onMock(2)
+    const [first, second] = shotsOf(doc.get()).map((s) => s.id)
+    await markRedrawn(doc, second)
+    const id = await changeFrame(deps, first, SWAP, { mode: 'redraw' })
+    expect(ui.get().jobs[id].request!.input.castFrame?.sha256).toBe(currentFrame(doc.get(), second)!.asset)
+    await land()
+    await land()
+    const job = doc.get().jobs[id]
+    expect(frameEditOf(job)?.who).toBe(`${SWAP}, as in the frame redrawn next to it.`)
+    expect(frameEditCopy.newWhat(frameEditOf(job)?.who)).toBe(`${SWAP}, as in the frame redrawn next to it.`)
+    expect(frameEditCopy.newWhat(undefined)).toBe('who is in it and where they stand')
   })
 })

@@ -78,7 +78,10 @@ export function mockRecasts(input: JobInput, answer?: string): boolean {
  *  ("Bigger how?": an ambiguity, nothing recommended, no price; or a recast, when the words swap the people). */
 export function mockFrameEdit(input: JobInput, answer?: string): { edit?: FrameEditOutput; question?: Omit<Question, 'id'> } {
   if (input.mode === 'redraw' || answer === 'redraw') {
-    return { edit: { reading: 'redraw', runAs: 'frame', words_as_given: true, ...(input.region || input.mask ? { maskUnused: true } : {}) } }
+    // who: Dex's sentence of who is where; the mock says the words back as one (the live director writes its own).
+    const said = (input.text ?? '').trim().replace(/[.\s]+$/, '')
+    const who = said ? `${said[0].toUpperCase()}${said.slice(1)}${input.castFrame ? ', as in the frame redrawn next to it' : ''}.` : undefined
+    return { edit: { reading: 'redraw', runAs: 'frame', words_as_given: true, ...(who ? { who } : {}), ...(input.region || input.mask ? { maskUnused: true } : {}) } }
   }
   if (mockRecasts(input, answer)) return { question: recastQuestion('Edit anyway') }
   if (answer === 'edit') answer = undefined

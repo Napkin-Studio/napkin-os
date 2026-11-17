@@ -147,7 +147,7 @@ describe('the switch on the Storyboard card', () => {
     await land()
     const result = card(el, 2).querySelector('.sb-result')!
     expect(result.textContent).toMatch(/Dex redrew frame 2 from the shot\./)
-    expect(result.querySelector('.sb-keeps')?.textContent).toBe('Keptthe place, the light, Medium wide, Eye levelNewwho is in it and where they stand, as you said')
+    expect(result.querySelector('.sb-keeps')?.textContent).toBe(`Keptthe place, the light, Medium wide, Eye levelNew${SWAP}.`)
     expect([...result.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Apply', 'Keep both', 'Discard'])
     expect(pressed(card(el, 2))).toBe('Redraw frame')
     expect(byText('Redo')).toBeTruthy()

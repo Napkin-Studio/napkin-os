@@ -83,6 +83,8 @@ export interface FrameEditOutput {
   camera?: CameraPatch
   maskUnused?: boolean
   words_as_given?: boolean
+  /** redraw: Dex's sentence of who is where in the new frame (features/frame-edit-or-redraw.clan, 2026-11-17). */
+  who?: string
 }
 
 export const BEAT_KINDS = ['moment', 'line', 'vo', 'music', 'sound', 'camera'] as const

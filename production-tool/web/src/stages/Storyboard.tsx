@@ -595,7 +595,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
                     ? (
                       <div className="sb-keeps">
                         <div><b>{frameEditCopy.kept}</b>{frameEditCopy.keptWhat(chips.filter((c) => c.field === 'size' || c.field === 'angle').map((c) => c.label))}</div>
-                        <div><b>{frameEditCopy.made}</b>{frameEditCopy.newWhat}</div>
+                        <div><b>{frameEditCopy.made}</b>{frameEditCopy.newWhat(frameEditOf(change.job)?.who)}</div>
                       </div>
                     )
                     : (
