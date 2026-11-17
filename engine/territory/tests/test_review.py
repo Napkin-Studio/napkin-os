@@ -335,3 +335,106 @@ def test_no_real_brand_is_named_in_the_territory_code():
         if p.name == "test_review.py":
             continue
         assert "guinness" not in p.read_text().lower(), p
+
+
+# --------------------------------------------- a create that may have reached Runway is UNKNOWN, never paid for twice
+
+class Dies(BaseException):
+    """Stands in for the process being killed mid-request."""
+
+
+class TimesOutOn(FakeRunway):
+    def __init__(self, nth: int, exc=TimeoutError("timed out"), **kw):
+        super().__init__(**kw)
+        self.nth, self.exc, self.seen = nth, exc, 0
+
+    def __call__(self, method, url, headers, body):
+        if method == "POST" and url.endswith("/text_to_image"):
+            self.seen += 1
+            if self.seen == self.nth:
+                raise self.exc
+        return super().__call__(method, url, headers, body)
+
+
+def _jobs(n=3):
+    return [{"key": f"s{i}-f1-flash", "tid": f"s{i}", "shot": "f1", "kind": "quick", "prompt": f"p{i}"} for i in range(1, n + 1)]
+
+
+def test_a_create_timeout_is_unknown_and_is_never_created_again(tmp_path):
+    rw = TimesOutOn(2)
+    man = runway.load_manifest(tmp_path)
+    res = runway.generate(runway.Client(KEY, rw), _jobs(), tmp_path, man, [], sleep=lambda s: None, log=lambda *a: None)
+    assert res["unknown"] == ["s2-f1-flash"] and man["frames"]["s2-f1-flash"]["status"] == "UNKNOWN" and res["stopped"]
+    assert runway.state(_jobs()[1], man, tmp_path) == "unknown"
+    rw2 = FakeRunway()
+    res2 = runway.generate(runway.Client(KEY, rw2), _jobs(), tmp_path, runway.load_manifest(tmp_path), [], sleep=lambda s: None, log=lambda *a: None)
+    assert [json.loads(b)["promptText"] if isinstance(b, (bytes, str)) else b["promptText"] for b in rw2.posts] == ["p3"]    # s2 is NOT created again
+    assert res2["unknown"] == ["s2-f1-flash"]
+
+
+@pytest.mark.parametrize("exc", [ConnectionResetError("reset"), OSError("network down"), ValueError("not json")])
+def test_any_failure_after_the_post_left_the_client_is_unknown_not_failed(tmp_path, exc):
+    man = runway.load_manifest(tmp_path)
+    res = runway.generate(runway.Client(KEY, TimesOutOn(1, exc)), _jobs(1), tmp_path, man, [], sleep=lambda s: None, log=lambda *a: None)
+    assert man["frames"]["s1-f1-flash"]["status"] == "UNKNOWN" and res["unknown"]
+
+
+def test_a_server_error_on_create_is_unknown_but_a_client_error_is_a_plain_failure(tmp_path):
+    for status, want in ((503, "UNKNOWN"), (400, "FAILED")):
+        d = tmp_path / str(status)
+        man = runway.load_manifest(d)
+        runway.generate(runway.Client(KEY, lambda m, u, h, b, s=status: (s, b'{"error": "x"}')), _jobs(1), d, man, [], sleep=lambda s: None, log=lambda *a: None)
+        assert man["frames"]["s1-f1-flash"]["status"] == want
+
+
+def test_the_creating_marker_is_on_disk_and_synced_before_the_post(tmp_path, monkeypatch):
+    synced, seen = [], {}
+    real = __import__("os").fsync
+    monkeypatch.setattr("os.fsync", lambda fd: synced.append(fd) or real(fd))
+
+    def spy(method, url, headers, body):
+        if method == "POST":
+            seen["disk"] = runway.load_manifest(tmp_path)["frames"]["s1-f1-flash"]["status"]
+            seen["synced"] = len(synced)
+            raise Dies()
+        return 404, b"{}"
+    with pytest.raises(Dies):
+        runway.generate(runway.Client(KEY, spy), _jobs(1), tmp_path, runway.load_manifest(tmp_path), [], sleep=lambda s: None, log=lambda *a: None)
+    assert seen["disk"] == "CREATING" and seen["synced"] >= 1
+    rw = FakeRunway()                                                         # the process died mid-request: next run must not re-create it
+    res = runway.generate(runway.Client(KEY, rw), _jobs(1), tmp_path, runway.load_manifest(tmp_path), [], sleep=lambda s: None, log=lambda *a: None)
+    assert rw.posts == [] and res["unknown"] == ["s1-f1-flash"]
+
+
+def test_the_card_counts_unknown_jobs_and_warns_they_may_be_billed(env, capsys):
+    go(env, *LIVE, rw=TimesOutOn(3))
+    capsys.readouterr()
+    code, rw, _ = go(env)
+    out = capsys.readouterr().out
+    assert "1 unknown" in out and "may already be billed" in out and "--retry-unknown" in out
+
+
+def test_retry_unknown_without_a_live_card_is_refused_and_creates_nothing(env, capsys):
+    go(env, *LIVE, rw=TimesOutOn(3))
+    for argv in (("--retry-unknown",), ("--retry-unknown", "--live"), ("--retry-unknown", "--yes-cost")):
+        code, rw, _ = go(env, *argv)
+        out = capsys.readouterr().out
+        assert code == 2 and rw.posts == [] and "RUNWAY COST CARD" in out and "--live --yes-cost" in out
+
+
+def test_retry_unknown_with_the_card_creates_the_unknown_job_once_and_a_plain_run_never_does(env, capsys):
+    go(env, *LIVE, rw=TimesOutOn(3))                                          # stops at the timeout: job 3 unknown, jobs 4 to 8 never sent
+    capsys.readouterr()
+    code, plain, _ = go(env, *LIVE)                                           # no flag: the five never-sent jobs only, not the unknown one
+    assert code == 0 and len(plain.posts) == 5 and "unknown" in capsys.readouterr().out
+    code, rw, _ = go(env, "--retry-unknown", *LIVE)
+    out = capsys.readouterr().out
+    assert code == 0 and len(rw.posts) == 1 and "1 new x  7 credits =    7 credits" in out
+    code, rw2, _ = go(env, "--retry-unknown", *LIVE)
+    assert rw2.posts == []                                                    # nothing left unknown
+
+
+def test_retry_unknown_must_fit_inside_max_usd(env):
+    go(env, *LIVE, rw=TimesOutOn(3))
+    code, rw, _ = go(env, "--retry-unknown", "--max-usd", "0.01", *LIVE)
+    assert code == 2 and rw.posts == []
