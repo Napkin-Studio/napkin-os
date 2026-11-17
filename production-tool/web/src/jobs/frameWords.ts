@@ -55,9 +55,33 @@ export function readingOf(text: string, camera: Camera, answer?: string): { read
   return Object.keys(patch).length ? { reading: 'camera', camera: patch } : { reading: 'local', camera: {} }
 }
 
+/** Words that swap who is in the picture (the mock's stand-in for Dex's recast reading; the relay's Dex reads
+ *  them himself, director.v9.1): sellers and buyers, people of another background, one person for another. */
+const RECAST = /\b(seller|sellers|buyer|buyers|shopper|shoppers|instead of|swap|swapped|replace the people|replaced by)\b/i
+
+/** The recast ask (features/frame-edit-or-redraw.clan): redraw recommended, an edit's own "anyway" option. */
+export function recastQuestion(anyway: string): Omit<Question, 'id'> {
+  return {
+    kind: 'recast', text: 'This changes who is in the picture.',
+    why: 'An edit keeps everyone already there, so it would add people rather than swap them.',
+    options: [{ id: 'redraw', label: 'Redraw frame instead', value: 'redraw' }, { id: 'edit', label: anyway, value: 'edit' }],
+    allow_text: false, recommended_option_id: 'redraw',
+  }
+}
+
+/** The mock's recast reading: words that swap the people, on a shot's frame, not yet answered. */
+export function mockRecasts(input: JobInput, answer?: string): boolean {
+  return !answer && !!input.shot && !input.region && !input.mask && RECAST.test(input.text ?? '')
+}
+
 /** What the mock relay answers for a frame_edit, as the passthrough does: its frameEdit, or the ask
- *  ("Bigger how?": an ambiguity, nothing recommended, no price). */
+ *  ("Bigger how?": an ambiguity, nothing recommended, no price; or a recast, when the words swap the people). */
 export function mockFrameEdit(input: JobInput, answer?: string): { edit?: FrameEditOutput; question?: Omit<Question, 'id'> } {
+  if (input.mode === 'redraw' || answer === 'redraw') {
+    return { edit: { reading: 'redraw', runAs: 'frame', words_as_given: true, ...(input.region || input.mask ? { maskUnused: true } : {}) } }
+  }
+  if (mockRecasts(input, answer)) return { question: recastQuestion('Edit anyway') }
+  if (answer === 'edit') answer = undefined
   const camera = input.shot?.camera ?? { size: 'medium' }
   const { reading, camera: patch } = readingOf(input.text ?? '', camera, answer)
   if (reading === 'ask') {

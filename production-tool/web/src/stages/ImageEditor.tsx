@@ -3,7 +3,7 @@
 // differs between the two is in imageEditor/subject.ts). Six tools (Select V, Brush mask B, Lasso L,
 // Text T, Crop C, Hand H or Space), the brush strip, a numbered list of edits that changes nothing
 // until Apply as new version, layers, and Rhea's actions: Fill area with its Fill and Remove, Change
-// whole frame (Ideogram 4.5 on Runway) and Upscale (Magnific on Runway). No price anywhere; each job's
+// whole frame (Gemini 3 Pro on Runway: a words-only model, as nothing is marked) and Upscale (Magnific on Runway). No price anywhere; each job's
 // cost is in History. Remove background is gone (owner, 2026-10-16: "I don't know why you still have the
 // remove the background going on").
 //
@@ -17,7 +17,12 @@ import { modelChoicesFor, modelWhere } from '../capabilities'
 import { assetRef } from '../jobs/assets'
 import { selectFrame } from '../jobs/frames'
 import type { EditTarget } from '../model/purpose'
-import { isActive } from '../jobs/runner'
+import { askOf, isActive } from '../jobs/runner'
+import { shotNumber } from '../model/selectors'
+import { SHEETS } from '../contracts/load'
+import { changeFrame, frameEditCopy } from '../jobs/frameEdit'
+import { placeAsk } from '../ui/askPlaces'
+import type { JobShot, Shot } from '../contracts/types'
 import { getBlob, idbLocation, putBlob } from '../lib/blobs'
 import { deleteFrom, removeFrame } from '../doc/remove'
 import { systemUpdate } from '../doc/store'
@@ -207,6 +212,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const regionChoice = modelChoicesFor('region_edit', config)[0]
   const upChoice = modelChoicesFor('upscale', config)[0]
   const regionModel = regionChoice ? modelWhere(regionChoice.provider, regionChoice.model) : undefined
+  // Change whole frame marks nothing, so it runs on a model that edits from words alone, as the relay picks
+  // (service.whole_picture_models): Ideogram 4.5 with no mask gave the frame back unchanged (2026-11-17).
+  const wholeChoice = modelChoicesFor('region_edit', config).find((c) => wordsOnly(c.provider, c.model)) ?? regionChoice
+  const wholeModel = wholeChoice ? modelWhere(wholeChoice.provider, wholeChoice.model) : undefined
   const upModel = upChoice ? modelWhere(upChoice.provider, upChoice.model) : undefined
 
   // Keys: the tools, [ ] for the brush, Space held for the Hand, ⌘Z and ⇧⌘Z for strokes.
@@ -286,6 +295,13 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
 
   if (!subject) return null
 
+  // Change whole frame on a shot's frame, when the words swap who is in it (features/frame-edit-or-redraw.clan):
+  // Dex offers Redraw frame N under the field, before anything is paid. Its row in Edits says so.
+  const shotNo = shotId ? shotsOfFrame(doc, shotId) : 0
+  const offerEdit = session.edits.find((e) => e.kind === 'whole' && 'jobId' in e && !!e.jobId && askOf(doc, e.jobId)?.state === 'open' && askOf(doc, e.jobId)?.question.kind === 'recast')
+  const offerJob = offerEdit && 'jobId' in offerEdit ? offerEdit.jobId : undefined
+  const offer = offerJob ? askOf(doc, offerJob) : undefined
+
   const attempt = async (what: string, fn: () => Promise<unknown>) => {
     setError(null)
     setBusy(what)
@@ -363,7 +379,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       }
     } else if (a === 'whole') {
       const words = whole.trim()
-      const jobId = await runner.submit('region_edit', { image: picture, text: words, aspect: shape }, parents, purpose)
+      const frameShot = shotId && doc.shots[shotId] ? plainShot(doc.shots[shotId]) : undefined
+      const jobId = await runner.submit('region_edit', { image: picture, text: words, aspect: shape, ...(frameShot ? { shot: frameShot } : {}) }, parents, purpose)
       setSession((s) => addEdit(s, { id: editId(), kind: 'whole', words, jobId }))
       setWhole('')
     } else {
@@ -551,13 +568,13 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 const label = editLabel(e, session, st)
                 const jobId = 'jobId' in e ? e.jobId : undefined
                 // The job's status, elapsed time and Cancel (or its question) live in its row, never over the stage.
-                const live = jobId && isActive(jobState(jobId) ?? 'completed') ? jobId : undefined
+                const live = jobId && isActive(jobState(jobId) ?? 'completed') && jobId !== offerJob ? jobId : undefined
                 return (
                   <li key={e.id} className={`${session.active === e.id ? 'on' : ''} ${live ? 'ie-hasjob' : ''}`}>
                     <button type="button" className="ie-ebody" onClick={() => { if (e.kind === 'mask') { setPicked(null); setSession((s) => ({ ...s, active: e.id })) } }}>
                       <span className="pt-mono ie-n">{i + 1}</span> {label}
                       {st === 'ready' && <span className="ie-ok">ready</span>}
-                      {st === 'running' && !live && <span className="ie-run">working</span>}
+                      {st === 'running' && !live && <span className="ie-run">{jobId && jobId === offerJob ? 'waiting for your choice' : 'working'}</span>}
                       {st === 'failed' && <span className="ie-bad">did not work</span>}
                     </button>
                     {live && <span className="ie-jobrow"><JobSlot jobId={live} row onRetried={(id) => setSession((s) => updateEdit(s, e.id, { jobId: id }))} /></span>}
@@ -645,6 +662,16 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (whole.trim() && !running) setTray('whole') } }} />
                   <button ref={wholeBtn} type="button" className="btn sm" disabled={!current || !whole.trim() || running} onClick={() => setTray('whole')}>Change</button>
                 </div>
+                {offer && offerJob && offerEdit && shotId && (
+                  <RedrawOffer askId={offer.id} n={shotNo}
+                    onRedraw={() => void attempt('handing the redraw to the Storyboard', async () => {
+                      await runner.answer(offerJob, { optionId: 'redraw' })
+                      setSession((s) => undoEdit(s, offerEdit.id))
+                      await changeFrame({ relay, doc: docStore, ui: uiStore, runner }, shotId, 'words' in offerEdit ? offerEdit.words : whole, { mode: 'redraw' })
+                      onBack()
+                    })}
+                    onAnyway={() => void attempt('sending the change', () => runner.answer(offerJob, { optionId: 'edit' }))} />
+                )}
               </div>
             )}
 
@@ -669,11 +696,50 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       {tray && (
         <EditTray anchor={tray === 'fill' ? fillBtn : tray === 'remove' ? removeBtn : tray === 'whole' ? wholeBtn : upBtn} open onClose={() => setTray(null)}
           title={TRAY_TITLE[tray]}
-          items={trayItems(tray)} model={tray === 'upscale' ? upModel : regionModel} send={TRAY_SEND[tray]}
+          items={trayItems(tray)} model={tray === 'upscale' ? upModel : tray === 'whole' ? wholeModel : regionModel} send={TRAY_SEND[tray]}
           onSend={() => send(tray)} />
       )}
     </div>
   )
+}
+
+/** Dex's offer under Change whole frame (features/frame-edit-or-redraw.clan, mock frame-edit-or-redraw-v2): the
+ *  words swap who is in the shot's frame, which a whole-frame change cannot do; nothing is paid yet. */
+function RedrawOffer({ askId, n, onRedraw, onAnyway }: { askId: string; n: number; onRedraw: () => void; onAnyway: () => void }) {
+  useEffect(() => placeAsk(askId), [askId])
+  return (
+    <div className="ie-offer" role="group" aria-label="Dex offers a redraw">
+      <div className="row"><AgentFigure agent="dex" size={24} state="needs-you" decorative /><p><b>{frameEditCopy.recast.title}</b> {frameEditCopy.recast.bodyWhole(n)}</p></div>
+      <div className="row">
+        <button type="button" className="btn sm dark" onClick={onRedraw}>{frameEditCopy.recast.redrawN(n)}</button>
+        <button type="button" className="btn sm" onClick={onAnyway}>{frameEditCopy.recast.changeAnyway}</button>
+        <span className="spacer" />
+        <span className="faint">{frameEditCopy.recast.unpaid}</span>
+      </div>
+    </div>
+  )
+}
+
+/** A region_edit model that edits from words alone (its sheet mask "none"), as the relay's whole_picture_models. */
+function wordsOnly(provider: string, model: string): boolean {
+  const sheet = SHEETS[provider as keyof typeof SHEETS] as unknown as { mask?: string; ops?: Record<string, { model: string; mask?: string; alternates?: { model: string; mask?: string }[] }> } | undefined
+  const spec = sheet?.ops?.region_edit
+  if (!spec) return false
+  const own = spec.mask ?? sheet?.mask ?? 'none'
+  const row = spec.model === model ? { mask: own } : spec.alternates?.find((a) => a.model === model)
+  return !!row && (row.mask ?? own) === 'none'
+}
+
+/** A shot as a whole-frame change sends it: enough for Dex to know the picture is its storyboard frame, its
+ *  words with no @names (the change sends none of the shot's pictures, so a name would refer to nothing). */
+function plainShot(shot: Shot): JobShot {
+  const action = (shot.action ?? '').replace(/@([a-z][a-z0-9_-]*)/gi, (_, name: string) => name.split('_')[0]).slice(0, 600)
+  return { id: shot.id, kind: shot.kind, duration_s: shot.duration_s, camera: shot.camera, action, refs: [] }
+}
+
+/** The shot's number on its storyboard (1 when it cannot be told). */
+function shotsOfFrame(doc: ReturnType<typeof useDoc>, shotId: string): number {
+  return Math.max(1, shotNumber(doc, shotId))
 }
 
 /** Why a picked layer that is not a mask cannot be painted, and what a stroke does instead. */

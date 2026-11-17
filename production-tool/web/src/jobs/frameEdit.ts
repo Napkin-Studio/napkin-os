@@ -13,13 +13,15 @@
 //   frameEditCopy    the spec's words, pinned by a test
 //
 // Each mutation runs inside one updateDoc, so each is one undo step (the *Step wrappers); the landing is
-// the crew's (landUpdate), never an undo step. No price is shown anywhere (owner decision 2026-10-13).
+// the crew's (landUpdate), never an undo step. Change this frame shows its one price, about the frame model's, under
+// the Edit parts | Redraw frame switch (owner, 2026-11-17, mock frame-edit-or-redraw-v2; features/frame-edit-or-redraw.clan).
 
 import { crewFor, newUlidId } from '../../../clan-store/src'
-import { CAMERA_WORDS } from '../contracts/load'
+import { CAMERA_WORDS, SHEETS } from '../contracts/load'
 import type {
-  Camera, CameraPatch, CameraWordField, CrewId, DocJob, Frame, FrameEditOutput, FrameReading, Job, JobInput, ProductionDocument, Region,
+  Camera, CameraPatch, CameraWordField, Config, CrewId, DocJob, Frame, FrameEditMode, FrameEditOutput, FrameReading, Job, JobInput, ProductionDocument, Region,
 } from '../contracts/types'
+import { routedSheet } from '../capabilities'
 import { landUpdate, updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import { currentFrame, currentTake, framesOf, shotName, shotNumber } from '../model/selectors'
@@ -38,7 +40,40 @@ export const frameEditCopy = {
     camera: 'Dex read this as a camera change',
     local: 'Dex read this as a local change',
     both: 'Dex read this as a camera change and a local change',
+    redraw: 'Dex redrew this frame from the shot',
   } satisfies Record<FrameReading, string>,
+  // Edit parts | Redraw frame (features/frame-edit-or-redraw.clan, mock frame-edit-or-redraw-v2).
+  mode: { edit: 'Edit parts', redraw: 'Redraw frame' } satisfies Record<FrameEditMode, string>,
+  hint: {
+    edit: 'Keeps this picture and changes only what you name. Everyone and everything else stays as it is.',
+    redraw: (n: number) => `Draws frame ${n} again from the shot. Keeps the place, the light and the camera; who is in it and where they stand come from your words.`,
+  },
+  placeholder: { edit: 'Make her scarf red', redraw: 'An Indian seller, Nigerian buyers in the line' } satisfies Record<FrameEditMode, string>,
+  send: { edit: 'Send', redraw: 'Redraw' } satisfies Record<FrameEditMode, string>,
+  price: (usd: number) => `≈ ${dollars(usd)}`,
+  recast: {
+    title: 'This changes who is in the picture.',
+    body: 'An edit keeps everyone already there, so it would add people rather than swap them. Redraw the frame instead?',
+    bodyWhole: (n: number) => `Changing the whole frame keeps everyone already there. Redraw frame ${n} from the shot instead? It opens on the Storyboard with your words.`,
+    redraw: 'Redraw frame instead',
+    redrawN: (n: number) => `Redraw frame ${n}`,
+    edit: 'Edit anyway',
+    changeAnyway: 'Change anyway',
+    unpaid: 'Nothing paid yet',
+  },
+  redrawing: (n: number) => `Dex is redrawing frame ${n}`,
+  redrew: (n: number) => `Dex redrew frame ${n} from the shot.`,
+  kept: 'Kept',
+  made: 'New',
+  keptWhat: (chips: string[]) => ['the place', 'the light', ...chips].join(', '),
+  newWhat: 'who is in it and where they stand, as you said',
+  edited: (n: number) => `Dex edited frame ${n}; everything else in it stays.`,
+  notMeant: 'Not what you meant?',
+  redrawLink: 'Redraw the frame',
+  withSame: 'with the same words.',
+  unchanged: (n: number) => `This edit came back the same as frame ${n}.`,
+  charged: (who: string, usd: number | undefined) => `${who} ${usd !== undefined ? `charged ${dollars(usd)} for it` : 'still charged for it'}. Say it another way, or redraw the frame.`,
+  redrawButton: 'Redraw frame',
   /** Laurence's step 4: a box or mask with a camera change. */
   maskUnused: 'A camera change redraws the whole frame, so the area you marked was not used.',
   /** job.director.model is passthrough. */
@@ -54,6 +89,10 @@ export const frameEditCopy = {
   newVersion: (version: number) => `v${version} new`,
 } as const
 
+function dollars(usd: number): string {
+  return '$' + usd.toFixed(2)
+}
+
 function sentence(words: string[]): string {
   const [first, ...rest] = words
   const head = first ? first[0].toUpperCase() + first.slice(1) : ''
@@ -62,6 +101,29 @@ function sentence(words: string[]): string {
 }
 
 // ── the reading ────────────────────────────────────────────────────────────────────────────────
+
+/** What Change this frame costs, about: the frame model's price on the sheet frame_edit is routed to (Runway's
+ *  when nothing routes it, as in the in-browser mock), credits times the sheet's USD per credit. */
+export function framePriceUsd(config?: Config | null): number | undefined {
+  const sheet = (config ? routedSheet('frame_edit', config) : null) ?? SHEETS.runway
+  const s = sheet as unknown as { usdPerCredit?: number; ops?: Record<string, { model?: string }>; models?: Record<string, { pricing?: { byResolution?: Record<string, number>; credits?: number } }> }
+  const model = s.ops?.frame_edit?.model ?? s.ops?.frame?.model
+  const price = model ? s.models?.[model]?.pricing : undefined
+  const credits = price?.byResolution?.['1K'] ?? price?.credits
+  return credits !== undefined && s.usdPerCredit ? Math.round(credits * s.usdPerCredit * 100) / 100 : undefined
+}
+
+/** The mode a frame_edit ran in: redraw when it was asked for, or when Dex read it so (a recast answered
+ *  Redraw frame instead); otherwise edit. */
+export function frameEditMode(job: Pick<DocJob, 'director' | 'purpose'> | undefined): FrameEditMode {
+  return job?.purpose === 'frame_edit redraw' || frameEditOf(job)?.reading === 'redraw' ? 'redraw' : 'edit'
+}
+
+/** The picture came back the same as the frame (the relay's sameness check, kept on the proposal so a reload
+ *  still knows): no Apply is offered. */
+export function cameBackSame(frame: Frame | undefined): boolean {
+  return !!frame?.edits?.some((e) => e.op === 'frame_edit' && (e.params as { unchanged?: boolean } | undefined)?.unchanged)
+}
 
 /** Dex's reading of a frame_edit job (director.schema.json frameEdit), when it has one. */
 export function frameEditOf(job: Pick<DocJob | Job, 'director'> | undefined): FrameEditOutput | undefined {
@@ -127,7 +189,7 @@ export function cameraDiff(camera: Camera, patch: CameraPatch | undefined): { ro
  *  it, the refs it names, the words, and a box or mask when one was marked. No anchor or previous frame:
  *  the old framing must not come back. */
 export async function frameEditInput(relay: FrameDeps['relay'], d: ProductionDocument, shotId: string, text: string,
-  marked: { region?: Region; mask?: string } = {}): Promise<JobInput> {
+  marked: { region?: Region; mask?: string; mode?: FrameEditMode } = {}): Promise<JobInput> {
   const shot = d.shots[shotId]
   if (!shot) throw new Error('That shot is gone.')
   const frame = currentFrame(d, shotId)
@@ -138,6 +200,7 @@ export async function frameEditInput(relay: FrameDeps['relay'], d: ProductionDoc
   const aspect = ownAspect(d, frame.asset)
   return {
     text: words.slice(0, 1000),
+    ...(marked.mode === 'redraw' ? { mode: 'redraw' as const } : {}),
     image: await assetRef(relay, frame.asset, d),
     ...(aspect ? { aspect } : {}),
     shot: jobShot(d, shot),
@@ -149,11 +212,11 @@ export async function frameEditInput(relay: FrameDeps['relay'], d: ProductionDoc
 
 /** Send Change this frame (or a Redo of `redoOf`, the earlier frame_edit job, with the reworded text). */
 export async function changeFrame(deps: FrameDeps, shotId: string, text: string,
-  opts: { region?: Region; mask?: string; redoOf?: string } = {}): Promise<string> {
+  opts: { region?: Region; mask?: string; redoOf?: string; mode?: FrameEditMode } = {}): Promise<string> {
   const d = liveGet(deps.doc)
   const input = await frameEditInput(deps.relay, d, shotId, text, opts)
   const frame = currentFrame(d, shotId)
-  const purpose: JobPurpose = { for: 'frame_edit', shotId, ...(frame ? { parentFrameId: frame.id } : {}) }
+  const purpose: JobPurpose = { for: 'frame_edit', shotId, ...(frame ? { parentFrameId: frame.id } : {}), ...(opts.mode === 'redraw' ? { mode: 'redraw' as const } : {}) }
   return deps.runner.submit('frame_edit', input, opts.redoOf ? [opts.redoOf] : [], purpose)
 }
 
@@ -168,7 +231,7 @@ export function proposalOf(d: ProductionDocument, jobId: string): Frame | undefi
 
 /** A frame_edit's picture as a new version of the shot's frame, left unpicked: the card shows it with Apply,
  *  Keep both and Discard. Nothing lands for a change of movement only (no picture), and landing twice does nothing. */
-export function landFrameEdit(d: ProductionDocument, job: Pick<Job, 'jobId' | 'outputs' | 'model' | 'provider' | 'crew' | 'op' | 'director'>,
+export function landFrameEdit(d: ProductionDocument, job: Pick<Job, 'jobId' | 'outputs' | 'model' | 'provider' | 'crew' | 'op' | 'director' | 'unchanged'>,
   ctx: { shotId: string; parentFrameId?: string }): Frame | undefined {
   const out = job.outputs?.[0]
   const shot = d.shots[ctx.shotId]
@@ -187,7 +250,7 @@ export function landFrameEdit(d: ProductionDocument, job: Pick<Job, 'jobId' | 'o
     crew: (d.jobs[job.jobId]?.crew ?? job.crew ?? crewFor(job.op)) as CrewId,
     ...(job.model ? { model: job.model } : {}),
     ...(job.provider ? { provider: job.provider } : {}),
-    edits: [{ op: 'frame_edit', ...(edit ? { params: { reading: edit.reading, ...(edit.camera ? { camera: { ...edit.camera } } : {}) } } : {}) }],
+    edits: [{ op: 'frame_edit', ...(edit || job.unchanged ? { params: { ...(edit ? { reading: edit.reading } : {}), ...(edit?.camera ? { camera: { ...edit.camera } } : {}), ...(job.unchanged ? { unchanged: true } : {}) } } : {}) }],
   }
   const crop = croppedTo(out)
   if (crop) frame.cropped_to = crop

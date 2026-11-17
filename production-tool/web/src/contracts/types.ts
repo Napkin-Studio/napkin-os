@@ -23,6 +23,8 @@ export interface TakeCutPlan { atS: number; text: string }
 export interface TakeCut { planned_s: number; found_s: number | null }
 /** relay-api clip mode (features/connected-video.clan). */
 export type ClipJobMode = 'take' | 'take_refs' | 'frames' | 'alone' | 'redo_window'
+/** frame_edit: keep the picture and change what the words name, or draw the frame again (features/frame-edit-or-redraw.clan). */
+export type FrameEditMode = 'edit' | 'redraw'
 /** continue: the clip before landed on this clip's first frame; stitch ends its window one frame early so the
  *  shared frame shows once (features/connected-video.clan). */
 export interface StitchTransition { kind: 'cut' | 'continue' | 'dissolve' | 'dip'; s?: number }
@@ -73,7 +75,8 @@ export type CameraWordField = 'size' | 'angle' | 'movement' | 'movement_speed'
 export type CameraWords = Record<CameraWordField, Record<string, { label: string; words: string[] }>>
 
 /** Change this frame (director.schema.json#/$defs/frameEdit): how Dex read the words, and what ran. */
-export type FrameReading = 'camera' | 'local' | 'both'
+/** redraw: the frame drawn again from the shot and the words (features/frame-edit-or-redraw.clan). */
+export type FrameReading = 'camera' | 'local' | 'both' | 'redraw'
 export interface FrameEditOutput {
   reading: FrameReading
   runAs: 'frame' | 'region_edit' | 'none'
@@ -187,7 +190,8 @@ export interface QuestionOption {
   detail?: string
   cost?: { estimate: number; currency: 'USD' }
 }
-export type AskKind = 'block' | 'nudge' | 'ambiguity'
+/** recast: a change to a frame would swap who is in it; options redraw and edit (features/frame-edit-or-redraw.clan). */
+export type AskKind = 'block' | 'nudge' | 'ambiguity' | 'recast'
 export interface Question {
   id: Id
   kind: AskKind
@@ -1073,7 +1077,7 @@ export interface JobInput {
   /** clip, a take: where each shot after the first starts and what happens in it. */
   cuts?: TakeCutPlan[]
   /** clip: how it is made (absent: alone, as before). */
-  mode?: ClipJobMode
+  mode?: ClipJobMode | FrameEditMode
   /** clip_patch: the note's window. clip with mode redo_window: one shot's window of a take (source, the take's
    *  video) made again, landing on its out still when withLast (the next join is a continue). */
   window?: NoteWindow | RedoWindow
@@ -1271,8 +1275,12 @@ export interface Job {
   cutdownPlan?: CutdownPlan
   /** A remake (JobRequest.remakeWith): its parent and what changed, `from` filled from the parent's held request. */
   remake?: { parentJobId: Id; parentId?: Id; delta: { field: RemakeDelta['field']; shotId?: Id; from?: unknown; to: unknown }[]; window?: { from_s: number; to_s: number }; atS?: number }
-  /** A clip_patch answered "Remake the whole clip": the client makes this op through the send tray. */
-  handoff?: { op: 'clip' }
+  /** The person chose another op when asked, and this job was cancelled, free: a clip_patch's "Remake the whole
+   *  clip" (op clip, through the send tray), or the Image editor's whole-frame change on a shot's frame answered
+   *  "Redraw frame" (op frame_edit, mode redraw, on the Storyboard; features/frame-edit-or-redraw.clan). */
+  handoff?: { op: 'clip' } | { op: 'frame_edit'; mode: 'redraw' }
+  /** frame_edit and region_edit: the picture came back the same as the one sent, so no Apply is offered. */
+  unchanged?: boolean
   createdAt: string
   updatedAt: string
 }

@@ -69,10 +69,33 @@
 .sb-change { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--soft); font-size: 13px; }
 .sb-change b { font-weight: 600; }
 .sb-change .input { flex: 1; min-width: 0; }
+/* Edit parts | Redraw frame (features/frame-edit-or-redraw.clan, mock frame-edit-or-redraw-v2): the house segmented
+   look with a dark selected segment; on a narrow card it drops under the title. */
+.sb-headrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sb-mode { display: inline-flex; padding: 2px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line); margin-left: auto; }
+.sb-mode button { height: 26px; padding: 0 11px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink2); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sb-mode button[aria-pressed='true'] { background: var(--plan); color: var(--paper); font-weight: 600; }
+.sb-mode button:disabled { cursor: default; }
+.sb-mode svg { width: 13px; height: 13px; }
+.sb-modehint { color: var(--ink2); font-size: 12.5px; line-height: 1.45; }
+.sb-cost { font-size: 11.5px; color: var(--ink3); margin-left: 4px; white-space: nowrap; }
+.sb-ask, .sb-nochange, .sb-running { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line-soft); }
+.sb-ask { border-color: var(--ask-line, #F08A6E); box-shadow: 0 0 0 4px var(--ask-glow, rgba(255, 79, 46, .08)); }
+.sb-ask .row, .sb-nochange .row, .sb-running .row, .sb-result .row { align-items: flex-start; flex-wrap: wrap; }
+.sb-ask p, .sb-nochange p { margin: 0; line-height: 1.45; flex: 1; min-width: 180px; }
+.sb-keeps { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink2); min-width: 0; }
+.sb-keeps b { color: var(--ink); font-weight: 600; margin-right: 4px; }
+.sb-notmeant { margin-top: 4px; }
+.sb-notmeant .btn.link { height: auto; padding: 0 2px; font-size: inherit; }
+.sb-bar { height: 4px; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
+.sb-bar i { display: block; height: 100%; width: 42%; background: var(--tool); border-radius: 2px; animation: sb-prog 2.4s var(--ease, ease) infinite alternate; }
+@keyframes sb-prog { from { width: 18%; } to { width: 72%; } }
+@media (prefers-reduced-motion: reduce) { .sb-bar i { animation: none; } }
+@media (max-width: 600px) { .sb-mode { margin-left: 0; } }
 .sb-changejob { height: 120px; border-radius: 8px; overflow: hidden; }
 .sb-result { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line-soft); }
 .sb-diff { display: flex; gap: 10px; align-items: flex-start; }
-.sb-proposal { position: relative; width: 72px; height: 42px; border-radius: 6px; overflow: hidden; background: var(--soft); flex: none; }
+.sb-proposal { position: relative; width: 104px; height: 58px; border-radius: 6px; overflow: hidden; background: var(--soft); flex: none; }
 .sb-proposal img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sb-proposal span { position: absolute; left: 4px; bottom: 3px; padding: 0 5px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--card) 90%, transparent); font-family: var(--f-mono); font-size: 9.5px; }
 .sb-diffrow { display: flex; gap: 6px; align-items: baseline; font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }

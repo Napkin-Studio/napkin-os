@@ -26,7 +26,7 @@ import { quotaClassOf, SPEND_POLICY } from '../contracts/load'
 import { getBlob, putBlob } from '../lib/blobs'
 import { resolveQuality, sizeLabel } from '../capabilities'
 import { hexOf } from '../lib/hash'
-import { mockFrameEdit } from '../jobs/frameWords'
+import { mockFrameEdit, mockRecasts, recastQuestion } from '../jobs/frameWords'
 import type { AnswerResult, Relay, UploadResult } from './types'
 import { RelayError } from './types'
 
@@ -68,7 +68,7 @@ interface LedgerItem {
   answer?: Answer
   answeredBy?: string
   answeredAt?: number
-  done?: { state: JobState; outputs?: Output[]; shots?: PlannedShot[]; writes?: Write[]; error?: ContractError; at: number }
+  done?: { state: JobState; outputs?: Output[]; shots?: PlannedShot[]; writes?: Write[]; error?: ContractError; at: number; handoff?: Job['handoff'] }
 }
 
 const MOCK_HOST = 'https://mock.napkin.invalid'
@@ -341,6 +341,11 @@ export class MockRelay implements Relay {
     item.answer = answer.optionId ? { option_id: answer.optionId } : { text: answer.text! }
     item.answeredBy = by
     item.answeredAt = this.opts.now()
+    // The Image editor's whole-frame change answered Redraw frame: this job ends here, free, and the
+    // Storyboard redraws the frame (the relay's handoff; features/frame-edit-or-redraw.clan).
+    if (item.req.op === 'region_edit' && answer.optionId === 'redraw') {
+      item.done = { state: 'cancelled', at: this.opts.now(), outputs: [], handoff: { op: 'frame_edit', mode: 'redraw' } }
+    }
     this.save()
     return { job: this.snapshot(jobId) }
   }
@@ -474,7 +479,9 @@ export class MockRelay implements Relay {
     const elapsed = now - (item.answeredAt ?? item.createdAt)
     const delay = this.delayFor(req.op)
     // Change this frame: the passthrough's reading of the words (jobs/frameEdit.ts), its ask included.
-    const frameEdit = req.op === 'frame_edit' ? mockFrameEdit(req.input, frameAnswer(item)) : undefined
+    const frameEdit = req.op === 'frame_edit' ? mockFrameEdit(req.input, frameAnswer(item))
+      // The Image editor's whole-frame change on a shot's frame asks the same recast (relay director.v9.1 region_edit).
+      : req.op === 'region_edit' && mockRecasts(req.input, frameAnswer(item)) ? { question: recastQuestion('Change anyway') } : undefined
     const words = `${req.input.text ?? ''} ${req.input.script ?? ''} ${(req.input.write?.lines ?? []).map((l) => l.text).join(' ')}`
     const asks = (ASK.test(words) || !!frameEdit?.question) && !req.input.answer
     let state: JobState
@@ -544,6 +551,9 @@ export class MockRelay implements Relay {
     if (item.done?.shots) job.shots = item.done.shots
     if (item.done?.writes) job.writes = item.done.writes
     if (item.done?.error) job.error = item.done.error
+    if (item.done?.handoff) job.handoff = item.done.handoff
+    // [same]: the edit came back the same picture (the relay's sameness check), so no Apply is offered.
+    if (item.done?.state === 'completed' && (req.op === 'frame_edit' || req.op === 'region_edit') && /\[same\]/i.test(req.input.text ?? '')) job.unchanged = true
     if (item.question) job.question = item.question
     if (frameEdit?.edit && state !== 'needs_input') {
       job.director = {

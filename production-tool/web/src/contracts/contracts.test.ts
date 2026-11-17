@@ -95,7 +95,7 @@ describe('the tables in common.schema.json', () => {
     const props = director.$defs.frameEdit.properties
     const edit: Required<FrameEditOutput> = { reading: 'both', runAs: 'none', camera: {}, maskUnused: true, words_as_given: true }
     expect(Object.keys(props).sort()).toEqual(Object.keys(edit).sort())
-    expect(props.reading.enum).toEqual(['camera', 'local', 'both'])
+    expect(props.reading.enum).toEqual(['camera', 'local', 'both', 'redraw']) // redraw: features/frame-edit-or-redraw.clan
     expect(props.runAs.enum).toEqual(['frame', 'region_edit', 'none'])
   })
   it('lets a script drive a storyboard and no video drive a script', () => {
