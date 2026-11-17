@@ -24,10 +24,13 @@ def frames_for(manifest: dict, vdir: Path, run_dir: Path, version: str, plan: di
         g = e.get("guard") or {}
         flagged = bool(e.get("status") == "REFUSED" or g.get("flagged")) and not e.get("approved_by_person")
         f = {"path": os.path.relpath(vdir / e["file"], run_dir) if e.get("file") else None, "shot": e["shot"], "model": e["model"],
-             "style_version": version, "flagged": flagged, "guard_checked": bool(g.get("checked")),
-             "reason": e.get("error") if e.get("status") == "REFUSED" else g.get("reason"), "prompt": e.get("prompt", ""), "key": key}
+             "style_version": version, "flagged": flagged, "guard_checked": bool(g.get("checked")), "approved": bool(e.get("approved_by_person")),
+             "reason": e.get("error") if e.get("status") == "REFUSED" else g.get("reason"), "prompt": e.get("prompt", ""), "key": key,
+             "sha256": e.get("sha256"), "prompt_sha256": e.get("prompt_sha256")}
         cur = out.setdefault(e["territory"], {})
-        if e["shot"] not in cur or e["tier"] == "best":
+        have = cur.get(e["shot"])
+        # the best frame wins a shot, unless it is flagged and the quick one is clean (a clean frame beats a frame that needs a person)
+        if have is None or (e["tier"] == "best" and not (flagged and not have["flagged"])):
             cur[e["shot"]] = f
     return {tid: [shots[s] for s in sorted(shots)] for tid, shots in out.items()}
 
