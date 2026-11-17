@@ -176,12 +176,12 @@ describe('the Booth in the Video rooms', () => {
     expect(apart).toEqual([shots[1]])
   })
 
-  it('Edit: The Edit agent has no box', async () => {
+  it('Edit with nothing selected and nothing waiting: no Booth at all (the Booth rule)', async () => {
     const { shots, el, render } = await project()
     render(createElement(RoomBooth, { room: 'edit', data: data(shots), sel: {}, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
     await settle()
-    expect(el.querySelector('.booth .bt-agent')?.textContent).toContain('Edit agent')
-    expect(el.querySelector('.booth textarea')).toBeNull()
+    expect(el.querySelector('.booth')).toBeNull()
+    expect(el.querySelector('.booth-edge')).toBeNull()
   })
 
   it('a room below 1280 px starts with its Booth hidden as its edge tab, with a 44 px gutter', async () => {

@@ -35,12 +35,12 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function Harness({ place, scoped, count, asks }: { place: BoothPlace; scoped?: boolean; count?: number; asks?: number }) {
+function Harness({ place, scoped, count, asks, earned = true }: { place: BoothPlace; scoped?: boolean; count?: number; asks?: number; earned?: boolean }) {
   const state = useBooth(place)
-  return createElement(Booth, { state, scoped, count, asks, children: createElement('p', { className: 'inside' }, 'The Script agent') })
+  return createElement(Booth, { state, earned, scoped, count, asks, children: createElement('p', { className: 'inside' }, 'The Script agent') })
 }
 
-function mount(props: { place: BoothPlace; scoped?: boolean; count?: number; asks?: number }, ui: Partial<UiState> = {}, width = 1600) {
+function mount(props: { place: BoothPlace; scoped?: boolean; count?: number; asks?: number; earned?: boolean }, ui: Partial<UiState> = {}, width = 1600) {
   setWidth(width)
   const store = new SnapshotStore<UiState>({ ...initialUi(), me: ME, ...ui }, null)
   const services = { ui: store } as unknown as Services
@@ -155,5 +155,10 @@ describe('the Booth', () => {
     document.body.appendChild(input)
     act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: ']', bubbles: true })) })
     expect(b.open()).toBe(false)
+  })
+  it('with nothing it earns its place for, there is no Booth and no edge tab (the Booth rule)', () => {
+    const b = mount({ place: 'storyboard', earned: false })
+    expect(b.col()).toBeNull()
+    expect(b.edge()).toBeNull()
   })
 })

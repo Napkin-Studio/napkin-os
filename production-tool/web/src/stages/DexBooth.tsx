@@ -14,6 +14,7 @@ import { BoothAgent, BoothAsk, BoothSection, ChoiceCard, NoteCard } from '../ui/
 import { ago, useChain, useLater } from '../ui/booth/hooks'
 import { agentNotes, groupFailures, stageWaiting, storyboardAddresses, triesWords } from '../ui/booth/notes'
 import { useBooth } from '../ui/booth/useBooth'
+import { boothEarned } from '../ui/booth/state'
 
 export const DEX_LINE = 'My notes and questions on the shots and frames wait here.'
 
@@ -57,7 +58,7 @@ export function DexBooth({ storyboardId, onShotAsk }: { storyboardId: Id | undef
   const notes = agentNotes(chain, 'dex', storyboardAddresses(doc, docId, storyboardId), doc)
   const count = items.length
   return (
-    <Booth state={booth} count={count} asks={waiting.asks.length + shotAsks.length}>
+    <Booth state={booth} earned={boothEarned({ waiting: count })} count={count} asks={waiting.asks.length + shotAsks.length}>
       <BoothAgent agent="dex" line={DEX_LINE} needsYou={count > 0} />
       {count > 0 && <BoothSection label="Waiting for you" count={count} />}
       {items.map((x) => x.node)}

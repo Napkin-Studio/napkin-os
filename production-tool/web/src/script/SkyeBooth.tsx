@@ -204,7 +204,7 @@ export function SkyeBooth(p: SkyeBoothProps) {
   const count = waits.length
 
   return (
-    <Booth state={booth} scoped={scoped} count={count} asks={count}
+    <Booth state={booth} earned scoped={scoped} count={count} asks={count}
       footer={<ScriptFacts composed={composed} doc={doc} store={store} current={p.current} onError={p.onError} say={p.say} />}>
       {scope.kind === 'selection' && <SelectionMark editor={p.editor} span={scope.span} />}
       <BoothAgent agent="skye" line={SKYE_LINE} needsYou={count > 0} />

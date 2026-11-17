@@ -64,3 +64,11 @@ export function shownOpen(place: BoothPlace, windowWidth: number, open: boolean)
 export function edgeLabel(count: number): string {
   return `Open the Booth${count ? `, ${count} ${count === 1 ? 'thing' : 'things'} waiting for you` : ''}`
 }
+
+/** The Booth rule (Shrey, 2026-11-17; features/production-new-ui.clan, booth-rule.html): the Booth earns its
+ *  place. It shows for a selection whose work needs room, a library opened on purpose, or the agent asked on
+ *  purpose; and, until each surface carries its asks on the work itself, for something waiting for the person
+ *  (so nothing is hidden). Otherwise there is no Booth and no edge tab: the surface takes the full width. */
+export function boothEarned(o: { selection?: boolean; library?: boolean; asked?: boolean; waiting?: number }): boolean {
+  return !!(o.selection || o.library || o.asked || (o.waiting ?? 0) > 0)
+}

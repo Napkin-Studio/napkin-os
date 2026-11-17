@@ -16,6 +16,7 @@ import { Booth } from '../ui/booth/Booth'
 import { BoothAgent, BoothAsk, BoothBox, BoothSection, ChoiceCard, DoneCard, NoteCard, ScopeChip } from '../ui/booth/BoothParts'
 import { ago, useChain, useLater } from '../ui/booth/hooks'
 import { agentNotes, groupFailures, stageWaiting, triesWords, videoAddresses } from '../ui/booth/notes'
+import { boothEarned } from '../ui/booth/state'
 import { useBooth } from '../ui/booth/useBooth'
 import type { ChangeOpen } from './ChangeDrawer'
 import { boxName, type Gen } from './model'
@@ -136,7 +137,7 @@ export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady,
     ?? data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready')
   const count = ordered.length
   return (
-    <Booth state={booth} count={count} asks={items.filter((x) => x.ask).length}>
+    <Booth state={booth} earned={boothEarned({ selection: !!box, asked: !!done, waiting: count })} count={count} asks={items.filter((x) => x.ask).length}>
       <BoothAgent agent={agent} line={room === 'make' ? FIN_LINE : EDIE_LINE} needsYou={count > 0} crew={crew} />
       {room === 'make' && box && !box.endCard && (
         <BoothBox key={`${box.key}:${shotId ?? ''}`} placeholder="Tell the Camera agent what to make or make again…" button="Ask the Camera agent"
