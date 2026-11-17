@@ -128,6 +128,28 @@ def test_what_was_asked_is_kept_capped_but_never_a_header_or_an_upload_url():
     assert up and "body" not in up[0]["data"]
 
 
+def test_a_jobs_brief_never_reaches_the_record():
+    # features/brief-node.clan; owner 2026-11-13: Confidential means Napkin never takes it in.
+    h = on()
+    token = agreed(h)
+    spine = {"proposition": "SECRET-PROPOSITION", "audience": "SECRET-AUDIENCE", "mandatories": ["SECRET-MANDATORY"]}
+    h.call("POST", "/jobs", {**envelope("write", new_id("job")), "node": {"kind": "script", "id": new_id("script")},
+                             "input": {"write": {"intent": "draft", "mode": "draft", "target": {"kind": "scene", "id": new_id("scene")},
+                                                 "base_hash": "sha256:" + "d" * 64, "instruction": "a runner at dawn", "lines": [],
+                                                 "context": {"script_title": "First Light", "target_s": 15, "neighbours": "", "refs": []}},
+                                       "brief": {"title": "First Light brief", "spine": spine}}}, token)
+    everything = b"".join(objects(h).values()).decode()
+    assert "SECRET-" not in everything
+    req = [e for e in lines(h) if e["kind"] == "request" and e["name"] == "POST /jobs"]
+    assert len(req) == 1 and req[0]["data"]["brief"] is True and "a runner at dawn" in req[0]["data"]["body"]["text"]
+
+
+def test_without_brief_leaves_other_bodies_as_they_came():
+    assert dogfood.without_brief(b"not json") == (b"not json", False)
+    raw = json.dumps({"input": {"text": "x"}}).encode()
+    assert dogfood.without_brief(raw) == (raw, False)
+
+
 def test_a_job_event_says_where_it_ran_and_why_it_moved():
     h = on()
     token = agreed(h)

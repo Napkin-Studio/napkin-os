@@ -614,7 +614,12 @@ class Relay:
         for k in ("error", "jobId", "op", "pick", "libraryKey"):
             if ctx.get(k) is not None:
                 data[k] = ctx[k]
-        if route == "/jobs" or route.startswith("/library/"):
+        if route == "/jobs":
+            kept, briefed = dogfood.without_brief(body or b"")
+            data["body"] = dogfood.body_value(kept)
+            if briefed:
+                data["brief"] = True  # a brief went with it; its words stay out of the record
+        elif route.startswith("/library/"):
             data["body"] = dogfood.body_value(body or b"")
         elif body:
             data["bytes"] = len(body)
