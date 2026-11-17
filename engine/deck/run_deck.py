@@ -65,21 +65,28 @@ def _replay_agency(a, ctx: dict, rep_look: dict) -> tuple[dict | None, bool]:
     look") takes the current look and records it. Returns (agency JSON or None, use)."""
     lp = (ctx.get("look") or {}).get("agency_look") or {} if ctx else {}
     use = not (a.no_agency_look or lp.get("use") is False)
-    update = bool(a.update_look or lp.get("update_requested"))
     current = json.loads(a.agency_look.expanduser().read_text()) if a.agency_look else None
     rec_path = a.out / "look.json"
-    recorded = json.loads(rec_path.read_text()) if rec_path.exists() else None
+    raw = json.loads(rec_path.read_text()) if rec_path.exists() else None
+    recorded = ({"agency": raw["agency"], "applied_at": raw.get("applied_at") or ""} if raw and "agency" in raw
+                else {"agency": raw, "applied_at": ""} if raw else None)   # a copy made before applied_at existed is the bare look
+    # An update is a person's request, kept in the document: it counts only while it is newer than the look last applied, so it never re-reads
+    # the agency's look on every later build. --update-look is the request made now.
+    asked = str(lp.get("update_requested") or "")
+    update = bool(a.update_look or (asked and (recorded is None or asked > recorded["applied_at"])))
     if recorded and not update:
-        if current and current.get("rev") != recorded.get("rev"):
-            rep_look["notice"] = (f"Your agency's look changed since this deck was built (rev {recorded.get('rev')} to {current.get('rev')}). This deck keeps the look it "
+        if current and current.get("rev") != recorded["agency"].get("rev"):
+            rep_look["notice"] = (f"Your agency's look changed since this deck was built (rev {recorded['agency'].get('rev')} to {current.get('rev')}). This deck keeps the look it "
                                   "has; choose 'update to current look' to take the new one.")
-        return recorded, use
+        return recorded["agency"], use
     if not recorded and (a.out / "deck.json").exists() and not update:
         if current:
             rep_look["notice"] = "This deck was built before your agency's look was set up and keeps its look. Choose 'update to current look' to dress it."
         return None, use
     if current:
-        rec_path.write_text(json.dumps(current, indent=1, ensure_ascii=False))
+        import datetime   # noqa: PLC0415
+        rec_path.write_text(json.dumps({"agency": current, "applied_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")},
+                                       indent=1, ensure_ascii=False))
     return current, use
 
 
@@ -93,6 +100,8 @@ def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None =
     if pack_src:
         from visuals import style as vstyle   # noqa: PLC0415 (a sibling package of engine/deck, imported only when a pack is given)
         try:
+            if isinstance(pack_src, tuple) and not ((pack_src[0].get("kit") or {}).get("published")):
+                raise vstyle.StyleError("the attached Style Pack's version is not published (kit.published is empty): a steward publishes it before a deck uses it")
             style = vstyle.load(*pack_src, forbid=[client]) if isinstance(pack_src, tuple) else vstyle.load(pack_src, forbid=[client])
         except (vstyle.StyleError, OSError) as e:   # a pack that breaks its rules is not used, and pictures are held until it is fixed
             rep["style_pack"] = {"used": False, "hold": True, "error": str(e)}
@@ -104,11 +113,19 @@ def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None =
     agency, use = _replay_agency(a, ctx, look_rep)
     lp = ctx.get("look") or {}
     wears = (lp.get("brand") or {}).get("wears") or a.wears if ctx else a.wears
+    wears_problem = None
+    if wears not in look.WEARS:   # an unknown value never crashes a build: the default stands and the problem is said
+        wears_problem = f"look.brand.wears {wears!r} is not one of {', '.join(look.WEARS)}: the deck wears the agency"
+        wears = "agency"
     strict = bool(lp.get("strict_brand")) or a.strict_brand
     got = look.resolve(wears=wears, strict_brand=strict, brand_file=brand, brand=look.brand_tokens(ctx.get("brand")), style=style,
                        agency=agency, use_agency=use, client=client)
     if got.brand:
         deck["meta"]["brand"] = got.brand
+    if wears_problem:
+        look_rep.setdefault("problems", []).append(wears_problem)
+        if got.theme:
+            got.theme["problems"].append(wears_problem)
     if got.theme:
         if got.logo:
             try:

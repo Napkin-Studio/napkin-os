@@ -318,3 +318,38 @@ def test_the_lint_reads_a_folder_and_a_clan_too(tmp_path):
     with pytest.raises(style.StyleError, match="Lumen Water"):
         style.load(d, forbid=["Lumen Water"])
     assert style.load(d).notes == "Made for Lumen Water"
+
+
+# ------------------------------------------------------------------ the adversarial check on the lint
+
+@pytest.mark.parametrize("text", ["٣ pm", "x²", "Ⅻ o'clock", "½ cup", "० zero", "full１"])
+def test_any_unicode_number_is_refused(text):
+    data, _ = _pack()
+    with pytest.raises(style.StyleError, match="digit or number"):
+        style.load({**data, "notes": text})
+
+
+@pytest.mark.parametrize("quote", ["«", "»", "„", "‚", "‹", "“", "”", "‘", "’", "「", "`", "'", '"'])
+def test_every_quotation_mark_is_refused(quote):
+    data, _ = _pack()
+    with pytest.raises(style.StyleError, match="quotation"):
+        style.load({**data, "palette": [f"ochre{quote}"]})
+
+
+def test_all_five_free_text_fields_are_linted():
+    data, _ = _pack()
+    for key, value in (("this_not_that", {"tn01": {"this": "4 walls", "not": "x"}}), ("this_not_that", {"tn01": {"this": "a", "not": 'say "x"'}}),
+                       ("banned_imagery", ["3d logo"]), ("banned_imagery", ["“drink”"]), ("look", ["①"]), ("notes", "nº 1")):
+        with pytest.raises(style.StyleError):
+            style.load({**data, key: value})
+
+
+def test_names_are_compared_with_accents_folded():
+    data, _ = _pack(notes="Warm kitchens for Nestle.")
+    with pytest.raises(style.StyleError, match="Nestl"):
+        style.load(data, forbid=["Nestlé"])
+    data["notes"] = "Warm kitchens for Nestlé."
+    with pytest.raises(style.StyleError):
+        style.load(data, forbid=["NESTLE"])
+    data["notes"] = "Warm kitchens."
+    assert style.load(data, forbid=["Nestlé"]).notes == "Warm kitchens."

@@ -94,3 +94,30 @@ def test_a_pin_of_the_research_that_only_looks_like_a_brand_one_is_kept_when_no_
     """The brand-layer filter acts only when a kit is attached: a deck with no kit keeps every pin it holds."""
     inp = inputs.from_upstream(_data(("res-1",)), {"facts": [BRAND_PIN]}, apps={"res-1": RESEARCH_APP})
     assert list(inp.facts) == ["f_brand1"]
+
+
+# ------------------------------------------------------------------ the adversarial check: pins that name a kit, odd layers, odd case
+
+def test_pins_that_name_an_attached_kit_or_a_brand_layer_never_reach_the_facts():
+    kit_doc = "brand-1"
+    pins = [{"id": "f_1", "entity": "Lumen Water", "key": "customers", "value": 1200},
+            {"id": "f_s", "entity": "Lumen", "key": "a", "value": 1, "source": kit_doc},
+            {"id": "f_si", "entity": "Lumen", "key": "b", "value": 2, "source_id": kit_doc},
+            {"id": "f_ss", "entity": "Lumen", "key": "c", "value": 3, "sources": ["src_x", kit_doc]},
+            {"id": "f_l", "entity": "Lumen", "key": "d", "value": 4, "layer": "brand_guidelines"},
+            {"id": "f_L", "entity": "Lumen", "key": "e", "value": 5, "layer": " Brand"},
+            {"id": "f_r", "entity": "Lumen", "key": "f", "value": 6, "ref": "fact://Brand/x@1"},
+            {"id": "f_u", "entity": "Lumen", "key": "g", "value": 7, "uri": "FACT://BRAND/y@2"}]
+    inp = inputs.from_upstream(_data(("res-1", "brand-1")), {"facts": pins}, apps=APPS)
+    assert list(inp.facts) == ["f_1"]
+    assert inp.coverage["kit_pins_dropped"] == sorted(p["id"] for p in pins[1:])
+
+
+def test_a_source_naming_a_kit_that_is_only_in_the_app_map_still_drops_the_pin():
+    inp = inputs.from_upstream({"upstream": {"res-1": RESEARCH}}, {"facts": [{"id": "f_s", "entity": "x", "key": "k", "value": 1, "source": "brand-1"}]}, apps={"res-1": RESEARCH_APP, "brand-1": BRAND_APP})
+    assert inp.facts == {}
+
+
+def test_a_layer_that_only_looks_like_brand_in_research_is_kept_when_no_kit_is_attached():
+    inp = inputs.from_upstream(_data(("res-1",)), {"facts": [{"id": "f_x", "entity": "x", "key": "k", "value": 1, "layer": "brand_awareness"}]}, apps={"res-1": RESEARCH_APP})
+    assert list(inp.facts) == ["f_x"]

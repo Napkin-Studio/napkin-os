@@ -28,6 +28,7 @@ import hashlib
 import json
 import mimetypes
 import re
+import unicodedata
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -184,22 +185,36 @@ def _deck(raw) -> dict:
     return {k: v for k, v in raw.items() if v}
 
 
+def _fold(text: str) -> str:
+    """Lower case with accents and compatibility forms folded away (``Nestlé`` and ``Nestle`` are one word)."""
+    return "".join(c for c in unicodedata.normalize("NFKD", str(text)) if not unicodedata.combining(c)).casefold()
+
+
+_QUOTES = set("\"'`\u00ab\u00bb\u201e\u201a\u2039\u203a\u300c\u300d\u300e\u300f")
+
+
 def lint(norm: dict, forbid=()) -> None:
-    """The pack's free text goes into an image prompt, so it carries no figure, no quotation and no name (ADR 0027): ``look``, ``palette``
-    and ``notes`` hold no digit and no quotation mark; no field holds a forbidden name (the deck's client, a brand's name) as a word."""
-    for key in ("look", "palette", "notes"):
+    """The pack's free text goes into an image prompt, so it carries no figure, no quotation and no name (ADR 0027): every free-text field
+    (``look``, ``palette``, ``this_not_that``, ``banned_imagery``, ``notes``) holds no number (any Unicode category N) and no quotation mark
+    (the ASCII ones, the Unicode quote categories Pi, Pf, Ps and Pe, and the guillemets and low quotes); none holds a forbidden name (the
+    deck's client, a brand's), compared with accents folded, as a word."""
+    fields = ("look", "palette", "this_not_that", "banned_imagery", "notes")
+    for key in fields:
         text = " ".join(norm[key]) if isinstance(norm[key], list) else norm[key]
-        if re.search(r"[0-9]", text):
-            raise StyleError(f"style: {key} holds a digit; a prompt carries no figure (say it in words)")
-        if re.search(r"[\"'`\u2018\u2019\u201c\u201d]", text):
-            raise StyleError(f"style: {key} holds a quotation mark; a prompt carries no quoted text")
+        for ch in text:
+            cat = unicodedata.category(ch)
+            if cat.startswith("N"):
+                raise StyleError(f"style: {key} holds a digit or number ({ch!r}); a prompt carries no figure (say it in words)")
+            if ch in _QUOTES or cat in ("Pi", "Pf", "Ps", "Pe"):
+                raise StyleError(f"style: {key} holds a quotation mark; a prompt carries no quoted text")
     for name in forbid:
-        words = re.findall(r"[a-z0-9]+", str(name or "").casefold())
+        words = re.findall(r"[a-z0-9]+", _fold(name))
         if not words:
             continue
-        for key in ("look", "palette", "this_not_that", "banned_imagery", "notes"):
+        pattern = r"(?<![a-z0-9])" + r"[^a-z0-9]+".join(map(re.escape, words)) + r"(?![a-z0-9])"
+        for key in fields:
             text = " ".join(norm[key]) if isinstance(norm[key], list) else norm[key]
-            if re.search(r"(?<![a-z0-9])" + r"[^a-z0-9]+".join(map(re.escape, words)) + r"(?![a-z0-9])", text.casefold()):
+            if re.search(pattern, _fold(text)):
                 raise StyleError(f"style: {key} names {name!r}; no client or brand name reaches a picture prompt")
 
 

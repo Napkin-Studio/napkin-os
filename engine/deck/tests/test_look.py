@@ -15,7 +15,7 @@ from deck import look, theme
 from visuals import style as vstyle
 
 FIX = Path(__file__).parent / "fixtures"
-BRAND_TOKENS = {"name": "Lumen", "colours": {"accent": "0B7A75", "paper": "F4FBFA", "ink": "10302E", "panel": "DDF0EE"}, "colour_ids": {"c_teal": "0B7A75", "c_sand": "D9B382"},
+BRAND_TOKENS = {"name": "Lumen Water", "colours": {"accent": "0B7A75", "paper": "F4FBFA", "ink": "10302E", "panel": "DDF0EE"}, "colour_ids": {"c_teal": "0B7A75", "c_sand": "D9B382"},
                 "fonts": {"head": "Brand Serif", "body": "Brand Sans"}, "type_ids": {"t_head": "Brand Serif"},
                 "logos": {"dark": "<svg xmlns='http://www.w3.org/2000/svg'><rect width='10' height='10'/></svg>"},
                 "imagery_bans": ["stock handshake", "thumbs up"], "kit": {"document_id": "brand-1", "version": 5}}
@@ -96,8 +96,19 @@ def test_a_pack_pointer_into_the_brand_with_no_brand_falls_through():
     pack = _pack(colours={"accent": {"brand": "c_teal"}})
     assert look.resolve(style=pack).theme["from"]["accent"] == "default"
     assert look.resolve(style=pack, agency=AGENCY).theme["from"]["accent"] == "agency_look"
-    got = look.resolve(style=pack, agency=AGENCY, brand=BRAND_TOKENS)
-    assert got.theme["colors"]["accent"] == "0B7A75" and got.theme["from"]["accent"] == "style_pack"     # it picks the brand's own colour
+    got = look.resolve(style=pack, agency=AGENCY, brand=BRAND_TOKENS, wears="client")
+    assert got.theme["colors"]["accent"] == "0B7A75" and got.theme["from"]["accent"] == "brand_clan"     # wearing the client, the brand tier gives it
+
+
+def test_a_brand_pointer_cannot_sidestep_wears_agency():
+    """Q1: under wears agency a client kit gives no colour or type, not even through a pack's {brand: id} pointer."""
+    pack = _pack(colours={"accent": {"brand": "c_teal"}}, type={"head": {"brand": "t_head"}})
+    for wears in ("agency",):
+        got = look.resolve(style=pack, agency=AGENCY, brand=BRAND_TOKENS, wears=wears)
+        assert got.theme["colors"]["accent"] == "7A3FF2" and got.theme["from"]["accent"] == "agency_look"
+        assert got.theme["fonts"]["head"] == "Cambria" and got.theme["from"]["head"] == "default"
+    both = look.resolve(style=pack, brand=BRAND_TOKENS, wears="co_branded")
+    assert both.theme["fonts"]["head"] == "Brand Serif" and both.theme["from"]["head"] in ("style_pack", "brand_clan")
 
 
 def test_a_client_brand_adds_only_its_logo_and_bans_when_the_deck_wears_the_agency():
@@ -145,8 +156,11 @@ def test_a_pack_with_a_dark_paper_cannot_make_the_default_ink_unreadable():
     assert got.theme["colors"]["paper"] == theme.NAPKIN.paper and got.theme["from"]["paper"] == "default"
     assert any("paper 1B2024" in p and "reset to the default" in p for p in got.problems)
     assert not [p for p in got.theme["problems"] if "ink on paper" in p]
-    both = look.resolve(style=_pack(colours={"paper": {"hex": "1B2024"}, "ink": {"hex": "0A0A0A"}}))        # two tokens of one tier: left as given, and said
-    assert both.theme["colors"]["paper"] == "1B2024" and any("ink on paper" in p for p in both.theme["problems"])
+    both = look.resolve(style=_pack(colours={"paper": {"hex": "111111"}, "ink": {"hex": "222222"}}))        # a clash inside one pack: both reset
+    assert both.theme["colors"]["paper"] == theme.NAPKIN.paper and both.theme["colors"]["ink"] == theme.NAPKIN.ink
+    assert both.theme["from"]["paper"] == both.theme["from"]["ink"] == "default"
+    own = look.resolve(brand_file={"colors": {"paper": "#111111", "ink": "#222222"}})                        # a brand's own palette is left as it is
+    assert own.theme is None
 
 
 def test_a_lower_tier_loses_to_a_brand_file_token_it_cannot_be_read_against():
@@ -164,10 +178,10 @@ def test_a_pale_accent_is_a_fill_only_and_lines_take_the_default_accent():
 
 
 def test_the_client_logo_is_placed_only_when_the_kit_is_for_the_briefs_client():
-    for client in ("Lumen Water", "lumen water ltd", "Lumen"):
+    for client in ("Lumen Water", "LUMEN  water.", "L\u00fcmen Water"):
         got = look.resolve(brand=BRAND_TOKENS, client=client)
-        assert got.logo and got.logo["name"] == "Lumen" and got.held == [], client
-    for client in ("Harbour County Council", "", "Lumenara Foods"):
+        assert got.logo and got.logo["name"] == "Lumen Water" and got.held == [], client
+    for client in ("Harbour County Council", "", "Lumenara Foods", "Lumen Water Ltd", "Lumen", "Water"):
         got = look.resolve(brand=BRAND_TOKENS, client=client)
         assert got.logo is None and len(got.held) == 1 and "held" in got.held[0] and got.theme["held"] == got.held, client
     nameless = look.resolve(brand={**BRAND_TOKENS, "name": ""}, client="Lumen Water")
@@ -309,7 +323,7 @@ def _build_in(monkeypatch, tmp_path, out, *extra, base=BASE_ARGS, real=False):
 def test_the_agency_look_is_copied_into_the_run_folder_and_replayed_byte_for_byte(monkeypatch, tmp_path):
     out = tmp_path / "run"
     first, _ = _build_in(monkeypatch, tmp_path, out, "--agency-look", _write(tmp_path, "ag.json", AGENCY))
-    assert json.loads((out / "look.json").read_text()) == AGENCY
+    assert json.loads((out / "look.json").read_text())["agency"] == AGENCY
     changed = {**AGENCY, "rev": 5, "accent": "#D6336C", "accent_ink": "#A61E4D"}
     again, rep = _build_in(monkeypatch, tmp_path, out, "--agency-look", _write(tmp_path, "ag2.json", changed))
     for d in (first, again):
@@ -327,7 +341,7 @@ def test_update_to_current_look_takes_the_new_look_and_records_it(monkeypatch, t
     changed = {**AGENCY, "rev": 5, "accent": "#D6336C", "accent_ink": "#A61E4D"}
     deck, rep = _build_in(monkeypatch, tmp_path, out, "--agency-look", _write(tmp_path, "ag2.json", changed), "--update-look")
     assert deck["meta"]["theme"]["colors"]["accent"] == "D6336C" and deck["meta"]["theme"]["agency"]["rev"] == 5 and "notice" not in rep["look"]
-    assert json.loads((out / "look.json").read_text())["rev"] == 5
+    assert json.loads((out / "look.json").read_text())["agency"]["rev"] == 5
 
 
 def test_an_existing_deck_keeps_its_look_and_is_offered_the_update(monkeypatch, tmp_path):
@@ -427,13 +441,13 @@ def _deck_clan(path: Path, *, brand_version=5, library=True, look=None) -> Path:
     import zipfile
     import yaml
     from visuals import style as vstyle
-    pack = {"pack": {"name": "Demo pack"}, "kit": {"version": 2, "stewards": ["human:demo"]}, "look": ["natural light"],
+    pack = {"pack": {"name": "Demo pack"}, "kit": {"version": 2, "stewards": ["human:demo"], "published": {"by": "human:demo", "at": "2026-11-17T10:00:00Z"}}, "look": ["natural light"],
             "deck": {"colours": {"accent": {"hex": "A8431D"}}}}
     facts = [{"id": "f_1", "entity": "Lumen Water", "key": "customers", "value": 1200, "unit": "count", "confidence": "high"},
              {"id": "f_brand1", "entity": "Lumen", "key": "brand.market_share", "value": 0.61, "unit": "proportion", "confidence": "high",
               "ref": "fact://brand/lumen/market_share@1"}]
     data = {"upstream": {"res-1": {"campaign": {"name": "Lumen"}},
-                         "brand-1": {"kit": {"version": brand_version}, "brand": {"name": "Lumen"}, "visual": {"colours": []}},
+                         "brand-1": {"kit": {"version": brand_version}, "brand": {"name": "Lumen Water"}, "visual": {"colours": []}},
                          "pack-1": pack},
             "inputs": {"prompt": {"client": "Lumen Water", "project": "Awareness", "text": "Lumen Water wants a summer campaign."},
                        "library": {"enabled": library}},
@@ -551,3 +565,133 @@ def test_every_agency_look_on_lumen_adds_no_qa_finding(tmp_path):
     for ag in _registry():
         line = run(tmp_path / ag["id"], "--agency-look", _write(tmp_path, ag["id"] + ".json", ag))
         assert line.startswith("QA: 0 errors, 0 warnings"), (ag["id"], line)
+
+
+# ------------------------------------------------------------------ the adversarial check: names, wears, replay, packs
+
+@pytest.mark.parametrize("brand,client", [("Delta", "Delta Faucet"), ("Group Nine", "Nine Network"), ("\u00dcnilever", "Nilever"), ("Lumen", "Lumen Water Ltd"),
+                                         ("Water", "Lumen Water")])
+def test_the_logo_gate_needs_the_same_words_and_a_prefix_or_a_stripped_word_does_not_pass(brand, client):
+    assert look.same_name(brand, client) is False and look.same_name(client, brand) is False
+    got = look.resolve(brand={**BRAND_TOKENS, "name": brand}, client=client)
+    assert got.logo is None and len(got.held) == 1
+
+
+def test_the_logo_gate_folds_accents_and_case_only():
+    assert look.same_name("Nestl\u00e9", "NESTLE") and look.same_name("Lumen-Water", "lumen water") and not look.same_name("", "")
+
+
+def test_a_stale_update_request_does_not_reread_the_agency_look_on_every_build(monkeypatch, tmp_path):
+    """update_requested is a timestamp kept in the document: it counts only while newer than the look last applied (look.json applied_at)."""
+    out = tmp_path / "run"
+    doc = {"agency_look": {"update_requested": "2026-01-01T00:00:00Z"}}
+    first, _ = _build_in(monkeypatch, tmp_path, out, "--deck", str(_deck_clan(tmp_path / "d.clan", look=doc)), "--agency-look", _write(tmp_path, "a1.json", AGENCY), base=PROMPT_ARGS)
+    assert first["meta"]["theme"]["colors"]["accent_ink"] == "5A22C8" and json.loads((out / "look.json").read_text())["applied_at"] > "2026-01-01"
+    moved = {**AGENCY, "rev": 9, "accent": "#D6336C", "accent_ink": "#A61E4D"}
+    for n in range(2):                                                                        # the same stale request, build after build
+        again, rep = _build_in(monkeypatch, tmp_path, out, "--deck", str(_deck_clan(tmp_path / "d.clan", look=doc)), "--agency-look", _write(tmp_path, "a2.json", moved), base=PROMPT_ARGS)
+        assert again["meta"]["theme"]["colors"]["accent_ink"] == "5A22C8" and "rev 4 to 9" in rep["look"]["notice"], n
+    import datetime
+    applied = datetime.datetime.strptime(json.loads((out / "look.json").read_text())["applied_at"], "%Y-%m-%dT%H:%M:%S.%fZ")
+    fresh = {"agency_look": {"update_requested": (applied + datetime.timedelta(microseconds=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")}}   # a new request, newer than the last apply, is taken
+    taken, _ = _build_in(monkeypatch, tmp_path, out, "--deck", str(_deck_clan(tmp_path / "d.clan", look=fresh)), "--agency-look", _write(tmp_path, "a2.json", moved), base=PROMPT_ARGS)
+    assert taken["meta"]["theme"]["colors"]["accent_ink"] == "A61E4D"
+    later, _ = _build_in(monkeypatch, tmp_path, out, "--deck", str(_deck_clan(tmp_path / "d.clan", look=fresh)), "--agency-look", _write(tmp_path, "a1.json", AGENCY), base=PROMPT_ARGS)
+    assert later["meta"]["theme"]["colors"]["accent_ink"] == "A61E4D"                         # that request is now older than the apply: not re-read
+
+
+def test_a_recorded_look_made_before_applied_at_still_replays(monkeypatch, tmp_path):
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "look.json").write_text(json.dumps(AGENCY))
+    deck, _ = _build_in(monkeypatch, tmp_path, out, "--agency-look", _write(tmp_path, "a2.json", {**AGENCY, "rev": 7, "accent": "#D6336C"}))
+    assert deck["meta"]["theme"]["colors"]["accent"] == "7A3FF2"
+
+
+def test_an_unknown_wears_never_crashes_a_build(monkeypatch, tmp_path):
+    doc = _deck_clan(tmp_path / "deck.clan", look={"brand": {"wears": "everyone"}})
+    deck, rep = _build_in(monkeypatch, tmp_path, tmp_path / "run", "--deck", str(doc), "--agency-look", _write(tmp_path, "ag.json", AGENCY), base=PROMPT_ARGS)
+    assert any("'everyone'" in p and "wears the agency" in p for p in rep["look"]["problems"]) and deck["meta"]["theme"]["colors"]["accent"] == "A8431D"
+
+
+def test_an_attached_pack_that_is_not_published_is_refused_and_held(monkeypatch, tmp_path):
+    import zipfile
+    import yaml
+    doc = _deck_clan(tmp_path / "deck.clan")
+    with zipfile.ZipFile(doc) as z:
+        files = {n: z.read(n) for n in z.namelist()}
+    data = yaml.safe_load(files["shared/data.yaml"])
+    del data["upstream"]["pack-1"]["kit"]["published"]
+    files["shared/data.yaml"] = yaml.safe_dump(data).encode()
+    with zipfile.ZipFile(tmp_path / "draft.clan", "w") as z:
+        for n, b in files.items():
+            z.writestr(n, b)
+    deck, rep = _build_in(monkeypatch, tmp_path, tmp_path / "run", "--deck", str(tmp_path / "draft.clan"), base=PROMPT_ARGS)
+    assert "not published" in deck["meta"]["style_hold"]["reason"] and rep["style_pack"]["hold"] is True and "theme" not in deck["meta"]
+
+
+def test_a_rasteriser_that_times_out_holds_the_logo(monkeypatch):
+    import subprocess
+    monkeypatch.setattr(look.shutil if hasattr(look, "shutil") else __import__("shutil"), "which", lambda n: "/bin/true")
+    def boom(*a, **k):
+        raise subprocess.TimeoutExpired("rsvg-convert", 60)
+    monkeypatch.setattr(subprocess, "run", boom)
+    with pytest.raises(look.LogoError, match="too long"):
+        look.rasterise_svg("<svg xmlns='http://www.w3.org/2000/svg'/>")
+
+
+def _minimal_brand(frozen: dict | None) -> dict:
+    """A minimal Brand Clan fixture mapper in place of the stub: Contract 6's shape, trimmed to what the deck reads."""
+    if not frozen:
+        return look.brand_tokens(None)
+    cols = {c["role"]: c["hex"] for c in frozen["visual"]["colours"]}
+    return {"name": frozen["brand"]["name"], "colours": {"accent": cols["accent"], "paper": cols["background"]}, "colour_ids": {c["id"]: c["hex"] for c in frozen["visual"]["colours"]},
+            "fonts": {"head": frozen["visual"]["typography"]["heading"]}, "type_ids": {}, "logos": {"dark": _png()}, "logo_placement": "cover_only",
+            "imagery_bans": [d for d in frozen["visual"]["imagery"]["dont"]], "chart": [], "kit": {"document_id": "brand-1", "version": frozen["kit"]["version"]}}
+
+
+def _brand_deck(tmp_path, name="Lumen Water", wears=None):
+    import zipfile
+    import yaml
+    doc = _deck_clan(tmp_path / f"brand-{name.replace(' ', '')}-{wears}.clan", look={"brand": {"wears": wears}} if wears else {})
+    with zipfile.ZipFile(doc) as z:
+        files = {n: z.read(n) for n in z.namelist()}
+    data = yaml.safe_load(files["shared/data.yaml"])
+    data["upstream"]["brand-1"] = {"kit": {"version": 5}, "brand": {"name": name},
+                                   "visual": {"colours": [{"id": "c_teal", "role": "accent", "hex": "0B7A75"}, {"id": "c_bg", "role": "background", "hex": "F4FBFA"}],
+                                              "typography": {"heading": "Brand Serif"}, "imagery": {"dont": ["stock handshake"]}}}
+    del data["upstream"]["pack-1"]
+    files["shared/data.yaml"] = yaml.safe_dump(data).encode()
+    attached = yaml.safe_load(files["manifest.yaml"])
+    attached["lineage"]["attached"] = [a for a in attached["lineage"]["attached"] if a["app_id"] != "ie.napkin.style-pack"]
+    files["manifest.yaml"] = yaml.safe_dump(attached).encode()
+    out = tmp_path / f"b-{name.replace(' ', '')}-{wears}.clan"
+    with zipfile.ZipFile(out, "w") as z:
+        for n, b in files.items():
+            z.writestr(n, b)
+    return out
+
+
+def test_runner_path_wears_agency_takes_the_clients_logo_and_bans_but_never_its_colours(monkeypatch, tmp_path):
+    monkeypatch.setattr(look, "brand_tokens", _minimal_brand)
+    out = tmp_path / "run"
+    deck, rep = _build_in(monkeypatch, tmp_path, out, "--deck", str(_brand_deck(tmp_path)), "--agency-look", _write(tmp_path, "ag.json", AGENCY), base=PROMPT_ARGS, real=True)
+    th = deck["meta"]["theme"]
+    assert th["colors"]["accent"] == "7A3FF2" and th["from"]["accent"] == "agency_look" and th["fonts"]["head"] == "Cambria"
+    assert th["colors"]["paper"] == theme.NAPKIN.paper and len(_pptx_logo(out / "deck.pptx")) == 1
+    assert th["logo"]["placement"] == "cover_only" and rep["look"]["held"] == []
+
+
+def test_runner_path_wears_client_dresses_the_deck_in_the_clients_tokens(monkeypatch, tmp_path):
+    monkeypatch.setattr(look, "brand_tokens", _minimal_brand)
+    deck, _ = _build_in(monkeypatch, tmp_path, tmp_path / "run", "--deck", str(_brand_deck(tmp_path, wears="client")), "--agency-look", _write(tmp_path, "ag.json", AGENCY), base=PROMPT_ARGS)
+    th = deck["meta"]["theme"]
+    assert th["colors"]["accent"] == "0B7A75" and th["from"]["accent"] == "brand_clan" and th["fonts"]["head"] == "Brand Serif" and th["kit"] == {"document_id": "brand-1", "version": 5}
+
+
+def test_runner_path_holds_the_logo_of_a_kit_that_is_not_the_clients(monkeypatch, tmp_path):
+    monkeypatch.setattr(look, "brand_tokens", _minimal_brand)
+    out = tmp_path / "run"
+    deck, rep = _build_in(monkeypatch, tmp_path, out, "--deck", str(_brand_deck(tmp_path, name="Harbour County")), base=PROMPT_ARGS, real=True)
+    th = deck["meta"]["theme"]
+    assert "logo" not in th and "Harbour County" in th["held"][0] and _pptx_logo(out / "deck.pptx") == [] and rep["look"]["held"] == th["held"]

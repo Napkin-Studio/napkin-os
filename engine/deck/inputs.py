@@ -317,18 +317,24 @@ def _is_kit(key: str, entry, apps: dict | None) -> bool:
     return isinstance(entry, dict) and isinstance(entry.get("kit"), dict) and "version" in entry["kit"]
 
 
-def _is_brand_pin(pin: dict) -> bool:
-    """A pin the brand layer owns, by its reference or its layer."""
+def _is_brand_pin(pin: dict, kit_ids: set = frozenset()) -> bool:
+    """A pin the brand layer owns: its reference (compared without regard to case), its layer (any layer starting with ``brand``), or a
+    source that is an attached kit's document."""
     refs = [pin.get(k) for k in ("ref", "uri", "id")]
-    return any(isinstance(r, str) and r.startswith(_BRAND_REF) for r in refs) or pin.get("layer") == "brand"
+    if any(isinstance(r, str) and r.strip().casefold().startswith(_BRAND_REF) for r in refs):
+        return True
+    if str(pin.get("layer") or "").strip().casefold().startswith("brand"):
+        return True
+    named = {pin.get("source"), pin.get("source_id"), *(pin.get("sources") or [])}
+    return bool(named & set(kit_ids))
 
 
-def _drop_kit_pins(members: dict, kit_pins: set) -> tuple[dict, list]:
+def _drop_kit_pins(members: dict, kit_pins: set, kit_ids: set = frozenset()) -> tuple[dict, list]:
     """``members`` without the pins that arrived with a kit, and without the sources only those pins cite.
     Returns (members, dropped pin ids). A Brand Clan attach merges its pins into the deck's facts; the deck's
     facts are research, so they leave here, before anything reads them."""
     rows = _unwrap(members.get("facts"), "facts")
-    gone = [p for p in rows if isinstance(p, dict) and (p.get("id") in kit_pins or _is_brand_pin(p))]
+    gone = [p for p in rows if isinstance(p, dict) and (p.get("id") in kit_pins or _is_brand_pin(p, kit_ids))]
     if not gone:
         return members, []
     gone_ids = {p.get("id") for p in gone}
@@ -371,8 +377,9 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
     brief_id, brief_data = next(((k, v) for k, v in up.items() if _is_brief_data(v)), (None, None))
     research_id = next((k for k, v in up.items() if k != brief_id and isinstance(v, dict) and v), None)
     dropped: list = []
-    if kits:
-        members, dropped = _drop_kit_pins(members, set(kit_pins or ()))
+    kit_ids = set(kits) | {k for k, app in (apps or {}).items() if app in KIT_APPS}
+    if kits or kit_ids:
+        members, dropped = _drop_kit_pins(members, set(kit_pins or ()), kit_ids)
     elif kit_pins:
         members, dropped = _drop_kit_pins(members, set(kit_pins))
     if brief_data is not None:

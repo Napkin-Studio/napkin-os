@@ -120,11 +120,13 @@ def _agency_of(agency: dict | None, problems: list) -> dict | None:
     return {**out, "id": agency.get("id"), "rev": agency.get("rev")} if out else None
 
 
-def _pack_pointer(ptr: dict, token: str, brand: dict | None, agency: dict | None, strict: bool):
+def _pack_pointer(ptr: dict, token: str, brand: dict | None, agency: dict | None, strict: bool, wears_kit: bool = False):
     """One Style Pack deck pointer as a value, or None to fall through."""
     if not isinstance(ptr, dict):
         return None
     if "brand" in ptr:
+        if not wears_kit:   # a client kit's colours reach the deck only when it wears the client (Q1): a pointer cannot sidestep that
+            return None
         src = (brand or {}).get("colour_ids" if token in COLOUR_TOKENS else "type_ids") or {}
         return src.get(ptr["brand"])
     if "agency" in ptr:
@@ -164,7 +166,7 @@ def resolve(*, theme: str = themes.DEFAULT, wears: str = "agency", strict_brand:
             return file_t[token], "brand_file"
         ptr = (pack_colours if token in COLOUR_TOKENS else pack_type).get(token)
         if ptr:
-            v = _pack_pointer(ptr, token, kit, ag, strict_brand)
+            v = _pack_pointer(ptr, token, kit, ag, strict_brand, wears_kit)
             if v:
                 return (_hex(v) if token in COLOUR_TOKENS else str(v)), "style_pack"
         if ag:
@@ -270,18 +272,20 @@ def resolve(*, theme: str = themes.DEFAULT, wears: str = "agency", strict_brand:
 
 #: Below this a colour is a fill only (WCAG's 3:1 for graphical objects and large text).
 LINE_MIN = 3.0
-_NAME_NOISE = {"ltd", "limited", "inc", "co", "plc", "llc", "the", "group", "company"}
 
 
 def _name_words(name: str) -> list:
-    return [w for w in re.findall(r"[a-z0-9]+", str(name or "").casefold()) if w not in _NAME_NOISE]
+    """The words of a name with accents and compatibility forms folded, lower case, nothing stripped."""
+    import unicodedata   # noqa: PLC0415
+    text = "".join(c for c in unicodedata.normalize("NFKD", str(name or "")) if not unicodedata.combining(c)).casefold()
+    return re.findall(r"[a-z0-9]+", text)
 
 
 def same_name(brand: str, client: str) -> bool:
-    """True when a kit's brand name is the brief's client: the same words, ignoring case, punctuation and company suffixes, or the
-    client's name opens with the brand's (a brand of a larger client name)."""
+    """True only when a kit's brand name and the brief's client are the same words (accents folded, case and punctuation ignored). Nothing is
+    stripped and a prefix does not match: anything else holds the logo."""
     b, c = _name_words(brand), _name_words(client)
-    return bool(b and c and (b == c or c[:len(b)] == b))
+    return bool(b and b == c)
 
 
 def _reset_unreadable(theme: str, values: dict, won: dict, problems: list) -> None:
@@ -301,11 +305,15 @@ def _reset_unreadable(theme: str, values: dict, won: dict, problems: list) -> No
                 continue
             rank = {t: TIERS.index(won[t]) for t in given}
             if len(given) == 2 and rank[a] == rank[b]:
-                continue
-            gone = max(given, key=lambda t: rank[t])
-            problems.append(f"{gone} {values[gone]} ({won[gone].replace('_', ' ')}) is {r:.2f}:1 against {b if gone == a else a}, under {themes.AA}:1: "
-                            f"reset to the default")
-            del values[gone], won[gone]
+                if won[a] != "style_pack":   # a brand's own palette is left as it is and named; a pack's is not
+                    continue
+                gone_all = [a, b]
+            else:
+                gone_all = [max(given, key=lambda t: rank[t])]
+            for gone in gone_all:
+                problems.append(f"{gone} {values[gone]} ({won[gone].replace('_', ' ')}) is {r:.2f}:1 against {b if gone == a else a}, under {themes.AA}:1: "
+                                f"reset to the default")
+                del values[gone], won[gone]
             break
         else:
             return
@@ -357,7 +365,10 @@ def rasterise_svg(svg: str, height_px: int = 360) -> bytes:
     exe = shutil.which("rsvg-convert")
     if not exe:
         raise LogoError("no SVG rasteriser (rsvg-convert) is installed, so the logo cannot go into the .pptx")
-    r = subprocess.run([exe, "-h", str(height_px), "-f", "png"], input=svg.encode(), capture_output=True, timeout=60)
+    try:
+        r = subprocess.run([exe, "-h", str(height_px), "-f", "png"], input=svg.encode(), capture_output=True, timeout=60)
+    except subprocess.TimeoutExpired as e:
+        raise LogoError("the logo SVG took too long to rasterise") from e
     if r.returncode or not r.stdout.startswith(b"\x89PNG"):
         raise LogoError("the logo SVG could not be rasterised")
     return r.stdout
