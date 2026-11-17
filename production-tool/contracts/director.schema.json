@@ -23,6 +23,21 @@
     "frameEdit": {
       "$ref": "#/$defs/frameEdit"
     },
+    "briefFlags": {
+      "type": "array",
+      "maxItems": 6,
+      "description": "The Review flags (features/brief-node.clan): when `input.brief` is given and what this job makes (a plan, a frame, a clip, a cut, a size) breaks one of its mandatories or don'ts, the work is still made and each line it breaks is named here, quoted as given. Never a question about it. The relay keeps only lines the job was given; the web writes each as a check (crew jude, never blocking) and a decision.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": { "enum": ["mandatory", "dont"] },
+          "line": { "type": "string", "minLength": 1, "maxLength": 120, "description": "The mandatory or don't, as `input.brief` gives it." },
+          "note": { "type": "string", "maxLength": 300, "description": "How this work breaks it, in one plain sentence." }
+        },
+        "required": ["kind", "line", "note"],
+        "additionalProperties": false
+      }
+    },
     "added": {
       "type": "array",
       "maxItems": 14,

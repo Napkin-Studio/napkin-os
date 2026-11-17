@@ -15,7 +15,7 @@ export type NodeKind =
   | 'board' | 'sketch'
   | 'picture' | 'drawing' | 'generated'
   | 'note' | 'ink_group' | 'group'
-  | 'document' | 'format_set'
+  | 'document' | 'format_set' | 'brief'
 /** Not nodes: the tool's own marks. */
 export type SystemKind = 'pin' | 'provenance'
 /** Linkable, but not an element on the canvas. */
@@ -58,6 +58,8 @@ export const NODE_REGISTRY: readonly NodeEntry[] = [
   entry({ kind: 'sketch', label: 'Sketch area', tag: 'sketch', tagStatus: 'v3', element: 'rectangle', generates: true, opensEditor: false, port: null }),
   entry({ kind: 'ink_group', label: 'Ink group', tag: null, tagStatus: 'unassigned', element: 'group', generates: false, opensEditor: false, port: null }),
   entry({ kind: 'document', label: 'Document', tag: 'document', tagStatus: 'unassigned', element: 'rectangle', generates: false, opensEditor: false, port: null }),
+  // features/brief-node.clan: a Brief Maker brief's spine, read-only; found by its card's tag (own engine).
+  entry({ kind: 'brief', label: 'Brief', tag: 'brief', tagStatus: 'v3', element: 'rectangle', generates: false, opensEditor: false, port: null }),
   entry({ kind: 'format_set', label: 'Format set', tag: 'format_set', tagStatus: 'unassigned', element: 'rectangle', generates: true, opensEditor: true, port: null }),
   // A brand board is a board with purpose 'brand'.
   entry({ kind: 'board', label: 'Board', tag: 'board', tagStatus: 'v3', element: 'frame', generates: false, opensEditor: false, port: null }),

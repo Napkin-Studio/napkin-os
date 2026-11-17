@@ -1051,6 +1051,16 @@
         "safeArea": {
           "$ref": "common.schema.json#/$defs/safeArea"
         },
+        "brief": {
+          "type": "object",
+          "description": "The brief in the node's scope (features/brief-node.clan): its own linked Brief node, else the one its Script (or the Storyboard that drives it) has linked. Its spine only, never the whole brief. Sent on the director-backed ops (write, shot_list, frame, frame_edit, region_edit, clip, clip_edit, clip_patch, cutdown, resize); the director writes it in a brief block cut to that op's budget, and reports a cut or size that breaks a mandatory or a don't in briefFlags (it never blocks or asks). Absent: no brief, and the director's input is exactly as before. The relay never records it in the run log.",
+          "properties": {
+            "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "spine": { "$ref": "common.schema.json#/$defs/briefSpine" }
+          },
+          "required": ["title", "spine"],
+          "additionalProperties": false
+        },
         "context": {
           "type": "array",
           "maxItems": 16,

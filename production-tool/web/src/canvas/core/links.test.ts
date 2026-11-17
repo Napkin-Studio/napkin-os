@@ -52,6 +52,16 @@ const CASES: Case[] = [
   ['Anything → Brand board (refused)', 'picture', brand, 'A reference cannot feed a brand board'],
   ['Video → anything but a Format set (refused)', 'video', 'storyboard', 'A video cannot feed a storyboard'],
   ['Video → Shot (refused)', 'video', 'shot', 'A video cannot feed a shot'],
+  // features/brief-node.clan: brief → script/storyboard/video/format_set only.
+  ['Brief → Script', 'brief', 'script', ['brief']],
+  ['Brief → Storyboard', 'brief', 'storyboard', ['brief']],
+  ['Brief → Video', 'brief', 'video', ['brief']],
+  ['Brief → Format set', 'brief', 'format_set', ['brief']],
+  ['Brief → Sketch area (refused)', 'brief', 'sketch', 'Not a target for a brief'],
+  ['Brief → Shot (refused)', 'brief', 'shot', 'Not a target for a brief'],
+  ['Brief → Frame (refused)', 'brief', 'generated', 'Not a target for a brief'],
+  ['Brief → Brief (refused)', 'brief', 'brief', 'A brief cannot feed a brief'],
+  ['Anything → Brief (refused)', 'script', 'brief', 'A script cannot feed a brief'],
 ]
 
 describe('canLink: every row of 3.4', () => {
@@ -61,14 +71,14 @@ describe('canLink: every row of 3.4', () => {
     else expect(got).toEqual({ ok: true, roles: want })
   })
 
-  it('the table is 3.4 as written, plus the owner’s Script → Video row: eleven rows, three refusals', () => {
+  it('the table is 3.4 as written, plus the owner’s Script → Video and Brief rows: twelve rows, three refusals', () => {
     expect(LINK_TABLE.map((r) => r.fromTo)).toEqual([
       'Script → Storyboard', 'Storyboard → Video', 'Script → Video', 'Reference → any generating node, or a Shot', 'Board or group → any generating node',
       'Note, ink group or Document → any generating node', 'Brand board → any generating node', 'Frame, key visual or Video → Format set',
-      'Image, frame or generated picture → Shot', 'Sketch area → Frame', 'Ink group → Shot',
+      'Image, frame or generated picture → Shot', 'Sketch area → Frame', 'Ink group → Shot', 'Brief → Script, Storyboard, Video or Format set',
     ])
     expect(REFUSALS.map((r) => r.fromTo)).toEqual([
-      'Anything → Reference, Product, Document or Brand board', 'Video → anything but a Format set', 'A link that would form a loop',
+      'Anything → Reference, Product, Document, Brief or Brand board', 'Video → anything but a Format set', 'A link that would form a loop',
     ])
     expect(LINK_TABLE.find((r) => r.fromTo === 'Sketch area → Frame')!.allowed).toBe('Created by the system only')
   })
@@ -126,6 +136,14 @@ describe('checkLink: the limits', () => {
   it('one brand link', () => {
     const g = graph([['b1', 'board', 'brand'], ['b2', 'board', 'brand'], ['s', 'script']], [['b1', 's', 'brand']])
     expect(checkLink(g, 'b2', 's', 'brand')).toEqual({ ok: false, reason: 'This already has a brand board.' })
+  })
+
+  it('one brief per node; one brief feeds many nodes (a main film and its cut-down each take their own)', () => {
+    const g = graph([['br1', 'brief'], ['br2', 'brief'], ['s', 'script'], ['v', 'video'], ['fs', 'format_set']], [['br1', 's', 'brief']])
+    expect(checkLink(g, 'br2', 's', 'brief')).toEqual({ ok: false, reason: 'This already has a brief.' })
+    expect(checkLink(g, 'br1', 'v', 'brief')).toEqual({ ok: true })
+    expect(checkLink(g, 'br2', 'fs', 'brief')).toEqual({ ok: true })
+    expect(checkLink(g, 'br1', 's', 'context')).toEqual({ ok: false, reason: 'A brief feeds a script as brief.' })
   })
 
   it('one input link per board or group, while a node takes many boards', () => {

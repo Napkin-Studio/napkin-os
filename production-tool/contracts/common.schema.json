@@ -13,7 +13,7 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$",
-      "description": "Prefixed ULID made by the client (or, for a job's question, the relay): job_, ref_, key_, shot_, beat_, scene_, script_, storyboard_, video_, frame_, gen_, render_, rev_, link_, board_, sketch_, doc_, fset_, size_, check_, q_, sug_, spin_, stale_, exp_, item_, run_, node_, proj_ …. Never holds '.', '[', ']' or '#', so it is always a safe map key and address segment."
+      "description": "Prefixed ULID made by the client (or, for a job's question, the relay): job_, ref_, key_, shot_, beat_, scene_, script_, storyboard_, video_, frame_, gen_, render_, rev_, link_, board_, sketch_, doc_, brief_, fset_, size_, check_, q_, sug_, spin_, stale_, exp_, item_, run_, node_, proj_ …. Never holds '.', '[', ']' or '#', so it is always a safe map key and address segment."
     },
     "sceneId": {
       "type": "string",
@@ -329,9 +329,24 @@
       "required": ["x", "y", "w", "h"],
       "additionalProperties": false
     },
+    "briefSpine": {
+      "type": "object",
+      "description": "A brief's spine (features/brief-node.clan, owner 2026-11-17): the few parts of a Brief Maker brief every agent reads, projected by one declaration (web/src/brief/spine.ts BRIEF_SPINE) and frozen at the version taken. Each part is cut at a word to its length here; the relay's brief block has its own, smaller budget per op. Never typed in Production.",
+      "properties": {
+        "insight": { "type": "string", "maxLength": 400 },
+        "proposition": { "type": "string", "maxLength": 200, "description": "The single-minded proposition." },
+        "audience": { "type": "string", "maxLength": 400 },
+        "tone": { "type": "string", "maxLength": 300, "description": "Tone and world, its lines joined." },
+        "feel": { "type": "string", "maxLength": 200, "description": "What they should feel (desired response)." },
+        "mandatories": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 120 }, "maxItems": 6 },
+        "donts": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 120 }, "maxItems": 6, "description": "What the film must not do: the brief's mandatories worded as a prohibition (Don't, Do not, Never, Avoid, No …)." },
+        "format": { "type": "string", "maxLength": 160, "description": "Format and length, when the brief sets them (its role of each medium)." }
+      },
+      "additionalProperties": false
+    },
     "linkEndpointKind": {
-      "enum": ["board", "group", "note", "ink", "script", "storyboard", "video", "ref", "key", "frame", "render", "sketch", "document", "format_set", "shot", "text"],
-      "description": "What a link joins. group, note and ink are canvas things: their id is a sceneId. Every other kind is a document entity: its id is the entity's id. key (2026-10-15, owner): a solid key (keys[id]), the whole character or thing; every named ref with that key, each of its views, is in a node's scope through the one link. text (2026-10-16, owner): a text written on the canvas (texts[id], which holds its words and its canvas element); linked into a node, its words are that node's input words."
+      "enum": ["board", "group", "note", "ink", "script", "storyboard", "video", "ref", "key", "frame", "render", "sketch", "document", "format_set", "shot", "text", "brief"],
+      "description": "What a link joins. group, note and ink are canvas things: their id is a sceneId. Every other kind is a document entity: its id is the entity's id. key (2026-10-15, owner): a solid key (keys[id]), the whole character or thing; every named ref with that key, each of its views, is in a node's scope through the one link. text (2026-10-16, owner): a text written on the canvas (texts[id], which holds its words and its canvas element); linked into a node, its words are that node's input words. brief (2026-11-17, owner; features/brief-node.clan): a Brief node (briefs[id]), a frozen, read-only copy of a Brief Maker brief's spine; linked into a node, the spine goes with every job from it."
     },
     "linkEndpoint": {
       "type": "object",
@@ -347,13 +362,13 @@
     },
     "linkRole": {
       "anyOf": [
-        { "enum": ["drives", "renders", "input", "note", "context", "brand", "master", "frame", "made_from", "note_on_shot"] },
+        { "enum": ["drives", "renders", "input", "note", "context", "brand", "master", "frame", "made_from", "note_on_shot", "brief"] },
         { "$ref": "#/$defs/refRole" }
       ],
       "description": "A link's label (ui-behaviour 3.4). A reference's link carries its role (character, lighting, …); 'layout' is both a ref role and a shot's layout guide."
     },
     "linkRule": {
-      "description": "Every link that may exist (ui-behaviour 3.4), the one table the canvas's canLink(), clan-store's integrity check and check.py read. A link is allowed when a rule has its from kind, its to kind and its role; the first such rule decides its limits. per_target one: at most one link of that role into one target. per_source one: at most one link from one source into one target. system: made only by the tool. generating: the nodes that send work to an agent. Refused besides: a link into a ref, a document or a brand board; a link out of a video except as a format set's master; a link that makes a loop.",
+      "description": "Every link that may exist (ui-behaviour 3.4), the one table the canvas's canLink(), clan-store's integrity check and check.py read. A link is allowed when a rule has its from kind, its to kind and its role; the first such rule decides its limits. per_target one: at most one link of that role into one target. per_source one: at most one link from one source into one target. system: made only by the tool. generating: the nodes that send work to an agent. Refused besides: a link into a ref, a document, a brief or a brand board; a link out of a video except as a format set's master; a link that makes a loop.",
       "const": {
         "generating": ["script", "storyboard", "video", "sketch", "format_set"],
         "rules": [
@@ -368,7 +383,8 @@
           { "from": ["board"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["brand"], "per_target": "one", "board_purpose": "brand" },
           { "from": ["frame", "ref", "render", "video"], "to": ["format_set"], "roles": ["master"], "per_target": "one", "system": true },
           { "from": ["sketch"], "to": ["frame"], "roles": ["made_from"], "per_target": "one", "system": true },
-          { "from": ["ink"], "to": ["shot"], "roles": ["note_on_shot"], "per_target": "many", "per_source": "one" }
+          { "from": ["ink"], "to": ["shot"], "roles": ["note_on_shot"], "per_target": "many", "per_source": "one" },
+          { "from": ["brief"], "to": ["script", "storyboard", "video", "format_set"], "roles": ["brief"], "per_target": "one" }
         ]
       }
     },

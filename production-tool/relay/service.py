@@ -633,7 +633,12 @@ class Relay:
         for k in ("error", "jobId", "op", "pick", "libraryKey"):
             if ctx.get(k) is not None:
                 data[k] = ctx[k]
-        if route == "/jobs" or route.startswith("/library/"):
+        if route == "/jobs":
+            kept, briefed = dogfood.without_brief(body or b"")
+            data["body"] = dogfood.body_value(kept)
+            if briefed:
+                data["brief"] = True  # a brief went with it; its words stay out of the record
+        elif route.startswith("/library/"):
             data["body"] = dogfood.body_value(body or b"")
         elif body:
             data["bytes"] = len(body)
@@ -1980,7 +1985,10 @@ class Relay:
         if errors:
             return self._fail(saved, "internal", f"The plan did not match its schema: {errors[0]}", paid=False, refund=True)
         block = {"model": getattr(cutter, "model", "unknown"), "promptVersion": getattr(cutter, "prompt_version", cutdowns.PROMPT_VERSION),
-                 "output": {"lengths": len(plan["lengths"]), "crops": len(plan["crops"])}, "rationale": rationale[:2000], "latencyMs": latency}
+                 "output": {"lengths": len(plan["lengths"]), "crops": len(plan["crops"]),
+                            # the Review flags against a linked brief (features/brief-node.clan): never blocking
+                            **({"briefFlags": out["briefFlags"]} if out.get("briefFlags") else {})},
+                 "rationale": rationale[:2000], "latencyMs": latency}
         return self._finish(saved, "completed", cutdownPlan=plan, director=block, outputs=[], kind="generated", paid=False)
 
     def _run_cutdown_render(self, job: dict, cfg: dict) -> dict:

@@ -39,6 +39,14 @@ plans a script written as prose and bullets, with no scene heading or screenplay
 no question), count (within `expect.shots`), length (the shots add up to the target within half a second), words
 (each `must` group in some shot's words), order (those words in the script's order) and no_headings (no
 scene_heading and none of `forbid` invented). Not recorded yet: record live on the owner's say.
+
+The brief (features/brief-node.clan, owner 2026-11-17): three shot_list cases (`since` director.v13) plan the same
+one-line script under three linked briefs (quiet for 55 to 70, brisk for 18 to 24, premium and minimal). Besides the
+shot_list checks, each scores brief_pace (shot count and average length as its `expect_brief` names), brief_camera
+(no movement speed the brief rules out; one it names where any is set), brief_words (its tone in the shots' words),
+brief_forbid (no line a don't rules out), brief_insert (a close detail where a mandatory asks for one), no_quote (the
+proposition is never put on screen) and no_flags (nothing flagged that the plan does not break). Together the three
+must differ as named. Not recorded yet: record live on the owner's say.
 """
 
 from __future__ import annotations
@@ -274,6 +282,31 @@ def _score_shot_list(case: dict, out: dict) -> dict:
     res["order"] = res["words"] and first == sorted(first)
     res["no_headings"] = not any(s.get("scene_heading") for s in shots) and not any(
         w in t for t in texts for w in case.get("forbid", []))
+    if case.get("expect_brief"):
+        res.update(_score_brief_plan(case, out, shots, texts))
+    return res
+
+
+def _score_brief_plan(case: dict, out: dict, shots: list, texts: list[str]) -> dict:
+    """A plan under a linked brief (since director.v13): the differences its `expect_brief` names."""
+    want = case["expect_brief"]
+    spine = case["input"]["brief"]["spine"]
+    avg = sum(s.get("duration_s") or 0 for s in shots) / len(shots) if shots else 0
+    speeds = [(s.get("camera") or {}).get("movement_speed") for s in shots]
+    speeds = [x for x in speeds if x]
+    words = " ".join(texts)
+    res = {}
+    res["brief_pace"] = (len(shots) >= want.get("min_shots", 1) and len(shots) <= want.get("max_shots", 24)
+                         and avg >= want.get("min_avg_s", 0) and avg <= want.get("max_avg_s", 30))
+    res["brief_camera"] = all(x not in want.get("no_speed", []) for x in speeds) and (
+        not speeds or not want.get("speed") or any(x in want["speed"] for x in speeds))
+    res["brief_words"] = all(any(w in words for w in group) for group in want.get("words", []))
+    res["brief_forbid"] = not any(w in words for w in want.get("forbid", []))
+    if want.get("insert"):
+        res["brief_insert"] = any((s.get("camera") or {}).get("size") in ("insert", "extreme_close", "close")
+                                  or (s.get("camera") or {}).get("macro") for s in shots)
+    res["no_quote"] = _words(spine.get("proposition", "")) not in words
+    res["no_flags"] = not out.get("briefFlags")
     return res
 
 

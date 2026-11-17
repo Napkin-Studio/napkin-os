@@ -42,11 +42,12 @@ def test_v11_is_v10_with_the_take_tied_to_its_frames():
     assert changed[0].startswith("  - `take_refs`:") and "follows image k" in changed[0] and "No frame is pinned" in changed[0]
 
 
-def test_the_configs_run_v12_and_the_check_allows_v11():
-    """v12 is v11 plus frame-edit-or-redraw's lines; v11 stays allowed for a rollback."""
+def test_the_configs_run_v13_and_the_check_allows_v11_and_v12():
+    """v12 is v11 plus frame-edit-or-redraw's lines, v13 is v12 plus the brief (features/brief-node.clan);
+    v11 and v12 stay allowed for a rollback."""
     for name in ("config.live.json", "config.testing.json", "config.pathway.runway.json"):
-        assert json.loads((CONTRACTS / "examples" / name).read_text())["director"]["promptVersion"] == "director.v12", name
-    assert '"director.v11"' in (CONTRACTS / "check.py").read_text()
+        assert json.loads((CONTRACTS / "examples" / name).read_text())["director"]["promptVersion"] == "director.v13", name
+    assert '"director.v11"' in (CONTRACTS / "check.py").read_text() and '"director.v12"' in (CONTRACTS / "check.py").read_text()
 
 
 def test_the_passthrough_ties_each_shot_to_its_frame_and_sends_no_first_frame():

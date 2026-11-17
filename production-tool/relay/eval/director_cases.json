@@ -1504,6 +1504,208 @@
       "frame": false,
       "ties": true,
       "budget": 500
+    },
+    {
+      "id": "brief_quiet_morning",
+      "since": "director.v13",
+      "op": "shot_list",
+      "why": "features/brief-node.clan (owner 2026-11-17): the same one-line script planned under three linked briefs. The plan follows each brief's tone and audience where the script leaves them open (the pace, the shot sizes, the camera), keeps its mandatories, breaks no don't, never puts the brief's words on screen and flags nothing it does not break.",
+      "input": {
+        "script": "A woman opens her fridge in the morning and takes out a bottle of Lumen water.",
+        "targetS": 15,
+        "brief": {
+          "title": "Lumen: a quiet start",
+          "spine": {
+            "proposition": "Lumen is what the day starts with.",
+            "audience": "Adults 55 to 70 who like a slow, settled morning at home.",
+            "tone": "Quiet, warm, unhurried; soft morning light",
+            "feel": "Calm and settled",
+            "mandatories": [
+              "Lumen name first"
+            ],
+            "donts": [
+              "Don't use fast cuts or loud music"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "shots": [
+          2,
+          8
+        ]
+      },
+      "must": [
+        [
+          "fridge"
+        ],
+        [
+          "lumen"
+        ]
+      ],
+      "forbid": [
+        "int.",
+        "ext."
+      ],
+      "expect_brief": {
+        "max_shots": 4,
+        "min_avg_s": 3.5,
+        "speed": [
+          "slow"
+        ],
+        "no_speed": [
+          "fast"
+        ],
+        "words": [
+          [
+            "calm",
+            "soft",
+            "slow",
+            "quiet",
+            "gentle",
+            "warm"
+          ]
+        ],
+        "forbid": [
+          "fast cut",
+          "loud"
+        ]
+      }
+    },
+    {
+      "id": "brief_brisk_gen_z",
+      "since": "director.v13",
+      "op": "shot_list",
+      "why": "features/brief-node.clan (owner 2026-11-17): the same one-line script planned under three linked briefs. The plan follows each brief's tone and audience where the script leaves them open (the pace, the shot sizes, the camera), keeps its mandatories, breaks no don't, never puts the brief's words on screen and flags nothing it does not break.",
+      "input": {
+        "script": "A woman opens her fridge in the morning and takes out a bottle of Lumen water.",
+        "targetS": 15,
+        "brief": {
+          "title": "Lumen: hit the ground running",
+          "spine": {
+            "proposition": "Lumen is what the day starts with.",
+            "audience": "Students 18 to 24 rushing out of a shared flat.",
+            "tone": "Brisk, playful, high energy; quick cuts",
+            "feel": "Awake and ready to go",
+            "mandatories": [
+              "Lumen name first"
+            ],
+            "donts": [
+              "Never show the bottle being wasted or spilled"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "shots": [
+          2,
+          8
+        ]
+      },
+      "must": [
+        [
+          "fridge"
+        ],
+        [
+          "lumen"
+        ]
+      ],
+      "forbid": [
+        "int.",
+        "ext."
+      ],
+      "expect_brief": {
+        "min_shots": 5,
+        "max_avg_s": 3.0,
+        "speed": [
+          "fast",
+          "normal"
+        ],
+        "no_speed": [],
+        "words": [
+          [
+            "quick",
+            "rush",
+            "grab",
+            "dash",
+            "energ",
+            "hurr",
+            "fast"
+          ]
+        ],
+        "forbid": [
+          "spill",
+          "pours away"
+        ]
+      }
+    },
+    {
+      "id": "brief_premium_ritual",
+      "since": "director.v13",
+      "op": "shot_list",
+      "why": "features/brief-node.clan (owner 2026-11-17): the same one-line script planned under three linked briefs. The plan follows each brief's tone and audience where the script leaves them open (the pace, the shot sizes, the camera), keeps its mandatories, breaks no don't, never puts the brief's words on screen and flags nothing it does not break.",
+      "input": {
+        "script": "A woman opens her fridge in the morning and takes out a bottle of Lumen water.",
+        "targetS": 15,
+        "brief": {
+          "title": "Lumen Reserve: the morning ritual",
+          "spine": {
+            "proposition": "Lumen Reserve makes the first glass a ritual.",
+            "audience": "Design-minded professionals 30 to 45.",
+            "tone": "Premium, minimal, precise; clean lines and cool light",
+            "feel": "Refined",
+            "mandatories": [
+              "Lumen name first",
+              "A close-up of the glass bottle"
+            ],
+            "donts": [
+              "No price, discount or offer on screen"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "shots": [
+          2,
+          8
+        ]
+      },
+      "must": [
+        [
+          "fridge"
+        ],
+        [
+          "lumen"
+        ]
+      ],
+      "forbid": [
+        "int.",
+        "ext."
+      ],
+      "expect_brief": {
+        "insert": true,
+        "speed": [
+          "slow",
+          "normal"
+        ],
+        "no_speed": [
+          "fast"
+        ],
+        "words": [
+          [
+            "close",
+            "detail",
+            "glass",
+            "macro"
+          ]
+        ],
+        "forbid": [
+          "price",
+          "discount",
+          "offer",
+          "%"
+        ]
+      }
     }
   ],
   "frames": {

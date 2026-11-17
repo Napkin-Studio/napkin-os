@@ -216,6 +216,17 @@
       },
       "maxProperties": 64
     },
+    "briefs": {
+      "type": "object",
+      "description": "Brief nodes (features/brief-node.clan, owner 2026-11-17): each a frozen, read-only copy of a Brief Maker brief's spine, made only by linking a brief or spinning one off into Production, never typed here. Several per canvas (a main film and a cut-down for another market). Optional: a document made before it has none.",
+      "propertyNames": {
+        "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/brief"
+      },
+      "maxProperties": 16
+    },
     "texts": {
       "type": "object",
       "description": "Texts written on the canvas (features/canvas-text.clan, 2026-10-16): each holds its words and the canvas element it is, so a node a text is linked into reads its words without the canvas. Optional: a document made before it has none.",
@@ -503,7 +514,8 @@
             "sketch",
             "document",
             "board",
-            "key"
+            "key",
+            "brief"
           ]
         },
         "id": {
@@ -2183,6 +2195,106 @@
       ],
       "additionalProperties": false
     },
+    "brief": {
+      "type": "object",
+      "description": "A Brief node (features/brief-node.clan): a Brief Maker brief's spine, frozen at the version taken. Read-only here: Open in Brief Maker to change it. When the brief changes there, the node says 'Brief changed: update?'; taking the newer version is the person's decision (one decision entry), never automatic. Linked into a Script, Storyboard, Video or Format set (role brief), the spine is in that node's scope and goes with its jobs; a brief linked into a Script carries on to the Storyboard and Video it drives unless they have one linked of their own.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "minLength": 1,
+          "description": "The brief's title when it was taken."
+        },
+        "source": {
+          "type": "object",
+          "description": "Where it was taken from, as the OS's links keep it (clan_sdk Attached: document id, data hash, how many times taken).",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1,
+              "description": "The brief's OS document id (its library path, doc-…): what GET /api/t/{tenant}/d/{doc}/data reads and the shell opens (/?open=<id>)."
+            },
+            "app_id": {
+              "const": "ie.napkin.brief-maker"
+            },
+            "data_sha256": {
+              "$ref": "common.schema.json#/$defs/sha256",
+              "description": "sha256 of the brief's shared/data.yaml as taken: a brief whose data hashes otherwise has changed."
+            },
+            "taken": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The version shown ('from Brief Maker v2'): 1 when linked, one more on each update taken."
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When it was linked or last updated."
+            },
+            "how": {
+              "enum": [
+                "link",
+                "spinoff"
+              ],
+              "description": "Linked from an existing brief, or spun off from Brief Maker into Production."
+            },
+            "kept": {
+              "$ref": "common.schema.json#/$defs/sha256",
+              "description": "A newer version the person chose not to take (Keep this version): no notice again until the brief changes once more."
+            }
+          },
+          "required": [
+            "document_id",
+            "app_id",
+            "data_sha256",
+            "taken",
+            "at",
+            "how"
+          ],
+          "additionalProperties": false
+        },
+        "spine": {
+          "$ref": "common.schema.json#/$defs/briefSpine"
+        },
+        "confidential": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "insight",
+              "proposition",
+              "audience",
+              "tone",
+              "feel",
+              "mandatories",
+              "donts",
+              "format"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "Spine parts made from brief parts marked Confidential (owner 2026-11-13): shown in full to the agency and the client, never sent to Napkin's own records (run logs, layers, evals, training)."
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "source",
+        "spine"
+      ],
+      "additionalProperties": false
+    },
     "text": {
       "type": "object",
       "description": "A text on the canvas (the Text tool's). Its words follow the canvas: an edit there rewrites them; a delete takes it out with its links. Linked into a node (role note), its words are that node's input words.",
@@ -2743,7 +2855,7 @@
     },
     "check": {
       "type": "object",
-      "description": "Jude's check of a result against the shot or the brand rules. Brand rules never block; Ignore is recorded here.",
+      "description": "Jude's check of a result against the shot, the brand rules or a linked brief's mandatories and don'ts. Brand rules and brief flags never block; Ignore is recorded here.",
       "properties": {
         "id": {
           "type": "string",
@@ -2778,6 +2890,11 @@
         "rule_ref": {
           "type": "string",
           "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "brief_id": {
+          "type": "string",
+          "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "A flag against a linked brief (features/brief-node.clan): reason_code brief_mandatory or brief_dont, the note naming the line. It never blocks or asks: it shows in Decisions and as an amber mark on its target."
         },
         "note": {
           "type": "string",
@@ -3206,7 +3323,8 @@
                   "generation",
                   "render",
                   "board",
-                  "group"
+                  "group",
+                  "brief"
                 ]
               },
               "ref": {

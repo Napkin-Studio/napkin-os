@@ -84,6 +84,21 @@ def body_value(raw: bytes, cap: int = BODY_CAP) -> dict:
     return out
 
 
+def without_brief(raw: bytes) -> tuple[bytes, bool]:
+    """A /jobs body without its brief (features/brief-node.clan): the spine may hold parts the client
+    marked Confidential, and Napkin's own record never takes them in (owner 2026-11-13). Whether a
+    brief went is kept; its words are not. A body that is not a job's JSON is returned as it came."""
+    try:
+        job = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        return raw, False
+    inp = job.get("input") if isinstance(job, dict) else None
+    if not isinstance(inp, dict) or "brief" not in inp:
+        return raw, False
+    inp.pop("brief")
+    return json.dumps(job, separators=(",", ":")).encode(), True
+
+
 def capped(data):
     """An event's data, capped like a body: a shell event can carry what was typed."""
     raw = json.dumps(data, separators=(",", ":"), default=str).encode()

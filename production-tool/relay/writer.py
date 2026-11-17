@@ -27,7 +27,7 @@ from pathlib import Path
 from contracts import Contracts
 
 WRITE_MODEL = "claude-sonnet-5-5"
-PROMPT_VERSION = "skye.v4"  # skye.v1–v3 stay bundled: ModelWriter(prompt_version="skye.v3") rolls back
+PROMPT_VERSION = "skye.v5"  # skye.v1–v4 stay bundled: ModelWriter(prompt_version="skye.v4") rolls back (v5: the brief, features/brief-node.clan)
 PURPOSE = "writer"
 PROMPTS = Path(__file__).parent / "prompts"
 ASK_HOOK = "[ask]"
@@ -126,7 +126,10 @@ class ModelWriter:
     def write(self, req: dict) -> dict:
         from director.model import Usage
 
-        inp = req["input"]
+        import brief as briefs
+
+        # A linked brief, cut to the write op's budget (features/brief-node.clan); none: the input as it came.
+        inp = briefs.for_op("write", req["input"])
         usage = Usage()
         t0 = time.monotonic()
 

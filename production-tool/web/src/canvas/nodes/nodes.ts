@@ -111,6 +111,8 @@ export function endOf(e: CanvasElement | undefined, doc: ProductionDocument, opt
   if (card) return { el: e, doc: { kind: card.kind, id: card.id }, core: { kind: card.kind as LinkKind } }
   const t = tag(e)
   if (t.kind === 'sketch' && t.id) return { el: e, doc: { kind: 'sketch', id: t.id }, core: { kind: 'sketch' } }
+  // A Brief node (features/brief-node.clan): its card carries {kind: 'brief', id}; an input only.
+  if (t.kind === 'brief' && t.id) return doc.briefs?.[t.id] ? { el: e, doc: { kind: 'brief', id: t.id }, core: { kind: 'brief' } } : null
   if (e.type === 'text' && !(e as CanvasElement & { containerId?: string | null }).containerId) {
     const row = textRowOf(doc, e.id)
     return row ? { el: e, doc: { kind: 'text', id: row.id }, core: { kind: 'note' } } : { refuse: 'Type something in this text first, then link it.' }
@@ -166,7 +168,7 @@ export function linkCheck(els: readonly CanvasElement[], doc: ProductionDocument
   const a = endOf(from, doc, opts)
   const b = endOf(to, doc)
   if (a && 'refuse' in a) return { ok: false, reason: a.refuse }
-  if (!a || !b) return { ok: false, reason: 'Link a script, a storyboard, a video, a named picture, a sketch area or a text.' }
+  if (!a || !b) return { ok: false, reason: 'Link a script, a storyboard, a video, a brief, a named picture, a sketch area or a text.' }
   if ('refuse' in b) return { ok: false, reason: to.type === 'text' ? b.refuse : `Nothing links into ${endName({ kind: 'picture' })}: it is an input only.` }
   if (a.doc.id === b.doc.id) return { ok: false, reason: 'That would make a loop.' }
   const can = canLink(a.core, b.core)
@@ -420,6 +422,8 @@ export function docEnd(doc: ProductionDocument, e: LinkEndpoint): { core: CoreEn
     case 'video': return doc.videos?.[e.id] ? { core: { kind: 'video' } } : null
     case 'sketch': return doc.sketches?.[e.id] ? { core: { kind: 'sketch' } } : null
     case 'shot': return doc.shots?.[e.id] ? { core: { kind: 'shot' } } : null
+    case 'format_set': return doc.format_sets?.[e.id] ? { core: { kind: 'format_set' } } : null
+    case 'brief': return doc.briefs?.[e.id] ? { core: { kind: 'brief' } } : null
     default: return null
   }
 }
