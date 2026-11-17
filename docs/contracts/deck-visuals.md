@@ -37,6 +37,11 @@ shapes that nothing reads together. This contract gives each of those one shape.
 7. **`validation.json` and `qa.json` keep their shapes.** Issues (§7) are derived from them by adapters. A
    validator finding and `golden_validation.json` do not change.
 8. **Nothing invents a layout.** A layout id is one of the library's (§2), at most 40 of them.
+9. **How a deck should be is the user's choice, asked by the tool.** Which slides carry pictures, how
+   much text a slide holds, where pictures come from and what they may cost, which Style Pack, whose brand,
+   who approves a picture and what it is labelled are deck preferences (§6.3): fields on the deck, each
+   with a default, asked at intake only when the answer changes the build (§6.4). They are not policy
+   fixed by Sai or Laurence (Sai, 2026-11-17).
 
 ## 2. Where each thing lives, and who writes it
 
@@ -49,10 +54,13 @@ shapes that nothing reads together. This contract gives each of those one shape.
 | Asset registry | `deck.assets.<asset id>` | `deck.schema.json` | the image plan and the image step |
 | The look a deck used | `deck.meta.theme` | `deck.schema.json` `meta` | the runner |
 | The repair policy a run used | `deck.meta.repair_policy` | `schemas/repair_policy.schema.json` | the runner |
-| The person's look choices | `look` (top level, `x-clan-appearance`) | template `schema.json` | the app |
+| Deck preferences: how it looks | `look.pictures`, `look.density`, `look.brand`, `look.style_pack` (top-level `look`, `x-clan-appearance`) | template `schema.json` | the app, from an intake answer, the Start screen or Review |
+| Deck preferences: spend and approval | `inputs.pictures.source`, `inputs.pictures.approval` | template `schema.json` | the app, the same three ways |
+| The preferences a build used | `deck.meta.preferences` | `deck.schema.json` `meta` | the runner |
+| Other look choices | `look.theme`, `look.strict_brand`, `look.layouts` | template `schema.json` | the app |
 | The person's review decisions | `review.pinned`, `review.images` | template `schema.json` | the app |
 | Fidelity switch | `inputs.text_mode` | template `schema.json` | the app |
-| Presentation inputs on or off | `inputs.library.enabled` | template `schema.json` (exists) | the app, once ADR 0027 is accepted |
+| Presentation inputs allowed at all | `inputs.library.enabled` | template `schema.json` (exists) | the app, once ADR 0027 is accepted |
 | Issues | run folder `issues.json`; `qa.issues.<issue id>` in the document | `schemas/issue.schema.json` | the runner |
 | Repair rounds | run folder `repair.json`; `repair` in the document | template `schema.json` | the runner |
 | Golden slides | `engine/deck/golden/<slide type>/<id>.yaml` | `schemas/golden.schema.json` | a person, by PR |
@@ -181,17 +189,20 @@ empty ──▶ planned ──▶ made ──────▶ approved
   something; the slot waits for a person.
 - `approved` exists only as the stamp of a person's `approve` whose `asset` is the slot's `asset`. A slot
   whose asset changes after approval returns to `made` or `flagged`: an approval is for one picture.
-- A review render draws `made`, `flagged` and `approved` pictures; all but `approved` carry the fixed label
-  Illustrative. A client render draws only `approved`. Any other filled slot on a client render is
+- A review render draws `made`, `flagged` and `approved` pictures; all but `approved` carry the deck's
+  picture label (`inputs.pictures.approval.label`, by default Illustrative). A client render draws only
+  `approved`, and only a decision by the deck's approver (`inputs.pictures.approval.approver`) is stamped. Any other filled slot on a client render is
   `image_unapproved` (an error for `--audience client`), and the slide uses the layout's `without_image`.
 
 ### 4.4 Where a picture may go
 
 Slide types `title`, `appendix` (the divider), `territory`, `idea`, `execution`, `audience`, `real_question`,
 `close`, and the investor types `solution` and `product`. Every other type is an evidence slide and takes
-no picture. This list is a decision for Laurence and part of ADR 0027's decision: as ADR 0027 is worded
-(§4, "only where the slide already says illustrative") only `territory` and `execution` slides qualify,
-because only they carry `visual.kind: image_prompt` today (`assemble.py` lines 562 and 586).
+no picture. Within this list the user chooses (`look.pictures`, §6.3): none, the creative slides, the
+creative slides and the cover, or slide by slide. The list itself is the rule and part of ADR 0027's
+decision: as ADR 0027 is worded (§4, "only where the slide already says illustrative") only `territory`
+and `execution` slides qualify, because only they carry `visual.kind: image_prompt` today (`assemble.py`
+lines 562 and 586).
 
 ## 5. The layout library
 
@@ -208,7 +219,7 @@ role or renderer stops the load, as `ProfileError` does for a deck type.
 | `when` | `{blocks_any, blocks_only, needs_image, needs_number, min_items, max_items, status}`: when the picker may choose it |
 | `priority` | 0 to 100; highest first, first match wins. Replaces the order of `choose_layout`'s table |
 | `alternatives`, `roomier`, `without_image` | up to 4 swaps; the next layout on the fit ladder; the layout used when its image slot stays empty |
-| `density` | `airy` · `regular` · `dense` |
+| `density` | `lean` · `standard` · `detailed`: the most text the layout is meant for, the same three words as `look.density` (§6.3) |
 | `renderer` | the draw routine's name. Every renderer (pptx, web, HyperFrames) has one for it or falls back to `flow` and says so |
 | `slots` | 1 to 8 slot definitions, by name |
 
@@ -274,23 +285,89 @@ From a Brand Clan the deck reads `visual.colours`, `typography`, `logos`, `image
 that are `checkable` with `area` `logo`, `colour` or `imagery` (a warning, never a block). It never reads
 `voice`, `strategy`, `claims` or `legal_lines`: a kit adds no word to a slide.
 
-### 6.3 What the person chooses
+### 6.3 Deck preferences: what the user chooses
+
+Six choices about how this deck should be. Each is a field on the deck with a default. Each is an object
+that holds the choice and, once a person has made it, who and when, like `run.approvals`:
+`by` (`human:<id>`), `at`, and `via` (`question` · `start` · `review`). With no `by` the default is in
+force and nobody was asked.
 
 ```
-look:   { theme, strict_brand, density, images, layouts: {<slide id>: <layout id>} }   # x-clan-appearance
+look:                                   # x-clan-appearance: how the deck looks
+  pictures:   { on, slides?, by?, at?, via? }
+  density:    { level, by?, at?, via? }
+  brand:      { wears, by?, at?, via? }
+  style_pack: { use, document_id?, by?, at?, via? }
+  theme, strict_brand, layouts: {<slide id>: <layout id>}
+inputs:
+  pictures:                             # not appearance: it can spend money and send a prompt out
+    source:   { allow, cap_usd, by?, at?, via? }
+    approval: { approver, user?, label, by?, at?, via? }
+  text_mode: preserve | condense
+  library: { enabled }
 review: { pinned: {<slide id>: {by, at}},
           images: {<slide id>: {<slot>: {asset, decision, by, at, note?}}} }
-inputs: { text_mode: preserve | condense, library: { enabled } }
 ```
 
-- `look` is marked `"x-clan-appearance": true` on the top-level property, so a person's change is one
-  rolling `look` entry and asks for no reason (os-layer §4). `theme`: `napkin` · `brand` · `classic`.
-  `density`: `airy` · `regular` · `dense`. `images`: `off` (default) · `supplied` · `generate`.
-  `strict_brand`: only the kit's layouts and given tokens, nothing derived.
-- `review` is not appearance: an image approval and a pin are ordinary attributed decisions.
-- `inputs.text_mode`: `preserve` turns the repair loop's shorten rung off; `condense` is the default.
-- `inputs.library.enabled` is the one gate for presentation inputs. While it is false or absent the runner
-  ignores `look.images`, an attached Brand Clan and an attached Style Pack, and the deck is today's.
+| Field | Values (default first) | The question, as worded | Feeds |
+|---|---|---|---|
+| `look.pictures.on` | `creative` · `none` · `creative_cover` · `custom` | "Which slides should carry pictures?" Creative slides only (territories, the idea, the work, the audience) · None · Creative slides and the cover · I'll choose slide by slide | which slides get an image layout (§4.4). `creative_cover` adds `title` and the divider. `custom` starts from `creative`; `slides: {<slide id>: true \| false}` is set at Review, once slides exist, and only for a slide type of §4.4 |
+| `look.density.level` | `lean` for a presented pitch, `detailed` for a leave-behind (`inputs.format: full`) · `standard` | "How much text should each slide carry?" Lean: about 30 words, the rest in the speaker notes · Standard: up to about 60 words · Detailed: the full text on the slide | the picker prefers layouts of that `density`, and the fit ladder moves whole points to the notes above the target: 30 words on a content slide, 60, or the slide type's budget (`spec.SLIDE_TYPES`). Nothing is reworded by it |
+| `inputs.pictures.source.allow`, `.cap_usd` | `existing` · `generated`; `2.5` (0 to 10) | "Where may the pictures come from?" Only pictures we already have (territory frames and uploads) · Also make new ones, up to $2.50 for this deck (the amount can be changed) | `existing` never calls a provider. `generated` allows it, after the cost card, which shows the cap; the image step stops before the cap is passed |
+| `look.style_pack.use`, `.document_id` | `territory` · `other` | "Which Style Pack should the pictures follow?" The one the territory board uses · Another one (pick from the attached Style Packs) | the image prompt's style block and references. With no Style Pack attached the built-in default style is used |
+| `look.brand.wears` | `agency` · `client` · `co_branded` | "Whose brand should the deck wear?" Ours, with the client's logo on the cover · The client's · Both, side by side on the cover | which kit `meta.theme` is resolved from, and `logo.placement` |
+| `inputs.pictures.approval.approver`, `.user`, `.label` | `owner` · `named` (with `user: human:<id>`); `Illustrative` (up to 30 characters, no digit) | "Who approves pictures before a client sees them?" Me, the deck's owner · Someone else. "What should a picture be labelled until it is approved?" Illustrative | whose `review.images` decision the runner stamps as `approved`; the label drawn on every picture not yet approved |
+
+Rules:
+
+- `look` is marked `"x-clan-appearance": true` on the top-level property, so a person's change there is one
+  rolling `look` entry and asks for no reason (os-layer §4). `inputs.pictures` and `review` are not
+  appearance: allowing generation, a spend cap, an approver and an approval are ordinary attributed decisions.
+- **A default in the schema is what the app shows and the runner applies.** The engine does not assume
+  it: `run_deck` given no preferences behaves as it does today (no pictures, the slide types' budgets), so
+  recorded runs and goldens are unchanged. The runner always passes the resolved preferences.
+- `deck.meta.preferences` is the runner's stamp of what a build used:
+  `{pictures, density, picture_source, style_pack, brand, picture_approval}`, each the field's values plus
+  `source: person | default`.
+- The label is a fixed label like DRAFT and Illustrative today: it holds no fact, and a digit is refused
+  so that it can never read as a figure.
+- `inputs.library.enabled` is still the one gate (ADR 0027). While it is false or absent the picture,
+  Style Pack and brand questions are not shown, the runner ignores those preferences, an attached Brand
+  Clan and an attached Style Pack, and the deck is today's. Density does not wait on it.
+- Two things stay rules, whatever the user chooses: a part marked Confidential with `model: false` is never
+  sent to a provider (os-layer §4), and a `reference_only` asset never fills a slot.
+- `theme`: `napkin` · `brand` · `classic`. `strict_brand`: only the kit's layouts and given tokens, nothing
+  derived. `inputs.text_mode`: `preserve` turns the repair loop's shorten rung off; `condense` is the default.
+
+### 6.4 Asking: intake, the Start screen and Review
+
+A preference is asked as an intake question card only when the answer changes the build. Otherwise the
+default applies silently, is shown on the Start screen, and stays editable at Review.
+
+The cards are computed in code, like the type question (`intake.type_question`) and the supply cards
+(`intake.supply_questions`): `{id, text, options, allow_text, address, skippable: true, kind: "preference"}`,
+with the default option first and marked `origin: default`. `address` is the field (`look.pictures`).
+
+| Card | Joins the questions only when |
+|---|---|
+| `q_pref_pictures` | the deck has something to place (a Territory run with frames, or an attached picture), or generation is allowed |
+| `q_pref_picture_source` | pictures are on, and the pictures the deck already has cannot fill every slide type chosen |
+| `q_pref_density` | the format is `pitch` and the deck is not a sketch (`meta.sketch`: at most 10 short slides already) |
+| `q_pref_brand` | two brands are available: an agency look or kit, and a client Brand Clan |
+| `q_pref_style_pack` | generation is allowed and more than one Style Pack is attached |
+| picture approval | never. Nothing in a build depends on it; it is set at Review, beside the first picture |
+
+- **The cap is still five** (`intake.MAX_QUESTIONS`). The type question is first, then the stage's own
+  questions and the supply cards, as today. Preference cards take only the places left, in the order of the
+  table. A preference card never displaces a question about what the deck says: with no place left the
+  default applies and the choice waits on the Start screen.
+- **An answer** writes `intake.answers.<qid> = {option_id | text, at, by}` (`by` is new and optional) and,
+  in the same patch, the addressed field with `by`, `at` and `via: question`. A skip writes
+  `{skipped: true, at}` and no field: the default stays in force.
+- **The Start screen** shows all six with their current value; a change writes the field with `via: start`.
+- **Review** shows them again. A change writes the field with `via: review` and takes effect on the next
+  build: a picture preference rebuilds images only (the words stay byte-identical); density re-plans layouts.
+- Build never waits for a preference, as it never waits for any question.
 
 ## 7. Issues
 
@@ -366,7 +443,8 @@ start `slot_`. `placeholder` is raised by both `validate` and `qa_render`; `sour
 - Tests (`engine/deck/tests/test_visual_contract.py`, built after approval): each schema is valid draft-07
   and has one valid and one invalid example; every `spec` tuple equals its schema enum; the colour roles
   equal `theme.COLOR_FIELDS` and the scale keys are `theme.Scale` fields; the template mirror equals the
-  engine schema; `x-clan-appearance` is on `look` and only there; no golden file changes.
+  engine schema; `x-clan-appearance` is on `look` and only there; every preference of §6.3 has a default
+  and a document with none of them validates; no golden file changes.
 - `app/tests/deckMakerFixtures.test.ts` reads only `type`, `enum`, `required`, `properties`,
   `additionalProperties`, `items`, `maxItems` and `oneOf`. A new test fails when the template schema uses
   a keyword its checker does not read, so a limit cannot pass unchecked.
@@ -379,4 +457,8 @@ start `slot_`. `placeholder` is raised by both `validate` and `qa_render`; `sour
 - `from_territory.py` and placing frames: `deck-frames-in`. Generation: `deck-image-gen`.
 - The repair loop and the adapters that write issues: `deck-repair-loop`.
 - The app's Review controls and the tasks `swap_layout`, `make_images`, `decide_image`: after `deck-maker-server`.
+- The preference cards in `intake.py` and the Start and Review controls that write §6.3's fields. This
+  contract fixes the fields, the defaults, the wording and when each is asked; `deck-layout-library` reads
+  density, `deck-frames-in` and `deck-image-gen` read the picture preferences, `deck-look-kits` reads the
+  brand and the Style Pack.
 - A per-agency Deck Kit that overrides the library, goldens, policy and rubric.

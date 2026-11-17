@@ -33,8 +33,8 @@ library later wants slots, and the repair loop would meet three finding shapes.
 
 1. **One contract, added to the two schemas that exist.** `engine/deck/deck.schema.json` gains optional
    `layout`, `slots` and `pinned` on a slide, `assets` at the top level and `meta.theme` and
-   `meta.repair_policy`. `app/templates/deck-maker/schema.json` mirrors them and gains `look`, `review`,
-   `qa`, `repair` and `inputs.text_mode`. Nothing is required, no enum shrinks, so every deck written
+   `meta.repair_policy` and `meta.preferences`. `app/templates/deck-maker/schema.json` mirrors them and gains
+   `look`, `inputs.pictures`, `review`, `qa`, `repair` and `inputs.text_mode`. Nothing is required, no enum shrinks, so every deck written
    before stays valid and every golden stays byte-identical.
 2. **Blocks stay the words; slots bind them.** `slide.blocks` is still required and still the only source
    of words (ADR 0016, ADR 0023). `slots` is a binding written by code, with a hash of the blocks it was
@@ -57,6 +57,14 @@ library later wants slots, and the repair loop would meet three finding shapes.
    a test fails when they differ.
 8. **Presentation inputs stay off** until ADR 0027 is accepted, behind the one gate that already exists,
    `inputs.library.enabled`.
+9. **How a deck should be is the user's choice, asked by the tool** (Sai, 2026-11-17). Six deck
+   preferences are fields on the deck, each with a default: which slides carry pictures
+   (`look.pictures`), text per slide (`look.density`), whose brand (`look.brand`), which Style Pack
+   (`look.style_pack`), where pictures come from and the spend cap (`inputs.pictures.source`), who approves
+   and the label (`inputs.pictures.approval`). Each records `{by, at, via}` once a person has chosen. A
+   preference joins the five intake questions only when its answer changes the build and a place is free;
+   otherwise the default applies silently and stays editable on the Start screen and at Review. The engine
+   assumes no default: `run_deck` given no preferences behaves as today, so goldens do not change.
 
 ## Who writes each field
 
@@ -67,7 +75,8 @@ library later wants slots, and the repair loop would meet three finding shapes.
 | image `slots`, `assets` | the image plan and image step (`deck-frames-in`, `deck-image-gen`) | renderers, validate, the app |
 | `slides.<id>.pinned`, `slots.<slot>.image.approval`, `layout.chosen_by: person` | the runner, stamping `review` and `look` | the trim, the red team, the repair loop, renderers |
 | `meta.theme`, `meta.repair_policy` | the runner (`run_deck.py`) | the app, the bench, a reader of the deck |
-| `look`, `review`, `inputs.text_mode`, `inputs.library.enabled` | a person, through the app | the runner |
+| `look` (pictures, density, brand, style_pack, theme, layouts), `inputs.pictures` (source, approval), `review`, `inputs.text_mode`, `inputs.library.enabled` | a person, through the app: an intake answer, the Start screen or Review | the runner |
+| `meta.preferences` | the runner, stamping the resolved preferences with `source: person \| default` | the bench, a reader of the deck |
 | `qa`, `repair` | the runner | the app, the export gate |
 | `upstream.<brand>`, `upstream.<style pack>` | the host, on attach | the runner |
 | `engine/deck/layouts`, `golden`, `policy`, `visual_rubric.json` | a person, by PR | the engine |
@@ -100,6 +109,8 @@ The plan's shapes are kept except where the code on `develop` contradicts them:
 | `unknown_slot` | `slot_unknown`, with `slot_limit`, `slot_missing`, `slot_stale`, `block_unbound` | `empty_slot` already exists in `spec.CHECKS` and means something else |
 | Every golden validates today | The investor golden has three schema errors today | Measured |
 | `from.kind` includes `library` | Left out | Nothing supplies it; an enum can grow later |
+| `look.density` `airy`, `regular`, `dense`; `look.images` `off`, `supplied`, `generate` | `look.density.level` `lean`, `standard`, `detailed`; `look.pictures.on` and `inputs.pictures.source.allow` | Sai's revision: one question each, in the user's words; which slides and where pictures come from are two choices |
+| Questions for Sai and Laurence: which slides carry pictures, words per slide, the image cap, one Style Pack, whose brand, who approves, the label | Deck preferences with defaults, asked by the tool | Sai, 2026-11-17 |
 
 ## Consequences
 
@@ -118,10 +129,12 @@ The plan's shapes are kept except where the code on `develop` contradicts them:
 
 ## Open
 
-- ADR 0027, in full (its file has the decision to make). Until then the image and brand fields are shapes
-  nobody writes.
+- ADR 0027: accept or reject, and four points of wording (its file has the decision to make). Until then
+  the image and brand fields are shapes nobody writes. Density does not wait on it.
 - Whether a frame approved in the Territory tool counts as approved in a deck. Proposed: no; it arrives
-  `made` and one click approves a territory's four.
+  `made` and one click by the deck's approver approves a territory's four.
+- The numbers behind the density words (30 and 60 words on a content slide) are Napkin defaults, the
+  first from the measured leaders. They go in `spec.py`, to be tuned on the visual checklist.
 - The Brand Clan's `visual.layout.logo_placement` (`corner`, `centre`, …) and the deck's `logo.placement`
   (`cover_only`, `cover_and_footer`, `none`) are different lists; the mapping is Shrey's and Sai's to agree
   in `deck-look-kits`.
