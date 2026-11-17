@@ -46,7 +46,7 @@ shot_list checks, each scores brief_pace (shot count and average length as its `
 (no movement speed the brief rules out; one it names where any is set), brief_words (its tone in the shots' words),
 brief_forbid (no line a don't rules out), brief_insert (a close detail where a mandatory asks for one), no_quote (the
 proposition is never put on screen) and no_flags (nothing flagged that the plan does not break). Together the three
-must differ as named. Not recorded yet: record live on the owner's say.
+must differ as named. Recorded 2026-11-18 on the owner's say (director.v13, Sonnet 5.5, three calls): 40/40.
 """
 
 from __future__ import annotations
