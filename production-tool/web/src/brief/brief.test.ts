@@ -12,7 +12,8 @@ import { scopeOf, inputChips } from '../model/scope'
 import { removeBrief } from '../doc/remove'
 import { BRIEF_SPINE, cutAtWord, isDont, projectSpine, spineLines, spineSummary } from './spine'
 import {
-  BRIEF_OPS, briefFeeds, briefForJob, briefNotice, briefOf, briefSendRow, freshness, keepVersion, newBrief, takeNewer, withBrief,
+  BRIEF_OPS, briefFeeds, briefFlagsOn, briefForJob, briefNotice, briefOf, briefSendRow, freshness, ignoreBriefFlag, keepVersion, newBrief,
+  recordBriefFlags, takeNewer, withBrief,
 } from './model'
 import { osBriefSource, type OsBriefRead } from './os'
 import { newId } from '../lib/ulid'
@@ -203,6 +204,39 @@ describe('Brief changed: update?', () => {
     expect(chain).toContain('update_from_brief “First Light brief (2)” v2')
     // Nothing was made again by itself.
     expect(Object.keys(d.jobs)).toHaveLength(0)
+  })
+})
+
+describe('the Review flags', () => {
+  it('a job that breaks a line becomes Jude\u2019s check on its node, one decision, never a block; once per job; Ignore takes the mark away', async () => {
+    const s = modelStore()
+    await s.create(MAYA, 'Flags')
+    const d0 = s.get() as unknown as ProductionDocument
+    const video = Object.keys(d0.videos)[0]
+    const b = newBrief(read(), 'link')
+    const jobId = newId('job')
+    await s.change((d) => {
+      d.briefs ??= {}
+      d.briefs[b.id] = b
+      d.jobs[jobId] = {
+        id: jobId, v: 1, field_v: {}, op: 'cutdown', state: 'completed', node: { kind: 'video', id: video }, started_by: `human:${MAYA.id}`,
+        tenant_id: MAYA.tenant_id, nonce: 'n_brief0001', crew: 'dex', parent_ids: [], input_hashes: [], created_at: '2026-11-17T10:00:00Z',
+        inputs: [{ kind: 'brief', ref: b.id, used_as: 'brief', included: true }],
+      }
+    }, { action: 'seed', quiet: true })
+    const job = { jobId, director: { model: 'm', promptVersion: 'cutter.v2', rationale: 'r', output: { briefFlags: [{ kind: 'mandatory', line: 'Lumen name first', note: 'The 6 s cut has no shot with the Lumen name.' }] } } }
+    const made = await recordBriefFlags(s, job as never)
+    expect(made).toHaveLength(1)
+    let d = s.get() as unknown as ProductionDocument
+    expect(d.checks[made[0].id]).toMatchObject({ crew: 'jude', result: 'flag', reason_code: 'brief_mandatory', brief_id: b.id, target: { kind: 'video', id: video }, job_id: jobId })
+    expect(briefFlagsOn(d, video)).toHaveLength(1)
+    expect(await recordBriefFlags(s, job as never)).toEqual([]) // once per job
+    const jude = (await s.chain()).filter((e) => e.agent === 'jude')
+    expect(jude.map((e) => e.action)).toEqual(['flag a line of the brief \u201cFirst Light brief\u201d v1'])
+    await ignoreBriefFlag(s, made[0].id, `human:${MAYA.id}`)
+    d = s.get() as unknown as ProductionDocument
+    expect(briefFlagsOn(d, video)).toEqual([])
+    expect(d.checks[made[0].id].ignored?.by).toBe(`human:${MAYA.id}`)
   })
 })
 

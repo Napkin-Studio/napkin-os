@@ -11,11 +11,11 @@
 //   (withBrief, called by the job runner on the director-backed ops).
 
 import type {
-  BriefNode, BriefSpine, BriefSpinePart, Id, JobBrief, JobInput, JobInputRow, Link, LinkEndpoint, Op, ProductionDocument, StaleMark,
+  BriefNode, BriefSpine, BriefSpinePart, Check, Id, Job, JobBrief, JobInput, JobInputRow, Link, LinkEndpoint, Op, PersonRef, ProductionDocument, StaleMark, TargetKind,
 } from '../contracts/types'
 import { BRIEF_SPINE_PARTS } from '../contracts/types'
 import { newId } from '../lib/ulid'
-import { systemUpdate, updateDoc, type DocumentStore } from '../doc/store'
+import { landUpdate, systemUpdate, updateDoc, type DocumentStore } from '../doc/store'
 import { scopeOf, type ScopeItem } from '../model/scope'
 import { projectSpine, spineSummary, BRIEF_APP_ID } from './spine'
 import type { OsBriefRead } from './os'
@@ -234,3 +234,59 @@ export async function keepVersion(store: DocumentStore, briefId: Id, now: Pick<O
 
 /** Whether a stale mark came from a brief update (the amber "brief changed" mark, not a frame's). */
 export const staleFromBrief = (m: StaleMark): boolean => m.caused_by.kind === 'brief'
+
+// ── The Review flags: a job that breaks a mandatory or a don't (never blocking) ────────────────────
+
+/** One line the work breaks, as the relay keeps it (director.schema.json briefFlags). */
+export interface BriefFlag { kind: 'mandatory' | 'dont'; line: string; note: string }
+
+const FLAG_TARGETS: readonly TargetKind[] = ['script', 'storyboard', 'video', 'format_set', 'shot', 'size', 'render', 'frame', 'generation']
+
+/** The flags a finished job's agent named (Dex's plan, frame or clip; the cutter's cut). */
+export function flagsOf(job: Pick<Job, 'director'>): BriefFlag[] {
+  const f = (job.director?.output as { briefFlags?: unknown } | undefined)?.briefFlags
+  return Array.isArray(f) ? f.filter((x): x is BriefFlag => !!x && typeof x === 'object' && typeof (x as BriefFlag).line === 'string') : []
+}
+
+/**
+ * Write a job's Review flags as Jude's checks on the job's node, with the brief they read: one decision by
+ * Jude, never an ask and never a block. Once per job (a job whose checks are written is left alone).
+ */
+export async function recordBriefFlags(store: DocumentStore, job: Pick<Job, 'jobId' | 'director'>): Promise<Check[]> {
+  const flags = flagsOf(job)
+  const d = store.get()
+  const entry = d.jobs[job.jobId]
+  if (!flags.length || !entry) return []
+  if (Object.values(d.checks).some((c) => c.job_id === job.jobId && c.brief_id)) return []
+  const briefId = entry.inputs?.find((r) => r.kind === 'brief')?.ref
+  const node = entry.node
+  if (!briefId || !d.briefs?.[briefId] || !FLAG_TARGETS.includes(node.kind as TargetKind)) return []
+  const made: Check[] = flags.map((f) => ({
+    id: newId('check'), v: 1, field_v: {}, target: { kind: node.kind as TargetKind, id: node.id }, crew: 'jude', job_id: job.jobId,
+    result: 'flag', reason_code: f.kind === 'dont' ? 'brief_dont' : 'brief_mandatory', brief_id: briefId, note: `${f.line}: ${f.note}`.slice(0, 300),
+  }))
+  const docId = store.documentId?.()
+  await landUpdate(store, (x) => {
+    for (const c of made) x.checks[c.id] = c
+  }, {
+    action: `flag ${made.length === 1 ? 'a line' : `${made.length} lines`} of the brief ${named(d.briefs[briefId].title, d.briefs[briefId].source.taken)}`,
+    rationale: flags.map((f) => `${f.kind === 'dont' ? 'don\u2019t' : 'mandatory'} \u201c${f.line}\u201d: ${f.note}`).join(' \u00b7 ').slice(0, 1000),
+    agent: 'jude', ...(docId ? { cites: [`${docId}#jobs[${job.jobId}]`] } : {}),
+  })
+  return made
+}
+
+/** The Review flags on a node that nobody has ignored: what its amber mark counts. */
+export function briefFlagsOn(d: Doc, nodeId: Id): Check[] {
+  return Object.values(d.checks ?? {}).filter((c) => c.brief_id && c.result === 'flag' && !c.ignored && c.target.id === nodeId)
+}
+
+/** Ignore a Review flag (the person's decision): it stays in Decisions, its amber mark goes. */
+export async function ignoreBriefFlag(store: DocumentStore, checkId: Id, by: PersonRef, at = new Date()): Promise<void> {
+  const c = store.get().checks[checkId]
+  if (!c || c.ignored) return
+  await updateDoc(store, (d) => {
+    const x = d.checks[checkId]
+    if (x) x.ignored = { by, at: at.toISOString() }
+  }, `ignore the brief flag \u201c${c.note.split(':')[0]}\u201d`)
+}

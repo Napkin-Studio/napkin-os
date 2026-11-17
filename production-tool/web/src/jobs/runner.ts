@@ -23,7 +23,7 @@ import { idbLocation, putBlobAs } from '../lib/blobs'
 import { newId, ulid } from '../lib/ulid'
 import { purposeInputs, purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { withLinkedText } from './linkedText'
-import { withBrief } from '../brief/model'
+import { flagsOf, recordBriefFlags, withBrief } from '../brief/model'
 import { checkFronts } from '../lib/names'
 import { deadRefs, lifeOf, liveGet, liveInput } from '../model/live'
 import { plainJobError } from './errorWords'
@@ -678,6 +678,8 @@ export class JobRunner {
     }
     if (job.error) patch.error = plainJobError(job.error, job.op)
     this.patchDocJob(job.jobId, patch)
+    // The Review flags against a linked brief: Jude's checks, never a block (features/brief-node.clan).
+    if (done && flagsOf(job).length) void recordBriefFlags(this.doc, job).catch((e) => console.warn('could not record the brief flags', e))
     this.noteAsk(job)
     this.noteFallback(job)
     this.emit()
