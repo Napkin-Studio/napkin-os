@@ -3,7 +3,7 @@
 // CanvasAdapter v2, so the own engine runs it and nothing here imports an engine.
 //
 // - seedNodes: a canvas with no node yet gets the project's Script, Storyboard and
-//   Video nodes, where production-ui's overlay drew them (mock Main, boards/layout.ts), and a link
+//   Film nodes, where production-ui's overlay drew them (mock Main, boards/layout.ts), and a link
 //   element for each of the document's links between them.
 // - linkNodes: a person's link from one node to another, checked against the link
 //   rules (core/links.ts), written to the scene and to the document's links.
@@ -51,7 +51,7 @@ export function linkIdOf(e: CanvasElement): string | null {
 /**
  * The elements to add so the canvas shows the document's nodes and their links; [] when it already
  * does. The nodes go where production-ui's overlay drew them (mock Main; boards/layout.ts): left of
- * the named pictures, the Storyboard below, the Video beside it.
+ * the named pictures, the Storyboard below, the Film beside it.
  */
 export function seedNodes(canvas: CanvasAdapter, doc: ProductionDocument): CanvasElement[] {
   const els = canvas.elements()
@@ -100,7 +100,7 @@ export interface EndOptions {
 export const textRowOf = (doc: ProductionDocument, elId: string) => Object.values(doc.texts ?? {}).find((t) => t.node === elId)
 
 /**
- * What a canvas element is as a link end: a Script, Storyboard or Video node, a named picture (its
+ * What a canvas element is as a link end: a Script, Storyboard or Film node, a named picture (its
  * reference, or its whole key when the key has two or more views), a sketch area, or a text (its
  * texts[id] row; to the rules, a note: owner 2026-10-16, "text should link to nodes too"). An unnamed
  * picture is not one yet, nor a text whose row is still being written: `refuse` says so. Null: not an end.
@@ -289,7 +289,7 @@ export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDoc
 
 // ── New nodes (+ Node; ui-behaviour 3.3 Creating nodes) ─────────────────────
 
-const WORD: Record<CardKind, string> = { script: 'Script', storyboard: 'Storyboard', video: 'Video' }
+const WORD: Record<CardKind, string> = { script: 'Script', storyboard: 'Storyboard', video: 'Film' }
 
 /** A new, empty document entity for a node of this kind: "Script 2", at the project's ratio and length. */
 export function newEntity(doc: ProductionDocument, kind: CardKind): { kind: CardKind; entity: Script | Storyboard | Video } {

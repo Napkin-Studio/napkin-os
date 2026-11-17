@@ -4,7 +4,7 @@ import type { ProjectSummary } from '../projects/summary'
 
 /** Where the project is: blue on its way, amber when things wait for an update, green once the ad is made. */
 export function stageChip(s: ProjectSummary): { tone: 'on' | 'warn' | 'done'; text: string } {
-  const label = s.stage === 'character' ? 'Canvas' : s.stage === 'storyboard' ? 'Storyboard' : 'Video'
+  const label = s.stage === 'character' ? 'Canvas' : s.stage === 'storyboard' ? 'Storyboard' : 'Film'
   if (s.behind > 0) return { tone: 'warn', text: `${label} · ${s.behind} behind` }
   if (s.adSeconds !== null) return { tone: 'done', text: `Ad rendered · ${s.adSeconds} s` }
   if (s.stage === 'character') return { tone: 'on', text: s.pictures ? `Canvas · ${s.pictures} ${s.pictures === 1 ? 'picture' : 'pictures'}` : 'Canvas · empty' }

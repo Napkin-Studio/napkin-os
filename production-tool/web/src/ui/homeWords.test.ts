@@ -19,7 +19,7 @@ describe('a project card\'s words', () => {
     const s = emptySummary()
     expect(stageChip(s)).toEqual({ tone: 'on', text: 'Canvas · empty' })
     expect(stageChip({ ...s, pictures: 4 })).toEqual({ tone: 'on', text: 'Canvas · 4 pictures' })
-    expect(stageChip({ ...s, stage: 'video', shots: 3 })).toEqual({ tone: 'on', text: 'Video · 3 shots' })
+    expect(stageChip({ ...s, stage: 'video', shots: 3 })).toEqual({ tone: 'on', text: 'Film · 3 shots' })
     expect(stageChip({ ...s, stage: 'storyboard', shots: 3, behind: 2 })).toEqual({ tone: 'warn', text: 'Storyboard · 2 behind' })
     expect(stageChip({ ...s, stage: 'video', shots: 3, adSeconds: 12 })).toEqual({ tone: 'done', text: 'Ad rendered · 12 s' })
     // Behind wins over a rendered ad: the ad is out of date.

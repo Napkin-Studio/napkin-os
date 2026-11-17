@@ -66,7 +66,7 @@ describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
     await s.close()
   })
 
-  it('"Storyboard 2" goes in the Storyboard board, which grows down, never over the Video board beside it (one undo step)', async () => {
+  it('"Storyboard 2" goes in the Storyboard board, which grows down, never over the Film board beside it (one undo step)', async () => {
     const { a, s, doc } = await seeded()
     const ranked = Object.values(doc().boards).sort((x, y) => (x.rank < y.rank ? -1 : 1))
     const sbBoard = ranked.find((b) => b.purpose === 'storyboard')!
@@ -81,7 +81,7 @@ describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
     const after = boxOf(frameOf(sbBoard.id))
     expect(el.frameId).toBe(frameOf(sbBoard.id).id)
     expect(overlap(boxOf(el), boxOf(first))).toBe(false)
-    // Down: the same left, top and width, taller, holding the new card; clear of the Video board.
+    // Down: the same left, top and width, taller, holding the new card; clear of the Film board.
     expect([after.x, after.y, after.w]).toEqual([before.x, before.y, before.w])
     expect(after.h).toBeGreaterThan(before.h)
     expect(el.y).toBeGreaterThan(first.y + first.height)
@@ -95,7 +95,7 @@ describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
     await s.close()
   })
 
-  it('a Storyboard and a Video made where no board fits go near the middle of the view, unboarded, clear of every node and board', async () => {
+  it('a Storyboard and a Film made where no board fits go near the middle of the view, unboarded, clear of every node and board', async () => {
     const { a, s, doc } = await seeded()
     // The Characters board in view: its purpose fits none of the three.
     const chars = Object.values(doc().boards).sort((x, y) => (x.rank < y.rank ? -1 : 1))
@@ -106,7 +106,7 @@ describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
     expect(sb.frameId ?? null).toBeNull()
     expect(Object.keys(doc().storyboards)).toHaveLength(2)
     expect(Object.keys(doc().videos)).toHaveLength(3)
-    expect(doc().videos[cardOf(v2)!.id].title).toBe('Video 3')
+    expect(doc().videos[cardOf(v2)!.id].title).toBe('Film 3')
     expect(overlap(boxOf(v1), boxOf(v2))).toBe(false)
     const vb = a.visibleBounds()
     const mid = { x: (vb.minX + vb.maxX) / 2, y: (vb.minY + vb.maxY) / 2 }

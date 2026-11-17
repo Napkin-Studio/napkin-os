@@ -1,5 +1,5 @@
 // The send tray for Make clips (ui-behaviour 3.16, 5.4; features/production-ui.clan): "What Dex will
-// send", anchored to the Video editor's Make clips, signed by Dex. One row per shot that has no clip,
+// send", anchored to the Film editor's Make clips, signed by Dex. One row per shot that has no clip,
 // each ticked, saying what its clip is made from: its frame, or (a video made straight from the script,
 // 3.5) its words alone. A shot with neither is listed and cannot be ticked, with why. A batch opens
 // expanded (5.4). No price (costs live in the decision tree). Nothing is sent until Make clips; Cancel

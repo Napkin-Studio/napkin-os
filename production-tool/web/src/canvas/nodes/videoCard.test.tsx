@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// The Video node while Dex plans its shots straight from the script (live test 2026-11-16): it went blank
+// The Film node while Dex plans its shots straight from the script (live test 2026-11-16): it went blank
 // and its title became "Video · Video" (its implicit shot list named it).
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -24,7 +24,7 @@ afterEach(async () => {
   store = null
 })
 
-describe('the Video node while the Director agent plans straight from the script', () => {
+describe('the Film node while the Director agent plans straight from the script', () => {
   it('keeps its title and says the Director agent is planning', async () => {
     const s = modelStore()
     store = s

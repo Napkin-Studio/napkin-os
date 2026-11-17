@@ -130,7 +130,7 @@ describe('scope', () => {
     const d = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
     d.format_sets = { fset_01K7A0000000000000000000F1: fs({ kind: 'video', id: VIDEO }) }
     expect(briefOf(d, 'fset_01K7A0000000000000000000F1')).toMatchObject({ via: 'upstream', through: VIDEO, brief: { id: b1.id } })
-    expect(briefSendRow(d, 'fset_01K7A0000000000000000000F1')!.detail).toMatch(/from Video/)
+    expect(briefSendRow(d, 'fset_01K7A0000000000000000000F1')!.detail).toMatch(/from Film/)
     expect(withBrief(d, 'resize', { kind: 'format_set', id: 'fset_01K7A0000000000000000000F1' }, {}).input.brief?.title).toBe('First Light brief')
     // Through an ad render of the video.
     d.renders = { ...d.renders, render_x: { id: 'render_x', v: 1, field_v: {}, video_id: VIDEO, version: 1, asset: SHA('a'), job_id: 'job_x' } as never }

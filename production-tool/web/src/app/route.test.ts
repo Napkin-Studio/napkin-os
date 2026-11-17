@@ -33,7 +33,7 @@ describe('parseRoute and formatRoute', () => {
   }
 
   for (const base of ['/', '/production/']) {
-    it(`each Video editor room has its own route under ${base} (reload, Back and Share return to the room)`, () => {
+    it(`each Film editor room has its own route under ${base} (reload, Back and Share return to the room)`, () => {
       for (const room of ['make', 'edit', 'sound'] as const) {
         const r = projectRoute(P, 'video', room)
         expect(formatRoute(r, base)).toBe(`${base}p/${P}/video/${room}`)
@@ -41,7 +41,7 @@ describe('parseRoute and formatRoute', () => {
         expect(routeRoom(r)).toBe(room)
         expect(routeProject(r)).toBe(P)
       }
-      // The Video editor with no room is Make; a room is only a Video editor's.
+      // The Film editor with no room is Make; a room is only a Film editor's.
       expect(routeRoom(projectRoute(P, 'video'))).toBe('make')
       expect(formatRoute(projectRoute(P, 'storyboard', 'edit'), base)).toBe(`${base}p/${P}/storyboard`)
       expect(parseRoute({ pathname: `${base}p/${P}/video/cut` }, base)).toEqual({ kind: 'none' })
@@ -49,7 +49,7 @@ describe('parseRoute and formatRoute', () => {
     })
   }
 
-  it('the open project keeps the Video editor\'s room in the URL, and drops it on leaving', () => {
+  it('the open project keeps the Film editor\'s room in the URL, and drops it on leaving', () => {
     expect(routeFor(P, 'video', projectRoute(P, 'video', 'edit'))).toBeNull()
     expect(routeFor(P, 'video', projectRoute(P, 'video', 'sound'))).toBeNull()
     expect(routeFor(P, 'character', projectRoute(P, 'video', 'edit'))).toEqual(projectRoute(P))

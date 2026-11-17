@@ -1,4 +1,4 @@
-// The Video editor's Sound view (ui-behaviour 3.21; mock SoundEditor.dc.html) as a shell: the layout
+// The Film editor's Sound view (ui-behaviour 3.21; mock SoundEditor.dc.html) as a shell: the layout
 // of shots with their sound path, the mix card, the sound lanes and the line or cue panel, each with
 // its real empty state. Sound comes with the audio features (audio-*); nothing here pretends to play,
 // mix or measure.

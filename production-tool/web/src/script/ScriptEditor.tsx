@@ -108,7 +108,7 @@ export function ScriptEditor({ scriptId }: { scriptId: string }) {
   const router = useRouter()
   // Back to where the editor was opened from (ui-behaviour 2.3): the canvas, or the Storyboard editor.
   const [from] = useState(() => services.ui.get().stage)
-  const backTo = from === 'storyboard' ? 'Storyboard' : from === 'video' ? 'Video' : 'Canvas'
+  const backTo = from === 'storyboard' ? 'Storyboard' : from === 'video' ? 'Film' : 'Canvas'
   const back = useCallback(() => {
     services.ui.update((u) => { u.stage = from })
     router.leave()
@@ -380,13 +380,13 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     })
     router.leave()
   }
-  // Make video from the script (3.5): with the storyboard when Dex has planned it, else from the script
-  // alone, and Dex asks on the new Video node how to make its clips. Then the canvas, where the node is.
+  // Make film from the script (3.5): with the storyboard when Dex has planned it, else from the script
+  // alone, and Dex asks on the new Film node how to make its clips. Then the canvas, where the node is.
   const makeVideo = () => attempt(async () => {
     const d = docStore.get()
     const withBoard = sb && shotsOf(d, sb.id).length ? sb.id : undefined
     const made = canvasActions.makeVideo({ scriptId, ...(withBoard ? { storyboardId: withBoard } : {}) })
-    if (!made) throw new Error('Make video from the canvas: select this script there.')
+    if (!made) throw new Error('Make film from the canvas: select this script there.')
     await made
     goTo('character')
   })
@@ -504,7 +504,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       {!phone && next && (
         <div className="sheet-note se-next" role="status" aria-label="What comes next" data-next={next.step}>
           <span className="wl"><AgentFigure agent="dex" size={20} decorative /><span><b>{sayer('dex')}:</b> {next.line}</span></span>
-          {/* Plan shots, Update storyboard and Make video are in the bar: the line does not repeat them. */}
+          {/* Plan shots, Update storyboard and Make film are in the bar: the line does not repeat them. */}
           {next.actions.filter((a) => a !== 'plan' && a !== 'update' && a !== 'make-video' && !(a === 'open-video' && nextVideoId)).map((a) => <button key={a} type="button" className="sp-btn" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
         </div>
       )}
@@ -621,9 +621,9 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
           <>
             {/* Why Plan shots is off, said beside it (a disabled button never says why). */}
             {blocked && !planning && <span className="se-why" id="se-plan-why">{blocked}</span>}
-            {/* Make video straight from the words (3.5): beside Plan shots, off while there are none. */}
+            {/* Make film straight from the words (3.5): beside Plan shots, off while there are none. */}
             <button type="button" className="sp-btn se-makevideo" disabled={!!blocked || !!planning} onClick={() => void (nextVideoId ? goTo('video', nextVideoId) : makeVideo())}>
-              {nextVideoId ? 'Open the video' : 'Make video'}
+              {nextVideoId ? 'Open the film' : 'Make film'}
             </button>
             <SendDisclosure who="the Director agent" rows={sendRows(doc, sb?.id ?? scriptId, [
               { key: 'script', label: 'The script’s words', detail: `${scriptText(doc, scriptId).trim().split(/\s+/).filter(Boolean).length} words` },
@@ -706,7 +706,7 @@ function ImportExport({ onImport, onFountain, onPdf }: { onImport: () => void; o
 }
 
 const NEXT_LABEL: Record<NextAction, string> = {
-  plan: 'Plan shots', update: 'Update storyboard', 'make-video': 'Make video', 'open-storyboard': 'Open the storyboard', 'open-video': 'Open the video',
+  plan: 'Plan shots', update: 'Update storyboard', 'make-video': 'Make film', 'open-storyboard': 'Open the storyboard', 'open-video': 'Open the film',
 }
 
 /** The chain's keys in script order: a scene's heading and text, a shot, the current shot's beats. */

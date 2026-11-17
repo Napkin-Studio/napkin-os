@@ -62,11 +62,11 @@ export const LINK_TABLE: readonly LinkRow[] = [
     sources: [{ kind: 'storyboard' }], targets: [{ kind: 'video' }], roles: ['renders'], limit: 'one-per-target',
   },
   // Owner ruling (Shrey, 2026-10-13), closing the 3.4/3.5 gap: a script may drive a
-  // video straight. On Make video Dex asks "Plan a storyboard first?"; planning the
+  // video straight. On Make film Dex asks "Plan a storyboard first?"; planning the
   // storyboard first stays the recommended path, and each tool works on its own.
   {
     fromTo: 'Script → Video', roleLabel: '`drives`', allowed: 'One script per video',
-    effect: 'Make clips straight from the script. Make video asks first: "Plan a storyboard first?" (Plan the storyboard first is recommended).',
+    effect: 'Make clips straight from the script. Make film asks first: "Plan a storyboard first?" (Plan the storyboard first is recommended).',
     sources: [{ kind: 'script' }], targets: [{ kind: 'video' }], roles: ['drives'], limit: 'one-per-target',
   },
   {
@@ -208,7 +208,7 @@ export interface LinkGraph {
 /** The words for a limit that is already used, by role. */
 const LIMIT_REASON: Partial<Record<LinkRole, string>> = {
   // drives is worded by its target (a storyboard or a video), in checkLink.
-  renders: 'This video already has a storyboard.',
+  renders: 'This film already has a storyboard.',
   master: 'This set already has a master.',
   frame: 'This shot already has a frame.',
   layout: 'This shot already has a layout.',

@@ -345,9 +345,9 @@ function VideoBlock({ videoId }: { videoId: Id }) {
 
 /**
  * Dex's nudge on a video a script drives and no storyboard renders (3.5, 3.17, artboard 4c): "Plan a
- * storyboard first?". Either answer is stored on the video (Change in the Video editor switches later),
+ * storyboard first?". Either answer is stored on the video (Change in the Film editor switches later),
  * gives it the storyboard its script drives with Dex planning the shots, and opens where the next step is:
- * the Storyboard to check frames, or the Video, whose Make clips makes them straight from the script.
+ * the Storyboard to check frames, or the Film, whose Make clips makes them straight from the script.
  */
 function ScriptVideoAsk({ videoId, scriptId }: { videoId: Id; scriptId: Id }) {
   const services = useServices()
@@ -376,7 +376,7 @@ function ScriptVideoAsk({ videoId, scriptId }: { videoId: Id; scriptId: Id }) {
   if (later) {
     return (
       <button className="askcard-later" onClick={() => setLater(false)} aria-label={`Waiting for you: ${q.text}`}>
-        <AgentFigure agent="dex" size={20} state="needs-you" decorative /><b>Waiting for you</b><span>· Make video</span>
+        <AgentFigure agent="dex" size={20} state="needs-you" decorative /><b>Waiting for you</b><span>· Make film</span>
       </button>
     )
   }

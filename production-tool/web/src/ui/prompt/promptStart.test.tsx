@@ -232,7 +232,7 @@ describe('PromptStart, rendered', () => {
     expect(Object.values(store.get().links).some((l) => l.to.id === v && l.role === 'renders')).toBe(true)
   })
 
-  it('a video from a script alone: "Plan a storyboard first?"; straight from the script plans into the video\'s own shot list, no storyboard node, and opens the Video', async () => {
+  it('a video from a script alone: "Plan a storyboard first?"; straight from the script plans into the video\'s own shot list, no storyboard node, and opens the Film', async () => {
     const store = await project()
     const v = await unlinkVideo(store)
     const sc = mainScript(store.get())!.id
@@ -241,7 +241,7 @@ describe('PromptStart, rendered', () => {
       d.scenes[scene].text = 'A runner crests the cliff at dawn.'
       const l = id('link')
       d.links[l] = { id: l, v: 1, field_v: {}, from: { kind: 'script', id: sc }, to: { kind: 'video', id: v }, role: 'drives' }
-    }, 'make video')
+    }, 'make film')
     await store.flush()
     const { s, sent } = services(store)
     const host = document.createElement('div')

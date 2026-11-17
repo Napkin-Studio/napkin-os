@@ -34,7 +34,7 @@ export function wireJobs(deps: FrameDeps) {
     if (ctx.for !== 'frame_edit') return
     void landFrameEditIn(doc, job, ctx).catch(warn('change this frame'))
   })
-  // A new take: in the Video editor it is picked in the cut; in the rooms it lands beside the others only.
+  // A new take: in the Film editor it is picked in the cut; in the rooms it lands beside the others only.
   const inCut = () => ({ inCut: !deps.rooms?.() })
   runner.onComplete('clip', (job, ctx) => {
     if (ctx.for !== 'clip') return

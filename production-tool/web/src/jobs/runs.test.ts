@@ -254,7 +254,7 @@ describe('a take landing', () => {
     expect(applyRunTake(d, j, { videoId: a.videoId, runId })).toBeUndefined() // landing twice does nothing
     // Nothing marks a take out of date.
     expect(Object.values(d.stale)).toEqual([])
-    // The Video editor puts each shot's window in the cut, its shot's length long (a short one holds its last frame).
+    // The Film editor puts each shot's window in the cut, its shot's length long (a short one holds its last frame).
     expect(a.shots.map((s) => cutItemFor(d, s.id, a.videoId)?.source)).toEqual([
       { generation_id: made.id, in_s: 0, out_s: 3 }, { generation_id: made.id, in_s: 3.05, out_s: 6 }, { generation_id: made.id, in_s: 6, out_s: 10 },
     ])

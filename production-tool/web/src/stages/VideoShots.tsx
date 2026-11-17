@@ -1,5 +1,5 @@
 // A video's shots on its timeline, made straight from the script (ui-behaviour 3.13, decided 2026-10-15):
-// the Video holds its own shot list (no Storyboard node), so the Video editor shows and edits it. The
+// the Film holds its own shot list (no Storyboard node), so the Film editor shows and edits it. The
 // selected shot's words and direction (live text, the same editor as the storyboard's), its length, its
 // place (earlier, later) and Delete; + between two shots inserts an empty one, + Shot adds one at the end.
 // Clips are made from the words through Make clips (the send tray). Each edit is one undo step.

@@ -40,7 +40,7 @@ describe('barFor (3.9)', () => {
     expect(barFor(sel({ group: { ink: true } })).find((a) => a.id === 'ungroup')!.off).toBeUndefined()
   })
 
-  it('Make video and Plan shots are built (3.5, 3.10): no "for now" placeholder; a reason only when this selection cannot', () => {
+  it('Make film and Plan shots are built (3.5, 3.10): no "for now" placeholder; a reason only when this selection cannot', () => {
     for (const r of [{ cards: ['script', 'storyboard'], units: 2 }, { cards: ['script'] }, { cards: ['storyboard'] }] as Partial<SelInfo>[]) {
       for (const a of barFor(sel(r)).filter((x) => x.id === 'make-video' || x.id === 'plan-shots')) expect(a.off).toBeUndefined()
     }
@@ -49,7 +49,7 @@ describe('barFor (3.9)', () => {
     expect(off.find((a) => a.id === 'make-video')!.off).toBeUndefined()
   })
 
-  it('two scripts or two storyboards offer Make video (The Director agent asks which one drives), never with a video in the selection', () => {
+  it('two scripts or two storyboards offer Make film (The Director agent asks which one drives), never with a video in the selection', () => {
     expect(ids({ cards: ['script', 'script'], units: 2 })).toEqual(['make-video', 'group', 'move-to-board', 'delete'])
     expect(ids({ cards: ['script', 'storyboard', 'storyboard'], units: 3 })).toEqual(['make-video', 'group', 'move-to-board', 'delete'])
     expect(ids({ cards: ['script', 'script', 'video'], units: 3 })).toEqual(['group', 'move-to-board', 'delete'])

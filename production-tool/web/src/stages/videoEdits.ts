@@ -1,4 +1,4 @@
-// The Video panel's writes on a draft (run each inside one updateDoc): which take is in the cut for a shot (its
+// The Film panel's writes on a draft (run each inside one updateDoc): which take is in the cut for a shot (its
 // V1 clip in the video's timeline, features/make-and-edit.clan), and a note on a take (a review with its window).
 
 import { noteWindow } from '../../../clan-store/src'

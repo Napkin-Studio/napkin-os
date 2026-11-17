@@ -29,8 +29,8 @@ export interface FrameDeps {
   doc: DocumentStore
   ui: UiStore
   runner: JobRunner
-  /** The Video editor is the two rooms (flags.makeAndEdit): a new take lands beside the others and never
-   *  touches the cut. Absent or false: the Video editor, which picks each new take in the cut. */
+  /** The Film editor is the two rooms (flags.makeAndEdit): a new take lands beside the others and never
+   *  touches the cut. Absent or false: the Film editor, which picks each new take in the cut. */
   rooms?: () => boolean
 }
 

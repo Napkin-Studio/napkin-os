@@ -23,7 +23,9 @@ export function initials(name: string | undefined): string {
 /** A node's title in its bar or card: its own title, or, while it still has the template's word
  *  ("Script", "Storyboard"), the ad's name ("First Light" from "Lumen Water · First Light"). */
 export function nodeTitle(own: string | undefined, templateWord: string, project: string | undefined): string {
-  if (own && own.trim() && own.trim() !== templateWord && !/^untitled/i.test(own.trim())) return own.trim()
+  // A film made before the rename (owner 2026-11-18) is still titled Video: the template word, not a name.
+  const template = own?.trim() === templateWord || (templateWord === 'Film' && own?.trim() === 'Video')
+  if (own && own.trim() && !template && !/^untitled/i.test(own.trim())) return own.trim()
   const ad = project?.split(' · ').at(-1)?.trim()
   return ad && !/^untitled/i.test(ad) ? ad : templateWord
 }

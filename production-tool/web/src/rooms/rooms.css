@@ -591,3 +591,20 @@
 .jc-unit { max-width: 100%; }
 .jc-box { max-width: 100%; }
 .jc-row { flex-wrap: wrap; row-gap: 10px; }
+
+/* ── The rooms in the new UI (features/production-new-ui.clan; mock make, make-box, edit): the shell bar and band,
+   what waits as a line over the work, the Box | Shot | Change panel in the Booth on a selection only. ── */
+.rooms .rm-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1; }
+.rooms .rm-main > .rm-body { flex: 1; min-height: 0; }
+.rm-waits { display: flex; flex-direction: column; gap: 8px; padding: 10px 24px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 70%, var(--desk)); }
+.rm-waits-row { display: flex; gap: 10px; overflow-x: auto; }
+.rm-waits-row > * { flex: 0 0 340px; }
+.rm-waits .tagcall { font: 700 9px/16px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; padding: 0 7px; border-radius: 999px; background: #FEF3DC; color: #B45309; border: 1px solid rgba(180, 83, 9, .35); }
+.rooms .rm-make { grid-template-columns: minmax(0, 1fr); }
+.booth .rm-boothslot .rm-direct { display: flex; flex-direction: column; gap: 12px; border: 0; background: none; padding: 0; position: static; width: auto; }
+.booth .rm-boothslot .rm-tabs { display: flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--card); }
+.booth .rm-boothslot .rm-tabs button { flex: 1; min-height: 32px; border: 0; border-radius: 0; background: none; font: 600 12px var(--font-ui); color: var(--muted); }
+.booth .rm-boothslot .rm-tabs button.on { background: var(--ag-act); color: var(--ag-act-ink); }
+.booth .rm-boothslot .rm-directbody { overflow: visible; padding: 0; }
+.rm-meta { font: 500 12px var(--font-mono); color: var(--muted); }
+.rooms .sp-btn.rm-jobs { height: 28px; padding: 0 10px; border-radius: 6px; font: 600 12px var(--font-ui); }

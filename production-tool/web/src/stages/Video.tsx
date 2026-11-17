@@ -233,13 +233,13 @@ export function Video() {
     : anyRunning ? 'Wait for the clips being made' : isMoving(doc, stitchJob) ? 'The ad is rendering' : undefined)
 
   if (!controls.video) {
-    return <div className="panel"><div className="empty-state"><b>Video is off right now.</b></div></div>
+    return <div className="panel"><div className="empty-state"><b>Film is off right now.</b></div></div>
   }
   // The approved editor top bar (mock VideoEditor), empty or not: ← Canvas, the node, its actions.
   const empty = !shots.length
   const bar = (
     <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
-      title={`Video · ${isMain && !own ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
+      title={`Film · ${isMain && !own ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Film', projectName)}`}
       meta={<><span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>
         {video && <QualityDefault videoId={video.id} />}</>}
       view={{ label: 'View', value: view, onPick: (v) => setView(v as typeof view), options: [{ id: 'picture', label: 'Picture' }, { id: 'sound', label: 'Sound' }] }}

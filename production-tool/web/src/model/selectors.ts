@@ -38,7 +38,7 @@ export function mainStoryboard(d: Doc): Storyboard | undefined {
 /**
  * A video's own shot list (ui-behaviour 3.5, decided 2026-10-15): a storyboard with `implicit` set holds the
  * shots of a video made straight from the script. It has no canvas node and renders exactly that video;
- * the Video editor shows and edits its shots. Make a storyboard from these shots clears the flag.
+ * the Film editor shows and edits its shots. Make a storyboard from these shots clears the flag.
  */
 export function isImplicit(sb: Pick<Storyboard, 'implicit'> | undefined): boolean {
   return !!sb?.implicit
@@ -78,7 +78,7 @@ export function openStoryboard(d: Doc, open?: { storyboard?: Id }): Storyboard |
   return (open?.storyboard && d.storyboards[open.storyboard]) || mainStoryboard(d)
 }
 
-/** The video the Video panel shows: the node opened on the canvas, else the main one. */
+/** The video the Film panel shows: the node opened on the canvas, else the main one. */
 export function openVideo(d: Doc, open?: { video?: Id }): Video | undefined {
   return (open?.video && d.videos[open.video]) || mainVideo(d)
 }
@@ -301,7 +301,7 @@ export function staleList(d: Doc): StaleMark[] {
   return values(d.stale).sort(byId)
 }
 
-/** Whether every shot is locked or waits for review: today's gate to the Video stage. */
+/** Whether every shot is locked or waits for review: today's gate to the Film stage. */
 export function storyboardReady(d: Doc): boolean {
   const shots = shotsOf(d)
   return shots.length > 0 && shots.every((s) => s.status === 'locked' || s.status === 'needs_review')

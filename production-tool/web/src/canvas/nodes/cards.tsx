@@ -197,7 +197,7 @@ export function VideoCard({ id, onOpen, openButton }: { id?: string; onOpen: () 
   // The main video is named after its storyboard (mock Main); another after its own title.
   // A video's own shot list (implicit, made straight from the script) is not a storyboard with a name: it named
   // the card "Video · Video" while Dex planned (live test 2026-11-16).
-  const title = sb && !sb.implicit && video?.id === mainVideo(doc)?.id ? chrome.title(sb.title, 'Storyboard', project) : chrome.title(video?.title, 'Video', project)
+  const title = sb && !sb.implicit && video?.id === mainVideo(doc)?.id ? chrome.title(sb.title, 'Storyboard', project) : chrome.title(video?.title, 'Film', project)
   // Dex planning this video's shots (straight from the script: on its own shot list, or on the video itself).
   const planning = !shots.length && (runningOn(doc, 'shot_list', 'storyboard', sb?.id) || runningOn(doc, 'shot_list', 'video', video?.id))
   // A video a script drives with no storyboard yet (mock Asks): "from Script · no storyboard".

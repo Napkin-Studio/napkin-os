@@ -1,4 +1,4 @@
-// Make video and the storyboard a script drives, on our own engine (ui-behaviour 3.5, 3.10;
+// Make film and the storyboard a script drives, on our own engine (ui-behaviour 3.5, 3.10;
 // features/production-ui.clan), with a real contract-3 document: each make is one undo step, beside
 // what it came from, with only the links the spec names.
 
@@ -28,8 +28,8 @@ const nodeOf = (a: OwnAdapter, id: string) => a.elements().find((e) => cardOf(e)
 const linksTo = (d: ProductionDocument, id: string) => Object.values(d.links).filter((l) => l.to.id === id || l.from.id === id)
 const arrows = (a: OwnAdapter) => a.elements().filter((e) => linkIdOf(e))
 
-describe('Make video (3.5)', () => {
-  it('Script + Storyboard: the Video right of the storyboard, a renders link and the missing drives link, one undo step', async () => {
+describe('Make film (3.5)', () => {
+  it('Script + Storyboard: the Film right of the storyboard, a renders link and the missing drives link, one undo step', async () => {
     const { a, s, doc } = await seeded()
     const sc = mainScript(doc())!.id
     // A second, unlinked storyboard: its drives link is missing.
@@ -62,7 +62,7 @@ describe('Make video (3.5)', () => {
     await s.close()
   })
 
-  it('a Script alone: the Video beside it with a drives link, and the video waits on the Director agent\'s question', async () => {
+  it('a Script alone: the Film beside it with a drives link, and the video waits on the Director agent\'s question', async () => {
     const { a, s, doc } = await seeded()
     const sc = mainScript(doc())!.id
     const r = await makeVideo({ canvas: a, doc: s }, { scriptId: sc })
@@ -153,7 +153,7 @@ describe('Make a storyboard from these shots (3.13, decided 2026-10-15)', () => 
     await s.close()
   })
 
-  it('deleting the Video takes its own shot list and shots with it', async () => {
+  it('deleting the Film takes its own shot list and shots with it', async () => {
     const { s, doc, videoId, own, shotId } = await direct()
     await deleteFrom(s, (d) => removeNode(d, 'video', videoId))
     expect(doc().storyboards[own]).toBeUndefined()

@@ -343,7 +343,7 @@ function absorb(r: Removal, sub: Removal) {
 }
 
 /**
- * A Script, Storyboard or Video node left the canvas (features/canvas-edit-tools.clan; ui-behaviour
+ * A Script, Storyboard or Film node left the canvas (features/canvas-edit-tools.clan; ui-behaviour
  * 3.3 Delete). The entity goes with what only it holds: a script's scenes (shots planned from them
  * keep their place, without the scene), a storyboard's shots with their frames, clips, beats and
  * place in the cut (as removeShot), a video's renders. Its links, the notes, marks, checks,

@@ -64,7 +64,7 @@ export function planChoices(): { kind: 'plan' | 'pack'; id: string; name: string
 }
 
 /** What a master of this kind can be made into (owner, 2026-10-16): a picture or a scamp gives stills only
- *  (films come from a Video node); a Video node gives everything. */
+ *  (films come from a Film node); a Film node gives everything. */
 export function rowsFor(choice: { kind: 'plan' | 'pack'; id: string }, media: 'image' | 'video', lengths?: readonly number[]): PlanRow[] {
   const rows = rowsOf(choice, lengths)
   return media === 'image' ? rows.filter((r) => r.media === 'image') : rows
@@ -76,7 +76,7 @@ export function choicesFor(media: 'image' | 'video'): ReturnType<typeof planChoi
 }
 
 /** Said once on the sheet from a picture or a scamp. */
-export const FILMS_FROM_VIDEO = 'Films come from a Video node.'
+export const FILMS_FROM_VIDEO = 'Films come from a Film node.'
 
 export function findFormat(packId: string, formatId: string): { pack: Pack; format: PackFormat } | null {
   for (const pack of PACKS) {

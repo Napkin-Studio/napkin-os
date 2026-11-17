@@ -27,7 +27,7 @@ export interface CanvasActions {
   fitTo(end: { kind: string; id: string }): boolean
   /** The Storyboard a Script drives, made beside it on the canvas when it has none (3.10 Plan shots). */
   storyboardFor(scriptId: string): Promise<{ storyboardId: string; made: boolean }>
-  /** Make video (3.5): the Video node beside what it is made from, with its links, one undo step. */
+  /** Make film (3.5): the Film node beside what it is made from, with its links, one undo step. */
   makeVideo(from: MakeVideoFrom): Promise<MadeVideo>
   /** Make a storyboard from these shots (3.13): a video's own shot list as a node beside it, one undo step. */
   storyboardFromShots(videoId: string): Promise<{ storyboardId: string }>
@@ -142,7 +142,7 @@ class Bus {
     return this.makes ? this.makes.storyboardFromShots(videoId) : null
   }
 
-  /** Make video on the canvas; null when no canvas can. */
+  /** Make film on the canvas; null when no canvas can. */
   makeVideo(from: MakeVideoFrom): Promise<MadeVideo> | null {
     return this.makes ? this.makes.makeVideo(from) : null
   }

@@ -1,11 +1,11 @@
-// The Booth in the Video rooms (features/script-freeform.clan; mock script-freeform-v1 states make, edit): Fin in
-// Make, Edie in Edit. What waits is what the rooms already know (owner, 2026-11-16: use what exists): a job's
-// question, a take or a render that failed and was not cleared, 'New take ready' on a clip in the cut, and the
-// 'Make shot N apart' offer the Change tab makes for a shot filmed with others. Notes are the decision chain's
-// recent entries by the room's agent about this film. Fin's box is the Change → Words path: the words go to the
-// Change tab for the selected shot's next take, and nothing is made until Make there. Edie has no box.
+// The Video rooms' Booth and their waiting line (features/production-new-ui.clan; mock production-new-ui-v2 make,
+// make-box, edit, edit-clip; the Booth rule). The Booth comes in only on a selection: a box, a shot or a take in
+// Make (its crumb, the Box | Shot | Change panel the Make room puts in it, the Camera agent's words for the next
+// take, the offer to make a shot apart), a clip in Edit. What waits for the person is a line on the room, not
+// a Booth: a job's question, a take or a render that failed and was not cleared, 'New take ready' on a clip in
+// the cut, what was just joined or cut with Undo, and the agents' recent notes on this film.
 
-import { useState, type ReactNode } from 'react'
+import { useState, type ReactNode, type Ref } from 'react'
 import { useDoc, useServices, useUi } from '../app/context'
 import type { DocJob, Id } from '../contracts/types'
 import { plainJobError } from '../jobs/errorWords'
@@ -13,10 +13,9 @@ import { jobCtx } from '../jobs/runner'
 import { shotNumber } from '../model/selectors'
 import type { CastKey } from '../ui/agents/cast'
 import { Booth } from '../ui/booth/Booth'
-import { BoothAgent, BoothAsk, BoothBox, BoothSection, ChoiceCard, DoneCard, NoteCard, ScopeChip } from '../ui/booth/BoothParts'
+import { BoothAsk, BoothBox, ChoiceCard, DoneCard, NoteCard, ScopeChip } from '../ui/booth/BoothParts'
 import { ago, useChain, useLater } from '../ui/booth/hooks'
 import { agentNotes, groupFailures, stageWaiting, triesWords, videoAddresses } from '../ui/booth/notes'
-import { boothEarned } from '../ui/booth/state'
 import { useBooth } from '../ui/booth/useBooth'
 import type { ChangeOpen } from './ChangeDrawer'
 import { boxName, type Gen } from './model'
@@ -25,18 +24,16 @@ import type { RoomData, RoomName, Selection } from './Rooms'
 import { dismissedTakes, newerTake, notNow, readCut } from './timeline'
 import type { CutClip } from './cut'
 
-export const FIN_LINE = 'Takes that need you, and anything I’d make apart, wait here.'
-export const EDIE_LINE = 'Questions about the cut wait here. Nothing changes until you choose.'
 
 /** A take is one of a box's takes: its own box, or a box made apart from it. */
 const inBox = (g: Gen, key: string | undefined) => !!key && (g.boxKey === key || (g.boxKeys ?? []).includes(key))
 
-export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady, done, onUndo }: {
+export interface RoomProps {
   room: RoomName
   data: RoomData
   sel: Selection
   change: ChangeOpen | null
-  /** The last join or cut in the Make room's strip (features/join-or-cut-shots.clan): said here, with Undo. */
+  /** The last join or cut in the Make room's strip (features/join-or-cut-shots.clan): said on the room, with Undo. */
   done?: { id: number; text: string } | null
   onUndo?: () => void
   /** Open the Change tab (Make) on a take, with words for its next take. */
@@ -45,11 +42,17 @@ export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady,
   onApart: (shotId: Id) => void
   /** 'Use this take' on a clip's new take: the Edit room's New take sheet. */
   onReady: (clipId: Id, takeId: Id) => void
-}) {
+  /** The crumb's ← Film and ×: the selection goes, and the Booth with it. */
+  onClose?: () => void
+  /** Where the Make room puts its Box | Shot | Change panel (a portal into the Booth). */
+  slot?: Ref<HTMLDivElement>
+}
+
+/** Everything the rooms have waiting, and the agents' notes, worked out once (the line and the Booth share it). */
+function useRoomWaits({ room, data, change, onApart, onReady }: RoomProps) {
   const { clan, runner, ui: uiStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
-  const booth = useBooth('room')
   const chain = useChain(clan)
   const { later, order } = useLater()
   const [, rerender] = useState(0)
@@ -125,33 +128,60 @@ export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady,
     }
   }
 
-  const ordered = order(items, (x) => x.id)
   const crew: CastKey[] = room === 'edit' ? ['wren'] : []
   const notes = [agent, ...crew].flatMap((a) => agentNotes(chain, a, videoAddresses(doc, docId, data.videoId, shotIds), doc).map((n) => ({ ...n, agent: a })))
     .sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 3)
 
-  // Fin's box: words for the selected shot's next take, through Change → Words.
+  return { items: order(items, (x) => x.id), notes, apart: items.filter((x) => x.id.startsWith('apart:')), later }
+}
+
+/** What waits in a room, as a line over its work (no Booth for it). */
+export function RoomWaits(p: RoomProps) {
+  const { items, notes } = useRoomWaits(p)
+  const waits = items.filter((x) => !x.id.startsWith('apart:'))
+  if (!waits.length && !notes.length && !p.done) return null
+  return (
+    <div className="rm-waits" role="region" aria-label="Waiting for you" data-count={waits.length}>
+      {waits.length > 0 && <div className="rm-waits-hd"><span className="tagcall">Needs your call · {waits.length}</span></div>}
+      <div className="rm-waits-row">
+        {waits.map((x) => x.node)}
+        {p.done && <DoneCard key={p.done.id} agent="wren" text={`${p.done.text} Nothing is sent until you press Make.`} onUndo={p.onUndo} />}
+        {notes.map((n) => <NoteCard key={`${n.agent}:${n.id}`} agent={n.agent} label={n.label} body={n.body} time={ago(n.at)} />)}
+      </div>
+    </div>
+  )
+}
+
+/** The Booth on a selected box, shot or take (Make) or clip (Edit). */
+export function RoomBooth({ slot, ...p }: RoomProps) {
+  const { room, data, sel, onClose, onChange } = p
+  const doc = useDoc()
+  const booth = useBooth('room')
+  const { apart } = useRoomWaits(p)
+  const genOf = (id: string | undefined) => data.gens.find((g) => g.id === id)
+  // The Camera agent's box: words for the selected shot's next take, through Change → Words.
   const box = data.boxes.find((b) => b.key === sel.boxKey) ?? data.boxes.find((b) => b.shotIds.includes(sel.shotId ?? ''))
   const shotId = sel.shotId && box?.shotIds.includes(sel.shotId) ? sel.shotId : box?.shotIds[0]
   const take = (sel.genId && genOf(sel.genId)?.state === 'ready' && inBox(genOf(sel.genId)!, box?.key) ? genOf(sel.genId) : undefined)
     ?? data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready')
-  const count = ordered.length
+  const ns = box ? box.shotIds.map((id) => shotNumber(doc, id)).filter((n) => n > 0) : []
+  const where = box ? `${boxName(box)}${ns.length > 1 ? ` · shots ${ns[0]}-${ns.at(-1)}` : ns.length ? ` · shot ${ns[0]}` : ''}` : ''
   return (
-    <Booth state={booth} earned={boothEarned({ selection: !!box, asked: !!done, waiting: count })} count={count} asks={items.filter((x) => x.ask).length}>
-      <BoothAgent agent={agent} line={room === 'make' ? FIN_LINE : EDIE_LINE} needsYou={count > 0} crew={crew} />
+    <Booth state={booth} earned={!!box}>
+      <div className="sp-crumb"><button type="button" onClick={onClose}>← Film</button><span>›</span><b>{where}</b>
+        <button type="button" className="x" onClick={onClose} title="Back (Esc)" aria-label="Close the selection">×</button></div>
+      {room === 'make' && <div className="rm-boothslot" ref={slot} />}
+      {apart.map((x) => x.node)}
       {room === 'make' && box && !box.endCard && (
-        <BoothBox key={`${box.key}:${shotId ?? ''}`} placeholder="Tell the Camera agent what to make or make again…" button="Ask the Camera agent"
-          scope={<ScopeChip label={`${shotId ? `Shot ${shotNumber(doc, shotId)} · ` : ''}${boxName(box)}`} />}
-          disabled={!take}
-          hint={!take ? 'Make a take of this box first. Then tell the Camera agent what changes in the next one.' : undefined}
-          onSend={(words) => { if (take) onChange({ parentId: take.id, ...(shotId && take.shotIds.includes(shotId) ? { shotId } : {}), verb: 'words', words }) }} />
+        <div className="bsec">
+          <h4>Tell the Camera agent</h4>
+          <BoothBox key={`${box.key}:${shotId ?? ''}`} placeholder="Tell the Camera agent what to make or make again…" button="Ask the Camera agent"
+            scope={<ScopeChip label={`${shotId ? `Shot ${shotNumber(doc, shotId)} · ` : ''}${boxName(box)}`} />}
+            disabled={!take}
+            hint={!take ? 'Make a take of this box first. Then tell the Camera agent what changes in the next one.' : undefined}
+            onSend={(words) => { if (take) onChange({ parentId: take.id, ...(shotId && take.shotIds.includes(shotId) ? { shotId } : {}), verb: 'words', words }) }} />
+        </div>
       )}
-      {count > 0 && <BoothSection label="Waiting for you" count={count} />}
-      {ordered.map((x) => x.node)}
-      {(notes.length > 0 || !!done) && <BoothSection label="Notes" />}
-      {done && <DoneCard key={done.id} agent="wren" text={`${done.text} Nothing is sent until you press Make.`} onUndo={onUndo} />}
-      {notes.map((n) => <NoteCard key={`${n.agent}:${n.id}`} agent={n.agent} label={n.label} body={n.body} time={ago(n.at)} />)}
-      {!count && !notes.length && !done && <p className="bt-quiet">Nothing waiting. {room === 'make' ? 'Takes that need you come here.' : 'Questions about the cut come here.'}</p>}
     </Booth>
   )
 }

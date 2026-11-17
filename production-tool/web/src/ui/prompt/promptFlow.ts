@@ -1,6 +1,6 @@
 // What an empty node offers to start from (features/prompt-start.clan; ui-behaviour 3.5, 3.10,
 // 3.17; plan decision 1), apart from the component so it can be tested: when each kind is empty,
-// which start it shows, the words, and the two asks (the Video's hard block, the Storyboard's nudge).
+// which start it shows, the words, and the two asks (the Film's hard block, the Storyboard's nudge).
 // The asks are derived from the node's state, never stored: a link or a plan settles them.
 
 import type { Id, ProductionDocument, Question } from '../../contracts/types'
@@ -90,7 +90,7 @@ export function promptState(d: Doc, kind: PromptKind, nodeId: Id): PromptState {
   }
 }
 
-/** Option ids of the Video's hard block and the Storyboard's nudge. */
+/** Option ids of the Film's hard block and the Storyboard's nudge. */
 export const DESCRIBE = 'describe'
 export const LINK_SCRIPT = 'link_script'
 export const LINK_STORYBOARD = 'link_storyboard'
@@ -98,7 +98,7 @@ export const SCRIPT_FIRST = 'script_first'
 export const PLAN_NOW = 'plan_now'
 
 /**
- * Dex's hard block on a Video with nothing linked or described (3.5, 3.17): no option is
+ * Dex's hard block on a Film with nothing linked or described (3.5, 3.17): no option is
  * recommended, the text box is the Describe it option, and nothing runs until one is done.
  */
 export function videoBlock(videoId: Id): Question {
@@ -132,7 +132,7 @@ export function storyboardNudge(storyboardId: Id): Question {
   }
 }
 
-/** The primary of the Video's block: "15 s · Make it". */
+/** The primary of the Film's block: "15 s · Make it". */
 export const makeItLabel = (seconds: number) => `${seconds} s · Make it`
 
 /** The @word being typed at the caret, if any: what the mention list filters by. */

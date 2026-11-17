@@ -100,7 +100,7 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
   }
   if (size.media === 'video') {
     const edl = size.edl ?? []
-    // A cutdown made from a Video node (it has Dex's beats) always ends on the end card stitch draws at its size.
+    // A cutdown made from a Film node (it has Dex's beats) always ends on the end card stitch draws at its size.
     if (edl.length) out.end_card = edl.at(-1)?.end_card || size.beats ? pass('The film ends on its end card.') : flag('This film does not end on its end card.')
     const r = size.delivery.width / size.delivery.height
     if (SOCIAL_SHAPES.some(([a, b]) => Math.abs(r - a / b) < 0.02)) {

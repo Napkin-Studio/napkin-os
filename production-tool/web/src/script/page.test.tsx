@@ -118,9 +118,9 @@ describe('Plan shots and what comes next (ui-behaviour 3.10, 3.5)', () => {
     const { el, services, scriptId } = await open(secondScript('EXT. CLIFFS - DAWN. A runner crests the cliff and drinks Lumen water.'))
     await settle()
     expect(el.querySelector('.se-next')?.textContent).toMatch(/Director agent: I'll read your words as they are and plan about 6 shots\. Nothing needs a heading or an element first\./)
-    // Make video sits beside Plan shots in the bar (mock state 'prose'), not on Dex's line.
-    expect(el.querySelector('.se-next')?.textContent).not.toContain('Make video')
-    expect(button(el, 'Make video')!.disabled).toBe(false)
+    // Make film sits beside Plan shots in the bar (mock state 'prose'), not on Dex's line.
+    expect(el.querySelector('.se-next')?.textContent).not.toContain('Make film')
+    expect(button(el, 'Make film')!.disabled).toBe(false)
     const plan = button(el, 'Plan shots')!
     expect(plan.disabled).toBe(false)
     expect(el.querySelector('.se-why')).toBeNull()

@@ -5,7 +5,7 @@
 // The Production Tool is a React app outside the shell runtime, so the hidden/shown state is the
 // person's own in this tool's app UI (doc/ui.ts AppUi.booth), keyed by who is signed in; not clan:booth.
 
-/** Where the Booth is: the Script editor, the Storyboard editor, a Video room, or the canvas (a selected
+/** Where the Booth is: the Script editor, the Storyboard editor, a Film room, or the canvas (a selected
  *  Brief node, the Assets library opened on purpose; features/production-new-ui.clan). */
 export type BoothPlace = 'script' | 'storyboard' | 'room' | 'canvas'
 

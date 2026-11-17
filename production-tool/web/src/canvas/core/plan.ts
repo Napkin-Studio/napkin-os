@@ -3,7 +3,7 @@
 // planSelection, which is now its projection (canvas/selection.ts), and gives
 // the selected nodes by kind and what it refused, with reasons. Pure.
 //
-// v2 only: the v3 actions (Make video, Plan shots, scope focus and the Ask
+// v2 only: the v3 actions (Make film, Plan shots, scope focus and the Ask
 // flags) come with canvas-nodes, once contract-v3 fixes the link and Ask model.
 //
 // Today's rules, unchanged:

@@ -1,4 +1,4 @@
-// Make all sizes from a Video node (features/campaign-formats.clan, phases 5 and 6; owner 2026-10-16: "video
+// Make all sizes from a Film node (features/campaign-formats.clan, phases 5 and 6; owner 2026-10-16: "video
 // versions from video nodes"): the film's options (lengths × shapes), Dex's plan shown before anything
 // renders (each length's beats, kept or dropped with his reason, editable; each shape's shots, cropped or
 // made again), then the tray (what Edie and Wren will make: every version, and every shot × method ×

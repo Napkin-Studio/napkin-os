@@ -213,7 +213,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {ICON[m]}{vertical && <span className="tb-name">{label}</span>}
     </button>
   )
-  const NAME: Record<'script' | 'storyboard' | 'video', string> = { script: 'Script', storyboard: 'Storyboard', video: 'Video' }
+  const NAME: Record<'script' | 'storyboard' | 'video', string> = { script: 'Script', storyboard: 'Storyboard', video: 'Film' }
   const newKind = (k: 'script' | 'storyboard' | 'video') => {
     setMenu(false)
     if (!canvasActions.node(k)) onNode(k)

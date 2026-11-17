@@ -159,7 +159,7 @@ describe('a new take', () => {
     expect(s.doc.get().jobs[id].inputs).toContainEqual({ kind: 'generation', ref: s.takeOf(0).id, used_as: 'new version of', included: true })
   })
 
-  it('a take lands as a generation and, in the Video editor, as the shot\'s clip in the main video\'s cut, made by wren', async () => {
+  it('a take lands as a generation and, in the Film editor, as the shot\'s clip in the main video\'s cut, made by wren', async () => {
     const s = await setup(2)
     await s.makeAll(false)
     const d = s.doc.get()

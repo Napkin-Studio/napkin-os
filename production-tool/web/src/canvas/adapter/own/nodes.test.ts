@@ -20,7 +20,7 @@ async function project(): Promise<ProductionDocument> {
 const kinds = (a: OwnAdapter) => a.elements().map((e) => cardOf(e)?.kind ?? (linkIdOf(e) ? 'link' : e.type)).sort()
 
 describe('canvas-nodes on the own engine', () => {
-  it('seeds the Script, Storyboard and Video nodes and the document’s links once, and they survive the Y round trip', async () => {
+  it('seeds the Script, Storyboard and Film nodes and the document’s links once, and they survive the Y round trip', async () => {
     const doc = await project()
     const a = new OwnAdapter()
     const els = seedNodes(a, doc)

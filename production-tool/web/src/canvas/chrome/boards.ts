@@ -32,7 +32,7 @@ const TEMPLATE: { id: string; title: string; purpose: BoardPurpose; roles?: RefR
   { id: 'references', title: 'References', purpose: 'reference', roles: 'other' },
   { id: 'products', title: 'Products', purpose: 'product', roles: ['product'] },
   { id: 'storyboard', title: 'Storyboard', purpose: 'storyboard' },
-  { id: 'video', title: 'Video', purpose: 'video' },
+  { id: 'video', title: 'Film', purpose: 'video' },
 ]
 const OWN: RefRole[] = ['character', 'location', 'product']
 const PICTURE_BOARDS: BoardPurpose[] = ['character', 'location', 'reference', 'product']
@@ -42,7 +42,7 @@ export interface RailNode {
   card: 'script' | 'storyboard' | 'video'
   elId: string
 }
-const NODE_TITLE: Record<RailNode['card'], string> = { script: 'Script', storyboard: 'Storyboard', video: 'Video' }
+const NODE_TITLE: Record<RailNode['card'], string> = { script: 'Script', storyboard: 'Storyboard', video: 'Film' }
 
 /**
  * The rail's rows. `frames`: the canvas has the boards as real frames (our own engine, art-boards),
@@ -99,7 +99,7 @@ type Box = { minX: number; minY: number; maxX: number; maxY: number }
 const PAD = 16
 const TOP = 22
 const FOOT = 34
-/** Main's sizes: the Script board, the Storyboard board and the Video board. */
+/** Main's sizes: the Script board, the Storyboard board and the Film board. */
 const SCRIPT = { w: 340, h: 440 }
 const STORY = { w: 752, h: 236 }
 const VIDEO = { w: 380, h: 236 }
@@ -107,7 +107,7 @@ const GAP = 32
 
 /**
  * Where the boards sit (mock Main), from what is on the canvas: a picture board wraps the pictures of
- * its role; the Script board stands to the left of them, the Storyboard below, the Video to the
+ * its role; the Script board stands to the left of them, the Storyboard below, the Film to the
  * Storyboard's right. Derived on every draw and never written: art-boards will make them real frames.
  * `groups` are the picture boards with pictures, each with the box of its pictures.
  */
@@ -126,6 +126,6 @@ export function boardFrames(groups: { id: string; title: string; box: Box }[]): 
     { id: 'script', title: 'Script', holds: 'script', rect: script },
     ...frames,
     { id: 'storyboard', title: 'Storyboard', holds: 'storyboard', rect: { x: script.x, y: below, ...STORY } },
-    { id: 'video', title: 'Video', holds: 'video', rect: { x: script.x + STORY.w + 24, y: below, ...VIDEO } },
+    { id: 'video', title: 'Film', holds: 'video', rect: { x: script.x + STORY.w + 24, y: below, ...VIDEO } },
   ]
 }

@@ -311,7 +311,7 @@ export const PURPOSES: readonly { purpose: BoardPurpose; label: string }[] = [
   { purpose: 'reference', label: 'References' },
   { purpose: 'product', label: 'Products' },
   { purpose: 'storyboard', label: 'Storyboard' },
-  { purpose: 'video', label: 'Video' },
+  { purpose: 'video', label: 'Film' },
   { purpose: 'sketches', label: 'Sketches' },
   { purpose: 'brand', label: 'Brand' },
   { purpose: 'formats', label: 'Formats' },

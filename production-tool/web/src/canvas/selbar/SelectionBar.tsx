@@ -13,7 +13,7 @@ import './selbar.css'
 
 export interface SelectionBarActions {
   open(): void
-  /** Make video (3.5): the Video node beside the selection, with its links. */
+  /** Make film (3.5): the Film node beside the selection, with its links. */
   makeVideo(): void
   /** Plan shots (3.10): on the storyboard the selected script drives, made when there is none. */
   planShots(): void
@@ -21,7 +21,7 @@ export interface SelectionBarActions {
   ungroup(): void
   lock(locked: boolean): void
   remove(): void
-  /** Make all sizes from a Video node (features/campaign-formats.clan). */
+  /** Make all sizes from a Film node (features/campaign-formats.clan). */
   makeSizes?(): void
   /** Resize… the pictures among the selection (features/resize-selection.clan). */
   resize?(): void

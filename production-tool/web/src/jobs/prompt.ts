@@ -184,7 +184,7 @@ export function storyboardOfVideo(d: Doc, videoId: Id): Storyboard | undefined {
 /**
  * The video's own shot list (ui-behaviour 3.5, decided 2026-10-15): an implicit storyboard with no canvas
  * node and no link, owned by this video (video_id), made when the video has no storyboard. Its shots are the video's
- * timeline in the Video editor. One write, in the document only. Returns its id.
+ * timeline in the Film editor. One write, in the document only. Returns its id.
  */
 export async function ownShotList(store: DocumentStore, videoId: Id): Promise<Id> {
   const d = store.get()

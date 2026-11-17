@@ -19,7 +19,7 @@ const FRAME_S = 1 / 24
 export const CENTRE = { x: 0.35, y: 0.15, w: 0.3, h: 0.7 }
 export const ALEPH_RATIOS = ['16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16', '21:9'] as const
 
-/** The film shapes Make all sizes offers from a Video node: the film pack's formats (owner, CF6/CF7). */
+/** The film shapes Make all sizes offers from a Film node: the film pack's formats (owner, CF6/CF7). */
 export const FILM_SHAPES = [
   { id: 'film-16x9', label: '16:9', aspect: { w: 16, h: 9 } },
   { id: 'film-9x16', label: '9:16', aspect: { w: 9, h: 16 } },

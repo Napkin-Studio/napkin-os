@@ -105,7 +105,7 @@ export function Storyboard() {
   const vModel = film ? videoModel(doc, linked?.id, config, lastWorkedModel(doc, 'clip', config)) : null
   const vPlan = vModel ? videoPlan(doc, linked?.id, vModel) : undefined
   const marks = vPlan ? marksNow(doc, linked?.id, vPlan) : {}
-  // The same strips as the Video timeline, as a light bracket under the cards that will be one video.
+  // The same strips as the Film timeline, as a light bracket under the cards that will be one video.
   const units = vPlan && linked ? videoUnits(doc, ui, linked.id, vPlan) : []
   const facts = vPlan && linked ? videoShots(doc, linked.id) : []
   const stripPlace = (i: number): StripPlace | undefined => {
@@ -194,14 +194,14 @@ export function Storyboard() {
     await updateDoc(docStore, (d) => {
       for (const s of shotsOf(d, sb?.id)) d.shots[s.id].status = 'locked'
     }, 'lock storyboard')
-    // A blank canvas has no Video node (owner 2026-11-03), so Make clips on a storyboard with none makes
-    // one first, the canvas's own Make video (one undo step, the renders link), and opens it. Before,
-    // it opened the Video editor on "No video here yet." with no way back (full test, 2026-11-04).
+    // A blank canvas has no Film node (owner 2026-11-03), so Make clips on a storyboard with none makes
+    // one first, the canvas's own Make film (one undo step, the renders link), and opens it. Before,
+    // it opened the Film editor on "No film here yet." with no way back (full test, 2026-11-04).
     let videoId = videoOfStoryboard(docStore.get(), sb?.id)?.id
     if (!videoId && sb) {
       const script = scriptOfStoryboard(docStore.get(), sb.id)
       const made = canvasActions.makeVideo({ storyboardId: sb.id, ...(script ? { scriptId: script.id } : {}) })
-      if (!made) throw new Error('Make the video from the canvas: select this storyboard there and choose Make video.')
+      if (!made) throw new Error('Make the video from the canvas: select this storyboard there and choose Make film.')
       videoId = (await made).videoId
     }
     uiStore.update((u) => {
@@ -228,7 +228,7 @@ export function Storyboard() {
       ? <button className="btn primary" disabled={!check.ok || anyFrameRunning} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : NO_PICTURES}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
       : !allFramed
         ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
-        : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title="Lock the frames and make a clip of each in the Video editor">Make clips</button>
+        : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title="Lock the frames and make a clip of each in the Film editor">Make clips</button>
   // The next step's "What the X agent will send" (features/production-new-ui.clan): what goes, the brief, no price.
   const named = refsList(doc).length
   const sending = !shots.length

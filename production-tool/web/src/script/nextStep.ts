@@ -37,8 +37,8 @@ export function planLine(d: Doc, scriptId: Id, hasVideo: boolean, pasted = false
   const shots = countWords(shotCount(d, scriptId), 'shot')
   if (scriptIsFree(d, scriptId)) return `I'll read your words as they are and plan ${shots}. Nothing needs a heading or an element first.`
   const n = scenesOf(d, scriptId).filter((s) => s.heading.trim()).length
-  if (!n) return `Plan shots turns your screenplay into ${shots}.${hasVideo ? '' : ' Make video goes straight to the clips.'}`
-  return `Your screenplay ${pasted ? 'came in with' : 'has'} its ${n} ${n === 1 ? 'scene' : 'scenes'}. Plan shots turns it into ${shots}${hasVideo ? '.' : '; Make video goes straight to the clips.'}`
+  if (!n) return `Plan shots turns your screenplay into ${shots}.${hasVideo ? '' : ' Make film goes straight to the clips.'}`
+  return `Your screenplay ${pasted ? 'came in with' : 'has'} its ${n} ${n === 1 ? 'scene' : 'scenes'}. Plan shots turns it into ${shots}${hasVideo ? '.' : '; Make film goes straight to the clips.'}`
 }
 
 /** The next step for this script, or null when there is none to show (no words yet, or Dex is planning).
@@ -60,12 +60,12 @@ export function nextStep(d: Doc, scriptId: Id, storyboardId?: Id, behind = false
   const framed = shots.filter((s) => !!currentFrame(d, s)).length
   const clipped = video ? shots.filter((s) => !!currentTake(d, s.id, video)).length : 0
   const planned = `${n} ${n === 1 ? 'shot' : 'shots'} planned.`
-  if (video && clipped === n) return { step: 'render', line: `Every clip is made. Next: render the ad in the video.`, actions: ['open-video'] }
+  if (video && clipped === n) return { step: 'render', line: `Every clip is made. Next: render the ad in the film.`, actions: ['open-video'] }
   if (video && clipMode(d, video) === 'straight' && framed < n) {
-    return { step: 'clips', line: `${planned} Next: Make clips in the video makes them straight from the script.`, actions: ['open-video', 'open-storyboard'] }
+    return { step: 'clips', line: `${planned} Next: Make clips in the film makes them straight from the script.`, actions: ['open-video', 'open-storyboard'] }
   }
   if (framed < n) {
     return { step: 'frames', line: `${planned} Next: draw and check each shot's frame in the storyboard${framed ? ` (${framed} of ${n} drawn)` : ''}.`, actions: ['open-storyboard', toVideo] }
   }
-  return { step: 'clips', line: 'Every shot has its frame. Next: make the clips in the video.', actions: [toVideo] }
+  return { step: 'clips', line: 'Every shot has its frame. Next: make the clips in the film.', actions: [toVideo] }
 }

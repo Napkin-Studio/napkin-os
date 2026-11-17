@@ -1,7 +1,7 @@
 // A new project opens on the canvas stage with one script, one storyboard and one video (contract 3),
 // and the Storyboard and Video panels' writes land on the real .clan engine: the script's words in a
 // scene, the ratio and length on the storyboard, new shots by rank, a take picked in the cut, a note
-// with its window. The Video stage stays shut until every shot is locked or waits for review.
+// with its window. The Film stage stays shut until every shot is locked or waits for review.
 
 import { describe, expect, it, vi } from 'vitest'
 
@@ -58,7 +58,7 @@ describe('a new project', () => {
     expect(mainScript(d)).toBeUndefined()
     expect(mainStoryboard(d)).toBeUndefined()
     expect(mainVideo(d)).toBeUndefined()
-    // Nothing to film yet: the Video stage stays shut.
+    // Nothing to film yet: the Film stage stays shut.
     expect(storyboardReady(d)).toBe(false)
   })
 })

@@ -7,7 +7,7 @@ import { RelayError } from '../relay/types'
 import { snapshotDoc } from '../test/jobFixtures'
 import { FETCH_AGAIN_S, FETCH_BACKOFF_S, JobRunner, LOST_RESENDS } from './runner'
 
-// The Video stage test (2026-10-09, features/video-stage-findings.clan): a lost POST /jobs answer
+// The Film stage test (2026-10-09, features/video-stage-findings.clan): a lost POST /jobs answer
 // failed a clip the relay went on making; a relay restart left "No such job." with no Retry; an
 // uncertain job was asked about every 2 s for ever; one failed download failed a paid clip; and a
 // cancel while it downloaded landed it twice.

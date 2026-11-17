@@ -6,6 +6,7 @@
 // changes the next take only: the takes there are never marked out of date.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { choiceToSend, clipRefCapacity, controlsFor, modelChoicesFor } from '../capabilities'
 import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type ModelChoice, type Shot } from '../contracts/types'
@@ -47,7 +48,7 @@ const MOVES: CameraMovement[] = CAMERA_MOVEMENTS.filter((m) => m !== 'crane_down
 const SPEEDS = [{ id: 'slow', label: 'Slow' }, { id: 'normal', label: 'Normal' }, { id: 'fast', label: 'Fast' }] as const
 
 
-export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseChange, onRoom, register, onDone }: {
+export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseChange, onRoom, register, onDone, slot }: {
   data: RoomData
   shots: Shot[]
   sel: Selection
@@ -57,8 +58,10 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   onCloseChange: () => void
   onRoom: (r: 'make' | 'edit') => void
   register: (close: () => void) => () => void
-  /** A join or cut was made: Fin says so in the Booth, with Undo. */
+  /** A join or cut was made: Fin says so on the room, with Undo. */
   onDone?: (text: string) => void
+  /** The Booth's slot for the Box | Shot | Change panel: there only while a box, shot or take is selected. */
+  slot?: HTMLElement | null
 }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
@@ -271,7 +274,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
               <div key={b.key} className="jc-unit">
                 {before && <GapButton gap={before} onFlip={(g, k) => void flip(g, k)} onTip={(g, el) => setTip({ gap: g, el })} onTipEnd={tipEnd} />}
                 {b.endCard ? <EndCardTile b={b} shot={doc.shots[b.shotIds[0]]} onEdit={() => onRoom('edit')} /> : (
-                  <BoxCard b={b} sel={tab === 'shot' ? sel : { ...sel, shotId: undefined }} since={openedAt} selected={b.key === box?.key} making={making || b.shotIds.some(busy)} words={f.words} limit={f.limit}
+                  <BoxCard b={b} sel={tab === 'shot' ? sel : { ...sel, shotId: undefined }} since={openedAt} selected={!!(sel.boxKey || sel.shotId) && b.key === box?.key} making={making || b.shotIds.some(busy)} words={f.words} limit={f.limit}
                     model={f.model} gaps={gapAt} preview={preview?.get(b.key)} takes={data.gens.filter((g) => inBox(g, b.key))}
                     onShot={(id) => pickShot(b, id)} onBox={() => pickBox(b)} onMake={() => void make(b)} onTake={(g) => pickTake(g, b)}
                     onFlip={(g, k) => void flip(g, k)} onTip={(g, el) => setTip({ gap: g, el })} onTipEnd={tipEnd}
@@ -288,7 +291,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
         </div>
         {tip && tipWords && <GapTip anchor={tip.el} words={tipWords} />}
       </section>
-      <aside className="rm-direct" aria-label="Direct">
+      {slot && createPortal(<div className="rm-direct" aria-label="Direct">
         <div className="rm-tabs" role="tablist" aria-label="Direct">
           {(['shot', 'box', 'change'] as const).map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t === 'shot' ? 'Shot' : t === 'box' ? 'Box' : 'Change'}</button>
@@ -314,7 +317,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
               onMade={(g) => { onCloseChange(); if (g) { onSel({ ...sel, genId: g }); } }} onApart={(shotId) => void reshape(shotId, 'out')} />
           })()}
         </div>
-      </aside>
+      </div>, slot)}
     </div>
   )
 }

@@ -16,7 +16,7 @@ describe('the registry', () => {
       'pin', 'provenance', 'script', 'shot', 'sketch', 'storyboard', 'video',
     ])
     // 3.3's card labels.
-    for (const label of ['Script', 'Storyboard', 'Video', 'Reference', 'Frame', 'Sketch area', 'Ink group', 'Document', 'Format set']) {
+    for (const label of ['Script', 'Storyboard', 'Film', 'Reference', 'Frame', 'Sketch area', 'Ink group', 'Document', 'Format set']) {
       expect(NODE_REGISTRY.some((e) => e.label === label)).toBe(true)
     }
   })

@@ -29,7 +29,7 @@ type ClipCtx = Pick<Extract<JobCtx, { for: 'clip' }>, 'shotId' | 'parentTakeId' 
 type RunCtx = Pick<Extract<JobCtx, { for: 'run' }>, 'videoId' | 'runId'>
 type RemakeCtx = Pick<Extract<JobCtx, { for: 'remake' }>, 'videoId' | 'parentId'>
 
-/** Where a landing puts a new take: the Video editor puts it in the cut (as before the rooms); the rooms
+/** Where a landing puts a new take: the Film editor puts it in the cut (as before the rooms); the rooms
  *  never do (features/make-and-edit.clan: a new take never touches the timeline). */
 export interface LandOpts { inCut: boolean }
 const IN_CUT: LandOpts = { inCut: true }
@@ -136,7 +136,7 @@ function inputsOf(d: ProductionDocument, job: Job, shotIds: string[], lengthS: n
 }
 
 /** A clip job's result as a new generation of the shot (its parent's, when it has one); the notes it fixed are
- *  resolved. In the Video editor it is also picked in its video's cut (`opts.inCut`). Landing twice does nothing. */
+ *  resolved. In the Film editor it is also picked in its video's cut (`opts.inCut`). Landing twice does nothing. */
 export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx, opts: LandOpts = IN_CUT): Generation | undefined {
   const out = job.outputs?.[0]
   const shot = d.shots[ctx.shotId]
@@ -188,7 +188,7 @@ export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx, opts: L
 }
 
 /** A take of a run (features/connected-video.clan) as ONE generation of its box (box_id the run), with a window
- *  per shot (its segments: from the job's cuts, found else planned). In the Video editor each shot's clip in the
+ *  per shot (its segments: from the job's cuts, found else planned). In the Film editor each shot's clip in the
  *  cut becomes its window (`opts.inCut`). Shots deleted while it ran are left out. Landing twice does nothing. */
 export function applyRunTake(d: ProductionDocument, job: Job, ctx: RunCtx, opts: LandOpts = IN_CUT): Generation | undefined {
   const out = job.outputs?.[0]
@@ -318,7 +318,7 @@ export function landFrame(store: DocumentStore, job: Job, ctx: Extract<JobCtx, {
   return landUpdate(store, (x) => { applyFrame(x, job, ctx) }, landingWhy(store, job.jobId, what, cardsOf(job, ctx)))
 }
 
-/** Fin's clip (in the Video editor, picked in the cut): "render take v2 for shot 3". */
+/** Fin's clip (in the Film editor, picked in the cut): "render take v2 for shot 3". */
 export function landTake(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'clip' }>, opts: LandOpts = IN_CUT) {
   const d = store.get()
   const what = `take v${takesOf(d, ctx.shotId).length + 1} for ${shotName(d, ctx.shotId)}`

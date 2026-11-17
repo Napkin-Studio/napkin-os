@@ -74,10 +74,10 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         </div>
         {stage === 'storyboard' && <div className="stage-pane editor-pane" data-dogfood-area="storyboard"><Storyboard /></div>}
         {stage === 'video' && <div className="stage-pane editor-pane" data-dogfood-area="video">
-          {/* The Video editor as two rooms, Make and Edit (features/make-and-edit.clan); absent flag: as before. */}
+          {/* The Film editor as two rooms, Make and Edit (features/make-and-edit.clan); absent flag: as before. */}
           {config.flags.makeAndEdit ? <Suspense fallback={<div className="editor" role="status" aria-busy="true" />}><Rooms /></Suspense> : <Video />}
         </div>}
-        {/* The Video editor shows it in its timeline head (stages/Video.tsx). */}
+        {/* The Film editor shows it in its timeline head (stages/Video.tsx). */}
         {stage === 'storyboard' && <RemakeBar />}
         {panel === 'history' && <DecisionsDrawer store={clan} onClose={() => setPanel(null)} />}
       </div>

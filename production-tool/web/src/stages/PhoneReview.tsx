@@ -1,7 +1,7 @@
 // Phone review (ui-behaviour 2.5, 3.14; mock PhoneReview.dc.html): below 600px wide every route shows
 // this. Watch the ad, see the notes, leave a note at a moment. No editing controls, hidden or
 // disabled; one banner says where to edit. A note on the ad lands on the shot playing at that moment,
-// as a note on its take (the Video editor's notes), so Fix this moment there picks it up.
+// as a note on its take (the Film editor's notes), so Fix this moment there picks it up.
 
 import { useMemo, useRef, useState } from 'react'
 import { useDoc, useServices, useShell, useUi } from '../app/context'

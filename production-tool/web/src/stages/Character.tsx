@@ -158,7 +158,7 @@ export function Character({ initial, active, onPictureEditor }: {
   const [placeError, setPlaceError] = useState<string | null>(null)
   /** Resize… from the node bar (a selection with nodes and pictures): the pictures it resizes. */
   const [resizeOn, setResizeOn] = useState<{ els: El[]; key: string } | null>(null)
-  /** Dex's question when Make video has two scripts or two storyboards (3.5): which one drives. */
+  /** Dex's question when Make film has two scripts or two storyboards (3.5): which one drives. */
   // Generate opened from an ink group's bar (container-select): the popover over the group's strokes.
   const [genFor, setGenFor] = useState<string[] | null>(null)
   const [which, setWhich] = useState<{ scripts: string[]; storyboards: string[]; at: Pt } | null>(null)
@@ -303,7 +303,7 @@ export function Character({ initial, active, onPictureEditor }: {
       const other = boards.length === 1 ? drivers(d, { kind: 'storyboard', id: boards[0] }).filter((s) => s !== scripts[0]) : []
       if (!why && other.length) off['plan-shots'] = 'That storyboard follows another script'
     }
-    if (!canvasActions.canMake()) off['make-video'] = 'Make video needs the canvas'
+    if (!canvasActions.canMake()) off['make-video'] = 'Make film needs the canvas'
     if (!controls.generate) off.generate = 'Generate is turned off here'
     const pictures = resizableIn(all).count
     return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked), off, ...(pictures ? { pictures } : {}) }, els: all }
@@ -423,19 +423,19 @@ export function Character({ initial, active, onPictureEditor }: {
     }
   }, [ctrl, asking, limits])
 
-  // A node made from an editor (the Video editor's Make a storyboard from these shots): its Undo here.
+  // A node made from an editor (the Film editor's Make a storyboard from these shots): its Undo here.
   useEffect(() => canvasActions.onMade((m) => {
     const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
     offerUndo({ label: m.label, at: { x: m.el.x + m.el.width / 2, y: m.el.y }, above: true, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([m.el.id]) })
   }), [canvas, offerUndo])
 
-  /** Make video from a script, a storyboard or both (3.5): one undo step, said with Undo. */
+  /** Make film from a script, a storyboard or both (3.5): one undo step, said with Undo. */
   const makeVideoFrom = useCallback(async (from: MakeVideoFrom) => {
     setWhich(null)
     setPlaceError(null)
     try {
       const made = canvasActions.makeVideo(from)
-      if (!made) throw new Error('Make video needs the canvas.')
+      if (!made) throw new Error('Make film needs the canvas.')
       const r = await made
       const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
       offerUndo({ label: r.label, at: { x: r.el.x + r.el.width / 2, y: r.el.y }, above: true, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([r.el.id]) })

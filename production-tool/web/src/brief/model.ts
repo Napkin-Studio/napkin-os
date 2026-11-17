@@ -133,7 +133,7 @@ export function briefSendRow(d: Doc, nodeId: Id): BriefSendRow | undefined {
   if (!b) return undefined
   const t = b.through
   const from = b.via === 'link' ? 'linked'
-    : `from ${t && d.scripts?.[t] ? `Script · ${d.scripts[t].title}` : t && d.storyboards?.[t] ? `Storyboard · ${d.storyboards[t].title}` : t && d.videos?.[t] ? `Video · ${d.videos[t].title}` : 'upstream'}`
+    : `from ${t && d.scripts?.[t] ? `Script · ${d.scripts[t].title}` : t && d.storyboards?.[t] ? `Storyboard · ${d.storyboards[t].title}` : t && d.videos?.[t] ? `Film · ${d.videos[t].title}` : 'upstream'}`
   return { key: `brief:${b.brief.id}`, briefId: b.brief.id, label: b.item.label, detail: [spineSummary(b.brief.spine), from].filter(Boolean).join(' · '), via: b.via }
 }
 

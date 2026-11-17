@@ -99,7 +99,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     },
   }), [canvas, services, markNew])
 
-  // Nodes made from nodes (3.5 Make video, 3.10 Plan shots), for the selection bar and the editors:
+  // Nodes made from nodes (3.5 Make film, 3.10 Plan shots), for the selection bar and the editors:
   // beside what they come from, with their links, marked new.
   useEffect(() => {
     // A node made beside one at the edge of the view may land outside it: bring both into view.
