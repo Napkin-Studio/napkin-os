@@ -31,7 +31,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import assemble, inputs, intake, profiles, qa_render, render_hyperframes, render_pptx, render_web, spec, validate
+from . import assemble, images, inputs, intake, profiles, qa_render, render_hyperframes, render_pptx, render_web, spec, validate
 
 #: Stage a0 (intake) comes first: it fills the brief fields the brief does not supply.
 STAGE_FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.json", "c": "c_territories.json", "d": "d_idea.json"}
@@ -284,7 +284,27 @@ def main(argv=None):
     ap.add_argument("--until", choices=UNTIL_CHOICES, default=None,
                     help="stop after this stage and write report.json (stages a0 a b c d, or i for an investor deck); 'deck' stops once the deck "
                          "is assembled and validated, before any file is rendered. Stage outputs stay in --stages: a later run carries on from them")
+    ap.add_argument("--pictures", choices=("creative_cover", "creative", "none"), default=None,
+                    help="place pictures that already exist (stages/frames.json from deck.from_territory, and --image): creative_cover (the "
+                         "creative slides, the cover and the divider), creative, or none. Absent: frames.json is ignored and no slot is written")
+    ap.add_argument("--image", action="append", default=[], metavar="SLIDE.SLOT=FILE",
+                    help="place a picture you supply on a slide of a picture type (never an evidence slide; the slot 'logo' is refused); repeatable")
+    ap.add_argument("--image-rights", action="append", default=[], metavar="SLIDE.SLOT=RIGHTS",
+                    help="own, licensed or client_supplied for a supplied picture; with none it is recorded as reference_only and not placed")
+    ap.add_argument("--review", type=Path, help="the person's review JSON ({pinned, images}) as the app keeps it: stamps approvals on the pictures")
+    ap.add_argument("--approver", help="the deck's picture approver, human:<id>: only a decision by this person is stamped as approved")
+    ap.add_argument("--picture-label", default=spec.PICTURE_LABEL, help="what a picture is labelled until approved (up to 30 characters, no digit, no name)")
+    ap.add_argument("--picture-source", choices=spec.PICTURE_SOURCES, default="existing",
+                    help="existing (the only one built): only pictures we already have. generated is refused until deck-image-gen")
     a = ap.parse_args(argv)
+    if a.picture_source == "generated":
+        ap.error("generation is not built yet: nothing was sent and nothing was spent (--picture-source existing)")
+    if a.pictures == "none" and a.image:
+        ap.error("--image asks for a picture and --pictures none asks for none: drop one")
+    try:
+        supplied = images.parse_image_args(a.image, a.image_rights)
+    except images.ImageError as e:
+        ap.error(str(e))
     if a.prompt_text and a.prompt_file:
         ap.error("give --prompt-text or --prompt-file, not both")
     prompt_text = (a.prompt_file.expanduser().read_text(encoding="utf-8", errors="replace") if a.prompt_file else a.prompt_text or "").strip()
@@ -366,7 +386,20 @@ def main(argv=None):
     fp = a.stages / "fit.json"   # the fit judge reads an assembled deck; its verdicts decide what a pitch presents
     fit = json.loads(fp.read_text()) if fp.exists() else None
     builder = assemble.build_investor if kind == "investor" else assemble.build
-    build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile)
+    frames, bound = None, None
+    names = [x for x in (a.client, a.agency) if x]
+    try:
+        label = images.clean_label(a.picture_label, names)
+        if a.approver and not images.APPROVER.match(a.approver):
+            raise images.ImageError("--approver must be human:<id>: only a person approves a picture")
+        if a.pictures and kind != "investor":   # frames.json is read ONLY with --pictures: a stray one in a stages folder changes nothing
+            frames = images.load_frames(a.stages)
+            if frames:
+                bound = images.bind_frames(None, frames, st.get("c") or {}, a.pictures, names)
+    except images.ImageError as e:
+        raise SystemExit(f"refused: {e}")
+    extra = {"pictures": bound} if bound else {}
+    build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile, **extra)
     deck = build(fit)
     if fit:
         rep["stages"]["fit"] = {"source": "recorded", "produced_by": fit.get("produced_by"), **(fit.get("usage") or {})}
@@ -412,6 +445,27 @@ def main(argv=None):
         if ecopy.get("narrowed"):   # headline narrowing: a recorded e_copy.json without it changes nothing
             rep["stages"]["e"]["narrowing"] = assemble.apply_narrowing(deck, ecopy["narrowed"])
     _red_team(a, deck, inp, profile, rep)
+    sources, held = {}, []
+    if a.pictures or supplied:   # pictures that already exist: records and assets only; nothing is made, sent or spent
+        try:
+            if bound and bound["assets"]:
+                images.register_assets(deck, bound["assets"])
+            held = images.place_supplied(deck, supplied, images.deck_names(deck), sources)
+            if a.pictures:
+                images.add_empty_slots(deck, a.pictures)
+            images.prune_assets(deck)
+            review = json.loads(a.review.read_text()) if a.review else {}
+            review = review.get("review", review) if isinstance(review, dict) else {}
+            stamped = images.stamp_review(deck, review, a.approver)
+            images.stamp_preferences(deck, a.pictures or "creative_cover", label, a.approver, (frames or {}).get("style_hold"),
+                                     ((frames or {}).get("style") or {}).get("hash") if (frames or {}).get("style_hold") else None)
+        except images.ImageError as e:
+            raise SystemExit(f"refused: {e}")
+        if frames:
+            deck["meta"]["built_from"] = {**deck["meta"]["built_from"], "territory_run": {
+                "file": frames["run"]["file"], "sha256_12": frames["run"]["sha256_12"], "frames_version": frames.get("version"),
+                "same_brief": frames["run"]["same_brief"]}}
+        rep["pictures"] = {"slots": sum(1 for _ in images.image_slots(deck)), "drawn": len(images.drawn(deck, a.audience)), "held": held, "review": stamped}
     rep["stages"]["assemble"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
@@ -433,14 +487,26 @@ def main(argv=None):
         rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
         return _stopped(a, rep, t0, "deck")
 
+    pics, pic_findings = None, []
+    if a.pictures or supplied:   # only what this audience draws is copied or derived: a client folder holds no byte of an unapproved picture
+        try:
+            pics = images.copy_assets(deck, a.out, a.audience, [a.stages], sources)
+        except images.ImageError as e:
+            raise SystemExit(f"refused: {e}")
     t = time.time()
-    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json")
+    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings)
+    if pic_findings:   # a slide drawn without its picture because it would not fit beside it: say so in the findings
+        for f in pic_findings:
+            f["slide_no"] = deck["order"].index(f["slide"]) + 1
+        findings.extend(pic_findings)
+        rep["validation"] = validate.summary(findings)
+        (a.out / "validation.json").write_text(json.dumps(findings, indent=1, ensure_ascii=False))
     rep["stages"]["render_pptx"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    render_web.render(deck, inp, a.out / "deck.html", findings)
+    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics)
     if a.hyperframes:
-        render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds)
+        render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics)
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()

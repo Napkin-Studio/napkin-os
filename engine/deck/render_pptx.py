@@ -82,6 +82,7 @@ Footer, slide number, watermark and check flags never animate.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import itertools
 import json
 import re
@@ -99,6 +100,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import nsdecls, qn
 from pptx.util import Emu, Inches, Pt
 
+from . import images, spec
 from . import theme as themes
 from .refs import Resolver, fmt
 from .spec import HUMAN_ONLY_TYPES, shown_blocks
@@ -318,9 +320,15 @@ def _is_image(path) -> bool:
 class Renderer:
     """Builds one Presentation from a deck dict."""
 
-    def __init__(self, deck, inp, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT):
+    def __init__(self, deck, inp, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
+                 pictures: dict | None = None):
         self.deck, self.inp = _clean_xml(deck), inp
         deck = self.deck
+        # Pictures (deck-frames-in): ``pictures`` maps an asset id to its derived JPEG. None: nothing is drawn and nothing changes.
+        self.pictures = pictures
+        self.drawn = {k: v for k, v in images.drawn(deck, deck["meta"].get("audience", "review")).items() if v["asset"] in (pictures or {})} if pictures else {}
+        self.pic_label = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or spec.PICTURE_LABEL
+        self.picture_findings = []   # [{check, level, slide, message}]: a picture dropped because its slide would not fit it
         self.th = themes.get_theme(theme, (deck["meta"].get("brand") or {}))
         self.theme_problems = themes.check_palette(self.th)
         self.x0 = self.th.grid.M if self.th.layouts else X0
@@ -1748,28 +1756,35 @@ class Renderer:
         name = choose_layout(s, audience) if self.th.layouts else "flow"
         self.chosen[sid] = name
         s = {**s, "blocks": shown_blocks(s, audience)}
-        if name != "flow":
+        plan = self._picture_plan(sid, s, name)
+        if plan:   # one carve: x1 and body_end are narrowed before the layout runs, so the layout (its id) is the one it would pick anyway
             n_sh, n_st = len(sl.shapes), len(self.steps)
+            cs = {**s, "visual": {}} if s["type"] == "execution" else s   # the picture replaces the 'Image prompt' note
+            self._carve(plan)
             try:
-                try:
-                    getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))(sl, s)
-                except NoFit:   # too dense at the body floor: once more with body text allowed down to the caption floor
-                    self._rollback(sl, n_sh, n_st)
-                    self._relaxed = True
-                    try:
-                        getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))(sl, s)
-                        self.relaxed[sid] = True
-                    finally:
-                        self._relaxed = False
-            except NoFit:
-                self._rollback(sl, n_sh, n_st)
-                name = "flow"
-        if name == "flow":
-            self._relaxed = True   # the last resort: stepped down as far as the caption floor, never under it
-            try:
-                getattr(self, "_" + s["type"], self._generic)(sl, s)
+                ok = self._try_layout(sl, cs, name, sid)
             finally:
-                self._relaxed = False
+                self._uncarve()
+            if ok:
+                self._draw_pictures(sl, plan)
+            else:   # the narrowed layout does not fit: no picture, and a finding
+                self._rollback(sl, n_sh, n_st)
+                self.relaxed.pop(sid, None)
+                self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "message":
+                                              f"the {name} layout does not fit beside its picture, so the slide is drawn without it"})
+                plan = None
+        if not plan:
+            if name != "flow":
+                n_sh, n_st = len(sl.shapes), len(self.steps)
+                if not self._try_layout(sl, s, name, sid):
+                    self._rollback(sl, n_sh, n_st)
+                    name = "flow"
+            if name == "flow":
+                self._relaxed = True   # the last resort: stepped down as far as the caption floor, never under it
+                try:
+                    getattr(self, "_" + s["type"], self._generic)(sl, s)
+                finally:
+                    self._relaxed = False
         self.layouts[sid] = name
         # footer: section label, footnote keys, slide number
         t, p = self.th, self.p
@@ -1795,6 +1810,110 @@ class Renderer:
             sl._element.set("show", "0")
         if self.animate:
             self._animate(sl)
+
+    def _try_layout(self, sl, s, name, sid) -> bool:
+        """Draw the layout ``name``; once more with body text allowed down to the caption floor when it is too dense. True when it drew;
+        False when it raised NoFit twice (the caller rolls back and falls to the flow). Marks ``self.relaxed[sid]``."""
+        n_sh, n_st = len(sl.shapes), len(self.steps)
+        fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
+        try:
+            try:
+                fn(sl, s)
+            except NoFit:
+                self._rollback(sl, n_sh, n_st)
+                self._relaxed = True
+                try:
+                    fn(sl, s)
+                    self.relaxed[sid] = True
+                finally:
+                    self._relaxed = False
+            return True
+        except NoFit:
+            self._rollback(sl, n_sh, n_st)
+            return False
+
+    # -- pictures: one carve, one draw helper (slice 4 moves the boxes into its layout files) --------
+    #: Box sizes in inches per aspect for a picture beside the text, and the gap to it. Tall pictures are given a height.
+    SIDE = {"16:9": (3.6, None), "4:3": (3.3, None), "4:5": (None, 3.6), "9:16": (None, 4.6)}
+    SIDE_COVER = {"16:9": (4.4, None)}
+    GAP_PIC = 0.35
+    BOTTOM_H = 2.2
+
+    def _picture_plan(self, sid, s, name):
+        """Where this slide's drawn pictures go, and how far the layout's area is narrowed to leave room: ``{x1, body_end, boxes}`` or None
+        (no picture drawn on this slide, the classic theme, or the flow). The territory's four frames sit in a strip along the foot; the
+        emphasis bar (idea, divider) takes its picture bottom right; every other layout narrows its right edge."""
+        if not self.th.layouts or name == "flow":
+            return None
+        got = {slot: im for (i, slot), im in self.drawn.items() if i == sid}
+        if not got:
+            return None
+        g, x0, x1 = self.th.grid, self.x0, self.x1
+        gap = self.GAP_PIC
+        boxes = []
+        if s["type"] == "territory":
+            w = (x1 - x0 - 3 * 0.2) / 4   # four 16:9 boxes across the content width
+            h = w * 9 / 16
+            y = g.body_end - h
+            for i in range(1, 5):
+                if f"frame_{i}" in got:
+                    boxes.append((f"frame_{i}", x0 + (i - 1) * (w + 0.2), y, w, h, got[f"frame_{i}"]))
+            return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": boxes} if boxes else None
+        slot = next(iter(sorted(got)))
+        im = got[slot]
+        a = im["aspect"]
+        if name == "emphasis_bar":
+            h = self.BOTTOM_H
+            w = h * images.ratio(a)
+            return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": [(slot, x1 - w, g.body_end - h, w, h, im)]}
+        table = self.SIDE_COVER if s["type"] == "title" else self.SIDE
+        wv, hv = table.get(a) or self.SIDE[a]
+        w, h = (wv, wv / images.ratio(a)) if wv else (hv * images.ratio(a), hv)
+        top = 1.6
+        y = top + max(0.0, (g.body_end - top - h) / 2)
+        if s["type"] == "execution":   # beside the two cards: level with their top edge, not floating in the middle
+            y = 1.74
+        return {"x1": x1 - w - gap, "body_end": g.body_end, "boxes": [(slot, x1 - w, y, w, h, im)]}
+
+    def _carve(self, plan):
+        self._saved_carve = (self.x1, self.th)
+        self.x1 = plan["x1"]
+        self.th = dataclasses.replace(self.th, grid=dataclasses.replace(self.th.grid, body_end=plan["body_end"]))
+
+    def _uncarve(self):
+        self.x1, self.th = self._saved_carve
+
+    def picture(self, sl, x, y, w, h, im, name="Picture", label=True):
+        """One picture in the box ``x, y, w, h`` (inches): the asset's derived JPEG cropped to the box's aspect with cover (a:srcRect;
+        never stretched), alt text through cNvPr descr, the name ``Picture``. A picture that is not approved carries the deck's label on a
+        solid pill named ``Caption``; a flagged one also gets a red outline and the word Flagged. Returns the picture shape."""
+        from PIL import Image
+        path = self.pictures[im["asset"]]
+        with Image.open(path) as pil:
+            sw, sh = pil.size
+        box = images.crop_box(sw, sh, w / h, im.get("focal"))
+        l, t, r, b = images.src_rect(box, sw, sh)
+        pic = sl.shapes.add_picture(str(path), Inches(x), Inches(y), Inches(w), Inches(h))
+        pic.crop_left, pic.crop_top, pic.crop_right, pic.crop_bottom = l, t, r, b
+        pic.name = name
+        pic._element.nvPicPr.cNvPr.set("descr", im.get("alt") or "An illustrative picture")
+        if label and im.get("status") != "approved":
+            flagged = im.get("status") == "flagged"
+            if flagged:
+                pic.line.color.rgb = _rgb("C0392B")
+                pic.line.width = Pt(3)
+            text = f"{self.pic_label} · Flagged" if flagged else self.pic_label
+            pw = min(w - 0.2, 0.24 + 0.085 * len(text))
+            self.rect(sl, x + 0.1, y + h - 0.38, pw, 0.28, fill="B03225" if flagged else "1B2430", name="PictureLabel")
+            self.text(sl, x + 0.1, y + h - 0.38, pw, 0.28, text, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
+                      anchor=MSO_ANCHOR.MIDDLE, name="Caption")
+        return pic
+
+    def _draw_pictures(self, sl, plan):
+        for slot, x, y, w, h, im in plan["boxes"]:
+            m = self._mark(sl)
+            self.picture(sl, x, y, w, h, im)
+            self._build(sl, m)
 
     # -- the earlier flow (the fallback, and every slide under the classic theme) ----------------
     def _title_text(self, sl, s, size=30, y=0.5, w=None):
@@ -2058,12 +2177,18 @@ class Renderer:
 
 
 def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
-           layouts_out: Path | None = None) -> Path:
+           layouts_out: Path | None = None, pictures: dict | None = None, picture_findings: list | None = None) -> Path:
     """Render a deck to ``out`` (.pptx); slides with a failed check carry a visible flag.
 
     ``animate``: False (static), True or ``"auto"`` (builds play in order), ``"click"`` (one block per click).
     ``theme``: ``"napkin"`` (default, the layout library) or ``"classic"`` (the earlier look, flow only);
     the deck's brand JSON is applied over either, exactly as before.
     ``layouts_out``: a path for the layout record (``layouts.json``); the .pptx is byte-identical with or without it.
+    ``pictures``: asset id -> derived JPEG for the pictures to draw (images.copy_assets); None draws none and changes nothing.
+    ``picture_findings``: a list the renderer appends to when a slide had to be drawn without its picture.
     """
-    return Renderer(deck, inp, master, findings, animate, theme).render(out, layouts_out)
+    r = Renderer(deck, inp, master, findings, animate, theme, pictures)
+    r.render(out, layouts_out)
+    if picture_findings is not None:
+        picture_findings.extend(r.picture_findings)
+    return out

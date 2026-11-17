@@ -508,6 +508,14 @@ def w_line_length(r: Run) -> dict:
     return _verdict(bad, r.ids, round(widest), thr["max_chars"])
 
 
+def words_sha(deck: dict) -> str:
+    """The one hash of a deck's words: 12 hex of the SHA-256 of its slide ids, titles, blocks and notes in slide order (nothing else:
+    not layout, slots, assets, theme or preferences). The checklist's w_words_sha and the frames tests both use THIS function, so a
+    picture, a look or a kit can be shown to have changed no word."""
+    blob = json.dumps(_words_of(deck), sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
+
+
 def _words_of(deck: dict) -> list:
     """What the words check hashes: per slide in order, the title, the blocks and the notes (nothing else)."""
     return [[sid, s.get("title"), s.get("blocks"), s.get("notes")] for sid in deck["order"] for s in [deck["slides"][sid]]]
@@ -517,8 +525,7 @@ def _words_of(deck: dict) -> list:
 def w_words_sha(r: Run) -> dict:
     if not r.presented:
         return na("no presented slide")
-    blob = json.dumps(_words_of(r.deck), sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
-    return value(hashlib.sha256(blob.encode()).hexdigest()[:12])
+    return value(words_sha(r.deck))
 
 
 @check
@@ -696,12 +703,33 @@ def p_all_approved(r: Run) -> dict:
 
 
 @check
+def p_client_approved(r: Run) -> dict:
+    if (r.deck.get("meta") or {}).get("audience") != "client":
+        return na("the build is not for the client (deck.meta.audience): p_all_approved shows the share instead")
+    slots = r.image_slots()
+    if not slots:
+        return na(NA_NO_PICTURE)
+    return _verdict([s for s, _, im in slots if not _approved(im)], r.ids, None, 0)
+
+
+def _approved(im: dict) -> bool:
+    a = im.get("approval")
+    return im.get("status") == "approved" and isinstance(a, dict) and a.get("decision") == "approve" and a.get("asset") == im.get("asset") and bool(a.get("by"))
+
+
+@check
 def p_one_style(r: Run) -> dict:
-    hashes = {s: (im.get("style") or {}).get("hash") for s, _, im in r.image_slots() if (im.get("style") or {}).get("hash")}
-    if len(hashes) < 2:
+    """One picture style per deck. A hash that differs from the current pack's (``meta.preferences.style_pack.hash``, when the build
+    records it) is STALE: counted on its own (``stale``), never as a second style. The rest must agree."""
+    cur = (((r.deck.get("meta") or {}).get("preferences") or {}).get("style_pack") or {}).get("hash")
+    hashes = {(s, n): (im.get("style") or {}).get("hash") for s, n, im in r.image_slots() if (im.get("style") or {}).get("hash")}   # per picture, not per slide: a territory slide holds four
+    if len(hashes) < 2 and not (cur and hashes):
         return na("fewer than 2 placed pictures carry a style hash")
-    kinds = set(hashes.values())
-    return yes() if len(kinds) == 1 else no(list(hashes), len(kinds), 1)
+    stale = [k for k, h in hashes.items() if cur and h != cur]
+    fresh = {k: h for k, h in hashes.items() if k not in stale}
+    if len(set(fresh.values())) > 1:
+        return no([k[0] for k in fresh], len(set(fresh.values())), 1, stale=len(stale))
+    return yes(stale=len(stale)) if cur else yes()
 
 
 @check
@@ -709,7 +737,11 @@ def p_assets_resolve(r: Run) -> dict:
     if (x := _no_picture(r)):
         return x
     assets = r.deck.get("assets") or {}
-    bad = [s for s, _, im in r.image_slots()
+    client = (r.deck.get("meta") or {}).get("audience") == "client"
+    slots = [x for x in r.image_slots() if not client or _approved(x[2])]   # a client folder holds only the approved pictures it draws
+    if not slots:
+        return na("a client build with no approved picture: nothing is drawn, so no file is expected")
+    bad = [s for s, _, im in slots
            if im.get("asset") not in assets or not (r.dir / (assets[im["asset"]].get("file") or "\0")).is_file()]
     return _verdict(bad, r.ids, len(bad), 0)
 
@@ -744,6 +776,11 @@ def _picture_qa(r: Run, name: str) -> dict:
 @check
 def p_no_stretch(r: Run) -> dict:
     return _picture_qa(r, "picture_stretch")
+
+
+@check
+def p_no_lowres(r: Run) -> dict:
+    return _picture_qa(r, "picture_lowres")
 
 
 @check

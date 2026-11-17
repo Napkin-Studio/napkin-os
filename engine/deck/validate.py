@@ -35,6 +35,10 @@ internal_leak     agency-only text on screen: pipeline ids, stand-in or gate lab
                   labelled placeholders and blocks marked internal are expected and skipped)
 quote_source      a quote with no ref that is not marked creative (it would read as a verbatim)
 criteria_map      a scored criterion's concept no slide answers (assemble.criteria_coverage)
+image_unapproved  (client render) a picture not approved by the deck's approver for its own asset (an error: it is not drawn)
+image_flagged     a picture the guard flagged (a warning in a review, where it is drawn marked)
+image_rights      a reference-only picture in a slot (an error), or a territory run not checked against the brief (a warning)
+image_missing     an image slot that names an asset the deck does not hold (an error)
 imagery           an image prompt names a pack's banned imagery (method or location, in pictures too)
 copy_spec         execution copy over its channel's limit (spec.COPY_LIMITS: search characters,
                   poster words, audio words for the spot length)
@@ -386,7 +390,10 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
                         if n >= 10 and n not in corpus and round(n / 100, 4) not in corpus:
                             add("copy_number", "warn", sid, f"'{n:g}' in copy \"{str(t)[:60]}\" is in none of the inputs")
         # image prompts: method and location are banned in pictures as in words
-        prompt = str((sl.get("visual") or {}).get("prompt") or "").lower()
+        prompt = " ".join([str((sl.get("visual") or {}).get("prompt") or "")] + [
+            str(v["image"].get(k) or "") for v in (sl.get("slots") or {}).values() if isinstance(v, dict) and v.get("kind") == "image"
+            for k in ("prompt", "subject")]).lower().strip()   # an image slot's prompt and subject are read as well as slide.visual
+        _images(sl, sid, deck, audience, add)
         for p in packs:
             for bi in p.get("banned_imagery", []):
                 if re.search(rf"\b{re.escape(bi['text'])}\b", prompt):
@@ -576,6 +583,35 @@ def _copy_spec(sl, add):
         n = sum(len(ln.split()) for ln in lines)
         if secs and n > secs * L["audio_words_per_sec"]:
             add("warn", f"{n} spoken words for a {secs}-second spot (rule of thumb: {int(secs * L['audio_words_per_sec'])})")
+
+
+def _images(sl: dict, sid: str, deck: dict, audience: str, add) -> None:
+    """The picture checks for one slide's image slots (contract section 4.3). ``image_unapproved``: on a client render any picture
+    not approved by the deck's approver for its own asset (an error: it is not drawn); ``image_flagged``: a picture the guard flagged
+    (a warning in a review, which draws it marked); ``image_rights``: a ``reference_only`` asset in a slot, and a territory run whose
+    brief was never checked against this deck's; ``image_missing``: a slot that names an asset the deck does not hold."""
+    assets = deck.get("assets") or {}
+    for name, v in (sl.get("slots") or {}).items():
+        if not (isinstance(v, dict) and v.get("kind") == "image" and isinstance(v.get("image"), dict)):
+            continue
+        im = v["image"]
+        if im.get("status") in ("empty", "planned", "failed", "rejected"):
+            continue
+        aid = im.get("asset")
+        if aid not in assets:
+            add("image_missing", "error", sid, f"{name} names the picture {aid} and the deck holds no such asset")
+            continue
+        if assets[aid].get("rights") == "reference_only":
+            add("image_rights", "error", sid, f"{name} holds a reference-only picture: it may never fill a slot")
+        if im.get("status") == "flagged" or (assets[aid].get("guard") or {}).get("flagged"):
+            add("image_flagged", "warn", sid, f"{name} was flagged by the guard ({(im.get('reason') or 'needs a person')[:80]}) and waits for a person")
+        a = im.get("approval")
+        approved = im.get("status") == "approved" and isinstance(a, dict) and a.get("decision") == "approve" and a.get("asset") == aid and a.get("by")
+        if audience == "client" and not approved:
+            add("image_unapproved", "error", sid, f"{name} is not approved by the deck's approver, so a client render does not draw it")
+    tr = (deck.get("meta", {}).get("built_from") or {}).get("territory_run") or {}
+    if tr.get("same_brief") == "unverified" and sl.get("type") == "territory" and sid == next((x for x in deck["order"] if deck["slides"][x]["type"] == "territory"), None):
+        add("image_rights", "warn", sid, "the territory run was not checked against this deck's brief (give --brief to from_territory)")
 
 
 def summary(F: list) -> dict:

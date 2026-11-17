@@ -212,6 +212,39 @@ decision: as ADR 0027 is worded (§4, "only where the slide already says illustr
 and `execution` slides qualify, because only they carry `visual.kind: image_prompt` today (`assemble.py`
 lines 562 and 586).
 
+### 4.5 Placing existing pictures (deck-frames-in, 17 November 2026)
+
+Three clarifications, no field changes:
+
+1. **An image slot is never stale-checked.** It binds no blocks, so the `blocks_sha` rule (§3.3 rule 4) applies to the text,
+   list, group, stat, table, chart and copy slots only. A slide may hold image slots and no `layout` until `deck-layout-library`
+   lands; the renderer then places them by its own rule (one carve in `Renderer.slide`, boxes in `images.SLOT_TABLE`).
+2. **A slot with count n binds `<name>_1` to `<name>_n`.** The territory's four frames are `frame_1` to `frame_4` and stay so
+   in the library: review.images and approvals are keyed per slot, so four pictures need four keys (§5's "one slot with count 4"
+   means this).
+3. **The one click** (`images.approve_territory`, by a `human:<id>` only) writes one `review.images` entry for every slot holding
+   one of that territory's frames, the cover's and the idea's included. It approves only clean frames (made, the guard ran and
+   found nothing) and lists the rest: a flagged frame stays flagged, a frame no guard looked at and a refused one wait for a person.
+   The Territory tool's own `approved_by_person` is kept as `territory_accepted` and is never approval.
+
+The stage file `--stages/frames.json`, written by `python3 -m deck.from_territory` and read only when `run_deck` is given
+`--pictures`:
+
+```
+{ stage: "frames", produced_by, run: {file, sha256_12, same_brief: verified | unverified}, version: "v<N>-<hash>",
+  style: {pack?, document_id?, version, hash}, safe_messaging, style_hold?: {reason}, fixture?: true,
+  frames: { <key>: {territory, shot, tier, model, prompt, prompt_sha256?, subject, guard{checked, flagged, found?, reason?},
+                    territory_accepted, status: made | flagged | refused, reason?,
+                    file: "assets/<sha256>.<ext>", sha256, mime, width, height} } }
+```
+
+One frame per shot: a clean frame beats a flagged or refused one, then the best model beats the quick one. `meta.built_from.territory_run`
+records `{file, sha256_12, frames_version, same_brief}`. `meta.preferences.style_pack` may carry `hash` (the Style Pack the deck now
+uses: a picture whose style hash differs is stale, not mixed) and `hold` (the Style Pack could not be read; the build went on).
+The picture boxes: the cover and the divider 16:9, the idea and the audience 4:3, the territory's four frames in a strip of 16:9
+boxes, executions by `spec.frame_for` (phone 9:16, poster 4:5, none 16:9; search and audio take no slot). Nothing is generated:
+`inputs.pictures.source.allow: generated` is refused until `deck-image-gen`.
+
 ## 5. The layout library
 
 One file per layout, checked on load against `layout.schema.json`. An unknown slide type, block kind,
