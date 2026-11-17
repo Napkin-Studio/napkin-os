@@ -53,6 +53,8 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-usd", type=float, default=runway.DEFAULT_MAX_USD, help="hard stop for the whole live run (plan call plus pictures); default 2.00")
     ap.add_argument("--approve", default="", help="comma-separated frame keys a person has looked at and accepts although flagged")
     ap.add_argument("--retry-flagged", action="store_true", help="regenerate flagged frames that nobody approved (costs credits)")
+    ap.add_argument("--retry-unknown", action="store_true", help="re-create jobs whose create got no answer (they may already be billed). Needs --live --yes-cost, "
+                    "shows them on the card, and must fit inside --max-usd")
     ap.add_argument("--no-guard", action="store_true", help="skip the local Ollama check")
     return ap
 
@@ -174,10 +176,17 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
                 if going_live:
                     (vdir / e["file"]).rename(vdir / f"{k}.flagged-{e.get('attempts', 1)}.png")
                 e.update({"file": None, "task": None, "status": "RETRY", "guard": None})
+    if a.retry_unknown:                            # in memory until the card is shown and accepted: the unknown jobs become 'new' on the card
+        for k, e in (manifest.get("frames") or {}).items():
+            if not e.get("task") and e.get("status") in ("CREATING", "UNKNOWN") and any(j["key"] == k for j in jobs):
+                e.update({"status": "RETRY", "retried_unknown": True})
     card = runway.cost_card(jobs, manifest, vdir, plan_usd, len(refs), a.max_usd)
     print(runway.render_card(card))
     for r in refused:
         print(f"Refused (needs a person): {r['key']}: {r['why']}")
+    if a.retry_unknown and not going_live:
+        print("--retry-unknown re-creates jobs that may already be billed: it needs --live --yes-cost after you have read the card above. Nothing was made.")
+        return 2
     if not going_live:
         if jobs:
             print(runway.preview(jobs[0], refs, placeholder=not plan))
@@ -213,6 +222,9 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     plan_spent = plan_usd or 0                      # the plan call was made in this run only when it was not saved before
     res = runway.generate(client, jobs, vdir, manifest, refs, sleep=sleep, poll_every=poll_every,
                           max_credits=max(0.0, (a.max_usd - plan_spent) / runway.USD_PER_CREDIT))
+    if res["unknown"]:
+        print(f"UNKNOWN ({len(res['unknown'])}): {', '.join(res['unknown'])}: the create was sent and no answer was seen. They may be billed: check the Runway "
+              "dashboard. Not created again automatically; --retry-unknown --live --yes-cost re-creates them after a fresh card.")
     print(f"Runway: {res['created']} task(s) created, {len(res['still_running'])} still running" + (f" ({res['stopped']})" if res["stopped"] else "")
           + (": run the same command again to pick them up." if res["still_running"] else "."))
 
