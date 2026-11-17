@@ -118,6 +118,29 @@ def test_the_ledger_and_the_recorder_are_off_unless_switched_on(tmp_path, monkey
     assert json.loads((tmp_path / "rec" / "model_calls.jsonl").read_text())["reply"] == "r"
 
 
+def test_a_recording_never_holds_a_briefs_spine(tmp_path, monkeypatch):
+    """features/brief-node.clan (owner 2026-11-18): a Production Tool brief's spine can hold parts a client marked
+    Confidential, so NAPKIN_RECORD_DIR never keeps it: not in the input, not in a reply's briefFlags."""
+    monkeypatch.setenv("NAPKIN_RECORD_DIR", str(tmp_path / "rec"))
+    spine = {"proposition": "SECRET-PROPOSITION", "mandatories": ["SECRET-MANDATORY"]}
+    payload = {"op": "frame", "input": {"text": "a wide shot", "brief": {"title": "First Light brief", "spine": spine}}}
+    user = f"Task: director\n\n<input>\n{json.dumps(payload)}\n</input>"
+    reply = json.dumps({"op": "frame", "rationale": "r", "briefFlags": [{"kind": "mandatory", "line": "SECRET-MANDATORY", "note": "n"}]})
+    metrics.record("model_calls", purpose="director", system="s", user=user, reply=reply)
+    raw = (tmp_path / "rec" / "model_calls.jsonl").read_text()
+    assert "SECRET-" not in raw
+    line = json.loads(raw)
+    assert line["briefs_left_out"] == 2
+    kept = json.loads(line["user"].split("<input>\n", 1)[1].rsplit("\n</input>", 1)[0])
+    assert kept == {"op": "frame", "input": {"text": "a wide shot"}}
+    assert json.loads(line["reply"]) == {"op": "frame", "rationale": "r"}
+    # Anything else is recorded as it came, a server payload's own "brief" field included.
+    other = f"Task: x\n\n<input>\n{json.dumps({'brief': 'the words of a Brief Maker job'})}\n</input>"
+    metrics.record("model_calls", purpose="x", user=other, reply="plain")
+    last = json.loads((tmp_path / "rec" / "model_calls.jsonl").read_text().splitlines()[-1])
+    assert last["user"] == other and last["reply"] == "plain" and "briefs_left_out" not in last
+
+
 def test_the_report_splits_a_units_spend_by_the_model_that_ran(tmp_path):
     (tmp_path / "mock").mkdir()
     (tmp_path / "middleware.jsonl").write_text("")
