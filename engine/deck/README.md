@@ -194,7 +194,7 @@ Tests: `tests/test_profiles.py` (inference, the card, the profile files and thei
 
 ## The visual checklist (`deck/bench/checklist.py`, `deck/checklist.json`)
 
-The measuring stick for every deck slice: 47 items (41 yes/no, 6 metrics), each defined once in `checklist.json` (question,
+The measuring stick for every deck slice: 51 items (43 yes/no, 8 metrics), each defined once in `checklist.json` (question,
 threshold, source, inputs, `na_when`) with one function of the same name in `bench/checklist.py`. Read-only over a run
 folder; no model, no network. `render_pptx.render(..., layouts_out=PATH)` writes the layout record `layouts.json`
 (`{id, chosen, fallback, relaxed}` per slide id) after the save, so the .pptx is byte-identical with or without it;
@@ -214,9 +214,10 @@ python3 -m deck.bench compare BEFORE.json AFTER.json [--format text|md|json] [--
   `python3 -m deck.bench compare deck/bench/baseline/checklist.json /tmp/new.json --format md` for the PR body, and copy
   `/tmp/new.json` over `deck/bench/baseline/checklist.json`. CI rebuilds geometry-only and compares every answer except
   the pixel items and `m_seconds`. `compare` is not a CI gate.
+- **Tiers.** Each item is a `gate` or `advisory`; `compare --fail-on-regress` ignores advisory items (`l_variety`, `l_repeat_max2`, `w_line_length`, `t_cover_title`, `m_seconds`). A metric has a direction (`higher`, `lower`, or `same`: `w_words_sha` must not change, since no word comes from a look or a picture).
 - `deck/issues.py` holds `severity()` (contract section 7 default) and `slide_id_of()`; `qa_render` gained the pure measures
   `title_box`, `body_columns` and `font_families` (they add nothing to qa.json).
-- Tests: `tests/test_checklist.py` (65 tests). The full deck suite is 495 offline tests.
+- Tests: `tests/test_checklist.py` (76 tests). The full deck suite is 559 offline tests.
 
 ## The evaluation bench (`deck/bench`)
 

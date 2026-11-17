@@ -412,18 +412,46 @@ def _line_count(tf, width_in: float) -> int:
     return total
 
 
+def chars_per_line(tf, width_in: float) -> float:
+    """Characters that fit on one line of a frame: its text width over the mean glyph width at the run's font size
+    (0.5 of the size, 0.56 bold, +0.02 serif: the estimate ``_est_size`` uses). The widest case over its paragraphs."""
+    avail_pt = max((width_in - (tf.margin_left + tf.margin_right) / EMU_IN) * 72, 10.0)
+    best = 0.0
+    for p in tf.paragraphs:
+        if not "".join(r.text for r in p.runs).strip():
+            continue
+        sz = _para_size(p)
+        bold = any(r.font.bold for r in p.runs)
+        name = next((r.font.name for r in p.runs if r.font.name), "") or ""
+        best = max(best, avail_pt / (sz * ((0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0))))
+    return best
+
+
 def body_columns(slide) -> list:
-    """Body text frames as ``[{name, width_in, text_in, lines}]``: the frame's width, the width of its text (margins off) and the lines its text wraps to
-    (titles, captions and footer furniture are left out). A column that runs to more than one line is a text column."""
+    """Body text frames as ``[{name, role, width_in, text_in, size_pt, chars, lines}]``: the frame's width, the width of
+    its text (margins off), the font size, the characters that fit a line (``chars_per_line``) and the lines its text wraps
+    to (titles, captions and footer furniture are left out). A column that runs to more than one line is a text column."""
     out = []
     for sh in slide.shapes:
         if sh.width is None or not sh.has_text_frame or not sh.text_frame.text.strip() or _role(sh) != "body":
             continue
         w = sh.width / EMU_IN
         tf = sh.text_frame
-        out.append({"name": sh.name, "width_in": w, "text_in": w - (tf.margin_left + tf.margin_right) / EMU_IN,
-                    "lines": _line_count(tf, w)})
+        out.append({"name": sh.name, "role": _role(sh), "width_in": w, "text_in": w - (tf.margin_left + tf.margin_right) / EMU_IN,
+                    "size_pt": max(_para_size(p) for p in tf.paragraphs if p.runs) if any(p.runs for p in tf.paragraphs) else None,
+                    "chars": chars_per_line(tf, w), "lines": _line_count(tf, w)})
     return out
+
+
+def slide_colors(slide) -> set:
+    """Every explicit sRGB colour on a slide (fills, text, lines, background) as upper-case hex, with no ``#``."""
+    ns = "{http://schemas.openxmlformats.org/drawingml/2006/main}srgbClr"
+    return {el.get("val").upper() for el in slide._element.iter(ns) if el.get("val")}
+
+
+def has_picture(slide) -> bool:
+    """True when the slide holds a picture shape (the brand logo is one, named Logo)."""
+    return any(getattr(sh, "shape_type", None) == 13 or (sh.name or "") == "Logo" for sh in _walk(slide.shapes))
 
 
 def font_families(prs) -> dict:
