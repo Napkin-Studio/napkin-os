@@ -589,7 +589,7 @@
     },
     "frameEdit": {
       "type": "object",
-      "description": "frame_edit only (Change this frame, features/frame-change-edit.clan): how Dex read the words and what the relay runs. reading: camera (the shot's camera changes, so the whole frame is redrawn), local (something in the frame changes; the camera stays) or both. runAs: the op the provider job runs as (frame: a redraw, or an instruction edit for a local change with no box; region_edit: a boxed or masked edit), or none when only the camera's movement changes, which needs no new picture. redraw (input.mode redraw, or the answer redraw to a recast ask; features/frame-edit-or-redraw.clan): the frame is drawn again from the shot and the words, with the current frame for its place and light only; it runs as frame. camera: the leaves that change, each with its new value. maskUnused: a box or mask was sent but a camera change redraws the whole frame. words_as_given: the person's words went to the model as they are (the passthrough).",
+      "description": "frame_edit only (Change this frame, features/frame-change-edit.clan): how Dex read the words and what the relay runs. reading: camera (the shot's camera changes, so the whole frame is redrawn), local (something in the frame changes; the camera stays) or both. runAs: the op the provider job runs as (frame: a redraw, or an instruction edit for a local change with no box; region_edit: a boxed or masked edit), or none when only the camera's movement changes, which needs no new picture. redraw (input.mode redraw, or the answer redraw to a recast ask; features/frame-edit-or-redraw.clan): the frame is drawn again from the shot and the words, with the current frame for its place and light only; it runs as frame. camera: the leaves that change, each with its new value. maskUnused: a box or mask was sent but a camera change redraws the whole frame. words_as_given: the person's words went to the model as they are (the passthrough). who: on a redraw, Dex's sentence of who is where.",
       "properties": {
         "reading": {
           "enum": [
@@ -614,6 +614,12 @@
         },
         "words_as_given": {
           "type": "boolean"
+        },
+        "who": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 240,
+          "description": "redraw only, and required there: one plain sentence of who is where in the redrawn frame (\"An Indian man sells from behind the stall on the right; Nigerian women in ankara prints buy in front.\"). The Redraw result's New line shows it (features/frame-edit-or-redraw.clan, 2026-11-17)."
         }
       },
       "required": [

@@ -79,6 +79,15 @@ MOVE_LEAVES = {"movement", "movement_speed"}
 CONTINUITY_WORDS = re.compile(r"@(?:anchor|previous)\b|\b(?:anchor|previous) (?:frame|shot|picture|image)\b", re.I)
 # An edit's closing line, which a redraw never says: it brings the old people back (features/frame-edit-or-redraw.clan).
 EVERYTHING_STAYS = re.compile(r"everything else(?: in @[a-z0-9_]+)? stays(?: exactly)? as it is", re.I)
+# A redraw's prompt places its people in the shot's framing (features/frame-edit-or-redraw.clan, 2026-11-17: shot 4,
+# an insert, redrawn as "an Indian seller and Nigerian buyers" kept the old seller and put the new one on the buyers' side).
+PLACE_WORDS = re.compile(
+    r"\b(?:behind|in front of|beside|next to|between|opposite|facing|where\b[^.]{0,40}\b(?:stands?|stood|sits?|sat|is|was|were)"
+    r"|(?:on|to|at) the (?:left|right|far left|far right|centre|center|middle|back|front)"
+    r"|(?:left|right) of|in the (?:centre|center|middle|foreground|background|front|back)"
+    r"|foreground|background|frame (?:left|right))", re.I)
+# The cast frame's tag (input.castFrame): a neighbouring shot's redrawn frame, for who the people are.
+CAST_TAG = re.compile(r"@cast\b", re.I)
 # A recast ask's options (frame_edit and the Image editor's region_edit on a shot's frame).
 RECAST_VALUES = ("redraw", "edit")
 # Words that take one thing from a picture: "like @x", "@x's", "the dress of @x", "from @x", "as in @x".
@@ -745,6 +754,7 @@ class Director:
             return self._check_redraw(payload, output, edit)
         if reading == "redraw":
             raise DirectorError("only a redraw is read as redraw; the person chose to edit")
+        edit.pop("who", None)  # who is where: a redraw's line only
         if chosen and reading != chosen:
             raise DirectorError(f"read the words as {reading}, but the person chose {chosen}")
         patch = edit.get("camera") or {}
@@ -813,9 +823,23 @@ class Director:
             raise DirectorError("a redraw names no anchor or previous frame")
         if EVERYTHING_STAYS.search(job["prompt"]):
             raise DirectorError("a redraw never says everything else stays as it is")
+        if not PLACE_WORDS.search(job["prompt"]):
+            raise DirectorError("a redraw says where each person stands in the frame (behind the stall, on the left, …)")
+        who = (edit.get("who") or "").strip()
+        if not who:
+            raise DirectorError("a redraw says who is where in frameEdit.who")
+        edit["who"] = who
+        cast = payload.get("castFrame")
+        if cast and not CAST_TAG.search(job["prompt"]):
+            raise DirectorError("a redraw with a cast frame says its people are the ones in @cast")
+        if not cast and CAST_TAG.search(job["prompt"]):
+            raise DirectorError("@cast names a cast frame this redraw was not sent")
         image = payload["image"]["sha256"]
+        kept = [r for r in job.get("refs") or []
+                if r["sha256"] != image and r.get("name") not in ("previous", "anchor", "cast")
+                and (not cast or r["sha256"] != cast["sha256"])]
         job["refs"] = [{"sha256": image, "name": "current", "role": "current"},
-                       *[r for r in job.get("refs") or [] if r["sha256"] != image and r.get("name") not in ("previous", "anchor")]]
+                       *([{"sha256": cast["sha256"], "name": "cast", "role": "object"}] if cast else []), *kept]
         job.pop("mask", None)
         job.pop("region", None)
         return "frame"

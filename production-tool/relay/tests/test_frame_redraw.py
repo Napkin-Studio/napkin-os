@@ -40,7 +40,27 @@ def dex(h: Harness, *replies) -> FakeWire:
     return wire
 
 
+WHO = "An Indian man sells from behind the stall; Nigerian women in ankara prints wait in front of it."
+# The 2026-11-17 live tests on the market's shot 4 (an insert, high angle): T4 places each person and names who
+# leaves; T5 adds the redrawn shot 5 as the cast. Both came back right; the bare words had kept the old seller.
+T4 = ("An insert, high angle, static. Behind the stall on the right, where the seller stands, an Indian man in his "
+      "sixties with grey hair and a white striped shirt folds the cloth into a paper bag and passes it across with a nod. "
+      "The woman in the yellow and blue dress is not in this picture. On the left, the hands of a Nigerian woman buyer, "
+      "her sleeve in bright ankara print, hold out the cash. The stall, the cloth and the light stay as they are; the "
+      "people are new. Keep the setting, light and style of @current. "
+      "Full-bleed cinematic image; no text, captions, borders or panels.")
+T5 = T4.replace("an Indian man in his sixties with grey hair and a white striped shirt",
+                "the Indian man in @cast, grey hair and white striped shirt,")
+UNPLACED = ("An Indian seller and Nigerian buyers. The market and the light stay as they are; the people are new. "
+            "An insert, high angle. Keep the setting, light and style of @current. "
+            "Full-bleed cinematic image; no text, captions, borders or panels.")
+CAST = asset(88)
+
+
 def redraw_reply(prompt: str = T3, refs=None, **edit) -> dict:
+    edit = {"who": WHO, **edit}
+    if edit["who"] is None:
+        edit.pop("who")
     return {"op": "frame_edit", "frameEdit": {"reading": "redraw", "runAs": "frame", **edit}, "question": None,
             "rationale": "redraw: who is where, from the words", "confidence": 0.9,
             "providerJob": {"provider": "runway", "model": "gemini_image3_pro", "prompt": prompt, "ratio": "1344:768",
@@ -85,7 +105,7 @@ def test_a_redraw_runs_as_frame_with_the_current_frame_first_and_never_a_previou
     assert all(r["name"] != "previous" and r["sha256"] != previous["sha256"] for r in sent["refs"])
     assert "everything else" not in sent["prompt"].lower() and "@previous" not in sent["prompt"]
     edit = job["director"]["output"]["frameEdit"]
-    assert edit == {"reading": "redraw", "runAs": "frame"}
+    assert edit == {"reading": "redraw", "runAs": "frame", "who": WHO}
     assert job["cost"]["reserved"] == 0.2
 
 
@@ -127,6 +147,94 @@ def test_a_redraw_with_a_box_draws_the_whole_frame_and_says_the_box_was_not_used
     (sent,) = h.providers["runway"].submits
     assert "region" not in sent and "mask" not in sent
     assert job["director"]["output"]["frameEdit"]["maskUnused"] is True
+
+
+# ── a redraw places its people, and keeps a recast neighbour's cast (2026-11-17) ──────────────
+
+def redraw_harness() -> Harness:
+    h = harness()
+    h.blobs.objects[f"in/{CAST['sha256']}"] = h.blobs.objects[f"in/{FRAME['sha256']}"]
+    return h
+
+
+@pytest.mark.parametrize("prompt", [T3, T4])
+def test_a_redraw_that_places_each_person_goes_as_dex_wrote_it(prompt):
+    h = harness()
+    dex(h, redraw_reply(prompt=prompt))
+    job = post(h, h.as_person(), edit_input(RECAST_WORDS, mode="redraw"))
+    (sent,) = h.providers["runway"].submits
+    assert job["director"]["model"] != "passthrough" and sent["prompt"].startswith(prompt[:40])
+    assert job["director"]["output"]["frameEdit"]["who"] == WHO
+
+
+def test_a_redraw_that_places_no_one_falls_to_the_passthrough():
+    h = harness()
+    dex(h, redraw_reply(prompt=UNPLACED))
+    job = post(h, h.as_person(), edit_input(RECAST_WORDS, mode="redraw"))
+    assert job["director"]["model"] == "passthrough"
+    assert job["director"]["output"]["frameEdit"]["reading"] == "redraw"
+
+
+def test_a_redraw_without_who_falls_to_the_passthrough():
+    h = harness()
+    dex(h, redraw_reply(who=None))
+    job = post(h, h.as_person(), edit_input(RECAST_WORDS, mode="redraw"))
+    assert job["director"]["model"] == "passthrough" and "who" not in job["director"]["output"]["frameEdit"]
+
+
+def test_an_edit_never_carries_who():
+    h = harness()
+    dex(h, {**local_reply("Make her scarf red. Everything else in @current stays exactly as it is."),
+            "frameEdit": {"reading": "local", "runAs": "frame", "who": WHO}})
+    job = post(h, h.as_person(), edit_input("make her scarf red"))
+    assert job["director"]["model"] != "passthrough" and "who" not in job["director"]["output"]["frameEdit"]
+
+
+def test_a_redraw_with_a_cast_frame_sends_current_then_cast_and_dex_sees_both():
+    h = redraw_harness()
+    wire = dex(h, redraw_reply(prompt=T5, refs=[{"sha256": FRAME["sha256"], "name": "current", "role": "current"}]))
+    job = post(h, h.as_person(), edit_input(RECAST_WORDS, mode="redraw", castFrame=CAST))
+    (sent,) = h.providers["runway"].submits
+    assert job["director"]["model"] != "passthrough"
+    assert [(r["name"], r["role"], r["sha256"]) for r in sent["refs"]][:2] == [
+        ("current", "current", FRAME["sha256"]), ("cast", "object", CAST["sha256"])]
+    assert "@cast" in sent["prompt"]
+    assert len(wire.calls[0]["turns"][0]["images"]) == 2
+
+
+def test_a_cast_frame_dex_never_names_falls_to_the_passthrough_which_names_it():
+    h = redraw_harness()
+    dex(h, redraw_reply(prompt=T4))
+    job = post(h, h.as_person(), edit_input(RECAST_WORDS, mode="redraw", castFrame=CAST))
+    (sent,) = h.providers["runway"].submits
+    assert job["director"]["model"] == "passthrough"
+    assert "the people are the ones in @cast" in sent["prompt"]
+    assert [r["name"] for r in sent["refs"]][:2] == ["current", "cast"]
+
+
+def test_cast_without_a_cast_frame_falls_to_the_passthrough():
+    h = harness()
+    dex(h, redraw_reply(prompt=T5))
+    job = post(h, h.as_person(), edit_input(RECAST_WORDS, mode="redraw"))
+    (sent,) = h.providers["runway"].submits
+    assert job["director"]["model"] == "passthrough" and "@cast" not in sent["prompt"]
+    assert "cast" not in [r["name"] for r in sent["refs"]]
+
+
+def test_a_cast_frame_never_lets_a_previous_frame_back_in():
+    h = redraw_harness()
+    dex(h, redraw_reply(prompt=T5 + " Continue from @previous."))
+    job = post(h, h.as_person(), edit_input(RECAST_WORDS, mode="redraw", castFrame=CAST))
+    (sent,) = h.providers["runway"].submits
+    assert job["director"]["model"] == "passthrough" and "@previous" not in sent["prompt"]
+
+
+@pytest.mark.parametrize("more", [{"castFrame": CAST}, {"castFrame": CAST, "mode": "edit"}])
+def test_a_cast_frame_comes_only_with_a_redraw(more):
+    h = redraw_harness()
+    dex(h, local_reply("Make her scarf red."))
+    post(h, h.as_person(), edit_input("make her scarf red", **more), expect=400)
+    assert not h.providers["runway"].submits
 
 
 # ── the recast ask, before anything is paid ───────────────────────────────────────────────────
@@ -297,5 +405,6 @@ def test_a_takes_budget_grows_with_its_shots():
 def test_the_bundled_v9_1_prompt_carries_redraw_recast_and_the_take_budget():
     text = (PROMPTS / "director.v9.1.md").read_text()
     for line in ("### redraw", "`kind` `recast`", "Redraw frame instead", "120 for each shot's line",
-                 "Keep the setting, light and style of @current."):
+                 "Keep the setting, light and style of @current.", "where they stand in this shot's framing",
+                 "is not in this picture", "`input.castFrame`", "`frameEdit.who`"):
         assert line in text, line

@@ -1818,6 +1818,10 @@ class Relay:
             kw, unseen = {}, None
             if req["op"] == "frame_edit" and claude:
                 images, unseen = self._frame_image(job)
+                cast = (inp.get("castFrame") or {}).get("url")
+                if images and cast:  # a redraw's cast frame: Dex sees its people too, after the frame
+                    more, _ = self._frame_image(job, cast)
+                    images += more or []
                 if images:
                     kw = {"images": images}
                 elif unseen:  # Dex cannot see the frame: the words go as they are, and the History says why

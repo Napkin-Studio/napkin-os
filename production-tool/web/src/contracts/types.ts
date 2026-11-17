@@ -1058,6 +1058,9 @@ export interface JobInput {
   shots?: JobShot[]
   previousFrame?: AssetRef
   anchorFrame?: AssetRef
+  /** frame_edit with mode redraw: a neighbouring shot's frame that was itself redrawn; its people are kept
+   *  (Dex's @cast; features/frame-edit-or-redraw.clan, 2026-11-17). */
+  castFrame?: AssetRef
   image?: AssetRef
   region?: Region
   mask?: AssetRef

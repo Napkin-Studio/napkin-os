@@ -484,6 +484,41 @@
           "if": {
             "properties": {
               "op": {
+                "const": "frame_edit"
+              },
+              "input": {
+                "properties": {
+                  "mode": {
+                    "const": "redraw"
+                  }
+                },
+                "required": [
+                  "mode"
+                ]
+              }
+            },
+            "required": [
+              "op",
+              "input"
+            ]
+          },
+          "then": {},
+          "else": {
+            "properties": {
+              "input": {
+                "not": {
+                  "required": [
+                    "castFrame"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
                 "const": "clip"
               },
               "input": {
@@ -880,6 +915,10 @@
         "anchorFrame": {
           "$ref": "common.schema.json#/$defs/assetRef",
           "description": "frame: the first storyboard frame, the setting/light/style anchor for every later frame"
+        },
+        "castFrame": {
+          "$ref": "common.schema.json#/$defs/assetRef",
+          "description": "frame_edit with mode redraw only: the frame of a neighbouring shot that was itself redrawn, whose people this redraw keeps (Dex names it @cast). Sent only when such a frame exists, so the old people cannot come back (features/frame-edit-or-redraw.clan, 2026-11-17)."
         },
         "image": {
           "$ref": "common.schema.json#/$defs/assetRef",

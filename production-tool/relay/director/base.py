@@ -318,8 +318,12 @@ class PassthroughDirector:
         model = ((sheet or {}).get("ops", {}).get("frame") or {}).get("model", "unknown")
         words = (inp.get("text") or "").strip().rstrip(".")
         action = ((inp.get("shot") or {}).get("action") or "").strip()
-        prompt = ". ".join(p for p in (words, action) if p) + ". The place and the light stay as they are; the people are as said here. Keep the setting, light and style of @current. Full-bleed cinematic image; no text, captions, borders or panels."
+        cast = inp.get("castFrame")  # a neighbouring shot's redrawn frame: its people (2026-11-17)
+        people = "the people are the ones in @cast" if cast else "the people are as said here"
+        prompt = ". ".join(p for p in (words, action) if p) + f". The place and the light stay as they are; {people}. Keep the setting, light and style of @current. Full-bleed cinematic image; no text, captions, borders or panels."
         refs = [{"sha256": inp["image"]["sha256"], "name": "current", "role": "current"}] if inp.get("image") else []
+        if cast and all(r["sha256"] != cast["sha256"] for r in refs):
+            refs.append({"sha256": cast["sha256"], "name": "cast", "role": "object"})
         for ref, role in ref_roles(inp, "frame_edit", sheet):
             if all(r["sha256"] != ref["asset"]["sha256"] for r in refs):
                 refs.append({"sha256": ref["asset"]["sha256"], "name": ref["tag"], "role": role})
