@@ -4,7 +4,7 @@ Status: **proposed** (Claude, 2026-11-17). The design was approved by Sai in cha
 built it; the ADR stays proposed until the PR merges · Feature: `features/deck-visual-contract.clan` ·
 Contract: `docs/contracts/deck-visuals.md` · Builds on ADR 0016 (the deck schema) and ADR 0027 (accepted
 2026-11-17: look and pictures are allowed information) · Code: schemas, examples, vocabulary tuples in
-`spec.py` and tests only. No engine behaviour changed.
+`spec.py` and tests only. One engine change, approved (see Consequences).
 
 Numbering: the Deck Maker plan calls this ADR 0034. On `develop` 0034 is "SMP and insight from the planning
 skill" and 0035 is "first-draft checks", so this is 0036, the next free number on every remote branch (Sai
@@ -132,7 +132,9 @@ The plan's shapes are kept except where the code on `develop` contradicts them:
   two `basis: null`). `stats` is in the block enum now. The two nulls are the `statement` blocks of the
   `problem` and `ask` slides, written by `assemble.py` line 762. The value for them is `opinion` (contract §9
   gives the reasons). Because the golden is what the engine writes, the golden and that line must change in one
-  commit, which is an engine change and so not slice 1's to make alone; it waits on one approval.
+  commit. That is the slice's one noted exception to "no behaviour change", approved by Sai on 2026-11-17:
+  `assemble.py` line 762 now writes `opinion`, and the `problem` and `ask` statement block of every investor deck
+  carries it. The golden was regenerated from `build_investor`; its diff is exactly those two values.
 - Golden churn is deferred, not avoided: `deck-layout-library` adds `layout` and `slots` to every slide and
   regenerates the goldens once, reviewed.
 
@@ -154,4 +156,3 @@ The plan's shapes are kept except where the code on `develop` contradicts them:
   in `deck-look-kits`.
 - The Style Pack's hash includes the reference files' names (`style._hash`). A Style Pack document must
   keep those names, or a document and a folder give different hashes.
-- The two investor-golden values and `assemble.py` line 762 (above).

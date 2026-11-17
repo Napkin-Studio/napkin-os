@@ -362,8 +362,7 @@ def test_requirements_and_issue_ids_match_their_documented_forms():
 # ------------------------------------------------------------------------------------------------ additive only
 
 #: The schema errors each fixture had on develop before this change, measured: lumen_water 0; investor_seed 3 (one stats block
-#: kind, now in the enum, and two ``basis: null``). The two nulls remain until the golden and ``assemble.build_investor`` change
-#: together (see the feature record's build_log): a golden is what the engine writes, so it cannot move alone.
+#: kind, now in the enum, and two ``basis: null``, now ``opinion``: the slice's one approved engine change, Sai 2026-11-17).
 def _deck_errors(deck: dict) -> list:
     deck = {**deck}
     deck.setdefault("territories", {})
@@ -377,8 +376,7 @@ def test_every_golden_deck_has_no_more_schema_errors_than_before():
     investor = json.loads((FIX / "types" / "investor_seed" / "golden_deck.json").read_text())
     errs = _deck_errors(investor)
     assert not [e for e in errs if "stats" in e[1]], "stats is in the block kind enum now"
-    assert all(path[-1] == "basis" and path[:2] == ("slides", path[1]) and "None is not one of" in msg for path, msg in errs), errs
-    assert len(errs) in (0, 2)
+    assert errs == []
 
 
 def test_the_sample_deck_and_every_state_fixture_still_validate():
@@ -519,3 +517,15 @@ def test_template_version_is_0_3_0_in_the_packer():
     text = (ROOT / "crates" / "clan-sdk" / "examples" / "make_deck_maker.rs").read_text()
     assert 'version: "0.3.0".into()' in text and 'assert_eq!(app_block.version, "0.3.0"' in text
     assert "0.2.1" not in text
+
+
+def test_investor_golden_statements_have_a_basis_and_validate_clean():
+    """The slice's one noted exception to "no behaviour change" (Sai, 2026-11-17): an unreferenced investor statement is opinion."""
+    from deck import validate
+    from deck.inputs import load
+    golden = json.loads((FIX / "types" / "investor_seed" / "golden_deck.json").read_text())
+    statements = [b for s in golden["slides"].values() for b in s["blocks"] if b["kind"] == "statement"]
+    assert statements and all(b.get("basis") is not None for b in statements)
+    assert {s["type"]: b["basis"] for s in golden["slides"].values() for b in s["blocks"] if b["kind"] == "statement"} == {"problem": "opinion", "ask": "opinion"}
+    inp = load(None, prompt_text=(FIX / "types" / "investor_seed" / "prompt.txt").read_text().strip())
+    assert validate.run(golden, inp) == json.loads((FIX / "types" / "investor_seed" / "golden_validation.json").read_text()) == []

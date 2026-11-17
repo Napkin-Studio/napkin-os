@@ -80,7 +80,7 @@
     {
      "kind": "statement",
      "text": "Farms lose water to guesswork.",
-     "basis": null
+     "basis": "opinion"
     },
     {
      "kind": "bullets",
@@ -163,7 +163,7 @@
     {
      "kind": "statement",
      "text": "A seed round of 1500000 euro.",
-     "basis": null
+     "basis": "opinion"
     },
     {
      "kind": "bullets",

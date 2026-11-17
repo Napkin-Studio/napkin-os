@@ -451,19 +451,9 @@ start `slot_`. `placeholder` is raised by both `validate` and `qa_render`; `sour
   slice. The value is `opinion`: that is what the same file writes for every other statement or claim with no
   refs (lines 293, 302, 766, 770), `creative` there is only for the `close` sign-off, and a `creative`, `proposal`
   or `meta` basis would exempt the ask's figure from `numbers_trace` (`validate.py` line 315). With `opinion` the
-  investor golden still validates with no findings. The golden is what `build_investor` writes
-  (`test_polish.py::test_investor_golden_is_unchanged_by_the_new_types`), so it cannot change alone: the fix is the
-  golden's two values and `assemble.py` line 762 (`else None` becomes `else "opinion"`) in one commit. Slice 1 may
-  not change engine behaviour, so the pair waits for that one-line engine change to be approved; until then the
-  golden is untouched and `test_visual_contract.py` accepts either state.
-- Tests (`engine/deck/tests/test_visual_contract.py`, built after approval): each schema is valid draft-07
-  and has one valid and one invalid example; every `spec` tuple equals its schema enum; the colour roles
-  equal `theme.COLOR_FIELDS` and the scale keys are `theme.Scale` fields; the template mirror equals the
-  engine schema; `x-clan-appearance` is on `look` and only there; every preference of §6.3 has a default
-  and a document with none of them validates; no golden file changes.
-- `app/tests/deckMakerFixtures.test.ts` reads only `type`, `enum`, `required`, `properties`,
-  `additionalProperties`, `items`, `maxItems` and `oneOf`. A new test fails when the template schema uses
-  a keyword its checker does not read, so a limit cannot pass unchecked.
+  investor golden still validates with no findings. The golden is what `build_investor` writes, so the golden's two values and `assemble.py` line 762 (`else None`
+  became `else "opinion"`) changed in one commit. Sai approved it on 2026-11-17: this is the slice's one noted
+  exception to "no behaviour change". It affects the `problem` and `ask` statement block in every investor deck.
 
 ## 10. Decisions of 17 November 2026
 
