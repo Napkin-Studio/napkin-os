@@ -29,6 +29,15 @@ type Schema = {
   items?: Schema
   maxItems?: number
   oneOf?: Schema[]
+  const?: unknown
+  pattern?: string
+  minimum?: number
+  maximum?: number
+  minItems?: number
+  minLength?: number
+  maxLength?: number
+  propertyNames?: Schema
+  default?: unknown
 }
 
 function typeOk(v: unknown, t: string): boolean {
@@ -45,17 +54,29 @@ function check(v: unknown, s: Schema, path: string, errs: string[]): void {
     if (!ts.some(t => typeOk(v, t))) { errs.push(`${path}: expected ${ts.join('|')}`); return }
   }
   if (s.enum && !s.enum.some(e => e === v)) errs.push(`${path}: ${JSON.stringify(v)} is not one of ${JSON.stringify(s.enum)}`)
+  if ('const' in s && s.const !== v) errs.push(`${path}: ${JSON.stringify(v)} is not ${JSON.stringify(s.const)}`)
+  if (typeof v === 'string') {
+    if (s.pattern !== undefined && !new RegExp(s.pattern).test(v)) errs.push(`${path}: does not match ${s.pattern}`)
+    if (s.minLength !== undefined && v.length < s.minLength) errs.push(`${path}: shorter than ${s.minLength}`)
+    if (s.maxLength !== undefined && v.length > s.maxLength) errs.push(`${path}: longer than ${s.maxLength}`)
+  }
+  if (typeof v === 'number') {
+    if (s.minimum !== undefined && v < s.minimum) errs.push(`${path}: under ${s.minimum}`)
+    if (s.maximum !== undefined && v > s.maximum) errs.push(`${path}: over ${s.maximum}`)
+  }
   if (s.oneOf) {
     const hits = s.oneOf.filter(o => { const e: string[] = []; check(v, o, path, e); return e.length === 0 })
     if (hits.length !== 1) errs.push(`${path}: matches ${hits.length} of ${s.oneOf.length} oneOf branches`)
   }
   if (Array.isArray(v)) {
     if (s.maxItems !== undefined && v.length > s.maxItems) errs.push(`${path}: more than ${s.maxItems} items`)
+    if (s.minItems !== undefined && v.length < s.minItems) errs.push(`${path}: fewer than ${s.minItems} items`)
     if (s.items) v.forEach((x, i) => check(x, s.items!, `${path}[${i}]`, errs))
   } else if (typeof v === 'object' && v !== null) {
     const o = v as Record<string, unknown>
     for (const k of s.required ?? []) if (!(k in o)) errs.push(`${path}: missing required "${k}"`)
     for (const [k, x] of Object.entries(o)) {
+      if (s.propertyNames) check(k, s.propertyNames, `${path}.${k} (name)`, errs)
       const p = s.properties?.[k]
       if (p) check(x, p, `${path}.${k}`, errs)
       else if (typeof s.additionalProperties === 'object') check(x, s.additionalProperties, `${path}.${k}`, errs)
@@ -104,6 +125,61 @@ test('the checker itself catches a wrong type, a bad enum and a missing key', ()
   assert.equal(validate({ a: 'no' }, s).length, 1)
   assert.equal(validate({ a: 1, b: 'y' }, s).length, 1)
   assert.equal(validate({}, s).length, 1)
+})
+
+test('the checker bites on each added keyword: const, pattern, minimum, maximum, minItems, minLength, maxLength, propertyNames', () => {
+  const s: Schema = {
+    type: 'object',
+    properties: {
+      c: { const: true }, p: { type: 'string', pattern: '^img_[0-9a-f]{12}$' }, n: { type: 'number', minimum: 0, maximum: 10 },
+      a: { type: 'array', minItems: 1 }, l: { type: 'string', minLength: 1, maxLength: 3 },
+      m: { type: 'object', propertyNames: { pattern: '^s[0-9]{2}$' }, additionalProperties: { type: 'boolean' } },
+    },
+  }
+  const ok = { c: true, p: 'img_0123456789ab', n: 5, a: [1], l: 'ab', m: { s01: true } }
+  assert.deepEqual(validate(ok, s), [])
+  for (const bad of [{ c: false }, { p: 'img_x' }, { n: -1 }, { n: 11 }, { a: [] }, { l: '' }, { l: 'abcd' }, { m: { slide1: true } }, { m: { s01: 'no' } }]) {
+    assert.equal(validate({ ...ok, ...bad }, s).length, 1, JSON.stringify(bad))
+  }
+})
+
+// Every keyword schema.json uses is one the checker above reads, or a note that checks nothing. A limit written with any other
+// keyword would pass this file's tests unchecked, so adding one has to extend the checker (with a case above that bites) first.
+const CHECKED = ['type', 'enum', 'required', 'properties', 'additionalProperties', 'items', 'maxItems', 'oneOf', 'const', 'pattern',
+  'minimum', 'maximum', 'minItems', 'minLength', 'maxLength', 'propertyNames', 'default']
+const NOTES = ['$schema', 'title', 'description', '$comment', 'x-clan-appearance']
+
+function keywords(s: Schema, found: Set<string>): void {
+  for (const [k, v] of Object.entries(s as Record<string, unknown>)) {
+    found.add(k)
+    if (k === 'properties') for (const x of Object.values(v as Record<string, Schema>)) keywords(x, found)
+    else if (k === 'items' || k === 'propertyNames' || (k === 'additionalProperties' && typeof v === 'object')) keywords(v as Schema, found)
+    else if (k === 'oneOf') for (const x of v as Schema[]) keywords(x, found)
+  }
+}
+
+test('schema.json uses only keywords the checker reads', () => {
+  const found = new Set<string>()
+  keywords(schema, found)
+  const unread = [...found].filter(k => !CHECKED.includes(k) && !NOTES.includes(k))
+  assert.deepEqual(unread, [], `schema.json uses keywords this file does not check: ${unread.join(', ')}`)
+  // The guard itself bites on a keyword outside both lists.
+  const probe = new Set<string>()
+  keywords({ type: 'object', properties: { a: { type: 'string', format: 'date' } } } as Schema, probe)
+  assert.ok([...probe].some(k => !CHECKED.includes(k) && !NOTES.includes(k)))
+})
+
+test('the added schema fields check what the contract says (deck-visuals.md 6.3)', () => {
+  const ok = { inputs: { pictures: { source: { allow: 'existing', cap_usd: 2.5 }, approval: { approver: 'owner', label: 'Illustrative' } } }, look: { pictures: { on: 'creative' }, density: { level: 'lean' } } }
+  assert.deepEqual(validate(ok, schema), [])
+  const bad = (o: unknown) => validate(o, schema).length > 0
+  assert.ok(bad({ inputs: { pictures: { approval: { label: 'Draft 2' } } } }))
+  assert.ok(bad({ inputs: { pictures: { source: { cap_usd: 11 } } } }))
+  assert.ok(bad({ look: { pictures: { on: 'everywhere' } } }))
+  assert.ok(bad({ look: { surprise: true } }))
+  assert.ok(bad({ review: { pinned: { slide3: { by: 'a', at: 'b' } } } }))
+  assert.ok(bad({ qa: { issues: { nope: {} } } }))
+  assert.ok(bad({ repair: { rounds: [{}, {}, {}] } }))
 })
 
 test('the YAML reader reads the flow, block and quoted forms the data files use', () => {

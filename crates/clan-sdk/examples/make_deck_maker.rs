@@ -134,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
             name: "Deck Maker".into(),
             app_id: APP_ID.into(),
-            version: "0.2.1".into(),
+            version: "0.3.0".into(),
             icon: Some(ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
@@ -163,7 +163,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The spin-off contract and version are asserted, not assumed: a regression
     // here must fail the packer (and the spinoff.rs test that runs it).
     let app_block = template.manifest().app.as_ref().expect("app block");
-    assert_eq!(app_block.version, "0.2.1", "the Deck template version");
+    assert_eq!(app_block.version, "0.3.0", "the Deck template version");
     let spin = app_block.spinoff.as_ref().expect("app.spinoff is declared");
     assert_eq!(
         spin.accepts,
