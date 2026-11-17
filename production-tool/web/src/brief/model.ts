@@ -131,7 +131,9 @@ export interface BriefSendRow {
 export function briefSendRow(d: Doc, nodeId: Id): BriefSendRow | undefined {
   const b = briefOf(d, nodeId)
   if (!b) return undefined
-  const from = b.via === 'link' ? 'linked' : `from ${b.through && d.scripts?.[b.through] ? `Script · ${d.scripts[b.through].title}` : b.through && d.storyboards?.[b.through] ? `Storyboard · ${d.storyboards[b.through].title}` : 'upstream'}`
+  const t = b.through
+  const from = b.via === 'link' ? 'linked'
+    : `from ${t && d.scripts?.[t] ? `Script · ${d.scripts[t].title}` : t && d.storyboards?.[t] ? `Storyboard · ${d.storyboards[t].title}` : t && d.videos?.[t] ? `Video · ${d.videos[t].title}` : 'upstream'}`
   return { key: `brief:${b.brief.id}`, briefId: b.brief.id, label: b.item.label, detail: [spineSummary(b.brief.spine), from].filter(Boolean).join(' · '), via: b.via }
 }
 

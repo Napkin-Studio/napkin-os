@@ -288,7 +288,15 @@ export function scopeOf(d: Doc, nodeId: Id, opts: ScopeOptions = {}): ScopeItem[
       for (const it of linkItems(d, l, 'upstream', opts, up)) add(it)
     }
   }
-  // The node's own text: its shots (action, direction, beats) and, for a script, its scenes.
+  // A Format set made from a video (its master: the video, or an ad render of it) reads that video's brief, as
+  // a Storyboard reads its Script's; an explicit link into the set overrides it (owner 2026-11-18, features/brief-node.clan).
+  if (kind === 'format_set' && !items.some((x) => x.kind === 'brief')) {
+    const m = d.format_sets?.[nodeId]?.master
+    const film = m?.kind === 'video' ? m.id : m?.kind === 'render' ? d.renders?.[m.id]?.video_id : undefined
+    const carried = film && d.videos?.[film] ? scopeOf(d, film, opts).find((x) => x.kind === 'brief') : undefined
+    if (carried) add({ ...carried, via: 'upstream', through: film })
+  }
+    // The node's own text: its shots (action, direction, beats) and, for a script, its scenes.
   const shots = shotsFor(d, kind, nodeId)
   const named = new Map<string, Id[]>() // kind:id → shots naming it
   const unknown = new Map<string, Id[]>()

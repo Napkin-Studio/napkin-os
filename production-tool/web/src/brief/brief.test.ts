@@ -123,6 +123,28 @@ describe('scope', () => {
     expect(briefOf(d, SCRIPT)?.brief.id).toBe(b1.id)
   })
 
+  it('a Format set made from a video reads that video\u2019s brief (also through an ad render); its own link overrides it', () => {
+    const fs = (master: { kind: 'video' | 'render' | 'frame'; id: string }, id = 'fset_01K7A0000000000000000000F1') => ({
+      id, v: 1, field_v: {}, master, pack: { pack_id: 'p', pack_version: '1' },
+    }) as unknown as ProductionDocument['format_sets'][string]
+    const d = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
+    d.format_sets = { fset_01K7A0000000000000000000F1: fs({ kind: 'video', id: VIDEO }) }
+    expect(briefOf(d, 'fset_01K7A0000000000000000000F1')).toMatchObject({ via: 'upstream', through: VIDEO, brief: { id: b1.id } })
+    expect(briefSendRow(d, 'fset_01K7A0000000000000000000F1')!.detail).toMatch(/from Video/)
+    expect(withBrief(d, 'resize', { kind: 'format_set', id: 'fset_01K7A0000000000000000000F1' }, {}).input.brief?.title).toBe('First Light brief')
+    // Through an ad render of the video.
+    d.renders = { ...d.renders, render_x: { id: 'render_x', v: 1, field_v: {}, video_id: VIDEO, version: 1, asset: SHA('a'), job_id: 'job_x' } as never }
+    d.format_sets = { fset_01K7A0000000000000000000F1: fs({ kind: 'render', id: 'render_x' }) }
+    expect(briefOf(d, 'fset_01K7A0000000000000000000F1')?.brief.id).toBe(b1.id)
+    // A still's set (a frame master) carries none; an explicit link overrides the video's.
+    d.format_sets = { fset_01K7A0000000000000000000F1: fs({ kind: 'frame', id: 'frame_x' }) }
+    expect(briefOf(d, 'fset_01K7A0000000000000000000F1')).toBeUndefined()
+    d.format_sets = { fset_01K7A0000000000000000000F1: fs({ kind: 'video', id: VIDEO }) }
+    const own = withBrief_(d, b2, link(b2.id, { kind: 'format_set', id: 'fset_01K7A0000000000000000000F1' }))
+    expect(briefOf(own, 'fset_01K7A0000000000000000000F1')).toMatchObject({ via: 'link', brief: { id: b2.id } })
+    expect(scopeOf(own, 'fset_01K7A0000000000000000000F1').filter((i) => i.kind === 'brief')).toHaveLength(1)
+  })
+
   it('no brief: nothing in scope, and a job is sent exactly as before', () => {
     const input: JobInput = { script: 'A runner at dawn.', targetS: 15 }
     const out = withBrief(ex, 'shot_list', { kind: 'storyboard', id: SB }, input)
