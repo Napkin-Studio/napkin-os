@@ -1,16 +1,19 @@
 """``visual agree``: grade the critic and a code-only baseline against a person, and write the trust file.
 
 A question is ``off`` (the default), ``advisory`` (shown, never fixes) or ``acts`` (may start a code-confirmed fix). The
-state comes only from this step (the file carries a digest of its questions, so a hand edit reads as off), from the
+state comes only from this step (the file carries an HMAC over the whole document, signed with a secret kept outside the repo, so a hand edit reads as off), from the
 pre-registered primary configuration, and from the gates below. Fail is the positive class throughout.
 """
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import os
 from pathlib import Path
 
 from . import visual as V
+from .judges import BenchError
 from . import visual_stats as S
 
 GATES = {"off_min_fails": 5, "adv_kappa": 0.4, "adv_flip": 0.25, "acts_kappa_lb": 0.4, "acts_spec_lb": 0.9, "acts_fails": 15,
@@ -19,8 +22,20 @@ N_BOOT = 2000
 STATES = ("off", "advisory", "acts")
 
 
-def _digest(questions: dict) -> str:
-    return hashlib.sha256(json.dumps(questions, sort_keys=True).encode()).hexdigest()
+SECRET_ENV = "NAPKIN_TRUST_SECRET"
+
+
+def secret() -> bytes | None:
+    """The signing secret, from the environment: it never lives in the repo, so a file edited (or recomputed) by someone
+    without it cannot read as trusted."""
+    v = os.environ.get(SECRET_ENV, "")
+    return v.encode() if v else None
+
+
+def sign(doc: dict, key: bytes) -> str:
+    """HMAC-SHA256 over the whole document except its ``digest`` field (key, configuration, gates and questions)."""
+    body = {k: v for k, v in doc.items() if k != "digest"}
+    return hmac.new(key, json.dumps(body, sort_keys=True, ensure_ascii=False).encode(), hashlib.sha256).hexdigest()
 
 
 def trust_key(cfg: dict) -> dict:
@@ -39,7 +54,8 @@ def read_trust(path: Path, current_key: dict | None = None) -> dict:
     except (OSError, ValueError):
         return off
     qs = t.get("questions") or {}
-    if t.get("digest") != _digest(qs) or t.get("key") is None:
+    sec = secret()
+    if sec is None or not isinstance(t.get("digest"), str) or not hmac.compare_digest(t["digest"], sign(t, sec)) or t.get("key") is None:
         return off
     if current_key is not None and t["key"] != current_key:
         return off
@@ -64,8 +80,12 @@ def _fig(rows: list, seed: int, n_boot: int) -> dict:
             "fail_recall": S.rate(sum(1 for r in pf if r["c"]), len(pf))}
 
 
-def agree(grades: dict, visual: dict, key: dict, seed: int = 0, n_boot: int = N_BOOT) -> dict:
-    """The trust document for these grades, critic answers and key. Pure: no file, no model."""
+def agree(grades: dict, visual: dict, key: dict, seed: int = 0, n_boot: int = N_BOOT, signing_key: bytes | None = None) -> dict:
+    """The trust document for these grades, critic answers and key, signed with the secret from the environment (or
+    ``signing_key``); without a secret there is nothing to sign with and BenchError is raised. No file, no model."""
+    signing_key = signing_key or secret()
+    if signing_key is None:
+        raise BenchError(f"set {SECRET_ENV} (a secret kept outside the repo) to sign the trust file")
     items = V.rubric_items()
     ans = _answers(grades)
     cfg = visual["config"]
@@ -157,7 +177,7 @@ def agree(grades: dict, visual: dict, key: dict, seed: int = 0, n_boot: int = N_
                   "kappa_order2": S.kappa([(r["p"], r["c2"]) for r in rows if r["c2"] is not None])}
     doc = {"version": 1, "written_by": "deck.bench visual agree", "key": trust_key(cfg), "primary_configuration": primary,
            "gates": GATES, "self_agreement_pooled": pooled_self, "self_agreement_pairs": len(selfp), "questions": out}
-    doc["digest"] = _digest(out)
+    doc["digest"] = sign(doc, signing_key)
     return doc
 
 
@@ -174,7 +194,7 @@ def _gap(rows: list) -> float | None:
 
 
 def off_file() -> dict:
-    """The committed starting point: every question off, no key, until grades exist."""
+    """The committed starting point: every question off, no key, unsigned (it reads as all-off whatever the secret)."""
     qs = {q: {"state": "off", "reasons": ["no grades yet"], "n": 0} for q in V.rubric_items()}
     return {"version": 1, "written_by": "deck.bench visual agree", "key": None, "primary_configuration": False, "gates": GATES,
-            "self_agreement_pooled": None, "self_agreement_pairs": 0, "questions": qs, "digest": _digest(qs)}
+            "self_agreement_pooled": None, "self_agreement_pairs": 0, "questions": qs, "digest": None}

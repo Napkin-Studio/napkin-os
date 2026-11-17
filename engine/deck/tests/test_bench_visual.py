@@ -24,6 +24,20 @@ from deck.bench.judges import BenchError
 
 SCHEMA = Path(V.DECK / "schemas" / "visual_rubric.schema.json")
 CANARY, CANARY_NUM = "ZQXCANARY-7319", "48213"
+SECRET = b"test-secret-not-a-real-one"
+
+
+@pytest.fixture(autouse=True)
+def trust_secret(monkeypatch):
+    monkeypatch.setenv(A.SECRET_ENV, SECRET.decode())
+
+
+def live_run(key, images, transport, **kw):
+    """V.run live, with the id off the cost card for the same settings (the gate every live run passes through)."""
+    kw.setdefault("max_usd", 5.0)
+    card = V.plan_cost(key, images, kw.get("model", V.PRIMARY["model"]), kw.get("orders", 2), kw["max_usd"], kw.get("max_tokens", V.MAX_OUT_TOKENS),
+                       kw.get("max_deck_usd", V.DECK_CAP_USD))
+    return V.run(key, images, transport, live=True, card_id=card["id"], **kw)
 
 
 # ---------------------------------------------------------------- rubric
@@ -159,7 +173,7 @@ def test_a_question_without_a_fix_or_a_confirm_cannot_act_and_a_non_primary_conf
     assert r["state"] == "off" and "exploratory" in r["reasons"][0]
 
 
-def test_the_trust_file_reads_off_on_a_key_mismatch_a_hand_edit_or_no_grades(tmp_path):
+def test_the_trust_file_reads_off_on_a_key_mismatch_a_hand_edit_a_forged_digest_or_no_secret(tmp_path, monkeypatch):
     key, grades, visual = synth()
     doc = A.agree(grades, visual, key, seed=3, n_boot=300)
     f = tmp_path / "critic_trust.json"
@@ -172,6 +186,27 @@ def test_the_trust_file_reads_off_on_a_key_mismatch_a_hand_edit_or_no_grades(tmp
     edited["questions"]["v_one_focus"]["state"] = "acts"
     f.write_text(json.dumps(edited))
     assert set(A.read_trust(f, cur).values()) == {"off"}                                  # a hand edit fails the digest
+    import hashlib
+    forged = copy.deepcopy(doc)
+    forged["questions"]["v_one_focus"]["state"] = "acts"
+    forged["digest"] = hashlib.sha256(json.dumps({k: v for k, v in forged.items() if k != "digest"}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    f.write_text(json.dumps(forged))
+    assert set(A.read_trust(f, cur).values()) == {"off"}                                  # a recomputed plain sha256 is rejected
+    rekeyed = copy.deepcopy(doc)
+    rekeyed["key"] = {**rekeyed["key"], "model": "whatever"}
+    f.write_text(json.dumps(rekeyed))
+    assert set(A.read_trust(f, rekeyed["key"]).values()) == {"off"}                       # editing the key alone is rejected
+    gates = copy.deepcopy(doc)
+    gates["gates"]["acts_fails"] = 1
+    f.write_text(json.dumps(gates))
+    assert set(A.read_trust(f, cur).values()) == {"off"}                                  # so are the gates and the configuration flag
+    f.write_text(json.dumps(doc))
+    assert A.read_trust(f, cur)["v_balance"] == "acts"
+    monkeypatch.delenv(A.SECRET_ENV)
+    assert set(A.read_trust(f, cur).values()) == {"off"}                                  # without the secret nothing reads as trusted
+    with pytest.raises(BenchError, match=A.SECRET_ENV):
+        A.agree(grades, visual, key, seed=3, n_boot=50)
+    monkeypatch.setenv(A.SECRET_ENV, SECRET.decode())
     f.write_text(json.dumps(A.off_file()))
     assert set(A.read_trust(f, cur).values()) == {"off"}
     assert set(A.read_trust(tmp_path / "missing.json").values()) == {"off"}
@@ -214,9 +249,9 @@ REPLY = json.dumps({"answers": {"v_one_focus": {"verdict": "pass", "description"
 
 def test_calls_reserve_their_worst_case_before_starting_and_the_run_stops_before_the_cap(tmp_path):
     key, images = _key_and_images(tmp_path)
-    worst = spec.estimate_usd(V.PRIMARY["model"], T.estimate_input_tokens(_png(), len(V.prompt_text()) + 400), V.MAX_OUT_TOKENS)
+    worst = T.worst_case_usd(V.PRIMARY["model"], T.estimate_input_tokens(_png(), len(V.prompt_text()) + 400), V.MAX_OUT_TOKENS)
     fake = T.FakeTransport(lambda *a: REPLY, tokens_in=1500, tokens_out=400, delay=0.05)
-    doc = V.run(key, images, fake, max_usd=worst * 2.5, live=True, workers=4)
+    doc = live_run(key, images, fake, max_usd=worst * 2.5, workers=4)
     assert fake.calls == 2 and doc["calls"] == 2 and doc["unjudgeable_calls"] == 10   # 6 slides x 2 orders = 12 jobs; only 2 fit the cap
     assert doc["usd"] <= worst * 2.5 and doc["usd"] == pytest.approx(2 * spec.estimate_usd(V.PRIMARY["model"], 1500, 400))
     skipped = [r for per in doc["results"].values() for r in per.values() if r["source"] == "unjudgeable"]
@@ -227,7 +262,7 @@ def test_calls_reserve_their_worst_case_before_starting_and_the_run_stops_before
 def test_a_larger_cap_runs_every_call_in_parallel_and_prices_unknown_models_at_the_maximum(tmp_path):
     key, images = _key_and_images(tmp_path)
     fake = T.FakeTransport(lambda *a: REPLY, tokens_in=1000, tokens_out=200, delay=0.05)
-    doc = V.run(key, images, fake, max_usd=5.0, live=True, workers=4)
+    doc = live_run(key, images, fake, max_usd=5.0, workers=4)
     assert doc["calls"] == 12 and fake.max_in_flight >= 2 and doc["config"]["primary"] is True
     assert doc["usd"] == pytest.approx(12 * spec.estimate_usd(V.PRIMARY["model"], 1000, 200), abs=1e-3)
     assert spec.estimate_usd("some-new-model", 1_000_000, 0) == 4.0
@@ -239,7 +274,7 @@ def test_answers_in_two_orders_and_unmatched_replies_are_unjudgeable_not_pass(tm
     key, images = _key_and_images(tmp_path, 2)
     seen = []
     fake = T.FakeTransport(lambda s, u, p, m: seen.append(u) or "not json at all")
-    doc = V.run(key, images, fake, max_usd=5.0, live=True)
+    doc = live_run(key, images, fake, max_usd=5.0)
     assert [u.index("v_one_focus") < u.index("v_balance") for u in seen[:2]].count(True) >= 1 and any(u.index("v_balance") < u.index("v_one_focus") for u in seen)
     assert all(a["verdict"] == "unjudgeable" for per in doc["results"].values() for r in per.values() for a in r["answers"].values())
     assert V.parse_reply('{"answers":{"v_one_focus":{"verdict":"maybe"}}}', ["v_one_focus"])["v_one_focus"]["verdict"] == "unjudgeable"
@@ -253,7 +288,7 @@ def test_a_replay_from_recordings_makes_no_call_with_the_network_blocked_and_the
     key, images = _key_and_images(tmp_path, 3)
     rec = tmp_path / "rec"
     live = T.FakeTransport(lambda *a: REPLY)
-    V.run(key, images, live, max_usd=5.0, live=True, record_to=rec)
+    live_run(key, images, live, max_usd=5.0, record_to=rec)
     assert live.calls == 6 and len(list(rec.glob("*.json"))) == 6
     quiet = T.FakeTransport(lambda *a: REPLY)
     with T.block_network():
@@ -386,7 +421,7 @@ def test_answers_round_trip_from_a_page_into_agree(packed):
     q = doc["questions"]["v_balance"]
     assert q["by_subset"]["both"]["person_fails"] == 3 and q["by_subset"]["seeded"]["person_fails"] == 3 and q["by_subset"]["natural"]["person_fails"] == 0
     assert q["state"] in ("off", "advisory") and doc["self_agreement_pooled"] == 1.0
-    assert doc["digest"] == A._digest(doc["questions"])
+    assert doc["digest"] == A.sign(doc, SECRET)
 
 
 def test_session_b_refuses_when_no_slide_has_a_picture(runs, tmp_path):
@@ -430,21 +465,31 @@ def scan(run_dir: Path, needles: tuple) -> list:
     return found
 
 
-def test_planted_critic_text_never_reaches_a_deck_or_its_files_and_the_scan_catches_a_copy(runs, tmp_path):
-    key, images = _key_and_images(tmp_path, 2)
-    doc = V.run(key, images, T.FakeTransport(lambda *a: REPLY), max_usd=5.0, live=True)
-    planted = [a["description"] for per in doc["results"].values() for r in per.values() for a in r["answers"].values() if CANARY in a["description"]]
-    assert planted and all(CANARY in p and CANARY_NUM in p for p in planted)   # the critic's text carries the canary
+def test_the_scan_finds_a_planted_string_copied_into_a_deck(runs, tmp_path):
+    """The scanner's positive control: a helper that copies a critic note into speaker notes must be caught, and a clean build is not."""
     needles = (CANARY, CANARY_NUM)
     built = tmp_path / "built"
-    fixtures.build_one("lumen_water", built, geometry_only=True)   # a full build after the critic ran
+    fixtures.build_one("lumen_water", built, geometry_only=True)
     assert scan(built, needles) == []
-    # positive control: a helper that copies the critic's note into speaker notes must make the scan find it
     from pptx import Presentation
     prs = Presentation(str(built / "deck.pptx"))
-    prs.slides[1].notes_slide.notes_text_frame.text = planted[0]
+    prs.slides[1].notes_slide.notes_text_frame.text = f"critic said {CANARY} {CANARY_NUM}"
     prs.save(str(built / "deck.pptx"))
-    assert (("deck.pptx", CANARY) in scan(built, needles))
+    assert ("deck.pptx", CANARY) in scan(built, needles) and ("deck.pptx", CANARY_NUM) in scan(built, needles)
+
+
+@pytest.mark.xfail(strict=True, reason="proves nothing until phase 2 wires the critic in: no build reads visual.json yet (run_deck has no --critic)")
+def test_planted_critic_text_never_reaches_a_deck_built_with_the_critic(runs, tmp_path):
+    key, images = _key_and_images(tmp_path, 2)
+    doc = live_run(key, images, T.FakeTransport(lambda *a: REPLY), max_usd=5.0)
+    planted = [a["description"] for per in doc["results"].values() for r in per.values() for a in r["answers"].values() if CANARY in a["description"]]
+    assert planted and all(CANARY in p and CANARY_NUM in p for p in planted)
+    visual_json = tmp_path / "visual.json"
+    visual_json.write_text(json.dumps(doc))
+    from deck import run_deck
+    built = tmp_path / "built"
+    fixtures.build_one("lumen_water", built, geometry_only=True, extra=("--critic", str(visual_json)))   # phase 2: the build must consume the critic
+    assert scan(built, (CANARY, CANARY_NUM)) == []
 
 
 # ---------------------------------------------------------------- the transport spike, prepared
@@ -478,3 +523,111 @@ def test_a_critic_fix_runs_only_inside_its_code_confirm_band():
 @pytest.mark.xfail(strict=True, reason="slice 5 (deck-repair-loop) has not merged: critic issues need spec.ISSUE_CHECKS entries first")
 def test_critic_issues_carry_the_canned_message_and_never_count_in_the_keep_rule():
     assert "v_balance" in spec.ISSUE_CHECKS
+
+
+# ---------------------------------------------------------------- the adversarial review's fixes
+
+def test_a_paid_call_that_stops_on_max_tokens_or_refuses_is_booked_not_free(tmp_path):
+    key, images = _key_and_images(tmp_path, 3)
+    for stop in ("max_tokens", "refusal"):
+        fake = T.FakeTransport(lambda *a: "", tokens_in=1500, tokens_out=1200, stop=stop)
+        doc = live_run(key, images, fake, max_usd=5.0)
+        assert doc["calls"] == 6 and doc["usd"] == pytest.approx(6 * spec.estimate_usd(V.PRIMARY["model"], 1500, 1200))
+        assert all(a["verdict"] == "unjudgeable" for per in doc["results"].values() for r in per.values() for a in r["answers"].values())
+        assert all(r["reason"] == f"stopped: {stop}" for per in doc["results"].values() for r in per.values())
+    one = T.worst_case_usd(V.PRIMARY["model"], T.estimate_input_tokens(_png(), len(V.prompt_text()) + 400), V.MAX_OUT_TOKENS)
+    fake = T.FakeTransport(lambda *a: "", tokens_in=1500, tokens_out=1200, stop="max_tokens")
+    doc = live_run(key, images, fake, max_usd=one * 1.5, workers=1)   # a stopped call still counts against the cap
+    assert fake.calls == 1 and doc["usd"] > 0 and doc["unjudgeable_calls"] == 5
+
+
+def test_missing_usage_and_failed_calls_book_the_worst_case_and_only_an_unsent_call_is_free(tmp_path):
+    key, images = _key_and_images(tmp_path, 2)
+    no_usage = T.FakeTransport(lambda *a: REPLY, tokens_in=0, tokens_out=0)
+    doc = live_run(key, images, no_usage, max_usd=5.0)
+    worst = T.worst_case_usd(V.PRIMARY["model"], T.estimate_input_tokens(_png(), len(V.prompt_text()) + 400), V.MAX_OUT_TOKENS)
+    assert doc["usd"] == pytest.approx(4 * worst, rel=0.02) and doc["usd"] > 0
+
+    class Boom(T.FakeTransport):
+        def call(self, **k):
+            raise TimeoutError("sent, no answer")
+    doc = live_run(key, images, Boom(), max_usd=5.0)
+    assert doc["usd"] == pytest.approx(4 * worst, rel=0.02) and doc["unjudgeable_calls"] == 4
+
+    class Unsent(T.FakeTransport):
+        def call(self, **k):
+            raise T.NoCharge("no key")
+    assert live_run(key, images, Unsent(), max_usd=5.0)["usd"] == 0
+
+
+def test_the_reservation_prices_images_at_w_h_over_750_cache_writes_at_1_25x_and_flags_an_overrun():
+    assert T.estimate_input_tokens(_png(1280, 720), 0) == -(-1280 * 720 // 750) + 1
+    assert T.worst_case_usd("claude-sonnet-5-5", 1_000_000, 0) == pytest.approx(2.5)
+    b = T.Budget(10.0, 1.0)
+    r = b.reserve("claude-sonnet-5-5", 100_000, 1000, "D01")
+    b.settle(r, r * 2, "D01")   # the real cost passed the reservation: booked in full and flagged, not clamped
+    assert b.spent == pytest.approx(r * 2) and b.overruns == 1
+
+
+def test_the_per_deck_cap_stops_a_deck_while_other_decks_go_on(tmp_path):
+    key, images = _key_and_images(tmp_path, 6)
+    for i, s in enumerate(key["slides"].values()):
+        s["deck"] = "D01" if i < 3 else "D02"
+    one = T.worst_case_usd(V.PRIMARY["model"], T.estimate_input_tokens(_png(), len(V.prompt_text()) + 400), V.MAX_OUT_TOKENS)
+    fake = T.FakeTransport(lambda *a: REPLY, tokens_in=1500, tokens_out=400)
+    doc = live_run(key, images, fake, max_usd=50.0, max_deck_usd=one * 2.5, workers=1)
+    assert 4 <= doc["calls"] < 12 and doc["deck_usd"].keys() == {"D01", "D02"}   # each deck stops early (12 asked); neither starves the other
+    assert all(v > 0 for v in doc["deck_usd"].values())
+    assert all(v <= one * 2.5 for v in doc["deck_usd"].values())
+    why = {r["reason"] for per in doc["results"].values() for r in per.values() if r["source"] == "unjudgeable"}
+    assert why == {"over the per-deck cap: not started"}
+    assert V.DECK_CAP_USD == 0.40
+
+
+def test_a_live_run_needs_the_id_printed_on_its_cost_card_and_the_card_uses_the_real_token_estimate(tmp_path):
+    key, images = _key_and_images(tmp_path, 2)
+    fake = T.FakeTransport(lambda *a: REPLY)
+    for bad in (None, "", "deadbeef", True):
+        with pytest.raises(BenchError, match="cost card"):
+            V.run(key, images, fake, max_usd=5.0, live=True, card_id=bad)
+    assert fake.calls == 0
+    card = V.plan_cost(key, images, V.PRIMARY["model"], 2, 5.0)
+    assert card["id"] in card["text"] and card["calls"] == 4
+    other = V.plan_cost(key, images, V.PRIMARY["model"], 2, 4.0)
+    assert other["id"] != card["id"]   # the id covers the caps
+    assert V.run(key, images, fake, max_usd=5.0, live=True, card_id=card["id"])["calls"] == 4
+    big = tmp_path / "big"
+    big.mkdir()
+    for s in key["slides"].values():
+        (big / s["image"]).write_bytes(_png(2560, 1440))
+    assert V.plan_cost(key, big, V.PRIMARY["model"], 2, 5.0)["est_in"] > 3 * card["est_in"]   # real picture sizes, not a fixed 2000
+
+
+def test_the_cli_refuses_a_bare_yes_cost_and_a_wrong_card_id(tmp_path, capsys):
+    from deck.bench.__main__ import main
+    key, images = _key_and_images(tmp_path, 1)
+    kp = tmp_path / "key.json"
+    kp.write_text(json.dumps(key))
+    base = ["visual", "run", "--key", str(kp), "--images", str(images), "--max-usd", "1", "--out", str(tmp_path / "v.json"), "--live"]
+    with pytest.raises(SystemExit):
+        main(base + ["--yes-cost"])
+    assert main(base + ["--yes-cost", "wrong"]) == 2
+    assert "COST CARD" in capsys.readouterr().out and not (tmp_path / "v.json").exists()
+
+
+def test_the_recording_key_includes_the_effort():
+    a = V.call_key("sha", 1, "p", "m", ["q"], "low")
+    assert a != V.call_key("sha", 1, "p", "m", ["q"], "high") and a == V.call_key("sha", 1, "p", "m", ["q"])
+
+
+def test_repeats_show_a_fresh_label_and_every_picture_is_one_png_encoding(packed):
+    out, key, _ = packed
+    shown = {t: (s["shown"]["deck"], s["shown"]["n"]) for t, s in key["slides"].items()}
+    assert len(set(shown.values())) == len(shown)   # no two slides share a label: a repeat cannot be matched to its original by it
+    for t, s in key["slides"].items():
+        if s["repeat_of"]:
+            assert shown[t] != shown[s["repeat_of"]] and s["shown"]["deck"] != key["slides"][s["repeat_of"]]["deck"]
+    html = (out / "index.html").read_text()
+    assert all(f'"deck": "{d}", "n": {n}' in html for d, n in shown.values())
+    for p in list(out.glob("*.png")):
+        assert p.read_bytes().endswith(b"\x00\x00\x00\x00IEND\xaeB`\x82"), p.name   # re-encoded: no trailing bytes from the renderer

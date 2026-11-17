@@ -227,7 +227,7 @@ measurement only: nothing in `run_deck`, a prompt, a deck or an export reads it,
 ```
 python3 -m deck.bench visual renders OUT_DIR                       # two renders of each invented fixture (needs LibreOffice)
 python3 -m deck.bench visual pack OUT_DIR/* --session A --out PAGE_DIR --seed N    # blind grading page + key.json (no model)
-python3 -m deck.bench visual run --key KEY --images PAGE_DIR --max-usd 2.5 --out visual.json [--recordings DIR | --live --yes-cost]
+python3 -m deck.bench visual run --key KEY --images PAGE_DIR --max-usd 2.5 --out visual.json [--recordings DIR | --live --yes-cost CARD_ID]
 python3 -m deck.bench visual agree grades.json visual.json --key KEY               # writes bench/baseline/critic_trust.json
 python3 -m deck.bench.spike_image --print-command                  # the transport spike (one tiny invented picture)
 ```
@@ -235,10 +235,13 @@ python3 -m deck.bench.spike_image --print-command                  # the transpo
 `visual_rubric.json` holds ten yes-is-good questions (version 1); canned messages and confirm bands live in
 `bench/visual_data.json` until phase 2. `pack` seeds frozen faults (listed only in the key), adds repeats for the person's
 self-agreement, and writes a page with no critic answer, fixture name, phase or seeded mark. `run` reserves each call's worst
-case against `--max-usd` before it starts; a live run uses the Napkin API key (never the Claude Code login) and needs
-`--live --yes-cost` after its cost card. `agree` reports natural and seeded slides apart, the critic and a code-only baseline
-on the same answers, and sets a state by pre-registered gates; the trust file carries a digest and a key (rubric version,
-prompt sha, model, image size, LibreOffice, fonts), so a hand edit or a changed setup reads as off.
+case against `--max-usd` and a $0.40 per-deck cap before it starts, and books every paid call (a stopped or unreadable reply
+at its real usage, unknown usage at the worst case); a live run uses the Napkin API key (never the Claude Code login) and
+needs `--live --yes-cost CARD_ID`, the id printed on its cost card (built from the real token estimate). `agree` reports natural and seeded slides apart, the critic and a code-only baseline
+on the same answers, and sets a state by pre-registered gates; the trust file carries a key (rubric version,
+prompt sha, model, image size, LibreOffice, fonts) and an HMAC over the whole document, signed with `NAPKIN_TRUST_SECRET`
+(kept outside the repo; `agree` refuses to write without it), so a hand edit, a recomputed hash, a changed setup or a
+missing secret reads as off.
 
 ## The evaluation bench (`deck/bench`)
 

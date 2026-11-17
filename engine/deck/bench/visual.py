@@ -46,6 +46,7 @@ SEEDED_QUOTA = {"overfilled": 16, "aside": 16, "equal_blocks": 8}   # session A;
 SEEDED_TARGETS = {"overfilled": ("v_not_crowded", "v_looks_finished"), "aside": ("v_balance", "v_looks_finished"),
                   "equal_blocks": ("v_one_focus", "v_looks_finished")}
 MAX_OUT_TOKENS = 1200
+DECK_CAP_USD = 0.40   # the per-deck live cap Sai approved (critic.max_usd in phase 2); applied to every bench run too
 WORKERS = 4
 
 
@@ -357,6 +358,34 @@ def pick_natural(decks: list, taken: set, rng: random.Random, session: str, want
     return must + rest[:max(0, want - len(must))]
 
 
+def write_png(src: Path, dst: Path) -> None:
+    """Copy a picture re-encoded one way for every slide (RGB, same PNG settings, no metadata or trailing bytes), so a
+    seeded slide's file is not given away by its size or encoder. Without Pillow the file is copied as it is."""
+    try:
+        from PIL import Image
+    except ImportError:
+        shutil.copyfile(src, dst)
+        return
+    with Image.open(src) as im:
+        im.convert("RGB").save(dst, "PNG", optimize=True, compress_level=9)
+
+
+def shown_labels(seq: list, label: dict, decks: list, rng: random.Random) -> list:
+    """The (deck label, slide number) each entry shows on the page. A repeat gets a fresh pair: another deck's label and
+    a number not used in that deck, so S010 and its repeat cannot be matched by their labels."""
+    used = {(label[e["di"]], e["facts"]["n"]) for e in seq if "repeat_of" not in e}
+    out = []
+    for e in seq:
+        if "repeat_of" not in e:
+            out.append((label[e["di"]], e["facts"]["n"]))
+            continue
+        options = [(label[di], n) for di in label for n in range(1, len(decks[di]["ids"]) + 1) if di != e["di"] and (label[di], n) not in used]
+        pick = rng.choice(options) if options else (label[e["di"]], e["facts"]["n"])
+        used.add(pick)
+        out.append(pick)
+    return out
+
+
 def pack(run_dirs: list, session: str, out: Path, key_out: Path, seed: int = 0, renderer: Renderer | None = None,
          slides: int = SESSION_SLIDES, repeats: int = REPEATS, quota: dict | None = None) -> dict:
     """Write the blind grading page (``out``/index.html and PNGs) and the key (``key_out``). No model call."""
@@ -407,11 +436,12 @@ def pack(run_dirs: list, session: str, out: Path, key_out: Path, seed: int = 0, 
                    "environment": renderer.versions(), "slides": {}, "decks": {label[di]: {"run": str(decks[di]["dir"].name), "content": decks[di]["content"],
                                                                                          "render": decks[di]["render"]} for di in order}}
             page_slides, tokens = [], {}
+            shown = shown_labels(seq, label, decks, rng)
             for n, e in enumerate(seq, 1):
                 tok = f"S{n:03d}"
                 d = decks[e["di"]]
                 img = f"slide-{n:03d}.png"
-                shutil.copyfile(e["png"], out / img)
+                write_png(e["png"], out / img)
                 rep = e.get("repeat_of")
                 if rep is not None:
                     tokens_of = tokens[id(rep)]
@@ -423,8 +453,8 @@ def pack(run_dirs: list, session: str, out: Path, key_out: Path, seed: int = 0, 
                 key["slides"][tok] = {"deck": label[e["di"]], "content": d["content"], "render": d["render"], "run": d["dir"].name, "slide_id": e["sid"],
                                       "n": e["facts"]["n"], "type": e["facts"]["type"], "hash": slide_hash(d["deck"], e["sid"]), "questions": qs,
                                       "seeded": e["seeded"], "repeat_of": tokens_of, "image": img, "image_sha": _sha((out / img).read_bytes()),
-                                      "facts": e["facts"], "measures": m}
-                page_slides.append({"token": tok, "img": img, "deck": label[e["di"]], "n": e["facts"]["n"], "questions": qs})
+                                      "facts": e["facts"], "measures": m, "shown": {"deck": shown[n - 1][0], "n": shown[n - 1][1]}}
+                page_slides.append({"token": tok, "img": img, "deck": shown[n - 1][0], "n": shown[n - 1][1], "questions": qs})
             warm = _warmup(decks, seeded, rng, renderer, width, out, session) if session == "A" else []
             key["warmup"] = [{"img": w["img"], "kind": w["kind"]} for w in warm]
             visual_page.write(out / "index.html", session, page_slides, load_data(), rubric_items(rubric), warm)
@@ -457,7 +487,7 @@ def _warmup(decks, seeded, rng, renderer, width, out: Path, session: str) -> lis
         examples = [("pass", d["pages"][picks[0]])] + [(k, pages[si]) for si, k in ok]
         for n, (kind, src) in enumerate(examples, 1):
             name = f"warm-{n}.png"
-            shutil.copyfile(src, out / name)
+            write_png(src, out / name)
             res.append({"img": name, "kind": kind})
     return res
 
@@ -487,62 +517,93 @@ def parse_reply(text: str, qids: list) -> dict:
     return out
 
 
-def call_key(image_sha: str, rubric_version: int, psha: str, model: str, qids: list) -> str:
-    return hashlib.sha256(json.dumps([image_sha, rubric_version, psha, model, list(qids)]).encode()).hexdigest()[:24]
+def call_key(image_sha: str, rubric_version: int, psha: str, model: str, qids: list, effort: str = PRIMARY["effort"]) -> str:
+    return hashlib.sha256(json.dumps([image_sha, rubric_version, psha, model, list(qids), effort]).encode()).hexdigest()[:24]
 
 
-def cost_card(n_calls: int, model: str, est_in: int, max_out: int, cap: float) -> str:
-    worst = spec.estimate_usd(model, est_in, max_out) * n_calls
-    typical = spec.estimate_usd(model, est_in, 800) * n_calls
-    return (f"COST CARD\n  calls: {n_calls} ({model}, 1280 px slide picture + questions, prompt v{prompt_version()})\n"
-            f"  typical: about ${typical:.2f}; worst case ${worst:.2f}; cap --max-usd ${cap:.2f}\n"
-            f"  transport: the Napkin API key (ANTHROPIC_API_KEY), invented slides only\n")
-
-
-def run(key: dict, images: Path, transport, *, model: str = PRIMARY["model"], orders: int = 2, max_usd: float,
-        effort: str = PRIMARY["effort"], recordings: Path | None = None, record_to: Path | None = None, workers: int = WORKERS,
-        live: bool = False, max_tokens: int = MAX_OUT_TOKENS) -> dict:
-    """Ask the critic the applicable questions of every graded slide, in ``orders`` question orders. A call is replayed
-    from ``recordings`` when one matches (cost 0); otherwise it needs ``live`` and a transport. Each call reserves its
-    worst case against ``max_usd`` before it starts; a call that would pass the cap is not started and its answers are
-    unjudgeable with the reason. Returns the visual.json document."""
-    rubric = load_rubric()
-    items = rubric_items(rubric)
-    psha = prompt_sha()
-    budget = vt.Budget(max_usd)
-    system = prompt_text()
+def build_jobs(key: dict, orders: int) -> list:
+    """``[(token, order, question ids, slide)]``: the calls a run makes (repeats are not asked)."""
     jobs = []
     for tok, s in key["slides"].items():
         if s.get("repeat_of") or not s["questions"]:
             continue
         for order in range(1, orders + 1):
-            qids = list(s["questions"]) if order == 1 else list(reversed(s["questions"]))
-            jobs.append((tok, order, qids, s))
+            jobs.append((tok, order, list(s["questions"]) if order == 1 else list(reversed(s["questions"])), s))
+    return jobs
+
+
+def plan_cost(key: dict, images: Path, model: str, orders: int, max_usd: float, max_tokens: int = MAX_OUT_TOKENS,
+              max_deck_usd: float = DECK_CAP_USD) -> dict:
+    """The cost card from the real token estimate of every call (each picture's size and the real prompt text), with a
+    card id that ``--yes-cost`` must repeat: the id covers the calls, the estimate, the model and both caps."""
+    items = rubric_items()
+    system = prompt_text()
+    est_in = worst = 0.0
+    jobs = build_jobs(key, orders)
+    for _tok, _o, qids, s in jobs:
+        png = (Path(images) / s["image"]).read_bytes()
+        n = vt.estimate_input_tokens(png, len(system) + len(user_text(s["facts"], qids, items)))
+        est_in += n
+        worst += vt.worst_case_usd(model, n, max_tokens)
+    typical = sum(spec.estimate_usd(model, 0, 800, 0, vt.estimate_input_tokens((Path(images) / s["image"]).read_bytes(), len(system) + 300)) for _t, _o, _q, s in jobs)
+    ident = hashlib.sha256(json.dumps([len(jobs), int(est_in), model, orders, round(max_usd, 4), round(max_deck_usd, 4), max_tokens, prompt_sha()]).encode()).hexdigest()[:8]
+    text = (f"COST CARD {ident}\n  calls: {len(jobs)} ({model}, slide picture + questions, prompt v{prompt_version()}), about {int(est_in):,} input tokens\n"
+            f"  typical: about ${typical:.2f}; worst case ${worst:.2f}; caps: --max-usd ${max_usd:.2f}, ${max_deck_usd:.2f} a deck\n"
+            f"  transport: the Napkin API key (ANTHROPIC_API_KEY), invented slides only\n  to run: --live --yes-cost {ident}\n")
+    return {"id": ident, "calls": len(jobs), "est_in": int(est_in), "worst_usd": round(worst, 4), "typical_usd": round(typical, 4), "text": text}
+
+
+def run(key: dict, images: Path, transport, *, model: str = PRIMARY["model"], orders: int = 2, max_usd: float,
+        max_deck_usd: float = DECK_CAP_USD, effort: str = PRIMARY["effort"], recordings: Path | None = None, record_to: Path | None = None,
+        workers: int = WORKERS, live: bool = False, max_tokens: int = MAX_OUT_TOKENS, card_id: str | None = None) -> dict:
+    """Ask the critic the applicable questions of every graded slide, in ``orders`` question orders. A call is replayed
+    from ``recordings`` when one matches (cost 0); otherwise it needs ``live``, a transport and the id printed on the
+    cost card (``card_id``). Each call reserves its worst case against ``max_usd`` and against its deck's ``max_deck_usd``
+    before it starts; a call that would pass either cap is not started and is unjudgeable with the reason. A paid call
+    is always booked: its real usage when known, else its reserved worst case, also when its answer is unusable
+    (max_tokens, refusal) or the call failed after being sent. Returns the visual.json document."""
+    rubric = load_rubric()
+    items = rubric_items(rubric)
+    psha = prompt_sha()
+    budget = vt.Budget(max_usd, max_deck_usd)
+    system = prompt_text()
+    if live:
+        card = plan_cost(key, images, model, orders, max_usd, max_tokens, max_deck_usd)
+        if card_id != card["id"]:
+            raise BenchError(f"a live run needs the id on its cost card: --yes-cost {card['id']}\n{card['text']}")
+    jobs = build_jobs(key, orders)
 
     def one(job):
         tok, order, qids, s = job
         png = (Path(images) / s["image"]).read_bytes()
-        ck = call_key(s["image_sha"], rubric["version"], psha, model, qids)
+        ck = call_key(s["image_sha"], rubric["version"], psha, model, qids, effort)
         base = {"order": order, "qids": qids, "call_key": ck}
+        skip = lambda why: (tok, {**base, "answers": parse_reply("", qids), "usd": 0.0, "secs": 0.0, "source": "unjudgeable", "reason": why})
         if recordings and (Path(recordings) / f"{ck}.json").exists():
             rec = json.loads((Path(recordings) / f"{ck}.json").read_text())
             return tok, {**base, "answers": parse_reply(rec["reply"], qids), "usd": 0.0, "secs": 0.0, "source": "recorded"}
         if not live or transport is None:
-            return tok, {**base, "answers": parse_reply("", qids), "usd": 0.0, "secs": 0.0, "source": "unjudgeable", "reason": "no recording and not --live"}
+            return skip("no recording and not --live")
         text = user_text(s["facts"], qids, items)
-        res = budget.reserve(model, vt.estimate_input_tokens(png, len(system) + len(text)), max_tokens)
+        deck = s.get("deck", "")
+        res = budget.reserve(model, vt.estimate_input_tokens(png, len(system) + len(text)), max_tokens, deck)
         if res is None:
-            return tok, {**base, "answers": parse_reply("", qids), "usd": 0.0, "secs": 0.0, "source": "unjudgeable", "reason": "over the --max-usd cap: not started"}
+            return skip(budget.why)
         try:
             r = transport.call(system=system, user_text=text, image_png=png, model=model, max_tokens=max_tokens)
-        except Exception as e:   # a failed call is unjudgeable, never a pass; it is released, not booked
-            budget.settle(res, 0.0)
-            return tok, {**base, "answers": parse_reply("", qids), "usd": 0.0, "secs": 0.0, "source": "unjudgeable", "reason": f"call failed: {type(e).__name__}"}
-        usd = vt.reply_usd(r, model)
-        budget.settle(res, usd)
+        except vt.NoCharge as e:   # nothing was sent: released, not booked
+            budget.settle(res, 0.0, deck)
+            return skip(f"call not sent: {e}")
+        except Exception as e:   # sent, outcome unknown: it may have been billed, so the worst case is booked
+            budget.settle(res, res, deck)
+            return tok, {**base, "answers": parse_reply("", qids), "usd": res, "secs": 0.0, "source": "unjudgeable", "reason": f"call failed ({type(e).__name__}); worst case booked"}
+        usd = vt.reply_usd(r, model, res)
+        budget.settle(res, usd, deck)
+        if r.stop:
+            return tok, {**base, "answers": parse_reply("", qids), "usd": usd, "secs": r.secs, "source": "live", "reason": f"stopped: {r.stop}", "tokens": [r.tokens_in, r.tokens_out]}
         if record_to:
             Path(record_to).mkdir(parents=True, exist_ok=True)
-            (Path(record_to) / f"{ck}.json").write_text(json.dumps({"call_key": ck, "slide_hash": s["hash"], "image_sha": s["image_sha"], "model": model,
+            (Path(record_to) / f"{ck}.json").write_text(json.dumps({"call_key": ck, "slide_hash": s["hash"], "image_sha": s["image_sha"], "model": model, "effort": effort,
                                                                    "rubric_version": rubric["version"], "prompt_sha": psha, "qids": qids, "reply": r.text}, indent=1))
         return tok, {**base, "answers": parse_reply(r.text, qids), "usd": usd, "secs": r.secs, "source": "live", "tokens": [r.tokens_in, r.tokens_out]}
 
@@ -555,7 +616,8 @@ def run(key: dict, images: Path, transport, *, model: str = PRIMARY["model"], or
            "rubric_version": rubric["version"], "orders": orders, "libreoffice": env.get("libreoffice"), "fonts": env.get("fonts")}
     cfg["primary"] = all(cfg[k] == v for k, v in PRIMARY.items())
     calls = [r for per in results.values() for r in per.values()]
-    return {"config": cfg, "results": results, "usd": round(budget.spent, 4), "max_usd": max_usd, "calls": sum(1 for r in calls if r["source"] == "live"),
+    return {"config": cfg, "results": results, "usd": round(budget.spent, 4), "max_usd": max_usd, "max_deck_usd": max_deck_usd, "deck_usd": budget.group_spent(),
+            "overruns": budget.overruns, "calls": sum(1 for r in calls if r["source"] == "live"),
             "replayed": sum(1 for r in calls if r["source"] == "recorded"), "unjudgeable_calls": sum(1 for r in calls if r["source"] == "unjudgeable")}
 
 

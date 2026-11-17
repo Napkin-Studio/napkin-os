@@ -34,15 +34,15 @@ def _visual(a) -> int:
         return 0
     if a.vcmd == "run":
         key = json.loads(a.key.read_text())
-        n_calls = sum(a.orders for s in key["slides"].values() if not s.get("repeat_of") and s["questions"])
         transport = None
         if a.live:
-            print(visual_mod.cost_card(n_calls, a.model, 2000, visual_mod.MAX_OUT_TOKENS, a.max_usd))
-            if not a.yes_cost:
-                raise BenchError("a live run needs --yes-cost after the cost card above is accepted")
+            card = visual_mod.plan_cost(key, a.images, a.model, a.orders, a.max_usd, max_deck_usd=a.max_deck_usd)
+            print(card["text"])
+            if a.yes_cost != card["id"]:
+                raise BenchError(f"a live run needs --yes-cost {card['id']} (the id on the card above)")
             transport = visual_transport.ApiTransport(visual_mod.PRIMARY["effort"])
-        doc = visual_mod.run(key, a.images, transport, model=a.model, orders=a.orders, max_usd=a.max_usd, recordings=a.recordings,
-                             record_to=a.record_to, live=a.live)
+        doc = visual_mod.run(key, a.images, transport, model=a.model, orders=a.orders, max_usd=a.max_usd, max_deck_usd=a.max_deck_usd,
+                             recordings=a.recordings, record_to=a.record_to, live=a.live, card_id=a.yes_cost)
         a.out.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
         print(f"{doc['calls']} live calls, {doc['replayed']} replayed, {doc['unjudgeable_calls']} unjudgeable; ${doc['usd']:.4f} of ${doc['max_usd']:.2f}")
         return 0
@@ -109,7 +109,8 @@ def main(argv=None) -> int:
     n_.add_argument("--recordings", type=Path, help="replay recorded replies from here (free)")
     n_.add_argument("--record-to", type=Path, help="save each live reply here")
     n_.add_argument("--live", action="store_true", help="make paid calls with the API key")
-    n_.add_argument("--yes-cost", action="store_true", help="the cost card was shown and accepted")
+    n_.add_argument("--max-deck-usd", type=float, default=visual_mod.DECK_CAP_USD, help="cap per deck (default 0.40)")
+    n_.add_argument("--yes-cost", metavar="CARD_ID", help="the id printed on the cost card: a live run is refused without it")
     n_.add_argument("--out", type=Path, required=True)
     g_ = vs.add_parser("agree", help="grade the critic and the code baseline against a person; write the trust file")
     g_.add_argument("grades", type=Path)
