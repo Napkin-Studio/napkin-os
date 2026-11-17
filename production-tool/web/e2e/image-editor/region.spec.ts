@@ -111,7 +111,7 @@ test('Remove takes out what the mask covers with no words: one result layer, lik
   await expect(page.locator('.ie-action').getByRole('button', { name: 'Fill', exact: true })).toBeDisabled() // Fill needs words
   await remove.click()
   const tray = page.getByRole('dialog')
-  await expect(tray).toContainText('What Rhea will send to remove what is in the area')
+  await expect(tray).toContainText('What the Retouch agent will send to remove what is in the area')
   await tray.getByRole('button', { name: 'Remove', exact: true }).click()
   await expect(page.locator('.ie-elist li', { hasText: 'Remove Mask 1' })).toContainText('ready', { timeout: 20_000 })
   const sent = await page.evaluate(() => (window as unknown as { __sent: { op: string; input: Record<string, unknown> }[] }).__sent)

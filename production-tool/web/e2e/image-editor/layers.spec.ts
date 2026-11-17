@@ -99,7 +99,7 @@ test('Apply leaves hidden layers out, says so, and keeps them for the new versio
   await expect(page.locator('.ie-pill .ie-n-long')).toHaveText('1 hidden layer is left out')
 })
 
-test('when the picture cannot be drawn, the last good one stays and Rhea says why', async ({ page }) => {
+test('when the picture cannot be drawn, the last good one stays and the Retouch agent says why', async ({ page }) => {
   const seeded = await openEditor(page)
   const before = await picPixel(page, 0.7, 0.2)
   // A Change whole frame whose result is not in this browser: a finished job with an output no browser has.

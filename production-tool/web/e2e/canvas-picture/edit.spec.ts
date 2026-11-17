@@ -165,12 +165,12 @@ test('while a picture is open in the Image editor its bar is the only one; Canva
   const [p] = await oneDropped(page)
   const bars = () => page.locator('.ptbar').count()
   const accounts = () => page.getByRole('button', { name: 'Your account' }).count()
-  const history = () => page.getByRole('button', { name: /^History/ }).count()
+  const history = () => page.getByRole('button', { name: /^Decisions/ }).count()
   expect(await bars()).toBe(1)
   await page.mouse.click(...centre(p))
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await page.locator('canvas.ie-pic:not([hidden])').waitFor()
-  // One bar, one account button, one History (owner, 2026-10-16: "Double buttons?").
+  // One bar, one account button, one Decisions (owner, 2026-10-16: "Double buttons?").
   await expect.poll(bars).toBe(1)
   expect(await accounts()).toBe(1)
   expect(await history()).toBe(1)
