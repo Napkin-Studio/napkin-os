@@ -38,6 +38,9 @@ type Schema = {
   maxLength?: number
   propertyNames?: Schema
   default?: unknown
+  uniqueItems?: boolean
+  if?: Schema
+  then?: Schema
 }
 
 function typeOk(v: unknown, t: string): boolean {
@@ -55,6 +58,11 @@ function check(v: unknown, s: Schema, path: string, errs: string[]): void {
   }
   if (s.enum && !s.enum.some(e => e === v)) errs.push(`${path}: ${JSON.stringify(v)} is not one of ${JSON.stringify(s.enum)}`)
   if ('const' in s && s.const !== v) errs.push(`${path}: ${JSON.stringify(v)} is not ${JSON.stringify(s.const)}`)
+  if (s.if && s.then) {
+    const e: string[] = []
+    check(v, s.if, path, e)
+    if (e.length === 0) check(v, s.then, path, errs)
+  }
   if (typeof v === 'string') {
     if (s.pattern !== undefined && !new RegExp(s.pattern).test(v)) errs.push(`${path}: does not match ${s.pattern}`)
     if (s.minLength !== undefined && v.length < s.minLength) errs.push(`${path}: shorter than ${s.minLength}`)
@@ -71,6 +79,7 @@ function check(v: unknown, s: Schema, path: string, errs: string[]): void {
   if (Array.isArray(v)) {
     if (s.maxItems !== undefined && v.length > s.maxItems) errs.push(`${path}: more than ${s.maxItems} items`)
     if (s.minItems !== undefined && v.length < s.minItems) errs.push(`${path}: fewer than ${s.minItems} items`)
+    if (s.uniqueItems && new Set(v.map(x => JSON.stringify(x))).size !== v.length) errs.push(`${path}: items are not unique`)
     if (s.items) v.forEach((x, i) => check(x, s.items!, `${path}[${i}]`, errs))
   } else if (typeof v === 'object' && v !== null) {
     const o = v as Record<string, unknown>
@@ -127,18 +136,24 @@ test('the checker itself catches a wrong type, a bad enum and a missing key', ()
   assert.equal(validate({}, s).length, 1)
 })
 
-test('the checker bites on each added keyword: const, pattern, minimum, maximum, minItems, minLength, maxLength, propertyNames', () => {
+test('the checker bites on each added keyword: const, pattern, minimum, maximum, minItems, minLength, maxLength, propertyNames, uniqueItems, if/then', () => {
   const s: Schema = {
     type: 'object',
     properties: {
       c: { const: true }, p: { type: 'string', pattern: '^img_[0-9a-f]{12}$' }, n: { type: 'number', minimum: 0, maximum: 10 },
       a: { type: 'array', minItems: 1 }, l: { type: 'string', minLength: 1, maxLength: 3 },
       m: { type: 'object', propertyNames: { pattern: '^s[0-9]{2}$' }, additionalProperties: { type: 'boolean' } },
+      u: { type: 'array', uniqueItems: true },
     },
+    if: { properties: { c: { const: true } }, required: ['c'] },
+    then: { required: ['t'] },
   }
-  const ok = { c: true, p: 'img_0123456789ab', n: 5, a: [1], l: 'ab', m: { s01: true } }
+  const ok = { c: true, t: 1, p: 'img_0123456789ab', n: 5, a: [1], l: 'ab', m: { s01: true }, u: [1, 2] }
   assert.deepEqual(validate(ok, s), [])
-  for (const bad of [{ c: false }, { p: 'img_x' }, { n: -1 }, { n: 11 }, { a: [] }, { l: '' }, { l: 'abcd' }, { m: { slide1: true } }, { m: { s01: 'no' } }]) {
+  const { t: _t, ...noThen } = ok // eslint-disable-line @typescript-eslint/no-unused-vars
+  assert.equal(validate(noThen, s).length, 1, 'then applies when if matches')
+  assert.equal(validate({ ...noThen, c: false }, s).length, 1, 'c: false breaks const; then is skipped')
+  for (const bad of [{ c: false }, { p: 'img_x' }, { n: -1 }, { n: 11 }, { a: [] }, { l: '' }, { l: 'abcd' }, { m: { slide1: true } }, { m: { s01: 'no' } }, { u: [1, 1] }]) {
     assert.equal(validate({ ...ok, ...bad }, s).length, 1, JSON.stringify(bad))
   }
 })
@@ -146,14 +161,14 @@ test('the checker bites on each added keyword: const, pattern, minimum, maximum,
 // Every keyword schema.json uses is one the checker above reads, or a note that checks nothing. A limit written with any other
 // keyword would pass this file's tests unchecked, so adding one has to extend the checker (with a case above that bites) first.
 const CHECKED = ['type', 'enum', 'required', 'properties', 'additionalProperties', 'items', 'maxItems', 'oneOf', 'const', 'pattern',
-  'minimum', 'maximum', 'minItems', 'minLength', 'maxLength', 'propertyNames', 'default']
+  'minimum', 'maximum', 'minItems', 'minLength', 'maxLength', 'propertyNames', 'default', 'uniqueItems', 'if', 'then']
 const NOTES = ['$schema', 'title', 'description', '$comment', 'x-clan-appearance']
 
 function keywords(s: Schema, found: Set<string>): void {
   for (const [k, v] of Object.entries(s as Record<string, unknown>)) {
     found.add(k)
     if (k === 'properties') for (const x of Object.values(v as Record<string, Schema>)) keywords(x, found)
-    else if (k === 'items' || k === 'propertyNames' || (k === 'additionalProperties' && typeof v === 'object')) keywords(v as Schema, found)
+    else if (k === 'items' || k === 'propertyNames' || k === 'if' || k === 'then' || (k === 'additionalProperties' && typeof v === 'object')) keywords(v as Schema, found)
     else if (k === 'oneOf') for (const x of v as Schema[]) keywords(x, found)
   }
 }

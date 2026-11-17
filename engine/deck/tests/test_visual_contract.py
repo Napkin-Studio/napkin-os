@@ -488,7 +488,7 @@ def test_the_template_mirror_equals_the_engine_schema_with_refs_inlined():
 #: Keywords the app's own checker (app/tests/deckMakerFixtures.test.ts) reads, and annotations that check nothing. A keyword outside
 #: both lists would pass unchecked in the frontend test, so the template schema may not use it.
 CHECKED = {"type", "enum", "required", "properties", "additionalProperties", "items", "maxItems", "oneOf", "const", "pattern",
-           "minimum", "maximum", "minItems", "minLength", "maxLength", "propertyNames", "default"}
+           "minimum", "maximum", "minItems", "minLength", "maxLength", "propertyNames", "default", "uniqueItems", "if", "then"}
 ANNOTATIONS = {"$schema", "title", "description", "$comment", "x-clan-appearance"}
 
 
@@ -504,7 +504,7 @@ def test_the_template_schema_uses_only_keywords_the_frontend_checker_reads():
                 if k in ("properties",):
                     for sub in v.values():
                         visit(sub, True)
-                elif k in ("additionalProperties", "items", "propertyNames"):
+                elif k in ("additionalProperties", "items", "propertyNames", "if", "then"):
                     visit(v, isinstance(v, dict))
                 elif k == "oneOf":
                     for sub in v:
@@ -529,3 +529,121 @@ def test_investor_golden_statements_have_a_basis_and_validate_clean():
     assert {s["type"]: b["basis"] for s in golden["slides"].values() for b in s["blocks"] if b["kind"] == "statement"} == {"problem": "opinion", "ask": "opinion"}
     inp = load(None, prompt_text=(FIX / "types" / "investor_seed" / "prompt.txt").read_text().strip())
     assert validate.run(golden, inp) == json.loads((FIX / "types" / "investor_seed" / "golden_validation.json").read_text()) == []
+
+
+# ------------------------------------------------------------------------------------------------ review findings
+
+def _slot_image(**kw) -> dict:
+    img = {"kind": "frame", "status": "made", "aspect": "16:9", "asset": "img_0123456789ab"}
+    img.update(kw)
+    return {"meta": {"client": "Lumen Water", "project": "Refill", "kind": "pitch"}, "order": ["s01"],
+            "slides": {"s01": {**_minimal_deck()["slides"]["s01"], "slots": {"picture": {"kind": "image", "image": img}}}}}
+
+
+def _approval(**kw) -> dict:
+    a = {"asset": "img_0123456789ab", "decision": "approve", "by": "human:sai", "at": "2026-11-17T10:00:00Z"}
+    a.update(kw)
+    return a
+
+
+def _image_slot_schemas():
+    tpl = TEMPLATE["properties"]["deck"]["properties"]["slides"]["additionalProperties"]["properties"]["slots"]["additionalProperties"]["oneOf"]
+    return {"deck": DECK_SCHEMA, "template": None, "tpl_image": next(b for b in tpl if b["properties"]["kind"]["const"] == "image")["properties"]["image"]}
+
+
+def test_an_approved_picture_needs_a_real_approval_by_a_person():
+    """Finding 1. JSON Schema cannot say approval.asset equals the slot's asset: that equality is checked below, in code."""
+    ok = _slot_image(status="approved", approval=_approval())
+    assert _errors(DECK_SCHEMA, ok) == []
+    for img in (dict(status="approved"), dict(status="approved", approval=None), dict(status="approved", approval=_approval(decision="remove")),
+                dict(status="approved", approval=_approval(decision="replace")), dict(status="approved", approval=_approval(by="")),
+                dict(status="approved", approval=_approval(at="")), dict(status="approved", approval={"asset": "img_0123456789ab", "decision": "approve"})):
+        assert _errors(DECK_SCHEMA, _slot_image(**img)), img
+    # the other statuses stay free of an approval, and a made slot may carry a null one
+    assert _errors(DECK_SCHEMA, _slot_image(status="made", approval=None)) == []
+    assert _errors(DECK_SCHEMA, _slot_image(status="flagged")) == []
+    assert _errors(_image_slot_schemas()["tpl_image"], {"kind": "frame", "status": "approved", "aspect": "16:9", "asset": "img_0123456789ab"})
+    assert _errors(_image_slot_schemas()["tpl_image"], {"kind": "frame", "status": "approved", "aspect": "16:9", "asset": "img_0123456789ab", "approval": _approval()}) == []
+
+
+def approval_matches_asset(image: dict) -> bool:
+    """The rule a schema cannot state: an approval is for one picture, so an approved slot's approval names its own asset."""
+    return image.get("status") != "approved" or (image.get("approval") or {}).get("asset") == image.get("asset")
+
+
+def test_an_approval_names_the_slots_own_asset():
+    assert approval_matches_asset(_slot_image(status="approved", approval=_approval())["slides"]["s01"]["slots"]["picture"]["image"])
+    mismatched = _slot_image(status="approved", approval=_approval(asset="img_ffffffffffff"))["slides"]["s01"]["slots"]["picture"]["image"]
+    assert not approval_matches_asset(mismatched)
+    assert "approval.asset" in (ROOT / "docs" / "contracts" / "deck-visuals.md").read_text()
+
+
+def test_a_picture_is_creative_and_the_label_is_derived_not_stored():
+    """Finding 2."""
+    assert _errors(DECK_SCHEMA, _slot_image(basis="creative")) == []
+    for basis in ("sourced", "opinion", "proposal", "meta", None):
+        assert _errors(DECK_SCHEMA, _slot_image(basis=basis)), basis
+    assert _errors(DECK_SCHEMA, _slot_image(label="Illustrative"))          # no stored label field
+    doc = (ROOT / "docs" / "contracts" / "deck-visuals.md").read_text()
+    assert "status != approved" in doc and "no stored label" in doc
+
+
+def test_review_entries_are_attributed_to_a_person_and_closed():
+    """Finding 3."""
+    review = TEMPLATE["properties"]["review"]["properties"]
+    entry = {"by": "human:sai", "at": "2026-11-17"}
+    ok = {"review": {"pinned": {"s03": entry}, "images": {"s05": {"picture": {"asset": "img_0123456789ab", "decision": "approve", **entry}}}}}
+    assert _errors(TEMPLATE, ok) == []
+    pins = lambda e: {"review": {"pinned": {"s03": e}}}
+    imgs = lambda e: {"review": {"images": {"s05": {"picture": {"asset": "img_0123456789ab", "decision": "approve", **e}}}}}
+    for e in ({"by": "", "at": "x"}, {"by": "sai", "at": "x"}, {"by": "human:", "at": "x"}, {"by": "human:sai", "at": ""}, {**entry, "extra": 1}):
+        assert _errors(TEMPLATE, pins(e)), e
+        assert _errors(TEMPLATE, imgs(e)), e
+    assert _errors(TEMPLATE, {"review": {"images": {"s05": {"picture": {"asset": "img_0123456789ab", "decision": "approve", **entry}, "Bad": {}}}}})
+    assert review["pinned"]["additionalProperties"]["additionalProperties"] is False
+    # a named approver must say who
+    approval = lambda **kw: {"inputs": {"pictures": {"approval": kw}}}
+    assert _errors(TEMPLATE, approval(approver="named"))
+    assert _errors(TEMPLATE, approval(approver="named", user="human:laurence")) == []
+    assert _errors(TEMPLATE, approval(approver="owner")) == []
+    # the stamp on the deck's own approval says who and when too
+    assert _errors(DECK_SCHEMA, _slot_image(status="made", approval=_approval(by="sai")))
+
+
+def test_qa_and_repair_are_closed_and_later_slices_are_told_to_enforce_the_stamps():
+    """Finding 4: no fixture or app code writes an extra key, so both are closed; the rest is a note for later slices."""
+    for node in (TEMPLATE["properties"]["qa"], TEMPLATE["properties"]["qa"]["properties"]["summary"],
+                 TEMPLATE["properties"]["repair"], TEMPLATE["properties"]["repair"]["properties"]["rounds"]["items"]):
+        assert node["additionalProperties"] is False
+    assert _errors(TEMPLATE, {"qa": {"surprise": 1}}) and _errors(TEMPLATE, {"repair": {"rounds": [{"surprise": 1}]}})
+    doc = (ROOT / "docs" / "contracts" / "deck-visuals.md").read_text()
+    assert "Later slices must enforce" in doc and "models never write `review.*`" in doc.lower()
+    assert "runner stamps only" in doc
+
+
+def test_counts_and_sizes_have_sensible_minimums():
+    """Finding 5."""
+    img = DECK_SCHEMA["definitions"]["image_slot"]["properties"]
+    assert img["target_px"]["items"]["minimum"] == 1
+    assert _errors(DECK_SCHEMA, _slot_image(target_px=[0, 1080])) and _errors(DECK_SCHEMA, _slot_image(target_px=[1920, -5]))
+    assert _errors(DECK_SCHEMA, _slot_image(target_px=[1920, 1080])) == []
+    assert _errors(DECK_SCHEMA, _slot_image(reference_images=["img_0123456789ab"] * 15))
+    assert img["reference_images"]["uniqueItems"] is True and _errors(DECK_SCHEMA, _slot_image(reference_images=["img_0123456789ab"] * 2))
+    assert _errors(DECK_SCHEMA, _slot_image(attempts=-1))
+    made = DECK_SCHEMA["definitions"]["asset"]["properties"]["made"]["properties"]
+    assert made["credits"]["minimum"] == 0 and made["usd"]["minimum"] == 0
+    summary = TEMPLATE["properties"]["qa"]["properties"]["summary"]["properties"]
+    assert all(summary[k]["minimum"] == 0 for k in summary)
+    rnd = TEMPLATE["properties"]["repair"]["properties"]["rounds"]["items"]["properties"]
+    assert rnd["n"]["minimum"] == 1 and all(rnd[k]["minimum"] == 0 for k in ("fixed", "open", "usd", "seconds"))
+    assert TEMPLATE["properties"]["repair"]["properties"]["left_for_person"]["minimum"] == 0
+    assert _errors(TEMPLATE, {"repair": {"rounds": [{"n": 0}]}}) and _errors(TEMPLATE, {"qa": {"summary": {"minor": -1}}})
+
+
+def test_the_golden_slot_handoff_is_recorded():
+    """Finding 6: no schema change; slice 4 must validate golden slots against their layout on load, with a test."""
+    record = (ROOT / "features" / "deck-visual-contract.clan")
+    import subprocess
+    text = subprocess.run(["unzip", "-p", str(record), "shared/data.yaml"], capture_output=True, text=True, check=True).stdout
+    assert "validate golden slots against their layout on load" in text
+    assert "validate golden slots against their layout on load" in (ROOT / "docs" / "contracts" / "deck-visuals.md").read_text()

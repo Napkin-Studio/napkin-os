@@ -156,7 +156,8 @@ image: { kind, status, aspect, asset?, from?, subject?, prompt?, style?, referen
 | `alt` | up to 140 characters | written by code from `subject`. Never from a picture's metadata |
 | `attempts` | 0 to 2 | generations tried |
 | `reason` | up to 300 characters | why the slot is `empty`, `failed` or held back (a Confidential part, a safe-messaging gate) |
-| `approval` | `{asset, decision, by, at, note?}` or null | the runner's stamp of `review.images.<slide id>.<slot>`. `decision`: `approve` · `replace` · `remove` |
+| `approval` | `{asset, decision, by, at, note?}` or null | the runner's stamp of `review.images.<slide id>.<slot>`. `decision`: `approve` · `replace` · `remove`. `by` is `human:<id>`, `at` is not empty. The schema requires an approved slot to hold an approval with `decision: approve`, a `by`, an `at` and an `asset`; that `approval.asset` equals the slot's own `asset` is a rule JSON Schema cannot state, so it is checked in code (`approval_matches_asset` in `test_visual_contract.py`, and the validator that reads it, `deck-repair-loop`) |
+| `basis` | `creative` | constant: every picture is creative, never sourced. There is no stored label field: a renderer draws the picture label (`inputs.pictures.approval.label`, Illustrative by default) whenever `status != approved` |
 
 ### 4.2 Assets
 
@@ -493,7 +494,20 @@ Each is a **default until Laurence answers; his answer replaces it** (Sai, 2026-
 6. A presented pitch defaults to lean, about 30 words per content slide, with the rest in the speaker notes. The
    full (leave-behind) format keeps today's budgets (`look.density.level: detailed`).
 
-## 12. Not in this contract
+## 12. Later slices must enforce
+
+The schemas state shape. These rules are for the code that arrives with each slice, each with a test:
+
+- **Models never write `review.*`.** `review.pinned` and `review.images` are a person's decisions, written by the
+  app. The slide-level `pinned` and `slots.<slot>.image.approval` are runner stamps only: no stage, model or repair
+  step may set either.
+- `approval.asset` must equal the slot's own `asset` (§4.1); a changed asset returns the slot to `made` or `flagged`.
+- `qa` and `repair` are closed objects (`additionalProperties: false`): no fixture or app code writes an extra key
+  today. A later slice that needs one adds it to the schema first.
+- **Slice 4 (`deck-layout-library`) must validate golden slots against their layout on load, with a test.**
+  `golden.schema.json` checks only that each slot names a `kind`.
+
+## 13. Not in this contract
 
 - The Style Pack template (`ie.napkin.style-pack`) and the Brand Clan section `visual.deck`: `deck-look-kits`.
 - The picker, the fit ladder, `capacity()`, the per-layout slot rules generated into the template schema:

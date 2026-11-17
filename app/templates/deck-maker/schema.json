@@ -156,6 +156,21 @@
                   ],
                   "description": "Where the choice was made: an intake question, the Start screen or Review."
                 }
+              },
+              "if": {
+                "properties": {
+                  "approver": {
+                    "const": "named"
+                  }
+                },
+                "required": [
+                  "approver"
+                ]
+              },
+              "then": {
+                "required": [
+                  "user"
+                ]
               }
             }
           }
@@ -1942,6 +1957,7 @@
                             "reference_images": {
                               "type": "array",
                               "maxItems": 14,
+                              "uniqueItems": true,
                               "items": {
                                 "type": "string",
                                 "pattern": "^img_[0-9a-f]{12}$"
@@ -1952,8 +1968,13 @@
                               "minItems": 2,
                               "maxItems": 2,
                               "items": {
-                                "type": "integer"
+                                "type": "integer",
+                                "minimum": 1
                               }
+                            },
+                            "basis": {
+                              "const": "creative",
+                              "description": "Every picture is creative, never sourced. There is no stored label: a renderer draws the picture label when status is not approved."
                             },
                             "fit": {
                               "enum": [
@@ -2052,7 +2073,7 @@
                                 "by",
                                 "at"
                               ],
-                              "description": "The runner's stamp of review.images.<slide id>.<slot>. An approval names one asset: a changed asset is unapproved again.",
+                              "description": "The runner's stamp of review.images.<slide id>.<slot>. An approval names one asset: a changed asset is unapproved again. That approval.asset equals the slot's asset is checked in code, not by the schema.",
                               "properties": {
                                 "asset": {
                                   "type": "string",
@@ -2066,13 +2087,48 @@
                                   ]
                                 },
                                 "by": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "pattern": "^human:.+$"
                                 },
                                 "at": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "minLength": 1
                                 },
                                 "note": {
                                   "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "if": {
+                            "properties": {
+                              "status": {
+                                "const": "approved"
+                              }
+                            },
+                            "required": [
+                              "status"
+                            ]
+                          },
+                          "then": {
+                            "required": [
+                              "asset",
+                              "approval"
+                            ],
+                            "properties": {
+                              "approval": {
+                                "type": "object",
+                                "required": [
+                                  "asset",
+                                  "decision",
+                                  "by",
+                                  "at"
+                                ],
+                                "properties": {
+                                  "decision": {
+                                    "const": "approve"
+                                  }
                                 }
                               }
                             }
@@ -2248,10 +2304,12 @@
                     "type": "string"
                   },
                   "credits": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "usd": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   }
                 }
               },
@@ -2436,7 +2494,7 @@
                   "supply",
                   "preference"
                 ],
-                "description": "'supply' is a card for something only the person knows (team, credentials, budget split, options, decision date). Free text, one item per line, skippable. Its answer fills the slide named by `fills`. 'preference' is a card for how the deck should look or what it may spend (docs/contracts/deck-visuals.md 6.4): the default option first, skippable; its answer also writes the addressed field."
+                "description": "'supply' is a card for something only the person knows (team, credentials, budget split, options, decision date). Free text, one item per line, skippable. Its answer fills the slide named by `fills`. 'preference' is a card for how the deck should look or what it may spend (docs/contracts/deck-visuals.md 6.4): the default option first, skippable; its answer also writes the addressed field. 'preference' is a card for how the deck should look or what it may spend (docs/contracts/deck-visuals.md 6.4): the default option first, skippable; its answer also writes the addressed field."
               },
               "fills": {
                 "type": "string",
@@ -2844,16 +2902,20 @@
           },
           "additionalProperties": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "by",
               "at"
             ],
             "properties": {
               "by": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^human:.+$"
               },
               "at": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1
               }
             }
           }
@@ -2870,6 +2932,7 @@
             },
             "additionalProperties": {
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "asset",
                 "decision",
@@ -2889,10 +2952,13 @@
                   ]
                 },
                 "by": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^human:.+$"
                 },
                 "at": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 },
                 "note": {
                   "type": "string"
@@ -2905,6 +2971,7 @@
     },
     "qa": {
       "type": "object",
+      "additionalProperties": false,
       "description": "The checks' findings as issues, written by the runner beside validation and report. current is false once the deck has changed since deck_sha.",
       "properties": {
         "deck_sha": {
@@ -2915,18 +2982,23 @@
         },
         "summary": {
           "type": "object",
+          "additionalProperties": false,
           "properties": {
             "blocker": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0
             },
             "major": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0
             },
             "minor": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0
             },
             "slides_checked": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0
             }
           }
         },
@@ -3124,6 +3196,7 @@
     },
     "repair": {
       "type": "object",
+      "additionalProperties": false,
       "description": "The repair rounds, written by the runner. At most two.",
       "properties": {
         "rounds": {
@@ -3131,30 +3204,37 @@
           "maxItems": 2,
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "properties": {
               "n": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1
               },
               "kept": {
                 "type": "boolean"
               },
               "fixed": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 0
               },
               "open": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 0
               },
               "usd": {
-                "type": "number"
+                "type": "number",
+                "minimum": 0
               },
               "seconds": {
-                "type": "number"
+                "type": "number",
+                "minimum": 0
               }
             }
           }
         },
         "left_for_person": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         }
       }
     }

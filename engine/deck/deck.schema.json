@@ -2105,6 +2105,7 @@
     "reference_images": {
      "type": "array",
      "maxItems": 14,
+     "uniqueItems": true,
      "items": {
       "type": "string",
       "pattern": "^img_[0-9a-f]{12}$"
@@ -2115,8 +2116,13 @@
      "minItems": 2,
      "maxItems": 2,
      "items": {
-      "type": "integer"
+      "type": "integer",
+      "minimum": 1
      }
+    },
+    "basis": {
+     "const": "creative",
+     "description": "Every picture is creative, never sourced. There is no stored label: a renderer draws the picture label when status is not approved."
     },
     "fit": {
      "enum": [
@@ -2215,7 +2221,7 @@
       "by",
       "at"
      ],
-     "description": "The runner's stamp of review.images.<slide id>.<slot>. An approval names one asset: a changed asset is unapproved again.",
+     "description": "The runner's stamp of review.images.<slide id>.<slot>. An approval names one asset: a changed asset is unapproved again. That approval.asset equals the slot's asset is checked in code, not by the schema.",
      "properties": {
       "asset": {
        "type": "string",
@@ -2229,13 +2235,48 @@
        ]
       },
       "by": {
-       "type": "string"
+       "type": "string",
+       "minLength": 1,
+       "pattern": "^human:.+$"
       },
       "at": {
-       "type": "string"
+       "type": "string",
+       "minLength": 1
       },
       "note": {
        "type": "string"
+      }
+     }
+    }
+   },
+   "if": {
+    "properties": {
+     "status": {
+      "const": "approved"
+     }
+    },
+    "required": [
+     "status"
+    ]
+   },
+   "then": {
+    "required": [
+     "asset",
+     "approval"
+    ],
+    "properties": {
+     "approval": {
+      "type": "object",
+      "required": [
+       "asset",
+       "decision",
+       "by",
+       "at"
+      ],
+      "properties": {
+       "decision": {
+        "const": "approve"
+       }
       }
      }
     }
@@ -2307,10 +2348,12 @@
        "type": "string"
       },
       "credits": {
-       "type": "number"
+       "type": "number",
+       "minimum": 0
       },
       "usd": {
-       "type": "number"
+       "type": "number",
+       "minimum": 0
       }
      }
     },
