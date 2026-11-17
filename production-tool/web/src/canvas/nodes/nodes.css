@@ -151,3 +151,7 @@
 .bl-noframe.run::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--ag-acc, var(--ag-act)) 55%, transparent) 50%, transparent 80%); animation: bl-sheen 1.8s ease-in-out infinite; }
 @keyframes bl-sheen { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .bl-noframe.run::after { animation: none; opacity: .5; } }
+/* An agent asks on this node (mock "ask"): the amber tag on its top edge, the node grows to show the question. */
+.node-layer .bl-card.needs { overflow: visible; }
+.bl-card .paper-tag { position: absolute; top: -10px; right: 10px; z-index: 1; font: 700 9.5px/18px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; padding: 0 8px;
+  border-radius: 999px; background: var(--warn-soft); color: var(--needs, var(--warn)); border: 1px solid color-mix(in srgb, var(--needs, var(--warn)) 40%, transparent); }

@@ -38,7 +38,7 @@ import { canvasActions } from '../canvas/chrome/actions'
 import { marksNow } from './marksNow'
 import { titleOf } from './shotTitle'
 import { jobCtx, LOCAL_PERSON } from '../jobs/runner'
-import { addShot, answerShotAsk, setRatio, setTarget } from './storyboardEdits'
+import { addShot, answerShotAsk, clipsBehindLine, setRatio, setTarget } from './storyboardEdits'
 import { scriptRoute } from '../app/route'
 import type { ModelStore } from '../model/store'
 import { insertShot } from '../script/edits'
@@ -63,7 +63,7 @@ import './storyboard.css'
 import { PromptStart } from '../ui/prompt/PromptStart'
 import { moveOnStoryboard, useShotSort } from './shotDrag'
 import { ShotSort } from './ShotSort'
-import { lastWorkedModel } from '../jobs/follow'
+import { lastWorkedModel, startFollow } from '../jobs/follow'
 import { joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
 import { canJoin } from '../jobs/runs'
 import { videoOfStoryboard } from '../model/selectors'
@@ -222,22 +222,33 @@ export function Storyboard() {
     <div className="editor">
       <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="storyboard"
         title={`Storyboard · ${nodeTitle(sb?.title, 'Storyboard', projectName)}`}
-        meta={<RatioPill ratio={ratio} onPick={(r) => void updateDoc(docStore, (d) => setRatio(d, r), `set the storyboard format to ${r}`)} />}
         more={() => <CopyLinkLater />}
+        // The band (mock production-new-ui-v2 sbBand): length, fit, shape and who is at work on the left; how to
+        // reorder, undo and + Add shot on the right.
+        meta={<>
+          <span className="pt-mono sb-len">{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {total.toFixed(1)} s of{' '}
+            <select className="sb-target" aria-label="The ad's length" value={targetS} onChange={(e) => void updateDoc(docStore, (d) => setTarget(d, Number(e.target.value)), `set the storyboard length to ${e.target.value} s`)}>
+              {lengthChoices(targetS).map((t) => <option key={t} value={t}>{t}</option>)}
+            </select> s</span>
+          {shots.length > 0 && <span className={`pt-pill sb-fit ${check.ok ? 'ok' : 'warn'}`} title={check.ok ? undefined : check.reason}>{check.ok ? 'Lengths fit the ad' : over > 0 ? `${over.toFixed(1)} s over` : `${(-over).toFixed(1)} s short`}</span>}
+          <RatioPill ratio={ratio} onPick={(r) => void updateDoc(docStore, (d) => setRatio(d, r), `set the storyboard format to ${r}`)} />
+          {working.slice(0, 2).map((r) => <CrewLine key={r.job.id} row={r} />)}
+        </>}
+        right={<>
+          {shots.length > 1 && <span className="hint sb-reorder">Drag ⋮⋮ to reorder, or Space and the arrows</span>}
+          {shots.length > 0 && <button className="sp-btn" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
+        </>}
         primary={primary} />
-      <div className="sb-sub">
-        <span className="pt-mono sb-len">{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {total.toFixed(1)} s of{' '}
-          <select className="sb-target" aria-label="The ad's length" value={targetS} onChange={(e) => void updateDoc(docStore, (d) => setTarget(d, Number(e.target.value)), `set the storyboard length to ${e.target.value} s`)}>
-            {lengthChoices(targetS).map((t) => <option key={t} value={t}>{t}</option>)}
-          </select> s</span>
-        {shots.length > 0 && <span className={`pt-pill ${check.ok ? 'ok' : 'warn'}`} title={check.ok ? undefined : check.reason}>{check.ok ? 'Lengths fit the ad' : over > 0 ? `${over.toFixed(1)} s over` : `${(-over).toFixed(1)} s short`}</span>}
-        {working.slice(0, 2).map((r) => <CrewLine key={r.job.id} row={r} />)}
-        <span className="pt-grow" />
-        {shots.length > 0 && <button className="btn" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
-      </div>
-      <ScopeLine nodeId={sb?.id} shotNumber={(id) => shotNumber(doc, id)} />
       <div className="booth-row">
-      <div className="panel sb-body pt-grid">
+      <div className="panel sb-body sb-desk">
+      <article className="sb-sheet" aria-label="Storyboard">
+        <span className="stab">{(projectName ?? 'Untitled').split(' · ').at(-1)} · storyboard</span>
+        <div className="sh-head">
+          <div><small>Storyboard · {ratio} · {targetS} seconds</small><h1>{nodeTitle(sb?.title, 'Storyboard', projectName)}</h1></div>
+          <div className="r">{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {total.toFixed(1)} s
+            <div className="sb-inputs"><ScopeLine nodeId={sb?.id} shotNumber={(id) => shotNumber(doc, id)} /></div></div>
+        </div>
+        <SheetNote />
         {error && <div role="alert" className="sb-error">{error}<FrontButtons text={error} /></div>}
         {deleted && (
           <div role="status" className="sb-deleted">
@@ -282,6 +293,7 @@ export function Storyboard() {
         </div>
         </ShotSort>
         {shots.length > 0 && <Thumbs compact target={{ kind: 'shot-list', jobId: lastPlan?.id, model: lastPlan?.director?.model, promptVersion: lastPlan?.director?.promptVersion, shots: shots.length }} />}
+      </article>
       </div>
       {/* the Director agent's Booth (features/script-freeform.clan): his questions and notes on these shots. */}
       <DexBooth storyboardId={sb?.id} onShotAsk={(a, shotId, option) => void answerAsk(a, shotId, option)} />
@@ -291,6 +303,29 @@ export function Storyboard() {
 }
 
 /** The storyboard's ratio, as a pill that opens the three shapes. */
+/** The line on the sheet (mock "storyboard": notes and out of date sit on the sheet, not in a Booth): which clips
+ *  are out of date because their frames changed after them, and Update N clips (jobs/follow.ts, scope direct). */
+function SheetNote() {
+  const doc = useDoc()
+  const services = useServices()
+  const { config } = useConfig()
+  const [error, setError] = useState<string | null>(null)
+  const shots = shotsOf(doc)
+  const withTakes = shots.filter((s) => !!currentTake(doc, s.id))
+  const behind = shots.map((s, i) => ({ n: i + 1, b: !!clipBehind(doc, s.id) })).filter((x) => x.b).map((x) => x.n)
+  if (!withTakes.length) return null
+  return (
+    <div className="sheet-note" role="status">
+      {behind.length
+        ? <><span className="warn">{clipsBehindLine(behind)}</span>
+          <button type="button" className="sp-btn" onClick={() => { setError(null); void startFollow(services, config, { scope: { kind: 'direct' } }).catch((e) => setError(e instanceof Error ? e.message : 'That did not start.')) }}>
+            Update {behind.length} {behind.length === 1 ? 'clip' : 'clips'}</button></>
+        : <span className="ok">{clipsBehindLine([])}</span>}
+      {error && <span className="warn" role="alert">{error}</span>}
+    </div>
+  )
+}
+
 function RatioPill({ ratio, onPick }: { ratio: Ratio; onPick: (r: Ratio) => void }) {
   const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)

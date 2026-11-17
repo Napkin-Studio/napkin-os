@@ -89,4 +89,9 @@ describe("the script card while the Script agent's draft waits on a question (ow
     expect(html).not.toContain('The Script agent is writing a draft')
     expect(withWrite('submitted')).toContain('The Script agent is writing a draft')
   })
+
+  it('carries the amber "Needs your call" tag on its edge while it waits (features/production-new-ui.clan, mock "ask")', () => {
+    expect(withWrite('needs_input')).toContain('<span class="paper-tag" role="status">Needs your call</span>')
+    expect(withWrite('submitted')).not.toContain('paper-tag')
+  })
 })

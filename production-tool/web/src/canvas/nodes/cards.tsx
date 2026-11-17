@@ -31,13 +31,16 @@ const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).rep
  *  caps and its facts on the right; the body; its inputs as chips at the foot. No Open in the head on our own
  *  engine: a click selects it, and the selection bar's Open (or a double-click) opens it. The Excalidraw
  *  fallback's overlay keeps Open (`openButton`), since its cards cannot be selected. */
-export function Card({ icon, kind, name, meta, extra, inputs, onOpen, openButton = false, children, style, className = '' }: {
+export function Card({ icon, kind, name, meta, extra, inputs, tag, onOpen, openButton = false, children, style, className = '' }: {
   icon: CardKind; kind: string; name?: string; meta?: ReactNode; extra?: ReactNode; inputs?: ReactNode
+  /** An agent's question waits on this node: the amber tag on its edge ("Needs your call"; mock "ask"). */
+  tag?: string
   onOpen: () => void; openButton?: boolean; children: ReactNode; style?: CSSProperties; className?: string
 }) {
   const chrome = useContext(CardChromeContext)
   return (
-    <article className={`bl-card ${className}`} style={style}>
+    <article className={`bl-card ${tag ? 'needs' : ''} ${className}`} style={style}>
+      {tag && <span className="paper-tag" role="status">{tag}</span>}
       <div className="bl-cardhead">
         {chrome.icon(icon)}
         <b title={name ? `${kind} · ${name}` : kind}>{kind}</b>
@@ -98,7 +101,7 @@ export function ScriptCard({ id, onOpen, openButton }: { id?: string; onOpen: ()
   const words = scenes.map((s) => s.text ?? '').join(' ').trim()
   return (
     <Card icon="script" kind="Script" name={chrome.title(script?.title, 'Script', project)} meta={`${Math.round(script?.target_s ?? 15)} s`} onOpen={onOpen} openButton={openButton}
-      className={writing ? 'writing' : ''} inputs={<InputsStrip nodeId={script?.id} />} style={{ height: 380 }}>
+      className={writing ? 'writing' : ''} tag={waiting ? 'Needs your call' : undefined} inputs={<InputsStrip nodeId={script?.id} />} style={{ height: 380 }}>
       {shots.length ? (
         <div className="bl-av">
           <span className="bl-avhead">Video</span><span className="bl-avhead">Audio</span>
@@ -199,7 +202,7 @@ export function VideoCard({ id, onOpen, openButton }: { id?: string; onOpen: () 
   return (
     <Card icon="video" kind="Film" name={title} meta={fromScript ? 'from Script · no storyboard' : total ? `${total.toFixed(1)} s` : undefined} onOpen={onOpen} openButton={openButton}
       className={[asking ? 'asking' : '', planning || takeRunning || clipRunning ? 'writing' : ''].filter(Boolean).join(' ')}
-      inputs={<InputsStrip nodeId={video?.id} />} style={asking ? { minHeight: 194 } : { height: 194 }}>
+      tag={asking ? 'Needs your call' : undefined} inputs={<InputsStrip nodeId={video?.id} />} style={asking ? { minHeight: 194 } : { height: 194 }}>
       {planning ? <AtWork agent="dex" line="The Director agent is planning the shots from the script" /> : <Start kind="video" id={video?.id} fallback={
         <div className="bl-videorow">
           <span className="bl-poster">
