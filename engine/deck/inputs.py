@@ -408,3 +408,32 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
         cov["doc_figures"] = len(inp.doc_facts)
     inp.coverage = cov
     return inp
+
+
+def from_deck_document(path: Path) -> tuple[Inputs, dict]:
+    """The runner's one way into a Deck document (a ``.clan``): its Inputs through ``from_upstream`` with the app map read from
+    ``lineage.attached`` (so an attached kit is never the brief or research and a Brand Clan's pins never reach the facts), and what
+    the look needs: ``{apps, look (the document's look preferences), library (inputs.library.enabled), pack (Style Pack data and an
+    asset reader, or None), brand (the frozen Brand Clan, or None)}``. Kits count only while ``inputs.library.enabled`` is true
+    (ADR 0027); the facts filter acts always. Read on every run, so an Update (a newer frozen kit) is re-applied by construction."""
+    z = zipfile.ZipFile(path)
+    names = set(z.namelist())
+    rd = lambda n: yaml.safe_load(z.read(n)) if n in names else None  # noqa: E731
+    man, data = rd("manifest.yaml") or {}, rd("shared/data.yaml") or {}
+    attached = (man.get("lineage") or {}).get("attached") or []
+    apps = {(a.get("carried") or {}).get("document_id"): a.get("app_id") for a in attached if (a.get("carried") or {}).get("document_id")}
+    members = {"facts": rd("shared/facts.yaml"), "findings": rd("shared/findings.yaml"), "sources": rd("shared/sources.yaml"),
+               "decisions": rd("agent/decision-chain.yaml")}
+    inp = from_upstream(data, {k: v for k, v in members.items() if v is not None}, apps=apps)
+    up = data.get("upstream") or {}
+    lib = bool(((data.get("inputs") or {}).get("library") or {}).get("enabled") is True)
+    pack = brand = None
+    for did, app in apps.items():
+        if did in up and lib:
+            if app == STYLE_PACK_APP and pack is None:
+                pack = (up[did], lambda p: z.read(p) if p in names else None)
+            elif app == BRAND_APP and brand is None:
+                brand = up[did]
+    if lib is False and any(app in KIT_APPS for app in apps.values()):
+        inp.coverage["kits_gated_off"] = True
+    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand}

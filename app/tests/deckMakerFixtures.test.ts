@@ -236,3 +236,14 @@ test('look.agency_look is a per-deck opt-out that defaults to on, and a bad valu
   assert.equal(validate({ agency_look: { use: 'no' } }, wrap).length, 1)
   assert.equal(validate({ agency_look: { use: true, colour: 'red' } }, wrap).length, 1)
 })
+
+test('the gate rows keep n as an integer or a string, and look.agency_look and the preference stamp carry the agency look', () => {
+  const gate = (schema.properties!.run as Schema).properties!.gate as Schema
+  assert.deepEqual((gate.properties!.territories.items as Schema).properties!.n.type, ['integer', 'string'])
+  assert.deepEqual(((gate.properties!.idea.properties!.executions).items as Schema).properties!.n.type, ['integer', 'string'])
+  const al = (schema.properties!.look as Schema).properties!.agency_look as Schema
+  assert.deepEqual(Object.keys(al.properties!).sort(), ['at', 'by', 'update_requested', 'use', 'via'])
+  const meta = ((schema.properties!.deck as Schema).properties!.meta as Schema).properties!
+  assert.deepEqual(Object.keys(meta.preferences.properties!.agency_look.properties!).sort(), ['source', 'use'])
+  assert.ok('accent_line' in meta.theme.properties! && 'held' in meta.theme.properties! && 'style_hold' in meta)
+})

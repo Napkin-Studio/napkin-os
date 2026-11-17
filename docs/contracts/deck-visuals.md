@@ -343,8 +343,11 @@ Rules:
   so that it can never read as a figure.
 - `inputs.library.enabled` is still the one gate for the picture, Style Pack and Brand Clan inputs (ADR 0027, accepted
   2026-11-17). While it is false or absent those questions are not shown, the runner ignores those preferences, an
-  attached Brand Clan and an attached Style Pack. Density does not wait on it. **The agency look is outside the gate**
-  (Sai, 17 Nov 2026): see §6.5.
+  attached Brand Clan and an attached Style Pack. Density does not wait on it. **One exception, recorded in ADR 0027 and
+  ADR 0036 (Sai, 17 Nov 2026): the agency accent applies automatically.** An agency that has set up a look has its accent on
+  every new deck with the library off, and a deck opts out (`look.agency_look.use: false`). It is colour only and adds no word
+  or number. This replaces "library off means today's deck" for that one case; agencies with no look keep today's default
+  theme, and §6.5 says how.
 - Two things stay rules, whatever the user chooses: a part marked Confidential with `model: false` is never
   sent to a provider (os-layer §4), and a `reference_only` asset never fills a slot.
 - `theme`: `napkin` · `brand` · `classic`. `strict_brand`: only the kit's layouts and given tokens, nothing
@@ -400,11 +403,30 @@ token wins; `meta.theme.from` records it:
 2. **Style Pack deck section.** Empty by default. A pointer into the brand (`{brand: <id>}`) only picks one of the brand's own
    colours and falls through when no kit is attached; `{agency: base|accent}` picks one of the agency look's; a literal (`{hex}`,
    `{family}`) applies below the brand tier and is ignored under `look.strict_brand`.
-3. **Agency look.** Once the agency has set one up it dresses every new deck, with no switch; a deck opts out with
-   `look.agency_look.use: false`. An agency with no look changes nothing. `accent`→`accent`, `accent_ink`→`accent_ink`,
-   `accent_use` recorded (`line` is `outline`), `surface: mono`→white `paper`, `base`→`ink` only when it holds 4.5:1 on paper
-   (else ignored and named in `problems`). Ignored under `strict_brand`. Stamped `meta.theme.agency {id, rev}`.
+3. **Agency look: the accent only.** Once the agency has set one up its `accent` and `accent_ink` dress every new deck, with no
+   switch; a deck opts out with `look.agency_look.use: false`. An agency with no look changes nothing. Its `base` is shell
+   chrome and is never read; there is no logo and no wordmark; `accent_use` is not stamped (no renderer draws an outline).
+   Ignored under `strict_brand`. Stamped `meta.theme.agency {id, rev}`. **A deck keeps the look it was built with**: the first
+   build copies the agency look into the run folder (`look.json`) and every later build replays that copy, so a recorded run
+   replays byte for byte; a deck built before the agency had a look keeps its look too. The runner (`--update-look`, from
+   `look.agency_look.update_requested`) takes the current look only when a person chooses "update to current look", and
+   Review says "your agency's look changed" when its `rev` moved.
 4. **Default.** `napkin`, or `classic`.
+
+**Readable or reset.** A pale accent (under 3:1 on the paper) is a fill only: thin lines, rules and chart series take
+`meta.theme.accent_line`, the default accent. After merging, an `ink`, `paper` or `accent_ink` that cannot be read (4.5:1)
+against the token it sits on, when the two come from different tiers, is reset to the default (the lower tier loses) and
+named in `problems`, not left to a warning.
+
+**The client's logo has one path.** The kit's dark-ground logo is placed only when the kit's brand name matches the brief's
+client (otherwise it is held, and `meta.theme.held` says so). A placed logo is sanitised, rasterised to PNG and written as a
+deck asset (`deck.assets.<img id>`, rights `client_supplied`) with `meta.theme.logo {asset, placement}`; all three renderers
+read that. A logo that cannot be made safe, or rasterised, is held with a note: never dropped silently.
+
+**A Style Pack that cannot be used is held, not skipped.** It never falls back silently to the default look: `meta.style_hold
+{reason, pack}` is set and the report says why; the picture steps (`deck-frames-in`, `deck-image-gen`) read it and make nothing
+until a person fixes the pack. A pack's free text (`look`, `palette`, `notes`) holds no digit and no quotation mark, and no
+field holds the client's or a brand's name (ADR 0027).
 
 Then `theme.Theme.with_brand` derives the accessible tokens nobody gave (`accent_ink`, `accent_on_dark`, `on_dark_mute`), named in
 `derived`; `check_palette`'s findings go to `problems` and are never fatal. **When no tier above the default gave a token and no

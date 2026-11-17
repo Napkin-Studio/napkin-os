@@ -57,27 +57,74 @@ def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:
         deck["meta"]["profile"] = rec
 
 
-def _stamp_look(a, deck: dict, brand: dict | None, rep: dict) -> None:
-    """Resolve the deck's look (look.py) and stamp it: ``meta.brand`` (what the renderers read) and ``meta.theme`` (what a reader
-    sees). With no --style, no agency look and no --brand nothing is written, so today's decks and every golden are unchanged."""
-    style = None
-    if a.style:
+def _replay_agency(a, ctx: dict, rep_look: dict) -> tuple[dict | None, bool]:
+    """The agency look this build uses, and whether the deck opted out. A deck keeps the look it was built with: the first build with an
+    agency look copies the --agency-look JSON into the run folder (``look.json``) and every later build replays that copy, so a recorded run
+    replays byte for byte and the agency's changes never re-dress a deck on their own. A deck built before there was an agency look (a
+    ``deck.json`` already in the run folder and no ``look.json``) keeps its look too. ``--update-look`` (the person's "update to current
+    look") takes the current look and records it. Returns (agency JSON or None, use)."""
+    lp = (ctx.get("look") or {}).get("agency_look") or {} if ctx else {}
+    use = not (a.no_agency_look or lp.get("use") is False)
+    update = bool(a.update_look or lp.get("update_requested"))
+    current = json.loads(a.agency_look.expanduser().read_text()) if a.agency_look else None
+    rec_path = a.out / "look.json"
+    recorded = json.loads(rec_path.read_text()) if rec_path.exists() else None
+    if recorded and not update:
+        if current and current.get("rev") != recorded.get("rev"):
+            rep_look["notice"] = (f"Your agency's look changed since this deck was built (rev {recorded.get('rev')} to {current.get('rev')}). This deck keeps the look it "
+                                  "has; choose 'update to current look' to take the new one.")
+        return recorded, use
+    if not recorded and (a.out / "deck.json").exists() and not update:
+        if current:
+            rep_look["notice"] = "This deck was built before your agency's look was set up and keeps its look. Choose 'update to current look' to dress it."
+        return None, use
+    if current:
+        rec_path.write_text(json.dumps(current, indent=1, ensure_ascii=False))
+    return current, use
+
+
+def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None = None) -> None:
+    """Resolve the deck's look (look.py) and stamp it: ``meta.brand`` (what the renderers read), ``meta.theme`` (what a reader sees) and the
+    client's logo as a deck asset. With no --style, no agency look and no --brand nothing is written, so today's decks and every golden are
+    unchanged. A Style Pack that cannot be used is never skipped silently: ``meta.style_hold`` and the report say so."""
+    ctx = ctx or {}
+    client = deck["meta"].get("client") or a.client
+    style, pack_src = None, a.style or ctx.get("pack")
+    if pack_src:
         from visuals import style as vstyle   # noqa: PLC0415 (a sibling package of engine/deck, imported only when a pack is given)
         try:
-            style = vstyle.load(a.style)
-        except vstyle.StyleError as e:   # a pack that breaks its rules is not used: the deck still builds, and says so
-            rep["style_pack"] = {"used": False, "error": str(e)}
+            style = vstyle.load(*pack_src, forbid=[client]) if isinstance(pack_src, tuple) else vstyle.load(pack_src, forbid=[client])
+        except (vstyle.StyleError, OSError) as e:   # a pack that breaks its rules is not used, and pictures are held until it is fixed
+            rep["style_pack"] = {"used": False, "hold": True, "error": str(e)}
+            deck["meta"]["style_hold"] = {"reason": str(e), "pack": Path(str(a.style)).name if a.style else "attached Style Pack"}
         else:
             rep["style_pack"] = {"used": True, "hash": style.hash, "warnings": style.warnings, "sent_references": [r.name for r in style.references],
                                  "withheld_references": style.withheld}
-    agency = json.loads(a.agency_look.expanduser().read_text()) if a.agency_look else None
-    got = look.resolve(wears=a.wears, strict_brand=a.strict_brand, brand_file=brand, brand=look.brand_tokens(None), style=style,
-                       agency=agency, use_agency=not a.no_agency_look)
+    look_rep: dict = {}
+    agency, use = _replay_agency(a, ctx, look_rep)
+    lp = ctx.get("look") or {}
+    wears = (lp.get("brand") or {}).get("wears") or a.wears if ctx else a.wears
+    strict = bool(lp.get("strict_brand")) or a.strict_brand
+    got = look.resolve(wears=wears, strict_brand=strict, brand_file=brand, brand=look.brand_tokens(ctx.get("brand")), style=style,
+                       agency=agency, use_agency=use, client=client)
     if got.brand:
         deck["meta"]["brand"] = got.brand
     if got.theme:
+        if got.logo:
+            try:
+                aid, rec = look.make_logo_asset(got.logo, a.out / "assets")
+                deck.setdefault("assets", {})[aid] = rec
+                got.theme["logo"] = {"asset": aid, "placement": got.logo["placement"]}
+            except look.LogoError as e:
+                note = f"The client's logo could not be placed: {e}"
+                got.theme.setdefault("held", []).append(note)
+                got.theme["problems"].append(note)
         deck["meta"]["theme"] = got.theme
-        rep["look"] = {"source": got.theme["source"], "problems": got.problems, "derived": got.theme["derived"]}
+        look_rep.update(source=got.theme["source"], problems=got.theme["problems"], derived=got.theme["derived"], held=got.theme.get("held", []))
+    if agency or look_rep.get("notice"):
+        deck["meta"].setdefault("preferences", {})["agency_look"] = {"use": use, "source": "person" if (a.no_agency_look or ((ctx.get("look") or {}).get("agency_look") or {}).get("by")) else "default"}
+    if look_rep:
+        rep["look"] = look_rep
 
 
 def _qa_line(summary: dict, n_slides: int) -> str:
@@ -286,6 +333,9 @@ def main(argv=None):
                                                "(empty by default) rank above the agency look (deck-look-kits)")
     ap.add_argument("--agency-look", type=Path, help="the signed-in person's agency look, JSON (id, rev, accent, base, accent_ink, accent_use, surface): "
                                                      "it dresses the deck automatically unless --no-agency-look; an agency with no look passes none")
+    ap.add_argument("--update-look", action="store_true", help="take the agency's current look (--agency-look) in place of the one this deck recorded when it was built")
+    ap.add_argument("--deck", type=Path, help="a Deck document (.clan): the brief, research and look come from it (the runner's path); an attached Style Pack or Brand Clan "
+                                              "is never read as research and a Brand Clan's pins never reach the facts")
     ap.add_argument("--no-agency-look", action="store_true", help="this deck opts out of the agency look (look.agency_look.use false)")
     ap.add_argument("--wears", choices=look.WEARS, default="agency",
                     help="whose brand the deck wears: agency (default; a client kit gives only its logo and imagery bans), client or co_branded")
@@ -295,7 +345,7 @@ def main(argv=None):
     if a.prompt_text and a.prompt_file:
         ap.error("give --prompt-text or --prompt-file, not both")
     prompt_text = (a.prompt_file.expanduser().read_text(encoding="utf-8", errors="replace") if a.prompt_file else a.prompt_text or "").strip()
-    if not (prompt_text or a.doc or a.brief or a.research):
+    if not (prompt_text or a.doc or a.brief or a.research or a.deck):
         ap.error("nothing to build a deck from: give a prompt (--prompt-text or --prompt-file), a document (--doc), a brief (--brief) or research (--research)")
     a.out.mkdir(parents=True, exist_ok=True)
     rep = {"stages": {}, "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
@@ -311,7 +361,13 @@ def main(argv=None):
             ap.error(f"--doc key {key!r} is given twice: each document needs its own key")
         docs.append((key, Path(path).expanduser()))
     answers, verified = _read_answers(a.answers)
-    inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
+    deck_ctx = None
+    if a.deck:
+        inp, deck_ctx = inputs.from_deck_document(a.deck)
+        if prompt_text:
+            inp.prompt_text = prompt_text
+    else:
+        inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
     choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
     profile = profiles.load(choice["type"])
@@ -392,7 +448,7 @@ def main(argv=None):
         for k in ("logo_dark_png", "logo_light_png"):
             if brand.get(k):
                 brand[k] = str(Path(brand[k]).expanduser())
-    _stamp_look(a, deck, brand, rep)
+    _stamp_look(a, deck, brand, rep, deck_ctx)
     ep = a.stages / "e_copy.json"   # stage e: tighten over-budget presented slides; recorded edits are re-applied by title
     if ep.exists():
         ecopy = json.loads(ep.read_text())

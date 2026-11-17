@@ -27,6 +27,7 @@ import base64
 import hashlib
 import json
 import mimetypes
+import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -183,6 +184,25 @@ def _deck(raw) -> dict:
     return {k: v for k, v in raw.items() if v}
 
 
+def lint(norm: dict, forbid=()) -> None:
+    """The pack's free text goes into an image prompt, so it carries no figure, no quotation and no name (ADR 0027): ``look``, ``palette``
+    and ``notes`` hold no digit and no quotation mark; no field holds a forbidden name (the deck's client, a brand's name) as a word."""
+    for key in ("look", "palette", "notes"):
+        text = " ".join(norm[key]) if isinstance(norm[key], list) else norm[key]
+        if re.search(r"[0-9]", text):
+            raise StyleError(f"style: {key} holds a digit; a prompt carries no figure (say it in words)")
+        if re.search(r"[\"'`\u2018\u2019\u201c\u201d]", text):
+            raise StyleError(f"style: {key} holds a quotation mark; a prompt carries no quoted text")
+    for name in forbid:
+        words = re.findall(r"[a-z0-9]+", str(name or "").casefold())
+        if not words:
+            continue
+        for key in ("look", "palette", "this_not_that", "banned_imagery", "notes"):
+            text = " ".join(norm[key]) if isinstance(norm[key], list) else norm[key]
+            if re.search(r"(?<![a-z0-9])" + r"[^a-z0-9]+".join(map(re.escape, words)) + r"(?![a-z0-9])", text.casefold()):
+                raise StyleError(f"style: {key} names {name!r}; no client or brand name reaches a picture prompt")
+
+
 # ------------------------------------------------------------------ references and their rights
 
 def _check_rights(name: str, row: dict, stewards: list | None) -> Reference:
@@ -257,7 +277,7 @@ def _norm(raw: dict) -> dict:
             "banned_imagery": _list(raw.get("banned_imagery"), "banned_imagery"), "notes": str(raw.get("notes") or "").strip()}
 
 
-def _folder(d: Path) -> Style:
+def _folder(d: Path, forbid=()) -> Style:
     if not d.is_dir():
         raise StyleError(f"style folder not found: {d}")
     yml = d / "style.yaml"
@@ -285,10 +305,12 @@ def _folder(d: Path) -> Style:
         ref.mime = IMAGE_TYPES[files[name].suffix.lower()]
         refs.append(ref)
     extra = [{"name": n, "rights": "reference_only", "why": "not listed in style.yaml references"} for n in sorted(files) if n not in listed]
-    return _build(_norm(raw), refs, extra, _models(raw.get("models")), _deck(raw.get("deck")), source=str(d))
+    norm = _norm(raw)
+    lint(norm, forbid)
+    return _build(norm, refs, extra, _models(raw.get("models")), _deck(raw.get("deck")), source=str(d))
 
 
-def from_document(data: dict, assets=None, source: str = "style pack") -> Style:
+def from_document(data: dict, assets=None, source: str = "style pack", forbid=()) -> Style:
     """A Style Pack's data (``shared/data.yaml``, or ``data.upstream.<id>`` in a Deck) into a Style. ``assets`` gives the
     bytes of each reference image: a dict of ``asset path -> bytes`` or a function of the path."""
     if not isinstance(data, dict):
@@ -318,6 +340,7 @@ def from_document(data: dict, assets=None, source: str = "style pack") -> Style:
         ref.data, ref.sha256, ref.mime = blob, digest, row.get("mime") or mimetypes.guess_type(name)[0] or "image/png"
         refs.append(ref)
     norm = _norm(data)
+    lint(norm, forbid)
     st = _build(norm, refs, [], _models(data.get("models")), _deck(data.get("deck")), source=source,
                 version=kit.get("version"), name=str((data.get("pack") or {}).get("name") or ""))
     stamp = ((kit.get("published") or {}).get("style_hash"))
@@ -326,7 +349,7 @@ def from_document(data: dict, assets=None, source: str = "style pack") -> Style:
     return st
 
 
-def _clan(path: Path) -> Style:
+def _clan(path: Path, forbid=()) -> Style:
     try:
         z = zipfile.ZipFile(path)
     except zipfile.BadZipFile as e:
@@ -338,23 +361,24 @@ def _clan(path: Path) -> Style:
     app = ((man or {}).get("app") or {}).get("app_id")
     if app and app != "ie.napkin.style-pack":
         raise StyleError(f"{path} is a {app} document, not a Style Pack")
-    st = from_document(yaml.safe_load(z.read("shared/data.yaml")) or {}, lambda p: z.read(p) if p in names else None, source=str(path))
+    st = from_document(yaml.safe_load(z.read("shared/data.yaml")) or {}, lambda p: z.read(p) if p in names else None, source=str(path), forbid=forbid)
     st.document_id = (man or {}).get("document_id") or (man or {}).get("id")
     return st
 
 
-def load(source=None, assets=None) -> Style:
+def load(source=None, assets=None, forbid=()) -> Style:
     """Read a Style Pack. ``None``: the built-in default (no references): the first run, before Laurence's pack arrives.
-    A folder (style.yaml and images), a ``.clan`` path, or a dict (a document's data, with ``assets``)."""
+    A folder (style.yaml and images), a ``.clan`` path, or a dict (a document's data, with ``assets``). ``forbid``: names (the deck's
+    client, a brand's) that may not appear in the pack's text."""
     if source is None:
         return _build(dict(DEFAULT), [], [], dict(DEFAULT_MODELS), {})
     if isinstance(source, dict):
-        return from_document(source, assets)
+        return from_document(source, assets, forbid=forbid)
     p = Path(source)
     if p.is_dir():
-        return _folder(p)
+        return _folder(p, forbid)
     if p.is_file():
-        return _clan(p)
+        return _clan(p, forbid)
     raise StyleError(f"style folder not found: {p}")
 
 

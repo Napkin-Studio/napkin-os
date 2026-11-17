@@ -51,6 +51,8 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   kitNotices(res: unknown, data: unknown): { kind: string; document_id: string; published: boolean; canUpdate: boolean; text: string }[]
   lookPanel(data: unknown): { agency: { use: boolean; shown: boolean }; kits: { shown: boolean; pack: { name: string; version: number } | null; brand: { name: string; version: number } | null } }
   agencyPatch(use: boolean, by: string | null, at: string): unknown
+  agencyLookNotice(data: unknown): { text: string; canUpdate: boolean; requested: boolean } | null
+  agencyUpdatePatch(at: string): unknown
   DECK_TYPES: { id: string; label: string; one_line: string }[]
   deckTypeOf(data: unknown): { id: string; source: string; quote: string; skipped: boolean; hasQuestion: boolean }
   typeHints(type: string): { type: string; items: string[]; line: string }
@@ -302,8 +304,33 @@ test('a changed Style Pack: a published version offers Update, unpublished chang
   assert.equal(draft.canUpdate, false)
 })
 
+test('Update is offered only when the published version is above the frozen one, so unpublished edits are never pulled', () => {
+  const data = { upstream: { 'pack-1': PACK_FROZEN } }
+  const entry = (over: object) => ({ status: 'changed', app_id: 'ie.napkin.style-pack', title: 'Demo pack', document_id: 'pack-1', ...over })
+  assert.equal(L.kitNotices({ upstream: [entry({ version: 3, published: true })] }, data)[0].canUpdate, false) // same version as the deck uses
+  assert.equal(L.kitNotices({ upstream: [entry({ version: 2, published: true })] }, data)[0].canUpdate, false) // never back
+  assert.equal(L.kitNotices({ upstream: [entry({ version: 4, published: false })] }, data)[0].canUpdate, false) // unpublished edits
+  assert.equal(L.kitNotices({ upstream: [entry({ published: true })] }, data)[0].canUpdate, false) // version unknown: cannot tell
+  assert.equal(L.kitNotices({ upstream: [entry({ version: 4, published: true })] }, data)[0].canUpdate, true)
+})
+
+test('the agency look notice offers update to current look and never re-dresses on its own', () => {
+  const built = { deck: { meta: { theme: { agency: { id: 'a', rev: 1 } } } } }
+  assert.equal(L.agencyLookNotice(built), null) // the runner has reported no current look
+  assert.equal(L.agencyLookNotice({ ...built, run: { agency_look: { id: 'a', rev: 1 } } }), null) // nothing moved
+  const moved = L.agencyLookNotice({ ...built, run: { agency_look: { id: 'a', rev: 2 } } })
+  assert.match(moved?.text ?? '', /keeps the look it has/)
+  assert.equal(moved?.canUpdate, true)
+  assert.equal(moved?.requested, false)
+  assert.equal(L.agencyLookNotice({ ...built, run: { agency_look: { id: 'a', rev: 2 } }, look: { agency_look: { use: false } } })?.canUpdate, false)
+  assert.equal(L.agencyLookNotice({ ...built, run: { agency_look: { id: 'a', rev: 2 } }, look: { agency_look: { update_requested: 't' } } })?.requested, true)
+  assert.equal(L.agencyLookNotice({ run: { agency_look: { id: 'a', rev: 2 } } }), null) // a deck with no stamped look has nothing to update
+  assert.deepEqual(plain(L.agencyUpdatePatch('t')), { look: { agency_look: { update_requested: 't', via: 'review' } } })
+  assert.match(html, /data-agency-update/)
+})
+
 test('a changed Brand Clan says it changes colours, type and logos only', () => {
-  const [n] = L.kitNotices({ upstream: [{ status: 'changed', app_id: 'ie.napkin.brand', title: 'Demo brand', document_id: 'brand-1', version: 6, published: { revision: 'sha256:x' } }] }, { upstream: { 'brand-1': BRAND_FROZEN } })
+  const [n] = L.kitNotices({ upstream: [{ status: 'changed', app_id: 'ie.napkin.brand', title: 'Demo brand', document_id: 'brand-1', version: 6, version: 6, published: { revision: 'sha256:x' } }] }, { upstream: { 'brand-1': BRAND_FROZEN } })
   assert.equal(n.text, 'The brand kit "Demo brand" has v6 (this deck uses v5). Update changes colours, type and logos only.')
   assert.equal(n.kind, 'brand')
   assert.equal(n.canUpdate, true)

@@ -759,9 +759,24 @@
          "type": "string"
         },
         "rev": {
-         "type": "integer"
+         "type": [
+          "integer",
+          "string"
+         ]
         }
        }
+      },
+      "accent_line": {
+       "type": "string",
+       "pattern": "^[0-9A-F]{6}$",
+       "description": "The accent where it is a thin line, rule or chart series. Set when the accent is under 3:1 on the paper (a pale accent is a fill only); absent means the accent itself."
+      },
+      "held": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "What the look held back and why (for example a client logo whose brand is not the brief's client). Never dropped silently."
       }
      }
     },
@@ -1126,6 +1141,35 @@
          ]
         }
        }
+      },
+      "agency_look": {
+       "type": "object",
+       "properties": {
+        "use": {
+         "type": "boolean"
+        },
+        "source": {
+         "enum": [
+          "person",
+          "default"
+         ]
+        }
+       }
+      }
+     }
+    },
+    "style_hold": {
+     "type": "object",
+     "description": "Set when a Style Pack was given but could not be used (it broke its rules or could not be read). The deck was built with the default style and pictures are held: image steps (deck-frames-in, deck-image-gen) read this and make nothing until a person fixes the pack.",
+     "required": [
+      "reason"
+     ],
+     "properties": {
+      "reason": {
+       "type": "string"
+      },
+      "pack": {
+       "type": "string"
       }
      }
     }

@@ -84,3 +84,15 @@ never what it says.*
   click by the deck's approver approves all four frames of a territory.
 - Still Laurence's, with defaults recorded until he answers (`deck-visuals.md` section 11): which slides carry
   pictures, the Style Pack, who approves, critic grading, and which reference images may be sent to an image model.
+
+### Amendment, 2026-11-17 (Sai, in chat, after the design review of `deck-look-kits`): the agency accent
+
+One exception to "library off means today's deck". **The agency accent applies automatically.** An agency that has set up a
+look (the People page) has its accent (`accent`, `accent_ink`) on every new deck, with no `inputs.library.enabled` and no
+switch to find, and a deck opts out with `look.agency_look.use: false`. The accent is colour only: it adds no word, number,
+name or legal line, so the reason for the gate (no outside information reaches a slide) does not apply to it. Agencies with
+no look keep today's default theme. Nothing else of the agency look is read: its `base` is shell chrome, and no logo or
+wordmark is taken. An existing deck keeps the look it was built with and is never re-dressed on its own; a person chooses
+"update to current look". The gate still holds for the Style Pack and the Brand Clan. A client's logo goes on the cover only
+when the kit's brand name matches the brief's client (the logo rule above: only for a brand the information already names).
+A reference marked `licensed` by a pack steward, with a reason and the licence holder and terms, may go to an image model.

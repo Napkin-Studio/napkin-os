@@ -287,3 +287,34 @@ def test_the_deck_section_is_checked_for_shape_only():
     for bad in ({"colours": {"accent": "red"}}, {"colours": {"sparkle": {"hex": "FFFFFF"}}}, {"type": {"head": {"x": 1}}}, {"slogan": "x"}):
         with pytest.raises(style.StyleError):
             style.load({**data, "deck": bad})
+
+
+# ------------------------------------------------------------------ the pack's free text goes into a prompt (ADR 0027)
+
+@pytest.mark.parametrize("key,value,why", [
+    ("notes", "Shot on a 35mm camera.", "digit"), ("look", ["golden hour at 5pm"], "digit"), ("palette", ["ochre 2"], "digit"),
+    ("notes", 'The slogan "drink more".', "quotation"), ("look", ["it's candid"], "quotation"), ("notes", "a “quoted” line", "quotation"),
+])
+def test_the_packs_free_text_has_no_digit_and_no_quotation_mark(key, value, why):
+    data, _ = _pack()
+    with pytest.raises(style.StyleError, match=why):
+        style.load({**data, key: value})
+
+
+def test_no_client_or_brand_name_reaches_a_prompt():
+    data, _ = _pack(notes="Warm kitchens for Lumen Water.")
+    assert style.load(data).notes                                              # fine until a name is forbidden
+    with pytest.raises(style.StyleError, match="Lumen Water"):
+        style.load(data, forbid=["Lumen Water"])
+    data["notes"], data["banned_imagery"] = "Plain.", ["lumen water logo"]
+    with pytest.raises(style.StyleError, match="banned_imagery"):
+        style.load(data, forbid=["Lumen Water"])
+    ok, _ = _pack(notes="A luminous kitchen.")
+    assert style.load(ok, forbid=["Lumen"]).notes == "A luminous kitchen."     # a name is a word, not a fragment
+
+
+def test_the_lint_reads_a_folder_and_a_clan_too(tmp_path):
+    d = _folder(tmp_path, "look: [natural light]\nnotes: Made for Lumen Water\n")
+    with pytest.raises(style.StyleError, match="Lumen Water"):
+        style.load(d, forbid=["Lumen Water"])
+    assert style.load(d).notes == "Made for Lumen Water"

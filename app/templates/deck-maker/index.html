@@ -992,7 +992,9 @@ var DeckLogic = (function () {
       } else {
         text = 'The ' + noun + ' "' + name + '" has ' + (ver ? 'v' + ver : 'a newer version') + uses + '.' + said + ' Update changes colours, type and logos only.';
       }
-      return { kind: pack ? 'pack' : 'brand', document_id: String(e.document_id || ''), published: published, canUpdate: published && !!e.document_id, text: text };
+      // Update is offered only for a published version newer than the frozen one: unpublished edits are never pulled (Update takes the head).
+      var newer = Number.isInteger(ver) && Number.isInteger(froz) && ver > froz;
+      return { kind: pack ? 'pack' : 'brand', document_id: String(e.document_id || ''), published: published, canUpdate: published && newer && !!e.document_id, text: text };
     });
   }
 
@@ -1017,6 +1019,25 @@ var DeckLogic = (function () {
     var known = isObj(x.look) && isObj(x.look.agency_look) || isObj(theme.agency) || (isObj(x.run) && isObj(x.run.agency_look));
     return { agency: { use: al.use !== false, shown: !!known }, kits: { shown: lib, pack: lib ? pack : null, brand: lib ? brand : null } };
   }
+
+  /**
+   * The notice that the agency's look moved on since this deck was built, with the explicit action. A deck keeps the look it was built with and is
+   * never re-dressed on its own (Sai, 17 Nov 2026): the runner reports the agency's current look as `run.agency_look` ({id, rev}); the deck's
+   * build stamped `deck.meta.theme.agency` ({id, rev}). Null when nothing moved or either is unknown.
+   * { text, canUpdate, requested }
+   */
+  function agencyLookNotice(data) {
+    var x = isObj(data) ? data : {};
+    var stamped = isObj(x.deck) && isObj(x.deck.meta) && isObj(x.deck.meta.theme) && isObj(x.deck.meta.theme.agency) ? x.deck.meta.theme.agency : null;
+    var now = isObj(x.run) && isObj(x.run.agency_look) ? x.run.agency_look : null;
+    if (!stamped || !now || now.rev == null || stamped.rev == null || String(now.rev) === String(stamped.rev)) return null;
+    var al = isObj(x.look) && isObj(x.look.agency_look) ? x.look.agency_look : {};
+    return { text: "Your agency's look has changed since this deck was built. This deck keeps the look it has; update to the current look to take the new one.",
+      canUpdate: al.use !== false, requested: typeof al.update_requested === 'string' && al.update_requested !== '' };
+  }
+
+  /** The patch for "update to current look": the runner takes the agency's current look at the next build, then the deck keeps it. */
+  function agencyUpdatePatch(at) { return { look: { agency_look: { update_requested: at, via: 'review' } } }; }
 
   /** The patch for the per-deck opt-out: look.agency_look.use, with who and when (look is appearance: no reason asked). */
   function agencyPatch(use, by, at) {
@@ -1435,7 +1456,7 @@ var DeckLogic = (function () {
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
-    researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
+    researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, gateRequest: gateRequest,
@@ -1658,6 +1679,9 @@ var DeckLogic = (function () {
       return '<div class="upnote" role="status" data-kit-notice="' + esc(n.kind) + '">' + esc(n.text) +
         (n.canUpdate ? ' <button class="btn sm" data-kit-update="' + esc(n.document_id) + '">Update</button>' : '') + '</div>';
     }).join('');
+    var an = L.agencyLookNotice(s.raw);
+    if (an) kitNote += '<div class="upnote" role="status" data-agency-look-notice>' + esc(an.text) +
+      (an.canUpdate && !an.requested ? ' <button class="btn sm" data-agency-update>Update to current look</button>' : (an.requested ? ' <b>Asked: the next build takes it.</b>' : '')) + '</div>';
     return '<div class="eyebrow dark">Bring in a brief or research (optional)</div>' + changed + kitNote + '<div class="two">' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Research</b><div class="spacer"></div>' + (r ? attached : opt) + '</div>' +
         (r ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(r.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (r.findings == null ? 'report brought in' : esc(r.findings) + ' findings · ' + esc(r.rejected) + ' rejected') + '</div></div></div>' +
@@ -2255,6 +2279,11 @@ var DeckLogic = (function () {
       delete qdraft[qid];
       put(patch, (a.qskip ? 'skip' : (qid.indexOf('q_supply_') === 0 ? 'supply' : 'answer')) + ' question ' + qid, qid.indexOf('q_supply_') === 0 ? 'supplied by the person' : 'intake');
       return;
+    }
+    if (a.agencyUpdate !== undefined) {
+      put(L.agencyUpdatePatch(now()), 'update to current agency look', 'look');
+      toast('Asked. The next build takes your agency\'s current look; the words stay the same.');
+      return render();
     }
     if (a.kitUpdate) {
       // The person chose to take the newer kit: the host's attach update. Pictures are not remade by it.
