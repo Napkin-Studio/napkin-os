@@ -18,9 +18,9 @@
 import { Extension, type AnyExtension, type Editor } from '@tiptap/core'
 import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration'
 import { Placeholder } from '@tiptap/extensions'
-import type { Node as PMNode, Slice } from '@tiptap/pm/model'
+import { Fragment, Slice, type Node as PMNode, type Schema } from '@tiptap/pm/model'
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
-import type { EditorView } from '@tiptap/pm/view'
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import { ySyncPlugin } from '@tiptap/y-tiptap'
 import type * as Y from 'yjs'
 import type { ProductionDocument } from '../contracts/types'
@@ -135,15 +135,43 @@ function limitPlugin(opts: EditorOptions): Plugin {
       return true
     },
     props: {
-      handlePaste(view, _event, slice) {
-        if (opts.kind === 'scene' && opts.keys?.pasteScript && opts.editor) {
-          const text = sliceText(slice)
-          if (text.includes('\n') && opts.keys.pasteScript(text, opts.editor())) return true
+      handlePaste(view, event, slice) {
+        // A scene's text is the free page (features/script-freeform.clan): a paste of several lines is
+        // either a screenplay (the page imports it with its layout) or words kept exactly as written,
+        // one block per line, never re-read from the clipboard's HTML.
+        if (opts.kind === 'scene' && !opts.compact) {
+          const plain = event.clipboardData?.getData('text/plain')
+          const text = plain || sliceText(slice)
+          if (text.includes('\n')) {
+            if (opts.keys?.pasteScript && opts.editor && opts.keys.pasteScript(text, opts.editor())) return true
+            if (pasteLines(view, text, opts)) return true
+            const lines = plainSlice(view.state.schema, text)
+            if (lines) return pasteWithin(view, lines, opts)
+          }
         }
         return pasteWithin(view, slice, opts)
       },
     },
   })
+}
+
+/** Plain lines as action blocks, one per line, as written (trailing spaces and blank lines aside); open at
+ *  both ends, so the first line joins the words before the caret and the last the words after it. */
+export function plainSlice(schema: Schema, text: string): Slice | null {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => l.trim())
+  if (!lines.length) return null
+  return new Slice(Fragment.from(lines.map((l) => schema.nodes.action.create(null, schema.text(l)))), 1, 1)
+}
+
+/** A paste of several plain lines into a scene's text, kept as written: true when it went in (it fits). */
+export function pasteLines(view: EditorView, text: string, opts: EditorOptions): boolean {
+  const slice = plainSlice(view.state.schema, text)
+  if (!slice) return true
+  const tr = view.state.tr.replaceSelection(slice)
+  const limit = limitsOf(opts.kind).text
+  if (limit !== undefined && (fieldLengths(opts.kind, tr.doc, (opts.refs ?? NO_REFS)()).text ?? 0) > limit) return false
+  view.dispatch(tr.scrollIntoView())
+  return true
 }
 
 /** Plain words of a slice, a mention as @label. */
@@ -360,6 +388,37 @@ function blockIndex(editor: Editor, pos: number): number {
   return pos <= editor.state.doc.content.size ? editor.state.doc.resolve(pos).index(0) : -1
 }
 
+// ── Bullets ─────────────────────────────────────────────────────────────────
+
+/** A line written as a bullet ('- ', '* ' or '• '): its marker's length, or 0. */
+export function bulletMarker(text: string): number {
+  return /^\s*[-*•]\s+/.exec(text)?.[0].length ?? 0
+}
+
+/** Bullets as written stay as written (features/script-freeform.clan): an action line that starts with a
+ *  marker shows as a bullet, with its marker kept in the text, so the words are exactly what was typed. */
+function bulletPlugin(): Plugin {
+  const decorate = (doc: PMNode) => {
+    const out: Decoration[] = []
+    doc.forEach((block, pos) => {
+      if (block.type.name !== 'action') return
+      const n = bulletMarker(block.textContent)
+      if (!n || block.firstChild?.type.name !== 'text' || (block.firstChild.text?.length ?? 0) < n) return
+      out.push(Decoration.node(pos, pos + block.nodeSize, { class: 'fp-li' }))
+      out.push(Decoration.inline(pos + 1, pos + 1 + n, { class: 'fp-mark' }))
+    })
+    return DecorationSet.create(doc, out)
+  }
+  return new Plugin({
+    key: new PluginKey('napkinBullets'),
+    state: {
+      init: (_, state) => decorate(state.doc),
+      apply: (tr, old) => (tr.docChanged ? decorate(tr.doc) : old),
+    },
+    props: { decorations(state) { return this.getState(state) } },
+  })
+}
+
 /** The extension list for one fragment editor. */
 export function editorExtensions(opts: EditorOptions): AnyExtension[] {
   const keys = keysExtension(opts)
@@ -376,7 +435,7 @@ export function editorExtensions(opts: EditorOptions): AnyExtension[] {
       name: 'napkinGuards',
       addProseMirrorPlugins() {
         const editor = this.editor
-        return [shapePlugin(opts.kind), limitPlugin({ ...opts, editor: () => editor })]
+        return [shapePlugin(opts.kind), limitPlugin({ ...opts, editor: () => editor }), ...(opts.kind === 'scene' && !opts.compact ? [bulletPlugin()] : [])]
       },
     }),
   ]
