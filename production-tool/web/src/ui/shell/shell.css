@@ -193,3 +193,14 @@
 .agrid .a span:not(.a-empty) { display: block; padding: 4px 6px; font: 600 11px var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agrid .a small { display: block; padding: 0 6px 5px; font-size: 10px; color: var(--muted); }
 .drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; }
+/* A paid next step and its "What the X agent will send" (mock .split-act, .disc). */
+.split-act { display: inline-flex; align-items: stretch; }
+.split-act > .btn.primary, .split-act > .pt-primary { border-radius: 8px 0 0 8px !important; }
+.split-act > .disc { border-radius: 0 8px 8px 0; padding: 0 8px; border: 1px solid var(--ag-act); border-left: 0; background: var(--ag-act); color: var(--ag-act-ink); filter: brightness(.92); font-size: 11px; cursor: pointer; }
+.send-disc { width: 340px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.send-disc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.send-disc li { display: flex; flex-direction: column; font-size: 12.5px; line-height: 1.4; }
+.send-disc li b { font-weight: 600; }
+.send-disc li small { color: var(--muted); font-size: 12px; }
+.send-disc li.promise { color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; }
+.send-disc li.promise b { font-weight: 500; }

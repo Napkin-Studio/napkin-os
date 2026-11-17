@@ -64,6 +64,8 @@ import { PromptStart } from '../ui/prompt/PromptStart'
 import { moveOnStoryboard, useShotSort } from './shotDrag'
 import { ShotSort } from './ShotSort'
 import { lastWorkedModel, startFollow } from '../jobs/follow'
+import { SendDisclosure } from '../ui/SendDisclosure'
+import { sendRows } from '../ui/sendRows'
 import { joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
 import { canJoin } from '../jobs/runs'
 import { videoOfStoryboard } from '../model/selectors'
@@ -210,13 +212,21 @@ export function Storyboard() {
   const total = storyboardSeconds(doc, sb?.id)
   const over = Math.round((total - targetS) * 10) / 10
   const working = trayGroups(jobsList(doc), (id) => jobCtx(doc, ui, id), (id) => runner.liveInfo(id)).working
-  const primary = !shots.length
+  const next = !shots.length
     ? <button className="btn primary" disabled={planning || !words.trim()} onClick={() => void attempt(plan)} title={words.trim() ? undefined : 'Write the script first'}>{planning ? 'Planning…' : 'Plan shots'}</button>
     : noFrames
       ? <button className="btn primary" disabled={!check.ok || anyFrameRunning} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : NO_PICTURES}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
       : !allFramed
         ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
         : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title="Lock the frames and make a clip of each in the Video editor">Make clips</button>
+  // The next step's "What the X agent will send" (features/production-new-ui.clan): what goes, the brief, no price.
+  const named = refsList(doc).length
+  const sending = !shots.length
+    ? { who: 'the Director agent', action: 'Plan shots', what: [{ key: 'script', label: 'The script’s words', detail: `${words.trim().split(/\s+/).filter(Boolean).length} words` }, { key: 'fit', label: `${targetS} s at ${ratio}`, detail: 'the length and shape to plan to' }] }
+    : noFrames || !allFramed
+      ? { who: 'the Camera agent', action: noFrames ? 'Draw frame 1' : 'Draw the rest', what: [{ key: 'shots', label: noFrames ? 'Shot 1’s words and camera' : 'Each undrawn shot’s words and camera, one at a time' }, { key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}`, detail: noFrames ? 'frame 1 sets the look for the rest' : 'and the frame before each one' }] }
+      : { who: 'the Camera agent', action: 'Make clips', what: [{ key: 'frames', label: `${shots.length} ${shots.length === 1 ? 'frame' : 'frames'}, their words and camera` }, { key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}` }] }
+  const primary = <SendDisclosure primary={next} who={sending.who} rows={sendRows(doc, sb?.id, sending.what, sending.action)} />
 
   return (
     <div className="editor">
