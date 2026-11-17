@@ -64,14 +64,14 @@ class FakeRunway:
 
 
 def clean_ollama(url, body):
-    return {"message": {"content": json.dumps({"readable_text": [], "logos_or_brands": []})}}
+    return {"message": {"content": json.dumps({"readable_text": [], "logos_or_brands": [], "banned_imagery": []})}}
 
 
 def flag_task(task_id: str):
     def post(url, body):
         png = base64.b64decode(body["messages"][0]["images"][0])
-        found = ["GUINNESS"] if task_id.encode() in png else []
-        return {"message": {"content": json.dumps({"readable_text": [], "logos_or_brands": found})}}
+        found = ["ACMELOGO"] if task_id.encode() in png else []
+        return {"message": {"content": json.dumps({"readable_text": [], "logos_or_brands": found, "banned_imagery": []})}}
     return post
 
 
@@ -334,13 +334,13 @@ def test_flagged_frame_is_marked_and_kept_out_of_the_deck_slot(env):
     vdir = next((env.parent / "jam.frames").glob("v1-*"))
     man = json.loads((vdir / "manifest.json").read_text())
     flagged = [k for k, e in man["frames"].items() if e["guard"]["flagged"]]
-    assert flagged == ["s1-f1-flash"] and "GUINNESS" in man["frames"]["s1-f1-flash"]["guard"]["reason"]
+    assert flagged == ["s1-f1-flash"] and "ACMELOGO" in man["frames"]["s1-f1-flash"]["guard"]["reason"]
     cs = json.loads((vdir / "frames.json").read_text())["cards"]
     s1 = cs[0]
     assert s1["frames"][0]["flagged"] is True and all(not f["flagged"] for f in s1["frames"][1:])
     assert s1["visual"]["image"] == s1["frames"][1]["path"]             # the deck slot skips the flagged one
     html = (vdir / "board.html").read_text()
-    assert "needs a person" in html and "GUINNESS" in html
+    assert "needs a person" in html and "ACMELOGO" in html
 
 
 def test_person_can_approve_a_flagged_frame_and_retry_regenerates_only_flagged(env):
@@ -388,7 +388,7 @@ def test_suicide_brief_gets_no_plan_and_no_frames_until_reviewed(env, capsys):
     env.write_text(json.dumps(make_run(suicide=True)))
     code, rw, llm = go(env, *LIVE)
     assert code == 2 and rw.posts == [] and llm.calls == [] and not plan_mod.plan_path(env).exists()
-    assert "--reviewed" in capsys.readouterr().out
+    assert "--reviewed-by" in capsys.readouterr().out
     assert not (env.parent / "jam.frames").exists()
 
 
@@ -396,7 +396,7 @@ def test_reviewed_run_proceeds_and_banned_imagery_is_in_every_prompt(env):
     env.write_text(json.dumps(make_run(suicide=True)))
     seen = []
     llm = FakeLLM({"frames_plan": lambda user: seen.append(user) or plan_output()})
-    code, rw, _ = go(env, "--reviewed", *LIVE, llm=llm)
+    code, rw, _ = go(env, "--reviewed-by", "Sai", *LIVE, llm=llm)
     assert code == 0 and len(rw.posts) == 8
     for p in rw.posts:
         assert "Never show:" in p["promptText"] and "bridge" in p["promptText"] and "noose" in p["promptText"]
@@ -406,7 +406,7 @@ def test_reviewed_run_proceeds_and_banned_imagery_is_in_every_prompt(env):
 def test_a_shot_that_names_banned_imagery_is_refused_not_painted(env):
     env.write_text(json.dumps(make_run(suicide=True)))
     llm = FakeLLM({"frames_plan": plan_output(" standing on a bridge at dusk")})
-    code, rw, _ = go(env, "--reviewed", *LIVE, llm=llm)
+    code, rw, _ = go(env, "--reviewed-by", "Sai", *LIVE, llm=llm)
     assert len(rw.posts) == 6                                           # f1 of both territories is refused
     vdir = next((env.parent / "jam.frames").glob("v1-*"))
     man = json.loads((vdir / "manifest.json").read_text())

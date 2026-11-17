@@ -32,12 +32,17 @@ class FakeLLM:
 class LiveLLM:
     """Paid. Construct only after the cost card has been shown and approved (``approved=True``)."""
 
-    def __init__(self, approved: bool = False):
+    def __init__(self, approved: bool = False, max_usd: float | None = None):
         if not approved:
             raise PermissionError("live model calls need the cost card shown and an explicit yes (approved=True)")
-        self.usage = []
+        self.usage, self.max_usd = [], max_usd
+
+    def spent(self) -> float:
+        return sum(u.get("usd", 0) or 0 for u in self.usage)
 
     def __call__(self, stage: str, system: str, user: str):
+        if self.max_usd is not None and self.spent() >= self.max_usd:
+            raise RuntimeError(f"model cost cap reached (${self.spent():.2f} of ${self.max_usd:.2f}): no further call made")
         from deck import stages
         stages.MODELS.setdefault(f"t_{stage}", STAGE_MODEL[stage])
         stages.EFFORT.setdefault(f"t_{stage}", "medium")

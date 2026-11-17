@@ -1,7 +1,7 @@
 """Optional local guard check on a saved frame: a vision model on this machine (Ollama) lists any readable text, logos or
 brand names, and any banned imagery for a safe-messaging category. A frame that fails is FLAGGED ("needs a person"), never
 silently used. If Ollama is not running the check is skipped cleanly and the frame shows as "not checked".
-Real precedent: a "Guinness" logo slipped into a frame that said no brand names."""
+Real precedent: a real brand's logo slipped into a frame that said no brand names."""
 from __future__ import annotations
 
 import base64
@@ -39,13 +39,18 @@ def check_image(png: bytes, banned: list[str] | None = None, post=_post, url: st
         reply = post(url, body)
     except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as e:
         return {"checked": False, "flagged": False, "found": {}, "reason": f"skipped: Ollama not reachable ({type(e).__name__})"}
+    except ValueError:                                  # Ollama answered with something that is not JSON
+        return {"checked": False, "flagged": False, "found": {}, "reason": "skipped: Ollama's answer was not JSON"}
     text = ((reply or {}).get("message") or {}).get("content") or ""
+    unreadable = {"checked": True, "flagged": True, "found": {}, "reason": "the vision model's reply was not readable: needs a person"}
     try:
         got = json.loads(text)
-        if not isinstance(got, dict):
-            raise ValueError("not an object")
     except ValueError:
-        return {"checked": True, "flagged": True, "found": {}, "reason": "the vision model's reply was not readable: needs a person"}
+        return unreadable
+    # fail closed: a reply that does not answer every question asked ({} or a chatty object) is NOT a clean bill
+    want = ["readable_text", "logos_or_brands"] + (["banned_imagery"] if banned else [])
+    if not isinstance(got, dict) or any(k not in got for k in want):
+        return unreadable
     found = {k: _items(got.get(k)) for k in ("readable_text", "logos_or_brands", "banned_imagery")}
     found = {k: v for k, v in found.items() if v}
     return {"checked": True, "flagged": bool(found), "found": found,
