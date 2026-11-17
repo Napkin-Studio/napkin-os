@@ -61,9 +61,9 @@ window.__timelines.deck=tl;
 """
 
 
-def build(deck, inp, findings: list | None = None, builds: bool = False, pictures: dict | None = None):
+def build(deck, inp, findings: list | None = None, builds: bool = False, pictures: dict | None = None, placed: set | None = None):
     """(scenes markup, island, total seconds): scene times, notes and fragment hold-points."""
-    views = slide_views(deck, inp, findings, pictures, src=lambda aid, path: f"assets/{Path(path).name}")   # a picture is a file in assets/, not inline
+    views = slide_views(deck, inp, findings, pictures, src=lambda aid, path: f"assets/{Path(path).name}", placed=placed)   # a picture is a file in assets/, not inline
     cs = lambda sec: round(sec * 100)   # times in hundredths of a second
     t, scenes, slides = 0, [], []
     for v in views:
@@ -87,16 +87,17 @@ def build(deck, inp, findings: list | None = None, builds: bool = False, picture
     return "\n".join(scenes), island, (t - 1) / 100
 
 
-def render(deck, inp, out: Path, findings: list | None = None, builds: bool = False, pictures: dict | None = None) -> Path:
+def render(deck, inp, out: Path, findings: list | None = None, builds: bool = False, pictures: dict | None = None, placed: set | None = None) -> Path:
     """Write the HyperFrames slideshow project to the directory ``out``; returns ``out``. ``pictures`` (asset id -> derived JPEG, only the
     ones this audience draws) are copied into ``assets/``; nothing else is."""
     out.mkdir(parents=True, exist_ok=True)
-    scenes, island, total = build(deck, inp, findings, builds, pictures)
+    scenes, island, total = build(deck, inp, findings, builds, pictures, placed)
     if pictures:
         import shutil
         (out / "assets").mkdir(exist_ok=True)
-        for path in pictures.values():
-            shutil.copyfile(path, out / "assets" / Path(path).name)
+        for aid, path in pictures.items():   # only the files the markup points at
+            if f"assets/{Path(path).name}" in scenes:
+                shutil.copyfile(path, out / "assets" / Path(path).name)
     m = deck["meta"]
     css = theme_css(CSS_LAYOUT + HF_CSS + (PIC_CSS if pictures else ""), head="serif", body="system-ui, sans-serif")
     (out / "index.html").write_text(f"""<!doctype html>

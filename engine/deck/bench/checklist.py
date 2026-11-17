@@ -20,7 +20,7 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
-from .. import issues, spec
+from .. import images, issues, spec
 from ..validate import presented as _presented, words as _words
 from .judges import BenchError
 from .packets import run_ids
@@ -741,8 +741,8 @@ def p_assets_resolve(r: Run) -> dict:
     slots = [x for x in r.image_slots() if not client or _approved(x[2])]   # a client folder holds only the approved pictures it draws
     if not slots:
         return na("a client build with no approved picture: nothing is drawn, so no file is expected")
-    bad = [s for s, _, im in slots
-           if im.get("asset") not in assets or not (r.dir / (assets[im["asset"]].get("file") or "\0")).is_file()]
+    where = (lambda rec: images.derived_path(rec)) if client else (lambda rec: rec.get("file") or "\0")   # a client folder holds the derived JPEGs only
+    bad = [s for s, _, im in slots if im.get("asset") not in assets or not (r.dir / where(assets[im["asset"]])).is_file()]
     return _verdict(bad, r.ids, len(bad), 0)
 
 

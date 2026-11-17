@@ -329,6 +329,7 @@ class Renderer:
         self.drawn = {k: v for k, v in images.drawn(deck, deck["meta"].get("audience", "review")).items() if v["asset"] in (pictures or {})} if pictures else {}
         self.pic_label = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or spec.PICTURE_LABEL
         self.picture_findings = []   # [{check, level, slide, message}]: a picture dropped because its slide would not fit it
+        self.placed = set()          # (slide id, slot) of every picture this renderer really drew: the web outputs draw exactly these
         self.th = themes.get_theme(theme, (deck["meta"].get("brand") or {}))
         self.theme_problems = themes.check_palette(self.th)
         self.x0 = self.th.grid.M if self.th.layouts else X0
@@ -1757,6 +1758,7 @@ class Renderer:
         self.chosen[sid] = name
         s = {**s, "blocks": shown_blocks(s, audience)}
         plan = self._picture_plan(sid, s, name)
+        want = {slot for (i, slot) in self.drawn if i == sid}
         if plan:   # one carve: x1 and body_end are narrowed before the layout runs, so the layout (its id) is the one it would pick anyway
             n_sh, n_st = len(sl.shapes), len(self.steps)
             cs = {**s, "visual": {}} if s["type"] == "execution" else s   # the picture replaces the 'Image prompt' note
@@ -1767,12 +1769,16 @@ class Renderer:
                 self._uncarve()
             if ok:
                 self._draw_pictures(sl, plan)
+                self.placed |= {(sid, b[0]) for b in plan["boxes"]}
             else:   # the narrowed layout does not fit: no picture, and a finding
                 self._rollback(sl, n_sh, n_st)
                 self.relaxed.pop(sid, None)
-                self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "message":
-                                              f"the {name} layout does not fit beside its picture, so the slide is drawn without it"})
                 plan = None
+        for slot in sorted(want - {b[0] for b in (plan or {}).get("boxes", [])}):   # asked for, not drawn: say so, for every slot
+            why = ("the classic theme has no picture box" if not self.th.layouts else "the slide is drawn by the flow, which has no picture box" if name == "flow"
+                   else f"the {name} layout does not fit beside its picture")
+            self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "slot": slot,
+                                          "message": f"{slot} is not drawn: {why}, so no output carries it"})
         if not plan:
             if name != "flow":
                 n_sh, n_st = len(sl.shapes), len(self.steps)
@@ -2177,7 +2183,7 @@ class Renderer:
 
 
 def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
-           layouts_out: Path | None = None, pictures: dict | None = None, picture_findings: list | None = None) -> Path:
+           layouts_out: Path | None = None, pictures: dict | None = None, picture_findings: list | None = None, placed: set | None = None) -> Path:
     """Render a deck to ``out`` (.pptx); slides with a failed check carry a visible flag.
 
     ``animate``: False (static), True or ``"auto"`` (builds play in order), ``"click"`` (one block per click).
@@ -2191,4 +2197,6 @@ def render(deck, inp, out: Path, master: Path | None = None, findings: list | No
     r.render(out, layouts_out)
     if picture_findings is not None:
         picture_findings.extend(r.picture_findings)
+    if placed is not None:
+        placed |= r.placed
     return out

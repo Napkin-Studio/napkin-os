@@ -296,7 +296,7 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
           "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
-          "image_rights")
+          "image_rights", "style_pack_held")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.

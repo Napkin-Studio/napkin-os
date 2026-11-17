@@ -388,12 +388,21 @@ def main(argv=None):
     builder = assemble.build_investor if kind == "investor" else assemble.build
     frames, bound = None, None
     names = [x for x in (a.client, a.agency) if x]
+    if a.brand and a.brand.exists():   # the brand's own name may not label or describe a picture either: read before any frame is bound
+        try:
+            bn = json.loads(a.brand.read_text()).get("name")
+        except ValueError:
+            bn = None
+        names += [bn] if bn else []
     try:
         label = images.clean_label(a.picture_label, names)
         if a.approver and not images.APPROVER.match(a.approver):
             raise images.ImageError("--approver must be human:<id>: only a person approves a picture")
         if a.pictures and kind != "investor":   # frames.json is read ONLY with --pictures: a stray one in a stages folder changes nothing
             frames = images.load_frames(a.stages)
+            if frames and frames.get("territories_sha256_12") and frames["territories_sha256_12"] != images.territories_sha((st.get("c") or {}).get("territories")):
+                raise images.ImageError("frames.json was made for other territories than c_territories.json now holds (its territories hash differs): "
+                                        "frames bind by territory id, so they would sit on the wrong slides. Run deck.from_territory again, with --replace")
             if frames:
                 bound = images.bind_frames(None, frames, st.get("c") or {}, a.pictures, names)
     except images.ImageError as e:
@@ -461,6 +470,8 @@ def main(argv=None):
                                      ((frames or {}).get("style") or {}).get("hash") if (frames or {}).get("style_hold") else None)
         except images.ImageError as e:
             raise SystemExit(f"refused: {e}")
+        if (frames or {}).get("style_hold"):
+            print("style pack held: " + frames["style_hold"].get("reason", "the Style Pack could not be read") + " The build went on; the pictures keep the style they were made in.")
         if frames:
             deck["meta"]["built_from"] = {**deck["meta"]["built_from"], "territory_run": {
                 "file": frames["run"]["file"], "sha256_12": frames["run"]["sha256_12"], "frames_version": frames.get("version"),
@@ -487,14 +498,16 @@ def main(argv=None):
         rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
         return _stopped(a, rep, t0, "deck")
 
-    pics, pic_findings = None, []
+    pics, pic_findings, placed = None, [], set()
+    if a.pictures or supplied or a.audience == "client":   # never ship what an earlier build left in a reused --out (a client folder above all)
+        images.wipe_outputs(a.out)
     if a.pictures or supplied:   # only what this audience draws is copied or derived: a client folder holds no byte of an unapproved picture
         try:
             pics = images.copy_assets(deck, a.out, a.audience, [a.stages], sources)
         except images.ImageError as e:
             raise SystemExit(f"refused: {e}")
     t = time.time()
-    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings)
+    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings, placed=placed)
     if pic_findings:   # a slide drawn without its picture because it would not fit beside it: say so in the findings
         for f in pic_findings:
             f["slide_no"] = deck["order"].index(f["slide"]) + 1
@@ -504,9 +517,9 @@ def main(argv=None):
     rep["stages"]["render_pptx"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics)
+    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None)
     if a.hyperframes:
-        render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics)
+        render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None)
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()

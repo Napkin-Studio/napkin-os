@@ -230,7 +230,7 @@ def test_a_client_folder_holds_no_byte_of_an_unapproved_or_flagged_picture(clien
     assert media and not (media & bad_hashes)
     html = (client_run / "deck.html").read_text()
     assert not any(b in html for b in b64)
-    assert sorted(p.name for p in (client_run / "assets").iterdir() if p.is_file()) == sorted(f"{a['sha256']}.png" for aid, a in assets.items() if a["sha256"] in approved)
+    assert [p for p in (client_run / "assets").iterdir() if p.is_file()] == []   # a client folder holds no original (it could carry metadata), only the derived JPEGs
     assert len(list((client_run / "assets" / "derived").iterdir())) == len(approved) == len(list((client_run / "hyperframes" / "assets").iterdir()))
 
 

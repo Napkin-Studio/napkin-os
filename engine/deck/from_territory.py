@@ -146,6 +146,7 @@ def from_run(run: dict, manifest: dict, plan: dict, run_hash: str, plan_hash: st
     frames = {"stage": "frames", "produced_by": "deck.from_territory (a Territory run, no model call)",
               "run": {"file": run_name, "sha256_12": run_hash, "same_brief": same}, "version": version, "style": style,
               "safe_messaging": manifest.get("safe_messaging") or {}, "frames": out}
+    frames["territories_sha256_12"] = images.territories_sha(c["territories"])   # run_deck refuses frames whose territories are not stage c's
     if manifest.get("fixture"):
         frames["fixture"] = True
     if hold:
@@ -176,10 +177,15 @@ def write(c: dict, frames: dict, vdir: Path, stages: Path, replace: bool = False
     was written against other territories."""
     stages = Path(stages)
     cp, dp = stages / "c_territories.json", stages / "d_idea.json"
+    notes = []
     if cp.exists() and not replace:
         raise FromTerritoryError(f"{cp} exists: pass --replace to overwrite the recorded territories")
     if dp.exists() and not replace:
         raise FromTerritoryError(f"{dp} exists: the idea was written from other territories. Pass --replace if you mean to use these ones")
+    if dp.exists():   # --replace only gets here: an idea written against the old territories no longer matches them
+        gone = dp.with_name("d_idea.replaced.json")
+        dp.replace(gone)
+        notes.append(f"moved {dp.name} to {gone.name}: the idea was written from other territories, so write it again (or restore it if the territories are the same)")
     (stages / "assets").mkdir(parents=True, exist_ok=True)
     for rec in frames["frames"].values():
         if rec.get("file"):
@@ -190,6 +196,8 @@ def write(c: dict, frames: dict, vdir: Path, stages: Path, replace: bool = False
         rec.pop("source", None)
     cp.write_text(json.dumps(c, indent=1, ensure_ascii=False))
     (stages / "frames.json").write_text(json.dumps(frames, indent=1, ensure_ascii=False))
+    for n in notes:
+        print(n)
 
 
 def main(argv=None) -> int:

@@ -97,6 +97,7 @@
         "image_unapproved",
         "image_flagged",
         "image_rights",
+        "style_pack_held",
         "golden_echo",
         "picture_stretch",
         "picture_lowres",

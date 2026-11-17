@@ -236,7 +236,7 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
     return f'<div class="body col">{b.blocks(blocks)}</div>'
 
 
-def slide_views(deck, inp, findings: list | None = None, pictures: dict | None = None, src=None) -> list:
+def slide_views(deck, inp, findings: list | None = None, pictures: dict | None = None, src=None, placed: set | None = None) -> list:
     """Per slide, in order: id, number, type, dark, inner markup, notes, build-step count and, per
     step, the latest reveal delay (ms) up to and including it."""
     failed = {}
@@ -247,7 +247,7 @@ def slide_views(deck, inp, findings: list | None = None, pictures: dict | None =
     audience = deck["meta"].get("audience", "review")
     out = []
     # Pictures (deck-frames-in): the same slots the pptx draws; with pictures None nothing is drawn and the markup is as it was.
-    drawn = images.drawn(deck, audience) if pictures else {}
+    drawn = {k: v for k, v in images.drawn(deck, audience).items() if placed is None or k in placed} if pictures else {}   # only what the pptx drew: one content in every format
     plabel = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or "Illustrative"
     src = src or data_uri
     for n, sid in enumerate(deck["order"], 1):
@@ -563,9 +563,9 @@ def _brand_css(meta: dict) -> dict:
     return {k: v for k, v in (("head", b.get("head")), ("body", b.get("body")), ("colors", b.get("colors"))) if v}
 
 
-def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None) -> Path:
+def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None) -> Path:
     """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs)."""
-    views = slide_views(deck, inp, findings, pictures)
+    views = slide_views(deck, inp, findings, pictures, placed=placed)
     m = deck["meta"]
     slides = "\n".join(
         f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}" id="{v["id"]}" data-steps="{v["steps"]}" '

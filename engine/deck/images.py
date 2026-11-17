@@ -113,17 +113,32 @@ def src_rect(box: tuple, src_w: int, src_h: int) -> tuple:
 
 # -------------------------------------------------------------------------------------------------- words
 
+#: Words that end a company name and say nothing about which company: 'Acme Ltd' is named by 'Acme'.
+GENERIC_NAME_WORDS = {"ltd", "limited", "inc", "incorporated", "group", "plc", "llc", "co", "company", "corp", "corporation", "gmbh", "ag", "sa", "the"}
+
+
+def name_forms(name: str) -> list:
+    """The forms of a name that may not appear in a label or alt text: the whole name without its generic suffix ('Acme Ltd' gives 'acme'),
+    and, for a name of several words, its first distinctive word ('Lumen Water' gives 'lumen'; 'water' alone stays allowed)."""
+    words = [w for w in re.findall(r"[\w&'-]+", str(name or "").lower()) if w not in GENERIC_NAME_WORDS]
+    if not words or str(name).strip().startswith("["):
+        return []
+    forms = [" ".join(words)]
+    if len(words) > 1 and len(words[0]) >= 3:
+        forms.append(words[0])
+    return [f for f in forms if len(f) >= 3]
+
+
 def digits_or_name(text: str, names=()) -> str | None:
-    """Why this text may not label or describe a picture: it holds a digit (it could read as a figure) or one of ``names``
-    (the client's name, the agency's, a brand name). A whole name, case-insensitively, not a word of it: 'water' alone is allowed
-    for a water utility. None when the text is clean."""
+    """Why this text may not label or describe a picture: it holds a digit (it could read as a figure) or one of ``names`` (the client's name,
+    the agency's, a brand name; see name_forms), case-insensitively. None when the text is clean."""
     if re.search(r"\d", text or ""):
         return "it holds a digit, which could be read as a figure"
     low = (text or "").lower()
     for n in names:
-        n = str(n or "").strip()
-        if len(n) >= 3 and not n.startswith("[") and re.search(r"(?<!\w)" + re.escape(n.lower()) + r"(?!\w)", low):
-            return f"it names '{n}'"
+        for f in name_forms(n):
+            if re.search(r"(?<!\w)" + re.escape(f) + r"(?!\w)", low):
+                return f"it names '{str(n).strip()}'"
     return None
 
 
@@ -165,16 +180,14 @@ def inspect_file(path: Path) -> dict:
     path = Path(path)
     if not path.is_file():
         raise ImageError(f"{path} is not a file")
+    if path.stat().st_size > MAX_BYTES:   # the size is read from the file system first: a huge file is never read into memory
+        raise ImageError(f"{path.name} is {path.stat().st_size // 1_000_000} MB: pictures over {MAX_BYTES // 1_000_000} MB are refused")
     raw = path.read_bytes()
-    if len(raw) > MAX_BYTES:
-        raise ImageError(f"{path.name} is {len(raw) // 1_000_000} MB: pictures over {MAX_BYTES // 1_000_000} MB are refused")
     head = raw[:512].lstrip().lower()
     if path.suffix.lower() in (".svg", ".svgz") or head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in raw[:4096].lower()):
         raise ImageError(f"{path.name} is an SVG: it can carry script and words, so it is refused. Give a PNG, JPEG or WEBP")
-    prior = Image.MAX_IMAGE_PIXELS
-    Image.MAX_IMAGE_PIXELS = MAX_PIXELS
     try:
-        with Image.open(path) as im:
+        with Image.open(path) as im:   # the header only: width and height are known before any pixel is decoded
             fmt = im.format
             if fmt not in _MIME:
                 raise ImageError(f"{path.name} is not a PNG, JPEG or WEBP picture (Pillow read it as {fmt})")
@@ -189,8 +202,6 @@ def inspect_file(path: Path) -> dict:
         raise ImageError(f"{path.name} is refused as a decompression bomb: {e}") from None
     except Exception as e:   # a corrupt or truncated file
         raise ImageError(f"{path.name} cannot be read as a picture: {type(e).__name__}") from None
-    finally:
-        Image.MAX_IMAGE_PIXELS = prior
     if turned:
         w, h = h, w
     mime, ext = _MIME[fmt]
@@ -204,25 +215,22 @@ def derived_jpeg(src: Path, out_dir: Path, sha256: str) -> Path:
     if dst.is_file():
         return dst
     dst.parent.mkdir(parents=True, exist_ok=True)
-    prior = Image.MAX_IMAGE_PIXELS
-    Image.MAX_IMAGE_PIXELS = MAX_PIXELS
-    try:
-        with Image.open(src) as im:
-            im = ImageOps.exif_transpose(im)
-            if im.mode in ("RGBA", "LA", "P") or "transparency" in im.info:
-                im = im.convert("RGBA")
-                flat = Image.new("RGB", im.size, (255, 255, 255))
-                flat.paste(im, mask=im.getchannel("A"))
-                im = flat
-            else:
-                im = im.convert("RGB")
-            if max(im.size) > DERIVED_PX:
-                im.thumbnail((DERIVED_PX, DERIVED_PX), Image.LANCZOS)
-            tmp = dst.with_suffix(".tmp")
-            im.save(tmp, format="JPEG", quality=DERIVED_QUALITY, optimize=True)
-            tmp.replace(dst)
-    finally:
-        Image.MAX_IMAGE_PIXELS = prior
+    with Image.open(src) as im:
+        if im.size[0] * im.size[1] > MAX_PIXELS:   # a local check of width times height before any pixel is decoded
+            raise ImageError(f"{Path(src).name} is over {MAX_PIXELS // 1_000_000} million pixels")
+        im = ImageOps.exif_transpose(im)
+        if im.mode in ("RGBA", "LA", "P") or "transparency" in im.info:
+            im = im.convert("RGBA")
+            flat = Image.new("RGB", im.size, (255, 255, 255))
+            flat.paste(im, mask=im.getchannel("A"))
+            im = flat
+        else:
+            im = im.convert("RGB")
+        if max(im.size) > DERIVED_PX:
+            im.thumbnail((DERIVED_PX, DERIVED_PX), Image.LANCZOS)
+        tmp = dst.with_suffix(".tmp")
+        im.save(tmp, format="JPEG", quality=DERIVED_QUALITY, optimize=True)   # no exif=, no icc_profile=: nothing of the original's metadata is written
+        tmp.replace(dst)
     return dst
 
 
@@ -237,6 +245,12 @@ def load_frames(stages: Path) -> dict | None:
     if f.get("stage") != "frames" or not isinstance(f.get("frames"), dict):
         raise ImageError(f"{p} is not a frames stage file")
     return f
+
+
+def territories_sha(territories) -> str:
+    """12 hex of the SHA-256 of stage c's territories as canonical JSON: frames.json records it, so frames made for other territories are refused."""
+    blob = json.dumps(territories or [], sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
 
 
 def frame_for_shot(frames: dict, tid: str, shot: str) -> tuple:
@@ -548,11 +562,21 @@ def approval_names_asset(im: dict) -> bool:
     return isinstance(a, dict) and a.get("decision") == "approve" and bool(a.get("by")) and bool(a.get("at")) and a.get("asset") == im.get("asset")
 
 
+def wipe_outputs(out_dir: Path) -> None:
+    """Remove what an earlier build left in a reused ``--out`` that could hold a picture: assets/, hyperframes/, png/ and the PDF. A build never
+    ships bytes from another build (a client render into a folder an earlier review render used must hold no unapproved picture)."""
+    import shutil
+    for name in ("assets", "hyperframes", "png"):
+        shutil.rmtree(Path(out_dir) / name, ignore_errors=True)
+    (Path(out_dir) / "deck.pdf").unlink(missing_ok=True)
+
+
 def copy_assets(deck: dict, out_dir: Path, audience: str, src_dirs=(), sources: dict | None = None) -> dict:
-    """Copy and derive ONLY the pictures a render of this audience draws (a client folder holds no byte of an unapproved or flagged
-    picture). Originals go to ``<out_dir>/assets/<sha256>.<ext>`` (the asset's ``file``), derived JPEGs to ``assets/derived/``. Sources
-    are looked for in ``src_dirs`` (the stages folder) by the asset's ``file``, or at the path recorded for a supplied picture. Returns
-    ``{asset id: derived jpeg path}``."""
+    """Derive (and for a review, copy) ONLY the pictures a render of this audience draws. Derived JPEGs go to ``<out_dir>/assets/derived/``: one
+    per asset, re-encoded, so no EXIF, XMP, ICC or PNG text chunk of the original comes with it. A review also copies the original to
+    ``<out_dir>/assets/<sha256>.<ext>`` (the asset's ``file``); a CLIENT folder holds no original at all, because an original can carry
+    metadata (GPS position, camera, comments) the deck never asked to send. Sources are looked for in ``src_dirs`` (the stages folder)
+    by the asset's ``file``, or at the path recorded for a supplied picture. Returns ``{asset id: derived jpeg path}``."""
     import shutil
     assets, out = deck.get("assets") or {}, {}
     sources = sources or {}
@@ -568,11 +592,17 @@ def copy_assets(deck: dict, out_dir: Path, audience: str, src_dirs=(), sources: 
             raise ImageError(f"the picture for {sid}.{name} ({rec['file']}) is not on disk: looked in {', '.join(map(str, cands)) or 'nowhere'}")
         if hashlib.sha256(src.read_bytes()).hexdigest() != rec["sha256"]:
             raise ImageError(f"{src} is not the picture the deck recorded for {aid} (its sha256 differs)")
-        dst = Path(out_dir) / rec["file"]
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, dst)
+        if audience != "client":
+            dst = Path(out_dir) / rec["file"]
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
         out[aid] = derived_jpeg(src, out_dir, rec["sha256"])
     return out
+
+
+def derived_path(asset: dict) -> str:
+    """Where an asset's derived JPEG lives in a run folder (relative)."""
+    return f"assets/derived/{asset['sha256']}-{DERIVED_PX}.jpg"
 
 
 # -------------------------------------------------------------------------------------------------- CLI

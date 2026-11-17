@@ -38,6 +38,7 @@ criteria_map      a scored criterion's concept no slide answers (assemble.criter
 image_unapproved  (client render) a picture not approved by the deck's approver for its own asset (an error: it is not drawn)
 image_flagged     a picture the guard flagged (a warning in a review, where it is drawn marked)
 image_rights      a reference-only picture in a slot (an error), or a territory run not checked against the brief (a warning)
+style_pack_held  the Style Pack could not be read (a StyleError): the build went on (a warning, a major issue: the pictures were not restyled)
 image_missing     an image slot that names an asset the deck does not hold (an error)
 imagery           an image prompt names a pack's banned imagery (method or location, in pictures too)
 copy_spec         execution copy over its channel's limit (spec.COPY_LIMITS: search characters,
@@ -410,6 +411,9 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
             for ww in p.get("watch_words", []):
                 if ww["text"] in alltext and sl["type"] != "guardrails":
                     add("watch_word", "warn", sid, f"'{ww['text']}': {ww['why']} ({p['id']})")
+    sp = (deck["meta"].get("preferences") or {}).get("style_pack") or {}
+    if sp.get("hold"):
+        add("style_pack_held", "warn", None, f"the Style Pack could not be read ({str(sp.get('hold_reason', ''))[:120]}): the build went on and the pictures keep the style they were made in")
     # requirements (a rule is kept across the deck, not answered by a slide: its quoted phrase must not appear)
     mapped = {r for sl in deck["slides"].values() for r in sl.get("requirements", [])}
     deck_text = " ".join(str(t) for x in deck["order"] if deck["slides"][x]["type"] != "requirement_trace"   # the trace quotes the rules
@@ -603,7 +607,11 @@ def _images(sl: dict, sid: str, deck: dict, audience: str, add) -> None:
             continue
         if assets[aid].get("rights") == "reference_only":
             add("image_rights", "error", sid, f"{name} holds a reference-only picture: it may never fill a slot")
-        if im.get("status") == "flagged" or (assets[aid].get("guard") or {}).get("flagged"):
+        g = assets[aid].get("guard") or {}
+        if im.get("status") == "approved" and (g.get("flagged") or (not g.get("checked") and (im.get("from") or {}).get("kind") == "territory_frame")):
+            add("image_flagged", "warn", sid, f"{name} was approved by a person although " + ("the guard flagged it" if g.get("flagged") else "no guard looked at it") +
+                ": look at it again before a client sees it")
+        elif im.get("status") == "flagged" or g.get("flagged"):
             add("image_flagged", "warn", sid, f"{name} was flagged by the guard ({(im.get('reason') or 'needs a person')[:80]}) and waits for a person")
         a = im.get("approval")
         approved = im.get("status") == "approved" and isinstance(a, dict) and a.get("decision") == "approve" and a.get("asset") == aid and a.get("by")
