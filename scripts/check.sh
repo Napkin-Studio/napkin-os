@@ -88,6 +88,9 @@ else
         want[desktop]=1 ;;
       app/src/shell/bridge/*)  # the frame scripts napkin-host compiles in (frame.rs)
         want[frontend]=1; want[rust]=1; want[wasm]=1; want[desktop]=1 ;;
+      app/src/shell/agency/*|app/src/shell/agents/*|app/src/shell/nui/tokens.css|app/src/brand/*|app/src/components/medallion*|app/templates/shared/agent-sphere/*)
+        # the Production Tool imports these (@napkin/app; features/production-new-ui.clan) and the image bundles them
+        want[frontend]=1; want[production-tool]=1; want[image]=1 ;;
       app/*)
         want[frontend]=1 ;;
       engine/*|mock-agent/*)

@@ -1,6 +1,12 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { fileURLToPath } from 'node:url'
 import { excalidrawFonts } from './excalidraw-fonts'
+
+// The new UI's shared pieces are imported from the shell's own source, never copied (features/production-new-ui.clan):
+// @napkin/app is app/src (the agency looks and tokens, the Deep O mark, the agent spheres, the Booth's key). The
+// Dockerfile's production stage copies exactly those folders, so the image build sees them too.
+const APP_SRC = fileURLToPath(new URL('../../app/src', import.meta.url))
 
 // The contracts live one level up (production-tool/contracts) and are bundled
 // in, so the dev server has to be allowed to read them.
@@ -10,6 +16,7 @@ import { excalidrawFonts } from './excalidraw-fonts'
 // editors must share yjs, ProseMirror and y-tiptap, or Yjs warns "already imported", schemas fail
 // instanceof and plugin keys differ (features/script-editor.clan). src/script/dedupe.test.ts checks it.
 const DEDUPE = [
+  'react', 'react-dom',
   'yjs', 'lib0', 'y-protocols', '@tiptap/core', '@tiptap/pm', '@tiptap/y-tiptap',
   'prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'prosemirror-transform', 'prosemirror-keymap',
   'prosemirror-commands', 'prosemirror-changeset',
@@ -20,7 +27,7 @@ export default defineConfig({
   // excalidrawFonts: Excalidraw's fonts served by us, Liberation Sans and Cascadia Code replaced
   // by OFL-1.1 releases (features/licence-gate.clan).
   plugins: [react(), excalidrawFonts()],
-  resolve: { dedupe: DEDUPE },
+  resolve: { dedupe: DEDUPE, alias: { '@napkin/app': APP_SRC } },
   define: {
     // Excalidraw checks this at runtime; it is not set outside its own build.
     'process.env.IS_PREACT': JSON.stringify('false'),
@@ -29,7 +36,7 @@ export default defineConfig({
   // The store Worker (src/store/worker.ts, features/engine-store.clan) is a module Worker: it imports napkin-wasm and zstd by URL.
   worker: { format: 'es' },
   server: {
-    fs: { allow: ['..'] },
+    fs: { allow: ['..', APP_SRC, fileURLToPath(new URL('../../app/templates/shared', import.meta.url))] },
   },
   // Dev server only: crawl the canvas engines and the store Worker from the start. They load by dynamic
   // import (src/canvas/adapter/index.ts), so without this Vite found their packages (yjs, @tldraw/store,

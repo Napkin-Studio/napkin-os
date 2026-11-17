@@ -68,7 +68,10 @@ RUN npm run build
 # the app's src/canvas/adapter/own imports. Each package resolves its own
 # node_modules, and the app imports ../contracts. canvas-engine installs its dev
 # dependencies too: the app's `tsc -b` type-checks the engine's sources, which
-# need its @types (rbush). Only web/dist leaves this stage.
+# need its @types (rbush). The new UI's shared pieces come from the shell's own
+# source, imported as @napkin/app (features/production-new-ui.clan): the agency
+# looks, the new-UI tokens, the Deep O mark and the agent spheres; only those
+# folders are copied (../app from /src/production-tool). Only web/dist leaves this stage.
 FROM node:20-bookworm-slim AS production
 WORKDIR /src/production-tool
 COPY production-tool/clan-store/package.json production-tool/clan-store/package-lock.json ./clan-store/
@@ -81,6 +84,12 @@ COPY production-tool/contracts/ ./contracts/
 COPY production-tool/clan-store/ ./clan-store/
 COPY production-tool/canvas-engine/ ./canvas-engine/
 COPY production-tool/web/ ./web/
+COPY app/src/shell/agency/ ../app/src/shell/agency/
+COPY app/src/shell/agents/ ../app/src/shell/agents/
+COPY app/src/shell/nui/tokens.css ../app/src/shell/nui/tokens.css
+COPY app/src/brand/ ../app/src/brand/
+COPY app/src/components/medallionMotion.ts app/src/components/medallionLook.ts ../app/src/components/
+COPY app/templates/shared/agent-sphere/ ../app/templates/shared/agent-sphere/
 COPY --from=device /out/wasm/ ./clan-store/src/wasm/
 WORKDIR /src/production-tool/web
 RUN VITE_RELAY_URL=/production/api VITE_BASE=/production/ npm run build:web \
