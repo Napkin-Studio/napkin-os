@@ -1634,7 +1634,12 @@
           ]
         ],
         "forbid": [
-          "spill",
+          "spills the bottle",
+          "bottle spills",
+          "water spills",
+          "spilled water",
+          "wasted",
+          "pours it away",
           "pours away"
         ]
       }

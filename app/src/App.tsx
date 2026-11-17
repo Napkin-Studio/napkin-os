@@ -19,9 +19,9 @@ import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { useLanding } from './shell/landing/useLanding'
 import { initialsOf, jobOf, routeOfDocument, whoIs } from './shell/landing/model'
-import { toolById, toolOfApp } from './shell/landing/tools'
+import { BRIEF_APP_ID, filmFromBriefHref, toolById, toolOfApp } from './shell/landing/tools'
 import Toolbar from './components/Toolbar'
-import { signedInUser } from './host/http'
+import { productionOn, signedInUser } from './host/http'
 import { signOut } from './shell/signOut'
 import { docEntry, isDocEntryState, isNotFound, launchIsMine } from './shell/lastOpen'
 import { spinoffTitle } from './shell/docTitle'
@@ -107,6 +107,9 @@ export default function App() {
   // On the device: the public viewer, a file opened here, an offline copy, or
   // a signed-in page that could not reach the studio.
   const [device, setDevice] = useState(onDevice)
+  // The server serves the Production Tool to this person: a brief's Continue in offers it (features/brief-node.clan).
+  const [production, setProduction] = useState(false)
+  useEffect(() => { if (!device) void productionOn().then(setProduction) }, [device])
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
   // The People page (features/people-admin.clan): an admin's, from the account menu.
@@ -641,6 +644,9 @@ export default function App() {
           onExport={exportCurrent}
           onSpinoff={spinOff}
           onStartFresh={startFresh}
+          onStartFilm={production && !device && !running.open.is_template && running.open.manifest.app?.app_id === BRIEF_APP_ID
+            ? () => { window.open(filmFromBriefHref(running.open.path), '_blank', 'noopener') }
+            : undefined}
           // In the studio (or the desktop's files) each change is kept as it
           // is made; on the device it stays in the tab (DeviceBanner says so).
           saved={!device && !running.open.is_template}

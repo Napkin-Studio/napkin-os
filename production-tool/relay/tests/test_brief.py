@@ -229,3 +229,23 @@ def test_the_eval_scores_tell_the_three_plans_apart_as_named():
             assert checks["plans"] and checks["no_quote"] and checks["no_flags"]
             brief_ok = all(v for k, v in checks.items() if k.startswith("brief_"))
             assert brief_ok == (cid == other), (cid, other, checks)
+
+
+def test_the_recorded_v13_plans_follow_each_brief_and_differ_as_named():
+    """Recorded live on 2026-11-18 (owner answer 7: three Sonnet 5.5 calls through scripts/model-local), replayed here
+    with no model call. Each plan passes its brief's checks, and the passthrough, which reads no brief, does not."""
+    from eval.director_eval import table
+    data = load()
+    v13 = table(data, ["director.v13"])["director.v13"]
+    plain = table(data, ["passthrough"])["passthrough"]
+    for cid in BRIEF_CASES:
+        assert all(v13[cid].values()), (cid, v13[cid])
+        assert not all(v for k, v in plain[cid].items() if k.startswith("brief_")), cid
+    plans = {cid: json.loads((HERE.parent / "eval" / "recorded" / "director.v13" / f"{cid}.json").read_text())["reply"] for cid in BRIEF_CASES}
+    plans = {k: (json.loads(v) if isinstance(v, str) else v)["shots"] for k, v in plans.items()}
+    avg = {k: sum(s["duration_s"] for s in v) / len(v) for k, v in plans.items()}
+    speeds = {k: {s["camera"].get("movement_speed") for s in v} - {None} for k, v in plans.items()}
+    # Quiet: fewer, longer, slower shots than brisk; premium: a close detail, never fast.
+    assert len(plans["brief_quiet_morning"]) < len(plans["brief_brisk_gen_z"]) and avg["brief_quiet_morning"] > avg["brief_brisk_gen_z"]
+    assert "fast" in speeds["brief_brisk_gen_z"] and "fast" not in speeds["brief_quiet_morning"] | speeds["brief_premium_ritual"]
+    assert any(s["camera"]["size"] in ("insert", "close", "extreme_close") for s in plans["brief_premium_ritual"])
