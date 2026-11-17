@@ -72,7 +72,7 @@ def test_tag_field_and_thinness():
     (dict(fields=FIELDS, category=None, market="IE"), "confirm"),
     (dict(fields=FIELDS, category="c", market=None), "confirm"),
     (dict(fields={}, prompt="make me a sauce brief"), "confirm"),
-    (dict(fields={}, brand="Ballymaloe"), "confirm"),
+    (dict(fields={}, brand="Fernhill Preserves"), "confirm"),
     (dict(fields={}), "ask"),
     (dict(fields={}, asked=True), "refuse"),
 ])
