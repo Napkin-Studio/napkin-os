@@ -192,6 +192,32 @@ A tender response, a credentials deck, an investor deck and an agency pitch need
 
 Tests: `tests/test_profiles.py` (inference, the card, the profile files and their failures, the spine arrangement, strictness, prompts, the CLI).
 
+## The visual checklist (`deck/bench/checklist.py`, `deck/checklist.json`)
+
+The measuring stick for every deck slice: 47 items (41 yes/no, 6 metrics), each defined once in `checklist.json` (question,
+threshold, source, inputs, `na_when`) with one function of the same name in `bench/checklist.py`. Read-only over a run
+folder; no model, no network. `render_pptx.render(..., layouts_out=PATH)` writes the layout record `layouts.json`
+(`{id, chosen, fallback, relaxed}` per slide id) after the save, so the .pptx is byte-identical with or without it;
+`run_deck` passes `RUN_DIR/layouts.json`.
+
+```bash
+python3 -m deck.bench fixtures OUT_DIR [--geometry-only]          # the 6 invented fixture decks, offline
+python3 -m deck.bench checklist RUN_DIR [RUN_DIR ...] --out checklist.json
+python3 -m deck.bench compare BEFORE.json AFTER.json [--format text|md|json] [--fail-on-regress]
+```
+
+- **The n/a rule.** A check that cannot be judged (missing input, a slice not built yet, no picture to judge, a finding name
+  still in `spec.RESERVED_CHECKS`) answers `n/a` with its reason, never `yes`. `summary.yes` excludes n/a; `compare` shows
+  yes to n/a and n/a to yes as changes of their own.
+- **Refreshing the baseline in a slice PR.** Build on a Mac with LibreOffice so the pixel checks are judged:
+  `python3 -m deck.bench fixtures /tmp/fx && python3 -m deck.bench checklist /tmp/fx/* --out /tmp/new.json`, then
+  `python3 -m deck.bench compare deck/bench/baseline/checklist.json /tmp/new.json --format md` for the PR body, and copy
+  `/tmp/new.json` over `deck/bench/baseline/checklist.json`. CI rebuilds geometry-only and compares every answer except
+  the pixel items and `m_seconds`. `compare` is not a CI gate.
+- `deck/issues.py` holds `severity()` (contract section 7 default) and `slide_id_of()`; `qa_render` gained the pure measures
+  `title_box`, `body_columns` and `font_families` (they add nothing to qa.json).
+- Tests: `tests/test_checklist.py` (65 tests). The full deck suite is 495 offline tests.
+
 ## The evaluation bench (`deck/bench`)
 
 Offline scoring of finished decks, so "the pipeline makes it better" is measured rather than felt (DECK-CRAFT-PLAN 4.3, roadmap item 7). It makes no model call unless `--live --claude-judge` are both given; judges are Claude-only by default (ADR 0006).
