@@ -653,7 +653,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             )}
 
             {controls.regionEditFrames && (
-              <div className="ie-action">
+              <div className={`ie-action ${offer ? 'on' : ''}`}>
                 <b>Change whole frame</b>
                 <div className="row">
                   {/* Two lines, as Fill's: the one-line field cut its own placeholder off (live test 2026-11-16). */}

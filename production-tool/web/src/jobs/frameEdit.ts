@@ -103,14 +103,15 @@ function sentence(words: string[]): string {
 // ── the reading ────────────────────────────────────────────────────────────────────────────────
 
 /** What Change this frame costs, about: the frame model's price on the sheet frame_edit is routed to (Runway's
- *  when nothing routes it, as in the in-browser mock), credits times the sheet's USD per credit. */
+ *  when no config routes it), credits times the sheet's USD per credit; undefined when it costs nothing. */
 export function framePriceUsd(config?: Config | null): number | undefined {
   const sheet = (config ? routedSheet('frame_edit', config) : null) ?? SHEETS.runway
   const s = sheet as unknown as { usdPerCredit?: number; ops?: Record<string, { model?: string }>; models?: Record<string, { pricing?: { byResolution?: Record<string, number>; credits?: number } }> }
   const model = s.ops?.frame_edit?.model ?? s.ops?.frame?.model
   const price = model ? s.models?.[model]?.pricing : undefined
   const credits = price?.byResolution?.['1K'] ?? price?.credits
-  return credits !== undefined && s.usdPerCredit ? Math.round(credits * s.usdPerCredit * 100) / 100 : undefined
+  // A model that costs nothing (the mock provider) shows no price rather than "$0.00".
+  return credits && s.usdPerCredit ? Math.round(credits * s.usdPerCredit * 100) / 100 : undefined
 }
 
 /** The mode a frame_edit ran in: redraw when it was asked for, or when Dex read it so (a recast answered

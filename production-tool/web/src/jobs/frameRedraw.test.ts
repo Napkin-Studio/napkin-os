@@ -163,3 +163,10 @@ describe('landFrameEdit keeps the mark', () => {
     expect(cameBackSame(f)).toBe(true)
   })
 })
+
+describe('the price on the mock provider', () => {
+  it('is not shown when the routed model costs nothing, and is Runway\'s when Runway is routed', () => {
+    expect(framePriceUsd({ routing: { frame_edit: ['mock'] } } as never)).toBeUndefined()
+    expect(framePriceUsd({ routing: { frame_edit: ['runway'] } } as never)).toBe(0.2)
+  })
+})
