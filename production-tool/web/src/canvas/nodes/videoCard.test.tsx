@@ -24,8 +24,8 @@ afterEach(async () => {
   store = null
 })
 
-describe('the Video node while Dex plans straight from the script', () => {
-  it('keeps its title and says Dex is planning', async () => {
+describe('the Video node while the Director agent plans straight from the script', () => {
+  it('keeps its title and says the Director agent is planning', async () => {
     const s = modelStore()
     store = s
     await s.create(MAYA, 'EXT. CITY STREET - DUSK')
@@ -49,6 +49,6 @@ describe('the Video node while Dex plans straight from the script', () => {
           createElement(VideoCard, { id: videoId, onOpen: () => {} }))))
     })
     expect(el.querySelector('.bl-cardhead b')?.textContent).not.toBe('Video · Video')
-    expect(el.textContent).toContain('Dex is planning the shots from the script')
+    expect(el.textContent).toContain('The Director agent is planning the shots from the script')
   })
 })

@@ -1035,9 +1035,9 @@ function AdResult({ sha }: { sha: string }) {
 /** What Nell says over open notes: built from the notes, never sent anywhere. */
 function ellisLine(n: number, boxed: number, inShot: boolean, frameFixed: boolean): string {
   const notes = `${n} note${n > 1 ? 's' : ''} on this take${boxed ? `, ${boxed === n ? (n > 1 ? 'all boxed' : 'boxed') : `${boxed} boxed`}` : ''}.`
-  if (frameFixed) return `${notes} The frame is fixed; Dex makes the clip from it next.`
-  if (inShot) return `${notes} The box is fixed in the shot's frame first, then Dex makes the clip again.`
-  return `${notes} Dex makes a new version from them; this one is kept.`
+  if (frameFixed) return `${notes} The frame is fixed; the Director agent makes the clip from it next.`
+  if (inShot) return `${notes} The box is fixed in the shot's frame first, then the Director agent makes the clip again.`
+  return `${notes} the Director agent makes a new version from them; this one is kept.`
 }
 
 /** A take's level and size on its card (features/clip-quality.clan): "Draft 360p", "Final 1080p", so a draft

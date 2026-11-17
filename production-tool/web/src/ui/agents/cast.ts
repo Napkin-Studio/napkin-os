@@ -20,25 +20,29 @@ export interface CastMember { given: string; job: string; role: string; look: Ag
 
 export const CAST: Readonly<Record<CastKey, CastMember>> = {
   // New here: a cobalt hex with a viewfinder for a mark.
-  dex: { given: 'Dex', job: 'directs', role: 'Plans the shots, draws the frames and makes the clips.', look: { shape: 'hex', emblem: 'frame', tone: 'cobalt' } },
+  dex: { given: 'Director agent', job: 'directs', role: 'Plans the shots, draws the frames and makes the clips.', look: { shape: 'hex', emblem: 'frame', tone: 'cobalt' } },
   // The house sheet's Extract and Judge (LOOK_OF.extract, LOOK_OF.judge).
-  ellis: { given: 'Nell', job: 'notes', role: 'Notes what you asked for and reads it back before anything is made again.', look: { shape: 'triangle', emblem: 'page', tone: 'ink' } },
+  ellis: { given: 'Knowledge agent', job: 'notes', role: 'Notes what you asked for and reads it back before anything is made again.', look: { shape: 'triangle', emblem: 'page', tone: 'ink' } },
   // The crew of the approved UI (BRIEF-2 A, docs/production-tool/ui-mocks/crew-figures.json):
   // Skye a coral column with a page, Fin a marigold star with a spark, Rhea a mint dome with
   // dots, Edie an iris stack with bars. agents.test.ts checks every one against the sheet.
-  skye: { given: 'Skye', job: 'scripts', role: 'Drafts and rewrites the script.', look: { shape: 'column', emblem: 'page', tone: 'coral' }, phase: 0.924 },
-  wren: { given: 'Fin', job: 'films', role: 'Films the frames and clips on Runway.', look: { shape: 'star', emblem: 'spark', tone: 'marigold' }, phase: 0.939 },
-  rhea: { given: 'Rhea', job: 'retouches', role: 'Cut-outs, fills and upscales.', look: { shape: 'dome', emblem: 'dots', tone: 'mint' }, phase: 0.497 },
-  edie: { given: 'Edie', job: 'edits', role: 'Splices moments and renders the ad.', look: { shape: 'stack', emblem: 'bars', tone: 'iris' }, phase: 0.347 },
-  jude: { given: 'Jude', job: 'judges', role: 'Judges each result as it lands, and says when one needs you.', look: { shape: 'card', emblem: 'tick', tone: 'ink' } },
+  skye: { given: 'Script agent', job: 'scripts', role: 'Drafts and rewrites the script.', look: { shape: 'column', emblem: 'page', tone: 'coral' }, phase: 0.924 },
+  wren: { given: 'Camera agent', job: 'films', role: 'Films the frames and clips on Runway.', look: { shape: 'star', emblem: 'spark', tone: 'marigold' }, phase: 0.939 },
+  rhea: { given: 'Retouch agent', job: 'retouches', role: 'Cut-outs, fills and upscales.', look: { shape: 'dome', emblem: 'dots', tone: 'mint' }, phase: 0.497 },
+  edie: { given: 'Edit agent', job: 'edits', role: 'Splices moments and renders the ad.', look: { shape: 'stack', emblem: 'bars', tone: 'iris' }, phase: 0.347 },
+  jude: { given: 'Review agent', job: 'judges', role: 'Judges each result as it lands, and says when one needs you.', look: { shape: 'card', emblem: 'tick', tone: 'ink' } },
 }
 
 /** The whole crew in the crew sheet's order (5.1): five who make the ad, then the two house agents. */
 export const CREW_ORDER: readonly CastKey[] = ['dex', 'skye', 'wren', 'rhea', 'edie', 'ellis', 'jude']
 export const HOUSE_AGENTS: readonly CastKey[] = ['ellis', 'jude']
 
-/** How an agent signs what it says: 'Dex · directs'. */
-export const sayer = (k: CastKey) => `${CAST[k].given} · ${CAST[k].job}`
+/** How an agent signs what it says: its role name, 'Director agent' (features/production-new-ui.clan: role names
+ *  everywhere; the crew keys stay as stored). */
+export const sayer = (k: CastKey) => CAST[k].given
+/** The agent mid-sentence and at its start: 'the Director agent', 'The Director agent'. */
+export const theAgent = (k: CastKey) => `the ${CAST[k].given}`
+export const TheAgent = (k: CastKey) => `The ${CAST[k].given}`
 
 /** CSS colours for a tone (model.ts TONE_VARS): ink follows the theme, the rest are fixed. */
 export const TONE_VARS: Readonly<Record<Tone, { body: string; mark: string }>> = {
@@ -121,14 +125,19 @@ export function whoIsWorking(job: Pick<DocJob, 'op'> & Partial<Pick<DocJob, 'pro
     return { agent: 'jude', state: 'needs-you', line: `${capital(what)} did not come back` }
   }
   const maker: CastKey = job.op === 'shot_list' ? 'dex' : job.crew ? castOf(job.crew) : MAKER_OF[job.op] ?? 'dex'
-  const name = CAST[maker].given
-  if (state === 'needs_input') return { agent: maker, state: 'needs-you', line: `Waiting for you: ${name} has a question about ${what}` }
+  const name = TheAgent(maker)
+  if (state === 'needs_input') return { agent: maker, state: 'needs-you', line: `Waiting for you: ${theAgent(maker)} has a question about ${what}` }
   const moved = fellBack(ctx?.fallbackFrom, job.provider)
   const note = moved ? ` · ${moved}` : ''
-  if (state === 'validating' || state === 'uncertain') return { agent: 'jude', state: 'working', line: `Jude is judging ${what}${note}` }
+  if (state === 'validating' || state === 'uncertain') return { agent: 'jude', state: 'working', line: `The Review agent is checking ${what}${note}` }
   if (state === 'completed') return { agent: maker, state: 'idle', line: `${name} made ${what}${note}` }
   const verb = VERB[job.op] ?? 'making'
   return { agent: maker, state: 'working', line: (state === 'queued' ? `${name} is waiting to start ${what}` : `${name} is ${verb} ${what}`) + note }
 }
 
 const capital = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)
+
+/** Each crew key's role in the shared agent engine (features/production-new-ui.clan): keys stay as stored. */
+export const ROLE_OF: Readonly<Record<CastKey, string>> = {
+  dex: 'director', skye: 'script', wren: 'camera', rhea: 'retouch', edie: 'edit', jude: 'review', ellis: 'knowledge',
+}

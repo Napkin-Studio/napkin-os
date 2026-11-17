@@ -60,9 +60,9 @@ describe('the lines under the result', () => {
   const jobWith = (frameEdit: object, model = 'eu.anthropic.claude-sonnet-5-5') =>
     ({ director: { model, promptVersion: 'director.v7', rationale: '', output: { frameEdit } } }) as Pick<Job, 'director'>
   it('always name the reading, and say when the words went as they are or the mask was not used', () => {
-    expect(frameEditLines(jobWith({ reading: 'camera', runAs: 'frame' }))).toEqual(['Dex read this as a camera change'])
+    expect(frameEditLines(jobWith({ reading: 'camera', runAs: 'frame' }))).toEqual(['The Director agent read this as a camera change'])
     expect(frameEditLines(jobWith({ reading: 'local', runAs: 'frame', words_as_given: true }, 'passthrough')))
-      .toEqual(['Dex read this as a local change', 'Dex sent your words as they are.'])
+      .toEqual(['The Director agent read this as a local change', 'The Director agent sent your words as they are.'])
     expect(frameEditLines(jobWith({ reading: 'camera', runAs: 'frame', maskUnused: true }))).toContain(frameEditCopy.maskUnused)
   })
 })

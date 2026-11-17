@@ -71,7 +71,7 @@ export const LINK_TABLE: readonly LinkRow[] = [
   },
   {
     fromTo: 'Reference → any generating node, or a Shot', roleLabel: 'its role (`character`, `location`, `lighting`, …)', allowed: 'Many',
-    effect: 'The reference joins that node\'s `@` vocabulary and gets its own link with a "<name> · <role>" chip in the inputs strip. Dex words its role ("lighting reference: match its light only").',
+    effect: 'The reference joins that node\'s `@` vocabulary and gets its own link with a "<name> · <role>" chip in the inputs strip. The Director agent words its role ("lighting reference: match its light only").',
     sources: [{ kind: 'picture' }], targets: [GENERATING, { kind: 'shot' }], roles: ['reference'], limit: 'many',
   },
   {
@@ -87,7 +87,7 @@ export const LINK_TABLE: readonly LinkRow[] = [
   },
   {
     fromTo: 'Brand board → any generating node', roleLabel: '`brand`', allowed: 'One',
-    effect: 'Dex writes the brand rules into every prompt; Jude judges results against them (3.18).',
+    effect: 'The Director agent writes the brand rules into every prompt; the Review agent judges results against them (3.18).',
     sources: [{ kind: 'board', purpose: 'brand' }], targets: [GENERATING], roles: ['brand'], limit: 'one-per-target',
   },
   {

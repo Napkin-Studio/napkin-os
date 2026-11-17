@@ -139,10 +139,10 @@ export function RoomBooth({ room, data, sel, change, onChange, onApart, onReady,
     <Booth state={booth} count={count} asks={items.filter((x) => x.ask).length}>
       <BoothAgent agent={agent} line={room === 'make' ? FIN_LINE : EDIE_LINE} needsYou={count > 0} crew={crew} />
       {room === 'make' && box && !box.endCard && (
-        <BoothBox key={`${box.key}:${shotId ?? ''}`} placeholder="Tell Fin what to make or make again…" button="Ask Fin"
+        <BoothBox key={`${box.key}:${shotId ?? ''}`} placeholder="Tell the Camera agent what to make or make again…" button="Ask the Camera agent"
           scope={<ScopeChip label={`${shotId ? `Shot ${shotNumber(doc, shotId)} · ` : ''}${boxName(box)}`} />}
           disabled={!take}
-          hint={!take ? 'Make a take of this box first. Then tell Fin what changes in the next one.' : undefined}
+          hint={!take ? 'Make a take of this box first. Then tell the Camera agent what changes in the next one.' : undefined}
           onSend={(words) => { if (take) onChange({ parentId: take.id, ...(shotId && take.shotIds.includes(shotId) ? { shotId } : {}), verb: 'words', words }) }} />
       )}
       {count > 0 && <BoothSection label="Waiting for you" count={count} />}

@@ -63,7 +63,7 @@ export function DexBooth({ storyboardId, onShotAsk }: { storyboardId: Id | undef
       {items.map((x) => x.node)}
       {notes.length > 0 && <BoothSection label="Notes" />}
       {notes.map((n) => <NoteCard key={n.id} agent="dex" label={n.label} body={n.body} time={ago(n.at)} />)}
-      {!count && !notes.length && <p className="bt-quiet">Nothing waiting. Dex’s questions and notes on these shots come here.</p>}
+      {!count && !notes.length && <p className="bt-quiet">Nothing waiting. The Director agent’s questions and notes on these shots come here.</p>}
     </Booth>
   )
 }

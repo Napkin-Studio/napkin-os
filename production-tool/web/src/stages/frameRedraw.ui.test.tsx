@@ -131,7 +131,7 @@ describe('the switch on the Storyboard card', () => {
     expect(box.querySelector('.row .btn.sm')?.textContent).toBe('Redraw')
   })
 
-  it('Redraw sends a redraw, shows Dex redrawing, then the result with Kept and New, and Redo keeps the mode', async () => {
+  it('Redraw sends a redraw, shows the Director agent redrawing, then the result with Kept and New, and Redo keeps the mode', async () => {
     const { el, services, land } = await mount('storyboard')
     const box = await openChange(el)
     act(() => byText('Redraw frame')!.click())
@@ -141,12 +141,12 @@ describe('the switch on the Storyboard card', () => {
     const job = jobsList(services.doc.get()).find((j) => j.op === 'frame_edit')!
     expect(job.purpose).toBe('frame_edit redraw')
     expect(services.ui.get().jobs[job.id].request!.input.mode).toBe('redraw')
-    expect(card(el, 2).querySelector('.sb-running')?.textContent).toMatch(/Dex is redrawing frame 2/)
+    expect(card(el, 2).querySelector('.sb-running')?.textContent).toMatch(/The Director agent is redrawing frame 2/)
     expect([...card(el, 2).querySelectorAll('.sb-mode button')].every((b) => (b as HTMLButtonElement).disabled)).toBe(true)
     await land()
     await land()
     const result = card(el, 2).querySelector('.sb-result')!
-    expect(result.textContent).toMatch(/Dex redrew frame 2 from the shot\./)
+    expect(result.textContent).toMatch(/The Director agent redrew frame 2 from the shot\./)
     expect(result.querySelector('.sb-keeps')?.textContent).toBe(`Keptthe place, the light, Medium wide, Eye levelNew${SWAP}.`)
     expect([...result.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Apply', 'Keep both', 'Discard'])
     expect(pressed(card(el, 2))).toBe('Redraw frame')
@@ -171,7 +171,7 @@ describe('the switch on the Storyboard card', () => {
     await land()
     const job = jobsList(services.doc.get()).find((j) => j.op === 'frame_edit')!
     expect((job.director?.output as { frameEdit?: { reading: string } }).frameEdit?.reading).toBe('redraw')
-    expect(card(el, 2).querySelector('.sb-result')?.textContent).toMatch(/Dex redrew frame 2/)
+    expect(card(el, 2).querySelector('.sb-result')?.textContent).toMatch(/The Director agent redrew frame 2/)
   })
 
   it('an edit that came back the same offers no Apply, says what was charged and offers Redraw frame', async () => {
@@ -196,13 +196,13 @@ describe('the switch on the Storyboard card', () => {
     await land()
     await land()
     const result = card(el, 2).querySelector('.sb-result')!
-    expect(result.textContent).toMatch(/Dex edited frame 2; everything else in it stays\./)
+    expect(result.textContent).toMatch(/The Director agent edited frame 2; everything else in it stays\./)
     expect(result.querySelector('.sb-notmeant')?.textContent).toBe('Not what you meant? Redraw the frame with the same words.')
   })
 })
 
 describe("the Image editor's Change whole frame on a shot's frame", () => {
-  it('when the words swap the people, Dex offers Redraw frame N under the field; it hands the words to the Storyboard as a redraw', async () => {
+  it('when the words swap the people, the Director agent offers Redraw frame N under the field; it hands the words to the Storyboard as a redraw', async () => {
     const { el, services, onBack, land } = await mount('editor')
     const field = el.querySelector('[aria-label="Describe the change to the whole frame"]') as HTMLTextAreaElement
     type(field, SWAP)

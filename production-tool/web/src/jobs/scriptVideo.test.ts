@@ -78,7 +78,7 @@ describe('Plan shots from a script (3.10)', () => {
     expect(planShotsBlocked(doc(store), sc)).toBe('Write something first')
   })
 
-  it('a script with words and no storyboard gets one, linked, and Dex plans on it', async () => {
+  it('a script with words and no storyboard gets one, linked, and the Director agent plans on it', async () => {
     const { store, deps, sent } = await project()
     const sc = await newScript(store)
     expect(planShotsBlocked(doc(store), sc)).toBeNull()
@@ -121,7 +121,7 @@ describe('"Plan a storyboard first?" (3.5, 3.17)', () => {
     expect(clipMode(doc(store), v)).toBe('frames')
   })
 
-  it('Make clips straight from the script: stored on the video, its own shot list (no Storyboard node, no link), Dex plans there', async () => {
+  it('Make clips straight from the script: stored on the video, its own shot list (no Storyboard node, no link), the Director agent plans there', async () => {
     const { store, deps, sent } = await project()
     const sc = await newScript(store)
     const v = await videoFrom(store, sc)
@@ -150,7 +150,7 @@ describe('"Plan a storyboard first?" (3.5, 3.17)', () => {
     expect(sent.filter((s) => s.op === 'shot_list')).toHaveLength(1)
   })
 
-  it('Plan the storyboard first on a video a script drives: the storyboard beside the script, linked; Dex plans', async () => {
+  it('Plan the storyboard first on a video a script drives: the storyboard beside the script, linked; the Director agent plans', async () => {
     const { store, deps, sent } = await project()
     const sc = await newScript(store)
     const v = await videoFrom(store, sc)

@@ -247,7 +247,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
         {notice && <div role="status" className="rm-note">{notice}</div>}
         {empty.kind === 'no-shots' && (
           <div className="rm-emptystate" role="status">
-            {empty.planning ? <p>Dex is planning the shots from the script…</p> : (
+            {empty.planning ? <p>The Director agent is planning the shots from the script…</p> : (
               <>
                 <p>{empty.why ?? 'No shots yet. Make a box from words, or plan the shots in the Storyboard first.'}{empty.why && <FrontButtons text={empty.why} />}</p>
                 <div className="btns">
@@ -652,7 +652,7 @@ function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick
       </fieldset>
       {box.together && facts.pics.length > 0 && (
         <fieldset className="rm-field">
-          <legend className="rm-label">What Fin sends</legend>
+          <legend className="rm-label">What the Camera agent sends</legend>
           <div className="jc-guides">
             {guides.map((p) => (
               <div key={p.id} className={`jc-gi ${p.shotId && left.has(p.shotId) ? 'out' : ''}`}>

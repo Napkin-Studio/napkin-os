@@ -73,7 +73,7 @@ async function setup() {
 }
 
 describe('the crew\'s landings on the CLAN store', () => {
-  it('Dex\'s plan moves the script into the shots as one undo step and one decision by dex citing the job', async () => {
+  it('The Director agent\'s plan moves the script into the shots as one undo step and one decision by dex citing the job', async () => {
     const s = await setup()
     const jobId = await s.plan()
     const d = s.store.get()
@@ -114,7 +114,7 @@ describe('the crew\'s landings on the CLAN store', () => {
     expect(d.shots[second].last_writer).toBe('dex')
   })
 
-  it('Fin\'s take is the shot\'s pick in the cut, landed by wren citing the job', async () => {
+  it('The Camera agent\'s take is the shot\'s pick in the cut, landed by wren citing the job', async () => {
     const s = await setup()
     await s.plan()
     await drawFrame(s.deps, 0, 'first')

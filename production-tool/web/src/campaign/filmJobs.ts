@@ -59,7 +59,7 @@ export function landFilmPlan(job: Job) {
   if (!w) return
   waiting.delete(job.jobId)
   if (job.cutdownPlan) w.resolve(job.cutdownPlan)
-  else w.reject(new Error('Dex sent no plan. Try again.'))
+  else w.reject(new Error('The Director agent sent no plan. Try again.'))
 }
 
 /** Up to three stills of a take's window (in, middle, out) as small JPEGs, for Claude to look at. Empty
@@ -129,12 +129,12 @@ export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: Master
       const live = deps.runner.liveInfo(jobId)
       if (live?.state === 'failed' || live?.state === 'cancelled' || live?.state === 'uncertain') {
         waiting.delete(jobId)
-        reject(new Error(liveGet(deps.doc).jobs[jobId]?.error?.message ?? 'Dex could not plan the cuts. Try again.'))
+        reject(new Error(liveGet(deps.doc).jobs[jobId]?.error?.message ?? 'The Director agent could not plan the cuts. Try again.'))
         return
       }
       if (Date.now() - started > timeoutMs) {
         waiting.delete(jobId)
-        reject(new Error('Dex took too long to plan. Try again.'))
+        reject(new Error('The Director agent took too long to plan. Try again.'))
         return
       }
       setTimeout(watch, 400)

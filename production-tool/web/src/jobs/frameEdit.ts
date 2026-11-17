@@ -37,10 +37,10 @@ import { liveGet } from '../model/live'
 
 export const frameEditCopy = {
   reading: {
-    camera: 'Dex read this as a camera change',
-    local: 'Dex read this as a local change',
-    both: 'Dex read this as a camera change and a local change',
-    redraw: 'Dex redrew this frame from the shot',
+    camera: 'The Director agent read this as a camera change',
+    local: 'The Director agent read this as a local change',
+    both: 'The Director agent read this as a camera change and a local change',
+    redraw: 'The Director agent redrew this frame from the shot',
   } satisfies Record<FrameReading, string>,
   // Edit parts | Redraw frame (features/frame-edit-or-redraw.clan, mock frame-edit-or-redraw-v2).
   mode: { edit: 'Edit parts', redraw: 'Redraw frame' } satisfies Record<FrameEditMode, string>,
@@ -61,14 +61,14 @@ export const frameEditCopy = {
     changeAnyway: 'Change anyway',
     unpaid: 'Nothing paid yet',
   },
-  redrawing: (n: number) => `Dex is redrawing frame ${n}`,
-  redrew: (n: number) => `Dex redrew frame ${n} from the shot.`,
+  redrawing: (n: number) => `The Director agent is redrawing frame ${n}`,
+  redrew: (n: number) => `The Director agent redrew frame ${n} from the shot.`,
   kept: 'Kept',
   made: 'New',
   keptWhat: (chips: string[]) => ['the place', 'the light', ...chips].join(', '),
   /** The New line of a Redraw result: Dex's own sentence of who is where; an older job without one says what changed. */
   newWhat: (who: string | undefined) => who?.trim() || 'who is in it and where they stand',
-  edited: (n: number) => `Dex edited frame ${n}; everything else in it stays.`,
+  edited: (n: number) => `The Director agent edited frame ${n}; everything else in it stays.`,
   notMeant: 'Not what you meant?',
   redrawLink: 'Redraw the frame',
   withSame: 'with the same words.',
@@ -78,7 +78,7 @@ export const frameEditCopy = {
   /** Laurence's step 4: a box or mask with a camera change. */
   maskUnused: 'A camera change redraws the whole frame, so the area you marked was not used.',
   /** job.director.model is passthrough. */
-  passthrough: 'Dex sent your words as they are.',
+  passthrough: 'The Director agent sent your words as they are.',
   /** Only the camera's movement changed: nothing was drawn. */
   movementOnly: 'Only the camera move changes, so the frame stays as it is.',
   apply: 'Apply',

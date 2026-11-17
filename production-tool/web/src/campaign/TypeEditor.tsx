@@ -87,7 +87,7 @@ export function TypeEditor({ size, set, deps, by, zoom, onClose }: { size: Size;
       <label className="cb-field">This size's line
         <input value={own} maxLength={200} onChange={(e) => setOwn(e.target.value)} placeholder={line || 'Same as every size'} />
       </label>
-      {isOoh && ooh > OOH_WORDS && <p className="cb-warn">{ooh} words: a poster is read in 3 to 5 seconds. Jude suggests 7 or fewer here.</p>}
+      {isOoh && ooh > OOH_WORDS && <p className="cb-warn">{ooh} words: a poster is read in 3 to 5 seconds. The Review agent suggests 7 or fewer here.</p>}
       <label className="cb-field">Legal · every size
         <input value={legal} maxLength={600} onChange={(e) => setLegal(e.target.value)} placeholder="Small print" />
       </label>

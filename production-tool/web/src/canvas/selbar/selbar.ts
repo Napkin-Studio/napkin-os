@@ -54,7 +54,7 @@ const LATER = 'Not built yet.'
 const OFF: Partial<Record<ActionId, string>> = {
   'make-clips': 'Make clips from the Storyboard for now (Open).',
   'render-ad': 'Render the ad from the Video for now (Open).',
-  convert: 'Nell reading your ink comes in a later build.',
+  convert: 'The Knowledge agent reading your ink comes in a later build.',
   'move-to-board': 'Drag it onto a board for now.',
 }
 
@@ -137,5 +137,5 @@ function making(d: ProductionDocument, j: DocJob): string {
 /** The question before deleting a node with a job still running on it (3.3 Delete). */
 export function busyQuestion(d: ProductionDocument, j: DocJob): string {
   const who = CAST[j.op === 'shot_list' ? 'dex' : j.crew ? castOf(j.crew) : MAKER_OF[j.op] ?? 'dex'].given
-  return `${who} is still ${VERB[j.op] ?? 'making'} ${making(d, j)}. Stop it and delete?`
+  return `The ${who} is still ${VERB[j.op] ?? 'making'} ${making(d, j)}. Stop it and delete?`
 }

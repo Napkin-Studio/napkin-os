@@ -21,7 +21,7 @@ const row = (op: DocJob['op'], node: DocJob['node']): WaitingAsk => {
 }
 
 describe('where a waiting question belongs', () => {
-  it("Skye's is her script's editor; a frame's is the storyboard; the canvas is 'character'", () => {
+  it("The Script agent's is her script's editor; a frame's is the storyboard; the canvas is 'character'", () => {
     expect(homeOf({ op: 'write', node: { kind: 'script', id: 's1' } }, undefined)).toEqual({ script: 's1' })
     expect(homeOf({ op: 'frame', node: { kind: 'shot', id: 'x' } }, { for: 'frame', shotId: 'x' })).toEqual({ stage: 'storyboard' })
     expect(hereOf({ kind: 'script', projectId: 'p', scriptId: 's1' }, 'character')).toEqual({ script: 's1' })

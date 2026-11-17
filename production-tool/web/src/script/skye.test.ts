@@ -68,7 +68,7 @@ describe('the write request', () => {
 })
 
 describe('drafts land as suggestions, and Keep is one step', () => {
-  it('Keep writes the words as Skye, decided by the person, with the length; Undo takes all of it back', async () => {
+  it('Keep writes the words as the Script agent, decided by the person, with the length; Undo takes all of it back', async () => {
     const { store, shots, scriptId } = await project()
     const input = await writeInput(store, scriptId, { kind: 'shot', id: shots[1] }, 'fit_seconds', { seconds: 1.6 })
     const [sug] = await landWrites(store, jobOf(store, mockWrites(input)))
@@ -81,7 +81,7 @@ describe('drafts land as suggestions, and Keep is one step', () => {
     const chain = await store.chain()
     expect(chain[0]).toMatchObject({ agent: 'skye' })
     const r = await keep(store, sug)
-    expect(r.line).toBe("Kept Skye's draft. Shot 2 now runs 1.6 s.")
+    expect(r.line).toBe("Kept the Script agent's draft. Shot 2 now runs 1.6 s.")
     const shot = store.get().shots[shots[1]]
     expect(shot).toMatchObject({ action: '@maya_front walks the waterline.', duration_s: 1.6, last_writer: 'skye', refs: [Object.keys(store.get().refs)[0]] })
     expect(store.get().suggestions[sug]).toMatchObject({ state: 'kept', decided_by: `human:${MAYA.id}` })
@@ -101,12 +101,12 @@ describe('drafts land as suggestions, and Keep is one step', () => {
     expect(beats[0].text).toMatch(/^VO: /)
   })
 
-  it('Keep mine drops it and Skye leaves the shot alone', async () => {
+  it('Keep mine drops it and the Script agent leaves the shot alone', async () => {
     const { store, shots, scriptId } = await project()
     const input = await writeInput(store, scriptId, { kind: 'shot', id: shots[1] }, 'rephrase')
     const [sug] = await landWrites(store, jobOf(store, mockWrites(input)))
     const r = await keepMineDraft(store, sug)
-    expect(r.line).toBe('Kept yours. Skye will leave this shot alone.')
+    expect(r.line).toBe('Kept yours. The Script agent will leave this shot alone.')
     expect(store.get().suggestions[sug].state).toBe('dropped')
     expect(handsOff(store.get(), { kind: 'shot', id: shots[1] })).toBe(true)
     // On a hands_off item a press is an explicit request.
@@ -121,7 +121,7 @@ describe('drafts land as suggestions, and Keep is one step', () => {
     await store.text.replace('shot', shots[1], proseFromLines('action', ['Someone typed since.']), `human:${MAYA.id}`)
     await expect(keep(store, sug)).rejects.toBeInstanceOf(StaleSuggestion)
     expect(store.get().suggestions[sug].state).toBe('stale')
-    expect(new StaleSuggestion().message).toBe('The text changed since Skye wrote this, so it no longer fits. Ask her again.')
+    expect(new StaleSuggestion().message).toBe('The text changed since the Script agent wrote this, so it no longer fits. Ask it again.')
   })
 
   it('a draft that does not fit its item (two blocks for a beat) is left out', async () => {
@@ -203,7 +203,7 @@ describe('a draft from a brief (owner bug 2026-11-03)', () => {
   })
 })
 
-describe('Write with Skye: a real script from an idea (urgent P0 2026-11-04)', () => {
+describe('Write with the Script agent: a real script from an idea (urgent P0 2026-11-04)', () => {
   it('drafts a short screenplay (slugline + action, not one empty line) and Keep applies it to the scene', async () => {
     const { store, scriptId } = await project()
     // A non-empty script (project already has shots); add the scene the draft lands on.
@@ -243,7 +243,7 @@ describe('Write with Skye: a real script from an idea (urgent P0 2026-11-04)', (
   })
 })
 
-describe("the 'Tell Skye' free instruction", () => {
+describe("the 'Tell the Script agent' free instruction", () => {
   it('carries the typed words as the instruction on a revise, and the mock echoes the mode', async () => {
     const { store, shots, scriptId } = await project()
     const input = await writeInput(store, scriptId, { kind: 'shot', id: shots[1] }, 'instruct',
@@ -259,14 +259,14 @@ describe("the 'Tell Skye' free instruction", () => {
 })
 
 describe('when the relay says no', () => {
-  it('a relay without Skye answers 422 capability_missing; the last write job failing so turns her bar off', async () => {
+  it('a relay without the Script agent answers 422 capability_missing; the last write job failing so turns her bar off', async () => {
     const relay = new MockRelay({ renderer: { async render() { return [] } }, persistKey: null, writeOff: true })
     await expect(relay.createJob({ contractVersion: '3', jobId: id('job'), op: 'write', projectId: 'proj_x', nonce: 'n_x', node: { kind: 'script', id: 'script_x' }, parentIds: [], input: {} }))
       .rejects.toMatchObject({ status: 422, error: { code: 'capability_missing' } })
     const { store, scriptId } = await project()
     const jobId = id('job')
     await store.change((d) => {
-      d.jobs[jobId] = { id: jobId, v: 1, field_v: {}, op: 'write', state: 'failed', node: { kind: 'script', id: scriptId }, started_by: `human:${MAYA.id}`, tenant_id: MAYA.tenant_id, nonce: 'n_yyyyyyyy', crew: 'skye', parent_ids: [], input_hashes: [], created_at: '2026-10-13T10:00:00Z', error: { code: 'capability_missing', message: "Skye isn't available here yet.", retryable: false } } as never
+      d.jobs[jobId] = { id: jobId, v: 1, field_v: {}, op: 'write', state: 'failed', node: { kind: 'script', id: scriptId }, started_by: `human:${MAYA.id}`, tenant_id: MAYA.tenant_id, nonce: 'n_yyyyyyyy', crew: 'skye', parent_ids: [], input_hashes: [], created_at: '2026-10-13T10:00:00Z', error: { code: 'capability_missing', message: "The Script agent isn't available here yet.", retryable: false } } as never
     }, { action: 'submit write', quiet: true, undo: false })
     await store.flush()
     expect(skyeState(store.get(), scriptId)).toMatchObject({ off: true, quota: false })
@@ -324,7 +324,7 @@ describe('a write waiting on her question (owner 2026-10-15)', () => {
   })
 })
 
-describe('a scene draft whose scene was undone while Skye asked (owner 2026-10-15)', () => {
+describe('a scene draft whose scene was undone while the Script agent asked (owner 2026-10-15)', () => {
   it('lands as a new first scene in her words, one undo step, and her line says so', async () => {
     const { store, scriptId } = await project()
     const first = Object.values(store.get().scenes).find((x) => x.script_id === scriptId)

@@ -181,7 +181,7 @@ describe('Make clips straight from the script, with a bare @kapi and no front (o
     const sb = storyboardOfVideo(store.get(), videoId)!
     const j = job(store.get(), 'shot_list', [], null, { state: 'failed', node: { kind: 'storyboard', id: sb.id }, error: { code: 'internal', message: 'The director failed (DirectorError).', retryable: true } })
     await systemUpdate(store, (d: ProductionDocument) => { d.jobs[j.id] = j }, 'sync')
-    expect(roomEmpty(store.get(), store.get(), videoId, 0, 0)).toMatchObject({ kind: 'no-shots', canPlan: true, why: expect.stringMatching(/^The last Plan shots did not work: Dex could not plan these shots/) })
+    expect(roomEmpty(store.get(), store.get(), videoId, 0, 0)).toMatchObject({ kind: 'no-shots', canPlan: true, why: expect.stringMatching(/^The last Plan shots did not work: The Director agent could not plan these shots/) })
     await store.close()
   })
 })

@@ -326,8 +326,8 @@ export function RenderAd({ data }: { data: RoomData }) {
     <>
       <button ref={ref} type="button" className="btn primary rm-primary" aria-haspopup="dialog" aria-expanded={open} disabled={empty || rendering || sending}
         title={empty ? 'Assemble the cut first' : undefined} onClick={() => setOpen(!open)}>{rendering ? 'Rendering…' : sending ? 'Sending…' : 'Render ad'}</button>
-      <Float anchor={ref} open={open} onClose={close} role="dialog" align="end" label="Jude checked the cut" className="rm-checks">
-        <div className="rm-floathead">Jude checked the cut</div>
+      <Float anchor={ref} open={open} onClose={close} role="dialog" align="end" label="The Review agent checked the cut" className="rm-checks">
+        <div className="rm-floathead">The Review agent checked the cut</div>
         <p className="rm-note">None of these stop the render. {rendersOf(doc, data.videoId).length ? `This makes render v${rendersOf(doc, data.videoId).length + 1}.` : ''}</p>
         <ul className="rm-checklist">
           {checks.map((c) => <li key={c.text} className={c.ok ? 'ok' : 'warn'}><span aria-hidden="true">{c.ok ? '✓' : '!'}</span><span className="rm-clamp2" title={c.text}>{c.text}</span></li>)}

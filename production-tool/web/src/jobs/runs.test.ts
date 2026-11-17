@@ -124,7 +124,7 @@ describe('planRuns', () => {
     expect(modes(p)).toEqual(['frames:1', 'take_refs:2'])
   })
 
-  it('a person\'s join wins over Dex\'s', () => {
+  it('a person\'s join wins over the Director agent\'s', () => {
     expect(joinKind(ps({ sceneId: 'a' }), ps({ sceneId: 'b', human: { kind: 'continue', by: 'human' } }))).toEqual({ kind: 'continue', by: 'human' })
   })
 })
@@ -429,12 +429,12 @@ describe('strips', () => {
     expect(unitsOf(a)).toEqual(['shot:1', 'shot:2', 'shot:3'])
   })
 
-  it("Dex's History line says the words were made plainer, once", () => {
-    const why = { action: 'render one take', rationale: 'Dex: one take of three shots.' }
-    expect(softenedWhy({ softened: true }, why).rationale).toBe(`${SOFTENED_NOTE} Dex: one take of three shots.`)
+  it("The Director agent's History line says the words were made plainer, once", () => {
+    const why = { action: 'render one take', rationale: 'The Director agent: one take of three shots.' }
+    expect(softenedWhy({ softened: true }, why).rationale).toBe(`${SOFTENED_NOTE} The Director agent: one take of three shots.`)
     expect(softenedWhy({}, why)).toBe(why)
-    const once = softenedWhy({ softened: true }, { ...why, rationale: `Dex: ${SOFTENED_NOTE}` })
-    expect(once.rationale).toBe(`Dex: ${SOFTENED_NOTE}`)
+    const once = softenedWhy({ softened: true }, { ...why, rationale: `The Director agent: ${SOFTENED_NOTE}` })
+    expect(once.rationale).toBe(`The Director agent: ${SOFTENED_NOTE}`)
   })
 
   it('says why shots cannot be one video', () => {

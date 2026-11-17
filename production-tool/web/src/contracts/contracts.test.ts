@@ -75,8 +75,8 @@ describe('contract 3 examples', () => {
 describe('the tables in common.schema.json', () => {
   it('has a role line for every role, and they read as the spec says', () => {
     expect(Object.keys(REF_ROLE_TABLE).sort()).toEqual([...REF_ROLES].sort())
-    expect(REF_ROLE_TABLE.lighting.ui_line).toBe('Dex matches its light only')
-    expect(REF_ROLE_TABLE.layout.ui_line).toBe('Dex follows where things sit, not how they look')
+    expect(REF_ROLE_TABLE.lighting.ui_line).toBe('The Director agent matches its light only')
+    expect(REF_ROLE_TABLE.layout.ui_line).toBe('The Director agent follows where things sit, not how they look')
     expect(Object.values(REF_ROLE_TABLE).filter((r) => r.picker === 'main')).toHaveLength(10)
   })
   it('has a quota class for every op', () => {

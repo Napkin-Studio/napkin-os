@@ -147,7 +147,7 @@ describe('storyboard from a line', () => {
 })
 
 describe('video from words', () => {
-  it('links the project\'s empty storyboard into an unlinked video, then Dex plans from the words', async () => {
+  it('links the project\'s empty storyboard into an unlinked video, then the Director agent plans from the words', async () => {
     const { store, deps, sent } = await project()
     const sb = mainStoryboard(doc(store))!
     // A video with nothing linked: take away whatever links the template made into it.
@@ -176,7 +176,7 @@ describe('video from words', () => {
 })
 
 describe('a picture from words', () => {
-  it('is Fin\'s generate with the words and the node\'s scope, on the node; naming it makes one reference', async () => {
+  it('is the Camera agent\'s generate with the words and the node\'s scope, on the node; naming it makes one reference', async () => {
     const { store, deps, sent } = await project()
     const node = 'pic_node_1'
     const jobId = await pictureFromWords(deps, node, 'A glass bottle on a wet rock.', '1:1')

@@ -133,17 +133,17 @@ async function land(services: Services, scriptId: string, input: Awaited<ReturnT
 }
 const sceneWords = (services: Services, sceneId: string) => (services.clan!.text.prose('scene', sceneId).content ?? []).map((b) => flatText(b.content, refNames(services.clan!.get()))).join('\n')
 
-describe("Skye's box in the Booth", () => {
-  it('on an empty script, asks Skye for a draft from the words typed (the draft intent, the words as its instruction)', async () => {
+describe("The Script agent's box in the Booth", () => {
+  it('on an empty script, asks the Script agent for a draft from the words typed (the draft intent, the words as its instruction)', async () => {
     const { el, services } = await open('')
     const sent = spySubmit(services)
     const b = booth(el)
-    expect(b.querySelector('.bt-agent')?.textContent).toContain('Skye · scripts')
+    expect(b.querySelector('.bt-agent')?.textContent).toContain('Script agent')
     expect(b.querySelector('.bt-scope')?.textContent).toBe('Whole script')
     const box = b.querySelector('textarea') as HTMLTextAreaElement
-    expect(box.placeholder).toBe('Tell Skye what to write or change…')
+    expect(box.placeholder).toBe('Tell the Script agent what to write or change…')
     await act(async () => { typeInto(box, '30 s ad: a woman finds a lost puppy in the rain.') })
-    await act(async () => { buttonIn(b, 'Ask Skye').click() })
+    await act(async () => { buttonIn(b, 'Ask the Script agent').click() })
     await until(() => sent.length > 0)
     expect(sent).toHaveLength(1)
     expect(sent[0].write).toMatchObject({ intent: 'draft', mode: 'draft', instruction: '30 s ad: a woman finds a lost puppy in the rain.', target: { kind: 'scene' } })
@@ -164,10 +164,10 @@ describe("Skye's box in the Booth", () => {
     await settle()
     const b = booth(el)
     expect(b.querySelector('.bt-scope')?.textContent).toBe('Your selection· “She drinks Lumen water”×')
-    expect((b.querySelector('textarea') as HTMLTextAreaElement).placeholder).toBe('Tell Skye what to change in your selection…')
+    expect((b.querySelector('textarea') as HTMLTextAreaElement).placeholder).toBe('Tell the Script agent what to change in your selection…')
     expect([...b.querySelectorAll('.bt-verbs button')].map((x) => x.textContent)).toEqual(['Tighten', 'Make it 30 s', 'Add a beat', 'Write the VO', 'Say it another way'])
     await act(async () => { typeInto(b.querySelector('textarea') as HTMLTextAreaElement, 'slow this down') })
-    await act(async () => { buttonIn(b, 'Ask Skye').click() })
+    await act(async () => { buttonIn(b, 'Ask the Script agent').click() })
     await until(() => sent.length > 0)
     expect(sent).toHaveLength(1)
     expect(sent[0].write).toMatchObject({ intent: 'instruct', mode: 'revise', instruction: 'slow this down', target: { kind: 'scene', id: sceneId }, selection: { from, text: 'She drinks Lumen water' } })
@@ -177,7 +177,7 @@ describe("Skye's box in the Booth", () => {
   })
 })
 
-describe("Skye's drafts and edits are cards: nothing changes until Keep", () => {
+describe("The Script agent's drafts and edits are cards: nothing changes until Keep", () => {
   it('a draft shows her words with Keep, Discard and Why; Keep lands it on the page with Undo', async () => {
     const { el, services, scriptId } = await open('')
     const store = services.clan!
@@ -186,7 +186,7 @@ describe("Skye's drafts and edits are cards: nothing changes until Keep", () => 
     await act(async () => { await land(services, scriptId, input) })
     await until(() => !!booth(el).querySelector('[data-suggestion]'))
     const card = booth(el).querySelector('[data-suggestion]') as HTMLElement
-    expect(card.querySelector('.bc-who')?.textContent).toBe('Skye · draft')
+    expect(card.querySelector('.bc-who')?.textContent).toBe('Script agent · draft')
     expect(card.querySelector('.bc-note')?.textContent).toBe('From your words: A lost puppy in the rain.')
     expect(card.querySelector('.bc-text')?.textContent).not.toBe('')
     expect(card.querySelector('.where')?.textContent).toBe('Lands on the empty page')
@@ -198,7 +198,7 @@ describe("Skye's drafts and edits are cards: nothing changes until Keep", () => 
     expect(sceneWords(services, sceneId)).not.toBe('')
     expect(booth(el).querySelector('[data-suggestion]')).toBeNull()
     const done = booth(el).querySelector('.bc.done') as HTMLElement
-    expect(done.textContent).toContain('Kept. Skye’s draft is on the page.')
+    expect(done.textContent).toContain('Kept. The Script agent’s draft is on the page.')
     await act(async () => { buttonIn(done, 'Undo').click() })
     await until(() => sceneWords(services, sceneId) === '')
     expect(sceneWords(services, sceneId)).toBe('')
@@ -212,7 +212,7 @@ describe("Skye's drafts and edits are cards: nothing changes until Keep", () => 
     await act(async () => { await land(services, scriptId, input) })
     await until(() => !!booth(el).querySelector('[data-suggestion]'))
     const card = booth(el).querySelector('[data-suggestion]') as HTMLElement
-    expect(card.querySelector('.bc-who')?.textContent).toBe('Skye · edit')
+    expect(card.querySelector('.bc-who')?.textContent).toBe('Script agent · edit')
     expect(card.querySelector('.bc-diff del')).not.toBeNull()
     expect(card.querySelector('.bc-diff ins')).not.toBeNull()
     expect(card.querySelector('.where')?.textContent).toBe('Replaces the page')
@@ -225,7 +225,7 @@ describe("Skye's drafts and edits are cards: nothing changes until Keep", () => 
 })
 
 describe('what waits for the person', () => {
-  it("Skye's questions wait in the Booth, counted; Later puts one at the end", async () => {
+  it("The Script agent's questions wait in the Booth, counted; Later puts one at the end", async () => {
     const { el, services, scriptId } = await open('')
     const store = services.clan!
     await act(async () => {

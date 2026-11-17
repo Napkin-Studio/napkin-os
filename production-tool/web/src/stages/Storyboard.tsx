@@ -283,7 +283,7 @@ export function Storyboard() {
         </ShotSort>
         {shots.length > 0 && <Thumbs compact target={{ kind: 'shot-list', jobId: lastPlan?.id, model: lastPlan?.director?.model, promptVersion: lastPlan?.director?.promptVersion, shots: shots.length }} />}
       </div>
-      {/* Dex's Booth (features/script-freeform.clan): his questions and notes on these shots. */}
+      {/* the Director agent's Booth (features/script-freeform.clan): his questions and notes on these shots. */}
       <DexBooth storyboardId={sb?.id} onShotAsk={(a, shotId, option) => void answerAsk(a, shotId, option)} />
       </div>
     </div>
@@ -471,7 +471,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
               <span className="sb-ins-blank" aria-hidden="true" /><span><b>Empty shot</b><br /><span className="faint">A blank card you fill in</span></span>
             </button>
             <button type="button" role="menuitem" className="pt-menurow" disabled title="Not in this version yet">
-              <AgentFigure agent="dex" size={22} decorative /><span><b>Bridge</b><br /><span className="faint">Dex draws a shot that links {index} and {index + 1} · not in this version yet</span></span>
+              <AgentFigure agent="dex" size={22} decorative /><span><b>Bridge</b><br /><span className="faint">The Director agent draws a shot that links {index} and {index + 1} · not in this version yet</span></span>
             </button>
           </Float>
         </>
@@ -555,7 +555,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
             <button className="btn sm" disabled={!words.trim() || changeRunning} onClick={() => void send(showChange ? change?.job.id : undefined)}>{showChange && !recast ? frameEditCopy.redo : frameEditCopy.send[mode]}</button>
           </div>
           {recast && (
-            <div className="sb-ask" role="group" aria-label="Dex asks">
+            <div className="sb-ask" role="group" aria-label="The Director agent asks">
               <div className="row"><AgentFigure agent="dex" size={26} state="needs-you" decorative /><p><b>{frameEditCopy.recast.title}</b> {frameEditCopy.recast.body}</p></div>
               <div className="row">
                 <button className="btn sm dark" onClick={() => void answerRecast('redraw')}>{frameEditCopy.recast.redraw}</button>

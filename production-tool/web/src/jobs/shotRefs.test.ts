@@ -78,7 +78,7 @@ describe('a shot sends what its words name, and offers the rest', () => {
   })
 })
 
-describe('the tray shows what goes and what Dex added', () => {
+describe('the tray shows what goes and what the Director agent added', () => {
   const added = (d: ProductionDocument) => {
     d.jobs.job_frame = {
       id: 'job_frame', v: 1, field_v: {}, op: 'frame', crew: 'wren', state: 'completed', node: { kind: 'shot', id: SHOT },
@@ -91,12 +91,12 @@ describe('the tray shows what goes and what Dex added', () => {
     } as unknown as Job as never
   }
 
-  it('one row for the whole key from its words, then "Added by Dex: @hall_wide · why", ticked', () => {
+  it('one row for the whole key from its words, then "Added by the Director agent: @hall_wide · why", ticked', () => {
     const d = owners()
     added(d)
     expect(shotRefRows(d, SHOT).map((r) => [r.label, r.detail, r.kind, r.on])).toEqual([
       ['@samurai', 'front, three-quarter, side, back · from its words', 'asked', true],
-      ['Added by Dex: @hall_wide', 'the action is set in the hall', 'added', true],
+      ['Added by the Director agent: @hall_wide', 'the action is set in the hall', 'added', true],
     ])
   })
 
@@ -107,7 +107,7 @@ describe('the tray shows what goes and what Dex added', () => {
   })
 })
 
-describe('Skye is told the whole key by its bare name', () => {
+describe('The Script agent is told the whole key by its bare name', () => {
   it('lists @samurai with its views before the views themselves', () => {
     const refs = writeRefs(owners())
     expect(refs[0]).toEqual({ name: 'samurai', role: 'character', label: 'the whole character: front, three-quarter, side, back' })

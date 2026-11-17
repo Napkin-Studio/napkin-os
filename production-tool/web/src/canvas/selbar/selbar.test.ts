@@ -33,7 +33,7 @@ describe('barFor (3.9)', () => {
     const rows: Partial<SelInfo>[] = [{ cards: ['script', 'storyboard'], units: 2 }, { cards: ['video'] }, { group: { ink: true } }, { units: 3 }]
     for (const r of rows) expect(barFor(sel(r)).filter((a) => a.primary).length).toBeLessThanOrEqual(1)
     expect(barFor(sel({ cards: ['script', 'storyboard'], units: 2 }))[0]).toMatchObject({ id: 'make-video', primary: true })
-    expect(barFor(sel({ group: { ink: true } })).find((a) => a.id === 'convert')!.off).toMatch(/Nell/)
+    expect(barFor(sel({ group: { ink: true } })).find((a) => a.id === 'convert')!.off).toMatch(/Knowledge agent/)
     // An ink group generates without Ungroup first (container-select owner answer).
     expect(barFor(sel({ group: { ink: true } }))[0]).toMatchObject({ id: 'generate', primary: true })
     expect(barFor(sel({ group: { ink: true } }))[0].off).toBeUndefined()
@@ -49,7 +49,7 @@ describe('barFor (3.9)', () => {
     expect(off.find((a) => a.id === 'make-video')!.off).toBeUndefined()
   })
 
-  it('two scripts or two storyboards offer Make video (Dex asks which one drives), never with a video in the selection', () => {
+  it('two scripts or two storyboards offer Make video (The Director agent asks which one drives), never with a video in the selection', () => {
     expect(ids({ cards: ['script', 'script'], units: 2 })).toEqual(['make-video', 'group', 'move-to-board', 'delete'])
     expect(ids({ cards: ['script', 'storyboard', 'storyboard'], units: 3 })).toEqual(['make-video', 'group', 'move-to-board', 'delete'])
     expect(ids({ cards: ['script', 'script', 'video'], units: 3 })).toEqual(['group', 'move-to-board', 'delete'])
@@ -64,14 +64,14 @@ describe('barFor (3.9)', () => {
 })
 
 describe('busyQuestion (3.3 Delete)', () => {
-  it('names the agent and the work: "Fin is still making clip 4. Stop it and delete?"', () => {
+  it('names the agent and the work: "The Camera agent is still making clip 4. Stop it and delete?"', () => {
     const d = emptyDocument(MAYA, 'Ad')
     const shots = addShots(d, 4)
     const clip = job(d, 'clip', [], null, { state: 'submitted', node: { kind: 'shot', id: shots[3].id } })
-    expect(busyQuestion(d, clip)).toBe('Fin is still making clip 4. Stop it and delete?')
+    expect(busyQuestion(d, clip)).toBe('The Camera agent is still making clip 4. Stop it and delete?')
     const plan = job(d, 'shot_list', [], null, { state: 'submitted', crew: 'dex', node: { kind: 'storyboard', id: mainStoryboard(d)!.id } })
-    expect(busyQuestion(d, plan)).toBe('Dex is still planning the shots. Stop it and delete?')
+    expect(busyQuestion(d, plan)).toBe('The Director agent is still planning the shots. Stop it and delete?')
     const draft = job(d, 'write', [], null, { state: 'submitted', crew: 'skye' })
-    expect(busyQuestion(d, draft)).toBe('Skye is still writing a draft. Stop it and delete?')
+    expect(busyQuestion(d, draft)).toBe('The Script agent is still writing a draft. Stop it and delete?')
   })
 })

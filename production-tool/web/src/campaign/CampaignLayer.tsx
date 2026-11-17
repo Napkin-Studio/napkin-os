@@ -253,7 +253,7 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
             if (c) c.ignored = { by, at: new Date().toISOString() }
             const sz = x.sizes[s.id]
             if (sz && sz.status === 'look' && !Object.values(sz.checks ?? {}).some((k) => k && k.result === 'flag' && !k.ignored)) sz.status = 'ready'
-          }, `ignore Jude's ${code} check on sizes[${s.id}]`)}
+          }, `ignore the Review agent's ${code} check on sizes[${s.id}]`)}
           deps={deps} by={by} say={say} />
       })}
       {note && <div className="cb-note" role="status">{note}</div>}
@@ -319,7 +319,7 @@ function SendTray({ tray, setId, onClose }: { tray: TrayOpen; setId: string; onC
   })
   return createPortal(
     <div ref={panel} className="cb-tray pt-panel" role="dialog" aria-label={tray.title} style={{ left: 0, top: 0, visibility: 'hidden' }} onPointerDown={(e) => e.stopPropagation()}>
-      <div className="cb-trayhead"><b>{tray.title}</b><span className="faint">{tray.who === 'rhea' ? 'Rhea' : 'Wren'} will make</span></div>
+      <div className="cb-trayhead"><b>{tray.title}</b><span className="faint">{tray.who === 'rhea' ? 'The Retouch agent' : 'The Camera agent'} will make</span></div>
       <div className="cb-trayrows" role="list">
         {tray.rows.map((r) => (
           <div key={r.id} className="cb-trayrow" role="listitem"><span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}</span></div>
@@ -445,7 +445,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
         {checks.length > 0 && (
           <button type="button" className={`cb-flag ${flags.every(([, c]) => c!.ignored) ? 'ignored' : ''}`} onPointerDown={(e) => e.stopPropagation()}
             onClick={() => tilePick.toggleFlags(set.id, size.id)} aria-expanded={flagsOpen}>
-            {flags.length ? `⚑ Jude · ${flags.length}` : 'Jude · cannot verify'}</button>
+            {flags.length ? `⚑ Review agent · ${flags.length}` : 'The Review agent · cannot verify'}</button>
         )}
       </div>
       <div className="cb-caption" style={{ height: CAPTION_H }}>
@@ -454,7 +454,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
       </div>
       {picked && !typing && <TileFloat anchor={pic}>
       {flagsOpen && checks.length > 0 && (
-        <div className="cb-flags pt-panel" role="dialog" aria-label="Jude's checks">
+        <div className="cb-flags pt-panel" role="dialog" aria-label="The Review agent's checks">
           {checks.map(([code, c]) => (
             <div key={code} className="cb-check">
               <span>{c!.result === 'unverified' ? <><b>Cannot verify.</b> {c!.note}</> : c!.note}</span>

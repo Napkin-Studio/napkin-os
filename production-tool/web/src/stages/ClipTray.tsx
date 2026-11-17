@@ -70,13 +70,13 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, quali
     return n
   })
   return (
-    <Float anchor={anchor} open={open} onClose={onClose} role="dialog" label="What Dex will send" align="end" className="clip-tray">
+    <Float anchor={anchor} open={open} onClose={onClose} role="dialog" label="What the Director agent will send" align="end" className="clip-tray">
       <div className="tray-head">
         <button type="button" className="tray-fold" aria-label={isOpen ? 'Collapse' : 'Expand'} aria-expanded={isOpen} onClick={() => setExpanded(!isOpen)}>
           <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d={isOpen ? 'M3 7.5 L6 4.5 L9 7.5' : 'M3 4.5 L6 7.5 L9 4.5'} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
         </button>
         <AgentFigure agent="dex" size={22} decorative />
-        <div className="tray-title"><b>What Dex will send</b><span>{sayer('dex')}</span></div>
+        <div className="tray-title"><b>What the Director agent will send</b><span>{sayer('dex')}</span></div>
       </div>
       {!isOpen && <button type="button" className="tray-line" onClick={() => setExpanded(true)}>{traySummary(picked.map((r) => r.source))}</button>}
       {isOpen && (

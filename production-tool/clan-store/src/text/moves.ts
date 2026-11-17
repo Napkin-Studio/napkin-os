@@ -156,7 +156,7 @@ interface Proposed {
 
 export class StaleSuggestion extends Error {
   constructor() {
-    super('The text changed since Skye wrote this, so it no longer fits. Ask her again.')
+    super('The text changed since the Script agent wrote this, so it no longer fits. Ask it again.')
     this.name = 'StaleSuggestion'
   }
 }

@@ -107,8 +107,8 @@ export function ScriptCard({ id, onOpen }: { id?: string; onOpen: () => void }) 
       )}
       <span className="bl-meta">{scenes.length} {scenes.length === 1 ? 'scene' : 'scenes'} · {shots.length} {shots.length === 1 ? 'shot' : 'shots'}</span>
       <span className="pt-grow" />
-      {writing && <AtWork agent="skye" line="Skye is writing a draft" />}
-      {waiting && <AtWork agent="skye" warm line={`Waiting for you: ${asking?.question.text ?? 'Skye has a question about a draft'}`} />}
+      {writing && <AtWork agent="skye" line="The Script agent is writing a draft" />}
+      {waiting && <AtWork agent="skye" warm line={`Waiting for you: ${asking?.question.text ?? 'The Script agent has a question about a draft'}`} />}
     </Card>
   )
 }
@@ -138,7 +138,7 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
           {strip.more > 0 && <figure className="bl-frame bl-more" title={`${strip.more} more shots: open the Storyboard to see them all`}><span className="bl-noframe">+{strip.more}</span><figcaption>more</figcaption></figure>}
         </div>
       ) : <Start kind="storyboard" id={sb?.id} fallback={<p className="bl-excerpt faint">No shots yet · write the script, then plan shots.</p>} />}
-      {planning ? <AtWork agent="dex" line="Dex is planning the shots from the script" />
+      {planning ? <AtWork agent="dex" line="The Director agent is planning the shots from the script" />
         : shots.length ? (
           <div className="bl-line">{chrome.agent('dex', false)}<span>{plannedLine(shots)}{drawingIdx >= 0 ? ` · frame ${drawingIdx + 1} is being drawn` : ''}</span></div>
         ) : null}
@@ -152,8 +152,8 @@ function FrameTile({ shot, n, drawing }: { shot: Shot; n: number; drawing: boole
   const chrome = useContext(CardChromeContext)
   return (
     <figure className="bl-frame">
-      {/* A frame being drawn shows Fin at work, never the loader (ui-behaviour 6.5). */}
-      {url && !drawing ? <img src={url} alt="" /> : <span className="bl-noframe" style={drawing ? { gap: 4 } : undefined}>{drawing ? <>{chrome.agent('wren', true)}Fin is drawing</> : 'No frame yet'}</span>}
+      {/* A frame being drawn shows the Camera agent at work, never the loader (ui-behaviour 6.5). */}
+      {url && !drawing ? <img src={url} alt="" /> : <span className="bl-noframe" style={drawing ? { gap: 4 } : undefined}>{drawing ? <>{chrome.agent('wren', true)}the Camera agent is drawing</> : 'No frame yet'}</span>}
       <figcaption>{n} · {cap(cameraLabel('size', shot.camera.size))}</figcaption>
     </figure>
   )
@@ -192,7 +192,7 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
     <Card icon="video" title={`Video · ${title}`} meta={fromScript ? <span className="pt-mono">from Script · no storyboard</span> : undefined} onOpen={onOpen}
       className={asking ? 'asking' : ''} style={asking ? { minHeight: 194 } : { height: 194 }}>
       <InputsStrip nodeId={video?.id} />
-      {planning ? <AtWork agent="dex" line="Dex is planning the shots from the script" /> : <Start kind="video" id={video?.id} fallback={
+      {planning ? <AtWork agent="dex" line="The Director agent is planning the shots from the script" /> : <Start kind="video" id={video?.id} fallback={
         <div className="bl-videorow">
           <span className="bl-poster">
             {adUrl ? <video src={adUrl} muted preload="metadata" /> : url ? <img src={url} alt="" /> : null}
@@ -204,8 +204,8 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
           </span>
         </div>
       } />}
-      {takeRunning ? <AtWork agent="wren" warm line={`Fin is filming ${takeRunning} as one take`} />
-        : clipRunning && <AtWork agent="wren" warm line={`Fin is filming clip ${clipRunning.i + 1}`} />}
+      {takeRunning ? <AtWork agent="wren" warm line={`The Camera agent is filming ${takeRunning} as one take`} />
+        : clipRunning && <AtWork agent="wren" warm line={`The Camera agent is filming clip ${clipRunning.i + 1}`} />}
     </Card>
   )
 }

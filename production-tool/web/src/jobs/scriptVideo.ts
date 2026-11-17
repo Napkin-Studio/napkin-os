@@ -174,7 +174,7 @@ export async function answerScriptVideo(deps: FrameDeps, videoId: Id, optionId: 
   const scriptId = scriptOfVideo(d, videoId) ?? (had ? scriptOf(d, had.id) : undefined)
   if (!had || !shotsOf(d, had.id).length) {
     if (!scriptId) throw new Error('Link a script to this video first.')
-    if (!scriptText(d, scriptId).trim()) throw new Error('Write the script first: Dex plans the shots from its words.')
+    if (!scriptText(d, scriptId).trim()) throw new Error('Write the script first: The Director agent plans the shots from its words.')
   }
   if (optionId !== STRAIGHT && had?.implicit && !canvasActions.canMake()) throw new Error('Make a storyboard from these shots on the canvas: open this project with the canvas.')
   await recordScriptVideoAnswer(deps.doc, videoId, optionId, by)

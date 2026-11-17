@@ -39,7 +39,7 @@ describe('name asks', () => {
     const asks = nameAsks(store.get(), scriptId)
     expect(asks.map(askedName)).toEqual(['jogger'])
     const [a] = asks
-    expect(a.question.text).toBe("Who is the jogger? There's no ref called @jogger, so I can't tell Dex how to show them.")
+    expect(a.question.text).toBe("Who is the jogger? There's no ref called @jogger, so I can't tell the Director agent how to show them.")
     expect(a.question.why).toBe("Shot 1 · 'A @jogger runs past far behind @maya_front.'")
     expect(a.question.options.map((o) => o.label)).toEqual(['A character', 'An extra', 'Cut them'])
     expect(a).toMatchObject({ crew: 'skye', state: 'open', node: { kind: 'script', id: scriptId } })

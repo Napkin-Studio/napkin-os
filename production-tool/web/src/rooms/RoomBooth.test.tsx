@@ -78,7 +78,7 @@ function typeInto(t: HTMLTextAreaElement, text: string) {
   t.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-describe("Dex's Booth in the Storyboard", () => {
+describe("The Director agent's Booth in the Storyboard", () => {
   it("waits with his question on a shot a re-plan left out, and a frame that did not draw; Clear clears it; his notes follow", async () => {
     const { services, sb, shots, el, render } = await project()
     const answered: string[] = []
@@ -96,7 +96,7 @@ describe("Dex's Booth in the Storyboard", () => {
     render(createElement(DexBooth, { storyboardId: sb, onShotAsk: (_a: Ask, shotId: string, o: 'keep' | 'remove') => { answered.push(`${o}:${shotId}`) } }))
     await until(() => !!el.querySelector('.booth [data-booth-note]') && el.querySelectorAll('.booth .bc.ask').length === 2)
     const booth = el.querySelector('.booth') as HTMLElement
-    expect(booth.querySelector('.bt-agent')?.textContent).toContain('Dex · directs')
+    expect(booth.querySelector('.bt-agent')?.textContent).toContain('Director agent')
     expect(booth.querySelector('textarea')).toBeNull()
     expect(booth.querySelector('.bt-sec')?.textContent).toBe('Waiting for you2')
     const cards = [...booth.querySelectorAll('.bc.ask')]
@@ -119,7 +119,7 @@ describe('the Booth in the Video rooms', () => {
   })
   const take = (shotId: string): Gen => ({ id: id('gen'), kind: 'take' as Gen['kind'], boxKey: shotId, shotIds: [shotId], version: 1, delta: [], label: 'First take', durationS: 3, segments: [{ shotId, inS: 0, outS: 3 }], state: 'ready' })
 
-  it("Make: Fin waits with a take that did not work, and his box sends words to Change's Words row for the shot's next take", async () => {
+  it("Make: The Camera agent waits with a take that did not work, and his box sends words to Change's Words row for the shot's next take", async () => {
     const { services, shots, el, render } = await project()
     await failed(services, shots[0], 'clip')
     const opened: ChangeOpen[] = []
@@ -128,12 +128,12 @@ describe('the Booth in the Video rooms', () => {
       onChange: (c: ChangeOpen) => { opened.push(c) }, onApart: () => {}, onReady: () => {} }))
     await settle()
     const booth = el.querySelector('.booth') as HTMLElement
-    expect(booth.querySelector('.bt-agent')?.textContent).toContain('Fin · films')
+    expect(booth.querySelector('.bt-agent')?.textContent).toContain('Camera agent')
     expect(el.querySelector('.booth-col')?.getAttribute('style')).toContain('--bw: 380px')
     expect(booth.querySelector('.bc.ask .bc-q')?.textContent).toBe('The take of shot 1 did not work.')
     expect(booth.querySelector('.bt-scope')?.textContent).toBe('Shot 2 · Box 2')
     await act(async () => { typeInto(booth.querySelector('textarea') as HTMLTextAreaElement, 'she looks up at the rain') })
-    await act(async () => { buttonIn(booth, 'Ask Fin').click() })
+    await act(async () => { buttonIn(booth, 'Ask the Camera agent').click() })
     expect(opened).toEqual([{ parentId: t.id, shotId: shots[1], verb: 'words', words: 'she looks up at the rain' }])
   })
 
@@ -158,7 +158,7 @@ describe('the Booth in the Video rooms', () => {
     render(createElement(RoomBooth, { room: 'make', data: data(shots), sel: { shotId: shots[0], boxKey: shots[0] }, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
     await settle()
     expect((el.querySelector('.booth textarea') as HTMLTextAreaElement).disabled).toBe(true)
-    expect(el.querySelector('.booth .bt-hint')?.textContent).toBe('Make a take of this box first. Then tell Fin what changes in the next one.')
+    expect(el.querySelector('.booth .bt-hint')?.textContent).toBe('Make a take of this box first. Then tell the Camera agent what changes in the next one.')
   })
 
   it('Make: the Change tab on a shot filmed with others offers to make it apart', async () => {
@@ -176,11 +176,11 @@ describe('the Booth in the Video rooms', () => {
     expect(apart).toEqual([shots[1]])
   })
 
-  it('Edit: Edie has no box', async () => {
+  it('Edit: The Edit agent has no box', async () => {
     const { shots, el, render } = await project()
     render(createElement(RoomBooth, { room: 'edit', data: data(shots), sel: {}, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
     await settle()
-    expect(el.querySelector('.booth .bt-agent')?.textContent).toContain('Edie · edits')
+    expect(el.querySelector('.booth .bt-agent')?.textContent).toContain('Edit agent')
     expect(el.querySelector('.booth textarea')).toBeNull()
   })
 

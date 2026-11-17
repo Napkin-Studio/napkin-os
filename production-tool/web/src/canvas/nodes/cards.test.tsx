@@ -69,7 +69,7 @@ describe('node cards, one per node (+ Node; ui-behaviour 3.3)', () => {
   })
 })
 
-describe("the script card while Skye's draft waits on a question (owner 2026-10-15)", () => {
+describe("the script card while the Script agent's draft waits on a question (owner 2026-10-15)", () => {
   const withWrite = (state: 'needs_input' | 'submitted') => {
     const p = project()
     const scriptId = mainScript(p.d)!.id
@@ -84,7 +84,7 @@ describe("the script card while Skye's draft waits on a question (owner 2026-10-
   it('says it waits for you with the question, not that she is writing', () => {
     const html = withWrite('needs_input')
     expect(html).toContain('Waiting for you: Open wide or close?')
-    expect(html).not.toContain('Skye is writing a draft')
-    expect(withWrite('submitted')).toContain('Skye is writing a draft')
+    expect(html).not.toContain('The Script agent is writing a draft')
+    expect(withWrite('submitted')).toContain('The Script agent is writing a draft')
   })
 })

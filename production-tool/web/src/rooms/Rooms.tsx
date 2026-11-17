@@ -161,7 +161,7 @@ export function Rooms() {
                   onDone={(text) => setDone((d) => ({ id: (d?.id ?? 0) + 1, text }))} />
               : <EditRoom data={data} sel={sel} onSel={setSel} onChange={openChange} onSound={() => setSound(true)} register={register} ready={ready} />}
           </div>
-          {/* The Booth (features/script-freeform.clan): Fin in Make, Edie in Edit. */}
+          {/* The Booth (features/script-freeform.clan): The Camera agent in Make, the Edit agent in Edit. */}
           <RoomBooth room={room} data={data} sel={sel} change={room === 'make' ? change : null} onChange={openChange}
             done={room === 'make' ? done : null} onUndo={() => { setDone(null); void undo(docStore) }}
             onApart={(shotId) => void takeShotOut(docStore, data.videoId, shotId).then(() => { setChange(null); setSel({ shotId }) })}

@@ -377,7 +377,7 @@ describe('what a card shows', () => {
     d.jobs[j.id] = j
     const s = summarise(d)
     expect(s.active).toBe(1)
-    expect(s.making).toBe('Fin is making the clip for shot 2')
+    expect(s.making).toBe('The Camera agent is making the clip for shot 2')
   })
 })
 

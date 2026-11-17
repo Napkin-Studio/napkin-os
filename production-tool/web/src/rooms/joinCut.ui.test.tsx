@@ -95,7 +95,7 @@ async function room(lengths: number[]) {
 }
 
 describe('the Make room strip', () => {
-  it('a gap flips a cut to a join and back, Fin says so in the Booth, and Undo restores it', async () => {
+  it('a gap flips a cut to a join and back, the Camera agent says so in the Booth, and Undo restores it', async () => {
     const r = await room([3.5, 3.5, 4, 4])
     expect(r.boxes()).toEqual([1, 1, 1, 1])
     expect(r.gaps().map((g) => [g.getAttribute('aria-pressed'), g.textContent])).toEqual([['false', 'cut'], ['false', 'cut'], ['false', 'cut']])

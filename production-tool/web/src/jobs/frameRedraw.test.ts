@@ -77,14 +77,14 @@ describe('the mode is kept with the job', () => {
     expect(purposeOf({ purpose: words, node: { kind: 'shot', id: 'shot_x' }, inputs: [] })).toEqual({ for: 'frame_edit', shotId: 'shot_x', mode: 'redraw' })
     expect(purposeWords({ for: 'frame_edit', shotId: 'shot_x' })).toBe('frame_edit')
   })
-  it('a job is a redraw when its purpose says so, or Dex read it so', () => {
+  it('a job is a redraw when its purpose says so, or the Director agent read it so', () => {
     expect(frameEditMode({ purpose: 'frame_edit redraw' })).toBe('redraw')
     expect(frameEditMode({ purpose: 'frame_edit', director: { model: 'm', promptVersion: 'director.v9.1', rationale: '', output: { frameEdit: { reading: 'redraw', runAs: 'frame' } } } } as never)).toBe('redraw')
     expect(frameEditMode({ purpose: 'frame_edit' })).toBe('edit')
   })
 })
 
-describe("the mock relay's reading (as the passthrough and Dex)", () => {
+describe("the mock relay's reading (as the passthrough and the Director agent)", () => {
   const input = { text: SWAP, shot: { id: 'shot_x', kind: 'shot', duration_s: 2, camera: { size: 'medium_wide' }, action: '', refs: [] } } as never
   it('asks a recast for words that swap the people, redraw recommended, nothing to type', () => {
     const q = mockFrameEdit(input).question!
@@ -102,7 +102,7 @@ describe("the mock relay's reading (as the passthrough and Dex)", () => {
 })
 
 describe('Redraw frame on the mock relay', () => {
-  it('sends mode redraw with the frame and the shot, keeps it in the purpose, and lands a proposal Dex read as redraw', async () => {
+  it('sends mode redraw with the frame and the shot, keeps it in the purpose, and lands a proposal the Director agent read as redraw', async () => {
     const m = await onMock()
     const v1 = currentFrame(m.doc.get(), m.shotId)!
     const jobId = await changeFrame(m.deps, m.shotId, SWAP, { mode: 'redraw' })

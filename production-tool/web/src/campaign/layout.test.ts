@@ -63,7 +63,7 @@ const size = (format_id: string, w: number, h: number, over: Partial<Size> = {})
   aspect: { w, h }, delivery: { width: w, height: h }, method: 'crop', media: 'image', ...over,
 })
 
-describe('Jude on the fixtures', () => {
+describe('The Review agent on the fixtures', () => {
   it('a clean Reels size passes; a logo moved into its bottom 35% is flagged', () => {
     const ok = checksFor(size('meta-reels-9x16', 1440, 2560), SET, DOC)
     expect(ok.logo_safe?.result).toBe('pass')
@@ -92,7 +92,7 @@ describe('Jude on the fixtures', () => {
   })
 })
 
-describe('Jude on what a picture cannot show (art-director)', () => {
+describe('The Review agent on what a picture cannot show (art-director)', () => {
   const boxes = [{ role: 'subject' as const, x: 600, y: 200, w: 300, h: 400 }]
   const SETP = { ...SET, protect: { boxes } }
   const made = (over: Partial<Size>) => size('meta-reels-9x16', 1440, 2560, { asset: `sha256:${'7'.repeat(64)}`, ...over })

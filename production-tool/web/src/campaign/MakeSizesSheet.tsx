@@ -134,7 +134,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
               {master.media === 'image' && <button type="button" className="btn xs ghost" onClick={() => setStep('protect')}>
                 {keepMiddle ? 'Keeping the middle' : `${boxes.length} kept in every size`} · Change</button>}
             </div>
-            <div className="cf-tray" role="list" aria-label="What Wren will make">
+            <div className="cf-tray" role="list" aria-label="What the Camera agent will make">
               {LANES.map((lane) => {
                 const mine = rows.filter((r) => r.channel === lane.channel)
                 if (!mine.length) return null

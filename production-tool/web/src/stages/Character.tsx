@@ -465,7 +465,7 @@ export function Character({ initial, active, onPictureEditor }: {
       if (r.made) {
         const el = canvas ? alive(canvas.elements()).find((e) => cardOf(e)?.id === r.storyboardId) : undefined
         const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
-        if (el) offerUndo({ label: 'Storyboard made from Script · Dex is planning the shots', at: { x: el.x + el.width / 2, y: el.y }, undo: () => { undoScene?.call(canvas, 'undo') } })
+        if (el) offerUndo({ label: 'Storyboard made from Script · The Director agent is planning the shots', at: { x: el.x + el.width / 2, y: el.y }, undo: () => { undoScene?.call(canvas, 'undo') } })
       }
     } catch (err) {
       setPlaceError(errText(err))
@@ -1189,7 +1189,7 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
           <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d={open ? 'M3 7.5 L6 4.5 L9 7.5' : 'M3 4.5 L6 7.5 L9 4.5'} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
         </button>
         <AgentFigure agent="dex" size={22} decorative />
-        <div className="tray-title"><b>What Dex will send</b><span>{sayer('dex')}</span></div>
+        <div className="tray-title"><b>What the Director agent will send</b><span>{sayer('dex')}</span></div>
       </div>
       {!open && <button type="button" className="tray-line" onClick={() => setOpen(true)}>{summary}</button>}
       {open && (
@@ -1324,7 +1324,7 @@ function StartCard({ onScript, onPictures }: { onScript: () => void; onPictures:
         <b>Start with the script</b>
         <span className="pt-mono">{sayer('skye')}</span>
       </div>
-      <p>Paste a script, or tell Skye the idea. Then draw or drop your characters, places and products.</p>
+      <p>Paste a script, or tell the Script agent the idea. Then draw or drop your characters, places and products.</p>
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <button type="button" className="btn" onClick={onPictures}>Add pictures</button>
         <button type="button" className="btn primary" onClick={onScript}>Write the script</button>

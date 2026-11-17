@@ -125,7 +125,7 @@ describe('mock relay', () => {
     if ('conflict' in again) expect(makeAjv().compile({ $ref: SCHEMA('relay-api') + '#/$defs/AnswerConflict' })(again.conflict)).toBe(true)
   })
 
-  it("[ask] in a write's lines stops Skye's draft at needs_input, as the relay's passthrough does", async () => {
+  it("[ask] in a write's lines stops the Script agent's draft at needs_input, as the relay's passthrough does", async () => {
     const { relay, advance } = setup()
     const target = { kind: 'scene' as const, id: newId('scene') }
     const write = { intent: 'draft' as const, target, base_hash: `sha256:${'d'.repeat(64)}`, lines: [{ type: 'action' as const, text: 'A jogger [ask]' }], context: { target_s: 15, neighbours: '', refs: [] } }

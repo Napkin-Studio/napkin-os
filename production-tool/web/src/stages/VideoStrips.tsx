@@ -60,7 +60,7 @@ export function VideoRows({ videoId, shots, rows, card, insert, selected, onSele
   const refusal = (row: Row) => row.state === 'refused' && (
     <div className="ve-refusal" role="status">
       <span><span aria-hidden="true">⚠ </span>Runway refused the words.</span>
-      <button type="button" className="btn xs primary" aria-haspopup="dialog" title="Dex rewords anything Runway refuses, once, and tries again" onClick={() => onMake(row)}>Try again</button>
+      <button type="button" className="btn xs primary" aria-haspopup="dialog" title="The Director agent rewords anything Runway refuses, once, and tries again" onClick={() => onMake(row)}>Try again</button>
       {row.shotIds.length > 1 && <button type="button" className="btn xs" aria-haspopup="dialog" onClick={() => onMakeSeparately(row)}>Make separately</button>}
     </div>
   )

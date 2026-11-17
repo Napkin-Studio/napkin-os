@@ -66,7 +66,7 @@ export function PhoneReview() {
           <svg width="28" height="20" viewBox="0 0 28 20" aria-hidden="true"><rect x="1" y="2" width="18" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M5 17h10" stroke="currentColor" strokeWidth="1.4" /><rect x="20" y="6" width="7" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>
           <span>You can watch and leave notes here. <b>Open on a laptop or iPad to edit.</b>{asks ? ` ${asks} ${asks === 1 ? 'question' : 'questions'} waiting · answer on a laptop or iPad.` : ''}</span>
         </div>
-        <div className="ph-head"><b>The ad</b>{render && <span className="pt-pill">v{render.version}</span>}{render && <span className="faint"><AgentFigure agent="edie" size={18} decorative /> rendered by Edie</span>}</div>
+        <div className="ph-head"><b>The ad</b>{render && <span className="pt-pill">v{render.version}</span>}{render && <span className="faint"><AgentFigure agent="edie" size={18} decorative /> rendered by the Edit agent</span>}</div>
         <div className="ph-player">
           {adUrl ? (
             <video ref={video} src={adUrl} controls playsInline preload="metadata" onTimeUpdate={(e) => setT(e.currentTarget.currentTime)} />

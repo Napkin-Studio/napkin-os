@@ -37,7 +37,7 @@ afterEach(() => {
 
 function Harness({ place, scoped, count, asks }: { place: BoothPlace; scoped?: boolean; count?: number; asks?: number }) {
   const state = useBooth(place)
-  return createElement(Booth, { state, scoped, count, asks, children: createElement('p', { className: 'inside' }, 'Skye') })
+  return createElement(Booth, { state, scoped, count, asks, children: createElement('p', { className: 'inside' }, 'The Script agent') })
 }
 
 function mount(props: { place: BoothPlace; scoped?: boolean; count?: number; asks?: number }, ui: Partial<UiState> = {}, width = 1600) {

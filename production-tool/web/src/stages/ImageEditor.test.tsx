@@ -202,7 +202,7 @@ describe('the edits and layers', () => {
   })
 })
 
-describe("arriving from Jude's brand flag", () => {
+describe("arriving from the Review agent's brand flag", () => {
   it('shows the rule at the top of the Edits panel, and nothing runs', async () => {
     const { el, services, ids } = await open()
     await act(async () => {
@@ -265,7 +265,7 @@ describe('the actions (3.12), none with a price', () => {
     const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
     act(() => byLabel(el, 'Remove what the mask covers')!.click())
     const tray = document.querySelector('.ie-tray')!
-    expect(tray.textContent).toContain('What Rhea will send to remove what is in the area')
+    expect(tray.textContent).toContain('What the Retouch agent will send to remove what is in the area')
     expect(tray.textContent).toContain('Mask 1')
     expect(tray.textContent).toContain('the background continues over it')
     expect(tray.textContent).not.toContain('"')
@@ -280,7 +280,7 @@ describe('the actions (3.12), none with a price', () => {
     act(() => { set.call(box, 'add condensation drops'); box.dispatchEvent(new Event('input', { bubbles: true })) })
     act(() => byText(el, 'Fill')!.click())
     const tray = document.querySelector('.ie-tray')!
-    expect(tray.textContent).toContain('What Rhea will send to fill the area')
+    expect(tray.textContent).toContain('What the Retouch agent will send to fill the area')
     expect(tray.textContent).toContain('Mask 1')
     expect(tray.textContent).toContain('"add condensation drops"')
     expect(tray.textContent).toContain('Ideogram 4.5 on Runway')

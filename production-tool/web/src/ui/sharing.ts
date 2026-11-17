@@ -31,7 +31,7 @@ export function sharingRows(allow: Allow, entries: Subprocessor[] = SUBPROCESSOR
       state = 'Always on: the tool runs on it'
     } else if (e.control === 'claude') {
       on = allow.claude
-      state = on ? 'On' : 'Off for your agency: Dex plans no shots, and directs without it'
+      state = on ? 'On' : 'Off for your agency: The Director agent plans no shots, and directs without it'
     } else {
       on = allow.makers.includes(e.id) || SPEND_POLICY.alwaysAllowed.includes(e.id)
       state = on ? 'On' : 'Off for your agency'

@@ -26,7 +26,7 @@ import { nextMomentTime, UNPLANNED_MOMENT } from './moments'
 export type FormatFocus = { key: string; editor: Editor | null } | null
 
 export const FORMAT_SKYE = 'Format as screenplay'
-export const FORMAT_SKYE_WHY = 'Skye lays your words out as a screenplay in the Booth. Nothing changes until you keep it.'
+export const FORMAT_SKYE_WHY = 'The Script agent lays your words out as a screenplay in the Booth. Nothing changes until you keep it.'
 export const FORMAT_TAB = 'cycles the elements as you write a screenplay.'
 
 /** What Skye is told for Format as screenplay: the words stay, the layout changes. */
@@ -77,7 +77,7 @@ export function FormatButton(p: FormatProps) {
   }, [open, focus])
   return (
     <>
-      <button ref={ref} type="button" className="btn se-fmt" aria-haspopup="menu" aria-expanded={open} data-tip="Format: screenplay elements, or Skye lays it out"
+      <button ref={ref} type="button" className="btn se-fmt" aria-haspopup="menu" aria-expanded={open} data-tip="Format: screenplay elements, or the Script agent lays it out"
         onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen(!open)}>
         Format
         <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" /></svg>

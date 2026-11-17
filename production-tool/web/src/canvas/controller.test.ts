@@ -228,7 +228,7 @@ describe('Generate on a sketch area', () => {
   })
 })
 
-describe('Fin’s ask on a sketch with no words and nothing linked', () => {
+describe('The Camera agent’s ask on a sketch with no words and nothing linked', () => {
   it('asks first and sends nothing until it is answered', async () => {
     withFrame(t)
     const r = await t.ctrl.generate(['F'], '')

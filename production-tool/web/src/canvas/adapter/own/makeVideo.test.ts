@@ -62,7 +62,7 @@ describe('Make video (3.5)', () => {
     await s.close()
   })
 
-  it('a Script alone: the Video beside it with a drives link, and the video waits on Dex\'s question', async () => {
+  it('a Script alone: the Video beside it with a drives link, and the video waits on the Director agent\'s question', async () => {
     const { a, s, doc } = await seeded()
     const sc = mainScript(doc())!.id
     const r = await makeVideo({ canvas: a, doc: s }, { scriptId: sc })

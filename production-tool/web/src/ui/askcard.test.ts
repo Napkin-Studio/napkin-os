@@ -67,7 +67,7 @@ describe('the ask card', () => {
   it('shows the question, why, its options and the Recommended mark', () => {
     const runner = fakeRunner()
     const html = renderToStaticMarkup(createElement(ServicesContext.Provider, { value: services(runner) }, createElement(AskCard, { ask: ASK })))
-    expect(html).toContain('Dex · directs')
+    expect(html).toContain('Director agent')
     expect(html).toContain('Is the umbrella red or yellow?')
     expect(html).toContain('The script says both.')
     expect(html).toContain('Red')

@@ -72,7 +72,7 @@ const PLAN = (shotIds: string[]): CutdownPlan => ({
   crops: shotIds.map((id, i) => ({ shotId: id, aspect: { w: 1080, h: 1920 }, keys: [{ at: 0, box: { x: 656.25, y: 0, w: 607.5, h: 1080 } }], cuts: i === 4 })),
 })
 
-describe('the master as Dex reads it', () => {
+describe('the master as the Director agent reads it', () => {
   it('every shot with its window, its take and its spoken line, in cut order', () => {
     const { d, shots, video } = master()
     const m = masterShots(d, video.id)
@@ -104,7 +104,7 @@ describe('a 15 s at 9:16', () => {
     expect(over).toBeCloseTo(0, 3)
     expect(size.edl![0]).toMatchObject({ in_s: 0, out_s: 2.5, crop: { x: 656.25, w: 607.5 }, crop_by: 'rule', take_size: { w: 1920, h: 1080 } })
   })
-  it('captions each spoken line in its time in the cut, and Jude counts them for sound off', () => {
+  it('captions each spoken line in its time in the cut, and the Review agent counts them for sound off', () => {
     const { d, size, set } = sized()
     const caps = captionLayers(d, size.edl!, { x: 0.1, y: 0.6, w: 0.8, h: 0.08 })
     expect(caps).toHaveLength(1)

@@ -26,7 +26,7 @@ type Doc = ProductionDocument
 type StartOpts = { selection?: Span; seconds?: number; explicit?: boolean; instruction?: string; mode?: WriteMode }
 
 export const SKYE_LINE = 'Tell me what to write or change. It waits here until you keep it.'
-export const SKYE_PLACEHOLDER = 'Tell Skye what to write or change…'
+export const SKYE_PLACEHOLDER = 'Tell the Script agent what to write or change…'
 
 export interface SkyeBoothProps {
   booth: BoothState
@@ -164,7 +164,7 @@ export function SkyeBooth(p: SkyeBoothProps) {
   }
 
   const verbs = (list: typeof SKYE_OPTIONS) => (
-    <div className="bt-verbs" role="toolbar" aria-label="Ask Skye to">
+    <div className="bt-verbs" role="toolbar" aria-label="Ask the Script agent to">
       {list.map((o) => <button key={o.intent} type="button" disabled={busy || asking || handsOff || skye.off || skye.quota} onClick={() => void verb(o.intent)}>{o.label(seconds)}</button>)}
     </div>
   )
@@ -172,9 +172,9 @@ export function SkyeBooth(p: SkyeBoothProps) {
     ? <ScopeChip on label="Your selection" quote={scope.span.text.length > 60 ? `${scope.span.text.slice(0, 60)}…` : scope.span.text} onClear={clearScope} clearLabel="Apply to the whole script" />
     : scope.kind === 'part' ? <ScopeChip on label={`This part · ${scope.label}`} onClear={clearScope} clearLabel="Apply to the whole script" />
       : <ScopeChip label={scope.label} />
-  const placeholder = scope.kind === 'selection' ? 'Tell Skye what to change in your selection…' : scope.kind === 'part' ? 'Tell Skye what to change in this part…' : SKYE_PLACEHOLDER
+  const placeholder = scope.kind === 'selection' ? 'Tell the Script agent what to change in your selection…' : scope.kind === 'part' ? 'Tell the Script agent what to change in this part…' : SKYE_PLACEHOLDER
   const hint: ReactNode = skye.off ? NOT_HERE : skye.quota ? QUOTA_OUT
-    : handsOff ? <>{HANDS_OFF_LINE} <button type="button" className="btn sm link" onClick={() => setAnyway(true)}>Ask her</button></> : null
+    : handsOff ? <>{HANDS_OFF_LINE} <button type="button" className="btn sm link" onClick={() => setAnyway(true)}>Ask it anyway</button></> : null
 
   // What waits for the person: Skye's questions on drafts, her questions on names, Dex's on shots a re-plan left out.
   const shotAsks = openAsks(doc).filter((a) => !!askedShot(a) && composed.shots.some((s) => s.id === askedShot(a)))
@@ -213,21 +213,21 @@ export function SkyeBooth(p: SkyeBoothProps) {
           <header className="bc-hd"><span className="bc-who">This part · {scope.label}</span></header>
           <div className="bc-text quiet">{scope.text}</div>
           <p className="bc-note">{scope.target.kind === 'shot'
-            ? `Planned: ${scope.label.toLowerCase()} runs ${doc.shots[scope.target.id]?.duration_s ?? 0} s. What you tell Skye below applies to this shot only.`
-            : 'Not planned yet. What you tell Skye below applies to this part only.'}</p>
+            ? `Planned: ${scope.label.toLowerCase()} runs ${doc.shots[scope.target.id]?.duration_s ?? 0} s. What you tell the Script agent below applies to this shot only.`
+            : 'Not planned yet. What you tell the Script agent below applies to this part only.'}</p>
           {verbs(SKYE_OPTIONS.filter((o) => o.intent !== 'write_vo'))}
         </article>
       )}
-      <BoothBox key={scope.kind === 'whole' ? 'whole' : scope.kind === 'part' ? `part:${scope.label}` : 'sel'} placeholder={placeholder} button="Ask Skye" scope={chip}
+      <BoothBox key={scope.kind === 'whole' ? 'whole' : scope.kind === 'part' ? `part:${scope.label}` : 'sel'} placeholder={placeholder} button="Ask the Script agent" scope={chip}
         onSend={send} busy={asking} disabled={skye.off || skye.quota || busy || handsOff} hint={hint} />
       {scope.kind === 'selection' && verbs(SKYE_OPTIONS)}
       {waits.length > 0 && <BoothSection label="Waiting for you" count={waits.length} />}
       {waits.map((w) => w.node)}
-      {fromSkye && <BoothSection label="From Skye" />}
-      {p.planning && <WorkingCard agent="dex" text="Dex is planning the shots from the script." />}
-      {skye.working && <WorkingCard agent="skye" text="Skye is writing…" />}
+      {fromSkye && <BoothSection label="From the Script agent" />}
+      {p.planning && <WorkingCard agent="dex" text="The Director agent is planning the shots from the script." />}
+      {skye.working && <WorkingCard agent="skye" text="The Script agent is writing…" />}
       {mine.map((s) => <SkyeCard key={s.id} sug={s} {...p} decided={decided} />)}
-      {others.map((s) => <NoteCard key={s.id} agent="skye" label="drafting" body={`Skye is drafting for ${s.for.replace(/^human:/, '')}.`} />)}
+      {others.map((s) => <NoteCard key={s.id} agent="skye" label="drafting" body={`The Script agent is drafting for ${s.for.replace(/^human:/, '')}.`} />)}
       {skye.newScene && !skye.working && !skye.waiting && <NoteCard agent="skye" label="note" body={NEW_SCENE_LINE} />}
       {done.map((d) => <DoneCard key={d.id} agent="skye" text={d.text} onUndo={d.undo ? () => { setDone((x) => x.filter((y) => y.id !== d.id)); void store.undo() } : undefined} />)}
       {!waits.length && !fromSkye && (
@@ -282,7 +282,7 @@ function SkyeCard({ sug, store, doc, composed, requestOf, empty, onWrite, onWhy,
   const lines = isDraft ? draftLines(doc, sug) : null
   const diff = isDraft ? [] : trimDiff(wordDiff(before, sug.proposed.text))
   return (
-    <article className={`bc ${stale ? 'stale' : ''}`} role="group" aria-label={`Skye's ${isDraft ? 'draft' : 'edit'}`} data-suggestion={sug.id}>
+    <article className={`bc ${stale ? 'stale' : ''}`} role="group" aria-label={`The Script agent's ${isDraft ? 'draft' : 'edit'}`} data-suggestion={sug.id}>
       <CardHead agent="skye" label={isDraft ? 'draft' : 'edit'} time={ago(doc.jobs[sug.job_id]?.updated_at ?? doc.jobs[sug.job_id]?.created_at)} />
       <p className="bc-note">{asked.lead}{asked.quote ? <>: <q>{asked.quote}</q></> : null}</p>
       {lines ? (
@@ -305,7 +305,7 @@ function SkyeCard({ sug, store, doc, composed, requestOf, empty, onWrite, onWhy,
           </>
         ) : (
           <>
-            <button type="button" className="btn sm dark" disabled={busy} onClick={() => void act(() => keep(store, sug.id), isDraft ? 'Kept. Skye’s draft is on the page.' : 'Kept. The change is on the page.', true)}>Keep</button>
+            <button type="button" className="btn sm dark" disabled={busy} onClick={() => void act(() => keep(store, sug.id), isDraft ? 'Kept. The Script agent’s draft is on the page.' : 'Kept. The change is on the page.', true)}>Keep</button>
             <button type="button" className="btn sm" disabled={busy} onClick={() => void act(() => discardDraft(store, sug.id), 'Discarded. The page is as it was.', false)}>Discard</button>
           </>
         )}
@@ -315,7 +315,7 @@ function SkyeCard({ sug, store, doc, composed, requestOf, empty, onWrite, onWhy,
       {showWhy && (
         <div className="bc-why">
           {sug.note}{' '}
-          <button type="button" className="btn sm link" onClick={() => onWhy({ label: 'Skye\'s draft', addresses: [`${docId}#suggestions[${sug.id}]`, `${docId}#jobs[${sug.job_id}]`, `${docId}#${sug.target.kind}s[${sug.target.id}]`] })}>In History</button>
+          <button type="button" className="btn sm link" onClick={() => onWhy({ label: 'The Script agent\'s draft', addresses: [`${docId}#suggestions[${sug.id}]`, `${docId}#jobs[${sug.job_id}]`, `${docId}#${sug.target.kind}s[${sug.target.id}]`] })}>In History</button>
         </div>
       )}
     </article>

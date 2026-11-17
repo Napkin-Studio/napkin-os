@@ -60,8 +60,8 @@ const capital = (s: string) => s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpp
 type Action = 'fill' | 'remove' | 'whole' | 'upscale'
 const SENDING: Record<Action, string> = { fill: 'sending the fill', remove: 'sending the removal', whole: 'sending the change', upscale: 'sending the upscale' }
 const TRAY_TITLE: Record<Action, string> = {
-  fill: 'What Rhea will send to fill the area', remove: 'What Rhea will send to remove what is in the area',
-  whole: 'What Rhea will send to change the frame', upscale: 'What Rhea will send to upscale',
+  fill: 'What the Retouch agent will send to fill the area', remove: 'What the Retouch agent will send to remove what is in the area',
+  whole: 'What the Retouch agent will send to change the frame', upscale: 'What the Retouch agent will send to upscale',
 }
 const TRAY_SEND: Record<Action, string> = { fill: 'Fill', remove: 'Remove', whole: 'Change', upscale: 'Upscale' }
 type MaskEdit = Extract<Edit, { kind: 'mask' }>
@@ -434,7 +434,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     ...(a === 'fill' && activeMask ? [{ what: activeMask.name, detail: keepOutside ? 'only the blue area changes' : 'the whole result is kept' }] : []),
     ...(a === 'remove' && activeMask ? [{ what: activeMask.name, detail: 'what it covers goes; the background continues over it' }] : []),
     ...(a === 'remove' ? [] : a === 'fill' ? [{ what: `"${fill.trim()}"` }] : a === 'whole' ? [{ what: `"${whole.trim()}"`, detail: 'the composition and size stay' }] : [{ what: `${scale}× larger`, detail: upscaleSize(W, H, scale) }]),
-    ...(sent?.leftOut ? [{ what: capital(leftOutLine(sent.leftOut)), detail: 'Rhea sends what you see' }] : []),
+    ...(sent?.leftOut ? [{ what: capital(leftOutLine(sent.leftOut)), detail: 'The Retouch agent sends what you see' }] : []),
   ]
   const step = nextStep(session)
 
@@ -556,7 +556,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
           </div>
 
           <section className="ie-edits" aria-label="Edits not applied yet">
-            {check && <div className="ie-rule" role="note"><AgentFigure agent="jude" size={16} decorative /> <b>Jude · judges:</b> {check.note}</div>}
+            {check && <div className="ie-rule" role="note"><AgentFigure agent="jude" size={16} decorative /> <b>Review agent:</b> {check.note}</div>}
             <div className="ie-edithead">
               <h2 className="pt-label">Edits · not applied yet</h2>
               <span className="pt-grow" />
@@ -708,7 +708,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
 function RedrawOffer({ askId, n, onRedraw, onAnyway }: { askId: string; n: number; onRedraw: () => void; onAnyway: () => void }) {
   useEffect(() => placeAsk(askId), [askId])
   return (
-    <div className="ie-offer" role="group" aria-label="Dex offers a redraw">
+    <div className="ie-offer" role="group" aria-label="The Director agent offers a redraw">
       <div className="row"><AgentFigure agent="dex" size={24} state="needs-you" decorative /><p><b>{frameEditCopy.recast.title}</b> {frameEditCopy.recast.bodyWhole(n)}</p></div>
       <div className="row">
         <button type="button" className="btn sm dark" onClick={onRedraw}>{frameEditCopy.recast.redrawN(n)}</button>
@@ -746,7 +746,7 @@ function shotsOfFrame(doc: ReturnType<typeof useDoc>, shotId: string): number {
 function whyNotPainted(kind: string): string {
   if (kind === 'frame') return 'Locked: the version you opened. Brush or lasso makes a new mask over it.'
   if (kind === 'text') return 'Words: move them with Select (V), retype with Text (T). Brush or lasso makes a new mask.'
-  return "Rhea's result. Brush or lasso makes a new mask over it."
+  return "The Retouch agent's result. Brush or lasso makes a new mask over it."
 }
 
 /** What Rhea says under the stage: at work, or why the picture could not be drawn. */
@@ -761,21 +761,21 @@ function RheaLine({ busy, drawError }: {
   return (
     <div role="status" className={`ie-said ${bad ? 'bad' : ''}`}>
       <AgentFigure agent="rhea" size={18} state={busy ? 'working' : 'idle'} decorative />
-      <span><b>Rhea · retouches:</b> {line}</span>
+      <span><b>Retouch agent:</b> {line}</span>
     </div>
   )
 }
 
 export function VersionRow({ f, open, onPick }: { f: Frame; open: boolean; onPick: () => void }) {
   const url = useBlobUrl(f.asset)
-  const who = f.crew === 'rhea' ? 'Rhea' : f.crew === 'dex' ? 'Dex' : 'Fin'
+  const who = f.crew === 'rhea' ? 'The Retouch agent' : f.crew === 'dex' ? 'The Director agent' : 'The Camera agent'
   const what = f.kind === 'edited' ? 'edited' : f.kind === 'original' ? 'as it was on the canvas' : f.version === 1 ? `drawn by ${who}` : `redrawn by ${who}`
   return (
     <button type="button" role="menuitem" className={`ie-vrow ${open ? 'on' : ''}`} aria-current={open || undefined} onClick={onPick}>
       <span className="ie-vthumb">{url && <img src={url} alt="" />}</span>
       <span className="ie-vtext">
         <span><span className="pt-mono">v{f.version}</span> · {what}{open ? ' · open now' : ''}</span>
-        <span className="faint">{f.kind === 'edited' ? `${f.edits?.length ?? 0} edits by Rhea` : f.kind === 'original' ? 'before its first edit' : f.model ?? (f.kind === 'mock' ? 'the mock' : '')}</span>
+        <span className="faint">{f.kind === 'edited' ? `${f.edits?.length ?? 0} edits by the Retouch agent` : f.kind === 'original' ? 'before its first edit' : f.model ?? (f.kind === 'mock' ? 'the mock' : '')}</span>
       </span>
     </button>
   )
