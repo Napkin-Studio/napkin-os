@@ -25,6 +25,17 @@ def run_hash(run_path: Path) -> str:
     return hashlib.sha256(run_path.read_bytes()).hexdigest()[:12]
 
 
+def plan_hash(run_path: Path) -> str:
+    """12 hex of the saved plan file: recorded in every frames manifest, so frames from another plan are refused."""
+    return hashlib.sha256(plan_path(run_path).read_bytes()).hexdigest()[:12]
+
+
+def missing(plan: dict | None, ids: list[str]) -> list[str]:
+    """Territory ids the plan has no four shots for (a plan made for another run): such a plan must not be used."""
+    have = (plan or {}).get("territories") or {}
+    return [i for i in ids if len(have.get(i) or []) < len(SHOTS)]
+
+
 def estimate() -> dict:
     """The plan call's own cost card line: one Sonnet call, scaled like the pipeline's card (an estimate)."""
     usd = round(cost._price("claude-sonnet-5-5", 6000, 3500) * cost.CALIBRATION, 4)
@@ -64,6 +75,8 @@ def load(run_path: Path) -> dict | None:
 
 def make(run: dict, run_path: Path, llm, banned: list[str] | None = None) -> dict:
     """One call through ``llm`` (LiveLLM in a live run, FakeLLM in tests). Saved only when every territory has four shots."""
+    if plan_path(run_path).exists():
+        raise PlanError(f"{plan_path(run_path).name} already exists: the plan is made once and never overwritten (the words of every picture stay the same)")
     ids = [t["id"] for t in run.get("territories", [])]
     obj, usage = llm("frames_plan", prompt("frames_plan"), json.dumps(_payload(run, banned or []), ensure_ascii=False))
     plan = {"run": run_path.name, "run_sha256_12": run_hash(run_path), "model": (usage or {}).get("model"), "usd": (usage or {}).get("usd"),

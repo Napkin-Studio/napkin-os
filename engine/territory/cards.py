@@ -27,8 +27,9 @@ def card(t: dict, result: dict, frames: list | None = None) -> dict:
 
 def deck_visual(frames: list, name: str | None) -> dict | None:
     """The Deck Maker image slot (deck.schema.json ``visual``: kind image_prompt, prompt, status) plus an ``image`` path:
-    the first frame no check or person has flagged. None when there is none, so a flagged frame never flows into a deck."""
-    ok = next((f for f in frames if not f.get("flagged")), None)
+    the first frame that is not flagged AND has either passed the guard check or been accepted by a person. None when there is
+    none: a flagged frame, and a frame nobody has checked (guard skipped, Ollama down), never flow into a deck (fail closed)."""
+    ok = next((f for f in frames if not f.get("flagged") and (f.get("guard_checked") or f.get("approved"))), None)
     if not ok:
         return None
     return {"kind": "image_prompt", "prompt": f"Mood frame for '{name}': {ok.get('prompt', '')}".strip(), "status": "illustrative, not final",
