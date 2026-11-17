@@ -112,7 +112,8 @@ test('a double-click opens a picture on its own; in a group the first picks it o
   await page.mouse.click(...centre(b))
   await page.keyboard.up('Shift')
   await page.keyboard.press('Control+g')
-  await page.mouse.click(30, 860)
+  // An empty spot to clear the selection: bottom centre (the zoom pill sits bottom left, the tool rail on the left).
+  await page.mouse.click(720, 860)
   await page.mouse.click(...centre(b))
   expect((await selected(page)).sort()).toEqual([a.id, b.id].sort())
 
