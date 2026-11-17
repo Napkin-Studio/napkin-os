@@ -219,6 +219,27 @@ python3 -m deck.bench compare BEFORE.json AFTER.json [--format text|md|json] [--
   `title_box`, `body_columns` and `font_families` (they add nothing to qa.json).
 - Tests: `tests/test_checklist.py` (76 tests). The full deck suite is 559 offline tests.
 
+## The vision critic bench, phase 1 (`deck/bench/visual*.py`, `deck/visual_rubric.json`; feature deck-vision-critic)
+
+An eye that looks at the rendered slide, measured against a person before any of its questions is trusted. Phase 1 is the
+measurement only: nothing in `run_deck`, a prompt, a deck or an export reads it, and every question is `off` until graded.
+
+```
+python3 -m deck.bench visual renders OUT_DIR                       # two renders of each invented fixture (needs LibreOffice)
+python3 -m deck.bench visual pack OUT_DIR/* --session A --out PAGE_DIR --seed N    # blind grading page + key.json (no model)
+python3 -m deck.bench visual run --key KEY --images PAGE_DIR --max-usd 2.5 --out visual.json [--recordings DIR | --live --yes-cost]
+python3 -m deck.bench visual agree grades.json visual.json --key KEY               # writes bench/baseline/critic_trust.json
+python3 -m deck.bench.spike_image --print-command                  # the transport spike (one tiny invented picture)
+```
+
+`visual_rubric.json` holds ten yes-is-good questions (version 1); canned messages and confirm bands live in
+`bench/visual_data.json` until phase 2. `pack` seeds frozen faults (listed only in the key), adds repeats for the person's
+self-agreement, and writes a page with no critic answer, fixture name, phase or seeded mark. `run` reserves each call's worst
+case against `--max-usd` before it starts; a live run uses the Napkin API key (never the Claude Code login) and needs
+`--live --yes-cost` after its cost card. `agree` reports natural and seeded slides apart, the critic and a code-only baseline
+on the same answers, and sets a state by pre-registered gates; the trust file carries a digest and a key (rubric version,
+prompt sha, model, image size, LibreOffice, fonts), so a hand edit or a changed setup reads as off.
+
 ## The evaluation bench (`deck/bench`)
 
 Offline scoring of finished decks, so "the pipeline makes it better" is measured rather than felt (DECK-CRAFT-PLAN 4.3, roadmap item 7). It makes no model call unless `--live --claude-judge` are both given; judges are Claude-only by default (ADR 0006).
