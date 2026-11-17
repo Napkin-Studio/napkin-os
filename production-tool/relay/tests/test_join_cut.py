@@ -42,9 +42,10 @@ def test_v11_is_v10_with_the_take_tied_to_its_frames():
     assert changed[0].startswith("  - `take_refs`:") and "follows image k" in changed[0] and "No frame is pinned" in changed[0]
 
 
-def test_the_configs_run_v11_and_the_check_allows_it():
+def test_the_configs_run_v12_and_the_check_allows_v11():
+    """v12 is v11 plus frame-edit-or-redraw's lines; v11 stays allowed for a rollback."""
     for name in ("config.live.json", "config.testing.json", "config.pathway.runway.json"):
-        assert json.loads((CONTRACTS / "examples" / name).read_text())["director"]["promptVersion"] == "director.v11", name
+        assert json.loads((CONTRACTS / "examples" / name).read_text())["director"]["promptVersion"] == "director.v12", name
     assert '"director.v11"' in (CONTRACTS / "check.py").read_text()
 
 

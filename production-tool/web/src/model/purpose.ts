@@ -40,7 +40,7 @@ export type JobPurpose =
   | { for: 'sketch'; sketchId: Id }
   /** Change this frame (features/frame-change-edit.clan): a proposal on the shot's frame `parentFrameId`,
    *  landed unpicked until Apply or Keep both (jobs/frameEdit.ts). */
-  | { for: 'frame_edit'; shotId: Id; parentFrameId?: Id }
+  | { for: 'frame_edit'; shotId: Id; parentFrameId?: Id; mode?: 'redraw' }
   /** An Image editor action (features/image-editor.clan) on a shot's frame or a canvas picture
    *  (features/edit-canvas-pictures.clan), from its version `parentFrameId` when it has one: Fill area,
    *  Change whole frame or Upscale. Its result lands nowhere: the
@@ -71,6 +71,7 @@ export function purposeWords(p: JobPurpose): string {
   if (p.for === 'reframe') return `reframe ${p.key}`
   if (p.for === 'run') return `run ${p.runId}`
   if (p.for === 'remake') return `remake ${p.parentId}`
+  if (p.for === 'frame_edit' && p.mode) return `frame_edit ${p.mode}`  // Redraw frame (features/frame-edit-or-redraw.clan)
   return p.for === 'frame' && p.how ? `frame ${p.how}` : p.for
 }
 
@@ -156,7 +157,7 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
     case 'frame_edit': {
       if (j.node.kind !== 'shot') return null
       const pf = parent('frame')
-      return { for: kind, shotId: j.node.id, ...(pf ? { parentFrameId: pf } : {}) }
+      return { for: kind, shotId: j.node.id, ...(pf ? { parentFrameId: pf } : {}), ...(how === 'redraw' ? { mode: 'redraw' as const } : {}) }
     }
     case 'image_edit': {
       const pf = parent('frame')
