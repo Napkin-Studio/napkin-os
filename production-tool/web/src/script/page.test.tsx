@@ -196,7 +196,7 @@ describe('the Script editor page', () => {
     expect(el.querySelector('.av-row.open .av-marker')?.textContent).toBe('0:00')
   })
 
-  it("'This script' at the foot of the Script agent's Booth lists a name with no ref yet, with the shots that use it", async () => {
+  it("References · N in the band lists a name with no ref yet, with the shots that use it", async () => {
     const { services, el, render } = await open()
     const store = services.clan!
     await act(async () => {
@@ -208,7 +208,8 @@ describe('the Script editor page', () => {
     })
     render()
     await settle()
-    const ref = el.querySelector('.booth .bt-facts .bt-ref')
+    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent?.startsWith('References ·'))!.click() })
+    const ref = document.querySelector('.se-refs .bt-ref')
     expect(ref?.textContent).toBe('@jogger · no ref yet')
     expect(ref?.getAttribute('title')).toBe('In shot 1')
   })
@@ -235,15 +236,18 @@ describe('the Script editor page', () => {
     })
     render()
     await settle()
-    const refs = () => [...el.querySelectorAll('.booth .bt-facts .bt-ref')].map((r) => r.textContent)
+    const refsButton = () => [...el.querySelectorAll('button')].find((b) => b.textContent?.startsWith('References ·'))!
+    expect(refsButton().textContent).toBe('References · 1')
+    await act(async () => { refsButton().click() })
+    const refs = () => [...document.querySelectorAll('.se-refs .bt-ref')].map((r) => r.textContent)
     expect(refs()).toEqual(['@loc_beach'])
-    expect(el.querySelector('.bt-facts [aria-label="References · 1"]')).not.toBeNull()
     await act(async () => {
       await updateDoc(services.doc, (d) => { delete d.links[linkId] }, 'unlink')
       await services.doc.flush()
     })
     await settle()
     expect(refs()).toEqual([])
+    expect(refsButton().textContent).toBe('References · 0')
   })
 
   it('deletes a shot from its Delete control, and Undo brings it back (item 4)', async () => {
@@ -313,20 +317,21 @@ describe("The Script agent's question on a draft (owner 2026-10-15: shown nowher
     return { jobId, askId: q }
   }
 
-  it("a question whose item is gone waits in the Script agent's Booth (features/script-freeform.clan)", async () => {
+  it("a question whose item is gone waits on the sheet, under its head (features/production-new-ui.clan)", async () => {
     const { services, el, render, scriptId } = await open()
     let askId = ''
     await act(async () => { askId = (await waitingWrite(services, scriptId, { kind: 'scene', id: id('scene') })).askId })
     render()
     await settle()
-    const card = el.querySelector(`.booth [data-ask="${askId}"]`)
+    const card = el.querySelector(`.se-waits [data-ask="${askId}"]`)
     expect(card?.textContent).toContain('Open on the hall or on the samurai?')
     expect([...card!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(expect.arrayContaining(['The hall', 'The samurai']))
-    expect(el.querySelector('.booth .bt-sec')?.textContent).toBe('Waiting for you1')
-    expect(el.querySelector('.booth')!.textContent).not.toContain("I'm writing that now")
+    expect(el.querySelector('.se-waits-hd')?.textContent).toBe('Needs your call · 1')
+    expect(el.querySelector('.se-waits')!.textContent).not.toContain("I'm writing that now")
+    expect(el.querySelector('.booth')).toBeNull()
   })
 
-  it('a question on a scene that is on the page waits in the Booth too, never on the page', async () => {
+  it('a question on a scene that is on the page waits on the sheet too; no Booth comes for it', async () => {
     const { services, el, render, scriptId } = await open()
     let askId = ''
     await act(async () => {
@@ -336,8 +341,8 @@ describe("The Script agent's question on a draft (owner 2026-10-15: shown nowher
     })
     render()
     await settle()
-    expect(el.querySelector(`.booth [data-ask="${askId}"]`)).not.toBeNull()
-    expect(el.querySelector(`.se-page [data-ask="${askId}"]`)).toBeNull()
+    expect(el.querySelector(`.se-waits [data-ask="${askId}"]`)).not.toBeNull()
+    expect(el.querySelector('.booth')).toBeNull()
   })
 
   it("the tray's Show brings the question into view with the focus on its first answer", async () => {

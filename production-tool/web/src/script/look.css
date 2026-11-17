@@ -92,3 +92,67 @@
 select.se-target option { color: var(--ink); background: var(--card); }
 .se-target.custom { border: 0; cursor: auto; }
 .se-target.custom input { width: 4.5em; font: inherit; color: var(--ink); background: var(--soft-2); border: 1px solid var(--tool); border-radius: 6px; padding: 0 4px; }
+
+/* ── The Script editor in the new UI (features/production-new-ui.clan; mock production-new-ui-v2 "script"): the desk,
+   the outline as a plain list on the left, the page as a paper sheet with its tab and head, the Director agent's
+   next step and what waits as lines on the sheet, drafts where they change things. No Booth until a line is
+   selected or the Script agent is asked on purpose. Paper in dark too. ── */
+.se { background: var(--desk); background-image: none; }
+.se-body { grid-template-columns: 240px minmax(0, 1fr); padding: 0; }
+.se-body:has(> .booth-col) { grid-template-columns: 240px minmax(0, 1fr) auto; }
+.se-outline { background: transparent; border: 0; box-shadow: none; backdrop-filter: none; border-radius: 0; padding: 26px 8px 24px 24px; }
+.se-outline .ol-head { padding: 0 8px 8px; font: 600 10.5px var(--font-mono); letter-spacing: .08em; color: var(--muted); }
+.se-outline .se-keycard { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.se-page { padding: 28px 24px 60px; }
+.se-sheet { position: relative; width: min(760px, 100%); min-height: 760px; margin: 18px auto 0; background: #FFFDF8; color: #141413; border-radius: 3px; box-shadow: var(--shadow-paper);
+  --ink: #141413; --ink2: #3A372F; --ink3: #6D655A; --muted: #6D655A; --faint: #9A9183; --line: #E2D9C8; --line-soft: #EDE6D8; --card: #FFFDF8; --soft: #F6F1E6; --paper: #FFFDF8; }
+html[data-theme='dark'] .se-sheet { box-shadow: 0 24px 60px -24px rgba(0, 0, 0, .7); }
+.se-sheet .stab { position: absolute; top: -21px; left: 22px; height: 21px; padding: 0 10px 0 8px; display: inline-flex; align-items: center; gap: 6px; font: 600 10.5px var(--font-mono);
+  letter-spacing: .1em; text-transform: uppercase; background: #FBF8F1; border: 1px solid #E2DACB; border-bottom: 0; border-radius: 3px 3px 0 0; color: #141413; }
+.se-sheet .stab::before { content: ''; width: 14px; height: 9px; background: repeating-linear-gradient(135deg, #1C1F24 0 3px, #FBF8F1 3px 6px); }
+.se-sheet .sh-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 34px 56px 22px; border-bottom: 1px solid #E2DACB; }
+.se-sheet .sh-head small { display: block; font: 600 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: #6D655A; margin-bottom: 8px; }
+.se-sheet .sh-head h1 { margin: 0; font: 800 30px/1.1 var(--font-ui); letter-spacing: -.025em; }
+.se-sheet .sh-head .r { font: 500 11px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: #3A372F; text-align: right; }
+.se-sheet .sheet-note { margin: 14px 56px 0; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-radius: 4px;
+  background: color-mix(in srgb, #E7D5AC 30%, #FBF8F1); font-size: 13px; }
+.se-sheet .sheet-note .wl { display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
+.se-sheet .sheet-note .sp-btn { background: #FFFDF8; color: #141413; border-color: #E2DACB; }
+.se-sheet .se-page-sp, .se-sheet .sp-rows { background: transparent; border: 0; box-shadow: none; border-radius: 0; max-width: none; margin: 0; padding: 30px 72px 60px 96px; font: 400 17px/1.7 var(--font-ui); }
+.se-sheet .sp-rows .fragment, .se-sheet .sp-rows .sp-static { font: 400 17px/1.7 var(--font-ui); }
+.se-sheet .sp-rows[data-page='screenplay'] .fragment, .se-sheet .sp-rows[data-page='screenplay'] .sp-static { font: 400 14.5px/1.65 var(--f-mono); }
+.se-waits, .se-offpage { margin: 14px 56px 0; display: flex; flex-direction: column; gap: 10px; }
+.se-waits-hd .tagcall { font: 700 9px/16px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; padding: 0 7px; border-radius: 999px; background: #FEF3DC; color: #B45309; border: 1px solid rgba(180, 83, 9, .35); }
+.se-draft { border: 1px solid color-mix(in srgb, var(--ag-base, #1E22AA) 40%, #E2D9C8); background: color-mix(in srgb, var(--ag-base, #1E22AA) 5%, #FFFDF8); border-radius: 4px;
+  padding: 10px 12px; margin: 6px -12px 14px; font: 400 15px/1.6 var(--font-ui); color: #141413; user-select: text; }
+.se-draft .dh { display: flex; align-items: center; gap: 8px; font: 600 10px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: #1E22AA; margin-bottom: 6px; }
+.se-draft .dh .where { color: #6D655A; }
+.se-draft .note { margin: 0 0 6px; font-size: 12.5px; color: #6D655A; }
+.se-draft .text { display: grid; gap: 4px; }
+.se-draft .text .l { white-space: pre-wrap; }
+.se-draft del { color: #9A9082; }
+.se-draft ins { text-decoration: none; background: color-mix(in srgb, #1D8A4E 14%, transparent); }
+.se-draft .acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.se-draft .acts button { height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid #E2D9C8; background: #fff; font: 600 12px var(--font-ui); color: #141413; cursor: pointer; }
+.se-draft .acts button.k { background: #141413; color: #FFFDF8; border-color: #141413; }
+.se-draft .acts button:disabled { opacity: .5; cursor: default; }
+.se-draft .why { margin-top: 8px; font-size: 12.5px; color: #3A372F; }
+.se-draft.stale { opacity: .85; border-style: dashed; }
+.se-facts { display: inline-flex; align-items: center; gap: 8px; }
+.se-facts .meta { font: 500 12px var(--font-mono); color: var(--muted); }
+.se-facts .fit { font: 600 10.5px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: var(--ok-soft, color-mix(in srgb, var(--ok) 14%, transparent)); color: var(--ok); }
+.se-facts .fit.over { background: var(--warn-soft, color-mix(in srgb, var(--warn) 14%, transparent)); color: var(--warn); }
+.se-facts .fit.none { background: none; color: var(--muted); }
+.se-ask[aria-pressed='true'] { border-color: var(--ink); }
+.se-refs { width: 320px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.se-refs .bt-refs { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 1179px) { .se-body, .se-body:has(> .booth-col) { grid-template-columns: minmax(0, 1fr); } .se-body:has(> .booth-col) { grid-template-columns: minmax(0, 1fr) auto; } }
+@media (max-width: 720px) { .se-sheet .sp-rows { padding: 20px 18px 40px; } .se-sheet .sh-head { padding: 24px 20px 16px; } .se-sheet .sheet-note, .se-waits { margin: 12px 20px 0; } }
+.se-outline, .se-outline.nothing { background: transparent !important; border: 0; box-shadow: none; }
+.se-sheet .sh-head .r { white-space: nowrap; }
+.se-partmark { border-left-color: #141413; border-radius: 3px; background: color-mix(in srgb, #F6E36B 40%, transparent); }
+.se-saved { font: 500 11.5px var(--font-mono); color: var(--muted); }
+/* The canvas stays mounted under the Script editor (its jobs keep landing) but is not shown: the one sphere
+   scene draws every visible sphere over the page, so the Start card's would show through the sheet. */
+body:has(> #root .se, .se) .stage { visibility: hidden; }
+.se-partmark { mix-blend-mode: multiply; }

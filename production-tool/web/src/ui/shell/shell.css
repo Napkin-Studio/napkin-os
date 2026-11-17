@@ -204,3 +204,5 @@
 .send-disc li small { color: var(--muted); font-size: 12px; }
 .send-disc li.promise { color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; }
 .send-disc li.promise b { font-weight: 500; }
+/* A long document or node name never runs the crumb into Continue in. */
+.tba-crumb .here { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }

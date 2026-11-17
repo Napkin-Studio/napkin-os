@@ -242,7 +242,7 @@ export function Storyboard() {
     <div className="editor">
       <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="storyboard"
         undo
-        title={`Storyboard · ${nodeTitle(sb?.title, 'Storyboard', projectName)}`}
+        title="Storyboard"
         more={() => <CopyLinkLater />}
         // The band (mock production-new-ui-v2 sbBand): length, fit, shape and who is at work on the left; how to
         // reorder, undo and + Add shot on the right.

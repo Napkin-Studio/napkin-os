@@ -150,10 +150,19 @@ export function installSeed(shell: Shell) {
       services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
     },
     /** Opens the main script in the Script editor (the paired screenshots' script states). */
-    script: () => {
-      const services = shell.get().session?.services
-      const sc = services && mainScript(services.doc.get())
-      if (!services || !sc) throw new Error('open a project first')
+    script: async () => {
+      if (!shell.get().session) await shell.newProject()
+      const services: Services = shell.get().session!.services
+      // A blank project has no stages: give it a script, storyboard and video as a non-blank one starts with.
+      if (!mainScript(services.doc.get())) {
+        await systemUpdate(services.doc, (d: ProductionDocument) => {
+          const person = { id: String(d.project.created_by ?? 'human:e2e').replace(/^human:/, ''), handle: 'e2e', tenant_id: String(d.project.tenant_id ?? '') }
+          const stages = newProjectData({ person, title: d.project.title ?? 'Market day', newId: newUlidId, now: new Date().toISOString() }) as unknown as ProductionDocument
+          Object.assign(d.scripts, stages.scripts); Object.assign(d.storyboards, stages.storyboards); Object.assign(d.videos, stages.videos); Object.assign(d.links, stages.links)
+        }, 'e2e seed')
+      }
+      const sc = mainScript(services.doc.get())
+      if (!sc) throw new Error('no script')
       history.pushState(history.state, '', formatRoute(scriptRoute(services.project.id, sc.id)))
       dispatchEvent(new PopStateEvent('popstate'))
       return sc.id
