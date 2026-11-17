@@ -9,7 +9,6 @@ import { Video } from './stages/Video'
 import { DecisionsDrawer } from './ui/History'
 import { RemakeBar } from './ui/Follow'
 import { CanvasBar } from './ui/chrome/TopBars'
-import { BusyPointer } from './ui/loader/BusyPointer'
 import { UndoKeys } from './ui/UndoButtons'
 import { SaveKeys } from './ui/SaveButton'
 import { PhoneReview } from './stages/PhoneReview'
@@ -85,7 +84,6 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
       {script && <Suspense fallback={<div className="se" role="status" aria-busy="true" />}><ScriptEditor key={script} scriptId={script} /></Suspense>}
       <UpdateBox />
       <FallbackNotices />
-      <BusyPointer />
       <UndoKeys />
       <SaveKeys />
       {!import.meta.env.PROD && <DevSwitch />}
