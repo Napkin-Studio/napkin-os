@@ -23,6 +23,7 @@ import { idbLocation, putBlobAs } from '../lib/blobs'
 import { newId, ulid } from '../lib/ulid'
 import { purposeInputs, purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { withLinkedText } from './linkedText'
+import { withBrief } from '../brief/model'
 import { checkFronts } from '../lib/names'
 import { deadRefs, lifeOf, liveGet, liveInput } from '../model/live'
 import { plainJobError } from './errorWords'
@@ -217,6 +218,9 @@ export class JobRunner {
     // The texts linked into the node are its input words (features/canvas-text.clan).
     const linked = withLinkedText(d, op, node, input)
     input = linked.input
+    // The brief in the node's scope, its spine only (features/brief-node.clan; behind flags.briefNode).
+    const briefed = this.briefs() ? withBrief(d, op, node, input) : { input, rows: [] }
+    input = briefed.input
     const words = purposeWords(purpose)
     // A fresh nonce for every job: another take is never deduped with the one running (ui-behaviour 4.3).
     const nonce = ulid()
@@ -246,7 +250,7 @@ export class JobRunner {
       input_hashes: [...hashes],
       created_at: new Date().toISOString(),
     }
-    const rows = [...purposeInputs(purpose), ...inputRows(input), ...linked.rows].slice(0, 32)
+    const rows = [...purposeInputs(purpose), ...inputRows(input), ...linked.rows, ...briefed.rows].slice(0, 32)
     if (rows.length) entry.inputs = rows
     if (input.text) entry.text = input.text
     if (input.chips?.length) entry.chips = input.chips
@@ -271,6 +275,8 @@ export class JobRunner {
 
   /** How many of this person's jobs the relay runs at once (config inFlightPerParticipant; the session sets it). */
   inFlightLimit: () => number = () => Infinity
+  /** Whether jobs carry the node's brief (config flags.briefNode; the session sets it). Off until it does. */
+  briefs: () => boolean = () => false
   /** Jobs the relay holds a place for now (queued or running there), by id. */
   private readonly atRelay = new Set<string>()
   /** Requests waiting in this browser for a place, oldest first: never sent past the limit (it was a 429). */

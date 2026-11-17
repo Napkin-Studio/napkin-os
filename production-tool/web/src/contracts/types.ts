@@ -437,6 +437,8 @@ export interface Flags {
   ownCanvas?: boolean
   /** The Video editor as two rooms, Make and Edit, over one Bin (features/make-and-edit.clan). Optional; absent means off. */
   makeAndEdit?: boolean
+  /** The Brief node: Start from a brief, Brief nodes, JobInput.brief (features/brief-node.clan). Optional; absent means off. */
+  briefNode?: boolean
 }
 
 /** Fix this moment's settings (config.schema clipPatch); every key optional. */

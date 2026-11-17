@@ -2223,7 +2223,7 @@
               "type": "string",
               "maxLength": 128,
               "minLength": 1,
-              "description": "The brief's OS document id."
+              "description": "The brief's OS document id (its library path, doc-…): what GET /api/t/{tenant}/d/{doc}/data reads and the shell opens (/?open=<id>)."
             },
             "app_id": {
               "const": "ie.napkin.brief-maker"

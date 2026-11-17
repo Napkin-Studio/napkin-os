@@ -1,0 +1,236 @@
+// The Brief node's model (features/brief-node.clan, owner 2026-11-17). Engine-free and UI-free: the
+// card, the Booth and the Start card call these.
+//
+// - A Brief node is made only from a Brief Maker brief, by linking one or spinning one off; never typed
+//   here. It is a frozen copy: the brief's spine at the version taken (source.data_sha256, taken).
+// - "Brief changed: update?" is the person's decision: takeNewer writes the newer spine (one decision,
+//   update_from_brief) and only then marks what the brief feeds out of date; keepVersion says no to
+//   that version (one decision) and the notice stays away until the brief changes again.
+// - Its scope (model/scope.ts): linked into a Script, Storyboard, Video or Format set; a Script's brief
+//   carries on to what it drives unless that has its own. Every job from such a node carries the spine
+//   (withBrief, called by the job runner on the director-backed ops).
+
+import type {
+  BriefNode, BriefSpine, BriefSpinePart, Id, JobBrief, JobInput, JobInputRow, Link, LinkEndpoint, Op, ProductionDocument, StaleMark,
+} from '../contracts/types'
+import { BRIEF_SPINE_PARTS } from '../contracts/types'
+import { newId } from '../lib/ulid'
+import { systemUpdate, updateDoc, type DocumentStore } from '../doc/store'
+import { scopeOf, type ScopeItem } from '../model/scope'
+import { projectSpine, spineSummary, BRIEF_APP_ID } from './spine'
+import type { OsBriefRead } from './os'
+
+type Doc = ProductionDocument
+
+/** The ops whose director reads the brief: draft, plan, frame, change a frame, take, change a clip, cut-down, sizes. */
+export const BRIEF_OPS: readonly Op[] = ['write', 'shot_list', 'frame', 'frame_edit', 'clip', 'clip_edit', 'clip_patch', 'cutdown', 'resize']
+
+/** The words a decision uses for a brief: “First Light brief” v2. */
+const named = (title: string, taken: number) => `“${title}” v${taken}`
+
+/** A new Brief node from a brief as read from the OS (not yet in the document). */
+export function newBrief(read: OsBriefRead, how: 'link' | 'spinoff', now = new Date()): BriefNode {
+  const { spine, confidential } = projectSpine(read.data)
+  return {
+    id: newId('brief'), v: 1, field_v: {},
+    title: read.title.slice(0, 200) || 'Brief',
+    source: { document_id: read.documentId, app_id: BRIEF_APP_ID, data_sha256: read.dataSha256 as BriefNode['source']['data_sha256'], taken: 1, at: now.toISOString(), how },
+    spine,
+    ...(confidential.length ? { confidential } : {}),
+  }
+}
+
+/** The Brief nodes, oldest first. */
+export const briefsList = (d: Doc): BriefNode[] => Object.values(d.briefs ?? {}).sort((a, b) => (a.id < b.id ? -1 : 1))
+
+/** The Brief node already made from this brief, if one is (linking the same brief twice gives the same node). */
+export const briefFromDocument = (d: Doc, documentId: string): BriefNode | undefined => briefsList(d).find((b) => b.source.document_id === documentId)
+
+/** Put a Brief node in the document (a system write: the person's undo step is its card on the canvas). One decision. */
+export async function addBrief(store: DocumentStore, brief: BriefNode): Promise<BriefNode> {
+  await systemUpdate(store, (d) => {
+    d.briefs ??= {}
+    d.briefs[brief.id] = brief
+  }, `${brief.source.how === 'spinoff' ? 'spin off' : 'link'} the brief ${named(brief.title, brief.source.taken)}`, `from Brief Maker (${brief.source.document_id}): ${spineSummary(brief.spine) || 'no spine parts filled in'}`)
+  return brief
+}
+
+/** The link from a Brief node into a node (not yet in the document). */
+export const briefLink = (briefId: Id, to: LinkEndpoint): Link => ({ id: newId('link'), v: 1, field_v: {}, from: { kind: 'brief', id: briefId }, to, role: 'brief' })
+
+// ── Scope: which brief a node (and a job on it) reads ─────────────────────────────────────────────
+
+/** A node's brief, from its scope: its own link, else the nearest upstream. */
+export interface BriefInScope {
+  brief: BriefNode
+  /** 'link': linked into this node; 'upstream': carried from the Script (or Storyboard) that drives it. */
+  via: 'link' | 'upstream'
+  linkId?: Id
+  /** The upstream node it came through. */
+  through?: Id
+  item: ScopeItem
+}
+
+/** The brief in a node's scope, or undefined. */
+export function briefOf(d: Doc, nodeId: Id): BriefInScope | undefined {
+  const it = scopeOf(d, nodeId).find((x) => x.kind === 'brief')
+  const brief = it ? d.briefs?.[it.id] : undefined
+  if (!it || !brief) return undefined
+  return { brief, via: it.via === 'link' ? 'link' : 'upstream', ...(it.linkId ? { linkId: it.linkId } : {}), ...(it.through ? { through: it.through } : {}), item: it }
+}
+
+/** The nodes whose scope a job on `node` reads for its brief, nearest first: a shot reads its storyboard, then
+ *  the videos that storyboard renders (a frame, a clip, a frame change); any other node reads itself. */
+function readers(d: Doc, node: LinkEndpoint): Id[] {
+  if (node.kind !== 'shot') return [node.id]
+  const sb = d.shots[node.id]?.storyboard_id
+  if (!sb) return []
+  const videos = Object.values(d.links ?? {}).filter((l) => l.role === 'renders' && l.from.id === sb).map((l) => l.to.id)
+  const own = d.storyboards[sb]?.video_id
+  return [sb, ...(own ? [own] : []), ...videos]
+}
+
+/** The brief a job on `node` reads, and its node: undefined when there is none. */
+export function briefForJob(d: Doc, node: LinkEndpoint): BriefInScope | undefined {
+  for (const id of readers(d, node)) {
+    const b = briefOf(d, id)
+    if (b) return b
+  }
+  return undefined
+}
+
+/** JobInput.brief: the title and the spine, nothing else of the brief. */
+export const jobBrief = (b: BriefNode): JobBrief => ({ title: b.title.slice(0, 200) || 'Brief', spine: { ...b.spine } })
+
+/**
+ * The job's input with the node's brief added (on the director-backed ops), and its inputs row. No brief, or
+ * another op: the input as it was, byte for byte.
+ */
+export function withBrief(d: Doc, op: Op, node: LinkEndpoint, input: JobInput): { input: JobInput; rows: JobInputRow[] } {
+  if (!BRIEF_OPS.includes(op) || input.brief) return { input, rows: [] }
+  const b = briefForJob(d, node)
+  if (!b) return { input, rows: [] }
+  const row: JobInputRow = {
+    kind: 'brief', ref: b.brief.id, ...(b.linkId ? { link_id: b.linkId } : {}), used_as: b.via === 'link' ? 'brief' : 'brief (from its script)', included: true,
+    text: `${b.brief.title} v${b.brief.source.taken}`.slice(0, 200),
+  }
+  return { input: { ...input, brief: jobBrief(b.brief) }, rows: [row] }
+}
+
+/** "What Dex will send" lists the brief: one row, its words and where it comes from. */
+export interface BriefSendRow {
+  key: string
+  briefId: Id
+  /** "Brief · First Light brief · v2". */
+  label: string
+  /** "proposition, audience, tone, feel, 2 mandatories · linked" or "… · from Script · First Light". */
+  detail: string
+  via: 'link' | 'upstream'
+}
+
+export function briefSendRow(d: Doc, nodeId: Id): BriefSendRow | undefined {
+  const b = briefOf(d, nodeId)
+  if (!b) return undefined
+  const from = b.via === 'link' ? 'linked' : `from ${b.through && d.scripts?.[b.through] ? `Script · ${d.scripts[b.through].title}` : b.through && d.storyboards?.[b.through] ? `Storyboard · ${d.storyboards[b.through].title}` : 'upstream'}`
+  return { key: `brief:${b.brief.id}`, briefId: b.brief.id, label: b.item.label, detail: [spineSummary(b.brief.spine), from].filter(Boolean).join(' · '), via: b.via }
+}
+
+/** The nodes a Brief node feeds, as its card says ("Feeds Script · Main, and what it drives"): its own links. */
+export function briefFeeds(d: Doc, briefId: Id): LinkEndpoint[] {
+  return Object.values(d.links ?? {}).filter((l) => l.from.kind === 'brief' && l.from.id === briefId).map((l) => l.to)
+}
+
+// ── Update: "Brief changed: update?" ───────────────────────────────────────────────────────────────
+
+/** How a Brief node stands against the brief as it is now: the same, changed (offer the update), or changed
+ *  to a version the person already chose not to take. */
+export type BriefFreshness = 'same' | 'changed' | 'kept'
+
+export function freshness(b: BriefNode, now: Pick<OsBriefRead, 'dataSha256'>): BriefFreshness {
+  if (now.dataSha256 === b.source.data_sha256) return 'same'
+  if (now.dataSha256 === b.source.kept) return 'kept'
+  return 'changed'
+}
+
+/** The spine parts that differ between two spines (what the notice and the decision name). */
+export function spineChanges(a: BriefSpine, b: BriefSpine): BriefSpinePart[] {
+  return BRIEF_SPINE_PARTS.filter((p) => JSON.stringify(a[p] ?? null) !== JSON.stringify(b[p] ?? null))
+}
+
+/** The notice a Brief node shows when its brief has changed in Brief Maker, or null. */
+export interface BriefNotice {
+  briefId: Id
+  /** "Brief changed: update?" */
+  text: string
+  /** "Proposition and tone changed in Brief Maker (now v3)." */
+  detail: string
+  changes: BriefSpinePart[]
+  read: OsBriefRead
+}
+
+export function briefNotice(b: BriefNode, now: OsBriefRead): BriefNotice | null {
+  if (freshness(b, now) !== 'changed') return null
+  const changes = spineChanges(b.spine, projectSpine(now.data).spine)
+  const words = changes.map((p) => (p === 'donts' ? 'don’ts' : p))
+  const what = !words.length
+    ? 'The brief changed in Brief Maker, but not its spine'
+    : `${words.length === 1 ? words[0] : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`} changed in Brief Maker`
+  return { briefId: b.id, text: 'Brief changed: update?', detail: `${what.charAt(0).toUpperCase()}${what.slice(1)} (would be v${b.source.taken + 1}).`, changes, read: now }
+}
+
+/** The nodes taking a brief update makes out of date: what it feeds, and what those drive (scope's reach). */
+export function briefReach(d: Doc, briefId: Id): LinkEndpoint[] {
+  const out = new Map<Id, LinkEndpoint>()
+  const nodes: { kind: LinkEndpoint['kind']; id: Id }[] = [
+    ...Object.values(d.scripts ?? {}).map((x) => ({ kind: 'script' as const, id: x.id })),
+    ...Object.values(d.storyboards ?? {}).filter((x) => !x.implicit).map((x) => ({ kind: 'storyboard' as const, id: x.id })),
+    ...Object.values(d.videos ?? {}).map((x) => ({ kind: 'video' as const, id: x.id })),
+    ...Object.values(d.format_sets ?? {}).map((x) => ({ kind: 'format_set' as const, id: x.id })),
+  ]
+  for (const n of nodes) if (briefOf(d, n.id)?.brief.id === briefId) out.set(n.id, n)
+  return [...out.values()]
+}
+
+/**
+ * Take the newer version (the person's decision): the spine, title and version change, one decision
+ * (update_from_brief), and what the brief feeds is marked out of date. Nothing is made again by itself.
+ */
+export async function takeNewer(store: DocumentStore, briefId: Id, now: OsBriefRead, at = new Date()): Promise<BriefNode | undefined> {
+  const before = store.get().briefs?.[briefId]
+  if (!before || freshness(before, now) === 'same') return before
+  const { spine, confidential } = projectSpine(now.data)
+  const changes = spineChanges(before.spine, spine)
+  const taken = before.source.taken + 1
+  const title = now.title.slice(0, 200) || before.title
+  await updateDoc(store, (d) => {
+    const b = d.briefs?.[briefId]
+    if (!b) return
+    b.title = title
+    b.spine = spine
+    if (confidential.length) b.confidential = confidential
+    else delete b.confidential
+    b.source = { ...b.source, data_sha256: now.dataSha256 as BriefNode['source']['data_sha256'], taken, at: at.toISOString() }
+    delete b.source.kept
+    for (const target of briefReach(d, briefId)) {
+      const id = newId('stale')
+      d.stale[id] = {
+        id, v: 1, field_v: {}, target: { kind: target.kind as StaleMark['target']['kind'], id: target.id }, caused_by: { kind: 'brief', id: briefId },
+        reason: `The brief changed (v${before.source.taken} → v${taken})${changes.length ? `: ${changes.join(', ')}` : ''}.`.slice(0, 200), marked_at: at.toISOString(),
+      }
+    }
+  }, `update_from_brief ${named(title, taken)}`, changes.length ? `took the newer brief: ${changes.join(', ')} changed` : 'took the newer brief; its spine is the same')
+  return store.get().briefs?.[briefId]
+}
+
+/** Keep this version (the person's decision): the newer one is not taken, and its notice goes until the brief changes again. */
+export async function keepVersion(store: DocumentStore, briefId: Id, now: Pick<OsBriefRead, 'dataSha256'>): Promise<void> {
+  const b = store.get().briefs?.[briefId]
+  if (!b || freshness(b, now) !== 'changed') return
+  await updateDoc(store, (d) => {
+    const x = d.briefs?.[briefId]
+    if (x) x.source = { ...x.source, kept: now.dataSha256 as BriefNode['source']['data_sha256'] }
+  }, `keep the brief ${named(b.title, b.source.taken)}`, 'Brief Maker has a newer version; it was not taken')
+}
+
+/** Whether a stale mark came from a brief update (the amber "brief changed" mark, not a frame's). */
+export const staleFromBrief = (m: StaleMark): boolean => m.caused_by.kind === 'brief'

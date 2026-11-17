@@ -108,6 +108,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   const runner = new JobRunner(relay, doc, ui)
   // Never send past the relay's per-person limit: the rest wait here, "In the queue" (it answered 429 before).
   runner.inFlightLimit = () => (deps.remoteConfig ?? CONFIGS.live).inFlightPerParticipant
+  runner.briefs = () => !!(deps.remoteConfig ?? CONFIGS.live).flags.briefNode
   // Landed jobs, and the chains they move on: Draw the rest, Fix it in the shot, Update what follows.
   // The rooms (flags.makeAndEdit) read from the config the person runs on, at each landing.
   const rooms = () => !!effectiveConfig(ui.get().configChoice, ui.get().providerChoice, undefined, deps.remoteConfig).flags.makeAndEdit
