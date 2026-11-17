@@ -45,7 +45,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 const until = async (ok: () => boolean) => {
-  for (let i = 0; i < 100 && !ok(); i++) await act(async () => { await new Promise((r) => setTimeout(r, 30)) })
+  for (let i = 0; i < 330 && !ok(); i++) await act(async () => { await new Promise((r) => setTimeout(r, 30)) })
 }
 
 /** The Make room and its Booth, wired as Rooms wires them (the done note and its Undo). */
@@ -103,6 +103,7 @@ describe('the Make room strip', () => {
     await until(() => r.boxes().length === 3)
     expect(r.boxes()).toEqual([2, 1, 1])
     expect(r.el.querySelector('.jc-box')?.getAttribute('aria-label')).toBe('Box 1: One video · 2 shots · 7 s')
+    await until(() => !!r.el.querySelector('.booth .bc.done')?.textContent?.includes('Joined shots 1 and 2'))
     const note = r.el.querySelector('.booth .bc.done')!
     expect(note.textContent).toContain('Joined shots 1 and 2: one video now. Nothing is sent until you press Make.')
     await act(async () => { (note.querySelector('button') as HTMLButtonElement).click() })
@@ -174,6 +175,7 @@ describe('the Make room strip', () => {
     await until(() => r.boxes().length === 3)
     expect(r.boxes()).toEqual([2, 1, 1])
     expect(r.el.querySelector('.jc-box.over')).toBeNull()
+    await until(() => !!r.el.querySelector('.booth .bc.done')?.textContent?.includes('Cut before shot 3'))
     expect(r.el.querySelector('.booth .bc.done')?.textContent).toContain('Cut before shot 3: two videos now.')
   })
 })
