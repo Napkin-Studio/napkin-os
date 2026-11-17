@@ -39,6 +39,9 @@ export function placeAsk(askId: string): () => void {
   }
 }
 
+/** Asks the Booth to come in (a card it holds was asked for while it was hidden). */
+export const BOOTH_OPEN_EVENT = 'napkin:booth-open'
+
 export function isPlaced(askId: string): boolean {
   return placed.has(askId)
 }
@@ -117,6 +120,11 @@ export function dockAsks(waiting: WaitingAsk[], here: AskHome, ctxOf: (jobId: st
 export function focusAsk(askId: string): boolean {
   const card = [...document.querySelectorAll<HTMLElement>(`[data-ask="${CSS.escape(askId)}"]`)].find((el) => el.isConnected)
   if (!card) return false
+  // In a hidden Booth (ui/booth/Booth.tsx): it comes in first, then the card is shown.
+  if (card.closest('[data-booth-open="false"]')) {
+    window.dispatchEvent(new Event(BOOTH_OPEN_EVENT))
+    return false
+  }
   // Put off with Later: open it again first (the next look finds the card).
   if (card.classList.contains('askcard-later')) {
     card.click()

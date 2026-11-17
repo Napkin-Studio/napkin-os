@@ -29,13 +29,15 @@ import { Viewer } from './Viewer'
 
 const FRAME = 1 / 24
 
-export function EditRoom({ data, sel, onSel, onChange, onSound, register }: {
+export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready: readyAsk }: {
   data: RoomData
   sel: Selection
   onSel: (s: Selection) => void
   onChange: (c: ChangeOpen) => void
   onSound: () => void
   register: (close: () => void) => () => void
+  /** 'Use this take' from Edie's Booth: open the New take sheet on that clip and take. */
+  ready?: { clipId: string; takeId: string; n: number } | null
 }) {
   const { doc: docStore } = useServices()
   const doc = useDoc()
@@ -49,6 +51,14 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register }: {
   const [ripple, setRipple] = useState(true)
   const [snap, setSnap] = useState(true)
   const [sheet, setSheet] = useState<{ clip: CutClip; take: Gen } | null>(null)
+  // 'Use this take' asked from the Booth: the same sheet as the clip's badge opens.
+  const [readySeen, setReadySeen] = useState(readyAsk?.n)
+  if (readyAsk && readySeen !== readyAsk.n) {
+    setReadySeen(readyAsk.n)
+    const clip = cut.v1.find((c) => c.id === readyAsk.clipId)
+    const take = data.gens.find((g) => g.id === readyAsk.takeId)
+    if (clip && take) setSheet({ clip, take })
+  }
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'preview' | 'rendered'>('preview')
   const [, rerender] = useState(0)

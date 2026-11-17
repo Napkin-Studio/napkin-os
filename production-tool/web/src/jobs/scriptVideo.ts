@@ -133,7 +133,7 @@ export async function storyboardForScript(store: DocumentStore, scriptId: Id): P
 /** Why Plan shots cannot run on a script now, in words, or null. */
 export function planShotsBlocked(d: Doc, scriptId: Id): string | null {
   if (!d.scripts[scriptId]) return 'This script is gone.'
-  return scriptText(d, scriptId).trim() ? null : 'Write the script first'
+  return scriptText(d, scriptId).trim() ? null : 'Write something first'
 }
 
 /**
@@ -142,7 +142,7 @@ export function planShotsBlocked(d: Doc, scriptId: Id): string | null {
  */
 export async function planFromScript(deps: FrameDeps, scriptId: Id): Promise<{ storyboardId: Id; made: boolean; joined: boolean }> {
   const blocked = planShotsBlocked(liveGet(deps.doc), scriptId)
-  if (blocked) throw new Error(blocked === 'Write the script first' ? 'Write the script first: Plan shots reads its words.' : blocked)
+  if (blocked) throw new Error(blocked === 'Write something first' ? 'Write something first: Plan shots reads the words.' : blocked)
   const { storyboardId, made } = await storyboardForScript(deps.doc, scriptId)
   const r = await planOrJoin(deps, { storyboardId })
   return { storyboardId, made, joined: r.joined }

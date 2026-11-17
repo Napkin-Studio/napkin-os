@@ -1204,6 +1204,306 @@
         "hat_front"
       ],
       "budget": 250
+    },
+    {
+      "id": "shot_list_free_prose",
+      "since": "director.v9",
+      "op": "shot_list",
+      "why": "features/script-freeform.clan (owner 2026-11-16): a script is written freely, as prose and bullets with no scene heading or screenplay element, and Plan shots reads the words as they are. Dex plans shots from the prose in its order, keeps the words, invents no scene heading and asks nothing.",
+      "input": {
+        "script": "A woman in a red raincoat finds a lost puppy in the rain. 30 seconds, one street, dusk. No dialogue, one line at the end.\nShe steps off a green tram into heavy rain and opens a small yellow umbrella.\n- walks past a bakery window, warm light, glances in at the bread\n- a whimper under the bridge railing: a soaked puppy, shivering\n- she kneels and holds the umbrella over it, not over herself\nShe carries the puppy across the old stone bridge as the rain stops and the sky turns gold.\nEnd line: Someone's always looking out for you.",
+        "targetS": 30
+      },
+      "expect": {
+        "shots": [
+          4,
+          12
+        ]
+      },
+      "must": [
+        [
+          "tram"
+        ],
+        [
+          "bakery"
+        ],
+        [
+          "whimper",
+          "soaked"
+        ],
+        [
+          "kneels"
+        ],
+        [
+          "gold"
+        ],
+        [
+          "looking out for you"
+        ]
+      ],
+      "forbid": [
+        "int.",
+        "ext."
+      ]
+    },
+    {
+      "id": "take_refs_frames_follow_images",
+      "since": "director.v11",
+      "op": "clip",
+      "provider": "runway",
+      "model": "wan3",
+      "why": "features/join-or-cut-shots.clan (owner 2026-11-16): a joined run is one generation with no frame pinned; every shot's storyboard frame goes as a guide, in shot order, beside the character's pictures (paid test P1 followed every frame). Each shot's line says which image it follows.",
+      "input": {
+        "mode": "take_refs",
+        "ratio": "16:9",
+        "shot": {
+          "id": "shot_01M7JC00000000000000000001",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "@mira steps off a green tram into the rain.",
+          "refs": [
+            "mira"
+          ]
+        },
+        "shots": [
+          {
+            "id": "shot_01M7JC00000000000000000001",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira steps off a green tram into the rain.",
+            "refs": [
+              "mira"
+            ]
+          },
+          {
+            "id": "shot_01M7JC00000000000000000002",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira opens a small yellow umbrella and smiles up at the sky.",
+            "refs": [
+              "mira"
+            ]
+          },
+          {
+            "id": "shot_01M7JC00000000000000000003",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira walks past a glowing bakery window, glancing in at the bread.",
+            "refs": [
+              "mira"
+            ]
+          }
+        ],
+        "cuts": [
+          {
+            "atS": 0,
+            "text": "@mira steps off a green tram into the rain."
+          },
+          {
+            "atS": 3,
+            "text": "@mira opens a small yellow umbrella and smiles up at the sky."
+          },
+          {
+            "atS": 6,
+            "text": "@mira walks past a glowing bakery window, glancing in at the bread."
+          }
+        ],
+        "refs": [
+          {
+            "id": "ref_01M7JC00000000000000000MF1",
+            "name": "mira_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M7JC00000000000000000MS2",
+            "name": "mira_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          },
+          {
+            "id": "frame_01M7JC00000000000000000001",
+            "role": "composition",
+            "kind": "generated",
+            "label": "Shot 1 frame",
+            "asset": "A2"
+          },
+          {
+            "id": "frame_01M7JC00000000000000000002",
+            "role": "composition",
+            "kind": "generated",
+            "label": "Shot 2 frame",
+            "asset": "A6"
+          },
+          {
+            "id": "frame_01M7JC00000000000000000003",
+            "role": "composition",
+            "kind": "generated",
+            "label": "Shot 3 frame",
+            "asset": "A9"
+          }
+        ]
+      },
+      "must": [
+        [
+          "tram"
+        ],
+        [
+          "umbrella"
+        ],
+        [
+          "bakery"
+        ]
+      ],
+      "forbid": [
+        "swatch",
+        "colour chart"
+      ],
+      "expect_refs": [
+        "mira_front",
+        "mira_side",
+        "in_1",
+        "in_2",
+        "in_3"
+      ],
+      "frame": false,
+      "ties": true,
+      "budget": 700
+    },
+    {
+      "id": "take_refs_words_follow_no_image",
+      "since": "director.v11",
+      "op": "clip",
+      "provider": "runway",
+      "model": "wan3",
+      "why": "features/join-or-cut-shots.clan: text-only shots planned straight from a script, joined: one generation from the words and the character's pictures; with no frames, no line says it follows an image.",
+      "input": {
+        "mode": "take_refs",
+        "ratio": "16:9",
+        "shot": {
+          "id": "shot_01M7JC00000000000000000001",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "@mira steps off a green tram into the rain.",
+          "refs": [
+            "mira"
+          ]
+        },
+        "shots": [
+          {
+            "id": "shot_01M7JC00000000000000000001",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira steps off a green tram into the rain.",
+            "refs": [
+              "mira"
+            ]
+          },
+          {
+            "id": "shot_01M7JC00000000000000000002",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira opens a small yellow umbrella and smiles up at the sky.",
+            "refs": [
+              "mira"
+            ]
+          },
+          {
+            "id": "shot_01M7JC00000000000000000003",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira walks past a glowing bakery window, glancing in at the bread.",
+            "refs": [
+              "mira"
+            ]
+          }
+        ],
+        "cuts": [
+          {
+            "atS": 0,
+            "text": "@mira steps off a green tram into the rain."
+          },
+          {
+            "atS": 3,
+            "text": "@mira opens a small yellow umbrella and smiles up at the sky."
+          },
+          {
+            "atS": 6,
+            "text": "@mira walks past a glowing bakery window, glancing in at the bread."
+          }
+        ],
+        "refs": [
+          {
+            "id": "ref_01M7JC00000000000000000MF1",
+            "name": "mira_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M7JC00000000000000000MS2",
+            "name": "mira_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "must": [
+        [
+          "tram"
+        ],
+        [
+          "umbrella"
+        ],
+        [
+          "bakery"
+        ]
+      ],
+      "forbid": [
+        "follows image"
+      ],
+      "expect_refs": [
+        "mira_front",
+        "mira_side"
+      ],
+      "frame": false,
+      "ties": true,
+      "budget": 500
     }
   ],
   "frames": {

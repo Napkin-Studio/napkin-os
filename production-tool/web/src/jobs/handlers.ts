@@ -15,7 +15,7 @@ import { aspectOfRatio, exactRatio, reducedAspect } from '../canvas/core/sketch'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore, WriteWhy } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
-import { framesOf, mainVideo, rendersOf, shotName, takesOf, videoOfShot } from '../model/selectors'
+import { currentFrame, framesOf, mainVideo, rendersOf, shotName, takesOf, videoOfShot } from '../model/selectors'
 import { pickInCut } from '../doc/cutWrites'
 import { modelLabel } from '../capabilities'
 import { landingWhy } from './landing'
@@ -340,7 +340,10 @@ export function landRunTake(store: DocumentStore, job: Job, ctx: Extract<JobCtx,
   const d = store.get()
   const run = d.videos[ctx.videoId]?.runs?.[ctx.runId]
   const n = run ? run.shot_ids.map((id) => shotName(d, id)) : []
-  const what = `one take of ${n.length ? `${n[0]} to ${n.at(-1)}` : 'a run'}${job.model ? ` on ${modelLabel(job.provider, job.model) ?? job.model}` : ''}`
+  // A take with no frame pinned that had the shots' frames as guides (features/join-or-cut-shots.clan) says so
+  // in Fin's note: "Made one video of shot 4 to shot 6 on WAN 3, each shot following its frame."
+  const guided = run?.mode === 'take_refs' && run.shot_ids.some((id) => !!currentFrame(d, id))
+  const what = `${guided ? 'one video' : 'one take'} of ${n.length ? `${n[0]} to ${n.at(-1)}` : 'a run'}${job.model ? ` on ${modelLabel(job.provider, job.model) ?? job.model}` : ''}${guided ? ', each shot following its frame' : ''}`
   return landUpdate(store, (x) => { applyRunTake(x, job, ctx, opts) }, softenedWhy(job, landingWhy(store, job.jobId, what, cardsOf(job, ctx))))
 }
 
