@@ -376,6 +376,74 @@ def _check_table(sh, slide, out: list, H: int, bg) -> None:
         _add(out, "text_overflow", "error", f"table runs off the slide bottom (about {sh.top / EMU_IN + rows_h:.1f} in)")
 
 
+# ---------------------------------------------------------------- pure measures (no finding; the visual checklist reads them)
+
+def title_box(slide):
+    """The slide's shape named ``Title`` as ``{left_in, top_in, size_pt}`` (the largest run size), or None."""
+    for sh in slide.shapes:
+        if (sh.name or "") == "Title" and sh.left is not None and sh.top is not None and sh.has_text_frame:
+            sizes = [r.font.size.pt for p in sh.text_frame.paragraphs for r in p.runs if r.font.size and r.text.strip()]
+            return {"left_in": sh.left / EMU_IN, "top_in": sh.top / EMU_IN, "size_pt": max(sizes) if sizes else None}
+    return None
+
+
+def _line_count(tf, width_in: float) -> int:
+    """Estimated lines a text frame wraps to at ``width_in`` (the estimate ``_est_size`` uses)."""
+    avail_pt = max((width_in - (tf.margin_left + tf.margin_right) / EMU_IN) * 72, 10.0)
+    total = 0
+    for p in tf.paragraphs:
+        text = "".join(r.text for r in p.runs)
+        if not text.strip():
+            continue
+        sz = _para_size(p)
+        bold = any(r.font.bold for r in p.runs)
+        name = next((r.font.name for r in p.runs if r.font.name), "") or ""
+        per_line = max(int(avail_pt / (sz * ((0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0)))), 1)
+        lines, cur = 1, 0
+        for w in text.split():
+            n = len(w)
+            if cur and cur + 1 + n > per_line:
+                lines, cur = lines + 1, n
+            else:
+                cur = cur + 1 + n if cur else n
+            while cur > per_line:
+                lines, cur = lines + 1, cur - per_line
+        total += lines
+    return total
+
+
+def body_columns(slide) -> list:
+    """Body text frames as ``[{name, width_in, text_in, lines}]``: the frame's width, the width of its text (margins off) and the lines its text wraps to
+    (titles, captions and footer furniture are left out). A column that runs to more than one line is a text column."""
+    out = []
+    for sh in slide.shapes:
+        if sh.width is None or not sh.has_text_frame or not sh.text_frame.text.strip() or _role(sh) != "body":
+            continue
+        w = sh.width / EMU_IN
+        tf = sh.text_frame
+        out.append({"name": sh.name, "width_in": w, "text_in": w - (tf.margin_left + tf.margin_right) / EMU_IN,
+                    "lines": _line_count(tf, w)})
+    return out
+
+
+def font_families(prs) -> dict:
+    """The explicit font names set on each slide's text (shapes, groups and tables): ``{slide number: [names]}``.
+    A run with no name inherits the theme font and is not counted."""
+    out = {}
+    for n, sl in enumerate(prs.slides, 1):
+        names = set()
+        for sh in _walk(sl.shapes):
+            frames = []
+            if getattr(sh, "has_table", False) and sh.has_table:
+                frames = [c.text_frame for row in sh.table.rows for c in row.cells]
+            elif sh.has_text_frame:
+                frames = [sh.text_frame]
+            for tf in frames:
+                names |= {r.font.name for p in tf.paragraphs for r in p.runs if r.font.name and r.text.strip()}
+        out[n] = sorted(names)
+    return out
+
+
 # ---------------------------------------------------------------- pixels
 
 def read_ppm(path: Path):

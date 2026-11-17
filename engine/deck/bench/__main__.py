@@ -1,4 +1,4 @@
-"""CLI: python3 -m deck.bench {score,gold,design} ..."""
+"""CLI: python3 -m deck.bench {score,gold,design,checklist,fixtures,compare} ..."""
 from __future__ import annotations
 
 import argparse
@@ -6,7 +6,10 @@ import json
 import sys
 from pathlib import Path
 
+from . import checklist as checklist_mod
+from . import compare as compare_mod
 from . import experiment
+from . import fixtures as fixtures_mod
 from .gold import gold_report, judged_from_bench, load_human
 from .judges import BenchError, ClaudeJudge, RecordedJudge
 from .rubric import criterion_ids, load_rubric
@@ -38,8 +41,35 @@ def main(argv=None) -> int:
     d.add_argument("--seeds", default="1,2")
     d.add_argument("--judges", type=int, default=3)
     d.add_argument("--out", type=Path)
+    c = sub.add_parser("checklist", help="answer the visual checklist for run folders (no model, no network)")
+    c.add_argument("runs", nargs="+", type=Path)
+    c.add_argument("--out", type=Path)
+    f = sub.add_parser("fixtures", help="build the invented fixture decks offline into OUT_DIR")
+    f.add_argument("out_dir", type=Path)
+    f.add_argument("--geometry-only", action="store_true", help="skip LibreOffice (no pixel checks)")
+    k = sub.add_parser("compare", help="what changed between two checklist files")
+    k.add_argument("before", type=Path)
+    k.add_argument("after", type=Path)
+    k.add_argument("--format", choices=("text", "md", "json"), default="text")
+    k.add_argument("--fail-on-regress", action="store_true", help="exit 1 when any yes became no")
     a = ap.parse_args(argv)
     try:
+        if a.cmd == "checklist":
+            out = checklist_mod.run_all(a.runs)
+            if a.out:
+                a.out.write_text(json.dumps(out, indent=1, ensure_ascii=False) + "\n")
+            for d, x in out["decks"].items():
+                s = x["summary"]
+                print(f"{d}: {s['yes']} yes, {s['no']} no, {s['na']} n/a")
+            return 0
+        if a.cmd == "fixtures":
+            for n, p in fixtures_mod.build_all(a.out_dir, a.geometry_only).items():
+                print(f"{n}: {p}")
+            return 0
+        if a.cmd == "compare":
+            diff = compare_mod.compare(json.loads(a.before.read_text()), json.loads(a.after.read_text()))
+            print(compare_mod.render(diff, a.format))
+            return 1 if a.fail_on_regress and diff["regressions"] else 0
         if a.cmd == "design":
             out = experiment.design(a.clients.split(","), a.arms.split(","), [int(x) for x in a.seeds.split(",")], judges=a.judges)
         elif a.cmd == "gold":

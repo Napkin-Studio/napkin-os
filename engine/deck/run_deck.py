@@ -397,7 +397,7 @@ def main(argv=None):
     (a.out / "validation.json").write_text(json.dumps(findings, indent=1, ensure_ascii=False))
 
     t = time.time()
-    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False)
+    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json")
     rep["stages"]["render_pptx"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
