@@ -11,7 +11,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () => '{}' }))
 import { ClanDocumentStore } from '../../../clan-store/src'
 import { ServicesContext, type Services } from '../app/context'
-import type { Ask } from '../contracts/types'
 import { SnapshotStore, updateDoc } from '../doc/store'
 import { initialAppUi, type AppUi } from '../doc/ui'
 import { mainStoryboard, shotsOf } from '../model/selectors'
@@ -21,7 +20,6 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { DexBooth } from '../stages/DexBooth'
 import { addShots, id, job, MAYA, seedStages, wasm } from '../test/model'
 import type { ChangeOpen } from './ChangeDrawer'
 import type { Box, Gen } from './model'
@@ -77,40 +75,6 @@ function typeInto(t: HTMLTextAreaElement, text: string) {
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(t, text)
   t.dispatchEvent(new Event('input', { bubbles: true }))
 }
-
-describe("The Director agent's Booth in the Storyboard", () => {
-  it("waits with his question on a shot a re-plan left out, and a frame that did not draw; Clear clears it; his notes follow", async () => {
-    const { services, sb, shots, el, render } = await project()
-    const answered: string[] = []
-    const q = id('q')
-    const ask: Ask = {
-      id: q, v: 1, field_v: {}, node: { kind: 'storyboard', id: sb }, crew: 'dex', state: 'open', answers: [],
-      question: { id: q, kind: 'block', text: 'Shot 2 no longer has a scene. Keep it or remove it?', options: [
-        { id: 'keep', label: 'Keep', value: { route: 'keep_shot', node: { kind: 'shot', id: shots[1] } } },
-        { id: 'remove', label: 'Remove', value: { route: 'remove_shot', node: { kind: 'shot', id: shots[1] } } }], allow_text: false },
-    }
-    await updateDoc(services.doc, (d) => { d.asks[q] = ask }, 'ask')
-    await failed(services, shots[2], 'frame')
-    const docId = services.clan!.documentId()
-    await services.clan!.record('plan 3 shots on the storyboard', undefined, { agent: 'dex', targets: [`${docId}#storyboards[${sb}]`] })
-    render(createElement(DexBooth, { storyboardId: sb, onShotAsk: (_a: Ask, shotId: string, o: 'keep' | 'remove') => { answered.push(`${o}:${shotId}`) } }))
-    await until(() => !!el.querySelector('.booth [data-booth-note]') && el.querySelectorAll('.booth .bc.ask').length === 2)
-    const booth = el.querySelector('.booth') as HTMLElement
-    expect(booth.querySelector('.bt-agent')?.textContent).toContain('Director agent')
-    expect(booth.querySelector('textarea')).toBeNull()
-    expect(booth.querySelector('.bt-sec')?.textContent).toBe('Waiting for you2')
-    const cards = [...booth.querySelectorAll('.bc.ask')]
-    expect(cards.map((c) => c.querySelector('.bc-q')?.textContent)).toEqual(['Shot 2 no longer has a scene. Keep it or remove it?', 'Shot 3’s frame did not draw.'])
-    expect(cards[1].querySelector('.bc-note')?.textContent).toBe('@mira is not one of the images this step was given.')
-    await act(async () => { buttonIn(cards[0], 'Keep').click() })
-    expect(answered).toEqual([`keep:${shots[1]}`])
-    await act(async () => { buttonIn(cards[1], 'Clear').click() })
-    await until(() => booth.querySelectorAll('.bc.ask').length === 1)
-    expect(booth.querySelectorAll('.bc.ask')).toHaveLength(1)
-    expect([...booth.querySelectorAll('[data-booth-note] .bc-note')].map((n) => n.textContent)).toEqual(['Planned 3 shots on the storyboard.'])
-    expect(el.querySelector('.booth-col')?.getAttribute('style')).toContain('--bw: 420px')
-  })
-})
 
 describe('the Booth in the Video rooms', () => {
   const data = (shots: string[], gens: Gen[] = []): RoomData => ({

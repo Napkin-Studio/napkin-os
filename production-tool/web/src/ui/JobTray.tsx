@@ -160,7 +160,7 @@ async function goTo(uiStore: UiStore, current: StageName, stage: StageName, shot
     const card = document.querySelector<HTMLElement>(`[data-shot-card="${CSS.escape(shotId)}"]`)
     if (card) {
       card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-      if (card.getAttribute('role') === 'button') card.click()
+      if (card.getAttribute('role') === 'button' || card.dataset.select === 'shot') card.click()
       card.classList.remove('flash')
       void card.offsetWidth
       card.classList.add('flash')

@@ -16,6 +16,7 @@ import type { NodeEnv } from '../canvas/nodes/nodes'
 import { addBrief, newBrief } from '../brief/model'
 import { linkBrief, placeBrief } from '../brief/canvas'
 import type { Shell } from '../projects/shell'
+import { formatRoute, scriptRoute } from '../app/route'
 
 export interface SeedFrameOpts {
   /** The storyboard's ratio ('16:9', '9:16', '1:1', '4:5'); 16:9 by default. */
@@ -147,6 +148,15 @@ export function installSeed(shell: Shell) {
       }, 'e2e seed')
       await (services.doc as { flush?: () => Promise<void> }).flush?.()
       services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+    },
+    /** Opens the main script in the Script editor (the paired screenshots' script states). */
+    script: () => {
+      const services = shell.get().session?.services
+      const sc = services && mainScript(services.doc.get())
+      if (!services || !sc) throw new Error('open a project first')
+      history.pushState(history.state, '', formatRoute(scriptRoute(services.project.id, sc.id)))
+      dispatchEvent(new PopStateEvent('popstate'))
+      return sc.id
     },
     /** Opens the storyboard stage (the Image editor opens from a shot there). */
     storyboard: () => shell.get().session?.services.ui.update((u) => { u.stage = 'storyboard' }, 'e2e seed'),
