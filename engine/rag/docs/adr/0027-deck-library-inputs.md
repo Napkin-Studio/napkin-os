@@ -1,7 +1,9 @@
-# ADR 0027 — Deck Maker: optional team-library brand kit and pictures (proposed)
+# ADR 0027 — Deck Maker: optional team-library brand kit and pictures (accepted)
 
-Status: **proposed, not accepted** (written 2026-10-15 for `features/deck-maker-ui.clan`; needs Sai's decision) ·
-Amends ADR 0023 · Code: none yet. The Deck Maker app shows the panel behind a flag that is off.
+Status: **accepted 2026-11-17 (Sai, approved in chat)**, with the four wording points below applied. Written
+2026-10-15 for `features/deck-maker-ui.clan`; first decided for `features/deck-visual-contract.clan` ·
+Amends ADR 0023 · Code: the shapes are in the deck schemas (ADR 0036); nothing writes them yet. The Deck Maker app
+shows the panel behind a flag that is off (`inputs.library.enabled`).
 
 ## Context
 
@@ -42,63 +44,43 @@ Two things in the code make this less clean than the mock suggests:
 If rejected, the panel stays off and nothing else changes. If accepted, the engine reads the
 inputs through the existing `--brand` path first; pictures need a new, separate step.
 
-## Decision needed from Sai (written 2026-11-17 for `features/deck-visual-contract.clan`)
+## Decision (Sai, 2026-11-17)
 
-Still **proposed**. The deck visual contract (`docs/contracts/deck-visuals.md`, ADR 0036) defines the
-shapes for a brand's look and for pictures. With no answer here the shapes exist and nobody writes them:
-`inputs.library.enabled` stays off and a deck is today's deck.
+**Accepted.** Look and pictures are allowed information. They change how a slide looks and never what it says:
+they never add a word, a number or a legal line. Every picture is `basis: creative` and is labelled
+Illustrative until a person approves it. How a deck should be is the user's choice, asked by the tool with
+sensible defaults (`docs/contracts/deck-visuals.md` section 6.3): the default is existing pictures only, so
+nothing is sent out and nothing is spent, and generating is a per-deck choice behind a cost card, a cap and a
+person's approval of every picture. `inputs.library.enabled` stays the one gate and stays off until the app
+turns it on.
 
-**Revised the same day.** Sai, 2026-11-17: how a deck should be is the user's choice, asked by the tool
-with sensible defaults, not policy. So which slides carry pictures, whether pictures may be generated and
-at what cap, which Style Pack, whose brand, who approves and the label are now deck preferences
-(`deck-visuals.md` §6.3), and they are no longer questions here. What is left is the rule itself.
+### The wording, with Sai's four points applied
 
-### The question
+ADR 0023 is read as follows. *Facts, names, numbers and legal lines come only from the prompt, the documents,
+the research and the brief. Look and pictures are presentation information. They change how a slide looks and
+never what it says.*
 
-May a deck take inputs that change how it looks (a brand's colours, fonts and logo; a style for its
-pictures; the pictures themselves), on the condition that none of them adds a fact, a name, a number or a
-legal line to a slide?
+1. **Say "information", not "inputs".** The rule is about what a slide may say. The engine already takes
+   `--brand FILE`, so it was never "no extra files".
+2. **A logo is a name.** A logo is placed only for a brand the information already names (the client, or the
+   agency the prompt names), whichever brand the user chooses to wear. A kit never puts a new name on a slide.
+3. **The Territory tool's words are an allowed creative input.** Territory text and a shot's on-screen line may
+   stand on a slide as `basis: creative`, never `sourced`, and only when the run was made on the deck's own brief
+   or research. A field the Territory run tagged `assumed` stays marked as proposed.
+4. **No preference can change facts from the brief.** The deck reads a Brand Clan's `visual.*` and its
+   checkable `rules`; it never reads `voice`, `strategy`, `claims` or `legal_lines`. Alt text is written by code
+   from the slide's own subject, never from a picture's metadata. A Style Pack's words go into an image prompt
+   and never onto a slide. A picture goes only on the slide types of `deck-visuals.md` section 4.4 and never on
+   an evidence slide. A part marked Confidential with `model: false` is never sent to a provider (os-layer
+   section 4), and a prompt never carries a brand name, a person's name or a figure.
 
-| | Answer | Effect |
-|---|---|---|
-| Accept | Presentation inputs are allowed. The user chooses, per deck, whether pictures are only ones that exist (the default: nothing is sent out, nothing is spent) or may also be generated (a cost card, a cap, a person's approval of every picture) | `inputs.library.enabled` may be turned on; the preference questions appear |
-| Reject | Nothing new. `--brand` and `--master` stay as they are | The panel stays off. The contract drops the image slot, the asset registry and the picture, Style Pack and brand preferences, and keeps layouts, slots, density, the theme stamp and issues |
+### Also decided the same day
 
-The revision reads as Accept. It is written here as still open because this file's status is Sai's to
-change, and because of the four points below.
-
-### Four points the wording has to settle
-
-Each was found by reading the code against the proposal above; none is covered by its four points.
-
-1. **Say "information", not "inputs".** ADR 0023 reads as "no extra inputs", and the engine already takes
-   `--brand FILE`. Proposed wording: *facts, names, numbers and legal lines come only from the prompt, the
-   documents, the research and the brief. Look and pictures are presentation inputs. They change how a slide
-   looks and never what it says.*
-2. **A logo is a name.** ADR 0023 point 4: the agency name appears only when the prompt gives one.
-   Proposed: a logo is placed only for a brand whose name the inputs already give (the client, or the
-   agency the prompt names), whichever brand the user chooses to wear. A kit never puts a new name on a
-   slide.
-3. **The Territory tool brings words, not only pictures.** `deck-frames-in` lets a saved Territory run
-   stand in for stage c, and puts each shot's on-screen line on the slide as text. Those are words from a
-   fourth tool, and "look and pictures" does not cover them. A Territory run also works from an assumed
-   brief, in which a field may be tagged `assumed`: proposed by the tool, not given
-   (`engine/territory/prompts/assumed_brief.md` on `feat/territory-slice`). Either the Territory tool's
-   output is named as an allowed **creative** input (basis `creative`, never `sourced`, and only when it
-   was run on the deck's own brief or research), or the frames come in and the lines stay out.
-4. **What no preference can change.** The deck reads a Brand Clan's `visual.*` and its checkable `rules`;
-   it never reads `voice`, `strategy`, `claims` or `legal_lines`. Alt text is written by code from the
-   slide's own subject, never from a picture's metadata. A Style Pack's words go into an image prompt and
-   never onto a slide. A picture goes only on the creative slide types of `deck-visuals.md` §4.4 (point 4
-   above, "only where the slide already says illustrative", allows only `territory` and `execution` today)
-   and never on an evidence slide. A part marked Confidential with `model: false` is never sent to a
-   provider (os-layer §4), and a prompt never carries a brand name, a person's name or a figure.
-
-Still an organisation's call, not a user's: whether the local Ollama guard is acceptable as a non-Claude
-check that can only add a flag, and which reference images may be sent to an image model at all.
-
-### What to write back
-
-One line is enough: Accept or Reject, and for each of the four points "as proposed" or the change. The
-answer goes in this file's Status line and in `features/deck-visual-contract.clan` before any schema is
-written.
+- The local Ollama image guard is acceptable as a non-Claude check, because it can only add a flag. It sits beside
+  ADR 0006's rule "Claude only, and say who answered" (non-Claude links are dropped unless allowed): this is the
+  one allowed exception, because the guard can only add a flag, never pass, block or change a picture or a word,
+  and the result says who answered (`deck.assets.<id>.guard.by` is `ollama:<model>`, or `not checked`).
+- A frame approved in the Territory tool does not count as approved in the deck: it arrives `made`, and one
+  click by the deck's approver approves all four frames of a territory.
+- Still Laurence's, with defaults recorded until he answers (`deck-visuals.md` section 11): which slides carry
+  pictures, the Style Pack, who approves, critic grading, and which reference images may be sent to an image model.

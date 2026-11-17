@@ -1,12 +1,14 @@
 # ADR 0036 — Deck Maker: layouts, slots, images, theme and issues are one additive contract (proposed)
 
-Status: **proposed, not accepted** (Claude, 2026-11-17, for Sai to review) · Feature:
-`features/deck-visual-contract.clan` · Contract: `docs/contracts/deck-visuals.md` · Builds on ADR 0016 (the
-deck schema) · Depends on Sai's decision on ADR 0027 (presentation inputs) · Code: none. This ADR is a
-design; no schema or engine file has changed.
+Status: **proposed** (Claude, 2026-11-17). The design was approved by Sai in chat the same day and slice 1
+built it; the ADR stays proposed until the PR merges · Feature: `features/deck-visual-contract.clan` ·
+Contract: `docs/contracts/deck-visuals.md` · Builds on ADR 0016 (the deck schema) and ADR 0027 (accepted
+2026-11-17: look and pictures are allowed information) · Code: schemas, examples, vocabulary tuples in
+`spec.py` and tests only. No engine behaviour changed.
 
 Numbering: the Deck Maker plan calls this ADR 0034. On `develop` 0034 is "SMP and insight from the planning
-skill" and 0035 is "first-draft checks", so this is 0036, the next free number on every remote branch.
+skill" and 0035 is "first-draft checks", so this is 0036, the next free number on every remote branch (Sai
+confirmed 0036, 2026-11-17).
 
 ## Context
 
@@ -55,8 +57,9 @@ library later wants slots, and the repair loop would meet three finding shapes.
    them onto the slide, as it stamps `intake.verified` into `meta.confirm` today.
 7. **The vocabulary is `spec.py`'s.** Each closed set is a tuple there; each schema repeats it as an enum;
    a test fails when they differ.
-8. **Presentation inputs stay off** until ADR 0027 is accepted, behind the one gate that already exists,
-   `inputs.library.enabled`.
+8. **Presentation information is allowed** (ADR 0027, accepted 2026-11-17), behind the one gate that already
+   exists, `inputs.library.enabled`, which stays off until the app turns it on. Every picture is
+   `basis: creative` and labelled Illustrative until a person approves it.
 9. **How a deck should be is the user's choice, asked by the tool** (Sai, 2026-11-17). Six deck
    preferences are fields on the deck, each with a default: which slides carry pictures
    (`look.pictures`), text per slide (`look.density`), whose brand (`look.brand`), which Style Pack
@@ -73,7 +76,7 @@ library later wants slots, and the repair loop would meet three finding shapes.
 | `slides.<id>.blocks`, `claims`, `visual` | `assemble.py`, as today | everything |
 | `slides.<id>.layout`, text `slots` | the layout plan, in code (`deck-layout-library`) | renderers, QA, the app's swap menu, the bench |
 | image `slots`, `assets` | the image plan and image step (`deck-frames-in`, `deck-image-gen`) | renderers, validate, the app |
-| `slides.<id>.pinned`, `slots.<slot>.image.approval`, `layout.chosen_by: person` | the runner, stamping `review` and `look` | the trim, the red team, the repair loop, renderers |
+| `slides.<id>.pinned`, `slots.<slot>.image.approval`, `layout.chosen_by: person` | the runner, stamping `review.pinned`, `review.images` and `look.layouts` | the trim, the red team, the repair loop, renderers |
 | `meta.theme`, `meta.repair_policy` | the runner (`run_deck.py`) | the app, the bench, a reader of the deck |
 | `look` (pictures, density, brand, style_pack, theme, layouts), `inputs.pictures` (source, approval), `review`, `inputs.text_mode`, `inputs.library.enabled` | a person, through the app: an intake answer, the Start screen or Review | the runner |
 | `meta.preferences` | the runner, stamping the resolved preferences with `source: person \| default` | the bench, a reader of the deck |
@@ -114,29 +117,41 @@ The plan's shapes are kept except where the code on `develop` contradicts them:
 
 ## Consequences
 
-- The build (a day, after approval) adds schemas, examples, vocabulary tuples in `spec.py` and one test
-  file. No stage, renderer, validator or CLI changes; no model call; no cost to a run.
+- Slice 1 (a day) added `engine/deck/schemas/{layout,issue,golden,repair_policy,visual_rubric}.schema.json` with
+  one valid and one invalid example each, the optional fields in `deck.schema.json` and the template schema,
+  vocabulary tuples in `spec.py` and `tests/test_visual_contract.py`. No stage, renderer, validator or CLI
+  changed; no model call; no cost to a run. The template version is 0.3.0.
 - Three validators read the template schema: Python `jsonschema` in the engine tests, the SDK's `jsonschema`
-  0.26 on every patch, and a small checker in `app/tests/deckMakerFixtures.test.ts` that reads eight
-  keywords. A test stops the template schema using a keyword that checker ignores.
-- The deck tests are not run by `scripts/check.sh` or CI yet (`features/deck-ci.clan`). Until that lands
-  the build runs `PYTHONPATH=. python3 -m pytest -q deck/tests` by hand and records the result.
-- `types/investor_seed/golden_deck.json` fails `deck.schema.json` today with three errors (a `stats` block
-  kind the enum lacks, two `basis: null`). The baseline for "nothing changed" is that recorded set, and the
-  build adds `stats` to the block enum.
+  0.26 on every patch, and a small checker in `app/tests/deckMakerFixtures.test.ts`. The checker now reads
+  `const`, `pattern`, `minimum`, `maximum`, `minItems`, `minLength`, `maxLength` and `propertyNames` as well as
+  the earlier eight, and a test fails when the template schema uses a keyword it does not read.
+- `features/deck-ci.clan` (approved 2026-11-17) makes the deck tests run in `scripts/check.sh` and CI. Until it
+  merges the build runs `PYTHONPATH=. python3 -m pytest -q deck/tests` by hand and records the result.
+- `deck-maker-server` merges before `deck-layout-library`: both edit `run_deck.py` (Sai, 2026-11-17).
+- `types/investor_seed/golden_deck.json` failed `deck.schema.json` with three errors (a `stats` block kind and
+  two `basis: null`). `stats` is in the block enum now. The two nulls are the `statement` blocks of the
+  `problem` and `ask` slides, written by `assemble.py` line 762. The value for them is `opinion` (contract §9
+  gives the reasons). Because the golden is what the engine writes, the golden and that line must change in one
+  commit, which is an engine change and so not slice 1's to make alone; it waits on one approval.
 - Golden churn is deferred, not avoided: `deck-layout-library` adds `layout` and `slots` to every slide and
   regenerates the goldens once, reviewed.
 
+## Decided (Sai, 2026-11-17, in chat)
+
+- ADR 0027 accepted with its four wording points; the Ollama guard accepted as a non-Claude check that can only
+  add a flag (against ADR 0006); `deck-ci` approved; ADR number 0036; the template version 0.3.0.
+- A person's decisions are at top-level `review.pinned` and `review.images`; the slide carries the runner's stamp.
+- Defaults: picture source `existing`; density `lean` for a presented pitch, `detailed` for the full format;
+  about 30 words per content slide for lean and about 60 for standard (`spec.DENSITY_WORDS`).
+- A frame approved in the Territory tool arrives `made` in the deck; one click by the deck's approver approves a
+  territory's four frames.
+
 ## Open
 
-- ADR 0027: accept or reject, and four points of wording (its file has the decision to make). Until then
-  the image and brand fields are shapes nobody writes. Density does not wait on it.
-- Whether a frame approved in the Territory tool counts as approved in a deck. Proposed: no; it arrives
-  `made` and one click by the deck's approver approves a territory's four.
-- The numbers behind the density words (30 and 60 words on a content slide) are Napkin defaults, the
-  first from the measured leaders. They go in `spec.py`, to be tuned on the visual checklist.
-- The Brand Clan's `visual.layout.logo_placement` (`corner`, `centre`, …) and the deck's `logo.placement`
+- Laurence's six answers replace the defaults recorded in contract §11.
+- The Brand Clan's `visual.layout.logo_placement` (`corner`, `centre`, ...) and the deck's `logo.placement`
   (`cover_only`, `cover_and_footer`, `none`) are different lists; the mapping is Shrey's and Sai's to agree
   in `deck-look-kits`.
 - The Style Pack's hash includes the reference files' names (`style._hash`). A Style Pack document must
   keep those names, or a document and a folder give different hashes.
+- The two investor-golden values and `assemble.py` line 762 (above).

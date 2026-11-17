@@ -1,8 +1,9 @@
 # Contract — Deck visuals: layouts, slots, images, theme and issues
 
-Status: **draft, design only. Nothing here is built.** · Feature: `features/deck-visual-contract.clan` ·
-Owner: Sai · ADRs: 0016 (the deck schema), 0023 (the input rule), 0027 (presentation inputs: proposed,
-**decision needed**), 0036 (this contract: proposed).
+Status: **approved by Sai 2026-11-17; the shapes are built, nothing writes them yet.** · Feature:
+`features/deck-visual-contract.clan` (slice 1: schemas, examples, vocabulary in `spec.py`, tests; no engine behaviour) ·
+Owner: Sai · ADRs: 0016 (the deck schema), 0023 (the input rule), 0027 (look and pictures are allowed
+information: **accepted 2026-11-17**), 0036 (this contract: proposed). Template version 0.3.0.
 Reads with: `docs/contracts/deck-maker.md` (the run document), `os-layer.md` §3 to §5 (addresses,
 appearance, upstream, attach), `clan-fields.md` §2.1 (data paths).
 
@@ -33,7 +34,8 @@ shapes that nothing reads together. This contract gives each of those one shape.
    person's layout swap, pin and image approval live at `look` and `review` (§6) and the runner stamps them
    onto the slide, the way `intake.verified` becomes `meta.confirm[].verified`.
 6. **A picture is never evidence.** It is never a ref, never backs a claim, never supplies a word or a
-   number, and is placed only on the creative slide types of §4.4. Charts stay native.
+   number, and is placed only on the creative slide types of §4.4. Charts stay native. Every picture is `basis: creative` and is labelled
+   Illustrative until a person approves it (ADR 0027, accepted 2026-11-17).
 7. **`validation.json` and `qa.json` keep their shapes.** Issues (§7) are derived from them by adapters. A
    validator finding and `golden_validation.json` do not change.
 8. **Nothing invents a layout.** A layout id is one of the library's (§2), at most 40 of them.
@@ -170,7 +172,9 @@ the same asset in every slot and every run. Two different files with one id stop
   Tool relay's `assetRef` keys (`production-tool/contracts/common.schema.json`), so moving to the relay
   later changes the client, not the data.
 - `rights`: `generated` · `own` · `licensed` · `client_supplied` · `reference_only`. A `reference_only` asset
-  is a style reference and may never fill a slot (`image_rights`).
+  is a style reference and may never fill a slot (`image_rights`). Only an image we own or have licensed may
+  go to an image model; a client-supplied or unclear image defaults to `reference_only`, for eyes only (§11,
+  default until Laurence answers).
 - `made`: `{provider, model, task, at, credits, usd}`, for a generated asset.
 - `guard`: `{checked, by, flagged, found, reason}`, the shape `engine/territory/visuals/guard.py`
   `check_image` returns. `by` is `ollama:<model>` or `not checked`.
@@ -187,6 +191,9 @@ empty ──▶ planned ──▶ made ──────▶ approved
 - `planned`: a source was found or a prompt composed. Nothing is spent.
 - `made`: the asset exists and the guard found nothing, or did not run. `flagged`: the guard found
   something; the slot waits for a person.
+- **A frame from the Territory tool arrives `made`, never `approved`.** Approval in the Territory tool does not
+  count in the deck (Sai, 2026-11-17). One click by the deck's approver stamps `approve` on all four frames of
+  a territory (`review.images` gets one entry per frame).
 - `approved` exists only as the stamp of a person's `approve` whose `asset` is the slot's `asset`. A slot
   whose asset changes after approval returns to `made` or `flagged`: an approval is for one picture.
 - A review render draws `made`, `flagged` and `approved` pictures; all but `approved` carry the deck's
@@ -311,7 +318,7 @@ review: { pinned: {<slide id>: {by, at}},
 
 | Field | Values (default first) | The question, as worded | Feeds |
 |---|---|---|---|
-| `look.pictures.on` | `creative` · `none` · `creative_cover` · `custom` | "Which slides should carry pictures?" Creative slides only (territories, the idea, the work, the audience) · None · Creative slides and the cover · I'll choose slide by slide | which slides get an image layout (§4.4). `creative_cover` adds `title` and the divider. `custom` starts from `creative`; `slides: {<slide id>: true \| false}` is set at Review, once slides exist, and only for a slide type of §4.4 |
+| `look.pictures.on` | `creative_cover` · `creative` · `none` · `custom` | "Which slides should carry pictures?" The cover, section breaks and the creative slides (each territory, the idea, each execution, the audience) · Creative slides only · None · I'll choose slide by slide | which slides get an image layout (§4.4). `creative_cover` adds `title` and the divider to `creative`. `custom` starts from the default; `slides: {<slide id>: true \| false}` is set at Review, once slides exist, and only for a slide type of §4.4 |
 | `look.density.level` | `lean` for a presented pitch, `detailed` for a leave-behind (`inputs.format: full`) · `standard` | "How much text should each slide carry?" Lean: about 30 words, the rest in the speaker notes · Standard: up to about 60 words · Detailed: the full text on the slide | the picker prefers layouts of that `density`, and the fit ladder moves whole points to the notes above the target: 30 words on a content slide, 60, or the slide type's budget (`spec.SLIDE_TYPES`). Nothing is reworded by it |
 | `inputs.pictures.source.allow`, `.cap_usd` | `existing` · `generated`; `2.5` (0 to 10) | "Where may the pictures come from?" Only pictures we already have (territory frames and uploads) · Also make new ones, up to $2.50 for this deck (the amount can be changed) | `existing` never calls a provider. `generated` allows it, after the cost card, which shows the cap; the image step stops before the cap is passed |
 | `look.style_pack.use`, `.document_id` | `territory` · `other` | "Which Style Pack should the pictures follow?" The one the territory board uses · Another one (pick from the attached Style Packs) | the image prompt's style block and references. With no Style Pack attached the built-in default style is used |
@@ -331,7 +338,7 @@ Rules:
   `source: person | default`.
 - The label is a fixed label like DRAFT and Illustrative today: it holds no fact, and a digit is refused
   so that it can never read as a figure.
-- `inputs.library.enabled` is still the one gate (ADR 0027). While it is false or absent the picture,
+- `inputs.library.enabled` is still the one gate (ADR 0027, accepted 2026-11-17). While it is false or absent the picture,
   Style Pack and brand questions are not shown, the runner ignores those preferences, an attached Brand
   Clan and an attached Style Pack, and the deck is today's. Density does not wait on it.
 - Two things stay rules, whatever the user chooses: a part marked Confidential with `model: false` is never
@@ -436,10 +443,19 @@ start `slot_`. `placeholder` is raised by both `validate` and `qa_render`; `sour
 
 - `deck.schema.json` and the template schema change by addition only: no new `required`, no enum made
   smaller, no `additionalProperties: false` on an object that exists today.
-- The baseline is the set of schema errors each fixture has **today**, not zero: `lumen_water/golden_deck.json`
-  has none, and `types/investor_seed/golden_deck.json` has three (a `stats` block, which `assemble.py` line
-  765 writes and the block enum does not list, and two `basis: null`). The build adds `stats` to the block
-  enum, because a slot's `from_blocks` must be able to name it.
+- The baseline is the set of schema errors each fixture had **before slice 1**, not zero: `lumen_water/golden_deck.json`
+  has none, and `types/investor_seed/golden_deck.json` had three (a `stats` block, which `assemble.py` line
+  765 writes and the block enum did not list, and two `basis: null`). Slice 1 added `stats` to the block enum,
+  because a slot's `from_blocks` must be able to name it, which leaves the two `basis: null` (the `statement`
+  block of the `problem` and `ask` slides, `assemble.py` line 762). Sai decided (17 Nov) to fix those two in this
+  slice. The value is `opinion`: that is what the same file writes for every other statement or claim with no
+  refs (lines 293, 302, 766, 770), `creative` there is only for the `close` sign-off, and a `creative`, `proposal`
+  or `meta` basis would exempt the ask's figure from `numbers_trace` (`validate.py` line 315). With `opinion` the
+  investor golden still validates with no findings. The golden is what `build_investor` writes
+  (`test_polish.py::test_investor_golden_is_unchanged_by_the_new_types`), so it cannot change alone: the fix is the
+  golden's two values and `assemble.py` line 762 (`else None` becomes `else "opinion"`) in one commit. Slice 1 may
+  not change engine behaviour, so the pair waits for that one-line engine change to be approved; until then the
+  golden is untouched and `test_visual_contract.py` accepts either state.
 - Tests (`engine/deck/tests/test_visual_contract.py`, built after approval): each schema is valid draft-07
   and has one valid and one invalid example; every `spec` tuple equals its schema enum; the colour roles
   equal `theme.COLOR_FIELDS` and the scale keys are `theme.Scale` fields; the template mirror equals the
@@ -449,7 +465,45 @@ start `slot_`. `placeholder` is raised by both `validate` and `qa_render`; `sour
   `additionalProperties`, `items`, `maxItems` and `oneOf`. A new test fails when the template schema uses
   a keyword its checker does not read, so a limit cannot pass unchecked.
 
-## 10. Not in this contract
+## 10. Decisions of 17 November 2026
+
+Sai, in chat, 2026-11-17 (approved in chat):
+
+- ADR 0027 accepted: look and pictures are allowed information; they never add a word, a number or a legal
+  line. Every picture is `basis: creative`, labelled Illustrative until a person approves it. Four points of
+  wording applied: say "information"; a logo only for a brand the information already names; Territory tool
+  words (territory text, on-screen lines) are an allowed creative input; no preference can change facts from
+  the brief.
+- The local Ollama guard is acceptable as a non-Claude check, because it can only add a flag (ADR 0006).
+- `deck-ci` is approved. `deck-maker-server` merges before `deck-layout-library` (both edit `run_deck.py`).
+- ADR number 0036. Deck template version 0.3.0.
+- The build adds `stats` to the block-kind enum and fixes the investor golden's two `basis: null` (§9).
+- A person's review decisions live at top-level `review.pinned` and `review.images`; `pinned` and `approval` on a
+  slide are the runner's stamps.
+- Defaults: picture source `existing` (nothing sent out, nothing spent); density `detailed` for the full
+  (leave-behind) format and `lean` for a presented pitch, about 30 words per content slide for lean and about 60
+  for standard.
+- A frame approved in the Territory tool is not approved in the deck: it arrives `made`, and one click by the
+  deck's approver approves all four frames of a territory.
+
+## 11. Defaults until Laurence answers
+
+Each is a **default until Laurence answers; his answer replaces it** (Sai, 2026-11-17). They are recorded in
+`features/deck-visual-contract.clan` open_questions.
+
+1. Pictures go on the cover, section breaks, each territory (its four frames), the idea, each execution and the
+   audience slide. Evidence slides get no pictures (`look.pictures.on: creative_cover`, §4.4).
+2. The territory board and the deck share one Style Pack (`look.style_pack.use: territory`).
+3. The deck's approver (`review.images`) approves each image. Until then it is labelled "Illustrative"
+   (`inputs.pictures.approval`).
+4. Visual critic grading: none yet. The vision critic stays advisory (`repair_policy.critic.enabled: false`) and
+   every rubric question stays off until graded.
+5. Reference images: only images we own or have licensed may go to an image model. Client-supplied or unclear
+   images default to `rights: reference_only`, for eyes only.
+6. A presented pitch defaults to lean, about 30 words per content slide, with the rest in the speaker notes. The
+   full (leave-behind) format keeps today's budgets (`look.density.level: detailed`).
+
+## 12. Not in this contract
 
 - The Style Pack template (`ie.napkin.style-pack`) and the Brand Clan section `visual.deck`: `deck-look-kits`.
 - The picker, the fit ladder, `capacity()`, the per-layout slot rules generated into the template schema:
