@@ -748,6 +748,7 @@ export class JobRunner {
           j.updated_at = new Date().toISOString()
         }
       }, `complete ${job.op}`)
+      if (job.unchanged) this.ui.update((u) => { u.jobs[job.jobId] = { ...u.jobs[job.jobId], unchanged: true } })
       this.live.set(job.jobId, { state: 'completed' })
       jobState(job.jobId, 'completed', { op: job.op, provider: job.provider, model: job.model, outputs: assets.map((a) => a.sha256), ms: this.ageMs(job.jobId) })
       this.emit()

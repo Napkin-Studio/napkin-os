@@ -19,14 +19,24 @@ STRONG = 24  # of 255, on the colour channel that moved most
 LIMIT = 0.0005  # the share of pixels that may move strongly in a picture that came back the same
 
 
-def moved_share(a: bytes, b: bytes) -> float:
-    """The share of pixels whose largest colour difference is over STRONG, at SIZE."""
+def moved_share(a: bytes, b: bytes, region: dict | None = None) -> float:
+    """The share of pixels whose largest colour difference is over STRONG, at SIZE. With a `region` (a box in
+    0-1 coordinates, the area a region edit was sent to change), only that area is compared: a fill that left
+    its area as it was is the same even when the provider shifted the rest of the frame a little (QA
+    2026-11-17: a no-op fill moved 0.39 % of the whole frame, over LIMIT, and was offered for Apply)."""
     from PIL import Image, ImageChops
 
     def small(data: bytes):
         im = Image.open(io.BytesIO(data))
         im.seek(0)
-        return im.convert("RGB").resize(SIZE, Image.BILINEAR)
+        im = im.convert("RGB")
+        if region:
+            w, h = im.size
+            box = (round(region["x"] * w), round(region["y"] * h),
+                   round((region["x"] + region["w"]) * w), round((region["y"] + region["h"]) * h))
+            if box[2] - box[0] >= 2 and box[3] - box[1] >= 2:
+                im = im.crop(box)
+        return im.resize(SIZE, Image.BILINEAR)
 
     diff = ImageChops.difference(small(a), small(b))
     channels = diff.split()
@@ -35,5 +45,5 @@ def moved_share(a: bytes, b: bytes) -> float:
     return sum(hist[STRONG + 1:]) / (SIZE[0] * SIZE[1])
 
 
-def same_picture(a: bytes, b: bytes) -> bool:
-    return moved_share(a, b) < LIMIT
+def same_picture(a: bytes, b: bytes, region: dict | None = None) -> bool:
+    return moved_share(a, b, region) < LIMIT

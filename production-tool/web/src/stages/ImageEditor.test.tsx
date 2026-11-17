@@ -102,7 +102,7 @@ describe('the tools (3.12)', () => {
     const strip = el.querySelector('[aria-label="Brush mask options"]')!
     expect(strip.querySelector('b')?.textContent).toBe('New mask') // until the first paint (features/image-editor-masks-layers.clan)
     for (const l of ['Brush size', 'Brush softness']) expect(strip.querySelector(`input[aria-label="${l}"]`)).not.toBeNull()
-    expect([...strip.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Add', 'Subtract', 'Clear mask'])
+    expect([...strip.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Add', 'Subtract', 'Clear mask', 'New mask'])
     const mode = () => strip.querySelector('[aria-label="Brush mode"] [aria-pressed="true"]')?.textContent
     expect(mode()).toBe('Add')
     act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' })) })
@@ -127,11 +127,12 @@ describe('the edits and layers', () => {
     const { el } = await open(painted)
     const items = [...el.querySelectorAll('.ie-elist li')].map((li) => li.textContent?.replace('↶', '').trim())
     expect(items).toEqual(['1 Mask 1 · painting', '2 Text "Drink the morning."', 'Next: Fill or remove Mask 1'])
-    expect(el.textContent).toContain('2 edits not applied')
+    // A mask is never applied, so it is not an edit in the count (QA 2026-11-17).
+    expect(el.textContent).toContain('1 edit not applied')
     expect(el.textContent).toContain('Nothing is sent until you run an action. v1 is never changed.')
     expect(byText(el, 'Apply as new version')?.disabled).toBe(false)
     act(() => byLabel(el, 'Undo edit 2, Text "Drink the morning."')!.click())
-    expect(el.textContent).toContain('1 edit not applied')
+    expect(el.textContent).not.toContain('1 edit not applied')
   })
   it('layers run text, masks, then the locked frame, each can be hidden', async () => {
     const { el } = await open(painted)
@@ -198,7 +199,7 @@ describe('the edits and layers', () => {
   it('the versions menu says what Apply makes', async () => {
     const { el } = await open(painted)
     act(() => byText(el, 'v1 of 1 ▼')!.click())
-    expect(document.body.textContent).toContain('Apply saves your 2 edits as v2. v1 stays.')
+    expect(document.body.textContent).toContain('Apply saves your 1 edit as v2. v1 stays.')
   })
 })
 
@@ -314,6 +315,30 @@ describe('a job in its Edits row (features/image-editor-masks-layers.clan)', () 
   })
 })
 
+describe('an edit that came back the same (QA 2026-11-17)', () => {
+  it('says so in its row and is left out of Apply', async () => {
+    const { el, services, ids } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
+    await act(async () => {
+      let jobId = ''
+      await systemUpdate(services.doc, (d) => {
+        const j = job(d, 'region_edit', [], null, { state: 'completed', crew: 'rhea' })
+        j.outputs = [SHA('a')]
+        d.jobs[j.id] = j
+        jobId = j.id
+      })
+      services.ui.update((u) => {
+        u.jobs[jobId] = { ...u.jobs[jobId], unchanged: true }
+        const s = u.imageEdits![ids.frame]
+        u.imageEdits = { [ids.frame]: { ...s, edits: [...s.edits, { id: 'f1', kind: 'fill', maskId: 'm1', ops: [stroke], words: 'the sky as it is', keepOutside: true, jobId }] } }
+      })
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))!
+    expect(row.textContent).toContain('came back the same')
+    expect(row.textContent).not.toContain('ready')
+  })
+})
+
 describe('hidden layers (features/image-editor-masks-layers.clan)', () => {
   it('a hidden mask cannot be filled and says why', async () => {
     const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: ['m1'], active: 'm1' }))
@@ -322,6 +347,6 @@ describe('hidden layers (features/image-editor-masks-layers.clan)', () => {
   })
   it('the pill counts hidden layers apart', async () => {
     const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }, { id: 't1', kind: 'text', text: 'Hi', x: 0.1, y: 0.1, size: 0.06 }], hidden: ['t1'], active: 'm1' }))
-    expect(el.querySelector('.ie-pill .ie-n-long')?.textContent).toBe('1 edit not applied · 1 hidden layer is left out')
+    expect(el.querySelector('.ie-pill .ie-n-long')?.textContent).toBe('1 hidden layer is left out')
   })
 })

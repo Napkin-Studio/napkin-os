@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   EMPTY, addEdit, applyLine, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
   toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, keptAfterApply, leftOutLine, NOTHING_TO_TAKE,
+  afterSend, newMask, pendingCount, sendWithRow,
   type EditSession, type MaskOp,
 } from './edits'
 
@@ -150,7 +151,7 @@ describe('hidden layers (features/image-editor-masks-layers.clan, IM1 and IM3)',
   }
   it('counts hidden edits apart from the ones Apply saves', () => {
     const s = toggleHidden(toggleHidden(session(), 't'), 'frame')
-    expect(editCount(s)).toBe(2)
+    expect(editCount(s)).toBe(1) // the fill; the mask is never applied
     expect(hiddenCount(s)).toBe(2) // the text and Frame
     expect(hiddenCount(s, ['text'])).toBe(1)
     expect(leftOutLine(1)).toBe('1 hidden layer is left out')
@@ -168,5 +169,53 @@ describe('hidden layers (features/image-editor-masks-layers.clan, IM1 and IM3)',
     expect(kept.edits.map((e) => e.id)).toEqual([m, 'f', 't'])
     expect(kept.hidden).toEqual([m, 'f', 't'])
     expect(editCount(kept)).toBe(0)
+  })
+})
+
+describe('fixes from the live test of 2026-11-17 (features/production-new-ui.clan P5)', () => {
+  const op = { t: 'brush' as const, mode: 'add' as const, r: 0.05, soft: 0, pts: [{ x: 0.2, y: 0.2 }] }
+  it('after a fill is sent the next stroke starts Mask 2; New mask starts one on purpose', () => {
+    let s = withMaskOp(EMPTY, op)
+    s = addEdit(s, { id: 'f1', kind: 'fill', maskId: s.active!, ops: [op], words: 'a balloon', keepOutside: true, jobId: 'job_1' })
+    s = afterSend(s)
+    s = withMaskOp(s, op)
+    const names = s.edits.filter((e) => e.kind === 'mask').map((e) => (e as { name: string }).name)
+    expect(names).toEqual(['Mask 1', 'Mask 2'])
+    const n = newMask(s)
+    expect(n.edits.find((e) => e.id === n.active)).toMatchObject({ kind: 'mask', name: 'Mask 3', ops: [] })
+  })
+  it('a mask is not an edit in the count; the leave ask counts an unfilled mask but not carried layers', () => {
+    let s = withMaskOp(EMPTY, op)
+    expect(editCount(s)).toBe(0)
+    expect(pendingCount(s)).toBe(1)
+    s = addEdit(s, { id: 'f1', kind: 'fill', maskId: s.active!, ops: [op], words: 'x', keepOutside: true, jobId: 'job_1' })
+    expect(editCount(s)).toBe(1)
+    expect(pendingCount(s)).toBe(1)
+    expect(pendingCount({ ...s, carried: ['f1'] })).toBe(0)
+  })
+  it('a hidden layer rides into the next version once, never again', () => {
+    let s = withMaskOp(EMPTY, op)
+    s = addEdit(s, { id: 'f1', kind: 'fill', maskId: s.active!, ops: [op], words: 'x', keepOutside: true, jobId: 'job_1' })
+    s = toggleHidden(s, 'f1')
+    const once = keptAfterApply(s)!
+    expect(once.carried).toContain('f1')
+    expect(keptAfterApply(once)).toBeUndefined()
+  })
+  it('an empty mask that is not being painted is not a layer', () => {
+    const s = { edits: [{ id: 'm1', kind: 'mask' as const, name: 'Mask 1', ops: [] }], hidden: [] }
+    expect(layersOf(s, 1).map((l) => l.id)).toEqual(['frame'])
+    expect(layersOf({ ...s, active: 'm1' }, 1).map((l) => l.id)).toEqual(['m1', 'frame'])
+  })
+  it('the row is in the session with its job id before the relay answers, and goes if the send fails', async () => {
+    let s: EditSession = EMPTY
+    const set = (f: (x: EditSession) => EditSession) => { s = f(s) }
+    let release!: (id: string) => void
+    const p = sendWithRow(set, { id: 'w1', kind: 'whole', words: 'golden hour' }, () => new Promise((r) => { release = r }), 'job_A')
+    expect(s.edits).toEqual([{ id: 'w1', kind: 'whole', words: 'golden hour', jobId: 'job_A' }])
+    release('job_A')
+    await p
+    expect(s.edits).toHaveLength(1)
+    await expect(sendWithRow(set, { id: 'w2', kind: 'whole', words: 'no' }, () => Promise.reject(new Error('refused')), 'job_B')).rejects.toThrow('refused')
+    expect(s.edits.map((e) => e.id)).toEqual(['w1'])
   })
 })

@@ -19,6 +19,7 @@ import type { EditSession, MaskOp, Pt } from './edits'
 import { edges, rasterize, RasterCache } from './mask'
 import { compose, type Plan } from './compose'
 import { cropRect, type ToolId } from './tools'
+import { endsTyping, finishesTyping } from './textTool'
 
 const BLUE = [47, 100, 245]
 const OVERLAY_MAX = 1100
@@ -264,6 +265,12 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
     const raw = rel(e)
     const inside = raw.x >= 0 && raw.x <= 1 && raw.y >= 0 && raw.y <= 1
     if (tool === 'text' && !inside) return
+    // Typing a text: this click finishes it (it saves on blur), and adds nothing.
+    if (tool === 'text' && finishesTyping(document.activeElement)) {
+      e.preventDefault()
+      ;(document.activeElement as HTMLElement).blur()
+      return
+    }
     const p = clamp(raw)
     if (tool !== 'text') {
       // No text selection starts here, and one already on the page is let go: pressed inside a selection,
@@ -361,6 +368,7 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
               ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
               drag.current = { kind: 'text', from: at(e), start: { x: t.x, y: t.y }, id: t.id }
             }}
+            onKeyDown={(e) => { if (endsTyping(e)) { e.preventDefault(); e.currentTarget.blur() } }}
             onBlur={(e) => onText(t.id, { text: e.currentTarget.textContent ?? '' })}>{t.text}</div>
         ))}
         {!before && crop && (

@@ -377,6 +377,17 @@ def test_sameness_calls_a_picture_given_back_the_same_and_a_small_real_edit_chan
     assert not sameness.same_picture(a, png_bytes())
 
 
+def test_a_region_edit_is_judged_inside_its_area():
+    """QA 2026-11-17: a no-op fill left its area as it was while the rest of the frame moved a little."""
+    a = scene()
+    elsewhere = scene(patch=[1100, 600, 1300, 740])  # a change outside the area
+    region = {"x": 0.0, "y": 0.0, "w": 0.34, "h": 0.34}
+    assert not sameness.same_picture(a, elsewhere)
+    assert sameness.same_picture(a, elsewhere, region)
+    inside = scene(patch=[60, 40, 300, 200])  # a real fill inside the area
+    assert not sameness.same_picture(a, inside, region)
+
+
 def test_a_frame_edit_whose_picture_came_back_the_same_is_marked_unchanged():
     h = harness()
     h.blobs.objects[f"in/{FRAME['sha256']}"] = (scene(), "image/png")

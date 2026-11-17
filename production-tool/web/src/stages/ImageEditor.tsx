@@ -33,13 +33,15 @@ import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { EditorBar } from '../ui/chrome/TopBars'
+import { newId } from '../lib/ulid'
+import { sendWithRow, type UnsentEdit } from './imageEditor/edits'
 import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Float } from '../ui/Float'
 import { croppedCaption } from '../canvas/core/sketch'
 import { PromptStart } from '../ui/prompt/PromptStart'
 import {
-  EMPTY, NOTHING_TO_TAKE, addEdit, applyLine, clearMask, editCount, editId, editLabel, editsForFrame, hiddenCount, keptAfterApply,
+  EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, newMask, pendingCount, editLabel, editsForFrame, hiddenCount, keptAfterApply,
   layersOf, leaveAsk, leftOutLine, nextStep,
   notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
   type Edit, type EditSession, type MaskOp, type Pt, type Undone,
@@ -154,17 +156,19 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const resultOf = useCallback((e: Edit): Pic | undefined => {
     const id = 'jobId' in e ? e.jobId : undefined
     const j = id ? doc.jobs[id] : undefined
-    const sha = j?.state === 'completed' ? j.outputs?.[0] : undefined
+    // A result that came back the same as the picture sent is no result (relay sameness.py): it is never applied.
+    const sha = j?.state === 'completed' && !ui.jobs[id!]?.unchanged ? j.outputs?.[0] : undefined
     if (!sha) return undefined
     const a = doc.assets[sha]
     return { sha, w: a?.w ?? W, h: a?.h ?? H }
-  }, [doc, W, H])
+  }, [doc, ui.jobs, W, H])
   // Ready only once its picture is in the document: the runner can say completed a moment before the
   // document has the output, and Apply composes from the document.
-  const stateOf = (e: Edit): 'running' | 'ready' | 'failed' | undefined => {
+  const stateOf = (e: Edit): 'running' | 'ready' | 'failed' | 'same' | undefined => {
     const id = 'jobId' in e ? e.jobId : undefined
     if (!id) return undefined
     if (resultOf(e)) return 'ready'
+    if (doc.jobs[id]?.state === 'completed' && ui.jobs[id]?.unchanged) return 'same'
     const s = jobState(id)
     return s === 'failed' || s === 'cancelled' || s === 'uncertain' ? 'failed' : 'running'
   }
@@ -199,7 +203,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const before = n ? { url, version } : prevVersion ? { url: prevUrl, version: prevVersion.version } : undefined
   const showBefore = view === 'before' && !!before
   // Hidden layers are left out of every send and of Apply, and the pill, the Apply line and the tray say so (IM1).
-  const hiddenEdits = hiddenCount(session) - (session.hidden.includes('frame') ? 1 : 0)
   const applyLeftOut = hiddenCount(session, ['mask'])
   const activeMask = session.edits.find((e): e is MaskEdit => e.id === session.active && e.kind === 'mask')
   const maskHidden = !!activeMask && session.hidden.includes(activeMask.id)
@@ -354,6 +357,11 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   })
 
   // ── the actions ──
+  // The edit's row goes into the session with its job id BEFORE the relay is asked, so a paid result is never
+  // lost when the tab closes while it is being sent (QA 2026-11-17: job_01M7N5PEGD8Z433F60SE1C1HCW was paid
+  // and only ever in History). If the send fails, the row goes again.
+  // The edit's row goes into the session with its job id before the relay is asked (edits.ts sendWithRow).
+  const withRow = (row: UnsentEdit, submit: (jobId: string) => Promise<string>) => sendWithRow(setSession, row, submit, newId('job'))
   const send = (a: Action) => void attempt(SENDING[a], async () => {
     setTray(null)
     const input = await inputPic()
@@ -369,23 +377,25 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       const ops = activeMask.ops
       if (a === 'remove') {
         // No words: the relay writes the removal (relay-api input.remove), and the area is always the only change.
-        const jobId = await runner.submit('region_edit', { image: picture, mask, region, remove: true, aspect: shape }, parents, purpose)
-        setSession((s) => addEdit(s, { id: editId(), kind: 'fill', maskId: activeMask.id, ops, words: '', keepOutside: true, remove: true, jobId }))
+        await withRow({ id: editId(), kind: 'fill', maskId: activeMask.id, ops, words: '', keepOutside: true, remove: true },
+          (jobId) => runner.submit('region_edit', { image: picture, mask, region, remove: true, aspect: shape }, parents, purpose, jobId))
       } else {
         const words = fill.trim()
-        const jobId = await runner.submit('region_edit', { image: picture, mask, region, text: words, aspect: shape }, parents, purpose)
-        setSession((s) => addEdit(s, { id: editId(), kind: 'fill', maskId: activeMask.id, ops, words, keepOutside, jobId }))
+        await withRow({ id: editId(), kind: 'fill', maskId: activeMask.id, ops, words, keepOutside },
+          (jobId) => runner.submit('region_edit', { image: picture, mask, region, text: words, aspect: shape }, parents, purpose, jobId))
         setFill('')
       }
+      // The next stroke starts a new mask: this one stays with the fill it was sent with.
+      setSession(afterSend)
     } else if (a === 'whole') {
       const words = whole.trim()
       const frameShot = shotId && doc.shots[shotId] ? plainShot(doc.shots[shotId]) : undefined
-      const jobId = await runner.submit('region_edit', { image: picture, text: words, aspect: shape, ...(frameShot ? { shot: frameShot } : {}) }, parents, purpose)
-      setSession((s) => addEdit(s, { id: editId(), kind: 'whole', words, jobId }))
+      await withRow({ id: editId(), kind: 'whole', words },
+        (jobId) => runner.submit('region_edit', { image: picture, text: words, aspect: shape, ...(frameShot ? { shot: frameShot } : {}) }, parents, purpose, jobId))
       setWhole('')
     } else {
-      const jobId = await runner.submit('upscale', { image: picture, scale, aspect: shape }, parents, purpose)
-      setSession((s) => addEdit(s, { id: editId(), kind: 'upscale', scale, jobId }))
+      await withRow({ id: editId(), kind: 'upscale', scale },
+        (jobId) => runner.submit('upscale', { image: picture, scale, aspect: shape }, parents, purpose, jobId))
     }
   })
   const apply = () => void attempt('applying', async () => {
@@ -415,7 +425,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     if (target.kind === 'shot') void selectFrame(docStore, target.shotId, f.id)
     else void pickPictureVersionStep(docStore, f.id)
   }
-  const go = (id: string) => (n + hiddenEdits > 0 ? setLeaving(id) : id === 'back' ? onBack() : onTarget?.({ kind: 'shot', shotId: id }))
+  const go = (id: string) => (pendingCount(session) > 0 ? setLeaving(id) : id === 'back' ? onBack() : onTarget?.({ kind: 'shot', shotId: id }))
   const leave = (to: string, discard: boolean) => {
     setLeaving(null)
     if (discard) uiStore.update((u) => { if (u.imageEdits && frameId) delete u.imageEdits[frameId] }, 'image edits discarded')
@@ -505,6 +515,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                     title="Subtract: the brush and the lasso take paint out of the mask (X swaps; Alt held paints the other way)">Subtract</button>
                 </div>
                 <button type="button" className="btn sm ghost" disabled={!masked} onClick={() => setSession(clearMask)}>Clear mask</button>
+                <button type="button" className="btn sm ghost" disabled={!masked} title="Start another mask: the next stroke paints it" onClick={() => setSession(newMask)}>New mask</button>
               </>
             ) : activeTool === 'text' ? (
               <><b>Text</b><span className="faint">Click the frame to place words, then type on them.</span></>
@@ -576,6 +587,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                       {st === 'ready' && <span className="ie-ok">ready</span>}
                       {st === 'running' && !live && <span className="ie-run">{jobId && jobId === offerJob ? 'waiting for your choice' : 'working'}</span>}
                       {st === 'failed' && <span className="ie-bad">did not work</span>}
+                      {st === 'same' && <span className="ie-bad" title="Nothing changed in the area, so there is nothing to apply. Try other words, or undo it.">came back the same</span>}
                     </button>
                     {live && <span className="ie-jobrow"><JobSlot jobId={live} row onRetried={(id) => setSession((s) => updateEdit(s, e.id, { jobId: id }))} /></span>}
                     <button type="button" className="ie-undo" aria-label={`Undo edit ${i + 1}, ${label}`} onClick={() => setSession((s) => undoEdit(s, e.id))}>↶</button>
@@ -594,7 +606,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             </div>
             {leaving && (
               <div className="ie-ask" role="alertdialog" aria-label="Edits not applied">
-                <span>{leaveAsk(n + hiddenEdits)}</span>
+                <span>{leaveAsk(pendingCount(session))}</span>
                 <span className="pt-grow" />
                 <button type="button" className="btn sm" onClick={() => leave(leaving, false)}>Keep for later</button>
                 <button type="button" className="btn sm ghost" onClick={() => leave(leaving, true)}>Discard</button>
