@@ -1,0 +1,222 @@
+{
+ "reframe": {
+  "title": "Fernley's task is to get young adults in Ireland to know and try a drink they may not yet know how to place.",
+  "line": "Awareness and trial for a Cork sparkling iced tea, spring to summer 2027, with no research yet behind the audience view.",
+  "claims": [
+   {
+    "text": "The client asks for two things: be known among the audience, and be tried.",
+    "refs": [
+     "prompt:1",
+     "req:R1",
+     "req:R2"
+    ],
+    "basis": "evidence"
+   },
+   {
+    "text": "The audience is 18 to 34 year olds in Ireland.",
+    "refs": [
+     "brief:audience",
+     "req:R3"
+    ],
+    "basis": "evidence"
+   },
+   {
+    "text": "Fernley is a Cork-based sparkling iced tea brand.",
+    "refs": [
+     "brief:background"
+    ],
+    "basis": "evidence"
+   },
+   {
+    "text": "We believe trial depends on people being able to picture the taste first. This is a hypothesis to confirm.",
+    "refs": [],
+    "basis": "proposal"
+   }
+  ]
+ },
+ "gap_chart": {
+  "title": "We cannot chart Fernley's awareness or trial gap yet because no market figures were supplied.",
+  "series": [],
+  "takeaway": "Before the pitch we need awareness, trial and category figures from the client or from research.",
+  "takeaway_refs": []
+ },
+ "barrier": {
+  "title": "The likely barrier to trial is uncertainty about what the drink is, not dislike of it. This must be tested.",
+  "points": [
+   {
+    "text": "The brief says nothing yet about how the audience sees iced tea. That is a research question, not a known fact.",
+    "refs": [
+     "brief:insight",
+     "brief:competitor_context"
+    ],
+    "basis": "opinion"
+   },
+   {
+    "text": "A new drink that is hard to place may be hard to picture tasting. This is a hypothesis to confirm.",
+    "refs": [],
+    "basis": "proposal"
+   },
+   {
+    "text": "The client wants trial, so the work must lower the risk of a first sip.",
+    "refs": [
+     "req:R2",
+     "brief:desired_response"
+    ],
+    "basis": "proposal"
+   }
+  ]
+ },
+ "insight_candidates": [
+  {
+   "id": "IC4",
+   "observation": "Hypothesis to confirm: at the chiller, young adults in Ireland may not be able to tell whether a sparkling iced tea is a tea or a soft drink.",
+   "refs": [
+    "brief:background",
+    "prompt:1"
+   ],
+   "tension": "They may be open to something new, yet a drink they cannot place is one they cannot picture tasting.",
+   "implication": "So Fernley should show what sparkling iced tea tastes like before it asks anyone to pick up a can.",
+   "not_in_brief": "Names a possible barrier: confusion between the tea and soft-drink categories. The brief names no barrier.",
+   "from": "No finding or verbatim was supplied. This grows only from the product description and the trial objective. It is an untested hypothesis.",
+   "swap_test": "Passes narrowly. It depends on sparkling iced tea sitting between two categories, so a cola could not say it. Another hybrid drink could.",
+   "confidence": "low: hypothesis only, needs shopper research"
+  },
+  {
+   "id": "IC5",
+   "observation": "Hypothesis to confirm: young adults in Ireland may see tea as something they grew up with at home, not something they would choose on a summer day out.",
+   "refs": [
+    "brief:background",
+    "brief:audience"
+   ],
+   "tension": "They may feel at home with tea, yet never think of it when they want something cold and fizzy.",
+   "implication": "So Fernley, a Cork tea brand, should take tea from the kitchen table out into the Irish summer, cold and sparkling.",
+   "not_in_brief": "Suggests the audience already knows tea but not this occasion. If true, awareness means a new moment for tea, not a new drink.",
+   "from": "No verbatim or finding was supplied. This grows from the brand being tea and the campaign running in spring and summer. It is an untested hypothesis.",
+   "swap_test": "Passes. Only a tea brand can turn familiarity with tea into a reason to try. A cola, water or juice brand could not say it.",
+   "confidence": "low: hypothesis only, needs qualitative interviews with the audience"
+  },
+  {
+   "id": "IC6",
+   "observation": "Hypothesis to confirm: young adults may expect iced tea to be sweet and still, and the word sparkling may not yet change that expectation.",
+   "refs": [
+    "brief:background"
+   ],
+   "tension": "They may want a cold drink with character, yet assume iced tea is a sugary drink with a tea label.",
+   "implication": "So Fernley should lead with the sparkle and the tea together, not rely on the words iced tea alone.",
+   "not_in_brief": "Suggests the category name itself may hold back trial. The brief gives no view of the category.",
+   "from": "No category research was supplied. This grows only from the product being sparkling iced tea. It is an untested hypothesis.",
+   "swap_test": "Passes. It depends on the iced tea category's reputation, so a rival from another category could not say it.",
+   "confidence": "low: hypothesis only, needs category perception research"
+  }
+ ],
+ "insight": {
+  "chosen_candidate_id": "IC5",
+  "why": "It is the only candidate that just a tea brand could own, and the cheapest to test early. All three are unproven until research is supplied.",
+  "title": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+  "evidence": [
+   {
+    "text": "Fernley is a Cork-based sparkling iced tea brand.",
+    "refs": [
+     "brief:background"
+    ]
+   },
+   {
+    "text": "The campaign runs from spring to summer 2027 in Ireland.",
+    "refs": [
+     "brief:background",
+     "req:R4"
+    ]
+   },
+   {
+    "text": "The client wants 18 to 34 year olds to know Fernley and try it.",
+    "refs": [
+     "prompt:1",
+     "req:R1",
+     "req:R2"
+    ]
+   },
+   {
+    "text": "No audience research was supplied, so this insight is a hypothesis to confirm.",
+    "refs": [
+     "brief:insight"
+    ]
+   }
+  ]
+ },
+ "audience": {
+  "title": "We are talking to 18 to 34 year olds in Ireland, and we do not yet know how they see tea.",
+  "primary": "18 to 34 year olds in Ireland.",
+  "two_halves": "Not defined in the inputs. Proposed for research: people who drink tea at home and people who do not.",
+  "also": "No secondary audience was specified.",
+  "refs": [
+   "brief:audience",
+   "req:R3",
+   "prompt:1"
+  ],
+  "voices": [],
+  "persona": {
+   "name": "Aoife",
+   "line": "Drinks tea at home every day, but has never thought of reaching for one cold in the sun.",
+   "basis": "creative"
+  }
+ },
+ "objection": {
+  "text": "This insight rests on no research. Why should we believe it?",
+  "answer": "We should not believe it yet. It is a testable hypothesis, and we propose quick audience interviews to confirm or replace it before creative development."
+ },
+ "from_to": {
+  "from": "Tea is something young adults may know only from home. This is a hypothesis.",
+  "to": "Fernley makes tea something to try cold and sparkling this summer.",
+  "refs": [
+   "brief:background",
+   "req:R2"
+  ]
+ },
+ "proposition": {
+  "rtbs": [
+   {
+    "text": "It is a sparkling iced tea, which is tea made cold and fizzy.",
+    "refs": [
+     "brief:background"
+    ]
+   },
+   {
+    "text": "It comes from Fernley Drinks, a Cork-based brand.",
+    "refs": [
+     "brief:background"
+    ]
+   },
+   {
+    "text": "Further reasons to believe must come from the client. None were supplied.",
+    "refs": [
+     "brief:reasons_to_believe"
+    ]
+   }
+  ]
+ },
+ "stage": "b_storyline",
+ "produced_by": "live claude-opus-5-5",
+ "usage": {
+  "prompt_tokens": 2,
+  "completion_tokens": 4850,
+  "cache_read_tokens": 1131,
+  "cache_creation_tokens": 1731,
+  "model": "claude-opus-5-5",
+  "secs": 50.3,
+  "calls": 1,
+  "usd": 0.1326,
+  "usd_estimated": true
+ },
+ "insight_retry": {
+  "reasons": [
+   "IC1: Swap in \"[client]\" and \"[category]\": \"when choosing a cold drink quickly, young adults reach for the brand they already know rather than an unfamiliar can\" is true of any drink brand.; Nothing ties it to Fernley or sparkling iced tea; any rival drink brand could say \"an unfamiliar can\" loses to the known brand.; It cites prompt:1, which gives only the objective, and req:R2, which has no text. The source note says \"No finding was supplied\", so the habit claim goes beyond the evidence.",
+   "IC2: \"a more grown-up alternative to the usual fizzy drinks, but keep buying the usual ones\" could be said by any non-cola or better-for-you drink; swap in \"[client]\" and it still reads true.; It never mentions tea, sparkle or Cork. Any rival alternative drink could claim \"an upgrade they can enjoy, not a compromise\".; brief:audience and brief:background give only the age range and a description of the brand. Nothing says young adults want a grown-up alternative to fizzy drinks, and the source note admits \"No verbatim or finding was supplied.\"",
+   "IC3: brief:background says only that Fernley is a Cork sparkling iced tea brand; prompt:1 gives the objective. Neither says how young adults see iced tea, and the source note admits \"No category research was supplied.\""
+  ],
+  "first_candidates": [
+   "IC1",
+   "IC2",
+   "IC3"
+  ]
+ }
+}

@@ -182,7 +182,7 @@ class Middleware:
                     log.info("%s %s cancelled", job.task, job.id)
             if job.task == "start_campaign":
                 return self.campaign_envelope(job, job.reply_change(clan))
-            if getattr(job, "kind", None) == "brief":
+            if getattr(job, "kind", None) in ("brief", "deck"):
                 return self.brief_envelope(job, job.reply_change(clan))
             done = job.state == "done"
             return self.envelope(job.task, job.handler, job.view(),
@@ -226,6 +226,17 @@ class Middleware:
             # host polls, and every poll carries what finished since
             first = {**job.view(), "state": "queued", "progress": {"done": 0, "total": len(job.stages)},
                      "stage": job.stages[0], "finished_at": None, "error": None}
+            return self.envelope(job.task, job.handler, first, {**job.result(), "summary": "queued"}, None, job.caps)
+        if mod.KIND == "deck":
+            caps = self.caps(handler)
+            jid = self.jobs.new_id()
+            caps.bind_job(jid)
+            job = mod.start(req, caps, self.settings, jid)  # validates: a 400 or 503 before a 409
+            if self.jobs.unfinished(scope, doc, ("build_deck",)):
+                raise TaskError(409, "job_state", "a build_deck job on this document is still running; one segment of a run at a time")
+            self.jobs.add(job)
+            job.start()
+            first = {**job.view(), "state": "queued", "progress": {"done": 0, "total": 1}, "stage": "build", "finished_at": None, "error": None}
             return self.envelope(job.task, job.handler, first, {**job.result(), "summary": "queued"}, None, job.caps)
         if mod.KIND == "short":
             if task == "compose_report" and self.jobs.unfinished_campaign(scope, doc):

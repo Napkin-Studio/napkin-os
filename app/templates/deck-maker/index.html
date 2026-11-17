@@ -408,6 +408,16 @@ var DeckLogic = (function () {
     };
   }
 
+  /**
+   * Only the person's half of approving a gate, for a document with an engine behind it: {approvals, decisions}, nothing else. The
+   * engine's side (state, stages, agent, gate) is written by the middleware's change, never by the app (middleware-api.md section 12).
+   * The same checks as approveGate (the open gate, a territory that exists); null when it would be refused.
+   */
+  function humanApproval(run, gateId, by, at, choice) {
+    var full = approveGate(run, gateId, by, at, choice);
+    return full ? { approvals: full.approvals, decisions: full.decisions } : null;
+  }
+
   /** The decisions recorded so far, as a new list (the store replaces arrays, so a write carries the whole list). */
   function decisionsOf(run) { return (isObj(run) && Array.isArray(run.decisions) ? run.decisions : []).filter(isObj); }
 
@@ -1373,7 +1383,7 @@ var DeckLogic = (function () {
     researchRequest: researchRequest, upstreamChanged: upstreamChanged,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
-    statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, gateRequest: gateRequest,
+    statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, gateRequest: gateRequest,
     GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown,
     isObj: isObj, own: own
   };
@@ -1402,6 +1412,84 @@ var DeckLogic = (function () {
   var upChanged = []; // sources the host says changed since this deck; empty when the call fails or is absent
   var upLoaded = false;
   var clanScheme = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
+
+  // ── the engine, through the middleware (docs/contracts/middleware-api.md section 12) ──
+  // Build deck and each approval start one segment: a build_deck job that runs the deck engine to the next gate (or on to the finished
+  // deck). The page polls job_status; the HOST applies each reply's staged change, and the page re-draws when it lands (clan:dataupdated).
+  // The page never writes what the engine reports: only the person's decision. With no middleware the page keeps its old, honest
+  // behaviour (it says live building needs the engine server).
+  var MW_API = 'napkin.middleware/1';
+  var MW = { configured: null };
+  var JOB = null; // the build_deck job in flight: { id, state, delay, t, error }
+  var BUSY_JOB = { sending: 1, queued: 1, running: 1 };
+  function mwOn() { return MW.configured === true; }
+  function checkMiddleware() {
+    if (typeof fetch !== 'function') return;
+    fetch(clanScheme + '/middleware').then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) { if (v && typeof v.configured === 'boolean') { MW.configured = v.configured; render(); resumeBuild(); } })
+      .catch(function () {});
+  }
+  function mwBody(res) { return (res && typeof res === 'object' && 'ok' in res && 'data' in res) ? res.data : res; }
+  /** What went wrong with a reply, in words, or null when it is a good napkin.middleware/1 reply. */
+  function hostErr(res) {
+    if (!res) return 'Empty reply from the host.';
+    if (res.error) {
+      var e = res.error, st = res.status && res.status !== 200 ? ' (' + res.status + ')' : '';
+      if (e && e.type === 'no_middleware') { MW.configured = false; return 'This workspace has no middleware set up, so the engine cannot be reached.'; }
+      return typeof e === 'string' ? e + st : (e.message || e.type || JSON.stringify(e)) + (e.type && e.message ? ' [' + e.type + st + ']' : '');
+    }
+    if (res.ok === false) return 'The host could not complete the call' + (res.status ? ' (status ' + res.status + ')' : '') + '. Nothing was applied.';
+    var b = mwBody(res);
+    if (!b || typeof b !== 'object' || b.api !== MW_API) return 'Not a ' + MW_API + ' reply. Nothing was applied.';
+    return null;
+  }
+  function docId() { var m = (window.__CLAN__ && window.__CLAN__.manifest) || {}; return m.document_id || m.id || ''; }
+  function jobKey() { return 'clan.deck.job.' + docId(); }
+  function store(v) { try { if (v == null) sessionStorage.removeItem(jobKey()); else sessionStorage.setItem(jobKey(), v); } catch (e) { /* no session storage: a reload forgets the job */ } }
+  function stored() { try { return sessionStorage.getItem(jobKey()); } catch (e) { return null; } }
+  /** Start the next segment of this document's run. Safe to call when one is already going: it says so and does nothing. */
+  function startBuild() {
+    if (!(window.clan && window.clan.apiProxy)) { toast('Building runs through the host.'); return; }
+    if (JOB && BUSY_JOB[JOB.state]) { toast('The engine is still working on this step.'); return; }
+    JOB = { id: null, state: 'sending', delay: 900, t: 0, error: null };
+    window.clan.apiProxy('middleware', { task: 'build_deck', input: {} }).then(onBuildReply, buildUnreachable);
+  }
+  function onBuildReply(res) {
+    var j = JOB, err = hostErr(res);
+    if (!j) return;
+    if (err) { j.state = 'failed'; j.error = err; endBuild(); toast(err); return; }
+    var b = mwBody(res);
+    if (b.job && typeof b.job === 'object') {
+      j.id = b.job.id || j.id; j.state = b.job.state || j.state;
+      if (b.job.error) j.error = b.job.error.message || b.job.error.type || String(b.job.error);
+    }
+    if (j.id) store(BUSY_JOB[j.state] ? j.id : null);
+    if (j.state === 'queued' || j.state === 'running') {
+      clearTimeout(j.t);
+      j.t = setTimeout(pollBuild, j.delay);
+      j.delay = Math.min(Math.round(j.delay * 1.4), 2500);
+    } else {
+      if (j.state === 'failed' && j.error) toast('The engine stopped: ' + j.error);
+      endBuild();
+    }
+  }
+  function pollBuild() {
+    if (!JOB || !JOB.id) return;
+    window.clan.apiProxy('middleware', { task: 'job_status', input: { job_id: JOB.id } }).then(onBuildReply, buildUnreachable);
+  }
+  function buildUnreachable(e) {
+    if (!JOB) return;
+    JOB.state = 'failed'; JOB.error = 'The middleware could not be reached: ' + (e && e.message || e);
+    endBuild(); toast(JOB.error);
+  }
+  function endBuild() { store(null); render(); }
+  /** A page reloaded while a job ran: pick it up again by its id. */
+  function resumeBuild() {
+    var id = stored();
+    if (!id || (JOB && BUSY_JOB[JOB.state]) || !(window.clan && window.clan.apiProxy)) return;
+    JOB = { id: id, state: 'running', delay: 900, t: 0, error: null };
+    pollBuild();
+  }
 
   function d() {
     var x = data();
@@ -1639,7 +1727,7 @@ var DeckLogic = (function () {
         '<div class="li"><span class="dot"></span><span><b style="font-weight:600">Animated deck</b> you can present from HyperFrames</span></div>' +
         '<div class="rule"></div><p class="note">You approve the storyline and pick a territory on the way. Then you review the finished deck.</p>' +
         '<button class="btn go big" id="build" style="width:100%;margin-top:18px;height:48px">Build deck</button>' +
-        '<p class="mono" style="margin-top:10px;text-align:center;font-size:11px;color:var(--ink3)">' + (s.run.stages.length ? 'Opens the recorded run. Live building needs the engine server.' : 'Live building needs the engine server.') + '</p></div>' +
+        '<p class="mono" style="margin-top:10px;text-align:center;font-size:11px;color:var(--ink3)">' + (mwOn() ? 'Builds with the engine and stops at the first gate. Nothing past a gate runs until you approve it.' : s.run.stages.length ? 'Opens the recorded run. Live building needs the engine server.' : 'Live building needs the engine server.') + '</p></div>' +
       library(s) + '</aside></main>';
   }
 
@@ -2145,8 +2233,14 @@ var DeckLogic = (function () {
       if (!guard.ok) { toast(guard.message); return; }
       // Only the person's own inputs are written. The brief and research are read from upstream, never stored.
       var dtb = L.deckTypeOf(s.raw), kindOut = dtb.source === 'answered' ? L.kindOfType(dtb.id) : (pending.kind || s.inputs.kind);
-      put({ inputs: { prompt: prompt, kind: kindOut, format: pending.format || s.inputs.format } }, 'start deck', 'inputs: prompt and documents');
+      var saved = put({ inputs: { prompt: prompt, kind: kindOut, format: pending.format || s.inputs.format } }, 'start deck', 'inputs: prompt and documents');
       view.screen = 'build'; render();
+      if (mwOn()) {
+        // The inputs are in the document before the engine reads it; the engine is started once they are.
+        toast('Saved. The engine is starting: it stops at the first gate and waits for you.');
+        Promise.resolve(saved).then(startBuild);
+        return;
+      }
       toast(s.run.stages.length ? 'Showing the recorded run. Live building needs the engine server.' : 'Saved. Live building needs the engine server.');
       return;
     }
@@ -2190,11 +2284,25 @@ var DeckLogic = (function () {
       var gv = L.gateView(s.run, view.pick);
       if (!gv) return;
       if (gv.body === 'territories' && !gv.picked) { toast('Pick a territory first.'); return; }
-      var next = L.approveGate(s.run, gv.id, 'You', now(), gv.picked ? { picked: gv.picked } : null);
-      if (!next) return;
+      var choice = gv.picked ? { picked: gv.picked } : null;
       var picked = gv.territories.filter(function (x) { return x.id === gv.picked; })[0];
+      var why = 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved' + (picked ? ': picked ' + picked.name : '');
+      if (mwOn()) {
+        // With an engine behind the document, approving writes only the person's decision. The engine's next stage is then asked for, and
+        // what it reports lands as the middleware's change: the page never writes run.state, stages, gate or agent itself.
+        if (JOB && BUSY_JOB[JOB.state]) { toast('The engine is still working on this step.'); return; }
+        var human = L.humanApproval(s.run, gv.id, 'You', now(), choice);
+        if (!human) return;
+        view.pick = null;
+        var wrote = put({ run: human }, 'approve ' + s.run.gate.id, why);
+        toast('Approved. The engine is working on the next step.');
+        Promise.resolve(wrote).then(startBuild);
+        return;
+      }
+      var next = L.approveGate(s.run, gv.id, 'You', now(), choice);
+      if (!next) return;
       view.pick = null;
-      put({ run: next }, 'approve ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved' + (picked ? ': picked ' + picked.name : ''));
+      put({ run: next }, 'approve ' + s.run.gate.id, why);
       return;
     }
     if (a.retry && !s.run.gate) { toast('Retrying a step needs the engine server, which is not connected yet.'); return; }
@@ -2271,6 +2379,7 @@ var DeckLogic = (function () {
   // Every circle on the page is the one agent engine's sphere: live where the browser can draw it, its still frame where not.
   if (Roles) Roles.auto();
   render();
+  checkMiddleware();
 })();
 </script>
 </body>

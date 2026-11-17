@@ -61,3 +61,9 @@ engine/rag/golden/labels/client/
 
 # Research run measurements (server/tools)
 runs/metrics/
+
+# the Deck Maker engine server per-document run folders (engine/deck/server.py)
+engine/deck-runs/
+
+# scripts/deck-local.sh: the local Deck Maker stack's runtime files
+.deck-local/
