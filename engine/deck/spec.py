@@ -324,3 +324,107 @@ WEIGHT_SHARE_FLOOR = 0.5
 #: In a pitch, a slide of a type that answers a scored criterion which has a written answer (a ``criterion_answer`` slide) goes behind the
 #: Appendix divider, because the answer is that criterion's presented slide (the derived deck). These types always stay presented.
 ANSWER_KEEPS = ("title", "scoring", "objective", "criterion_answer", "appendix", "next_step")
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# The visual contract (docs/contracts/deck-visuals.md, ADR 0036): the closed sets that layouts, slots, pictures, themes and
+# issues share. Each is repeated as an enum in engine/deck/deck.schema.json, app/templates/deck-maker/schema.json or one of
+# engine/deck/schemas/*.schema.json, and tests/test_visual_contract.py fails when a tuple and its enum differ. Nothing in the
+# engine reads them yet: they are the vocabulary the later features (layout library, frames, repair loop, image step) build on.
+# --------------------------------------------------------------------------------------------------------------------
+
+#: Every block kind a slide may carry. ``stats`` is written by ``assemble.build_investor`` and was missing from the schema's enum.
+BLOCK_KINDS = ("text", "small", "statement", "quote", "callout", "card", "bullets", "table", "kv", "fromto", "steps", "chart",
+               "sketch", "copy", "stats")
+
+#: The 17 layouts ``render_pptx.choose_layout`` returns today, then the eight that arrive with pictures. ``flow`` is reserved:
+#: no library layout, the earlier single-column flow. A layout id is a pattern in the schema, not an enum: the library's load
+#: check closes the list, so a new layout needs no schema edit.
+LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "comparison_grid", "chart", "execution", "territory",
+              "placeholder_card", "quote_cards", "comparison", "big_number", "kpi_row", "role_grid", "timeline_strip",
+              "native_table", "cards",
+              "cover_image", "section", "image_text", "image_left", "full_bleed_statement", "frames_strip", "image_grid",
+              "execution_visual")
+LAYOUT_FLOW = "flow"
+LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
+LAYOUT_MAX = 40
+LAYOUT_GROUPS = ("functional", "content")
+LAYOUT_PURPOSES = ("title", "statement", "list", "compare", "data", "timeline", "image", "people")
+LAYOUT_CHOSEN_BY = ("rule", "fit_ladder", "repair", "person")
+FIT_RUNGS = ("as_is", "shrunk", "switched", "shortened", "split", "overflow_to_notes", "no_fit")
+
+#: Slots: what a box holds, and the type role its text is set in (the names of ``theme.Scale`` sizes, see TYPE_ROLE_SCALE).
+SLOT_KINDS = ("text", "list", "group", "stat", "table", "chart", "image", "copy")
+TYPE_ROLES = ("display", "title", "lead", "body", "small", "caption")
+TYPE_ROLE_SCALE = {"display": "display", "title": "title", "lead": "lead", "body": "body", "small": "small", "caption": "caption"}
+CHART_TYPES = ("bar", "line", "stack", "big_number", "kpi_row")
+
+#: Pictures (contract section 4).
+IMAGE_KINDS = ("photo", "illustration", "frame", "screenshot", "logo")
+IMAGE_STATUSES = ("empty", "planned", "made", "flagged", "approved", "rejected", "failed")
+IMAGE_ASPECTS = ("16:9", "3:2", "4:3", "1:1", "4:5", "9:16")
+IMAGE_FITS = ("cover", "contain")
+IMAGE_SOURCES = ("territory_frame", "upload", "brand", "generated")
+IMAGE_RIGHTS = ("generated", "own", "licensed", "client_supplied", "reference_only")
+IMAGE_MIMES = ("image/png", "image/jpeg", "image/webp", "image/svg+xml")
+IMAGE_DECISIONS = ("approve", "replace", "remove")
+#: The default label of a picture a person has not approved (ADR 0027): a fixed label, never a fact, no digit.
+PICTURE_LABEL = "Illustrative"
+#: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
+PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "audience", "real_question", "close",
+                       "solution", "product")
+
+#: Theme (contract section 6.1 and 6.2). COLOR_ROLES equals ``theme.COLOR_FIELDS``.
+COLOR_ROLES = ("ink", "paper", "panel", "rule", "mute", "accent", "accent_ink", "on_dark", "on_dark_mute", "accent_on_dark")
+THEME_SOURCES = ("default", "brand_clan", "agency_look", "brand_file", "master")
+LOGO_PLACEMENTS = ("cover_only", "cover_and_footer", "none")
+ACCENT_USES = ("fill", "outline")
+HEADER_POSITIONS = ("left", "center")
+THEME_NAMES = ("napkin", "brand", "classic")
+
+#: Deck preferences (contract section 6.3): the user's choices, each with a default (the first value) and who made it.
+PICTURES_ON = ("creative_cover", "creative", "none", "custom")
+DENSITY_LEVELS = ("lean", "standard", "detailed")
+#: Words on a content slide per density level; ``detailed`` is the slide type's own budget in SLIDE_TYPES. Napkin defaults,
+#: to be tuned on the visual checklist. The engine does not apply them yet.
+DENSITY_WORDS = {"lean": 30, "standard": 60}
+#: The default density by ``inputs.format``: a presented pitch is lean, a leave-behind keeps today's budgets.
+DENSITY_DEFAULTS = {"pitch": "lean", "full": "detailed"}
+PICTURE_SOURCES = ("existing", "generated")
+PICTURE_CAP_USD_DEFAULT = 2.5
+PICTURE_CAP_USD_MAX = 10
+BRAND_WEARS = ("agency", "client", "co_branded")
+STYLE_PACK_USES = ("territory", "other")
+PICTURE_APPROVERS = ("owner", "named")
+PREFERENCE_VIA = ("question", "start", "review")
+TEXT_MODES = ("condense", "preserve")
+PREFERENCE_SOURCES = ("person", "default")
+
+#: Issues (contract section 7). ISSUE_CHECKS is every name an issue may carry: today's validator and render checks, then the
+#: names reserved for the features that will raise them.
+ISSUE_SOURCES = ("schema", "validate", "qa_render", "image_guard", "critic")
+ISSUE_LEVELS = ("error", "warn")
+ISSUE_SEVERITIES = ("blocker", "major", "minor")
+ISSUE_STATUSES = ("open", "fixed", "unfixed", "rolled_back", "left_for_person")
+ISSUE_FIXES = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "add_scrim", "crop_image", "regen_image",
+               "drop_image", "needs_human")
+QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min_font", "placeholder", "contrast", "mostly_empty",
+                    "one_corner", "qa_internal", "unreadable")
+RESERVED_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown",
+                   "image_missing", "image_unapproved", "image_flagged", "image_rights", "golden_echo",
+                   "picture_stretch", "picture_lowres", "text_on_image_contrast", "layout_repeat", "title_drift",
+                   "line_length", "image_style_mixed", "export_failed")
+ISSUE_CHECKS = tuple(dict.fromkeys(CHECKS + QA_RENDER_CHECKS + RESERVED_CHECKS))
+
+#: Repair policy (contract section 8).
+REPAIR_LADDER = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "needs_human")
+REPAIR_SHORTEN_GUARDS = ("no_new_number", "refs_kept", "not_longer", "label_titles_untouched")
+REPAIR_IMAGE_ON_FLAG = ("wait_for_person", "regen_then_drop")
+REPAIR_CRITIC_FIXES = ("switch_layout", "regen_image", "crop_image", "add_scrim")
+REPAIR_MAX_ROUNDS = 2
+REPAIR_KEEP_ROUND_IF = "blockers_and_majors_not_up_and_no_new_validator_error"
+
+#: Visual critic rubric (contract section 8).
+RUBRIC_FIXES = ("switch_layout", "regen_image", "crop_image", "add_scrim", "none")
+RUBRIC_PASS_IS = ("yes", "no")
+RUBRIC_SEVERITIES = ("major", "minor")

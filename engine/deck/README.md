@@ -142,6 +142,8 @@ copy and placeholders, and writes a comparison page plus the rows as JSON.
 
 `render_pptx.choose_layout(slide)` picks a native-shape layout from the slide type and block kinds (table in the module docstring): cover, emphasis_bar, chart, execution, territory, placeholder_card, quote_cards, comparison, big_number, kpi_row, timeline_strip, role_grid, native_table, cards. A layout that cannot hold the words at 10 pt or more, or meets a block kind it has no look for, raises `NoFit` and the slide is drawn by the earlier flow. `Renderer.layouts` records the layout each slide got. Words are fixed: layouts split, size and place text, never reword it. Claims are also written into the speaker notes. Tests: `tests/test_render_layouts.py`.
 
+**The visual contract (ADR 0036, `docs/contracts/deck-visuals.md`).** Layouts, slots, pictures, themes and issues have one additive shape, optional everywhere, so a deck without them is today's deck. The vocabulary is the visual-contract tuples at the end of `spec.py` (layout ids, slot kinds, type roles, image kinds and statuses, issue checks, deck preferences); the engine data has schemas in `schemas/` (`layout`, `issue`, `golden`, `repair_policy`, `visual_rubric`, each with a valid and an invalid example under `schemas/examples/`); the optional slide, asset and `meta` fields are in `deck.schema.json` and mirrored in `app/templates/deck-maker/schema.json`. Nothing in the engine reads or writes them yet. Who writes each field: the contract's section 2. Tests: `tests/test_visual_contract.py`.
+
 > Before any deck maker task read `features/deck-maker-intake.clan` (`clan read agent`); update it after any change to behaviour, interface, decisions, plan or handoffs.
 
 ## Stage h: rendered-slide QA

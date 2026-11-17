@@ -1,0 +1,86 @@
+{
+  "id": "image_text",
+  "version": 1,
+  "group": "content",
+  "purpose": "image",
+  "description": "Takeaway title, one short paragraph or three points on the left, one picture on the right.",
+  "slot_summary": "title, body (text or 3 bullets), 1 image 4:3",
+  "for_types": [
+    "idea",
+    "audience",
+    "execution",
+    "territory",
+    "solution",
+    "product"
+  ],
+  "when": {
+    "needs_image": true,
+    "blocks_any": [
+      "text",
+      "statement",
+      "bullets"
+    ]
+  },
+  "priority": 60,
+  "alternatives": [
+    "image_left",
+    "full_bleed_statement",
+    "cards"
+  ],
+  "roomier": "cards",
+  "without_image": "emphasis_bar",
+  "density": "standard",
+  "renderer": "image_text",
+  "slots": {
+    "title": {
+      "kind": "text",
+      "role": "title",
+      "required": true,
+      "max_chars": 90,
+      "max_lines": 3
+    },
+    "body": {
+      "kind": "text",
+      "role": "body",
+      "from_blocks": [
+        "statement",
+        "text"
+      ],
+      "max_chars": 275,
+      "max_words": 45
+    },
+    "points": {
+      "kind": "list",
+      "role": "body",
+      "from_blocks": [
+        "bullets"
+      ],
+      "min_items": 2,
+      "max_items": 3,
+      "item": {
+        "body_max_chars": 90
+      }
+    },
+    "picture": {
+      "kind": "image",
+      "required": true,
+      "image": {
+        "aspect": "4:3",
+        "kinds": [
+          "photo",
+          "illustration",
+          "frame"
+        ],
+        "min_px": [
+          1200,
+          900
+        ]
+      }
+    },
+    "caption": {
+      "kind": "text",
+      "role": "caption",
+      "max_chars": 80
+    }
+  }
+}
