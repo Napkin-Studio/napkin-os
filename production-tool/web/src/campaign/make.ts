@@ -151,6 +151,8 @@ export async function makeAllSizes(deps: CampaignDeps, req: MakeRequest, by: Per
     for (const s of sizes) x.sizes[s.id] = s
   }, `make all sizes of ${req.master.label}: ${sizes.length} formats`)
   canvas.select([el.id])
+  // The master goes up once before the sizes fan out (QA 2026-11-17).
+  if (set.master.asset) await assetRef(deps.relay, set.master.asset, doc.get()).catch(() => undefined)
   for (const s of sizes) if (s.status === 'making') void sendSize(deps, setId, s.id, by).catch((e) => console.warn('the size was not sent', e))
   return { setId, el }
 }
@@ -322,13 +324,14 @@ export function staleSizes(d: ProductionDocument, els: readonly CanvasElement[],
  * Update sizes: every out-of-date size that is not locked is made again from the master as it is now
  * (a person's crop kept), as one write, then sent. Locked sizes never change.
  */
-export async function updateSizes(deps: CampaignDeps, setId: string, by: PersonRef): Promise<number> {
+export async function updateSizes(deps: CampaignDeps, setId: string, by: PersonRef, only?: readonly string[]): Promise<number> {
   const d = deps.doc.get()
   const set = d.format_sets[setId]
   if (!set) return 0
   const els = deps.canvas.elements()
   const now = currentMasterAsset(d, els, set) ?? set.master.asset
-  const stale = staleSizes(d, els, setId)
+  // `only`: the sizes the person left ticked in the tray; the rest stay out of date.
+  const stale = staleSizes(d, els, setId).filter((s) => !only || only.includes(s.id))
   if (!stale.length) return 0
   let dims = { w: set.master.w!, h: set.master.h! }
   const a = now ? d.assets[now] : undefined
@@ -359,6 +362,9 @@ export async function updateSizes(deps: CampaignDeps, setId: string, by: PersonR
       s.status = 'making'
     }
   }, `update ${stale.length} sizes of format_sets[${setId}]`)
+  // The new master goes up once before the sizes fan out (QA 2026-11-17: one of eight failed with
+  // UnidentifiedImageError while the others raced to upload it; jobs/assets.ts also shares an upload on the way).
+  if (now) await assetRef(deps.relay, now, deps.doc.get()).catch(() => undefined)
   for (const s of stale) void sendSize(deps, setId, s.id, by).catch((e) => console.warn('the size was not sent', e))
   return stale.length
 }

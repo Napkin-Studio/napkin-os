@@ -15,7 +15,7 @@
 
 import { newUlidId } from '../../../clan-store/src'
 import type { Camera, ProductionDocument, Render, Shot, StaleMark, Target } from '../contracts/types'
-import { currentFrame, currentRender, currentTake, shotNumber, shotSegment, shotsOf, staleList } from '../model/selectors'
+import { currentFrame, currentRender, currentTake, framesOf, shotNumber, shotSegment, shotsOf, staleList } from '../model/selectors'
 
 /** A new mark, with its id. */
 function addMark(d: ProductionDocument, target: Target, causedBy: Target, reason: string, now: string): StaleMark {
@@ -132,17 +132,20 @@ export function endFrameDrift(d: ProductionDocument, shotId: string, videoId?: s
 
 /**
  * Said, never marked (features/make-and-edit.clan: takes are never marked out of date): shot `shotId`'s clip in
- * the cut was made from another frame than the one picked now. A window guided by its frame inside a box made
- * together is never behind it (only the box's first, pinned, shot is checked). An older job with no inputs on
- * record says nothing. "Update what follows" reads this to offer the clip again; nothing else does.
+ * the cut was made from another frame than the one picked now. Every shot of a box made together is checked
+ * against the take's inputs, since a joined take sends every frame as a guide (director.v11 take_refs; QA
+ * 2026-11-17: shot 2 went v1 to v5 and its joined take still said "Clip ready"). A shot of an older take that
+ * sent only the box's first frame (none of this shot's frames in its inputs) is not behind. An older job with
+ * no inputs on record says nothing. "Update what follows" and the storyboard's badge read this.
  */
 export function clipBehind(d: ProductionDocument, shotId: string): { reason: string } | undefined {
   const frame = currentFrame(d, shotId)
   const take = currentTake(d, shotId)
   if (!frame || !take?.job_id) return undefined
-  if (shotSegment(take, shotId) && take.segments![0].shot_id !== shotId) return undefined
   const job = d.jobs[take.job_id]
   if (!job?.input_hashes || job.input_hashes.includes(frame.asset)) return undefined
+  if (shotSegment(take, shotId) && take.segments![0].shot_id !== shotId
+    && !framesOf(d, shotId).some((f) => job.input_hashes!.includes(f.asset))) return undefined
   return { reason: `Shot ${shotNumber(d, shotId)}'s frame changed` }
 }
 

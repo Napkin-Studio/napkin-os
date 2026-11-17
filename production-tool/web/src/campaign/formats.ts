@@ -139,5 +139,5 @@ export function sizeWords(f: Pick<PackFormat, 'width' | 'height' | 'unit' | 'del
 
 /** A short name for a tile: the pack's long name without its brackets ("48-sheet billboard"). */
 export function shortName(f: Pick<PackFormat, 'name'>): string {
-  return f.name.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
+  return f.name.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').replace(/ ,/g, ',').trim()
 }

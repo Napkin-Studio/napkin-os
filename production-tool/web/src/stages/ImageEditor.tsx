@@ -787,7 +787,7 @@ export function VersionRow({ f, open, onPick }: { f: Frame; open: boolean; onPic
       <span className="ie-vthumb">{url && <img src={url} alt="" />}</span>
       <span className="ie-vtext">
         <span><span className="pt-mono">v{f.version}</span> · {what}{open ? ' · open now' : ''}</span>
-        <span className="faint">{f.kind === 'edited' ? `${f.edits?.length ?? 0} edits by the Retouch agent` : f.kind === 'original' ? 'before its first edit' : f.model ?? (f.kind === 'mock' ? 'the mock' : '')}</span>
+        <span className="faint">{f.kind === 'edited' ? `${f.edits?.length ?? 0} ${(f.edits?.length ?? 0) === 1 ? "edit" : "edits"} by the Retouch agent` : f.kind === 'original' ? 'before its first edit' : f.model ?? (f.kind === 'mock' ? 'the mock' : '')}</span>
       </span>
     </button>
   )

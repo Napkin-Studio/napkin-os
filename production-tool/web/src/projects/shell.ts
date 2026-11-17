@@ -5,7 +5,7 @@
 // contract is refused in words (ProjectRefused, NotAProject) and never created
 // over: its bytes stay where they are.
 
-import { UnsupportedContract } from '../../../clan-store/src'
+import { newUlidId, UnsupportedContract } from '../../../clan-store/src'
 import type { CanvasSnapshot } from '../canvas/controller'
 import type { ProductionDocument, SavedProject } from '../contracts/types'
 import { CURRENT } from '../doc/open'
@@ -27,6 +27,12 @@ export interface ShellState {
   busy: string | null
   /** A short line for Home, until dismissed ("Welcome back, Maya: 3 projects"). */
   notice: string | null
+}
+
+/** A new project id for the document (the bus never patches an id, so it is a data patch on the .clan), recorded
+ *  as a decision. Its jobs then go to the relay as their own project. */
+async function newProjectIdIn(store: { clan: { patch(body: object, why: { action: string; rationale?: string }): Promise<unknown> } }): Promise<void> {
+  await store.clan.patch({ project: { id: newUlidId('proj') } }, { action: 'a copy is its own project', rationale: 'Opened as a copy: its jobs are its own, never filed under the original project.' })
 }
 
 export class Shell {
@@ -116,9 +122,12 @@ export class Shell {
       const { storage, index } = this.deps
       const entry = await index.create({ name: copyName(src.name, index.all().map((p) => p.name)), naming: 'person', summary: { ...src.summary, active: 0, making: undefined } })
       const saved = await storage.clan(clanDbFor(id)).read()
-      if (saved) await storage.clan(clanDbFor(entry.id)).write(saved)
-      const json = await storage.get(docKeyFor(id))
-      if (json) await storage.put(docKeyFor(entry.id), json)
+      if (saved) {
+        await storage.clan(clanDbFor(entry.id)).write(saved)
+        await this.ownProjectId(entry.id)
+      }
+      const json = await storage.get<ProductionDocument>(docKeyFor(id))
+      if (json) await storage.put(docKeyFor(entry.id), { ...json, project: { ...json.project, id: newUlidId('proj') } })
       const canvas = await storage.get(canvasKeyFor(id))
       if (canvas) await storage.put(canvasKeyFor(entry.id), canvas)
       // Its own undo steps and drafts; not a run that was under way (that run belongs to the original).
@@ -170,7 +179,7 @@ export class Shell {
   async openFile(file: Blob, fileName: string): Promise<ProjectEntry> {
     const entry = await this.serial('Opening the file…', async () => {
       const unpacked = await unpackFile(new Uint8Array(await file.arrayBuffer()), fileName)
-      return this.importUnpacked(unpacked, { id: newProjectId() })
+      return this.importUnpacked(unpacked, { id: newProjectId(), copy: true })
     })
     await this.open(entry.id)
     return entry
@@ -212,7 +221,7 @@ export class Shell {
       const name = copyName(src.name, this.index.all().map((p) => p.name))
       const entry = await this.importUnpacked(
         { clan: got.bytes, assets: [], mismatched: 0, fileName: name, canvas: got.canvas },
-        { id: newProjectId(), name, naming: 'person', fetchAssets: true },
+        { id: newProjectId(), name, naming: 'person', fetchAssets: true, copy: true },
       )
       const saved = await server.save(entry.id, got.bytes, { reason: 'manual', name })
       await this.index.setServer(entry.id, { etag: saved.etag, savedAt: saved.savedAt })
@@ -267,7 +276,23 @@ export class Shell {
 
   /** A file's or the relay's project into this browser. With `fetchAssets`, every picture it uses
    *  that this browser lacks comes from the relay first; one that cannot stops it, and nothing is kept. */
-  private async importUnpacked(unpacked: Unpacked, opts: { id: string; name?: string; naming?: ProjectEntry['naming']; server?: ServerMark; fetchAssets?: boolean }): Promise<ProjectEntry> {
+  /** A copy is its own project to the relay: a new document project id, so its jobs are never filed under the
+   *  original's (QA 2026-11-17: the QA copy's jobs went under Shrey's proj_01M7MFGTR1GJR90QJDH74R08TM). */
+  private async ownProjectId(projectId: string): Promise<void> {
+    const { storage, makeClan } = this.deps
+    const store = makeClan(storage.clan(clanDbFor(projectId)), { person: personOf(this.deps.app.get().me) })
+    try {
+      if (!(await store.load())) return
+      await newProjectIdIn(store)
+      await store.flush()
+    } finally {
+      await store.close().catch(() => {})
+    }
+  }
+
+  /** `copy`: opened from a file or kept as a copy, so it gets its own project id; a project opened from the
+   *  server keeps its own. */
+  private async importUnpacked(unpacked: Unpacked, opts: { id: string; name?: string; naming?: ProjectEntry['naming']; server?: ServerMark; fetchAssets?: boolean; copy?: boolean }): Promise<ProjectEntry> {
     const { storage, makeClan, index, server } = this.deps
     const id = opts.id
     const fetchFirst = async (doc: ProductionDocument) => {
@@ -280,6 +305,11 @@ export class Shell {
       try {
         doc = await store.open(unpacked.clan)
         await fetchFirst(doc)
+        if (opts.copy) {
+          await newProjectIdIn(store)
+          await store.flush()
+          doc = store.get()
+        }
         await store.close()
       } catch (e) {
         await store.close().catch(() => {})
@@ -291,7 +321,7 @@ export class Shell {
     } else {
       const json = unpacked.json!
       if (json.contract_version !== CURRENT) throw new NotAProject(new UnsupportedContract((json as { contract_version?: string }).contract_version ?? null).message)
-      doc = json
+      doc = opts.copy ? { ...json, project: { ...json.project, id: newUlidId('proj') } } : json
       await fetchFirst(doc)
       await storage.put(docKeyFor(id), doc)
     }

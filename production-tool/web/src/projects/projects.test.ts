@@ -125,10 +125,15 @@ describe('the project index', () => {
     await storage.put(canvasKeyFor(p.id), { elements: [{ id: 'e1' }], files: {} })
     await shell.goHome()
 
+    await shell.open(p.id)
+    const originalProjectId = open(shell).doc.get().project.id
+    await shell.goHome()
     const copy = await shell.duplicate(p.id)
     expect(copy.name).toBe(`${UNTITLED} (copy)`)
     expect(index.get(copy.id)!.summary.pictures).toBe(1)
     await shell.open(copy.id)
+    // A copy is its own project to the relay (QA 2026-11-17).
+    expect(open(shell).doc.get().project.id).not.toBe(originalProjectId)
     expect(Object.keys(open(shell).doc.get().assets)).toEqual([pic])
     expect(open(shell).ui.get().stage).toBe('storyboard')
     expect(open(shell).project.usedElsewhere(pic)).toBe(true)
@@ -490,8 +495,13 @@ describe('Open a file', () => {
     expect(files).toEqual(expect.arrayContaining(['canvas.excalidraw']))
     expect(files.filter((f) => f.endsWith('.clan'))).toHaveLength(1)
 
+    await shell.open(p.id)
+    const originalProjectId = open(shell).doc.get().project.id
+    await shell.goHome()
     const entry = await shell.openFile(blob, name)
     expect(entry.id).not.toBe(p.id)
+    // Its jobs are never filed under the original's project id (QA 2026-11-17).
+    expect(open(shell).doc.get().project.id).not.toBe(originalProjectId)
     expect(index.all()).toHaveLength(2)
     expect(entry.name).toBe('Maya and the lamp.')
     expect(shell.get().session!.id).toBe(entry.id)

@@ -105,10 +105,11 @@ describe('The Review agent on what a picture cannot show (art-director)', () => 
     const { flagged } = await import('./checks')
     expect(flagged({ checks: checksFor(made({ method: 'regenerate' }), SETP, DOC) })).toBe(false)
   })
-  it('no logo on the Brand board is said out loud, not passed over', () => {
+  it('no logo on the Brand board is said once on the board, never a "Needs a look" on every size (QA 2026-11-17)', () => {
     const none = { refs: {}, assets: {} } as unknown as ProductionDocument
-    expect(checksFor(made({}), SET, none).logo_present?.result).toBe('flag')
-    expect(checksFor(made({}), SET, none).logo_present?.note).toMatch(/no logo on the Brand board/i)
+    expect(checksFor(made({}), SET, none).logo_present).toBeUndefined()
+    const { flagged } = { flagged: (c: ReturnType<typeof checksFor>) => Object.values(c).some((x) => x?.result === 'flag') }
+    expect(flagged(checksFor(made({}), SET, none))).toBe(false)
   })
   it('a logo the relay could not draw is a flag; one it drew passes; before the picture lands there is no claim', () => {
     // Words drawn: line and legal (2). A third layer drawn means the logo was.

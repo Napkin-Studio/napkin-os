@@ -124,6 +124,8 @@
 .cb-trayhead { display: flex; align-items: baseline; gap: 8px; }
 .cb-trayrows { display: flex; flex-direction: column; gap: 4px; overflow: auto; }
 .cb-trayrow { display: flex; align-items: baseline; gap: 6px; }
+.cb-trayrow.off { opacity: .5; }
+.cb-trayrow input { margin: 0; align-self: center; }
 .cb-trayname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
 .cb-traywords { white-space: nowrap; color: var(--ink2); }
 /* The picked tile's bar and Jude's flag list (pick.ts): on the page, one at a time, placed like the

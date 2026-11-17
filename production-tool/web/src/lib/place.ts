@@ -16,7 +16,7 @@ export interface Anchor {
  * each, centred, else moved clear beside whatever it would cover; covering chrome only when nothing fits.
  */
 export function placeFloating(anchor: Anchor, size: { w: number; h: number }, box: { w: number; h: number }, gap = 14, margin = 8,
-  avoid: readonly Rect[] = []): { left: number; top: number; below: boolean } {
+  avoid: readonly Rect[] = [], centredFirst = false): { left: number; top: number; below: boolean } {
   const clampLeft = (x: number) => {
     const maxLeft = box.w - size.w - margin
     return maxLeft < margin ? margin : Math.min(Math.max(x, margin), maxLeft)
@@ -31,6 +31,9 @@ export function placeFloating(anchor: Anchor, size: { w: number; h: number }, bo
   if (aboveTop >= margin) rows.push({ top: clampTop(aboveTop), below: false })
   rows.push({ top: clampTop(anchor.bottom + gap), below: true })
   const covers = (l: number, t: number) => avoid.find((r) => l < r.right && l + size.w > r.left && t < r.bottom && t + size.h > r.top)
+  // `centredFirst`: centred on the anchor, above or else below, before anything moves it sideways (QA
+  // 2026-11-17: a size tile's Adjust crop bar slid far left over the Boards panel under the board's header).
+  if (centredFirst) for (const row of rows) if (!covers(left, row.top)) return { left, ...row }
   for (const row of rows) {
     if (!covers(left, row.top)) return { left, ...row }
     // Beside what it would cover: to its right or its left, the nearer to the centred place first.
