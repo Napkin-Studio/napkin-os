@@ -47,6 +47,7 @@ python3 -m deck.run_deck --kind investor --brief outputs/deck_inputs/seed/brief.
 | Option | What it does |
 |---|---|
 | `--live` | Runs missing model stages and saves them to `--stages`. **Paid** (about $0.65-1.25 a deck in the 2026-10-05 eval): ask first |
+| `--until STAGE` | Stop after a stage (`a0`, `a`, `b`, `c`, `d`, or `i` for an investor deck) and write `report.json` with `until` set; `deck` stops once the deck is assembled and validated, before any file is rendered (so no LibreOffice is needed). The stage outputs stay in `--stages`: a later run carries on from them. A live run makes a missing `--stages` folder first. How the Deck Maker server runs a deck one gate at a time (`features/deck-maker-server.clan`) |
 | `--format pitch\|full` | `pitch` (default): at most 18 presented slides, an Appendix divider, backup slides hidden. `full`: every slide in story order (ADR 0024) |
 | `--audience review\|client` | `review` (default) shows agency notes and flags; `client` drops them and fails on any agency-only text left on screen |
 | `--kind agency\|investor` | Agency response to a brief (default) or a seed investor deck (ADR 0025) |
@@ -107,7 +108,7 @@ support it) and `e_copy.json` (tightened copy). Models and effort: `stages.py` d
 ## Check and compare
 
 ```bash
-PYTHONPATH=. python3 -m pytest -q deck/tests        # 70 offline tests; fails to import without PYTHONPATH
+PYTHONPATH=. python3 -m pytest -q deck/tests        # 397 offline tests; fails to import without PYTHONPATH
 python3 -m deck.evaluate outputs/deck_runs/eval/* --html outputs/deck_runs/eval/report.html
 ```
 
@@ -190,6 +191,32 @@ A tender response, a credentials deck, an investor deck and an agency pitch need
 5. Add a fixture folder `tests/fixtures/types/<new_id>/` of invented stage outputs and a row in `tests/test_profiles.py`. Run `PYTHONPATH=. python3 -m pytest -q deck/tests` from `engine/`.
 
 Tests: `tests/test_profiles.py` (inference, the card, the profile files and their failures, the spine arrangement, strictness, prompts, the CLI).
+
+## The visual checklist (`deck/bench/checklist.py`, `deck/checklist.json`)
+
+The measuring stick for every deck slice: 47 items (41 yes/no, 6 metrics), each defined once in `checklist.json` (question,
+threshold, source, inputs, `na_when`) with one function of the same name in `bench/checklist.py`. Read-only over a run
+folder; no model, no network. `render_pptx.render(..., layouts_out=PATH)` writes the layout record `layouts.json`
+(`{id, chosen, fallback, relaxed}` per slide id) after the save, so the .pptx is byte-identical with or without it;
+`run_deck` passes `RUN_DIR/layouts.json`.
+
+```bash
+python3 -m deck.bench fixtures OUT_DIR [--geometry-only]          # the 6 invented fixture decks, offline
+python3 -m deck.bench checklist RUN_DIR [RUN_DIR ...] --out checklist.json
+python3 -m deck.bench compare BEFORE.json AFTER.json [--format text|md|json] [--fail-on-regress]
+```
+
+- **The n/a rule.** A check that cannot be judged (missing input, a slice not built yet, no picture to judge, a finding name
+  still in `spec.RESERVED_CHECKS`) answers `n/a` with its reason, never `yes`. `summary.yes` excludes n/a; `compare` shows
+  yes to n/a and n/a to yes as changes of their own.
+- **Refreshing the baseline in a slice PR.** Build on a Mac with LibreOffice so the pixel checks are judged:
+  `python3 -m deck.bench fixtures /tmp/fx && python3 -m deck.bench checklist /tmp/fx/* --out /tmp/new.json`, then
+  `python3 -m deck.bench compare deck/bench/baseline/checklist.json /tmp/new.json --format md` for the PR body, and copy
+  `/tmp/new.json` over `deck/bench/baseline/checklist.json`. CI rebuilds geometry-only and compares every answer except
+  the pixel items and `m_seconds`. `compare` is not a CI gate.
+- `deck/issues.py` holds `severity()` (contract section 7 default) and `slide_id_of()`; `qa_render` gained the pure measures
+  `title_box`, `body_columns` and `font_families` (they add nothing to qa.json).
+- Tests: `tests/test_checklist.py` (65 tests). The full deck suite is 495 offline tests.
 
 ## The evaluation bench (`deck/bench`)
 
@@ -285,3 +312,42 @@ does read what the person supplies. `spec.HUMAN_ONLY_TYPES` means never invented
   `intake.verified.<ref> = {by, at}` (read from the `verified` key of `--answers`); `intake.confirm_summary(deck)` counts
   `verified`, `supplied` and `sourced` (verified plus supplied: nothing else counts). The renderers' "DRAFT · N slides need a
   person" wording is unchanged; they can call `confirm_summary` for the verified count.
+
+## The server (`deck/server.py`)
+
+`run_deck` behind a small HTTP port, for the Deck Maker app's `build_deck` task (`features/deck-maker-server.clan`). It runs one
+segment at a time and stops at each gate: **storyline** (after stage b), **territories** (after c), **idea** (after d); an investor
+deck has the storyline only (after i). Review is the screen after the last gate, not a gate. `deck/run_state.py` turns the stage files
+into the `run` object the screens read (rows, items, agent, gate payloads, checks, cost) and, once built, the deck, validation,
+evidence, report and exports (names and sizes).
+
+```bash
+cd engine
+NAPKIN_DECK_REPLAY=deck/tests/fixtures/fernley/stages python3 -m deck.server     # free: replays a recording, no model call
+```
+
+| Route | |
+|---|---|
+| `GET /status` | what is on and what is busy |
+| `POST /run` | `{doc, inputs: {prompt: {text, client, project, agency}, kind, format}, approvals: {storyline, territories: {picked}, idea}, mode, render}`: the next segment of this document's run |
+| `GET /run/<doc>` | the run so far: `state` (building, gate, done, failed), `run`, notices, and once built the `payload` |
+| `GET /file/<doc>/<name>` | `deck.html`, `deck.pptx`, `deck.pdf` or `report.json`, once written |
+
+| Env | |
+|---|---|
+| `NAPKIN_DECK_PORT` | default 8793 (8787 is the agent-server, 8788 the live relay, 8795 the middleware) |
+| `NAPKIN_DECK_DATA` | where the per-document, per-inputs folders go (default `./deck-runs`); they are a cache: a changed prompt starts again |
+| `NAPKIN_DECK_REPLAY` | a folder of recorded stage files: mode `replay` copies them in stage by stage, free |
+| `NAPKIN_DECK_LIVE` | `1` allows mode `live`: paid model calls (about 0.65 to 1.25 USD a deck). Off by default |
+| `NAPKIN_DECK_MAX_USD` | the most one live run may spend (default 2.00); the run stops at the cap with its message and what it wrote stays |
+
+A gate goes on only when the request carries the person's approval of it **and** its stage output already existed when the request
+arrived, so an approval of an earlier run never skips a gate of a new one. Only `approve` goes on; `edit` and `retry` are refused
+with `not_supported` until the engine can act on them. One run at a time: a second `POST /run` is a 409 `job_state`. A failing engine
+is a `failed` state with its message, never a success; a missing cache with no recording and no live is a 409, never invented output.
+The last segment builds the PowerPoint, the web deck and the PDF and needs LibreOffice (`soffice`) and poppler (`pdftoppm`):
+without them it is refused before it starts, and `render: false` stops at the deck instead (`--until deck`).
+
+Not yet: the document's brief and research as inputs (the server takes the prompt), the person's intake answers (`--answers`), attached
+documents (`--doc`), `edit` and `retry`, `ask_change`, and a run that survives a restart of the server (a restarted server answers
+404 for a run it did not start; posting the same request again resumes from the cache).

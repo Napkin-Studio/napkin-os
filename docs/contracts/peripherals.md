@@ -963,7 +963,7 @@ One process fakes every peripheral. It replaced `mock-llm/` and
 - Binds `MOCK_BACKEND_HOST` (default `127.0.0.1`) : `MOCK_BACKEND_PORT`
   (default **8797**). Ports in use elsewhere, never to be taken: 8080, 8090,
   8787 (engine agent server / mock-agent), 8788, 8790 (mock-middleware),
-  8791, 8792, 8795 (the middleware), 8796.
+  8791, 8792, 8793 (the deck engine server), 8795 (the middleware), 8796.
 - Needs `claude` on `PATH`, signed in; it refuses to start without the binary
   when any Claude-backed peripheral is enabled.
 - `MOCK_FAKES` (default `model,research,retrieval,layers`) chooses the families

@@ -1,0 +1,12 @@
+# The style pack: the ONLY thing that changes the pictures. Copy this file to <folder>/style.yaml, put up to 14
+# reference images (png, jpg or webp, each under about 3.5MB) in the same folder, and run
+#   python -m territory.visuals --from-run <run.json> --style <folder> --live --yes-cost
+# The territory text and the frame plan are not touched; only new pictures are made, in a new version folder.
+look: [natural light, unstaged, documentary stills, a little grain]
+palette: [warm ochre, slate blue, off-white]
+this_not_that:
+  - {this: ordinary kitchens and pavements, not: studio sets}
+  - {this: candid half-turned faces, not: posed smiles}
+finish: photo-real          # rough (quick storyboard look) or photo-real
+banned_imagery: [stock handshake, thumbs up]
+notes: Irish everyday settings; nothing glossy.

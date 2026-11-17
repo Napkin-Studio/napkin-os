@@ -83,6 +83,7 @@ from __future__ import annotations
 
 import copy
 import itertools
+import json
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -330,6 +331,8 @@ class Renderer:
         self._cur, self.steps = None, []
         self.failed = {}
         self.layouts = {}   # slide id -> the layout it was drawn with
+        self.chosen = {}    # slide id -> the layout choose_layout picked (before any fallback)
+        self.relaxed = {}   # slide id -> True when the layout fitted only with body text let down to the caption floor
         for f in findings or []:
             if f["level"] == "error" and f.get("slide"):
                 self.failed.setdefault(f["slide"], []).append(f["check"])
@@ -1702,8 +1705,21 @@ class Renderer:
         del self.steps[n_steps:]
 
     # -- slides -------------------------------------------------------------------------------
-    def render(self, out: Path):
-        """Render every slide in order and save the .pptx."""
+    def layout_record(self) -> dict:
+        """What the renderer did, per slide id, in the names of contract section 3.1: ``{id, chosen, fallback, relaxed}``
+        (``id`` the layout drawn, ``chosen`` the one the rules picked, ``fallback`` true when the flow drew a slide whose
+        layout raised NoFit, ``relaxed`` true when it fitted only at the caption floor). Written beside the deck, never into it."""
+        return {"version": 1, "theme": "napkin" if self.th.layouts else "classic",
+                "slides": {sid: {"id": name, "chosen": self.chosen.get(sid, name),
+                                 "fallback": self.chosen.get(sid, name) != "flow" and name == "flow",
+                                 "relaxed": bool(self.relaxed.get(sid))}
+                           for sid, name in self.layouts.items()}}
+
+    def render(self, out: Path, layouts_out: Path | None = None):
+        """Render every slide in order and save the .pptx; with ``layouts_out``, also write the layout record there
+        (after the save, so the .pptx is the same bytes either way)."""
+        if layouts_out is not None:
+            Path(layouts_out).unlink(missing_ok=True)   # a failed render must not leave an older record beside it
         nums = {sid: i for i, sid in enumerate(self.deck["order"], 1)}
         for sid in self.deck["order"]:
             self.slide(sid, self.deck["slides"][sid], nums[sid])
@@ -1711,6 +1727,8 @@ class Renderer:
         self.prs.core_properties.title = f"{self.deck['meta']['client']}: {self.deck['meta']['project']}"
         self.prs.core_properties.author = "Napkin Deck Maker"
         self.prs.save(str(out))
+        if layouts_out is not None:
+            Path(layouts_out).write_text(json.dumps(self.layout_record(), indent=1))
         return out
 
     def slide(self, sid, s, n):
@@ -1728,6 +1746,7 @@ class Renderer:
         self._cur, self.steps = sl, []
         audience = self.deck["meta"].get("audience", "review")
         name = choose_layout(s, audience) if self.th.layouts else "flow"
+        self.chosen[sid] = name
         s = {**s, "blocks": shown_blocks(s, audience)}
         if name != "flow":
             n_sh, n_st = len(sl.shapes), len(self.steps)
@@ -1739,6 +1758,7 @@ class Renderer:
                     self._relaxed = True
                     try:
                         getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))(sl, s)
+                        self.relaxed[sid] = True
                     finally:
                         self._relaxed = False
             except NoFit:
@@ -2037,11 +2057,13 @@ class Renderer:
                 etree.SubElement(sl, f"{{{P14}}}sldId").set("id", str(sid))
 
 
-def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT) -> Path:
+def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
+           layouts_out: Path | None = None) -> Path:
     """Render a deck to ``out`` (.pptx); slides with a failed check carry a visible flag.
 
     ``animate``: False (static), True or ``"auto"`` (builds play in order), ``"click"`` (one block per click).
     ``theme``: ``"napkin"`` (default, the layout library) or ``"classic"`` (the earlier look, flow only);
     the deck's brand JSON is applied over either, exactly as before.
+    ``layouts_out``: a path for the layout record (``layouts.json``); the .pptx is byte-identical with or without it.
     """
-    return Renderer(deck, inp, master, findings, animate, theme).render(out)
+    return Renderer(deck, inp, master, findings, animate, theme).render(out, layouts_out)

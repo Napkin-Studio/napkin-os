@@ -33,6 +33,7 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   statusOf(slide: unknown): string
   checksFor(id: string, slide: unknown, validation: unknown): Check[]
   approveGate(run: unknown, gate: string | null | undefined, by: string, at: string, choice?: unknown): (Run & { gate: null }) | null
+  humanApproval(run: unknown, gate: string | null | undefined, by: string, at: string, choice?: unknown): { approvals: unknown; decisions: unknown } | null
   gateRequest(run: unknown, gate: string, kind: string, by: string, at: string): { decisions: unknown[]; gate_requests: unknown[] } | null
   GATES: Record<string, { body: string; title: string }>
   gateView(run: unknown, pick?: unknown): GateView | null
@@ -292,7 +293,8 @@ test('nothing in the app writes inputs.brief or inputs.research', () => {
 
 // A stub DOM: enough to run the page script, render, and click.
 type Writes = { obj: Record<string, unknown>; action: string }[]
-function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Record<string, unknown> = {}) {
+type MountOpts = { apiProxy?: (kind: string, payload: { task: string; input: Record<string, unknown> }) => Promise<unknown>; timers?: boolean }
+function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Record<string, unknown> = {}, opts: MountOpts = {}) {
   const writes: Writes = []
   const handlers: Record<string, ((e: unknown) => void)[]> = {}
   const app = { innerHTML: '' }
@@ -305,16 +307,19 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
   }
   const win: Record<string, unknown> = {
     __CLAN__: { data },
-    clan: { patchData: (obj: Record<string, unknown>, o: { action: string }) => { writes.push({ obj, action: o.action }); return Promise.resolve() } },
+    clan: { patchData: (obj: Record<string, unknown>, o: { action: string }) => { writes.push({ obj, action: o.action }); return Promise.resolve() },
+            ...(opts.apiProxy ? { apiProxy: opts.apiProxy } : {}) },
     addEventListener() {},
   }
+  const timers: { fn: () => void; ms: number }[] = []   // with opts.timers the page's timeouts wait here until a test runs them
+  const fakeTimeout = (fn: () => void, ms: number) => { if (ms >= 3000) return 0; timers.push({ fn, ms }); return timers.length }   // the toast's own timer is not a poll
   const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
-  const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, fetch: fetchImpl, Promise, setTimeout, clearTimeout, Date })
+  const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, fetch: fetchImpl, Promise, setTimeout: opts.timers ? fakeTimeout : setTimeout, clearTimeout: opts.timers ? () => {} : clearTimeout, Date })
   vm.runInContext(logicRun, ctx)
   vm.runInContext(src, ctx)
   const click = (attrs: Record<string, string>, id = '') =>
     handlers.click.forEach(h => h({ target: { closest: () => ({ dataset: attrs, id }) } }))
-  return { app, writes, click, toastEl, doc }
+  return { app, writes, click, toastEl, doc, timers }
 }
 
 const hostile = '<img src=x onerror=alert(1)>'
@@ -1920,4 +1925,118 @@ test('the centred circle fills the window but stays between 184 and 720, and is 
   assert.equal(L.circleCentreSize(800, 2000), 496) // narrow: 62% of the width
   assert.equal(L.circleCentreSize(4000, 4000), 720)
   assert.equal(L.circleCentreSize(300, 300), 184)
+})
+
+// ── the engine, through the middleware (features/deck-maker-server.clan, middleware-api.md section 12) ──
+const settle = async () => { for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r)) }
+/** A host that says whether this workspace has a middleware (clan://middleware), and nothing else. */
+const middleware = (configured: boolean) => (url: string) =>
+  Promise.resolve(String(url).endsWith('/middleware') ? { ok: true, json: () => Promise.resolve({ configured }) } : { ok: false, json: () => Promise.resolve(null) })
+type Call = { kind: string; task: string; input: Record<string, unknown> }
+/** A fake host api-proxy: records each call and answers with the replies given in turn (the last repeats). */
+function proxy(...replies: unknown[]) {
+  const calls: Call[] = []
+  const apiProxy = (kind: string, p: { task: string; input: Record<string, unknown> }) => {
+    calls.push(JSON.parse(JSON.stringify({ kind, task: p.task, input: p.input })))   // a plain copy: the page's objects come from another realm
+    return Promise.resolve(replies[Math.min(calls.length - 1, replies.length - 1)])
+  }
+  return { calls, apiProxy }
+}
+const reply = (state: string, extra: Record<string, unknown> = {}) =>
+  ({ ok: true, status: 200, data: { api: 'napkin.middleware/1', task: 'build_deck', job: { id: 'job_1', state, ...extra }, change: null } })
+const sentToEngine = (m: ReturnType<typeof mount>) => Object.keys(m.writes.reduce((a, w) => ({ ...a, ...w.obj }), {}))
+
+test('with a middleware, Build deck saves the inputs and then asks for build_deck, and writes no run', async () => {
+  const p = proxy(reply('queued'))
+  const form = { client: { value: 'C' }, project: { value: 'P' }, agency: { value: '' }, ptext: { value: 'A deck for Fernley.' } }   // what the person typed on Start
+  const m = mount({ inputs: { prompt: { client: 'C', project: 'P', text: 'A deck for Fernley.' }, kind: 'agency', format: 'pitch' } }, middleware(true), form, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'build')
+  await settle()
+  assert.deepEqual(m.writes.map(w => w.action), ['start deck'])
+  assert.deepEqual(sentToEngine(m), ['inputs'], 'only the inputs: the engine writes the run')
+  assert.deepEqual(p.calls, [{ kind: 'middleware', task: 'build_deck', input: {} }])
+  assert.match(m.toastEl.textContent, /engine is starting/)
+})
+
+test('with a middleware, Approve writes only the person\'s decision, then asks for the next segment', async () => {
+  const p = proxy(reply('queued'))
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.equal(m.writes.length, 1)
+  const run = m.writes[0].obj.run as Record<string, unknown>
+  assert.deepEqual(Object.keys(run).sort(), ['approvals', 'decisions'], 'no state, stages, gate or agent: those are the engine\'s')
+  const a = (run.approvals as Record<string, { by: string; decision: string }>).storyline
+  assert.equal(a.by, 'You'); assert.equal(a.decision, 'approve')
+  assert.equal((run.decisions as { gate: string; kind: string }[]).at(-1)?.kind, 'approve')
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'], 'asked after the decision was written')
+})
+
+test('without a middleware, Approve keeps its old behaviour and asks for nothing', async () => {
+  const p = proxy(reply('queued'))
+  const m = mount(buildData(gateRun()), middleware(false), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.equal((m.writes[0].obj.run as { state: string }).state, 'building', 'the app still moves the sample along itself')
+  assert.equal(p.calls.length, 0)
+})
+
+test('a job that is running is polled by its id until it is done, and a second start while it runs does nothing', async () => {
+  const p = proxy(reply('queued'), reply('running'), reply('done'))
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.equal(m.timers.length, 1, 'a poll is waiting')
+  m.click({}, 'approve')   // the same gate again while the job runs
+  await settle()
+  assert.equal(p.calls.filter(c => c.task === 'build_deck').length, 1)
+  m.timers.shift()!.fn(); await settle()
+  assert.deepEqual(p.calls.at(-1), { kind: 'middleware', task: 'job_status', input: { job_id: 'job_1' } })
+  assert.equal(m.timers.length, 1, 'running: polled again, a little later')
+  assert.ok(m.timers[0].ms > 900)
+  m.timers.shift()!.fn(); await settle()
+  assert.equal(m.timers.length, 0, 'done: no more polling')
+})
+
+test('a host that refuses (no engine, a run already going) is said plainly and nothing keeps polling', async () => {
+  const refusal = { ok: false, status: 503, error: { type: 'engine_unavailable', message: 'no deck engine is configured for this middleware (NAPKIN_DECK_ENGINE_URL)' } }
+  const p = proxy(refusal)
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.match(m.toastEl.textContent, /no deck engine is configured/)
+  assert.equal(m.timers.length, 0)
+})
+
+test('a job that fails says the engine\'s message', async () => {
+  const p = proxy(reply('queued'), reply('failed', { error: { type: 'engine', message: 'the model said no' } }))
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve'); await settle()
+  m.timers.shift()!.fn(); await settle()
+  assert.match(m.toastEl.textContent, /The engine stopped: the model said no/)
+  assert.equal(m.timers.length, 0)
+})
+
+test('the Start screen says it builds with the engine and stops at the first gate, once there is one', async () => {
+  const data = { inputs: { prompt: { client: 'C', project: 'P', text: 'A deck.' }, kind: 'agency', format: 'pitch' } }
+  const on = mount(data, middleware(true), {}, { apiProxy: proxy().apiProxy })
+  await settle()
+  assert.match(on.app.innerHTML, /Builds with the engine and stops at the first gate/)
+  const off = mount(data, middleware(false), {}, { apiProxy: proxy().apiProxy })
+  await settle()
+  assert.match(off.app.innerHTML, /Live building needs the engine server/)
+})
+
+test('humanApproval is the person\'s half of approveGate and is refused where approveGate is', () => {
+  const run = gateRun()
+  const full = L.approveGate(run, 'storyline', 'You', 't') as { approvals: unknown; decisions: unknown }
+  assert.equal(JSON.stringify(L.humanApproval(run, 'storyline', 'You', 't')), JSON.stringify({ approvals: full.approvals, decisions: full.decisions }))
+  assert.equal(L.humanApproval(run, 'territories', 'You', 't'), null, 'not the open gate')
+  assert.equal(L.humanApproval({ state: 'draft', stages: [], gate: null }, 'storyline', 'You', 't'), null)
 })
