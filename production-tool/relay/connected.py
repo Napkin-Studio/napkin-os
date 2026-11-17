@@ -5,7 +5,8 @@ stages (the stills a window or a take frame needs, take_cuts after a take lands)
 Modes (JobInput.mode, chosen by the web's run planner):
   take        one generation over a run's shots (input.shots), pinned on the first shot's frame, no refs
               (Runway keyframes and references cannot mix), a timed prompt "Shot k [a-b s] ...".
-  take_refs   the same with no frame: the storyboard frames and named pictures go as references.
+  take_refs   the same with no frame: the storyboard frames and named pictures go as references; each shot's
+              line follows its own frame ("Shot k [a-b s] ..., follows image k (@tag)", director.v11).
   frames      one shot from its own frame, landing on input.lastFrame (a continue join) when given.
   alone       today's clip.
   redo_window one shot's window of a take made again from the take's own stills at its ends.
@@ -154,6 +155,40 @@ def timed_lines(starts: list[float], texts: list[str], duration: float) -> list[
     return [f"Shot {k + 1} [{_secs(a)}-{_secs(b)} s] {t}".rstrip() for k, (a, b, t) in enumerate(zip(starts, ends, texts))]
 
 
+FRAME_LABEL = re.compile(r"^Shot (\d+) frame$")
+
+
+def frame_tags(inp: dict) -> dict[int, str]:
+    """A take_refs take's storyboard frames (features/join-or-cut-shots.clan): shot k (from 1) -> the wire tag of
+    its frame, from the refs with role composition labelled "Shot k frame" (the web's makeTake). Image k is the
+    frame of shot k; a shot whose frame was left out (past the model's pictures) has none."""
+    out: dict[int, str] = {}
+    for r in inp.get("refs") or []:
+        m = FRAME_LABEL.match(str(r.get("label") or ""))
+        if r.get("role") == "composition" and m and r.get("tag"):
+            out.setdefault(int(m.group(1)), r["tag"])
+    return out
+
+
+def tie_lines(texts: list[str], tags: dict[int, str]) -> list[str]:
+    """Each shot's words with the image it follows: "..., follows image k (@tag)" (director.v11's form)."""
+    return [f"{t.rstrip().rstrip('.')}, follows image {k + 1} (@{tags[k + 1]})" if k + 1 in tags else t for k, t in enumerate(texts)]
+
+
+def ties_problem(prompt: str, inp: dict) -> str | None:
+    """Why a take_refs prompt does not tie each shot to its frame, or None: shot k's timed line names
+    "follows image k" exactly when the take carries that shot's frame (the eval's check, since director.v11)."""
+    tags = frame_tags(inp)
+    lines = {int(n): line for n, line in re.findall(r"^Shot (\d+) \[[^\]]*\](.*)$", prompt, re.M)}
+    for k, line in lines.items():
+        says = re.search(rf"follows image {k}\b", line) is not None
+        if says != (k in tags):
+            return f"Shot {k} {'does not follow' if k in tags else 'names an image it does not have:'} image {k}"
+        if k in tags and f"@{tags[k]}" not in line:
+            return f"Shot {k} does not name its frame @{tags[k]}"
+    return None
+
+
 def take_prompt(anchor: str, starts: list[float], texts: list[str], duration: float, landing: bool,
                 limit: int | None = None) -> str:
     """Wan's formula (overall description, then each shot by number and time): the anchor block, one
@@ -226,6 +261,8 @@ def shape(job: dict, inp: dict, sheet: dict, spec: dict, *, passthrough: bool) -
         if passthrough:
             from providers.types import prompt_max
             anchor = anchor_of(inp)
+            if mode == "take_refs":
+                texts = tie_lines(texts, frame_tags(inp))  # each shot follows its own frame (director.v11's form)
             job["prompt"] = take_prompt(in_words(anchor) if mode == "take" else anchor, starts, texts, duration,
                                         bool(last), prompt_max(sheet, job.get("model") or spec["model"]))
             return

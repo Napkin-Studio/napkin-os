@@ -33,7 +33,7 @@ describe('frame marks follow the plan', () => {
     applyRunTake(made, { jobId: 'job_1', op: 'clip', provider: 'runway', model: 'wan3', kind: 'generated', outputs: [{ sha256: SHA('v'), durationS: 9 }] } as unknown as Job, { videoId, runId })
     const landed = new SnapshotDocumentStore(made, null, 0)
     const together = videoPlan(landed.get(), videoId, WAN3)
-    expect(Object.values(marksNow(landed.get(), videoId, together))).toEqual(['pin', 'guide', 'guide'])
+    expect(Object.values(marksNow(landed.get(), videoId, together))).toEqual(['guide', 'guide', 'guide']) // no frame pinned (join-or-cut-shots)
     await separateSelection(landed, videoId, shots.map((s) => s.id))
     const apart = videoPlan(landed.get(), videoId, WAN3)
     expect(Object.values(frameMarks(landed.get(), videoId, apart))).toContain('guide') // the take still holds them

@@ -126,10 +126,11 @@ export async function makeClip(
 
 /**
  * One take of a run of shots (features/connected-video.clan, mode take or take_refs): one clip job over the
- * run's shots, timed by `cuts` (each shot's start and its line). A take is pinned on its first shot's frame
- * and sends no references; a take from pictures (take_refs: no first frame) sends the storyboard frames in
- * shot order, then the pictures the shots name, up to `refsMax`. It lands as a window per shot
- * (handlers.ts applyRunTake). take.withLast is false on every sheet, so a take never lands on a frame yet.
+ * run's shots, timed by `cuts` (each shot's start and its line). The planner makes every take take_refs
+ * (features/join-or-cut-shots.clan): no frame is pinned; the characters' pictures go first, then every shot's
+ * frame as a composition reference in shot order ("Shot k frame": Dex's line for shot k follows it), then the
+ * other pictures the shots name, up to `refsMax`. An older run stored as take is pinned on its first shot's
+ * frame. It lands as a window per shot (handlers.ts applyRunTake). take.withLast is false on every sheet.
  */
 export async function makeTake(
   deps: FrameDeps,
@@ -172,8 +173,12 @@ export async function makeTake(
   const ratio = ratioOf(d, videoId, shots[0].storyboard_id)
   const max = opts.refsMax ?? 10
   // Character refs go first, so when the model carries fewer pictures than the run offers, the storyboard
-  // frames are dropped before the characters (a take must keep its character: the owner's @on ad, 2026-11).
-  const ordered = [...refs.filter((r) => r.role === 'character'), ...refs.filter((r) => r.role !== 'character')]
+  // frames are dropped before the characters (a take must keep its character: the owner's @on ad, 2026-11);
+  // then each shot's frame in shot order, then the other named pictures. A character's clean views go before
+  // one with a swatch strip, whose text leaked into a take (paid test P1, finding 9).
+  const sheet = (r: JobInputRef) => (d.refs[r.id]?.swatches?.length ? 1 : 0)
+  const chars = refs.filter((r) => r.role === 'character').sort((a, b) => sheet(a) - sheet(b))
+  const ordered = [...chars, ...refs.filter((r) => r.role !== 'character')]
   const input: JobInput = {
     shot: jobShot(d, shots[0]), shots: shots.map((s) => jobShot(d, s)), mode, cuts,
     ...(image ? { image } : {}), ...(ordered.length ? { refs: ordered.slice(0, max) } : {}), ...(ratio ? { ratio } : {}),

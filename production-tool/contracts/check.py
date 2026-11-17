@@ -356,9 +356,11 @@ for f in sorted(HERE.glob("examples/config.*.json")):
     # director.v6.1 (features/frame-aspect.clan) adds the true-shape crop; director.v7
     # (features/frame-change-edit.clan) adds Change this frame; director.v8 (features/canvas-nodes.clan)
     # holds a shot's required references and lists Dex's additions. v6, v6.1 and v7 stay bundled for a rollback.
-    # director.v9 (features/runway-video-models.clan) says which pictures each clip model carries.
-    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9"):
-        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7, v8 or v9")
+    # director.v9 (features/runway-video-models.clan) says which pictures each clip model carries; v10 adds
+    # the finished-artwork lines for a layout drawing; v11 (features/join-or-cut-shots.clan) ties each line
+    # of a take to the frame it follows ("Shot k [a-b s] ..., follows image k"). Rolling back is this one line.
+    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9", "director.v10", "director.v11"):
+        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7, v8, v9, v10 or v11")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
 # every op to ['runway'] (or nothing), and no sheet or example names a provider that is gone.

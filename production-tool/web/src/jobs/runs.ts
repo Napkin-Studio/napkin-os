@@ -4,7 +4,9 @@
 //                product shot, a person's cut/dissolve/dip, a refused shot, a spoken line) and picks each
 //                run's mode from the model's sheet: one take (video.take.ok, 2 or more shots), else one clip
 //                per shot that lands on the next frame on a continue join (video.lastFrame, fidelity not
-//                loose), else each shot alone. A take longer than take.maxS or take.maxShots is split.
+//                loose), else each shot alone. A take longer than take.maxS or take.maxShots is split, except
+//                where a person joined the shots (it stays whole, marked over, and is never sent). A take is
+//                always take_refs: no frame is pinned; every shot's frame goes as a guide (join-or-cut-shots).
 //   makeRuns     the driver behind Make clips "As one film": writes video.runs and the joins Dex chose, then
 //                submits each run (frames and alone through makeClip, a take through makeTake).
 //   takeWindows  pure: each shot's window of a landed take, from the take's cuts.
@@ -56,6 +58,9 @@ export interface PlannedRun {
   switched?: string
   /** The shots after it carry on in the same scene but were too many or too long for one video. */
   splitAfter?: boolean
+  /** A person joined more shots, or more seconds, than its model makes in one go: why, in words. It is shown
+   *  whole (the Make room's box says so) and never sent (features/join-or-cut-shots.clan). */
+  over?: string
 }
 
 export interface RunPlan {
@@ -145,6 +150,33 @@ export function segmentRun<T extends { durationS: number }>(shots: T[], maxS = T
   return out
 }
 
+/** segmentRun for a group of shots, never splitting where a person joined two shots (a human continue): those
+ *  shots stay one video even past the caps, so the Make room shows the box whole and says it is too long
+ *  (features/join-or-cut-shots.clan). The crew's joins still split at the caps as before. */
+function segmentKept(shots: PlanShot[], joins: Record<Id, Seam>, maxS: number, maxShots: number): PlanShot[][] {
+  const chunks: PlanShot[][] = []
+  for (const [i, s] of shots.entries()) {
+    const j = joins[s.id]
+    if (i > 0 && j?.by === 'human' && j.kind === 'continue') chunks.at(-1)!.push(s)
+    else chunks.push([s])
+  }
+  const out: PlanShot[][] = []
+  let cur: PlanShot[] = []
+  let len = 0
+  for (const c of chunks) {
+    const cl = c.reduce((a, s) => a + s.durationS, 0)
+    if (cur.length && (len + cl > maxS + 1e-6 || cur.length + c.length > maxShots)) {
+      out.push(cur)
+      cur = []
+      len = 0
+    }
+    cur.push(...c)
+    len += cl
+  }
+  if (cur.length) out.push(cur)
+  return out
+}
+
 const BREAKS: SeamKind[] = ['cut', 'dissolve', 'dip']
 const round1 = (s: number) => Math.round(s * 10) / 10
 
@@ -221,8 +253,9 @@ export function planRuns(shots: PlanShot[], model: PlanModel, opts: { join?: 'fi
       const lim = (m: PlanModel | undefined) => ({ s: m?.video.take?.ok ? m.video.take.maxS ?? TAKE_MAX_S : 0, n: m?.video.take?.ok ? m.video.take.maxShots ?? TAKE_MAX_SHOTS : 0 })
       const maxS = Math.max(lim(model).s, lim(other).s)
       const maxShots = Math.max(lim(model).n, lim(other).n)
-      // Segments meet on a cut until take.withLast is proven (P1); phase C would carry the join instead.
-      const segs = segmentRun(g, maxS, maxShots)
+      // Segments meet on a cut until take.withLast is proven (P1); phase C would carry the join instead. A
+      // person's joins are never split: past the caps the run stays whole and is marked over.
+      const segs = segmentKept(g, joins, maxS, maxShots)
       for (const [k, seg] of segs.entries()) {
         if (seg.length === 1) runs.push(single(seg[0]))
         else {
@@ -230,8 +263,11 @@ export function planRuns(shots: PlanShot[], model: PlanModel, opts: { join?: 'fi
           const fits = !!take?.ok && len <= lim(model).s + 1e-6 && seg.length <= lim(model).n
           const m = fits || !other ? model : other
           const why = m === model ? undefined : !take?.ok ? `${model.label} cannot make one video` : `${round1(len)} s is longer than ${model.label} makes in one go (${lim(model).s} s)`
-          // The run's first frame pins the take; with none, its frames and named pictures go as references.
-          runs.push({ shotIds: seg.map((s) => s.id), mode: seg[0].hasFrame ? 'take' : 'take_refs', model: m, lands: {}, ...(why ? { switched: why } : {}) })
+          const over = len > lim(m).s + 1e-6 ? `${round1(len)} s is longer than ${m.label} makes in one go (${lim(m).s} s)`
+            : seg.length > lim(m).n ? `${seg.length} shots is more than ${m.label} makes in one go (${lim(m).n})` : undefined
+          // One generation with no frame pinned (features/join-or-cut-shots.clan): every shot's frame goes in
+          // as a guide, in shot order, beside the named pictures; with no frames, the words and the pictures.
+          runs.push({ shotIds: seg.map((s) => s.id), mode: 'take_refs', model: m, lands: {}, ...(why ? { switched: why } : {}), ...(over ? { over } : {}) })
         }
         if (k < segs.length - 1) runs.at(-1)!.splitAfter = true
       }
@@ -359,8 +395,15 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
   // What is made: each take run an asked shot is in, unless it is one take already (or being made); each asked
   // lone shot with no clip yet (any, with again).
   const work: { run: PlannedRun; shotIds: Id[] }[] = []
+  const failed: string[] = []
+  const name = (shotIds: Id[]) => { const w = shotsWords(d, shotIds); return w[0].toUpperCase() + w.slice(1) }
   for (const r of plan.runs) {
     if (!r.shotIds.some((id) => asked.has(id))) continue
+    if (isTakeRun(r) && r.over) {
+      // A person's join past what any model here makes in one go: said, never sent (the box offers the cut).
+      failed.push(`${name(r.shotIds)}: ${r.over}. Cut it into two videos first.`)
+      continue
+    }
     if (isTakeRun(r)) {
       if (r.shotIds.some(busy) || (!opts.again && isOneTake(d, opts.videoId, r.shotIds))) continue
       work.push({ run: r, shotIds: r.shotIds })
@@ -384,15 +427,13 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
       rationale: [r.switched && `${r.switched}, so ${r.model.label} makes it.`, lands && `${lands} of ${shotIds.length} end on the next shot's frame: the action carries on in the same setup.`].filter(Boolean).join(' ') || undefined,
     })
   }
-  const failed: string[] = []
-  const name = (shotIds: Id[]) => { const w = shotsWords(d, shotIds); return w[0].toUpperCase() + w.slice(1) }
   for (const [i, { run: r, shotIds }] of work.entries()) {
     const pick = r.model.model === model.model && r.model.provider === model.provider ? opts.modelChoice
       : choiceToSend('clip', opts.config, { provider: r.model.provider, model: r.model.model }, sheets)
     if (isTakeRun(r)) {
       try {
-        // A take_refs run (no first frame) sends the storyboard frames and character pictures as references:
-        // cap them at what the run's model can actually carry without a frame, so characters are not dropped.
+        // A take (take_refs: no frame pinned) sends the character pictures, then every shot's frame in shot
+        // order, as references: capped at what the run's model carries without a frame, characters first.
         const cap = clipRefCapacity({ provider: r.model.provider, model: r.model.model }, false, opts.config, sheets)
         await makeTake(deps, opts.videoId, ids[i], { modelChoice: pick, quality, refsMax: cap.max, ...(opts.texts ? { texts: opts.texts } : {}) })
       } catch (e) {
