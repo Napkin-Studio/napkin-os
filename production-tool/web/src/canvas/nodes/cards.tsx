@@ -27,29 +27,38 @@ const withRefs = (t: string): ReactNode[] => t.split(/(@[a-z][a-z0-9_]*)/g).map(
 const cap = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)
 const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s)
 
-export function Card({ icon, title, meta, extra, onOpen, children, style, className = '' }: { icon: CardKind; title: string; meta?: ReactNode; extra?: ReactNode; onOpen: () => void; children: ReactNode; style?: CSSProperties; className?: string }) {
+/** A node card as the mock draws it (production-new-ui-v2 .node): a head of icon, what it is, "· its name" in small
+ *  caps and its facts on the right; the body; its inputs as chips at the foot. No Open in the head on our own
+ *  engine: a click selects it, and the selection bar's Open (or a double-click) opens it. The Excalidraw
+ *  fallback's overlay keeps Open (`openButton`), since its cards cannot be selected. */
+export function Card({ icon, kind, name, meta, extra, inputs, onOpen, openButton = false, children, style, className = '' }: {
+  icon: CardKind; kind: string; name?: string; meta?: ReactNode; extra?: ReactNode; inputs?: ReactNode
+  onOpen: () => void; openButton?: boolean; children: ReactNode; style?: CSSProperties; className?: string
+}) {
   const chrome = useContext(CardChromeContext)
   return (
     <article className={`bl-card ${className}`} style={style}>
       <div className="bl-cardhead">
         {chrome.icon(icon)}
-        <b title={title}>{title}</b>
-        {meta}
-        <span className="pt-grow" />
+        <b title={name ? `${kind} · ${name}` : kind}>{kind}</b>
+        {name && <span className="bl-kind">· {name}</span>}
         {extra}
-        <button type="button" className="btn sm" onClick={onOpen}>Open</button>
+        <span className="pt-grow" />
+        {meta && <span className="bl-r">{meta}</span>}
+        {openButton && <button type="button" className="btn sm" onClick={onOpen}>Open</button>}
       </div>
-      {children}
+      <div className="bl-nb">{children}</div>
+      {inputs && <div className="bl-ins">{inputs}</div>}
     </article>
   )
 }
 
 /** Who is at work on a node: their figure working and one signed line (ui-behaviour 3.3 Running, 6.5). */
-export function AtWork({ line, warm = false, agent }: { line: string; warm?: boolean; agent: Agent }) {
-  const chrome = useContext(CardChromeContext)
+/** The new UI keeps the agents in one place (the bar's job chip): the node only fills in place, with this
+ *  one plain line saying what is happening to it (and who, by role). `agent` stays for the role's words. */
+export function AtWork({ line, warm = false }: { line: string; warm?: boolean; agent: Agent }) {
   return (
     <div className={`bl-atwork ${warm ? 'warm' : ''}`} role="status">
-      {chrome.agent(agent, true)}
       <span>{line}</span>
     </div>
   )
@@ -68,7 +77,7 @@ function Start({ kind, id, fallback }: { kind: CardKind; id: string | undefined;
 }
 
 /** `id`: the node's document entity; absent, the project's main one (the Excalidraw overlay). */
-export function ScriptCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
+export function ScriptCard({ id, onOpen, openButton }: { id?: string; onOpen: () => void; openButton?: boolean }) {
   useJobsTick()
   const chrome = useContext(CardChromeContext)
   const doc = useDoc()
@@ -88,8 +97,8 @@ export function ScriptCard({ id, onOpen }: { id?: string; onOpen: () => void }) 
     .map((b) => (b.kind === 'line' || b.kind === 'vo' ? `${b.kind === 'vo' ? 'VO: ' : b.speaker ? `${cap(b.speaker.toLowerCase())}: ` : ''}"${b.text ?? ''}"` : b.text ?? '')).filter(Boolean).join(' ')
   const words = scenes.map((s) => s.text ?? '').join(' ').trim()
   return (
-    <Card icon="script" title={`Script · ${chrome.title(script?.title, 'Script', project)}`} meta={<span className="pt-mono">{Math.round(script?.target_s ?? 15)} s</span>} onOpen={onOpen} style={{ height: 380 }}>
-      <InputsStrip nodeId={script?.id} />
+    <Card icon="script" kind="Script" name={chrome.title(script?.title, 'Script', project)} meta={`${Math.round(script?.target_s ?? 15)} s`} onOpen={onOpen} openButton={openButton}
+      className={writing ? 'writing' : ''} inputs={<InputsStrip nodeId={script?.id} />} style={{ height: 380 }}>
       {shots.length ? (
         <div className="bl-av">
           <span className="bl-avhead">Video</span><span className="bl-avhead">Audio</span>
@@ -113,7 +122,7 @@ export function ScriptCard({ id, onOpen }: { id?: string; onOpen: () => void }) 
   )
 }
 
-export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
+export function StoryboardCard({ id, onOpen, openButton }: { id?: string; onOpen: () => void; openButton?: boolean }) {
   useJobsTick()
   const chrome = useContext(CardChromeContext)
   const doc = useDoc()
@@ -127,11 +136,13 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
   const planning = runningOn(doc, 'shot_list', 'storyboard', sb?.id)
   const drawingIdx = shots.findIndex((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
   const strip = stripOf(shots.length)
+  // Its own name when it has one ("Cut-down · 9:16"); the main one is "Storyboard · 16:9" (mock).
+  const own = sb?.title?.trim() && sb.title.trim() !== 'Storyboard' && !/^untitled/i.test(sb.title.trim()) ? sb.title.trim() : undefined
   return (
-    <Card icon="storyboard" title={`Storyboard · ${chrome.title(sb?.title, 'Storyboard', project)}`}
-      meta={<span className="pt-mono">{sb?.ratio ?? '16:9'} · {shots.length} shots · {Math.round(total)} s</span>}
-      extra={behind ? <span className="pt-pill warn">{behind} behind the script</span> : undefined} onOpen={onOpen} style={{ height: 194 }}>
-      <InputsStrip nodeId={sb?.id} />
+    <Card icon="storyboard" kind="Storyboard" name={own ? `${chrome.title(own, 'Storyboard', project)} · ${sb?.ratio ?? '16:9'}` : sb?.ratio ?? '16:9'}
+      meta={drawingIdx >= 0 ? `drawing frame ${drawingIdx + 1} of ${shots.length}` : `${shots.length} shots · ${Math.round(total)} s`}
+      extra={behind ? <span className="pt-pill warn">{behind} behind the script</span> : undefined} onOpen={onOpen} openButton={openButton}
+      className={planning || drawingIdx >= 0 ? 'writing' : ''} inputs={<InputsStrip nodeId={sb?.id} />} style={{ height: 194 }}>
       {shots.length ? (
         <div className="bl-strip">
           {shots.slice(0, strip.shown).map((s, i) => <FrameTile key={s.id} shot={s} n={i + 1} drawing={i === drawingIdx} />)}
@@ -139,9 +150,7 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
         </div>
       ) : <Start kind="storyboard" id={sb?.id} fallback={<p className="bl-excerpt faint">No shots yet · write the script, then plan shots.</p>} />}
       {planning ? <AtWork agent="dex" line="The Director agent is planning the shots from the script" />
-        : shots.length ? (
-          <div className="bl-line">{chrome.agent('dex', false)}<span>{plannedLine(shots)}{drawingIdx >= 0 ? ` · frame ${drawingIdx + 1} is being drawn` : ''}</span></div>
-        ) : null}
+        : shots.length ? <span className="bl-meta">{plannedLine(shots)}</span> : null}
     </Card>
   )
 }
@@ -149,17 +158,16 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
 function FrameTile({ shot, n, drawing }: { shot: Shot; n: number; drawing: boolean }) {
   const doc = useDoc()
   const url = useBlobUrl(currentFrame(doc, shot)?.asset)
-  const chrome = useContext(CardChromeContext)
   return (
     <figure className="bl-frame">
       {/* A frame being drawn shows the Camera agent at work, never the loader (ui-behaviour 6.5). */}
-      {url && !drawing ? <img src={url} alt="" /> : <span className="bl-noframe" style={drawing ? { gap: 4 } : undefined}>{drawing ? <>{chrome.agent('wren', true)}the Camera agent is drawing</> : 'No frame yet'}</span>}
-      <figcaption>{n} · {cap(cameraLabel('size', shot.camera.size))}</figcaption>
+      {url && !drawing ? <img src={url} alt="" /> : <span className={`bl-noframe ${drawing ? 'run' : ''}`} aria-label={drawing ? 'The Camera agent is drawing this frame' : undefined}>{drawing ? '' : 'No frame yet'}</span>}
+      <figcaption>{n} · {drawing ? 'drawing' : cap(cameraLabel('size', shot.camera.size))}</figcaption>
     </figure>
   )
 }
 
-export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
+export function VideoCard({ id, onOpen, openButton }: { id?: string; onOpen: () => void; openButton?: boolean }) {
   useJobsTick()
   const chrome = useContext(CardChromeContext)
   const doc = useDoc()
@@ -189,9 +197,9 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
   // Dex's ask on a video with no storyboard (3.17) is read whole: the card grows over what is below it.
   const asking = !planning && !!video && !!chrome.PromptStart && isEmptyNode(doc, 'video', video.id) && (!sb || !!waitsOnScriptAsk(doc, video.id))
   return (
-    <Card icon="video" title={`Video · ${title}`} meta={fromScript ? <span className="pt-mono">from Script · no storyboard</span> : undefined} onOpen={onOpen}
-      className={asking ? 'asking' : ''} style={asking ? { minHeight: 194 } : { height: 194 }}>
-      <InputsStrip nodeId={video?.id} />
+    <Card icon="video" kind="Film" name={title} meta={fromScript ? 'from Script · no storyboard' : total ? `${total.toFixed(1)} s` : undefined} onOpen={onOpen} openButton={openButton}
+      className={[asking ? 'asking' : '', planning || takeRunning || clipRunning ? 'writing' : ''].filter(Boolean).join(' ')}
+      inputs={<InputsStrip nodeId={video?.id} />} style={asking ? { minHeight: 194 } : { height: 194 }}>
       {planning ? <AtWork agent="dex" line="The Director agent is planning the shots from the script" /> : <Start kind="video" id={video?.id} fallback={
         <div className="bl-videorow">
           <span className="bl-poster">
@@ -211,8 +219,8 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
 }
 
 /** The card for a node: `id` is its document entity (absent: the main one of its kind). */
-export function NodeCard({ kind, id, onOpen }: { kind: CardKind; id?: string; onOpen: () => void }) {
-  if (kind === 'script') return <ScriptCard id={id} onOpen={onOpen} />
-  if (kind === 'storyboard') return <StoryboardCard id={id} onOpen={onOpen} />
-  return <VideoCard id={id} onOpen={onOpen} />
+export function NodeCard({ kind, id, onOpen, openButton }: { kind: CardKind; id?: string; onOpen: () => void; openButton?: boolean }) {
+  if (kind === 'script') return <ScriptCard id={id} onOpen={onOpen} openButton={openButton} />
+  if (kind === 'storyboard') return <StoryboardCard id={id} onOpen={onOpen} openButton={openButton} />
+  return <VideoCard id={id} onOpen={onOpen} openButton={openButton} />
 }

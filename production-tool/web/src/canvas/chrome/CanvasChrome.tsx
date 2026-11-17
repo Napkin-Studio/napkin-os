@@ -1,6 +1,6 @@
 // The canvas's own chrome (ui-behaviour 3.2, 3.3, 7; mocks Main, CanvasReferences, SketchInk):
-// the frosted Boards rail with ⌥1…⌥9, the tool bar at the bottom with + Node, and the zoom and undo
-// pill. Engine-neutral: it reads the engine only through CanvasChrome (controls.ts) and is fed its
+// the tool rail on the canvas's left with + Node, the zoom and undo pill bottom left, and on touch the
+// Boards pill (⌥1…⌥9 jump on a keyboard; boards are frames on the canvas, the floating rail is gone). Engine-neutral: it reads the engine only through CanvasChrome (controls.ts) and is fed its
 // rows and actions by the stage, so it sits over either canvas adapter.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
@@ -174,7 +174,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   const [selSize, selColor] = text ? text.split('|') : []
   const textLook = text ? { size: Number(selSize), color: selColor } : { size: TEXT_SIZE_PX[textChoice.size], color: textChoice.color }
   const textOptions = !!chrome?.setText && shown !== 'pen' && (shown === 'text' || !!text) && (
-    <TextOptions look={textLook} recent={pen.recent} vertical={vertical}
+    <TextOptions look={textLook} recent={pen.recent} vertical
       onSize={(s) => { setText({ size: s }); chrome?.styleText?.({ size: TEXT_SIZE_PX[s] }) }}
       onColor={(c, remember, live) => {
         if (remember) rememberColour(c)
@@ -183,7 +183,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
         if (!live) chrome?.styleText?.({ color: c.toLowerCase() })
       }} />
   )
-  const penOptions = shown === 'pen' ? <PenOptions pen={pen} vertical={vertical} /> : textOptions
+  // Both layouts are columns on the canvas's left now: the options open beside them.
+  const penOptions = shown === 'pen' ? <PenOptions pen={pen} vertical /> : textOptions
   useEffect(() => {
     if (!actions.mode || !chrome) return
     const was = chrome.tool()
@@ -258,22 +259,23 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       </div>
     )
   }
+  // The desk's tool rail (mock production-new-ui-v2 canvas: a quiet column on the canvas's left, icons only,
+  // every name and key in its tooltip): Select, Hand, Pen, Eraser, Text, Sketch area, Board, Picture, Link, + Node.
   return (
-    <div className="canvas-toolbar" data-float-avoid="" role="toolbar" aria-label="Canvas tools">
+    <div className="canvas-toolbar rail" data-float-avoid="" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
       {penOptions}
       {t('select', 'Select', 'V')}
       {t('hand', 'Hand', 'H')}
       {t('pen', 'Pen', 'P')}
       {t('eraser', 'Eraser', 'E')}
       {t('text', 'Text', 'T', <span className="tb-t">T</span>)}
-      <span aria-hidden="true" className="tb-sep" />
       {(() => {
         const on = has('sketch')
         const active = shown === 'sketch'
         const copying = !!area && !!chrome?.copySketch
         return (
           <>
-            <button ref={shapeRef} type="button" className={`tb-tool wide ${active ? 'on' : ''}`} aria-pressed={active} aria-label={`Sketch area ${shape} (S)`}
+            <button ref={shapeRef} type="button" className={`tb-tool ${active ? 'on' : ''}`} aria-pressed={active} aria-label={`Sketch area ${shape} (S)`}
               aria-haspopup={on && (active || copying) ? 'dialog' : undefined} aria-expanded={on && (active || copying) ? shapes : undefined}
               aria-disabled={on ? undefined : 'true'}
               data-tip={!on ? 'Sketch area (S) · not on this canvas yet' : copying ? `Copy this ${areaRatio ?? ''} area into another shape` : active ? `Sketch area ${shape}: press again to pick the shape` : `Sketch area ${shape} (S): drag to draw, then Generate brings back a picture at its shape`}
@@ -283,9 +285,9 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
                 canvasActions.setMode(null)
                 chrome?.setTool('sketch')
               }}>
-              <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>{shape}
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeDasharray="3 2" /></svg>
             </button>
-            <Float anchor={shapeRef} open={shapes} onClose={() => setShapes(false)} side="above" align="start" role="dialog" label="Sketch area shape" className="tb-shapes pt-menu">
+            <Float anchor={shapeRef} open={shapes} onClose={() => setShapes(false)} side="right" align="start" role="dialog" label="Sketch area shape" className="tb-shapes pt-menu">
               {copying ? (
                 <>
                   <span className="pt-label">Copy this area</span>
@@ -321,9 +323,11 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {mode('board', 'Board', 'B', actions.canBoard, 'Board (B): drag out a board, or click for one', 'Board (B) · needs the new canvas (it has boards as frames)')}
       {t('image', 'Add a picture', 'I', ICON.image)}
       {mode('link', 'Link two nodes', 'L', actions.canNode, 'Link (L): click a node, then the node it feeds', 'Link (L) · needs the new canvas (it has nodes on it)')}
-      <span aria-hidden="true" className="tb-sep" />
-      {nodeButton}
-      <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="above" align="end" label="Add" className="pt-menu">{menuItems}</Float>
+      <button ref={nodeRef} type="button" className="tb-tool tb-node" aria-label="+ Node" aria-haspopup="menu" aria-expanded={menu}
+        data-tip="+ Node: Script, Storyboard, Video, a picture, a sketch area or a board" onClick={() => setMenu(!menu)}>
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+      </button>
+      <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="right" align="start" label="Add" className="pt-menu">{menuItems}</Float>
     </div>
   )
 }

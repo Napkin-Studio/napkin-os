@@ -4,12 +4,8 @@
 /* The rail, tool bar and zoom sit above the pen's live-ink layer (engine INK_OVER_Z = 4, over the
    cards' node layer at 3), or with the pen in hand they take no clicks: no ink, no Select, no way out
    (owner, 2026-10-15). */
-/* ── Boards rail (left, frosted) ─────────────────────────────────────────── */
-.board-rail {
-  position: absolute; left: 16px; top: 16px; width: 208px; padding: 12px; z-index: 5;
-  display: flex; flex-direction: column; gap: 2px;
-}
-.board-rail .br-head { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); padding: 4px 8px 8px; }
+/* ── Boards: frames on the canvas with ⌥1…⌥9 (features/production-new-ui.clan); the floating rail is gone.
+   On touch, where there is no ⌥, a Boards pill opens the jump sheet. ── */
 .br-row {
   display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; border: 0; background: transparent;
   font-size: 13px; color: var(--ink); text-align: left; cursor: pointer; width: 100%;
@@ -18,10 +14,7 @@
 .br-row:disabled { color: var(--ink3); cursor: default; }
 .br-row.current { color: var(--tool-ink); background: var(--tool-soft); font-weight: 600; }
 .br-row .br-key { color: var(--ink3); font-family: var(--f-mono); font-size: 11px; }
-.br-row.current .br-key { color: var(--tool-ink); }
-.br-new { margin-top: 6px; text-align: left; padding: 7px 8px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; font-size: 13px; color: var(--ink2); }
-.br-new:disabled { cursor: default; }
-.board-rail .br-foot { margin-top: 10px; padding: 10px 8px 2px; border-top: 1px solid var(--line-soft); font-family: var(--f-mono); font-size: 11px; line-height: 1.6; color: var(--ink3); }
+.br-new { margin-top: 6px; text-align: left; padding: 7px 8px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; font-size: 13px; color: var(--ink2); width: 100%; }
 .br-pill { position: absolute; left: 16px; top: 16px; z-index: 5; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 16px; border-radius: var(--r-pill); font-size: 14px; cursor: pointer; color: var(--ink); }
 .br-pill .br-cur { color: var(--tool-ink); font-weight: 600; }
 .br-sheet { width: 300px; padding: 8px; }
@@ -35,7 +28,7 @@
   display: flex; align-items: center; gap: 4px; padding: 6px;
   background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line-soft); border-radius: var(--r-pill); box-shadow: var(--shadow-pop);
 }
-:root[data-theme='dark'] .canvas-toolbar, :root[data-theme='dark'] .zoom-pill { background: rgba(22, 26, 31, 0.94); }
+:root[data-theme='dark'] .canvas-toolbar { background: rgba(22, 26, 31, 0.94); }
 .tb-tool {
   width: 36px; height: 36px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink);
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 0; font-size: 12px;
@@ -49,15 +42,27 @@
 .tb-node { white-space: nowrap; height: 36px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: var(--action); color: var(--action-fg); font-size: 13px; font-weight: 600; cursor: pointer; }
 .tb-node:hover { background: var(--action-hover); }
 
-/* ── Zoom and undo (bottom right) ────────────────────────────────────────── */
-.zoom-pill {
-  position: absolute; right: 16px; bottom: 20px; z-index: 5; display: flex; align-items: center; gap: 4px; padding: 4px;
-  background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line-soft); border-radius: var(--r-pill); font-size: 12px;
+/* ── The tool rail (mock v2 .cv-tools): a quiet column on the canvas's left ── */
+.canvas-toolbar.rail {
+  left: 14px; top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; gap: 2px; padding: 5px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-card);
 }
-.zoom-pill button { width: 30px; height: 30px; border: 0; border-radius: var(--r-pill); background: transparent; cursor: pointer; color: var(--ink); padding: 0; font-size: 13px; }
+:root[data-theme='dark'] .canvas-toolbar.rail { background: var(--paper); }
+.canvas-toolbar.rail .tb-tool { width: 36px; height: 36px; border-radius: 8px; color: var(--ink-soft); }
+.canvas-toolbar.rail .tb-tool svg { width: 18px; height: 18px; }
+.canvas-toolbar.rail .tb-tool:hover:not([aria-disabled='true']) { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.canvas-toolbar.rail .tb-tool.on, :root[data-theme='dark'] .canvas-toolbar.rail .tb-tool.on { background: var(--ag-act); color: var(--ag-act-ink); }
+.canvas-toolbar.rail .tb-node { background: transparent; padding: 0; }
+
+/* ── Zoom and undo (mock v2 .cv-zoom: bottom left) ─────────────────────────── */
+.zoom-pill {
+  position: absolute; left: 14px; bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 2px; padding: 3px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-pill); font: 500 11.5px var(--font-mono);
+}
+.zoom-pill button { min-width: 28px; height: 28px; padding: 0 9px; border: 0; border-radius: var(--r-pill); background: transparent; cursor: pointer; color: var(--ink); padding: 0; font-size: 13px; }
 .zoom-pill button:hover:not(:disabled) { background: var(--soft); }
 .zoom-pill button:disabled { color: var(--ink3); cursor: default; }
-.zoom-pill .zp-value { width: 44px; font-family: var(--f-mono); font-size: 12px; }
+.zoom-pill .zp-value { width: auto; font: 600 12px var(--font-ui); }
 .zoom-pill .zp-sep { width: 1px; height: 18px; background: var(--line-soft); }
 .zoom-pill .undonote { bottom: calc(100% + 8px); top: auto; }
 
@@ -180,20 +185,19 @@
 :root[data-theme='dark'] .popover.send-tray { background: rgba(22, 26, 31, 0.98); }
 
 /* ── Tooltips: every bar button says its name and key, or why it is off ──── */
-.canvas-toolbar [data-tip], .zoom-pill [data-tip], .board-rail [data-tip], .pt-menu [data-tip] { position: relative; }
+.canvas-toolbar [data-tip], .zoom-pill [data-tip], .pt-menu [data-tip] { position: relative; }
 .canvas-toolbar [data-tip]:hover::after, .canvas-toolbar [data-tip]:focus-visible::after,
 .zoom-pill [data-tip]:hover::after, .zoom-pill [data-tip]:focus-visible::after,
-.board-rail [data-tip]:hover::after, .board-rail [data-tip]:focus-visible::after,
 .pt-menu [data-tip]:hover::after, .pt-menu [data-tip]:focus-visible::after {
   content: attr(data-tip); position: absolute; z-index: 10; pointer-events: none; white-space: nowrap;
   padding: 5px 10px; border-radius: 8px; background: var(--ink-fixed, #16181D); color: #FFFFFF;
   font: 500 12px/1.3 var(--f-display, inherit); letter-spacing: 0; text-transform: none; box-shadow: var(--shadow-pill);
 }
-.canvas-toolbar:not(.vertical) [data-tip]:hover::after, .canvas-toolbar:not(.vertical) [data-tip]:focus-visible::after,
+.canvas-toolbar:not(.vertical):not(.rail) [data-tip]:hover::after, .canvas-toolbar:not(.vertical):not(.rail) [data-tip]:focus-visible::after,
 .zoom-pill [data-tip]:hover::after, .zoom-pill [data-tip]:focus-visible::after { bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); }
-.zoom-pill [data-tip]:hover::after, .zoom-pill [data-tip]:focus-visible::after { left: auto; right: 0; transform: none; }
+.zoom-pill [data-tip]:hover::after, .zoom-pill [data-tip]:focus-visible::after { left: 0; right: auto; transform: none; }
 .canvas-toolbar.vertical [data-tip]:hover::after, .canvas-toolbar.vertical [data-tip]:focus-visible::after,
-.board-rail [data-tip]:hover::after, .board-rail [data-tip]:focus-visible::after,
+.canvas-toolbar.rail [data-tip]:hover::after, .canvas-toolbar.rail [data-tip]:focus-visible::after,
 .pt-menu [data-tip]:hover::after, .pt-menu [data-tip]:focus-visible::after { left: calc(100% + 10px); top: 50%; transform: translateY(-50%); }
 /* Off (not built on this canvas yet): shown, greyed, saying why in the tooltip. */
 .tb-tool[aria-disabled='true'], .br-new[aria-disabled='true'], .pt-menu [aria-disabled='true'] { color: var(--ink3); opacity: 0.5; cursor: not-allowed; }

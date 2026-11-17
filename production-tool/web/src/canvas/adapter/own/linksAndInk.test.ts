@@ -195,7 +195,7 @@ describe('the pen owns the pointer', () => {
 
   it('the rail, tool bar and zoom stay above the pen, so its ink and Select can be clicked (2026-10-15)', () => {
     const css = readFileSync(fileURLToPath(new URL('../../chrome/canvas.css', import.meta.url)), 'utf8')
-    for (const sel of ['.board-rail {', '.br-pill {', '.canvas-toolbar {', '.zoom-pill {']) {
+    for (const sel of ['.br-pill {', '.canvas-toolbar {', '.zoom-pill {']) {
       // A selector can have several rules (a theme's colours); the one that places it has the z-index.
       const zs = css.split(sel).slice(1).map((r) => /z-index:\s*(\d+)/.exec(r.slice(0, r.indexOf('}')))?.[1]).filter(Boolean).map(Number)
       expect(zs.length, sel).toBeGreaterThan(0)

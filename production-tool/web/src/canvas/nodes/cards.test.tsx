@@ -45,7 +45,8 @@ describe('node cards, one per node (+ Node; ui-behaviour 3.3)', () => {
     const main = render(services, DEFAULT_CHROME, createElement(NodeCard, { kind: 'script', id: mainScript(d)!.id, onOpen: () => {} }))
     const second = render(services, DEFAULT_CHROME, createElement(NodeCard, { kind: 'script', id: ids.script, onOpen: () => {} }))
     expect(main).toContain('Maya runs through the rain')
-    expect(second).toContain('Script · Script 2')
+    expect(second).toContain('title="Script · Script 2"')
+    expect(second).toContain('<span class="bl-kind">· Script 2</span>')
     expect(second).not.toContain('Maya runs through the rain')
     expect(second).toContain('No script yet')
   })
@@ -65,7 +66,8 @@ describe('node cards, one per node (+ Node; ui-behaviour 3.3)', () => {
   it('a card without an id is the main one (the Excalidraw overlay)', () => {
     const { d, services } = project()
     const html = render(services, DEFAULT_CHROME, createElement(NodeCard, { kind: 'storyboard', onOpen: () => {} }))
-    expect(html).toContain(`${mainStoryboard(d)!.ratio} · 0 shots`)
+    expect(html).toContain(`· ${mainStoryboard(d)!.ratio}</span>`)
+    expect(html).toContain("0 shots · ")
   })
 })
 

@@ -119,6 +119,35 @@ export function installSeed(shell: Shell) {
       if (script) await linkBrief(env, b.id, { kind: 'script', id: script.id }).catch(() => undefined)
       return { briefId: b.id, elementId: el.id }
     },
+    /** The paired screenshots' project (features/production-new-ui.clan; the mock's "Market day"): a title, and
+     *  one shot per picture with its words, length and a drawn frame. `pics` are data URLs. */
+    market: async (o: { title?: string; shots: { pic: string; action: string; s: number }[] }) => {
+      if (!shell.get().session) await shell.newProject()
+      const services: Services = shell.get().session!.services
+      const blobs = await Promise.all(o.shots.map(async (x) => (await fetch(x.pic)).blob()))
+      const shas = await Promise.all(blobs.map((b) => putBlob(b)))
+      await systemUpdate(services.doc, (d: ProductionDocument) => {
+        if (!mainStoryboard(d)) {
+          const person = { id: String(d.project.created_by ?? 'human:e2e').replace(/^human:/, ''), handle: 'e2e', tenant_id: String(d.project.tenant_id ?? '') }
+          const stages = newProjectData({ person, title: o.title ?? 'Market day', newId: newUlidId, now: new Date().toISOString() }) as unknown as ProductionDocument
+          Object.assign(d.scripts, stages.scripts); Object.assign(d.storyboards, stages.storyboards); Object.assign(d.videos, stages.videos); Object.assign(d.links, stages.links)
+        }
+        if (o.title) d.project.title = o.title
+        const sb = mainStoryboard(d)!
+        const sc = mainScript(d)
+        if (sc) sc.target_s = o.shots.reduce((a, x) => a + x.s, 0)
+        const ranks = ranksBetween(shotsOf(d, sb.id).at(-1)?.rank ?? null, null, o.shots.length)
+        o.shots.forEach((x, i) => {
+          const s: Shot = { id: newUlidId('shot'), v: 1, field_v: {}, storyboard_id: sb.id, rank: ranks[i], kind: 'shot', duration_s: x.s, action: x.action, camera: { size: i === 2 ? 'close' : i === 0 ? 'wide' : 'medium' }, status: 'locked' } as Shot
+          d.shots[s.id] = s
+          d.assets[shas[i]] = { sha256: shas[i], kind: 'image', mime: 'image/jpeg' as Mime, bytes: blobs[i].size, w: 1344, h: 756, origin: 'generated', locations: [idbLocation(shas[i])] }
+          const job = { jobId: newUlidId('job'), op: 'frame', kind: 'mock', outputs: [{ sha256: shas[i], w: 1344, h: 756 }] } as unknown as Job
+          applyFrame(d, job, { shotId: s.id })
+        })
+      }, 'e2e seed')
+      await (services.doc as { flush?: () => Promise<void> }).flush?.()
+      services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+    },
     /** Opens the storyboard stage (the Image editor opens from a shot there). */
     storyboard: () => shell.get().session?.services.ui.update((u) => { u.stage = 'storyboard' }, 'e2e seed'),
   }

@@ -154,3 +154,42 @@
 .sp-crumb b { color: var(--ink); font-weight: 600; }
 .sp-crumb .x { margin-left: auto; text-decoration: none; font-size: 15px; }
 .booth-canvas .booth-body > .bb { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── The mock's shared controls (production-new-ui-v2 css/shell.css + pt.css), for the canvas, its Booth and the Start card ── */
+.btn-rect { min-height: 38px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+  font: 600 13.5px var(--font-ui); display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; cursor: pointer; }
+.btn-rect:hover { border-color: var(--ink); }
+.btn-rect.primary { background: var(--ag-act); color: var(--ag-act-ink); border-color: var(--ag-act-line, var(--ag-act)); }
+.btn-rect.primary:hover { filter: brightness(1.07); }
+.btn-rect.wide { width: 100%; }
+.btn-rect[disabled] { opacity: .45; cursor: not-allowed; }
+.sp-btn.on { background: var(--ag-act); color: var(--ag-act-ink); border-color: var(--ag-act); }
+.sp-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.sp-btn svg { width: 14px; height: 14px; flex: none; }
+.side-link { font: 600 13px var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ag-act) 55%, transparent); text-underline-offset: 3px;
+  color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; }
+.side-link[disabled] { opacity: .5; cursor: not-allowed; }
+.seg-row.sm button { min-height: 26px; font-size: 11.5px; padding: 0 9px; }
+.lbl { font: 600 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+  font: 500 11.5px var(--font-ui); color: var(--ink-soft); white-space: nowrap; }
+.chip.brief { background: #F3E8CC; border-color: #C4AA75; color: #3b2f17; }
+.field { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 10px 12px; font-size: 14px; color: var(--ink); resize: none; }
+.field:focus { outline: 2px solid color-mix(in srgb, var(--ag-act) 60%, transparent); outline-offset: 0; }
+.hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0; }
+.badge-pill { font: 700 10.5px/1.2 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; padding: 4px 10px; border-radius: 999px; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-soft); }
+.bsec { display: flex; flex-direction: column; gap: 10px; }
+.bsec + .bsec, .bsec.sep { border-top: 1px solid var(--line); padding-top: 16px; }
+.bsec h4 { margin: 0; font: 600 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.bsec h4 .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-family: var(--font-ui); font-weight: 600; }
+.btitle { display: flex; align-items: center; gap: 10px; }
+.btitle b { font: 700 16px var(--font-ui); letter-spacing: -.01em; }
+.btitle .meta { margin-left: auto; font: 500 11px var(--font-mono); color: var(--faint); }
+.agrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.agrid .a { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--card); text-align: left; padding: 0; cursor: pointer; color: var(--ink); }
+.agrid .a:hover { border-color: var(--ink); }
+.agrid .a img, .agrid .a .a-empty { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.agrid .a span:not(.a-empty) { display: block; padding: 4px 6px; font: 600 11px var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agrid .a small { display: block; padding: 0 6px 5px; font-size: 10px; color: var(--muted); }
+.drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; }

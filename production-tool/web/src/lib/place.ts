@@ -53,7 +53,13 @@ export interface Rect { left: number; top: number; right: number; bottom: number
  * when there is no room; always fully inside the viewport.
  */
 export function placeMenu(anchor: Rect, size: { w: number; h: number }, view: { w: number; h: number },
-  align: 'start' | 'end' | 'center' = 'start', side: 'below' | 'above' = 'below', gap = 6, margin = 8): { left: number; top: number; above: boolean } {
+  align: 'start' | 'end' | 'center' = 'start', side: 'below' | 'above' | 'right' = 'below', gap = 6, margin = 8): { left: number; top: number; above: boolean } {
+  // Beside a rail's button (the canvas's tool rail, features/production-new-ui.clan): to its right, top lined up, inside the view.
+  if (side === 'right') {
+    const maxTop = view.h - size.h - margin
+    const maxL = view.w - size.w - margin
+    return { left: Math.max(margin, Math.min(anchor.right + gap + 4, maxL)), top: maxTop < margin ? margin : Math.min(Math.max(anchor.top, margin), maxTop), above: false }
+  }
   const want = align === 'end' ? anchor.right - size.w : align === 'center' ? (anchor.left + anchor.right) / 2 - size.w / 2 : anchor.left
   const maxLeft = view.w - size.w - margin
   const left = maxLeft < margin ? margin : Math.min(Math.max(want, margin), maxLeft)

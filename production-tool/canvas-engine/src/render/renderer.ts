@@ -157,6 +157,15 @@ export interface BoardLook {
   title: string
   /** The chip behind the title: the canvas's background, so the frame line breaks under it. */
   titleBg: string
+  /** A dashed frame (the new UI's boards, production-new-ui): the dash in screen px. Absent: a solid line. */
+  dash?: readonly number[]
+  /** The title's font family, set in capitals with letter-spacing when `caps` (the new UI's mono label). */
+  titleFont?: string
+  caps?: boolean
+  /** The frame's line width in screen px (1 by default). */
+  lineWidth?: number
+  /** The frame line's opacity (the new UI draws it in the ink at 25%). */
+  strokeAlpha?: number
 }
 
 /** How bound links look, from the host's tokens: solid ink, lit in the tool colour, the role in a pill. */
@@ -696,8 +705,13 @@ export class Renderer {
     ctx.fill()
     const current = this.currentBoard === r.id
     ctx.strokeStyle = current ? look.current : look.stroke
-    ctx.lineWidth = current ? 2 : 1
+    ctx.lineWidth = (current ? 2 : look.lineWidth ?? 1) / (look.dash ? cam.zoom : 1)
+    if (look.dash) ctx.setLineDash?.(look.dash.map((d) => d / cam.zoom))
+    const alpha = ctx.globalAlpha
+    if (!current && look.strokeAlpha != null) ctx.globalAlpha = alpha * look.strokeAlpha
     ctx.stroke()
+    ctx.globalAlpha = alpha
+    if (look.dash) ctx.setLineDash?.([])
     const empty = this.emptyBoard(r)
     if (empty) {
       const hint = dropHint(typeof r.props.purpose === 'string' ? r.props.purpose : '')
@@ -711,16 +725,19 @@ export class Renderer {
 
   /** A board's title chip (boards/grab boardTitleRect): 20 px tall on screen at least, the frame line broken under it. */
   private drawBoardTitle(ctx: DrawContext, r: ElementRecord, cam: Camera, look: BoardLook) {
-    const name = typeof r.props.name === 'string' ? r.props.name : ''
-    if (!name) return
+    const raw = typeof r.props.name === 'string' ? r.props.name : ''
+    if (!raw) return
+    const name = look.caps ? raw.toUpperCase() : raw
     const t = boardTitleRect(r, cam.zoom)
     const k = titleScale(cam.zoom)
     const current = this.currentBoard === r.id
     ctx.fillStyle = look.titleBg
     ctx.fillRect(t.x, t.y, t.w, t.h)
     ctx.fillStyle = current ? look.current : look.title
-    ctx.font = `600 ${12 * k}px Geist, sans-serif`
+    ctx.font = look.titleFont ? `600 ${10.5 * k}px ${look.titleFont}` : `600 ${12 * k}px Geist, sans-serif`
+    if (look.caps && 'letterSpacing' in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = `${0.08 * 10.5 * k}px`
     ctx.fillText(name, t.x + 8 * k, t.y + t.h / 2 + 4 * k, Math.max(0, t.w - 16 * k))
+    if (look.caps && 'letterSpacing' in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = '0px'
   }
 
   /** Where moving boards will land: dashed, in the tool colour (BoardLook.current), rounded as a board. */

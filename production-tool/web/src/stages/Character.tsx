@@ -34,7 +34,7 @@ import { planOrJoin } from '../jobs/plan'
 import { linkInto } from '../jobs/prompt'
 import { AskOptions } from '../ui/AskCard'
 import { usePanels } from '../ui/chrome/panels'
-import { AssetsDrawer } from '../ui/assets/AssetsDrawer'
+import { AssetsLibrary } from '../ui/assets/AssetsDrawer'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { CanvasController, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
@@ -57,7 +57,7 @@ import { pickPictureVersionStep } from './imageEditor/apply'
 import { Float } from '../ui/Float'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
-import { currentPictureFrame, keyNamed, keysList, mainStoryboard, pictureVersions, refsList } from '../model/selectors'
+import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList } from '../model/selectors'
 import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
@@ -497,8 +497,8 @@ export function Character({ initial, active, onPictureEditor }: {
   // Our own engine has the boards as real frames and the nodes as real elements (art-boards,
   // canvas-nodes): the rail jumps to the frames, and nothing is drawn over the canvas for them.
   const own = canvas?.engine === 'own'
-  // The rail's left edge: what a jump keeps clear (the rail covers the left 240px; none when narrow).
-  const railInset = narrow || panels.assets ? 0 : 240
+  // What a jump keeps clear on the left: the tool rail's column (none when narrow, where it sits over the top).
+  const railInset = narrow ? 0 : 64
   // New results land in view right of the rail (board-autolayout).
   useEffect(() => { ctrl?.setInset(railInset) }, [ctrl, railInset])
   // A picture named on no board goes to its role's board: "Moved to Characters · Undo" (board-autolayout).
@@ -568,7 +568,23 @@ export function Character({ initial, active, onPictureEditor }: {
     })
     if (hit.length) canvas.fit(hit, { zoomFactor: 0.8, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
   }, [canvas, open, own, docStore, railInset])
-  // On our own engine the canvas takes ⌥1…⌥9 (canvas/boards/BoardLayer); the rail only shows which is current.
+  // The Excalidraw fallback has no frames of its own: ⌥1…⌥9 pick its rows (the rail took them; it is gone).
+  const pickRef = useRef<(r: BoardRow) => void>(() => {})
+  const fitRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    if (own || narrow) return
+    const onKey = (e: KeyboardEvent) => {
+      const k = boardKey(e)
+      if (k === null) return
+      e.preventDefault()
+      if (k === 'fit') return fitRef.current()
+      const row = rows[k]
+      if (row && !row.off) pickRef.current(row)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [own, narrow, rows])
+  // On our own engine the canvas takes ⌥1…⌥9 (canvas/boards/BoardLayer) and keeps which is current.
   useEffect(() => {
     if (!own || !canvas) return
     const onKey = (e: KeyboardEvent) => {
@@ -620,6 +636,8 @@ export function Character({ initial, active, onPictureEditor }: {
   })()
   // The dot grid moves with the canvas.
   const grid = vs ? { '--grid-x': `${vs.view.scrollX * vs.view.zoom}px`, '--grid-y': `${vs.view.scrollY * vs.view.zoom}px`, '--grid-s': `${24 * vs.view.zoom}px` } as React.CSSProperties : undefined
+
+  useEffect(() => { pickRef.current = pickBoard; fitRef.current = fitEverything })
 
   return (
     <div className="character">
@@ -782,15 +800,16 @@ export function Character({ initial, active, onPictureEditor }: {
         <FrontChooser />
         {placeError && <div className="place-error" role="alert">{placeError}<FrontButtons text={placeError} /> <button className="btn xs ghost" onClick={() => setPlaceError(null)}>OK</button></div>}
         {showHint && <StartCard onScript={() => open('script')} onPictures={() => chrome?.setTool('image')} />}
-        {panels.assets
-          ? <AssetsDrawer ctrl={ctrl} onClose={() => panels.toggle('assets')} onBoards={() => { panels.toggle('assets'); chrome?.fitAll() }}
-              onPicture={() => chrome?.setTool('image')} onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} />
-          : <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow={narrow} keys={!own} />}
+        {/* Boards are frames on the canvas (⌥1…⌥9 jump, ⌥0 fits); on touch, with no ⌥, the Boards pill opens the jump sheet. */}
+        {narrow && <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow keys={!own} />}
         <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
       </div>
-      <Booth state={booth} earned={boothEarned({ selection: !!selBrief })}>
-        {selBrief && <BriefBooth briefId={selBrief} onClose={() => canvas?.select([])} />}
+      <Booth state={booth} earned={boothEarned({ selection: !!selBrief, library: panels.assets })}>
+        {selBrief ? <BriefBooth briefId={selBrief} onClose={() => canvas?.select([])} />
+          : panels.assets ? <AssetsLibrary ctrl={ctrl} onClose={() => panels.toggle('assets')} onPicture={() => chrome?.setTool('image')}
+              onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} onScript={() => open('script', mainScript(docStore.get())?.id)} />
+          : null}
       </Booth>
       </div>
       </CardChromeContext.Provider>

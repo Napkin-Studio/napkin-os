@@ -56,13 +56,20 @@ export function surfaceOf(host: HTMLElement, theme: 'light' | 'dark'): Surface {
   return {
     background: 'transparent',
     ink,
+    // Boards as the new UI draws them (mock production-new-ui-v2 .cv-board): a dashed line on the desk, no fill,
+    // a 10px corner, the title in mono capitals on the desk's colour.
     board: {
-      fill: theme === 'dark' ? 'rgba(22, 26, 31, 0.45)' : 'rgba(255, 255, 255, 0.55)',
-      stroke: v('--line'),
+      fill: 'transparent',
+      stroke: v('--ink') || '#141413',
+      strokeAlpha: 0.25,
       current: v('--tool') || '#2F64F5',
-      radius: parseFloat(v('--r-board')) || 16,
-      title: v('--ink2') || '#4A4F5C',
+      radius: 10,
+      title: v('--ink-soft') || v('--ink2') || '#4A4F5C',
       titleBg: v('--canvas-bg') || (theme === 'dark' ? '#121417' : '#FAFAFB'),
+      dash: [6, 4],
+      lineWidth: 1.5,
+      titleFont: v('--font-mono') || 'ui-monospace, monospace',
+      caps: true,
     },
     link: {
       stroke: v('--ink') || '#16181D',

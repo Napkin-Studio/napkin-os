@@ -57,7 +57,7 @@ export function BoardsLayer({ part, frames, toView, zoom, current, onOpen }: {
         </section>
       ) : f.holds !== 'pictures' && (
         <div key={f.id} className="bl-cardbox" style={at(f)}>
-          <NodeCard kind={f.holds} onOpen={() => onOpen(f.holds as 'script' | 'storyboard' | 'video')} />
+          <NodeCard kind={f.holds} openButton onOpen={() => onOpen(f.holds as 'script' | 'storyboard' | 'video')} />
         </div>
       ))}
     </div>

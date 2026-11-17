@@ -18,7 +18,7 @@ export function Float({ anchor, open, onClose, align = 'start', side = 'below', 
   open: boolean
   onClose: () => void
   align?: 'start' | 'end' | 'center'
-  side?: 'below' | 'above'
+  side?: 'below' | 'above' | 'right'
   /** menu: items with role="menuitem", arrow keys; dialog: a panel with its own controls. */
   role?: 'menu' | 'dialog'
   label?: string

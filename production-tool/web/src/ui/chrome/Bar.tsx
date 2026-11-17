@@ -52,16 +52,18 @@ export type NodeKind = 'script' | 'storyboard' | 'video' | 'frame' | 'sound'
 
 /** The node marks of the mocks: a coral page (script), four blue frames (storyboard), a play box (video), a picture (frame). */
 export function NodeIcon({ kind, size = 20 }: { kind: NodeKind; size?: number }) {
+  // The new UI's slate identity (Shrey, 2026-11-17; mock production-new-ui-v2 core.js icons): one ink line icon
+  // per kind, no tool colours.
+  const p: Record<NodeKind, ReactNode> = {
+    script: <><path d="M5 4h14v11l-5 5H5z" /><path d="M14 20v-5h5" /></>,
+    storyboard: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18" /></>,
+    video: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18M7 5l2 4M12 5l2 4M17 5l2 4" /></>,
+    frame: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></>,
+    sound: <><path d="M4 10v4h4l5 4V6L8 10z" /><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" /></>,
+  }
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" aria-hidden="true" style={{ flexShrink: 0 }}>
-      {kind === 'script' && <><rect x="4" y="2" width="12" height="16" rx="2" fill="#FF6A55" /><path d="M7 7h6M7 10h6M7 13h4" stroke="#16181D" strokeWidth="1.4" strokeLinecap="round" /></>}
-      {kind === 'storyboard' && <>
-        <rect x="2" y="4" width="7" height="5" rx="1" fill="#2F64F5" /><rect x="11" y="4" width="7" height="5" rx="1" fill="#2F64F5" />
-        <rect x="2" y="11" width="7" height="5" rx="1" fill="#2F64F5" /><rect x="11" y="11" width="7" height="5" rx="1" fill="#2F64F5" opacity="0.45" />
-      </>}
-      {kind === 'video' && <><rect x="2" y="4" width="16" height="12" rx="2" fill="var(--ink)" /><path d="M8 7.5 L13 10 L8 12.5 Z" fill="var(--paper)" /></>}
-      {kind === 'frame' && <><rect x="2" y="4" width="16" height="12" rx="2" fill="#2F64F5" /><path d="M3 15 L8 9.5 L11.5 13 L14 11 L17 14" fill="none" stroke="#FFFFFF" strokeWidth="1.4" strokeLinejoin="round" /></>}
-      {kind === 'sound' && <><rect x="2" y="4" width="16" height="12" rx="2" fill="#7D52F4" /><path d="M5 10h1M8 7v6M11 8.5v3M14 6v8" stroke="#FFFFFF" strokeWidth="1.4" strokeLinecap="round" /></>}
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      {p[kind]}
     </svg>
   )
 }
