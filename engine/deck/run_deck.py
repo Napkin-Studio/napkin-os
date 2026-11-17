@@ -37,6 +37,27 @@ from . import assemble, inputs, intake, profiles, qa_render, render_hyperframes,
 STAGE_FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.json", "c": "c_territories.json", "d": "d_idea.json"}
 #: An investor deck's story is one stage.
 INVESTOR_STAGE_FILES = {"a0": "a0_intake.json", "i": "i_investor.json"}
+#: Where ``--until`` may stop: after a stage, or after ``deck`` (the deck assembled and validated, before any file is rendered).
+UNTIL_CHOICES = ("a0", "a", "b", "c", "d", "i", "deck")
+
+
+def _close(a, rep: dict, t0: float) -> dict:
+    """Price the stages, total the cost and write report.json: the end of a run, whole or stopped at ``--until``."""
+    rep["wall_secs"] = round(time.time() - t0, 1)
+    rep["stages"] = {k: _price_stage(v or {}) for k, v in rep["stages"].items()}   # the CLI transport reports tokens, not dollars
+    rep["usd_total"] = round(sum((v or {}).get("usd", 0) or 0 for v in rep["stages"].values()), 4)
+    if any(v.get("usd_estimated") for v in rep["stages"].values()):
+        rep["usd_basis"] = spec.USD_BASIS
+    (a.out / "report.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False))
+    return rep
+
+
+def _stopped(a, rep: dict, t0: float, at: str) -> dict:
+    """A run stopped by ``--until``: nothing past ``at`` ran or was written. The stage outputs are in --stages, so a later run carries on from them."""
+    rep["until"] = at
+    _close(a, rep, t0)
+    print(json.dumps({"until": at, "usd_total": rep["usd_total"], "wall_secs": rep["wall_secs"]}, indent=1))
+    return rep
 
 
 def _soffice() -> str:
@@ -260,6 +281,9 @@ def main(argv=None):
                     help="a client document (PDF page by page, or text), cited as doc:KEY#pN; repeatable")
     ap.add_argument("--brand", type=Path, help="brand JSON: name, colors (THEME keys, accent_ink), head/body fonts, logo files")
     ap.add_argument("--no-qa", action="store_true", help="skip stage h, the rendered-slide QA (qa.json)")
+    ap.add_argument("--until", choices=UNTIL_CHOICES, default=None,
+                    help="stop after this stage and write report.json (stages a0 a b c d, or i for an investor deck); 'deck' stops once the deck "
+                         "is assembled and validated, before any file is rendered. Stage outputs stay in --stages: a later run carries on from them")
     a = ap.parse_args(argv)
     if a.prompt_text and a.prompt_file:
         ap.error("give --prompt-text or --prompt-file, not both")
@@ -267,6 +291,8 @@ def main(argv=None):
     if not (prompt_text or a.doc or a.brief or a.research):
         ap.error("nothing to build a deck from: give a prompt (--prompt-text or --prompt-file), a document (--doc), a brief (--brief) or research (--research)")
     a.out.mkdir(parents=True, exist_ok=True)
+    if a.live:
+        a.stages.mkdir(parents=True, exist_ok=True)   # a live run writes each stage here as it goes; a missing folder used to fail after the first paid call
     rep = {"stages": {}, "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
     t0 = time.time()
 
@@ -294,10 +320,15 @@ def main(argv=None):
     if pages:
         rep["doc_pages"] = pages   # every page of every document read (never dropped)
 
+    names = profiles.stage_names(profile, INVESTOR_STAGE_FILES if kind == "investor" else STAGE_FILES)
+    if a.until not in (None, "deck") and a.until not in names:
+        ap.error(f"--until {a.until}: this deck type has no such stage (it runs {', '.join(names)})")
     st = {}
-    for k, fn in profiles.stage_names(profile, INVESTOR_STAGE_FILES if kind == "investor" else STAGE_FILES).items():
+    for k, fn in names.items():
         p = a.stages / fn
         if k == "a0" and not p.exists() and not (a.live and _needs_intake(inp)):
+            if a.until == k:
+                return _stopped(a, rep, t0, k)
             continue   # intake adds no stage, and no cost, when the brief supplies everything or there is nothing else to read
         if p.exists():
             st[k] = json.loads(p.read_text())
@@ -326,6 +357,8 @@ def main(argv=None):
             inp.intake = st[k]
             rep["intake"] = {"applied": intake.apply_a0(inp, st[k]), "gaps": st[k]["gaps"], "questions": asked,
                              "questions_total": len(st[k]["questions"])}
+        if a.until == k:
+            return _stopped(a, rep, t0, k)
 
     _criterion_answers(a, inp, st, profile, rep)
 
@@ -395,9 +428,13 @@ def main(argv=None):
     rep["stages"]["validate"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
     (a.out / "deck.json").write_text(json.dumps(deck, indent=1, ensure_ascii=False, default=str))
     (a.out / "validation.json").write_text(json.dumps(findings, indent=1, ensure_ascii=False))
+    if a.until == "deck":
+        rep["slides"] = len(deck["order"])
+        rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
+        return _stopped(a, rep, t0, "deck")
 
     t = time.time()
-    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False)
+    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json")
     rep["stages"]["render_pptx"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
@@ -424,12 +461,7 @@ def main(argv=None):
 
     rep["slides"] = len(deck["order"])
     rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
-    rep["wall_secs"] = round(time.time() - t0, 1)
-    rep["stages"] = {k: _price_stage(v or {}) for k, v in rep["stages"].items()}   # the CLI transport reports tokens, not dollars
-    rep["usd_total"] = round(sum((v or {}).get("usd", 0) or 0 for v in rep["stages"].values()), 4)
-    if any(v.get("usd_estimated") for v in rep["stages"].values()):
-        rep["usd_basis"] = spec.USD_BASIS
-    (a.out / "report.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False))
+    _close(a, rep, t0)
     print(json.dumps({k: rep[k] for k in ("slides", "slides_by_status", "validation", "wall_secs", "usd_total")}, indent=1))
     return rep
 

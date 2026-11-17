@@ -1,0 +1,142 @@
+[
+ {
+  "check": "numbers_uncited",
+  "level": "warn",
+  "slide": "s01",
+  "message": "'2027' in \"Fernley Drinks Ltd (FICTIONAL, Cork sparkling iced tea brand): Fernley\" is in the inputs but cited by no ref on this slide",
+  "slide_no": 1
+ },
+ {
+  "check": "internal_leak",
+  "level": "warn",
+  "slide": "s01",
+  "message": "the agency name placeholder on screen: '[Agency]' in \"A response from [Agency]\"",
+  "slide_no": 1
+ },
+ {
+  "check": "word_budget",
+  "level": "warn",
+  "slide": "s05",
+  "message": "87 words on screen, budget 80 for proposition",
+  "slide_no": 5
+ },
+ {
+  "check": "internal_leak",
+  "level": "warn",
+  "slide": "s05",
+  "message": "an open 'to confirm' on screen: 'to confirm' in \"The objection it must beat: This insight rests on no researc\"",
+  "slide_no": 5
+ },
+ {
+  "check": "empty_slot",
+  "level": "warn",
+  "slide": "s06",
+  "message": "empty text block (dropped at render)",
+  "slide_no": 6
+ },
+ {
+  "check": "word_budget",
+  "level": "warn",
+  "slide": "s07",
+  "message": "116 words on screen, budget 110 for measurement",
+  "slide_no": 7
+ },
+ {
+  "check": "internal_leak",
+  "level": "warn",
+  "slide": "s13",
+  "message": "an open 'to confirm' on screen: 'to confirm' in \"A new drink that is hard to place may be hard to picture tas\"",
+  "slide_no": 13
+ },
+ {
+  "check": "numbers_uncited",
+  "level": "warn",
+  "slide": "s19",
+  "message": "'18' in \"Cork origin is ownable and hard for rivals to claim, but nothing shows\" is in the inputs but cited by no ref on this slide",
+  "slide_no": 19
+ },
+ {
+  "check": "numbers_uncited",
+  "level": "warn",
+  "slide": "s19",
+  "message": "'34' in \"Cork origin is ownable and hard for rivals to claim, but nothing shows\" is in the inputs but cited by no ref on this slide",
+  "slide_no": 19
+ },
+ {
+  "check": "objective_quant",
+  "level": "warn",
+  "slide": null,
+  "message": "the first three presented slides do not give the objective as a number and a from/to, versus or by-date (say what moves, from what, to what, by when)",
+  "slide_no": null
+ },
+ {
+  "check": "action_title",
+  "level": "warn",
+  "slide": "s02",
+  "message": "title \"What has to change\" is a label: write the takeaway as a full sentence",
+  "slide_no": 2
+ },
+ {
+  "check": "action_title",
+  "level": "warn",
+  "slide": "s05",
+  "message": "title \"The single thought\" is a label: write the takeaway as a full sentence",
+  "slide_no": 5
+ },
+ {
+  "check": "claim_fit",
+  "level": "warn",
+  "slide": "s04",
+  "message": "headline partly supported: Brand, timing and audience facts are supported. The tea-as-home-drink insight has no evidence (insight field missing), though it is labelled a hypothesis.",
+  "slide_no": 4
+ },
+ {
+  "check": "claim_fit",
+  "level": "warn",
+  "slide": "s05",
+  "message": "headline partly supported: Sparkling iced tea and Cork origin are supported. Home-only tea belief is unsupported (flagged as hypothesis); no further reasons to believe were supplied.",
+  "slide_no": 5
+ },
+ {
+  "check": "claim_fit",
+  "level": "warn",
+  "slide": "s08",
+  "message": "headline was partly supported and has been narrowed (was \"What could go wrong, and what we would do about it\"): run the fit judge again to confirm. Removed alcohol-occasion and code-compliance framing, which has no cited evidence; kept the missing insight and baseline.",
+  "slide_no": 8
+ },
+ {
+  "check": "claim_fit",
+  "level": "error",
+  "slide": "s13",
+  "message": "headline not supported: Evidence says nothing on audience perception or barriers; insight and competitor fields are missing. Only the trial goal is supported. The barrier is pure hypothesis.",
+  "slide_no": 13
+ },
+ {
+  "check": "claim_fit",
+  "level": "warn",
+  "slide": "s24",
+  "message": "headline partly supported: Baseline absence and trial goal are supported. 'Works harder', placement at chiller and the confirmed-truth benefit are unevidenced assertions; no media list or channel evidence.",
+  "slide_no": 24
+ },
+ {
+  "check": "insight_shape",
+  "level": "warn",
+  "slide": "s04",
+  "message": "the second line of the insight has no tension (but, yet, while, even though, still, instead)",
+  "slide_no": 4
+ },
+ {
+  "check": "insight_shape",
+  "level": "warn",
+  "slide": "s04",
+  "message": "the third line of the insight does not say what it means for us (starts with 'so' or 'which means')",
+  "slide_no": 4
+ },
+ {
+  "check": "chain_links",
+  "level": "warn",
+  "slide": "s04",
+  "message": "chain insight_phrase \"never think of it when they want something cold an\" is not on the insight slide",
+  "slide_no": 4
+ }
+]
