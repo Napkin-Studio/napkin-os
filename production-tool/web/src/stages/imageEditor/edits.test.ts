@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   EMPTY, addEdit, applyLine, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
   toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, keptAfterApply, leftOutLine, NOTHING_TO_TAKE,
-  afterSend, newMask, pendingCount, sendWithRow,
+  afterSend, hasFill, newMask, pendingCount, sendWithRow,
   type EditSession, type MaskOp,
 } from './edits'
 
@@ -177,6 +177,7 @@ describe('fixes from the live test of 2026-11-17 (features/production-new-ui.cla
   it('after a fill is sent the next stroke starts Mask 2; New mask starts one on purpose', () => {
     let s = withMaskOp(EMPTY, op)
     s = addEdit(s, { id: 'f1', kind: 'fill', maskId: s.active!, ops: [op], words: 'a balloon', keepOutside: true, jobId: 'job_1' })
+    expect(hasFill(s, s.active!)).toBe(true) // the editor then starts the next stroke on a new mask
     s = afterSend(s)
     s = withMaskOp(s, op)
     const names = s.edits.filter((e) => e.kind === 'mask').map((e) => (e as { name: string }).name)

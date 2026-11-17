@@ -79,6 +79,9 @@ export function nothingToTake(s: EditSession, op: MaskOp): boolean {
   return !masks(s).some((m) => m.id === s.active) && op.mode === 'sub'
 }
 
+/** Whether a mask has a Fill or Remove sent on it. */
+export const hasFill = (s: EditSession, maskId: string): boolean => s.edits.some((e) => e.kind === 'fill' && e.maskId === maskId)
+
 /** Once a mask's Fill or Remove is sent, the next stroke starts a new mask (QA 2026-11-17: a second lasso
  *  joined Mask 1 and Fill 2 repainted Fill 1's area). */
 export function afterSend(s: EditSession): EditSession {

@@ -41,7 +41,7 @@ import { Float } from '../ui/Float'
 import { croppedCaption } from '../canvas/core/sketch'
 import { PromptStart } from '../ui/prompt/PromptStart'
 import {
-  EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, newMask, pendingCount, editLabel, editsForFrame, hiddenCount, keptAfterApply,
+  EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, hasFill, newMask, pendingCount, unfilledMasks, editLabel, editsForFrame, hiddenCount, keptAfterApply,
   layersOf, leaveAsk, leftOutLine, nextStep,
   notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
   type Edit, type EditSession, type MaskOp, type Pt, type Undone,
@@ -198,9 +198,11 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     return () => { alive = false }
   }, [sha, asset?.w, asset?.h, image])
   const n = editCount(session)
+  // Work here at all (the edits, and a mask painted and not filled): what Before compares and Apply looks at.
+  const work = n + unfilledMasks(session)
   // Before / After: with edits not applied, Before is this version as saved and After has the edits;
   // with none, Before is the version before this one and After is this one. Nothing to compare: off.
-  const before = n ? { url, version } : prevVersion ? { url: prevUrl, version: prevVersion.version } : undefined
+  const before = work ? { url, version } : prevVersion ? { url: prevUrl, version: prevVersion.version } : undefined
   const showBefore = view === 'before' && !!before
   // Hidden layers are left out of every send and of Apply, and the pill, the Apply line and the tray say so (IM1).
   const applyLeftOut = hiddenCount(session, ['mask'])
@@ -333,9 +335,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
 
   // ── the tools ──
   // A fill already sent keeps the mask it was sent with: painting while it runs starts a new mask.
-  const filling = runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined
+  // A mask whose Fill or Remove was sent stays with it: the next stroke starts a new mask (QA 2026-11-17: a
+  // second lasso joined Mask 1, and Fill 2 repainted Fill 1's area). Clear mask still works on it.
   const onMaskOp = (op: MaskOp) => {
-    const target = (s: EditSession) => (filling && s.active === filling ? { ...s, active: undefined } : s)
+    const target = (s: EditSession) => (s.active && hasFill(s, s.active) ? afterSend(s) : s)
     if (nothingToTake(target(session), op)) {
       setHintAt({ text: NOTHING_TO_TAKE, at: hintKey })
       return
@@ -385,8 +388,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
           (jobId) => runner.submit('region_edit', { image: picture, mask, region, text: words, aspect: shape }, parents, purpose, jobId))
         setFill('')
       }
-      // The next stroke starts a new mask: this one stays with the fill it was sent with.
-      setSession(afterSend)
     } else if (a === 'whole') {
       const words = whole.trim()
       const frameShot = shotId && doc.shots[shotId] ? plainShot(doc.shots[shotId]) : undefined
@@ -469,7 +470,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
           </>
         )}
         more={() => <CopyLinkLater />}
-        primary={<button type="button" className="btn primary" disabled={running || !n || !framePic} onClick={apply}
+        primary={<button type="button" className="btn primary" disabled={running || !work || !framePic} onClick={apply}
           title={n ? applyWords : 'Make an edit first'}>Apply as new version</button>} />
       <Float anchor={versionsBtn} open={versionsOpen} onClose={() => setVersionsOpen(false)} align="end" label={`Versions of ${subject.label}`} className="ie-versions">
         <div className="ie-vhead pt-mono">{ratio ? `${ratio} locked` : 'Picture'}{own ? ` · ${own.w} × ${own.h}` : ''}</div>
