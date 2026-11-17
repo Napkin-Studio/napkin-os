@@ -45,6 +45,7 @@ import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
 import { scriptToWrite, showStartCard } from './startCard'
+import { useBriefSpinoff } from '../brief/useBriefSpinoff'
 import { ImageEditor, VersionRow } from './ImageEditor'
 import { editablePicture } from '../canvas/nodes/dblclick'
 import { pickPictureVersionStep } from './imageEditor/apply'
@@ -473,6 +474,8 @@ export function Character({ initial, active, onPictureEditor }: {
   }, [docStore, services, canvas, offerUndo])
 
   const showHint = showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
+  // A brief spun off from Brief Maker (?brief=<doc id>): its Brief node and a new Script, once (features/brief-node.clan).
+  useBriefSpinoff(canvas?.engine === 'own' ? { canvas, doc: docStore } : null, config.flags)
 
   // Our own engine has the boards as real frames and the nodes as real elements (art-boards,
   // canvas-nodes): the rail jumps to the frames, and nothing is drawn over the canvas for them.

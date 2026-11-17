@@ -17,6 +17,7 @@ import {
 } from './model'
 import { osBriefSource, type OsBriefRead } from './os'
 import { newId } from '../lib/ulid'
+import { briefChoices, briefSpinoffOf, briefSpinoffUrl, offersStartFromBrief, withoutBriefSpinoff } from './start'
 
 const ex = loadJson<ProductionDocument>('examples/document.ad.json')
 const SB = 'storyboard_01K7A000000000000000000012'
@@ -274,5 +275,30 @@ describe('confidentiality', () => {
     const job = withBrief(d, 'write', { kind: 'script', id: SCRIPT }, {}).input
     expect(JSON.stringify(job)).not.toContain('200k')
     expect(JSON.stringify(job)).not.toContain('confidential')
+  })
+})
+
+describe('Start from a brief: the data path', () => {
+  const src = (ok: boolean, items: { documentId: string; title: string; updatedAt: string }[] = []) => ({
+    available: async () => ok, list: async () => items, read: async () => read(), openUrl: (id: string) => `/?open=${id}`,
+  })
+  it('is offered only with the flag on and Napkin\u2019s briefs readable', async () => {
+    expect(await offersStartFromBrief({ briefNode: true }, src(true))).toBe(true)
+    expect(await offersStartFromBrief({ briefNode: false }, src(true))).toBe(false)
+    expect(await offersStartFromBrief(undefined, src(true))).toBe(false)
+    expect(await offersStartFromBrief({ briefNode: true }, src(false))).toBe(false)
+  })
+  it('lists the briefs newest first, and says what to do when there are none', async () => {
+    const got = await briefChoices(src(true, [{ documentId: 'doc-a', title: 'A', updatedAt: '2026-11-01' }, { documentId: 'doc-b', title: 'B', updatedAt: '2026-11-17' }]))
+    expect(got.items.map((i) => i.documentId)).toEqual(['doc-b', 'doc-a'])
+    expect((await briefChoices(src(true))).empty).toMatch(/Brief Maker/)
+  })
+  it('a spin-off from Brief Maker arrives as ?brief=<doc id>, taken once', () => {
+    expect(briefSpinoffOf('?brief=doc-first-light&engine=own')).toBe('doc-first-light')
+    expect(briefSpinoffOf('?brief=../../etc')).toBeNull()
+    expect(briefSpinoffOf('')).toBeNull()
+    expect(withoutBriefSpinoff('?brief=doc-a&engine=own')).toBe('?engine=own')
+    expect(withoutBriefSpinoff('?brief=doc-a')).toBe('')
+    expect(briefSpinoffUrl('doc-a')).toBe('/production/?brief=doc-a')
   })
 })

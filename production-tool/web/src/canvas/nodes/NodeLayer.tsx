@@ -12,7 +12,7 @@
 // picture in the Image editor (dblclick.ts).
 
 import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { RouterContext, useDoc, useServices, useStoredDoc } from '../../app/context'
+import { RouterContext, useConfig, useDoc, useServices, useStoredDoc } from '../../app/context'
 import { scriptRoute } from '../../app/route'
 import { updateDoc } from '../../doc/store'
 import type { ActiveToolSpec, CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
@@ -35,6 +35,8 @@ import { pictureToOpen } from './dblclick'
 import './nodes.css'
 import { keyViews } from '../../lib/names'
 import { liveGet } from '../../model/live'
+import { BriefCardMin } from '../../brief/BriefCardMin'
+import { briefOfElement } from '../../brief/canvas'
 
 type Local = { x: number; y: number }
 const WORD: Record<CardKind, string> = { script: 'script', storyboard: 'storyboard', video: 'video' }
@@ -55,6 +57,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const doc = useStoredDoc()
   // What the layer draws reads the document as the canvas has it alive (model/live.ts).
   const live = useDoc()
+  // The Brief node's minimal card, until the new UI's compact card (features/brief-node.clan).
+  const briefCards = !!useConfig().config.flags.briefNode
   const services = useServices()
   const router = useContext(RouterContext)
   const mode = useSyncExternalStore(canvasActions.subscribe, () => canvasActions.mode())
@@ -285,7 +289,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   /** What an end is called in the hint and the picker. */
   const word = (e: CanvasElement) => {
     const c = cardOf(e)
-    return c ? WORD[c.kind] : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
+    return c ? WORD[c.kind] : briefOfElement(e) ? 'brief' : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
   }
 
   const selectedAtPress = useRef<readonly string[]>([])
@@ -575,6 +579,17 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
             {on && !linking && <span className="nl-port" role="button" aria-label={`Link from this ${c.kind}`} title="Drag to link (L)"
               style={{ left: e.width - 16, top: e.height / 2 }}
               onPointerDown={(ev) => startLink(e, ev)} onPointerMove={follow} onPointerUp={endLink} />}
+          </div>
+        )
+      })}
+      {briefCards && els.filter((e) => briefOfElement(e)).map((e) => {
+        const id = briefOfElement(e)!
+        const p = toLocal(e.x + (moving?.ids.has(e.id) ? moving.dx : 0), e.y + (moving?.ids.has(e.id) ? moving.dy : 0))
+        const state = !source ? '' : e.id === source.id ? 'source' : 'dim'
+        return (
+          <div key={e.id} className={`bl-cardbox ${selected.has(e.id) ? 'selected' : ''} ${state}`} data-node="brief" data-id={id}
+            style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
+            <BriefCardMin doc={live} id={id} />
           </div>
         )
       })}
