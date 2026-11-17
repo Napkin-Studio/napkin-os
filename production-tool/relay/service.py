@@ -1982,7 +1982,10 @@ class Relay:
         if errors:
             return self._fail(saved, "internal", f"The plan did not match its schema: {errors[0]}", paid=False, refund=True)
         block = {"model": getattr(cutter, "model", "unknown"), "promptVersion": getattr(cutter, "prompt_version", cutdowns.PROMPT_VERSION),
-                 "output": {"lengths": len(plan["lengths"]), "crops": len(plan["crops"])}, "rationale": rationale[:2000], "latencyMs": latency}
+                 "output": {"lengths": len(plan["lengths"]), "crops": len(plan["crops"]),
+                            # the Review flags against a linked brief (features/brief-node.clan): never blocking
+                            **({"briefFlags": out["briefFlags"]} if out.get("briefFlags") else {})},
+                 "rationale": rationale[:2000], "latencyMs": latency}
         return self._finish(saved, "completed", cutdownPlan=plan, director=block, outputs=[], kind="generated", paid=False)
 
     def _run_cutdown_render(self, job: dict, cfg: dict) -> dict:

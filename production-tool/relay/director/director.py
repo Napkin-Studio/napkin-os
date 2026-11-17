@@ -25,6 +25,7 @@ from providers import CapabilityMissing, ProviderJob, check_capabilities
 from providers.types import CONTRACTS, prompt_max, utf16_units
 from providers.tags import TAG as TAG_IN_TEXT, UnknownTag, rewrite_tags, unsent_in_words
 
+import brief as briefs
 from .base import fit_duration, require_prompt, view_angle
 from .model import ModelPort, Usage
 
@@ -577,6 +578,8 @@ class Director:
                 raise DirectorError(f"{provider_name} does not support {op}")
         model = self.shot_list_model if op == "shot_list" else self.per_click_model
         payload = _without_dialogue(op, payload)
+        # A linked brief (features/brief-node.clan), cut to this op's budget; no brief: the input as it came.
+        payload = briefs.for_op(op, payload)
         ask = {"op": op, "input": payload}
         if sheet:
             ask["provider"] = provider_name
@@ -592,6 +595,7 @@ class Director:
 
         if op in VIDEO_OPS and "providerJob" in output:
             output["providerJob"].setdefault("audio", False)  # explicit on every video request
+        briefs.settle_flags(output, payload)  # only lines of the brief this job was given
         self._check(op, payload, provider_name, sheet, output, set(extra_hashes))
         agent_block = {"model": model, "promptVersion": self.prompt_version, "output": output,
                        "rationale": output["rationale"], "latencyMs": latency_ms}

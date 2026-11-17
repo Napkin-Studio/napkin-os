@@ -32,6 +32,8 @@ import math
 import time
 from pathlib import Path
 
+import brief as briefs
+
 CARD_S = 2.5          # stitch.py CARD_S: the end card stitch adds after the clips
 MIN_WINDOW_S = 1.0    # no shot shorter than this in a cutdown
 SHOT_S = 2.5          # the passthrough keeps about one shot for each 2.5 s
@@ -42,7 +44,7 @@ MAX_CUT_SIDE = 1920   # a cutdown is rendered at its delivery size, at most this
 ALEPH_RATIOS = ("16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "21:9")
 OUTPAINT_PROMPT = ("Continue the scene beyond its edges; keep everything inside exactly as it is. "
                    "Match its light, colour, grain and motion. No text, no letters, no logos.")
-PROMPT_VERSION = "cutter.v1"
+PROMPT_VERSION = "cutter.v2"  # cutter.v1 stays bundled: ModelCutter(port, prompt_version="cutter.v1") rolls back (v2: the brief)
 PURPOSE = "cutdown"
 PROMPTS = Path(__file__).parent / "prompts"
 MAX_STILLS = 36       # pictures Claude sees for one plan
@@ -251,6 +253,11 @@ def output_schema() -> dict:
                 "type": "object",
                 "properties": {"shotId": {"type": "string"}, "boxes": {"type": "array", "maxItems": 3, "items": box}},
                 "required": ["shotId", "boxes"], "additionalProperties": False}},
+            "briefFlags": {"type": "array", "maxItems": 6, "items": {
+                "type": "object",
+                "properties": {"kind": {"enum": ["mandatory", "dont"]}, "line": {"type": "string", "maxLength": 120},
+                               "note": {"type": "string", "maxLength": 300}},
+                "required": ["kind", "line", "note"], "additionalProperties": False}},
             "rationale": {"type": "string", "maxLength": 2000},
         },
         "required": ["lengths", "subjects"],
@@ -328,11 +335,18 @@ class ModelCutter:
             payload_shots.append({**{k: v for k, v in s.items() if k != "stills"}, "pictures": seen})
         payload = {"shots": payload_shots, "lengths": cut["lengths"], "cardS": CARD_S,
                    "aspects": [f"{a['w']}:{a['h']}" for a in cut.get("aspects") or []]}
+        # A linked brief, cut to the cutdown's budget (features/brief-node.clan): its mandatories first.
+        briefed = briefs.for_op("cutdown", {"brief": req["input"].get("brief")} if req["input"].get("brief") else {})
+        if briefed.get("brief"):
+            payload["brief"] = briefed["brief"]
         t0 = time.monotonic()
         answer = self.port.call(PURPOSE, self.system, payload, self.schema, usage=Usage(),
                                 attribution=req.get("jobId", PURPOSE), images=images or None, vision=bool(images),
                                 max_tokens=4000)
         out = _settle(cut, answer)
+        flags = {"briefFlags": answer["briefFlags"]} if answer.get("briefFlags") else {}
+        briefs.settle_flags(flags, payload)
+        out.update(flags)
         out["rationale"] = (answer.get("rationale") or "")[:2000]
         out["_latencyMs"] = round((time.monotonic() - t0) * 1000)
         return out
