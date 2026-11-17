@@ -363,11 +363,11 @@ class Renderer:
         if dark:
             card = themes.blend(t.ink, t.on_dark, 0.09)
             return SimpleNamespace(dark=True, bg=t.ink, fg=t.on_dark, mute=t.on_dark_mute, acc_t=t.accent_on_dark,
-                                   acc_f=t.accent_on_dark, card=card, card_fg=t.on_dark, card_mute=t.on_dark_mute,
+                                   acc_f=t.accent_on_dark, acc_l=t.accent_on_dark, card=card, card_fg=t.on_dark, card_mute=t.on_dark_mute,
                                    card_acc=t.accent_on_dark, rule=themes.blend(t.ink, t.on_dark, 0.28), chip_fg=t.ink,
                                    inv=t.panel, inv_fg=t.ink, inv_acc=t.accent_ink, inv_mute=t.mute)
         chip = "FFFFFF" if themes.contrast("FFFFFF", t.accent) >= themes.contrast(t.ink, t.accent) else t.ink
-        return SimpleNamespace(dark=False, bg=t.paper, fg=t.ink, mute=t.mute, acc_t=t.accent_ink, acc_f=t.accent,
+        return SimpleNamespace(dark=False, bg=t.paper, fg=t.ink, mute=t.mute, acc_t=t.accent_ink, acc_f=t.accent, acc_l=t.line_accent,
                                card=t.panel, card_fg=t.ink, card_mute=t.mute, card_acc=t.accent_ink, rule=t.rule,
                                chip_fg=chip, inv=t.ink, inv_fg=t.on_dark, inv_acc=t.accent_on_dark, inv_mute=t.on_dark_mute)
 
@@ -701,13 +701,13 @@ class Renderer:
         dl.font.size, dl.font.name, dl.font.bold = Pt(self.sz(16)), t_.body, True
         dl.font.color.rgb = _rgb(t_.ink)
         ser = plot.series[0]
-        ser.format.fill.solid(); ser.format.fill.fore_color.rgb = _rgb(t_.accent)
+        ser.format.fill.solid(); ser.format.fill.fore_color.rgb = _rgb(t_.line_accent)
         if hero:
             quiet = themes.blend(t_.mute, t_.paper, 0.45)
             for i, lab in enumerate(labels):
                 pt = ser.points[i]
                 pt.format.fill.solid()
-                pt.format.fill.fore_color.rgb = _rgb(t_.accent if lab in hero else quiet)
+                pt.format.fill.fore_color.rgb = _rgb(t_.line_accent if lab in hero else quiet)
         va = ch.value_axis
         va.visible = False
         va.has_major_gridlines = False
@@ -753,7 +753,7 @@ class Renderer:
         """An emphasis bar: a vertical accent bar and the text beside it, anchored in the middle."""
         paras = [self.para(text, size, color or self.p.fg, font or self.th.head, italic=italic, line=1.1)]
         h = max(self.ph(paras, w - 0.32), minh)
-        self.rect(sl, x, y, 0.09, h, fill=self.p.acc_f)
+        self.rect(sl, x, y, 0.09, h, fill=self.p.acc_l)
         self.ptext(sl, x + 0.32, y, w - 0.32, h, paras, anchor="middle")
         return h
 
@@ -766,7 +766,7 @@ class Renderer:
         paras = [self.para(str(bl["text"]).strip(), self.th.scale.body * sc, self.p.card_fg, line=1.05)]
         h = self.ph(paras, w - 0.6) + 0.4
         self.rect(sl, x, y, w, h, fill=self.p.card)
-        self.rect(sl, x, y, 0.07, h, fill=self.p.acc_f)
+        self.rect(sl, x, y, 0.07, h, fill=self.p.acc_l)
         self.ptext(sl, x + 0.35, y + 0.2, w - 0.6, h - 0.4, paras, anchor="middle")
         return h
 
@@ -779,7 +779,7 @@ class Renderer:
             paras = paras[1:]
         h = self.ph(paras, w - 0.6) + 0.5
         self.rect(sl, x, y, w, h, fill=self.p.card)
-        self.rect(sl, x, y, w, 0.05, fill=self.p.acc_f)
+        self.rect(sl, x, y, w, 0.05, fill=self.p.acc_l)
         self.ptext(sl, x + 0.3, y + 0.3, w - 0.6, h - 0.5, paras)
         return h
 
@@ -795,7 +795,7 @@ class Renderer:
             for i, c in enumerate(cards):
                 cx = x + i * (cw + gap)
                 self.rect(sl, cx, y, cw, h, fill=self.p.card)
-                self.rect(sl, cx, y, cw, 0.05, fill=self.p.acc_f)
+                self.rect(sl, cx, y, cw, 0.05, fill=self.p.acc_l)
                 self.ptext(sl, cx + 0.25, y + 0.25, cw - 0.5, h - 0.35, c)
             return h
         for key, val in bl["items"]:
@@ -884,14 +884,14 @@ class Renderer:
                     self.ptext(sl, cx + 0.25, yy + 0.55 * min(1.0, sc + 0.15), rcw - 0.5, hr - 0.2 - 0.55 * min(1.0, sc + 0.15), paras)
                 elif kind == "num":   # figure and its sentence, the figure on one baseline across the row
                     self.rect(sl, cx, yy, rcw, hr, fill=p.card)
-                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_f)
+                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_l)
                     top = yy + 0.05 + (hr - 0.05 - content) / 2
                     fh = self.ph(paras[:1], rcw - 0.5)
                     self.ptext(sl, cx + 0.25, top, rcw - 0.5, fh, paras[:1])
                     self.ptext(sl, cx + 0.25, top + fh, rcw - 0.5, content - fh, paras[1:])
                 else:
                     self.rect(sl, cx, yy, rcw, hr, fill=p.card)
-                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_f)
+                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_l)
                     self.ptext(sl, cx + 0.25, yy + 0.05 + 0.15, rcw - 0.5, hr - 0.05 - 0.3, paras, anchor="middle")
             yy += hr + gap
         return head_h + total + extra * len(rows)
@@ -930,7 +930,7 @@ class Renderer:
             lp = [self.para(it["label"], (S.body + 2) * sc, p.inv_fg, line=1.05)]
             h = max(1.5 * sc, self.ph(lp, w - vw - 0.9) + 0.5, self._minh)
             self.rect(sl, x, y, w, h, fill=p.inv)
-            self.rect(sl, x, y, 0.09, h, fill=p.acc_f)
+            self.rect(sl, x, y, 0.09, h, fill=p.acc_l)
             self.ptext(sl, x + 0.4, y, vw - 0.6, h, [self.para(it["value"], vs, p.inv_acc, self.th.head, bold=True)], anchor="middle")
             self.ptext(sl, x + vw + 0.3, y, w - vw - 0.7, h, lp, anchor="middle")
             return h
@@ -953,7 +953,7 @@ class Renderer:
         for i in range(n):
             cx = x + i * (cw + gap)
             self.rect(sl, cx, y, cw, h, fill=p.card)
-            self.rect(sl, cx, y, 0.07, h, fill=p.acc_f)
+            self.rect(sl, cx, y, 0.07, h, fill=p.acc_l)
             self.ptext(sl, cx + 0.35, top, tw, fig_h, [fig[i]], anchor="bottom")
             self.ptext(sl, cx + 0.35, top + fig_h + 0.06, tw, lab_h, lab[i])
         return h
@@ -984,7 +984,7 @@ class Renderer:
         for rcw, cols, ch in geo:
             ch += extra
             span = len(cols) * rcw + (len(cols) - 1) * gap
-            self.rect(sl, x, yy + 0.095, span, 0.035, fill=p.acc_f)
+            self.rect(sl, x, yy + 0.095, span, 0.035, fill=p.acc_l)
             for k, ps in enumerate(cols):
                 cx = x + k * (rcw + gap)
                 self.rect(sl, cx, yy + 0.38, rcw, ch, fill=p.card)
@@ -1018,7 +1018,7 @@ class Renderer:
             self.rect(sl, x, yy, rw, h, fill=p.inv)
             self.ptext(sl, x + 0.3, yy, rw - 0.5, h, rp, anchor="middle")
             self.rect(sl, x + rw, yy, w - rw, h, fill=p.card)
-            self.rect(sl, x + rw, yy, 0.07, h, fill=p.acc_f)
+            self.rect(sl, x + rw, yy, 0.07, h, fill=p.acc_l)
             self.ptext(sl, x + rw + 0.4, yy, w - rw - 0.7, h, jp, anchor="middle")
             yy += h + 0.09
         return yy - y - 0.09
@@ -1071,7 +1071,7 @@ class Renderer:
                 self.rect(sl, cols[1][0], yy, cw, h, fill=p.card)
                 self.ptext(sl, cols[1][0] + 0.25, yy, cw - 0.45, h, ps[1], anchor="middle")
                 self.rect(sl, cols[2][0], yy, cw, h, fill=p.card)
-                self.rect(sl, cols[2][0], yy, 0.07, h, fill=p.acc_f)
+                self.rect(sl, cols[2][0], yy, 0.07, h, fill=p.acc_l)
                 self.ptext(sl, cols[2][0] + 0.3, yy, cw - 0.55, h, ps[2], anchor="middle")
             yy += h + gap
         return yy - y - gap
@@ -1309,7 +1309,7 @@ class Renderer:
         h = n * size * 1.2 / 72 + 0.04
         if sl is not None:
             m = self._mark(sl)
-            self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=self.p.acc_f)
+            self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=self.p.acc_l)
             tp = self.para(s["title"], size, self.p.fg, self.th.head, bold=True)
             bw = self.balance_w(tp["t"], w, size, True, self.th.head)
             self.ptext(sl, self.x0, top, bw, h, [tp], name="Title")
@@ -1368,8 +1368,7 @@ class Renderer:
         if sl is None:
             return
         m = self._mark(sl)
-        logo = (self.deck["meta"].get("brand") or {}).get("logo_dark_png")
-        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_f)
+        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
         lx = self._logo(sl, 0.8)   # the brand's lockup for a dark ground, with the kicker label kept beside it
         self.ptext(sl, lx, 0.8 if lx == self.x0 else 1.1, 8, 0.3, [self.para(_kicker(self.deck["meta"]).upper(), S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
         self.ptext(sl, self.x0, y, w, th_, [self.para(s["title"], size, p.fg, self.th.head, bold=True, line=1.0)], name="Title")
@@ -1417,7 +1416,7 @@ class Renderer:
         gh = max(self.ph(tp, tw), max(bar[3], 1.2) if bar else 0.0)
         top += max(0.0, (avail - gh) / 2) * 0.85
         m = self._mark(sl)
-        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_f)
+        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
         if label:
             self.ptext(sl, self.x0, 0.8, 6, 0.3, [self.para(label, S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
         self.ptext(sl, self.x0, top, tw, self.ph(tp, tw), tp, name="Title")
@@ -1426,7 +1425,7 @@ class Renderer:
             xr, wr, bp, bh = bar
             m = self._mark(sl)
             self.rect(sl, xr - 0.45, top, 0.012, max(bh, 2.0), fill=p.rule)
-            self.rect(sl, xr, top, 0.09, max(bh, 1.2), fill=p.acc_f)
+            self.rect(sl, xr, top, 0.09, max(bh, 1.2), fill=p.acc_l)
             self.ptext(sl, xr + 0.32, top, wr - 0.32, max(bh, 1.2), bp, anchor="middle")
             self._build(sl, m)
 
@@ -1549,7 +1548,7 @@ class Renderer:
             y = self.head(sl, s, dense)
             m = self._mark(sl)
             self.rect(sl, self.x0, y, lw, fh, fill=p.card)
-            self.rect(sl, self.x0, y, lw, 0.05, fill=p.acc_f)
+            self.rect(sl, self.x0, y, lw, 0.05, fill=p.acc_l)
             self.stack(sl, rest, self.x0 + 0.3, y + 0.3, lw - 0.6, g.body_end - 0.3 - nh, fill=True)
             if note:
                 self.ptext(sl, self.x0 + 0.3, g.body_end - 0.25 - (nh - 0.25), lw - 0.6, nh - 0.25, note, anchor="bottom")
@@ -1558,7 +1557,7 @@ class Renderer:
             lines = [self.para(l, size, p.inv_fg, self.th.head, line=1.1, after=10) for l in cp["lines"]]
             lh = self.ph(lines, fw - 0.8)
             self.rect(sl, fx, y, fw, fh, fill=p.inv)
-            self.rect(sl, fx, y, 0.09, fh, fill=p.acc_f)
+            self.rect(sl, fx, y, 0.09, fh, fill=p.acc_l)
             top = y + (fh - (lh + GAP + ah)) / 2
             self.ptext(sl, fx + 0.4, top, fw - 0.8, lh, lines)
             self._build(sl, m)
@@ -1587,7 +1586,7 @@ class Renderer:
                 return
             m = self._mark(sl_)
             self.rect(sl_, px, y, pw, h, fill=p.inv)
-            self.rect(sl_, px, y, 0.09, h, fill=p.acc_f)
+            self.rect(sl_, px, y, 0.09, h, fill=p.acc_l)
             self.ptext(sl_, px + 0.4, y + 0.25, pw - 0.8, h - 0.85, [self.para(t, size, p.inv_fg, self.th.head, line=1.1, after=8) for t in parts], anchor="middle")
             self.ptext(sl_, px + 0.4, y + h - 0.5, pw - 0.8, 0.3, [self.para("Illustrative, not final", S.caption, p.inv_acc, italic=True, cap=True)])
             self._build(sl_, m)
@@ -1677,7 +1676,7 @@ class Renderer:
             H = g.body_end - y
             m = self._mark(sl)
             self.rect(sl, self.x0, y, lw, H, fill=p.inv)
-            self.rect(sl, self.x0, y, 0.09, H, fill=p.acc_f)
+            self.rect(sl, self.x0, y, 0.09, H, fill=p.acc_l)
             parts = [([self.para("THE TARGET", S.caption, p.inv_mute, bold=True, track=1.2, cap=True)], 0.08),
                      ([self.para(facts["target"], vs, p.inv_acc, self.th.head, bold=True)], 0.3)]
             for cap, key in (("BASELINE", "baseline"), ("BY WHEN", "date")):
@@ -1720,6 +1719,7 @@ class Renderer:
         (after the save, so the .pptx is the same bytes either way)."""
         if layouts_out is not None:
             Path(layouts_out).unlink(missing_ok=True)   # a failed render must not leave an older record beside it
+        self.assets_dir = Path(out).parent
         nums = {sid: i for i, sid in enumerate(self.deck["order"], 1)}
         for sid in self.deck["order"]:
             self.slide(sid, self.deck["slides"][sid], nums[sid])
@@ -1880,11 +1880,23 @@ class Renderer:
             self._build(sl, m, "wipe" if k in ("fromto", "steps") else "fade")
         return y
 
+    def _logo_file(self):
+        """The cover logo's file: the client's logo the look cleared (``meta.theme.logo.asset``, a deck asset under ``assets/`` in the run
+        folder; placement ``none`` means no logo), else the ``--brand`` file's ``logo_dark_png``."""
+        th = self.deck["meta"].get("theme") or {}
+        lg = th.get("logo")
+        if lg:
+            if lg.get("placement") == "none":
+                return None
+            rec = (self.deck.get("assets") or {}).get(lg.get("asset")) or {}
+            return (self.assets_dir / rec["file"]) if rec.get("file") and self.assets_dir else None
+        return (self.deck["meta"].get("brand") or {}).get("logo_dark_png")
+
     def _logo(self, sl, y) -> float:
         """Place the brand's own dark-ground logo (``meta.brand.logo_dark_png``) at ``y`` with alt text and the
         name "Logo". Returns the x where the kicker label should start: beside the logo, or the left margin
         when the brand has no logo file."""
-        logo = (self.deck["meta"].get("brand") or {}).get("logo_dark_png")
+        logo = self._logo_file()
         if not (logo and _is_image(logo)):
             return self.x0
         try:

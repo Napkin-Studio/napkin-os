@@ -57,6 +57,12 @@ python3 -m deck.run_deck --kind investor --brief outputs/deck_inputs/seed/brief.
 | `--research FILE.clan` | The research tool's CLAN. May be given alone |
 | `--doc KEY=PATH` | A document the person attached: `.docx`, `.pdf` (page by page, `[pN]` markers kept), `.txt`, `.md`, `.eml` or an image (read by `brief_ingest.ingest`; nothing dropped). Cited as `doc:KEY#pN`. Repeatable |
 | `--brand FILE` | Brand JSON: `name`, `colors` (THEME keys + `accent_ink`), `head`/`body` fonts, logo SVG/PNG paths |
+| `--style PATH` | A Style Pack: a folder (`style.yaml` + images) or a Style Pack `.clan`, read by `engine/visuals/style.py`. Its `deck` colours and type (empty by default) outrank the agency look; a pack that breaks its rules is not used and the report says why |
+| `--agency-look FILE` | The signed-in person's agency look, JSON (`id`, `rev`, `accent`, `accent_ink`; only the accent is read). It dresses a new deck automatically; pass none for an agency with no look |
+| `--update-look` | Take the agency's current look in place of the one this deck recorded when it was built (a person's "update to current look"). A deck keeps the look it was built with: the first build copies the look into the run folder (`look.json`) and later builds replay it |
+| `--deck FILE` | The runner's path: a Deck document (`.clan`). Brief, research and look preferences come from it; an attached Style Pack or Brand Clan is never read as research and a Brand Clan's pins never reach the facts |
+| `--no-agency-look` | This deck opts out of the agency look (`look.agency_look.use: false`) |
+| `--wears agency\|client\|co_branded`, `--strict-brand` | Whose brand the deck wears (default `agency`: a client kit gives only its logo and imagery bans); `strict_brand` ignores Style Pack literals and the agency look |
 | `--agency NAME` | Agency name for the cover; without it the cover shows an `[Agency]` placeholder |
 | `--master FILE.potx` | Render the `.pptx` onto an agency master |
 | `--animate auto\|click` | Native PowerPoint transitions and builds (not yet checked in real PowerPoint or Keynote) |
@@ -108,7 +114,7 @@ support it) and `e_copy.json` (tightened copy). Models and effort: `stages.py` d
 ## Check and compare
 
 ```bash
-PYTHONPATH=. python3 -m pytest -q deck/tests        # 397 offline tests; fails to import without PYTHONPATH
+PYTHONPATH=. python3 -m pytest -q deck/tests        # offline tests; fails to import without PYTHONPATH
 python3 -m deck.evaluate outputs/deck_runs/eval/* --html outputs/deck_runs/eval/report.html
 ```
 

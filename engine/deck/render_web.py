@@ -198,7 +198,22 @@ def _body(s, b: _Slide, blocks: list) -> str:
     return f'<div class="body col">{b.blocks(blocks)}</div>'
 
 
-def slide_views(deck, inp, findings: list | None = None) -> list:
+def _cover_logo(deck, assets_dir) -> str | None:
+    """The cover's logo markup: the client's logo the look cleared (``meta.theme.logo``, a PNG deck asset, as an image with alt text), else the
+    ``--brand`` file's inline SVG. Placement ``none`` means no logo."""
+    lg = (deck["meta"].get("theme") or {}).get("logo")
+    if lg:
+        rec = (deck.get("assets") or {}).get(lg.get("asset")) or {}
+        f = Path(assets_dir) / rec["file"] if assets_dir and rec.get("file") else None
+        if lg.get("placement") == "none" or not (f and f.is_file()):
+            return None
+        import base64   # noqa: PLC0415
+        return (f'<img alt="{_e(deck["meta"].get("client", "Client"))} logo" style="height:110px;width:auto;display:block" '
+                f'src="data:image/png;base64,{base64.b64encode(f.read_bytes()).decode()}">')
+    return (deck["meta"].get("brand") or {}).get("logo_dark_svg")
+
+
+def slide_views(deck, inp, findings: list | None = None, assets_dir=None) -> list:
     """Per slide, in order: id, number, type, dark, inner markup, notes, build-step count and, per
     step, the latest reveal delay (ms) up to and including it."""
     failed = {}
@@ -212,7 +227,7 @@ def slide_views(deck, inp, findings: list | None = None) -> list:
         s = deck["slides"][sid]
         b = _Slide(inp)
         dark = s["type"] in DARK_TYPES
-        logo = (deck["meta"].get("brand") or {}).get("logo_dark_svg") if s["type"] == "title" else None
+        logo = _cover_logo(deck, assets_dir) if s["type"] == "title" else None
         kick = (b.rv("brand-logo", logo, "div", 160) if logo else
                 b.rv("kicker", _e(KICKERS[s["type"]] or _kicker(deck["meta"])), "div", 120) if s["type"] in KICKERS else "")
         title = b.words(s["title"], "title", "h1") if dark else b.rv("title", _e(s["title"]), "h1", 220)
@@ -236,7 +251,7 @@ def slide_views(deck, inp, findings: list | None = None) -> list:
 
 
 CSS_LAYOUT = """
-:root{--ink:#INK;--paper:#PAPER;--accent:#ACCENT;--accent-ink:#8A5A10;--muted:#MUTED;--tint:#TINT;--line:#LINE;--dark-text:#DARK;
+:root{--ink:#INK;--paper:#PAPER;--accent:#ACCENT;--accent-line:#ACCENTL;--accent-ink:#8A5A10;--muted:#MUTED;--tint:#TINT;--line:#LINE;--dark-text:#DARK;
 --head:HEAD;--body:BODY;--ease:cubic-bezier(.2,.75,.25,1)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--body);-webkit-font-smoothing:antialiased}
@@ -263,14 +278,14 @@ footer .src{margin-left:auto;text-transform:none;letter-spacing:0}footer .num{ma
 .b-quote{font:italic 400 calc(var(--s)*54px)/1.2 var(--head);color:var(--accent-ink);max-width:1400px}
 .b-text{font-size:calc(var(--s)*36px);line-height:1.38}
 .b-small{font-size:calc(var(--s)*26px);line-height:1.4;color:var(--muted)}.dark .b-small{color:#a9b3bd}
-.b-callout{background:var(--tint);color:var(--ink);border-left:8px solid var(--accent);padding:calc(var(--s)*26px) 36px;font-size:calc(var(--s)*34px);line-height:1.35;border-radius:10px}
+.b-callout{background:var(--tint);color:var(--ink);border-left:8px solid var(--accent-line);padding:calc(var(--s)*26px) 36px;font-size:calc(var(--s)*34px);line-height:1.35;border-radius:10px}
 .b-card{background:var(--tint);color:var(--ink);padding:calc(var(--s)*28px) 36px;border-radius:12px}
 .cap,.b-cap{font:700 calc(var(--s)*22px)/1.2 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
 .b-card p{font-size:calc(var(--s)*32px);line-height:1.38}
 .b-bullets ul{list-style:none;display:flex;flex-direction:column;gap:calc(var(--s)*14px)}
 .b-bullets li{position:relative;padding-left:40px;font-size:calc(var(--s)*34px);line-height:1.34}
 .b-bullets li:before{content:"";position:absolute;left:4px;top:.55em;width:14px;height:14px;border-radius:50%;background:var(--accent)}
-.human{outline:3px dashed var(--accent);outline-offset:8px;border-radius:6px}
+.human{outline:3px dashed var(--accent-line);outline-offset:8px;border-radius:6px}
 .human:after{content:"needs a person";display:inline-block;margin-left:16px;font:700 16px/1 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);vertical-align:middle}.dark .human:after,.dark .b-quote{color:var(--accent)}
 .b-table{width:100%;border-collapse:collapse;font-size:calc(var(--s)*27px);line-height:1.3}
 .b-table.small{font-size:calc(var(--s)*20px)}
@@ -285,17 +300,17 @@ footer .src{margin-left:auto;text-transform:none;letter-spacing:0}footer .num{ma
 .ft{padding:calc(var(--s)*28px) 36px;border-radius:12px;background:var(--tint);color:var(--ink)}
 .ft p{font-size:calc(var(--s)*32px);line-height:1.34}.ft.to{background:var(--ink);color:var(--dark-text)}.ft.to .cap{color:var(--accent)}
 .dark .ft.to{background:#2a3644}
-.ft-arrow{display:grid;place-items:center}.ft-arrow svg{width:90px;fill:none;stroke:var(--accent);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+.ft-arrow{display:grid;place-items:center}.ft-arrow svg{width:90px;fill:none;stroke:var(--accent-line);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
 .ft-arrow path{stroke-dasharray:120;stroke-dashoffset:0}
 .b-steps{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:20px;position:relative}
-.step{background:var(--tint);color:var(--ink);border-radius:12px;padding:calc(var(--s)*26px) 26px;border-top:6px solid var(--accent)}
+.step{background:var(--tint);color:var(--ink);border-radius:12px;padding:calc(var(--s)*26px) 26px;border-top:6px solid var(--accent-line)}
 .step .no{font:700 22px/1 var(--body);color:var(--accent-ink);margin-bottom:14px}
 .step .lab{font:700 calc(var(--s)*27px)/1.2 var(--body);margin-bottom:12px}.step p{font-size:calc(var(--s)*27px);line-height:1.34}
 .b-chart{display:flex;flex-direction:column;gap:calc(var(--s)*22px)}
 .bar{display:grid;grid-template-columns:330px 1fr 110px;align-items:center;gap:22px}
 .bar .lab{font-size:calc(var(--s)*26px);line-height:1.2;text-align:right}
 .bar .track{height:calc(var(--s)*54px);background:var(--tint);border-radius:6px;overflow:hidden}
-.bar i{display:block;height:100%;background:var(--accent);border-radius:6px;transform-origin:0 50%}
+.bar i{display:block;height:100%;background:var(--accent-line);border-radius:6px;transform-origin:0 50%}
 .bar .val{font:700 calc(var(--s)*34px)/1 var(--body);font-variant-numeric:tabular-nums}
 .frame{background:var(--ink);color:var(--dark-text);border-radius:14px;padding:56px 52px;display:flex;flex-direction:column;gap:30px}
 .dark .frame{background:#2a3644}
@@ -331,7 +346,7 @@ footer .src{margin-left:auto;text-transform:none;letter-spacing:0}footer .num{ma
 .poster{width:440px;height:660px;background:#f3ede4;border:14px solid #1b2430;border-radius:6px;padding:52px 40px;display:flex;flex-direction:column;justify-content:space-between;color:var(--ink)}
 .poster .line{font:700 64px/1.05 var(--head)}.poster .answer{font:700 26px/1.3 var(--body);color:var(--accent-ink)}
 .b-stats{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:48px;margin:calc(var(--s)*10px) 0}
-.stat{border-top:8px solid var(--accent);padding-top:22px;display:flex;flex-direction:column;gap:10px}
+.stat{border-top:8px solid var(--accent-line);padding-top:22px;display:flex;flex-direction:column;gap:10px}
 .stat .big{font:700 calc(var(--s)*104px)/1 var(--head);letter-spacing:-.02em}.stat span{font-size:calc(var(--s)*26px);line-height:1.3;color:var(--muted)}
 .dark .stat span{color:#a9b3bd}
 .brand-logo{margin-bottom:48px}.brand-logo svg{height:110px;width:auto;display:block}
@@ -361,7 +376,7 @@ html,body{height:100%;background:#0e1319;overflow:hidden}
 @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes draw{from{stroke-dashoffset:120}to{stroke-dashoffset:0}}
 .still .rv,.still .w{opacity:1!important;animation:none!important}
-#bar{position:absolute;left:0;top:0;height:5px;background:var(--accent);transition:width .5s var(--ease);z-index:3}
+#bar{position:absolute;left:0;top:0;height:5px;background:var(--accent-line);transition:width .5s var(--ease);z-index:3}
 #ui{position:absolute;right:22px;bottom:18px;display:flex;gap:6px;align-items:center;z-index:4;opacity:0;transition:opacity .3s;
   background:rgba(14,19,25,.82);border-radius:999px;padding:6px 10px;color:#fff;font:600 14px/1 var(--body)}
 #app.mouse #ui{opacity:1}
@@ -380,7 +395,7 @@ html,body{height:100%;background:#0e1319;overflow:hidden}
 .overview #ov{display:grid}
 .ov-head{grid-column:1/-1;color:#a9b3bd;font:700 13px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;padding-top:14px;border-top:1px solid #2a3644}
 .thumb{position:relative;height:0;padding-bottom:56.25%;overflow:hidden;border-radius:6px;cursor:pointer;outline:3px solid transparent}
-.thumb:hover,.thumb.cur{outline-color:var(--accent)}
+.thumb:hover,.thumb.cur{outline-color:var(--accent-line)}
 .thumb .slide{transform-origin:0 0;opacity:1;visibility:visible;transition:none}
 .thumb .n{position:absolute;left:8px;bottom:6px;font:700 13px/1 var(--body);color:var(--accent);z-index:2}
 .audience #ui,.audience #bar{display:none}
@@ -491,6 +506,9 @@ def theme_css(css: str | None = None, head: str = HEAD_FONT, body: str = BODY_FO
     overrides by THEME key (accent_ink too)."""
     css = (css or CSS_LAYOUT + CSS_UI).replace("HEAD", head).replace("BODY", body)
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
+    if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
+        T["tint"] = T["panel"]
+    css = css.replace("#ACCENTL", "#" + (T.get("accent_line") or T["accent"]))
     if T.get("accent_ink"):
         css = css.replace("--accent-ink:#8A5A10", "--accent-ink:#" + T["accent_ink"])
     for k, v in (("INK", "ink"), ("PAPER", "paper"), ("ACCENT", "accent"), ("MUTED", "muted"), ("TINT", "tint"),
@@ -507,7 +525,7 @@ def _brand_css(meta: dict) -> dict:
 
 def render(deck, inp, out: Path, findings: list | None = None) -> Path:
     """Write the deck as one self-contained HTML file at ``out``."""
-    views = slide_views(deck, inp, findings)
+    views = slide_views(deck, inp, findings, Path(out).parent)
     m = deck["meta"]
     slides = "\n".join(
         f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}" id="{v["id"]}" data-steps="{v["steps"]}" '

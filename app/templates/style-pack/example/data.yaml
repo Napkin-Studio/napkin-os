@@ -1,0 +1,72 @@
+# Invented demo Style Pack: no client, no real brand. The images are plain swatches.
+pack:
+  name: Demo pack (invented)
+  for: A demo pitch, no client
+kit:
+  version: 1
+  stewards:
+  - human:demo-steward
+  changelog:
+  - version: 1
+    at: '2026-11-17T10:00:00Z'
+    by: human:demo-steward
+    summary: First version of the demo pack.
+look:
+- natural light
+- unstaged
+- documentary stills
+palette:
+- warm ochre
+- slate blue
+- off-white
+this_not_that:
+  tn01:
+    this: ordinary kitchens and pavements
+    not: studio sets
+  tn02:
+    this: candid half-turned faces
+    not: posed smiles
+finish: photo-real
+banned_imagery:
+- stock handshake
+- thumbs up
+notes: Everyday settings; nothing glossy. Demo values, invented.
+references:
+  r1:
+    asset: human/assets/style/9a9598bc6f3f0ee12c998335b0f424ebb786e053ef3c98b2ae4732762b8bfce2.png
+    name: demo-warm.png
+    sha256: 9a9598bc6f3f0ee12c998335b0f424ebb786e053ef3c98b2ae4732762b8bfce2
+    mime: image/png
+    width: 16
+    height: 16
+    rights: own
+    by: human:demo-steward
+    at: '2026-11-17T10:00:00Z'
+    why: Invented demo swatch, made for this example.
+  r2:
+    asset: human/assets/style/ffb4a6dc27543d1f9b1edbb3538f57e4ba5a0dd678c4925d3c753ffd39034b6e.png
+    name: demo-cool.png
+    sha256: ffb4a6dc27543d1f9b1edbb3538f57e4ba5a0dd678c4925d3c753ffd39034b6e
+    mime: image/png
+    width: 16
+    height: 16
+    rights: licensed
+    by: human:demo-steward
+    at: '2026-11-17T10:00:00Z'
+    why: Invented demo swatch, made for this example.
+    licence:
+      holder: Demo Stock Library (invented)
+      terms: DEMO-1
+  r3:
+    asset: human/assets/style/75406131ec0e97ebbfdf466f6dd54de876044ef30d8eecdf3c060ea29948822f.png
+    name: demo-client.png
+    sha256: 75406131ec0e97ebbfdf466f6dd54de876044ef30d8eecdf3c060ea29948822f
+    mime: image/png
+    width: 16
+    height: 16
+    rights: client_supplied
+    by: human:demo-steward
+    at: '2026-11-17T10:00:00Z'
+models:
+  draft: gemini_image3.1_flash
+  hero: gemini_image3_pro

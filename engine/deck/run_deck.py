@@ -31,7 +31,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import assemble, inputs, intake, profiles, qa_render, render_hyperframes, render_pptx, render_web, spec, validate
+from . import assemble, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, spec, validate
 
 #: Stage a0 (intake) comes first: it fills the brief fields the brief does not supply.
 STAGE_FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.json", "c": "c_territories.json", "d": "d_idea.json"}
@@ -76,6 +76,93 @@ def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:
     deck["meta"]["built_from"] = {**deck["meta"]["built_from"], "type": profile["id"], "profile": rec}
     if profile["arrange"] == "spine" or choice["source"] in ("answer", "skipped"):
         deck["meta"]["profile"] = rec
+
+
+def _replay_agency(a, ctx: dict, rep_look: dict) -> tuple[dict | None, bool]:
+    """The agency look this build uses, and whether the deck opted out. A deck keeps the look it was built with: the first build with an
+    agency look copies the --agency-look JSON into the run folder (``look.json``) and every later build replays that copy, so a recorded run
+    replays byte for byte and the agency's changes never re-dress a deck on their own. A deck built before there was an agency look (a
+    ``deck.json`` already in the run folder and no ``look.json``) keeps its look too. ``--update-look`` (the person's "update to current
+    look") takes the current look and records it. Returns (agency JSON or None, use)."""
+    lp = (ctx.get("look") or {}).get("agency_look") or {} if ctx else {}
+    use = not (a.no_agency_look or lp.get("use") is False)
+    current = json.loads(a.agency_look.expanduser().read_text()) if a.agency_look else None
+    rec_path = a.out / "look.json"
+    raw = json.loads(rec_path.read_text()) if rec_path.exists() else None
+    recorded = ({"agency": raw["agency"], "applied_at": raw.get("applied_at") or ""} if raw and "agency" in raw
+                else {"agency": raw, "applied_at": ""} if raw else None)   # a copy made before applied_at existed is the bare look
+    # An update is a person's request, kept in the document: it counts only while it is newer than the look last applied, so it never re-reads
+    # the agency's look on every later build. --update-look is the request made now.
+    asked = str(lp.get("update_requested") or "")
+    update = bool(a.update_look or (asked and (recorded is None or asked > recorded["applied_at"])))
+    if recorded and not update:
+        if current and current.get("rev") != recorded["agency"].get("rev"):
+            rep_look["notice"] = (f"Your agency's look changed since this deck was built (rev {recorded['agency'].get('rev')} to {current.get('rev')}). This deck keeps the look it "
+                                  "has; choose 'update to current look' to take the new one.")
+        return recorded["agency"], use
+    if not recorded and (a.out / "deck.json").exists() and not update:
+        if current:
+            rep_look["notice"] = "This deck was built before your agency's look was set up and keeps its look. Choose 'update to current look' to dress it."
+        return None, use
+    if current:
+        import datetime   # noqa: PLC0415
+        rec_path.write_text(json.dumps({"agency": current, "applied_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")},
+                                       indent=1, ensure_ascii=False))
+    return current, use
+
+
+def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None = None) -> None:
+    """Resolve the deck's look (look.py) and stamp it: ``meta.brand`` (what the renderers read), ``meta.theme`` (what a reader sees) and the
+    client's logo as a deck asset. With no --style, no agency look and no --brand nothing is written, so today's decks and every golden are
+    unchanged. A Style Pack that cannot be used is never skipped silently: ``meta.style_hold`` and the report say so."""
+    ctx = ctx or {}
+    client = deck["meta"].get("client") or a.client
+    style, pack_src = None, a.style or ctx.get("pack")
+    if pack_src:
+        from visuals import style as vstyle   # noqa: PLC0415 (a sibling package of engine/deck, imported only when a pack is given)
+        try:
+            if isinstance(pack_src, tuple) and not ((pack_src[0].get("kit") or {}).get("published")):
+                raise vstyle.StyleError("the attached Style Pack's version is not published (kit.published is empty): a steward publishes it before a deck uses it")
+            style = vstyle.load(*pack_src, forbid=[client]) if isinstance(pack_src, tuple) else vstyle.load(pack_src, forbid=[client])
+        except (vstyle.StyleError, OSError) as e:   # a pack that breaks its rules is not used, and pictures are held until it is fixed
+            rep["style_pack"] = {"used": False, "hold": True, "error": str(e)}
+            deck["meta"]["style_hold"] = {"reason": str(e), "pack": Path(str(a.style)).name if a.style else "attached Style Pack"}
+        else:
+            rep["style_pack"] = {"used": True, "hash": style.hash, "warnings": style.warnings, "sent_references": [r.name for r in style.references],
+                                 "withheld_references": style.withheld}
+    look_rep: dict = {}
+    agency, use = _replay_agency(a, ctx, look_rep)
+    lp = ctx.get("look") or {}
+    wears = (lp.get("brand") or {}).get("wears") or a.wears if ctx else a.wears
+    wears_problem = None
+    if wears not in look.WEARS:   # an unknown value never crashes a build: the default stands and the problem is said
+        wears_problem = f"look.brand.wears {wears!r} is not one of {', '.join(look.WEARS)}: the deck wears the agency"
+        wears = "agency"
+    strict = bool(lp.get("strict_brand")) or a.strict_brand
+    got = look.resolve(wears=wears, strict_brand=strict, brand_file=brand, brand=look.brand_tokens(ctx.get("brand")), style=style,
+                       agency=agency, use_agency=use, client=client)
+    if got.brand:
+        deck["meta"]["brand"] = got.brand
+    if wears_problem:
+        look_rep.setdefault("problems", []).append(wears_problem)
+        if got.theme:
+            got.theme["problems"].append(wears_problem)
+    if got.theme:
+        if got.logo:
+            try:
+                aid, rec = look.make_logo_asset(got.logo, a.out / "assets")
+                deck.setdefault("assets", {})[aid] = rec
+                got.theme["logo"] = {"asset": aid, "placement": got.logo["placement"]}
+            except look.LogoError as e:
+                note = f"The client's logo could not be placed: {e}"
+                got.theme.setdefault("held", []).append(note)
+                got.theme["problems"].append(note)
+        deck["meta"]["theme"] = got.theme
+        look_rep.update(source=got.theme["source"], problems=got.theme["problems"], derived=got.theme["derived"], held=got.theme.get("held", []))
+    if agency or look_rep.get("notice"):
+        deck["meta"].setdefault("preferences", {})["agency_look"] = {"use": use, "source": "person" if (a.no_agency_look or ((ctx.get("look") or {}).get("agency_look") or {}).get("by")) else "default"}
+    if look_rep:
+        rep["look"] = look_rep
 
 
 def _qa_line(summary: dict, n_slides: int) -> str:
@@ -280,6 +367,17 @@ def main(argv=None):
     ap.add_argument("--doc", action="append", default=[], metavar="KEY=PATH",
                     help="a client document (PDF page by page, or text), cited as doc:KEY#pN; repeatable")
     ap.add_argument("--brand", type=Path, help="brand JSON: name, colors (THEME keys, accent_ink), head/body fonts, logo files")
+    ap.add_argument("--style", type=Path, help="a Style Pack: a folder (style.yaml and images) or a Style Pack .clan; its deck colours and type "
+                                               "(empty by default) rank above the agency look (deck-look-kits)")
+    ap.add_argument("--agency-look", type=Path, help="the signed-in person's agency look, JSON (id, rev, accent, base, accent_ink, accent_use, surface): "
+                                                     "it dresses the deck automatically unless --no-agency-look; an agency with no look passes none")
+    ap.add_argument("--update-look", action="store_true", help="take the agency's current look (--agency-look) in place of the one this deck recorded when it was built")
+    ap.add_argument("--deck", type=Path, help="a Deck document (.clan): the brief, research and look come from it (the runner's path); an attached Style Pack or Brand Clan "
+                                              "is never read as research and a Brand Clan's pins never reach the facts")
+    ap.add_argument("--no-agency-look", action="store_true", help="this deck opts out of the agency look (look.agency_look.use false)")
+    ap.add_argument("--wears", choices=look.WEARS, default="agency",
+                    help="whose brand the deck wears: agency (default; a client kit gives only its logo and imagery bans), client or co_branded")
+    ap.add_argument("--strict-brand", action="store_true", help="only the kit's given tokens: ignore Style Pack literals and the agency look")
     ap.add_argument("--no-qa", action="store_true", help="skip stage h, the rendered-slide QA (qa.json)")
     ap.add_argument("--until", choices=UNTIL_CHOICES, default=None,
                     help="stop after this stage and write report.json (stages a0 a b c d, or i for an investor deck); 'deck' stops once the deck "
@@ -288,7 +386,7 @@ def main(argv=None):
     if a.prompt_text and a.prompt_file:
         ap.error("give --prompt-text or --prompt-file, not both")
     prompt_text = (a.prompt_file.expanduser().read_text(encoding="utf-8", errors="replace") if a.prompt_file else a.prompt_text or "").strip()
-    if not (prompt_text or a.doc or a.brief or a.research):
+    if not (prompt_text or a.doc or a.brief or a.research or a.deck):
         ap.error("nothing to build a deck from: give a prompt (--prompt-text or --prompt-file), a document (--doc), a brief (--brief) or research (--research)")
     a.out.mkdir(parents=True, exist_ok=True)
     if a.live:
@@ -306,7 +404,13 @@ def main(argv=None):
             ap.error(f"--doc key {key!r} is given twice: each document needs its own key")
         docs.append((key, Path(path).expanduser()))
     answers, verified = _read_answers(a.answers)
-    inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
+    deck_ctx = None
+    if a.deck:
+        inp, deck_ctx = inputs.from_deck_document(a.deck)
+        if prompt_text:
+            inp.prompt_text = prompt_text
+    else:
+        inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
     choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
     profile = profiles.load(choice["type"])
@@ -385,6 +489,7 @@ def main(argv=None):
         rep["supply_questions"] = supply + [c for c in intake.gap_questions(assemble.investor_gaps(deck)) if c["id"] not in have]
     rep["confirm"] = intake.confirm_summary(deck, intake.stamp_confirm(deck, inp))   # what to confirm, and how much a person has verified or supplied
     _stamp_type(deck, profile, choice)
+    brand = None
     if a.brand:   # colours, fonts and logos: the logo files are read here so the deck carries them
         brand = json.loads(a.brand.read_text())
         for k in ("logo_dark_svg", "logo_light_svg"):
@@ -393,7 +498,7 @@ def main(argv=None):
         for k in ("logo_dark_png", "logo_light_png"):
             if brand.get(k):
                 brand[k] = str(Path(brand[k]).expanduser())
-        deck["meta"]["brand"] = brand
+    _stamp_look(a, deck, brand, rep, deck_ctx)
     ep = a.stages / "e_copy.json"   # stage e: tighten over-budget presented slides; recorded edits are re-applied by title
     if ep.exists():
         ecopy = json.loads(ep.read_text())

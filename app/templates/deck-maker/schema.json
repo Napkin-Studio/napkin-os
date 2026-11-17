@@ -741,6 +741,7 @@
                   "enum": [
                     "default",
                     "brand_clan",
+                    "style_pack",
                     "agency_look",
                     "brand_file",
                     "master"
@@ -996,6 +997,64 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "from": {
+                  "type": "object",
+                  "description": "Which tier gave each token: a colour role, head, body or logo. Written by the runner (deck-look-kits). meta.theme.source is the highest tier that gave any token.",
+                  "additionalProperties": {
+                    "enum": [
+                      "brand_clan",
+                      "brand_file",
+                      "master",
+                      "style_pack",
+                      "agency_look",
+                      "default",
+                      "derived"
+                    ]
+                  }
+                },
+                "style_pack": {
+                  "type": "object",
+                  "description": "The Style Pack the deck's look and pictures used: its document, version and computed style hash (deck-look-kits).",
+                  "properties": {
+                    "document_id": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "hash": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}$"
+                    }
+                  }
+                },
+                "agency": {
+                  "type": "object",
+                  "description": "The agency look the deck wore: its id and revision, so Review can say the look changed since the last build (deck-look-kits).",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "rev": {
+                      "type": [
+                        "integer",
+                        "string"
+                      ]
+                    }
+                  }
+                },
+                "accent_line": {
+                  "type": "string",
+                  "pattern": "^[0-9A-F]{6}$",
+                  "description": "The accent where it is a thin line, rule or chart series. Set when the accent is under 3:1 on the paper (a pale accent is a fill only); absent means the accent itself."
+                },
+                "held": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "What the look held back and why (for example a client logo whose brand is not the brief's client). Never dropped silently."
                 }
               }
             },
@@ -1360,6 +1419,35 @@
                       ]
                     }
                   }
+                },
+                "agency_look": {
+                  "type": "object",
+                  "properties": {
+                    "use": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "enum": [
+                        "person",
+                        "default"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "style_hold": {
+              "type": "object",
+              "description": "Set when a Style Pack was given but could not be used (it broke its rules or could not be read). The deck was built with the default style and pictures are held: image steps (deck-frames-in, deck-image-gen) read this and make nothing until a person fixes the pack.",
+              "required": [
+                "reason"
+              ],
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "pack": {
+                  "type": "string"
                 }
               }
             }
@@ -2825,6 +2913,41 @@
                 "review"
               ],
               "description": "Where the choice was made: an intake question, the Start screen or Review."
+            }
+          }
+        },
+        "agency_look": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Should the deck wear the agency's look? true (the default): an agency that has set up a look gets it on every new deck, with no switch to find; false: this deck opts out and uses the default theme. An agency with no look set up changes nothing (deck-look-kits, Sai, 17 Nov 2026).",
+          "default": {
+            "use": true
+          },
+          "properties": {
+            "use": {
+              "type": "boolean",
+              "default": true
+            },
+            "by": {
+              "type": "string",
+              "pattern": "^human:.+$",
+              "description": "Who chose it, as human:<id>. Absent: nobody chose, the default is in force."
+            },
+            "at": {
+              "type": "string",
+              "description": "When the choice was made (ISO 8601)."
+            },
+            "via": {
+              "enum": [
+                "question",
+                "start",
+                "review"
+              ],
+              "description": "Where the choice was made: an intake question, the Start screen or Review."
+            },
+            "update_requested": {
+              "type": "string",
+              "description": "When the person chose 'update to current look' (ISO 8601). The runner takes the agency's current look at the next build, then the deck keeps that look again. Existing decks keep the look they were built with until then."
             }
           }
         },

@@ -61,9 +61,9 @@ window.__timelines.deck=tl;
 """
 
 
-def build(deck, inp, findings: list | None = None, builds: bool = False):
+def build(deck, inp, findings: list | None = None, builds: bool = False, assets_dir=None):
     """(scenes markup, island, total seconds): scene times, notes and fragment hold-points."""
-    views = slide_views(deck, inp, findings)
+    views = slide_views(deck, inp, findings, assets_dir)
     cs = lambda sec: round(sec * 100)   # times in hundredths of a second
     t, scenes, slides = 0, [], []
     for v in views:
@@ -90,7 +90,7 @@ def build(deck, inp, findings: list | None = None, builds: bool = False):
 def render(deck, inp, out: Path, findings: list | None = None, builds: bool = False) -> Path:
     """Write the HyperFrames slideshow project to the directory ``out``; returns ``out``."""
     out.mkdir(parents=True, exist_ok=True)
-    scenes, island, total = build(deck, inp, findings, builds)
+    scenes, island, total = build(deck, inp, findings, builds, Path(out).parent)
     m = deck["meta"]
     css = theme_css(CSS_LAYOUT + HF_CSS, head="serif", body="system-ui, sans-serif")
     (out / "index.html").write_text(f"""<!doctype html>

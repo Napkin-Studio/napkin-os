@@ -156,3 +156,11 @@ The plan's shapes are kept except where the code on `develop` contradicts them:
   in `deck-look-kits`.
 - The Style Pack's hash includes the reference files' names (`style._hash`). A Style Pack document must
   keep those names, or a document and a folder give different hashes.
+
+## Amendment, 2026-11-17 (Sai, in chat, `deck-look-kits`)
+
+The exception to "library off means today's deck" recorded in ADR 0027: the agency accent applies automatically to agencies that
+have set up a look, with a per-deck opt-out (`look.agency_look.use`), and adds no word or number. `look.agency_look` is a new
+appearance field and `meta.preferences.agency_look` its stamp; `meta.theme` gains `from`, `style_pack`, `agency`, `accent_line`
+and `held`, and `meta` gains `style_hold` (a Style Pack that could not be used: pictures are held). All additions are optional,
+so no golden changes. `docs/contracts/deck-visuals.md` section 6.5 has the precedence.
