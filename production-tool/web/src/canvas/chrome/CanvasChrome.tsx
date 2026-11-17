@@ -129,14 +129,17 @@ export function BoardRail({ rows, current, onPick, onFit, narrow = false, keys =
 
 // ── The tool bar ────────────────────────────────────────────────────────────
 
+// The rail's icons (mock production-new-ui-v2 core.js: 24px line icons in the ink, 1.7 stroke).
+const line = (d: ReactNode) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
 const ICON: Record<string, ReactNode> = {
-  select: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2 L13 8 L8 9 L6 14 Z" fill="currentColor" /></svg>,
-  hand: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 8 V3.5 a1 1 0 0 1 2 0 V7 M7 7 V2.5 a1 1 0 0 1 2 0 V7 M9 7 V3.5 a1 1 0 0 1 2 0 V9 c0 3 -2 5 -4.5 5 C4 14 3 12 2.5 10 L2 8.5 a1 1 0 0 1 1.8 -0.8 L5 9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>,
-  pen: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 L4 9.5 L11 2.5 L13.5 5 L6.5 12 Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>,
-  board: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 2" /></svg>,
-  image: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M3 12 L7 8 L10 11 L12 9 L14 11" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>,
-  link: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="8" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.3" /><circle cx="12" cy="8" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M6.2 8 H9.8" stroke="currentColor" strokeWidth="1.3" /></svg>,
-  eraser: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 13 H13 M3.5 10.5 L9 5 L12 8 L7.5 12.5 H5.5 Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>,
+  select: line(<path d="M5 3l14 8-6 2-2 6z" />),
+  hand: line(<path d="M8 13V5a1.5 1.5 0 0 1 3 0v6M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L3 14a1.5 1.5 0 0 1 2.5-1.7L8 15" />),
+  pen: line(<><path d="M4 20l4-1 11-11-3-3L5 16z" /><path d="M14 6l3 3" /></>),
+  board: line(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18" /></>),
+  image: line(<><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></>),
+  link: line(<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />),
+  eraser: line(<path d="M7 20h12M5 15l8-8 5 5-6 6H8z" />),
+  text: line(<path d="M5 6V4h14v2M12 4v16M9 20h6" />),
 }
 
 export type NewNode = 'script' | 'storyboard' | 'video' | 'picture' | 'sketch'
@@ -268,7 +271,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {t('hand', 'Hand', 'H')}
       {t('pen', 'Pen', 'P')}
       {t('eraser', 'Eraser', 'E')}
-      {t('text', 'Text', 'T', <span className="tb-t">T</span>)}
+      {t('text', 'Text', 'T', ICON.text)}
       {(() => {
         const on = has('sketch')
         const active = shown === 'sketch'

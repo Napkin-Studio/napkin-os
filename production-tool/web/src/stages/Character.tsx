@@ -45,6 +45,7 @@ import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
 import { scriptToWrite, showStartCard } from './startCard'
+import { StartCard } from './FilmStart'
 import { useBriefSpinoff } from '../brief/useBriefSpinoff'
 import { BriefBooth } from '../brief/BriefBooth'
 import { briefOfElement } from '../brief/canvas'
@@ -799,7 +800,7 @@ export function Character({ initial, active, onPictureEditor }: {
         )}
         <FrontChooser />
         {placeError && <div className="place-error" role="alert">{placeError}<FrontButtons text={placeError} /> <button className="btn xs ghost" onClick={() => setPlaceError(null)}>OK</button></div>}
-        {showHint && <StartCard onScript={() => open('script')} onPictures={() => chrome?.setTool('image')} />}
+        {showHint && <StartCard env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} onPictures={() => { if (!panels.assets) panels.toggle('assets') }} />}
         {/* Boards are frames on the canvas (⌥1…⌥9 jump, ⌥0 fits); on touch, with no ⌥, the Boards pill opens the jump sheet. */}
         {narrow && <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow keys={!own} />}
         <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} vertical={narrow} />
@@ -1359,21 +1360,4 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   )
 }
 
-/** A new project's first card (mock States, "New project · Ad template"): Skye offers the script. */
-function StartCard({ onScript, onPictures }: { onScript: () => void; onPictures: () => void }) {
-  return (
-    <div className="start-card pt-card" role="note">
-      <div className="row" style={{ gap: 10 }}>
-        <AgentFigure agent="skye" size={22} decorative />
-        <b>Start with the script</b>
-        <span className="pt-mono">{sayer('skye')}</span>
-      </div>
-      <p>Paste a script, or tell the Script agent the idea. Then draw or drop your characters, places and products.</p>
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <button type="button" className="btn" onClick={onPictures}>Add pictures</button>
-        <button type="button" className="btn primary" onClick={onScript}>Write the script</button>
-      </div>
-    </div>
-  )
-}
 
