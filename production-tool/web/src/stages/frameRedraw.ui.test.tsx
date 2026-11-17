@@ -117,11 +117,11 @@ function type(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
 const pressed = (box: HTMLElement) => [...box.querySelectorAll('.sb-mode button')].find((b) => b.getAttribute('aria-pressed') === 'true')?.textContent
 
 describe('the switch on the Storyboard card', () => {
-  it('starts on Edit parts with its hint and price; Redraw frame changes the hint, placeholder and button', async () => {
+  it('starts on Edit parts with its hint and no price; Redraw frame changes the hint, placeholder and button', async () => {
     const { el } = await mount('storyboard')
     const box = await openChange(el)
     expect(pressed(box)).toBe('Edit parts')
-    expect(box.querySelector('.sb-modehint')?.textContent).toBe('Keeps this picture and changes only what you name. Everyone and everything else stays as it is.≈ $0.20')
+    expect(box.querySelector('.sb-modehint')?.textContent).toBe('Keeps this picture and changes only what you name. Everyone and everything else stays as it is.')
     expect((box.querySelector('input') as HTMLInputElement).placeholder).toBe('Make her scarf red')
     act(() => byText('Redraw frame')!.click())
     expect(pressed(box)).toBe('Redraw frame')
@@ -174,7 +174,7 @@ describe('the switch on the Storyboard card', () => {
     expect(card(el, 2).querySelector('.sb-result')?.textContent).toMatch(/The Director agent redrew frame 2/)
   })
 
-  it('an edit that came back the same offers no Apply, says what was charged and offers Redraw frame', async () => {
+  it('an edit that came back the same offers no Apply, says nothing changed (no price) and offers Redraw frame', async () => {
     const { el, land } = await mount('storyboard')
     const box = await openChange(el)
     type(box.querySelector('input')!, 'make her scarf red [same]')
@@ -183,7 +183,8 @@ describe('the switch on the Storyboard card', () => {
     await land()
     const none = card(el, 2).querySelector('.sb-nochange')!
     expect(none.textContent).toMatch(/This edit came back the same as frame 2\./)
-    expect(none.textContent).toMatch(/charged/)
+    expect(none.textContent).toMatch(/Nothing in it changed/)
+    expect(none.textContent).not.toMatch(/\$|charged/)
     expect([...none.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Redraw frame', 'Discard'])
     expect(card(el, 2).querySelector('.sb-result')).toBeNull()
   })

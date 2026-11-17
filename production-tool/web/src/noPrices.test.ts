@@ -1,6 +1,6 @@
 // No price or cost anywhere in the UI (Shrey, 2026-10-13; features/runway-sheet-sync.clan): not on
 // the model menu, job buttons, the update and send trays, cards, asks or toasts. Each job's cost is
-// recorded and shown in one place only, History (ui/historyItems.ts jobCost).
+// recorded and shown in one place only, the Decisions drawer (ui/historyItems.ts jobCost; features/production-new-ui.clan).
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 const SRC = join(__dirname)
 const ALLOWED = new Set(['ui/historyItems.ts'])
 // A dollar sign before a number or a template value, "about $", "~$", or a flat estimate field.
-const MONEY = /\$\$\{|about \$(\d|\$\{)|~\$|\$\d+\.\d|estimateUsd|planCost|costWords/
+const MONEY = /\$\$\{|about \$(\d|\$\{)|~\$|≈ ?\$|'\$' \+|\$\d+\.\d|estimateUsd|planCost|costWords/
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

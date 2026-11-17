@@ -8,7 +8,7 @@ import { purposeOf, purposeWords } from '../model/purpose'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { addKey, addRef, addScene, addShots as planShots, snapshotDoc } from '../test/jobFixtures'
 import {
-  applyFrameEditStep, cameBackSame, castFrameFor, changeFrame, frameEditCopy, frameEditInput, frameEditMode, frameEditOf, framePriceUsd,
+  applyFrameEditStep, cameBackSame, castFrameFor, changeFrame, frameEditCopy, frameEditInput, frameEditMode, frameEditOf,
   landFrameEdit, proposalOf, wasRedrawn,
 } from './frameEdit'
 import { mockFrameEdit, mockRecasts } from './frameWords'
@@ -62,11 +62,10 @@ describe('the words and the price', () => {
     expect(frameEditCopy.hint.redraw(5)).toMatch(/^Draws frame 5 again from the shot\./)
     expect(frameEditCopy.send).toEqual({ edit: 'Send', redraw: 'Redraw' })
     expect(frameEditCopy.recast.redraw).toBe('Redraw frame instead')
-    expect(frameEditCopy.charged('Runway', 0.25)).toBe('Runway charged $0.25 for it. Say it another way, or redraw the frame.')
+    expect(frameEditCopy.nothingMade).toBe('Nothing in it changed. Say it another way, or redraw the frame.')
   })
-  it('prices the change from the frame model on the sheet: Gemini 3 Pro at 20 credits is about $0.20', () => {
-    expect(framePriceUsd()).toBe(0.2)
-    expect(frameEditCopy.price(0.2)).toBe('≈ $0.20')
+  it('names no price: what a change cost is in Decisions only (features/production-new-ui.clan)', () => {
+    expect(JSON.stringify(frameEditCopy)).not.toMatch(/\$|≈|charged/)
   })
 })
 
@@ -168,12 +167,6 @@ describe('landFrameEdit keeps the mark', () => {
   })
 })
 
-describe('the price on the mock provider', () => {
-  it('is not shown when the routed model costs nothing, and is Runway\'s when Runway is routed', () => {
-    expect(framePriceUsd({ routing: { frame_edit: ['mock'] } } as never)).toBeUndefined()
-    expect(framePriceUsd({ routing: { frame_edit: ['runway'] } } as never)).toBe(0.2)
-  })
-})
 
 // A redraw keeps a redrawn neighbour's people (features/frame-edit-or-redraw.clan, 2026-11-17: shot 4 of the market).
 describe('the cast frame', () => {

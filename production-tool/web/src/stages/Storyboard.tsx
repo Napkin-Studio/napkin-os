@@ -51,7 +51,7 @@ import { Float } from '../ui/Float'
 import { trayGroups, type TrayRow } from '../ui/tray'
 import {
   applyClipLine, applyFrameEditStep, cameBackSame, cameraDiff, cameraLabel, changeFrame, discardStep, frameEditCopy, frameEditLines, frameEditMode, frameEditOf,
-  framePriceUsd, keepBothStep, proposalOf,
+  keepBothStep, proposalOf,
 } from '../jobs/frameEdit'
 import type { FrameEditMode } from '../contracts/types'
 import { askOf } from '../jobs/runner'
@@ -407,7 +407,6 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
     }
   }
   // Edit parts | Redraw frame (features/frame-edit-or-redraw.clan): the person's pick, and the job's once it says.
-  const { config } = useConfig()
   // The person's pick holds for the job it was made on; a newer job shows its own mode (a redraw it was sent as,
   // or one Dex read after "Redraw frame instead").
   const [pick, setPick] = useState<{ mode: FrameEditMode; job?: string }>({ mode: 'edit' })
@@ -418,7 +417,6 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
   const recast = waiting?.state === 'open' && waiting.question.kind === 'recast' ? waiting : undefined
   const recastId = recast?.id
   useEffect(() => (recastId ? placeAsk(recastId) : undefined), [recastId])
-  const price = framePriceUsd(config)
   const n = index + 1
   const send = (redoOf?: string, as: FrameEditMode = mode) => attempt(async () => {
     setMode(as)
@@ -548,7 +546,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
               ))}
             </div>
           </div>
-          <div className="sb-modehint">{mode === 'edit' ? frameEditCopy.hint.edit : frameEditCopy.hint.redraw(n)}{price !== undefined && <span className="sb-cost pt-mono">{frameEditCopy.price(price)}</span>}</div>
+          <div className="sb-modehint">{mode === 'edit' ? frameEditCopy.hint.edit : frameEditCopy.hint.redraw(n)}</div>
           <div className="row">
             <input className="input" aria-label="What to change in this frame" placeholder={frameEditCopy.placeholder[mode]} value={words} maxLength={1000} disabled={changeRunning && !recast}
               onChange={(e) => setWords(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && words.trim() && !changeRunning) void send(showChange ? change?.job.id : undefined) }} />
@@ -569,7 +567,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
             ? (
               <div className="sb-running" role="status">
                 <div className="row"><AgentFigure agent="dex" size={26} state="working" decorative />
-                  <div><div>{frameEditCopy.redrawing(n)}</div><div className="faint">{[modelLabel(change.job.provider, change.job.model), price !== undefined ? frameEditCopy.price(price).slice(2) : undefined].filter(Boolean).join(' · ')}</div></div>
+                  <div><div>{frameEditCopy.redrawing(n)}</div><div className="faint">{modelLabel(change.job.provider, change.job.model)}</div></div>
                 </div>
                 <div className="sb-bar"><i /></div>
               </div>
@@ -579,7 +577,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
             ? (
               <div className="sb-nochange">
                 <div className="row"><AgentFigure agent="dex" size={20} decorative />
-                  <p><b>{frameEditCopy.unchanged(n)}</b><br /><span className="faint">{frameEditCopy.charged(providerName(change.job.provider), change.job.cost?.confirmed)}</span></p>
+                  <p><b>{frameEditCopy.unchanged(n)}</b><br /><span className="faint">{frameEditCopy.nothingMade}</span></p>
                 </div>
                 <div className="row">
                   <button className="btn sm dark" disabled={!words.trim()} onClick={() => void send(change.job.id, 'redraw')}>{frameEditCopy.redrawButton}</button>
@@ -628,11 +626,6 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
       {error && <div role="alert" className="framecard-error">{error}</div>}
     </article>
   )
-}
-
-/** Who charged for a picture, by name ("Runway"). */
-function providerName(provider: string | undefined): string {
-  return provider ? provider[0].toUpperCase() + provider.slice(1) : 'The provider'
 }
 
 function EditIcon() {
