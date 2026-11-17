@@ -93,7 +93,7 @@ describe('the tables in common.schema.json', () => {
     expect(CAMERA_WORDS.angle.eye_level.label).toBe('eye level')
     const director = loadJson('director.schema.json') as { $defs: { frameEdit: { properties: Record<string, { enum?: string[] }> } } }
     const props = director.$defs.frameEdit.properties
-    const edit: Required<FrameEditOutput> = { reading: 'both', runAs: 'none', camera: {}, maskUnused: true, words_as_given: true }
+    const edit: Required<FrameEditOutput> = { reading: 'both', runAs: 'none', camera: {}, maskUnused: true, words_as_given: true, who: 'who is where' }
     expect(Object.keys(props).sort()).toEqual(Object.keys(edit).sort())
     expect(props.reading.enum).toEqual(['camera', 'local', 'both', 'redraw']) // redraw: features/frame-edit-or-redraw.clan
     expect(props.runAs.enum).toEqual(['frame', 'region_edit', 'none'])
