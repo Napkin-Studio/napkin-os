@@ -163,10 +163,10 @@ export type View = (typeof VIEWS)[number]
 
 export interface Region { x: number; y: number; w: number; h: number }
 
-export const LINK_ENDPOINT_KINDS = ['board', 'group', 'note', 'ink', 'script', 'storyboard', 'video', 'ref', 'key', 'frame', 'render', 'sketch', 'document', 'format_set', 'shot', 'text'] as const
+export const LINK_ENDPOINT_KINDS = ['board', 'group', 'note', 'ink', 'script', 'storyboard', 'video', 'ref', 'key', 'frame', 'render', 'sketch', 'document', 'format_set', 'shot', 'text', 'brief'] as const
 export type LinkEndpointKind = (typeof LINK_ENDPOINT_KINDS)[number]
 export interface LinkEndpoint { kind: LinkEndpointKind; id: string }
-export type StructuralLinkRole = 'drives' | 'renders' | 'input' | 'note' | 'context' | 'brand' | 'master' | 'frame' | 'made_from' | 'note_on_shot'
+export type StructuralLinkRole = 'drives' | 'renders' | 'input' | 'note' | 'context' | 'brand' | 'master' | 'frame' | 'made_from' | 'note_on_shot' | 'brief'
 export type LinkRole = StructuralLinkRole | RefRole
 export interface LinkRuleEntry {
   from: LinkEndpointKind[]
@@ -526,7 +526,7 @@ export interface Prose { type: 'doc'; content?: Record<string, unknown>[] }
 export interface TextProblem { field: string; length: number; limit: number; message: string }
 export interface Pick { current: Id; alternates?: Id[] }
 export interface LibraryCopy { shelf: string; key: Key; ver: number; by: PersonRef; at: string }
-export type TargetKind = 'ref' | 'frame' | 'generation' | 'render' | 'video' | 'shot' | 'scene' | 'beat' | 'script' | 'storyboard' | 'size' | 'format_set' | 'sketch' | 'document' | 'board' | 'key'
+export type TargetKind = 'ref' | 'frame' | 'generation' | 'render' | 'video' | 'shot' | 'scene' | 'beat' | 'script' | 'storyboard' | 'size' | 'format_set' | 'sketch' | 'document' | 'board' | 'key' | 'brief'
 export interface Target { kind: TargetKind; id: Id }
 export interface NoteWindow { from_s: number; to_s: number }
 
@@ -782,6 +782,40 @@ export interface DocDocument extends EntityBase {
   excerpt?: string
   read: { state: 'unread' | 'reading' | 'read' | 'failed'; pages_read: number }
 }
+/** A brief's spine (common.schema.json#/$defs/briefSpine; features/brief-node.clan): what every agent reads. */
+export interface BriefSpine {
+  insight?: string
+  proposition?: string
+  audience?: string
+  tone?: string
+  feel?: string
+  mandatories?: string[]
+  donts?: string[]
+  format?: string
+}
+export type BriefSpinePart = keyof BriefSpine
+export const BRIEF_SPINE_PARTS: readonly BriefSpinePart[] = ['insight', 'proposition', 'audience', 'tone', 'feel', 'mandatories', 'donts', 'format']
+/** Where a Brief node was taken from (as the OS keeps a link: clan_sdk Attached). */
+export interface BriefSource {
+  document_id: string
+  app_id: 'ie.napkin.brief-maker'
+  /** sha256 of the brief's shared/data.yaml as taken. */
+  data_sha256: Sha256
+  /** The version shown: 1 when linked, one more on each update taken. */
+  taken: number
+  at: string
+  how: 'link' | 'spinoff'
+  /** A newer version the person chose not to take. */
+  kept?: Sha256
+}
+/** A Brief node: a Brief Maker brief's spine, frozen at the version taken. Read-only in Production. */
+export interface BriefNode extends EntityBase {
+  title: string
+  source: BriefSource
+  spine: BriefSpine
+  /** Spine parts made from brief parts marked Confidential: never in Napkin's own records. */
+  confidential?: BriefSpinePart[]
+}
 export interface FormatSet extends EntityBase {
   /** picture: a canvas picture node (its id is the node's). asset, w, h: the master's picture when the set was made. */
   master: { kind: 'frame' | 'ref' | 'render' | 'video' | 'picture'; id: string; asset?: Sha256; w?: number; h?: number }
@@ -832,6 +866,8 @@ export interface Check extends EntityBase {
   result: 'pass' | 'flag'
   reason_code: string
   rule_ref?: Id
+  /** A flag against a linked brief (reason_code brief_mandatory or brief_dont). */
+  brief_id?: Id
   note: string
   ignored?: { by: PersonRef; at: string }
 }
@@ -872,7 +908,7 @@ export interface SpinIn extends EntityBase {
   decided_by?: PersonRef
 }
 export interface JobInputRow {
-  kind: 'ref' | 'sketch' | 'text' | 'note' | 'ink' | 'document' | 'brand' | 'frame' | 'generation' | 'render' | 'board' | 'group'
+  kind: 'ref' | 'sketch' | 'text' | 'note' | 'ink' | 'document' | 'brand' | 'frame' | 'generation' | 'render' | 'board' | 'group' | 'brief'
   ref?: Id
   link_id?: Id
   used_as: string
@@ -933,6 +969,8 @@ export interface EntityMaps {
   documents: Record<Id, DocDocument>
   /** Optional: a document made before texts could be linked has none (contracts README item 20). */
   texts?: Record<Id, CanvasText>
+  /** Optional: a document made before the Brief node has none (features/brief-node.clan). */
+  briefs?: Record<Id, BriefNode>
   format_sets: Record<Id, FormatSet>
   sizes: Record<Id, Size>
   checks: Record<Id, Check>
@@ -945,7 +983,7 @@ export interface EntityMaps {
 }
 export type MapName = keyof EntityMaps
 export const MAP_NAMES: readonly MapName[] = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'generations', 'renders', 'reviews',
-  'links', 'keys', 'refs', 'documents', 'texts', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
+  'links', 'keys', 'refs', 'documents', 'texts', 'briefs', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
 
 export interface ProductionDocument extends EntityMaps {
   contract_version: ContractVersion
@@ -1041,6 +1079,8 @@ export interface JobShot {
 
 export interface JobContext { kind: 'note' | 'document' | 'brand_rule' | 'palette' | 'typography'; title?: string; text: string }
 
+export interface JobBrief { title: string; spine: BriefSpine }
+
 export interface JobInput {
   text?: string
   /** region_edit: the Image editor's Remove. No words: the relay writes the removal (relay-api input.remove). */
@@ -1065,6 +1105,8 @@ export interface JobInput {
   delivery?: DeliveryPx
   safeArea?: SafeArea
   context?: JobContext[]
+  /** The brief in the node's scope, its spine only (features/brief-node.clan). Absent: no brief. */
+  brief?: JobBrief
   /** stitch: the takes in cut order. inS/outS: the edl item's in and out points; transition: the join into this
    *  clip (features/connected-video.clan; absent: a cut). */
   clips?: { asset: AssetRef; trimS?: number; inS?: number; outS?: number; transition?: StitchTransition; endCard?: boolean; fit?: StitchFit }[]
