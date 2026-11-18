@@ -52,7 +52,7 @@ from collections import Counter
 from pathlib import Path
 
 from . import spec
-from .theme import Scale
+from .theme import LOOK_BODY, LOOK_HEAD, Scale, fit_wf
 
 EMU_IN = 914400
 MARGIN_IN = 0.5
@@ -147,6 +147,14 @@ def _est_height_in(tf, width_in: float) -> float:
     return _est_size(tf, width_in)[0]
 
 
+def glyph_k(name: str, bold: bool) -> float:
+    """Mean glyph width as a fraction of the size: the measured, fallback-safe factor for the two look fonts (deck-look), else the
+    old estimate (0.5, 0.56 bold, +0.02 serif). One place for the three estimators below."""
+    if name in (LOOK_HEAD, LOOK_BODY):
+        return fit_wf(name, bool(bold))
+    return (0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0)
+
+
 def _est_size(tf, width_in: float):
     """Estimated rendered (height, widest line) of a text frame in inches, by character count.
 
@@ -161,7 +169,7 @@ def _est_size(tf, width_in: float):
         sz = _para_size(p)
         bold = any(r.font.bold for r in p.runs)
         name = next((r.font.name for r in p.runs if r.font.name), "") or ""
-        k = (0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0)
+        k = glyph_k(name, bold)
         per_line = max(int(avail_pt / (sz * k)), 1)
         lines, cur = 1, 0
         widest = max(widest, min(len(text) * sz * k, avail_pt))
@@ -510,7 +518,7 @@ def _line_count(tf, width_in: float) -> int:
         sz = _para_size(p)
         bold = any(r.font.bold for r in p.runs)
         name = next((r.font.name for r in p.runs if r.font.name), "") or ""
-        per_line = max(int(avail_pt / (sz * ((0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0)))), 1)
+        per_line = max(int(avail_pt / (sz * glyph_k(name, bold))), 1)
         lines, cur = 1, 0
         for w in text.split():
             n = len(w)
@@ -535,7 +543,7 @@ def chars_per_line(tf, width_in: float) -> float:
         sz = _para_size(p)
         bold = any(r.font.bold for r in p.runs)
         name = next((r.font.name for r in p.runs if r.font.name), "") or ""
-        best = max(best, avail_pt / (sz * ((0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0))))
+        best = max(best, avail_pt / (sz * glyph_k(name, bold)))
     return best
 
 

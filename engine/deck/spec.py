@@ -2,6 +2,7 @@
 
 Kept in one module so the schema file, the assembler, the validators and the renderer agree.
 """
+import os
 
 #: Every slide type the renderer has a layout for, with the word budget for the slide's
 #: on-screen text (title excluded). Budgets follow the agency rule of thumb that a presented
@@ -401,6 +402,10 @@ LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_ro
 #: The eight look changes of deck-layout-library (cover 64 pt, a stamped title size and a fixed title box per layout, 48-character
 #: lines, switch before relaxed, picture and close layouts rule-picked). Off while the library lands without a look change; on at the look commit.
 LOOK_V2 = True
+#: deck-look (Gamma-grade look), steps 1-2: Archivo + Source Sans 3 (measured widths, fit under the fallback font's width too),
+#: a section band and 0.75 pt hairlines instead of the accent tick and edge stripes, ink figures. OFF by default: every golden
+#: is unchanged until the look commit after the phase-12 review. DECK_LOOK_V3=1 turns it on for one run (the gallery render).
+LOOK_V3 = os.environ.get("DECK_LOOK_V3", "").strip() in ("1", "true", "yes")
 LAYOUT_FLOW = "flow"
 LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
 LAYOUT_MAX = 40

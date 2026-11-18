@@ -99,11 +99,21 @@ def _soffice() -> str:
     raise RuntimeError("LibreOffice not found: the PDF cannot be made")
 
 
+def _load_vendored_fonts(profile: str) -> None:
+    """Copy the vendored OFL fonts (deck/fonts: Archivo, Source Sans 3) into the private LibreOffice profile's ``user/fonts``, where
+    LibreOffice reads extra fonts, so the PDF and the PNGs are set in the fonts the deck names, not a substitute (deck-look)."""
+    dest = Path(profile) / "user" / "fonts"
+    dest.mkdir(parents=True, exist_ok=True)
+    for f in (Path(__file__).resolve().parent / "fonts").glob("*/*.ttf"):
+        shutil.copy2(f, dest / f.name)
+
+
 def to_pdf(pptx, outdir, timeout: int = 180):
     """Convert a pptx to PDF with LibreOffice, in a private profile (``-env:UserInstallation``) that is removed afterwards.
     Two soffice processes that share a profile hand the second job to the first and exit 0 with no PDF, so every call gets its own."""
     profile = tempfile.mkdtemp(prefix="deck_lo_")
     try:
+        _load_vendored_fonts(profile)
         return subprocess.run([_soffice(), f"-env:UserInstallation=file://{profile}", "--headless", "--convert-to", "pdf", "--outdir", str(outdir), str(pptx)],
                               check=True, capture_output=True, timeout=timeout)
     finally:
