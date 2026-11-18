@@ -649,6 +649,7 @@ def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, dec
         ctx = imagegen.Ctx(deck, inp, terr, _picture_style(a, deck_ctx, a.client), a.stages, a.images_cache or (a.stages / "images"), vjobs.Ledger(led, deck_id), deck_id,
                            review=review, approver=a.approver, cap_usd=a.cap_usd, banned_extra=look.brand_tokens((deck_ctx or {}).get("brand")).get("imagery_bans") or [],
                            territory_usd=_territory_usd(a.stages))
+        ctx.production_note = (rep.get("production") or {}).get("card")   # 'Production: N picked, M not reachable' on the card (no cost)
         res = imagegen.step(ctx, a.images, a.yes_cost, a.hero, a.retry_unknown, a.remake_style, remake=[x.strip() for v in a.remake for x in v.split(',') if x.strip()])
     except (imagegen.GenError, images.ImageError) as e:
         raise SystemExit(f"refused: {e}")
@@ -769,9 +770,21 @@ def main(argv=None):
     ap.add_argument("--pictures", choices=("creative_cover", "creative", "none"), default=None,
                     help="place pictures that already exist (stages/frames.json from deck.from_territory, and --image): creative_cover (the "
                          "creative slides, the cover and the divider), creative, or none. Absent: frames.json is ignored and no slot is written")
-    ap.add_argument("--production", action="store_true",
-                    help="place the Production Tool's pictures (stages/production.json from deck.from_production): the key visual on the cover and the idea, "
-                         "each execution the size its channel matches. Nothing is made or spent; implies --pictures creative_cover unless --pictures says otherwise")
+    ap.add_argument("--production", nargs="?", const=True, default=False, metavar="FILE",
+                    help="place the Production Tool's pictures: the key visual on the cover and the idea, each execution the size its channel matches. "
+                         "Bare: stages/production.json from deck.from_production. With FILE (a Production .clan, or its export zip): the picker "
+                         "(deck.prod_picker) lists every asset from metadata, picks by rule and pulls only the picked pictures (the .clan's own, then "
+                         "https with --production-fetch, then the zip). Nothing is made or spent; implies --pictures creative_cover unless --pictures says otherwise")
+    ap.add_argument("--production-fetch", action="store_true",
+                    help="with --production FILE: download picked pictures from their https:// locations (hosts on policy/production_fetch.yaml only; "
+                         "empty by default, so it refuses until the hosts are named). Off: nothing is downloaded")
+    ap.add_argument("--production-agent", action="store_true",
+                    help="with --production FILE: a Claude (Sonnet) call breaks ties the rules leave, on metadata rows only (about $0.01 a tie). Off: the newest wins")
+    ap.add_argument("--production-pick", action="append", default=[], metavar="SLIDE.SLOT=KEY",
+                    help="with --production FILE: a person's swap of a slot's Production picture to another of its candidates (repeatable; recorded in "
+                         "stages/production_choices.json and kept for later builds). The app's review.production, given with --review, says the same")
+    ap.add_argument("--production-look", action="store_true",
+                    help="with --production FILE: a vision check of the pulled pictures (local Ollama, else Claude Haiku; 8 at most) that only flags them")
     ap.add_argument("--image", action="append", default=[], metavar="SLIDE.SLOT=FILE",
                     help="place a picture you supply on a slide of a picture type (never an evidence slide; the slot 'logo' is refused); repeatable")
     ap.add_argument("--image-rights", action="append", default=[], metavar="SLIDE.SLOT=RIGHTS",
@@ -807,6 +820,14 @@ def main(argv=None):
         a.pictures = "creative_cover"
     if a.production and a.pictures == "none":
         ap.error("--production places pictures and --pictures none asks for none: drop one")
+    if (a.production_fetch or a.production_agent or a.production_look or a.production_pick) and not isinstance(a.production, str):
+        ap.error("--production-fetch, --production-agent, --production-look and --production-pick work on a Production file: give --production FILE (.clan or zip)")
+    prod_picks = {}
+    for x in a.production_pick:
+        sk, eq, key = x.partition("=")
+        if not (eq and key and re.fullmatch(r"s[0-9]{2,3}\.[a-z][a-z0-9_]{1,23}", sk)):
+            ap.error(f"--production-pick needs SLIDE.SLOT=KEY (e.g. s11.picture=size_...), got {x!r}")
+        prod_picks[sk] = {"key": key, "by": "a person (--production-pick)", "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
     if a.images_only and a.live:
         ap.error("--images-only never calls a text model: drop --live")
     if a.cap_usd is not None and not (0 < a.cap_usd <= 2.5):
@@ -931,7 +952,7 @@ def main(argv=None):
     fp = a.stages / "fit.json"   # the fit judge reads an assembled deck; its verdicts decide what a pitch presents
     fit = json.loads(fp.read_text()) if fp.exists() else None
     builder = assemble.build_investor if kind == "investor" else assemble.build
-    frames, bound, prod = None, None, None
+    frames, bound, prod, picker_src = None, None, None, None
     names = [x for x in (a.client, a.agency) if x]
     if a.brand and a.brand.exists():   # the brand's own name may not label or describe a picture either: read before any frame is bound
         try:
@@ -950,12 +971,17 @@ def main(argv=None):
                                         "frames bind by territory id, so they would sit on the wrong slides. Run deck.from_territory again, with --replace")
             if frames:
                 bound = images.bind_frames(None, frames, st.get("c") or {}, a.pictures, names)
-            if a.production:   # production.json is read ONLY with --production: a stray one changes nothing (deck-prod-assets)
+            if isinstance(a.production, str):   # a .clan or the export zip: opened and checked now, picked once the deck exists (deck-prod-picker)
+                from . import prod_picker
+                picker_src = prod_picker.Source(Path(a.production).expanduser())
+            elif a.production:   # production.json is read ONLY with --production: a stray one changes nothing (deck-prod-assets)
                 prod = images.load_production(a.stages)
                 if prod is None:
                     raise images.ImageError(f"--production: {a.stages}/production.json is missing. Run deck.from_production BUNDLE.zip --stages {a.stages} first")
     except images.ImageError as e:
         raise SystemExit(f"refused: {e}")
+    except ValueError as e:   # from_production.FromProductionError (and a YAML error) from the picker's file: refused before any build
+        raise SystemExit(f"refused: --production {Path(str(a.production)).name}: {e}")
     extra = {"pictures": bound} if bound else {}
     build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile, **extra)
     deck = build(fit)
@@ -1010,13 +1036,27 @@ def main(argv=None):
             if bound and bound["assets"]:
                 images.register_assets(deck, bound["assets"])
             held = images.place_supplied(deck, supplied, images.deck_names(deck), sources)
-            if prod:   # after a person's own pictures (kept), before the empty slots and the image step (a filled or rights-pending slot is never planned)
+            if prod or picker_src:   # after a person's own pictures (kept), before the empty slots and the image step (a filled or rights-pending slot is never planned)
                 brief_doc = next((d for d, app in ((deck_ctx or {}).get("apps") or {}).items() if app == "ie.napkin.brief-maker"), None)
-                pres = images.bind_production(deck, prod, a.pictures, images.deck_names(deck), brief_doc)
+                if picker_src:
+                    rvw = json.loads(a.review.read_text()) if a.review else {}
+                    rvw = rvw.get("review", rvw) if isinstance(rvw, dict) else {}   # the app's {review: ...} wrapper, or the bare object
+                    swaps = {**prod_picker.choices_from_review(rvw), **prod_picks}
+                    pres = prod_picker.run(deck, picker_src, a.stages, a.pictures, images.deck_names(deck), brief_doc, fetch=a.production_fetch,
+                                           agent=a.production_agent, look=a.production_look, choices=swaps)
+                    prod = images.load_production(a.stages)
+                    for name, u in (("production_agent", pres["usage"]["agent"]), ("production_look", pres["usage"]["look"])):
+                        if u:   # only on its flag: pulling itself never spends
+                            rep["stages"][name] = {"source": "live", **u}
+                    print(pres["card"] + (f"  ({pres['picker']['fetch']['refused']})" if pres["picker"]["fetch"]["refused"] else ""))
+                else:
+                    pres = images.bind_production(deck, prod, a.pictures, images.deck_names(deck), brief_doc)
                 held = held + pres["held"]
                 rep["production"] = {"project": (prod.get("project") or {}).get("id"), "offer_sha256": prod.get("offer_sha256"),
                                      "placed": pres["placed"], "held": len(pres["held"]), "kept": pres["kept"], "usd": 0,
                                      "key_visual": pres["master"]}
+                if picker_src:
+                    rep["production"].update(picker=pres["picker"], card=pres["card"])
             if a.pictures:
                 images.add_empty_slots(deck, a.pictures)
             review = json.loads(a.review.read_text()) if a.review else {}

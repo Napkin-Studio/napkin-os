@@ -540,6 +540,12 @@ FRAME_FORMATS = {"poster_portrait": "uk-6-sheet", "billboard": "uk-48-sheet", "p
 FRAME_OF_CHANNEL = {"ooh": "poster_portrait", "social": "phone", "film": "screen", "print": "poster_portrait", "display": "strip"}
 #: deck-graphics slice 3: a film execution's storyboard strip takes 3 to 4 Production frames in shot order, all Production or none.
 STRIP_MIN, STRIP_MAX = 3, 4
+#: deck-prod-picker (deck-graphics part 5): what a picked Production picture none of its sources yielded says, in production.json, report.json
+#: and the slot's reason. Never skipped silently and never replaced by a generated picture without the person choosing.
+PRODUCTION_NOT_REACHABLE = "not reachable — re-save or export in Production"
+#: The fetch allow-list of Production's provider output hosts (Q12) lives in this policy file, EMPTY by default: the fetch refuses until
+#: the hosts are named there. A host must also appear in the .clan's own locations.
+PRODUCTION_FETCH_POLICY = "policy/production_fetch.yaml"
 #: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
 PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "audience", "real_question", "close",
                        "solution", "product")

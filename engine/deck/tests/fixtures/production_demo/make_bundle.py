@@ -208,6 +208,35 @@ def build(out: Path, *, legacy: bool = False, contract: str = "3", flip: str | N
     return {k: hashlib.sha256(v).hexdigest() for k, v in pics.items()}
 
 
+def build_clan(out: Path, *, embed: tuple = (), flip: str | None = None, mutate=None) -> dict:
+    """Write the project's .clan alone to ``out`` (deck-prod-picker: the deck reads a Production .clan directly), with the comment
+    ``napkin-fixture``. ``embed``: pictures carried in its ``human/assets/`` (the rest only at their https:// locations on example.invalid,
+    which tests stub and never reach); ``flip``: an embedded picture whose bytes get one byte changed after hashing; ``mutate(doc)``: change the
+    document. Returns ``{name: sha256 hex}`` of the drawn pictures."""
+    pics = {k: draw(*v) for k, v in PICTURES.items()}
+    doc = document(pics)
+    if mutate:
+        mutate(doc)
+    zi = lambda n: zipfile.ZipInfo(n, T0)   # noqa: E731
+    out = Path(out)
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as c:
+        c.comment = b"napkin-fixture"
+        c.writestr(zi("manifest.yaml"), "format: clan\napp_id: ie.napkin.production-tool\n")
+        c.writestr(zi("shared/data.yaml"), json.dumps(doc, indent=1))
+        c.writestr(zi("agent/decision-chain.yaml"), "- decision: DECISION-TEXT-LUMEN\n")
+        for name in sorted(embed):
+            b = pics[name]
+            hx = hashlib.sha256(b).hexdigest()
+            if name == flip:
+                b = bytes([b[0] ^ 0xFF]) + b[1:]
+            c.writestr(zi(f"human/assets/{hx}.png"), b)
+    return {k: hashlib.sha256(v).hexdigest() for k, v in pics.items()}
+
+
 if __name__ == "__main__":
-    build(Path(sys.argv[1]))
-    print(f"wrote {sys.argv[1]}")
+    if len(sys.argv) > 2 and sys.argv[1] == "--clan":   # make_bundle.py --clan OUT.clan [EMBEDDED_NAME ...]
+        build_clan(Path(sys.argv[2]), embed=tuple(sys.argv[3:]))
+        print(f"wrote {sys.argv[2]}")
+    else:
+        build(Path(sys.argv[1]))
+        print(f"wrote {sys.argv[1]}")

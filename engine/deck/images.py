@@ -505,26 +505,33 @@ def keeps_protected(it: dict, aspect) -> bool:
     return k["x0"] * w >= x0 - 1 and k["y0"] * h >= y0 - 1 and k["x1"] * w <= x1 + 1 and k["y1"] * h <= y1 + 1
 
 
-def choose_master(prod: dict, brief_document_id: str | None = None) -> tuple:
-    """``(key, set, why)`` of the key visual (Q9): the newest Format set linked to the deck's brief; when none links to it, a placeable
-    key visual before one waiting for its rights, newest first. ``(None, None, why)`` when no set has a master."""
+def master_pool(prod: dict, brief_document_id: str | None = None) -> tuple:
+    """``(set ids, why)``: the Format sets the key-visual rule ranks equal, of which choose_master takes the newest (the Production picker
+    reports the others as a tie). Linked to the deck's brief first; when none links to it, a placeable key visual before one waiting for its
+    rights. ``([], why)`` when no set has a master."""
     items = prod.get("items") or {}
     sets = {fid: r for fid, r in (prod.get("format_sets") or {}).items() if r.get("master") in items}
     if not sets:
-        return None, None, "no Format set in the export has a key visual"
+        return [], "no Format set in the export has a key visual"
     linked = [fid for fid, r in sets.items() if brief_document_id and (r.get("brief") or {}).get("document_id") == brief_document_id]
     if linked:
-        fid = _newest(linked)
-        return sets[fid]["master"], fid, "the newest Format set linked to this deck's brief"
+        return linked, "the newest Format set linked to this deck's brief"
     placeable = [fid for fid in sets if items[sets[fid]["master"]].get("rights") != "reference_only"]
     if placeable:
-        fid = _newest(placeable)
         why = "no Format set links to this deck's brief: the newest set whose key visual can be placed"
-        if _newest(list(sets)) != fid:
+        if _newest(list(sets)) != _newest(placeable):
             why += " (a newer set's key visual waits for its rights)"
-        return sets[fid]["master"], fid, why
-    fid = _newest(list(sets))
-    return sets[fid]["master"], fid, "no Format set links to this deck's brief and every key visual waits for its rights: the newest set"
+        return placeable, why
+    return list(sets), "no Format set links to this deck's brief and every key visual waits for its rights: the newest set"
+
+
+def choose_master(prod: dict, brief_document_id: str | None = None) -> tuple:
+    """``(key, set, why)`` of the key visual (Q9): the newest Format set of master_pool. ``(None, None, why)`` when no set has a master."""
+    pool, why = master_pool(prod, brief_document_id)
+    if not pool:
+        return None, None, why
+    fid = _newest(pool)
+    return prod["format_sets"][fid]["master"], fid, why
 
 
 def production_master(prod: dict, brief_document_id: str | None = None) -> str | None:
@@ -533,11 +540,24 @@ def production_master(prod: dict, brief_document_id: str | None = None) -> str |
 
 
 def production_size(prod: dict, channel: str, aspect: str, prefer_set: str | None = None, any_shape: bool = False) -> tuple:
-    """``(key, why)``: the size for an execution slot. Sizes whose channel the execution accepts (a size of a format the pinned packs do
+    """``(key, why)``: the newest of size_pool's best sizes, else size_pool's ``(None, why)``."""
+    keys, why = size_pool(prod, channel, aspect, prefer_set, any_shape=any_shape)
+    return (_newest(keys), None) if keys else (None, why)
+
+
+def size_fits(prod: dict, channel: str, aspect: str, prefer_set: str | None = None, any_shape: bool = False) -> list:
+    """Every size that may fill an execution slot (size_pool's tests: channel, aspect tolerance, protect boxes, not stale), best first: what a
+    person may swap among in the Production picker. The rank still puts a placeable, ready size first."""
+    return size_pool(prod, channel, aspect, prefer_set, fits=True, any_shape=any_shape)[0]
+
+
+def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = None, fits: bool = False, any_shape: bool = False) -> tuple:
+    """``(keys, why)``: the sizes ranked best and equal for an execution slot (production_size takes the newest; the Production picker reports
+    the others as a tie). Sizes whose channel the execution accepts (a size of a format the pinned packs do
     not know only when the channel has none), within ASPECT_TOL of the slot's aspect and whose protect boxes the slot's crop keeps whole;
     a placeable one before one waiting for its rights, ready before flagged ('look'), the key visual's own set first, nearest the slot's
-    aspect, newest last. Stale sizes never. ``(None, why)`` when sizes of the channel exist and none fits (the slot is left empty with
-    that reason, never filled with a wrong shape); ``(None, None)`` when Production made nothing for the channel.
+    aspect. Stale sizes never. ``([], why)`` when sizes of the channel exist and none fits (the slot is left empty with that reason, never
+    filled with a wrong shape); ``([], None)`` when Production made nothing for the channel.
 
     ``any_shape`` (deck-graphics, spec.GRAPHICS): the size is shown WHOLE in a frame whose window takes its own format's aspect, so no
     shape is too far and no crop can cut a protect box: every size of the channel is a candidate, nearest the slot's aspect first; a
@@ -569,20 +589,22 @@ def production_size(prod: dict, channel: str, aspect: str, prefer_set: str | Non
         pool = []
     else:
         pool = matched or nearest
+    if fits:   # size_fits: every size that fits, best first (newest first among equals)
+        return [p[4] for p in sorted(pool, key=lambda p: (p[:4], tuple(-ord(c) for c in p[4])))], None
     if not pool:
         if any_shape and stale:
-            return None, (f"Out of date in Production: its {channel} size(s) changed since they were made. Make them again in Production, "
+            return [], (f"Out of date in Production: its {channel} size(s) changed since they were made. Make them again in Production, "
                           f"or supply a picture")
         if not off_shape and not cut:
-            return None, None
+            return [], None
         parts = []
         if off_shape:
             parts.append(f"its {channel} size(s) are {', '.join(sorted(off_shape))}, too far from this {aspect} slot")
         if cut:
             parts.append(f"{cut} {channel} size(s) would lose part of their protected area in a {aspect} crop")
-        return None, "No Production size fits: " + "; ".join(parts) + ". Make one in this shape in Production, or supply a picture"
+        return [], "No Production size fits: " + "; ".join(parts) + ". Make one in this shape in Production, or supply a picture"
     best = min(p[:4] for p in pool)
-    return _newest([p[4] for p in pool if p[:4] == best]), None
+    return sorted(p[4] for p in pool if p[:4] == best), None
 
 
 def production_frame(prod: dict) -> str | None:

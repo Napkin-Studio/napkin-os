@@ -2,6 +2,7 @@
 
   POST <url>/run          {doc, inputs, approvals, render?}  start the next segment of the document's run (202)
   GET  <url>/run/<doc>    {state, run, notices, payload?, error?}  poll it: state is building, gate, done or failed
+  POST <url>/production   {doc, name, data_b64}  keep a Production .clan or export zip for the document (deck-prod-picker)
 
 The engine keeps each run's stage outputs in a cache of its own, so a segment resumes where the last one stopped; this port holds
 no state. A failing, slow or unreadable engine is an `EngineError` carrying what it said (or why it could not be read); the job
@@ -30,7 +31,7 @@ class DeckEnginePort:
         self.url = url.rstrip("/")
         self.client = httpx.Client(timeout=timeout, transport=transport)
 
-    def _call(self, method: str, path: str, body=None) -> dict:
+    def _call(self, method: str, path: str, body=None, run: bool = True) -> dict:
         try:
             r = self.client.request(method, self.url + path, json=body)
         except httpx.TimeoutException as e:
@@ -46,6 +47,10 @@ class DeckEnginePort:
             if isinstance(err, dict) and err.get("message"):
                 raise EngineError(r.status_code, str(err.get("type") or "engine_error"), str(err["message"]))
             raise EngineError(r.status_code, "engine_error", f"the deck engine answered HTTP {r.status_code}")
+        if not run:
+            if not isinstance(data, dict) or not data.get("ok"):
+                raise EngineError(r.status_code, "engine_garbage", "the deck engine's answer was not a stored file")
+            return data
         if not isinstance(data, dict) or data.get("state") not in ("building", "gate", "done", "failed") or not isinstance(data.get("run"), dict):
             raise EngineError(r.status_code, "engine_garbage", "the deck engine's answer was not a run")
         return data
@@ -55,6 +60,10 @@ class DeckEnginePort:
 
     def poll(self, doc: str) -> dict:
         return self._call("GET", f"/run/{doc}")
+
+    def store_production(self, body: dict) -> dict:
+        """Hand the engine a Production file for one document: ``{ok, sha256, name, kind, rows, eligible}``."""
+        return self._call("POST", "/production", body, run=False)
 
 
 def port_for(settings) -> DeckEnginePort | None:

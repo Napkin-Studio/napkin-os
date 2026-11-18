@@ -430,7 +430,24 @@ def payload(out: Path, rep: dict, inp, live: bool) -> dict:
     out_p = {"deck": app_deck(deck), "validation": validation_summary(findings), "evidence": evidence_for(deck, inp) if inp is not None else {},
              "report": report, "exports": exports_for(out), "done": done_line(deck, rep)}
     out_p.update(repair_payload(out, deck, rep))
+    pv = production_payload(rep)
+    if pv:
+        out_p["production"] = pv
     return out_p
+
+
+def production_payload(rep: dict) -> dict | None:
+    """``production`` for the document (template schema; deck-prod-picker P6): the picker's card line, each picked slot with its candidates
+    (label, reach, rights, status; never a location) and the opt-in switches as the run had them. None when the run used no Production file."""
+    pk = (rep.get("production") or {}).get("picker")
+    if not isinstance(pk, dict):
+        return None
+    f = pk.get("fetch") or {}
+    return {"card": (rep.get("production") or {}).get("card") or "", "source": {k: (pk.get("source") or {}).get(k) for k in ("kind", "name")},
+            "picks": pk.get("picks") or [], "not_reachable": [{k: n.get(k) for k in ("slot", "key", "reason")} for n in pk.get("not_reachable") or []],
+            "fetch": {"on": bool(f.get("on")), "allow_list_empty": bool(f.get("allow_list_empty", not f.get("allow_list"))),
+                      **({"refused": f["refused"]} if f.get("refused") else {})},
+            "tie_break": {"on": bool((pk.get("tie_break") or {}).get("on"))}, "look": {"on": bool((pk.get("look") or {}).get("on"))}}
 
 
 def repair_payload(out: Path, deck: dict, rep: dict) -> dict:

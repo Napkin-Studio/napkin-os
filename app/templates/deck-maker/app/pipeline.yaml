@@ -25,3 +25,11 @@ tasks:
       - runs a stage after a gate that is not approved
       - shows an engine that failed, did not answer or answered garbage as a success: the job and the run are failed, with the engine's message
       - makes up a time, a percentage or a cost the engine did not give
+  attach_production:
+    handler: attach_production@1
+    job: short
+    reads:
+      - input.name and input.data_b64, a Production .clan or export zip the person attached to this deck (64 MB at most)
+    never:
+      - writes to the document (the app records inputs.production itself once the engine holds the file)
+      - fetches anything: fetching picked pictures stays the person's opt-in, behind the engine's host allow-list

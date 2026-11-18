@@ -14,6 +14,8 @@ Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, neve
     POST /run                    {doc, inputs, approvals, mode, render?}: start the next segment of this document's run
     GET  /run/<doc>              the run so far: state, the run object the screens read, and once built the payload
     GET  /file/<doc>/<name>      a finished file (deck.html, deck.pptx, deck.pdf, report.json)
+    POST /production             {doc, name, data_b64}: keep a Production .clan or export zip for this document (deck-prod-picker); every
+                                 later build whose inputs.production names its sha256 is run with --production FILE
 
 Env (all optional)::
 
@@ -95,6 +97,16 @@ class Settings:
         self.live = (e.get("NAPKIN_DECK_LIVE") or "").strip() == "1"
         self.max_usd = float(e.get("NAPKIN_DECK_MAX_USD") or 2.0)
         self.images = (e.get("NAPKIN_DECK_IMAGES") or "").strip() == "1"
+
+
+#: A Production file sent for a document: a .clan or the export zip, at most the importer's .clan cap (64 MB; the middleware's own body cap
+#: of 64 MB, base64 included, is lower still). Kept in <data>/<doc>/production/<sha256>.<ext>, local, never fetched from anywhere.
+PRODUCTION_EXT = (".clan", ".zip")
+PRODUCTION_MAX = 64_000_000
+BODY_MAX = PRODUCTION_MAX * 4 // 3 + 1_000_000
+#: What one document may keep: its newest Production files, at most this many and this many bytes together (older ones are removed).
+PRODUCTION_KEEP_FILES = 5
+PRODUCTION_KEEP_BYTES = 200_000_000
 
 
 def safe_name(doc) -> str:
@@ -242,6 +254,71 @@ class Server:
             d.thread.start()
             return self.view(d)
 
+    def production(self, body: dict) -> dict:
+        """Keep a Production .clan or export zip for one document (deck-prod-picker): checked as the picker reads it (contract 3, the
+        importer's caps; nothing fetched), stored by its sha256. Returns ``{sha256, name, kind, rows, eligible}`` for the app to record."""
+        import base64
+        import binascii
+        from . import from_production, prod_picker
+        if not isinstance(body, dict):
+            raise Refused(400, "bad_request", "the body must be a JSON object")
+        doc = safe_name(body.get("doc"))
+        name = str(body.get("name") or "")
+        ext = Path(name).suffix.lower()
+        if ext not in PRODUCTION_EXT or "/" in name or "\\" in name or len(name) > 200:
+            raise Refused(400, "bad_production", "give a Production .clan or its export zip (a file name ending .clan or .zip)")
+        raw = body.get("data_b64")
+        if not isinstance(raw, str) or len(raw) > BODY_MAX:
+            raise Refused(413 if isinstance(raw, str) else 400, "bad_production", f"the file must come as base64 and be at most {PRODUCTION_MAX // 1_000_000} MB")
+        try:
+            data = base64.b64decode(raw, validate=True)
+        except (binascii.Error, ValueError) as e:
+            raise Refused(400, "bad_production", "the file is not valid base64") from e
+        if not data or len(data) > PRODUCTION_MAX:
+            raise Refused(413, "bad_production", f"the file is empty or over {PRODUCTION_MAX // 1_000_000} MB")
+        hx = hashlib.sha256(data).hexdigest()
+        folder = self.s.data / doc / "production"
+        folder.mkdir(parents=True, exist_ok=True)
+        dest = folder / f"{hx}{ext}"
+        check = folder / f".{hx}.check{ext}"   # a hidden name until it reads as a Production file: never mistaken for a kept one
+        try:
+            check.write_bytes(data)
+            plan = prod_picker.Plan(prod_picker.Source(check))   # the Source holds the bytes in memory: the file can move after
+        except Exception as e:   # noqa: BLE001  (a bad zip, contract or YAML, or anything else the reader trips on: refused, never a 500)
+            check.unlink(missing_ok=True)
+            why = str(e) if isinstance(e, (from_production.FromProductionError, ValueError)) else f"it could not be read ({type(e).__name__})"
+            raise Refused(400, "bad_production", f"not a Production file the deck can read: {why}"[:400]) from e
+        check.replace(dest)
+        dest.touch()   # the newest kept file, for the quota below
+        self.keep_quota(folder, dest)
+        c = plan.inventory()["counts"]
+        return {"ok": True, "sha256": hx, "name": prod_picker.clean(name, 120), "kind": ext[1:], "rows": c["rows"], "eligible": c["eligible"]}
+
+    @staticmethod
+    def keep_quota(folder: Path, keep: Path) -> None:
+        """Hold one document's Production files to PRODUCTION_KEEP_FILES and PRODUCTION_KEEP_BYTES: the oldest go first, never ``keep``.
+        A build whose file was removed fails with production_missing and asks the person to choose it again."""
+        files = sorted((f for f in folder.iterdir() if f.is_file() and not f.name.startswith(".") and f.suffix in PRODUCTION_EXT),
+                       key=lambda f: f.stat().st_mtime, reverse=True)
+        n, total = 0, 0
+        for f in [keep] + [f for f in files if f != keep]:
+            size = f.stat().st_size
+            if f == keep or (n < PRODUCTION_KEEP_FILES and total + size <= PRODUCTION_KEEP_BYTES):
+                n, total = n + 1, total + size
+            else:
+                f.unlink(missing_ok=True)
+
+    def production_file(self, d: "Doc", prod: dict) -> Path | None:
+        """The stored Production file an inputs.production names (its sha256), or None when the engine does not hold it."""
+        hx = str((prod or {}).get("sha256") or "").removeprefix("sha256:")
+        if not (len(hx) == 64 and all(c in "0123456789abcdef" for c in hx)):
+            return None
+        for ext in PRODUCTION_EXT:
+            p = d.root / "production" / f"{hx}{ext}"
+            if p.is_file():
+                return p
+        return None
+
     def get(self, doc: str) -> dict:
         d = self.docs.get(safe_name(doc))
         if d is None:
@@ -375,11 +452,24 @@ class Server:
         inp = req["inputs"]
         if inp.get("text_mode") in ("condense", "preserve"):
             argv += ["--text-mode", inp["text_mode"]]
-        if isinstance(inp.get("review"), dict) and inp["review"].get("pinned"):
+        swaps = (req.get("review") or {}).get("production") if isinstance(req.get("review"), dict) else None
+        pinned = inp["review"].get("pinned") if isinstance(inp.get("review"), dict) else None
+        if pinned or swaps:   # the pins (the repair loop leaves them alone) and the person's Production swaps (the picker honours them)
             rv = d.out / "review.json"
             rv.parent.mkdir(parents=True, exist_ok=True)
-            rv.write_text(json.dumps({"pinned": inp["review"]["pinned"]}))
+            rv.write_text(json.dumps({**({"pinned": pinned} if pinned else {}), **({"production": swaps} if isinstance(swaps, dict) and swaps else {})}))
             argv += ["--review", str(rv)]
+        prod = inp.get("production") if isinstance(inp.get("production"), dict) else None
+        if prod and prod.get("sha256") and req["kind"] != "investor":   # deck-prod-picker: the person's Production file, on every build
+            pf = self.production_file(d, prod)
+            if pf is None:
+                raise Refused(409, "production_missing", "the Production file this deck uses is not on the engine any more: choose it again "
+                                                         "under Production pictures (nothing was built)")
+            argv += ["--production", str(pf)]
+            if prod.get("fetch") is True:   # opt-in; the host allow-list (engine/deck/policy/production_fetch.yaml) still decides
+                argv.append("--production-fetch")
+            if prod.get("look") is True:
+                argv.append("--production-look")
         ap_id = inp.get("approve_shorten")
         if isinstance(ap_id, str) and ap_id.startswith("apv_"):   # an approval id bound to the shortenable words' hash, never a bare yes
             argv += ["--approve-shorten", ap_id]
@@ -518,13 +608,18 @@ def make_handler(server: Server):
 
         def do_POST(self):
             def go():
-                if urlparse(self.path).path.strip("/") != "run":
+                route = urlparse(self.path).path.strip("/")
+                if route not in ("run", "production"):
                     raise Refused(404, "not_found", "no such route")
                 n = int(self.headers.get("Content-Length") or 0)
+                if n > BODY_MAX:
+                    raise Refused(413, "too_large", "the body is too large")
                 try:
                     body = json.loads(self.rfile.read(n) or b"{}")
                 except ValueError as e:
                     raise Refused(400, "bad_request", "the body is not JSON") from e
+                if route == "production":
+                    return self.json(200, server.production(body))
                 self.json(202, server.run(body))
             self.handle_any(go)
     return Handler

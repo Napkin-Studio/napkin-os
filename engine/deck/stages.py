@@ -50,7 +50,8 @@ MODELS["red_team"] = "claude-sonnet-5-5"   # a Claude model, never the writer's 
 MODELS["d_criterion"] = "claude-opus-5-5"   # one tender criterion's written answer: the writer's model, as stage d
 MODELS["g"] = "claude-sonnet-5-5"   # the picture subjects (deck-image-gen): one call per deck, on its own card
 MODELS["insight_judge"] = "claude-sonnet-5-5"   # never the writer's model (ADR 0006: Claude only; a non-Claude judge is not wired here)
-EFFORT = {"g": "low", "a0": "medium", "a": "medium", "b": "high", "c": "high", "c_judge": "low", "d": "high", "fit": "medium", "e": "low", "i": "high", "insight_judge": "low", "red_team": "medium", "d_criterion": "medium"}   # copy tightening is mechanical: low effort (medium cost up to $1.27 a deck)
+MODELS["production_pick"] = "claude-sonnet-5-5"   # deck-prod-picker: the optional tie-break on metadata rows only (Claude only, never Gemini)
+EFFORT = {"g": "low", "a0": "medium", "a": "medium", "b": "high", "c": "high", "c_judge": "low", "d": "high", "fit": "medium", "e": "low", "i": "high", "insight_judge": "low", "red_team": "medium", "d_criterion": "medium", "production_pick": "low"}   # copy tightening is mechanical: low effort (medium cost up to $1.27 a deck)
 #: Slide types whose headlines make claims the fit judge reads.
 JUDGED = ("real_question", "chart", "insight", "audience", "proposition", "measurement", "innovation",
           "problem", "why_now", "solution", "product", "market", "business_model", "traction", "competition", "gtm",
