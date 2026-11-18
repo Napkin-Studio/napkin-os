@@ -309,6 +309,9 @@
 /* The Edit room's band (mock edit): Preview | Rendered after the length; the timeline's tools on the right. */
 .rm-bandview { display: inline-flex; }
 .rm-bandseg { display: inline-flex; }
+.rm-bandview { gap: 6px; align-items: center; }
+.rm-bandview .sp-btn.rm-mute { gap: 5px; }
+.rm-bandview .sp-btn.rm-mute.pressed { background: var(--soft); }
 .rm-bandtools, .rm-tltools { display: inline-flex; align-items: center; gap: 6px; }
 .rm-tltools .sp-btn { flex-shrink: 0; }
 .rm-tltools .sp-btn kbd { font: 500 10px var(--font-mono); padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--ink2); }

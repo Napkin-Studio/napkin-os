@@ -17,3 +17,20 @@ export function isStill(doc: { assets: Record<string, { mime: string } | undefin
 
 /** "0:03.5". */
 export const tc = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${(Math.max(0, s) % 60).toFixed(1).padStart(4, '0')}`
+
+/** The Edit room preview's mute, remembered in this browser only (owner 2026-11-18). Unmuted unless chosen. */
+export const PREVIEW_MUTE_KEY = 'napkin.production.previewMuted'
+
+export function loadPreviewMuted(read: () => string | null = () => localStorage.getItem(PREVIEW_MUTE_KEY)): boolean {
+  try {
+    return read() === '1'
+  } catch {
+    return false
+  }
+}
+
+export function savePreviewMuted(muted: boolean, write: (v: string) => void = (v) => localStorage.setItem(PREVIEW_MUTE_KEY, v)) {
+  try {
+    write(muted ? '1' : '0')
+  } catch { /* private window: unmuted again next time */ }
+}

@@ -328,6 +328,35 @@ export function frameAt(plan: Plan, t: number): Frame {
   return { layers, text, ...(endCard ? { endCard } : {}), wash }
 }
 
+/** One clip's sound at a moment: where in its take, and how loud (0..1). */
+export interface Sound { clip: PlanClip; srcS: number; gain: number }
+
+/** What the preview hears at ad time `t`, as stitch mixes the render (stitch/timeline.py; owner 2026-11-18,
+ *  until the Sound feature mixes one): each clip's own sound inside its window, at its speed; its fades; a
+ *  transition (a dissolve or a dip) crossfades the two linearly over its seconds, the outgoing clip running on
+ *  into its footage after its out point, silent when it holds its last frame instead, has faded out or has no
+ *  footage left. Silent under a held last frame, a gap and the end card (and the roll-up after it). A still
+ *  has no sound: the preview never plays a picture. */
+export function soundAt(plan: Plan, t: number): Sound[] {
+  const cur = [...plan.clips].reverse().find((c) => t >= c.startS - 1e-6 && t < c.startS + c.durS - 1e-6)
+  if (!cur) return []
+  const out: Sound[] = []
+  const into = t - cur.startS
+  let gain = fadeAlpha(into, cur.durS, cur.fadeInS ?? 0, cur.fadeOutS ?? 0)
+  const tr = cur.transitionIn
+  const i = plan.clips.indexOf(cur)
+  const prev = i > 0 ? plan.clips[i - 1] : undefined
+  if (tr && tr.s > 0 && into < tr.s && prev) {
+    const k = into / tr.s
+    gain *= k
+    const handle = prev.outS + into * (prev.speed ?? 1)
+    if (!prev.holdS && !prev.fadeOutS && handle < prev.takeS - 0.02) out.push({ clip: prev, srcS: r3(handle), gain: r3(1 - k) })
+  }
+  const src = cur.inS + into * (cur.speed ?? 1)
+  if (src < cur.outS - 0.02) out.push({ clip: cur, srcS: r3(src), gain: r3(gain) })
+  return out
+}
+
 /** The clip under the playhead in words, for the transport: "Box 1 at 0:01.0". */
 export function whereWords(plan: Plan, t: number, nameOf: (genId: Id) => string): string {
   const c = [...plan.clips].reverse().find((x) => t >= x.startS && t < x.startS + x.durS)

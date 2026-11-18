@@ -2,13 +2,14 @@
 // one Render ad sends (rooms/timeline.ts compileFor). Each clip has a pooled video element; at every frame the
 // viewer asks frameAt(plan, t) what shows (the clip, the outgoing clip's footage inside a dissolve or dip, the
 // text, the end card) and draws it onto one canvas. It is always labelled Preview; a render plays labelled
-// Rendered. Nothing here spends anything.
+// Rendered. Nothing here spends anything. It plays the clips' own sound as the render mixes it (soundAt:
+// owner 2026-11-18), unless the person muted it in the band.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useDoc } from '../app/context'
 import { remoteUrl } from '../jobs/assets'
 import { blobUrl, cachedBlobUrl } from '../lib/blobs'
-import { frameAt, type Plan, type PlanText } from './timeline'
+import { frameAt, soundAt, type Plan, type PlanText } from './timeline'
 
 /** A file's URL: this browser's copy, else the relay's. */
 async function urlOf(doc: { assets: Record<string, { locations?: string[] } | undefined> }, sha: string): Promise<string | undefined> {
@@ -86,9 +87,20 @@ function drawFit(ctx: CanvasRenderingContext2D, el: CanvasImageSource & { videoW
   ctx.restore()
 }
 
-export function Viewer({ plan, t, onTime, ratio, playing, onPlaying, label }: {
+/** Play an element; if the browser refuses sound before a gesture, play it muted rather than not at all. */
+function play(el: HTMLVideoElement) {
+  void el.play().catch((e: unknown) => {
+    if ((e as { name?: string } | null)?.name !== 'NotAllowedError' || el.muted) return
+    el.muted = true
+    void el.play().catch(() => {})
+  })
+}
+
+export function Viewer({ plan, t, onTime, ratio, playing, onPlaying, label, muted = false }: {
   /** Said on the picture: Preview. */
   label: string
+  /** The band's mute: no sound at all. */
+  muted?: boolean
   plan: Plan
   t: number
   onTime: (s: number) => void
@@ -105,6 +117,11 @@ export function Viewer({ plan, t, onTime, ratio, playing, onPlaying, label }: {
   const [rw, rh] = ratio.split(':').map(Number)
   const tRef = useRef(t)
   useEffect(() => { tRef.current = t })
+  const mutedRef = useRef(muted)
+  useEffect(() => {
+    mutedRef.current = muted
+    for (const el of pool.current.values()) if (el instanceof HTMLVideoElement && muted) el.muted = true
+  }, [muted])
 
   // The canvas follows its box at the screen's density.
   useLayoutEffect(() => {
@@ -130,23 +147,36 @@ export function Viewer({ plan, t, onTime, ratio, playing, onPlaying, label }: {
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, w, h)
     const f = frameAt(plan, at)
-    const live = new Set(f.layers.map((l) => l.clip.item_id))
+    // The sound as the render mixes it: a clip sounds inside its window (and, under a transition, the
+    // outgoing one in its footage after the cut, even once a dip has hidden its picture).
+    const sound = new Map(running ? soundAt(plan, at).map((x) => [x.clip.item_id, x] as const) : [])
+    const live = new Set([...f.layers.map((l) => l.clip.item_id), ...sound.keys()])
     for (const [k, el] of pool.current) if (!live.has(k) && el instanceof HTMLVideoElement && !el.paused) el.pause()
+    const drive = (el: HTMLVideoElement, id: string, srcS: number, speed: number, plays: boolean) => {
+      el.playbackRate = speed
+      const s = sound.get(id)
+      el.volume = s ? s.gain : 0
+      el.muted = mutedRef.current || !s
+      const drift = Math.abs(el.currentTime - srcS)
+      if (plays) {
+        if (el.paused) play(el)
+        if (drift > 0.25) el.currentTime = srcS
+      } else {
+        if (!el.paused) el.pause()
+        if (drift > 0.03) el.currentTime = srcS
+      }
+    }
     for (const l of f.layers) {
       const el = pool.current.get(l.clip.item_id)
       if (!el) continue
       if (el instanceof HTMLVideoElement) {
-        el.playbackRate = l.clip.speed ?? 1
-        const drift = Math.abs(el.currentTime - l.srcS)
-        if (running && l.srcS < l.clip.outS - 0.02) {
-          if (el.paused) void el.play().catch(() => {})
-          if (drift > 0.25) el.currentTime = l.srcS
-        } else {
-          if (!el.paused) el.pause()
-          if (drift > 0.03) el.currentTime = l.srcS
-        }
+        drive(el, l.clip.item_id, l.srcS, l.clip.speed ?? 1, running && (sound.has(l.clip.item_id) || l.srcS < l.clip.outS - 0.02))
         if (el.readyState >= 2) drawFit(ctx, el, l.alpha, w, h)
       } else if (el.complete) drawFit(ctx, el, l.alpha, w, h)
+    }
+    for (const [id, x] of sound) {
+      const el = pool.current.get(id)
+      if (el instanceof HTMLVideoElement && !f.layers.some((l) => l.clip.item_id === id)) drive(el, id, x.srcS, x.clip.speed ?? 1, true)
     }
     if (f.wash.alpha > 0) {
       ctx.save()

@@ -22,7 +22,7 @@ import { Inspector } from './Inspector'
 import { boxName, sharesBox, type Gen } from './model'
 import { NewTakeSheet } from './NewTakeSheet'
 import { tc } from './media'
-import { isStill, useAssetUrl } from './media'
+import { isStill, loadPreviewMuted, savePreviewMuted, useAssetUrl } from './media'
 import type { RoomData, Selection } from './Rooms'
 import { Timeline, type Picked } from './Timeline'
 import { compileFor, dismissedTakes, newerTake, readCut, renderPlan, whereWords } from './timeline'
@@ -70,6 +70,9 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
   }
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'preview' | 'rendered'>('preview')
+  // The preview plays the clips' own sound (owner 2026-11-18); the band's toggle mutes it, per browser.
+  const [muted, setMuted] = useState(() => loadPreviewMuted())
+  const toggleMute = () => setMuted((m) => { savePreviewMuted(!m); return !m })
   const [, rerender] = useState(0)
   const v1 = cut.v1
   // What is picked: a clip (the selection carries across: Make's take or shot picks its clip here), a text, the card.
@@ -195,12 +198,19 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
           <button type="button" aria-pressed={view === 'rendered'} disabled={!render} onClick={() => setView('rendered')}
             title={render ? undefined : 'Render ad to see the rendered film'}>{render ? `Rendered v${render.version}` : 'Rendered'}</button>
         </span>, viewSlot)}
+      {viewSlot && view === 'preview' && createPortal(
+        <button type="button" className={`sp-btn rm-mute ${muted ? 'pressed' : ''}`} aria-pressed={muted} onClick={toggleMute}
+          aria-label="Mute the preview" title={muted ? 'The preview is muted' : 'The preview plays the clips\u2019 own sound, as the render does'}>
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6v4h3l4 3V3L5 6H2z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+            {muted ? <path d="M11 6l4 4M15 6l-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /> : <path d="M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />}</svg>
+          <span className="rm-muteword">{muted ? 'Muted' : 'Sound'}</span>
+        </button>, viewSlot)}
       <section className="rm-program" aria-label="Program">
         {view === 'rendered' && render ? (
           <RenderedPlayer sha={render.asset} onSound={onSound} />
         ) : (
           <div className="rm-viewer">
-            <Viewer label="Preview" plan={plan} t={t} onTime={setT} ratio={data.ratio} playing={playing} onPlaying={setPlaying} />
+            <Viewer label="Preview" plan={plan} t={t} onTime={setT} ratio={data.ratio} playing={playing} onPlaying={setPlaying} muted={muted} />
           </div>
         )}
         {view === 'preview' && (
@@ -289,7 +299,7 @@ function RenderedPlayer({ sha, onSound }: { sha: string; onSound: () => void }) 
         {url && !isStill(doc, sha) ? <video src={url} controls playsInline className="rm-rendered" /> : url ? <img src={url} alt="The rendered ad" className="rm-rendered" /> : <div className="rm-stage-empty">The render is on its way</div>}
         <span className="rm-viewlabel rendered">Rendered</span>
       </div></div>
-      <div className="rm-banner info">This render has no sound yet. <button type="button" className="btn link" onClick={onSound}>Open Sound</button> to add it.</div>
+      <div className="rm-banner info">This render keeps each clip's own sound. <button type="button" className="btn link" onClick={onSound}>Open Sound</button> for music and voice.</div>
     </div>
   )
 }
@@ -324,7 +334,8 @@ export function RenderAd({ data }: { data: RoomData }) {
   const target = storyboardOfVideo(doc, data.videoId)?.target_s ?? doc.videos[data.videoId]?.target_s
   const off = target && plan.lengthS ? Math.round((plan.lengthS - target) * 10) / 10 : 0
   if (Math.abs(off) >= 0.5) checks.push({ text: `The cut is ${Math.round(plan.lengthS * 10) / 10} s: ${Math.abs(off)} s ${off < 0 ? 'short of' : 'over'} the ${target} s it is for`, ok: false })
-  checks.push({ text: 'This render has no sound yet. Open Sound to add it.', ok: false })
+  // The render keeps each clip's own sound (stitch/timeline.py, owner 2026-11-18) until Sound mixes one.
+  checks.push({ text: 'The render keeps each clip\u2019s own sound; music and voice come with Sound', ok: true })
   const go = () => send(async () => {
     setError(null)
     try {
