@@ -24,7 +24,7 @@ from pathlib import Path
 
 from . import images, numfmt, spec
 from .refs import fmt
-from .render_pptx import DARK_TYPES, THEME, _kicker
+from .render_pptx import DARK_TYPES, THEME, _kicker, band_label, dark_types
 from .spec import blocks_sha, frame_for, shown_blocks
 
 #: The accent is 2.2:1 on white, so accent-coloured text on light slides uses a darker amber
@@ -269,13 +269,17 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         s = deck["slides"][sid]
         pic_html, pic_cls = picture_markup(sid, s, drawn, pictures or {}, src, plabel) if drawn else ("", "")
         b = _Slide(inp)
-        dark = s["type"] in DARK_TYPES
+        v3 = bool(spec.LOOK_V3)
+        dark = s["type"] in (dark_types(v3) if v3 else DARK_TYPES)
         logo = _cover_logo(deck, assets_dir) if s["type"] == "title" else None
         kick = (b.rv("brand-logo", logo, "div", 160) if logo else
                 b.rv("kicker", _e(KICKERS[s["type"]] or _kicker(deck["meta"])), "div", 120) if s["type"] in KICKERS else "")
+        if v3 and s["type"] != "title":   # deck-look: the section band replaces the kicker (and the accent tick): a topic, never the title
+            lab = band_label(s, deck["meta"])
+            kick = f'<div class="band">{_e(lab)}</div>' if lab else '<div class="band empty"></div>'
         title = b.words(s["title"], "title", "h1") if dark else b.rv("title", _e(s["title"]), "h1", 220)
         body = _body(s, b, shown_blocks(s, audience), bool(pic_html))
-        foot = f'<span>{_e(s["section"])}</span>'
+        foot = "" if (v3 and s["type"] != "title") else f'<span>{_e(s["section"])}</span>'   # the band carries the section
         if s.get("footnotes"):
             foot += f'<span class="src">Sources {" ".join(f"[{k}]" for k in s["footnotes"][:14])} (appendix)</span>'
         foot += f'<span class="num">{n}</span>'
@@ -575,10 +579,35 @@ LOOK_CSS = """
 """
 
 
-def theme_css(css: str | None = None, head: str = HEAD_FONT, body: str = BODY_FONT, colors: dict | None = None, look: bool = True) -> str:
+#: deck-look on the web (spec.LOOK_V3): the sans pair, the section band, 0.75 pt hairlines (1.5 px on the 1920 canvas) instead of the
+#: accent edge stripes and tick, figures in ink. The fonts load from the machine, else from ``fonts/`` beside the page, else Arial.
+LOOK_V3_FONTS = "'Archivo', Arial, 'Helvetica Neue', sans-serif"
+LOOK_V3_BODY = "'Source Sans 3', Arial, 'Helvetica Neue', sans-serif"
+LOOK_V3_CSS = """
+@font-face{font-family:'Archivo';font-weight:100 900;font-stretch:62% 125%;src:local('Archivo'),url('fonts/Archivo/Archivo%5Bwdth,wght%5D.ttf') format('truetype')}
+@font-face{font-family:'Source Sans 3';font-weight:200 900;src:local('Source Sans 3'),url('fonts/SourceSans3/SourceSans3%5Bwght%5D.ttf') format('truetype')}
+.band{border-top:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);padding:12px 0 10px;margin:-12px 0 36px;font:700 24px/1.2 var(--head)}
+.band.empty{height:16px;padding:0}
+.dark .band{border-color:var(--dark-text)}
+.kicker{display:none}
+.b-callout{border-left:0;border-top:1.5px solid var(--ink);border-radius:0}
+.b-quote{color:var(--ink)}.dark .b-quote{color:var(--dark-text)}
+.step{border-top:1.5px solid var(--ink);border-radius:0}.step .no{color:var(--ink)}
+.stat{border-top:1.5px solid var(--ink)}
+.b-bullets li:before{background:var(--ink)}.dark .b-bullets li:before{background:var(--dark-text)}
+.ft.to{background:var(--tint);color:var(--ink);border-top:1.5px solid var(--ink)}.dark .ft.to{background:#2a3644;color:var(--dark-text)}.ft.to .cap{color:var(--muted)}
+.frame{border-radius:0;border-top:1.5px solid var(--dark-text)}
+.pic,.b-card,.ft{border-radius:0}
+"""
+
+
+def theme_css(css: str | None = None, head: str | None = None, body: str | None = None, colors: dict | None = None, look: bool = True) -> str:
     """A stylesheet with the deck theme filled in (default: the whole web deck's); ``colors``: a brand's
-    overrides by THEME key (accent_ink too)."""
-    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI).replace("HEAD", head).replace("BODY", body)
+    overrides by THEME key (accent_ink too). Under ``spec.LOOK_V3`` the default fonts are the sans pair and the band CSS is added."""
+    v3 = bool(spec.LOOK_V3) and css is None
+    head = head or (LOOK_V3_FONTS if v3 else HEAD_FONT)
+    body = body or (LOOK_V3_BODY if v3 else BODY_FONT)
+    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI + (LOOK_V3_CSS if v3 else "")).replace("HEAD", head).replace("BODY", body)
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
     if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
         T["tint"] = T["panel"]
@@ -623,4 +652,8 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <script>{JS}</script></body></html>
 """
     out.write_text(page, encoding="utf-8")
+    if spec.LOOK_V3:   # the fonts folder beside the page (OFL, vendored): the page reads them when the machine has none
+        import shutil
+        shutil.copytree(Path(__file__).resolve().parent / "fonts", Path(out).parent / "fonts", dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("*.py", "widths.json", "__pycache__"))
     return out

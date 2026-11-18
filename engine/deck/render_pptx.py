@@ -112,6 +112,15 @@ THEME = {
     "head": "Cambria", "body": "Calibri",
 }
 DARK_TYPES = {"title", "real_question", "idea", "next_step", "appendix", "close"}
+#: deck-look: the real question sits on paper (a band and a hero line), the rest keep their dark slides.
+DARK_TYPES_V3 = DARK_TYPES - {"real_question"}
+#: The section band (deck-look step 2), in inches: hairline, label, hairline across the content width; the title starts under it.
+BAND_TOP, BAND_LABEL_Y, BAND_LABEL_H, BAND_BOTTOM, BAND_TITLE_Y = 0.50, 0.54, 0.24, 0.84, 0.94
+
+
+def dark_types(v3: bool | None = None) -> set:
+    """The slide types drawn on a dark ground (``spec.LOOK_V3`` moves the real question to paper)."""
+    return DARK_TYPES_V3 if (spec.LOOK_V3 if v3 is None else v3) else DARK_TYPES
 W, H = 13.333, 7.5
 X0, X1 = 0.6, 12.73
 Y_BODY, Y_END = 1.85, 6.75
@@ -127,6 +136,17 @@ SCALES = (1.0, 0.92, 0.85, 0.78, 0.72)
 NO_STYLE = "{2D5ABB26-0587-4C30-8999-92F81FD0307C}"
 NUM = re.compile(r"^[<>~≈]?[€$£]?\d[\d,.]*(%|×|[kKMB])?$")
 #: A numeric first word of a bullet is set large, the rest of the sentence beside it.
+
+
+def band_label(s: dict, meta: dict) -> str:
+    """The section topic for the band (pptx and web): the slide's section (sentence case), never the slide's title; when the section is
+    the title, the deck's project; when that is the title too, nothing."""
+    norm = lambda t: re.sub(r"\W+", " ", str(t or "")).strip().lower()
+    title = norm(s.get("title"))
+    for c in (s.get("section"), meta.get("project"), meta.get("title")):
+        if c and norm(c) != title:
+            return str(c)
+    return ""
 
 
 class NoFit(Exception):
@@ -378,6 +398,7 @@ class Renderer:
         self.no_plan = False        # --no-layout-plan: choose_layout on every slide, as before the library
         self.notes = True           # False: a notes-free export (no speaker notes at all, the moved points included)
         self._slotmap, self._shapes_now, self._sid = {}, [], None
+        self._band_drawn = False
         self._cpl = 48              # characters per line for body, small and lead text (fit.cpl widens it for a slide that fits no other way)
 
     def _layout(self, name):
@@ -392,11 +413,20 @@ class Renderer:
         t = self.th
         if dark:
             card = themes.blend(t.ink, t.on_dark, 0.09)
+            if t.v3:   # figures and labels wear the text colour on dark slides too
+                return SimpleNamespace(dark=True, bg=t.ink, fg=t.on_dark, mute=t.on_dark_mute, acc_t=t.on_dark,
+                                       acc_f=t.accent_on_dark, acc_l=t.accent_on_dark, card=card, card_fg=t.on_dark, card_mute=t.on_dark_mute,
+                                       card_acc=t.on_dark, rule=themes.blend(t.ink, t.on_dark, 0.28), chip_fg=t.ink,
+                                       inv=t.panel, inv_fg=t.ink, inv_acc=t.ink, inv_mute=t.mute)
             return SimpleNamespace(dark=True, bg=t.ink, fg=t.on_dark, mute=t.on_dark_mute, acc_t=t.accent_on_dark,
                                    acc_f=t.accent_on_dark, acc_l=t.accent_on_dark, card=card, card_fg=t.on_dark, card_mute=t.on_dark_mute,
                                    card_acc=t.accent_on_dark, rule=themes.blend(t.ink, t.on_dark, 0.28), chip_fg=t.ink,
                                    inv=t.panel, inv_fg=t.ink, inv_acc=t.accent_ink, inv_mute=t.mute)
         chip = "FFFFFF" if themes.contrast("FFFFFF", t.accent) >= themes.contrast(t.ink, t.accent) else t.ink
+        if t.v3:   # deck-look: figures and labels wear ink, no filled dark panels (the 'inverse' ground is the paper itself)
+            return SimpleNamespace(dark=False, bg=t.paper, fg=t.ink, mute=t.mute, acc_t=t.ink, acc_f=t.accent, acc_l=t.line_accent,
+                                   card=t.panel, card_fg=t.ink, card_mute=t.mute, card_acc=t.ink, rule=t.rule,
+                                   chip_fg=chip, inv=t.paper, inv_fg=t.ink, inv_acc=t.ink, inv_mute=t.mute)
         return SimpleNamespace(dark=False, bg=t.paper, fg=t.ink, mute=t.mute, acc_t=t.accent_ink, acc_f=t.accent, acc_l=t.line_accent,
                                card=t.panel, card_fg=t.ink, card_mute=t.mute, card_acc=t.accent_ink, rule=t.rule,
                                chip_fg=chip, inv=t.ink, inv_fg=t.on_dark, inv_acc=t.accent_on_dark, inv_mute=t.on_dark_mute)
@@ -501,6 +531,9 @@ class Renderer:
         """A plain native rectangle (or other shape) with no theme style: solid fill and/or outline, optionally dashed."""
         if sl is None:
             return None
+        if (self.th.v3 and fill and shape == MSO_SHAPE.RECTANGLE and not line and min(w, h) <= 0.12
+                and (fill.upper() in self._accent_fills() or (abs(w - 0.5) < 1e-6 and h <= 0.06))):
+            return self._stripe_to_rule(sl, x, y, w, h, name)
         s = sl.shapes.add_shape(shape, Inches(x), Inches(y), Inches(w), Inches(h))
         st = s._element.find(qn("p:style"))
         if st is not None:
@@ -521,9 +554,65 @@ class Renderer:
             s.name = name
         return s
 
+    # -- hairlines and the section band (deck-look, spec.LOOK_V3) ---------------------------------
+    def _accent_fills(self) -> set:
+        t = self.th
+        return {c.upper() for c in (t.accent, t.accent_ink, t.accent_on_dark, t.line_accent)}
+
+    def hairline(self, sl, x1, y1, x2, y2, color=None, name="Hairline"):
+        """A native straight line at the look's rule weight (0.75 pt), ink by default (light on a dark slide)."""
+        if sl is None:
+            return None
+        from pptx.enum.shapes import MSO_CONNECTOR
+        c = sl.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
+        st = c._element.find(qn("p:style"))
+        if st is not None:
+            c._element.remove(st)
+        c.line.color.rgb = _rgb(color or self.p.fg)
+        c.line.width = Pt(self.th.decor.rule_pt)
+        c.name = name
+        return c
+
+    def _stripe_to_rule(self, sl, x, y, w, h, name=None):
+        """An accent edge stripe or tick becomes a hairline (a tick above a title, 0.5 x 0.06 in, becomes nothing: the band is the mark)."""
+        if abs(w - 0.5) < 1e-6 and h <= 0.06:
+            return None
+        if h > w:   # a vertical stripe at a card's or text's edge
+            return self.hairline(sl, x + w / 2, y, x + w / 2, y + h, name=name or "Hairline")
+        return self.hairline(sl, x, y + h / 2, x + w, y + h / 2, name=name or "Hairline")
+
+    def band_label(self, s) -> str:
+        """The band's section topic (see ``band_label``)."""
+        return band_label(s, self.deck.get("meta") or {})
+
+    def band(self, sl, s):
+        """The section band: a hairline, the section topic, a hairline, across the content width. Drawn once per slide."""
+        if sl is None or not (self.th.v3 and self.th.decor.band) or self._band_drawn:
+            return
+        self._band_drawn = True
+        self.hairline(sl, self.x0, BAND_TOP, self.x1, BAND_TOP, name="BandRule")
+        label = self.band_label(s)
+        if label:
+            self.ptext(sl, self.x0, BAND_LABEL_Y, self.x1 - self.x0, BAND_LABEL_H,
+                       [self.para(label, self.th.decor.band_label_pt, self.p.fg, self.th.head, bold=True, cap=True)], anchor="middle", name="Band")
+        self.hairline(sl, self.x0, BAND_BOTTOM, self.x1, BAND_BOTTOM, name="BandRule")
+
+    def _mark_above_title(self, sl, s, color, band=True):
+        """What sits above a title: the accent tick of the earlier look, or the section band of deck-look
+        (the cover and the close carry none: their mark is the title itself)."""
+        if self.th.v3:
+            if band:
+                self.band(sl, s)
+        else:
+            self.rect(sl, self.x0, self.th.grid.top, 0.5, 0.06, fill=color)
+
     # -- measuring and paragraph text (layout library) -----------------------------------------
     def _wf(self, bold=False, font=None):
         """Average glyph width as a fraction of the size: a deliberately generous figure (QA catches the rest)."""
+        if self.th.v3:   # measured (deck/fonts/widths.json): the wider of the font and its fallback, with a margin
+            w = themes.fit_wf(font or self.th.body, bold)
+            if w:
+                return w
         head = (font or self.th.body) == self.th.head
         return (0.55 if head else 0.50) + (0.03 if bold else 0)
 
@@ -1383,15 +1472,17 @@ class Renderer:
         if n > 3:
             raise NoFit("title too long")
         top = (g.title_y - (0.1 if (dense or fixed) else 0.0)) if y is None else y
+        if self.th.v3 and self.th.decor.band and y is None:
+            top = BAND_TITLE_Y   # under the section band
         h = n * size * 1.2 / 72 + 0.04
         if sl is not None:
             m = self._mark(sl)
-            self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=self.p.acc_l)
+            self._mark_above_title(sl, s, self.p.acc_l)
             tp = self.para(s["title"], size, self.p.fg, self.th.head, bold=True)
             bw = self.balance_w(tp["t"], w, size, True, self.th.head)
             self.ptext(sl, self.x0, top, bw, h, [tp], name="Title")
             self._build(sl, m, title=True)
-        return top + h + (0.2 if (dense or fixed) else 0.3)
+        return top + h + ((0.15 if self.th.v3 else 0.2) if (dense or fixed) else 0.3)
 
     def _lay_stack(self, sl, s, role=False):
         """The standard composition: title, then the blocks stacked with their looks (cards, KPI row, timeline
@@ -1454,7 +1545,7 @@ class Renderer:
         if sl is None:
             return
         m = self._mark(sl)
-        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
+        self._mark_above_title(sl, s, p.acc_l, band=False)
         lx = self._logo(sl, 0.8)   # the brand's lockup for a dark ground, with the kicker label kept beside it
         self.ptext(sl, lx, 0.8 if lx == self.x0 else 1.1, 8, 0.3, [self.para(_kicker(self.deck["meta"]).upper(), S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
         self.ptext(sl, self.x0, y, w, th_, [self.para(s["title"], size, p.fg, self.th.head, bold=True, line=1.0)], name="Title")
@@ -1504,15 +1595,16 @@ class Renderer:
         gh = max(self.ph(tp, tw), max(bar[3], 1.2) if bar else 0.0)
         top += 0.45 if spec.LOOK_V2 else max(0.0, (avail - gh) / 2) * 0.85   # look change 2: one baseline, not floating to the middle
         m = self._mark(sl)
-        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
-        if label:
+        self._mark_above_title(sl, s, p.acc_l)
+        if label and not self._band_drawn:   # the band carries the section label
             self.ptext(sl, self.x0, 0.8, 6, 0.3, [self.para(label, S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
         self.ptext(sl, self.x0, top, tw, self.ph(tp, tw), tp, name="Title")
         self._build(sl, m, title=True)
         if bar:
             xr, wr, bp, bh = bar
             m = self._mark(sl)
-            self.rect(sl, xr - 0.45, top, 0.012, max(bh, 2.0), fill=p.rule)
+            if not self.th.v3:
+                self.rect(sl, xr - 0.45, top, 0.012, max(bh, 2.0), fill=p.rule)
             self.rect(sl, xr, top, 0.09, max(bh, 1.2), fill=p.acc_l)
             self.ptext(sl, xr + 0.32, top, wr - 0.32, max(bh, 1.2), bp, anchor="middle")
             self._build(sl, m)
@@ -1875,7 +1967,7 @@ class Renderer:
             return self._with_width(tx0, tx1, body)
         run(sl is not None)
         label = {"idea": "THE IDEA", "real_question": "THE REAL QUESTION"}.get(s["type"])
-        if label and sl is not None:   # the kicker label an emphasis bar sets over its title, kept when the idea takes a picture panel
+        if label and sl is not None and not self._band_drawn:   # the kicker label an emphasis bar sets over its title, kept when the idea takes a picture panel (the band carries it under deck-look)
             S, p = self.th.scale, self.p
             self.ptext(sl, tx0 + 0.65, g.top - 0.05, 4.0, 0.25, [self.para(label, S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
         self._own_picture(sl, "picture", px, self.PIC_TOP, pw, self.PIC_H)
@@ -2265,7 +2357,7 @@ class Renderer:
             return
         y = max(1.5, (g.body_end + 1.0 - total) / 2 - 0.2)
         m = self._mark(sl)
-        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
+        self._mark_above_title(sl, s, p.acc_l, band=False)
         self.ptext(sl, self.x0, y, w, th_, [self.para(s["title"], size, p.fg, self.th.head, bold=True, line=1.0)], name="Title")
         self._build(sl, m, title=True)
         y += th_ + 0.35
@@ -2302,7 +2394,7 @@ class Renderer:
         self._cpl = cpl
         lib = layouts.load()
         self._lid, self._min_sc, self._scale_cap, self._relaxed = name, 1.0, scale_cap, relaxed
-        self.p = self._palette(s["type"] in DARK_TYPES or name in ("close",))
+        self.p = self._palette(s["type"] in dark_types(self.th.v3) or name in ("close",))
         if title_pt:
             self._tpt = {**self._tpt, name: title_pt}
         self._pics = {n: {"aspect": sl["image"]["aspect"], "asset": None, "probe": True} for n, sl in layouts.image_slots(lib[name])} if name in lib else {}
@@ -2389,7 +2481,8 @@ class Renderer:
         """One slide: background, then the layout chosen by ``choose_layout`` (the flow if it does not fit),
         footer, watermark, notes."""
         sl = self.prs.slides.add_slide(self.blank)
-        dark = s["type"] in DARK_TYPES
+        dark = s["type"] in dark_types(self.th.v3)
+        self._band_drawn = False
         self.p = self._palette(dark)
         self.fg = self.p.fg
         bg = sl.background.fill
@@ -2463,7 +2556,8 @@ class Renderer:
         foot = t.scale.foot
         if t.layouts:
             self.rect(sl, self.x0, 6.9, self.x1 - self.x0, 0.01, fill=p.rule)
-        self.text(sl, self.x0, 7.0, 6, 0.3, s["section"].upper(), size=foot, cap=True, color=p.mute, name="Section")
+        if not self._band_drawn:   # the band carries the section on a banded slide
+            self.text(sl, self.x0, 7.0, 6, 0.3, s["section"].upper(), size=foot, cap=True, color=p.mute, name="Section")
         if s.get("footnotes"):
             self.text(sl, 6.2, 7.0, 5.6, 0.3, "Sources " + " ".join(f"[{k}]" for k in s["footnotes"][:14]) + "  (appendix)", size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="Footnotes")
         self.text(sl, 12.1, 7.0, self.x1 - 12.1, 0.3, str(n), size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="SlideNumber")
@@ -2605,6 +2699,9 @@ class Renderer:
         w = w or (self.x1 - self.x0)
         h = _est_h(s["title"], w, size, 1.1)
         m = self._mark(sl)
+        if self.th.v3 and self.th.decor.band and y == 0.5:   # the flow gets the band too: it is the same look, only the fit failed
+            self.band(sl, s)
+            y = BAND_TITLE_Y
         self.text(sl, self.x0, y, w, h, s["title"], size=size, bold=True, font=self.th.head, name="Title")
         self._build(sl, m, title=True)
         return y + h + 0.25
