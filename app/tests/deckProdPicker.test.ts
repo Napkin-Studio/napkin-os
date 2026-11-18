@@ -94,6 +94,7 @@ test('fetch and the vision check are opt-in, and an empty allow-list is said pla
   assert.match(off.fetchLine, /off \(opt-in\)/)
   assert.match(off.fetchLine, /allow-list is empty/)
   assert.match(off.lookLine, /off \(opt-in\).*never place or remove/)
+  assert.match(off.lookLine, /Claude Haiku, which sends the pictures to Anthropic and is paid.*every build/)
   const onEmpty = P.prodView({ production: production('s01', { fetch: { on: true, allow_list_empty: true, refused: 'fetch refused' } }) })!
   assert.match(onEmpty.fetchLine, /no provider host is on the fetch allow-list.*production_fetch\.yaml/)
   const onHosts = P.prodView({ production: production('s01', { fetch: { on: true, allow_list_empty: false }, look: { on: true } }) })!
@@ -220,6 +221,10 @@ test('fetch and the vision check start off, and the card says what an empty allo
   const off = P2.sourceView(startData(['lumen.clan'], cur))!
   assert.match(off.fetchNote, /^Off: .*Nothing is downloaded unless you turn this on, and only from hosts on the engine's allow-list/)
   assert.match(off.lookNote, /^Off: .*never place or remove/)
+  for (const note of [off.lookNote, P2.sourceView(startData(['lumen.clan'], { ...cur, look: true }))!.lookNote]) {
+    assert.match(note, /falls back to Claude Haiku, which sends the pictures to Anthropic and is paid/)
+    assert.match(note, /runs on every build/)
+  }
   const on = P2.sourceView(startData(['lumen.clan'], { ...cur, fetch: true }))!
   assert.match(on.fetchNote, /no provider host is on the engine's fetch allow-list yet/)
   const hosts = P2.sourceView({ ...startData(['lumen.clan'], { ...cur, fetch: true }), production: { fetch: { on: true, allow_list_empty: false } } })!
@@ -231,12 +236,12 @@ test('fetch and the vision check start off, and the card says what an empty allo
 
 test('the patches: use records the engine\'s hash with the opt-ins off; options and stop are merge patches', () => {
   assert.deepEqual(plain(P2.sourcePatch('lumen.clan', { sha256: 'ab'.repeat(32), rows: 21, eligible: 12 }, 't')),
-    { inputs: { production: { name: 'lumen.clan', sha256: 'ab'.repeat(32), fetch: false, look: false, at: 't', rows: 21, eligible: 12 } } })
+    { inputs: { production: { name: 'lumen.clan', sha256: 'ab'.repeat(32), fetch: false, look: false, at: 't', rows: 21, eligible: 12 } }, review: { production: null } })
   assert.equal(P2.sourcePatch('brief.pdf', { sha256: 'ab'.repeat(32) }, 't'), null)
   assert.equal(P2.sourcePatch('lumen.clan', { sha256: 'nope' }, 't'), null)
   assert.deepEqual(plain(P2.optionPatch('fetch', true)), { inputs: { production: { fetch: true } } })
   assert.equal(P2.optionPatch('agent', true), null)
-  assert.deepEqual(plain(P2.dropPatch()), { inputs: { production: null } })
+  assert.deepEqual(plain(P2.dropPatch()), { inputs: { production: null }, review: { production: null } })
 })
 
 test('Use for pictures reads the attached file from the host, sends it to the engine, then records it', async () => {
@@ -261,7 +266,8 @@ test('Use for pictures reads the attached file from the host, sends it to the en
   assert.equal(m.writes[0].obj.inputs.production.sha256, 'cd'.repeat(32))
   m.click({ prodOpt: 'fetch', prodOn: '1' })
   m.click({ prodDrop: '1' })
-  assert.deepEqual(plain(m.writes.slice(1).map(w => w.obj)), [{ inputs: { production: { fetch: true } } }, { inputs: { production: null } }])
+  assert.deepEqual(plain(m.writes[0].obj.review), { production: null })   // a file chosen anew starts with no swaps
+  assert.deepEqual(plain(m.writes.slice(1).map(w => w.obj)), [{ inputs: { production: { fetch: true } } }, { inputs: { production: null }, review: { production: null } }])
 })
 
 test('a file too large to send, or one the engine refuses, writes nothing and says why', async () => {

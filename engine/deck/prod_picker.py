@@ -366,13 +366,16 @@ CHOICES_FILE = "production_choices.json"
 SLOT_KEY = re.compile(r"s[0-9]{2,3}\.[a-z][a-z0-9_]{1,23}")
 
 
-def load_choices(stages: Path) -> dict:
-    """The person's recorded swaps (P6), ``{"sNN.slot": {key, by, at}}``, from ``<stages>/production_choices.json``; {} when none."""
+def load_choices(stages: Path, clan_sha256: str | None = None) -> dict:
+    """The person's recorded swaps (P6), ``{"sNN.slot": {key, by, at}}``, from ``<stages>/production_choices.json``; {} when none, and {}
+    when they were recorded against another Production file than ``clan_sha256`` (a new file starts with no swaps)."""
     try:
         raw = json.loads((Path(stages) / CHOICES_FILE).read_text())
     except (OSError, ValueError):
         return {}
-    return clean_choices((raw or {}).get("choices") if isinstance(raw, dict) else None)
+    if not isinstance(raw, dict) or (clan_sha256 is not None and raw.get("clan_sha256") != clan_sha256):
+        return {}
+    return clean_choices(raw.get("choices"))
 
 
 def clean_choices(raw) -> dict:
@@ -472,14 +475,24 @@ def refusal_empty(policy_file: str) -> str:
 
 
 def is_public(ip: str) -> bool:
-    """True for a global unicast address: never loopback, private, link-local (169.254.169.254 included), shared, reserved or multicast."""
+    """True for a global unicast address: never loopback, private, link-local (169.254.169.254 included), shared, reserved or multicast.
+    IPv6 forms that carry an IPv4 address are judged by it (IPv4-mapped, 6to4, Teredo) or refused outright (NAT64 64:ff9b::/96 and
+    64:ff9b:1::/48, which a gateway turns into any IPv4 address, and the deprecated IPv4-compatible ::a.b.c.d)."""
     try:
         a = ipaddress.ip_address(ip)
     except ValueError:
         return False
-    if isinstance(a, ipaddress.IPv6Address) and a.ipv4_mapped:
-        a = a.ipv4_mapped
+    if isinstance(a, ipaddress.IPv6Address):
+        if a in NAT64 or a in NAT64_LOCAL or int(a) >> 32 == 0:   # NAT64, and ::/96 (IPv4-compatible, ::1 and :: among them)
+            return False
+        inner = a.ipv4_mapped or a.sixtofour or (a.teredo[1] if a.teredo else None)
+        if inner is not None:
+            return is_public(str(inner))
     return a.is_global and not a.is_multicast
+
+
+NAT64 = ipaddress.ip_network("64:ff9b::/96")
+NAT64_LOCAL = ipaddress.ip_network("64:ff9b:1::/48")
 
 
 def _resolve(host: str) -> list:
@@ -499,10 +512,14 @@ class _Pinned(http.client.HTTPSConnection):
 
 
 def _open(host: str, ip: str, path: str, timeout: float):
-    """GET over the pinned connection: no redirect is followed here (http.client never does), no cookie, no auth header, no proxy."""
+    """GET over the pinned connection: no redirect is followed here (http.client never does), no cookie, no auth header, no proxy. The
+    response carries ``settimeout`` (its socket's), so the stream can shrink the socket timeout to the time the fetch has left."""
     conn = _Pinned(host, ip, timeout)
     conn.request("GET", path, headers={"User-Agent": "napkin-deck-picker", "Accept": "image/*", "Accept-Encoding": "identity", "Connection": "close"})
-    return conn.getresponse()
+    sock = conn.sock
+    resp = conn.getresponse()
+    resp.settimeout = sock.settimeout
+    return resp
 
 
 class Fetcher:
@@ -510,7 +527,8 @@ class Fetcher:
     tests (no socket). Every reason and log line names the host only, never a location's path or query."""
 
     def __init__(self, hosts, policy_file: str = str(POLICY), opener=None, resolver=None, timeout: float = TIMEOUT_S,
-                 file_max: int = FILE_MAX, run_max: int = RUN_MAX, files_max: int = FILES_MAX):
+                 file_max: int = FILE_MAX, run_max: int = RUN_MAX, files_max: int = FILES_MAX, clock=None):
+        self.clock = clock or time.monotonic
         self.hosts = {str(h).lower() for h in hosts or ()}
         self.policy_file = policy_file
         self.opener, self.resolver = opener or _open, resolver or _resolve
@@ -530,7 +548,7 @@ class Fetcher:
         if self.refused:
             return None, self._done(None, self.refused)
         doc_hosts = {h.lower() for h in doc_hosts or ()}
-        hops, t0 = 0, time.monotonic()
+        hops, t0 = 0, self.clock()   # one deadline for the whole fetch: redirects, headers and body together
         while True:
             u = urlsplit(url)
             h = (u.hostname or "").lower()
@@ -551,8 +569,12 @@ class Fetcher:
             if not ips or not all(is_public(ip) for ip in ips):
                 return None, self._done(h, f"{h} resolves to a private or reserved address: refused")
             path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+            left = self.timeout - (self.clock() - t0)
+            if left <= 0:
+                return None, self._done(h, f"{h}: timed out")
+            self.files += 1   # an attempt counts toward the run's file cap, whatever comes of it
             try:
-                resp = self.opener(h, ips[0], path, self.timeout)
+                resp = self.opener(h, ips[0], path, left)
             except (socket.timeout, TimeoutError):
                 return None, self._done(h, f"{h}: timed out")
             except (OSError, ssl.SSLError, http.client.HTTPException) as e:
@@ -597,10 +619,15 @@ class Fetcher:
         digest, n = hashlib.sha256(), 0
         try:
             with open(part, "wb") as f:
+                read = getattr(resp, "read1", None) or resp.read   # read1: whatever has arrived, never a wait for a full 64 KiB
+                settimeout = getattr(resp, "settimeout", None)
                 while True:
-                    if time.monotonic() - t0 > self.timeout:
+                    left = self.timeout - (self.clock() - t0)
+                    if left <= 0:   # the total deadline: a host dripping a byte at a time cannot hold the build past it
                         return None, self._done(h, f"{h}: timed out")
-                    chunk = resp.read(65536)
+                    if settimeout:
+                        settimeout(left)   # the socket waits no longer than the fetch has left
+                    chunk = read(65536)
                     if not chunk:
                         break
                     n += len(chunk)
@@ -615,8 +642,7 @@ class Fetcher:
             part.replace(dest)
         finally:
             part.unlink(missing_ok=True)
-        self.files += 1
-        self.bytes += n
+            self.bytes += n   # what came down counts toward the run's byte cap, kept or not
         self._done(h)
         return dest, None
 
@@ -898,10 +924,8 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
                       "by": "rule"} for g in groups]
     chosen = {s: d["choice"] for d in decisions for s in d["slots"]}
     by_claude = {s for d in decisions if d["by"] == "claude" for s in d["slots"]}
-    stored = load_choices(stages)
+    stored = load_choices(stages, src.clan_sha256)   # swaps recorded against another file are dropped with it
     stored.update(clean_choices(choices))   # a newer swap for a slot replaces the recorded one
-    (stages / CHOICES_FILE).write_text(json.dumps({"stage": "production_choices", "produced_by": "a person's swaps in the Production picker (P6)",
-                                                    "choices": stored}, indent=1, ensure_ascii=False))
     keys = []
     for pk in picks:
         sk = f"{pk['slide']}.{pk['slot']}"
@@ -916,6 +940,10 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
         if pk["placeable"] and pk["final"] not in keys:
             keys.append(pk["final"])
     swapped = {(pk["slide"], pk["slot"]) for pk in picks if pk["final"] != pk["key"]}
+    live = {f"{pk['slide']}.{pk['slot']}": pk["eligible"] for pk in picks}
+    kept = {sk: c for sk, c in stored.items() if c["key"] in live.get(sk, ())}   # a swap that is no longer a candidate is not kept
+    (stages / CHOICES_FILE).write_text(json.dumps({"stage": "production_choices", "produced_by": "a person's swaps in the Production picker (P6)",
+                                                    "clan_sha256": src.clan_sha256, "choices": kept}, indent=1, ensure_ascii=False))
     pol = fetch_policy()
     if fetch and fetcher is None:
         fetcher = Fetcher(pol["hosts"], pol["file"])

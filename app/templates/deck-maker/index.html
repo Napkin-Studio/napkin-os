@@ -1492,6 +1492,9 @@ var DeckProd = (function () {
     reference_only: ['warn', 'Rights to supply'] };
   var BY = { rule: 'Picked by the rules', claude: 'Tie broken by Claude', person: 'Your swap' };
   var ROLE = { key_visual: 'Key visual', size: 'Channel size', storyboard_frame: 'Storyboard frame' };
+  /** What the vision check costs and where the pictures go: said wherever it can be turned on. */
+  var HAIKU_NOTE = 'It uses the local Ollama model first; when that is not running it falls back to Claude Haiku, which sends the pictures ' +
+    'to Anthropic and is paid (about a cent a picture, 8 at most). While it is on, it runs on every build.';
 
   /** A candidate's badge: where its bytes could come from (inventory reach). */
   function reachBadge(reach) { return REACH[reach] || NOT_REACHABLE; }
@@ -1535,8 +1538,8 @@ var DeckProd = (function () {
       : 'Fetching links is off (opt-in): pictures came from the .clan or its export zip only.' +
         (empty ? ' Turning it on would fetch nothing yet: the host allow-list is empty until the provider hosts are named.' : '');
     var look = isObj(p.look) && p.look.on;
-    var lookLine = look ? 'The vision check ran. It only flags a picture for you; it never places or removes one.'
-      : 'The vision check is off (opt-in). It would only flag pictures, never place or remove one.';
+    var lookLine = look ? 'The vision check ran. It only flags a picture for you; it never places or removes one. ' + HAIKU_NOTE
+      : 'The vision check is off (opt-in). It would only flag pictures, never place or remove one. ' + HAIKU_NOTE;
     return { card: str(p.card, 200), slots: slots, fetchLine: fetchLine, lookLine: lookLine, fetchOn: !!f.on, allowListEmpty: empty, lookOn: !!look,
       notReachable: slots.filter(function (s) { return s.notReachable; }).length };
   }
@@ -1574,8 +1577,8 @@ var DeckProd = (function () {
       ? (emptyKnown === false ? 'On: the next build fetches only the picked pictures, only from the allowed hosts, each checked against its hash.'
         : 'On, but no provider host is on the engine\'s fetch allow-list yet, so nothing will be fetched until the hosts are named.')
       : 'Off: pictures come from the file itself (or its export zip). Nothing is downloaded unless you turn this on, and only from hosts on the engine\'s allow-list.';
-    var lookNote = cur && cur.look ? 'On: a vision check may flag a pulled picture for you. It never places or removes one.'
-      : 'Off: no vision check. It would only flag pictures, never place or remove one.';
+    var lookNote = (cur && cur.look ? 'On: a vision check may flag a pulled picture for you. It never places or removes one. '
+      : 'Off: no vision check. It would only flag pictures, never place or remove one. ') + HAIKU_NOTE;
     return { files: names.map(function (n) { return { name: str(n, 200), inUse: !!cur && cur.name === n }; }),
       current: cur ? { name: str(cur.name, 200), rows: Number(cur.rows) || 0, eligible: Number(cur.eligible) || 0, fetch: cur.fetch === true, look: cur.look === true } : null,
       fetchNote: fetchNote, lookNote: lookNote };
@@ -1584,8 +1587,9 @@ var DeckProd = (function () {
   function sourcePatch(name, result, at) {
     var r = isObj(result) ? result : {};
     if (!isProdFile(name) || !HEX.test(String(r.sha256 || ''))) return null;
+    // A file chosen anew starts with no swaps: the old ones named pictures of another file (the engine drops them too).
     return { inputs: { production: { name: String(name), sha256: String(r.sha256), fetch: false, look: false, at: str(at, 40),
-      rows: Math.max(0, Number(r.rows) || 0), eligible: Math.max(0, Number(r.eligible) || 0) } } };
+      rows: Math.max(0, Number(r.rows) || 0), eligible: Math.max(0, Number(r.eligible) || 0) } }, review: { production: null } };
   }
   /** Turn one opt-in on or off: fetch (picked https pictures) or look (the vision check). Null for anything else. */
   function optionPatch(which, on) {
@@ -1593,8 +1597,8 @@ var DeckProd = (function () {
     var row = {}; row[which] = !!on;
     return { inputs: { production: row } };
   }
-  /** Stop using the Production file (the store merges patches: null removes the key). */
-  function dropPatch() { return { inputs: { production: null } }; }
+  /** Stop using the Production file and its swaps (the store merges patches: null removes the key). */
+  function dropPatch() { return { inputs: { production: null }, review: { production: null } }; }
   /** Bytes as base64, in slices (a whole file at once overflows the argument list). */
   function toBase64(bytes, btoaFn) {
     var out = '', CH = 0x8000;

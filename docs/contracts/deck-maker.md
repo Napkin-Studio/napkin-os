@@ -334,7 +334,10 @@ through the middleware task `attach_production@1` to the engine (`POST /producti
 kept locally by its sha256). The app records `inputs.production {name, sha256, fetch, look}` with both opt-ins off; every
 `build_deck` passes `{sha256, fetch, look}` and the person's `review` on, and the engine runs with `--production FILE` (plus
 `--production-fetch` / `--production-look` only when turned on, and never for an investor deck). A file the engine no longer holds
-fails the build with `production_missing`: choose it again.
+fails the build with `production_missing`: choose it again. The engine keeps a document's newest five Production files, 200 MB
+together at most. A file chosen anew clears `review.production`, and the engine drops a recorded swap whose key is no longer a
+candidate, or that was made against another file. The vision check says what it costs: local Ollama first, else Claude Haiku, which
+sends the pictures to Anthropic and is paid, on every build while it is on.
 
 ## Not built
 

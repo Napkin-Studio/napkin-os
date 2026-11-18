@@ -234,10 +234,23 @@ def test_without_the_flag_no_call_and_a_failed_call_keeps_the_rule(tmp_path):
     assert res["picker"]["ties"][0]["by"] == "rule" and "unavailable" in res["picker"]["ties"][0]["note"]
 
 
-def test_the_tie_break_is_claude_never_gemini():
-    from deck import stages
-    src = Path(pp.__file__).read_text().lower()
-    assert stages.MODELS["production_pick"].startswith("claude-") and "gemini-" not in src and "google" not in src and "_gemini" not in src
+def test_the_tie_break_goes_through_brief_llm_to_claude_sonnet_never_gemini(tmp_path, monkeypatch):
+    """The default call (no tie_call) is the deck's own Claude route: brief_llm's pinned link, provider anthropic, model Sonnet."""
+    import brief_llm
+    src, twin = _tie_clan(tmp_path)
+    links = []
+
+    def link(provider, model, user, system=None, **kw):
+        links.append((provider, model, system))
+        assert "/out/" not in user and "sha256" not in user   # metadata rows only
+        return json.dumps({"choice": mb.S_STORY, "why": "earlier version"})
+    monkeypatch.setattr(brief_llm, "_call_link", link)
+    monkeypatch.setenv("BRIEF_CLI_EFFORT", "low")   # stages._call sets it for the stage: restored after the test
+    d = _deck()
+    res = pp.run(d, src, tmp_path / "st", agent=True)
+    assert [(p, m) for p, m, _ in links] == [("anthropic", "claude-sonnet-5-5")] and links[0][2] == pp.TIE_SYSTEM
+    assert res["picker"]["ties"][0]["by"] == "claude" and _im(d, "s3")["from"]["key"] == mb.S_STORY
+    assert res["usage"]["agent"]["model"] == "claude-sonnet-5-5"
 
 
 # ---------------------------------------------------------------- P3 the guarded fetch
@@ -316,6 +329,45 @@ def test_a_same_host_redirect_is_followed(tmp_path, pics):
 
 
 @pytest.mark.parametrize("ip", ["10.0.0.5", "127.0.0.1", "169.254.169.254", "192.168.1.2", "::1", "100.64.0.1", "::ffff:10.0.0.1"])
+def test_a_host_dripping_bytes_is_cut_off_at_the_total_deadline(tmp_path):
+    """A host sending one byte every 19 s never trips a per-read timeout; the fetch's own deadline (20 s, all reads together) does. The
+    socket's timeout is set before each read to the time left, and only what has arrived is read (read1)."""
+    now = [0.0]
+    timeouts, reads = [], []
+
+    class Drip(Resp):
+        def read1(self, n=-1):
+            reads.append(n)
+            now[0] += 19.0   # each byte takes 19 s to come
+            return b"\x89"
+
+        def read(self, n=-1):
+            raise AssertionError("read() waits for a whole chunk: the stream must use read1()")
+
+        def settimeout(self, t):
+            timeouts.append(round(t, 3))
+    f = fetcher(lambda h, ip, path, timeout: Drip(200, b"", {"Content-Type": "image/png"}), clock=lambda: now[0])
+    path, why = f.get(f"https://{HOST}/out/a.png", "0" * 64, tmp_path / "a.png", [HOST])
+    assert path is None and why.endswith("timed out") and len(reads) == 2 and now[0] <= 40.0
+    assert timeouts == [20.0, 1.0] and not (tmp_path / "a.png.part").exists()
+
+
+def test_an_attempt_counts_toward_the_file_cap_even_when_it_fails(tmp_path, pics):
+    f = fetcher(png_server(pics, lambda p: Resp(404)), files_max=2)
+    for _ in range(2):
+        assert "expired or gone" in f.get(f"https://{HOST}/out/x.png", "0" * 64, tmp_path / "x.png", [HOST])[1]
+    assert "file fetch cap" in f.get(f"https://{HOST}/out/x.png", "0" * 64, tmp_path / "x.png", [HOST])[1]
+
+
+@pytest.mark.parametrize("ip", ["64:ff9b::a00:1", "64:ff9b::5db8:d822", "64:ff9b:1::1", "::a00:1", "::5db8:d822", "::", "2002:a00:1::1"])
+def test_nat64_ipv4_compatible_and_6to4_private_forms_are_refused(ip):
+    assert pp.is_public(ip) is False
+
+
+def test_public_addresses_still_pass():
+    assert pp.is_public("93.184.216.34") and pp.is_public("2606:2800:220:1:248:1893:25c8:1946") and pp.is_public("2002:5db8:d822::1")
+
+
 def test_a_private_address_is_refused(tmp_path, pics, ip):
     op = png_server(pics)
     f = fetcher(op, resolver=lambda h: [ip])
@@ -507,6 +559,28 @@ def test_a_persons_swap_wins_among_the_slots_candidates_and_is_recorded_in_the_s
     assert {p["slot"]: p["by"] for p in res2["picker"]["picks"]}["s03.picture"] == "person" and _im(d2, "s03")["from"]["key"] == twin
 
 
+def test_swaps_are_cleared_when_the_production_file_changes_and_stale_ones_are_not_kept(tmp_path):
+    twin = mb.uid("size", 9)
+
+    def mut(d):
+        d["sizes"][twin] = {**copy.deepcopy(d["sizes"][mb.S_STORY]), "id": twin, "status": "look"}
+    st = tmp_path / "st"
+    a = pp.Source(clan(tmp_path, name="a.clan", mutate=mut, embed=("story",)))
+    pp.run(_deck6(), a, st, choices={"s03.picture": {"key": twin, "by": "You", "at": "t"}, "s01.picture": {"key": mb.F2, "by": "You", "at": "t"}})
+    rec = json.loads((st / pp.CHOICES_FILE).read_text())
+    assert set(rec["choices"]) == {"s03.picture"} and rec["clan_sha256"] == a.clan_sha256   # a frame is no candidate for the cover: dropped
+
+    def mut_b(d):
+        mut(d)
+        d["project"]["title"] = "Lumen Water relaunch (invented)"   # another Production file
+    b = pp.Source(clan(tmp_path, name="b.clan", mutate=mut_b, embed=("story",)))
+    d = _deck6()
+    res = pp.run(d, b, st)
+    assert {p["slot"]: p["by"] for p in res["picker"]["picks"]}["s03.picture"] == "rule" and _im(d, "s03")["from"]["key"] == mb.S_STORY
+    assert json.loads((st / pp.CHOICES_FILE).read_text()) == {"stage": "production_choices", "produced_by": "a person's swaps in the Production picker (P6)",
+                                                               "clan_sha256": b.clan_sha256, "choices": {}}
+
+
 def test_a_swap_to_a_key_that_is_not_a_candidate_is_ignored_with_a_note(tmp_path):
     d = _deck6()
     res = pp.run(d, pp.Source(clan(tmp_path, embed=("story",))), tmp_path / "st", choices={"s03.picture": {"key": mb.F2, "by": "You", "at": "t"}})
@@ -548,7 +622,8 @@ def test_run_deck_takes_a_production_pick(tmp_path, clan_stages, build_demo):
     with pytest.raises(SystemExit):
         build_demo(clan_stages, tmp_path / "x", "--production", str(c), "--production-pick", "nope")
     run = build_demo(clan_stages, tmp_path / "a", "--production", str(c), "--production-pick", f"s99.picture={mb.S_SIX}", "--no-layout-plan")
-    assert json.loads((clan_stages / pp.CHOICES_FILE).read_text())["choices"]["s99.picture"]["key"] == mb.S_SIX
+    rec = json.loads((clan_stages / pp.CHOICES_FILE).read_text())
+    assert rec["clan_sha256"] == hashlib.sha256(c.read_bytes()).hexdigest() and "s99.picture" not in rec["choices"]   # no such slot: not kept
     assert json.loads((run / "report.json").read_text())["production"]["picker"]
 
 
@@ -588,6 +663,40 @@ def test_the_engine_server_refuses_anything_but_a_readable_production_file(tmp_p
         s.production(body)
     assert e.value.kind == kind
     assert not list((cfg.data / "doc1" / "production").glob("*")) if (cfg.data / "doc1" / "production").exists() else True
+
+
+def test_a_malformed_document_is_a_clear_refusal_and_leaves_no_file(tmp_path):
+    import base64
+    import io
+    import zipfile
+    srv, cfg, s = _srv(tmp_path)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("shared/data.yaml", "contract_version: '3'\napp: production-tool\nproject: {id: [unclosed\n")
+    with pytest.raises(srv.Refused) as e:
+        s.production({"doc": "doc1", "name": "bad.clan", "data_b64": base64.b64encode(buf.getvalue()).decode()})
+    assert e.value.status == 400 and e.value.kind == "bad_production" and "could not be read" in e.value.message
+    assert list((cfg.data / "doc1" / "production").iterdir()) == []
+
+
+def test_each_document_keeps_at_most_its_newest_production_files(tmp_path, monkeypatch):
+    import base64
+    import os
+    srv, cfg, s = _srv(tmp_path)
+    monkeypatch.setattr(srv, "PRODUCTION_KEEP_FILES", 2)
+    shas = []
+    for i in range(3):
+        c = clan(tmp_path, name=f"v{i}.clan", mutate=lambda d, i=i: d["project"].update(title=f"Lumen v{i} (invented)"))
+        shas.append(s.production({"doc": "doc1", "name": c.name, "data_b64": base64.b64encode(c.read_bytes()).decode()})["sha256"])
+        p = cfg.data / "doc1" / "production" / f"{shas[-1]}.clan"
+        os.utime(p, (1_000_000 + i, 1_000_000 + i))   # distinct times: the order the files came in
+    kept = {p.stem for p in (cfg.data / "doc1" / "production").iterdir()}
+    assert kept == set(shas[1:])                                                           # the oldest went
+    monkeypatch.setattr(srv, "PRODUCTION_KEEP_FILES", 5)
+    monkeypatch.setattr(srv, "PRODUCTION_KEEP_BYTES", 1)                                   # bytes: only the newest stays
+    c = clan(tmp_path, name="v9.clan", mutate=lambda d: d["project"].update(title="Lumen v9 (invented)"))
+    last = s.production({"doc": "doc1", "name": c.name, "data_b64": base64.b64encode(c.read_bytes()).decode()})["sha256"]
+    assert {p.stem for p in (cfg.data / "doc1" / "production").iterdir()} == {last}
 
 
 def test_the_engine_server_refuses_a_file_over_the_cap(tmp_path, monkeypatch):

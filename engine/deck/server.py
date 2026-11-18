@@ -104,6 +104,9 @@ class Settings:
 PRODUCTION_EXT = (".clan", ".zip")
 PRODUCTION_MAX = 64_000_000
 BODY_MAX = PRODUCTION_MAX * 4 // 3 + 1_000_000
+#: What one document may keep: its newest Production files, at most this many and this many bytes together (older ones are removed).
+PRODUCTION_KEEP_FILES = 5
+PRODUCTION_KEEP_BYTES = 200_000_000
 
 
 def safe_name(doc) -> str:
@@ -277,16 +280,33 @@ class Server:
         folder = self.s.data / doc / "production"
         folder.mkdir(parents=True, exist_ok=True)
         dest = folder / f"{hx}{ext}"
-        part = folder / f".{hx}{ext}.part"
-        part.write_bytes(data)
+        check = folder / f".{hx}.check{ext}"   # a hidden name until it reads as a Production file: never mistaken for a kept one
         try:
-            plan = prod_picker.Plan(prod_picker.Source(part.rename(part.with_name(f".{hx}.check{ext}"))))
-        except (from_production.FromProductionError, ValueError) as e:
-            part.with_name(f".{hx}.check{ext}").unlink(missing_ok=True)
-            raise Refused(400, "bad_production", f"not a Production file the deck can read: {e}"[:400]) from e
-        part.with_name(f".{hx}.check{ext}").replace(dest)
+            check.write_bytes(data)
+            plan = prod_picker.Plan(prod_picker.Source(check))   # the Source holds the bytes in memory: the file can move after
+        except Exception as e:   # noqa: BLE001  (a bad zip, contract or YAML, or anything else the reader trips on: refused, never a 500)
+            check.unlink(missing_ok=True)
+            why = str(e) if isinstance(e, (from_production.FromProductionError, ValueError)) else f"it could not be read ({type(e).__name__})"
+            raise Refused(400, "bad_production", f"not a Production file the deck can read: {why}"[:400]) from e
+        check.replace(dest)
+        dest.touch()   # the newest kept file, for the quota below
+        self.keep_quota(folder, dest)
         c = plan.inventory()["counts"]
         return {"ok": True, "sha256": hx, "name": prod_picker.clean(name, 120), "kind": ext[1:], "rows": c["rows"], "eligible": c["eligible"]}
+
+    @staticmethod
+    def keep_quota(folder: Path, keep: Path) -> None:
+        """Hold one document's Production files to PRODUCTION_KEEP_FILES and PRODUCTION_KEEP_BYTES: the oldest go first, never ``keep``.
+        A build whose file was removed fails with production_missing and asks the person to choose it again."""
+        files = sorted((f for f in folder.iterdir() if f.is_file() and not f.name.startswith(".") and f.suffix in PRODUCTION_EXT),
+                       key=lambda f: f.stat().st_mtime, reverse=True)
+        n, total = 0, 0
+        for f in [keep] + [f for f in files if f != keep]:
+            size = f.stat().st_size
+            if f == keep or (n < PRODUCTION_KEEP_FILES and total + size <= PRODUCTION_KEEP_BYTES):
+                n, total = n + 1, total + size
+            else:
+                f.unlink(missing_ok=True)
 
     def production_file(self, d: "Doc", prod: dict) -> Path | None:
         """The stored Production file an inputs.production names (its sha256), or None when the engine does not hold it."""
