@@ -18,20 +18,23 @@ from deck import imagegen, images, run_deck
 from visuals import jobs, runway
 
 KEY = "rw_SECRET_KEY_123"
-FAKE_PORT = 0
+ALLOWED_PORTS: set = set()   # loopback ports of in-process fakes (the engine server under test); everything else is refused
 HERE = Path(__file__).parent
 
 
 @pytest.fixture(autouse=True)
 def hermetic(monkeypatch):
+    ALLOWED_PORTS.clear()
     """No connection to anything, whatever BRIEF_TESTS_OFFLINE says; no key in the environment; no test seam left set."""
+    real = socket.socket.connect
+
     def refuse(self, addr, *a, **k):
         host, port = (addr[0], addr[1]) if isinstance(addr, tuple) and len(addr) >= 2 else ("", 0)
-        if host in ("127.0.0.1", "::1", "localhost") and FAKE_PORT and port == FAKE_PORT:
-            return None
+        if host in ("127.0.0.1", "::1", "localhost") and port in ALLOWED_PORTS:
+            return real(self, addr, *a, **k)
         raise OSError("network blocked by the image tests")
     monkeypatch.setattr(socket.socket, "connect", refuse)
-    monkeypatch.setattr(socket.socket, "connect_ex", lambda self, addr, *a, **k: 111)
+    monkeypatch.setattr(socket.socket, "connect_ex", lambda self, addr, *a, **k: 111)   # nothing is reached by connect_ex either
     monkeypatch.delenv("RUNWAYML_API_SECRET", raising=False)
     monkeypatch.delenv("NAPKIN_DECK_IMAGES_MAX_USD", raising=False)
     for n in ("CLIENT_FACTORY", "SUBJECTS_CALL", "GUARD_POST", "SLEEP"):
@@ -587,3 +590,65 @@ def test_python_dash_m_territory_visuals_still_runs():
     import subprocess
     r = subprocess.run([sys.executable, "-m", "territory.visuals", "--help"], cwd=HERE.parents[1], capture_output=True, text=True, env={"PYTHONPATH": ".", "PATH": "/usr/bin:/bin"})
     assert r.returncode == 0 and "--from-run" in r.stdout
+
+
+# ------------------------------------------------------------------------------------------------ the engine server
+
+def _server(tmp_path, images):
+    import threading
+    from deck import server as srv
+    from test_server import FERN
+    env = {"NAPKIN_DECK_DATA": str(tmp_path / "runs"), "NAPKIN_DECK_REPLAY": str(FERN / "stages"), "NAPKIN_DECK_PORT": "0", **({"NAPKIN_DECK_IMAGES": "1"} if images else {})}
+    httpd = srv.serve(srv.Settings(env))
+    ALLOWED_PORTS.add(httpd.server_address[1])
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd, f"http://127.0.0.1:{httpd.server_address[1]}"
+
+
+def _drive(base, **extra):
+    from test_server import call, start, wait
+    done = {"storyline": {"decision": "approve"}, "territories": {"decision": "approve"}, "idea": {"decision": "approve"}}
+    e = type("E", (), {"base": base})
+    start(e); wait(base, "doc1")
+    for k in ("storyline", "territories"):
+        start(e, approvals={g: done[g] for g in list(done)[: list(done).index(k) + 1]}); wait(base, "doc1")
+    approvals = {**done, **extra.pop("approvals", {})}
+    start(e, approvals=approvals, **extra)
+    return wait(base, "doc1")
+
+
+def test_the_server_passes_the_picture_cards_through_and_never_makes_a_picture_without_a_yes(monkeypatch, tmp_path):
+    fake = wire(monkeypatch)
+    httpd, base = _server(tmp_path, images=True)
+    try:
+        v = _drive(base, marks=[])
+        assert v["state"] == "done", v.get("error")
+        im = v["run"]["images"]
+        assert im["state"] == "card" and im["cards"]["subjects"]["id"].startswith("c_") and im["cap_usd"] == 2.5
+        assert fake.posts == []
+        v = _drive(base, marks=[], approvals={"images": {"decision": "approve", "by": "human:ann", "at": "2026-11-17T10:00:00Z", "card": im["cards"]["subjects"]["id"], "usd": 0.05}})
+        assert v["state"] == "done", v.get("error")
+        assert fake.posts == [] and "pictures" in v["run"]["images"]["cards"]       # stage g ran on the yes, and the picture card is now open
+        v = _drive(base, marks=[], approvals={"images": {"decision": "approve", "by": "human:ann", "at": "x", "card": "c_00000000", "usd": 0.5}})
+        assert v["state"] == "failed" and fake.posts == []
+    finally:
+        httpd.shutdown()
+
+
+def test_the_server_with_images_off_or_no_mark_data_plans_nothing(monkeypatch, tmp_path):
+    wire(monkeypatch)
+    httpd, base = _server(tmp_path, images=False)
+    try:
+        v = _drive(base, marks=[])
+        assert v["state"] == "done" and "images" not in v["run"]
+    finally:
+        httpd.shutdown()
+    httpd, base = _server(tmp_path / "b", images=True)
+    try:
+        v = _drive(base)                                    # marks absent: refuse (nothing is planned)
+        assert v["state"] == "done" and "images" not in v["run"]
+        from test_server import call
+        s, body = call(base, "/run", {"doc": "x", "inputs": {"prompt": {"text": "t"}}, "marks": "nope", "mode": "replay"})
+        assert s == 400
+    finally:
+        httpd.shutdown()
