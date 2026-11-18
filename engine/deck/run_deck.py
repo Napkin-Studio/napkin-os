@@ -693,7 +693,7 @@ def main(argv=None):
                 plan_res = _image_step(a, deck, inp, terr, review, wrapped, deck_ctx, rep)
             gen = images.load_generated(a.stages) if a.pictures else None
             if gen:
-                bound_gen = images.bind_generated(deck, gen, terr, images.deck_names(deck))
+                bound_gen = images.bind_generated(deck, gen, terr, images.deck_names(deck), imagegen.words_sha(deck))
                 if bound_gen.get("stale"):
                     stale_gen.append({"check": "image_missing", "level": "warn", "slide": deck["order"][0],
                                       "message": f"{bound_gen['stale']} generated picture(s) were made for other words than this deck now has, so none was used: make them again from a card"})

@@ -62,7 +62,7 @@ class GenError(ValueError):
 
 # ---------------------------------------------------------------------------------------------------------- words and anchors
 
-words_sha = images.words_sha
+from .bench.checklist import words_sha   # noqa: E402 (the ONE hash of a deck's words: the checklist's)
 
 
 anchors, anchor_key = images.anchors, images.anchor_key
@@ -631,7 +631,7 @@ def write_generated(ctx: Ctx, plan: dict) -> dict | None:
             p.unlink()
         return None
     obj = {"stage": "generated", "produced_by": "deck.imagegen", "style": {"hash": ctx.style.hash}, "safe_messaging": plan["safe_messaging"],
-           "words_sha": plan["words_sha"], "pictures": pics}
+           "words": plan["words_sha"], "pictures": pics}
     (Path(ctx.stages) / "generated.json").write_text(json.dumps(obj, indent=1, ensure_ascii=False))
     return obj
 
