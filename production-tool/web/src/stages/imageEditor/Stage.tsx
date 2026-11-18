@@ -344,14 +344,18 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
     if (!lastText || lastText === seenText.current) return
     seenText.current = lastText
     if (tool !== 'text') return
-    const el = textEls.current.get(lastText)
-    if (!el) return
-    el.focus()
-    const range = document.createRange()
-    range.selectNodeContents(el)
-    const sel = window.getSelection()
-    sel?.removeAllRanges()
-    sel?.addRange(range)
+    // After the click that placed it: the mousedown's own default focus comes after this render, and would take it back.
+    const id = window.setTimeout(() => {
+      const el = textEls.current.get(lastText)
+      if (!el) return
+      el.focus()
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      const sel = window.getSelection()
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [lastText, tool])
   const pendingMask = pending ? session.edits.find((e) => e.id === pending) : undefined
   const pendingBox = useMemo(() => {
