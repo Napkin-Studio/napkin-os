@@ -1160,6 +1160,7 @@
                       "slot_stale",
                       "block_unbound",
                       "layout_unknown",
+                      "text_on_image_fallback",
                       "image_missing",
                       "image_unapproved",
                       "image_flagged",
