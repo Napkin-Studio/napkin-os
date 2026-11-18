@@ -42,6 +42,10 @@ class FakeRelay {
   uploads = new Map<string, Uint8Array>()
   saves: { id: string; ifMatch: string | null; name: string | null }[] = []
   failUploads = false
+  /** A save lands, and its answer never reaches the browser (the page was closed as it went: UAT U7). */
+  loseAnswers = false
+  /** Nothing reaches the relay. */
+  offline = false
   /** The identity seam knows who is asking (features/drop-hackathon-extras.clan); off, every route is 401. */
   identity = true
 
@@ -63,6 +67,7 @@ class FakeRelay {
       return this.json(200, this.uploads.has(req.sha256) ? { exists: true, url: `${CDN}/in/${req.sha256}` } : { exists: false, putUrl: 'x', url: `${CDN}/in/${req.sha256}` })
     }
     if (method === 'POST' && path === '/clan') {
+      if (this.offline) throw new TypeError('Failed to fetch')
       const id = h.get('X-Project-Id')!
       const bytes = new Uint8Array(init.body as Uint8Array)
       const ifMatch = h.get('If-Match')?.replace(/"/g, '') ?? null
@@ -75,6 +80,7 @@ class FakeRelay {
       this.t += 60_000
       const row: SavedProject = { id, savedAt: new Date(this.t).toISOString().replace(/\.\d+Z$/, 'Z'), bytes: bytes.length, etag: await sha256Hex(bytes), ...(name ?? old?.row.name ? { name: name ?? old?.row.name } : {}) }
       this.projects.set(id, { row, bytes, canvas: old?.canvas })
+      if (this.loseAnswers) throw new TypeError('Failed to fetch')
       return this.json(200, { project: row })
     }
     const m = /^\/clan\/([^/]+)(\/canvas)?$/.exec(path)
@@ -400,6 +406,35 @@ describe('opening a project checks the relay for a newer version (re-test R2)', 
     await laptop.shell.saveAsNewVersion()
     expect(fake.saves.at(-1)).toMatchObject({ id: p.id, ifMatch: theirs.etag })
     expect(copy.get()).toBeNull()
+  })
+
+  it('its own save, whose answer never came back (the page closed as it went), and work after it: no question (UAT U7)', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    await nameKey(services(laptop.shell).doc, 'kite')
+    await services(laptop.shell).clan!.flush()
+    fake.loseAnswers = true
+    await services(laptop.shell).clan!.clan.mirrorNow('manual').catch(() => {})
+    const mine = fake.projects.get(p.id)!.row
+    // More work here after it went, and then the browser died: nothing more reaches the relay.
+    await nameKey(services(laptop.shell).doc, 'lamp')
+    await services(laptop.shell).clan!.flush()
+    fake.offline = true
+    await laptop.shell.goHome()
+    await quiet()
+    fake.loseAnswers = fake.offline = false
+    const saves = fake.saves.length
+    await laptop.shell.open(p.id)
+    // Its own save is its base, not "saved from another browser or tab"; the work after it is still here.
+    const copy = services(laptop.shell).serverCopy!
+    expect(copy.get()).toBeNull()
+    expect(copy.basedOn()?.etag).toBe(mine.etag)
+    expect(keys(laptop.shell)).toEqual(expect.arrayContaining(['kite', 'lamp']))
+    expect(fake.saves.length).toBe(saves)
+    await services(laptop.shell).clan!.clan.mirrorNow('manual')
+    expect(fake.saves.at(-1)).toMatchObject({ id: p.id, ifMatch: mine.etag })
+    expect(fake.projects.get(p.id)!.row.etag).not.toBe(mine.etag)
   })
 
   it('the same version as here: it opens with no question and no download', async () => {

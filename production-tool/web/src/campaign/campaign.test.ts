@@ -10,7 +10,7 @@ import cases from '../../../contracts/examples/crop-cases.json'
 import type { DeliveryPx, FormatSet, ProductionDocument, ProtectBox, SafeArea, Size } from '../contracts/types'
 import { purposeOf, purposeWords } from '../model/purpose'
 import { isFreeRequest } from '../jobs/runner'
-import { boardLayout, tileSize } from './board'
+import { boardLayout, MIN_BOARD_W, tileSize } from './board'
 import { cropBox, previewSize, protectedInside, safeFracs, panCrop, zoomCrop } from './crop'
 import { channelOf, PACKS, planChoices, rowsOf } from './formats'
 import { availableMethods, methodFor, methodModels, methodWords, SET_REGENERATE_BELOW, filled } from './rules'
@@ -129,6 +129,10 @@ describe('the Campaign board', () => {
       expect(b.x + b.w).toBeLessThanOrEqual(L.w)
       for (const [id2, c] of boxes) if (id2 !== id) expect(b.x < c.x + c.w && c.x < b.x + b.w && b.y < c.y + c.h && c.y < b.y + b.h).toBe(false)
     }
+  })
+  it('is never narrower than its header (UAT 2026-11-18: two 6 s films, and "Export at full size" ran off)', () => {
+    const L = boardLayout([{ id: 'a', channel: 'film', aspect: { w: 9, h: 16 } }, { id: 'b', channel: 'film', aspect: { w: 1, h: 1 } }])
+    expect(L.w).toBe(MIN_BOARD_W)
   })
 })
 

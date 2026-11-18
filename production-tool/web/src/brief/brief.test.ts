@@ -174,6 +174,10 @@ describe('scope', () => {
     expect(endLineOf({ mandatories: ['End line \u2013 \u201cLumo. Calm, on.\u201d'] })).toBe('Lumo. Calm, on.')
     expect(endLineOf({ mandatories: ["Sign-off: 'Hearth. Every morning.'"] })).toBe('Hearth. Every morning.')
     expect(endLineOf({ mandatories: ['Never show a phone screen'] })).toBeUndefined()
+    // UAT 2026-11-18, U6: it pre-filled 'must be "Quietboil. Let them sleep.'.
+    expect(endLineOf({ mandatories: ['End line must be "Quietboil. Let them sleep."'] })).toBe('Quietboil. Let them sleep.')
+    expect(endLineOf({ mandatories: ['The end line should read: Quietboil. Let them sleep.'] })).toBe('Quietboil. Let them sleep.')
+    expect(endLineOf({ mandatories: ["Tagline is 'Hearth's best. Every morning.' in white"] })).toBe("Hearth's best. Every morning.")
     expect(endLineOf(undefined)).toBeUndefined()
     const fs = (id: string) => ({ id, v: 1, field_v: {}, master: { kind: 'video', id: VIDEO }, pack: { pack_id: 'film', pack_version: '1' } }) as unknown as ProductionDocument['format_sets'][string]
     const NEW = 'fset_01K7A0000000000000000000F2'

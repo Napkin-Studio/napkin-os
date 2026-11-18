@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars (untracked). Every variable has a default; set only what differs.
+
+# Every web origin, besides the distribution itself, that runs the Production Tool at /production:
+# the bucket's PUT rule (uploads) and CloudFront's CORS answers on /in/*, /out/* and /ads/* (frames,
+# clips, exports) both come from this list. Scheme and host only, no path or trailing slash. A studio
+# whose origin is missing here gets frames stuck at "Almost there…" and uploads refused (UAT U2/U2b).
+cors_origins = [
+  "http://localhost:5173",                                        # the dev server
+  "http://napkin-uat-web-126391466.eu-west-1.elb.amazonaws.com", # UAT (plain HTTP until it has a certificate)
+  # "https://<staging host>",
+  # "https://<production host>",
+]
+
+# domain_aliases  = ["hack.napkin.ie"]
+# certificate_arn = "arn:aws:acm:us-east-1:<account>:certificate/<id>"

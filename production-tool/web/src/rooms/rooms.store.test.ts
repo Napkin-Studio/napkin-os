@@ -266,4 +266,18 @@ describe('the end card\'s words (live test 2026-11-18: "Hearth Oats end card" as
     await systemUpdate(store, (d) => { d.shots[shots[3].id].action = 'Clean like a samurai. Sweep once.' }, 'sync')
     expect(endCardFrom(store.get(), videoId)).toMatchObject({ headline: 'Clean like a samurai', line: 'Sweep once.' })
   })
+
+  it('a direction that labels the card and quotes its super shows the quoted words (UAT 2026-11-18, U5)', async () => {
+    const { store, shots, videoId } = await film()
+    const said = async (action: string) => {
+      await systemUpdate(store, (d) => { d.shots[shots[3].id].action = action }, 'sync')
+      return endCardFrom(store.get(), videoId)
+    }
+    // It read 'End card with the super: "Quietboil' over 'Let them sleep."'.
+    expect(await said('End card with the super: "Quietboil. Let them sleep."')).toMatchObject({ headline: 'Quietboil', line: 'Let them sleep.' })
+    expect(await said('End card with the super \u201cQuietboil. Let them sleep.\u201d')).toMatchObject({ headline: 'Quietboil', line: 'Let them sleep.' })
+    expect(await said('End card: Quietboil. Let them sleep.')).toMatchObject({ headline: 'Quietboil', line: 'Let them sleep.' })
+    // One sentence is the line, under the brand the label names.
+    expect(await said('Quietboil end card \u2013 "Let them sleep."')).toMatchObject({ headline: 'Quietboil', line: 'Let them sleep.' })
+  })
 })

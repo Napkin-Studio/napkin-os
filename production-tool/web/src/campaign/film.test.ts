@@ -12,7 +12,7 @@ import { purposeOf, purposeWords } from '../model/purpose'
 import type { Relay } from '../relay/types'
 import { MAYA, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addShots, addTake, job } from '../test/model'
-import { alephRatio, captionLayers, cropKeys, edlFor, filmLength, fitWindows, isSocialShape, masterShots, reframeKey, reframesOf } from './film'
+import { alephRatio, CARD_S, captionLayers, cropKeys, edlFor, filmLength, filmSeconds, fitWindows, isSocialShape, masterShots, reframeKey, reframesOf } from './film'
 import { cutdownInput, filmLayers, withoutRepeats } from './filmJobs'
 import { checksFor } from './checks'
 import { fileName } from './exportZip'
@@ -173,5 +173,16 @@ describe('the words shown once (re-test N-G)', () => {
     const late = { ...line, fromS: 5, toS: 8 }
     const caps = [{ kind: 'captions' as const, box, text: 'Lumo. Calm, on.', fromS: 3, toS: 8 }, { kind: 'captions' as const, box, text: 'Lumo. Calm, on.', fromS: 0, toS: 2 }]
     expect(withoutRepeats(caps, [late]).map((c) => [c.fromS, c.toS])).toEqual([[3, 5], [0, 2]])
+  })
+})
+
+describe('the film\'s own length in Make all sizes (UAT 2026-11-18, U6: "Film · 15 s" for a 12.7 s cut)', () => {
+  const shot = (n: number, inS: number, outS: number, endCard = false) => ({ shotId: `shot_${n}`, number: n, inS, outS, ...(endCard ? { endCard } : {}) })
+  it('is its shots as cut now, without the end card stitch adds', () => {
+    expect(filmSeconds([shot(1, 0, 4), shot(2, 0.5, 4.2), shot(3, 0, 5), shot(4, 0, CARD_S, true)], 15)).toBe(12.7)
+  })
+  it('is the render\'s length (or target) less the card when no shot has a take', () => {
+    expect(filmSeconds([shot(4, 0, CARD_S, true)], 15.2)).toBeCloseTo(12.7)
+    expect(filmSeconds([])).toBe(0)
   })
 })

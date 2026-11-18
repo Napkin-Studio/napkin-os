@@ -7,6 +7,7 @@ import { newUlidId } from '../../../clan-store/src'
 import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as StorePlanEndCard, type PlanText as StorePlanText, type TimelineItem as StoreTimelineItem } from '../../../clan-store/src'
 import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
 import { updateDoc } from '../doc/store'
+import { quoted } from '../lib/quotes'
 import type { DocumentStore } from '../doc/types'
 import { beatsOf, shotsOf, storyboardOfVideo } from '../model/selectors'
 import {
@@ -143,14 +144,20 @@ export function assemble(d: ProductionDocument, videoId: Id, boxes: Box[], gens:
 
 /** A shot's words that only name it ("Hearth Oats end card."): the director's label, not a line to show. */
 const END_LABEL = /\s*\bend[ -]?card\b[.!]?$/i
+/** The director's label before the card's words: "End card with the super:", "Quietboil end card –". */
+const END_PREFIX = /^(.*?)\bend[ -]?card\b[^:\u2013\u2014"\u201c]*(?:[:\u2013\u2014]\s*|(?=["\u201c]))/i
 const sentences = (t: string) => t.trim().split(/(?<=[.!?])\s+/).filter(Boolean)
 const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
 
 /**
  * The end card from the storyboard's end card shot. Its words when they are words ("SuperSamurai. Clean in one
- * sweep.": the first sentence is the headline, the rest the line). When they only label the card ("Hearth Oats
- * end card.", live test 2026-11-18: the card read "Hearth Oats end card" twice), the brand in the label is the
- * headline and the film's own closing line (its last VO or spoken line) is the line, without the brand again.
+ * sweep.": the first sentence is the headline, the rest the line). When the direction labels the card and gives
+ * its words ('End card with the super: "Quietboil. Let them sleep."', UAT 2026-11-18: the card read 'End card
+ * with the super: "Quietboil' over 'Let them sleep."'), the words are the quoted ones (else what follows the
+ * label), split the same way; one sentence is the line under the brand the label names. When they only label
+ * the card ("Hearth Oats end card.", live test 2026-11-18: the card read "Hearth Oats end card" twice), the
+ * brand in the label is the headline and the film's own closing line (its last VO or spoken line) is the line,
+ * without the brand again.
  */
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
   return endCardOf(d, storyboardOfVideo(d, videoId)?.id)
@@ -164,6 +171,13 @@ export function endCardOf(d: ProductionDocument, storyboardId: Id | undefined): 
   const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
   const words = (shot.action ?? '').trim()
   const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: '#14161B', durS: shot.duration_s || 1.5 })
+  const label = END_PREFIX.exec(words)
+  const after = label ? words.slice(label[0].length).trim() : ''
+  const said = quoted(after) ?? after
+  if (said) {
+    const [head, ...rest] = sentences(said)
+    return rest.length ? card(bare(head), rest.join(' ')) : card(bare(label?.[1] ?? ''), said)
+  }
   if (words && !END_LABEL.test(words)) {
     const [head, ...rest] = sentences(words)
     return card(bare(head ?? ''), rest.join(' '))
