@@ -14,7 +14,7 @@ import { shotNumber } from '../model/selectors'
 import { AskCard } from './AskCard'
 import { cancelText, mayStillCharge } from './cancel'
 import { AgentFigure } from './agents/AgentFigure'
-import { sayer, whoIsWorking } from './agents/cast'
+import { whoIsWorking } from './agents/cast'
 import { Float } from './Float'
 import { otherModels } from './modelChoice'
 import { ModelItems } from './ModelPick'
@@ -69,7 +69,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
       ? <AskCard ask={ask} />
       : (
         <div className={`pending waiting ${compact ? 'compact' : ''}`} role="status">
-          <AgentFigure agent={who.agent} state={who.state} size={compact ? 48 : 96} decorative />
+          <AgentFigure agent={who.agent} state={who.state} size={compact ? 72 : 96} decorative />
           <div className="state">{who.line}</div>
         </div>
       )
@@ -158,8 +158,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
     <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
       {/* Who is doing the work, at work, and their sign-off (ui-behaviour 5.1, 6.5). */}
       {/* Big agent, small words (owner, 2026-11-19): the line already names who; no separate name label. */}
-      <AgentFigure agent={who.agent} state={who.state} size={compact ? 48 : 96} decorative />
-      {compact && <div className="pt-say"><span className="who">{sayer(who.agent)}</span></div>}
+      <AgentFigure agent={who.agent} state={who.state} size={compact ? 72 : 96} decorative />
       {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
       <div className="meta" title={compact ? who.line : undefined}>
         {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}

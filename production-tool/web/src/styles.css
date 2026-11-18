@@ -233,7 +233,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* The agent at work where the result will land: Dex's blue glow under the stripes. */
 @keyframes drift-2 { to { background-position: 0 0, 28px 0; } }
 .pending.compact { gap: 2px; padding: 6px; }
-.pending.compact .meta { font-size: 10.5px; }
+.pending.compact .meta { font-size: 9.5px; letter-spacing: 0.02em; }
 .errnode .agent-figure { margin-bottom: -2px; }
 .pending .meta { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
 .spinner { display: none; }
