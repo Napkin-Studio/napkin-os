@@ -42,6 +42,22 @@ export function createSaveStore() {
 
 const store = createSaveStore()
 
+/** A save made by another control (the conflict's two choices): through the same store, so the bar follows it
+ *  (re-test N-C: after "Save this as a new version" the relay answered 200 and the bar kept "not saved · retry"
+ *  until the next Ctrl+S). Throws what the save threw. */
+export async function saveThrough(of: unknown, task: () => Promise<unknown>, s = store): Promise<void> {
+  let error: unknown
+  const r = await s.run(of, async () => {
+    try {
+      await task()
+    } catch (e) {
+      error = e
+      throw e
+    }
+  })
+  if (r.kind === 'failed') throw error
+}
+
 export const saveTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
 /** The save state and Save now. `can` is false without the relay and the .clan store (the in-browser

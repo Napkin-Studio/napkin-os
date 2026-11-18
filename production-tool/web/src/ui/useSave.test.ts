@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { createSaveStore, merged } from './useSave'
+import { createSaveStore, merged, saveThrough } from './useSave'
 
 // One save state (features/topbar-declutter.clan): the canvas bar's status and More's "Save now"
 // read the same store, and Ctrl/Cmd+S is bound once.
@@ -23,6 +23,17 @@ describe('the saved line has one source (live test 2026-11-18)', () => {
 })
 
 describe('the save store', () => {
+  it('a conflict resolved by saving as a new version clears "not saved" (re-test N-C)', async () => {
+    const s = createSaveStore()
+    const me = {}
+    const conflict = new Error('This project was saved from somewhere else')
+    await s.run(me, async () => { throw conflict })
+    expect(s.get(me).kind).toBe('failed')
+    await saveThrough(me, async () => {}, s)
+    expect(s.get(me).kind).toBe('saved')
+    await expect(saveThrough(me, async () => { throw conflict }, s)).rejects.toBe(conflict)
+    expect(s.get(me).kind).toBe('failed')
+  })
   it('saving, then saved', async () => {
     const s = createSaveStore()
     const me = {}
