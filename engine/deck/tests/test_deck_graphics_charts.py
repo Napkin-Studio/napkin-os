@@ -202,8 +202,8 @@ def test_the_plot_is_never_shrunk_under_its_floor(gr, tmp_path, monkeypatch):
     monkeypatch.setattr(graphics, "CHART_MIN_PLOT_IN", 20.0)
     d, inp = _chart_deck()
     sid = next(s for s in d["order"] if d["slides"][s]["type"] == "chart")
-    assert d["slides"][sid]["layout"]["id"] not in ("chart", "chart_full")   # the ladder switched; the chart was never drawn small
     r, prs = _render(d, inp, tmp_path)
+    assert r.layouts[sid] not in ("chart", "chart_full")   # the ladder switched at render; the chart was never drawn small
     assert not any(getattr(sh, "has_chart", False) and sh.has_chart for sh in prs.slides[d["order"].index(sid)].shapes)
 
 
