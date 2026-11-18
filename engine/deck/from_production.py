@@ -15,12 +15,15 @@ Fable 5.2's review fixes, as applied here:
 * (5) Images only: a video, a render, a video size or a video master is never offered (counted in ``not_carried``). The master may
   be absent: the offer then has no key visual.
 * (6) Protect boxes are in the master's pixels: a size's focal point is their centre mapped through ``size.crop``; extend and
-  regenerate sizes (and sizes with no crop) use the centre. Only a focal point is stored, never pixels.
+  regenerate sizes (and sizes with no crop) use the centre. A focal point and the boxes' union as fractions (``keep``) are stored,
+  never pixels, so the binding can refuse a slot whose crop would cut through a box (not only lose its centre).
 * (7) A size's channel comes from a pinned copy of format-packs.json (``vendor/``, with its source commit); a format not in it falls
   back to the nearest aspect.
 * (8) Rights are never assumed: generated -> generated; drawn -> own; uploaded, extracted, a library ref and an edit of one ->
   reference_only, ``Rights to supply``; an ``edited`` asset whose frame chain does not reach only generated frames (no chain, or an
-  ``original`` canvas picture at its root) -> reference_only. Mock output (asset origin or frame kind ``mock``) is refused.
+  ``original`` canvas picture at its root) -> reference_only. Mock output (asset origin or frame kind ``mock``) is refused, checked
+  first. Contract 3 defines no ``rights`` field on an asset (it forbids extra properties): one is ignored, and the export is
+  reported as forged or altered in ``warnings``.
 * (9) production.json is written from an allow-list: no brief spine (nor its confidential parts), no decision, no thumb, no
   location, no copy line, no layer text. Only offered image assets are copied. Zip members are read by exact name with size
   caps; nothing is extracted by a member's own name (zip-bomb and path-traversal safe).
@@ -59,8 +62,8 @@ DATA_MAX = 16_000_000               # its shared/data.yaml
 ASSET_MAX = images.MAX_BYTES        # one picture (25 MB, the deck's own cap)
 RATIO_MAX = 200                     # uncompressed over compressed: a zip bomb is refused before it is inflated
 IMAGE_MIMES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
-#: Rights the deck can place a picture under; an explicit rights field (a later additive Production field) wins when it is one of these.
-PLACEABLE = ("generated", "own", "licensed", "client_supplied")
+#: All verified pictures together, written to disk one by one as each passes (never all held in memory).
+ASSETS_TOTAL_MAX = 1_000_000_000
 ULID = r"[0-9A-HJKMNP-TV-Z]{26}"
 
 
@@ -177,12 +180,11 @@ def _frames_by_asset(doc: dict) -> dict:
 
 
 def rights_of(doc: dict, sha: str, by_asset: dict | None = None) -> tuple:
-    """``(rights, why)`` of one asset, or ``("mock", why)`` for mock output (refused). Inference only ever lowers: an explicit placeable
-    ``rights`` field on the asset wins; generated -> generated; drawn -> own; uploaded or extracted -> reference_only; edited -> generated
-    only when its frame chain reaches only generated frames, else reference_only."""
+    """``(rights, why)`` of one asset, or ``("mock", why)`` for mock output (refused, checked first). Inferred from the origin alone, and
+    inference only ever lowers: generated -> generated; drawn -> own; uploaded or extracted -> reference_only; edited -> generated only
+    when its frame chain reaches only generated frames, else reference_only. An asset's ``rights`` field is never read: contract 3 has
+    none (see forged_fields), so a bundle cannot raise a mock or an upload to placeable by writing one."""
     a = (doc.get("assets") or {}).get(sha) or {}
-    if a.get("rights") in PLACEABLE:
-        return a["rights"], "stated on the asset"
     origin = a.get("origin")
     if origin == "mock":
         return "mock", "mock output"
@@ -219,6 +221,14 @@ def rights_of(doc: dict, sha: str, by_asset: dict | None = None) -> tuple:
     return "reference_only", "an edit whose parent frame is missing"
 
 
+def forged_fields(doc: dict) -> list:
+    """Warnings for asset fields contract 3 does not define that would change what the deck places (``rights``): ignored, and named,
+    because only a forged or hand-altered export carries one."""
+    return [{"entity": sha, "warning": "the asset carries a 'rights' field contract 3 does not define: ignored (a forged or altered export); "
+                                       "its rights come from its origin"}
+            for sha, a in sorted((doc.get("assets") or {}).items()) if isinstance(a, dict) and "rights" in a]
+
+
 def lower(*rights) -> str:
     """The lowest of several rights: reference_only beats anything; otherwise the first."""
     return "reference_only" if "reference_only" in rights else rights[0]
@@ -249,6 +259,33 @@ def master_focal(fset: dict, w: int, h: int) -> tuple:
     if not u or not w or not h:
         return dict(CENTRE), "centre"
     return {"x": _clamp((u[0] + u[2]) / 2 / w), "y": _clamp((u[1] + u[3]) / 2 / h)}, "protect"
+
+
+def _keep(x0, y0, x1, y1, w, h) -> dict:
+    return {"x0": _clamp(x0 / w), "y0": _clamp(y0 / h), "x1": _clamp(x1 / w), "y1": _clamp(y1 / h)}
+
+
+def master_keep(fset: dict, w: int, h: int) -> dict | None:
+    """The union of the master's protect boxes as fractions of the master ({x0, y0, x1, y1}), or None (no boxes, keep_middle)."""
+    pr = fset.get("protect") or {}
+    u = None if pr.get("keep_middle") else _union(pr.get("boxes"))
+    return _keep(*u, w, h) if u and w and h else None
+
+
+def size_keep(size: dict, fset: dict | None) -> dict | None:
+    """The part of the protect boxes a cropped size shows, as fractions of the size; None wherever size_focal takes the centre."""
+    crop = size.get("crop")
+    pr = (fset or {}).get("protect") or {}
+    if size.get("method") in ("extend", "regenerate") or not isinstance(crop, dict) or not crop.get("w") or not crop.get("h") or pr.get("keep_middle"):
+        return None
+    u = _union(pr.get("boxes"))
+    if not u:
+        return None
+    x0, y0 = max(u[0], crop["x"]), max(u[1], crop["y"])
+    x1, y1 = min(u[2], crop["x"] + crop["w"]), min(u[3], crop["y"] + crop["h"])
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return _keep(x0 - crop["x"], y0 - crop["y"], x1 - crop["x"], y1 - crop["y"], crop["w"], crop["h"])
 
 
 def size_focal(size: dict, fset: dict | None) -> tuple:
@@ -340,6 +377,7 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
                     focal, by = master_focal(fs, w, h)
                     cands.append({"key": f"{fid}#master", "entity": fid, "role": "master", "set": fid, "version": fs.get("v"), "sha": sha,
                                   "origin": a.get("origin"), "rights": rr[0], "rights_why": rr[1], "status": "ready", "focal": focal, "focal_by": by,
+                                  "keep": master_keep(fs, w, h),
                                   **({"job_id": a["job_id"]} if a.get("job_id") else {})})
     sizes = doc.get("sizes") or {}
     for sid in sorted(sizes):
@@ -368,6 +406,7 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
         focal, by = size_focal(s, fs)
         c = {"key": sid, "entity": sid, "role": "size", "set": s.get("set_id"), "version": s.get("v"), "sha": sha, "origin": a.get("origin"),
              "rights": rr[0], "rights_why": rr[1], "status": st, "channel": ch, "channel_by": ch_by, "focal": focal, "focal_by": by,
+             "keep": size_keep(s, fs),
              "format": {k: v for k, v in (s.get("format") or {}).items() if k in ("pack_id", "pack_version", "format_id")},
              "aspect": _aspect(s.get("aspect")) or {"w": a.get("w") or 1, "h": a.get("h") or 1}}
         for k in ("method", "job_id"):
@@ -428,46 +467,61 @@ def offer_sha(items: dict) -> str:
     return hashlib.sha256(json.dumps(pairs, separators=(",", ":")).encode()).hexdigest()
 
 
-def build(bundle: Path, at: str | None = None) -> tuple:
-    """Read the bundle and return ``(production, {sha256 hex: bytes})``: the record and the bytes of every offered picture. Writes nothing."""
+def build(bundle: Path, at: str | None = None, work: Path | None = None) -> tuple:
+    """Read the bundle and return ``(production, {sha256 hex: path})``. Each picture is read, hashed and checked one at a time and written
+    to ``work`` (a folder; write() moves the files into the stages folder) as soon as it passes, so only one picture is ever held in memory;
+    together they are capped at ASSETS_TOTAL_MAX, and a picture past the cap is refused, item by item. With no ``work`` the pictures are
+    checked in a temporary folder that is removed before return, and the map is empty: nothing is written."""
+    if work is None:
+        with tempfile.TemporaryDirectory() as td:
+            return build(bundle, at, Path(td))[0], {}
+    work = Path(work)
     zf, inner, clan_name, clan_raw = open_bundle(bundle)
     doc = read_document(inner)
     clan_hex = hashlib.sha256(clan_raw).hexdigest()
+    del clan_raw
     packs = load_packs()
     cands, refused, not_carried = plan_offer(doc, packs)
     assets = doc.get("assets") or {}
-    items, files, where = {}, {}, set()
+    items, files, infos, where, total = {}, {}, {}, set(), 0
     for c in cands:
         a = assets[c["sha"]]
-        try:
-            raw, how = asset_bytes(zf, inner, c["sha"], a.get("mime"))
-        except FromProductionError as e:
-            refused.append({"entity": c["key"], "reason": str(e)})
-            continue
-        if raw is None:
-            refused.append({"entity": c["key"], "reason": how})
-            continue
-        hx = hashlib.sha256(raw).hexdigest()
-        if hx != _hex(c["sha"]):
-            refused.append({"entity": c["key"], "reason": "its bytes do not hash to its sha256 (changed or damaged): refused"})
-            continue
-        with tempfile.TemporaryDirectory() as td:   # the deck's own picture check: PNG, JPEG or WEBP, no SVG, no bomb, size read from the header
-            p = Path(td) / f"{hx}.{IMAGE_MIMES[a['mime']]}"
+        hx = _hex(c["sha"])
+        if hx not in infos:
+            try:
+                raw, how = asset_bytes(zf, inner, c["sha"], a.get("mime"))
+            except FromProductionError as e:
+                refused.append({"entity": c["key"], "reason": str(e)})
+                continue
+            if raw is None:
+                refused.append({"entity": c["key"], "reason": how})
+                continue
+            if hashlib.sha256(raw).hexdigest() != hx:
+                refused.append({"entity": c["key"], "reason": "its bytes do not hash to its sha256 (changed or damaged): refused"})
+                continue
+            if total + len(raw) > ASSETS_TOTAL_MAX:
+                refused.append({"entity": c["key"], "reason": f"the export's pictures together pass the {ASSETS_TOTAL_MAX // 1_000_000} MB cap: refused"})
+                continue
+            p = work / f"{hx}.{IMAGE_MIMES[a['mime']]}"   # the deck's own picture check: PNG, JPEG or WEBP, no SVG, no bomb, size read from the header
             p.write_bytes(raw)
+            del raw
             try:
                 info = images.inspect_file(p)
             except images.ImageError as e:
+                p.unlink(missing_ok=True)
                 refused.append({"entity": c["key"], "reason": str(e)[:300]})
                 continue
-        where.add(how)
-        files[hx] = raw
+            total += info["bytes"]
+            infos[hx], files[hx] = info, p
+            where.add(how)
+        info = infos[hx]
         it = {"entity": c["entity"], "role": c["role"], "version": c.get("version"), "origin": c.get("origin"), "rights": c["rights"],
               "status": c["status"], "sha256": hx, "bundle_sha256": clan_hex, "file": f"assets/{hx}.{info['ext']}", "mime": info["mime"],
               "width": info["width"], "height": info["height"], "bytes": info["bytes"], "focal": c["focal"], "focal_by": c["focal_by"]}
         if c["rights"] == "reference_only":
             it["to_supply"] = "rights"
             it["rights_why"] = c.get("rights_why", "")
-        for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "shot_rank", "shot_kind"):
+        for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "shot_rank", "shot_kind", "keep"):
             if c.get(k) not in (None, "", {}):
                 it[k] = c[k]
         if c["role"] != "size":
@@ -487,22 +541,25 @@ def build(bundle: Path, at: str | None = None) -> tuple:
             "taken_at": at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "format_packs": packs_record(), "format_sets": fsets, "items": items, "offer_sha256": offer_sha(items),
             "refused": refused, "not_carried": not_carried}
+    warnings = forged_fields(doc)
+    if warnings:
+        prod["warnings"] = warnings
     if (zf.comment or b"").strip() == b"napkin-fixture":
         prod["fixture"] = True
     return prod, files
 
 
 def write(prod: dict, files: dict, stages: Path) -> None:
-    """``<stages>/production.json`` and ``<stages>/assets/<sha256>.<ext>``, each picture once. Replaces an earlier production.json: it is a
-    frozen copy of the export, and run_deck keeps what was placed in deck.json until the person takes an update."""
+    """``<stages>/production.json`` and ``<stages>/assets/<sha256>.<ext>``, each picture once, moved from where build() wrote it (keep its
+    ``work`` folder on the same disk as ``stages``: the move is then a rename). Replaces an earlier production.json: it is a frozen copy of
+    the export, and run_deck keeps what was placed in deck.json until the person takes an update."""
     stages = Path(stages)
     (stages / "assets").mkdir(parents=True, exist_ok=True)
     for it in prod["items"].values():
         dst = stages / it["file"]
-        if not dst.exists():
-            tmp = dst.with_suffix(".tmp")
-            tmp.write_bytes(files[it["sha256"]])
-            tmp.replace(dst)
+        src = Path(files[it["sha256"]])
+        if not dst.exists() and src.exists():
+            src.replace(dst)
     (stages / "production.json").write_text(json.dumps(prod, indent=1, ensure_ascii=False))
 
 
@@ -512,8 +569,10 @@ def main(argv=None) -> int:
     ap.add_argument("--stages", required=True, type=Path)
     a = ap.parse_args(argv)
     try:
-        prod, files = build(a.bundle)
-        write(prod, files, a.stages)
+        a.stages.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=a.stages, prefix=".production-") as td:   # same disk: write() renames, and the folder goes
+            prod, files = build(a.bundle, work=Path(td))
+            write(prod, files, a.stages)
     except (FromProductionError, images.ImageError, yaml.YAMLError) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
@@ -521,6 +580,8 @@ def main(argv=None) -> int:
     supply = sum(1 for i in prod["items"].values() if i.get("to_supply"))
     print(f"wrote {a.stages}/production.json: {n['master']} key visual(s), {n['size']} size(s), {n['frame']} storyboard frame(s); "
           f"{supply} with rights to supply; {len(prod['refused'])} refused; not carried: {prod['not_carried']}")
+    for w in prod.get("warnings") or []:
+        print(f"WARNING: {w['entity']}: {w['warning']}", file=sys.stderr)
     return 0
 
 

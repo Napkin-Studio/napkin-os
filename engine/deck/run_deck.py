@@ -759,6 +759,9 @@ def main(argv=None):
     choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
     profile = profiles.load(choice["type"])
     kind = profile["kind"]                     # which assembler: agency or investor
+    if a.production and kind == "investor":   # never silently ignored, and refused before any stage runs or spends
+        raise SystemExit("refused: --production places the Production Tool's campaign pictures on a pitch deck's cover, idea and executions; "
+                         "an investor deck has none of those slides. Drop --production")
     rep["type"] = {"id": profile["id"], "source": choice["source"], "note": choice["note"]}
     rep["type_question"] = intake.type_card_for(inp)   # computed in code: it exists even when no a0 stage ran
     supply = intake.supply_questions(inp, kind, profile if profile["arrange"] == "spine" else None)   # computed in code: what only the person knows
@@ -903,7 +906,8 @@ def main(argv=None):
                 pres = images.bind_production(deck, prod, a.pictures, images.deck_names(deck), brief_doc)
                 held = held + pres["held"]
                 rep["production"] = {"project": (prod.get("project") or {}).get("id"), "offer_sha256": prod.get("offer_sha256"),
-                                     "placed": pres["placed"], "held": len(pres["held"]), "kept": pres["kept"], "usd": 0}
+                                     "placed": pres["placed"], "held": len(pres["held"]), "kept": pres["kept"], "usd": 0,
+                                     "key_visual": pres["master"]}
             if a.pictures:
                 images.add_empty_slots(deck, a.pictures)
             review = json.loads(a.review.read_text()) if a.review else {}

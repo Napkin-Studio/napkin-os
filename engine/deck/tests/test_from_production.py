@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -156,10 +157,39 @@ def test_edits_with_no_chain_or_of_a_canvas_picture_are_reference_only():
     assert fp.rights_of(doc, sha["f3"])[0] == "generated"
     doc["assets"][sha["upload_master"]]["origin"] = "drawn"
     assert fp.rights_of(doc, sha["upload_master"])[0] == "own"
-    doc["assets"][sha["upload_master"]].update(origin="uploaded", rights="licensed")   # a stated rights field (a later Production field) wins
-    assert fp.rights_of(doc, sha["upload_master"])[0] == "licensed"
     doc["assets"][sha["f3_gen"]]["origin"] = "mock"
     assert fp.rights_of(doc, sha["f3"])[0] == "mock"
+
+
+def test_a_rights_field_never_raises_mock_or_an_upload_and_is_reported_as_forged():
+    """Contract 3 defines no rights field on an asset: a forged one is ignored, mock is refused first, and the export is named forged."""
+    doc = mb.document({k: mb.draw(*v) for k, v in mb.PICTURES.items()})
+    sha = {k: "sha256:" + hashlib.sha256(mb.draw(*v)).hexdigest() for k, v in mb.PICTURES.items()}
+    doc["assets"][sha["master"]].update(origin="mock", rights="generated")
+    assert fp.rights_of(doc, sha["master"]) == ("mock", "mock output")
+    doc["assets"][sha["upload_master"]].update(origin="uploaded", rights="licensed")
+    assert fp.rights_of(doc, sha["upload_master"])[0] == "reference_only"
+    for forged in ("own", "client_supplied", "generated"):
+        doc["assets"][sha["upload_master"]]["rights"] = forged
+        assert fp.rights_of(doc, sha["upload_master"])[0] == "reference_only", forged
+    assert {w["entity"] for w in fp.forged_fields(doc)} == {sha["master"], sha["upload_master"]}
+
+
+def test_a_forged_rights_field_in_a_bundle_is_ignored_and_warned(tmp_path):
+    master = "sha256:" + hashlib.sha256(mb.draw(*mb.PICTURES["master"])).hexdigest()
+
+    def forge(d):
+        for a in d["assets"].values():
+            if a.get("origin") == "uploaded":
+                a["rights"] = "licensed"
+        d["assets"][master].update(origin="mock", rights="generated")
+    p, _ = fp.build(make(tmp_path, mutate=forge))
+    up = p["items"][f"{mb.FSET_OLD}#master"]
+    assert up["rights"] == "reference_only" and up["to_supply"] == "rights"
+    assert f"{mb.FSET_NEW}#master" not in p["items"] and "mock" in refused(p, mb.FSET_NEW)
+    assert p["warnings"] and all("forged" in w["warning"] for w in p["warnings"])
+    clean, _ = fp.build(make(tmp_path))
+    assert "warnings" not in clean
 
 
 # ---------------------------------------------------------------- focal points, channels
@@ -172,6 +202,9 @@ def test_protect_boxes_map_through_the_crop_and_extend_or_regenerate_take_the_ce
     assert it[mb.S_CLIENT]["focal"] == fp.CENTRE                                               # extend
     assert it[f"{mb.FSET_OLD}#master"]["focal"] == fp.CENTRE                                   # keep_middle
     assert not any(k in it for it in prod["items"].values() for k in ("crop", "protect", "boxes"))   # a focal point, never pixels
+    k = it[f"{mb.FSET_NEW}#master"]["keep"]                                                    # the boxes' union, as fractions
+    assert k == {"x0": round(1200 / 1920, 4), "y0": round(240 / 1080, 4), "x1": round(1600 / 1920, 4), "y1": round(840 / 1080, 4)}
+    assert it[mb.S_STORY]["keep"]["x0"] == round(160 / 607.5, 4) and "keep" not in it[mb.S_SIX] and "keep" not in it[f"{mb.FSET_OLD}#master"]
 
 
 def test_size_focal_outside_the_crop_is_the_centre():
@@ -304,8 +337,13 @@ def test_a_flagged_size_is_flagged_with_its_reason_and_a_stale_one_is_never_plac
     p = copy.deepcopy(prod)
     p["items"][mb.S_STORY]["status"] = "stale"
     d = _deck()
+    got = images.bind_production(d, p)
+    # the 4:5 feed size is the wrong shape for a 9:16 phone slot: the 9:16 size waiting for its rights is held instead
+    assert _im(d, "s3")["status"] == "empty" and _im(d, "s3")["from"]["key"] == mb.S_OLD_STORY and {"s3"} <= {h["slide"] for h in got["held"]}
+    p["items"][mb.S_STORY].update(status="look", reason="Flagged by review in Production: needs a look")
+    d = _deck()
     images.bind_production(d, p)
-    assert _im(d, "s3")["from"]["key"] == mb.S_FEED and _im(d, "s3")["status"] == "flagged"   # placeable and flagged before an upload's size
+    assert _im(d, "s3")["from"]["key"] == mb.S_STORY and _im(d, "s3")["status"] == "flagged"
     p["items"][mb.S_SIX]["status"] = "look"
     p["items"][mb.S_SIX]["reason"] = "Flagged by review in Production: needs a look"
     d = _deck()
@@ -331,6 +369,91 @@ def test_a_rights_pending_or_filled_slot_leaves_the_generation_plan(prod):
     images.add_empty_slots(d, "creative_cover")
     keys = {(c["sid"], c["slot"]) for c in imagegen.candidate_slots(d)}
     assert ("s1", "picture") not in keys and ("s2", "picture") not in keys and ("s3", "picture") not in keys
+
+
+# ---------------------------------------------------------------- shapes: aspect tolerance and protect boxes
+
+def _size(key, channel, w, h, set_id="fset_x", **kw):
+    return {key: {"role": "size", "status": "ready", "rights": "generated", "channel": channel, "aspect": {"w": w, "h": h}, "set": set_id,
+                  "entity": key, "sha256": hashlib.sha256(key.encode()).hexdigest(), "file": f"assets/{key}.png", "mime": "image/png",
+                  "width": w * 100, "height": h * 100, "focal": {"x": 0.5, "y": 0.5}, "origin": "generated", **kw}}
+
+
+def test_a_channel_size_of_the_wrong_shape_is_never_placed():
+    prod = {"items": {**_size("ooh_banner", "ooh", 78, 10), **_size("skyscraper", "display", 2, 7)}}
+    key, why = images.production_size(prod, "ooh", "4:5")
+    assert key is None and "78:10" in why and "4:5" in why            # a 7.8:1 OOH banner never fills a 4:5 poster slot
+    key, why = images.production_size(prod, "display", "16:9")
+    assert key is None and "2:7" in why                                # nor a 2:7 skyscraper a 16:9 slot
+    assert images.production_size(prod, "social", "9:16") == (None, None)   # nothing made for the channel: no reason to state
+    prod["items"].update(_size("six_sheet", "ooh", 2, 3))
+    assert images.production_size(prod, "ooh", "4:5") == ("six_sheet", None)   # 2:3 sits within the tolerance of 4:5
+
+
+def test_a_size_whose_crop_would_cut_its_protect_box_is_never_placed():
+    wide = {"x0": 0.05, "y0": 0.3, "x1": 0.95, "y1": 0.7}    # the centre is kept by any crop, the box is not
+    prod = {"items": _size("square", "social", 1, 1, keep=wide)}
+    assert not images.keeps_protected(prod["items"]["square"], "4:5")
+    key, why = images.production_size(prod, "social", "4:5")
+    assert key is None and "protected area" in why
+    prod["items"]["square"]["keep"] = {"x0": 0.3, "y0": 0.1, "x1": 0.7, "y1": 0.9}
+    assert images.production_size(prod, "social", "4:5") == ("square", None)
+    off = {"x0": 0.0, "y0": 0.4, "x1": 0.12, "y1": 0.6}       # a box at the edge: a crop centred on it is pushed back inside, and keeps it
+    assert images.keeps_protected({"keep": off, "width": 1920, "height": 1080, "focal": {"x": 0.06, "y": 0.5}}, "4:5")
+
+
+def test_an_unfit_execution_slot_is_left_empty_with_its_reason(prod):
+    p = copy.deepcopy(prod)
+    for k in (mb.S_SIX, mb.S_CLIENT):
+        p["items"][k]["aspect"] = {"w": 78, "h": 10}
+    d = _deck()
+    got = images.bind_production(d, p)
+    im = _im(d, "s4")
+    assert im["status"] == "empty" and "asset" not in im and im["from"]["kind"] == "production" and "No Production size fits" in im["reason"]
+    assert any(h["slide"] == "s4" for h in got["held"])
+    keys = {(c["sid"], c["slot"]) for c in imagegen.candidate_slots(d)}
+    assert ("s4", "picture") not in keys                                   # held with its reason, never planned over silently
+
+
+def test_a_key_visual_whose_box_a_crop_would_cut_leaves_that_slot_empty(prod):
+    p = copy.deepcopy(prod)
+    master = f"{mb.FSET_NEW}#master"
+    p["items"][master]["keep"] = {"x0": 0.05, "y0": 0.3, "x1": 0.95, "y1": 0.7}
+    p["items"][master]["focal"] = {"x": 0.5, "y": 0.5}
+    d = _deck()
+    images.bind_production(d, p)
+    assert _im(d, "s1")["from"]["key"] == master and _im(d, "s1")["status"] == "made"     # 16:9 shows the whole 16:9 master
+    assert _im(d, "s2")["status"] == "empty" and "protected area" in _im(d, "s2")["reason"]   # a 4:3 crop would cut the box
+
+
+def test_with_no_linked_set_a_placeable_key_visual_wins_and_the_choice_is_said(prod):
+    p = copy.deepcopy(prod)
+    new, old = f"{mb.FSET_NEW}#master", f"{mb.FSET_OLD}#master"
+    assert mb.FSET_NEW > mb.FSET_OLD
+    p["items"][new]["rights"], p["items"][old]["rights"] = "reference_only", "generated"
+    key, fset, why = images.choose_master(p, None)
+    assert (key, fset) == (old, mb.FSET_OLD) and "can be placed" in why and "waits for its rights" in why
+    assert images.choose_master(p, mb.BRIEF_DOC)[1] == mb.FSET_OLD and "linked" in images.choose_master(p, mb.BRIEF_DOC)[2]
+    assert images.choose_master(prod, None)[:2] == (new, mb.FSET_NEW)
+    got = images.bind_production(_deck(), p)
+    assert got["master"]["set"] == mb.FSET_OLD and got["master"]["why"] == why
+
+
+# ---------------------------------------------------------------- the pictures are written as they pass, under a total cap
+
+def test_pictures_are_written_one_by_one_and_capped_in_total(monkeypatch, tmp_path, bundle):
+    work = tmp_path / "work"
+    work.mkdir()
+    p, files = fp.build(bundle, work=work)
+    assert files and all(Path(f).parent == work and Path(f).is_file() for f in files.values())
+    assert fp.build(bundle)[1] == {}                                      # no work folder: checked, then nothing kept
+    one = max(it["bytes"] for it in p["items"].values())
+    monkeypatch.setattr(fp, "ASSETS_TOTAL_MAX", one)
+    work2 = tmp_path / "work2"
+    work2.mkdir()
+    capped, files2 = fp.build(bundle, work=work2)
+    assert 1 <= len(files2) < len(files) and any("MB cap" in r["reason"] for r in capped["refused"])
+    assert sum(Path(f).stat().st_size for f in files2.values()) <= one
 
 
 # ---------------------------------------------------------------- (5) label and client gate
@@ -382,6 +505,7 @@ def test_run_deck_production_places_pictures_spends_nothing_and_keeps_the_words(
     assert [with_p["slides"][s].get("title") for s in with_p["order"]] == [without["slides"][s].get("title") for s in without["order"]]
     rep = json.loads((tmp_path / "a" / "report.json").read_text())
     assert rep["production"]["usd"] == 0 and rep["production"]["placed"] >= 2 and rep.get("usd_total", 0) == 0
+    assert rep["production"]["key_visual"]["set"] and rep["production"]["key_visual"]["why"]   # which set gave the key visual, and why
     assert "production" not in without["meta"]
 
 
@@ -397,6 +521,11 @@ def test_run_deck_refuses_production_with_no_production_json(tmp_path, demo_stag
         build_demo(demo_stages, tmp_path / "e", "--production")
 
 
+def test_run_deck_refuses_production_on_an_investor_deck(tmp_path, demo_stages, build_demo):
+    with pytest.raises(SystemExit, match="an investor deck has none of those slides"):
+        build_demo(demo_stages, tmp_path / "inv", "--production", "--kind", "investor")
+
+
 def test_the_review_pptx_labels_a_production_picture_production(tmp_path, prod_stages, build_demo):
     from pptx import Presentation
     run = build_demo(prod_stages, tmp_path / "f", "--production")
@@ -407,7 +536,10 @@ def test_the_review_pptx_labels_a_production_picture_production(tmp_path, prod_s
 # ---------------------------------------------------------------- (6) nothing is sent, nothing is spent
 
 def test_importing_from_production_loads_no_provider_module():
-    code = (f"import sys; sys.path.insert(0, {str(HERE.parents[1])!r}); import deck.from_production, deck.images; "
+    # -I keeps the child free of the caller's environment; the suite's own interpreter and import path (site-packages included, so yaml
+    # and PIL load) are handed over explicitly, so the child imports exactly what the suite would.
+    path = [str(HERE.parents[1])] + [p for p in sys.path if p and os.path.isdir(p)]
+    code = (f"import sys; sys.path[:0] = {path!r}; import deck.from_production, deck.images; "
             "bad = [m for m in sys.modules if m.split('.')[0] in ('anthropic', 'openai', 'requests', 'httpx', 'urllib3') or m.endswith(('runway', 'guard', 'ollama')) "
             "or m.startswith('visuals') or m == 'deck.imagegen']; "
             "assert not bad, bad")
