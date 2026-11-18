@@ -220,6 +220,8 @@ def recipe_errors(r, spine: list, _nested: bool = False) -> list:
                 for t, role in roles.items():
                     if t not in spec.SLIDE_TYPES:
                         errs.append(f"recipe.density.roles: unknown slide type {t!r}")
+                    elif t not in spine:
+                        errs.append(f"recipe.density.roles: {t} is not in the spine")
                     if role not in spec.ROLE_WINDOWS:
                         errs.append(f"recipe.density.roles.{t} must be one of {', '.join(spec.ROLE_WINDOWS)}")
             wins = d.get("windows") or {}
@@ -241,7 +243,9 @@ def recipe_errors(r, spine: list, _nested: bool = False) -> list:
                 errs.append(f"recipe.pictures.on must be one of {', '.join(x for x in spec.PICTURES_ON if x != 'custom')}")
             if "generate" in pc and pc["generate"] not in spec.RECIPE_GENERATE:
                 errs.append(f"recipe.pictures.generate must be one of {', '.join(spec.RECIPE_GENERATE)}")
-            if "types" in pc and not (isinstance(pc["types"], list) and set(pc["types"]) <= set(spec.PICTURE_SLIDE_TYPES)):
+            if "types" in pc and isinstance(pc["types"], list) and not pc["types"]:
+                errs.append("recipe.pictures.types must name at least one slide type (leave it out for the default; pictures.on: none turns pictures off)")
+            elif "types" in pc and not (isinstance(pc["types"], list) and set(pc["types"]) <= set(spec.PICTURE_SLIDE_TYPES)):
                 errs.append("recipe.pictures.types must be picture slide types (spec.PICTURE_SLIDE_TYPES): an evidence slide takes no picture")
     b = r.get("brand")
     if b is not None and not (isinstance(b, dict) and set(b) <= {"strict"} and isinstance(b.get("strict", False), bool)):

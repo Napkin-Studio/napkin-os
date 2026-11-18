@@ -143,6 +143,8 @@ def _bad(mut) -> list:
     (lambda p: p["recipe"].__setitem__("density", {"level": "airy"}), "density.level"),
     (lambda p: p["recipe"].__setitem__("density", {"roles": {"idea": "shout"}}), "density.roles"),
     (lambda p: p["recipe"].__setitem__("pictures", {"types": ["competition"]}), "evidence slide"),
+    (lambda p: p["recipe"].__setitem__("pictures", {"types": []}), "at least one slide type"),
+    (lambda p: p["recipe"].__setitem__("density", {"roles": {"founders": "statement"}}), "density.roles: founders is not in the spine"),
     (lambda p: p["recipe"].__setitem__("pictures", {"on": "custom"}), "pictures.on"),
     (lambda p: p["recipe"].__setitem__("pictures", {"generate": "lots"}), "pictures.generate"),
     (lambda p: p["recipe"].__setitem__("size", "a3"), "recipe.size"),
@@ -292,11 +294,12 @@ def _deck() -> dict:
 def test_pick_tries_the_preference_first_and_only_when_it_accepts():
     s = _deck()["slides"]["s08"]   # idea: a statement and a text
     rule = layouts.pick(s)
-    assert layouts.pick(s, prefer={"idea": ["big_statement"]}) == "big_statement" != rule   # an offer layout can be preferred
+    assert layouts.pick(s, prefer={"idea": ["cards"]}) == "cards" != rule   # a rule layout that takes the slide is preferred
+    assert layouts.pick(s, prefer={"idea": ["big_statement"]}) == rule   # an offer layout is never preferred (pick: offer)
     assert layouts.pick(s, prefer={"idea": ["kpi_row"]}) == rule   # no stats block: kpi_row does not accept it
     assert layouts.pick(s, prefer={"idea": ["full_bleed_statement"]}) == rule   # no picture ready: its 'when' fails
-    assert layouts.pick(s, prefer={"idea": ["cover_bleed", "no_such", "big_statement"]}) == "big_statement"   # missing ids are skipped
-    assert layouts.pick(s, prefer={"insight": ["big_statement"]}) == rule   # another type's preference
+    assert layouts.pick(s, prefer={"idea": ["cover_bleed", "no_such", "big_statement", "cards"]}) == "cards"   # missing and offered ids are skipped
+    assert layouts.pick(s, prefer={"insight": ["cards"]}) == rule   # another type's preference
     assert layouts.pick(s, prefer=None) == layouts.pick(s, prefer={}) == rule
 
 
@@ -308,10 +311,10 @@ def test_plan_without_prefer_is_todays_plan_byte_for_byte():
 
 
 def test_plan_keeps_a_preference_that_fits_with_chosen_by_rule_and_a_recipe_why():
-    p, _, _ = layouts.plan(_deck(), prefs={"prefer": {"idea": ["big_statement"]}, "prefer_type": "agency_pitch"})
+    p, _, _ = layouts.plan(_deck(), prefs={"prefer": {"idea": ["cards"]}, "prefer_type": "agency_pitch"})
     lay = p["slides"]["s08"]["layout"]
-    assert lay["id"] == "big_statement" and lay["chosen_by"] == "rule"
-    assert lay["why"] == "recipe agency_pitch: prefers big_statement for idea"
+    assert lay["id"] == "cards" and lay["chosen_by"] == "rule"
+    assert lay["why"] == "recipe agency_pitch: prefers cards for idea"
     assert lay["fit"]["rung"] in ("as_is", "shrunk") and not lay["fit"]["relaxed"]
 
 
@@ -320,17 +323,51 @@ def test_a_preference_that_would_not_fit_gives_the_slide_back_to_the_rules():
     long = " ".join(["Every household sees its own water story and the tap becomes personal"] * 14)
     d["slides"]["s08"]["blocks"] = [{"kind": "statement", "text": long}]
     without, _, _ = layouts.plan(copy.deepcopy(d), prefs={"density": "detailed"})
-    got, _, _ = layouts.plan(copy.deepcopy(d), prefs={"density": "detailed", "prefer": {"idea": ["big_statement"]}, "prefer_type": "t"})
+    got, _, _ = layouts.plan(copy.deepcopy(d), prefs={"density": "detailed", "prefer": {"idea": ["cards"]}, "prefer_type": "t"})
     lay = got["slides"]["s08"]["layout"]
-    if lay["id"] == "big_statement":   # it fitted after all: then only as is or shrunk
+    if lay["id"] == "cards":   # it fitted after all: then only as is or shrunk
         assert lay["fit"]["rung"] in ("as_is", "shrunk") and not lay["fit"]["relaxed"]
     else:
         assert lay == without["slides"]["s08"]["layout"]
 
 
 def test_a_persons_swap_beats_a_preference():
-    p, _, _ = layouts.plan(_deck(), prefs={"prefer": {"idea": ["big_statement"]}}, swaps={"s08": "cards"})
+    p, _, _ = layouts.plan(_deck(), prefs={"prefer": {"idea": ["cards"]}}, swaps={"s08": "emphasis_bar"})
     assert p["slides"]["s08"]["layout"]["chosen_by"] == "person"
+
+
+def test_a_preference_that_moves_more_points_to_the_notes_gives_way():
+    """A preferred layout is kept only if it keeps at least as many points on the slide as the rule's choice: at lean density, a slide
+    with many points preferred onto a content layout (density moves points) while the rule picks one that keeps them."""
+    d = _deck()
+    for sid in d["order"]:
+        ref, _, _ = layouts.plan(copy.deepcopy(d), prefs={"density": "lean"})
+        w = ref["slides"][sid]["layout"]
+        typ = d["slides"][sid]["type"]
+        for lid in [x for x, lay in layouts.load().items() if lay["pick"] == "rule" and x != w["id"]]:
+            got, _, _ = layouts.plan(copy.deepcopy(d), prefs={"density": "lean", "prefer": {typ: [lid]}, "prefer_type": "t"})
+            g = got["slides"][sid]["layout"]
+            if g["why"].startswith("recipe "):
+                assert len(g["fit"]["moved"]) <= len(w["fit"]["moved"]), (sid, lid)
+        break
+
+
+def test_a_preference_that_opens_a_hole_gives_way_under_the_look(monkeypatch):
+    monkeypatch.setattr(spec, "LOOK_V3", True)
+    from deck import render_pptx
+    monkeypatch.setattr(render_pptx.Renderer, "hole_estimate", lambda self, s, name, title_pt=None, cpl=48: 0.99)
+    rule, _, _ = layouts.plan(_deck(), prefs={"density": "lean"})
+    got, _, _ = layouts.plan(_deck(), prefs={"density": "lean", "prefer": {"idea": ["cards"]}, "prefer_type": "t"})
+    assert not got["slides"]["s08"]["layout"]["why"].startswith("recipe ")   # every hole is over the gate: the rule's pick stands
+    assert got["slides"]["s08"]["layout"]["id"] == rule["slides"]["s08"]["layout"]["id"]
+
+
+def test_catalogue_is_read_again_after_a_forced_load():
+    first = layouts.catalogue()
+    layouts._CACHE["catalogue"] = {"stale": []}
+    assert "stale" in layouts.catalogue()
+    layouts.load(force=True)
+    assert layouts.catalogue() == first
 
 
 @pytest.mark.parametrize("look", [False, True])

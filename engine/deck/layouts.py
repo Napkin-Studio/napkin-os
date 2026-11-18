@@ -57,6 +57,8 @@ def load(directory: Path | None = None, force: bool = False) -> dict:
     v3 = directory is None and bool(spec.LOOK_V3)
     d = Path(directory) if directory else DIR
     key = str(d) + ("+v3" if v3 else "")
+    if force:   # a forced reload re-reads the files: the recipe catalogue must not keep the old ones
+        _CACHE.pop("catalogue", None)
     if key in _CACHE and not force:
         return _CACHE[key]
     import jsonschema
@@ -95,7 +97,8 @@ def load(directory: Path | None = None, force: bool = False) -> dict:
 def catalogue() -> dict:
     """``{layout id: [slide types]}`` of every layout file, ``layouts/v3`` laid over the base whatever spec.LOOK_V3 says (deck-types: a
     recipe is checked against the whole catalogue, and a layout absent from the ACTIVE library is skipped at plan time). Read only: no
-    schema pass and no cache shared with ``load``, so the active library is never touched."""
+    schema pass and no cache shared with ``load``, so the active library is never touched. ``load(force=True)`` drops it, so it is read
+    again after a forced reload."""
     key = "catalogue"
     if key not in _CACHE:
         out = {}
@@ -385,11 +388,12 @@ def pick_planned(s: dict, audience: str = "review", library: dict | None = None,
 def preferred(s: dict, bl: list, lib: dict, ready=frozenset(), prefer: dict | None = None) -> str | None:
     """deck-types: the first layout a recipe prefers for this slide's type (``prefer``: ``{slide type: [layout id, ...]}``,
     profiles.recipe) that is in the active library and whose ``for_types``, ``when`` and ``accepts`` all take the slide's own blocks;
-    None when there is none. An offered layout may be preferred (still gated by its own ``when``, image_ready included); an id the
-    active library lacks (not built yet, or LOOK_V3 off) is skipped. It never forces: the fit is the plan's to check."""
+    None when there is none. A layout whose ``pick`` is ``offer`` is never preferred: an offer stays in the swap menu for a person until a
+    gallery review promotes it to ``rule`` (a recipe naming one is a suggestion only). An id the active library lacks (not built yet, or
+    LOOK_V3 off) is skipped. It never forces: the fit, the points kept and the hole are the plan's to check."""
     for lid in (prefer or {}).get(s.get("type")) or []:
         lay = lib.get(lid)
-        if lay and _matches(lay, s, bl, ready) and accepts(lay, s, bl, ready):
+        if lay and lay.get("pick") == "rule" and _matches(lay, s, bl, ready) and accepts(lay, s, bl, ready):
             return lid
     return None
 
@@ -939,9 +943,18 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             pid = pick_planned(s, aud, lib, ready.get(sid, frozenset()), prefer=prefer)
             if pid != rid:
                 _ex, b_, m_ = before_probe(sid, s, pid)
+                _rx, _rb, m_rule = before_probe(sid, s, rid)
                 sl_p = _with_moved(b_, m_) if m_ else b_
-                rp = probe({**sl_p, "blocks": spec.shown_blocks(sl_p, aud)}, pid, cap=f.get("scale_max"))
-                if rp["ok"] and not rp["relaxed"]:   # fits as is or shrunk: kept; else the rule pick stands
+                shown_p = {**sl_p, "blocks": spec.shown_blocks(sl_p, aud)}
+                rp = probe(shown_p, pid, cap=f.get("scale_max"))
+                # kept only when it fits as is or shrunk, keeps at least as many points on the slide as the rule's layout (density moves no
+                # more to the notes), and, under the look, opens no hole over the gate (the swap menu's own test); else the rule pick stands
+                keeps = len(m_) <= len(m_rule)
+                hole_ok = True
+                if spec.LOOK_V3 and lib[pid]["group"] == "content":
+                    hole = R.hole_estimate(shown_p, pid)
+                    hole_ok = hole is not None and hole <= spec.HOLE_GATE
+                if rp["ok"] and not rp["relaxed"] and keeps and hole_ok:
                     pref_rule[sid] = (rid, why[sid])
                     rid, why[sid] = pid, f"recipe {prefs.get('prefer_type') or 'deck type'}: prefers {pid} for {s['type']}"
         sw = swaps.get(sid)
