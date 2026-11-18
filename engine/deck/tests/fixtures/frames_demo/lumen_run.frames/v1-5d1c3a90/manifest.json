@@ -1,0 +1,326 @@
+{
+ "frames": {
+  "t1-f1-pro": {
+   "territory": "t1",
+   "shot": "f1",
+   "tier": "best",
+   "model": "gemini_image3_pro",
+   "credits": 20,
+   "prompt": "A kitchen tap at first light, wide, soft: water starts to run into a glass. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "94625d6800a7e7b2575f80259cb3a1662a03803a65f8006529c931ade1294caa",
+   "task": "fixture-t1-f1-pro",
+   "status": "SUCCEEDED",
+   "file": "t1-f1-pro.png",
+   "sha256": "e7814eed9bafd6ba6ebeadf4379dff463e3700351aa1df30da457d3dac9b1a53",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t1-f1-flash": {
+   "territory": "t1",
+   "shot": "f1",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A kitchen tap at first light, wide, soft: water starts to run into a glass. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "94625d6800a7e7b2575f80259cb3a1662a03803a65f8006529c931ade1294caa",
+   "task": "fixture-t1-f1-flash",
+   "status": "SUCCEEDED",
+   "file": "t1-f1-flash.png",
+   "sha256": "5f4c392ed7c7de15d9cfb54046c89efe2a45ea7113a032555319b6ad6868a931",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t1-f2-pro": {
+   "territory": "t1",
+   "shot": "f2",
+   "tier": "best",
+   "model": "gemini_image3_pro",
+   "credits": 20,
+   "prompt": "A hand under a running tap, close, warm: the hand turns the tap off a little early. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "ad648a75cad86684a0b87bace3670119fd2c5e5bbd90eff57a03ccb31287e7b1",
+   "task": "fixture-t1-f2-pro",
+   "status": "SUCCEEDED",
+   "file": "t1-f2-pro.png",
+   "sha256": "aadbc5d5bbc2138ddaaad5df77985147d4a6853d4c826d808708e7a96d2166f0",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t1-f2-flash": {
+   "territory": "t1",
+   "shot": "f2",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A hand under a running tap, close, warm: the hand turns the tap off a little early. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "ad648a75cad86684a0b87bace3670119fd2c5e5bbd90eff57a03ccb31287e7b1",
+   "task": "fixture-t1-f2-flash",
+   "status": "SUCCEEDED",
+   "file": "t1-f2-flash.png",
+   "sha256": "4d93c380677eed415b4a16ceb2278361488cc0254855c210bfbcb48577b362d1",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t1-f3-flash": {
+   "territory": "t1",
+   "shot": "f3",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A window over a sink, medium, still: light falls across the empty sink. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "f8848a3d8f43c348c0eadc9056002bd58d41d28cef9fa301ceffab5023701688",
+   "task": "fixture-t1-f3-flash",
+   "status": "SUCCEEDED",
+   "file": "t1-f3-flash.png",
+   "sha256": "33cf84da9748f16abf7bdb59b3b77ccd3b678a6c9b351bae2909f110fbdc5a4c",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t1-f4-flash": {
+   "territory": "t1",
+   "shot": "f4",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A glass of water on a table, wide, calm: the glass catches the evening sun. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "7e3f7c5ed39f7ff3c5ebbbd2d626ca76bd4dcb43068e35f75a39272a57128a7a",
+   "task": "fixture-t1-f4-flash",
+   "status": "SUCCEEDED",
+   "file": "t1-f4-flash.png",
+   "sha256": "5428b19c2bb57dbc31bb90590c0670d164d063f924c8af8b9dd30be8f9525f3f",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t2-f1-flash": {
+   "territory": "t2",
+   "shot": "f1",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A meter on a wall, close, flat: a dial moves by one small step. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "e4a350c0259ab27f671ea7b087f8f855c6e94a84f42a891eb41685e543f517c9",
+   "task": "fixture-t2-f1-flash",
+   "status": "SUCCEEDED",
+   "file": "t2-f1-flash.png",
+   "sha256": "23d006c2bf24db9d897bfe134ab5bbb6902e80029ec916fef29eb6fa27057625",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t2-f2-pro": {
+   "territory": "t2",
+   "shot": "f2",
+   "tier": "best",
+   "model": "gemini_image3_pro",
+   "credits": 20,
+   "prompt": "A bath filling slowly, high angle: the level rises towards the line. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "bccedfe5e506b360e1ffd61dd0e018291f5b82dc539bbc47d0667bd83d2646d4",
+   "task": "fixture-t2-f2-pro",
+   "status": "SUCCEEDED",
+   "file": "t2-f2-pro.png",
+   "sha256": "5db4c311bdddb105306789193615b5170328de0a5bee76a752d1d731a3f48c39",
+   "guard": {
+    "checked": true,
+    "flagged": true,
+    "found": {
+     "readable_text": [
+      "EXIT"
+     ]
+    },
+    "reason": "test: readable sign"
+   },
+   "approved_by_person": false
+  },
+  "t2-f2-flash": {
+   "territory": "t2",
+   "shot": "f2",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A bath filling slowly, high angle: the level rises towards the line. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "bccedfe5e506b360e1ffd61dd0e018291f5b82dc539bbc47d0667bd83d2646d4",
+   "task": "fixture-t2-f2-flash",
+   "status": "SUCCEEDED",
+   "file": "t2-f2-flash.png",
+   "sha256": "2eef3bd51006ad5f6a9c98428c7f5d65978a39b97a43d1876c35c5eede849cd6",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t2-f3-flash": {
+   "territory": "t2",
+   "shot": "f3",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A garden hose coiled up, medium, bright: a single drop falls from the nozzle. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "a65527cc4b6d47325fcec017f22721936fe009deff4853deceb224467934178d",
+   "task": "fixture-t2-f3-flash",
+   "status": "SUCCEEDED",
+   "file": "t2-f3-flash.png",
+   "sha256": "1f0ee5d5ec20d8f984085f9ad243ce84aa0d33b01252d669ddf35bc08a2aa059",
+   "guard": {
+    "checked": true,
+    "flagged": true,
+    "found": {
+     "readable_text": [
+      "EXIT"
+     ]
+    },
+    "reason": "test: readable sign"
+   },
+   "approved_by_person": true
+  },
+  "t2-f4-flash": {
+   "territory": "t2",
+   "shot": "f4",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A row of full glasses, wide, level: the glasses stand in a line of light. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "2c8dd742f09d6746409dce310db7720161109fa5f6235d105bb0ba207db1cf57",
+   "task": "fixture-t2-f4-flash",
+   "status": "SUCCEEDED",
+   "file": "t2-f4-flash.png",
+   "sha256": "b2ff5509c4b23e3b972bb5d3b309d9d63dc68678204cb4224358b13c999e096b",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t3-f1-flash": {
+   "territory": "t3",
+   "shot": "f1",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A street at night, wide, dark: a manhole cover glows faintly. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "2b75d87f1ddd3fb7664129c07138ccda3500d7e3a742b966a3ca80166c36f440",
+   "task": "fixture-t3-f1-flash",
+   "status": "SUCCEEDED",
+   "file": "t3-f1-flash.png",
+   "sha256": "1f2a535d8507aeb25e98ad1d03587aa300a348da41bf38346077ad1b0872c0b7",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t3-f2-flash": {
+   "territory": "t3",
+   "shot": "f2",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "A long pipe underground, low, cool: ripples travel along the pipe. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "393939b3ca5d7ed215402c44e410fe379cf85f3f2eaa2f5bf99d28477c60195d",
+   "task": "fixture-t3-f2-flash",
+   "status": "SUCCEEDED",
+   "file": "t3-f2-flash.png",
+   "sha256": "ac014680b4b1264f5fbea0e9b1b43cff756ebd5f038439b7af5c55fc744ef0c0",
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "approved_by_person": false
+  },
+  "t3-f3-flash": {
+   "territory": "t3",
+   "shot": "f3",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "credits": 7,
+   "prompt": "An empty reservoir, wide, hushed: light enters through a high window. Abstract, rough finish. No logos, no brand names, no readable signage or text anywhere in the frame.",
+   "prompt_sha256": "a680c33161f803c8198a1a7121f3147eb1376d0107b0e1419e5e048a093bbf10",
+   "task": "fixture-t3-f3-flash",
+   "status": "SUCCEEDED",
+   "file": "t3-f3-flash.png",
+   "sha256": "5b68c1d795eee14cdc2400cf6bbfb042496d76e9d818976ffa1b32e75973bbaf",
+   "guard": {
+    "checked": false,
+    "flagged": false,
+    "found": {},
+    "reason": "skipped: Ollama not reachable (URLError)"
+   },
+   "approved_by_person": false
+  },
+  "t3-f4-flash": {
+   "territory": "t3",
+   "shot": "f4",
+   "tier": "quick",
+   "model": "gemini_image3.1_flash",
+   "status": "REFUSED",
+   "error": "the shot description names banned imagery: test"
+  }
+ },
+ "fixture": true,
+ "style": {
+  "source": "invented fixture style",
+  "hash": "5d1c3a90",
+  "finish": "rough",
+  "look": [
+   "abstract",
+   "flat colour"
+  ],
+  "palette": [],
+  "this_not_that": [],
+  "banned_imagery": [],
+  "notes": "",
+  "references": [],
+  "ignored_references": []
+ },
+ "inputs": {
+  "run_sha256_12": "9fae3abc3951",
+  "plan_sha256_12": "1ee620bc43c6",
+  "safety_banned_sha256_12": "000000000000"
+ },
+ "safe_messaging": {
+  "applies": false,
+  "packs": [],
+  "reviewed": null
+ }
+}

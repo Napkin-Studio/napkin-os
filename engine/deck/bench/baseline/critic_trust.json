@@ -1,0 +1,93 @@
+{
+ "version": 1,
+ "written_by": "deck.bench visual agree",
+ "key": null,
+ "primary_configuration": false,
+ "gates": {
+  "off_min_fails": 5,
+  "adv_kappa": 0.4,
+  "adv_flip": 0.25,
+  "acts_kappa_lb": 0.4,
+  "acts_spec_lb": 0.9,
+  "acts_fails": 15,
+  "acts_natural_fails": 5,
+  "acts_added": 5,
+  "acts_self": 0.8,
+  "cant_max": 0.2
+ },
+ "self_agreement_pooled": null,
+ "self_agreement_pairs": 0,
+ "questions": {
+  "v_one_focus": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  },
+  "v_balance": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  },
+  "v_not_crowded": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  },
+  "v_looks_finished": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  },
+  "v_image_fits": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  },
+  "v_image_clean": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  },
+  "v_text_on_image": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  },
+  "v_crop_ok": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  },
+  "v_one_style": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  },
+  "v_rhythm": {
+   "state": "off",
+   "reasons": [
+    "no grades yet"
+   ],
+   "n": 0
+  }
+ },
+ "digest": null
+}

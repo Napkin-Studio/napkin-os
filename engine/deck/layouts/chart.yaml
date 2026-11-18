@@ -1,0 +1,48 @@
+id: chart
+version: 1
+group: content
+purpose: data
+description: A bar chart on one side with its commentary beside it.
+slot_summary: title, chart, commentary
+for_types:
+- chart
+when:
+  blocks_any:
+  - chart
+priority: 75
+alternatives:
+- chart_full
+roomier: chart_full
+density: standard
+pick: rule
+family: chart
+renderer: chart
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  chart:
+    kind: chart
+    from_blocks:
+    - chart
+    dominant: true
+    chart:
+      types:
+      - bar
+      max_categories: 8
+      max_series: 1
+      hero_max: 2
+  commentary:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    - text
+    - small
+    - card
+    - kv
+    min_items: 1
+    max_items: 3

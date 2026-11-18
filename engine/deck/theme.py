@@ -139,6 +139,12 @@ class Theme:
     grid: Grid = field(default_factory=Grid)
     layouts: bool = True      # False: the old single-column flow for every slide
     derived: tuple = ()       # names of tokens derived from a brand rather than given
+    accent_line: str = ""     # the accent where it is a thin line, rule or chart series; "" means the accent itself (a pale accent sets it)
+
+    @property
+    def line_accent(self) -> str:
+        """The accent as a thin line, rule or chart series: the accent itself unless a pale one set ``accent_line``."""
+        return self.accent_line or self.accent
 
     def legacy(self) -> dict:
         """The tokens under the old THEME dict's keys (ink paper accent muted tint line dark_text head body)."""
@@ -154,6 +160,9 @@ class Theme:
             f = LEGACY_KEYS.get(k, k if k in COLOR_FIELDS else None)
             if f and HEX.match(v):
                 upd[f] = v.upper()
+        al = str(colors.get("accent_line") or "")
+        if HEX.match(al):
+            upd["accent_line"] = al.upper()
         for k in ("head", "body"):
             v = brand.get(k)
             if isinstance(v, str) and v.strip() and not _FONT_BAD.search(v):
