@@ -9,8 +9,8 @@ import { RouterContext, ServicesContext, ShellContext } from './app/context'
 import { routeProject, type Router } from './app/route'
 import type { Shell } from './projects/shell'
 import { Home } from './ui/Home'
-import { MarkTile } from './ui/chrome/Bar'
 import { LookProvider } from './ui/shell/look'
+import { PlaceBar } from './ui/shell/ShellBar'
 import { NO_ACCESS, signInHref, type Access, type AccessStore } from './relay/access'
 import './ui/home.css'
 
@@ -55,26 +55,22 @@ export function Root({ shell, access, router }: { shell: Shell; access: AccessSt
   )
 }
 
-/** Why this person cannot use the tool now (relay/access.ts; UI spec 3.15). The tool has no sign-in
- *  of its own: Napkin Studio's signs you in and comes back to this same page (features/os-sign-in.clan). */
+/** Why this person cannot use the tool now (relay/access.ts; UI spec 3.15), under the shell bar of the new UI.
+ *  The tool has no sign-in of its own: Napkin Studio's signs you in and comes back to this same page
+ *  (features/os-sign-in.clan). */
 function NoAccess({ why }: { why: Exclude<Access, 'ok'> }) {
   const words = NO_ACCESS[why]
   return (
-    <div className="pt-grid" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-      <header className="hm-bar">
-        <span className="hm-brand">
-          <MarkTile />
-          <span className="hm-studio">Napkin Studio</span>
-          <span className="hm-tool">Production</span>
-        </span>
-      </header>
-      <div className="card signin stack" role="status">
-        <b className="signin-title">{words.title}</b>
-        {words.body && <p style={{ margin: 0 }}>{words.body}</p>}
-        {why === 'signed_out' && (
-          <div className="row" style={{ justifyContent: 'center' }}><a className="btn primary" href={signInHref(location)}>Sign in</a></div>
-        )}
-      </div>
+    <div className="access-view" data-access={why}>
+      <PlaceBar />
+      <main className="access-main">
+        <section className="access-card" role="status">
+          <span className="lbl">Production</span>
+          <h1>{words.title}</h1>
+          {words.body && <p>{words.body}</p>}
+          {why === 'signed_out' && <a className="btn-rect primary" href={signInHref(location)}>Sign in</a>}
+        </section>
+      </main>
     </div>
   )
 }

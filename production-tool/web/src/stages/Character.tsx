@@ -44,8 +44,7 @@ import { AskCard } from '../ui/AskCard'
 import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
-import { hasWork, scriptToWrite, showStartCard } from './startCard'
-import { StartCard } from './FilmStart'
+import { scriptToWrite } from './scriptToWrite'
 import { useBriefSpinoff } from '../brief/useBriefSpinoff'
 import { BriefBooth } from '../brief/BriefBooth'
 import { briefOfElement } from '../brief/canvas'
@@ -492,10 +491,8 @@ export function Character({ initial, active, onPictureEditor }: {
     }
   }, [docStore, services, canvas, offerUndo])
 
-  // Only once the canvas has its scene (vs: its first read, after the engine opened it), and never on a document
-  // with work in it (re-test N-E).
-  const showHint = !!vs && !hasWork(doc) && showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
-  // A brief spun off from Brief Maker (?brief=<doc id>): its Brief node and a new Script, once (features/brief-node.clan).
+  // A blank canvas asks nothing (owner 2026-11-18): no Start card, no prompt. Arriving from Brief Maker
+  // (?brief=<doc id>) puts that brief's Brief node on it, alone, once (features/production-new-ui.clan).
   useBriefSpinoff(canvas?.engine === 'own' ? { canvas, doc: docStore } : null)
   // Dev only: the canvas for window.__seed.brief (dev/seed.ts), so a Brief node can be put on it in a screenshot.
   useEffect(() => {
@@ -880,12 +877,12 @@ export function Character({ initial, active, onPictureEditor }: {
         )}
         <FrontChooser />
         {placeError && <div className="place-error" role="alert">{placeError}<FrontButtons text={placeError} /> <button className="btn xs ghost" onClick={() => setPlaceError(null)}>OK</button></div>}
-        {showHint && <StartCard env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} onPictures={() => { if (!panels.assets) panels.toggle('assets') }} />}
         {/* Boards are frames on the canvas (⌥1…⌥9 jump, ⌥0 fits); on touch, with no ⌥, the Boards pill opens the jump sheet. */}
         {narrow && <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow keys={!own} />}
-        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={() => { canvas?.select([]); panels.openAssets('napkin') }} vertical={narrow} />
+        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={() => { canvas?.select([]); panels.openAssets('napkin') }}
+          onAssets={() => { canvas?.select([]); if (!panels.assets) panels.toggle('assets') }} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
-        {!showHint && <LinksToggle chrome={chrome} />}
+        <LinksToggle chrome={chrome} />
       </div>
       <Booth state={booth} earned={boothEarned({ selection: !!selBrief, library: panels.assets })}>
         {selBrief ? <BriefBooth briefId={selBrief} onClose={() => canvas?.select([])} />

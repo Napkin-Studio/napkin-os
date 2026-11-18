@@ -1,17 +1,18 @@
 import { readFileSync } from 'node:fs'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { HomeMark, MarkTile } from './Bar'
-import { StudioMark } from '../Mark'
-
-const TRIANGLE = 'M2 11 L7 3 L12 11 Z'
 
 describe('the bar is the shell bar of the new UI (features/production-new-ui.clan)', () => {
-  it('HomeMark and MarkTile still draw the logo where no bar is (signed out)', () => {
-    expect(renderToStaticMarkup(createElement(HomeMark, { onClick: () => {} }))).toContain('aria-label="Home: your projects"')
-    expect(renderToStaticMarkup(createElement(MarkTile))).not.toContain(TRIANGLE)
-    expect(renderToStaticMarkup(createElement(StudioMark, { size: 20 }))).toContain('viewBox="0 0 22 22"')
+  it('where no film is open (All projects, signed out, not confirmed, not on for the agency) the bar is PlaceBar: no old header', () => {
+    const shell = readFileSync(new URL('../shell/ShellBar.tsx', import.meta.url), 'utf8')
+    const place = shell.slice(shell.indexOf('export function PlaceBar'), shell.indexOf('function ThemeButton'))
+    expect(place).toContain('<BrandPill />')
+    expect(place).not.toContain('m1-medallion')
+    for (const f of ['../../Root.tsx', '../Home.tsx']) {
+      const src = readFileSync(new URL(f, import.meta.url), 'utf8')
+      expect(src).toContain('<PlaceBar')
+      expect(src).not.toMatch(/hm-bar|hm-brand|MarkTile|BetaTag/)
+    }
+    expect(readFileSync(new URL('../home.css', import.meta.url), 'utf8')).not.toContain('.hm-bar')
   })
   it('the canvas bar and every editor bar are the slim ShellBar: the brand pill, the film, the crumb; the dot, Decisions, you', () => {
     const bars = readFileSync(new URL('./TopBars.tsx', import.meta.url), 'utf8')
@@ -64,7 +65,8 @@ describe('the film\'s ▾ menu holds the film\'s actions; each page\'s actions a
     expect(band.indexOf('{!tight && planActs}')).toBeLessThan(band.indexOf('se-ask'))
   })
   it('Assets is on the canvas\'s + menu', () => {
-    expect(src('../../canvas/chrome/CanvasChrome.tsx')).toContain("panels.toggle('assets')")
+    expect(src('../../canvas/chrome/CanvasChrome.tsx')).toContain('Assets and characters…')
+    expect(src('../../stages/Character.tsx')).toContain('onAssets={')
   })
   it('Storyboard does not repeat the project name, and every title carries its full text for the tooltip', () => {
     expect(src('../../stages/Storyboard.tsx')).not.toContain('<span className="pt-project">{projectName}</span>')
@@ -96,5 +98,14 @@ describe('the name in the bar (re-test N-D)', () => {
     expect(nameParts('PW Lumo Gen Z cut-down brief 2')).toEqual(['PW Lumo Gen Z cut-down brief', ' 2'])
     expect(nameParts('Rain (copy 3)')).toEqual(['Rain', ' (copy 3)'])
     expect(nameParts('Lumo 2026 launch')).toEqual(['Lumo 2026 launch', ''])
+  })
+})
+
+describe('the avatar menu and the film menu never repeat each other (Shrey 2026-11-19)', () => {
+  it('the avatar menu is the person, the theme, Reduce motion and Sign out; no crew, no New or All projects', () => {
+    const bar = src('./Bar.tsx')
+    const account = bar.slice(bar.indexOf('export function Account'))
+    for (const gone of ['The crew', 'CrewSheet', 'New project', 'All projects', 'newProject', 'goHome']) expect(account).not.toContain(gone)
+    for (const kept of ['<ThemeChoices />', 'Reduce motion', 'Sign out', 'look.name']) expect(account).toContain(kept)
   })
 })

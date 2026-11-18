@@ -1,5 +1,5 @@
 // The pieces every top bar of the approved UI is made of (docs/production-tool/ui-mocks,
-// Main.dc.html; ui-behaviour 3.1): the Home mark, the brand, the back button, an editor's
+// Main.dc.html; ui-behaviour 3.1): the brand, the back button, an editor's
 // title with its node mark, the people here and the account button with its menu.
 
 import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
@@ -7,24 +7,10 @@ import { useShell } from '../../app/context'
 import { onThemeChoice, setThemeChoice, themeChoice, type ThemeChoice } from '../../theme'
 import type { Me } from '../../contracts/types'
 import { Float } from '../Float'
-import { StudioMark } from '../Mark'
 import { initials } from './panels'
-import { CrewSheet } from '../agents/CrewSheet'
+import { useLook } from '../shell/lookContext'
+import { behindNapkinOs, signOut } from '../../relay/access'
 import './chrome.css'
-
-/** "Home: your projects": the Napkin logo, as the shell's bar draws it (StudioLogo size 15: a 20px mark). */
-export function HomeMark({ onClick }: { onClick: () => void }) {
-  return (
-    <button type="button" className="pt-home" aria-label="Home: your projects" title="Home: your projects" onClick={onClick}>
-      <StudioMark size={20} />
-    </button>
-  )
-}
-
-/** The same logo where it goes nowhere (Home itself, the signed-out page). */
-export function MarkTile() {
-  return <span className="pt-home static" aria-hidden="true"><StudioMark size={20} /></span>
-}
 
 /** "Napkin Studio", "Production" in tool blue, and the project's name in grey (it shrinks first).
  *  `wordmark` false (a tight bar): "Napkin Studio" hides; the Home mark is the logo already. */
@@ -94,7 +80,7 @@ export function ThemeChoices() {
   )
 }
 
-/** The account button: your initials; its menu has who you are, the theme, Reduce motion, and the projects. */
+/** The account button: your initials; its menu has who you are (name, agency), the theme, Reduce motion and Sign out. */
 export function Account({ children }: { children?: ReactNode }) {
   // The app's part of the UI (who you are, Reduce motion): the same on Home and in a project.
   const shell = useShell()
@@ -102,7 +88,7 @@ export function Account({ children }: { children?: ReactNode }) {
   const ui = useSyncExternalStore(app.subscribe, app.get)
   const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
-  const [crew, setCrew] = useState(false)
+  const look = useLook()
   const me: Me | undefined = ui.me
   const still = ui.motion === 'still'
   return (
@@ -114,6 +100,8 @@ export function Account({ children }: { children?: ReactNode }) {
         <div className="pt-menuhead">
           <div style={{ fontWeight: 600, color: 'var(--ink)', fontSize: 13 }}>{me?.name ?? me?.handle ?? 'You'}</div>
           <div className="pt-mono">@{me?.handle ?? 'guest'}{me?.team ? ` · ${me.team}` : ''}</div>
+          {/* The agency this person is signed in under (ui/shell/agency.ts). */}
+          <div className="pt-mono">{look.name}</div>
         </div>
         <div className="pt-menusep" />
         <ThemeChoices />
@@ -124,12 +112,15 @@ export function Account({ children }: { children?: ReactNode }) {
             onClick={() => app.update((u) => { u.motion = still ? undefined : 'still' })} />
         </label>
         {children}
-        <button type="button" className="pt-menurow" onClick={() => { setOpen(false); setCrew(true) }}>The crew<span className="hint">who works on your ad</span></button>
-        <div className="pt-menusep" />
-        <button type="button" className="pt-menurow" onClick={() => { setOpen(false); void shell.newProject() }}>New project</button>
-        <button type="button" className="pt-menurow" onClick={() => { setOpen(false); void shell.goHome() }}>All projects</button>
+        {/* Napkin OS's sign-out, only when napkin-web serves the tool (features/os-sign-in.clan). New film and All
+            projects are the film's ▾ menu's, not here (Shrey 2026-11-19: the two menus never repeat each other). */}
+        {behindNapkinOs(import.meta.env.VITE_RELAY_URL as string | undefined) && (
+          <>
+            <div className="pt-menusep" />
+            <button type="button" className="pt-menurow" onClick={() => { setOpen(false); void signOut() }}>Sign out</button>
+          </>
+        )}
       </Float>
-      {crew && <CrewSheet onClose={() => setCrew(false)} />}
     </>
   )
 }

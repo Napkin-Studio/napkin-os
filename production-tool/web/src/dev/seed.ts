@@ -106,8 +106,7 @@ export function installSeed(shell: Shell) {
     /** A project open on the canvas (a new one unless one is open), for specs that drop pictures there. */
     canvas: async () => {
       if (!shell.get().session) await shell.newProject()
-      // A new project is blank (2026-11-04), so the first-run Start card would sit where specs drop pictures.
-      shell.get().session?.services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+      shell.get().session?.services.ui.update((u) => { u.stage = 'character' }, 'e2e seed')
     },
     /** A Brief node from Brief Maker's data, placed on the canvas and linked into the main script (the
      *  paired screenshots of features/production-new-ui.clan). Needs the canvas open on our own engine. */
@@ -149,7 +148,7 @@ export function installSeed(shell: Shell) {
         })
       }, 'e2e seed')
       await (services.doc as { flush?: () => Promise<void> }).flush?.()
-      services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+      services.ui.update((u) => { u.stage = 'character' }, 'e2e seed')
     },
     /** The Film's rooms with footage (the paired screenshots' make/edit states): after market(), each shot its
      *  own box with one ready mock take (its frame as a still), each in the Edit room's cut. */

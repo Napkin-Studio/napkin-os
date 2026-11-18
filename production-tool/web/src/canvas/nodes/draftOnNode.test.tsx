@@ -54,7 +54,7 @@ async function mount() {
   const store = services.clan!
   const scriptId = Object.keys(store.get().scripts)[0]
   const sceneId = await addScene(store, scriptId)
-  // The Script agent's draft from the Start card's line, landed as the runner lands it.
+  // The Script agent's draft from a line, landed as the runner lands it.
   const input = await writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'draft', { mode: 'draft', instruction: 'A market at noon.' })
   const job: Job = {
     contractVersion: '3', jobId: id('job'), participantId: MAYA.id, tenantId: MAYA.tenant_id, projectId: store.get().project.id, startedBy: `human:${MAYA.id}`,

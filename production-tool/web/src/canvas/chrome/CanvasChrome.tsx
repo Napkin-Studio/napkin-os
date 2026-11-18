@@ -7,7 +7,6 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import { Float } from '../../ui/Float'
 import { UndoButtons } from '../../ui/UndoButtons'
 import { NodeIcon } from '../../ui/chrome/Bar'
-import { usePanels } from '../../ui/chrome/panels'
 import { rowLabel, type BoardRow } from './boards'
 // ⌥1…⌥9 and ⌥0 (ui-behaviour 3.2): one reading of the keys for the rail and the own engine's boards.
 import { boardKey } from '../boards/boards'
@@ -145,7 +144,7 @@ const ICON: Record<string, ReactNode> = {
 
 export type NewNode = 'script' | 'storyboard' | 'video' | 'picture' | 'sketch'
 
-export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false }: {
+export function CanvasToolbar({ chrome, ratio, onNode, onBrief, onAssets, vertical = false }: {
   chrome: CanvasChrome | null
   /** The storyboard's ratio: the sketch area's shape (ui-behaviour 3.7). */
   ratio: string
@@ -153,6 +152,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
   onNode: (kind: NewNode) => void
   /** Opens Assets › From Napkin, where the agency's briefs are (features/brief-node.clan). Absent, no brief row. */
   onBrief?: () => void
+  /** Opens Assets and characters in the Booth (it left the bar, owner 2026-11-19). Absent, no Assets row. */
+  onAssets?: () => void
   /** iPad (mock TabletCanvas): a column on the left, each tool with its name, 44px targets, undo and redo in it. */
   vertical?: boolean
 }) {
@@ -163,7 +164,6 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
   const pen = usePenChoice(chrome)
   const actions = useActions()
   const nodeRef = useRef<HTMLButtonElement>(null)
-  const panels = usePanels()
   const [menu, setMenu] = useState(false)
   // The next sketch area's shape (ui-behaviour 3.7): the storyboard's ratio until the person picks one.
   // An existing area's ratio never changes; the picker is the only way the next one's does.
@@ -240,14 +240,10 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
       {row('picture', <>{ICON.image}A picture</>, null, has('image'), 'Pictures are not on this canvas yet', () => onNode('picture'))}
       {row('sketch', <>{sketchIcon}A sketch area</>, ratio, has('sketch'), 'Sketch areas are not on this canvas yet', () => onNode('sketch'))}
       {row('board', <>{ICON.board}A board</>, 'B', actions.canBoard, 'New boards need the new canvas (it has boards as frames)', () => canvasActions.board())}
+      {onAssets && <div className="pt-menusep" />}
+      {onAssets && row('assets', <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></svg>Assets and characters…</>, null, true, '', onAssets)}
       {/* A brief comes from Brief Maker, never typed here: Assets › From Napkin lists the agency's (features/brief-node.clan). */}
       {onBrief && row('brief', <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" /><path d="M7 13h10M7 16h6" /></svg>A brief from Brief Maker…</>, null, actions.canNode, 'Briefs need the new canvas', onBrief)}
-      {/* Assets and characters left the bar for here (Shrey 2026-11-19): the library opens in the Booth. */}
-      <div className="pt-menusep" />
-      <button type="button" role="menuitem" className="pt-menurow cc-assets" aria-pressed={panels.assets} onClick={() => { setMenu(false); panels.toggle('assets') }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></svg>
-        Assets and characters<span className="hint">{panels.assets ? 'open' : 'library'}</span>
-      </button>
     </>
   )
   const nodeButton = (

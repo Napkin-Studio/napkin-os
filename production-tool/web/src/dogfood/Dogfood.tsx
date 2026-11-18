@@ -1,12 +1,11 @@
 // What a participant sees of the beta's record (features/production-tool-dogfood.clan), after
 // Napkin OS's dogfood build (app/src/dogfood/Dogfood.tsx):
 // - once, after sign-in, a notice that this beta logs what they do, acknowledged before anything is;
-// - a "Beta" tag after "Production" in the top bar (and on Home) that shows the notice again;
+// - no Beta tag and no thumbs in any bar (owner 2026-11-19);
 // - 👍 / 👎 with an optional note on the screen and on everything the tool makes, and on errors.
 // Nothing renders when the build does not record.
 
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { createPortal } from 'react-dom'
 import type { Relay } from '../relay'
 import type { Shell } from '../projects/shell'
 import { CONTACT, configureDogfood, dogfoodState, feedback, feedbackNote, subscribe, type Target } from './recorder'
@@ -93,17 +92,3 @@ export function Thumbs({ target, compact = false, labels }: { target: Target; co
   )
 }
 
-/** In the top bar and on Home: the Beta tag, and thumbs for this screen. */
-export function BetaTag({ screen }: { screen: { stage: string; project?: string | null } }) {
-  const state = useDogfood()
-  const [open, setOpen] = useState(false)
-  if (!state.on) return null
-  return (
-    <span className="df-bar">
-      <button type="button" className="df-badge" data-dogfood="beta tag" onClick={() => setOpen(true)} title="This beta logs what you do. Click to read more.">Beta</button>
-      {state.consented && <Thumbs key={`${screen.stage}:${screen.project ?? ''}`} target={{ kind: 'screen', id: screen.stage, project: screen.project ?? null }} compact />}
-      {/* On the page itself: the bar's backdrop-filter would hold a fixed veil inside the bar. */}
-      {open && createPortal(<DogfoodNotice onClose={() => setOpen(false)} />, document.body)}
-    </span>
-  )
-}

@@ -19,6 +19,9 @@ export interface ProjectEntry {
    *  what "saved HH:MM" and Home show. Never a tab's If-Match: each tab sends the version its own document is
    *  based on (serverCopy.ts, re-test R1). */
   server?: ServerMark
+  /** A blank film nothing was added to yet (owner 2026-11-18): not listed on All projects, and gone when it is
+   *  left empty. The first change to its document, or a mark on its canvas, keeps it (keep). */
+  draft?: true
 }
 
 export interface ServerMark {
@@ -158,7 +161,7 @@ export class ProjectIndex {
     return () => this.listeners.delete(fn)
   }
 
-  async create(init: { id?: string; name?: string; naming?: ProjectEntry['naming']; summary?: ProjectSummary; at?: string; server?: ServerMark } = {}): Promise<ProjectEntry> {
+  async create(init: { id?: string; name?: string; naming?: ProjectEntry['naming']; summary?: ProjectSummary; at?: string; server?: ServerMark; draft?: true } = {}): Promise<ProjectEntry> {
     const at = init.at ?? this.now().toISOString()
     const entry: ProjectEntry = {
       id: init.id ?? newProjectId(),
@@ -168,9 +171,18 @@ export class ProjectIndex {
       updated: at,
       summary: init.summary ?? emptySummary(),
       ...(init.server ? { server: init.server } : {}),
+      ...(init.draft ? { draft: true as const } : {}),
     }
     await this.commit((l) => [...l.filter((p) => p.id !== entry.id), entry])
     return entry
+  }
+
+  /** Something was added to a blank film: it is a project now, listed and kept. */
+  async keep(id: string): Promise<void> {
+    await this.change(id, (p) => {
+      const { draft: _d, ...rest } = p
+      return rest
+    })
   }
 
   /** A person's name for it: kept from now on, whatever the script says. Blank goes back to naming itself. */

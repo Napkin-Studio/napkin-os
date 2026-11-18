@@ -12,7 +12,8 @@ import { saveTime, useSave } from '../useSave'
 import { Account } from '../chrome/Bar'
 import { StudioMark } from '../Mark'
 import { pillMark } from './agency'
-import { useLook } from './lookContext'
+import { useLook, useTheme } from './lookContext'
+import { setThemeChoice } from '../../theme'
 import { ICON, studioHref, useNeedsCount } from './bar'
 import { usePanels } from '../chrome/panels'
 import './shell.css'
@@ -140,20 +141,35 @@ export function ShellBar({ crumb, menu, job, className = '', bar, history }: {
   )
 }
 
-/** The same slim bar where no film is open (the projects page): the brand pill, the place, and you. */
-export function PlaceBar({ place, children, account }: { place: string; children?: ReactNode; account?: ReactNode }) {
+/** The slim bar where no film is open (All projects, and the sign-in and access screens): the brand pill, the
+ *  place's name, and you once signed in. Light or dark is in your account menu; signed out, a theme button stands
+ *  in for it. A film's slots (its name and menu, the status dot, Decisions) are not here. */
+export function PlaceBar({ place = 'Production', account }: {
+  place?: string
+  /** The account button and its menu; none when signed out. */
+  account?: ReactNode
+}) {
   return (
-    <div className="topbar-outer slim" data-float-avoid="" data-bar="home">
+    <div className="topbar-outer slim" data-float-avoid="" data-bar="place">
       <header className="tb" aria-label="Napkin Studio Top Bar">
         <BrandPill />
         <div className="tb-app">
           <span className="tba-place"><Ic d={ICON.film} cls="ticon" /><b>{place}</b></span>
-          {children}
         </div>
         <span className="tb-spacer" />
-        <span className="tb-right"><span className="tb-me"><Account>{account}</Account></span></span>
+        <span className="tb-right">{account ? <span className="tb-me">{account}</span> : <ThemeButton />}</span>
       </header>
     </div>
+  )
+}
+
+function ThemeButton() {
+  const theme = useTheme()
+  return (
+    <button type="button" className="tb-theme" title="Light or dark" aria-label={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+      onClick={() => setThemeChoice(theme === 'dark' ? 'light' : 'dark')}>
+      <Ic d={ICON.moon} cls="i-moon" /><Ic d={ICON.sun} cls="i-sun" />
+    </button>
   )
 }
 

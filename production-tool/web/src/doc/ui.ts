@@ -56,7 +56,6 @@ export interface AppUi {
   providerChoice: ProviderChoice
   /** Who is signed in (GET /me), asked again on every load; absent when signed out. */
   me?: Me
-  hintDismissed?: boolean
   /** Home, or the project `project` (features/project-home.clan). */
   view: 'home' | 'project'
   project?: string
@@ -71,7 +70,7 @@ export interface AppUi {
 }
 
 /** The UiState fields that are the app's, not the project's. */
-export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'me', 'hintDismissed', 'view', 'project', 'homeSort', 'savedAt', 'motion', 'booth'] as const satisfies readonly (keyof AppUi)[]
+export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'me', 'view', 'project', 'homeSort', 'savedAt', 'motion', 'booth'] as const satisfies readonly (keyof AppUi)[]
 
 /** Kept per project. */
 export interface ProjectUi {

@@ -38,7 +38,7 @@
 .bb-changed > b { color: var(--needs, var(--warn)); }
 .bb-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 
-/* From Napkin: the agency's briefs as manila slips (as the Start card's .src-card), Link or On the canvas. */
+/* From Napkin: the agency's briefs as manila slips, Link or On the canvas. */
 .fn-list { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
 .fn-row { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--bm-manila-line); background: color-mix(in srgb, var(--bm-manila) 45%, var(--paper)); border-radius: 6px; position: relative; }
 :root[data-theme='dark'] .fn-row { background: color-mix(in srgb, var(--bm-manila) 12%, var(--paper)); }

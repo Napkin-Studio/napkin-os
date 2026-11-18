@@ -1,14 +1,13 @@
-// The Brief node on the canvas (features/brief-node.clan): its card element and the empty canvas's
-// "Start from a brief". Engine-neutral, through CanvasAdapter v2 like canvas/nodes. How the card
-// looks (compact: title, version, proposition, tone) is the card chrome's; this file only places it.
+// The Brief node on the canvas (features/brief-node.clan): its card element, the brief a page arrives with,
+// and a brief linked later. Engine-neutral, through CanvasAdapter v2 like canvas/nodes. How the card looks
+// (compact: title, version, proposition, tone) is the card chrome's; this file only places it.
 //
-// Start from a brief: the brief chosen in the picker (linked from the agency's briefs, or arriving as
-// a spin-off from Brief Maker) becomes a Brief node, a new Script node is made beside it, and the
-// brief is linked into the Script, so the first draft and everything after it read the spine.
+// A blank canvas asks nothing (owner 2026-11-18, features/production-new-ui.clan): arriving from Brief Maker
+// puts the brief's Brief node there alone (bringBrief), and the person links it to what they add.
 
 import type { Id, Link, LinkEndpoint } from '../contracts/types'
 import type { CanvasElement, Pt } from '../canvas/core/canvasAdapter'
-import { cardOf, createNode, elementOfEnd, linkInput, type NodeEnv } from '../canvas/nodes/nodes'
+import { elementOfEnd, linkInput, type NodeEnv } from '../canvas/nodes/nodes'
 import { clearOffset } from '../canvas/boards/fitting'
 import { addBrief, briefFromDocument, briefOf, newBrief } from './model'
 import type { OsBriefRead } from './os'
@@ -57,27 +56,16 @@ export async function linkBrief(env: NodeEnv, briefId: Id, to: LinkEndpoint): Pr
   return linkInput(env.doc, env.doc.get(), { kind: 'brief', id: briefId }, to)
 }
 
-/** What Start from a brief made. */
-export interface StartedFromBrief {
-  briefId: Id
-  scriptId: Id
-  link?: Link
-}
-
 /**
- * Start from a brief (the empty canvas's Start card): the Brief node (the one already made from this
- * brief, else a new frozen copy), a new Script node beside it, and the brief linked into the Script.
+ * The brief a page arrives with (Brief Maker's Continue in › Production Tool, ?brief=<doc id>): its Brief node
+ * (the one already made from this brief, else a new frozen copy), placed in view and nothing else: no Script,
+ * no link, nothing selected, so no Booth opens. The person links it to what they add.
  */
-export async function startFromBrief(env: NodeEnv, read: OsBriefRead, how: 'link' | 'spinoff' = 'link'): Promise<StartedFromBrief> {
+export async function bringBrief(env: NodeEnv, read: OsBriefRead, how: 'link' | 'spinoff' = 'spinoff'): Promise<{ briefId: Id; el: CanvasElement }> {
   const brief = briefFromDocument(env.doc.get(), read.documentId) ?? (await addBrief(env.doc, newBrief(read, how)))
-  const scriptEl = await createNode(env, 'script')
-  const scriptId = cardOf(scriptEl)!.id
-  // The brief to the Script's left, its middle level with the Script's top third.
-  const at = { x: scriptEl.x - GAP - BRIEF_CARD.w / 2, y: scriptEl.y + Math.min(scriptEl.height / 3, BRIEF_CARD.h / 2 + 24) }
-  placeBrief(env, brief.id, at)
-  const linked = await linkBrief(env, brief.id, { kind: 'script', id: scriptId })
-  env.canvas.select([scriptEl.id])
-  return { briefId: brief.id, scriptId, ...(linked.ok ? { link: linked.link } : {}) }
+  const el = placeBrief(env, brief.id)
+  env.canvas.select([])
+  return { briefId: brief.id, el }
 }
 
 /** What linking a brief later did: the Brief node, and the Script it now feeds when there was one to feed. */

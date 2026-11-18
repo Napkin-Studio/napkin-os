@@ -239,3 +239,19 @@
 .nui-pop .dm-theme { display: flex; align-items: center; gap: 10px; padding: 7px 10px; }
 .nui-pop .dm-theme .fmi-ico { width: 16px; display: grid; place-items: center; color: var(--ink2, var(--muted)); }
 .nui-pop .dm-theme-l { font-weight: 600; }
+/* Signed out: light or dark beside the place (PlaceBar), as no account menu is there to hold it. */
+.tb .tb-theme { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--paper); display: grid; place-items: center; flex: none; }
+.tb-theme svg { width: 16px; height: 16px; }
+.tb-theme .i-sun { display: none; }
+:root[data-theme='dark'] .tb-theme .i-moon { display: none; }
+:root[data-theme='dark'] .tb-theme .i-sun { display: block; }
+
+/* Signed out, not confirmed, or not on for the agency (Root.tsx NoAccess): the desk under the shell bar, one
+   paper card with what to do (the mock's .cp-box paper; features/production-new-ui.clan). */
+.access-view { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--desk); color: var(--ink); }
+.access-main { flex: 1; display: grid; place-items: center; padding: 24px 16px; }
+.access-card { width: min(480px, 100%); box-sizing: border-box; background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-paper, 0 1px 2px rgba(0, 0, 0, .06)); padding: 24px 26px; display: flex; flex-direction: column; gap: 12px; }
+.access-card h1 { margin: 0; font: 800 22px/1.2 var(--font-ui); letter-spacing: -.02em; color: var(--ink); }
+.access-card p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); }
+.access-card .btn-rect { align-self: flex-start; margin-top: 4px; text-decoration: none; }
