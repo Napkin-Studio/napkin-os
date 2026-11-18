@@ -458,12 +458,15 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
         {safe && adjusting && set.protect?.boxes?.map((b, i) => (
           <span key={i} className="cb-pbox" style={{ left: (b.x - adjusting.x) * s, top: (b.y - adjusting.y) * s, width: b.w * s, height: b.h * s }} />
         ))}
-        <span className={`cb-status ${status ?? 'notmade'}`} title={failure}>{status === 'failed' ? 'Failed' : status ? STATUS[status] : 'Not made'}</span>
-        {status === 'failed' && !PAID.has(size.method) && (
-          // A free size that failed is made again from here (QA 2026-11-17: only Adjust crop → Reset did it).
-          <button type="button" className="btn xs" onPointerDown={(e) => e.stopPropagation()} title={failure ? `Make it again. ${failure}` : 'Make it again'}
-            onClick={() => void sendSize(deps, set.id, size.id, by).then(() => say('Making it again'))}>Try again</button>
-        )}
+        {/* The status and Try again side by side, never one over the other (UAT 2026-11-18: "Failed" covered it). */}
+        <span className="cb-badges">
+          <span className={`cb-status ${status ?? 'notmade'}`} title={failure}>{status === 'failed' ? 'Failed' : status ? STATUS[status] : 'Not made'}</span>
+          {status === 'failed' && !PAID.has(size.method) && (
+            // A free size that failed is made again from here (QA 2026-11-17: only Adjust crop → Reset did it).
+            <button type="button" className="btn xs" onPointerDown={(e) => e.stopPropagation()} title={failure ? `Make it again. ${failure}` : 'Make it again'}
+              onClick={() => void sendSize(deps, set.id, size.id, by).then(() => say('Making it again'))}>Try again</button>
+          )}
+        </span>
         {size.locked && <span className="cb-lock" title="Locked: Update sizes never changes it">🔒</span>}
         {checks.length > 0 && (
           <button type="button" className={`cb-flag ${flags.every(([, c]) => c!.ignored) ? 'ignored' : ''}`} onPointerDown={(e) => e.stopPropagation()}
