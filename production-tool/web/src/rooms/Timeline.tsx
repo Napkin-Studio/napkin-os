@@ -111,7 +111,7 @@ export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, 
           <button type="button" className={`sp-btn ${ripple ? 'pressed' : ''}`} aria-pressed={ripple} onClick={() => onRipple(!ripple)} title="Trims and deletes close up the cut">Ripple {ripple ? 'on' : 'off'}</button>
           <button type="button" className={`sp-btn ${snap ? 'pressed' : ''}`} aria-pressed={snap} onClick={() => onSnap(!snap)} title="Snap to edges, the playhead and marks">Snap {snap ? 'on' : 'off'}</button>
           <button type="button" className="sp-btn" onClick={actions.addText} title="Add text at the playhead (T)">+ Text <kbd>T</kbd></button>
-          <button type="button" className="sp-btn" onClick={actions.captions} title="Captions from the shots' spoken lines">Captions from the script</button>
+          <button type="button" className="sp-btn" onClick={actions.captions} title="Captions from the shots' spoken lines">Captions<span className="rm-wide"> from the script</span></button>
           <EditKeys />
         </span>, tools)}
       <div className="rm-tlbody">

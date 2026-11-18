@@ -93,7 +93,7 @@
 .band .band-back:focus-visible, .ov-head .band-back:focus-visible { outline: 2px solid var(--ag-act); outline-offset: 1px; }
 /* The page's primary (Plan shots, Make clips, Render ad, Apply as new version), at the band's right. */
 .band-primary { display: inline-flex; align-items: center; gap: 8px; }
-.band .btn.primary, .band .pt-primary { height: 32px; border-radius: 8px; padding: 0 14px; font: 600 13px var(--font-ui);
+.band .btn.primary, .band .pt-primary { height: 32px; min-height: 32px; border-radius: 8px; padding: 0 14px; font: 600 13px var(--font-ui);
   background: var(--ag-act); color: var(--ag-act-ink); border: 1px solid var(--ag-act-line, var(--ag-act)); }
 
 /* ── menus opened from the bar (the shell's .pop) ───────────────────────── */
@@ -134,6 +134,9 @@
 
 /* ── phone and narrow ───────────────────────────────────────────────────────
    Laptops (1024-1440) keep every word: only the film's name gives way (Shrey 2026-11-19, at 1116). */
+@media (max-width: 1279px) {
+  .band { gap: 8px; padding: 6px 16px; }
+}
 @media (max-width: 1023px) {
   .tb { gap: 8px; padding: 0 12px; }
   .ag-pill small { display: none; }
