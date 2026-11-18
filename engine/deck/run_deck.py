@@ -223,13 +223,17 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
     def spent() -> float:
         return sum((_price_stage(v or {}).get("usd") or 0) for v in rep["stages"].values())
 
-    rec_path = next((p for p in (a.stages / "repair_record.json", out / "repair_record.json") if p.exists()), None)
     record = None
-    if rec_path:
+    for p in (a.stages / "repair_record.json", out / "repair_record.json"):
+        if not p.exists():
+            continue
         try:
-            record = json.loads(rec_path.read_text())
+            got = json.loads(p.read_text())
         except ValueError:
-            record = None
+            continue
+        if p.parent == a.stages or got.get("stages") == str(a.stages.resolve()):   # out/'s record is used only when it was written for these --stages
+            record = got
+            break
     ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm}, "swaps": swaps, "base_deck": base_deck,
            "pinned": pinned, "out": out, "stages": a.stages, "live": a.live, "approve_shorten": a.approve_shorten, "call_fn": call_fn, "spent": spent,
            "run_cap": repair.run_cap(), "record": record, "render_fn": render_fn, "pdf_fn": pdf_fn, "qa_fn": qa_fn}
@@ -278,7 +282,7 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
     (out / "repair.json").write_text(json.dumps(res["repair"], indent=1, ensure_ascii=False))
     rec_dir = a.stages if a.live else out
     rec_dir.mkdir(parents=True, exist_ok=True)
-    (rec_dir / "repair_record.json").write_text(json.dumps(res["record"], indent=1, ensure_ascii=False))
+    (rec_dir / "repair_record.json").write_text(json.dumps({**res["record"], "stages": str(a.stages.resolve())}, indent=1, ensure_ascii=False))
     for k, row in res["stage_rows"].items():
         rep["stages"][k] = row
     rep["repair"] = {"policy_sha": res["repair"]["policy_sha"], "rounds": [{**x, "seconds": round(s, 1)} for x, s in zip(res["rounds"], res.get("secs") or [0] * len(res["rounds"]))],
@@ -517,7 +521,9 @@ def main(argv=None):
     ap.add_argument("--text-mode", choices=spec.TEXT_MODES, default=None,
                     help="condense: the repair loop may move whole points to the speaker notes and shorten wording with the slide's own words; preserve (also when absent): it never does")
     ap.add_argument("--repair-policy", type=Path, help="a repair policy file over policy/repair.yaml (tests and experiments)")
-    ap.add_argument("--approve-shorten", action="store_true", help="a person's yes to shortening a deck built for --audience client (recorded in the repair record)")
+    ap.add_argument("--approve-shorten", metavar="ID", default=None,
+                    help="a person's yes to shortening a deck built for --audience client: the approval id for these exact words (apv_..., printed in the repair report's skipped list); "
+                         "any change to the shortenable words voids it. A bare flag is not a yes")
     ap.add_argument("--until", choices=UNTIL_CHOICES, default=None,
                     help="stop after this stage and write report.json (stages a0 a b c d, or i for an investor deck); 'deck' stops once the deck "
                          "is assembled and validated, before any file is rendered. Stage outputs stay in --stages: a later run carries on from them")
@@ -755,7 +761,7 @@ def main(argv=None):
         pinned_ids = _stamp_pinned(a, deck, deck_ctx)
         loop_on = not a.no_repair and not a.no_qa and a.until is None
         policy = repair.load_policy(profile, a.repair_policy) if loop_on else None
-        stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages)[0]
+        stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages, repair.approval_id(deck))[0]
         base_deck = deck
         deck, plan_issues, _pending = layouts.plan(deck, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten)}, swaps=swaps)
         rungs = (deck["meta"].get("layout_plan") or {}).get("rungs", {})

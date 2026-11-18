@@ -199,10 +199,10 @@ def test_mutation_every_single_ledger_token_changed_is_refused():
     texts = [BASE_TEXT, LONG, "Radio reach was about 3x in H1 FY26, never under 2m.", "Not for B2B in March 2026, without a budget of USD 4bn."]
     # what the ledger covers, spelled out: a ledger that quietly stopped reading a class of word would have no mutants of that class
     assert ledger.tokens(BASE_TEXT, ledger.known_names([BASE_TEXT])) == [
-        ("num", "Q3"), ("name", "EUR"), ("num", "5m"), ("name", "EUR"), ("num", "7m"), ("hedge", "up to"), ("num", "12"), ("neg", "not"), ("num", "40%"),
-        ("name", "Lumen"), ("name", "Water"), ("name", "Acme")]
-    assert [k for k, _ in ledger.tokens(texts[2])] == ["hedge", "num", "num", "num", "neg", "num"]
-    assert [k for k, _ in ledger.tokens(texts[3])] == ["neg", "num", "month", "num", "neg", "name", "num"]
+        ("num", "Q3"), ("after", "from"), ("name", "EUR"), ("num", "5m"), ("after", "to"), ("name", "EUR"), ("num", "7m"), ("after", "up"), ("hedge", "up to"),
+        ("num", "12"), ("after", "hires"), ("neg", "not"), ("num", "40"), ("unit", "%"), ("after", "of"), ("name", "Lumen"), ("name", "Water"), ("name", "Acme")]
+    assert [k for k, _ in ledger.tokens(texts[2])] == ["hedge", "num", "after", "num", "num", "neg", "num"]
+    assert [k for k, _ in ledger.tokens(texts[3])] == ["neg", "num", "after", "month", "num", "neg", "name", "num"]
     mutants = survivors = 0
     for t in texts:
         known = ledger.known_names([t])
@@ -250,7 +250,7 @@ def test_the_ledger_reads_moved_points_from_the_notes_and_refuses_a_line_that_di
 # ---------------------------------------------------------------------------------------------------- the shorten guard (own words, ledger)
 @pytest.mark.parametrize("new,why", [
     (SHORT, ""),
-    (SHORT.replace("water story", "water tale"), "words that are not on the slide"),   # a synonym
+    (SHORT.replace("water story", "water tale"), "words that are not in the field"),   # a synonym
     (SHORT.replace("up to 12", "up to 21"), "adds a number"),
     (SHORT.replace("Q3 and Q4", "Q4 and Q3"), "ledger"),
     (SHORT.replace("not once", "once"), "ledger"),
@@ -384,7 +384,7 @@ def test_a_pinned_slide_is_left_alone_and_a_persons_layout_is_never_switched(tmp
 def _m(issues_=(), counts_=None, pairs_=None, content=frozenset(), cl=None, ledger_=(), ok=True):
     iss = list(issues_)
     deck = {"order": ["s01", "s02"], "slides": {"s01": {"type": "x"}, "s02": {"type": "x"}}}
-    return {"issues": iss, "counts": counts_ or repair.counts(iss, deck), "pairs": pairs_ if pairs_ is not None else repair.pairs(iss, deck), "content": set(content),
+    return {"issues": iss, "counts": counts_ or repair.counts(iss, deck), "pairs": pairs_ if pairs_ is not None else repair.pairs(iss, deck), "content": __import__("collections").Counter(content),
             "checklist": cl, "ledger": list(ledger_), "ok": ok, "deck": deck}
 
 
@@ -426,7 +426,7 @@ def test_no_hiding_a_content_finding_that_disappears_rejects_the_round_as_one_th
 def test_content_set_ignores_the_word_budget_and_slot_checks_and_the_render_findings():
     f = [{"check": "numbers_trace", "level": "warn", "slide": "s01"}, {"check": "word_budget", "level": "warn", "slide": "s01"}, {"check": "slot_limit", "level": "warn", "slide": "s01"},
          {"check": "text_overflow", "level": "error", "slide": "s01"}, {"check": "image_flagged", "level": "warn", "slide": "s02"}]
-    assert repair.content_set(f) == {("numbers_trace", "s01", "warn")}
+    assert repair.content_set(f) == {("numbers_trace", "s01", "warn"): 1}
 
 
 def test_block_unbound_and_slot_stale_count_as_blockers_and_a_new_pair_rejects_whatever_the_totals():
@@ -536,7 +536,9 @@ def test_a_client_deck_is_shortened_only_with_a_persons_yes(tmp_path, monkeypatc
     build(tmp_path / "n", fake_qa({S: too_long(SLOT, CAP, BLOCK)}, "word_budget"), "--text-mode", "condense", "--audience", "client", stages_dir=stages_copy)
     assert seen == []
     assert any("person's yes" in s["why"] for s in jload(tmp_path / "n" / "repair.json")["skipped"])
-    build(tmp_path / "y", fake_qa({S: too_long(SLOT, CAP, BLOCK)}, "word_budget"), "--text-mode", "condense", "--audience", "client", "--approve-shorten", stages_dir=stages_copy)
+    why = next(x["why"] for x in jload(tmp_path / "n" / "repair.json")["skipped"] if "person's yes" in x["why"])
+    approval = why[why.index("apv_"):].rstrip(")")   # the id the person is shown: bound to these exact words
+    build(tmp_path / "y", fake_qa({S: too_long(SLOT, CAP, BLOCK)}, "word_budget"), "--text-mode", "condense", "--audience", "client", "--approve-shorten", approval, stages_dir=stages_copy)
     assert seen
 
 
@@ -545,7 +547,8 @@ def test_the_free_rungs_run_without_a_recording_and_a_text_move_needs_condense()
     assert not ok and "not live" in why
     assert repair.shorten_available("preserve", "review", True, False, None)[0] is False
     assert repair.shorten_available("condense", "review", True, False, None)[0] is True
-    assert repair.shorten_available("condense", "client", True, False, None)[0] is False and repair.shorten_available("condense", "client", True, True, None)[0] is True
+    assert repair.shorten_available("condense", "client", True, False, None, "apv_x")[0] is False and repair.shorten_available("condense", "client", True, True, None, "apv_x")[0] is False   # a bare yes is not a yes
+    assert repair.shorten_available("condense", "client", True, "apv_other", None, "apv_x")[0] is False and repair.shorten_available("condense", "client", True, "apv_x", None, "apv_x")[0] is True
 
 
 # ---------------------------------------------------------------------------------------------------- FIX 7: a failing or refused call, and the caps
@@ -855,3 +858,166 @@ def test_the_overlap_fixture_is_cleared_by_the_free_rungs_and_the_shrink_floor_i
     env = _env({"type": "x", "blocks": [], "layout": {"id": "cards", "chosen_by": "rule", "alternatives": [], "fit": {"scale": 0.86}}})
     assert repair.available("shrink", _issue("text_overflow", "points"), env)[0] is False   # 0.81 would go under the 0.85 floor
     assert repair.available("shrink", _issue("text_overflow", "points"), _env({"type": "x", "blocks": [], "layout": {"id": "cards", "chosen_by": "rule", "alternatives": [], "fit": {"scale": 1.0}}}))[0]
+
+
+# ---------------------------------------------------------------------------------------------------- the adversarial check's fixes (18 November)
+GUARDS = tuple(POLICY["shorten"]["guards"])
+
+
+def _guard(old, new, slide_text=None, **kw):
+    return assemble.shorten_problem(old, new, slide_text if slide_text is not None else old, frozenset(), GUARDS, 0.99, **kw)
+
+
+@pytest.mark.parametrize("old,new", [
+    ("Delivery takes 5 km by road and also 5 days", "Delivery takes 5 by road and also 5 days"),   # the word after a number is protected, unit or not
+    ("Spend 5 weeks and also 3 days in the ramp", "Spend 5 days and also 3 weeks in the ramp"),   # a unit swap
+    ("Takes 5 per cent of budget overall here", "Takes 5 of budget overall here"),
+    ("Takes 5 percent of budget overall here", "Takes 5 of budget overall here"),
+    ("We opened 5 brands in the north and more", "We opened 5 in the north and more"),
+    ("Sales grew 1,200 units overall and more", "Sales grew 1200 units overall and more"),   # numbers compare as written
+    ("Spend 5-6 weeks on the ramp up plan", "Spend 5 weeks on the ramp up plan"),
+])
+def test_the_word_after_a_number_is_protected_and_numbers_compare_as_written(old, new):
+    assert _guard(old, new) != ""
+
+
+def test_per_cent_percent_and_the_sign_are_one_ledger_and_a_clean_cut_still_passes():
+    t = lambda x: ledger.tokens(x, frozenset())
+    assert t("Takes 5 per cent of it") == t("Takes 5 percent of it") == t("Takes 5% of it") == t("Takes 5 % of it")
+    assert _guard("Takes 5% of budget overall here today", "Takes 5% of budget here today") == ""
+
+
+def test_own_words_look_only_at_the_same_field_and_an_internal_note_is_never_a_source():
+    slide = "Sales rose in the region\nInternal note: the pipeline is confidential"
+    got = _guard("Sales rose in the region this year", "Sales rose in the pipeline", slide)
+    assert "not in the field" in got   # 'pipeline' is on the slide, in an internal note, but not in this field
+    other_field = _guard("Sales rose in the region this year", "Sales rose in the region", "Sales rose in the region this year\nCosts fell in the north")
+    assert other_field == ""
+    assert "not in the field" in _guard("Sales rose in the region this year", "Costs fell in the region", "Sales rose in the region this year\nCosts fell in the north")
+
+
+def test_a_client_field_cannot_borrow_a_word_that_exists_only_in_an_internal_note():
+    word = "pipeline"   # a word that stands only in the slide's "Internal note:" block
+    slide = LONG + "\nInternal note: the " + word + " is confidential"
+    assert "not in the field" in _guard(LONG, SHORT.replace("water story", word), slide)
+    assert _guard(LONG, SHORT, slide) == ""
+
+
+def test_the_word_rule_is_one_function_either_policy_drops_into():
+    old = "Revenue fell while costs rose across the region"
+    swapped = "Costs fell while revenue rose across the region"
+    assert assemble.words_problem(old, swapped, "reuse") == ""   # reuse lets the same words in any order: the pending decision
+    assert assemble.words_problem(old, swapped, "delete_only") != ""
+    assert assemble.words_problem(old, "Revenue fell while costs rose", "delete_only") == ""
+    assert assemble.words_problem(old, "Revenue fell while costs rose", "delete_only", {"across", "the", "region"}) == ""
+    assert "carry the claim" in assemble.words_problem(old, "Revenue fell while rose across the region", "delete_only", {"the", "across", "region"})
+    pol = {**POLICY, "shorten": {**POLICY["shorten"], "word_rule": "delete_only"}}
+    assert repair.load_policy(None, _policy_file(pol))["shorten"]["word_rule"] == "delete_only"
+
+
+def _policy_file(pol: dict) -> Path:
+    import tempfile
+    import yaml
+    p = Path(tempfile.mkdtemp()) / "p.yaml"
+    p.write_text(yaml.safe_dump(pol))
+    return p
+
+
+def test_k4_counts_findings_so_a_second_one_of_the_same_kind_is_seen():
+    one = [{"check": "numbers_trace", "level": "warn", "slide": "s01"}]
+    two = one + one
+    assert repair.content_set(two) != repair.content_set(one)
+    prev = _m([_iss(1)], content=repair.content_set(one), cl=_cl())
+    assert repair.gate(prev, _m([], content=repair.content_set(two), cl=_cl()), {"i_00000001"})["K4"] is False
+    assert repair.gate(prev, _m([], content=repair.content_set(one), cl=_cl()), {"i_00000001"})["K4"] is True
+
+
+def _client_run(tmp_path, stages_dir, name, *extra):
+    return build(tmp_path / name, fake_qa({S: too_long(SLOT, CAP, BLOCK)}, "word_budget"), "--text-mode", "condense", "--audience", "client", *extra, stages_dir=stages_dir)
+
+
+def _client_approval(tmp_path, stages_dir):
+    _client_run(tmp_path, stages_dir, "ask")
+    why = next(x["why"] for x in jload(tmp_path / "ask" / "repair.json")["skipped"] if "person's yes" in x["why"])
+    return why[why.index("apv_"):].rstrip(")")
+
+
+def test_an_approval_is_bound_to_the_exact_words_and_a_bare_flag_is_not_a_yes(tmp_path, monkeypatch, stages_copy):
+    (stages_copy / "e_repair_1.json").write_text("{}")
+    seen = capture_request(monkeypatch, lambda r: _edit(r, SHORT))
+    with pytest.raises(SystemExit):
+        _client_run(tmp_path, stages_copy, "bare", "--approve-shorten")   # no id: argparse refuses it
+    approval = _client_approval(tmp_path, stages_copy)
+    assert approval.startswith("apv_") and seen == []
+    base = jload(tmp_path / "ask" / "repair" / "base_deck.json")
+    assert repair.approval_id(base) == approval
+    base["slides"][S]["blocks"][BLOCK]["text"] += " now"
+    assert repair.approval_id(base) != approval   # any change to the shortenable words voids it
+    _client_run(tmp_path, stages_copy, "ok", "--approve-shorten", approval)
+    assert seen
+    seen.clear()
+    _client_run(tmp_path, stages_copy, "wrong", "--approve-shorten", "apv_000000000000")
+    assert seen == []
+
+
+def test_a_replay_is_refused_without_the_clients_approval_and_a_hand_edited_record_is_refused(tmp_path, monkeypatch, stages_copy):
+    (stages_copy / "e_repair_1.json").write_text("{}")
+    seen = capture_request(monkeypatch, lambda r: _edit(r, SHORT))
+    approval = _client_approval(tmp_path, stages_copy)
+    first = _client_run(tmp_path, stages_copy, "first", "--approve-shorten", approval)
+    assert jload(tmp_path / "first" / "deck.json")["slides"][S]["blocks"][BLOCK]["text"] == SHORT
+    record = jload(tmp_path / "first" / "repair_record.json")
+    assert record["key"]["audience"] == "client" and record["key"]["approval"] == approval and record["key"]["guard"] == repair.GUARD_VERSION and record["sig"]
+    monkeypatch.undo()
+    monkeypatch.setattr(stages, "repair_copy", lambda *a, **k: (_ for _ in ()).throw(AssertionError("a replay never calls the model")))
+    shutil.copy(tmp_path / "first" / "repair_record.json", stages_copy / "repair_record.json")
+    recording(stages_copy, 1, record["rounds"][0]["request"], _edit(record["rounds"][0]["request"], SHORT))
+    good = _client_run(tmp_path, stages_copy, "good", "--approve-shorten", approval)
+    assert good["repair"].get("replayed") and jload(tmp_path / "good" / "deck.json")["slides"][S]["blocks"][BLOCK]["text"] == SHORT
+    # the same record with no approval: refused (the key differs), the words stay, and it is said
+    _client_run(tmp_path, stages_copy, "noappr")
+    assert jload(tmp_path / "noappr" / "deck.json")["slides"][S]["blocks"][BLOCK]["text"] == LONG
+    assert any("stale" in x["why"] for x in jload(tmp_path / "noappr" / "repair.json")["skipped"])
+    # a hand-edited record: an edit text changed to one that breaks the ledger, the key, base and policy untouched
+    bad = json.loads(json.dumps(record))
+    bad["rounds"][0]["edits"][0]["text"] = SHORT.replace("up to 12", "up to 21")
+    (stages_copy / "repair_record.json").write_text(json.dumps(bad))
+    _client_run(tmp_path, stages_copy, "edited", "--approve-shorten", approval)
+    assert jload(tmp_path / "edited" / "deck.json")["slides"][S]["blocks"][BLOCK]["text"] != SHORT.replace("up to 12", "up to 21")
+    assert any("edited" in x["why"] or "refused" in x["why"] for x in jload(tmp_path / "edited" / "repair.json")["skipped"])
+    # re-signed by hand: the guards still refuse the edit on replay
+    bad["sig"] = repair.record_sig(bad)
+    (stages_copy / "repair_record.json").write_text(json.dumps(bad))
+    _client_run(tmp_path, stages_copy, "resigned", "--approve-shorten", approval)
+    assert jload(tmp_path / "resigned" / "deck.json")["slides"][S]["blocks"][BLOCK]["text"] != SHORT.replace("up to 12", "up to 21")
+    assert any("refused by the guards" in x["why"] for x in jload(tmp_path / "resigned" / "repair.json")["skipped"])
+
+
+def test_a_record_in_out_is_used_only_for_the_same_stages(tmp_path, monkeypatch, stages_copy):
+    (stages_copy / "e_repair_1.json").write_text("{}")
+    capture_request(monkeypatch, lambda r: _edit(r, SHORT))
+    out = tmp_path / "o"
+    build(out, fake_qa({S: too_long(SLOT, CAP, BLOCK)}, "word_budget"), "--text-mode", "condense", stages_dir=stages_copy)
+    rec = jload(out / "repair_record.json") if (out / "repair_record.json").exists() else jload(stages_copy / "repair_record.json")
+    assert rec["stages"] == str(stages_copy.resolve())
+    other = tmp_path / "other"
+    shutil.copytree(stages_copy, other)
+    (other / "e_repair_1.json").write_text("{}")
+    (stages_copy / "repair_record.json").unlink(missing_ok=True)
+    (out / "repair_record.json").write_text(json.dumps(rec))
+    build(out, fake_qa({S: too_long(SLOT, CAP, BLOCK)}, "word_budget"), "--text-mode", "condense", stages_dir=other)
+    assert not jload(out / "repair.json").get("replayed") and not any(x.get("replayed") for x in [jload(out / "report.json").get("repair") or {}])
+
+
+def test_the_server_passes_an_approval_id_and_never_a_bare_yes(tmp_path, monkeypatch):
+    from deck import server as srv
+    cfg = srv.Settings({"NAPKIN_DECK_DATA": str(tmp_path / "runs"), "NAPKIN_DECK_REPLAY": str(FX), "NAPKIN_DECK_PORT": "0"})
+    d = srv.Doc(tmp_path / "doc", "doc")
+    d.folder = tmp_path / "doc" / "k"
+    seen = []
+    monkeypatch.setattr(srv.run_deck, "main", lambda argv: seen.append(list(argv)) or {})
+    for val in (True, "yes", "apv_0123456789ab"):
+        req = srv.validate_request({"doc": "doc", "inputs": {"prompt": {"text": "x", "client": "c", "project": "p"}, "approve_shorten": val}, "mode": "replay", "render": True}, cfg)
+        srv.Server(cfg).call_engine(d, req, None)
+    assert "--approve-shorten" not in seen[0] and "--approve-shorten" not in seen[1]
+    assert seen[2][seen[2].index("--approve-shorten") + 1] == "apv_0123456789ab"

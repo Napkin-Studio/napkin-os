@@ -266,11 +266,11 @@ def test_call_engine_runs_the_qa_and_passes_the_text_mode_the_pins_and_the_perso
     d.folder = tmp_path / "doc" / "k"
     seen = []
     monkeypatch.setattr(srv.run_deck, "main", lambda argv: seen.append(list(argv)) or {})
-    inp = {**INPUTS, "text_mode": "condense", "review": {"pinned": {"s03": {"by": "human:sai", "at": "2026-11-17"}}}, "approve_shorten": True}
+    inp = {**INPUTS, "text_mode": "condense", "review": {"pinned": {"s03": {"by": "human:sai", "at": "2026-11-17"}}}, "approve_shorten": "apv_0123456789ab"}
     req = srv.validate_request({"doc": "doc", "inputs": inp, "mode": "replay", "render": True}, cfg)
     s.call_engine(d, req, None)
     argv = seen[0]
-    assert "--no-qa" not in argv and argv[argv.index("--text-mode") + 1] == "condense" and "--approve-shorten" in argv
+    assert "--no-qa" not in argv and argv[argv.index("--text-mode") + 1] == "condense" and argv[argv.index("--approve-shorten") + 1] == "apv_0123456789ab"
     assert json.loads(Path(argv[argv.index("--review") + 1]).read_text()) == {"pinned": inp["review"]["pinned"]}
     plain = srv.validate_request({"doc": "doc", "inputs": INPUTS, "mode": "replay", "render": True}, cfg)
     s.call_engine(d, plain, None)

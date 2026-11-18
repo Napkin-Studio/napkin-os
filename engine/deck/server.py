@@ -350,8 +350,9 @@ class Server:
             rv.parent.mkdir(parents=True, exist_ok=True)
             rv.write_text(json.dumps({"pinned": inp["review"]["pinned"]}))
             argv += ["--review", str(rv)]
-        if inp.get("approve_shorten") is True:
-            argv.append("--approve-shorten")
+        ap_id = inp.get("approve_shorten")
+        if isinstance(ap_id, str) and ap_id.startswith("apv_"):   # an approval id bound to the shortenable words' hash, never a bare yes
+            argv += ["--approve-shorten", ap_id]
         if p.get("agency"):
             argv += ["--agency", str(p["agency"])]
         if until:

@@ -48,15 +48,29 @@ def tokens(text, known: frozenset | set = frozenset()) -> list:
     ws = _words(str(text or ""))
     out: list = []
     first = True
+    prev_num, skip = False, False
     for i, (w, ends) in enumerate(ws):
+        if skip:   # the "cent" of "per cent"
+            skip, first = False, ends
+            continue
         lw = w.lower().strip("'’")
         nxt = ws[i + 1][0].lower() if i + 1 < len(ws) else ""
+        this_num = False
         if any(c.isdigit() for c in w):
-            out.append(("num", w))
-            if nxt in UNITS or (nxt == "per" and i + 2 < len(ws) and ws[i + 2][0].lower() == "cent"):
-                pass   # the unit joins the ledger as its own word below
-        elif w in ("%", "€", "£", "$") or lw in UNITS and i > 0 and any(c.isdigit() for c in ws[i - 1][0]) and not (len(w) > 1 and w.isupper()):
+            this_num = True
+            if w.endswith("%") and len(w) > 1:   # 40% and 40 % and 40 per cent are one ledger: the number, then the percent sign
+                out += [("num", w[:-1]), ("unit", "%")]
+            else:
+                out.append(("num", w))   # as written: 1,200 is not 1200, 5-6 is not 5 6
+        elif w in ("%", "€", "£", "$"):
             out.append(("unit", lw))
+            this_num = prev_num and w == "%"   # a lone percent sign after a number keeps the word after it protected
+        elif prev_num and lw == "percent":
+            out.append(("unit", "%"))
+            this_num = True
+        elif prev_num and lw == "per" and nxt == "cent":
+            out.append(("unit", "%"))
+            skip, this_num = True, True
         elif lw in NEGATIONS or lw.endswith("n't") or lw.endswith("n’t"):
             out.append(("neg", "n't" if lw.endswith(("n't", "n’t")) else lw))
         elif lw.rstrip(".") in MONTHS and w[0].isupper():
@@ -65,11 +79,13 @@ def tokens(text, known: frozenset | set = frozenset()) -> list:
             out.append(("name", w))
         elif w[0].isupper() and (not first or lw in known):
             out.append(("name", w))
+        elif prev_num and w.isalpha():   # the first word after a number is protected, a unit or not: "5 km", "5 weeks", "5 brands"
+            out.append(("after", lw))
         if lw in HEDGE_WORDS or lw.rstrip(".") == "est":
             out.append(("hedge", lw.rstrip(".")))
         elif nxt and f"{lw} {nxt}" in HEDGE_PHRASES:
             out.append(("hedge", f"{lw} {nxt}"))
-        first = ends
+        prev_num, first = this_num, ends
     return out
 
 

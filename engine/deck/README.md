@@ -434,7 +434,7 @@ unpinned slide from `repair.ACTION_MAP` (one row per check, rungs tried across r
 hands the fixes to `layouts.plan`, renders, runs QA and the checklist, and keeps the round only when it is not worse (K1 to K5, `repair.gate`). The token ledger
 (`ledger.py`) is read back from the round's `.pptx` and compared with the base deck's, so a changed number, unit, name, month, year, negation or hedge rejects the round.
 Free geometry rungs run by default; `--text-mode condense` also lets the loop move whole points to the speaker notes and shorten wording with the slide's own words (one
-batched stage e call per round, only with `--live` or a recording, capped by `policy.max_usd` and `NAPKIN_DECK_MAX_USD`; on `--audience client` only with `--approve-shorten`).
+batched stage e call per round, only with `--live` or a recording, capped by `policy.max_usd` and `NAPKIN_DECK_MAX_USD`; on `--audience client` only with `--approve-shorten ID`, an approval id bound to the hash of the shortenable words, so any change voids it).
 `--no-repair` turns it off, `--no-qa` skips it (it reads the QA), `--until` never starts it, `--review FILE` pins slides, `--repair-policy FILE` overrides the policy.
 Outputs: `issues.json`, `repair.json`, `repair_record.json` (replayed without measuring when its base and policy hashes match), `out/repair/round-<n>/`, and a `repair`
 key in `report.json` only when a round ran or a rung was skipped. Tests: `deck/tests/test_repair.py` (no model, no LibreOffice: QA is a stand-in seam).

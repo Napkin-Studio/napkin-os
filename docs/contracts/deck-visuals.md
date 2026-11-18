@@ -560,7 +560,7 @@ A round is kept only when it is not worse (K1 counts and no new blocker or major
 token ledger read from the round's `.pptx` and equal to the base deck's: numbers including letter-attached ones, units, percent and currency, order, capitalised names,
 months, years, negations and hedges; K4 the validator's content findings equal both ways; K5 progress). At most two rounds. `shorten` only deletes or reuses the slide's
 own words (guards `ledger_kept` and `own_words`, `spec.REPAIR_SHORTEN_GUARDS`); moving points to the notes and shortening need `--text-mode condense`; shortening a client
-deck needs a person's yes (`--approve-shorten`). The words never change by themselves: `--no-repair` and a deck with nothing to repair are byte-identical to the engine without the loop.
+deck needs a person's yes (`--approve-shorten ID`, bound to the exact words); the guard compares only with the same field's base text; a replay re-runs every guard. The words never change by themselves: `--no-repair` and a deck with nothing to repair are byte-identical to the engine without the loop.
 
 ## 8. Engine data: policy, goldens, rubric
 

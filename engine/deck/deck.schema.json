@@ -970,6 +970,21 @@
            "own_words"
           ]
          }
+        },
+        "word_rule": {
+         "enum": [
+          "reuse",
+          "delete_only"
+         ],
+         "default": "reuse",
+         "description": "reuse: every content word is a word of the same field's base text; delete_only: the base text's words in the same order with some deleted."
+        },
+        "deletable": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "description": "With delete_only: the lower-case words that may be deleted (absent: any)."
         }
        }
       },

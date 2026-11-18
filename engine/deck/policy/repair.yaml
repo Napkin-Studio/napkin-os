@@ -33,6 +33,7 @@ shrink:
 shorten:
   max_slots_per_round: 12
   max_cut_ratio: 0.35
+  word_rule: reuse     # reuse: words of the same field's base text, any order; delete_only: the same words in the same order with some deleted (Sai decides)
   guards: [no_new_number, refs_kept, not_longer, label_titles_untouched, ledger_kept, own_words]
 images:
   max_regens_per_slot: 1

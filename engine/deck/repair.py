@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import shutil
 import json
 import re
 import time
@@ -34,6 +35,8 @@ from . import ledger, layouts, spec, validate
 DECK = Path(__file__).parent
 POLICY_PATH = DECK / "policy" / "repair.yaml"
 POLICY_SCHEMA = DECK / "schemas" / "repair_policy.schema.json"
+#: Bumped when a shorten guard changes: a record made under another version is never replayed.
+GUARD_VERSION = 2
 SEV_RANK = {"blocker": 0, "major": 1, "minor": 2}
 #: Rungs that are not a fix kind of spec.ISSUE_FIXES: a pseudo-rung of the map.
 EXTRA_RUNGS = ("undo_shrink", "left_for_person", "replan", "engine_fault", "critic", "none")
@@ -115,6 +118,14 @@ def load_policy(profile: dict | None = None, override: Path | str | None = None)
             pol[k] = {**pol[k], **v} if isinstance(v, dict) and isinstance(pol.get(k), dict) else v
     jsonschema.validate(pol, json.loads(POLICY_SCHEMA.read_text()))
     return pol
+
+
+def approval_id(base_deck: dict) -> str:
+    """The id of a person's yes to shortening a client deck: ``apv_`` and the hash of every word the shorten rung may touch (each eligible field of each
+    slide of the BASE deck, with its slide and field id). The person approves THESE words, so any change to them voids the approval."""
+    rows = sorted((sid, fid, text) for sid in base_deck["order"] for bi in range(len(base_deck["slides"][sid]["blocks"]))
+                  for fid, text, _ in eligible_fields(base_deck["slides"][sid], bi))
+    return "apv_" + sha(rows)
 
 
 def run_cap() -> float:
@@ -304,11 +315,12 @@ def pairs(issues_: list, deck: dict) -> set:
     return {(i["check"], i["slide"]) for i in issues_ if i["source"] != "critic" and i["slide"] in pres and _gate_severity(i) in ("blocker", "major")}
 
 
-def content_set(findings: list) -> set:
-    """K4's set: every validator finding except the word budget and the ``slot_*`` checks, as (check, slide, level)."""
-    return {(f["check"], f.get("slide") or I.DECK_KEY, f.get("level")) for f in findings
+def content_set(findings: list):
+    """K4's multiset (a Counter): every validator finding except the word budget and the ``slot_*`` checks, as (check, slide, level), with how many."""
+    from collections import Counter
+    return Counter((f["check"], f.get("slide") or I.DECK_KEY, f.get("level")) for f in findings
             if isinstance(f, dict) and f.get("check") not in K4_SKIP and not str(f.get("check", "")).startswith("slot_")
-            and f.get("check") not in I.IMAGE_GUARD_CHECKS and f.get("check") not in spec.QA_RENDER_CHECKS}
+            and f.get("check") not in I.IMAGE_GUARD_CHECKS and f.get("check") not in spec.QA_RENDER_CHECKS)
 
 
 def read_ledger(base_deck: dict, deck: dict, folder: Path, audience: str, prs=None) -> list:
@@ -421,7 +433,7 @@ def gate(prev: dict, cur: dict, targeted: set) -> dict:
         reasons.append(f"a word that carries a claim changed on slide {d0['slide']}" if d0["kind"] != "unreadable" else "the slides could not be read back")
     r["K4"] = cur["content"] == prev["content"]
     if not r["K4"]:
-        reasons.append("a content finding " + ("appeared" if cur["content"] - prev["content"] else "disappeared"))
+        reasons.append("a content finding " + ("appeared" if (cur["content"] - prev["content"]) else "disappeared"))
     ids_prev = {i["id"] for i in prev["issues"]}
     ids_cur = {i["id"] for i in cur["issues"]}
     fixed = (targeted & ids_prev) - ids_cur
@@ -689,8 +701,9 @@ def guard_edits(edits: list, request: list, deck_kept_slides: dict, work_base: d
             continue
         s0 = base_deck["slides"][sid]
         old = _field_text(base_deck, sid, fid)
-        why = assemble.shorten_problem(old, e.get("text"), slide_text(s0), ledger.slide_known(s0), tuple(sh.get("guards") or ()),
-                                       float(sh.get("max_cut_ratio", 0.35)), current=_field_text(work_base, sid, fid))
+        why = assemble.shorten_problem(old, e.get("text"), "", frozenset(), tuple(sh.get("guards") or ()), float(sh.get("max_cut_ratio", 0.35)),
+                                       current=_field_text(work_base, sid, fid), word_rule=sh.get("word_rule", "reuse"),
+                                       deletable=set(sh["deletable"]) if sh.get("deletable") is not None else None)
         if why:
             ref.append({"slide": sid, "field": fid, "why": why})
         else:
@@ -714,16 +727,29 @@ def existing(deck: dict, findings: list, qa: dict | None, folder: Path, ctx: dic
             "pixels": bool((qa or {}).get("pixels"))}
 
 
-def shorten_available(text_mode, audience: str, live: bool, approve: bool, stages) -> tuple:
-    """``(ok, why not)``: may the paid shorten rung run at all? Only with text mode condense; on a client deck only with a person's yes
-    (``--approve-shorten`` or the app's gate); and only live or with a recording."""
+def shorten_available(text_mode, audience: str, live: bool, approval, stages, expected: str | None = None) -> tuple:
+    """``(ok, why not)``: may the paid shorten rung run at all? Only with text mode condense; on a client deck only with a person's yes, which is an
+    approval id (``approval_id``) equal to the one for these exact words (``expected``): a bare yes, or an id for other words, is refused; and only live or
+    with a recording."""
     if text_mode != "condense":
         return False, "shortening needs text mode condense (this build keeps your words)"
-    if audience == "client" and not approve:
-        return False, "shortening a client deck needs a person's yes (--approve-shorten)"
+    if audience == "client" and not (isinstance(approval, str) and approval and approval == expected):
+        return False, "shortening a client deck needs a person's yes for these words (--approve-shorten " + (expected or "ID") + ")"
     if not (live or (stages and list(Path(stages).glob("e_repair_*.json")))):
         return False, "this build was not live and has no recording"
     return True, ""
+
+
+def replay_key(ctx: dict) -> dict:
+    """What a replay must agree on besides the deck and the policy: the audience, the text mode, a client's approval id and the guard version."""
+    return {"audience": ctx["audience"], "text_mode": ctx["prefs"].get("text_mode"),
+            "approval": ctx.get("approve_shorten") if ctx["audience"] == "client" else None, "guard": GUARD_VERSION}
+
+
+def record_sig(rec: dict) -> str:
+    """A hash over what a record decides (base, policy, key, and each round's verdict, fixes, edits and request): an edited record no longer matches it."""
+    return sha({"base": rec.get("base_sha"), "policy": rec.get("policy_sha"), "key": rec.get("key"),
+                "rounds": [{k: r.get(k) for k in ("n", "verdict", "fixes", "edits", "request")} for r in rec.get("rounds") or []]})
 
 
 def _replan(ctx: dict, work_base: dict, fixes: dict, stop: bool = False) -> tuple:
@@ -795,7 +821,7 @@ def run(ctx: dict, m0: dict) -> dict:
     pinned = set(ctx.get("pinned") or ())
     by_title = {base["slides"][x]["title"]: x for x in order}
     condense = ctx["prefs"].get("text_mode") == "condense"
-    shorten_ok, shorten_why = shorten_available(ctx["prefs"].get("text_mode"), ctx["audience"], ctx["live"], bool(ctx.get("approve_shorten")), ctx.get("stages"))
+    shorten_ok, shorten_why = shorten_available(ctx["prefs"].get("text_mode"), ctx["audience"], ctx["live"], ctx.get("approve_shorten"), ctx.get("stages"), approval_id(ctx["base_deck"]))
     state = {"tried": set(), "left": {}, "targeted": set()}
     skipped: list = []
     rounds_out, rec_rounds, stage_rows = [], [], {}
@@ -808,9 +834,13 @@ def run(ctx: dict, m0: dict) -> dict:
     final_n = 0
     pol_sha, base_sha = sha(policy), sha({**base, "meta": {k: v for k, v in base["meta"].items() if k != "built_at"}})
     record = ctx.get("record")
-    replay = bool(record) and record.get("base_sha") == base_sha and record.get("policy_sha") == pol_sha
+    key = replay_key(ctx)
+    replay = bool(record) and record.get("base_sha") == base_sha and record.get("policy_sha") == pol_sha and record.get("key") == key
     if record and not replay:
-        skipped.append({"slide": None, "slot": None, "rung": "replay", "why": "the recorded repair is stale (the deck or the policy changed), so this run decides afresh"})
+        skipped.append({"slide": None, "slot": None, "rung": "replay", "why": "the recorded repair is stale (the deck, the policy, the audience, the text mode, the approval or the guards changed), so this run decides afresh"})
+    if replay and record.get("sig") != record_sig(record):
+        replay, why = False, "the recorded repair was edited after it was written, so it is refused and this run decides afresh"
+        skipped.append({"slide": None, "slot": None, "rung": "replay", "why": why})
     secs_round: list = []
     t_start = ctx["clock"]()
     max_rounds = int(policy.get("max_rounds", 2))
@@ -822,27 +852,45 @@ def run(ctx: dict, m0: dict) -> dict:
                 "text_mode": ctx["prefs"].get("text_mode"), "density": ctx["prefs"].get("density") or "detailed"}
 
     if replay:
-        # replay: the recorded fixes, edits and verdicts are applied round by round; nothing is measured to decide, no model, no clock
+        # replay: the recorded fixes, edits and verdicts are applied round by round; no model, no clock, and nothing is measured to DECIDE. But nothing recorded is
+        # trusted: every edit goes through shorten_available and the guards again, and the replayed deck must still pass the ledger.
+        bad = ""
         for rr in record["rounds"]:
             n = rr["n"]
             rec_rounds.append(rr)
             rounds_out.append(rr["summary"])
             if rr["verdict"] == "kept":
                 fixes_kept = rr["fixes"]
-                for e in rr.get("edits") or []:
-                    edits_all[(e["slide"], e["field"])] = e["text"]
-                work_kept = apply_edits(base, edits_all)
+                if rr.get("edits"):
+                    if not shorten_ok:
+                        bad = "a recorded shortening cannot be replayed here: " + shorten_why
+                        break
+                    slot_of = {(r["slide"], f["id"]): r["slot"] for r in rr.get("request") or [] for f in r["fields"]}
+                    conv = [{"slide": base["slides"][e["slide"]]["title"] if e.get("slide") in base["slides"] else e.get("slide"), "field": e["field"], "text": e["text"],
+                             "slot": slot_of.get((base["slides"][e["slide"]]["title"] if e.get("slide") in base["slides"] else None, e["field"]))} for e in rr["edits"]]
+                    acc, refused = guard_edits(conv, rr.get("request") or [], None, work_kept, base, policy, by_title)
+                    if refused or len(acc) != len(rr["edits"]):
+                        bad = "a recorded edit is refused by the guards now: " + (refused[0]["why"] if refused else "unreadable")
+                        break
+                    edits_all.update(acc)
+                    work_kept = apply_edits(base, edits_all)
                 final_n = n
-        stopped = record.get("stopped", stopped)
-        skipped += record.get("skipped") or []
-        st = record.get("state") or {}
-        state["left"], state["targeted"], rolled_targets = dict(st.get("left") or {}), set(st.get("targeted") or ()), set(st.get("rolled") or ())
         final = None
-        if final_n:
+        if not bad and final_n:
             deck_n, plan_issues, _ = _replan(ctx, work_kept, fixes_kept)
             final = measure(deck_n, plan_issues, Path(ctx["out"]) / "repair" / f"round-{final_n}", ctx, final_n, stamp)
-        return _result(ctx, m0, final or m0, final_n, rounds_out, stopped, skipped, state, rolled_targets, pinned, rec_rounds, record, base_sha, pol_sha, work_kept, fixes_kept, stage_rows,
-                       replayed=True)
+            if final["ledger"]:
+                bad = "the replayed deck does not keep the token ledger"
+        if not bad:
+            stopped = record.get("stopped", stopped)
+            skipped += record.get("skipped") or []
+            st = record.get("state") or {}
+            state["left"], state["targeted"], rolled_targets = dict(st.get("left") or {}), set(st.get("targeted") or ()), set(st.get("rolled") or ())
+            return _result(ctx, m0, final or m0, final_n, rounds_out, stopped, skipped, state, rolled_targets, pinned, rec_rounds, record, base_sha, pol_sha, work_kept, fixes_kept, stage_rows,
+                           replayed=True)
+        skipped.append({"slide": None, "slot": None, "rung": "replay", "why": bad + "; this run decides afresh"})
+        shutil.rmtree(Path(ctx["out"]) / "repair", ignore_errors=True)
+        rounds_out, rec_rounds, edits_all, fixes_kept, work_kept, final_n, n = [], [], {}, {}, base, 0, 0
 
     while n < max_rounds:
         n += 1
@@ -853,6 +901,7 @@ def run(ctx: dict, m0: dict) -> dict:
         t_round = ctx["clock"]()
         env = env_for(kept, fixes_kept)
         actions: list = []
+        request_sent: list = []
         round_edits: dict = {}
         row_skipped: list = []
         if salvage_actions is not None:
@@ -876,6 +925,7 @@ def run(ctx: dict, m0: dict) -> dict:
             if cands:
                 targets = [(a["issue"]["slide"], a["issue"]["slot"], (a["issue"].get("evidence") or {}).get("measured"), (a["issue"].get("evidence") or {}).get("limit")) for a in cands]
                 request = build_request(kept["deck"], work_kept, targets, ctx["library"], policy, ctx["audience"])
+                request_sent = request
                 edits, row = (None, None)
                 if request:
                     edits, row = get_reply(ctx, n, request, row_skipped)
@@ -928,7 +978,7 @@ def run(ctx: dict, m0: dict) -> dict:
         secs_round.append(ctx["clock"]() - t_round)
         ctx["secs"] = list(secs_round)
         ed_list = [{"slide": k[0], "field": k[1], "text": v} for k, v in sorted(round_edits.items())]
-        rec_rounds.append({"n": n, "verdict": "kept" if g["keep"] else "rolled_back", "fixes": fixes_round, "edits": ed_list, "shorten_request_sha": (stage_rows.get(f"e_repair_{n}") or {}).get("request_sha"),
+        rec_rounds.append({"n": n, "verdict": "kept" if g["keep"] else "rolled_back", "fixes": fixes_round, "edits": ed_list, "request": request_sent, "shorten_request_sha": (stage_rows.get(f"e_repair_{n}") or {}).get("request_sha"),
                            "gate": summ["gate"], "summary": summ, "actions": [{"issue_id": a["issue"]["id"], "action": a["rung"], "edits": {f"{k[0]}|{k[1]}": v for k, v in round_edits.items() if k[0] == a["issue"]["slide"]}} for a in actions]})
         if g["keep"]:
             kept, fixes_kept, work_kept, final_n = m, fixes_round, work_n, n
@@ -966,8 +1016,9 @@ def _result(ctx, m0, final, final_n, rounds_out, stopped, skipped, state, rolled
     if replayed and record is not None:
         left = record.get("left") or left
     repair = {"version": 1, "policy": policy, "policy_sha": pol_sha, "rounds": rounds_out, "stopped": stopped, "skipped": sk, "left_for_person": left}
-    rec = {"base_sha": base_sha, "policy_sha": pol_sha, "rounds": rec_rounds, "stopped": stopped, "skipped": sk, "left": left,
+    rec = {"base_sha": base_sha, "policy_sha": pol_sha, "key": replay_key(ctx), "rounds": rec_rounds, "stopped": stopped, "skipped": sk, "left": left,
            "state": {"left": state["left"], "targeted": sorted(state["targeted"]), "rolled": sorted(rolled_targets)}}
+    rec["sig"] = record_sig(rec)
     return {"final_round": final_n, "final": final, "deck": final["deck"], "rounds": rounds_out, "stopped": stopped, "skipped": sk, "left": left, "issues": iss,
             "repair": repair, "record": rec, "stage_rows": stage_rows, "usd": ctx["usd"][0], "ran": bool(rounds_out), "replayed": replayed, "secs": ctx.get("secs", []), "work_base": work_kept, "fixes": fixes_kept}
 

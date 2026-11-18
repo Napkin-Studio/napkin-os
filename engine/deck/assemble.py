@@ -1293,15 +1293,41 @@ def content_words(text) -> set:
     return {w for w in re.findall(r"[a-z0-9]+(?:['\u2019][a-z]+)?", str(text or "").lower()) if w not in STOP_WORDS}
 
 
-def shorten_problem(old_base: str, new, slide_base_text: str, known=frozenset(), guards: tuple = (), max_cut_ratio: float = 0.35,
-                    current: str | None = None, is_label: bool = False) -> str:
-    """Why a shortened field is refused, or '' when it is acceptable. ``old_base`` is the field in the BASE deck (never the previous
-    round's), ``slide_base_text`` the base text of the whole slide. The guards (spec.REPAIR_SHORTEN_GUARDS), all on by default:
-    ``label_titles_untouched`` (a title or label is never a field), ``not_longer`` than the base, at most ``max_cut_ratio`` of the base's
-    characters cut, ``no_new_number``, ``ledger_kept`` (numbers incl. letter-attached ones, units, %, currency, order, capitalised names,
-    months, years, negations and hedges are the same tokens in the same order: ``ledger.tokens``) and ``own_words`` (every content word
-    already stands in the slide's base text: only deleting or reusing, never a synonym). ``refs_kept`` holds by construction (only a
-    field's text is replaced; refs live beside it)."""
+def words_problem(old: str, new: str, rule: str = "reuse", deletable=None) -> str:
+    """The word rule of the shorten guard, one place so either policy drops in. ``reuse``: every content word of ``new`` is a content word of ``old``
+    (the same field's BASE text), in any order. ``delete_only``: the words of ``new`` are ``old``'s words in the same order with some deleted (a
+    subsequence), and, when ``deletable`` (a set of lower-case words) is given, every deleted word is on that list. Returns why, or ''."""
+    ow = re.findall(r"[a-z0-9]+(?:['\u2019][a-z]+)?", str(old or "").lower())
+    nw = re.findall(r"[a-z0-9]+(?:['\u2019][a-z]+)?", str(new or "").lower())
+    if rule == "delete_only":
+        it = iter(ow)
+        if not all(w in it for w in nw):   # consumes the iterator: a word out of order, or one that is not there, fails
+            return "reorders or adds words: only deleting is allowed"
+        if deletable is not None:
+            kept = list(nw)
+            gone = []
+            j = 0
+            for w in ow:
+                if j < len(kept) and kept[j] == w:
+                    j += 1
+                else:
+                    gone.append(w)
+            bad = sorted({w for w in gone if w not in deletable})
+            if bad:
+                return "deletes words that carry the claim: " + ", ".join(bad[:4])
+        return ""
+    extra = content_words(new) - content_words(old)
+    return ("uses words that are not in the field: " + ", ".join(sorted(extra)[:4])) if extra else ""
+
+
+def shorten_problem(old_base: str, new, slide_base_text: str = "", known=frozenset(), guards: tuple = (), max_cut_ratio: float = 0.35,
+                    current: str | None = None, is_label: bool = False, word_rule: str = "reuse", deletable=None) -> str:
+    """Why a shortened field is refused, or '' when it is acceptable. ``old_base`` is the field in the BASE deck (never the previous round's).
+    The guards (spec.REPAIR_SHORTEN_GUARDS), all on by default: ``label_titles_untouched`` (a title or label is never a field), ``not_longer``
+    than the base, at most ``max_cut_ratio`` of the base's characters cut, ``no_new_number``, ``ledger_kept`` (numbers incl. letter-attached ones,
+    the word after each number, percent, currency, order, capitalised names, months, years, negations and hedges: ``ledger.tokens``) and
+    ``own_words`` (``words_problem``: the words come from the SAME field's base text only, never the rest of the slide and never an internal note;
+    ``slide_base_text`` is kept for old callers and ignored). ``refs_kept`` holds by construction (only a field's text is replaced)."""
     from . import ledger
     from .refs import numbers_in
     guards = guards or ("no_new_number", "refs_kept", "not_longer", "label_titles_untouched", "ledger_kept", "own_words")
@@ -1318,12 +1344,11 @@ def shorten_problem(old_base: str, new, slide_base_text: str, known=frozenset(),
         return f"cuts more than {int(max_cut_ratio * 100)} percent of the base text"
     if "no_new_number" in guards and (numbers_in(new) - numbers_in(old_base)):
         return "adds a number the base text did not have"
+    known = ledger.known_names([old_base])   # this field's own names only
     if "ledger_kept" in guards and ledger.tokens(new, known) != ledger.tokens(old_base, known):
-        return "changes the ledger (a number, unit, name, month, year, negation or hedge, or their order)"
+        return "changes the ledger (a number, the word after it, a name, month, year, negation or hedge, or their order)"
     if "own_words" in guards:
-        extra = content_words(new) - content_words(slide_base_text)
-        if extra:
-            return "uses words that are not on the slide: " + ", ".join(sorted(extra)[:4])
+        return words_problem(old_base, new, word_rule, deletable)
     return ""
 
 
