@@ -386,9 +386,10 @@ function reconEnv(locked = false) {
   const kept: (string | null)[] = []
   const RECON = { queue: [] as unknown[], job: null as Job | null }
   const classes = new Set<string>()
+  const side = { n: 0 }
   const walker = { innerHTML: '', classList: { contains: (c: string) => classes.has(c), toggle: (c: string, on: boolean) => { if (on) classes.add(c); else classes.delete(c) } } }
   const env = {
-    RECON, arr, walker, esc, ROLE_NM: {}, sideAgent: () => {},
+    RECON, arr, walker, esc, ROLE_NM: {}, sideAgent: () => { side.n++ },
     $: (id: string) => (id === 'walker' ? walker : null),
     calm: () => false,
     setTimeout: () => 0, clearTimeout: () => {},
@@ -400,7 +401,7 @@ function reconEnv(locked = false) {
     runTask: (task: string, input: Job['input'], then: Job['then'], quiet?: boolean) => { const j = { task, input, then, quiet }; runs.push(j); return j },
   }
   type F = { reviewed(route: string, body: unknown, res: unknown): void; reviewEvent(route: string, body: unknown, res: unknown): unknown }
-  return { f: lift<F>(RT, RECON_FNS, env), runs, kept, RECON, walker }
+  return { f: lift<F>(RT, RECON_FNS, env), runs, kept, RECON, walker, side }
 }
 /** The job is over: the view tells whoever started it, once. */
 const finish = (j: Job, how: Partial<Job> = { jobId: 'job_1' }) => { Object.assign(j, how); const t = j.then; j.then = null; t?.(j) }
@@ -479,15 +480,15 @@ test('reviews a reconsider job never started wait for the next one', () => {
   assert.equal(RECON.queue.length, 0)
 })
 
-test('a review leaves the page where it is, and the Strategy agent works at the bottom edge while the agents do', () => {
-  const { f, runs, walker } = reconEnv()
+test('a review leaves the page where it is, and the Strategy agent works in the side panel while the agents do', () => {
+  const { f, runs, walker, side } = reconEnv()
   const on = () => walker.classList.contains('on')
   assert.ok(!on())
   f.reviewed('/verdict', { polarity: 'good' }, { ok: true, decision: 'd_1', targets: ['doc1#facts[f_01A]'] })
   assert.equal(runs[0].quiet, true, 'the reconsider job does not scroll the page')
-  assert.ok(on(), 'the Strategy agent shows while the job runs')
-  assert.match(walker.innerHTML, /<span class="nk-ag" data-nk-agent="strategy" data-nk-state="working" data-nk-size="44"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working (the static frame until it is hydrated)')
-  assert.match(walker.innerHTML, /The Strategy agent is bringing the report in step with your review…/)
+  // The side panel (sideAgent) shows the working agent now; the bottom-edge walker stays off.
+  assert.ok(side.n > 0, 'the side panel is told while the job runs')
+  assert.ok(!on(), 'the bottom-edge walker stays off')
   assert.doesNotMatch(walker.innerHTML, /agent-figure|walking/)
   finish(runs[0])
   assert.ok(!on(), 'and leaves when nothing is pending')
@@ -745,7 +746,7 @@ test('a part judged after the page drew it gets its mark when the chain comes', 
 
 // A note on a brief, fixed by the crew: one fix_parts job, the page left where
 // it is, and whoever is working walks the bottom edge meanwhile.
-test('a note on a brief can be fixed by the crew, and the worker walks the bottom edge', () => {
+test('a note on a brief can be fixed by the crew, and the side panel shows who works', () => {
   const FIX_SAY = new Function('STRAT_', 'WRITER_', 'REV_', `${obj(BM, 'FIX_SAY')} return FIX_SAY;`)('The Strategy agent', 'The Brief agent', 'The Review agent')
   const classes = new Set<string>()
   const attrs: Record<string, string> = {}
@@ -757,6 +758,7 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
   type J = { task: string; verdict: string; stage?: string; summary?: string; error?: string | null; onUpdate(j: J): void; onEnd(j: J): void }
   const runs: { j: J; input: unknown }[] = []
   const said: string[] = []
+  const side = { n: 0 }
   let locked = false
   const env = {
     FIX: null, DRAFT: null, FIX_SAY, walker, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
@@ -766,7 +768,7 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
     fig: (k: string, o: { walking?: boolean }) => `<svg data-agent="${k}"${o.walking ? ' data-walking="true"' : ''}></svg>`,
     setStatus: (h: string) => { said.push(h) }, renderStructured: () => {}, pollJob: () => {},
     runJob: (j: J, input: unknown) => { runs.push({ j, input }) },
-    setTimeout: () => 0, clearTimeout: () => {},
+    setTimeout: () => 0, clearTimeout: () => {}, sideAgent: () => { side.n++ },
   }
   type F = { fixBtn(d: { id: string } | null): string; fixParts(vid: string, resumeId?: string): void; walk(): void }
   const f = lift<F>(BM, ['fixBtn', 'fixParts', 'walk'], env)
@@ -778,16 +780,16 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
   assert.equal(runs.length, 1)
   assert.deepEqual(runs[0].input, { verdict: 'd_note' })
   assert.equal(runs[0].j.task, 'fix_parts')
-  assert.ok(classes.has('on'))
-  assert.match(walker.innerHTML, /data-agent="synthesis"><\/svg>/, 'the Strategy agent\'s sphere, working')
-  assert.match(walker.innerHTML, /The Strategy agent is looking up what the fix needs/)
+  // The side panel (sideAgent) shows the working agent; the bottom-edge walker stays off.
+  assert.ok(side.n > 0, 'the side panel is told')
+  assert.ok(!classes.has('on'), 'the bottom-edge walker stays off')
   assert.match(f.fixBtn({ id: 'd_note' }), / disabled /, 'one fix at a time')
   f.fixParts('d_other')
   assert.equal(runs.length, 1, 'a second fix waits for the first')
+  const before = side.n
   runs[0].j.stage = 'draft'; runs[0].j.onUpdate(runs[0].j)
-  assert.match(walker.innerHTML, /data-agent="drafter"[^>]*>.*The Brief agent is rewriting the parts together/)
   runs[0].j.stage = 'judge'; runs[0].j.onUpdate(runs[0].j)
-  assert.match(walker.innerHTML, /The Review agent is checking the fix/)
+  assert.ok(side.n >= before + 2, 'each stage tells the side panel')
   runs[0].j.summary = 'Fixed 3 of 3 part(s), 0 proposed, 4 new fact(s) found.'
   runs[0].j.onEnd(runs[0].j)
   assert.ok(!classes.has('on'))
