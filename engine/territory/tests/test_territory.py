@@ -292,7 +292,8 @@ def test_seed_prompt_asks_for_a_safe_quarter_and_spread_and_has_no_conventions()
 
 
 def test_cost_card_is_calibrated_to_the_measured_run():
-    assert 0.65 <= cost.estimate()["est_usd"] <= 0.85
+    # measured tokens cost about $0.74 at the old price table; at the fixed list prices (deck.spec, 17 Nov 2026) the same tokens cost about $0.55
+    assert 0.45 <= cost.estimate()["est_usd"] <= 0.65
 
 
 def _cand(i, tier, group, tension="t1", mech=None, total=5):

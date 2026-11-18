@@ -99,21 +99,23 @@ TRIM_ORDER = ("process", "guardrails", "timeline", "innovation", "chart", "execu
 
 #: List prices in USD per million tokens, (input, output), for the cost the CLI transport does not report. An ESTIMATE
 #: from tokens (stages._call). A real usd the transport provides wins.
-PRICE_PER_MTOK = {"claude-opus-5-5": (5.0, 25.0), "claude-sonnet-5-5": (3.0, 15.0)}
-USD_BASIS = "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache tokens at 0.1x and 1.25x input; not a billed amount"
+PRICE_PER_MTOK = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0)}
+USD_BASIS = "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache reads at 0.05x and writes at 1.25x input; an unlisted model at the dearest price; not a billed amount"
 
 
 #: Prompt-cache tokens are priced against the input price: a read at this share, a write at this multiple.
-CACHE_READ_SHARE, CACHE_WRITE_MULT = 0.1, 1.25
+CACHE_READ_SHARE, CACHE_WRITE_MULT = 0.05, 1.25
 
 
 def estimate_usd(model: str, tokens_in: int, tokens_out: int, cache_read: int = 0, cache_creation: int = 0) -> float:
-    """Estimated dollars for one model's tokens at spec.PRICE_PER_MTOK; 0.0 for a model not in the table. Cache reads and
-    writes are priced at CACHE_READ_SHARE and CACHE_WRITE_MULT of the input price. ``model`` may name several (a comma
-    list from a summed stage): the dearest listed one prices the lot, so an estimate is never low."""
-    prices = [PRICE_PER_MTOK[m.strip()] for m in str(model or "").split(",") if m.strip() in PRICE_PER_MTOK]
-    if not prices:
-        return 0.0
+    """Estimated dollars for one model's tokens at spec.PRICE_PER_MTOK. Cache reads and writes are priced at
+    CACHE_READ_SHARE and CACHE_WRITE_MULT of the input price. ``model`` may name several (a comma list from a summed
+    stage): the dearest one prices the lot, so an estimate is never low. A model not in the table (or no model named,
+    when there are tokens) is priced at the dearest listed price, never $0: a new model must not look free."""
+    names = [m.strip() for m in str(model or "").split(",") if m.strip()]
+    prices = [PRICE_PER_MTOK[m] for m in names if m in PRICE_PER_MTOK]
+    if len(prices) < len(names) or not names:
+        prices.append(max(PRICE_PER_MTOK.values(), key=lambda p: p[1]))
     pin, pout = max(prices, key=lambda p: p[1])
     billed_in = (tokens_in or 0) + (cache_read or 0) * CACHE_READ_SHARE + (cache_creation or 0) * CACHE_WRITE_MULT
     return round(billed_in / 1e6 * pin + (tokens_out or 0) / 1e6 * pout, 4)

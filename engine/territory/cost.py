@@ -29,7 +29,8 @@ def _price(model, tin, tout):
 
 
 #: measured 2026-11-02: four live runs (client A, client B, client C, client D), 8 calls each, token-based
-#: estimates of $0.62, $0.68, $0.86 and $0.80, mean $0.74, against an uncalibrated card of $0.43
+#: estimates of $0.62, $0.68, $0.86 and $0.80, mean $0.74, against an uncalibrated card of $0.43 (at the price table then;
+#: after the 17 Nov 2026 price fix, Sonnet 5.5 2/10 and Opus 5.5 4/20, the same tokens and this factor give about $0.55)
 CALIBRATION = 1.71
 
 

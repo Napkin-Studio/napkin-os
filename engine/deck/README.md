@@ -233,6 +233,30 @@ python3 -m deck.bench compare BEFORE.json AFTER.json [--format text|md|json] [--
   `title_box`, `body_columns` and `font_families` (they add nothing to qa.json).
 - Tests: `tests/test_checklist.py` (76 tests). The full deck suite is 559 offline tests.
 
+## The vision critic bench, phase 1 (`deck/bench/visual*.py`, `deck/visual_rubric.json`; feature deck-vision-critic)
+
+An eye that looks at the rendered slide, measured against a person before any of its questions is trusted. Phase 1 is the
+measurement only: nothing in `run_deck`, a prompt, a deck or an export reads it, and every question is `off` until graded.
+
+```
+python3 -m deck.bench visual renders OUT_DIR                       # two renders of each invented fixture (needs LibreOffice)
+python3 -m deck.bench visual pack OUT_DIR/* --session A --out PAGE_DIR --seed N    # blind grading page + key.json (no model)
+python3 -m deck.bench visual run --key KEY --images PAGE_DIR --max-usd 2.5 --out visual.json [--recordings DIR | --live --yes-cost CARD_ID]
+python3 -m deck.bench visual agree grades.json visual.json --key KEY               # writes bench/baseline/critic_trust.json
+python3 -m deck.bench.spike_image --print-command                  # the transport spike (one tiny invented picture)
+```
+
+`visual_rubric.json` holds ten yes-is-good questions (version 1); canned messages and confirm bands live in
+`bench/visual_data.json` until phase 2. `pack` seeds frozen faults (listed only in the key), adds repeats for the person's
+self-agreement, and writes a page with no critic answer, fixture name, phase or seeded mark. `run` reserves each call's worst
+case against `--max-usd` and a $0.40 per-deck cap before it starts, and books every paid call (a stopped or unreadable reply
+at its real usage, unknown usage at the worst case); a live run uses the Napkin API key (never the Claude Code login) and
+needs `--live --yes-cost CARD_ID`, the id printed on its cost card (built from the real token estimate). `agree` reports natural and seeded slides apart, the critic and a code-only baseline
+on the same answers, and sets a state by pre-registered gates; the trust file carries a key (rubric version,
+prompt sha, model, image size, LibreOffice, fonts) and an HMAC over the whole document, signed with `NAPKIN_TRUST_SECRET`
+(kept outside the repo; `agree` refuses to write without it), so a hand edit, a recomputed hash, a changed setup or a
+missing secret reads as off.
+
 ## The evaluation bench (`deck/bench`)
 
 Offline scoring of finished decks, so "the pipeline makes it better" is measured rather than felt (DECK-CRAFT-PLAN 4.3, roadmap item 7). It makes no model call unless `--live --claude-judge` are both given; judges are Claude-only by default (ADR 0006).
@@ -263,7 +287,7 @@ Offline and model-free; tests in `tests/test_core.py` and `tests/test_intake.py`
 - **Objective slide** (`objective`, 50 words, section Objective): slide 2 of an agency pitch and a credentials deck, after the response map in a tender. Built only from the requirements of kind objective, `brief.objectives` and the person's answer to the question addressed to `brief.objectives`; whole items until the budget; no slide when the inputs hold no objective. `brief_restated` stays in the appendix (also for tender and credentials). `objective_quant` (warn, agency decks) wants a number and a from/to, versus or by-date in the first three presented slides. The slide has no layout of its own yet: it falls back to the flow.
 - **Stated limits, every profile** (`length.respect_stated_limit`): `assemble.stated_limit` reads the buyer's rules and criteria, the brief's mandatories, the prompt, the answers and the documents ('no more than 14 slides', '20 slides', 'slide limit', a page limit beside a limit word, '10 minutes' to present = 5 slides at `spec.MINUTES_PER_SLIDE`). The tightest wins, and an explicit count may be looser than the profile's; minutes only ever tighten. In the pitch format the presented story is cut to the limit by moving the least needed slides behind the Appendix divider in `spec.TRIM_ORDER` (process, guardrails, timeline, innovation, extra charts and executions, channel roles, ..., then credentials, audience, measurement). Nothing is reworded; the response map, the team, the money, the insight, the idea, the real question and routes the client asked for are never moved, and a story still over its limit is reported by `pitch_length`. A deck with no stated limit and no sketch is built exactly as before (no `meta.length` for the legacy types).
 - **Sketch tier.** A deck built from a prompt alone, or a prompt and documents holding under `spec.SKETCH_DOC_CHARS` characters, presents at most `spec.SKETCH_MAX_SLIDES` (10), carries the fixed label `spec.SKETCH_LABEL` as a small block on the cover and records `meta.sketch`. `meta.length.source` says why.
-- **Cost.** Each live stage records `usd`: a real figure when the transport gives one, else an estimate from tokens at `spec.PRICE_PER_MTOK` (Opus 5.5 5/25, Sonnet 5.5 3/15 dollars per million in/out; cache reads at 0.1x and writes at 1.25x the input price), marked `usd_estimated`. `run_deck` prices recorded stages that hold tokens but no dollars the same way, so `report.json` `usd_total` is not 0 and `usd_basis` says it is an estimate.
+- **Cost.** Each live stage records `usd`: a real figure when the transport gives one, else an estimate from tokens at `spec.PRICE_PER_MTOK` (Opus 5.5 4/20, Sonnet 5.5 2/10 dollars per million in/out; cache reads at 0.05x and writes at 1.25x the input price; a model not in the table is priced at the dearest listed price, never 0), marked `usd_estimated`. `run_deck` prices recorded stages that hold tokens but no dollars the same way, so `report.json` `usd_total` is not 0 and `usd_basis` says it is an estimate.
 - **Repair call.** A reply that is not usable JSON gets one extra call (`stages.REPAIR_SYSTEM`) shown the bad text and asked for valid JSON only; its tokens are in the stage's usage and `repaired: true` is recorded. A failed repair raises as before. Reading the reply through `parse` turns provider JSON mode off for stage calls (it only matters to the non-Anthropic links, which stage calls do not use).
 - **Dangling `brief:` refs** are warnings, not errors, when the run has no brief.
 - **Smoke fixes.** A sentence is not shown twice on a slide (a text, statement, quote, callout or small block equal to the title or an earlier block is dropped; its refs stay as a claim). The credentials 'questions for the client' slide is in the presented spine in both formats (guarded by a test). The stage h line in `report.json` now counts the slides checked, not only the flagged ones.

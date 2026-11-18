@@ -35,11 +35,11 @@ GALLERY_SLUGS = {"lumen_water": "lumen-water", "investor_seed": "investor-seed",
                  "tender_response": "tender-response", "credentials": "credentials"}
 
 
-def build_one(name: str, out: Path, geometry_only: bool = False) -> Path:
-    """Build one fixture deck into ``out`` (a run folder) through run_deck.main; returns ``out``."""
+def build_one(name: str, out: Path, geometry_only: bool = False, extra: tuple = ()) -> Path:
+    """Build one fixture deck into ``out`` (a run folder) through run_deck.main; returns ``out``. ``extra`` adds run_deck arguments."""
     from .. import run_deck
     stages, args = FIXTURES[name]
-    argv = ["--stages", str(FIXTURE_ROOT / stages), "--out", str(out), *[a.replace("{fx}", str(FIXTURE_ROOT)) for a in args]]
+    argv = ["--stages", str(FIXTURE_ROOT / stages), "--out", str(out), *[a.replace("{fx}", str(FIXTURE_ROOT)) for a in args], *extra]
     saved = (run_deck.subprocess.run, run_deck._soffice)
     if geometry_only:   # no PDF, no PNG: qa_render then reports "pixels skipped: no PDF"
         run_deck.subprocess.run = lambda *a, **k: None
