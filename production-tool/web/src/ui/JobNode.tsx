@@ -69,7 +69,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
       ? <AskCard ask={ask} />
       : (
         <div className={`pending waiting ${compact ? 'compact' : ''}`} role="status">
-          <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
+          <AgentFigure agent={who.agent} state={who.state} size={compact ? 48 : 96} decorative />
           <div className="state">{who.line}</div>
         </div>
       )
@@ -157,8 +157,9 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
     <>
     <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
       {/* Who is doing the work, at work, and their sign-off (ui-behaviour 5.1, 6.5). */}
-      <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
-      <div className="pt-say"><span className="who">{sayer(who.agent)}</span></div>
+      {/* Big agent, small words (owner, 2026-11-19): the line already names who; no separate name label. */}
+      <AgentFigure agent={who.agent} state={who.state} size={compact ? 48 : 96} decorative />
+      {compact && <div className="pt-say"><span className="who">{sayer(who.agent)}</span></div>}
       {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
       <div className="meta" title={compact ? who.line : undefined}>
         {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
