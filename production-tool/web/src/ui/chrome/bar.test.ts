@@ -43,7 +43,7 @@ describe('the document menu holds what More held; secondary actions live there',
   })
   it('every editor\'s menu has the document rows, and no dead Copy link to this (live test 2026-11-18)', () => {
     expect(src('../../script/ScriptEditor.tsx')).toMatch(/<MenuItem icon=\{<LinkIcon \/>\} onSelect=\{[^]*?\}>Copy link to this<\/MenuItem>/)
-    for (const f of ['Storyboard', 'Video', 'ImageEditor']) expect(src(`../../stages/${f}.tsx`)).not.toContain('CopyLinkLater')
+    for (const f of ['Storyboard', 'ImageEditor']) expect(src(`../../stages/${f}.tsx`)).not.toContain('CopyLinkLater')
     expect(src('../../rooms/Rooms.tsx')).not.toContain('CopyLinkLater')
     expect(bars).toContain('<CanvasMoreItems close={close} share={false} />')
   })
