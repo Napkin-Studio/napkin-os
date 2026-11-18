@@ -1,7 +1,7 @@
 // The slim shell bar on every Production screen (Shrey, 2026-11-18/19; features/production-new-ui.clan, the
 // pinned "slim shell bar" decision):
-//   [◐ Napkin Studio]  <Film name> ▾  › Canvas › Script            •  Decisions 0  (SH)
-// Left: the brand pill (the way home), the film's name with its saved line and its ▾ menu, and the crumb of
+//   (O)[Napkin Studio]  <Film name> ▾  › Canvas › Script            •  Decisions 0  (SH)
+// Left: the Deep O medallion and the agency pill (the way home), as Brief Maker and the shell wear them, the film's name with its saved line and its ▾ menu, and the crumb of
 // where you are (the steps before the current one are links). Right: only the agent status dot (ui/JobTray),
 // Decisions and you. Every page's own actions sit in its band (Band) under the bar, never in it.
 
@@ -10,7 +10,7 @@ import { useShell } from '../../app/context'
 import { Float } from '../Float'
 import { saveTime, useSave } from '../useSave'
 import { Account } from '../chrome/Bar'
-import { StudioMark } from '../Mark'
+import { DeepO } from './look'
 import { pillMark } from './agency'
 import { useLook, useTheme } from './lookContext'
 import { setThemeChoice } from '../../theme'
@@ -27,23 +27,38 @@ const Ic = ({ d, cls }: { d: string; cls?: string }) => (
 )
 export const Icon = Ic
 
-/** The brand pill: the Napkin mark and the agency (or Napkin Studio alone); the way back to the studio, or Home. */
-export function BrandPill() {
+/** The brand: the Deep O medallion and the agency pill, as Brief Maker and the OS shell wear them (app/src/components/
+ *  Toolbar.tsx; the mark is the shared app/src/brand/deepOSvg, ./look DeepO, in the agency's colours). The medallion
+ *  is the way back to the studio, or Home. It is the brand, held still: the agents' activity is the status dot. */
+function Medallion() {
   const shell = useShell()
-  const look = useLook()
-  const mark = pillMark(look)
-  const studio = studioHref()
   const go = () => {
-    if (studio) location.assign(studio)
+    const href = studioHref()
+    if (href) location.assign(href)
     else void shell.goHome()
   }
-  const where = studio ? 'Back to the studio' : 'Home: your films'
   return (
-    <button type="button" className={`tb-brand ag-pill ${look.solo ? 'solo' : ''}`} onClick={go} title={where} aria-label={`${look.name}: ${where}`}>
-      <span className="tb-brand-mark" aria-hidden="true"><StudioMark size={18} /></span>
-      {look.solo ? <b>Napkin Studio</b> : <span className="tb-brand-t">{mark ? <img src={mark} alt="" className="ag-mark" /> : <b>{look.name}</b>}<small>Napkin Studio</small></span>}
+    <button type="button" className="m1-medallion" onClick={go} title={studioHref() ? 'Back to the studio' : 'Home: your films'} aria-label={studioHref() ? 'Back to the studio' : 'Home: your films'}>
+      <DeepO size={54} state="awake" />
     </button>
   )
+}
+
+export function AgencyPill() {
+  const look = useLook()
+  const mark = pillMark(look)
+  if (look.solo) return <span className="ag-pill solo"><b>Napkin Studio</b></span>
+  return (
+    <span className="ag-pill">
+      {mark ? <img src={mark} alt={look.name} className="ag-mark" /> : <b>{look.name}</b>}
+      <small>Napkin Studio</small>
+    </span>
+  )
+}
+
+/** The bar's lead: the medallion over the agency pill. */
+export function BrandLead() {
+  return <span className="tb-lead"><Medallion /><AgencyPill /></span>
 }
 
 function savedLine(s: ReturnType<typeof useSave>): string {
@@ -125,7 +140,8 @@ export function ShellBar({ crumb, menu, job, className = '', bar, history }: {
   return (
     <div className={`topbar-outer slim ${className}`} data-float-avoid="" data-bar={bar}>
       <header className="tb" aria-label="Napkin Studio Top Bar">
-        <BrandPill />
+        <BrandLead />
+        <span className="tb-sep" aria-hidden="true" />
         <div className="tb-app">
           <DocSlot menu={menu} />
           {crumb && crumb.length > 0 && <Crumbs crumb={crumb} />}
@@ -141,7 +157,7 @@ export function ShellBar({ crumb, menu, job, className = '', bar, history }: {
   )
 }
 
-/** The slim bar where no film is open (All projects, and the sign-in and access screens): the brand pill, the
+/** The slim bar where no film is open (All projects, and the sign-in and access screens): the medallion and pill, the
  *  place's name, and you once signed in. Light or dark is in your account menu; signed out, a theme button stands
  *  in for it. A film's slots (its name and menu, the status dot, Decisions) are not here. */
 export function PlaceBar({ place = 'Production', account }: {
@@ -152,7 +168,8 @@ export function PlaceBar({ place = 'Production', account }: {
   return (
     <div className="topbar-outer slim" data-float-avoid="" data-bar="place">
       <header className="tb" aria-label="Napkin Studio Top Bar">
-        <BrandPill />
+        <BrandLead />
+        <span className="tb-sep" aria-hidden="true" />
         <div className="tb-app">
           <span className="tba-place"><Ic d={ICON.film} cls="ticon" /><b>{place}</b></span>
         </div>

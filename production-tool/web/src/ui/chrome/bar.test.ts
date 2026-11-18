@@ -5,8 +5,7 @@ describe('the bar is the shell bar of the new UI (features/production-new-ui.cla
   it('where no film is open (All projects, signed out, not confirmed, not on for the agency) the bar is PlaceBar: no old header', () => {
     const shell = readFileSync(new URL('../shell/ShellBar.tsx', import.meta.url), 'utf8')
     const place = shell.slice(shell.indexOf('export function PlaceBar'), shell.indexOf('function ThemeButton'))
-    expect(place).toContain('<BrandPill />')
-    expect(place).not.toContain('m1-medallion')
+    expect(place).toContain('<BrandLead />')
     for (const f of ['../../Root.tsx', '../Home.tsx']) {
       const src = readFileSync(new URL(f, import.meta.url), 'utf8')
       expect(src).toContain('<PlaceBar')
@@ -14,17 +13,23 @@ describe('the bar is the shell bar of the new UI (features/production-new-ui.cla
     }
     expect(readFileSync(new URL('../home.css', import.meta.url), 'utf8')).not.toContain('.hm-bar')
   })
-  it('the canvas bar and every editor bar are the slim ShellBar: the brand pill, the film, the crumb; the dot, Decisions, you', () => {
+  it('the canvas bar and every editor bar are the slim ShellBar: the medallion and pill, the film, the crumb; the dot, Decisions, you', () => {
     const bars = readFileSync(new URL('./TopBars.tsx', import.meta.url), 'utf8')
     expect(bars.match(/<ShellBar /g)?.length).toBe(2)
     const shell = readFileSync(new URL('../shell/ShellBar.tsx', import.meta.url), 'utf8')
     const bar = shell.slice(shell.indexOf('export function ShellBar'), shell.indexOf('export function PlaceBar'))
-    for (const part of ['<BrandPill />', '<DocSlot menu={menu} />', '<Crumbs crumb={crumb} />', '{job}', '<DecisionsButton', '<Account />']) expect(bar).toContain(part)
+    for (const part of ['<BrandLead />', '<DocSlot menu={menu} />', '<Crumbs crumb={crumb} />', '{job}', '<DecisionsButton', '<Account />']) expect(bar).toContain(part)
     // Shrey 2026-11-18/19: no medallion (the sphere ran off), no Production pill, no Continue in / Share / theme
     // button, no BETA or thumbs, and no page action in the bar.
-    for (const gone of ['m1-medallion', '<ClientChip', '<ContinueIn', '<Share ', '<ThemeButton', 'BetaTag', 'Thumbs', 'primary', 'tools']) expect(bar).not.toContain(gone)
+    for (const gone of ['<ClientChip', '<ContinueIn', '<Share ', '<ThemeButton', 'BetaTag', 'Thumbs', 'primary', 'tools']) expect(bar).not.toContain(gone)
     expect(bars).not.toContain('BetaTag')
     expect(readFileSync(new URL('../Home.tsx', import.meta.url), 'utf8')).not.toContain('BetaTag')
+    // The brand is the Deep O medallion over the agency pill, as Brief Maker and the shell wear it; the old
+    // four-quarter mark is nowhere in a bar or the projects page (Shrey 2026-11-19).
+    const lead = shell.slice(shell.indexOf('function Medallion'), shell.indexOf('function savedLine'))
+    expect(lead).toContain('<DeepO size={54} state="awake" />')
+    expect(lead).toContain('<span className="tb-lead"><Medallion /><AgencyPill /></span>')
+    for (const f of ['../shell/ShellBar.tsx', '../Home.tsx', '../../Root.tsx']) expect(readFileSync(new URL(f, import.meta.url), 'utf8')).not.toMatch(/StudioMark|MarkTile|HomeMark/)
   })
 })
 
