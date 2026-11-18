@@ -46,7 +46,7 @@ def test_write_is_skyes_internal_job_on_the_text_quota_with_no_spend(h):
     assert draft["base_hash"] == BASE  # echoed: a draft lands after a reload, and goes stale on Keep if the text moved
     assert draft["lines"][0]["text"] == "@maya_front walks the waterline."
     assert draft["note"] == "I tightened it."
-    assert job["director"]["promptVersion"] == "skye.v4"
+    assert job["director"]["promptVersion"] == "skye.v5"
 
 
 def test_a_draft_writes_from_the_instruction_not_the_items_words(h):
@@ -144,7 +144,7 @@ def test_the_model_writer_asks_sonnet_with_skye_v3_and_the_relay_owns_target_and
     out = w.write({"op": "write", "jobId": new_id("job"), "input": inp})
     [asked] = port.asked
     assert asked["purpose"] == "writer" and asked["model"] == "claude-sonnet-5-5"
-    assert asked["system"].startswith("# Skye · scripts (skye.v4)")
+    assert asked["system"].startswith("# Skye · scripts (skye.v5)")
     assert asked["payload"]["input"]["write"]["context"]["refs"] == [{"name": "maya_front", "role": "character"}]
     assert [d["target"] for d in out["writes"]] == [target]
     assert out["writes"][0]["base_hash"] == BASE
@@ -191,7 +191,7 @@ def test_settle_keeps_new_beats_inside_the_length():
 
 
 def test_the_prompt_file_is_versioned_and_says_no_chat():
-    for v in ("skye.v1", "skye.v2", "skye.v3", "skye.v4"):
+    for v in ("skye.v1", "skye.v2", "skye.v3", "skye.v4", "skye.v5"):
         text = (Path(__file__).parent.parent / "prompts" / f"{v}.md").read_text()
         assert "You never chat" in text and "No prices, no costs" in text
 
@@ -316,3 +316,26 @@ def test_the_relay_drafts_through_a_one_option_nudge_with_no_needs_input(h):
     _, job = post_write(h, token, intent="draft", text="A samurai cleans the house for you.")
     assert job["state"] == "completed" and job.get("question") is None
     assert job["writes"][0]["lines"][0]["text"] == "A samurai sweeps the hall."
+
+
+def test_v5_is_v4_plus_the_brief_and_reads_it_cut_to_the_write_budget():
+    """features/brief-node.clan: Skye drafts for the linked brief's audience and tone, keeps its mandatories
+    and never writes what a don't rules out; she reads its spine cut to the write op's budget."""
+    root = Path(__file__).parent.parent / "prompts"
+    v4, v5 = (root / "skye.v4.md").read_text(), (root / "skye.v5.md").read_text()
+    assert v5.replace("(skye.v5)", "(skye.v4)", 1).startswith(v4.split("Answer with the JSON only:")[0].split("- `input.answer`")[0])
+    assert "input.brief" in v5 and "never write what a don't rules out" in v5
+    port = FakePort({"writes": [{"lines": [{"kind": "action", "text": "x"}], "note": "n"}], "rationale": "r"})
+    inp = write_input()
+    inp["brief"] = {"title": "First Light brief", "spine": {"proposition": "P" * 150, "audience": "A" * 380, "tone": "T" * 290,
+                                                             "feel": "F" * 190, "insight": "I" * 390, "mandatories": ["M" * 110] * 6}}
+    ModelWriter(port, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": inp})
+    [asked] = port.asked
+    spine = asked["payload"]["input"]["brief"]["spine"]
+    assert list(spine)[:4] == ["proposition", "audience", "tone", "feel"]
+    assert sum(len(v) if isinstance(v, str) else sum(map(len, v)) for v in spine.values()) <= 900
+    # No brief: the input goes to Skye as it came.
+    port2 = FakePort({"writes": [{"lines": [{"kind": "action", "text": "x"}], "note": "n"}], "rationale": "r"})
+    plain = write_input()
+    ModelWriter(port2, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": plain})
+    assert port2.asked[0]["payload"]["input"] == plain

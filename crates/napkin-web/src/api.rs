@@ -79,6 +79,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/d/{doc}", get(open_document))
         .route("/t/{tenant}/d/{doc}/human-html", get(human_html))
         .route("/t/{tenant}/d/{doc}/entry/{which}", get(entry))
+        .route("/t/{tenant}/d/{doc}/data", get(document_data))
         .route("/t/{tenant}/d/{doc}/edit-mode", post(edit_mode))
         .route("/t/{tenant}/d/{doc}/preview-html", post(preview_html_gone))
         .route("/t/{tenant}/d/{doc}/patch", post(patch))
@@ -591,6 +592,35 @@ async fn entry(
     let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
     let text = session.entry_string(path)?;
     Ok(([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response())
+}
+
+/// One document's data as JSON, read as it stands now, with the hash the OS's
+/// links compare (`clan_sdk::Carried.data_sha256`: sha256 of its
+/// `shared/data.yaml`). Read-only. The Production Tool at `/production`, a
+/// page of this origin on the same session, reads a Brief Maker brief through
+/// it to freeze the brief's spine on a Brief node, and reads it again to say
+/// "Brief changed: update?" (features/brief-node.clan). The tool is not an OS
+/// document, so it keeps its own frozen copy rather than `data.upstream`.
+async fn document_data(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Path((_t, doc)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    let ws = ctx.workspace(&tenant);
+    let (session, _) = crate::timing::phase("session", || ws.open(&DocId::new(doc.clone())))?;
+    let now = session
+        .document_now()
+        .ok_or_else(|| ApiError::new(404, "no such document"))?;
+    let yaml = session.entry_string("shared/data.yaml")?;
+    Ok(Json(serde_json::json!({
+        "document_id": now["id"],
+        "path": doc,
+        "app_id": session.app_id(),
+        "title": session.title()?,
+        "revision": now["revision"],
+        "data": now["data"],
+        "data_sha256": clan_sdk::hash::sha256_prefixed(yaml.as_bytes()),
+    })))
 }
 
 #[derive(Deserialize)]

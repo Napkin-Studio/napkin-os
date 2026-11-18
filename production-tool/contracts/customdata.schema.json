@@ -272,6 +272,24 @@
     },
     {
       "type": "object",
+      "title": "brief: a Brief node (features/brief-node.clan)",
+      "properties": {
+        "kind": {
+          "const": "brief"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
       "title": "format_set: a Format set node",
       "properties": {
         "kind": {

@@ -63,10 +63,12 @@ export interface AppUi {
   savedAt?: string
   /** Reduce motion, from the account menu (ui-behaviour 6.6): 'still' stops every loader and animation. */
   motion?: 'still'
+  /** The Booth hidden or shown, per person in this tool (ui/booth/state.ts boothKey; features/script-freeform.clan). */
+  booth?: Record<string, 'hidden' | 'shown'>
 }
 
 /** The UiState fields that are the app's, not the project's. */
-export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'me', 'hintDismissed', 'view', 'project', 'homeSort', 'savedAt', 'motion'] as const satisfies readonly (keyof AppUi)[]
+export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'me', 'hintDismissed', 'view', 'project', 'homeSort', 'savedAt', 'motion', 'booth'] as const satisfies readonly (keyof AppUi)[]
 
 /** Kept per project. */
 export interface ProjectUi {

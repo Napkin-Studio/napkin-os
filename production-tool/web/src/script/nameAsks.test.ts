@@ -1,19 +1,12 @@
 // @vitest-environment happy-dom
 // Unknown names become Skye's asks (features/script-editor.clan): one per name, closed quietly
-// when the name resolves, answered locally as one undo step; and her bar's words.
+// when the name resolves, answered locally as one undo step. (Her words on a selection are the Booth's: SkyeBooth.test.tsx.)
 
-import { act, createElement } from 'react'
-import { createRoot } from 'react-dom/client'
-import { Editor } from '@tiptap/core'
 import { describe, expect, it } from 'vitest'
 import { proseFromLines } from '../../../clan-store/src'
 import { mainScript } from '../model/selectors'
 import { addShots, asset, id, MAYA, modelStore, SHA } from '../test/model'
-import { editorExtensions } from './extensions'
 import { answerLocalAsk, askedName, askPlan, nameAsks, settleNameAsks } from './nameAsks'
-import { SkyeBar } from './SkyeUI'
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 async function project() {
   const store = modelStore()
@@ -84,50 +77,5 @@ describe('name asks', () => {
     const cuts: [string, string][] = []
     await answerLocalAsk(store, a.id, 'cut', `human:${MAYA.id}`, async (shot, name) => { cuts.push([shot, name]) })
     expect(cuts).toEqual([[shots[0], 'jogger']])
-  })
-})
-
-describe("Skye's bar", () => {
-  function mountBar(props: Partial<Parameters<typeof SkyeBar>[0]>) {
-    const el = document.createElement('div')
-    document.body.appendChild(el)
-    const editor = new Editor({ element: el, extensions: editorExtensions({ kind: 'shot' }), content: { type: 'doc', content: [{ type: 'action', content: [{ type: 'text', text: 'She walks the beach.' }] }] } })
-    editor.commands.focus()
-    editor.commands.setTextSelection({ from: 5, to: 10 })
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    const root = createRoot(host)
-    const started: string[] = []
-    act(() => root.render(createElement(SkyeBar, {
-      editor, target: { kind: 'shot', id: 'shot_x' }, seconds: 2.5, handsOff: false, off: false, quota: false, working: false,
-      onStart: (intent) => started.push(intent), ...props,
-    })))
-    Object.defineProperty(editor, 'isFocused', { get: () => true })
-    act(() => root.render(createElement(SkyeBar, {
-      editor, target: { kind: 'shot', id: 'shot_x' }, seconds: 2.5, handsOff: false, off: false, quota: false, working: false,
-      onStart: (intent) => started.push(intent), ...props,
-    })))
-    return { host, started, done: () => { act(() => root.unmount()); editor.destroy() } }
-  }
-
-  it('offers the five options, with no price', () => {
-    const { host, started, done } = mountBar({})
-    expect([...host.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Tighten', 'Make it 2.5 s', 'Add a beat', 'Write the VO', 'Say it another way'])
-    expect(host.textContent).not.toMatch(/cost|\$|free/i)
-    act(() => (host.querySelectorAll('button')[0] as HTMLButtonElement).click())
-    expect(started).toEqual(['tighten'])
-    done()
-  })
-
-  it('on an item she was asked to leave alone, asks first; off where she is not available; says when the allowance is used', () => {
-    let b = mountBar({ handsOff: true })
-    expect(b.host.textContent).toContain('Skye is leaving this alone. Ask her anyway?')
-    b.done()
-    b = mountBar({ off: true })
-    expect(b.host.textContent).toBe('')
-    b.done()
-    b = mountBar({ quota: true })
-    expect(b.host.textContent).toContain("Skye has used today's writing allowance")
-    b.done()
   })
 })

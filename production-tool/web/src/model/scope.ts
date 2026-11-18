@@ -7,8 +7,10 @@
 // - upstream: the script that drives it, the storyboard that renders it (their links);
 // - each other link into it: a board or group (and the references on it), a whole key (and each of
 //   its views: owner 2026-10-15), a single reference with its role, a sketch area or drawing, a note or ink group, a document, the brand board,
-//   a frame (a shot's frame or layout, a format set's master);
-// - what upstream nodes have linked in (a storyboard sees its script's references), once;
+//   a frame (a shot's frame or layout, a format set's master), a Brief node (features/brief-node.clan);
+// - what upstream nodes have linked in (a storyboard sees its script's references), once; a node
+//   has one brief: its own linked Brief node, else the nearest one upstream (a Script's brief carries
+//   on to the Storyboard and Video it drives; an explicit link downstream overrides it);
 // - @-mentions in its own text that nothing above brings in (not yet linked: the auto-link of
 //   3.6 links them on pick), and @words that name no reference at all (3.6 unknown names).
 //
@@ -86,7 +88,7 @@ const titled = (kind: string, title: string | undefined) => (title && title.trim
 const values = <T>(m: Record<string, T> | undefined): T[] => Object.values(m ?? {})
 const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g
 const UPSTREAM: LinkRole[] = ['drives', 'renders']
-const ORDER: ScopeKind[] = ['script', 'storyboard', 'video', 'board', 'group', 'ref', 'key', 'sketch', 'ink', 'frame', 'render', 'shot', 'note', 'text', 'document', 'format_set', 'unknown']
+const ORDER: ScopeKind[] = ['brief', 'script', 'storyboard', 'video', 'board', 'group', 'ref', 'key', 'sketch', 'ink', 'frame', 'render', 'shot', 'note', 'text', 'document', 'format_set', 'unknown']
 const PURPOSE_ROLES: Partial<Record<BoardPurpose, RefRole[]>> = {
   character: ['character'], location: ['location'], product: ['product'],
   reference: ['lighting', 'composition', 'style', 'wardrobe', 'pose', 'prop', 'texture', 'colour', 'layout', 'other'],
@@ -98,6 +100,7 @@ export function nodeKindOf(d: Doc, id: Id): LinkEndpointKind | null {
   const maps: [LinkEndpointKind, Record<string, unknown> | undefined][] = [
     ['script', d.scripts], ['storyboard', d.storyboards], ['video', d.videos], ['sketch', d.sketches], ['format_set', d.format_sets],
     ['shot', d.shots], ['board', d.boards], ['ref', d.refs], ['frame', d.frames], ['render', d.renders], ['document', d.documents],
+    ['brief', d.briefs],
   ]
   for (const [k, m] of maps) if (m?.[id]) return k
   return null
@@ -230,6 +233,11 @@ function linkItems(d: Doc, l: Link, via: ScopeVia, opts: ScopeOptions, through?:
       return [{ ...base, kind: 'ink', id: e.id, label: l.label || 'Ink', drawn: true }]
     case 'note':
       return [{ ...base, kind: 'note', id: e.id, label: l.label || 'Note' }]
+    case 'brief': {
+      // A Brief node (features/brief-node.clan): "Brief · First Light brief · v2".
+      const b = d.briefs?.[e.id]
+      return b ? [{ ...base, kind: 'brief', id: e.id, label: `Brief · ${b.title} · v${b.source.taken}` }] : []
+    }
     case 'text': {
       // A text on the canvas (features/canvas-text.clan): its words are the node's input words.
       const t = d.texts?.[e.id]
@@ -253,6 +261,8 @@ export function scopeOf(d: Doc, nodeId: Id, opts: ScopeOptions = {}): ScopeItem[
   const add = (it: ScopeItem) => {
     const k = `${it.kind}:${it.id}`
     if (seen.has(k)) return
+    // One brief per node: its own link first, else the nearest upstream; any other is not in scope.
+    if (it.kind === 'brief' && items.some((x) => x.kind === 'brief')) return
     seen.add(k)
     items.push(it)
   }
@@ -278,7 +288,15 @@ export function scopeOf(d: Doc, nodeId: Id, opts: ScopeOptions = {}): ScopeItem[
       for (const it of linkItems(d, l, 'upstream', opts, up)) add(it)
     }
   }
-  // The node's own text: its shots (action, direction, beats) and, for a script, its scenes.
+  // A Format set made from a video (its master: the video, or an ad render of it) reads that video's brief, as
+  // a Storyboard reads its Script's; an explicit link into the set overrides it (owner 2026-11-18, features/brief-node.clan).
+  if (kind === 'format_set' && !items.some((x) => x.kind === 'brief')) {
+    const m = d.format_sets?.[nodeId]?.master
+    const film = m?.kind === 'video' ? m.id : m?.kind === 'render' ? d.renders?.[m.id]?.video_id : undefined
+    const carried = film && d.videos?.[film] ? scopeOf(d, film, opts).find((x) => x.kind === 'brief') : undefined
+    if (carried) add({ ...carried, via: 'upstream', through: film })
+  }
+    // The node's own text: its shots (action, direction, beats) and, for a script, its scenes.
   const shots = shotsFor(d, kind, nodeId)
   const named = new Map<string, Id[]>() // kind:id → shots naming it
   const unknown = new Map<string, Id[]>()

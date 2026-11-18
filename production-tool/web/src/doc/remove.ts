@@ -20,7 +20,7 @@ import type { DocumentStore } from './types'
 
 type Doc = ProductionDocument
 type Entity = { id: string } & Record<string, unknown>
-export type RemovalKind = 'gen' | 'shot' | 'frame' | 'generation' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat' | 'text' | NodeRemovalKind
+export type RemovalKind = 'gen' | 'shot' | 'frame' | 'generation' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat' | 'text' | 'brief' | NodeRemovalKind
 /** The document's nodes on the canvas (features/canvas-edit-tools.clan). */
 export type NodeRemovalKind = 'script' | 'storyboard' | 'video'
 
@@ -317,6 +317,19 @@ export function removeText(d: Doc, textId: string): Removal {
   takeOut(d, r, 'texts', textId)
   for (const x of Object.values(d.links)) if ((x.from.kind === 'text' && x.from.id === textId) || (x.to.kind === 'text' && x.to.id === textId)) takeOut(d, r, 'links', x.id)
   r.ids = [textId]
+  return r
+}
+
+/** A Brief node left the canvas (features/brief-node.clan): its briefs[id] copy goes, with its links and the
+ *  out-of-date marks and Review flags it caused. The brief itself, in Brief Maker, is untouched. */
+export function removeBrief(d: Doc, briefId: string): Removal {
+  const r = blank('brief', briefId, `brief ${briefId}`)
+  if (!d.briefs?.[briefId]) return r
+  takeOut(d, r, 'briefs', briefId)
+  for (const x of Object.values(d.links)) if ((x.from.kind === 'brief' && x.from.id === briefId) || (x.to.kind === 'brief' && x.to.id === briefId)) takeOut(d, r, 'links', x.id)
+  for (const m of Object.values(d.stale)) if (m.caused_by.kind === 'brief' && m.caused_by.id === briefId) takeOut(d, r, 'stale', m.id)
+  for (const c of Object.values(d.checks)) if (c.brief_id === briefId) takeOut(d, r, 'checks', c.id)
+  r.ids = [briefId]
   return r
 }
 

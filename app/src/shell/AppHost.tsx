@@ -58,6 +58,8 @@ interface Props {
   toolKey?: string | null
   /** Continue in › Start fresh: a new document of this app for this client. */
   onStartFresh?: () => void
+  /** Continue in › Production Tool on a brief (features/brief-node.clan). */
+  onStartFilm?: () => void
   /** The document menu's way to its tool's page for its client. */
   onToolPage?: { label: string; run: () => void } | null
   /** The signed-in agency, on the bar's pill, and its page. */
@@ -85,7 +87,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onStartFilm, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
   const docPath = open.path
@@ -399,6 +401,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           toolKey,
           onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
           onStartFresh,
+          onStartFilm,
           onToolPage,
           onSave,
           onCopyLink: open.is_template ? undefined : onCopyLink,

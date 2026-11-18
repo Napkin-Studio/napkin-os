@@ -194,6 +194,60 @@
       "to": "ref",
       "role": "note",
       "ok": false
+    },
+    {
+      "from": "brief",
+      "to": "script",
+      "role": "brief",
+      "ok": true
+    },
+    {
+      "from": "brief",
+      "to": "storyboard",
+      "role": "brief",
+      "ok": true
+    },
+    {
+      "from": "brief",
+      "to": "video",
+      "role": "brief",
+      "ok": true
+    },
+    {
+      "from": "brief",
+      "to": "format_set",
+      "role": "brief",
+      "ok": true
+    },
+    {
+      "from": "brief",
+      "to": "sketch",
+      "role": "brief",
+      "ok": false
+    },
+    {
+      "from": "brief",
+      "to": "shot",
+      "role": "brief",
+      "ok": false
+    },
+    {
+      "from": "brief",
+      "to": "script",
+      "role": "context",
+      "ok": false
+    },
+    {
+      "from": "script",
+      "to": "brief",
+      "role": "brief",
+      "ok": false
+    },
+    {
+      "from": "document",
+      "to": "script",
+      "role": "brief",
+      "ok": false
     }
   ]
 }

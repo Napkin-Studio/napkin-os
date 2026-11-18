@@ -11,7 +11,7 @@ export type LinkKind = NodeKind | OffCanvasKind
 /** A link's role. A reference link's label is the reference's own role (character, location, …). */
 export type LinkRole =
   | 'drives' | 'renders' | 'reference' | 'input' | 'note' | 'context' | 'brand'
-  | 'master' | 'frame' | 'layout' | 'made_from' | 'note_on_shot'
+  | 'master' | 'frame' | 'layout' | 'made_from' | 'note_on_shot' | 'brief'
 
 /** One end of a link: a kind, a board's purpose ('brand'), or a reference's role ('product', 'key_visual'). */
 export interface LinkEnd {
@@ -111,11 +111,20 @@ export const LINK_TABLE: readonly LinkRow[] = [
     effect: 'Attaches the ink as a note on that shot (artboard 5).',
     sources: [{ kind: 'ink_group' }], targets: [{ kind: 'shot' }], roles: ['note_on_shot'], limit: 'many',
   },
+  // features/brief-node.clan (owner 2026-11-17): a Brief node feeds what makes the film, never a sketch
+  // or a shot. One brief per node; a Script's brief carries on to the Storyboard and Video it drives
+  // (model/scope.ts) unless they have one of their own.
+  {
+    fromTo: 'Brief → Script, Storyboard, Video or Format set', roleLabel: '`brief`', allowed: 'One brief per node',
+    effect: 'The brief\'s spine goes with every job from that node (and from what its Script drives), within each op\'s budget.',
+    sources: [{ kind: 'brief' }], targets: [{ kind: 'script' }, { kind: 'storyboard' }, { kind: 'video' }, { kind: 'format_set' }],
+    roles: ['brief'], limit: 'one-per-target',
+  },
 ]
 
 /** The refusals of 3.4, as written. */
 export const REFUSALS = [
-  { fromTo: 'Anything → Reference, Product, Document or Brand board', allowed: 'Refused', effect: 'These are inputs only.' },
+  { fromTo: 'Anything → Reference, Product, Document, Brief or Brand board', allowed: 'Refused', effect: 'These are inputs only.' },
   { fromTo: 'Video → anything but a Format set', allowed: 'Refused', effect: 'Video is an output; it can only be the master of a cut-down set.' },
   { fromTo: 'A link that would form a loop', allowed: 'Refused', effect: '"That would make a loop."' },
 ] as const
@@ -138,8 +147,8 @@ const matches = (m: Match | 'generating', e: LinkEnd) =>
     ? (GENERATING_KINDS as readonly string[]).includes(e.kind)
     : m.kind === e.kind && (m.purpose === undefined || m.purpose === e.purpose) && (m.role === undefined || m.role === e.role)
 
-/** Inputs only: nothing links into a reference, a product, a document or a brand board. */
-const inputOnly = (e: LinkEnd) => e.kind === 'picture' || e.kind === 'document' || (e.kind === 'board' && e.purpose === 'brand')
+/** Inputs only: nothing links into a reference, a product, a document, a brief or a brand board. */
+const inputOnly = (e: LinkEnd) => e.kind === 'picture' || e.kind === 'document' || e.kind === 'brief' || (e.kind === 'board' && e.purpose === 'brand')
 
 const SYSTEM_REASON: Partial<Record<LinkRole, string>> = {
   master: 'Made only by Make all sizes.',
@@ -204,6 +213,7 @@ const LIMIT_REASON: Partial<Record<LinkRole, string>> = {
   frame: 'This shot already has a frame.',
   layout: 'This shot already has a layout.',
   brand: 'This already has a brand board.',
+  brief: 'This already has a brief.',
 }
 
 function reaches(graph: LinkGraph, start: string, goal: string): boolean {

@@ -9,7 +9,7 @@
 
 import type { CustomData, ProductionDocument } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
-import { bareRemoval, deleteFrom, removeGen, removeNode, removeSketch, removeText, restoreTo, type NodeRemovalKind, type Removal } from '../doc/remove'
+import { bareRemoval, deleteFrom, removeBrief, removeGen, removeNode, removeSketch, removeText, restoreTo, type NodeRemovalKind, type Removal } from '../doc/remove'
 import { newId } from '../lib/ulid'
 import type { DocumentStore } from '../doc/types'
 import { systemUpdate } from '../doc/store'
@@ -44,7 +44,7 @@ function sketchId(e: SceneEl): string | undefined {
   return c && typeof c === 'object' && c.kind === 'sketch' && e.type === 'rectangle' ? c.id : undefined
 }
 
-const NODE_KINDS: readonly string[] = ['script', 'storyboard', 'video']
+const NODE_KINDS: readonly string[] = ['script', 'storyboard', 'video', 'brief']
 
 /** A node element's document entity (canvas-nodes' tag {kind, id}), as 'kind:id'. */
 function nodeKey(e: SceneEl): string | undefined {
@@ -170,10 +170,15 @@ export class CanvasDocSync {
     for (const k of now) this.nodesSeen.add(k)
     this.nodesAlive = now
     for (const k of gone) {
-      const [kind, id] = k.split(/:(.*)/s) as [NodeRemovalKind, string]
+      const [kind, id] = k.split(/:(.*)/s) as [NodeRemovalKind | 'brief', string]
       this.queue = this.queue.then(async () => {
         const store = this.deps.doc
         const d = store.get()
+        // A Brief node (features/brief-node.clan): its frozen copy goes with its links; undo brings both back.
+        if (kind === 'brief') {
+          if (d.briefs?.[id]) this.removals.set(k, await deleteFrom(store, (doc) => removeBrief(doc, id), { system: true }))
+          return
+        }
         const map = kind === 'script' ? d.scripts : kind === 'storyboard' ? d.storyboards : d.videos
         if (!map[id]) return
         // A storyboard made from a video's own shots (it keeps video_id): its shots go back to the video,
