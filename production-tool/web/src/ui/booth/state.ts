@@ -26,7 +26,7 @@ export function boothWidth(place: BoothPlace, scoped: boolean, windowWidth: numb
 }
 
 /** Whether the Booth may hide here. Below 1100 px the Script and Storyboard Booth stays a column; a room's
- *  may, since it starts hidden below 1280 px and its gutter keeps the tab off the work. */
+ *  may, since its gutter keeps the tab off the work. */
 export function boothCanHide(place: BoothPlace, windowWidth: number): boolean {
   return place === 'room' || windowWidth > BOOTH_NARROW
 }

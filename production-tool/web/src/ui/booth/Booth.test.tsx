@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The Booth, rendered (features/booth.clan; features/script-freeform.clan): Hide and the edge tab, the
 // remembered state per person, the width for each place, the count dot, a column below 1100 px, a room
-// starting hidden below 1280 px, an agent's question bringing it in, and reduced motion.
+// starting as the person left it on a laptop too, an agent's question bringing it in, and reduced motion.
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -112,14 +112,13 @@ describe('the Booth', () => {
     expect(b.col().style.getPropertyValue('--bw')).toBe('320px')
   })
 
-  it('in a room below 1280 px it starts hidden as its edge tab, without changing what is remembered', () => {
+  it('in a room on a laptop it starts as the person left it: open, or hidden when they hid it (live test 2026-11-18)', () => {
     const b = mount({ place: 'room' }, {}, 1200)
-    expect(b.open()).toBe(false)
-    expect(b.edge()?.classList.contains('on')).toBe(true)
+    expect(b.open()).toBe(true)
     expect(b.store.get().booth).toBeUndefined()
     act(() => root?.unmount())
     root = null
-    expect(mount({ place: 'room' }, {}, 1600).open()).toBe(true)
+    expect(mount({ place: 'room' }, { booth: { 'human:p_maya': 'hidden' } }, 1200).open()).toBe(false)
   })
 
   it('an agent asking while it is hidden pings the dot, then brings it in after about a second', () => {
