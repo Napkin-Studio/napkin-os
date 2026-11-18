@@ -62,6 +62,25 @@ describe('links', () => {
     expect(lit.lines.find((l) => l.to[0] === 900)!.alpha).toBe(1)
   })
 
+  it('with a look: the selection’s links lit, the rest step back; Show all links lights every one', () => {
+    const s = setup()
+    const r = new Renderer(s, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
+    r.linkLook = { stroke: '#111', lit: '#00f', label: '#111', labelBg: '#fff', labelLine: '#ccc', roles: [], strokeAlpha: 0.28, dimAlpha: 0.25 }
+    const alphaOf = (toX: number, toY: number) => {
+      const rec = recorder()
+      r.draw(rec.ctx, { scrollX: 0, scrollY: 0, zoom: 1 }, { width: 2000, height: 2000 }, 1)
+      return rec.lines.find((l) => l.to[0] === toX && l.to[1] === toY)!.alpha
+    }
+    // Nothing selected: every link resting in the faint ink.
+    expect(alphaOf(150, 400)).toBeCloseTo(0.28)
+    // The video selected: its link lit, the script's link to the storyboard steps back.
+    r.selected = new Set(['v'])
+    expect(alphaOf(500, 500)).toBe(1)
+    expect(alphaOf(150, 400)).toBeCloseTo(0.07)
+    r.linksAll = true
+    expect(alphaOf(150, 400)).toBe(1)
+  })
+
   it('a node is hit before what is under it, and a link along its line', () => {
     const s = setup()
     expect(hitNodeOrLink(s, { x: 10, y: 10 }, 1)?.id).toBe('s')

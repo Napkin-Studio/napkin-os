@@ -36,6 +36,9 @@ export interface CanvasChrome {
   selectedText?(): { size: number; color: string } | null
   /** Restyle the text being typed, or the selected texts (one undo step). */
   styleText?(change: { size?: number; color?: string }): void
+  /** "Show all links": every link lit; absent where the engine draws its links its own way. */
+  showAllLinks?(on: boolean): void
+  allLinksShown?(): boolean
   /** Called when the tool, the zoom, the selected sketch area or the selected text changes. */
   onChange(cb: () => void): () => void
 }

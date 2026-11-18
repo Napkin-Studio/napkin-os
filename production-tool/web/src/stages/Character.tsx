@@ -12,7 +12,7 @@ import type { ViewSnapshot } from '../canvas/core/canvasAdapter'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
 import { scriptRoute } from '../app/route'
-import { BoardRail, CanvasToolbar, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
+import { BoardRail, CanvasToolbar, LinksToggle, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
 import { boardFrames, boardRows, type BoardRow, type RailNode } from '../canvas/chrome/boards'
 import { BoardsLayer } from '../canvas/chrome/BoardsLayer'
 import { PRODUCTION_CARD_CHROME } from '../canvas/chrome/cardChrome'
@@ -805,6 +805,7 @@ export function Character({ initial, active, onPictureEditor }: {
         {narrow && <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow keys={!own} />}
         <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
+        {!showHint && <LinksToggle chrome={chrome} />}
       </div>
       <Booth state={booth} earned={boothEarned({ selection: !!selBrief, library: panels.assets })}>
         {selBrief ? <BriefBooth briefId={selBrief} onClose={() => canvas?.select([])} />

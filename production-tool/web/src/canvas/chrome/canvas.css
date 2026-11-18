@@ -54,6 +54,11 @@
 .canvas-toolbar.rail .tb-tool.on, :root[data-theme='dark'] .canvas-toolbar.rail .tb-tool.on { background: var(--ag-act); color: var(--ag-act-ink); }
 .canvas-toolbar.rail .tb-node { background: transparent; padding: 0; }
 
+/* ── Show all links (mock v2 .cv-links: bottom right) ──────────────────────── */
+.cv-links { position: absolute; right: 14px; bottom: 14px; z-index: 5; }
+.cv-links .sp-btn { height: 30px; box-shadow: var(--shadow-card, none); }
+.cv-links .sp-btn svg { width: 14px; height: 14px; }
+
 /* ── Zoom and undo (mock v2 .cv-zoom: bottom left) ─────────────────────────── */
 .zoom-pill {
   position: absolute; left: 14px; bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 2px; padding: 3px;

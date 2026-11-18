@@ -73,7 +73,10 @@ export function surfaceOf(host: HTMLElement, theme: 'light' | 'dark'): Surface {
     },
     link: {
       stroke: v('--ink') || '#16181D',
-      lit: v('--tool') || '#2F64F5',
+      // Lit in the agency's base (its accent on dark), as the mock's .links path.lit.
+      lit: (theme === 'dark' ? v('--ag-acc') : v('--ag-base')) || v('--tool') || '#2F64F5',
+      strokeAlpha: 0.28,
+      dimAlpha: 0.25,
       label: v('--ink2') || '#4A4F5C',
       labelBg: v('--card') || '#FFFFFF',
       labelLine: v('--line'),

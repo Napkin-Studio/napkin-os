@@ -349,3 +349,23 @@ export function ZoomPill({ chrome, touch = false }: { chrome: CanvasChrome | nul
     </div>
   )
 }
+
+// ── Show all links ─────────────────────────────────────────────────────────
+
+/**
+ * Bottom right (mock v2 .cv-links): with a node selected only its own links are lit and the rest step
+ * back; this lights every link, and "Hide links" puts them back. Only where the engine draws its own links.
+ */
+export function LinksToggle({ chrome }: { chrome: CanvasChrome | null }) {
+  const sub = useCallback((cb: () => void) => (chrome ? chrome.onChange(cb) : () => {}), [chrome])
+  const on = useSyncExternalStore(sub, () => !!chrome?.allLinksShown?.(), () => false)
+  if (!chrome?.showAllLinks) return null
+  return (
+    <div className="cv-links" data-float-avoid="">
+      <button type="button" className="sp-btn" aria-pressed={on} onClick={() => chrome.showAllLinks!(!on)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+        {on ? 'Hide links' : 'Show all links'}
+      </button>
+    </div>
+  )
+}

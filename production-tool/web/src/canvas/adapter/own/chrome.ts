@@ -44,6 +44,8 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       return e ? { id: e.id, ratio: areaRatio(e) } : null
     },
     copySketch: (r) => !!a.copySketchArea(r),
+    showAllLinks: (on) => a.showAllLinks(on),
+    allLinksShown: () => a.allLinksShown(),
     zoom: () => a.view().zoom,
     zoomBy: (step) => {
       const v = a.view()
@@ -64,7 +66,7 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       return a.onChange(() => {
         const t = a.activeTool()
         const txt = a.selectedText()
-        const sig = `${t.type}:${t.id}|${a.view().zoom}|${a.selectedSketchArea()?.id ?? ''}|${txt ? `${txt.size}:${txt.color}` : ''}`
+        const sig = `${t.type}:${t.id}|${a.allLinksShown() ? 1 : 0}|${a.view().zoom}|${a.selectedSketchArea()?.id ?? ''}|${txt ? `${txt.size}:${txt.color}` : ''}`
         if (sig !== last) {
           last = sig
           cb()
