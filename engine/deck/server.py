@@ -345,7 +345,10 @@ class Server:
         order = ORDER[req["kind"]]
         stop = order.index(until) if until in order else len(order) - 1
         for key in order[: stop + 1]:
-            for fn in STAGE_FILES[key]:
+            names = list(STAGE_FILES[key])
+            if key == "final" and self.s.replay and self.s.replay.is_dir():
+                names += sorted(p.name for p in self.s.replay.glob("e_repair_*.json") if p.name not in names)   # shorten recordings are named by request hash
+            for fn in names:
                 src = self.s.replay / fn
                 if src.exists() and not (d.stages / fn).exists():
                     shutil.copyfile(src, d.stages / fn)

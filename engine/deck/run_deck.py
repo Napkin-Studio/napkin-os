@@ -250,7 +250,7 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
             break
     ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm}, "swaps": swaps, "base_deck": base_deck,
            "pinned": pinned, "out": out, "stages": a.stages, "live": a.live, "approve_shorten": a.approve_shorten, "call_fn": call_fn, "spent": spent,
-           "run_cap": repair.run_cap(), "record": record, "render_fn": render_fn, "pdf_fn": pdf_fn, "qa_fn": qa_fn}
+           "run_cap": repair.run_cap(), "shorten_ledger": _shorten_ledger(a, inp, deck), "record": record, "render_fn": render_fn, "pdf_fn": pdf_fn, "qa_fn": qa_fn}
     iss0 = repair.I.derive(findings, qa, deck, policy, 0)
     (out / "issues.json").write_text(json.dumps(iss0, indent=1, ensure_ascii=False))
     if not policy["max_rounds"] or not [i for i in iss0 if i["severity"] in policy["repair_on"] and i["source"] != "critic"]:
@@ -484,15 +484,20 @@ def _picture_style(a, deck_ctx, client: str):
     return vstyle.load(None)
 
 
-def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, deck_ctx, rep: dict):
-    """The picture step (deck-image-gen), between the placed pictures and the layout plan. Prints the open card(s); makes pictures only for a
-    ``--yes-cost`` that names a card's id. Returns what imagegen.step returns."""
+def _add_marks(a, inp) -> None:
+    """``--marks FILE`` adds to the marks the document carried (an empty list is a real answer: the marks are known). Applied once, at load, so the picture step and
+    the paid shorten request both see them."""
     if a.marks:   # marks given by hand only ADD to the ones the document carried, and must be well formed
         raw = json.loads(a.marks.read_text())
         raw = raw.get("marks", raw) if isinstance(raw, dict) and "marks" in raw else raw
         if not (isinstance(raw, list) and all(isinstance(m, dict) and isinstance(m.get("text"), str) and m["text"].strip() and isinstance(m.get("path", ""), str) for m in raw)):
             raise SystemExit("refused: --marks must be a list of {path, text, kind} objects, each with non-empty text (an empty list adds nothing)")
         inp.marks = (inp.marks or []) + raw
+
+
+def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, deck_ctx, rep: dict):
+    """The picture step (deck-image-gen), between the placed pictures and the layout plan. Prints the open card(s); makes pictures only for a
+    ``--yes-cost`` that names a card's id. Returns what imagegen.step returns."""
     try:
         if a.images_reviewed:
             imagegen.record_safe_review(review, inp, deck, a.by)
@@ -511,6 +516,16 @@ def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, dec
                      "made": (res["made"] or {}).get("created", 0), "stopped": (res["made"] or {}).get("stopped"),
                      "held": [f"{r['slide']}.{r['slot']}: {r.get('reason')}" for r in res["plan"]["slots"].values() if r["status"] in ("held", "rejected")]}
     return res
+
+
+def _shorten_ledger(a, inp, deck: dict):
+    """The deck's lifetime ledger of shorten spend: a file beside the picture ledger, counted under the same deck id, outside any stages folder, so deleting a cache
+    cannot lower what the deck has spent. Only a live build uses it."""
+    if not a.live:
+        return None
+    from visuals import jobs as vjobs   # noqa: PLC0415
+    led = a.ledger or Path(os.environ.get("NAPKIN_DECK_LEDGER") or Path.home() / ".napkin" / "deck-images" / "ledger.jsonl")
+    return vjobs.Ledger(led.with_name(led.stem + ".shorten.jsonl"), a.deck_id or _deck_id(a, inp, deck))
 
 
 def _deck_id(a, inp, deck: dict) -> str:
@@ -695,6 +710,7 @@ def main(argv=None):
             inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
         except inputs.MarksError as e:
             raise SystemExit(f"refused: {e}")
+    _add_marks(a, inp)
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
     choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
     profile = profiles.load(choice["type"])

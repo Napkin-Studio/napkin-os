@@ -230,10 +230,11 @@ def slide_text(s: dict) -> str:
     return "\n".join([s.get("title", "")] + [t for b in s["blocks"] for t in ledger.block_texts(b)])
 
 
-def build_request(deck_kept: dict, work_base: dict, targets: list, library: dict, policy: dict, audience: str) -> list:
+def build_request(deck_kept: dict, work_base: dict, targets: list, library: dict, policy: dict, audience: str, deny: dict | None = None) -> list:
     """The shorten request, one entry per target slot (at most ``policy.shorten.max_slots_per_round``): ``{slide (title), slot, role, max_chars,
     max_words, fields: [{id, text}]}``. Fields are the slot's eligible fields only (``eligible_fields``), their text the CURRENT words. A slot
-    with nothing eligible, or whose blocks draw on a part marked Confidential with model false, is not sent (the caller lists it).
+    with nothing eligible, or whose blocks draw on a part marked Confidential with model false, or whose words or title name a marked text
+    (``deny`` is ``lint.deny_list(inp.marks)``), is not sent (the caller lists it).
     ``targets`` is ``[(slide id, slot, measured, limit)]``."""
     out, cap = [], (policy.get("shorten") or {}).get("max_slots_per_round", 12)
     for sid, slot, measured, limit in targets:
@@ -257,6 +258,8 @@ def build_request(deck_kept: dict, work_base: dict, targets: list, library: dict
             fields += [{"id": f, "text": _field_text(work_base, sid, f)} for f, _, _ in eligible_fields(w, bi, frozenset(mv) if isinstance(mv, set) else frozenset())]
         if not fields or any(_confidential(w, int(f["id"].split(".")[0])) for f in fields):
             continue
+        if deny and _marked(deny, [s.get("title", ""), *(f["text"] for f in fields)]):   # a marked phrase never goes into a paid request
+            continue
         chars = sum(len(f["text"]) for f in fields)
         cap_chars = min(int(limit) if limit else chars, max(1, int(chars * 0.9)))
         cap_chars = max(cap_chars, int(chars * (1 - (policy.get("shorten") or {}).get("max_cut_ratio", 0.35))))
@@ -264,6 +267,12 @@ def build_request(deck_kept: dict, work_base: dict, targets: list, library: dict
         out.append({"slide": s["title"], "slot": slot, "role": lay["slots"][slot].get("role", "body"), "max_chars": cap_chars,
                     "max_words": max(1, int(words * cap_chars / max(chars, 1))), "fields": fields})
     return out
+
+
+def _marked(deny: dict, texts) -> bool:
+    """True when any of these texts carries a phrase the person marked Confidential (visuals.lint.confidential_hit against the deny list)."""
+    from visuals import lint   # noqa: PLC0415
+    return any(lint.confidential_hit(str(t), deny) for t in texts if t)
 
 
 def _confidential(s: dict, bi: int) -> bool:
@@ -644,23 +653,54 @@ def choose(issue: dict, env: dict, skipped: list, defer_shorten: bool = True) ->
 
 
 # ---------------------------------------------------------------------------------------------------- the paid rung
+def _deny(ctx: dict):
+    """The deny list of the deck's marked texts, or None when there are no marks to apply."""
+    marks = getattr(ctx.get("inp"), "marks", None)
+    if not marks:
+        return None
+    from visuals import lint   # noqa: PLC0415
+    return lint.deny_list(marks)
+
+
+def shorten_spent(led) -> float:
+    """What this deck's shorten calls have cost in its lifetime ledger: per send, the last row's USD (the card's upper bound until the call settles, then the
+    measured figure). A call that died before it settled stays at its upper bound, so a crash never frees budget."""
+    last = {}
+    for r in led.lines() if led else []:
+        if r.get("kind") == "shorten":
+            last[r.get("send")] = float(r.get("usd") or 0)
+    return round(sum(last.values()), 4)
+
+
+def recording_path(stages, n: int, rsha: str) -> Path:
+    """Where a shorten reply is kept: named by its request's hash, so a reply is never overwritten by another request's."""
+    return Path(stages) / f"e_repair_{rsha}.json"
+
+
 def get_reply(ctx: dict, n: int, request: list, skipped: list) -> tuple:
-    """The shorten reply for round ``n``: ``(edits [{slide, slot, field, text}], row for report.json)``. A recording whose ``request_sha`` matches is
-    read; a stale one is listed and never applied. With no recording the call is made only with ``--live``, under both caps (policy.max_usd for
-    the deck, NAPKIN_DECK_MAX_USD for the run), after printing its cost card. A call that raises (a refusal too) is caught, skipped and listed."""
+    """The shorten reply for round ``n``: ``(edits [{slide, slot, field, text}], row for report.json)``. A recording of this request (its file is named by the
+    request's hash and is never overwritten) is read; one made for another request is listed and never applied. With no recording the call is made only
+    with ``--live``, with the marks known, under the caps (policy.max_usd for the deck's whole life, counted in its ledger; NAPKIN_DECK_MAX_USD for the run),
+    after printing its cost card. A call that raises (a refusal too) is caught, skipped and listed."""
+    import contextlib
+    import uuid
     rsha = sha(request)
-    path = Path(ctx["stages"]) / f"e_repair_{n}.json" if ctx.get("stages") else None
+    stages_dir = Path(ctx["stages"]) if ctx.get("stages") else None
+    path = recording_path(stages_dir, n, rsha) if stages_dir else None
+    legacy = stages_dir / f"e_repair_{n}.json" if stages_dir else None   # recordings made before the files were named by request hash
     card = estimate(request)
     row = {"source": "skipped", "request_sha": rsha, "cost_card": card}
-    if path is not None and path.exists():
+    for cand in (path, legacy):
+        if cand is None or not cand.exists():
+            continue
         try:
-            obj = json.loads(path.read_text())
+            obj = json.loads(cand.read_text())
         except ValueError:
             obj = {}
         if obj.get("request_sha") == rsha:
             row.update(source="recorded", produced_by=obj.get("produced_by"), **(obj.get("usage") or {}))
             return obj.get("edits") or [], row
-        skipped.append({"slide": None, "slot": None, "rung": "shorten", "why": f"the recording e_repair_{n}.json was made for another request (stale), so it is not applied"})
+        skipped.append({"slide": None, "slot": None, "rung": "shorten", "why": f"the recording {cand.name} was made for another request (stale), so it is not applied"})
         row["why"] = "stale recording"
         if not ctx["live"]:
             return None, row
@@ -668,14 +708,25 @@ def get_reply(ctx: dict, n: int, request: list, skipped: list) -> tuple:
         skipped.append({"slide": None, "slot": None, "rung": "shorten", "why": "this build was not live and no recording matches"})
         row["why"] = "not live"
         return None, row
-    left_policy = float(ctx["policy"].get("max_usd", 0.6)) - ctx["usd"][0]
-    left_run = ctx["run_cap"] - ctx["spent"]() - ctx["usd"][0]
-    card.update(policy_left=round(left_policy, 4), run_left=round(left_run, 4))
-    if card["usd_upper"] > left_policy or card["usd_upper"] > left_run:
-        why = "the estimated cost would pass the deck's cap" if card["usd_upper"] > left_policy else "the estimated cost would pass the run's cap (NAPKIN_DECK_MAX_USD)"
+    if getattr(ctx.get("inp"), "marks", None) is None:   # fail closed, as pictures do: with no mark data it cannot be known whether a request carries a marked part
+        why = "no mark data, so a paid shorten request is refused (give the marks, even an empty list)"
         skipped.append({"slide": None, "slot": None, "rung": "shorten", "why": why})
         row["why"] = why
         return None, row
+    led = ctx.get("shorten_ledger")
+    send = uuid.uuid4().hex[:12]
+    with (led.locked() if led else contextlib.nullcontext()):   # the check and the marker are one step under the lock, so two builds cannot both pass it
+        life = shorten_spent(led) if led else ctx["usd"][0]
+        left_policy = float(ctx["policy"].get("max_usd", 0.6)) - life
+        left_run = ctx["run_cap"] - ctx["spent"]() - ctx["usd"][0]
+        card.update(policy_left=round(left_policy, 4), run_left=round(left_run, 4))
+        if card["usd_upper"] > left_policy or card["usd_upper"] > left_run:
+            why = "the estimated cost would pass the deck's cap" if card["usd_upper"] > left_policy else "the estimated cost would pass the run's cap (NAPKIN_DECK_MAX_USD)"
+            skipped.append({"slide": None, "slot": None, "rung": "shorten", "why": why})
+            row["why"] = why
+            return None, row
+        if led:
+            led.append({"kind": "shorten", "send": send, "request": rsha, "usd": card["usd_upper"], "state": "sending"})
     print(f"Repair shorten, cost card: {card['slots']} slots, about {card['tokens_in']} tokens in, up to {card['tokens_out']} out, at most {card['usd_upper']:.3f} USD "
           f"(deck cap left {left_policy:.2f}, run cap left {left_run:.2f})")
     try:
@@ -685,8 +736,11 @@ def get_reply(ctx: dict, n: int, request: list, skipped: list) -> tuple:
         skipped.append({"slide": None, "slot": None, "rung": "shorten", "why": why})
         row["why"] = why
         return None, row
+    if led:
+        with led.locked():
+            led.append({"kind": "shorten", "send": send, "request": rsha, "usd": float(usage.get("usd") or 0), "state": "settled"})
     obj = {**obj, "stage": "e_repair", "round": n, "request_sha": rsha, "request": request, "usage": usage}
-    if path is not None:
+    if path is not None and not path.exists():   # never overwritten: another request has its own hash
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(obj, indent=1, ensure_ascii=False))
     ctx["usd"][0] += float(usage.get("usd") or 0)
@@ -936,7 +990,7 @@ def run(ctx: dict, m0: dict) -> dict:
             cands = [a for a in actions if a["rung"] == "shorten"]
             if cands:
                 targets = [(a["issue"]["slide"], a["issue"]["slot"], (a["issue"].get("evidence") or {}).get("measured"), (a["issue"].get("evidence") or {}).get("limit")) for a in cands]
-                request = build_request(kept["deck"], work_kept, targets, ctx["library"], policy, ctx["audience"])
+                request = build_request(kept["deck"], work_kept, targets, ctx["library"], policy, ctx["audience"], deny=_deny(ctx))
                 request_sent = request
                 edits, row = (None, None)
                 if request:

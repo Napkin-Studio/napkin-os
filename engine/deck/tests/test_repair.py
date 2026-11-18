@@ -552,7 +552,9 @@ def test_the_free_rungs_run_without_a_recording_and_a_text_move_needs_condense()
 
 # ---------------------------------------------------------------------------------------------------- FIX 7: a failing or refused call, and the caps
 def _ctx(call_fn, live=True, cap=2.0, spent=0.0, policy=None, stages_dir=None):
-    return {"live": live, "stages": stages_dir, "policy": policy or POLICY, "call_fn": call_fn, "usd": [0.0], "run_cap": cap, "spent": lambda: spent}
+    import types
+    return {"live": live, "stages": stages_dir, "policy": policy or POLICY, "call_fn": call_fn, "usd": [0.0], "run_cap": cap, "spent": lambda: spent,
+            "inp": types.SimpleNamespace(marks=[])}   # marks known (an empty list is an answer): a live shorten request is allowed
 
 
 REQ = [{"slide": "T", "slot": "lead", "role": "body", "max_chars": 30, "max_words": 6, "fields": [{"id": "1", "text": LONG}]}]

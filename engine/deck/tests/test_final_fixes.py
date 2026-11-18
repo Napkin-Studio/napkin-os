@@ -114,3 +114,107 @@ def test_text_mode_and_pins_change_the_out_folder_but_not_the_stages_key():
     c = server.out_key({**base, "review": {"pinned": {"s03": {}}}})
     assert len({"", a, b, c}) == 4
     assert server.inputs_key(base) == server.inputs_key({**base, "text_mode": "preserve"})   # the paid stages stay cached
+
+
+# ---------------------------------------------------------------- 3: the slot checks are raised, so l_slots_clean can answer
+
+def test_a_slot_missing_error_makes_l_slots_clean_no():
+    import tempfile
+    import test_checklist as TC
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t)
+        clean = TC.answer(TC.make(t / "c", deck_edit=TC.with_image()), "l_slots_clean")
+        assert clean["answer"] == "yes", clean
+        bad = TC.make(t / "b", deck_edit=TC.with_image(), validation=[{"check": "slot_missing", "slide": "s4", "level": "error", "message": "x"}])
+        got = TC.answer(bad, "l_slots_clean")
+        assert got["answer"] == "no", got
+
+
+def test_no_raised_name_is_reserved():
+    from deck import spec
+    for name in ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown"):
+        assert name not in spec.RESERVED_CHECKS and name in spec.ISSUE_CHECKS
+
+
+# ---------------------------------------------------------------- 4: shorten recordings by request hash, and a lifetime shorten ledger
+
+def _shorten_ctx(tmp_path, led, call_fn, marks=()):
+    import test_repair as TR
+    return {**TR._ctx(call_fn, stages_dir=tmp_path / "st"), "shorten_ledger": led, "inp": __import__("types").SimpleNamespace(marks=list(marks))}
+
+
+def test_shorten_recordings_are_named_by_request_hash_and_never_overwritten(tmp_path):
+    import test_repair as TR
+    from deck import repair
+    (tmp_path / "st").mkdir()
+    req2 = [{**TR.REQ[0], "slot": "other"}]
+    fn = lambda r: ({"edits": [{"slide": "T", "slot": r[0]["slot"], "field": "1", "text": "x"}]}, {"usd": 0.01})
+    ctx = _shorten_ctx(tmp_path, None, fn)
+    repair.get_reply(ctx, 1, TR.REQ, [])
+    repair.get_reply(ctx, 1, req2, [])   # the same round number, another request: the first recording must survive
+    files = sorted(p.name for p in (tmp_path / "st").glob("e_repair_*.json"))
+    assert files == sorted([f"e_repair_{repair.sha(TR.REQ)}.json", f"e_repair_{repair.sha(req2)}.json"]), files
+
+
+def test_two_rebuilds_cannot_each_spend_the_deck_cap(tmp_path):
+    import test_repair as TR
+    from deck import repair
+    from visuals import jobs
+    (tmp_path / "st").mkdir()
+    called = []
+    fn = lambda r: called.append(r) or ({"edits": []}, {"usd": 0.5})
+    led_path = tmp_path / "ledger.shorten.jsonl"
+    req2 = [{**TR.REQ[0], "slot": "other"}]
+    # two builds of the same deck: each starts with ctx["usd"] at 0 (a fresh process) but they share the deck's lifetime ledger
+    e1, r1 = repair.get_reply(_shorten_ctx(tmp_path, jobs.Ledger(led_path, "deck-1"), fn), 1, TR.REQ, [])
+    skipped = []
+    e2, r2 = repair.get_reply(_shorten_ctx(tmp_path, jobs.Ledger(led_path, "deck-1"), fn), 1, req2, skipped)
+    assert e1 == [] and r1["source"] == "live" and len(called) == 1
+    assert e2 is None and "deck's cap" in skipped[0]["why"] and len(called) == 1, "the second rebuild must not spend another 0.60"
+    assert repair.shorten_spent(jobs.Ledger(led_path, "deck-1")) == 0.5
+    # another deck has its own budget
+    assert repair.get_reply(_shorten_ctx(tmp_path, jobs.Ledger(led_path, "deck-2"), fn), 1, req2, [])[1]["source"] == "live"
+
+
+def test_a_call_that_dies_before_it_settles_still_counts_at_its_upper_bound(tmp_path):
+    import test_repair as TR
+    from deck import repair
+    from visuals import jobs
+    (tmp_path / "st").mkdir()
+
+    def die(r):
+        raise TimeoutError("lost")
+    led = jobs.Ledger(tmp_path / "l.jsonl", "d")
+    repair.get_reply(_shorten_ctx(tmp_path, led, die), 1, TR.REQ, [])
+    assert repair.shorten_spent(led) == repair.estimate(TR.REQ)["usd_upper"] > 0
+
+
+# ---------------------------------------------------------------- 5: marked text never goes into a paid shorten request
+
+def test_a_marked_phrase_never_appears_in_a_shorten_request(tmp_path, monkeypatch):
+    import shutil
+    import test_repair as TR
+    stages_dir = tmp_path / "stages"
+    shutil.copytree(TR.REPAIR_FX / "overlong", stages_dir)
+    marks = tmp_path / "marks.json"
+    marks.write_text(json.dumps([{"path": "brief.x", "text": "every household sees its own water story", "kind": "confidential"}]))
+    (stages_dir / "e_repair_1.json").write_text("{}")   # makes the rung available; get_reply is replaced below
+    seen = TR.capture_request(monkeypatch, lambda r: [])
+    TR.build(tmp_path / "o", TR.fake_qa({TR.S: TR.too_long(TR.SLOT, TR.CAP, TR.BLOCK)}, "word_budget"), "--text-mode", "condense", "--marks", str(marks), stages_dir=stages_dir)
+    assert not any("household sees its own water story" in json.dumps(r) for r in seen), "a marked phrase went into a shorten request"
+    # control: with no marks the same deck does send that slot
+    seen2 = TR.capture_request(monkeypatch, lambda r: [])
+    TR.build(tmp_path / "o2", TR.fake_qa({TR.S: TR.too_long(TR.SLOT, TR.CAP, TR.BLOCK)}, "word_budget"), "--text-mode", "condense", stages_dir=stages_dir)
+    assert any("household sees its own water story" in json.dumps(r) for r in seen2)
+
+
+def test_with_no_mark_data_a_live_shorten_is_refused_and_nothing_is_sent(tmp_path):
+    import test_repair as TR
+    from deck import repair
+    called = []
+    ctx = {**TR._ctx(lambda r: called.append(r) or ({"edits": []}, {"usd": 0.01})), "inp": __import__("types").SimpleNamespace(marks=None)}
+    skipped = []
+    edits, row = repair.get_reply(ctx, 1, TR.REQ, skipped)
+    assert edits is None and called == [] and "no mark data" in skipped[0]["why"]
+    ctx["inp"] = __import__("types").SimpleNamespace(marks=[])   # an empty list is a real answer
+    assert repair.get_reply(ctx, 1, TR.REQ, [])[0] == [] and len(called) == 1
