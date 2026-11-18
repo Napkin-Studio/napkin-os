@@ -26,12 +26,7 @@
      "answer": "yes"
     },
     "g_no_major": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1,
-     "limit": 0
+     "answer": "yes"
     },
     "g_checks_current": {
      "answer": "yes"
@@ -101,12 +96,7 @@
      "limit": 9
     },
     "l_slots_clean": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1,
-     "limit": 0
+     "answer": "yes"
     },
     "w_type_budget": {
      "answer": "yes"
@@ -216,7 +206,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.3,
+     "value": 5.1,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -227,13 +217,12 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "layout_plan": 0.04,
+      "layout_plan": 0.059,
       "validate": 0.01,
       "render_pptx": 0.17,
       "render_web": 0.0,
-      "render_pdf_png": 4.57,
-      "qa_render": 0.33,
-      "repair": 0.17
+      "render_pdf_png": 4.49,
+      "qa_render": 0.33
      }
     },
     "w_words_sha": {
@@ -241,8 +230,7 @@
      "value": "363d4221c4e6"
     },
     "w_notes_kept": {
-     "answer": "n/a",
-     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+     "answer": "yes"
     },
     "k_palette_only": {
      "answer": "n/a",
@@ -254,16 +242,16 @@
     }
    },
    "summary": {
-    "yes": 27,
-    "no": 5,
-    "na": 14,
+    "yes": 30,
+    "no": 3,
+    "na": 13,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 14,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.3,
+     "m_seconds": 5.1,
      "w_words_sha": "363d4221c4e6"
     }
    }
@@ -292,12 +280,7 @@
      "answer": "yes"
     },
     "g_no_major": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1,
-     "limit": 0
+     "answer": "yes"
     },
     "g_checks_current": {
      "answer": "yes"
@@ -373,12 +356,7 @@
      "limit": 9
     },
     "l_slots_clean": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1,
-     "limit": 0
+     "answer": "yes"
     },
     "w_type_budget": {
      "answer": "yes"
@@ -483,7 +461,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.0,
+     "value": 4.9,
      "stages": {
       "inputs": 0.0,
       "a0": 0,
@@ -493,13 +471,12 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "layout_plan": 0.019,
+      "layout_plan": 0.017,
       "validate": 0.01,
-      "render_pptx": 0.09,
+      "render_pptx": 0.1,
       "render_web": 0.0,
-      "render_pdf_png": 4.45,
-      "qa_render": 0.28,
-      "repair": 0.14
+      "render_pdf_png": 4.48,
+      "qa_render": 0.29
      }
     },
     "w_words_sha": {
@@ -507,8 +484,7 @@
      "value": "2003ece26ded"
     },
     "w_notes_kept": {
-     "answer": "n/a",
-     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+     "answer": "yes"
     },
     "k_palette_only": {
      "answer": "n/a",
@@ -520,16 +496,16 @@
     }
    },
    "summary": {
-    "yes": 28,
-    "no": 4,
-    "na": 14,
+    "yes": 31,
+    "no": 2,
+    "na": 13,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
      "m_median_words": 4,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.0,
+     "m_seconds": 4.9,
      "w_words_sha": "2003ece26ded"
     }
    }
@@ -721,7 +697,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 4.2,
+     "value": 4.3,
      "stages": {
       "inputs": 0.0,
       "i": 0,
@@ -729,11 +705,11 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "layout_plan": 0.01,
+      "layout_plan": 0.009,
       "validate": 0.01,
       "render_pptx": 0.04,
       "render_web": 0.0,
-      "render_pdf_png": 4.02,
+      "render_pdf_png": 4.09,
       "qa_render": 0.12
      }
     },
@@ -764,7 +740,7 @@
      "m_median_words": 10,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 4.2,
+     "m_seconds": 4.3,
      "w_words_sha": "20fddf54b073"
     }
    }
@@ -793,12 +769,7 @@
      "answer": "yes"
     },
     "g_no_major": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1,
-     "limit": 0
+     "answer": "yes"
     },
     "g_checks_current": {
      "answer": "yes"
@@ -871,12 +842,7 @@
      "limit": 15
     },
     "l_slots_clean": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1,
-     "limit": 0
+     "answer": "yes"
     },
     "w_type_budget": {
      "answer": "yes"
@@ -986,7 +952,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.9,
+     "value": 5.7,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -997,13 +963,12 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "layout_plan": 0.255,
+      "layout_plan": 0.273,
       "validate": 0.01,
-      "render_pptx": 0.18,
+      "render_pptx": 0.17,
       "render_web": 0.0,
-      "render_pdf_png": 4.75,
-      "qa_render": 0.46,
-      "repair": 0.18
+      "render_pdf_png": 4.76,
+      "qa_render": 0.45
      }
     },
     "w_words_sha": {
@@ -1011,8 +976,7 @@
      "value": "d62d948a67a9"
     },
     "w_notes_kept": {
-     "answer": "n/a",
-     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+     "answer": "yes"
     },
     "k_palette_only": {
      "answer": "n/a",
@@ -1024,16 +988,16 @@
     }
    },
    "summary": {
-    "yes": 27,
-    "no": 5,
-    "na": 14,
+    "yes": 30,
+    "no": 3,
+    "na": 13,
     "metrics": {
      "m_share_le_30": 0.933,
      "m_share_le_60": 1.0,
      "m_median_words": 9,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.9,
+     "m_seconds": 5.7,
      "w_words_sha": "d62d948a67a9"
     }
    }
@@ -1071,7 +1035,7 @@
      "slides": [
       "s01"
      ],
-     "measured": 2,
+     "measured": 1,
      "limit": 0
     },
     "g_checks_current": {
@@ -1148,11 +1112,10 @@
     "l_slots_clean": {
      "answer": "no",
      "slides": [
-      "s01",
       "s08",
       "s09"
      ],
-     "measured": 5,
+     "measured": 4,
      "limit": 0
     },
     "w_type_budget": {
@@ -1278,7 +1241,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 6.8,
+     "value": 18.6,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -1289,13 +1252,13 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "layout_plan": 0.042,
+      "layout_plan": 0.062,
       "validate": 0.01,
       "render_pptx": 0.22,
-      "render_web": 0.01,
-      "render_pdf_png": 5.49,
+      "render_web": 0.04,
+      "render_pdf_png": 5.63,
       "qa_render": 0.65,
-      "repair": 0.23
+      "repair": 11.82
      }
     },
     "w_words_sha": {
@@ -1303,8 +1266,7 @@
      "value": "34b876357189"
     },
     "w_notes_kept": {
-     "answer": "n/a",
-     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+     "answer": "yes"
     },
     "k_palette_only": {
      "answer": "no",
@@ -1334,9 +1296,9 @@
     }
    },
    "summary": {
-    "yes": 31,
+    "yes": 32,
     "no": 11,
-    "na": 3,
+    "na": 2,
     "metrics": {
      "m_share_le_30": 0.947,
      "m_share_le_60": 1.0,
@@ -1344,7 +1306,7 @@
      "m_creative_pictured": 0.556,
      "p_all_approved": 0.0,
      "m_usd": 0,
-     "m_seconds": 6.8,
+     "m_seconds": 18.6,
      "w_words_sha": "34b876357189"
     }
    }
@@ -1373,12 +1335,7 @@
      "answer": "yes"
     },
     "g_no_major": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1,
-     "limit": 0
+     "answer": "yes"
     },
     "g_checks_current": {
      "answer": "yes"
@@ -1448,12 +1405,7 @@
      "limit": 9
     },
     "l_slots_clean": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1,
-     "limit": 0
+     "answer": "yes"
     },
     "w_type_budget": {
      "answer": "yes"
@@ -1563,7 +1515,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.1,
+     "value": 5.0,
      "stages": {
       "inputs": 0.0,
       "a0": 0,
@@ -1575,13 +1527,12 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "layout_plan": 0.037,
+      "layout_plan": 0.058,
       "validate": 0.01,
       "render_pptx": 0.13,
       "render_web": 0.0,
-      "render_pdf_png": 4.44,
-      "qa_render": 0.31,
-      "repair": 0.15
+      "render_pdf_png": 4.5,
+      "qa_render": 0.31
      }
     },
     "w_words_sha": {
@@ -1589,8 +1540,7 @@
      "value": "9e74ee2219de"
     },
     "w_notes_kept": {
-     "answer": "n/a",
-     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+     "answer": "yes"
     },
     "k_palette_only": {
      "answer": "n/a",
@@ -1602,16 +1552,16 @@
     }
    },
    "summary": {
-    "yes": 27,
-    "no": 5,
-    "na": 14,
+    "yes": 30,
+    "no": 3,
+    "na": 13,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 14,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.1,
+     "m_seconds": 5.0,
      "w_words_sha": "9e74ee2219de"
     }
    }
@@ -1640,12 +1590,7 @@
      "answer": "yes"
     },
     "g_no_major": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1,
-     "limit": 0
+     "answer": "yes"
     },
     "g_checks_current": {
      "answer": "yes"
@@ -1704,10 +1649,9 @@
     "l_slots_clean": {
      "answer": "no",
      "slides": [
-      "s01",
       "s02"
      ],
-     "measured": 2,
+     "measured": 1,
      "limit": 0
     },
     "w_type_budget": {
@@ -1819,7 +1763,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.3,
+     "value": 5.1,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -1831,13 +1775,12 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "layout_plan": 0.018,
+      "layout_plan": 0.021,
       "validate": 0.01,
-      "render_pptx": 0.18,
+      "render_pptx": 0.17,
       "render_web": 0.0,
-      "render_pdf_png": 4.58,
-      "qa_render": 0.34,
-      "repair": 0.17
+      "render_pdf_png": 4.55,
+      "qa_render": 0.34
      }
     },
     "w_words_sha": {
@@ -1845,8 +1788,7 @@
      "value": "529b08c764da"
     },
     "w_notes_kept": {
-     "answer": "n/a",
-     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+     "answer": "yes"
     },
     "k_palette_only": {
      "answer": "n/a",
@@ -1858,16 +1800,16 @@
     }
    },
    "summary": {
-    "yes": 29,
-    "no": 3,
-    "na": 14,
+    "yes": 31,
+    "no": 2,
+    "na": 13,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
      "m_median_words": 11,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.3,
+     "m_seconds": 5.1,
      "w_words_sha": "529b08c764da"
     }
    }
