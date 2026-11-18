@@ -1,5 +1,5 @@
 {
-  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words. frame_edit cases (features/frame-change-edit.clan, since director.v7): image names a still in `frames` (eval/fixtures/frames/, drawn by make_frames.py), sent to Dex as one picture. expect: reading (camera, local, both, or ask), camera (each leaf one of the values listed), changed (leaves that must change), runAs and maskUnused when they matter. clip_patch cases (features/clip-moment-edit.clan, since director.v7): frame names the still at the note's moment that Dex sees; video V1 is the take; expect.route is fix (a job) or ask (the fix/remake nudge). expect_refs (since director.v9, features/runway-video-models.clan): exactly the pictures besides `current` the job sends; frame: whether it sends a firstFrame.",
+  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words. frame_edit cases (features/frame-change-edit.clan, since director.v7): image names a still in `frames` (eval/fixtures/frames/, drawn by make_frames.py), sent to Dex as one picture. expect: reading (camera, local, both, or ask), camera (each leaf one of the values listed), changed (leaves that must change), runAs and maskUnused when they matter. clip_patch cases (features/clip-moment-edit.clan, since director.v7): frame names the still at the note's moment that Dex sees; video V1 is the take; expect.route is fix (a job) or ask (the fix/remake nudge). expect_refs (since director.v9, features/runway-video-models.clan): exactly the pictures besides `current` the job sends; frame: whether it sends a firstFrame. Redraw cases (features/frame-edit-or-redraw.clan, since director.v14): input.mode redraw on a shot with no people (no character picture, no cast frame); expect.objects are the main objects, each a group of words, and the redraw scores places (each object named in a sentence with the validator's PLACE_WORDS), who (frameEdit.who names each object and where), no_people (no person in the prompt or who) instead of words_first.",
   "assets": {
     "A2": "sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b",
     "A6": "sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228",
@@ -610,6 +610,48 @@
         "maskUnused": true
       },
       "budget": 500
+    },
+    {
+      "id": "fe_redraw_product_insert",
+      "why": "features/frame-edit-or-redraw.clan (owner 2026-11-18, director.v14): a redraw of a shot with no people, a product insert, was refused for want of a person to place. With no character picture and no cast frame, Dex places each main object in the shot's framing, says what is where in frameEdit.who and brings no people in.",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v14",
+      "input": {
+        "text": "make the bottle a tall frosted-glass Lumen bottle and add a bowl of lemons",
+        "image": "F2",
+        "mode": "redraw",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV03",
+          "kind": "shot",
+          "duration_s": 2,
+          "camera": {
+            "size": "insert",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "Insert: a green bottle of Lumen water on the kitchen table beside a white plate, morning light.",
+          "refs": []
+        },
+        "refs": []
+      },
+      "expect": {
+        "reading": "redraw",
+        "runAs": "frame",
+        "objects": [
+          [
+            "bottle"
+          ],
+          [
+            "lemon"
+          ]
+        ]
+      },
+      "budget": 750
     },
     {
       "id": "cp_scarf_blows",

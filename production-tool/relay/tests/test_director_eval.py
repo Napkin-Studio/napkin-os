@@ -148,7 +148,8 @@ def test_views_said_elsewhere_get_the_line_added():
 
 # ── Change this frame (features/frame-change-edit.clan) ──────────────────────────────────────
 
-FRAME_CASES = [c for c in load()["cases"] if c["op"] == "frame_edit"]
+FRAME_CASES = [c for c in load()["cases"] if c["op"] == "frame_edit" and c["since"] == "director.v7"]
+REDRAW = next(c for c in load()["cases"] if c["id"] == "fe_redraw_product_insert")
 FRAME_CHECKS = ("reading", "camera", "ask", "no_continuity", "words_first")
 
 
@@ -294,7 +295,7 @@ def test_a_v9_answer_that_sends_the_wrong_pictures_scores_so():
 
 import re  # noqa: E402
 
-from eval.director_eval import Replay, answer, score  # noqa: E402
+from eval.director_eval import Replay, answer, job_input, score  # noqa: E402
 
 FREE = next(c for c in load()["cases"] if c["id"] == "shot_list_free_prose")
 
@@ -347,3 +348,50 @@ def test_the_eval_fails_a_plan_that_invents_a_heading_drops_words_reorders_or_as
         {"id": "a", "label": "One street", "value": "one"}, {"id": "b", "label": "Two streets", "value": "two"}], "allow_text": False}
     asked = score(FREE, answer(FREE, data, "director.v9", Replay(_plan(*GOOD, question=question))))
     assert asked.get("valid") is False or not asked["plans"]
+
+
+# ── A redraw with no people places its objects (director.v14, features/frame-edit-or-redraw.clan, 2026-11-18) ──
+
+PLACED = ("An insert, eye level, static. In the centre of the kitchen table, a tall frosted-glass Lumen bottle stands where "
+          "the green bottle was. To the left of the bottle, a white bowl of yellow lemons sits on the table. "
+          "The place and the light stay as they are. Keep the setting, light and style of @current. "
+          "Full-bleed cinematic image; no text, captions, borders or panels.")
+PLACED_WHO = "The frosted Lumen bottle stands in the centre of the table; the bowl of lemons sits to the left of it."
+
+
+def _redraw(prompt: str = PLACED, who: str | None = PLACED_WHO) -> str:
+    edit = {"reading": "redraw", "runAs": "frame", **({"who": who} if who is not None else {})}
+    return __import__("json").dumps({
+        "op": "frame_edit", "question": None, "frameEdit": edit, "rationale": "fixture", "confidence": 0.9,
+        "providerJob": {"provider": "runway", "model": "gemini_image3_pro", "prompt": prompt, "ratio": "1344:768",
+                        "refs": [{"sha256": job_input(REDRAW, load())["image"]["sha256"], "name": "current", "role": "current"}]}})
+
+
+def test_the_redraw_case_is_a_product_insert_with_no_people_on_a_clean_still():
+    from eval.director_eval import FRAMES
+    inp = REDRAW["input"]
+    assert REDRAW["since"] == "director.v14" and inp["mode"] == "redraw" and inp["shot"]["camera"]["size"] == "insert"
+    assert not inp["refs"] and not inp["shot"]["refs"] and "castFrame" not in inp
+    assert (FRAMES / load()["frames"][inp["image"]]).exists()
+
+
+def test_a_redraw_that_places_each_object_passes_v14_and_the_eval():
+    out = answer(REDRAW, load(), "director.v14", Replay(_redraw()))
+    assert "error" not in out, out
+    checks = score(REDRAW, out)
+    assert set(checks) == {"valid", "reading", "camera", "ask", "no_continuity", "length", "places", "who", "no_people"}
+    assert all(checks.values()), checks
+
+
+def test_the_eval_fails_a_redraw_that_leaves_an_object_unplaced_or_brings_people():
+    data = load()
+    unplaced = PLACED.replace("To the left of the bottle, a white bowl of yellow lemons sits on the table.",
+                              "A white bowl of yellow lemons sits on the table too.")
+    got = score(REDRAW, answer(REDRAW, data, "director.v14", Replay(_redraw(unplaced))))
+    assert got["valid"] and not got["places"]
+    vague = score(REDRAW, answer(REDRAW, data, "director.v14", Replay(_redraw(who="A bottle and some lemons."))))
+    assert vague["valid"] and not vague["who"]
+    person = PLACED.replace("The place and the light", "A woman's hand reaches in from the right. The place and the light")
+    assert not score(REDRAW, answer(REDRAW, data, "director.v14", Replay(_redraw(person))))["no_people"]
+    nobody = PLACED.replace("The place and the light", "No one is in the frame. The place and the light")
+    assert score(REDRAW, answer(REDRAW, data, "director.v14", Replay(_redraw(nobody))))["no_people"]
