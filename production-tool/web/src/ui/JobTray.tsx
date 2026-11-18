@@ -86,7 +86,7 @@ export function StatusDot({ ref, state, line, chip, open, onClick }: {
   open: boolean
   onClick: () => void
 }) {
-  const tip = [chip || SAID[state], line].filter((x, i, a) => x && a.indexOf(x) === i).join(' — ')
+  const tip = state === 'idle' ? line : [chip || SAID[state], line].filter((x, i, a) => x && a.indexOf(x) === i).join(' — ')
   return (
     <button ref={ref} type="button" className={`tb-status-dot ${open ? 'open' : ''}`} data-st={state}
       aria-label={`Agents: ${SAID[state].toLowerCase()}. ${line}`} title={tip} aria-haspopup="dialog" aria-expanded={open} onClick={onClick}>
