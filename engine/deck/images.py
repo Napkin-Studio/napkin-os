@@ -1099,7 +1099,8 @@ TEXT_OVER_TYPES = ("title", "idea", "real_question")
 SCRIM_FLOOR, SCRIM_CAP, SCRIM_STEP = 0.40, 0.60, 0.01
 TEXT_ON_PICTURE_TARGET = 4.8
 BUSY_SD = 0.12
-#: deck-slide-size (review 5): a solid shape or a hard edge under the words. The zone is cut into SHAPE_GRID cells (columns, rows) on the
+#: deck-slide-size (review 5): a solid shape or a hard edge under the words, checked at 4:3 and A4 (``text_zone(shapes=True)``; 16:9 keeps
+#: the zones it records today, byte for byte). The zone is cut into SHAPE_GRID cells (columns, rows) on the
 #: thumbnail; when their mean luminances differ by more than SHAPE_DELTA, part of the block sits on a shape (a dark mark, a horizon), which no
 #: scrim hides, so the zone is refused. Fine texture (stripes, grain) averages out inside a cell and is still the scrim's to calm.
 SHAPE_GRID, SHAPE_DELTA = (6, 3), 0.15
@@ -1229,7 +1230,7 @@ def _zone_cells(thumb, box: tuple, W: float, H: float, grid: tuple = SHAPE_GRID)
 
 
 def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, block: tuple = ZONE_BLOCK, zones=ZONES,
-              ink: str = "1B2430", paper: str = "FAF7F1", target: float = TEXT_ON_PICTURE_TARGET) -> dict:
+              ink: str = "1B2430", paper: str = "FAF7F1", target: float = TEXT_ON_PICTURE_TARGET, shapes: bool = False) -> dict:
     """The calm-zone finder and scrim solver (design.pictures.zone_finder), pure Pillow on a 160 px thumbnail, deterministic.
 
     For each candidate zone of the picture as cropped to ``box`` (inches): the words take the colour the zone already favours (ink on a
@@ -1253,7 +1254,7 @@ def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, b
         text, scrim = (paper, ink) if on_paper else (ink, paper)
         t_rgb, s_rgb = (paper_rgb, ink_rgb) if on_paper else (ink_rgb, paper_rgb)
         rec = {"zone": z, "text": text, "colour": scrim, "busy_sd": round(sd, 3)}
-        cells = _zone_cells(thumb, zone_box(z, block, W, H), W, H)
+        cells = _zone_cells(thumb, zone_box(z, block, W, H), W, H) if shapes else []
         if cells and max(cells) - min(cells) > SHAPE_DELTA:   # a shape or an edge under the words: no scrim makes that read
             tried.append({**rec, "alpha": SCRIM_CAP, "p10": round(p10_contrast(pix, t_rgb, s_rgb, SCRIM_CAP), 2), "why": "shapes"})
             continue
@@ -1307,7 +1308,7 @@ def solve_text_zones(deck: dict, paths: dict, ink: str = "1B2430", paper: str = 
     out = []
     kw = {}
     if canvas is not None and not canvas.identity:
-        kw = {"box": (canvas.w_in, canvas.y(BLEED_H)), "block": zone_block(canvas, physical=True)}
+        kw = {"box": (canvas.w_in, canvas.y(BLEED_H)), "block": zone_block(canvas, physical=True), "shapes": True}
     for sid in deck["order"]:
         s = deck["slides"][sid]
         sl = (s.get("slots") or {}).get("picture")

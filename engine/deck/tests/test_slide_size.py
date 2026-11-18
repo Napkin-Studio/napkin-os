@@ -553,10 +553,10 @@ def _shapes_pic(tmp_path, name, fill, size=(1946, 1000)):
 def test_the_finder_refuses_a_shape_under_the_words_and_remeasures_at_a_size(tmp_path):
     sky, mark = (200, 220, 234), (58, 64, 72)
     p = _shapes_pic(tmp_path, "mark.png", lambda u, v: mark if (0.2 < u < 0.35 and 0.15 < v < 0.5) else sky)   # a dark mark in the top-left zone
-    rec = images.text_zone(p)
+    rec = images.text_zone(p, shapes=True)
     assert rec.get("zone") and rec["zone"] != "top_left" and rec["zone"] != "middle_left"
     horizon = _shapes_pic(tmp_path, "hz.png", lambda u, v: mark if (v > 0.6 or 0.4 < u < 0.6) else sky)
-    none = images.text_zone(horizon)
+    none = images.text_zone(horizon, shapes=True)
     assert none.get("none") and "shape" in none["reason"]
     d = {"order": ["s01"], "slides": {"s01": {"type": "title", "slots": {"picture": {"kind": "image", "image": {
         "asset": "img_x", "status": "made", "aspect": "16:9", "text_zone": {"zone": "top_left", "text": "1B2430", "colour": "FAF7F1", "alpha": 0.4,
