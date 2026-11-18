@@ -24,11 +24,11 @@ FX = fixtures.FIXTURE_ROOT / "lumen_water"
 REPAIR_FX = fixtures.FIXTURE_ROOT / "repair"
 POLICY = repair.load_policy()
 #: The overlong fixture's idea slide (s08, block 1, slot ``text``): an invented sentence with a quarter pair, a hedge, a negation and a count.
-LONG = ("It links the tap to the person, so that every household sees its own water story in the bills they already read and the adverts they already see, "
+LONG = ("It really links the tap to the person, so that every household sees its own water story in the bills they already read and the adverts they already see, "
         "and it does so about four times a year, not once, in Q3 and Q4, for up to 12 months.")
-SHORT = ("It links the tap to the person, so every household sees its own water story in the bills they already read and the adverts they already see, "
-         "about four times a year, not once, in Q3 and Q4, for up to 12 months.")
-S, SLOT, BLOCK, CAP = "s08", "text", 1, 215   # the fake QA flags s08's text while it is over CAP characters
+SHORT = ("It links the tap to the person, so that every household sees its own water story in bills they already read and adverts they already see, "
+         "and it does so about four times a year, not once, in Q3 and Q4, for up to 12 months.")
+S, SLOT, BLOCK, CAP = "s08", "text", 1, 223   # the fake QA flags s08's text while it is over CAP characters
 
 
 # ---------------------------------------------------------------------------------------------------- helpers
@@ -250,13 +250,14 @@ def test_the_ledger_reads_moved_points_from_the_notes_and_refuses_a_line_that_di
 # ---------------------------------------------------------------------------------------------------- the shorten guard (own words, ledger)
 @pytest.mark.parametrize("new,why", [
     (SHORT, ""),
-    (SHORT.replace("water story", "water tale"), "words that are not in the field"),   # a synonym
+    (SHORT.replace("water story", "water tale"), "reorders or adds"),   # a synonym
     (SHORT.replace("up to 12", "up to 21"), "adds a number"),
     (SHORT.replace("Q3 and Q4", "Q4 and Q3"), "ledger"),
     (SHORT.replace("not once", "once"), "ledger"),
     (SHORT.replace("up to 12", "12"), "ledger"),
     (LONG + " today", "longer"),
-    ("It links.", "cuts more than"),
+    ("It links.", "ledger"),
+    (LONG.replace("really ", ""), ""),
     (LONG, "unchanged"),
 ])
 def test_the_shorten_guard_accepts_deleting_and_refuses_a_synonym_a_changed_ledger_growth_and_a_deep_cut(new, why):
@@ -264,14 +265,12 @@ def test_the_shorten_guard_accepts_deleting_and_refuses_a_synonym_a_changed_ledg
     assert (why in got) if why else got == ""
 
 
-def test_the_guard_refuses_a_title_and_measures_the_cut_against_the_base_not_the_last_round():
+def test_the_guard_refuses_a_title_and_a_number_does_not_cap_the_cut_the_allow_list_does():
     guards = tuple(POLICY["shorten"]["guards"])
-    assert "title" in assemble.shorten_problem(LONG, SHORT, LONG, frozenset(), guards, is_label=True) or "label" in assemble.shorten_problem(LONG, SHORT, LONG, frozenset(), guards, is_label=True)
-    twice = SHORT.replace("every household sees", "every household")   # a second cut from the first round's text is still measured against the base
-    known = ledger.known_names([LONG])
-    assert assemble.shorten_problem(LONG, twice, LONG, known, guards, 0.35, current=SHORT) == ""
-    deep = "It links the tap to the person, in Q3 and Q4, for up to 12 months."   # past 35 percent of the BASE field, whatever the last round held
-    assert "cuts more than" in assemble.shorten_problem(LONG, deep.replace(", in Q3", ", not once, in Q3"), LONG, known, guards, 0.35, current=SHORT) or "cuts more than" in assemble.shorten_problem(LONG, "It links the tap to the person, not once, in Q3 and Q4, for up to 12 months.", LONG, known, guards, 0.35, current=SHORT)
+    assert "label" in assemble.shorten_problem(LONG, SHORT, LONG, frozenset(), guards, is_label=True)
+    old = "The very very really truly tap leaks every day"
+    assert assemble.shorten_problem(old, "tap leaks every day", "", frozenset(), guards, 0.35) == ""   # well past 35 percent of the characters, all of it listed words
+    assert "carry the claim" in assemble.shorten_problem(old, "The very tap leaks", "", frozenset(), guards, 0.35)   # 'every day' is not on the list
 
 
 # ---------------------------------------------------------------------------------------------------- FIX 4: eligibility
@@ -884,35 +883,73 @@ def test_the_word_after_a_number_is_protected_and_numbers_compare_as_written(old
 def test_per_cent_percent_and_the_sign_are_one_ledger_and_a_clean_cut_still_passes():
     t = lambda x: ledger.tokens(x, frozenset())
     assert t("Takes 5 per cent of it") == t("Takes 5 percent of it") == t("Takes 5% of it") == t("Takes 5 % of it")
-    assert _guard("Takes 5% of budget overall here today", "Takes 5% of budget here today") == ""
+    assert _guard("Takes 5% of the budget here today", "Takes 5% of budget here today") == ""
 
 
 def test_own_words_look_only_at_the_same_field_and_an_internal_note_is_never_a_source():
     slide = "Sales rose in the region\nInternal note: the pipeline is confidential"
-    got = _guard("Sales rose in the region this year", "Sales rose in the pipeline", slide)
-    assert "not in the field" in got   # 'pipeline' is on the slide, in an internal note, but not in this field
-    other_field = _guard("Sales rose in the region this year", "Sales rose in the region", "Sales rose in the region this year\nCosts fell in the north")
-    assert other_field == ""
-    assert "not in the field" in _guard("Sales rose in the region this year", "Costs fell in the region", "Sales rose in the region this year\nCosts fell in the north")
+    assert "reorders or adds" in _guard("Sales rose in the region this year", "Sales rose in the pipeline", slide)   # 'pipeline' is on the slide, in a note, not in this field
+    assert _guard("Sales rose in the very region", "Sales rose in the region", "Sales rose in the very region\nCosts fell in the north") == ""
+    assert "reorders or adds" in _guard("Sales rose in the region", "Costs fell in the region", "Sales rose in the region\nCosts fell in the north")
 
 
 def test_a_client_field_cannot_borrow_a_word_that_exists_only_in_an_internal_note():
     word = "pipeline"   # a word that stands only in the slide's "Internal note:" block
     slide = LONG + "\nInternal note: the " + word + " is confidential"
-    assert "not in the field" in _guard(LONG, SHORT.replace("water story", word), slide)
+    assert "reorders or adds" in _guard(LONG, SHORT.replace("water story", word), slide)
     assert _guard(LONG, SHORT, slide) == ""
 
 
-def test_the_word_rule_is_one_function_either_policy_drops_into():
-    old = "Revenue fell while costs rose across the region"
-    swapped = "Costs fell while revenue rose across the region"
-    assert assemble.words_problem(old, swapped, "reuse") == ""   # reuse lets the same words in any order: the pending decision
-    assert assemble.words_problem(old, swapped, "delete_only") != ""
-    assert assemble.words_problem(old, "Revenue fell while costs rose", "delete_only") == ""
-    assert assemble.words_problem(old, "Revenue fell while costs rose", "delete_only", {"across", "the", "region"}) == ""
-    assert "carry the claim" in assemble.words_problem(old, "Revenue fell while rose across the region", "delete_only", {"the", "across", "region"})
-    pol = {**POLICY, "shorten": {**POLICY["shorten"], "word_rule": "delete_only"}}
-    assert repair.load_policy(None, _policy_file(pol))["shorten"]["word_rule"] == "delete_only"
+@pytest.mark.parametrize("old,new,ok", [
+    ("Revenue fell while costs rose", "Costs fell while revenue rose", False),   # a reorder
+    ("Clients like the old plan but dislike the new plan", "Clients like the new plan but dislike the old plan", False),   # an old/new swap
+    ("Only the top three markets grew", "The top three markets grew", False),
+    ("We saw a few wins this quarter", "We saw few wins this quarter", False),
+    ("The plan is not very profitable", "The plan is not profitable", False),
+    ("We saw no really big change", "We saw no big change", False),
+    ("Sales were really strong and very steady", "Sales were strong and steady", True),
+    ("The plan is very profitable", "The plan is profitable", True),
+    ("It works. ", "It works", True),
+    ("We cut costs in order to grow", "We cut costs to grow", True),
+    ("We cut costs in order here", "We cut costs here", False),   # "in order" goes only before "to"
+    ("It is currently basically quite simple", "It is simple", False),
+    ("It is simple, really", "It is simple really", False),   # other punctuation survives
+    ("It is simply a plan that works", "It is a plan works", False),   # 'that' is not on the list
+    ("This is an extremely good plan", "This is good plan", True),   # 'an' and 'extremely' are both listed
+])
+def test_delete_only_is_the_default_rule_with_a_fail_closed_allow_list(old, new, ok):
+    assert (assemble.words_problem(old, new) == "") is ok, (old, new)
+    assert (assemble.shorten_problem(old, new, "", frozenset(), GUARDS, 0.35) == "") is (ok and old != new)
+
+
+def test_the_allow_list_is_exactly_the_decided_one_and_the_policy_default_is_delete_only():
+    assert assemble.DELETABLE == frozenset("the an very really truly highly extremely incredibly actually simply clearly obviously certainly definitely also additionally furthermore moreover indeed".split())
+    assert not {"a", "that", "which", "currently", "overall", "basically", "essentially", "quite"} & assemble.DELETABLE
+    assert POLICY["shorten"]["word_rule"] == "delete_only" and "deletable" not in POLICY["shorten"]
+    assert repair.load_policy(None, _policy_file({**POLICY, "shorten": {**POLICY["shorten"], "word_rule": "reuse"}}))["shorten"]["word_rule"] == "reuse"
+    assert assemble.words_problem("a b c", "a c", "delete_only", {"b"}) == "" and assemble.words_problem("a b c", "a b", "delete_only", {"b"}) != ""   # a policy may replace the list
+
+
+def test_reuse_is_a_switch_that_a_client_deck_refuses_and_nothing_falls_back_to_it():
+    old, swapped = "Revenue fell while costs rose across the region", "Costs fell while revenue rose across the region"
+    assert assemble.words_problem(old, swapped, "reuse") == "" and assemble.words_problem(old, swapped) != ""
+    assert repair.shorten_available("condense", "review", True, None, None, None, "reuse")[0] is True
+    ok, why = repair.shorten_available("condense", "client", True, "apv_x", None, "apv_x", "reuse")
+    assert ok is False and "reuse" in why and "client" in why
+    assert repair.shorten_available("condense", "client", True, "apv_x", None, "apv_x", "delete_only")[0] is True
+
+
+def test_the_approver_sees_the_deleted_words_highlighted():
+    marked = assemble.mark_deleted("Sales were really strong and very steady.", "Sales were strong and steady")
+    assert marked == "Sales were [-really-] strong and [-very-] steady[-.-]"
+    assert assemble.mark_deleted("a b", "b a") == ""
+
+
+def test_a_shortening_report_lists_what_it_deleted_with_the_words_marked(tmp_path, monkeypatch, stages_copy):
+    out, rep, _ = _shorten_run(tmp_path, monkeypatch, stages_copy)
+    sh = jload(out / "repair.json")["rounds"][0]["shortened"]
+    assert sh and sh[0]["deleted"] == ["really", "the", "the"] and "[-really-]" in sh[0]["marked"] and sh[0]["before"] == LONG and sh[0]["after"] == SHORT
+    assert rep["repair"]["rounds"][0]["shortened"] == sh
 
 
 def _policy_file(pol: dict) -> Path:

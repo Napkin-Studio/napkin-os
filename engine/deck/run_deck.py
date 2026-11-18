@@ -761,7 +761,7 @@ def main(argv=None):
         pinned_ids = _stamp_pinned(a, deck, deck_ctx)
         loop_on = not a.no_repair and not a.no_qa and a.until is None
         policy = repair.load_policy(profile, a.repair_policy) if loop_on else None
-        stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages, repair.approval_id(deck))[0]
+        stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages, repair.approval_id(deck), (policy["shorten"] or {}).get("word_rule", "delete_only"))[0]
         base_deck = deck
         deck, plan_issues, _pending = layouts.plan(deck, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten)}, swaps=swaps)
         rungs = (deck["meta"].get("layout_plan") or {}).get("rungs", {})

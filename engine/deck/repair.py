@@ -36,7 +36,7 @@ DECK = Path(__file__).parent
 POLICY_PATH = DECK / "policy" / "repair.yaml"
 POLICY_SCHEMA = DECK / "schemas" / "repair_policy.schema.json"
 #: Bumped when a shorten guard changes: a record made under another version is never replayed.
-GUARD_VERSION = 2
+GUARD_VERSION = 3
 SEV_RANK = {"blocker": 0, "major": 1, "minor": 2}
 #: Rungs that are not a fix kind of spec.ISSUE_FIXES: a pseudo-rung of the map.
 EXTRA_RUNGS = ("undo_shrink", "left_for_person", "replan", "engine_fault", "critic", "none")
@@ -184,6 +184,16 @@ def eligible_fields(s: dict, bi: int, moved_items: frozenset = frozenset()) -> l
     elif str(b.get("text", "")).strip():
         out.append((f"{bi}", str(b["text"]), False))
     return out
+
+
+def assemble_deleted(old, new):
+    from . import assemble
+    return assemble.deleted_words(old, new)
+
+
+def assemble_mark(old, new):
+    from . import assemble
+    return assemble.mark_deleted(old, new)
 
 
 def apply_edits(deck: dict, edits: dict) -> dict:
@@ -702,7 +712,7 @@ def guard_edits(edits: list, request: list, deck_kept_slides: dict, work_base: d
         s0 = base_deck["slides"][sid]
         old = _field_text(base_deck, sid, fid)
         why = assemble.shorten_problem(old, e.get("text"), "", frozenset(), tuple(sh.get("guards") or ()), float(sh.get("max_cut_ratio", 0.35)),
-                                       current=_field_text(work_base, sid, fid), word_rule=sh.get("word_rule", "reuse"),
+                                       current=_field_text(work_base, sid, fid), word_rule=sh.get("word_rule", "delete_only"),
                                        deletable=set(sh["deletable"]) if sh.get("deletable") is not None else None)
         if why:
             ref.append({"slide": sid, "field": fid, "why": why})
@@ -727,12 +737,14 @@ def existing(deck: dict, findings: list, qa: dict | None, folder: Path, ctx: dic
             "pixels": bool((qa or {}).get("pixels"))}
 
 
-def shorten_available(text_mode, audience: str, live: bool, approval, stages, expected: str | None = None) -> tuple:
+def shorten_available(text_mode, audience: str, live: bool, approval, stages, expected: str | None = None, word_rule: str = "delete_only") -> tuple:
     """``(ok, why not)``: may the paid shorten rung run at all? Only with text mode condense; on a client deck only with a person's yes, which is an
     approval id (``approval_id``) equal to the one for these exact words (``expected``): a bare yes, or an id for other words, is refused; and only live or
     with a recording."""
     if text_mode != "condense":
         return False, "shortening needs text mode condense (this build keeps your words)"
+    if audience == "client" and word_rule != "delete_only":
+        return False, "the reuse word rule is not allowed on a client deck: only deleting listed words is"
     if audience == "client" and not (isinstance(approval, str) and approval and approval == expected):
         return False, "shortening a client deck needs a person's yes for these words (--approve-shorten " + (expected or "ID") + ")"
     if not (live or (stages and list(Path(stages).glob("e_repair_*.json")))):
@@ -821,7 +833,7 @@ def run(ctx: dict, m0: dict) -> dict:
     pinned = set(ctx.get("pinned") or ())
     by_title = {base["slides"][x]["title"]: x for x in order}
     condense = ctx["prefs"].get("text_mode") == "condense"
-    shorten_ok, shorten_why = shorten_available(ctx["prefs"].get("text_mode"), ctx["audience"], ctx["live"], ctx.get("approve_shorten"), ctx.get("stages"), approval_id(ctx["base_deck"]))
+    shorten_ok, shorten_why = shorten_available(ctx["prefs"].get("text_mode"), ctx["audience"], ctx["live"], ctx.get("approve_shorten"), ctx.get("stages"), approval_id(ctx["base_deck"]), (policy.get("shorten") or {}).get("word_rule", "delete_only"))
     state = {"tried": set(), "left": {}, "targeted": set()}
     skipped: list = []
     rounds_out, rec_rounds, stage_rows = [], [], {}
@@ -970,6 +982,10 @@ def run(ctx: dict, m0: dict) -> dict:
         usd = float((stage_rows.get(f"e_repair_{n}") or {}).get("usd") or 0)
         changed = sorted({sid for (sid, _f) in round_edits})
         summ = _summary(n, g["keep"], g, recs, kept["counts"], m["counts"], m, kept, usd, changed, bool(round_edits))
+        # what each shortening takes away, for the approver: the deleted words marked in the base text
+        summ["shortened"] = [{"slide": sid, "field": fid, "before": _field_text(base, sid, fid), "after": text,
+                              "deleted": [w for _i, w in (assemble_deleted(_field_text(base, sid, fid), text) or [])],
+                              "marked": assemble_mark(_field_text(base, sid, fid), text)} for (sid, fid), text in sorted(round_edits.items())]
         # to: the layout a switch ended on
         for r in summ["actions"]:
             if r["action"] == "switch_layout":

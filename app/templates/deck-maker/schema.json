@@ -1254,15 +1254,15 @@
                         "reuse",
                         "delete_only"
                       ],
-                      "default": "reuse",
-                      "description": "reuse: every content word is a word of the same field's base text; delete_only: the base text's words in the same order with some deleted."
+                      "default": "delete_only",
+                      "description": "delete_only (default): the new text is an ordered subsequence of the same field's base words and only allow-listed words (assemble.DELETABLE, or `deletable`) are deleted; reuse: content words of the base text in any order, refused on a client deck."
                     },
                     "deletable": {
                       "type": "array",
                       "items": {
                         "type": "string"
                       },
-                      "description": "With delete_only: the lower-case words that may be deleted (absent: any)."
+                      "description": "Replaces the default allow-list of words that may be deleted (absent: assemble.DELETABLE). Fail closed: every other word survives."
                     }
                   }
                 },

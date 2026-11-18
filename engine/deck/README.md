@@ -438,3 +438,5 @@ batched stage e call per round, only with `--live` or a recording, capped by `po
 `--no-repair` turns it off, `--no-qa` skips it (it reads the QA), `--until` never starts it, `--review FILE` pins slides, `--repair-policy FILE` overrides the policy.
 Outputs: `issues.json`, `repair.json`, `repair_record.json` (replayed without measuring when its base and policy hashes match), `out/repair/round-<n>/`, and a `repair`
 key in `report.json` only when a round ran or a rung was skipped. Tests: `deck/tests/test_repair.py` (no model, no LibreOffice: QA is a stand-in seam).
+
+Shortening is delete-only by default (`shorten.word_rule`): the new text is an ordered subsequence of the same field's words and only the allow-listed filler words (`assemble.DELETABLE`: the, an, very, really, ...) go; never a word after a negation or before few or little. `reuse` is a switch and is refused on client decks. `repair.json` rounds carry `shortened` with the deleted words marked for the approver.
