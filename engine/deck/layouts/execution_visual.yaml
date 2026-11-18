@@ -1,0 +1,42 @@
+id: execution_visual
+version: 1
+group: content
+purpose: image
+description: The channel copy and a key visual beside it.
+slot_summary: title, role, copy, picture
+for_types:
+- execution
+when:
+  test: image_ready
+priority: 71
+alternatives:
+- execution
+- execution_stack
+without_image: execution
+density: standard
+pick: offer
+family: execution
+renderer: execution_visual
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  role:
+    kind: text
+    role: body
+    from_blocks:
+    - text
+    max_chars: 367
+  copy:
+    kind: copy
+    from_blocks:
+    - copy
+  picture:
+    kind: image
+    required: true
+    dominant: true
+    image:
+      aspect: '16:9'

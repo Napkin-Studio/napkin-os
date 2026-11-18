@@ -378,6 +378,13 @@ def main(argv=None):
     ap.add_argument("--wears", choices=look.WEARS, default="agency",
                     help="whose brand the deck wears: agency (default; a client kit gives only its logo and imagery bans), client or co_branded")
     ap.add_argument("--strict-brand", action="store_true", help="only the kit's given tokens: ignore Style Pack literals and the agency look")
+    ap.add_argument("--density", choices=spec.DENSITY_LEVELS, default=None,
+                    help="how much a content slide holds: lean (about 30 words), standard (60), detailed (the type's budget). Without it the engine resolves it by format "
+                         "(a presented pitch is lean, a leave-behind detailed) and stamps meta.preferences.density with its source")
+    ap.add_argument("--layout", action="append", default=[], metavar="SLIDE=ID",
+                    help="a person's layout swap for one slide (repeatable); honoured when the layout holds the slide, else layout_unknown")
+    ap.add_argument("--no-layout-plan", action="store_true", help="skip the layout plan: the renderers choose as before the library (rollback)")
+    ap.add_argument("--no-notes", action="store_true", help="a notes-free export: no speaker notes in the pptx (the moved points go with them)")
     ap.add_argument("--no-qa", action="store_true", help="skip stage h, the rendered-slide QA (qa.json)")
     ap.add_argument("--until", choices=UNTIL_CHOICES, default=None,
                     help="stop after this stage and write report.json (stages a0 a b c d, or i for an investor deck); 'deck' stops once the deck "
@@ -587,8 +594,29 @@ def main(argv=None):
         rep["pictures"] = {"slots": sum(1 for _ in images.image_slots(deck)), "drawn": len(images.drawn(deck, a.audience)), "held": held, "review": stamped}
     rep["stages"]["assemble"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
+    plan_issues = []
+    if not a.no_layout_plan:   # the layout plan (deck-layout-library): after stage e, the red team and the pictures, before validate
+        from . import layouts
+        t = time.time()
+        level = a.density or (spec.DENSITY_DEFAULTS.get(a.format) if spec.LOOK_V2 else None)
+        if level:
+            deck["meta"].setdefault("preferences", {})["density"] = {"level": level, "source": "person" if a.density else "default"}
+        swaps = {}
+        for item in a.layout:
+            sid_, _, lid_ = item.partition("=")
+            if sid_ not in deck["slides"] or not lid_:
+                raise SystemExit(f"--layout {item}: expected SLIDE=ID with a slide id of this deck")
+            swaps[sid_] = lid_
+        tm = (deck["meta"].get("preferences") or {}).get("text_mode")
+        deck, plan_issues, _pending = layouts.plan(deck, prefs={"density": level, "text_mode": tm.get("mode") if isinstance(tm, dict) else tm}, swaps=swaps)
+        rungs = (deck["meta"].get("layout_plan") or {}).get("rungs", {})
+        rep["layout_plan"] = {"secs": round(time.time() - t, 3), "rungs": rungs, "variety_swaps": 0, "skipped": ["condense"]}
+        rep["stages"]["layout_plan"] = {"secs": round(time.time() - t, 3), "model": None, "usd": 0}
     t = time.time()
     findings = validate.run(deck, inp, a.audience)
+    for x in plan_issues:   # the six slot and layout names, warn (slot_missing on a required slot: error)
+        findings.append({k: v for k, v in (("check", x["check"]), ("level", x["level"]), ("slide", x["slide"]), ("slot", x.get("slot")),
+                                           ("message", x["message"]), ("evidence", x.get("evidence"))) if v is not None})
     rep["validation"] = validate.summary(findings)
     ws = validate.weight_share_report(deck)   # the buyer's weights against the words spent on each criterion: record only
     if ws["rows"]:
@@ -622,7 +650,8 @@ def main(argv=None):
         except images.ImageError as e:
             raise SystemExit(f"refused: {e}")
     t = time.time()
-    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings, placed=placed)
+    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings, placed=placed,
+                              notes=not a.no_notes, no_plan=a.no_layout_plan)
     if pic_findings:   # a slide drawn without its picture because it would not fit beside it: say so in the findings
         for f in pic_findings:
             f["slide_no"] = deck["order"].index(f["slide"]) + 1

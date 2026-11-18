@@ -1,0 +1,64 @@
+id: frames_strip
+version: 1
+group: content
+purpose: image
+description: The territory's four frames in a strip with the thought above.
+slot_summary: title, thought, frame_1..frame_4
+for_types:
+- territory
+when:
+  test: image_ready
+priority: 66
+alternatives:
+- image_text
+- territory
+without_image: territory
+density: lean
+pick: offer
+family: territory
+renderer: frames_strip
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  thought:
+    kind: text
+    role: lead
+    from_blocks:
+    - statement
+    max_chars: 163
+  frame_1:
+    kind: image
+    required: true
+    dominant: true
+    image:
+      aspect: '16:9'
+      kinds:
+      - frame
+  frame_2:
+    kind: image
+    required: true
+    dominant: false
+    image:
+      aspect: '16:9'
+      kinds:
+      - frame
+  frame_3:
+    kind: image
+    required: true
+    dominant: false
+    image:
+      aspect: '16:9'
+      kinds:
+      - frame
+  frame_4:
+    kind: image
+    required: true
+    dominant: false
+    image:
+      aspect: '16:9'
+      kinds:
+      - frame

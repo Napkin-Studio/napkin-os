@@ -1,0 +1,133 @@
+id: cards
+version: 1
+group: content
+purpose: list
+description: 'The standard composition: lead text, then cards, figures, steps or a table.'
+slot_summary: title, lead, points, pairs, figures, steps, table, note
+for_types:
+- title
+- objective
+- brief_restated
+- scoring
+- criterion_answer
+- real_question
+- chart
+- insight
+- audience
+- proposition
+- territory
+- territory_choice
+- idea
+- execution
+- channel_roles
+- innovation
+- guardrails
+- process
+- measurement
+- measurement_plan
+- timeline
+- investment
+- team
+- credentials
+- next_step
+- appendix
+- problem
+- why_now
+- solution
+- product
+- market
+- business_model
+- traction
+- what_we_know
+- competition
+- gtm
+- financials
+- upside
+- founders
+- ask
+- risks
+- close
+- conflicts
+- questions
+- requirement_trace
+- appendix_sources
+when:
+  blocks_only:
+  - bullets
+  - text
+  - small
+  - statement
+  - callout
+  - card
+  - kv
+  - quote
+priority: 10
+alternatives:
+- cards_split
+- text_columns
+density: standard
+pick: rule
+family: cards
+renderer: cards
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  lead:
+    kind: text
+    role: lead
+    from_blocks:
+    - statement
+    - text
+    - quote
+    - small
+    - callout
+    max_chars: 163
+  points:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    min_items: 1
+    max_items: 8
+    item:
+      body_max_chars: 160
+  pairs:
+    kind: group
+    role: body
+    from_blocks:
+    - kv
+    - card
+    - fromto
+    min_items: 1
+    max_items: 8
+  figures:
+    kind: stat
+    role: display
+    from_blocks:
+    - stats
+    max_items: 4
+  steps:
+    kind: list
+    role: body
+    from_blocks:
+    - steps
+    min_items: 1
+    max_items: 8
+  table:
+    kind: table
+    from_blocks:
+    - table
+    table:
+      max_rows: 8
+      max_cols: 5
+      cell_max_chars: 140
+  note:
+    kind: text
+    role: caption
+    from_blocks:
+    - small
+    max_chars: 122

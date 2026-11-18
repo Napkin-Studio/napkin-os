@@ -204,7 +204,7 @@ def test_slots_check_stays_na_while_reserved_and_the_picture_checks_are_live(tmp
 
 def test_not_yet_built_checks_are_na(tmp_path):
     r = cl.run_checklist(make(tmp_path))["results"]
-    for item in ("g_no_major", "g_checks_current", "l_one_dominant", "l_alternatives", "w_density_met", "p_where_asked"):
+    for item in ("g_no_major", "g_checks_current", "l_alternatives", "w_density_met", "p_where_asked"):
         assert r[item]["answer"] == "n/a" and r[item]["reason"], item
 
 
@@ -239,7 +239,7 @@ def test_metrics(tmp_path):
 NEEDS = {
     "qa": {"g_no_blocker", "g_no_qa_error", "q_no_overflow", "q_no_overlap", "q_no_off_slide", "q_margins_kept", "q_body_floor",
            "q_contrast", "q_no_filler", "q_not_empty", "q_not_cornered"},
-    "layouts": {"l_no_fallback_flow", "l_no_rule_flow", "l_not_relaxed", "l_repeat_max2", "l_in_library", "t_title_one_place"},
+    "layouts": {"l_no_fallback_flow", "l_no_rule_flow", "l_not_relaxed", "l_repeat_max2", "l_in_library", "l_one_dominant", "t_title_one_place"},
     "report": {"m_usd", "m_seconds"},
     "pptx": {"w_line_length", "t_title_range", "t_cover_title", "t_two_families", "t_title_one_place"},
     "validation": {"g_no_blocker", "g_no_validator_error", "w_type_budget", "w_pitch_length", "w_takeaway_titles"},
@@ -432,10 +432,14 @@ def rebuilt(tmp_path_factory):
     return cl.run_all(list(runs.values()))
 
 
+#: The items deck-layout-library moves on purpose (the baseline is slice 2's "before"; bench/compare.py shows the movement).
+MOVED_BY_LAYOUT_LIBRARY = {"l_one_dominant", "l_alternatives", "l_slots_clean"}
+
+
 def test_baseline_matches_a_geometry_only_rebuild(rebuilt):
     base = json.loads((DECK_DIR / "bench" / "baseline" / "checklist.json").read_text())
     assert base["items_version"] == ITEMS["version"] and set(base["decks"]) == set(rebuilt["decks"]) == set(fx.FIXTURES)
-    skip = {i["id"] for i in ITEMS["items"] if i.get("depends_on")}
+    skip = {i["id"] for i in ITEMS["items"] if i.get("depends_on")} | MOVED_BY_LAYOUT_LIBRARY
     for d, b in base["decks"].items():
         assert set(b["results"]) == set(IDS) and b["inputs"]["qa_pixels"], d
         for i in IDS:

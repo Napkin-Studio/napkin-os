@@ -1,0 +1,58 @@
+id: image_grid
+version: 1
+group: content
+purpose: image
+description: Two to four pictures in a grid, each with a caption.
+slot_summary: title, picture_1..4, captions
+for_types:
+- execution
+- credentials
+when:
+  test: image_ready
+priority: 40
+alternatives:
+- cards
+without_image: cards
+density: lean
+pick: offer
+family: image_grid
+renderer: image_grid
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  picture_1:
+    kind: image
+    required: true
+    dominant: true
+    image:
+      aspect: '1:1'
+  picture_2:
+    kind: image
+    required: true
+    dominant: false
+    image:
+      aspect: '1:1'
+  picture_3:
+    kind: image
+    required: false
+    dominant: false
+    image:
+      aspect: '1:1'
+  picture_4:
+    kind: image
+    required: false
+    dominant: false
+    image:
+      aspect: '1:1'
+  captions:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    - small
+    min_items: 1
+    max_items: 4

@@ -22,10 +22,10 @@ import html
 import json
 from pathlib import Path
 
-from . import images
+from . import images, spec
 from .refs import fmt
 from .render_pptx import DARK_TYPES, THEME, _kicker
-from .spec import frame_for, shown_blocks
+from .spec import blocks_sha, frame_for, shown_blocks
 
 #: The accent is 2.2:1 on white, so accent-coloured text on light slides uses a darker amber
 #: (--accent-ink, 5.9:1 on white, 5.2:1 on the tint); dark slides keep the accent (7.3:1 on ink).
@@ -287,7 +287,12 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         inner = (f'<div class="flags">{flags}</div><header>{kick}{title}</header>{body}{pic_html}'
                  f'<footer>{foot}</footer>')
         notes = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
-        out.append({"id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
+        lay = s.get("layout") or {}
+        planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
+        if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
+            from . import layouts
+            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s))
+        out.append({"layout": lay["id"] if planned else None, "id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
                     "last": [max(v for k, v in b.last.items() if k <= f) for f in range(b.f + 1)]})
     return out
@@ -586,7 +591,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
     views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed)
     m = deck["meta"]
     slides = "\n".join(
-        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}" id="{v["id"]}" data-steps="{v["steps"]}" '
+        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}" id="{v["id"]}" data-steps="{v["steps"]}"{" data-layout=" + chr(34) + v["layout"] + chr(34) if (spec.LOOK_V2 and v["layout"]) else ""} '
         f'aria-label="Slide {v["n"]}: {_e(v["title"])}">{v["html"]}</section>' for v in views)
     meta = json.dumps([{"id": v["id"], "section": v["section"], "notes": v["notes"]} for v in views], ensure_ascii=False)
     page = f"""<!doctype html>

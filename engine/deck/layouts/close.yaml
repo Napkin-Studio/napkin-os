@@ -1,0 +1,52 @@
+id: close
+version: 1
+group: functional
+purpose: title
+description: 'Dark close: the title, one statement and up to three next steps, no contact slot.'
+slot_summary: title, statement, next steps
+for_types:
+- close
+- next_step
+when:
+  blocks_only:
+  - statement
+  - text
+  - small
+  - bullets
+  - kv
+  - card
+priority: 12
+alternatives:
+- cards
+- big_statement
+roomier: cards
+density: lean
+pick: offer
+family: close
+renderer: close
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    max_chars: 120
+    max_lines: 3
+  statement:
+    kind: text
+    role: lead
+    from_blocks:
+    - statement
+    - text
+    dominant: true
+    max_chars: 163
+  next:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    - kv
+    - card
+    min_items: 1
+    max_items: 3
+    item:
+      body_max_chars: 100

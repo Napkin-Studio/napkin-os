@@ -22,7 +22,9 @@ DEMO = HERE / "fixtures" / "frames_demo"
 
 
 def jdeck(run: Path) -> dict:
-    return json.loads((run / "deck.json").read_text())
+    """The run's deck.json without the layout plan's keys (``layouts.strip_plan``): these tests are about what slice 3 placed."""
+    from deck import layouts
+    return layouts.strip_plan(json.loads((run / "deck.json").read_text()))
 
 
 # ---------------------------------------------------------------- crop_box

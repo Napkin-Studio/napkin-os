@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deck import assemble, inputs, intake, refs, run_deck, spec, stages, validate
+from deck import assemble, inputs, intake, layouts, refs, run_deck, spec, stages, validate
 from deck.inputs import Inputs
 
 FIX = Path(__file__).parent / "fixtures"
@@ -74,13 +74,13 @@ def test_run_deck_with_a_brief_writes_the_golden_deck(monkeypatch, tmp_path):
     out = tmp_path / "out"
     _run_main(monkeypatch, tmp_path, ["--brief", str(BRIEF / "brief_object.json"), "--stages", str(BRIEF), "--client", "Lumen Water",
                                       "--project", "National awareness campaign", "--out", str(out)])
-    deck = json.loads((out / "deck.json").read_text())
+    deck = layouts.strip_plan(json.loads((out / "deck.json").read_text()))   # the plan's keys are stripped for good: golden_plan.json holds them
     deck["meta"].pop("built_at")
     deck["meta"].pop("built_from")
     assert deck["meta"].pop("audience") == "review"   # run_deck stamps who the render is for
     assert deck["meta"].pop("confirm") and deck["meta"].pop("confirm_summary")["verified"] == 0   # run_deck stamps the confirm list; the build itself is untouched
     assert deck == json.loads((BRIEF / "golden_deck.json").read_text())
-    assert json.loads((out / "validation.json").read_text()) == json.loads((BRIEF / "golden_validation.json").read_text())
+    assert layouts.without_plan_findings(json.loads((out / "validation.json").read_text())) == json.loads((BRIEF / "golden_validation.json").read_text())
     assert "intake" not in json.loads((out / "report.json").read_text())   # a complete brief runs no intake
 
 

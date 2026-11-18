@@ -200,19 +200,56 @@ CRITERIA_HOME = (
     (r"accessib", ("guardrails", "execution", "channel_roles"), "accessib", False),
 )
 
-def shown_blocks(s: dict, audience: str = "review") -> list:
-    """The blocks a slide shows to an audience: internal notes dropped for a client and labelled
-    for a review; an unsourced (illustrative) quote followed by its label. Shared by renderers."""
+def moved_map(s: dict, audience: str = "review") -> dict:
+    """``{block index: None (the whole block) | set of item indexes}`` moved to the notes by the layout plan (``layout.fit.moved``).
+    The blocks themselves are never edited: the plan only overlays what it moved, so the deck's words, claims and order are unchanged.
+    An overlay whose ``blocks_sha`` no longer matches the slide's words is stale and ignored (contract 3.3 rule 4)."""
+    lay = s.get("layout") or {}
+    moved = ((lay.get("fit") or {}).get("moved")) or []
+    if not moved:
+        return {}
+    if lay.get("blocks_sha") and lay["blocks_sha"] != blocks_sha(s, audience):
+        return {}
+    out: dict = {}
+    for m in moved:
+        bi, it = m.get("block"), m.get("item")
+        if it is None:
+            out[bi] = None
+        elif out.get(bi, set()) is not None:
+            out.setdefault(bi, set()).add(it)
+    return out
+
+
+def _shown(s: dict, audience: str, moved: dict) -> list:
     out = []
-    for b in s["blocks"]:
+    for bi, b in enumerate(s["blocks"]):
+        if bi in moved and moved[bi] is None:
+            continue
         if b.get("internal"):
             if audience == "client":
                 continue
             b = {**b, "text": "Internal note: " + str(b.get("text", ""))}
+        if bi in moved and isinstance(b.get("items"), list):
+            b = {**b, "items": [i for k, i in enumerate(b["items"]) if k not in moved[bi]]}
         out.append(b)
         if b["kind"] == "quote" and not b.get("refs") and str(b.get("text", "")).strip():
             out.append({"kind": "small", "text": ILLUSTRATIVE_QUOTE, "basis": "meta"})
     return out
+
+
+def shown_blocks(s: dict, audience: str = "review") -> list:
+    """The blocks a slide shows to an audience: internal notes dropped for a client and labelled
+    for a review; an unsourced (illustrative) quote followed by its label; the items the layout plan moved to the
+    notes (``layout.fit.moved``) left out. Shared by renderers, validate and the plan itself."""
+    return _shown(s, audience, moved_map(s, audience))
+
+
+def blocks_sha(s: dict, audience: str = "review") -> str:
+    """First 12 hex of the SHA-256 of the canonical JSON of ``[title, shown blocks]`` with nothing moved (contract 3.3 rule 4)."""
+    import hashlib
+    import json
+    blocks = _shown(s, audience, {})
+    return hashlib.sha256(json.dumps([s["title"], blocks], sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:12]
 
 
 #: Channel words in an execution's title -> the frame its copy is shown in (render_web) and the
@@ -345,7 +382,15 @@ LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "compari
               "placeholder_card", "quote_cards", "comparison", "big_number", "kpi_row", "role_grid", "timeline_strip",
               "native_table", "cards",
               "cover_image", "section", "image_text", "image_left", "full_bleed_statement", "frames_strip", "image_grid",
-              "execution_visual")
+              "execution_visual",
+              # the 11 text layouts and the close that arrive with the library (deck-layout-library)
+              "close", "big_statement", "quote_full", "cards_split", "text_columns", "placeholder_split", "chart_full",
+              "timeline_rows", "execution_stack", "territory_wide", "people_cards")
+#: The tests a layout file's ``when.test`` may name; each is a function of the same name in layouts.py (and has a unit test).
+LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready")
+#: The eight look changes of deck-layout-library (cover 64 pt, a stamped title size and a fixed title box per layout, 48-character
+#: lines, switch before relaxed, picture and close layouts rule-picked). Off while the library lands without a look change; on at the look commit.
+LOOK_V2 = False
 LAYOUT_FLOW = "flow"
 LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
 LAYOUT_MAX = 40

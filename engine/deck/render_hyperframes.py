@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from . import spec
 from .render_web import CSS_LAYOUT, PIC_CSS, _e, slide_views, theme_css
 
 INTRO = 0.35     # s before the first reveal of a slide
@@ -70,7 +71,7 @@ def build(deck, inp, findings: list | None = None, builds: bool = False, picture
         stops = [t + cs(INTRO + SETTLE) + round(ms / 10) for ms in v["last"]]
         frags = stops if builds else stops[-1:]
         dur = frags[-1] - t + cs(HOLD)
-        cls = f'slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}'
+        cls = f'slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}'
         st, du = f"{t / 100:g}", f"{dur / 100:g}"
         scenes.append(
             f'<div class="scene" id="scene-{v["id"]}" data-composition-id="{v["id"]}" data-start="{st}" data-duration="{du}" '
