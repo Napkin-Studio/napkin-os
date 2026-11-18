@@ -103,6 +103,15 @@ export const AGENCY_COLOURS: Readonly<Record<string, AgencyColours>> = {
     name: 'ACNE', base: '#000000', accent: '#86BC25', pill: 'base', accentUse: 'line', surface: 'mono',
     logo: svgUri(WORDMARK_SVG.acne), logoOnDark: svgUri(recolourSvg(WORDMARK_SVG.acne, '#FFFFFF')),
   },
+  // Verve, the live agency (verveliveagency.com, owner 2026-11-18): charcoal (#13181A, their nav and
+  // footer) and their green (#00BA7E, the mark). The pill is their header: the green mark on charcoal with
+  // a green rim. Buttons are charcoal in light and green in dark, with charcoal text on the green as on
+  // their "Contact Us". Warm paper, close to their off-white sections. The mark keeps its green on dark
+  // grounds and turns charcoal on light ones (the green on white reads under 3:1).
+  verve: {
+    name: 'Verve', base: '#13181A', accent: '#00BA7E', accentInk: '#13181A', pill: 'base',
+    logo: svgUri(recolourSvg(WORDMARK_SVG.verve, '#13181A')), logoOnDark: svgUri(WORDMARK_SVG.verve),
+  },
 }
 
 /**
@@ -114,6 +123,7 @@ export const AGENCY_ALIASES: Readonly<Record<string, string>> = {
   boysgirls: 'boysandgirls',
   'b+g': 'boysandgirls',
   'w+k': 'wk',
+  verveliveagency: 'verve',
 }
 // napkin-web mirrors the ids, names, colours and aliases above (crates/napkin-web/src/people.rs
 // CODE_AGENCIES, CODE_ALIASES) to recognise an agency on the People page; tests/peopleAdmin.test.ts keeps them in step.

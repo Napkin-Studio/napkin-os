@@ -179,7 +179,7 @@ const buttonOf = (html: string, label: string) => new RegExp(`<button[^>]*>${lab
 test('People | Agencies: the list has every agency with its kind, and the People list wears each agency\'s pill', () => {
   const agencies = mockAgencies()
   const list = renderToStaticMarkup(createElement(PeoplePage, { user: 'engineer@napkin', onClose: noop, initial: { people: MOCK_PEOPLE, agencies }, initialTab: 'agencies' }))
-  assert.match(list, /Agencies <small>12<\/small>/)
+  assert.match(list, /Agencies <small>13<\/small>/)
   assert.match(list, /People <small>11<\/small>/)
   const tagsOf = (id: string) => { const tr = list.slice(list.indexOf(`data-agency="${id}"`)); return [...tr.slice(0, tr.indexOf('</tr>')).matchAll(/class="pa-tag ag-(\w+)">([^<]+)</g)].map(m => m[2]) }
   for (const id of Object.keys(AGENCY_COLOURS)) assert.deepEqual(tagsOf(id), ['In code'], id)

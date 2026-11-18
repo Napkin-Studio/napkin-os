@@ -24,6 +24,8 @@ const FILES = {
   pluto: { logo: 'Pluto-logo.svg' },
   // ACNE's mark traced from their site's LogoNero.png with potrace (2026-11-13; their site has no SVG): the "acne" mark only, without "a Deloitte business".
   acne: { logo: 'acne-logo.svg' },
+  // Verve's "verve" script mark from their site's header SVG (verveliveagency.com, 2026-11-18): one path, re-traced with potrace to stay small.
+  verve: { logo: 'verve-logo.svg' },
 }
 
 const app = fileURLToPath(new URL('..', import.meta.url))
