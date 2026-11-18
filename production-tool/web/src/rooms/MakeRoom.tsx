@@ -293,7 +293,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
       </section>
       {slot && createPortal(<div className="rm-direct" aria-label="Direct">
         <div className="rm-tabs" role="tablist" aria-label="Direct">
-          {(['shot', 'box', 'change'] as const).map((t) => (
+          {(['box', 'shot', 'change'] as const).map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t === 'shot' ? 'Shot' : t === 'box' ? 'Box' : 'Change'}</button>
           ))}
         </div>

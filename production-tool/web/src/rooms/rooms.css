@@ -98,7 +98,8 @@
 
 /* ── Body ──────────────────────────────────────────────────────────────── */
 .rm-body { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--bin-w) minmax(0, 1fr); }
-.rm-body[data-room='edit'] { grid-template-columns: var(--bin-w) minmax(0, 1fr) var(--side-w); grid-template-rows: minmax(0, 1fr) var(--tl-h); }
+.rm-body[data-room='edit'] { grid-template-columns: var(--bin-w) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+.rm-body[data-room='edit'] .rm-bin { grid-row: 1 / span 2; }
 .rm-sound { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
 .rm-soundhead { margin-bottom: 12px; }
 
@@ -200,7 +201,7 @@
 
 /* The Direct panel and the Inspector. */
 .rm-direct, .rm-inspector { display: flex; flex-direction: column; min-height: 0; background: var(--paper); border-left: 1px solid var(--line-soft); }
-.rm-inspector { grid-row: 1; grid-column: 3; overflow-y: auto; }
+.rm-inspector { background: transparent; border: 0; }
 .rm-tabs { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); flex-shrink: 0; }
 .rm-tabs button { flex: 1; height: 44px; border: 0; border-radius: var(--r-pill); background: transparent; font-weight: 500; cursor: pointer; color: var(--ink2); }
 .rm-tabs button.on { background: var(--soft-2); color: var(--ink); font-weight: 600; }
@@ -303,10 +304,21 @@
 .rm-viewlabel { position: absolute; top: 10px; left: 10px; z-index: 2; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; padding: 4px 10px; border-radius: var(--r-pill); background: rgba(0, 0, 0, 0.6); color: #fff; }
 .rm-viewlabel.rendered { background: var(--ok-fg); }
 .rm-where { max-width: 220px; }
-.rm-tlwrap { grid-row: 2; grid-column: 1 / -1; min-width: 0; min-height: 0; border-top: 1px solid var(--line); background: var(--paper); }
+.rm-tlwrap { grid-row: 2; grid-column: 2; min-width: 0; min-height: 0; height: var(--tl-h); border-top: 1px solid var(--line); background: var(--paper); }
 .rm-timeline { height: 100%; display: flex; flex-direction: column; min-height: 0; }
-.rm-tltools { display: flex; align-items: center; gap: 6px; padding: 4px 12px; border-bottom: 1px solid var(--line-soft); flex-shrink: 0; overflow-x: auto; }
-.rm-tltools .btn { flex-shrink: 0; }
+/* The Edit room's band (mock edit): Preview | Rendered after the length; the timeline's tools on the right. */
+.rm-bandview { display: inline-flex; }
+.rm-bandseg { display: inline-flex; }
+.rm-bandtools, .rm-tltools { display: inline-flex; align-items: center; gap: 6px; }
+.rm-tltools .sp-btn { flex-shrink: 0; }
+.rm-tltools .sp-btn kbd { font: 500 10px var(--font-mono); padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--ink2); }
+.rm-tltools .sp-btn.pressed { background: var(--soft); }
+.rm-keysfloat { width: 320px; padding: 12px; }
+/* The cut in a line under the timeline (mock edit): what it holds, then the next things to do. */
+.rm-cutsum { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 8px 24px 10px; border-top: 1px solid var(--line-soft); font-size: 12.5px; color: var(--ink2); flex-shrink: 0; }
+.rm-linkbtn { all: unset; cursor: pointer; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.rm-linkbtn:hover, .rm-linkbtn:focus-visible { color: var(--ag-base, var(--ink)); }
+.rm-tlzoom { display: inline-flex; align-items: center; gap: 2px; }
 .rm-tlsep { width: 1px; height: 28px; background: var(--line); flex-shrink: 0; }
 .rm-zoom { min-width: 44px; text-align: center; }
 .rm-tlbody { flex: 1; min-height: 0; display: grid; grid-template-columns: 72px minmax(0, 1fr); }
@@ -608,3 +620,57 @@
 .booth .rm-boothslot .rm-directbody { overflow: visible; padding: 0; }
 .rm-meta { font: 500 12px var(--font-mono); color: var(--muted); }
 .rooms .sp-btn.rm-jobs { height: 28px; padding: 0 10px; border-radius: 6px; font: 600 12px var(--font-ui); }
+
+/* ── The Bin to the mock (production-new-ui-v2 .bin): a narrow paper column, a small search, small filter
+   pills, tiles of a picture, a name and one quiet line. ───────────────────────────────────────────── */
+.rooms { --bin-w: 236px; }
+.rm-body[data-room='make'] { --bin-w: 236px; }
+.rm-bin { padding: 14px; gap: 10px; border-right-color: var(--line); overflow-y: auto; }
+.rm-binhead b { font-size: 14px; }
+.rm-bin .rm-search { height: 34px; padding: 0 12px; font-size: 13px; }
+.rm-bin .rm-search input { font-size: 13px; }
+.rm-bin .rm-chips { gap: 6px; }
+.rm-bin .rm-chip { min-height: 24px; height: 24px; padding: 0 10px; font-size: 11.5px; font-weight: 600; }
+.rm-bin .rm-bingrid { grid-template-columns: 1fr 1fr; gap: 8px; overflow: visible; flex: none; }
+.rm-bin .rm-tile { padding: 0; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.rm-bin .rm-tile .rm-poster { border-radius: 0; }
+.rm-bin .rm-tilename { font-size: 11.5px; padding: 5px 7px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.rm-bin .rm-tilelabel { font-size: 10.5px; color: var(--muted, var(--ink3)); padding: 0 7px 6px; }
+.rm-bin .rm-tilelabel.ready { color: var(--ag-base, var(--ink)); font-weight: 600; }
+html[data-theme='dark'] .rm-bin .rm-tilelabel.ready { color: var(--ag-acc, var(--ink)); }
+.rm-bin .rm-tile.sel { outline: 2px solid var(--ag-base, var(--tool)); outline-offset: -2px; }
+html[data-theme='dark'] .rm-bin .rm-tile.sel { outline-color: var(--ag-acc, var(--tool)); }
+.rm-bin .rm-binfoot .btn { min-height: 30px; height: 30px; font-size: 12px; border-radius: 6px; }
+@media (max-width: 1279px) { .rooms, .rm-body[data-room='make'] { --bin-w: 220px; } }
+
+/* The timeline to the mock (production-new-ui-v2 .timeline): each clip its picture edge to edge with its name
+   small at the foot; the picked clip ringed in the agency's colour; the zoom small in the cut line. */
+.rm-clip { overflow: hidden; border-radius: 3px; }
+.rm-clip .rm-clipthumb { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border-radius: 0; }
+.rm-clip .rm-clipname { position: absolute; left: 6px; right: 6px; bottom: 4px; z-index: 1; font: 500 10.5px var(--font-mono); color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
+.rm-clip.sel { outline: 2px solid var(--ag-base, var(--tool)); outline-offset: 1px; }
+html[data-theme='dark'] .rm-clip.sel { outline-color: var(--ag-acc, var(--tool)); }
+.rm-clip .rm-fadewedge, .rm-clip .rm-hold, .rm-clip .rm-clipstate { z-index: 2; }
+.rm-tlzoom .rm-iconbtn { width: 28px; height: 28px; min-width: 28px; min-height: 28px; font-size: 13px; }
+
+/* The rooms' panels in the Booth (mock make-box, edit-clip): the mock's compact controls on a fine pointer —
+   joined segments, small number steppers, mono kickers; touch keeps its 44px targets. */
+.booth .sp-crumb b.rm-clamp1 { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.booth .sp-crumb { flex-wrap: nowrap; }
+.rm-boothslot .rm-tab { padding: 4px 0 12px; gap: 12px; }
+.rm-boothslot .rm-kicker, .rm-boothslot .rm-label { font: 500 10.5px var(--font-mono); letter-spacing: .08em; color: var(--muted, var(--ink3)); }
+@media (pointer: fine) {
+  .rm-boothslot .rm-seg { flex-wrap: nowrap; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .rm-boothslot .rm-seg button { min-height: 32px; height: 32px; border: 0; border-radius: 0; font-size: 12.5px; padding: 0 10px; background: var(--paper); }
+  .rm-boothslot .rm-seg button + button { border-left: 1px solid var(--line); }
+  .rm-boothslot .rm-seg button.on { background: var(--ink); color: var(--paper); }
+  .rm-boothslot .rm-num { gap: 4px; }
+  .rm-boothslot .rm-num .rm-rowname { flex: 1; font: 500 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted, var(--ink3)); }
+  .rm-boothslot .rm-num .rm-iconbtn { width: 28px; height: 28px; min-width: 28px; min-height: 28px; font-size: 13px; }
+  .rm-boothslot .rm-num input:not([type='color']) { width: 60px; height: 28px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px; }
+  .rm-boothslot .btn { min-height: 30px; height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 6px; }
+  .rm-boothslot .rm-tabs { display: flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; gap: 0; padding: 0; }
+  .rm-boothslot .rm-tabs button { flex: 1; min-height: 30px; height: 30px; border: 0; border-radius: 0; font-size: 12.5px; background: var(--paper); }
+  .rm-boothslot .rm-tabs button + button { border-left: 1px solid var(--line); }
+  .rm-boothslot .rm-tabs button.on { background: var(--ink); color: var(--paper); }
+}

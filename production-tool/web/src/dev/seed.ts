@@ -9,9 +9,11 @@ import { newProjectData, newUlidId, ranksBetween } from '../../../clan-store/src
 import type { Job, Mime, ProductionDocument, Shot } from '../contracts/types'
 import type { Services } from '../app/context'
 import { systemUpdate } from '../doc/store'
-import { applyFrame } from '../jobs/handlers'
+import { applyFrame, applyTake } from '../jobs/handlers'
+import { splitHere } from '../jobs/runView'
+import { selectedFrame } from '../jobs/frames'
 import { idbLocation, putBlob } from '../lib/blobs'
-import { mainScript, mainStoryboard, shotsOf } from '../model/selectors'
+import { mainScript, mainStoryboard, mainVideo, shotsOf } from '../model/selectors'
 import type { NodeEnv } from '../canvas/nodes/nodes'
 import { addBrief, newBrief } from '../brief/model'
 import { linkBrief, placeBrief } from '../brief/canvas'
@@ -148,6 +150,26 @@ export function installSeed(shell: Shell) {
       }, 'e2e seed')
       await (services.doc as { flush?: () => Promise<void> }).flush?.()
       services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+    },
+    /** The Film's rooms with footage (the paired screenshots' make/edit states): after market(), each shot its
+     *  own box with one ready mock take (its frame as a still), each in the Edit room's cut. */
+    takes: async () => {
+      const services: Services = shell.get().session!.services
+      const d0 = services.doc.get()
+      const sb = mainStoryboard(d0)
+      const video = mainVideo(d0)
+      if (!sb || !video) return
+      const shots = shotsOf(d0, sb.id)
+      for (const s of shots.slice(1)) await splitHere(services.doc, video.id, s.id)
+      await systemUpdate(services.doc, (d: ProductionDocument) => {
+        for (const s of shotsOf(d, sb.id)) {
+          const sha = selectedFrame(d, s.id)?.asset
+          if (!sha) continue
+          const job = { jobId: newUlidId('job'), op: 'clip', kind: 'mock', provider: 'mock', model: 'mock', outputs: [{ sha256: sha, durationS: s.duration_s }] } as unknown as Job
+          applyTake(d, job, { for: 'clip', shotId: s.id } as never, { inCut: true } as never)
+        }
+      }, 'e2e seed')
+      await (services.doc as { flush?: () => Promise<void> }).flush?.()
     },
     /** Opens the main script in the Script editor (the paired screenshots' script states). */
     script: async () => {

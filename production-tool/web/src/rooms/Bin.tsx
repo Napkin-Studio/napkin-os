@@ -97,13 +97,8 @@ function TakeTile({ g, data, picked, inCut, ready, draggable, onPick }: { g: Gen
       <Poster sha={g.asset} atS={g.segments[0]?.inS ?? 0} words={g.state === 'making' ? 'Making…' : box ? boxName(box) : ''} scrub />
       {g.state === 'making' && <span className="rm-spin" aria-label="Making" />}
       <div className="rm-tilename rm-clamp2" title={`${title} · ${g.label}`}>{title}</div>
-      <div className="rm-tilelabel rm-clamp2" title={g.label}>{g.label}</div>
-      {(inCut || ready) && (
-        <div className="rm-badges">
-          {ready && <span className="rm-pill accent">New take ready</span>}
-          {inCut && <span className="rm-pill ok">In the cut</span>}
-        </div>
-      )}
+      {/* One quiet line (mock .bin .it small): New take ready, In the cut, or what the take is. */}
+      <div className={`rm-tilelabel rm-clamp1 ${ready ? 'ready' : inCut ? 'incut' : ''}`} title={g.label}>{ready ? 'New take ready' : inCut ? 'In the cut' : g.label}</div>
       <Float anchor={ref} open={!!menu} onClose={close} label={title} role={menu === 'lineage' ? 'dialog' : 'menu'} className="rm-lineage">
         {menu === 'lineage' ? (
           <div className="rm-lineagebody">

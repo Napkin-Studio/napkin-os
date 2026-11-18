@@ -17,6 +17,7 @@ import { useSending } from '../ui/hooks'
 import type { ChangeOpen } from './ChangeDrawer'
 import { clipEnd, clipLen, fitWords, handleShort, type CutClip } from './cut'
 import { appendTake, assembleFirstCut, editCut } from './editOps'
+import { createPortal } from 'react-dom'
 import { Inspector } from './Inspector'
 import { boxName, sharesBox, type Gen } from './model'
 import { NewTakeSheet } from './NewTakeSheet'
@@ -29,7 +30,7 @@ import { Viewer } from './Viewer'
 
 const FRAME = 1 / 24
 
-export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready: readyAsk }: {
+export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready: readyAsk, picked, onPicked: setPicked, booth, viewSlot, toolSlot }: {
   data: RoomData
   sel: Selection
   onSel: (s: Selection) => void
@@ -38,6 +39,14 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
   register: (close: () => void) => () => void
   /** 'Use this take' from Edie's Booth: open the New take sheet on that clip and take. */
   ready?: { clipId: string; takeId: string; n: number } | null
+  /** What is picked (Rooms keeps it: the Booth shows only while something is). */
+  picked: Picked
+  onPicked: (p: Picked) => void
+  /** The Booth's slot for the Inspector (null while a change has the Booth). */
+  booth?: HTMLElement | null
+  /** The band's slots: Preview | Rendered, and the timeline's tools. */
+  viewSlot?: HTMLElement | null
+  toolSlot?: HTMLElement | null
 }) {
   const { doc: docStore } = useServices()
   const doc = useDoc()
@@ -64,10 +73,13 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
   const [, rerender] = useState(0)
   const v1 = cut.v1
   // What is picked: a clip (the selection carries across: Make's take or shot picks its clip here), a text, the card.
-  const [picked, setPicked] = useState<Picked>(() => {
+  useEffect(() => {
+    if (picked) return
     const c = v1.find((x) => (sel.clipId && x.id === sel.clipId)) ?? v1.find((x) => sel.shotId && x.follows?.shotId === sel.shotId)
-    return c ? { kind: 'clip', id: c.id } : null
-  })
+    if (c) setPicked({ kind: 'clip', id: c.id })
+    // On entering the room only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const pickedClip = picked?.kind === 'clip' ? v1.find((c) => c.id === picked.id) : undefined
   const pick = (p: Picked) => {
     setPicked(p)
@@ -177,16 +189,13 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
 
   return (
     <>
+      {viewSlot && createPortal(
+        <span className="pt-seg rm-bandseg" role="group" aria-label="What plays">
+          <button type="button" aria-pressed={view === 'preview'} onClick={() => setView('preview')}>Preview</button>
+          <button type="button" aria-pressed={view === 'rendered'} disabled={!render} onClick={() => setView('rendered')}
+            title={render ? undefined : 'Render ad to see the rendered film'}>{render ? `Rendered v${render.version}` : 'Rendered'}</button>
+        </span>, viewSlot)}
       <section className="rm-program" aria-label="Program">
-        <div className="rm-viewerhead">
-          <div className="rm-seg sm" role="radiogroup" aria-label="What plays">
-            <button type="button" role="radio" aria-checked={view === 'preview'} className={view === 'preview' ? 'on' : ''} onClick={() => setView('preview')}>Preview</button>
-            <button type="button" role="radio" aria-checked={view === 'rendered'} className={view === 'rendered' ? 'on' : ''} disabled={!render} onClick={() => setView('rendered')}
-              title={render ? undefined : 'Render ad to see the rendered film'}>{render ? `Rendered v${render.version}` : 'Rendered'}</button>
-          </div>
-          <span className="pt-grow" />
-          {plan.lengthS > 0 && <span className={`rm-pill ${fit.ok ? 'ok' : 'warn'}`} title={`The film is ${plan.lengthS.toFixed(1)} s; it is meant to be ${data.targetS} s`}>{fit.words}</span>}
-        </div>
         {view === 'rendered' && render ? (
           <RenderedPlayer sha={render.asset} onSound={onSound} />
         ) : (
@@ -215,19 +224,21 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
         )}
         {error && <div role="alert" className="rm-error">{error} <button type="button" className="btn link" onClick={() => setError(null)}>OK</button></div>}
       </section>
-      <aside className="rm-inspector" aria-label="Inspector">
-        <Inspector data={data} cut={cut} picked={picked} t={t} onPick={setPicked}
-          onChange={(c) => changeFrom(c)} onFeel={(c) => changeFrom(c, 'feel')}
-          onSwap={(c, take) => setSheet({ clip: c, take })}
-          handleShort={(c) => handleShort(cut, c.id, takeS)} />
-      </aside>
+      {booth && picked && createPortal(
+        <div className="rm-inspector" aria-label="Inspector">
+          <Inspector data={data} cut={cut} picked={picked} onPick={setPicked}
+            onChange={(c) => changeFrom(c)} onFeel={(c) => changeFrom(c, 'feel')}
+            onSwap={(c, take) => setSheet({ clip: c, take })}
+            handleShort={(c) => handleShort(cut, c.id, takeS)} />
+        </div>, booth)}
       <div className="rm-tlwrap">
         <Timeline data={data} cut={cut} t={t} marks={marks} picked={picked} ripple={ripple} onRipple={setRipple} snap={snap} onSnap={setSnap}
-          making={making} ready={ready}
+          making={making} ready={ready} tools={toolSlot} fit={plan.lengthS > 0 ? fit : undefined}
           actions={{
             seek: (s) => { setPlaying(false); setT(Math.min(Math.max(0, s), Math.max(plan.lengthS, 0))) },
             pick,
             assemble: () => run(assembleFirstCut(docStore, data)),
+            endCard: () => run(editCut.endCard(docStore, data.videoId, {}).then(() => setPicked({ kind: 'card' }))),
             trimHead: (c, inS) => run(editCut.trimHead(docStore, data.videoId, c, inS, ripple)),
             trimTail: (c, outS) => {
               if (outS > takeS(c.genId) + 1e-3) setError('Not enough footage after this clip. Making it longer comes soon; for now trim it shorter or use another take.')

@@ -18,11 +18,12 @@ import { ago, useChain, useLater } from '../ui/booth/hooks'
 import { agentNotes, groupFailures, stageWaiting, triesWords, videoAddresses } from '../ui/booth/notes'
 import { useBooth } from '../ui/booth/useBooth'
 import type { ChangeOpen } from './ChangeDrawer'
-import { boxName, type Gen } from './model'
+import { boxName, shotTitle, type Gen } from './model'
 import { Poster } from './Poster'
 import type { RoomData, RoomName, Selection } from './Rooms'
 import { dismissedTakes, newerTake, notNow, readCut } from './timeline'
 import type { CutClip } from './cut'
+import type { Picked } from './Timeline'
 
 
 /** A take is one of a box's takes: its own box, or a box made apart from it. */
@@ -44,8 +45,10 @@ export interface RoomProps {
   onReady: (clipId: Id, takeId: Id) => void
   /** The crumb's ← Film and ×: the selection goes, and the Booth with it. */
   onClose?: () => void
-  /** Where the Make room puts its Box | Shot | Change panel (a portal into the Booth). */
+  /** Where the Make room puts its Box | Shot | Change panel, and the Edit room its Inspector (a portal into the Booth). */
   slot?: Ref<HTMLDivElement>
+  /** The Edit room's pick: a clip, a text or the end card. */
+  picked?: Picked
 }
 
 /** Everything the rooms have waiting, and the agents' notes, worked out once (the line and the Booth share it). */
@@ -166,11 +169,20 @@ export function RoomBooth({ slot, ...p }: RoomProps) {
     ?? data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready')
   const ns = box ? box.shotIds.map((id) => shotNumber(doc, id)).filter((n) => n > 0) : []
   const where = box ? `${boxName(box)}${ns.length > 1 ? ` · shots ${ns[0]}-${ns.at(-1)}` : ns.length ? ` · shot ${ns[0]}` : ''}` : ''
+  // The Edit room: the Booth on a picked clip, text or end card (or a change asked from one), never on nothing.
+  const edit = room === 'edit'
+  const picked = p.picked
+  const cut = edit ? readCut(doc, data.videoId) : undefined
+  const clipAt = picked?.kind === 'clip' && cut ? cut.v1.findIndex((c) => c.id === picked.id) : -1
+  const clip = clipAt >= 0 ? cut!.v1[clipAt] : undefined
+  const editWhere = p.change ? 'Change' : clip ? `Clip ${clipAt + 1}${clip.follows?.shotId ? ` · ${shotTitle(doc.shots[clip.follows.shotId], shotNumber(doc, clip.follows.shotId))}` : ''}`
+    : picked?.kind === 'text' ? 'Text' : picked?.kind === 'card' ? 'End card' : ''
+  const earned = edit ? !!editWhere : !!box
   return (
-    <Booth state={booth} earned={!!box}>
-      <div className="sp-crumb"><button type="button" onClick={onClose}>← Film</button><span>›</span><b>{where}</b>
+    <Booth state={booth} earned={earned}>
+      <div className="sp-crumb"><button type="button" onClick={onClose}>{edit ? '← The cut' : '← Film'}</button><span>›</span><b className="rm-clamp1">{edit ? editWhere : where}</b>
         <button type="button" className="x" onClick={onClose} title="Back (Esc)" aria-label="Close the selection">×</button></div>
-      {room === 'make' && <div className="rm-boothslot" ref={slot} />}
+      <div className="rm-boothslot" ref={slot} />
       {apart.map((x) => x.node)}
       {room === 'make' && box && !box.endCard && (
         <div className="bsec">
