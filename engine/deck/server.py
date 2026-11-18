@@ -20,7 +20,7 @@ Env (all optional)::
     NAPKIN_DECK_PORT       listen port (default 8793; 8787 is the agent-server, 8788 the live relay, 8795 the middleware)
     NAPKIN_DECK_DATA       where the per-document folders go (default ./deck-runs)
     NAPKIN_DECK_REPLAY     a folder of recorded stage files: with it, mode "replay" replays them, paced by nothing, free
-    NAPKIN_DECK_LIVE       1 to allow mode "live": paid model calls (about 0.65 to 1.25 USD a deck). Off by default
+    NAPKIN_DECK_LIVE       1 to allow mode "live": paid model calls (about 0.50 to 0.95 USD a deck: the 2026-10-05 eval rescaled to the 17 Nov 2026 price table). Off by default
     NAPKIN_DECK_MAX_USD    the most one run may spend live (default 2.00); the run stops, with its message, at the cap
     NAPKIN_DECK_IMAGES     1 to allow picture generation (deck-image-gen): off by default. A cost card and a person's yes come first, always
     NAPKIN_DECK_IMAGES_MAX_USD  the ceiling on one deck's picture spend over its whole life (default 2.50), failures and stage g included

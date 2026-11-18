@@ -420,9 +420,12 @@ Rules:
 - `look` is marked `"x-clan-appearance": true` on the top-level property, so a person's change there is one
   rolling `look` entry and asks for no reason (os-layer §4). `inputs.pictures` and `review` are not
   appearance: allowing generation, a spend cap, an approver and an approval are ordinary attributed decisions.
-- **A default in the schema is what the app shows and the runner applies.** The engine does not assume
-  it: `run_deck` given no preferences behaves as it does today (no pictures, the slide types' budgets), so
-  recorded runs and goldens are unchanged. The runner always passes the resolved preferences.
+- **A default in the schema is what the app shows and the runner applies.** The engine assumes only two:
+  no pictures, and a density by format (a `pitch` is `lean`, a `full` deck `detailed`; `spec.DENSITY_DEFAULTS`, stamped
+  `source: default`). `run_deck` given no preferences therefore builds a lean pitch, not the slide types' full budgets;
+  the goldens and tests pin `--density detailed` to keep those. It assumes no `text_mode`: with none, the repair loop
+  runs no shorten and no move to the notes (a paid rung needs the explicit choice), while the plan's density still moves
+  points to the notes unless `preserve`. The runner always passes the resolved preferences.
 - `deck.meta.preferences` is the runner's stamp of what a build used:
   `{pictures, density, picture_source, style_pack, brand, picture_approval}`, each the field's values plus
   `source: person | default`.
@@ -438,7 +441,7 @@ Rules:
 - Two things stay rules, whatever the user chooses: a part marked Confidential with `model: false` is never
   sent to a provider (os-layer §4), and a `reference_only` asset never fills a slot.
 - `theme`: `napkin` · `brand` · `classic`. `strict_brand`: only the kit's layouts and given tokens, nothing
-  derived. `inputs.text_mode`: `preserve` turns the repair loop's shorten rung off; `condense` is the default.
+  derived. `inputs.text_mode`: `preserve` turns the repair loop's shorten rung and the plan's moves to the notes off; `condense` is the app's default, passed by the runner (the engine given none behaves as in section 6.3).
 
 ### 6.4 Asking: intake, the Start screen and Review
 

@@ -440,7 +440,7 @@ THEME_NAMES = ("napkin", "brand", "classic")
 PICTURES_ON = ("creative_cover", "creative", "none", "custom")
 DENSITY_LEVELS = ("lean", "standard", "detailed")
 #: Words on a content slide per density level; ``detailed`` is the slide type's own budget in SLIDE_TYPES. Napkin defaults,
-#: to be tuned on the visual checklist. The engine does not apply them yet.
+#: to be tuned on the visual checklist. The fit ladder in layouts.py applies them (a point over the target moves to the notes).
 DENSITY_WORDS = {"lean": 30, "standard": 60}
 #: The default density by ``inputs.format``: a presented pitch is lean, a leave-behind keeps today's budgets.
 DENSITY_DEFAULTS = {"pitch": "lean", "full": "detailed"}

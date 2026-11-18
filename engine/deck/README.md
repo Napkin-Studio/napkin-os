@@ -46,7 +46,7 @@ python3 -m deck.run_deck --kind investor --brief outputs/deck_inputs/seed/brief.
 
 | Option | What it does |
 |---|---|
-| `--live` | Runs missing model stages and saves them to `--stages`. **Paid** (about $0.65-1.25 a deck in the 2026-10-05 eval): ask first |
+| `--live` | Runs missing model stages and saves them to `--stages`. **Paid** (about $0.50-0.95 a deck: the 2026-10-05 eval, rescaled to the 17 Nov 2026 price table): ask first |
 | `--until STAGE` | Stop after a stage (`a0`, `a`, `b`, `c`, `d`, or `i` for an investor deck) and write `report.json` with `until` set; `deck` stops once the deck is assembled and validated, before any file is rendered (so no LibreOffice is needed). The stage outputs stay in `--stages`: a later run carries on from them. A live run makes a missing `--stages` folder first. How the Deck Maker server runs a deck one gate at a time (`features/deck-maker-server.clan`) |
 | `--format pitch\|full` | `pitch` (default): at most 18 presented slides, an Appendix divider, backup slides hidden. `full`: every slide in story order (ADR 0024) |
 | `--audience review\|client` | `review` (default) shows agency notes and flags; `client` drops them and fails on any agency-only text left on screen |
@@ -377,7 +377,7 @@ NAPKIN_DECK_REPLAY=deck/tests/fixtures/fernley/stages python3 -m deck.server    
 | `NAPKIN_DECK_PORT` | default 8793 (8787 is the agent-server, 8788 the live relay, 8795 the middleware) |
 | `NAPKIN_DECK_DATA` | where the per-document, per-inputs folders go (default `./deck-runs`); they are a cache: a changed prompt starts again |
 | `NAPKIN_DECK_REPLAY` | a folder of recorded stage files: mode `replay` copies them in stage by stage, free |
-| `NAPKIN_DECK_LIVE` | `1` allows mode `live`: paid model calls (about 0.65 to 1.25 USD a deck). Off by default |
+| `NAPKIN_DECK_LIVE` | `1` allows mode `live`: paid model calls (about 0.50 to 0.95 USD a deck, at the 17 Nov 2026 price table). Off by default |
 | `NAPKIN_DECK_MAX_USD` | the most one live run may spend (default 2.00); the run stops at the cap with its message and what it wrote stays |
 
 A gate goes on only when the request carries the person's approval of it **and** its stage output already existed when the request
