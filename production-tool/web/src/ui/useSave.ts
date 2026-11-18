@@ -2,9 +2,13 @@
 // and Ctrl/Cmd+S (registered once, by SaveKeys in App) read and drive the same store, so the bar's
 // words and the menu item always agree. Saving sends the project to the server now (the relay keeps
 // it: S3 on AWS, .local-data/clan locally), on top of the save every 5 minutes and on a lock.
+//
+// "saved HH:MM" is the server copy's time, whoever sent it (live test 2026-11-18: the 5-minute and lock
+// saves never moved it, and a reload said "not saved yet"): the project index's server mark
+// (projects/serverCopy.ts writes it on every post, and it is kept across reloads), or a later Save now.
 
-import { useCallback, useSyncExternalStore } from 'react'
-import { useServices } from '../app/context'
+import { useCallback, useContext, useSyncExternalStore } from 'react'
+import { ShellContext, useServices } from '../app/context'
 import { errorShown, record } from '../dogfood/recorder'
 
 export type SaveState = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved'; at: Date } | { kind: 'failed'; why: string }
@@ -43,8 +47,11 @@ export const saveTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit',
 /** The save state and Save now. `can` is false without the relay and the .clan store (the in-browser
  *  mock, the plain-data fallback): then there is no Save anywhere. */
 export function useSave(): { can: boolean; state: SaveState; save: () => Promise<void> } {
-  const { clan, relay } = useServices()
-  const state = useSyncExternalStore(store.subscribe, () => store.get(clan))
+  const { clan, relay, project } = useServices()
+  const index = useContext(ShellContext)?.index
+  const manual = useSyncExternalStore(store.subscribe, () => store.get(clan))
+  const serverAt = useSyncExternalStore(index ? index.subscribe : noSubscribe, () => index?.get(project.id)?.server?.savedAt ?? null)
+  const state = merged(manual, serverAt)
   const can = !!clan && relay.kind === 'http'
   const save = useCallback(async () => {
     if (!clan || relay.kind !== 'http') return
@@ -58,4 +65,14 @@ export function useSave(): { can: boolean; state: SaveState; save: () => Promise
     if (r.kind === 'failed') errorShown('save', r.why)
   }, [clan, relay.kind])
   return { can, state, save }
+}
+
+const noSubscribe = () => () => {}
+
+/** A Save now that is running or failed says so; otherwise the latest of a Save now and the server copy's time. */
+export function merged(manual: SaveState, serverAt: string | null): SaveState {
+  if (manual.kind === 'saving' || manual.kind === 'failed') return manual
+  const there = serverAt ? new Date(serverAt) : null
+  const at = there && !Number.isNaN(there.getTime()) && (manual.kind !== 'saved' || there > manual.at) ? there : manual.kind === 'saved' ? manual.at : null
+  return at ? { kind: 'saved', at } : IDLE
 }

@@ -591,7 +591,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         )}
         right={!phone && (
           <>
-            <span className={`pt-mono se-saved ${saved === 'Saved' ? '' : 'busy'}`} role="status">{saved}</span>
+            {/* The bar's saved line is the one save state (ui/useSave.ts); the band says only that this browser is offline. */}
+            {saved.startsWith('Offline') && <span className="pt-mono se-saved busy" role="status">{saved}</span>}
             <ScriptRefs composed={composed} doc={doc} store={store} onError={setError} say={say} />
             <ImportExport onImport={() => fileRef.current?.click()} onFountain={() => void exportFountain()} onPdf={() => void exportPdf()} />
           </>

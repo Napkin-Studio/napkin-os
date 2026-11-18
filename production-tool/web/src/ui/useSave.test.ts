@@ -2,10 +2,25 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { createSaveStore } from './useSave'
+import { createSaveStore, merged } from './useSave'
 
 // One save state (features/topbar-declutter.clan): the canvas bar's status and More's "Save now"
 // read the same store, and Ctrl/Cmd+S is bound once.
+
+describe('the saved line has one source (live test 2026-11-18)', () => {
+  const at = new Date('2026-11-18T06:17:00Z')
+  it('the server copy\'s time, from a 5-minute or lock save, or after a reload, says saved', () => {
+    expect(merged({ kind: 'idle' }, '2026-11-18T06:22:58Z')).toEqual({ kind: 'saved', at: new Date('2026-11-18T06:22:58Z') })
+    expect(merged({ kind: 'saved', at }, '2026-11-18T06:37:58Z')).toEqual({ kind: 'saved', at: new Date('2026-11-18T06:37:58Z') })
+  })
+  it('a later Save now wins; a running or failed one says so; nothing saved yet is idle', () => {
+    expect(merged({ kind: 'saved', at }, '2026-11-18T06:00:00Z')).toEqual({ kind: 'saved', at })
+    expect(merged({ kind: 'saving' }, '2026-11-18T06:22:58Z').kind).toBe('saving')
+    expect(merged({ kind: 'failed', why: 'x' }, '2026-11-18T06:22:58Z').kind).toBe('failed')
+    expect(merged({ kind: 'idle' }, null).kind).toBe('idle')
+    expect(merged({ kind: 'idle' }, 'not a date').kind).toBe('idle')
+  })
+})
 
 describe('the save store', () => {
   it('saving, then saved', async () => {
