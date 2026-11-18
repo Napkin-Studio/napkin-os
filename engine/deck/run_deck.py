@@ -100,11 +100,13 @@ def _soffice() -> str:
 
 
 def _load_vendored_fonts(profile: str) -> None:
-    """Copy the vendored OFL fonts (deck/fonts: Archivo, Source Sans 3) into the private LibreOffice profile's ``user/fonts``, where
-    LibreOffice reads extra fonts, so the PDF and the PNGs are set in the fonts the deck names, not a substitute (deck-look)."""
+    """Copy the vendored OFL fonts' STATIC faces (deck/fonts/*/static: Archivo, Source Sans 3, regular, bold, italic) into the private
+    LibreOffice profile's ``user/fonts``, where LibreOffice reads extra fonts, so the PDF and the PNGs are set in the fonts the deck names,
+    not a substitute (deck-look). Never the variable files: LibreOffice and PowerPoint draw a variable font at its default instance, and
+    Source Sans 3's default is ExtraLight (wght 200), which set every body line as a faint hairline."""
     dest = Path(profile) / "user" / "fonts"
     dest.mkdir(parents=True, exist_ok=True)
-    for f in (Path(__file__).resolve().parent / "fonts").glob("*/*.ttf"):
+    for f in (Path(__file__).resolve().parent / "fonts").glob("*/static/*.ttf"):
         shutil.copy2(f, dest / f.name)
 
 
