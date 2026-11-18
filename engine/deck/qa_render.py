@@ -34,6 +34,9 @@ Pixels (from the render):
                   pixels around it, 4.5:1 (3:1 for large text)
   mostly_empty    almost nothing but background
   one_corner      the content sits in one corner (share of non-background area per third of the slide)
+  q_no_hole       (spec.LOOK_V3 only, advisory) the largest empty rectangle of the slide on a 96 x 54 cell grid inside 3-97% x and
+                  3-90% y: over spec.HOLE_GATE (20%) the gate value, over spec.HOLE_ADVISORY (12%) advisory; pixels[n]["hole"] and
+                  summary.holes {median, max, over_gate} record it (Gamma's Lumen deck: median 6.6%, max 17%)
 
 The text-height estimate is a character-count one (average glyph width as a share of the font size),
 so it flags only what is clearly over. Hidden slides (the appendix) are checked for geometry but not
@@ -449,6 +452,49 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
     return out
 
 
+def text_contrasts(slide) -> list:
+    """Every text run on a slide with the colour it sits on and its WCAG ratio: ``[{shape, text, fg, bg, ratio, need, size, bold}]``. The
+    ground is the shape's own fill, else the last filled shape drawn before it under its centre, else the slide background; a run over a
+    picture with no fill between is left out (text_on_image_contrast measures it on the render). ``need`` is AA: 4.5, or 3.0 for large
+    text (18 pt, or 14 pt bold). The deck-look contrast test holds every run of a LOOK_V3 render to it."""
+    bg = _bg_rgb(slide)
+    fills, pics, out = [], [], []
+    for sh in slide.shapes:
+        if sh.left is None or sh.width is None:
+            continue
+        x, y, w, h = sh.left, sh.top, sh.width, sh.height
+        if _is_picture(sh):
+            pics.append((x, y, w, h))
+        own = _solid_fill(sh)
+        has_text = sh.has_text_frame and sh.text_frame.text.strip()
+        if own and not has_text:
+            fills.append((x, y, w, h, own))
+        if not has_text:
+            continue
+        cx, cy = x + w // 2, y + h // 2
+        under = own
+        if under is None:
+            for fx, fy, fw, fh, fc in fills:
+                if fx <= cx <= fx + fw and fy <= cy <= fy + fh:
+                    under = fc
+        if under is None:
+            if any(px <= cx <= px + pw and py <= cy <= py + ph for px, py, pw, ph in pics):
+                continue
+            under = bg
+        if under is None:
+            continue
+        for p in sh.text_frame.paragraphs:
+            for r in p.runs:
+                fg = _run_rgb(r)
+                if fg is None or not r.text.strip():
+                    continue
+                sz = r.font.size.pt if r.font.size else 18.0
+                large = sz >= 18 or (sz >= 14 and bool(r.font.bold))
+                out.append({"shape": sh.name, "text": r.text, "fg": "%02X%02X%02X" % fg, "bg": "%02X%02X%02X" % tuple(under),
+                            "ratio": round(contrast_ratio(fg, under), 2), "need": 3.0 if large else 4.5, "size": sz, "bold": bool(r.font.bold)})
+    return out
+
+
 def _check_contrast(tf, under, out: list) -> None:
     """Contrast findings for the runs of one text frame on a known colour."""
     seen = set()
@@ -655,6 +701,65 @@ def ink_shares(w: int, h: int, px: bytes, tol: int = 48) -> dict:
             "_counts": (hc, vc)}
 
 
+#: q_no_hole (deck-look): the cell grid of the page render, and the band of the slide it looks in (x 3-97%, y 3-90%: the margins and the
+#: footer are not holes).
+HOLE_GRID = (96, 54)
+HOLE_X, HOLE_Y = (0.03, 0.97), (0.03, 0.90)
+
+
+def largest_empty_rect(w: int, h: int, px: bytes, tol: int = 36) -> float:
+    """The largest empty axis-aligned rectangle of a rendered slide as a share of the slide (q_no_hole, design.checklist): the page is cut
+    into 96 x 54 cells; a cell is empty when every pixel in it is within ``tol`` (sum of the channel differences) of the background (the
+    commonest colour on the image border), so a cell holding any text, rule or picture is not; the largest rectangle of empty cells inside
+    3-97% x and 3-90% y is returned over the whole slide's 96 x 54 cells. Pure Python, deterministic."""
+    border = Counter()
+    for x in range(w):
+        for y in (0, h - 1):
+            i = (y * w + x) * 3
+            border[px[i:i + 3]] += 1
+    for y in range(h):
+        for x in (0, w - 1):
+            i = (y * w + x) * 3
+            border[px[i:i + 3]] += 1
+    br, bg_, bb = border.most_common(1)[0][0]
+    gx, gy = HOLE_GRID
+    c0, c1 = round(HOLE_X[0] * gx), round(HOLE_X[1] * gx)
+    r0, r1 = round(HOLE_Y[0] * gy), round(HOLE_Y[1] * gy)
+    full = [[True] * gx for _ in range(gy)]
+    for y in range(h):
+        r = min(y * gy // h, gy - 1)
+        row = full[r]
+        base = y * w * 3
+        for x in range(w):
+            i = base + x * 3
+            if abs(px[i] - br) + abs(px[i + 1] - bg_) + abs(px[i + 2] - bb) > tol:
+                row[min(x * gx // w, gx - 1)] = False
+    best, heights = 0, [0] * (c1 - c0)
+    for r in range(r0, r1):
+        for k, c in enumerate(range(c0, c1)):
+            heights[k] = heights[k] + 1 if full[r][c] else 0
+        stack = []   # the largest rectangle under the histogram of empty-run heights
+        for k in range(len(heights) + 1):
+            hk = heights[k] if k < len(heights) else 0
+            start = k
+            while stack and stack[-1][1] >= hk:
+                start, hs = stack.pop()
+                best = max(best, hs * (k - start))
+            stack.append((start, hk))
+    return round(best / (gx * gy), 4)
+
+
+def hole_findings(share: float) -> list:
+    """q_no_hole (advisory in this slice): above ``spec.HOLE_GATE`` (20%) a warning naming the gate value; between ``spec.HOLE_ADVISORY``
+    (12%) and the gate, an advisory note. Gamma's Lumen deck: median 6.6%, max 17%."""
+    out: list = []
+    if share > spec.HOLE_GATE:
+        _add(out, "q_no_hole", "warn", f"the largest empty rectangle is {share * 100:.1f}% of the slide (gate {spec.HOLE_GATE * 100:.0f}%, advisory for now)")
+    elif share > spec.HOLE_ADVISORY:
+        _add(out, "q_no_hole", "warn", f"the largest empty rectangle is {share * 100:.1f}% of the slide (advisory above {spec.HOLE_ADVISORY * 100:.0f}%)")
+    return out
+
+
 def _check_pixels(m: dict) -> list:
     """Findings from one slide's ink shares."""
     out: list = []
@@ -721,6 +826,9 @@ def check_pptx(pptx: Path, pdf: Path | None = None, validation: list | None = No
                     for n, pg in zip(presented, pages):
                         m = ink_shares(*read_ppm(pg))
                         found = _check_pixels(m)
+                        if spec.LOOK_V3:   # deck-look q_no_hole: measured on every presented slide (advisory)
+                            m["hole"] = largest_empty_rect(*read_ppm(pg))
+                            found += hole_findings(m["hole"])
                         if n in over:
                             found += _check_text_on_image(over[n], W / EMU_IN, H / EMU_IN, *read_ppm(pg))
                         m.pop("_counts")
@@ -735,7 +843,12 @@ def check_pptx(pptx: Path, pdf: Path | None = None, validation: list | None = No
             notes.append("pixels skipped: no PDF")
     except Exception as e:
         slides = {"deck": [{"check": "unreadable", "level": "error", "message": f"the pptx could not be checked: {type(e).__name__}: {e}"}]}
-    return {"slides": slides, "pixels": pixels, "summary": summarise(slides, notes)}
+    out = {"slides": slides, "pixels": pixels, "summary": summarise(slides, notes)}
+    holes = sorted(v["hole"] for v in pixels.values() if "hole" in v)
+    if holes:   # deck-look: the deck's hole profile beside Gamma's (median 6.6%, max 17%)
+        out["summary"]["holes"] = {"median": holes[len(holes) // 2] if len(holes) % 2 else round((holes[len(holes) // 2 - 1] + holes[len(holes) // 2]) / 2, 4),
+                                   "max": holes[-1], "over_gate": sum(1 for x in holes if x > spec.HOLE_GATE)}
+    return out
 
 
 def summarise(slides: dict, notes: list | None = None) -> dict:

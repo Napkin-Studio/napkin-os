@@ -1,0 +1,64 @@
+id: picture_column
+version: 1
+group: content
+purpose: image
+description: A full-height picture column bleeding off one side (sides alternate), the title, a lead and up to three labelled points beside it.
+slot_summary: title (hero), lead, copy, points (0-3), picture
+for_types:
+- audience
+- execution
+- idea
+- solution
+- product
+when:
+  test: image_ready
+priority: 97
+alternatives:
+- image_text
+- image_left
+- cards_split
+without_image: cards_split
+density: standard
+pick: rule
+family: picture_column
+renderer: picture_column
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    min_chars: 3
+    max_lines: 4
+  lead:
+    kind: text
+    role: lead
+    from_blocks:
+    - statement
+    - text
+  copy:
+    kind: copy
+    role: lead
+    from_blocks:
+    - copy
+  points:
+    kind: group
+    role: body
+    from_blocks:
+    - kv
+    - bullets
+    - small
+    - callout
+    max_items: 3
+  picture:
+    kind: image
+    required: true
+    dominant: false
+    image:
+      aspect: '4:3'
+      kinds:
+      - photo
+      - illustration
+      - frame
+      fit: cover
+      text_over: false
+      scrim: none

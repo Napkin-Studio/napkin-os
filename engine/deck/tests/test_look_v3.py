@@ -152,8 +152,8 @@ def test_no_edge_stripes_or_ticks(v3, tmp_path):
     hair = 0
     for sl in prs.slides:
         for sh in sl.shapes:
-            if sh.shape_type == 9 or sh.name in ("Hairline", "BandRule"):   # a line
-                assert sh.line.width == Pt(0.75)
+            if sh.shape_type == 9 or sh.name in ("Hairline", "BandRule"):   # a line (the shift line's two-stop line is the one heavier rule)
+                assert sh.line.width == (Pt(3.8) if sh.name == "StopLine" else Pt(0.75)), sh.name
                 hair += 1
                 continue
             if sh.shape_type == 1 and sh.fill.type == 1:   # an autoshape with a solid fill
@@ -202,6 +202,7 @@ def test_no_word_is_lost_by_the_reskin(tmp_path, monkeypatch):
     for i, (a, b) in enumerate(zip(before.slides, after.slides), 1):
         label = Counter(re.findall(r"[A-Za-z0-9%€]+", after_deck["slides"][after_deck["order"][i - 1]]["section"].lower()))   # the engine's own section label moves to the band
         lost = _words(a) - (_words(b) + Counter(re.findall(r"[A-Za-z0-9%€]+", b.notes_slide.notes_text_frame.text.lower())) + label)
+        lost -= Counter({"proposed": lost.get("proposed", 0)})   # the placeholder card's PROPOSED tag is an engine mark: the reworked close (step 4) tags a dashed row 'To supply', and the words still begin 'Proposed (not given by the client)'
         assert not lost, (i, dict(lost))
 
 

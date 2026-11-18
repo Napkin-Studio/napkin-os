@@ -139,7 +139,8 @@
             "has_human_item",
             "compare_table",
             "role_rows",
-            "image_ready"
+            "image_ready",
+            "points_2_3"
           ],
           "$comment": "a named test from spec.LAYOUT_TESTS, implemented in layouts.py"
         },
@@ -232,6 +233,10 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{2,31}$",
       "$comment": "the variety rule counts families, not ids"
+    },
+    "human_rows": {
+      "type": "boolean",
+      "$comment": "deck-look: the layout draws a human item (a placeholder a person must supply) as a dashed 'To supply' row, so it accepts a slide that holds one"
     }
   },
   "definitions": {

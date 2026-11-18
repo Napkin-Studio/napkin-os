@@ -398,7 +398,16 @@ LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "compari
               "close", "big_statement", "quote_full", "cards_split", "text_columns", "placeholder_split", "chart_full",
               "timeline_rows", "execution_stack", "territory_wide", "people_cards")
 #: The tests a layout file's ``when.test`` may name; each is a function of the same name in layouts.py (and has a unit test).
-LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready")
+LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3")
+#: deck-look steps 3-4: the layouts that exist only under ``LOOK_V3`` (``layouts/v3``; the same folder may also rework a layout
+#: of LAYOUT_IDS, such as ``close``). With the flag off the library is the 36 above, byte for byte.
+LAYOUT_IDS_V3 = ("statement_points", "reframe", "shift_line", "picture_column")
+#: deck-look: a statement set in capitals only when it is at most this many characters (and two lines); sentence case beyond (Q10).
+CAPS_MAX_CHARS = 40
+#: deck-look q_no_hole (design.checklist): the largest empty rectangle of a presented content slide, as a share of the slide, on a
+#: 96 x 54 cell grid of the page render inside 3-97% x and 3-90% y. Above HOLE_GATE is the gate value (advisory in this slice);
+#: above HOLE_ADVISORY is advisory. Gamma's Lumen deck: median 6.6%, max 17%; ours before the look: median 19.4%, max 57.9%.
+HOLE_GATE, HOLE_ADVISORY = 0.20, 0.12
 #: The eight look changes of deck-layout-library (cover 64 pt, a stamped title size and a fixed title box per layout, 48-character
 #: lines, switch before relaxed, picture and close layouts rule-picked). Off while the library lands without a look change; on at the look commit.
 LOOK_V2 = True

@@ -30,6 +30,8 @@ import yaml
 from . import images, spec
 
 DIR = Path(__file__).with_name("layouts")
+#: deck-look steps 3-4: the layouts laid over the library under ``spec.LOOK_V3`` (new ids and reworks).
+V3_DIR = DIR / "v3"
 SCHEMA = Path(__file__).with_name("schemas") / "layout.schema.json"
 #: The keys the plan owns: removed by ``strip_plan``, compared in golden_plan.json.
 PLAN_KEYS = ("layout", "slots", "meta.layout_title_pt")
@@ -48,15 +50,20 @@ class LibraryError(ValueError):
 def load(directory: Path | None = None, force: bool = False) -> dict:
     """``{id: layout}`` in file order (priority breaks ties by it). Every file is validated against the schema and the
     library's own rules: id equals the file name, in ``spec.LAYOUT_IDS``, at most ``spec.LAYOUT_MAX``, ``for_types`` in
-    ``spec.SLIDE_TYPES``, ``pick`` and ``family`` set, no ``max_line_in``, alternatives that exist."""
+    ``spec.SLIDE_TYPES``, ``pick`` and ``family`` set, no ``max_line_in``, alternatives that exist.
+
+    The default library under ``spec.LOOK_V3`` is the 36 files with ``layouts/v3`` laid over them (deck-look steps 3-4): a file there
+    with a new id (``spec.LAYOUT_IDS_V3``) is added, one with an existing id replaces it. With the flag off it is the 36, unchanged."""
+    v3 = directory is None and bool(spec.LOOK_V3)
     d = Path(directory) if directory else DIR
-    key = str(d)
+    key = str(d) + ("+v3" if v3 else "")
     if key in _CACHE and not force:
         return _CACHE[key]
     import jsonschema
     schema = json.loads(SCHEMA.read_text())
     lib: dict = {}
-    for f in sorted(d.glob("*.yaml")):
+    files = sorted(d.glob("*.yaml")) + (sorted(V3_DIR.glob("*.yaml")) if v3 else [])
+    for f in files:
         lay = yaml.safe_load(f.read_text())
         try:
             jsonschema.validate(lay, schema)
@@ -64,7 +71,7 @@ def load(directory: Path | None = None, force: bool = False) -> dict:
             raise LibraryError(f"{f.name}: {e.message}") from e
         if lay["id"] != f.stem:
             raise LibraryError(f"{f.name}: id {lay['id']!r} is not the file name")
-        if lay["id"] not in spec.LAYOUT_IDS:
+        if lay["id"] not in spec.LAYOUT_IDS and not (f.parent == V3_DIR and lay["id"] in spec.LAYOUT_IDS_V3):
             raise LibraryError(f"{f.name}: {lay['id']} is not in spec.LAYOUT_IDS")
         for t in lay["for_types"]:
             if t not in spec.SLIDE_TYPES:
@@ -154,7 +161,58 @@ def image_ready(lay: dict, ready: set | frozenset) -> bool:
     return bool(need) and all(n in ready for n in need)
 
 
-TESTS = {"has_target_figure": has_target_figure, "has_human_item": has_human_item, "compare_table": compare_table, "role_rows": role_rows}
+#: Block kinds a statement layout sets as one point each (bullets and kv: one point per item).
+POINT_KINDS = ("bullets", "kv", "quote", "text", "statement", "small", "callout", "card")
+
+
+def statement_points(bl: list) -> list | None:
+    """The points a statement layout (statement_points) stacks, from the shown blocks, in order: ``[{heading, text, italic, caption}]``.
+    A bullets or kv block gives one point per item (a kv item's key is its heading), a card its title as the heading, every other text
+    block one point; the 'Illustrative line' label after an unsourced quote is that quote's caption, not a point; empty blocks are
+    skipped. None when a block is of a kind a point cannot hold (a table, a chart, a from-to...). The words are the blocks' own."""
+    out = []
+    for b in bl:
+        k = b["kind"]
+        if k not in POINT_KINDS:
+            return None
+        if k == "small" and b.get("basis") == "meta" and b.get("text") == spec.ILLUSTRATIVE_QUOTE and out and out[-1]["italic"]:
+            out[-1]["caption"] = b["text"]
+            continue
+        if k == "bullets":
+            out += [{"heading": "", "text": _item_text(i).strip(), "italic": False, "caption": ""} for i in _items(b) if _item_text(i).strip()]
+        elif k == "kv":
+            out += [{"heading": str(i[0]).strip(), "text": str(i[1]).strip(), "italic": False, "caption": ""} for i in _items(b) if str(i[1]).strip()]
+        elif str(b.get("text", "")).strip():
+            out.append({"heading": str(b.get("title", "")).strip() if k == "card" else "", "text": str(b["text"]).strip(),
+                        "italic": k == "quote", "caption": ""})
+    return out
+
+
+def points_2_3(s: dict, bl: list) -> bool:
+    """Two or three points for a statement layout (``statement_points``): a slide with fewer is not padded and one with more is not cut;
+    another layout is picked instead (deck-look, 'never pad')."""
+    pts = statement_points(bl)
+    return pts is not None and 2 <= len(pts) <= 3
+
+
+TESTS = {"has_target_figure": has_target_figure, "has_human_item": has_human_item, "compare_table": compare_table, "role_rows": role_rows,
+         "points_2_3": points_2_3}
+
+
+def picture_sides(deck: dict) -> dict:
+    """``{slide id: "left" | "right"}`` for every slide planned on ``picture_column``, in deck order: the first column on the left, then
+    alternating (design.layouts: picture columns alternate sides). One rule for the pptx and the web deck."""
+    out, side = {}, "left"
+    for sid in deck["order"]:
+        if ((deck["slides"][sid].get("layout") or {}).get("id")) == "picture_column":
+            out[sid] = side
+            side = "right" if side == "left" else "left"
+    return out
+
+
+def caps_ok(text: str) -> bool:
+    """A statement may be set in capitals: at most ``spec.CAPS_MAX_CHARS`` characters (the renderer also asks for two lines at most)."""
+    return len(str(text).strip()) <= spec.CAPS_MAX_CHARS
 
 
 def _matches(lay: dict, s: dict, bl: list, ready) -> bool:
@@ -246,8 +304,8 @@ def accepts(lay: dict, s: dict, bl: list, ready=frozenset()) -> bool:
     picture when it has one."""
     if s["type"] not in lay["for_types"]:
         return False
-    if has_human_item(s, bl) and lay["family"] != "placeholder":
-        return False   # only the placeholder family may draw a human item (dashed, PROPOSED, TO SUPPLY)
+    if has_human_item(s, bl) and lay["family"] != "placeholder" and not lay.get("human_rows"):
+        return False   # only the placeholder family (or a layout with human_rows: dashed To supply rows) may draw a human item
     take = {k for sl in lay["slots"].values() if sl["kind"] != "image" for k in (sl.get("from_blocks") or [])}
     if not {b["kind"] for b in bl} <= take:
         return False

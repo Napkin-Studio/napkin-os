@@ -132,6 +132,49 @@ def _objective_slide(inp, items: list):
     return _slide("objective", "What has to change, by how much and by when" if quantified else "What has to change", blocks, status="from_source")
 
 
+#: deck-look (spec.LOOK_V3): brief fields the deck held but never showed, and the one slide each belongs on (design.density
+#: where_words_come_from; one field, one home). (slide type, brief field, label as engine words, block kind)
+SURFACED_FIELDS = (("objective", "objectives.attitudinal", None, "bullets"),
+                   ("real_question", "background", "Background", "kv"),
+                   ("audience", "desired_response", "What we want them to do", "kv"))
+
+
+def _deck_texts(S: list) -> str:
+    """Every word the slides show, normalised (``spec.norm_text``): what 'already said' is checked against."""
+    out = []
+    for sl in S:
+        out.append(sl.get("title", ""))
+        for b in sl["blocks"]:
+            out += [str(b.get(k, "")) for k in ("text", "from", "to", "title")]
+            for i in b.get("items") or []:
+                out += [str(x) for x in (i if isinstance(i, (list, tuple)) else [i.get("text", "") if isinstance(i, dict) else i])]
+            out += [" ".join(map(str, r)) for r in b.get("rows") or []]
+    return " | ".join(spec.norm_text(x) for x in out if str(x).strip())
+
+
+def _surface_brief_fields(S: list, inp) -> None:
+    """Add each field of ``SURFACED_FIELDS`` to its home slide, in the brief's own words with its ref, when the brief holds it, the home
+    slide is in the deck and no slide already says it (a sentence is said once). Density comes from distinct brief fields only, never
+    from a layout asking for more words."""
+    for typ, field, label, kind in SURFACED_FIELDS:
+        home = next((sl for sl in S if sl["type"] == typ), None)
+        top, _, sub = field.partition(".")
+        v = (inp.brief.get(top) or {}).get("value")
+        v = v.get(sub) if (sub and isinstance(v, dict)) else (None if sub else v)
+        text = str(v).strip() if isinstance(v, str) else ""
+        if not (home and text) or spec.norm_text(text) in _deck_texts(S):
+            continue
+        ref = f"brief:{field}"
+        if kind == "bullets":
+            bl = next((b for b in home["blocks"] if b["kind"] == "bullets"), None)
+            if bl is None:
+                continue
+            bl["items"] = list(bl["items"]) + [{"text": text, "refs": [ref]}]
+        else:
+            home["blocks"] = [b for b in home["blocks"] if not (b["kind"] in ("text", "small") and not str(b.get("text", "")).strip())] + \
+                [{"kind": kind, "items": [[label, text]], "refs": [ref]}]
+
+
 def _dedupe_blocks(title: str, blocks: list, claims: list) -> list:
     """Say a sentence once on a slide: a text-bearing block (text, statement, quote, callout, small, card) whose
     words equal the slide's title, or an earlier such block's, is dropped. Refs it carried are kept as a claim,
@@ -702,6 +745,9 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
             "territories": territories or {}, "slides": {}, "order": []}
     if fit:
         deck["fit"] = fit
+
+    if spec.LOOK_V3:   # deck-look: three brief fields the deck never showed, each on its one home slide (said once)
+        _surface_brief_fields(S, inp)
 
     # Requirement mapping, trace and sources slides go last (they read the slides above).
     for r in reqs:

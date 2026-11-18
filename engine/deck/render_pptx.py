@@ -399,6 +399,8 @@ class Renderer:
         self.notes = True           # False: a notes-free export (no speaker notes at all, the moved points included)
         self._slotmap, self._shapes_now, self._sid = {}, [], None
         self._band_drawn = False
+        self._foot = None           # deck-look: (x0, x1) of the text side when a picture column takes the rest (footer and DRAFT mark there)
+        self._pic_side = {}         # deck-look: slide id -> the side its picture column takes (layouts.picture_sides)
         self._cpl = 48              # characters per line for body, small and lead text (fit.cpl widens it for a slide that fits no other way)
 
     def _layout(self, name):
@@ -559,8 +561,8 @@ class Renderer:
         t = self.th
         return {c.upper() for c in (t.accent, t.accent_ink, t.accent_on_dark, t.line_accent)}
 
-    def hairline(self, sl, x1, y1, x2, y2, color=None, name="Hairline"):
-        """A native straight line at the look's rule weight (0.75 pt), ink by default (light on a dark slide)."""
+    def hairline(self, sl, x1, y1, x2, y2, color=None, name="Hairline", pt=None):
+        """A native straight line at the look's rule weight (0.75 pt; ``pt`` for a heavier stop line), ink by default (light on a dark slide)."""
         if sl is None:
             return None
         from pptx.enum.shapes import MSO_CONNECTOR
@@ -569,7 +571,7 @@ class Renderer:
         if st is not None:
             c._element.remove(st)
         c.line.color.rgb = _rgb(color or self.p.fg)
-        c.line.width = Pt(self.th.decor.rule_pt)
+        c.line.width = Pt(pt or self.th.decor.rule_pt)
         c.name = name
         return c
 
@@ -607,20 +609,21 @@ class Renderer:
             self.rect(sl, self.x0, self.th.grid.top, 0.5, 0.06, fill=color)
 
     # -- measuring and paragraph text (layout library) -----------------------------------------
-    def _wf(self, bold=False, font=None):
-        """Average glyph width as a fraction of the size: a deliberately generous figure (QA catches the rest)."""
+    def _wf(self, bold=False, font=None, caps=False):
+        """Average glyph width as a fraction of the size: a deliberately generous figure (QA catches the rest). ``caps``: the text is set in
+        capitals (deck-look's caps statements), measured on the capitals' own widths."""
         if self.th.v3:   # measured (deck/fonts/widths.json): the wider of the font and its fallback, with a margin
-            w = themes.fit_wf(font or self.th.body, bold)
+            w = themes.fit_wf(font or self.th.body, bold, caps)
             if w:
                 return w
         head = (font or self.th.body) == self.th.head
         return (0.55 if head else 0.50) + (0.03 if bold else 0)
 
-    def wrap(self, text, w, size, bold=False, font=None) -> list:
+    def wrap(self, text, w, size, bold=False, font=None, caps=False) -> list:
         """The lines a text wraps to in ``w`` inches at ``size`` pt, as lists of words: greedy word wrap on the
         estimated glyph width. A no-break space (``NBSP``) glues two words, as it does in PowerPoint, so a glued
         pair is one unit here. This is the renderer's own wrap estimate (the tests use it to look for orphans)."""
-        per = max(1.0, w * 72 / (size * self._wf(bold, font)))
+        per = max(1.0, w * 72 / (size * self._wf(bold, font, caps)))
         lines = []
         for para in str(text).split("\n"):
             cur, row = 0, []
@@ -640,9 +643,9 @@ class Renderer:
             lines.append(row)
         return lines
 
-    def nlines(self, text, w, size, bold=False, font=None) -> int:
+    def nlines(self, text, w, size, bold=False, font=None, caps=False) -> int:
         """Lines a text takes in ``w`` inches at ``size`` pt (the count of ``wrap``)."""
-        return len(self.wrap(text, w, size, bold, font))
+        return len(self.wrap(text, w, size, bold, font, caps))
 
     def balance_w(self, text, w, size, bold=False, font=None) -> float:
         """The narrowest width, between 62% of ``w`` and ``w``, at which ``text`` still wraps to as many lines
@@ -666,7 +669,7 @@ class Renderer:
         w = self._clamp(paras, w, all(p_.get("align", "l") == "l" for p_ in paras))
         for p in paras:
             size = p.get("size", self.th.scale.body)
-            n = self.nlines(p["t"], w - (0.3 if p.get("bullet") else 0), size, p.get("bold"), p.get("font"))
+            n = self.nlines(p["t"], w - (0.3 if p.get("bullet") else 0), size, p.get("bold"), p.get("font"), bool(p.get("allcaps")))
             h += n * size * 1.2 * p.get("line", 1.0) / 72 + p.get("after", 0) / 72
         return h + 0.04
 
@@ -703,6 +706,8 @@ class Renderer:
             f.color.rgb = _rgb(d.get("color") or self.p.fg)
             if d.get("track"):
                 run._r.get_or_add_rPr().set("spc", str(int(d["track"] * 100)))
+            if d.get("allcaps"):   # set in capitals by the font (the words stay as written, so search and edit see them)
+                run._r.get_or_add_rPr().set("cap", "all")
             if d.get("bullet"):   # a real bullet, hanging indent
                 pPr = para._p.get_or_add_pPr()
                 pPr.set("marL", str(Inches(0.3)))
@@ -1896,7 +1901,7 @@ class Renderer:
     LEAD_KINDS = ("text", "small", "statement", "quote", "callout")
     #: Picture layouts that draw their own picture panel (the rest keep slice 3's carve: execution_visual, frames_strip).
     PIC_TOP, PIC_H = 0.62, 6.05   # the picture panel of the cover and the image layouts: inside the margins, under the DRAFT mark
-    OWN_PICTURE = ("cover_image", "image_text", "image_left", "full_bleed_statement", "section", "image_grid")
+    OWN_PICTURE = ("cover_image", "image_text", "image_left", "full_bleed_statement", "section", "image_grid", "picture_column")
 
     def _cpl_w(self, size, bold=False, font=None, cpl=48) -> float:
         """The width in inches of ``cpl`` characters at ``size`` pt (the renderer's glyph estimate): the 48-character line."""
@@ -1905,7 +1910,7 @@ class Renderer:
     def _text_of(self, b) -> str:
         return str(b.get("text", "")).strip()
 
-    def _own_picture(self, sl, slot, x, y, w, h):
+    def _own_picture(self, sl, slot, x, y, w, h, corner="left"):
         """Draw the slide's picture for ``slot`` in the box (cropped to cover, never stretched). NoFit when there is none; measure-only and
         probes draw nothing."""
         im = self._pics.get(slot)
@@ -1914,7 +1919,7 @@ class Renderer:
         if sl is None or im.get("probe"):
             return
         m = self._mark(sl)
-        self.picture(sl, x, y, w, h, im)
+        self.picture(sl, x, y, w, h, im, corner=corner)
         self._own_pics.add(slot)
         self.placed.add((self._sid, slot))
         self._build(sl, m)
@@ -2005,7 +2010,10 @@ class Renderer:
         self._build(sl, m, title=True)
 
     def _lay_cover_image(self, sl, s):
-        """Cover with a picture: the title at display size set against a large picture panel that bleeds off the right edge."""
+        """Cover with a picture: the title at display size set against a large picture panel that bleeds off the right edge (under
+        deck-look: a full-height picture column, ``_lay_cover_column``)."""
+        if self.th.v3:
+            return self._lay_cover_column(sl, s)
         self._lay_cover(sl, s, panel=True)
 
     def _lay_section(self, sl, s):
@@ -2328,7 +2336,9 @@ class Renderer:
 
     def _lay_close(self, sl, s):
         """Close: dark, the title at display size, one statement and up to three next steps as rows. No contact line: nothing in the deck
-        supplies one."""
+        supplies one. Under deck-look the reworked close (``_lay_close_v3``)."""
+        if self.th.v3:
+            return self._lay_close_v3(sl, s)
         S, p, g = self.th.scale, self.p, self.th.grid
         bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items")]
         lead = [b for b in bl if b["kind"] in ("statement", "text", "small")]
@@ -2373,6 +2383,526 @@ class Renderer:
             self._build(sl, m)
             y += h
 
+    # -- deck-look steps 3-4 (spec.LOOK_V3): the statement layouts, the picture column, the reworked cover and close ----------------
+    #: Content top under the band (its lower rule sits at 0.84 in), the text inset from a frame hairline, the hero ladder, the picture
+    #: column (3/8 of the 13.333 in slide, floor 4.0 in: full height, bleeding top, bottom and its side) and the stop line's marks.
+    V3_TOP, V3_PAD = 1.15, 0.2
+    HERO_SIZES = (54, 48, 44, 40, 36)
+    PIC_COL = max(4.0, W * 3 / 8)
+    STOP_DOT, STOP_PT, STOP_STROKE = 0.17, 3.8, 1.5
+
+    def _span(self, n: int, x0=None, x1=None) -> float:
+        """The width of ``n`` of 12 columns on the content width ``x0..x1`` (gutter ``Grid.G`` between columns): design.grid."""
+        x0 = self.x0 if x0 is None else x0
+        x1 = self.x1 if x1 is None else x1
+        G = self.th.grid.G
+        return n * (x1 - x0 - 11 * G) / 12 + (n - 1) * G
+
+    def _kick(self, text, size=13) -> dict:
+        """A kicker (a slot label such as 'The target', 'From', 'Why they will believe it'): sentence case, Source Sans 3 bold, in accent ink
+        (the light accent on a dark slide). Never tracked capitals (Q12)."""
+        t = self.th
+        return self.para(text, size, t.accent_on_dark if self.p.dark else t.accent_ink, bold=True, cap=True, after=3)
+
+    def _hero(self, text, w, sizes=None, max_lines=3, color=None) -> tuple:
+        """``(paras, height, size)`` for a hero statement in ``w`` inches: the largest size of the ladder at which it takes at most
+        ``max_lines`` lines. Set in capitals (by the font, the words unchanged) only when it is short (``layouts.caps_ok``, about 40
+        characters) and takes two lines at most; sentence case otherwise (Q10). NoFit when even the smallest size is too long."""
+        mw = w * 0.95   # measured a little narrower than the box: a display line never breaks inside its last (glued) word
+        for size in sizes or self.HERO_SIZES:
+            caps = layouts.caps_ok(text) and self.nlines(glue(text), mw, size, True, self.th.head, True) <= 2 and self._units_fit(text, mw, size, True)
+            if self.nlines(glue(text), mw, size, True, self.th.head, caps) <= max_lines and self._units_fit(text, mw, size, caps):
+                ps = [self.para(text, size, color or self.p.fg, self.th.head, bold=True, line=0.95, allcaps=caps)]
+                return ps, self.ph(ps, w), size
+        raise NoFit("hero statement too long")
+
+    def _units_fit(self, text, w, size, caps=False, bold=True, font=None) -> bool:
+        """Every unbreakable unit of ``text`` (a word, or the last two words ``glue`` joins) fits one line of ``w`` inches at ``size``: a
+        display line must never break inside a word."""
+        per = w * 72 / (size * self._wf(bold, font or self.th.head, caps))
+        return all(len(u) <= per for u in glue(str(text)).split(" "))
+
+    def _frame(self, sl, xs, top, bottom):
+        """Vertical hairlines at ``xs`` from ``top`` to ``bottom`` (the content frame and its column rules: open at top and bottom)."""
+        for x in xs:
+            self.hairline(sl, x, top, x, bottom, name="Hairline")
+
+    def _rec_slot(self, sl, slot):
+        """Record a slot this layout drew by hand for layouts.json (``{name, slot, blocks}``, the blocks the plan bound to it)."""
+        if sl is not None and sl is self._cur:
+            bis = sorted({bi for (sn, bi) in self._slotmap.values() if sn == slot})
+            self._shapes_now.append({"name": f"slot:{slot}", "slot": slot, "blocks": bis})
+
+    def _stack_paras(self, sl, x, y, w, groups, name):
+        """Draw paragraph groups one under another from ``y`` (each ``(paras, gap after)``); returns the y below the last."""
+        for ps, gap in groups:
+            h = self.ph(ps, w)
+            self.ptext(sl, x, y, w, h, ps, name=name)
+            y += h + gap
+        return y
+
+    def _lay_statement_points(self, sl, s):
+        """statement_points (G2): the title in a 5/12 column, with the target figure (ink) and its date under it on an objective; two or
+        three points stacked in the 7/12 column, hairlines between them with equal space each side (the leftover height split evenly, never
+        more than 0.6 in; a short list is centred). Content frame and a column rule in hairlines. NoFit for fewer than two points or more
+        than three (another layout is picked: never padded), or when the words do not fit at 14 pt."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        pts = layouts.statement_points(s["blocks"])
+        if pts is None or not 2 <= len(pts) <= 3:
+            raise NoFit("statement points hold two or three points")
+        facts = _objective_facts([x["text"] for x in pts]) if s["type"] == "objective" else None
+        top, bottom, pad = self.V3_TOP, g.body_end, self.V3_PAD
+        lw = self._span(5)
+        rx = self.x0 + lw + g.G
+        ltw, rtw = lw - pad - 0.15, self.x1 - rx - 2 * pad
+        avail = bottom - top - 0.3
+        fig = []
+        if facts:
+            vs = 110
+            while vs > 48 and (self.nlines(facts["target"], ltw, vs, True, self.th.head) > 1 or not self._units_fit(facts["target"], ltw, vs)):
+                vs -= 4
+            fig = [([self._kick("The target")], 0.02), ([self.para(facts["target"], vs, p.fg, self.th.head, bold=True, line=0.9)], 0.2)]
+            for lab, key in (("Baseline", "baseline"), ("By when", "date")):
+                if facts.get(key):
+                    fig += [([self._kick(lab)], 0.02),
+                            ([self.para(facts[key], 30, p.fg, self.th.head, bold=True, line=1.0, allcaps=layouts.caps_ok(facts[key]))], 0.15)]
+            fig[-1] = (fig[-1][0], 0.0)
+        fh = sum(self.ph(ps, ltw) + gap for ps, gap in fig)
+        for tsize in (36, 32, 30, 28):
+            tp = [self.para(s["title"], tsize, p.fg, self.th.head, bold=True, line=1.05)]
+            th_ = self.ph(tp, ltw)
+            if self.nlines(glue(s["title"]), ltw, tsize, True, self.th.head) <= 4 and th_ + (0.4 + fh if fig else 0) <= avail:
+                break
+        else:
+            raise NoFit("title and figure do not fit the column")
+        for bsize in (26, 24, 22, 20, 18, 16, 14):   # short points are set large (a lead), long ones step down to the body sizes
+            groups = []
+            for pt in pts:
+                ps = []
+                if pt["heading"]:
+                    ps.append(self.para(pt["heading"], max(16, bsize - 2), p.fg, self.th.head, bold=True, after=4))
+                ps.append(self.para(pt["text"], bsize, p.fg, italic=pt["italic"], line=1.2))
+                if pt["caption"]:
+                    ps.append(self.para(pt["caption"], S.body_floor, p.mute))
+                groups.append(ps)
+            hs = [self.ph(ps, rtw) for ps in groups]
+            if sum(hs) + 2 * (len(hs) - 1) * 0.25 <= avail:
+                break
+        else:
+            raise NoFit("points too long for the column")
+        gap = min(0.6, max(0.25, (avail - sum(hs)) / (2 * (len(hs) - 1))))
+        total = sum(hs) + 2 * (len(hs) - 1) * gap
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self._frame(sl, (self.x0, self.x0 + lw + g.G / 2, self.x1), top, bottom)
+        self.ptext(sl, self.x0 + pad, top + 0.15, ltw, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        if fig:
+            m = self._mark(sl)
+            self._stack_paras(sl, self.x0 + pad, bottom - 0.15 - fh, ltw, fig, "slot:figure")
+            self._build(sl, m)
+            self._rec_slot(sl, "figure")
+        y = top + 0.15 + (avail - total) / 2
+        for i, (ps, h) in enumerate(zip(groups, hs)):
+            m = self._mark(sl)
+            if i:
+                self.hairline(sl, rx + pad, y + gap, self.x1 - pad, y + gap)
+                y += 2 * gap
+            self.ptext(sl, rx + pad, y, rtw, h, ps, name="slot:points")
+            self._build(sl, m)
+            y += h
+        self._rec_slot(sl, "points")
+
+    def _lay_reframe(self, sl, s):
+        """reframe (G3): the question as a hero line across the content frame (capitals only when short), the supporting line under it,
+        and at the foot a hairline and a row of one or two labelled notes (7/12 + 5/12, a column rule between). NoFit when it does not fit."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        top, bottom, pad = self.V3_TOP, g.body_end, self.V3_PAD
+        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items")]
+        line = [b for b in bl if b["kind"] in ("statement", "text")]
+        notes = []
+        for b in bl:
+            if b["kind"] == "kv":
+                notes += [(str(k).strip(), str(v).strip()) for k, v in b["items"]]
+            elif b["kind"] == "small":
+                notes.append(("", self._text_of(b)))
+            elif b["kind"] not in ("statement", "text"):
+                raise NoFit("reframe holds a statement, a line and labelled notes")
+        if not line or len(notes) > 2:
+            raise NoFit("reframe needs a line and at most two notes")
+        w = self.x1 - self.x0 - 2 * pad
+        cws = ([self._span(7) - pad - 0.15, self._span(5) - pad] if len(notes) == 2 else [self._span(8) - pad])[:len(notes)]
+        rowh, ngroups = 0.0, []
+        for nsize in (18, 16, 14):
+            ngroups = [([self._kick(k)] if k else []) + [self.para(v, nsize, p.fg, line=1.25)] for k, v in notes]
+            rowh = max([self.ph(ps, cw) for ps, cw in zip(ngroups, cws)] or [0.0])
+            if rowh <= 1.6:
+                break
+        else:
+            raise NoFit("notes too long")
+        row_top = bottom - 0.15 - rowh - 0.3 if notes else bottom
+        avail = row_top - top - 0.4
+        for lsize in (24, 22, 20):
+            lp = [self.para(self._text_of(b), lsize, p.fg, line=1.2, after=6) for b in line]
+            lh = self.ph(lp, min(w, self._cpl_w(lsize, cpl=60)))
+            try:
+                hp, hh, _ = self._hero(s["title"], w, max_lines=3)
+            except NoFit:
+                raise
+            if hh + 0.35 + lh <= avail:
+                break
+            for size in self.HERO_SIZES[1:]:
+                hp, hh, _ = self._hero(s["title"], w, sizes=(size,) + tuple(z for z in self.HERO_SIZES if z < size), max_lines=3)
+                if hh + 0.35 + lh <= avail:
+                    break
+            if hh + 0.35 + lh <= avail:
+                break
+        else:
+            raise NoFit("reframe too full")
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self._frame(sl, (self.x0, self.x1), top, bottom)
+        y = top + max(0.35, (avail - hh - 0.35 - lh) * 0.5)
+        self.ptext(sl, self.x0 + pad, y, w, hh, hp, name="Title")
+        self._build(sl, m, title=True)
+        m = self._mark(sl)
+        self.ptext(sl, self.x0 + pad, y + hh + 0.35, min(w, self._cpl_w(lp[0]["size"], cpl=60)), lh, lp, name="slot:line")
+        self._build(sl, m)
+        self._rec_slot(sl, "line")
+        if notes:
+            m = self._mark(sl)
+            self.hairline(sl, self.x0 + pad, row_top, self.x1 - pad, row_top)
+            xs = [self.x0 + pad, self.x0 + self._span(7) + g.G + 0.05]
+            for i, (ps, cw) in enumerate(zip(ngroups, cws)):
+                self.ptext(sl, xs[i], row_top + 0.3, cw, self.ph(ps, cw), ps, name="slot:notes_row")
+            if len(notes) == 2:
+                self._frame(sl, (self.x0 + self._span(7) + g.G / 2,), row_top + 0.3, bottom - 0.15)
+            self._build(sl, m)
+            self._rec_slot(sl, "notes_row")
+
+    def _lay_shift_line(self, sl, s):
+        """shift_line (G4 stops): the single thought as a hero line, a two-stop line (an open ink dot for from, a filled accent dot for to: the
+        slide's one accent mark), from and to in two 6/12 columns under it (from in mute, to in ink; capitals only when short), a sourced
+        support line under from when there is one, and the reasons to believe under a hairline at the foot."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        top, bottom, pad = self.V3_TOP, g.body_end, self.V3_PAD
+        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items") or b["kind"] == "fromto"]
+        ft = [b for b in bl if b["kind"] == "fromto"]
+        support = [b for b in bl if b["kind"] in ("text", "small")]
+        rtb = [b for b in bl if b["kind"] == "bullets"]
+        if len(ft) != 1 or any(b["kind"] not in ("fromto", "text", "small", "bullets") for b in bl):
+            raise NoFit("shift line holds one from-to, a support line and reasons to believe")
+        f, t_ = str(ft[0].get("from", "")).strip(), str(ft[0].get("to", "")).strip()
+        w = self.x1 - self.x0 - 2 * pad
+        half = self._span(6)
+        lx, cw = self.x0 + pad, half - pad - 0.15
+        rx = self.x0 + half + g.G + 0.05
+        rw = self.x1 - pad - rx
+        items = [_item_text(i).strip() for b in rtb for i in b["items"] if _item_text(i).strip()]
+        if len(items) > 3:
+            raise NoFit("at most three reasons to believe")
+        kick_rtb = next((str(b.get("title") or "").strip() for b in rtb if b.get("title")), "")
+        for bsize in (20, 18, 16):
+            rp = ([self._kick(kick_rtb)] if kick_rtb else []) + [self.para(x, bsize, p.fg, line=1.2, after=4) for x in items]
+            rh = self.ph(rp, w) if items else 0.0
+            sp = [self.para(self._text_of(b), bsize - 2, p.fg, line=1.25) for b in support]
+            sh = self.ph(sp, cw) if sp else 0.0
+            fit = None
+            for hs in self.HERO_SIZES:
+                for vs in (40, 36, 32, 28):
+                    hp, hh, _ = self._hero(s["title"], w, sizes=(hs,) + tuple(z for z in self.HERO_SIZES if z < hs), max_lines=3)
+                    vals = []
+                    for txt, col, cwid in ((f, p.mute, cw), (t_, p.fg, rw)):
+                        caps = layouts.caps_ok(txt) and self.nlines(glue(txt), cwid, vs, True, self.th.head, True) <= 2 and self._units_fit(txt, cwid, vs, True)
+                        vals.append([self.para(txt, vs, col, self.th.head, bold=True, line=0.95, allcaps=caps)])
+                    if not (self._units_fit(f, cw, vs) and self._units_fit(t_, rw, vs)):
+                        continue
+                    kh = self.ph([self._kick("From")], cw)
+                    colh = kh + max(self.ph(vals[0], cw) + (0.2 + sh if sp else 0), self.ph(vals[1], rw))
+                    total = hh + 0.45 + self.STOP_DOT + 0.3 + colh + (0.45 + rh if items else 0)
+                    if total <= bottom - top - 0.3:
+                        fit = (hp, hh, vals, kh, colh, total)
+                        break
+                if fit:
+                    break
+            if fit:
+                break
+        else:
+            raise NoFit("shift line too full")
+        hp, hh, vals, kh, colh, total = fit
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self._frame(sl, (self.x0, self.x1), top, bottom)
+        y = top + 0.3
+        self.ptext(sl, lx, y, w, hh, hp, name="Title")
+        self._build(sl, m, title=True)
+        y += hh + 0.45
+        m = self._mark(sl)
+        d = self.STOP_DOT
+        ya = y + d / 2
+        xa, xb = lx + d / 2, self.x1 - pad - d / 2
+        self.hairline(sl, xa + d / 2, ya, xb - d / 2, ya, color=p.fg, name="StopLine", pt=self.STOP_PT)
+        a = self.rect(sl, xa - d / 2, y, d, d, fill=p.bg, line=p.fg, lw=self.STOP_STROKE, shape=MSO_SHAPE.OVAL, name="StopFrom")
+        b_ = self.rect(sl, xb - d / 2, y, d, d, fill=self.th.accent_on_dark if p.dark else self.th.accent, shape=MSO_SHAPE.OVAL, name="StopTo")
+        y += d + 0.3
+        self.ptext(sl, lx, y, cw, kh, [self.para("From", 13, p.mute, bold=True, cap=True)], name="slot:pair")
+        self.ptext(sl, rx, y, rw, kh, [self._kick("To")], name="slot:pair")
+        vh0, vh1 = self.ph(vals[0], cw), self.ph(vals[1], rw)
+        self.ptext(sl, lx, y + kh, cw, vh0, vals[0], name="slot:pair")
+        self.ptext(sl, rx, y + kh, rw, vh1, vals[1], name="slot:pair")
+        self._frame(sl, (self.x0 + half + g.G / 2,), y, y + colh)
+        self._build(sl, m)
+        self._rec_slot(sl, "pair")
+        if sp:
+            m = self._mark(sl)
+            self.ptext(sl, lx, y + kh + vh0 + 0.2, cw, sh, sp, name="slot:support")
+            self._build(sl, m)
+            self._rec_slot(sl, "support")
+        if items:
+            m = self._mark(sl)
+            yr = bottom - 0.15 - rh
+            self.hairline(sl, lx, yr - 0.25, self.x1 - pad, yr - 0.25)
+            self.ptext(sl, lx, yr, w, rh, rp, name="slot:rtb")
+            self._build(sl, m)
+            self._rec_slot(sl, "rtb")
+
+    def _pic_box(self, side):
+        """``(picture x, text x0, text x1)`` for a picture column on ``side`` (the text column starts one margin from its edge)."""
+        M, pw = self.th.grid.M, self.PIC_COL
+        return (0.0, pw + M, W - M) if side == "left" else (W - pw, M, W - pw - M)
+
+    def _column_points(self, bl):
+        """The labelled points of a picture column: kv items (key as the kicker), bullets items, small and callout lines."""
+        out = []
+        for b in bl:
+            if b["kind"] == "kv":
+                out += [(str(k).strip(), str(v).strip()) for k, v in b["items"] if str(v).strip()]
+            elif b["kind"] == "bullets":
+                out += [(str(b.get("title") or "").strip() if n == 0 else "", _item_text(i).strip()) for n, i in enumerate(b["items"]) if _item_text(i).strip()]
+            elif b["kind"] in ("small", "callout"):
+                out.append(("", self._text_of(b)))
+        return out
+
+    def _lay_picture_column(self, sl, s):
+        """picture_column (D1/D3, G9): the picture as a full-height column (3/8 of the width, floor 4 in) bleeding off its side, sides
+        alternating across the deck; the band, a hero title (capitals only when short), the lead, the copy line and up to three labelled
+        points (hairline above each) in the text column beside it. No text over the picture; the label sits at its outer bottom corner and
+        the footer on the text side only."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        side = self._pic_side.get(self._sid, "left") if sl is not None else "left"
+        px, tx0, tx1 = self._pic_box(side)
+        self._own_picture(None, "picture", px, 0, self.PIC_COL, H)   # NoFit without a picture
+        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items") or b.get("lines")]
+        if any(b["kind"] not in ("statement", "text", "copy", "kv", "bullets", "small", "callout") for b in bl):
+            raise NoFit("picture column holds text, copy and labelled points")
+        lead = [b for b in bl if b["kind"] in ("statement", "text")]
+        copy = [b for b in bl if b["kind"] == "copy"]
+        pts = self._column_points(bl)
+        if len(pts) > 3:
+            raise NoFit("at most three points beside a picture")
+        tw = tx1 - tx0
+        top, bottom = BAND_TITLE_Y + 0.25, g.body_end
+        for bsize in (22, 20, 18, 16):
+            lp = [self.para(self._text_of(b), bsize, p.fg, line=1.25, after=6) for b in lead]
+            cp = []
+            for c in copy:
+                cp += [self.para(str(x), bsize + 4, p.fg, self.th.head, bold=True, line=1.05, after=4) for x in c.get("lines") or []]
+                if c.get("answer"):
+                    cp.append(self._kick(str(c["answer"])))
+            pg = [([self._kick(k)] if k else []) + [self.para(v, bsize - 2, p.fg, line=1.25)] for k, v in pts]
+            lh = self.ph(lp, tw) if lp else 0.0
+            ch = self.ph(cp, tw) if cp else 0.0
+            ph_ = [self.ph(ps, tw) for ps in pg]
+            body = (lh + 0.3 if lp else 0) + (ch + 0.3 if cp else 0) + sum(h + 0.5 for h in ph_)
+            try:
+                hp, hh, _ = self._hero(s["title"], tw, max_lines=4)
+            except NoFit:
+                continue
+            for hs in self.HERO_SIZES:
+                hp, hh, _ = self._hero(s["title"], tw, sizes=(hs,) + tuple(z for z in self.HERO_SIZES if z < hs), max_lines=4)
+                if hh + 0.45 + body <= bottom - top:
+                    break
+            if hh + 0.45 + body <= bottom - top:
+                break
+        else:
+            raise NoFit("picture column too full")
+        if sl is None:
+            return
+        self._own_picture(sl, "picture", px, 0, self.PIC_COL, H, corner="left" if side == "left" else "right")
+        self._with_width(tx0, tx1, lambda: self.band(sl, s))
+        self._foot = (tx0, tx1)
+        m = self._mark(sl)
+        used = hh + 0.45 + (lh + 0.3 if lp else 0) + (ch + 0.3 if cp else 0)
+        y = top if pg else top + max(0.0, (bottom - top - used) * 0.4)   # no points: the block sits a little above the column's middle
+        self.ptext(sl, tx0, y, tw, hh, hp, name="Title")
+        self._build(sl, m, title=True)
+        y += hh + 0.45
+        if lp:
+            m = self._mark(sl)
+            self.ptext(sl, tx0, y, tw, lh, lp, name="slot:lead")
+            self._build(sl, m)
+            self._rec_slot(sl, "lead")
+            y += lh + 0.3
+        if cp:
+            m = self._mark(sl)
+            self.ptext(sl, tx0, y, tw, ch, cp, name="slot:copy")
+            self._build(sl, m)
+            self._rec_slot(sl, "copy")
+            y += ch + 0.3
+        if pg:
+            y = max(y, bottom - sum(h + 0.5 for h in ph_))   # the points sit at the foot of the column
+            for ps, h in zip(pg, ph_):
+                m = self._mark(sl)
+                self.hairline(sl, tx0, y + 0.2, tx1, y + 0.2)
+                self.ptext(sl, tx0, y + 0.45, tw, h, ps, name="slot:points")
+                self._build(sl, m)
+                y += h + 0.5
+            self._rec_slot(sl, "points")
+
+    def _lay_cover_column(self, sl, s):
+        """cover_image reworked (deck-look): the picture as a 3/8 full-height column bleeding off the right edge; the kicker (sentence case),
+        the title at display size (capitals only when short) and the lead in the text column at the optical middle; the label at the
+        picture's outer bottom corner and the footer on the text side."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        px, tx0, tx1 = self._pic_box("right")
+        tx0 = self.x0
+        self._own_picture(None, "picture", px, 0, self.PIC_COL, H)
+        blocks = [b for b in s["blocks"] if self._text_of(b)]
+        if any(b["kind"] not in ("text", "small", "statement") for b in blocks):
+            raise NoFit("cover holds text only")
+        tw = tx1 - tx0
+        lp = [self.para(self._text_of(b), S.small if b["kind"] == "small" else S.lead, p.mute if b["kind"] == "small" else p.fg, line=1.1, after=8)
+              for b in blocks]
+        lh = self.ph(lp, tw) if lp else 0.0
+        kp = [self._kick(_kicker(self.deck["meta"]), 14)]
+        kh = self.ph(kp, tw)
+        for size in (52, 48, 44, 40):
+            hp, hh, _ = self._hero(s["title"], tw, sizes=(size,) + tuple(z for z in (52, 48, 44, 40) if z < size), max_lines=4)
+            block = kh + 0.3 + hh + (0.4 + lh if lp else 0)
+            if block <= g.body_end - 1.3:
+                break
+        else:
+            raise NoFit("cover too full")
+        if sl is None:
+            return
+        self._own_picture(sl, "picture", px, 0, self.PIC_COL, H, corner="right")
+        self._foot = (tx0, tx1)
+        y = max(1.3, (g.body_end + 0.6 - block) / 2)
+        m = self._mark(sl)
+        lx = self._logo(sl, 0.8)
+        self.ptext(sl, tx0, y, tw, kh, kp)
+        self.ptext(sl, tx0, y + kh + 0.3, tw, hh, hp, name="Title")
+        self._build(sl, m, title=True)
+        if lp:
+            m = self._mark(sl)
+            self.ptext(sl, tx0, y + kh + 0.3 + hh + 0.4, tw, lh, lp, name="slot:lead")
+            self._build(sl, m)
+            self._rec_slot(sl, "lead")
+
+    _LABEL_VALUE = re.compile(r"^([^:]{2,40}):\s*(.+)$")
+
+    def _lay_close_v3(self, sl, s):
+        """close reworked (deck-look): the ask (the title) as a hero across the content width; under a hairline, the budget given as a figure
+        in ink (a 'label: figure' line of the slide's own words) with any statement under it in a 4/12 column, and the next steps as
+        hairline rows in the 8/12 column, each list's own heading kept as its kicker; a step a person must supply is a dashed row tagged
+        'To supply' (review builds: a client build never shows one). At most five rows; the hero steps down before the rows do."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items")]
+        if any(b["kind"] not in ("statement", "text", "small", "bullets", "kv", "card") for b in bl):
+            raise NoFit("close holds a statement, a budget and next steps")
+        stat, lead, rows = None, [], []   # rows: (text, human, heading of its list or "")
+        for b in bl:
+            if b["kind"] in ("statement", "text", "small"):
+                mm = self._LABEL_VALUE.match(self._text_of(b))
+                if stat is None and mm and _FIG.search(mm.group(2)):
+                    stat = (mm.group(1).strip(), mm.group(2).strip())
+                else:
+                    lead.append(b)
+            elif b["kind"] == "bullets":
+                its = [i for i in b["items"] if _item_text(i).strip()]
+                rows += [(_item_text(i).strip(), bool(isinstance(i, dict) and i.get("human")), str(b.get("title") or "").strip() if n == 0 else "")
+                         for n, i in enumerate(its)]
+            elif b["kind"] == "kv":
+                rows += [(f"{k}: {v}", False, "") for k, v in b["items"]]
+            else:
+                rows.append((self._text_of(b), bool(b.get("human")), str(b.get("title") or "").strip()))
+        if len(rows) > 5:
+            raise NoFit("at most five next steps")
+        lw = self._span(4)
+        rx = self.x0 + lw + g.G
+        rw = self.x1 - rx
+        top = 0.75
+        fit = None
+        for size in (54, 48, 44, 40, 36, 32):
+            hp, hh, _ = self._hero(s["title"], self.x1 - self.x0, sizes=(size,), max_lines=3) if self._hero_fits(s["title"], self.x1 - self.x0, size, 3) else (None, 0, 0)
+            if hp is None:
+                continue
+            ctop = top + hh + 0.5
+            avail = g.body_end - ctop
+            for bsize in (16, 15, 14):
+                left = []
+                if stat:
+                    vs = 44
+                    while vs > 24 and (self.nlines(glue(stat[1]), lw - 0.15, vs, True, self.th.head) > 2 or not self._units_fit(stat[1], lw - 0.15, vs)):
+                        vs -= 2
+                    left += [([self._kick(stat[0])], 0.02), ([self.para(stat[1], vs, p.fg, self.th.head, bold=True, line=1.0)], 0.3)]
+                left += [([self.para(self._text_of(b), S.lead - 2, p.fg, line=1.2)], 0.2) for b in lead]
+                lh = sum(self.ph(ps, lw - 0.15) + gp for ps, gp in left)
+                rps, rhs = [], []
+                for t, hum, head in rows:
+                    ps = ([self._kick(head)] if head else []) + ([self._kick("To supply", 12)] if hum else []) + [self.para(t, bsize, p.fg, line=1.15, cpl=64)]
+                    rps.append(ps)
+                    rhs.append(self.ph(ps, rw - 0.5) + (0.24 if hum else 0.0))
+                need = sum(rhs) + 0.2 * max(0, len(rows) - 1)
+                if lh <= avail and need <= avail:
+                    fit = (hp, hh, ctop, left, rps, rhs)
+                    break
+            if fit:
+                break
+        if not fit:
+            raise NoFit("close too full")
+        hp, hh, ctop, left, rps, rhs = fit
+        if sl is None:
+            return
+        m = self._mark(sl)
+        self.ptext(sl, self.x0, top, self.x1 - self.x0, hh, hp, name="Title")
+        self._build(sl, m, title=True)
+        self.hairline(sl, self.x0, ctop - 0.25, self.x1, ctop - 0.25)
+        if left:
+            m = self._mark(sl)
+            self._stack_paras(sl, self.x0, ctop, lw - 0.15, left, "slot:statement")
+            self._build(sl, m)
+            self._rec_slot(sl, "statement")
+        if rows:
+            self._frame(sl, (rx - g.G / 2,), ctop, g.body_end)
+        y = ctop
+        for i, ((t, hum, head), ps, h) in enumerate(zip(rows, rps, rhs)):
+            m = self._mark(sl)
+            if hum:
+                self.rect(sl, rx + 0.1, y, rw - 0.1, h, line=self.th.accent_on_dark if p.dark else self.th.accent_ink, dash=True, name="slot:next")
+                self.ptext(sl, rx + 0.3, y + 0.12, rw - 0.5, h - 0.24, ps, name="slot:next")
+            else:
+                if i:
+                    self.hairline(sl, rx + 0.1, y - 0.1, self.x1, y - 0.1)
+                self.ptext(sl, rx + 0.3, y, rw - 0.5, h, ps, name="slot:next")
+            self._build(sl, m)
+            y += h + 0.2
+        self._rec_slot(sl, "next")
+
+    def _hero_fits(self, text, w, size, max_lines) -> bool:
+        """Whether a hero statement takes at most ``max_lines`` lines at ``size`` (as ``_hero`` measures it)."""
+        try:
+            self._hero(text, w, sizes=(size,), max_lines=max_lines)
+            return True
+        except NoFit:
+            return False
+
     LAYOUT_FN = {"objective_panel": "_lay_objective", "risk_cards": "_lay_risks", "cover": "_lay_cover", "emphasis_bar": "_lay_emphasis", "chart": "_lay_chart", "execution": "_lay_execution",
                  "territory": "_lay_territory", "quote_cards": "_lay_quote", "role_grid": "_lay_role", "flow": "_lay_flow",
                  # the standard composition: the blocks stacked with their looks
@@ -2383,7 +2913,10 @@ class Renderer:
                  "close": "_lay_close", "big_statement": "_lay_big_statement", "quote_full": "_lay_quote_full", "cards_split": "_lay_cards_split",
                  "text_columns": "_lay_text_columns", "placeholder_split": "_lay_placeholder_split", "chart_full": "_lay_chart_full",
                  "timeline_rows": "_lay_timeline_rows", "execution_stack": "_lay_execution_stack", "territory_wide": "_lay_territory_wide",
-                 "people_cards": "_lay_people_cards"}
+                 "people_cards": "_lay_people_cards",
+                 # deck-look steps 3-4 (spec.LOOK_V3 only: layouts/v3)
+                 "statement_points": "_lay_statement_points", "reframe": "_lay_reframe", "shift_line": "_lay_shift_line",
+                 "picture_column": "_lay_picture_column"}
 
     # -- the plan's measuring: the renderer's own measure-only mode ---------------------------------
     def probe(self, s: dict, name: str, relaxed: bool = False, scale_cap: float | None = None, title_pt: int | None = None, cpl: int = 48) -> dict:
@@ -2466,6 +2999,7 @@ class Renderer:
         if layouts_out is not None:
             Path(layouts_out).unlink(missing_ok=True)   # a failed render must not leave an older record beside it
         self.assets_dir = Path(out).parent
+        self._pic_side = layouts.picture_sides(self.deck) if self.th.v3 else {}
         nums = {sid: i for i, sid in enumerate(self.deck["order"], 1)}
         for sid in self.deck["order"]:
             self.slide(sid, self.deck["slides"][sid], nums[sid])
@@ -2483,6 +3017,7 @@ class Renderer:
         sl = self.prs.slides.add_slide(self.blank)
         dark = s["type"] in dark_types(self.th.v3)
         self._band_drawn = False
+        self._foot = None
         self.p = self._palette(dark)
         self.fg = self.p.fg
         bg = sl.background.fill
@@ -2554,16 +3089,21 @@ class Renderer:
         # footer: section label, footnote keys, slide number
         t, p = self.th, self.p
         foot = t.scale.foot
+        fx0, fx1 = self._foot or (self.x0, self.x1)   # deck-look: beside a picture column the footer and the DRAFT mark keep to the text side
         if t.layouts:
-            self.rect(sl, self.x0, 6.9, self.x1 - self.x0, 0.01, fill=p.rule)
+            self.rect(sl, fx0, 6.9, fx1 - fx0, 0.01, fill=p.rule)
+        side = self._foot is not None
         if not self._band_drawn:   # the band carries the section on a banded slide
-            self.text(sl, self.x0, 7.0, 6, 0.3, s["section"].upper(), size=foot, cap=True, color=p.mute, name="Section")
+            self.text(sl, fx0, 7.0, min(6, (fx1 - fx0) * 0.45) if side else 6, 0.3, s["section"].upper(), size=foot, cap=True, color=p.mute, name="Section")
         if s.get("footnotes"):
-            self.text(sl, 6.2, 7.0, 5.6, 0.3, "Sources " + " ".join(f"[{k}]" for k in s["footnotes"][:14]) + "  (appendix)", size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="Footnotes")
-        self.text(sl, 12.1, 7.0, self.x1 - 12.1, 0.3, str(n), size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="SlideNumber")
+            nx, nw = (fx0 + (fx1 - fx0) * 0.45, fx1 - 0.63 - (fx0 + (fx1 - fx0) * 0.45)) if side else (6.2, 5.6)
+            self.text(sl, nx, 7.0, nw, 0.3, "Sources " + " ".join(f"[{k}]" for k in s["footnotes"][:14]) + "  (appendix)", size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="Footnotes")
+        nx = fx1 - 0.63 if side else 12.1
+        self.text(sl, nx, 7.0, fx1 - nx, 0.3, str(n), size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="SlideNumber")
         if self.n_human:
             tag = "DRAFT · needs a person" if s["status"] == "needs_human" else f"DRAFT · {self.n_human} slides need a person"
-            self.text(sl, 8.7, 0.12, self.x1 - 8.7, 0.3, tag, size=foot, cap=True, color=p.acc_t, bold=True, align=PP_ALIGN.RIGHT, name="Watermark")
+            wx = 8.7 if self._foot is None else max(fx0, fx1 - 4.03)
+            self.text(sl, wx, 0.12, fx1 - wx, 0.3, tag, size=foot, cap=True, color=p.acc_t, bold=True, align=PP_ALIGN.RIGHT, name="Watermark")
         if sid in self.failed and audience != "client":   # a client slide never prints a check id (a failing client build is withheld by run_deck)
             red = "FF9B8E" if dark else "B03225"
             self.text(sl, 4.5, 0.12, 4.1, 0.3, "CHECK FAILED: " + ", ".join(sorted(set(self.failed[sid]))), size=foot, cap=True, color=red, bold=True, align=PP_ALIGN.RIGHT, name="CheckFailed")
@@ -2659,7 +3199,7 @@ class Renderer:
     def _uncarve(self):
         self.x1, self.th = self._saved_carve
 
-    def picture(self, sl, x, y, w, h, im, name="Picture", label=True):
+    def picture(self, sl, x, y, w, h, im, name="Picture", label=True, corner="left"):
         """One picture in the box ``x, y, w, h`` (inches): the asset's derived JPEG cropped to the box's aspect with cover (a:srcRect;
         never stretched), alt text through cNvPr descr, the name ``Picture``. A picture that is not approved carries the deck's label on a
         solid pill named ``Caption``; a flagged one also gets a red outline and the word Flagged. Returns the picture shape."""
@@ -2682,8 +3222,12 @@ class Renderer:
                 pic.line.width = Pt(3)
             text = f"{self.pic_label} · Flagged" if flagged else self.pic_label
             pw = min(w - 0.2, 0.24 + 0.085 * len(text))
-            self.rect(sl, x + 0.1, y + h - 0.38, pw, 0.28, fill="B03225" if flagged else "1B2430", name="PictureLabel")
-            self.text(sl, x + 0.1, y + h - 0.38, pw, 0.28, text, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
+            bleed = self.th.v3 and (x <= 0.01 or x + w >= W - 0.01)   # deck-look: a bleeding column keeps its label inside the slide margin
+            inset = 0.5 if bleed else 0.1
+            lx = x + w - inset - pw if corner == "right" else x + inset
+            ly = y + h - (0.78 if (self.th.v3 and y + h >= H - 0.01) else 0.38)
+            self.rect(sl, lx, ly, pw, 0.28, fill="B03225" if flagged else "1B2430", name="PictureLabel")
+            self.text(sl, lx, ly, pw, 0.28, text, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
                       anchor=MSO_ANCHOR.MIDDLE, name="Caption")
         return pic
 

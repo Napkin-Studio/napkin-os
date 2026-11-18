@@ -292,7 +292,8 @@ role or renderer stops the load, as `ProfileError` does for a deck type.
 | `purpose` | `title` · `statement` · `list` · `compare` · `data` · `timeline` · `image` · `people`: what the swap menu groups by |
 | `description`, `slot_summary` | how it arranges things (not what it says); one line of its slots |
 | `for_types` | names from `spec.SLIDE_TYPES` |
-| `when` | `{blocks_any, blocks_all, blocks_only, max_blocks, needs_image, needs_number, min_items, max_items, status, test}`: when the picker may choose it. `test` names one of `spec.LAYOUT_TESTS` (`has_target_figure`, `has_human_item`, `compare_table`, `role_rows`, `image_ready`), each implemented in `layouts.py`; `image_ready` is audience-aware (a client counts only an approved picture) |
+| `when` | `{blocks_any, blocks_all, blocks_only, max_blocks, needs_image, needs_number, min_items, max_items, status, test}`: when the picker may choose it. `test` names one of `spec.LAYOUT_TESTS` (`has_target_figure`, `has_human_item`, `compare_table`, `role_rows`, `image_ready`, `points_2_3`), each implemented in `layouts.py`; `image_ready` is audience-aware (a client counts only an approved picture); `points_2_3` holds a statement layout to two or three points (never padded, never cut) |
+| `human_rows` | optional, deck-look: the layout draws a human item as a dashed 'To supply' row, so it accepts a slide holding one (otherwise only the `placeholder` family may) |
 | `pick`, `family` | `rule` (the picker may choose it by priority) or `offer` (a swap, an alternative or a fit-ladder switch only); the family the variety rule counts, not the id |
 | `priority` | 0 to 100; highest first, first match wins. Replaces the order of `choose_layout`'s table |
 | `alternatives`, `roomier`, `without_image` | up to 4 swaps; the next layout on the fit ladder; the layout used when its image slot stays empty |
@@ -325,6 +326,18 @@ text layouts: `close` (the dark close: title, one statement, up to three next st
 `territory_wide`, `people_cards`. That is 36 of the 40 the catalogue may hold (`engine/deck/layouts/*.yaml`).
 Picture layouts are rule-picked only when a picture can be drawn for the audience (`image_ready`); the eleven text layouts
 are offers until a gallery review promotes them.
+
+**deck-look, steps 3-4 (`spec.LOOK_V3`, off by default).** Under the flag `layouts.load()` lays `engine/deck/layouts/v3/*.yaml`
+over the 36: four new ids (`spec.LAYOUT_IDS_V3`) and one rework, 40 in all (`LAYOUT_MAX` unchanged). `statement_points` (objective,
+insight, audience, proposition: the title in a 5/12 column with the target figure in ink, two or three points in the 7/12 column
+between hairlines), `reframe` (real question: a hero line, the supporting line, a footnote row of one or two labelled notes),
+`shift_line` (proposition: a hero line, from and to under a two-stop line, the reasons to believe under a hairline) and
+`picture_column` (audience, idea, execution: a full-height 3/8 picture column bleeding off one side, sides alternating across the deck
+by `layouts.picture_sides`, the band and the text column beside it, footer on the text side). `close` v2 (also for `investment`):
+the ask as a hero, the budget as a figure, next steps as hairline rows, a human item as a dashed 'To supply' row (`human_rows`). The
+`cover_image` draw routine becomes a full-height picture column under the flag (same file). A hero line is set in capitals only up to
+`spec.CAPS_MAX_CHARS` (40) and two lines, by the font (`cap="all"`, the words unchanged), with normal letter spacing. The web deck draws
+the same layouts in CSS (`render_web.V3_WEB`). With the flag off the library and every golden are unchanged.
 
 ### 5.1 The plan (`layouts.plan`) and the fit ladder
 

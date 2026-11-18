@@ -24,6 +24,7 @@ from pathlib import Path
 
 from . import images, numfmt, spec
 from .refs import fmt
+from .layouts import picture_sides as _pic_sides
 from .render_pptx import DARK_TYPES, THEME, _kicker, band_label, dark_types
 from .spec import blocks_sha, frame_for, shown_blocks
 
@@ -236,6 +237,163 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
     return f'<div class="body col">{b.blocks(blocks)}</div>'
 
 
+# ---- deck-look steps 3-4 on the web (spec.LOOK_V3): the same layouts as render_pptx, in CSS ------------------------------------------
+#: The layouts the web draws with their own markup under LOOK_V3 (the rest keep the per-type bodies until step 9 paints from plan boxes).
+V3_WEB = ("statement_points", "reframe", "shift_line", "picture_column", "cover_image", "close")
+
+
+def _caps(text) -> str:
+    """' caps' when a statement is short enough to set in capitals (the pptx rule, ``layouts.caps_ok``)."""
+    from . import layouts
+    t = str(text).strip()
+    return " caps" if (layouts.caps_ok(t) and len(t) <= 32 and len(t.split()) <= 5) else ""   # the pptx also asks for two lines at most
+
+
+def _kick(b: "_Slide", text, cls="") -> str:
+    return b.rv("kick" + (" " + cls if cls else ""), _e(text), "div", 60) if str(text).strip() else ""
+
+
+def _v3_points(bl: list) -> list:
+    """(heading, text, italic, caption) for statement_points, as layouts.statement_points reads them."""
+    from . import layouts
+    return [(p["heading"], p["text"], p["italic"], p["caption"]) for p in (layouts.statement_points(bl) or [])]
+
+
+def _v3_body(s, b: "_Slide", bl: list, lid: str, deck: dict) -> str:
+    """The body markup of a deck-look layout (the title is part of it: these layouts place the title themselves)."""
+    from .render_pptx import _FIG, _item_text, _objective_facts
+    t = s["title"]
+    text = lambda x: str(x.get("text", "")).strip()
+    hero = b.rv("title hero" + _caps(t), _e(t), "h1", 220)   # the title first: it is the first thing revealed
+    if lid == "statement_points":
+        title = hero.replace("title hero" + _caps(t), "title", 1)
+        pts = _v3_points(bl)
+        facts = _objective_facts([p[1] for p in pts]) if s["type"] == "objective" else None
+        fig = ""
+        if facts:
+            b.f += 1
+            fig = _kick(b, "The target") + b.rv("fig-v", _e(facts["target"]), "b", 200)
+            for lab, key in (("Baseline", "baseline"), ("By when", "date")):
+                if facts.get(key):
+                    fig += _kick(b, lab) + b.rv("fig-d" + _caps(facts[key]), _e(facts[key]), "b", 120)
+            fig = f'<div class="fig">{fig}</div>'
+        rows = ""
+        for h, x, it, cap in pts:
+            b.f += 1
+            inner = (_kick(b, h) if h else "") + b.rv("pt-t" + (" it" if it else ""), _e(x), "p", 120) + (f'<p class="capn">{_e(cap)}</p>' if cap else "")
+            rows += f'<div class="pt">{inner}</div>'
+        return (f'<div class="body v3 v3sp"><div class="sp-l">{title}{fig}</div>'
+                f'<div class="sp-r">{rows}</div></div>')
+    if lid == "reframe":
+        line = "".join(b.rv("lead", _e(text(x)), "p", 160) for x in bl if x["kind"] in ("statement", "text") and text(x))
+        notes = [(k, v) for x in bl if x["kind"] == "kv" for k, v in x["items"]] + [("", text(x)) for x in bl if x["kind"] == "small" and text(x)]
+        b.f += 1
+        row = "".join(f'<div class="note">{_kick(b, k)}{b.rv("", _e(v), "p", 120)}</div>' for k, v in notes)
+        return (f'<div class="body v3 v3rf">{hero}{line}'
+                + (f'<div class="row n{len(notes)}">{row}</div>' if notes else "") + "</div>")
+    if lid == "shift_line":
+        ft = next(x for x in bl if x["kind"] == "fromto")
+        sup = "".join(b.rv("sup", _e(text(x)), "p", 100) for x in bl if x["kind"] in ("text", "small") and text(x))
+        b.f += 1
+        stops = b.rv("stops", '<i class="dot from"></i><i class="bar"></i><i class="dot to"></i>', "div", 260)
+        cols = (f'<div class="cols"><div>{_kick(b, "From", "mute")}{b.rv("val from" + _caps(ft["from"]), _e(ft["from"]), "p", 160)}{sup}</div>'
+                f'<div>{_kick(b, "To")}{b.rv("val" + _caps(ft["to"]), _e(ft["to"]), "p", 160)}</div></div>')
+        rtb = ""
+        for x in bl:
+            if x["kind"] == "bullets":
+                b.f += 1
+                rtb += _kick(b, x.get("title") or "") + "".join(b.rv("", _e(_item_text(i)), "p", 90) for i in x["items"] if _item_text(i).strip())
+        return (f'<div class="body v3 v3sl">{hero}{stops}{cols}'
+                + (f'<div class="rtb">{rtb}</div>' if rtb else "") + "</div>")
+    if lid == "picture_column":
+        out = hero
+        for x in bl:
+            k = x["kind"]
+            if k in ("statement", "text") and text(x):
+                b.f += 1
+                out += b.rv("lead", _e(text(x)), "p", 140)
+            elif k == "copy":
+                b.f += 1
+                out += "".join(b.rv("copyline", _e(c), "p", 140) for c in x.get("lines") or []) + _kick(b, x.get("answer") or "")
+        pts = []
+        for x in bl:
+            if x["kind"] == "kv":
+                pts += [(k, v) for k, v in x["items"]]
+            elif x["kind"] == "bullets":
+                pts += [((x.get("title") or "") if n == 0 else "", _item_text(i)) for n, i in enumerate(x["items"])]
+            elif x["kind"] in ("small", "callout") and text(x):
+                pts.append(("", text(x)))
+        for k, v in pts:
+            b.f += 1
+            out += f'<div class="pt">{_kick(b, k)}{b.rv("", _e(v), "p", 120)}</div>'
+        return f'<div class="body v3 v3pc{" nopts" if not pts else ""}">{out}</div>'
+    if lid == "cover_image":
+        lead = "".join(b.rv("lead" + (" small" if x["kind"] == "small" else ""), _e(text(x)), "p", 160) for x in bl if text(x))
+        return f'<div class="body v3 v3cv">{_kick(b, _kicker(deck["meta"]))}{hero}{lead}</div>'
+    if lid == "close":
+        import re as _re
+        stat, lead, rows = None, "", ""
+        for x in bl:
+            if x["kind"] in ("statement", "text", "small") and text(x):
+                mm = _re.match(r"^([^:]{2,40}):\s*(.+)$", text(x))
+                if stat is None and mm and _FIG.search(mm.group(2)):
+                    b.f += 1
+                    stat = _kick(b, mm.group(1)) + b.rv("fig-v sm", _e(mm.group(2)), "b", 200)
+                else:
+                    lead += b.rv("lead", _e(text(x)), "p", 140)
+            elif x["kind"] in ("bullets", "kv", "card"):
+                items = x.get("items") or [{"text": text(x), "human": x.get("human")}]
+                for n, i in enumerate(items):
+                    b.f += 1
+                    hum = isinstance(i, dict) and i.get("human")
+                    words = f"{i[0]}: {i[1]}" if isinstance(i, (list, tuple)) else _item_text(i)
+                    head = _kick(b, x.get("title") or "") if n == 0 and x.get("title") else ""
+                    rows += f'<div class="row{" todo" if hum else ""}">{head}{_kick(b, "To supply") if hum else ""}{b.rv("", _e(words), "p", 100)}</div>'
+        return (f'<div class="body v3 v3cl">{hero}'
+                f'<div class="grid"><div class="l">{stat or ""}{lead}</div><div class="r">{rows}</div></div></div>')
+    return ""
+
+
+LOOK_V3_LAYOUT_CSS = """
+.v3 .kick{font:700 26px/1.25 var(--body);color:var(--accent-ink);margin-bottom:6px}.dark .v3 .kick{color:var(--accent)}.v3 .kick.mute{color:var(--muted)}
+.v3 h1.title{max-width:none;text-wrap:balance}.v3 .hero{font:700 104px/.95 var(--head);letter-spacing:0}.v3 .caps{text-transform:uppercase}
+.v3sp,.v3rf,.v3sl{border-left:1.5px solid var(--ink);border-right:1.5px solid var(--ink);margin-top:-14px}
+.v3sp{display:grid;grid-template-columns:5fr 7fr}
+.v3sp .sp-l{display:flex;flex-direction:column;justify-content:space-between;padding:20px 36px 20px 29px;border-right:1.5px solid var(--ink)}
+.v3sp .sp-l h1.title{font:700 64px/1.05 var(--head)}
+.v3 .fig-v{display:block;font:700 200px/.9 var(--head);letter-spacing:-.01em}.v3 .fig-v.sm{font-size:80px;line-height:1}.v3 .fig-d{display:block;font:700 56px/1 var(--head)}
+.v3sp .sp-r{display:flex;flex-direction:column;justify-content:center;padding:0 29px 0 36px}
+.v3sp .pt{padding:34px 0}.v3sp .pt+.pt{border-top:1.5px solid var(--ink)}
+.v3sp .pt-t{font-size:44px;line-height:1.2}.v3sp .pt-t.it{font-style:italic}.v3 .capn{font-size:24px;color:var(--muted);margin-top:8px}
+.v3rf{display:flex;flex-direction:column;padding:56px 29px 24px}
+.v3rf .lead{font-size:46px;line-height:1.2;margin-top:44px;max-width:1500px}
+.v3rf .row{margin-top:auto;border-top:1.5px solid var(--ink);padding-top:34px;display:grid;grid-template-columns:7fr 5fr;gap:48px}
+.v3rf .row.n1{grid-template-columns:8fr 4fr}.v3rf .row .note+.note{border-left:1.5px solid var(--ink);padding-left:36px}
+.v3rf .note p{font-size:34px;line-height:1.3}
+.v3sl{display:flex;flex-direction:column;padding:40px 29px 24px}
+.v3sl .stops{display:flex;align-items:center;margin:56px 0 40px}.v3sl .bar{flex:1;height:8px;background:var(--ink)}
+.v3sl .dot{width:24px;height:24px;border-radius:50%;flex:none}.v3sl .dot.from{border:3px solid var(--ink);background:var(--paper)}.v3sl .dot.to{background:var(--accent)}
+.v3sl .cols{display:grid;grid-template-columns:1fr 1fr}.v3sl .cols>div+div{border-left:1.5px solid var(--ink);padding-left:36px}
+.v3sl .val{font:700 76px/.95 var(--head)}.v3sl .val.from{color:var(--muted)}.v3sl .sup{font-size:32px;line-height:1.3;margin-top:20px}
+.v3sl .rtb{margin-top:auto;border-top:1.5px solid var(--ink);padding-top:30px}.v3sl .rtb p{font-size:38px;line-height:1.25}
+.v3pc{display:flex;flex-direction:column}.v3pc.nopts{justify-content:center;padding-bottom:120px}
+.v3pc .lead{font-size:44px;line-height:1.25;margin-top:48px}.v3pc .copyline{font:700 52px/1.05 var(--head);margin-top:36px}
+.v3pc .pt{border-top:1.5px solid var(--ink);padding-top:28px;margin-top:auto}.v3pc .pt+.pt{margin-top:36px}.v3pc .pt p{font-size:36px;line-height:1.25}
+.dark .v3pc .pt{border-color:var(--dark-text)}
+.v3cv{display:flex;flex-direction:column;justify-content:center;padding-bottom:80px}.v3cv .hero{font-size:100px;margin:24px 0 44px}
+.v3cv .lead{font-size:44px;line-height:1.2}.v3cv .lead.small{font-size:28px;color:var(--muted)}
+.v3cl .hero{font-size:84px;margin:24px 0 36px}.v3cl .grid{display:grid;grid-template-columns:4fr 8fr;border-top:1.5px solid var(--ink);padding-top:36px}
+.v3cl .r{border-left:1.5px solid var(--ink);padding-left:36px;display:flex;flex-direction:column;gap:22px}
+.v3cl .row p{font-size:30px;line-height:1.25}.v3cl .row.todo{outline:2px dashed var(--accent-ink);outline-offset:0;padding:18px 24px}
+.v3cl .lead{font-size:36px;line-height:1.25;margin-top:24px}
+.pics.col{position:absolute;top:0;bottom:0;width:720px;z-index:1}.pics.col.left{left:0}.pics.col.right{right:0}
+.pics.col .pic{height:100%;aspect-ratio:auto;border-radius:0}
+.pics.col .plabel{bottom:112px;left:72px}.pics.col.right .plabel{left:auto;right:72px}
+.pic-col-left{padding-left:814px}.pic-col-right{padding-right:814px}.pic-col-right .flags{right:814px}
+.v3.v3cv h1.title,.v3.v3pc h1.title{max-width:none}
+"""
+
+
 def _cover_logo(deck, assets_dir) -> str | None:
     """The cover's logo markup: the client's logo the look cleared (``meta.theme.logo``, a PNG deck asset, as an image with alt text), else the
     ``--brand`` file's inline SVG. Placement ``none`` means no logo."""
@@ -277,8 +435,22 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         if v3 and s["type"] != "title":   # deck-look: the section band replaces the kicker (and the accent tick): a topic, never the title
             lab = band_label(s, deck["meta"])
             kick = f'<div class="band">{_e(lab)}</div>' if lab else '<div class="band empty"></div>'
-        title = b.words(s["title"], "title", "h1") if dark else b.rv("title", _e(s["title"]), "h1", 220)
-        body = _body(s, b, shown_blocks(s, audience), bool(pic_html))
+        lay = s.get("layout") or {}
+        planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
+        v3lid = lay["id"] if (v3 and planned and lay.get("id") in V3_WEB) else None
+        if v3lid:   # deck-look: the layout places its own title; the band stays in the header (none on the cover and the close)
+            if v3lid in ("cover_image", "close"):
+                kick = ""
+            title = ""
+            body = _v3_body(s, b, shown_blocks(s, audience), v3lid, deck)
+            if pic_html and v3lid in ("picture_column", "cover_image"):
+                side = "right" if v3lid == "cover_image" else _pic_sides(deck).get(sid, "left")
+                import re as _re
+                pic_html = _re.sub(r' style="width:\d+px;aspect-ratio:[\d/]+"', "", pic_html.replace('<div class="pics side">', f'<div class="pics col {side}">', 1), count=1)
+                pic_cls = f"pic-col pic-col-{side}"
+        else:
+            title = b.words(s["title"], "title", "h1") if dark else b.rv("title", _e(s["title"]), "h1", 220)
+            body = _body(s, b, shown_blocks(s, audience), bool(pic_html))
         foot = "" if (v3 and s["type"] != "title") else f'<span>{_e(s["section"])}</span>'   # the band carries the section
         if s.get("footnotes"):
             foot += f'<span class="src">Sources {" ".join(f"[{k}]" for k in s["footnotes"][:14])} (appendix)</span>'
@@ -288,11 +460,10 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
             flags += f'<span class="draft">DRAFT · {"needs a person" if s["status"] == "needs_human" else f"{n_human} slides need a person"}</span>'
         if sid in failed and audience != "client":
             flags += f'<span class="failed">CHECK FAILED: {_e(", ".join(sorted(failed[sid])))}</span>'
-        inner = (f'<div class="flags">{flags}</div><header>{kick}{title}</header>{body}{pic_html}'
+        head = f"<header>{kick}{title}</header>" if (kick or title) else ""
+        inner = (f'<div class="flags">{flags}</div>{head}{body}{pic_html}'
                  f'<footer>{foot}</footer>')
         notes = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
-        lay = s.get("layout") or {}
-        planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
         if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
             from . import layouts
             notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s))
@@ -607,7 +778,7 @@ def theme_css(css: str | None = None, head: str | None = None, body: str | None 
     v3 = bool(spec.LOOK_V3) and css is None
     head = head or (LOOK_V3_FONTS if v3 else HEAD_FONT)
     body = body or (LOOK_V3_BODY if v3 else BODY_FONT)
-    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI + (LOOK_V3_CSS if v3 else "")).replace("HEAD", head).replace("BODY", body)
+    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI + (LOOK_V3_CSS + LOOK_V3_LAYOUT_CSS if v3 else "")).replace("HEAD", head).replace("BODY", body)
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
     if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
         T["tint"] = T["panel"]
