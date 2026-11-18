@@ -207,10 +207,3 @@ button.bt-pill { cursor: pointer; }
 /* The Storyboard: the Booth's column on the same dotted ground; with it open the cards keep their width. */
 .booth-row > .booth-storyboard { background-color: var(--canvas-bg); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 24px 24px; }
 .booth-row:has(> .booth-storyboard[data-booth-open='true']) .sb-grid:not(.sb-sheet .sb-grid) { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-/* The rooms: below 1100px an open Booth takes the inspector's place, so the work keeps its width. */
-@media (max-width: 1100px) {
-  .booth-row:has(> .booth-room[data-booth-open='true']) .rm-make { grid-template-columns: minmax(0, 1fr); }
-  .booth-row:has(> .booth-room[data-booth-open='true']) .rm-make > .rm-direct { display: none; }
-  .booth-row:has(> .booth-room[data-booth-open='true']) .rm-body[data-room='edit'] { grid-template-columns: var(--bin-w) minmax(0, 1fr); }
-  .booth-row:has(> .booth-room[data-booth-open='true']) .rm-inspector { display: none; }
-}

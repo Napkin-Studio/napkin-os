@@ -40,6 +40,7 @@ import { scriptMentionHooks } from '../script/mentionHooks'
 import { planOrJoin } from '../jobs/plan'
 import { addBox, addShotRef, addShotToBox, removeShotRef, setStartFrame, shotRefLinks, startPicture } from './newBox'
 import { IMG_DRAG } from './Bin'
+import { readCut } from './timeline'
 
 type Tab = 'shot' | 'box' | 'change'
 const SIZES = ['close', 'medium', 'wide'] as const
@@ -228,6 +229,8 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
     u.stage = 'storyboard'
   }, 'stage')
 
+  // The takes in the Edit room's cut: a box's newest take says In the cut (mock make).
+  const cutGens = new Set(readCut(doc, data.videoId).v1.map((c) => c.genId))
   const compareGens = ticked.map((id) => data.gens.find((g) => g.id === id)).filter((g): g is Gen => !!g && g.state === 'ready')
   const tipEnd = () => setTip(null)
 
@@ -276,6 +279,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
                 {b.endCard ? <EndCardTile b={b} shot={doc.shots[b.shotIds[0]]} onEdit={() => onRoom('edit')} /> : (
                   <BoxCard b={b} sel={tab === 'shot' ? sel : { ...sel, shotId: undefined }} since={openedAt} selected={!!(sel.boxKey || sel.shotId) && b.key === box?.key} making={making || b.shotIds.some(busy)} words={f.words} limit={f.limit}
                     model={f.model} gaps={gapAt} preview={preview?.get(b.key)} takes={data.gens.filter((g) => inBox(g, b.key))}
+                    inCut={(() => { const top = data.gens.find((g) => inBox(g, b.key) && g.state === 'ready'); return !!top && cutGens.has(top.id) })()}
                     onShot={(id) => pickShot(b, id)} onBox={() => pickBox(b)} onMake={() => void make(b)} onTake={(g) => pickTake(g, b)}
                     onFlip={(g, k) => void flip(g, k)} onTip={(g, el) => setTip({ gap: g, el })} onTipEnd={tipEnd}
                     onUse={f.limit?.alt ? () => setModels(withPick(models, b, f.limit!.alt!.choice)) : undefined}
@@ -326,8 +330,8 @@ type BoxFacts = { pics: ReturnType<typeof boxPictures>; model: ModelChoice | und
 
 /** A box of the strip (mock join-or-cut-v1): what Make will do (no prices), its shots with the joined gaps
  *  between them, its limits on its model, the stills of its newest take (one per shot window), and Make. */
-function BoxCard({ b, selected, sel, since, making, takes, words, limit, model, gaps, preview, onShot, onBox, onMake, onTake, onFlip, onTip, onTipEnd, onUse, onCut }: {
-  b: Box; selected: boolean; sel: Selection; since: string; making: boolean; takes: Gen[]
+function BoxCard({ b, selected, sel, since, making, takes, words, limit, model, gaps, preview, inCut, onShot, onBox, onMake, onTake, onFlip, onTip, onTipEnd, onUse, onCut }: {
+  b: Box; selected: boolean; inCut?: boolean; sel: Selection; since: string; making: boolean; takes: Gen[]
   words: { title: string; sub: string }; limit?: BoxLimit; model?: ModelChoice; gaps: Map<string, Gap>; preview?: 'join' | 'cut'
   onShot: (id: string) => void; onBox: () => void; onMake: () => void; onTake: (g: Gen) => void
   onFlip: (g: Gap, keyboard: boolean) => void; onTip: (g: Gap, el: HTMLElement) => void; onTipEnd: () => void
@@ -352,8 +356,8 @@ function BoxCard({ b, selected, sel, since, making, takes, words, limit, model, 
   return (
     <section className={`jc-box ${b.together ? 'multi' : 'one'} ${selected ? 'sel' : ''} ${over ? 'over' : ''} ${preview ? `pv pv-${preview}` : ''}`} aria-label={title}>
       <button type="button" className="jc-bhd" onClick={onBox} title={`${title}. Open the Box tab`}>
-        <span className="jc-kick">{boxName(b)}</span>
         <b>{words.title}</b>
+        <span className="jc-kick">{boxName(b)}</span>
         <span className="jc-sub"><Mentions text={words.sub} /></span>
       </button>
       <div className="jc-row">
@@ -377,7 +381,14 @@ function BoxCard({ b, selected, sel, since, making, takes, words, limit, model, 
           {making ? 'Making…' : differs || has ? 'Make new take' : 'Make'}
         </button>
         {makingNow && <span className="jc-tk making" title={makingNow.label}>v{makingNow.version}</span>}
-        {top && !(b.together && fresh) && <button type="button" className="jc-tk" onClick={() => onTake(top)} title={`Play v${top.version} · ${top.label}`}>v{top.version}</button>}
+        {top && !(b.together && fresh) && (
+          // The box's newest take as a row (mock make .take): its picture, version and length, and In the cut.
+          <button type="button" className={`jc-take ${inCut ? 'on' : ''}`} onClick={() => onTake(top)} title={`Play v${top.version} · ${top.label}`}>
+            <Poster sha={top.asset} atS={top.segments[0]?.inS ?? 0} className="jc-takethumb" />
+            <span><b>v{top.version}</b> · {Math.round(top.durationS * 10) / 10} s</span>
+            {inCut && <span className="r">In the cut</span>}
+          </button>
+        )}
         {modelLabel && <span className="jc-model" title={modelLabel}>{modelLabel}</span>}
       </footer>
     </section>

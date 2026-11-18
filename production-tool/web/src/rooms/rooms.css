@@ -674,3 +674,37 @@ html[data-theme='dark'] .rm-clip.sel { outline-color: var(--ag-acc, var(--tool))
   .rm-boothslot .rm-tabs button + button { border-left: 1px solid var(--line); }
   .rm-boothslot .rm-tabs button.on { background: var(--ink); color: var(--paper); }
 }
+
+/* The strip's boxes to the mock (production-new-ui-v2 make .box): paper, a fine line, the title with the box's
+   name on the right, its newest take as a row with In the cut; the selected box ringed in the agency's colour. */
+.jc-box { border-width: 1px; border-radius: 8px; background: var(--paper); padding: 12px 14px; }
+.jc-box.sel { border-color: transparent; box-shadow: 0 0 0 2px var(--ag-base, var(--tool)); }
+html[data-theme='dark'] .jc-box.sel { box-shadow: 0 0 0 2px var(--ag-acc, var(--tool)); }
+.jc-bhd { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'title kick' 'sub sub'; column-gap: 10px; height: auto; }
+.jc-bhd b { grid-area: title; font-size: 13.5px; }
+.jc-bhd .jc-kick { grid-area: kick; font-size: 11px; text-transform: none; letter-spacing: 0; color: var(--faint, var(--ink3)); }
+.jc-bhd .jc-sub { grid-area: sub; font-size: 11.5px; color: var(--muted, var(--ink3)); }
+.jc-take { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 4px; border-radius: 6px; font-size: 12.5px; cursor: pointer; color: var(--ink); }
+.jc-take.on { background: color-mix(in srgb, var(--ag-act, var(--tool)) 9%, transparent); }
+.jc-take:focus-visible { outline: 2px solid var(--tool); outline-offset: 1px; }
+.jc-take .jc-takethumb { width: 64px; flex: none; border-radius: 2px; }
+.jc-take b { font-weight: 600; }
+.jc-take .r { margin-left: auto; font: 600 10px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ok, var(--ok-fg)); white-space: nowrap; }
+.jc-bft { border-top: 1px solid var(--line); padding-top: 8px; }
+.jc-box.one .jc-take .r { display: none; }
+@media (pointer: fine) {
+  .rm-boothslot .rm-chip { min-height: 28px; height: 28px; padding: 0 10px; font-size: 12px; }
+  .rm-boothslot .rm-input, .rm-boothslot .rm-refsearch { min-height: 32px; height: 32px; border-radius: 4px; font-size: 12.5px; }
+}
+/* A one-shot box is one shot wide: its name and the take's picture give way to the shot's own. */
+.jc-box.one .jc-bhd { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'title' 'sub'; }
+.jc-box.one .jc-bhd .jc-kick { display: none; }
+.jc-box.one .jc-take .jc-takethumb { display: none; }
+.rooms .jc-box.one .jc-bft .btn.sm { padding: 0 8px; font-size: 12px; max-width: 100%; }
+@media (pointer: fine) {
+  .rm-boothslot .jc-seg { gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .rm-boothslot .jc-seg button { min-height: 32px; height: 32px; border: 0; border-radius: 0; font-size: 12.5px; }
+  .rm-boothslot .jc-seg button + button { border-left: 1px solid var(--line); }
+}
+.jc-bft .jc-take { flex: 1 1 100%; order: -1; min-width: 0; }
+.jc-bft .jc-take > span:not(.r) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
