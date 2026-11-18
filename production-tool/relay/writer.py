@@ -27,7 +27,7 @@ from pathlib import Path
 from contracts import Contracts
 
 WRITE_MODEL = "claude-sonnet-5-5"
-PROMPT_VERSION = "skye.v5"  # skye.v1–v4 stay bundled: ModelWriter(prompt_version="skye.v4") rolls back (v5: the brief, features/brief-node.clan)
+PROMPT_VERSION = "skye.v6"  # skye.v1–v5 stay bundled: ModelWriter(prompt_version="skye.v5") rolls back (v5: the brief, features/brief-node.clan; v6: one length rule with the band, rough_seconds)
 PURPOSE = "writer"
 PROMPTS = Path(__file__).parent / "prompts"
 ASK_HOOK = "[ask]"
@@ -97,6 +97,38 @@ def settle(inp: dict, out: dict) -> dict:
             "rationale": out.get("rationale", "")}
 
 
+SLUG = re.compile(r"^(?:INT|EXT|EST|INT\.?/EXT|I/E)[. ]", re.IGNORECASE)
+
+
+def rough_seconds(lines: list[dict]) -> float:
+    """A page's rough length by the one rule the Script editor's band uses (web script/compose.ts
+    roughSeconds, skye.v6 rule 10): an action line is one beat, max(2, words / 6) s; a dialogue line
+    2.5 words a second; a slugline, a cue, a parenthetical and a transition take no time."""
+    s = 0.0
+    for x in lines:
+        kind, text = x.get("type") or x.get("kind") or "action", (x.get("text") or "").strip()
+        if not text or kind in ("character", "parenthetical", "transition", "centered", "direction"):
+            continue
+        words = len(text.split())
+        if kind == "dialogue":
+            s += words / 2.5
+        elif not SLUG.match(text):
+            s += max(2.0, words / 6)
+    return round(s, 1)
+
+
+def too_long(w: dict, res: dict) -> dict | None:
+    """A page draft (a scene) that runs well past its length (live test 2026-11-18: a 15 s film drafted
+    at about 60 s, "Make it 15 s" at 53 s): how long it ran and what it was for; None when it fits."""
+    if w["target"].get("kind") != "scene" or not res.get("writes"):
+        return None
+    goal = w.get("seconds") if w.get("intent") == "fit_seconds" else (w.get("context") or {}).get("target_s") if w.get("intent") == "draft" else None
+    if not goal:
+        return None
+    about = rough_seconds(res["writes"][0].get("lines") or [])
+    return {"about_s": about, "target_s": goal} if about > goal + max(3.0, goal * 0.2) else None
+
+
 def empty_nudge(question: dict | None) -> bool:
     """A question that offers no choice (owner 2026-10-15: "Draft the scene as written?" with one option,
     "Draft it", on an empty script): a nudge with exactly one option that goes ahead. The person already
@@ -146,6 +178,13 @@ class ModelWriter:
                 # Asked the same again: no draft and no question, so the job fails with "Try again".
                 res.pop("question")
             res["rationale"] = f"relay: went ahead on a one-option nudge ({q.get('text', '')[:120]}). {res.get('rationale', '')}".strip()
+        over = too_long(inp["write"], res)
+        if over:
+            # Ran well past its length: one more ask to fit, by the same rule (skye.v6 rule 10). The second
+            # answer stands either way; the band shows its length.
+            again = settle(inp, ask({**inp, "write": {**inp["write"], "too_long": over}}))
+            if again.get("writes"):
+                res = {**again, "rationale": f"relay: the first draft ran about {over['about_s']:g} s for {over['target_s']:g} s; asked once to fit. {again.get('rationale', '')}".strip()}
         res["_latencyMs"] = round((time.monotonic() - t0) * 1000)
         res["_usage"] = {"input_tokens": getattr(usage, "input_tokens", 0), "output_tokens": getattr(usage, "output_tokens", 0)}
         return res

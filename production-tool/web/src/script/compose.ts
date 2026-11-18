@@ -86,26 +86,53 @@ export function sceneAt(rows: ScriptRow[], beforeId: Id | null, afterId: Id | nu
   return below ?? null
 }
 
+/** A script's words to time before shots exist: its scenes' text, without headings (a heading takes no time). */
+export function roughText(d: ProductionDocument, scriptId: Id): string {
+  return scenesOf(d, scriptId).map((sc) => sc.text ?? '').filter(Boolean).join('\n\n')
+}
+
+/** A slugline (INT. KITCHEN - DAY) or a transition (CUT TO:): no time of its own, and never a speaker. */
+const SLUG = /^(?:INT|EXT|EST|INT\.?\/EXT|I\/E)[. ]/i
+const TRANSITION = /(?:TO:|FADE OUT\.?|FADE IN:?)$/
+/** A character cue: an upper-case name, with an extension such as (V.O.) or (CONT'D). */
+const CUE = /^[A-Z][A-Z0-9 .'’-]*(?:\s*\([A-Z0-9 .'’-]+\))*$/
+
 /**
- * A rough length before shots exist (open question 8): dialogue at 2.5 words a second,
- * about 2 s per action line. Labelled 'rough, from the words'.
+ * A rough length before shots exist (open question 8), labelled 'rough, from the words'. The same rule
+ * the Script agent sizes a draft by (relay prompts/skye.v6.md rule 10, writer.rough_seconds), so a draft
+ * written to the target reads as on target here:
+ * - an action line is one beat: about 2 s, and 1 s for every 6 words past 12 (words / 6);
+ * - spoken words (the line under a character cue) run 2.5 a second;
+ * - a slugline, a transition, a cue and a parenthetical take no time.
+ * A scene's text holds one block per line, so a cue speaks the next line only (a blank line ends it too).
  */
 export function roughSeconds(text: string): number {
-  let s = 0
+  return Math.round(roughLines(text).reduce((a, b) => a + b, 0) * 10) / 10
+}
+
+/** roughSeconds line by line: each line's seconds (0 for a line that takes no time), for the meter. */
+export function roughLines(text: string): number[] {
+  const out: number[] = []
   let speaking = false
   for (const raw of text.split('\n')) {
     const line = raw.trim()
-    if (!line) {
+    if (!line || SLUG.test(line) || (TRANSITION.test(line) && line === line.toUpperCase())) {
       speaking = false
+      out.push(0)
       continue
     }
-    if (/^[A-Z][A-Z0-9 .'-]+$/.test(line) && line.length < 40) {
+    if (line.length < 40 && CUE.test(line)) {
       speaking = true
+      out.push(0)
       continue
     }
-    if (/^\(.*\)$/.test(line)) continue
-    if (speaking) s += line.split(/\s+/).length / 2.5
-    else s += 2
+    if (/^\(.*\)$/.test(line)) {
+      out.push(0)
+      continue
+    }
+    const words = line.split(/\s+/).length
+    out.push(speaking ? words / 2.5 : Math.max(2, words / 6))
+    speaking = false
   }
-  return Math.round(s * 10) / 10
+  return out
 }

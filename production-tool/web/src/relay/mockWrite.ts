@@ -8,7 +8,7 @@ import { writeMode } from '../contracts/types'
 const firstSentence = (t: string) => t.trim().split(/(?<=[.!?])\s+/)[0] ?? t
 
 /** A short screenplay from a brief: a slugline, the premise as action, a close. The real model writes
- *  a proper draft (relay prompts/skye.v4.md); this deterministic stub keeps the shape for the mock. */
+ *  a proper draft (relay prompts/skye.v6.md); this deterministic stub keeps the shape for the mock. */
 export function draftScript(instruction: string | undefined): { type: 'action'; text: string }[] {
   const brief = (instruction ?? '').trim()
   const where = [...brief.matchAll(/\b(?:at|in|inside)\s+(?:the\s+)?([a-z][a-z'-]+)/gi)].at(-1)?.[1]

@@ -4,8 +4,7 @@
 
 import { flatText, type PMNode, type Prose } from '../../../clan-store/src'
 import type { Id, ProductionDocument, Suggestion, WriteInput, WriteTarget } from '../contracts/types'
-import { roughSeconds, type ComposedScript } from './compose'
-import { scriptText } from '../model/selectors'
+import { roughLines, roughSeconds, roughText, type ComposedScript } from './compose'
 import { refNames } from './extensions'
 
 type RefNames = ReturnType<typeof refNames>
@@ -119,6 +118,12 @@ export function draftLines(d: Doc, sug: Suggestion): { lines: DraftLine[]; scree
   return { lines: shaped.filter((l) => l.text.trim()), screenplay: shaped.some((l) => l.kind === 'heading' || SCREENPLAY.has(l.kind)) }
 }
 
+/** A page draft's rough length, by the band's rule (compose.roughSeconds): what Keep would make the band say. */
+export function draftSeconds(d: Doc, sug: Suggestion): number {
+  const text = draftLines(d, sug).lines.map((l) => (l.kind === 'character' ? l.text.toUpperCase() : l.kind === 'parenthetical' && !/^\(.*\)$/.test(l.text.trim()) ? `(${l.text})` : l.text)).join('\n')
+  return roughSeconds(text)
+}
+
 /** A word-diff with long unchanged runs cut to a few words either side: the card shows what changed. */
 export function trimDiff(parts: ReturnType<typeof wordDiff>, keep = 8): ReturnType<typeof wordDiff> {
   return parts.map((p, i) => {
@@ -175,5 +180,5 @@ export function scriptSuggestions(d: Doc, composed: ComposedScript): Suggestion[
 /** The meter's segments: each planned shot, else each written paragraph, by its rough seconds. */
 export function meterSegments(doc: ProductionDocument, composed: ComposedScript): { id: string; s: number }[] {
   if (composed.shots.length) return composed.shots.map((s) => ({ id: s.id, s: s.duration_s }))
-  return scriptText(doc, composed.script.id).split(/\n\s*\n|\n/).map((t, i) => ({ id: `p${i}`, s: roughSeconds(t) })).filter((x) => x.s > 0)
+  return roughLines(roughText(doc, composed.script.id)).map((s, i) => ({ id: `p${i}`, s: Math.round(s * 10) / 10 })).filter((x) => x.s > 0)
 }

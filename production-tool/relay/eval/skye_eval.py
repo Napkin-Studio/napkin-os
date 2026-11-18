@@ -12,6 +12,8 @@ the blocks keep their types and order; Make it N s sets that length; a beat land
 the note is one short first-person line with no price; the words are shorter for Tighten; a question
 offers a real choice or asks for a missing fact, never one option that restates the press (skye.v3).
 The `proceed` cases are drafts that must come back as drafts (the owner's empty script, 2026-10-15).
+The `length` cases (since skye.v6, live test 2026-11-18) are page drafts and fits that must land on their
+length by the band's rule (writer.rough_seconds): within max(3 s, a fifth) of the target, never far over.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-from writer import PROMPT_VERSION, WRITE_MODEL, ModelWriter, PassthroughWriter, empty_nudge, settle  # noqa: E402
+from writer import PROMPT_VERSION, WRITE_MODEL, ModelWriter, PassthroughWriter, empty_nudge, rough_seconds, settle  # noqa: E402
 
 CASES = HERE / "skye_cases.json"
 RECORDED = HERE / "recorded" / PROMPT_VERSION
@@ -41,7 +43,7 @@ def load() -> dict:
 def request(case: dict, intent: str) -> dict:
     lines = case["lines"] if intent != "draft" or case.get("intent") else [{"type": "action", "text": case["lines"][0]["text"].split(". ")[0]}]
     write = {
-        "intent": intent, "target": {"kind": "shot" if intent != "draft" else "scene", "id": "shot_00000000000000000000000001"},
+        "intent": intent, "target": {"kind": "scene" if intent == "draft" or case.get("target") == "scene" else "shot", "id": "shot_00000000000000000000000001"},
         "base_hash": BASE, "lines": lines,
         "context": {"script_title": case["title"], "target_s": case["target_s"], "neighbours": "", "refs": case["refs"]},
     }
@@ -73,13 +75,18 @@ def score(case: dict, intent: str, out: dict) -> dict[str, bool]:
                                          for n in MENTION.findall(words))
     checks["invents no @name"] = set(MENTION.findall(words)) <= (names_before | known)
     checks["hash and target"] = d["base_hash"] == BASE and d["target"] == req["target"]
-    if intent != "draft":
+    if intent != "draft" and not (intent == "fit_seconds" and req["target"]["kind"] == "scene"):  # a scene fit cuts beats
         checks["blocks in order"] = [x["type"] for x in d["lines"]] == [x["type"] for x in req["lines"]]
     checks["note"] = 0 < len(d["note"]) <= 200 and not PRICE.search(d["note"])
     if intent == "tighten":
         checks["shorter"] = len(words) < len(before)
     if intent == "fit_seconds":
         checks["length"] = d.get("duration_s") == req["seconds"]
+    if req["target"]["kind"] == "scene" and intent in ("draft", "fit_seconds"):
+        # One rule with the band (skye.v6 rule 10): the page lands on its length, never far over.
+        goal = req.get("seconds") if intent == "fit_seconds" else req["context"]["target_s"]
+        about = rough_seconds(d["lines"])
+        checks["fits the length"] = about <= goal + max(3.0, goal * 0.2) and (intent != "draft" or about >= goal * 0.5)
     if intent in ("add_beat", "write_vo"):
         beats = d.get("new_beats") or []
         checks["a beat"] = len(beats) >= 1 and all(b["at_s"] <= 30 for b in beats)
@@ -108,7 +115,7 @@ def run(writer, data: dict, cases=None) -> dict:
             if out is None:
                 continue
             table[f"{case['id']}/{intent}"] = score(case, intent, out)
-    for case in data.get("proceed", []):
+    for case in data.get("proceed", []) + data.get("length", []):
         if cases and case["id"] not in cases:
             continue
         out = writer(case, case["intent"])

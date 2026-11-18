@@ -12,7 +12,7 @@ import { useWhy } from '../ui/booth/hooks'
 import type { HistoryFocus } from '../ui/History'
 import type { ComposedScript } from './compose'
 import { discardDraft, keep, linesOf, wordDiff } from './skye'
-import { askedWords, draftLines, landsWhere, trimDiff } from './skyeBooth'
+import { askedWords, draftLines, draftSeconds, landsWhere, trimDiff } from './skyeBooth'
 
 export interface DraftCardProps {
   sug: Suggestion
@@ -83,7 +83,11 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
           {diff.map((x, i) => (x.kind === 'same' ? <span key={i}>{x.text}</span> : x.kind === 'gone' ? <del key={i}>{x.text}</del> : <ins key={i}>{x.text}</ins>))}
         </div>
       )}
-      {(sug.proposed.duration_s !== undefined || (sug.proposed.new_beats ?? []).length > 0) && (
+      {kind === 'scene' ? (
+        // A page draft says its length by the band's rule, not the agent's own count (live test 2026-11-18:
+        // "15 s" on a draft the band then read as 53 s).
+        <p className="note">about {draftSeconds(doc, sug)} s</p>
+      ) : (sug.proposed.duration_s !== undefined || (sug.proposed.new_beats ?? []).length > 0) && (
         <p className="note">{sug.proposed.duration_s !== undefined ? `${sug.proposed.duration_s} s` : ''}{(sug.proposed.new_beats ?? []).map((b) => ` + ${b.kind} at ${b.at_s} s`).join('')}</p>
       )}
       <div className="acts">

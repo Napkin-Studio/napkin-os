@@ -15,6 +15,9 @@ def test_twenty_one_cases_by_six_intents_and_every_request_is_valid():
     data = skye_eval.load()
     assert len(data["cases"]) == 21 and len(data["intents"]) == 6
     c = Contracts()
+    for case in data["length"]:
+        req = skye_eval.request(case, case["intent"])
+        assert c.errors("relay-api.schema.json#/$defs/WriteInput", req["input"]["write"]) == [], case["id"]
     for case in data["cases"]:
         for intent in data["intents"]:
             req = skye_eval.request(case, intent)
@@ -24,10 +27,31 @@ def test_twenty_one_cases_by_six_intents_and_every_request_is_valid():
 def test_the_checks_pass_over_the_passthrough_writer():
     data = skye_eval.load()
     table = skye_eval.run(lambda c, i: skye_eval.PassthroughWriter().write(skye_eval.request(c, i)), data)
-    assert len(table) == 126 + len(data["proceed"])
+    assert len(table) == 126 + len(data["proceed"]) + len(data["length"])
     failed = {k: [n for n, ok in row.items() if not ok] for k, row in table.items() if not all(row.values())}
-    # The passthrough cuts to the first sentence: it may drop an @name or not shorten; everything else holds.
-    assert all(set(v) <= {"shorter", "keeps @names"} for v in failed.values()), failed
+    # The passthrough cuts to the first sentence: it may drop an @name, not shorten, or draft short of the
+    # length; everything else holds.
+    assert all(set(v) <= {"shorter", "keeps @names", "fits the length"} for v in failed.values()), failed
+
+
+def test_the_live_test_drafts_fail_the_length_check_and_a_fitted_one_passes():
+    """Live test 2026-11-18 (skye.v6): the 7-beat scene was about 60 s on the band for a 15 s film; the
+    length cases score it by the band's rule (writer.rough_seconds)."""
+    data = skye_eval.load()
+    fit = next(c for c in data["length"] if c["id"] == "hearth-oats-fit-15")
+    req = skye_eval.request(fit, "fit_seconds")["input"]["write"]
+    assert req["target"]["kind"] == "scene" and req["seconds"] == 15
+    as_was = {"writes": [{"target": req["target"], "base_hash": req["base_hash"], "note": "I tightened it.", "duration_s": 15, "lines": fit["lines"]}]}
+    assert skye_eval.score(fit, "fit_seconds", as_was)["fits the length"] is False
+    fitted = [{"type": "action", "text": "Frost on the window. A tired DAD tips red-pack oats into a pot."},
+              {"type": "action", "text": "His sleepy DAUGHTER shuffles in, one wellington boot on."},
+              {"type": "action", "text": "Steam rises. He sets a warm bowl before her."},
+              {"type": "action", "text": "He yawns. She yawns back."},
+              {"type": "character", "text": "NARRATOR (V.O.)"},
+              {"type": "dialogue", "text": "Hearth Oats. Slow down, warm up."}]
+    ok = {"writes": [{**as_was["writes"][0], "lines": fitted}]}
+    assert skye_eval.rough_seconds(fitted) <= 15
+    assert skye_eval.score(fit, "fit_seconds", ok)["fits the length"] is True
 
 
 def test_a_reply_with_a_price_or_a_lost_name_fails_its_checks():

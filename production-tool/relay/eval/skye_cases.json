@@ -615,5 +615,89 @@
     "rationale": "Confirming before drafting."
    }
   }
+ ],
+ "length": [
+  {
+   "id": "hearth-oats-draft-15",
+   "sector": "Food",
+   "since": "skye.v6",
+   "intent": "draft",
+   "why": "Live test 2026-11-18: a 15 s film drafted from one line came back at about 60 s on the band (7 action lines of 3-4 beats each). The draft must fit target_s by rule 10 (rough_seconds).",
+   "lines": [
+    {
+     "type": "action",
+     "text": "A tired dad makes Hearth Oats for his sleepy daughter on a frosty farm morning; tender and a little funny; the red pack on show; ends on 'Hearth Oats. Slow down, warm up.'"
+    }
+   ],
+   "refs": [],
+   "target_s": 15,
+   "title": "Script"
+  },
+  {
+   "id": "hearth-oats-fit-15",
+   "sector": "Food",
+   "since": "skye.v6",
+   "intent": "fit_seconds",
+   "target": "scene",
+   "seconds": 15,
+   "why": "Live test 2026-11-18: 'Make it 15 s' on the 7-beat scene trimmed adjectives and kept every beat (about 53 s on the band). fit_seconds on a scene must cut beats until rule 10 says 15 s.",
+   "lines": [
+    {
+     "type": "action",
+     "text": "Pale blue light. Frost on the window. A tired DAD in a rumpled jumper stands at the stove, shoulders up against the cold, breath faintly visible."
+    },
+    {
+     "type": "action",
+     "text": "He tears open a red Hearth Oats pack and tips oats into a small pot. The pack stays in frame on the counter."
+    },
+    {
+     "type": "action",
+     "text": "His sleepy DAUGHTER shuffles in wearing a coat over her pyjamas and one wellington boot. She climbs onto a chair and rests her head on the table."
+    },
+    {
+     "type": "action",
+     "text": "Dad stirs. Steam rises and softens the window. His shoulders drop. He stirs slower, then slower still."
+    },
+    {
+     "type": "action",
+     "text": "He sets a warm bowl before her. She wraps both hands around it and sighs. He yawns. She yawns back."
+    },
+    {
+     "type": "action",
+     "text": "He sits beside her, still in his coat, and eats from her bowl. She lets him."
+    },
+    {
+     "type": "action",
+     "text": "The red pack glows on the counter in the first gold sun."
+    },
+    {
+     "type": "character",
+     "text": "NARRATOR (V.O.)"
+    },
+    {
+     "type": "dialogue",
+     "text": "Hearth Oats. Slow down, warm up."
+    }
+   ],
+   "refs": [],
+   "target_s": 15,
+   "title": "Script"
+  },
+  {
+   "id": "gym-draft-30",
+   "sector": "Fitness",
+   "since": "skye.v6",
+   "intent": "draft",
+   "why": "A 30 s target is not padded or overshot: rule 10 lands within a few seconds of 30.",
+   "lines": [
+    {
+     "type": "action",
+     "text": "a man putting in work at the gym before dawn, nobody watching"
+    }
+   ],
+   "refs": [],
+   "target_s": 30,
+   "title": "Script"
+  }
  ]
 }

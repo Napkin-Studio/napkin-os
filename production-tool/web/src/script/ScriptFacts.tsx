@@ -9,10 +9,9 @@ import { useServices } from '../app/context'
 import type { ProductionDocument } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { scopeOf, scopeRefs, type ScopeItem } from '../model/scope'
-import { scriptText } from '../model/selectors'
 import { linkForMention, linkWords } from '../text/mention/source'
 import { Float } from '../ui/Float'
-import { roughSeconds, type ComposedScript } from './compose'
+import { roughSeconds, roughText, type ComposedScript } from './compose'
 import { setScriptTarget } from './length'
 import { LengthPicker } from './LengthPicker'
 import type { ModelStore } from '../model/store'
@@ -24,7 +23,7 @@ function lengthOf(doc: ProductionDocument, composed: ComposedScript) {
   const sb = composed.storyboard
   const target = sb?.target_s ?? composed.script.target_s
   const shots = composed.shots
-  const rough = !shots.length ? roughSeconds(scriptText(doc, composed.script.id)) : null
+  const rough = !shots.length ? roughSeconds(roughText(doc, composed.script.id)) : null
   // A rough length from the words is said in whole seconds (the mock's "about 11 s"); planned shots to a tenth.
   const est = rough !== null ? Math.round(rough) : Math.round(composed.total_s * 10) / 10
   return { target, est, over: Math.round((est - target) * 10) / 10, rough: rough !== null }
