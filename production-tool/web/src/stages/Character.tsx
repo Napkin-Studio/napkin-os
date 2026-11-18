@@ -250,10 +250,13 @@ export function Character({ initial, active, onPictureEditor }: {
   // The canvas's Booth (features/production-new-ui.clan, the Booth rule): only for a selected Brief node, whose
   // whole spine needs room; with nothing of that selected the canvas takes the full width.
   const booth = useBooth('canvas')
+  // In link mode the first click picks the source: no Booth for it, so the targets on the right stay in reach
+  // (re-test N8: the Brief's Booth covered the Storyboard and the Sizes board until Hide).
+  const linkMode = useSyncExternalStore(canvasActions.subscribe, () => canvasActions.mode() === 'link')
   const selBrief = useMemo(() => {
     const ids = vs?.selected ?? []
-    return ids.length === 1 ? briefOfElement(els.find((e) => e.id === ids[0])) : null
-  }, [vs, els])
+    return ids.length === 1 && !linkMode ? briefOfElement(els.find((e) => e.id === ids[0])) : null
+  }, [vs, els, linkMode])
   // The picture open in the Image editor, as the canvas shows it now; gone from the canvas, the editor closes.
   const editingPic = useMemo(() => {
     if (!editing) return null
@@ -519,7 +522,7 @@ export function Character({ initial, active, onPictureEditor }: {
   // once per selection, after the Booth has slid in; never mid-drag, and not after the person moved it.
   const oneSel = vs?.selected.length === 1 ? vs.selected[0] : ''
   useEffect(() => {
-    if (!canvas || !oneSel || !own) return
+    if (!canvas || !oneSel || !own || linkMode) return
     const at = canvas.elements().find((e) => e.id === oneSel)
     if (!at || isBoard(at)) return
     const from = { x: at.x, y: at.y }
@@ -537,7 +540,7 @@ export function Character({ initial, active, onPictureEditor }: {
     }
     t = setTimeout(reveal, 480)
     return () => clearTimeout(t)
-  }, [canvas, own, oneSel, railInset])
+  }, [canvas, own, oneSel, railInset, linkMode])
   // A picture named on no board goes to its role's board: "Moved to Characters · Undo" (board-autolayout).
   useEffect(() => ctrl?.onRouted((r) => {
     const e = canvas?.elements().find((x) => x.id === r.ids[0])
