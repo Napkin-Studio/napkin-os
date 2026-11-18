@@ -20,7 +20,7 @@ describe('a job the relay made on Runway instead', () => {
     }
     const doc = snapshotDoc()
     const state = { jobs: {} as Record<string, Record<string, unknown>> }
-    const ui = { get: () => state, update: (fn: (u: typeof state) => void) => fn(state) }
+    const ui = { get: () => state, update: (fn: (u: typeof state) => void) => fn(state), flush: async () => {} }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const runner = new JobRunner(relay as any, doc, ui as any)
     const id = await runner.submit('clip', { image: { sha256: 'sha256:' + '0'.repeat(64), url: 'u', mime: 'image/png' } }, [], { for: 'clip', shotId: 'shot_01K6XA7Q3M9V2D4R8T0B5C1E6F' })

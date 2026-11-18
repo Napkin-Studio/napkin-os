@@ -43,7 +43,7 @@ describe('the Film node while the Director agent plans straight from the script'
     document.body.appendChild(el)
     act(() => {
       root = createRoot(el)
-      const shell = { index: { get: () => ({ name: 'EXT. CITY STREET - DUSK' }) } }
+      const shell = { index: { get: () => ({ name: 'EXT. CITY STREET - DUSK' }), subscribe: () => () => {} } }
       root.render(createElement(ShellContext.Provider, { value: shell as never },
         createElement(ServicesContext.Provider, { value: { doc: s, ui, runner, project: { id: 'p1' } } as unknown as Services },
           createElement(VideoCard, { id: videoId, onOpen: () => {} }))))

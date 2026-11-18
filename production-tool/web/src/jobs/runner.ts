@@ -282,8 +282,14 @@ export class JobRunner {
 
   /** Write the document and the UI state now. A store that refuses never stops the send: the person asked. */
   private async durable() {
-    const kept = (e: unknown) => console.warn('could not keep the job before sending it', e)
-    await Promise.all([this.ui.flush().catch(kept), this.doc.flush().catch(kept)])
+    const keep = async (store: { flush(): Promise<void> }) => {
+      try {
+        await store.flush()
+      } catch (e) {
+        console.warn('could not keep the job before sending it', e)
+      }
+    }
+    await Promise.all([keep(this.ui), keep(this.doc)])
   }
 
   /** How many of this person's jobs the relay runs at once (config inFlightPerParticipant; the session sets it). */
