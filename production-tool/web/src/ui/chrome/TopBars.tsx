@@ -5,8 +5,9 @@
 // bar's Decisions button. No spend, cost or limit in any bar (principle 4); costs show only in Decisions.
 
 import { useState, type ReactNode } from 'react'
+import { DataSharing } from '../DataSharing'
 import { usePanels } from './panels'
-import { useDoc, useServices, useShell, useShowMock } from '../../app/context'
+import { useDoc, useServices, useShell, useShowMock, useUi } from '../../app/context'
 import { Band, Icon, ShellBar, type Crumb } from '../shell/ShellBar'
 import { ICON } from '../shell/bar'
 import { exportBundle, download } from '../../export'
@@ -63,8 +64,28 @@ function CanvasMoreItems({ close, share }: { close: () => void; share: boolean }
     }
   }
   const soon = 'Not in this version yet'
+  const ui = useUi()
+  const allow = ui.me?.allow
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [sharing, setSharing] = useState(false)
   return (
     <>
+      {/* The document itself (mock menu): Rename, Duplicate, then Export; Data sharing and Delete last. */}
+      {renaming !== null ? (
+        <form className="pt-menuform" onSubmit={(e) => { e.preventDefault(); const n = renaming.trim(); if (n) void shell.rename(project.id, n).then(close, () => setNote('Could not rename it. Try again.')); else setRenaming(null) }}>
+          <input className="input" autoFocus onFocus={(e) => e.currentTarget.select()} aria-label="The project's name" value={renaming} maxLength={120} onChange={(e) => setRenaming(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setRenaming(null) } }} />
+          <button type="submit" className="btn sm">Rename</button>
+        </form>
+      ) : <MenuItem icon="✎" onSelect={() => setRenaming(name ?? '')}>Rename</MenuItem>}
+      <MenuItem icon="⧉" disabled={!!busy} hint="Opens the copy" onSelect={() => void run('dup', async () => {
+        // The copy is made from the saved project (shell.duplicate closes this one first), then opened.
+        const copy = await shell.duplicate(project.id)
+        await shell.open(copy.id)
+        return null
+      })}>{busy === 'dup' ? 'Duplicating…' : 'Duplicate'}</MenuItem>
+      <div className="pt-menusep" />
       <div className="fhead">Export</div>
       <MenuItem icon={<ExportIcon kind="zip" />} disabled={!!busy} hint={`${files} files`} onSelect={() => void run('media', async () => {
         const canvas = await idbGet<CanvasSnapshot>('kv', project.canvasKey).catch(() => undefined)
@@ -89,6 +110,18 @@ function CanvasMoreItems({ close, share }: { close: () => void; share: boolean }
         </MenuItem>
       )}
       {share && <MenuItem icon={<LinkIcon />} onSelect={() => { close(); void copyLink(location.href) }}>Copy link</MenuItem>}
+      <div className="pt-menusep" />
+      {allow && <MenuItem icon="⇄" hint="Who receives what your agency puts in" onSelect={() => setSharing(true)}>Data sharing</MenuItem>}
+      {deleting ? (
+        <div className="pt-menuhead" role="alertdialog" aria-label="Delete this project">
+          Delete “{name ?? 'this project'}” from this browser? The server's copy is kept.
+          <span className="pt-menuacts">
+            <button type="button" className="btn sm danger" autoFocus onClick={() => { close(); void shell.remove(project.id).catch(() => undefined) }}>Delete</button>
+            <button type="button" className="btn sm ghost" onClick={() => setDeleting(false)}>Cancel</button>
+          </span>
+        </div>
+      ) : <MenuItem icon="×" danger hint="From this browser" onSelect={() => setDeleting(true)}>Delete…</MenuItem>}
+      {sharing && allow && <DataSharing allow={allow} onClose={() => { setSharing(false); close() }} />}
     </>
   )
 }

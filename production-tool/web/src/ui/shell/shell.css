@@ -218,3 +218,7 @@
   .tba-n2 small, .tba-n2 .tba-saved { display: none; }
   .tb .tb-decisions-btn { padding: 0 10px; }
 }
+/* The document menu's inline forms (Rename, Delete's confirm). */
+.pt-menuform { display: flex; gap: 6px; padding: 4px 8px; }
+.pt-menuform .input { flex: 1; min-width: 0; height: 30px; }
+.pt-menuacts { display: flex; gap: 6px; margin-top: 8px; }
