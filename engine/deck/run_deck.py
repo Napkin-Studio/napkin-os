@@ -666,6 +666,7 @@ def main(argv=None):
     if not (prompt_text or a.doc or a.brief or a.research or a.deck):
         ap.error("nothing to build a deck from: give a prompt (--prompt-text or --prompt-file), a document (--doc), a brief (--brief) or research (--research)")
     a.out.mkdir(parents=True, exist_ok=True)
+    images.wipe_stale(a.out)   # every build, --until deck included: no repair round, repair.json, issues.json or qa.json from an earlier build
     if a.live:
         a.stages.mkdir(parents=True, exist_ok=True)   # a live run writes each stage here as it goes; a missing folder used to fail after the first paid call
     rep = {"stages": {}, "started": time.strftime("%Y-%m-%dT%H:%M:%S")}

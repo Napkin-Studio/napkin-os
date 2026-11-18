@@ -113,6 +113,17 @@ def inputs_key(inp: dict) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
+def out_key(inp: dict) -> str:
+    """What the out folder is keyed by beyond the stages: the text mode and the pinned slides. They change the repair loop's output, not a stage's, so a
+    change gives a new out folder and the paid stages stay cached. Empty when neither is set (the folder is plain ``out``)."""
+    rv = inp.get("review") if isinstance(inp.get("review"), dict) else {}
+    pins = sorted(str(k) for k in (rv.get("pinned") or ()))   # a dict of slide ids, or a list of them
+    tm = inp.get("text_mode") if inp.get("text_mode") in ("condense", "preserve") else ""
+    if not tm and not pins:
+        return ""
+    return hashlib.sha256(json.dumps({"t": tm, "pins": pins}, sort_keys=True).encode()).hexdigest()[:8]
+
+
 def validate_request(body: dict, settings: Settings) -> dict:
     """The request, checked: raises Refused (400, 403, 409) for what the server will not run."""
     if not isinstance(body, dict):
@@ -174,6 +185,7 @@ class Doc:
         self.notices: list[str] = []
         self.req: dict | None = None
         self.folder: Path | None = None
+        self.out_tag = ""
         self.summary: dict | None = None
         self.pay: dict | None = None
         self.cost = 0.0
@@ -185,7 +197,7 @@ class Doc:
 
     @property
     def out(self) -> Path:
-        return (self.folder or self.root) / "out"
+        return (self.folder or self.root) / (f"out-{self.out_tag}" if self.out_tag else "out")
 
 
 class Server:
@@ -206,6 +218,7 @@ class Server:
                 raise Refused(409, "job_state", f"a run is already going ({self.busy}): the engine runs one segment at a time")
             d = self.docs.setdefault(req["doc"], Doc(self.s.data / req["doc"], req["doc"]))
             d.folder = self.s.data / req["doc"] / inputs_key(req["inputs"])
+            d.out_tag = out_key(req["inputs"])
             d.stages.mkdir(parents=True, exist_ok=True)
             d.req, d.notices, d.error, d.pay = req, [], None, None
             present = {p.name for p in d.stages.glob("*.json")}

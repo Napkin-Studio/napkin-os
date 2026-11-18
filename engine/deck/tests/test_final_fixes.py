@@ -74,3 +74,43 @@ def test_two_concurrent_conversions_both_make_a_pdf(tmp_path):
     with concurrent.futures.ThreadPoolExecutor(2) as ex:
         list(ex.map(lambda d: run_deck.to_pdf(d / "deck.pptx", d), jobs))
     assert all((d / "deck.pdf").stat().st_size > 500 for d in jobs)
+
+# ---------------------------------------------------------------- 2: every build starts from a clean out folder
+
+def test_a_client_build_leaves_no_stale_repair_output_from_an_earlier_review_build(tmp_path):
+    import test_repair as TR
+    out = tmp_path / "o"
+    TR.build(out, TR.fake_qa({"s06": TR.layout_is("pair", "comparison")}))
+    assert (out / "repair.json").exists() and (out / "repair").is_dir() and (out / "issues.json").exists() and (out / "qa.json").exists()
+    TR.build(out, None, "--audience", "client", "--no-repair", "--no-qa")
+    for name in ("repair", "repair.json", "issues.json", "qa.json"):
+        assert not (out / name).exists(), f"stale {name} from the review build survived a client build"
+
+
+def test_an_until_deck_build_also_wipes_them(tmp_path):
+    import test_repair as TR
+    out = tmp_path / "o"
+    TR.build(out, TR.fake_qa({"s06": TR.layout_is("pair", "comparison")}))
+    TR.build(out, None, "--until", "deck")
+    for name in ("repair", "repair.json", "issues.json", "qa.json"):
+        assert not (out / name).exists(), name
+
+
+def test_the_repair_record_survives_the_wipe(tmp_path):
+    import test_repair as TR
+    out = tmp_path / "o"
+    TR.build(out, TR.fake_qa({"s06": TR.layout_is("pair", "comparison")}))
+    assert (out / "repair_record.json").exists()
+    TR.build(out, TR.fake_qa({"s06": TR.layout_is("pair", "comparison")}))
+    assert (out / "repair.json").exists()   # the replay still ran its round
+
+
+def test_text_mode_and_pins_change_the_out_folder_but_not_the_stages_key():
+    from deck import server
+    base = {"prompt": {"text": "x"}, "kind": "agency", "format": "pitch"}
+    assert server.out_key(base) == ""
+    a = server.out_key({**base, "text_mode": "preserve"})
+    b = server.out_key({**base, "text_mode": "condense"})
+    c = server.out_key({**base, "review": {"pinned": {"s03": {}}}})
+    assert len({"", a, b, c}) == 4
+    assert server.inputs_key(base) == server.inputs_key({**base, "text_mode": "preserve"})   # the paid stages stay cached

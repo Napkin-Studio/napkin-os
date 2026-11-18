@@ -725,6 +725,16 @@ def wipe_outputs(out_dir: Path) -> None:
     (Path(out_dir) / "deck.pdf").unlink(missing_ok=True)
 
 
+def wipe_stale(out_dir: Path) -> None:
+    """Remove the repair loop's and the checks' files from an earlier build in a reused ``--out``, at the start of EVERY build: ``repair/`` (round pptx and pdf
+    files that can hold unapproved pictures), ``repair.json``, ``issues.json`` and ``qa.json``. A build writes the ones it makes; none survives from another.
+    ``repair_record.json`` stays: it is the replay's record, not an output."""
+    import shutil
+    shutil.rmtree(Path(out_dir) / "repair", ignore_errors=True)
+    for name in ("repair.json", "issues.json", "qa.json"):
+        (Path(out_dir) / name).unlink(missing_ok=True)
+
+
 def copy_assets(deck: dict, out_dir: Path, audience: str, src_dirs=(), sources: dict | None = None) -> dict:
     """Derive (and for a review, copy) ONLY the pictures a render of this audience draws. Derived JPEGs go to ``<out_dir>/assets/derived/``: one
     per asset, re-encoded, so no EXIF, XMP, ICC or PNG text chunk of the original comes with it. A review also copies the original to
