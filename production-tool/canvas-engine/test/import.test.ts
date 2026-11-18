@@ -38,6 +38,7 @@ const SCENE: ExcalidrawLike[] = [
   el({ id: 'doc1', type: 'rectangle', x: 900, y: 1200, customData: { kind: 'document', id: 'document_1' } }),
   el({ id: 'fmt1', type: 'rectangle', x: 1200, y: 1200, customData: { kind: 'format_set', id: 'format_set_1' } }),
   el({ id: 'sug1', type: 'rectangle', x: 1500, y: 1200, customData: { kind: 'suggestion', id: 'suggestion_1' } }),
+  el({ id: 'brf1', type: 'rectangle', x: 1800, y: 1200, customData: { kind: 'brief', id: 'brief_1' } }),
   el({ id: 'lnk1', type: 'arrow', x: 0, y: 1300, points: [[0, 0], [300, 0]], startBinding: { elementId: 'script1' }, endBinding: { elementId: 'sb1' }, customData: { kind: 'link', id: 'link_1' } }),
   el({ id: 'mine', type: 'frame', x: 2000, y: 0, name: null }),
   el({ id: 'gone', type: 'rectangle', isDeleted: true }),
@@ -62,10 +63,11 @@ describe('convertExcalidraw', () => {
     expect(kinds).toEqual({
       board1: 'board', drawn1: 'frame', ink1: 'stroke', area1: 'sketch', pic1: 'image', job_1: 'image', dropped: 'image',
       arr1: 'arrow', note1: 'text', box1: 'shape', label1: 'text', oval: 'shape', gem: 'shape', line1: 'arrow',
-      script1: 'node', sb1: 'node', vid1: 'node', doc1: 'node', fmt1: 'node', sug1: 'node', lnk1: 'link', mine: 'frame', web: 'shape',
+      script1: 'node', sb1: 'node', vid1: 'node', doc1: 'node', fmt1: 'node', sug1: 'node', brf1: 'node', lnk1: 'link', mine: 'frame', web: 'shape',
     })
     expect([r.get('oval')!.props.geo, r.get('gem')!.props.geo, r.get('box1')!.props.geo]).toEqual(['ellipse', 'diamond', 'rect'])
-    expect(['script1', 'sb1', 'vid1', 'doc1', 'fmt1', 'sug1'].map((id) => r.get(id)!.props.nodeKind)).toEqual(['script', 'storyboard', 'video', 'document', 'format_set', 'suggestion'])
+    // A brief is a node too, so a click selects it (live test 2026-11-18: only a marquee did).
+    expect(['script1', 'sb1', 'vid1', 'doc1', 'fmt1', 'sug1', 'brf1'].map((id) => r.get(id)!.props.nodeKind)).toEqual(['script', 'storyboard', 'video', 'document', 'format_set', 'suggestion', 'brief'])
   })
 
   it('keeps the customData tags exactly', () => {
