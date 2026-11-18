@@ -1,5 +1,5 @@
 // The pieces every top bar of the approved UI is made of (docs/production-tool/ui-mocks,
-// Main.dc.html; ui-behaviour 3.1): the Home mark, the brand, the back button, an editor's
+// Main.dc.html; ui-behaviour 3.1): the brand, the back button, an editor's
 // title with its node mark, the people here and the account button with its menu.
 
 import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
@@ -7,24 +7,9 @@ import { useShell } from '../../app/context'
 import { onThemeChoice, setThemeChoice, themeChoice, type ThemeChoice } from '../../theme'
 import type { Me } from '../../contracts/types'
 import { Float } from '../Float'
-import { StudioMark } from '../Mark'
 import { initials } from './panels'
 import { CrewSheet } from '../agents/CrewSheet'
 import './chrome.css'
-
-/** "Home: your projects": the Napkin logo, as the shell's bar draws it (StudioLogo size 15: a 20px mark). */
-export function HomeMark({ onClick }: { onClick: () => void }) {
-  return (
-    <button type="button" className="pt-home" aria-label="Home: your projects" title="Home: your projects" onClick={onClick}>
-      <StudioMark size={20} />
-    </button>
-  )
-}
-
-/** The same logo where it goes nowhere (Home itself, the signed-out page). */
-export function MarkTile() {
-  return <span className="pt-home static" aria-hidden="true"><StudioMark size={20} /></span>
-}
 
 /** "Napkin Studio", "Production" in tool blue, and the project's name in grey (it shrinks first).
  *  `wordmark` false (a tight bar): "Napkin Studio" hides; the Home mark is the logo already. */

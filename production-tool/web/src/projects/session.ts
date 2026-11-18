@@ -140,6 +140,8 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   let changedSinceOpen = false
   const offChange = doc.onChange(() => {
     changedSinceOpen = true
+    // Something was added to a blank film: it is a project now (owner 2026-11-18).
+    if (index.get(id)?.draft) void index.keep(id)
     serverCopy?.edited()
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {

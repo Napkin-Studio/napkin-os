@@ -84,15 +84,19 @@ async function boot() {
   // The names the relay already lists, so a film naming itself never takes one (re-test N-D). Not waited for,
   // but a spin-off names itself from the brief at once, so it waits a moment for them.
   const listed = app.get().me ? shell.serverProjects().catch(() => []) : Promise.resolve([])
+  // Blank films nothing was added to are not kept (owner 2026-11-18): those an earlier visit left go first.
+  if (app.get().me) await shell.pruneDrafts().catch((e) => console.warn('could not tidy blank films', e))
   if (app.get().me && spinoff) {
     await Promise.race([listed, new Promise((r) => setTimeout(r, 2000))])
     await shell.newProject().catch((e) => console.error('could not start a film from the brief', e))
   } else if (app.get().me) {
+    // Entry is the blank canvas, never All projects and never a question (owner 2026-11-18); a link or a reload
+    // that names a film opens that film.
     const opened = await openRouteProject(shell, router).catch((e) => {
       console.error('could not open the linked project', e)
       return false
     })
-    if (!opened) await shell.start().catch((e) => console.error('could not open the last project', e))
+    if (!opened) await shell.newProject().catch((e) => console.error('could not open a blank canvas', e))
   }
 
   window.addEventListener('pagehide', () => {
