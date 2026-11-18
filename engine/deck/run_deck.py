@@ -779,6 +779,9 @@ def main(argv=None):
                          "empty by default, so it refuses until the hosts are named). Off: nothing is downloaded")
     ap.add_argument("--production-agent", action="store_true",
                     help="with --production FILE: a Claude (Sonnet) call breaks ties the rules leave, on metadata rows only (about $0.01 a tie). Off: the newest wins")
+    ap.add_argument("--production-pick", action="append", default=[], metavar="SLIDE.SLOT=KEY",
+                    help="with --production FILE: a person's swap of a slot's Production picture to another of its candidates (repeatable; recorded in "
+                         "stages/production_choices.json and kept for later builds). The app's review.production, given with --review, says the same")
     ap.add_argument("--production-look", action="store_true",
                     help="with --production FILE: a vision check of the pulled pictures (local Ollama, else Claude Haiku; 8 at most) that only flags them")
     ap.add_argument("--image", action="append", default=[], metavar="SLIDE.SLOT=FILE",
@@ -816,8 +819,14 @@ def main(argv=None):
         a.pictures = "creative_cover"
     if a.production and a.pictures == "none":
         ap.error("--production places pictures and --pictures none asks for none: drop one")
-    if (a.production_fetch or a.production_agent or a.production_look) and not isinstance(a.production, str):
-        ap.error("--production-fetch, --production-agent and --production-look work on a Production file: give --production FILE (.clan or zip)")
+    if (a.production_fetch or a.production_agent or a.production_look or a.production_pick) and not isinstance(a.production, str):
+        ap.error("--production-fetch, --production-agent, --production-look and --production-pick work on a Production file: give --production FILE (.clan or zip)")
+    prod_picks = {}
+    for x in a.production_pick:
+        sk, eq, key = x.partition("=")
+        if not (eq and key and re.fullmatch(r"s[0-9]{2,3}\.[a-z][a-z0-9_]{1,23}", sk)):
+            ap.error(f"--production-pick needs SLIDE.SLOT=KEY (e.g. s11.picture=size_...), got {x!r}")
+        prod_picks[sk] = {"key": key, "by": "a person (--production-pick)", "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
     if a.images_only and a.live:
         ap.error("--images-only never calls a text model: drop --live")
     if a.cap_usd is not None and not (0 < a.cap_usd <= 2.5):
@@ -1029,8 +1038,11 @@ def main(argv=None):
             if prod or picker_src:   # after a person's own pictures (kept), before the empty slots and the image step (a filled or rights-pending slot is never planned)
                 brief_doc = next((d for d, app in ((deck_ctx or {}).get("apps") or {}).items() if app == "ie.napkin.brief-maker"), None)
                 if picker_src:
+                    rvw = json.loads(a.review.read_text()) if a.review else {}
+                    rvw = rvw.get("review", rvw) if isinstance(rvw, dict) else {}   # the app's {review: ...} wrapper, or the bare object
+                    swaps = {**prod_picker.choices_from_review(rvw), **prod_picks}
                     pres = prod_picker.run(deck, picker_src, a.stages, a.pictures, images.deck_names(deck), brief_doc, fetch=a.production_fetch,
-                                           agent=a.production_agent, look=a.production_look)
+                                           agent=a.production_agent, look=a.production_look, choices=swaps)
                     prod = images.load_production(a.stages)
                     for name, u in (("production_agent", pres["usage"]["agent"]), ("production_look", pres["usage"]["look"])):
                         if u:   # only on its flag: pulling itself never spends

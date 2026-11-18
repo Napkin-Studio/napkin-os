@@ -1474,6 +1474,87 @@ var DeckLogic = (function () {
     isObj: isObj, own: own
   };
 })();
+
+// ── Production picker (deck-prod-picker P6) ─────────────────────────────────────────────────────────────────────────
+// Self-contained: reads data.production (the engine's report of the last build) and data.review.production (the person's
+// swaps), and writes only review.production. Pure, like DeckLogic; the page's Production panel is the block of the same
+// name in the page script. Badges say where a picture came from (embedded in the .clan, an https link, the export zip, or
+// not reachable) and whether it may be placed (its rights).
+var DeckProd = (function () {
+  'use strict';
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function str(v, n) { return String(v == null ? '' : v).slice(0, n || 200); }
+  var SLIDE = /^s[0-9]{2,3}$/, SLOT = /^[a-z][a-z0-9_]{1,23}$/, KEY = /^[A-Za-z0-9_#]{6,80}$/;
+  /** Where a picture comes from, as a badge: [tone, word]. Only these four words: idb, s3 and nowhere are not reachable. */
+  var REACH = { embedded: ['ok', 'Embedded'], https: ['plain', 'https link'], zip: ['ok', 'Export zip'] };
+  var NOT_REACHABLE = ['warn', 'Not reachable'];
+  var RIGHTS = { generated: ['ok', 'Made in Production'], own: ['ok', 'Own'], licensed: ['ok', 'Licensed'], client_supplied: ['ok', 'Client supplied'],
+    reference_only: ['warn', 'Rights to supply'] };
+  var BY = { rule: 'Picked by the rules', claude: 'Tie broken by Claude', person: 'Your swap' };
+  var ROLE = { key_visual: 'Key visual', size: 'Channel size', storyboard_frame: 'Storyboard frame' };
+
+  /** A candidate's badge: where its bytes could come from (inventory reach). */
+  function reachBadge(reach) { return REACH[reach] || NOT_REACHABLE; }
+  /** The picked picture's badge: where it was pulled from on the last build; a picture held for its rights shows its reach instead. */
+  function pulledBadge(from, reach) {
+    if (from === 'https') return ['ok', 'Fetched link'];
+    if (from === 'embedded' || from === 'zip') return REACH[from];
+    if (from === 'rights') return reachBadge(reach);
+    return NOT_REACHABLE;
+  }
+  function rightsBadge(rights) { return RIGHTS[rights] || ['plain', 'Rights unknown']; }
+
+  function tile(t, badge) {
+    return { key: str(t.key, 80), label: str(t.label || t.key, 120), role: ROLE[t.role] || 'Picture', aspect: str(t.aspect, 20), status: str(t.status, 20),
+      reach: badge || reachBadge(t.reach), rights: rightsBadge(t.rights), placeable: t.rights !== 'reference_only' };
+  }
+
+  /** The picker as the panel shows it, or null when the last build used no Production file. Never throws on junk. */
+  function prodView(data) {
+    var x = isObj(data) ? data : {}, p = isObj(x.production) ? x.production : null;
+    if (!p) return null;
+    var mine = isObj(x.review) && isObj(x.review.production) ? x.review.production : {};
+    var slots = [];
+    (Array.isArray(p.picks) ? p.picks : []).forEach(function (pk) {
+      if (!isObj(pk) || typeof pk.slot !== 'string' || !KEY.test(String(pk.key || ''))) return;
+      var at = pk.slot.indexOf('.'), sid = pk.slot.slice(0, at), slot = pk.slot.slice(at + 1);
+      if (!SLIDE.test(sid) || !SLOT.test(slot)) return;
+      var want = isObj(mine[sid]) && isObj(mine[sid][slot]) ? String(mine[sid][slot].key || '') : '';
+      var elig = (Array.isArray(pk.eligible) ? pk.eligible : []).filter(function (t) { return isObj(t) && KEY.test(String(t.key || '')); });
+      var self = elig.filter(function (t) { return t.key === pk.key; })[0] || {};
+      var cands = elig.filter(function (t) { return t.key !== pk.key; }).map(function (t) { return tile(t, null); });
+      var chosen = tile({ key: pk.key, label: pk.label, role: pk.role, rights: pk.rights, status: pk.status, aspect: self.aspect }, pulledBadge(pk.from, self.reach));
+      slots.push({ id: pk.slot, slide: sid, slot: slot, chosen: chosen, by: BY[pk.by] || BY.rule, note: str(pk.note, 200),
+        notReachable: pk.from === 'not reachable', candidates: cands,
+        pending: want && want !== pk.key && cands.some(function (c) { return c.key === want; }) ? want : '' });
+    });
+    var f = isObj(p.fetch) ? p.fetch : {}, empty = f.allow_list_empty !== false;
+    var fetchLine = f.on
+      ? (empty ? 'Fetching links was on, but no provider host is on the fetch allow-list yet, so nothing was fetched. The hosts go in engine/deck/policy/production_fetch.yaml once they are named.'
+        : 'Fetching links was on: only the picked pictures, only from the allowed hosts, each checked against its hash.')
+      : 'Fetching links is off (opt-in): pictures came from the .clan or its export zip only.' +
+        (empty ? ' Turning it on would fetch nothing yet: the host allow-list is empty until the provider hosts are named.' : '');
+    var look = isObj(p.look) && p.look.on;
+    var lookLine = look ? 'The vision check ran. It only flags a picture for you; it never places or removes one.'
+      : 'The vision check is off (opt-in). It would only flag pictures, never place or remove one.';
+    return { card: str(p.card, 200), slots: slots, fetchLine: fetchLine, lookLine: lookLine, fetchOn: !!f.on, allowListEmpty: empty, lookOn: !!look,
+      notReachable: slots.filter(function (s) { return s.notReachable; }).length };
+  }
+
+  /** The picker's slots on one slide. */
+  function slideSlots(view, slideId) { return view ? view.slots.filter(function (s) { return s.slide === slideId; }) : []; }
+
+  /** The patch that records a person's swap of one slot to another of its candidates, or null (a bad id, or a key that is not a candidate). */
+  function swapPatch(view, slotId, key, by, at) {
+    var s = view ? view.slots.filter(function (x) { return x.id === slotId; })[0] : null;
+    if (!s || !KEY.test(String(key || '')) || !s.candidates.some(function (c) { return c.key === key; })) return null;
+    var row = {}; row[s.slot] = { key: String(key), by: str(by || 'a person', 60), at: str(at, 40) };
+    var prod = {}; prod[s.slide] = row;
+    return { review: { production: prod } };
+  }
+
+  return { prodView: prodView, slideSlots: slideSlots, swapPatch: swapPatch, REACH: REACH, RIGHTS: RIGHTS };
+})();
 </script>
 
 <script>
@@ -2126,7 +2207,7 @@ var DeckLogic = (function () {
       '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' +
         '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (inAx ? 'A' + n : String(n).padStart(2, '0')) + '</span></div></div>' +
       '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(sl.notes || 'No notes for this slide.') + '</div></div></section>' +
-      '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) +
+      '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) + prodPanel(s, id) +
       '<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Ask for a change</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
         [['shorter', 'Shorter'], ['add_figure', 'Add the figure'], ['rephrase', 'Say it another way']].map(function (c) { return '<button class="btn sm" data-change="' + c[0] + '">' + c[1] + '</button>'; }).join('') +
       '</div><p class="note" style="margin-top:10px;font-size:12px;color:var(--ink3)">Only the words on this slide change. Its sources stay.</p></div></aside></main>';
@@ -2310,6 +2391,41 @@ var DeckLogic = (function () {
 
   function now() { return new Date().toISOString(); }
 
+  // ── Production picker (deck-prod-picker P6): the panel on a slide's Review aside. Self-contained; DeckProd decides. ──
+  function prodBadge(b) { return '<span class="chip ' + (b[0] === 'ok' ? 'ok' : b[0] === 'warn' ? 'warn' : '') + '">' + esc(b[1]) + '</span>'; }
+  function prodTile(t, swapSlot) {
+    return '<div class="doc" style="margin-top:8px;align-items:flex-start" data-prod-tile="' + esc(t.key) + '"><span class="ico">' + (swapSlot ? 'ALT' : 'PICK') + '</span><div style="flex:1;min-width:0">' +
+      '<div style="font-size:13px;font-weight:600">' + esc(t.label) + '</div>' +
+      '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(t.role) + (t.aspect ? ' · ' + esc(t.aspect) : '') + (t.status && t.status !== 'ready' ? ' · ' + esc(t.status) : '') + '</div>' +
+      '<div class="chips">' + prodBadge(t.reach) + prodBadge(t.rights) + '</div>' +
+      (swapSlot ? '<button class="btn sm" style="margin-top:8px" data-prod-swap="' + esc(swapSlot) + '" data-prod-key="' + esc(t.key) + '">Use this one</button>' : '') + '</div></div>';
+  }
+  function prodPanel(s, slideId) {
+    var pv = typeof DeckProd !== 'undefined' ? DeckProd.prodView(s.raw) : null;
+    if (!pv) return '';
+    var mine = DeckProd.slideSlots(pv, slideId);
+    var body = mine.length ? mine.map(function (x) {
+      return '<div style="margin-top:10px" data-prod-slot="' + esc(x.id) + '"><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">Slot ' + esc(x.slot) + ' · ' + esc(x.by) + '</div>' +
+        prodTile(x.chosen, null) +
+        (x.notReachable ? '<p class="note" style="margin-top:6px">Not reachable: re-save or export it in Production. The slot stays empty; nothing is generated in its place.</p>' : '') +
+        (x.note ? '<p class="note" style="margin-top:6px">' + esc(x.note) + '</p>' : '') +
+        (x.pending ? '<p class="note" style="margin-top:6px" data-prod-pending>Your swap is recorded. The next build uses it.</p>' : '') +
+        (x.candidates.length ? '<div class="eyebrow" style="margin-top:10px">Other candidates for this slot</div>' + x.candidates.map(function (c) { return prodTile(c, x.id); }).join('') : '') + '</div>';
+    }).join('') : '<p class="note" style="margin-top:8px">No Production picture was picked for this slide.</p>';
+    return '<div class="card" style="padding:16px" data-prod-panel><div style="font-size:13px;font-weight:600;margin-bottom:4px">From Production</div>' +
+      '<p class="note">' + esc(pv.card) + '</p>' + body +
+      '<p class="note" style="margin-top:10px;font-size:12px;color:var(--ink3)" data-prod-fetch>' + esc(pv.fetchLine) + '</p>' +
+      '<p class="note" style="margin-top:6px;font-size:12px;color:var(--ink3)" data-prod-look>' + esc(pv.lookLine) + '</p></div>';
+  }
+  function prodSwap(s, a) {
+    var pt = typeof DeckProd !== 'undefined' ? DeckProd.swapPatch(DeckProd.prodView(s.raw), a.prodSwap, a.prodKey, 'You', now()) : null;
+    if (!pt) { toast('That picture is not a candidate for this slot.'); return render(); }
+    put(pt, 'swap production picture ' + a.prodSwap, 'review');
+    toast('Recorded. The next build uses your swap; rights and reach are checked again then.');
+    return render();
+  }
+  // ── end Production picker ──
+
   document.addEventListener('change', function (e) {
     var t = e.target;
     if (t && t.id === 'agencyLook') { put(L.agencyPatch(t.checked, null, now()), 'agency look ' + (t.checked ? 'on' : 'off') + ' for this deck', 'look'); render(); }
@@ -2337,6 +2453,7 @@ var DeckLogic = (function () {
       return render();
     }
     if (a.tab) { view.tab = a.tab; return render(); }
+    if (a.prodSwap) return prodSwap(s, a); // the Production picker's swap (deck-prod-picker P6)
     if (a.pres) { view.present += Number(a.pres); return render(); }
     if (t.id === 'build') {
       stashDraft();

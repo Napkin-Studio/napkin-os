@@ -545,7 +545,13 @@ def production_size(prod: dict, channel: str, aspect: str, prefer_set: str | Non
     return (_newest(keys), None) if keys else (None, why)
 
 
-def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = None) -> tuple:
+def size_fits(prod: dict, channel: str, aspect: str, prefer_set: str | None = None) -> list:
+    """Every size that may fill an execution slot (size_pool's tests: channel, aspect tolerance, protect boxes, not stale), best first: what a
+    person may swap among in the Production picker. The rank still puts a placeable, ready size first."""
+    return size_pool(prod, channel, aspect, prefer_set, fits=True)[0]
+
+
+def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = None, fits: bool = False) -> tuple:
     """``(keys, why)``: the sizes ranked best and equal for an execution slot (production_size takes the newest; the Production picker reports
     the others as a tie). Sizes whose channel the execution accepts (a size of a format the pinned packs do
     not know only when the channel has none), within ASPECT_TOL of the slot's aspect and whose protect boxes the slot's crop keeps whole;
@@ -574,6 +580,8 @@ def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = No
         row = (it.get("rights") == "reference_only", it.get("status") != "ready", it.get("set") != prefer_set, round(dist, 4), k)   # a placeable picture first
         (matched if ours else nearest).append(row)
     pool = matched or nearest
+    if fits:   # size_fits: every size that fits, best first (newest first among equals)
+        return [p[4] for p in sorted(pool, key=lambda p: (p[:4], tuple(-ord(c) for c in p[4])))], None
     if not pool:
         if not off_shape and not cut:
             return [], None

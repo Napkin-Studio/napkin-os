@@ -337,8 +337,60 @@ def collect_picks(deck: dict, meta: dict, got: dict, brief_doc) -> list:
             alts = [k for k in pool_of(meta, s, im["aspect"], it["role"], brief_doc, mset) if k != key and _same_rank(meta, k, key)]
             if alts:
                 pk["tie"] = {"alternatives": alts, "rule": "the newest of equal rank"}
+            pk["eligible"] = eligible_of(meta, s, im["aspect"], it["role"], brief_doc, mset, key)
             picks.append(pk)
     return picks
+
+
+def eligible_of(meta: dict, slide: dict, aspect: str, role: str, brief_doc, mset, key: str) -> list:
+    """Every candidate a person may swap this slot to (P6), best first, the rule's pick among them: any Format set's key visual for the cover
+    and the idea; every size that fits an execution (images.size_fits: channel, aspect tolerance, protect boxes, not stale); every picked
+    storyboard frame for a film. Rights are not a test here: a candidate waiting for its rights is offered and, if chosen, held as today."""
+    items = meta["items"]
+    if role == "master":
+        first, _ = images.master_pool(meta, brief_doc)
+        sets = meta.get("format_sets") or {}
+        order = sorted(first, reverse=True) + sorted((f for f in sets if f not in first and sets[f].get("master") in items), reverse=True)
+        out = [sets[f]["master"] for f in order if sets[f].get("master") in items]
+    elif role == "size":
+        ch = images.execution_channel(spec.picture_of(slide)[1])
+        out = images.size_fits(meta, ch, aspect, mset) if ch else []
+    else:
+        frames = [(str(it.get("storyboard") or ""), str(it.get("shot_rank") or ""), k) for k, it in items.items()
+                  if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"]
+        out = [k for _, _, k in sorted(frames, key=lambda r: (tuple(-ord(c) for c in r[0]), r[1]))]
+    return ([key] if key not in out else []) + out
+
+
+CHOICES_FILE = "production_choices.json"
+SLOT_KEY = re.compile(r"s[0-9]{2,3}\.[a-z][a-z0-9_]{1,23}")
+
+
+def load_choices(stages: Path) -> dict:
+    """The person's recorded swaps (P6), ``{"sNN.slot": {key, by, at}}``, from ``<stages>/production_choices.json``; {} when none."""
+    try:
+        raw = json.loads((Path(stages) / CHOICES_FILE).read_text())
+    except (OSError, ValueError):
+        return {}
+    return clean_choices((raw or {}).get("choices") if isinstance(raw, dict) else None)
+
+
+def clean_choices(raw) -> dict:
+    """Well-formed swaps only: a slot ``sNN.slot`` and a key; ``by`` and ``at`` kept as given (a person's, from the app's review.production)."""
+    out = {}
+    for sk, c in (raw or {}).items() if isinstance(raw, dict) else ():
+        c = c if isinstance(c, dict) else {"key": c}
+        k = str(c.get("key") or "")
+        if SLOT_KEY.fullmatch(str(sk)) and re.fullmatch(r"[A-Za-z0-9_#]{6,80}", k):
+            out[str(sk)] = {"key": k, "by": clean(c.get("by") or "a person", 60), "at": clean(c.get("at") or "", 40)}
+    return out
+
+
+def choices_from_review(review) -> dict:
+    """``review.production`` as the app writes it ({slide: {slot: {key, by, at}}}) as ``{"sNN.slot": {key, by, at}}``."""
+    rp = (review or {}).get("production") if isinstance(review, dict) else None
+    flat = {f"{sid}.{slot}": c for sid, slots in (rp or {}).items() if isinstance(slots, dict) for slot, c in slots.items()}
+    return clean_choices(flat)
 
 
 def tie_groups(picks: list) -> list:
@@ -707,13 +759,14 @@ def look_check(prod: dict, files: dict, picks: list, deck: dict, ollama=None, ha
     ollama, haiku, zone = ollama or ollama_look, haiku or haiku_look, zone or images.text_zone
     usage = {"model": None, "prompt_tokens": 0, "completion_tokens": 0, "calls": 0}
     rows, seen = [], []
+    fin = lambda pk: pk.get("final") or pk["key"]   # noqa: E731  (a person's or the tie-break's choice, else the rule's)
     for pk in picks:
-        if pk["key"] in prod["items"] and pk["key"] not in seen:
-            seen.append(pk["key"])
+        if fin(pk) in prod["items"] and fin(pk) not in seen:
+            seen.append(fin(pk))
     for key in seen[:LOOK_MAX]:
         it = prod["items"][key]
         path = files[it["sha256"]]
-        mine = [pk for pk in picks if pk["key"] == key]
+        mine = [pk for pk in picks if fin(pk) == key]
         title = "; ".join(sorted({clean(deck["slides"][pk["slide"]].get("title"), 80) for pk in mine}))
         what = {"master": "the campaign's key visual", "size": "a channel size of the campaign", "frame": "a storyboard frame"}[it["role"]]
         q = LOOK_Q.format(title=title, what=what)
@@ -760,6 +813,29 @@ def look_check(prod: dict, files: dict, picks: list, deck: dict, ollama=None, ha
 
 # ------------------------------------------------------------------------------------------------ the whole pull, in run_deck
 
+def _tile(key: str, meta: dict, labels: dict, rows_by: dict, where: dict) -> dict:
+    """One candidate as the app's tile shows it: label, role, reach (where it was pulled from, else where it could come from), rights, status."""
+    it, row = meta["items"].get(key) or {}, rows_by.get(key) or {}
+    reach = where.get(key) or row.get("reach") or "none"
+    t = {"key": key, "label": labels.get(key, key), "role": ROLE.get(it.get("role"), it.get("role")), "reach": reach,
+         "rights": it.get("rights"), "status": it.get("status")}
+    a = it.get("aspect") or {}
+    if a:
+        t["aspect"] = f"{a.get('w')}:{a.get('h')}"
+    return t
+
+
+def _pick_row(pk: dict, meta: dict, labels: dict, rows_by: dict, where: dict) -> dict:
+    key = pk["final"]
+    frm = where.get(key) or ("rights" if not pk["placeable"] else "not reachable")
+    row = {"slot": f"{pk['slide']}.{pk['slot']}", "key": key, "label": labels.get(key, ""), "role": ROLE[meta["items"][key]["role"]], "from": frm,
+           "by": pk["by"], "rights": meta["items"][key].get("rights"), "status": meta["items"][key].get("status"),
+           "eligible": [_tile(k, meta, labels, rows_by, where) for k in pk["eligible"][:12]]}
+    if pk.get("choice_note"):
+        row["note"] = pk["choice_note"]
+    return row
+
+
 def place(deck: dict, meta: dict, prod: dict, picks: list, chosen: dict, unreachable: dict, names) -> dict:
     """Put the pulled items in the slots bind_production filled from the metadata: a pulled pick gets its checked file's record (and the
     tie-break's choice where it made one); a pick no source yielded becomes an empty slot whose reason says it is not reachable (never
@@ -769,11 +845,15 @@ def place(deck: dict, meta: dict, prod: dict, picks: list, chosen: dict, unreach
     placed, held, nr = 0, [], []
     stale = set()
     for pk in picks:
-        if not pk["placeable"]:
-            continue
         s = deck["slides"][pk["slide"]]
+        key = pk.get("final") or chosen.get(f"{pk['slide']}.{pk['slot']}", pk["key"])
+        if not pk["placeable"]:
+            if key != pk["key"]:   # a person's swap to a picture waiting for its rights: held, with why, as bind_production holds one
+                stale.add(((s["slots"].get(pk["slot"]) or {}).get("image") or {}).get("asset"))
+                s["slots"][pk["slot"]] = images.production_slot(meta, key, pk["aspect"], names)[0]
+                held.append({"slide": pk["slide"], "slot": pk["slot"], "message": s["slots"][pk["slot"]]["image"]["reason"]})
+            continue
         stale.add(((s["slots"].get(pk["slot"]) or {}).get("image") or {}).get("asset"))
-        key = chosen.get(f"{pk['slide']}.{pk['slot']}", pk["key"])
         if key in prod["items"]:
             val, asset = images.production_slot(prod, key, pk["aspect"], names)
             if asset:
@@ -796,7 +876,7 @@ def place(deck: dict, meta: dict, prod: dict, picks: list, chosen: dict, unreach
 
 def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover", names=(), brief_doc: str | None = None, *, fetch: bool = False,
         agent: bool = False, look: bool = False, tie_call=None, fetcher: Fetcher | None = None, look_fns: dict | None = None,
-        at: str | None = None) -> dict:
+        at: str | None = None, choices: dict | None = None) -> dict:
     """The picker in a build (run_deck --production FILE). Binds the metadata, breaks ties (``agent``), pulls the picks (``fetch`` opens the
     https source), looks (``look``), places, and writes production_inventory.json, production.json and assets/ into ``stages``. Returns what
     run_deck reports: ``{placed, held, kept, master, picker, card, usage: {agent, look}}``."""
@@ -816,11 +896,25 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
         decisions = [{"tie": g["id"], "slots": g["slots"], "rule_pick": g["rule_pick"], "eligible": g["eligible"], "choice": g["rule_pick"],
                       "by": "rule"} for g in groups]
     chosen = {s: d["choice"] for d in decisions for s in d["slots"]}
+    by_claude = {s for d in decisions if d["by"] == "claude" for s in d["slots"]}
+    stored = load_choices(stages)
+    stored.update(clean_choices(choices))   # a newer swap for a slot replaces the recorded one
+    (stages / CHOICES_FILE).write_text(json.dumps({"stage": "production_choices", "produced_by": "a person's swaps in the Production picker (P6)",
+                                                    "choices": stored}, indent=1, ensure_ascii=False))
     keys = []
     for pk in picks:
-        k = chosen.get(f"{pk['slide']}.{pk['slot']}", pk["key"])
-        if pk["placeable"] and k not in keys:
-            keys.append(k)
+        sk = f"{pk['slide']}.{pk['slot']}"
+        c = stored.get(sk)
+        pk["by"] = "claude" if sk in by_claude else "rule"
+        if c and c["key"] in pk["eligible"]:   # a person's swap wins over the rule and the tie-break, among the slot's own candidates only
+            chosen[sk], pk["by"] = c["key"], "person"
+        elif c:
+            pk["choice_note"] = clean(f"your swap to {labels.get(c['key'], c['key'])} does not fit this slot now: the rule's pick is used", 200)
+        pk["final"] = chosen.get(sk, pk["key"])
+        pk["placeable"] = meta["items"][pk["final"]].get("rights") != "reference_only"
+        if pk["placeable"] and pk["final"] not in keys:
+            keys.append(pk["final"])
+    swapped = {(pk["slide"], pk["slot"]) for pk in picks if pk["final"] != pk["key"]}
     pol = fetch_policy()
     if fetch and fetcher is None:
         fetcher = Fetcher(pol["hosts"], pol["file"])
@@ -845,11 +939,12 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
             prod["warnings"] = warnings
         if src.fixture:
             prod["fixture"] = True
+        rows_by = {r["key"]: r for r in plan.rows}
         look_rows, look_usage = ([], None)
         if look and items:
             look_rows, look_usage = look_check(prod, files, [pk for pk in picks if pk["placeable"]], deck, **(look_fns or {}))
         res = place(deck, meta, prod, picks, chosen, unreachable, names)
-        held = [h for h in got["held"]] + res["held"]
+        held = [h for h in got["held"] if (h["slide"], h["slot"]) not in swapped] + res["held"]
         picked = len(keys)
         card = f"{CARD_WORD}: {picked} picked, {len({n['key'] for n in res['not_reachable']})} not reachable"
         supply = sum(1 for pk in picks if not pk["placeable"])
@@ -857,14 +952,11 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
             card += f", {supply} waiting for rights"
         report = {"source": {"kind": src.kind, "name": clean(src.name, 120), "clan_sha256": src.clan_sha256},
                   "inventory": plan.inventory(at)["counts"], "picked": picked,
-                  "picks": [{"slot": f"{pk['slide']}.{pk['slot']}", "key": chosen.get(f"{pk['slide']}.{pk['slot']}", pk["key"]),
-                             "label": labels.get(chosen.get(f"{pk['slide']}.{pk['slot']}", pk["key"]), ""), "role": ROLE[pk["role"]],
-                             "from": where.get(chosen.get(f"{pk['slide']}.{pk['slot']}", pk["key"])) or ("rights" if not pk["placeable"] else "not reachable")}
-                            for pk in picks],
+                  "picks": [_pick_row(pk, meta, labels, rows_by, where) for pk in picks],
                   "not_reachable": res["not_reachable"], "ties": decisions,
                   "tie_break": {"on": bool(agent), "model": (agent_usage or {}).get("model")},
-                  "fetch": {"on": bool(fetcher), "allow_list": pol["hosts"], "refused": fetcher.refused if fetcher else None,
-                            "log": fetcher.log if fetcher else []},
+                  "fetch": {"on": bool(fetcher), "allow_list": pol["hosts"], "allow_list_empty": not pol["hosts"],
+                            "refused": fetcher.refused if fetcher else None, "log": fetcher.log if fetcher else []},
                   "look": {"on": bool(look), "rows": look_rows}, "card": card}
         prod["picker"] = {k: report[k] for k in ("source", "picks", "not_reachable", "ties", "fetch")}
         prod["not_reachable"] = res["not_reachable"]

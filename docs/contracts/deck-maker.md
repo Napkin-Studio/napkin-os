@@ -316,6 +316,19 @@ is in `run.approvals` and the gate's stage output already existed. The table is 
 After the idea gate the run goes on by itself: copy (e, with the fit judge and the red team), assemble, validate, the files. An investor deck
 (stage i, no b, c or d) has the storyline gate only, after stage i.
 
+## The Production picker panel (deck-prod-picker P6)
+
+When a build used a Production file (`run_deck --production FILE`, a .clan or its export zip), the engine writes `production`
+(`engine/deck/run_state.production_payload`): the card line (`Production: N picked, M not reachable`), each picked slot with
+its candidates (label, role, reach, rights, status; never a location), and the opt-in switches as the build had them (fetch,
+with `allow_list_empty`; the tie-break; the vision check). The Review aside shows a slide's Production tiles with a reach badge
+(Embedded, https link or Fetched link, Export zip, Not reachable) and a rights badge (Rights to supply when the picture waits
+for its rights). A person swaps a slot to another of its candidates: the app writes `review.production.<slide>.<slot>`
+`{key, by, at}`; the engine honours it while the key is still a candidate for that slot (never over a rights or reach check)
+and records it in its stages (`production_choices.json`), as `--production-pick SLIDE.SLOT=KEY` does. Fetch and the vision check
+stay opt-in, and the panel says so; with an empty host allow-list it says nothing can be fetched yet. The runner does not pass a
+Production file yet, so the panel shows only for a build that was given one.
+
 ## Not built
 
 - Running the engine from the app: the middleware side exists (`build_deck@1`, middleware-api.md §12, over the
