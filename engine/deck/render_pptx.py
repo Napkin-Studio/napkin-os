@@ -82,6 +82,7 @@ Footer, slide number, watermark and check flags never animate.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import itertools
 import json
 import re
@@ -99,6 +100,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import nsdecls, qn
 from pptx.util import Emu, Inches, Pt
 
+from . import images, spec
 from . import theme as themes
 from .refs import Resolver, fmt
 from .spec import HUMAN_ONLY_TYPES, shown_blocks
@@ -318,9 +320,16 @@ def _is_image(path) -> bool:
 class Renderer:
     """Builds one Presentation from a deck dict."""
 
-    def __init__(self, deck, inp, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT):
+    def __init__(self, deck, inp, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
+                 pictures: dict | None = None):
         self.deck, self.inp = _clean_xml(deck), inp
         deck = self.deck
+        # Pictures (deck-frames-in): ``pictures`` maps an asset id to its derived JPEG. None: nothing is drawn and nothing changes.
+        self.pictures = pictures
+        self.drawn = {k: v for k, v in images.drawn(deck, deck["meta"].get("audience", "review")).items() if v["asset"] in (pictures or {})} if pictures else {}
+        self.pic_label = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or spec.PICTURE_LABEL
+        self.picture_findings = []   # [{check, level, slide, message}]: a picture dropped because its slide would not fit it
+        self.placed = set()          # (slide id, slot) of every picture this renderer really drew: the web outputs draw exactly these
         self.th = themes.get_theme(theme, (deck["meta"].get("brand") or {}))
         self.theme_problems = themes.check_palette(self.th)
         self.x0 = self.th.grid.M if self.th.layouts else X0
@@ -363,11 +372,11 @@ class Renderer:
         if dark:
             card = themes.blend(t.ink, t.on_dark, 0.09)
             return SimpleNamespace(dark=True, bg=t.ink, fg=t.on_dark, mute=t.on_dark_mute, acc_t=t.accent_on_dark,
-                                   acc_f=t.accent_on_dark, card=card, card_fg=t.on_dark, card_mute=t.on_dark_mute,
+                                   acc_f=t.accent_on_dark, acc_l=t.accent_on_dark, card=card, card_fg=t.on_dark, card_mute=t.on_dark_mute,
                                    card_acc=t.accent_on_dark, rule=themes.blend(t.ink, t.on_dark, 0.28), chip_fg=t.ink,
                                    inv=t.panel, inv_fg=t.ink, inv_acc=t.accent_ink, inv_mute=t.mute)
         chip = "FFFFFF" if themes.contrast("FFFFFF", t.accent) >= themes.contrast(t.ink, t.accent) else t.ink
-        return SimpleNamespace(dark=False, bg=t.paper, fg=t.ink, mute=t.mute, acc_t=t.accent_ink, acc_f=t.accent,
+        return SimpleNamespace(dark=False, bg=t.paper, fg=t.ink, mute=t.mute, acc_t=t.accent_ink, acc_f=t.accent, acc_l=t.line_accent,
                                card=t.panel, card_fg=t.ink, card_mute=t.mute, card_acc=t.accent_ink, rule=t.rule,
                                chip_fg=chip, inv=t.ink, inv_fg=t.on_dark, inv_acc=t.accent_on_dark, inv_mute=t.on_dark_mute)
 
@@ -701,13 +710,13 @@ class Renderer:
         dl.font.size, dl.font.name, dl.font.bold = Pt(self.sz(16)), t_.body, True
         dl.font.color.rgb = _rgb(t_.ink)
         ser = plot.series[0]
-        ser.format.fill.solid(); ser.format.fill.fore_color.rgb = _rgb(t_.accent)
+        ser.format.fill.solid(); ser.format.fill.fore_color.rgb = _rgb(t_.line_accent)
         if hero:
             quiet = themes.blend(t_.mute, t_.paper, 0.45)
             for i, lab in enumerate(labels):
                 pt = ser.points[i]
                 pt.format.fill.solid()
-                pt.format.fill.fore_color.rgb = _rgb(t_.accent if lab in hero else quiet)
+                pt.format.fill.fore_color.rgb = _rgb(t_.line_accent if lab in hero else quiet)
         va = ch.value_axis
         va.visible = False
         va.has_major_gridlines = False
@@ -753,7 +762,7 @@ class Renderer:
         """An emphasis bar: a vertical accent bar and the text beside it, anchored in the middle."""
         paras = [self.para(text, size, color or self.p.fg, font or self.th.head, italic=italic, line=1.1)]
         h = max(self.ph(paras, w - 0.32), minh)
-        self.rect(sl, x, y, 0.09, h, fill=self.p.acc_f)
+        self.rect(sl, x, y, 0.09, h, fill=self.p.acc_l)
         self.ptext(sl, x + 0.32, y, w - 0.32, h, paras, anchor="middle")
         return h
 
@@ -766,7 +775,7 @@ class Renderer:
         paras = [self.para(str(bl["text"]).strip(), self.th.scale.body * sc, self.p.card_fg, line=1.05)]
         h = self.ph(paras, w - 0.6) + 0.4
         self.rect(sl, x, y, w, h, fill=self.p.card)
-        self.rect(sl, x, y, 0.07, h, fill=self.p.acc_f)
+        self.rect(sl, x, y, 0.07, h, fill=self.p.acc_l)
         self.ptext(sl, x + 0.35, y + 0.2, w - 0.6, h - 0.4, paras, anchor="middle")
         return h
 
@@ -779,7 +788,7 @@ class Renderer:
             paras = paras[1:]
         h = self.ph(paras, w - 0.6) + 0.5
         self.rect(sl, x, y, w, h, fill=self.p.card)
-        self.rect(sl, x, y, w, 0.05, fill=self.p.acc_f)
+        self.rect(sl, x, y, w, 0.05, fill=self.p.acc_l)
         self.ptext(sl, x + 0.3, y + 0.3, w - 0.6, h - 0.5, paras)
         return h
 
@@ -795,7 +804,7 @@ class Renderer:
             for i, c in enumerate(cards):
                 cx = x + i * (cw + gap)
                 self.rect(sl, cx, y, cw, h, fill=self.p.card)
-                self.rect(sl, cx, y, cw, 0.05, fill=self.p.acc_f)
+                self.rect(sl, cx, y, cw, 0.05, fill=self.p.acc_l)
                 self.ptext(sl, cx + 0.25, y + 0.25, cw - 0.5, h - 0.35, c)
             return h
         for key, val in bl["items"]:
@@ -884,14 +893,14 @@ class Renderer:
                     self.ptext(sl, cx + 0.25, yy + 0.55 * min(1.0, sc + 0.15), rcw - 0.5, hr - 0.2 - 0.55 * min(1.0, sc + 0.15), paras)
                 elif kind == "num":   # figure and its sentence, the figure on one baseline across the row
                     self.rect(sl, cx, yy, rcw, hr, fill=p.card)
-                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_f)
+                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_l)
                     top = yy + 0.05 + (hr - 0.05 - content) / 2
                     fh = self.ph(paras[:1], rcw - 0.5)
                     self.ptext(sl, cx + 0.25, top, rcw - 0.5, fh, paras[:1])
                     self.ptext(sl, cx + 0.25, top + fh, rcw - 0.5, content - fh, paras[1:])
                 else:
                     self.rect(sl, cx, yy, rcw, hr, fill=p.card)
-                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_f)
+                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_l)
                     self.ptext(sl, cx + 0.25, yy + 0.05 + 0.15, rcw - 0.5, hr - 0.05 - 0.3, paras, anchor="middle")
             yy += hr + gap
         return head_h + total + extra * len(rows)
@@ -930,7 +939,7 @@ class Renderer:
             lp = [self.para(it["label"], (S.body + 2) * sc, p.inv_fg, line=1.05)]
             h = max(1.5 * sc, self.ph(lp, w - vw - 0.9) + 0.5, self._minh)
             self.rect(sl, x, y, w, h, fill=p.inv)
-            self.rect(sl, x, y, 0.09, h, fill=p.acc_f)
+            self.rect(sl, x, y, 0.09, h, fill=p.acc_l)
             self.ptext(sl, x + 0.4, y, vw - 0.6, h, [self.para(it["value"], vs, p.inv_acc, self.th.head, bold=True)], anchor="middle")
             self.ptext(sl, x + vw + 0.3, y, w - vw - 0.7, h, lp, anchor="middle")
             return h
@@ -953,7 +962,7 @@ class Renderer:
         for i in range(n):
             cx = x + i * (cw + gap)
             self.rect(sl, cx, y, cw, h, fill=p.card)
-            self.rect(sl, cx, y, 0.07, h, fill=p.acc_f)
+            self.rect(sl, cx, y, 0.07, h, fill=p.acc_l)
             self.ptext(sl, cx + 0.35, top, tw, fig_h, [fig[i]], anchor="bottom")
             self.ptext(sl, cx + 0.35, top + fig_h + 0.06, tw, lab_h, lab[i])
         return h
@@ -984,7 +993,7 @@ class Renderer:
         for rcw, cols, ch in geo:
             ch += extra
             span = len(cols) * rcw + (len(cols) - 1) * gap
-            self.rect(sl, x, yy + 0.095, span, 0.035, fill=p.acc_f)
+            self.rect(sl, x, yy + 0.095, span, 0.035, fill=p.acc_l)
             for k, ps in enumerate(cols):
                 cx = x + k * (rcw + gap)
                 self.rect(sl, cx, yy + 0.38, rcw, ch, fill=p.card)
@@ -1018,7 +1027,7 @@ class Renderer:
             self.rect(sl, x, yy, rw, h, fill=p.inv)
             self.ptext(sl, x + 0.3, yy, rw - 0.5, h, rp, anchor="middle")
             self.rect(sl, x + rw, yy, w - rw, h, fill=p.card)
-            self.rect(sl, x + rw, yy, 0.07, h, fill=p.acc_f)
+            self.rect(sl, x + rw, yy, 0.07, h, fill=p.acc_l)
             self.ptext(sl, x + rw + 0.4, yy, w - rw - 0.7, h, jp, anchor="middle")
             yy += h + 0.09
         return yy - y - 0.09
@@ -1071,7 +1080,7 @@ class Renderer:
                 self.rect(sl, cols[1][0], yy, cw, h, fill=p.card)
                 self.ptext(sl, cols[1][0] + 0.25, yy, cw - 0.45, h, ps[1], anchor="middle")
                 self.rect(sl, cols[2][0], yy, cw, h, fill=p.card)
-                self.rect(sl, cols[2][0], yy, 0.07, h, fill=p.acc_f)
+                self.rect(sl, cols[2][0], yy, 0.07, h, fill=p.acc_l)
                 self.ptext(sl, cols[2][0] + 0.3, yy, cw - 0.55, h, ps[2], anchor="middle")
             yy += h + gap
         return yy - y - gap
@@ -1309,7 +1318,7 @@ class Renderer:
         h = n * size * 1.2 / 72 + 0.04
         if sl is not None:
             m = self._mark(sl)
-            self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=self.p.acc_f)
+            self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=self.p.acc_l)
             tp = self.para(s["title"], size, self.p.fg, self.th.head, bold=True)
             bw = self.balance_w(tp["t"], w, size, True, self.th.head)
             self.ptext(sl, self.x0, top, bw, h, [tp], name="Title")
@@ -1368,8 +1377,7 @@ class Renderer:
         if sl is None:
             return
         m = self._mark(sl)
-        logo = (self.deck["meta"].get("brand") or {}).get("logo_dark_png")
-        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_f)
+        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
         lx = self._logo(sl, 0.8)   # the brand's lockup for a dark ground, with the kicker label kept beside it
         self.ptext(sl, lx, 0.8 if lx == self.x0 else 1.1, 8, 0.3, [self.para(_kicker(self.deck["meta"]).upper(), S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
         self.ptext(sl, self.x0, y, w, th_, [self.para(s["title"], size, p.fg, self.th.head, bold=True, line=1.0)], name="Title")
@@ -1417,7 +1425,7 @@ class Renderer:
         gh = max(self.ph(tp, tw), max(bar[3], 1.2) if bar else 0.0)
         top += max(0.0, (avail - gh) / 2) * 0.85
         m = self._mark(sl)
-        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_f)
+        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
         if label:
             self.ptext(sl, self.x0, 0.8, 6, 0.3, [self.para(label, S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
         self.ptext(sl, self.x0, top, tw, self.ph(tp, tw), tp, name="Title")
@@ -1426,7 +1434,7 @@ class Renderer:
             xr, wr, bp, bh = bar
             m = self._mark(sl)
             self.rect(sl, xr - 0.45, top, 0.012, max(bh, 2.0), fill=p.rule)
-            self.rect(sl, xr, top, 0.09, max(bh, 1.2), fill=p.acc_f)
+            self.rect(sl, xr, top, 0.09, max(bh, 1.2), fill=p.acc_l)
             self.ptext(sl, xr + 0.32, top, wr - 0.32, max(bh, 1.2), bp, anchor="middle")
             self._build(sl, m)
 
@@ -1549,7 +1557,7 @@ class Renderer:
             y = self.head(sl, s, dense)
             m = self._mark(sl)
             self.rect(sl, self.x0, y, lw, fh, fill=p.card)
-            self.rect(sl, self.x0, y, lw, 0.05, fill=p.acc_f)
+            self.rect(sl, self.x0, y, lw, 0.05, fill=p.acc_l)
             self.stack(sl, rest, self.x0 + 0.3, y + 0.3, lw - 0.6, g.body_end - 0.3 - nh, fill=True)
             if note:
                 self.ptext(sl, self.x0 + 0.3, g.body_end - 0.25 - (nh - 0.25), lw - 0.6, nh - 0.25, note, anchor="bottom")
@@ -1558,7 +1566,7 @@ class Renderer:
             lines = [self.para(l, size, p.inv_fg, self.th.head, line=1.1, after=10) for l in cp["lines"]]
             lh = self.ph(lines, fw - 0.8)
             self.rect(sl, fx, y, fw, fh, fill=p.inv)
-            self.rect(sl, fx, y, 0.09, fh, fill=p.acc_f)
+            self.rect(sl, fx, y, 0.09, fh, fill=p.acc_l)
             top = y + (fh - (lh + GAP + ah)) / 2
             self.ptext(sl, fx + 0.4, top, fw - 0.8, lh, lines)
             self._build(sl, m)
@@ -1587,7 +1595,7 @@ class Renderer:
                 return
             m = self._mark(sl_)
             self.rect(sl_, px, y, pw, h, fill=p.inv)
-            self.rect(sl_, px, y, 0.09, h, fill=p.acc_f)
+            self.rect(sl_, px, y, 0.09, h, fill=p.acc_l)
             self.ptext(sl_, px + 0.4, y + 0.25, pw - 0.8, h - 0.85, [self.para(t, size, p.inv_fg, self.th.head, line=1.1, after=8) for t in parts], anchor="middle")
             self.ptext(sl_, px + 0.4, y + h - 0.5, pw - 0.8, 0.3, [self.para("Illustrative, not final", S.caption, p.inv_acc, italic=True, cap=True)])
             self._build(sl_, m)
@@ -1677,7 +1685,7 @@ class Renderer:
             H = g.body_end - y
             m = self._mark(sl)
             self.rect(sl, self.x0, y, lw, H, fill=p.inv)
-            self.rect(sl, self.x0, y, 0.09, H, fill=p.acc_f)
+            self.rect(sl, self.x0, y, 0.09, H, fill=p.acc_l)
             parts = [([self.para("THE TARGET", S.caption, p.inv_mute, bold=True, track=1.2, cap=True)], 0.08),
                      ([self.para(facts["target"], vs, p.inv_acc, self.th.head, bold=True)], 0.3)]
             for cap, key in (("BASELINE", "baseline"), ("BY WHEN", "date")):
@@ -1720,6 +1728,7 @@ class Renderer:
         (after the save, so the .pptx is the same bytes either way)."""
         if layouts_out is not None:
             Path(layouts_out).unlink(missing_ok=True)   # a failed render must not leave an older record beside it
+        self.assets_dir = Path(out).parent
         nums = {sid: i for i, sid in enumerate(self.deck["order"], 1)}
         for sid in self.deck["order"]:
             self.slide(sid, self.deck["slides"][sid], nums[sid])
@@ -1748,28 +1757,40 @@ class Renderer:
         name = choose_layout(s, audience) if self.th.layouts else "flow"
         self.chosen[sid] = name
         s = {**s, "blocks": shown_blocks(s, audience)}
-        if name != "flow":
+        plan = self._picture_plan(sid, s, name)
+        want = {slot for (i, slot) in self.drawn if i == sid}
+        if plan:   # one carve: x1 and body_end are narrowed before the layout runs, so the layout (its id) is the one it would pick anyway
             n_sh, n_st = len(sl.shapes), len(self.steps)
+            cs = {**s, "visual": {}} if s["type"] == "execution" else s   # the picture replaces the 'Image prompt' note
+            self._carve(plan)
             try:
-                try:
-                    getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))(sl, s)
-                except NoFit:   # too dense at the body floor: once more with body text allowed down to the caption floor
-                    self._rollback(sl, n_sh, n_st)
-                    self._relaxed = True
-                    try:
-                        getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))(sl, s)
-                        self.relaxed[sid] = True
-                    finally:
-                        self._relaxed = False
-            except NoFit:
-                self._rollback(sl, n_sh, n_st)
-                name = "flow"
-        if name == "flow":
-            self._relaxed = True   # the last resort: stepped down as far as the caption floor, never under it
-            try:
-                getattr(self, "_" + s["type"], self._generic)(sl, s)
+                ok = self._try_layout(sl, cs, name, sid)
             finally:
-                self._relaxed = False
+                self._uncarve()
+            if ok:
+                self._draw_pictures(sl, plan)
+                self.placed |= {(sid, b[0]) for b in plan["boxes"]}
+            else:   # the narrowed layout does not fit: no picture, and a finding
+                self._rollback(sl, n_sh, n_st)
+                self.relaxed.pop(sid, None)
+                plan = None
+        for slot in sorted(want - {b[0] for b in (plan or {}).get("boxes", [])}):   # asked for, not drawn: say so, for every slot
+            why = ("the classic theme has no picture box" if not self.th.layouts else "the slide is drawn by the flow, which has no picture box" if name == "flow"
+                   else f"the {name} layout does not fit beside its picture")
+            self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "slot": slot,
+                                          "message": f"{slot} is not drawn: {why}, so no output carries it"})
+        if not plan:
+            if name != "flow":
+                n_sh, n_st = len(sl.shapes), len(self.steps)
+                if not self._try_layout(sl, s, name, sid):
+                    self._rollback(sl, n_sh, n_st)
+                    name = "flow"
+            if name == "flow":
+                self._relaxed = True   # the last resort: stepped down as far as the caption floor, never under it
+                try:
+                    getattr(self, "_" + s["type"], self._generic)(sl, s)
+                finally:
+                    self._relaxed = False
         self.layouts[sid] = name
         # footer: section label, footnote keys, slide number
         t, p = self.th, self.p
@@ -1795,6 +1816,110 @@ class Renderer:
             sl._element.set("show", "0")
         if self.animate:
             self._animate(sl)
+
+    def _try_layout(self, sl, s, name, sid) -> bool:
+        """Draw the layout ``name``; once more with body text allowed down to the caption floor when it is too dense. True when it drew;
+        False when it raised NoFit twice (the caller rolls back and falls to the flow). Marks ``self.relaxed[sid]``."""
+        n_sh, n_st = len(sl.shapes), len(self.steps)
+        fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
+        try:
+            try:
+                fn(sl, s)
+            except NoFit:
+                self._rollback(sl, n_sh, n_st)
+                self._relaxed = True
+                try:
+                    fn(sl, s)
+                    self.relaxed[sid] = True
+                finally:
+                    self._relaxed = False
+            return True
+        except NoFit:
+            self._rollback(sl, n_sh, n_st)
+            return False
+
+    # -- pictures: one carve, one draw helper (slice 4 moves the boxes into its layout files) --------
+    #: Box sizes in inches per aspect for a picture beside the text, and the gap to it. Tall pictures are given a height.
+    SIDE = {"16:9": (3.6, None), "4:3": (3.3, None), "4:5": (None, 3.6), "9:16": (None, 4.6)}
+    SIDE_COVER = {"16:9": (4.4, None)}
+    GAP_PIC = 0.35
+    BOTTOM_H = 2.2
+
+    def _picture_plan(self, sid, s, name):
+        """Where this slide's drawn pictures go, and how far the layout's area is narrowed to leave room: ``{x1, body_end, boxes}`` or None
+        (no picture drawn on this slide, the classic theme, or the flow). The territory's four frames sit in a strip along the foot; the
+        emphasis bar (idea, divider) takes its picture bottom right; every other layout narrows its right edge."""
+        if not self.th.layouts or name == "flow":
+            return None
+        got = {slot: im for (i, slot), im in self.drawn.items() if i == sid}
+        if not got:
+            return None
+        g, x0, x1 = self.th.grid, self.x0, self.x1
+        gap = self.GAP_PIC
+        boxes = []
+        if s["type"] == "territory":
+            w = (x1 - x0 - 3 * 0.2) / 4   # four 16:9 boxes across the content width
+            h = w * 9 / 16
+            y = g.body_end - h
+            for i in range(1, 5):
+                if f"frame_{i}" in got:
+                    boxes.append((f"frame_{i}", x0 + (i - 1) * (w + 0.2), y, w, h, got[f"frame_{i}"]))
+            return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": boxes} if boxes else None
+        slot = next(iter(sorted(got)))
+        im = got[slot]
+        a = im["aspect"]
+        if name == "emphasis_bar":
+            h = self.BOTTOM_H
+            w = h * images.ratio(a)
+            return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": [(slot, x1 - w, g.body_end - h, w, h, im)]}
+        table = self.SIDE_COVER if s["type"] == "title" else self.SIDE
+        wv, hv = table.get(a) or self.SIDE[a]
+        w, h = (wv, wv / images.ratio(a)) if wv else (hv * images.ratio(a), hv)
+        top = 1.6
+        y = top + max(0.0, (g.body_end - top - h) / 2)
+        if s["type"] == "execution":   # beside the two cards: level with their top edge, not floating in the middle
+            y = 1.74
+        return {"x1": x1 - w - gap, "body_end": g.body_end, "boxes": [(slot, x1 - w, y, w, h, im)]}
+
+    def _carve(self, plan):
+        self._saved_carve = (self.x1, self.th)
+        self.x1 = plan["x1"]
+        self.th = dataclasses.replace(self.th, grid=dataclasses.replace(self.th.grid, body_end=plan["body_end"]))
+
+    def _uncarve(self):
+        self.x1, self.th = self._saved_carve
+
+    def picture(self, sl, x, y, w, h, im, name="Picture", label=True):
+        """One picture in the box ``x, y, w, h`` (inches): the asset's derived JPEG cropped to the box's aspect with cover (a:srcRect;
+        never stretched), alt text through cNvPr descr, the name ``Picture``. A picture that is not approved carries the deck's label on a
+        solid pill named ``Caption``; a flagged one also gets a red outline and the word Flagged. Returns the picture shape."""
+        from PIL import Image
+        path = self.pictures[im["asset"]]
+        with Image.open(path) as pil:
+            sw, sh = pil.size
+        box = images.crop_box(sw, sh, w / h, im.get("focal"))
+        l, t, r, b = images.src_rect(box, sw, sh)
+        pic = sl.shapes.add_picture(str(path), Inches(x), Inches(y), Inches(w), Inches(h))
+        pic.crop_left, pic.crop_top, pic.crop_right, pic.crop_bottom = l, t, r, b
+        pic.name = name
+        pic._element.nvPicPr.cNvPr.set("descr", im.get("alt") or "An illustrative picture")
+        if label and im.get("status") != "approved":
+            flagged = im.get("status") == "flagged"
+            if flagged:
+                pic.line.color.rgb = _rgb("C0392B")
+                pic.line.width = Pt(3)
+            text = f"{self.pic_label} · Flagged" if flagged else self.pic_label
+            pw = min(w - 0.2, 0.24 + 0.085 * len(text))
+            self.rect(sl, x + 0.1, y + h - 0.38, pw, 0.28, fill="B03225" if flagged else "1B2430", name="PictureLabel")
+            self.text(sl, x + 0.1, y + h - 0.38, pw, 0.28, text, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
+                      anchor=MSO_ANCHOR.MIDDLE, name="Caption")
+        return pic
+
+    def _draw_pictures(self, sl, plan):
+        for slot, x, y, w, h, im in plan["boxes"]:
+            m = self._mark(sl)
+            self.picture(sl, x, y, w, h, im)
+            self._build(sl, m)
 
     # -- the earlier flow (the fallback, and every slide under the classic theme) ----------------
     def _title_text(self, sl, s, size=30, y=0.5, w=None):
@@ -1880,11 +2005,23 @@ class Renderer:
             self._build(sl, m, "wipe" if k in ("fromto", "steps") else "fade")
         return y
 
+    def _logo_file(self):
+        """The cover logo's file: the client's logo the look cleared (``meta.theme.logo.asset``, a deck asset under ``assets/`` in the run
+        folder; placement ``none`` means no logo), else the ``--brand`` file's ``logo_dark_png``."""
+        th = self.deck["meta"].get("theme") or {}
+        lg = th.get("logo")
+        if lg:
+            if lg.get("placement") == "none":
+                return None
+            rec = (self.deck.get("assets") or {}).get(lg.get("asset")) or {}
+            return (self.assets_dir / rec["file"]) if rec.get("file") and self.assets_dir else None
+        return (self.deck["meta"].get("brand") or {}).get("logo_dark_png")
+
     def _logo(self, sl, y) -> float:
         """Place the brand's own dark-ground logo (``meta.brand.logo_dark_png``) at ``y`` with alt text and the
         name "Logo". Returns the x where the kicker label should start: beside the logo, or the left margin
         when the brand has no logo file."""
-        logo = (self.deck["meta"].get("brand") or {}).get("logo_dark_png")
+        logo = self._logo_file()
         if not (logo and _is_image(logo)):
             return self.x0
         try:
@@ -2058,12 +2195,20 @@ class Renderer:
 
 
 def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
-           layouts_out: Path | None = None) -> Path:
+           layouts_out: Path | None = None, pictures: dict | None = None, picture_findings: list | None = None, placed: set | None = None) -> Path:
     """Render a deck to ``out`` (.pptx); slides with a failed check carry a visible flag.
 
     ``animate``: False (static), True or ``"auto"`` (builds play in order), ``"click"`` (one block per click).
     ``theme``: ``"napkin"`` (default, the layout library) or ``"classic"`` (the earlier look, flow only);
     the deck's brand JSON is applied over either, exactly as before.
     ``layouts_out``: a path for the layout record (``layouts.json``); the .pptx is byte-identical with or without it.
+    ``pictures``: asset id -> derived JPEG for the pictures to draw (images.copy_assets); None draws none and changes nothing.
+    ``picture_findings``: a list the renderer appends to when a slide had to be drawn without its picture.
     """
-    return Renderer(deck, inp, master, findings, animate, theme).render(out, layouts_out)
+    r = Renderer(deck, inp, master, findings, animate, theme, pictures)
+    r.render(out, layouts_out)
+    if picture_findings is not None:
+        picture_findings.extend(r.picture_findings)
+    if placed is not None:
+        placed |= r.placed
+    return out

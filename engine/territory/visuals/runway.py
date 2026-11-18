@@ -105,18 +105,32 @@ def load_manifest(vdir: Path) -> dict:
 def save_manifest(vdir: Path, manifest: dict) -> None:
     vdir.mkdir(parents=True, exist_ok=True)
     tmp = vdir / "manifest.json.tmp"
-    tmp.write_text(json.dumps(manifest, indent=1, ensure_ascii=False))
+    with open(tmp, "w") as f:                       # synced to disk: the "creating" marker must survive a crash or a power cut
+        f.write(json.dumps(manifest, indent=1, ensure_ascii=False))
+        f.flush()
+        os.fsync(f.fileno())
     tmp.replace(vdir / "manifest.json")
+    try:
+        fd = os.open(vdir, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
 
 
 def state(job: dict, manifest: dict, vdir: Path) -> str:
-    """saved: a frame is on disk, skip it. polling: a task exists, poll it (no new charge). gave_up: failed MAX_ATTEMPTS times,
-    left for a person. new: create a task."""
+    """saved: a frame is on disk, skip it. polling: a task exists, poll it (no new charge). unknown: a create was sent and we never
+    saw the answer (timeout, dropped connection, a crash, a 5xx): it MAY be billed, so it is never created again automatically
+    (--retry-unknown, after a fresh cost card). gave_up: failed MAX_ATTEMPTS times, left for a person. new: create a task."""
     e = (manifest.get("frames") or {}).get(job["key"])
     if e and e.get("file") and (vdir / e["file"]).exists():
         return "saved"
     if e and e.get("task") and e.get("status") not in ("FAILED", "CANCELLED"):
         return "polling"
+    if e and not e.get("task") and e.get("status") in ("CREATING", "UNKNOWN"):
+        return "unknown"
     if e and e.get("status") in ("FAILED", "CANCELLED") and (e.get("attempts") or 0) >= MAX_ATTEMPTS:
         return "gave_up"
     return "new"
@@ -131,6 +145,7 @@ def cost_card(jobs: list[dict], manifest: dict, vdir: Path, plan_usd: float | No
         new = sum(state(j, manifest, vdir) == "new" for j in mine)
         rows.append({"model": model, "kind": kind, "frames": len(mine), "new": new, "saved": sum(state(j, manifest, vdir) == "saved" for j in mine),
                      "polling": sum(state(j, manifest, vdir) == "polling" for j in mine), "gave_up": sum(state(j, manifest, vdir) == "gave_up" for j in mine),
+                     "unknown": sum(state(j, manifest, vdir) == "unknown" for j in mine),
                      "credits_each": credits, "credits": new * credits})
         total += new * credits
     usd = round(total * USD_PER_CREDIT, 2)
@@ -146,7 +161,11 @@ def render_card(card: dict) -> str:
         lines.append(f"  frame plan   1 model call (Claude)             ~${card['plan_usd']:.2f}")
     for r in card["rows"]:
         lines.append(f"  {r['model']:<24} {r['new']:>3} new x {r['credits_each']:>2} credits = {r['credits']:>4} credits"
-                     f"   ({r['saved']} saved, {r['polling']} already running, skipped" + (f"; {r['gave_up']} given up after {MAX_ATTEMPTS} failed attempts: needs a person" if r.get("gave_up") else "") + ")")
+                     f"   ({r['saved']} saved, {r['polling']} already running, skipped" + (f"; {r['gave_up']} given up after {MAX_ATTEMPTS} failed attempts: needs a person" if r.get("gave_up") else "")
+                     + (f"; {r['unknown']} unknown" if r.get("unknown") else "") + ")")
+    if any(r.get("unknown") for r in card["rows"]):
+        lines.append("  UNKNOWN jobs: a create was sent and its answer never seen. They may already be billed: check the Runway dashboard. "
+                     "They are never created again automatically; --retry-unknown --live --yes-cost re-creates them and puts them on this card.")
     lines.append(f"  {card['reference_images']} reference image(s) sent with every frame")
     lines.append(f"  total        {card['credits']} credits = ${card['usd']:.2f}" + (f", plus the plan call: about ${card['total_usd']:.2f}" if card.get("plan_usd") is not None else ""))
     lines.append(f"  hard stop    cap ${card['max_usd']:.2f} for this run (--max-usd)" + ("  ** THE CARD IS OVER THE CAP: nothing will run **" if card.get("over_cap") else ""))
@@ -160,6 +179,7 @@ def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs:
     """Create the tasks that do not exist, then poll all of them. Idempotent: run it again to pick up anything still running."""
     frames = manifest.setdefault("frames", {})
     made = polled = 0
+    unknown: list[str] = []
     stopped = None
     committed = 0.0                    # credits asked for in this call, by Runway's own estimate (or the card's price when it gave none)
     for j in jobs:
@@ -173,18 +193,36 @@ def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs:
             stopped = f"credit cap reached ({committed:g} of {max_credits:g} credits committed): stopped before the next frame"
             continue
         prior = frames.get(j["key"]) or {}
+        attempts = prior.get("attempts", 0) + 1
+        frames[j["key"]] = {**_entry(j), "status": "CREATING", "attempts": attempts}
+        save_manifest(vdir, manifest)          # synced BEFORE the POST: a crash or timeout from here on leaves a marker, never a clean slate
         try:
             t = client.create(MODELS[j["kind"]][0], j["prompt"], refs)
+            task_id = t["id"]
         except RunwayError as e:
-            frames[j["key"]] = {**_entry(j), "status": "FAILED", "error": str(e), "attempts": prior.get("attempts", 0) + 1}
+            if e.status is not None and e.status >= 500:         # the server may have taken the request before it failed
+                frames[j["key"]].update(status="UNKNOWN", error=str(e))
+                save_manifest(vdir, manifest)
+                log(f"{j['key']}: UNKNOWN, may be billed: {e}")
+                unknown.append(j["key"])
+                stopped = "Runway answered with a server error on a create: stopped; those jobs are unknown (not created again automatically)"
+                continue
+            frames[j["key"]] = {**_entry(j), "status": "FAILED", "error": str(e), "attempts": attempts}
             save_manifest(vdir, manifest)
             log(f"{j['key']}: not created: {e}")
             if e.status in STOP_STATUSES:
                 stopped = ("Runway is rate limiting: run this again later to create the rest" if e.status == 429
                            else f"Runway refused the request ({e.status}: key, credit or access): stopped, nothing else tried")
             continue
+        except (OSError, ValueError, KeyError, TypeError) as e:   # timeout, reset, no answer, an answer with no task id: it may exist and be billed
+            frames[j["key"]].update(status="UNKNOWN", error=f"{type(e).__name__}: {e}")
+            save_manifest(vdir, manifest)
+            log(f"{j['key']}: UNKNOWN, the create was sent and no answer was seen ({type(e).__name__}); it may be billed and is NOT created again")
+            unknown.append(j["key"])
+            stopped = "a create got no answer (network): stopped; that job is unknown, not created again automatically"
+            continue
         est = (t.get("estimatedCost") or {}).get("credits")
-        frames[j["key"]] = {**_entry(j), "task": t["id"], "status": "PENDING", "estimated_credits": est, "attempts": prior.get("attempts", 0) + 1}
+        frames[j["key"]] = {**_entry(j), "task": task_id, "status": "PENDING", "estimated_credits": est, "attempts": attempts}
         save_manifest(vdir, manifest)          # before polling: a crash now cannot lose the task id and create a duplicate
         made += 1
         committed += est if isinstance(est, (int, float)) else price
@@ -229,7 +267,8 @@ def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs:
         todo = still
         if todo:
             sleep(poll_every)
-    return {"created": made, "polled": polled, "still_running": [j["key"] for j in todo], "stopped": stopped}
+    unknown += [j["key"] for j in jobs if state(j, manifest, vdir) == "unknown" and j["key"] not in unknown]
+    return {"created": made, "polled": polled, "still_running": [j["key"] for j in todo], "stopped": stopped, "unknown": unknown}
 
 
 def _entry(j: dict) -> dict:

@@ -301,23 +301,96 @@ def _is_brief_data(d: dict) -> bool:
     return isinstance(d, dict) and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
 
 
-def from_upstream(data: dict, members: dict | None = None, docs: dict | None = None, doc_facts: dict | None = None) -> Inputs:
+#: Presentation kits a Deck may hold (deck-look-kits). A kit tells the deck how to look: it is never the brief,
+#: never the research, and none of its words or figures is evidence (ADR 0023 as amended by ADR 0027).
+BRAND_APP, STYLE_PACK_APP = "ie.napkin.brand", "ie.napkin.style-pack"
+KIT_APPS = (BRAND_APP, STYLE_PACK_APP)
+#: The brand layer's reference on a pin (Contract 6, section 2): ``fact://brand/<slug>/<key>@v``.
+_BRAND_REF = "fact://brand/"
+
+
+def _is_kit(key: str, entry, apps: dict | None) -> bool:
+    """True when an upstream entry is a kit. The runner's app map (``lineage.attached[].app_id``) decides when it
+    names the entry; with no map (or an entry it does not name) the shape does: a kit holds ``kit.version``."""
+    if apps and key in apps:
+        return apps[key] in KIT_APPS
+    return isinstance(entry, dict) and isinstance(entry.get("kit"), dict) and "version" in entry["kit"]
+
+
+def _is_brand_pin(pin: dict, kit_ids: set = frozenset()) -> bool:
+    """A pin the brand layer owns: its reference (compared without regard to case), its layer (any layer starting with ``brand``), or a
+    source that is an attached kit's document."""
+    refs = [pin.get(k) for k in ("ref", "uri", "id")]
+    if any(isinstance(r, str) and r.strip().casefold().startswith(_BRAND_REF) for r in refs):
+        return True
+    if str(pin.get("layer") or "").strip().casefold().startswith("brand"):
+        return True
+    named = {pin.get("source"), pin.get("source_id"), *(pin.get("sources") or [])}
+    return bool(named & set(kit_ids))
+
+
+def _drop_kit_pins(members: dict, kit_pins: set, kit_ids: set = frozenset()) -> tuple[dict, list]:
+    """``members`` without the pins that arrived with a kit, and without the sources only those pins cite.
+    Returns (members, dropped pin ids). A Brand Clan attach merges its pins into the deck's facts; the deck's
+    facts are research, so they leave here, before anything reads them."""
+    rows = _unwrap(members.get("facts"), "facts")
+    gone = [p for p in rows if isinstance(p, dict) and (p.get("id") in kit_pins or _is_brand_pin(p, kit_ids))]
+    if not gone:
+        return members, []
+    gone_ids = {p.get("id") for p in gone}
+    kept = [p for p in rows if p.get("id") not in gone_ids]
+
+    def cited(pins):
+        out = set()
+        for p in pins:
+            for k in ("source", "source_id"):
+                if p.get(k):
+                    out.add(p[k])
+            out.update(p.get("sources") or [])
+        return out
+
+    only_brand = cited(gone) - cited(kept)
+    out = {**members, "facts": kept}
+    if members.get("sources") is not None:
+        out["sources"] = [s for s in _unwrap(members.get("sources"), "sources") if s.get("id") not in only_brand]
+    return out, sorted(i for i in gone_ids if i)
+
+
+def from_upstream(data: dict, members: dict | None = None, docs: dict | None = None, doc_facts: dict | None = None,
+                  apps: dict | None = None, kit_pins: set | list | None = None) -> Inputs:
     """Build the Inputs from a Deck document: ``data`` is its data (``upstream.<source document id>``
     frozen sources, ``inputs.prompt``, ``intake``); ``members`` its merged ``facts``, ``findings``,
     ``sources`` and ``decisions`` (the whole carried decision chain), each a list or wrapped in its
     top-level key. ``docs`` (doc key -> {name, text, chars}) and ``doc_facts`` are what the server
     extracted from the attached documents. The brief goes through ``brief_from_data`` (CLAN_FIELDS)
     and the research through ``parse_research``, so there is one mapping. A finding rejected in
-    the chain stays rejected. With no brief upstream the brief fields are empty."""
+    the chain stays rejected. With no brief upstream the brief fields are empty.
+
+    ``apps`` (``{source document id: app_id}``, from ``lineage.attached``) says what each entry is. A Brand Clan
+    or Style Pack is a kit: never the brief or the research, and every pin that arrived with a kit is dropped from
+    the facts (``kit_pins``: the ids the runner knows came with one; a pin marked with the brand layer's reference
+    is dropped too). Without ``apps`` a kit is recognised by its ``kit.version`` block."""
     data, members = data or {}, members or {}
     up = data.get("upstream") or {}
+    kits = [k for k, v in up.items() if _is_kit(k, v, apps)]
+    up = {k: v for k, v in up.items() if k not in kits}
     brief_id, brief_data = next(((k, v) for k, v in up.items() if _is_brief_data(v)), (None, None))
     research_id = next((k for k, v in up.items() if k != brief_id and isinstance(v, dict) and v), None)
+    dropped: list = []
+    kit_ids = set(kits) | {k for k, app in (apps or {}).items() if app in KIT_APPS}
+    if kits or kit_ids:
+        members, dropped = _drop_kit_pins(members, set(kit_pins or ()), kit_ids)
+    elif kit_pins:
+        members, dropped = _drop_kit_pins(members, set(kit_pins))
     if brief_data is not None:
         fields, htw, oq, cov = brief_from_data(brief_data)
     else:
         fields, htw, oq, cov = empty_brief(), {}, [], {"brief_fields": len(BRIEF_FIELDS), "brief_fields_filled": 0,
                                                        "how_to_win_points": 0, "open_questions": 0, "brief_source": "none"}
+    if kits:
+        cov["kits_ignored"] = sorted(kits)
+    if dropped:
+        cov["kit_pins_dropped"] = dropped
     prompt = ((data.get("inputs") or {}).get("prompt") or {})
     intake = data.get("intake") or {}
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=str(prompt.get("text") or ""),
@@ -342,3 +415,32 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
         cov["doc_figures"] = len(inp.doc_facts)
     inp.coverage = cov
     return inp
+
+
+def from_deck_document(path: Path) -> tuple[Inputs, dict]:
+    """The runner's one way into a Deck document (a ``.clan``): its Inputs through ``from_upstream`` with the app map read from
+    ``lineage.attached`` (so an attached kit is never the brief or research and a Brand Clan's pins never reach the facts), and what
+    the look needs: ``{apps, look (the document's look preferences), library (inputs.library.enabled), pack (Style Pack data and an
+    asset reader, or None), brand (the frozen Brand Clan, or None)}``. Kits count only while ``inputs.library.enabled`` is true
+    (ADR 0027); the facts filter acts always. Read on every run, so an Update (a newer frozen kit) is re-applied by construction."""
+    z = zipfile.ZipFile(path)
+    names = set(z.namelist())
+    rd = lambda n: yaml.safe_load(z.read(n)) if n in names else None  # noqa: E731
+    man, data = rd("manifest.yaml") or {}, rd("shared/data.yaml") or {}
+    attached = (man.get("lineage") or {}).get("attached") or []
+    apps = {(a.get("carried") or {}).get("document_id"): a.get("app_id") for a in attached if (a.get("carried") or {}).get("document_id")}
+    members = {"facts": rd("shared/facts.yaml"), "findings": rd("shared/findings.yaml"), "sources": rd("shared/sources.yaml"),
+               "decisions": rd("agent/decision-chain.yaml")}
+    inp = from_upstream(data, {k: v for k, v in members.items() if v is not None}, apps=apps)
+    up = data.get("upstream") or {}
+    lib = bool(((data.get("inputs") or {}).get("library") or {}).get("enabled") is True)
+    pack = brand = None
+    for did, app in apps.items():
+        if did in up and lib:
+            if app == STYLE_PACK_APP and pack is None:
+                pack = (up[did], lambda p: z.read(p) if p in names else None)
+            elif app == BRAND_APP and brand is None:
+                brand = up[did]
+    if lib is False and any(app in KIT_APPS for app in apps.values()):
+        inp.coverage["kits_gated_off"] = True
+    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand}

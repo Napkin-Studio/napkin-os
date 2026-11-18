@@ -212,6 +212,39 @@ decision: as ADR 0027 is worded (§4, "only where the slide already says illustr
 and `execution` slides qualify, because only they carry `visual.kind: image_prompt` today (`assemble.py`
 lines 562 and 586).
 
+### 4.5 Placing existing pictures (deck-frames-in, 17 November 2026)
+
+Three clarifications, no field changes:
+
+1. **An image slot is never stale-checked.** It binds no blocks, so the `blocks_sha` rule (§3.3 rule 4) applies to the text,
+   list, group, stat, table, chart and copy slots only. A slide may hold image slots and no `layout` until `deck-layout-library`
+   lands; the renderer then places them by its own rule (one carve in `Renderer.slide`, boxes in `images.SLOT_TABLE`).
+2. **A slot with count n binds `<name>_1` to `<name>_n`.** The territory's four frames are `frame_1` to `frame_4` and stay so
+   in the library: review.images and approvals are keyed per slot, so four pictures need four keys (§5's "one slot with count 4"
+   means this).
+3. **The one click** (`images.approve_territory`, by a `human:<id>` only) writes one `review.images` entry for every slot holding
+   one of that territory's frames, the cover's and the idea's included. It approves only clean frames (made, the guard ran and
+   found nothing) and lists the rest: a flagged frame stays flagged, a frame no guard looked at and a refused one wait for a person.
+   The Territory tool's own `approved_by_person` is kept as `territory_accepted` and is never approval.
+
+The stage file `--stages/frames.json`, written by `python3 -m deck.from_territory` and read only when `run_deck` is given
+`--pictures`:
+
+```
+{ stage: "frames", produced_by, run: {file, sha256_12, same_brief: verified | unverified}, version: "v<N>-<hash>",
+  style: {pack?, document_id?, version, hash}, safe_messaging, style_hold?: {reason}, fixture?: true,
+  frames: { <key>: {territory, shot, tier, model, prompt, prompt_sha256?, subject, guard{checked, flagged, found?, reason?},
+                    territory_accepted, status: made | flagged | refused, reason?,
+                    file: "assets/<sha256>.<ext>", sha256, mime, width, height} } }
+```
+
+One frame per shot: a clean frame beats a flagged or refused one, then the best model beats the quick one. `meta.built_from.territory_run`
+records `{file, sha256_12, frames_version, same_brief}`. `meta.preferences.style_pack` may carry `hash` (the Style Pack the deck now
+uses: a picture whose style hash differs is stale, not mixed) and `hold` (the Style Pack could not be read; the build went on).
+The picture boxes: the cover and the divider 16:9, the idea and the audience 4:3, the territory's four frames in a strip of 16:9
+boxes, executions by `spec.frame_for` (phone 9:16, poster 4:5, none 16:9; search and audio take no slot). Nothing is generated:
+`inputs.pictures.source.allow: generated` is refused until `deck-image-gen`.
+
 ## 5. The layout library
 
 One file per layout, checked on load against `layout.schema.json`. An unknown slide type, block kind,
@@ -285,9 +318,10 @@ The ten roles are `theme.COLOR_FIELDS`, each a 6-digit hex. `derived[]` names th
   `canvas`: `{w_in: 13.333, h_in: 7.5}`, fixed. A render scales it and never reflows.
 - `logo`: `{asset, placement, min_height_in}`, `placement` `cover_only` · `cover_and_footer` · `none`.
 - `accent_use`: `fill` · `outline` (the agency look's switch). `header_position`: `left` · `center`.
-- `name`, `source`, `kit`: `source` is `default` · `brand_clan` · `agency_look` · `brand_file` · `master`,
-  resolved in the order master, attached Brand Clan, agency look, `--brand` file, the default `napkin`
-  theme. `kit` is `{document_id, version}` for a Brand Clan.
+- `name`, `source`, `kit`, `from`, `style_pack`, `agency`: `source` is `default` · `brand_clan` · `style_pack` ·
+  `agency_look` · `brand_file` · `master`, the highest tier that gave any token (§6.5 fixes the order, token by
+  token). `kit` is `{document_id, version}` for a Brand Clan; `from` names each token's tier (`derived` for a token
+  no tier gave); `style_pack` is `{document_id, version, hash}`; `agency` is `{id, rev}`.
 
 From a Brand Clan the deck reads `visual.colours`, `typography`, `logos`, `imagery`, `layout`, and `rules`
 that are `checkable` with `area` `logo`, `colour` or `imagery` (a warning, never a block). It never reads
@@ -323,6 +357,7 @@ review: { pinned: {<slide id>: {by, at}},
 | `look.density.level` | `lean` for a presented pitch, `detailed` for a leave-behind (`inputs.format: full`) · `standard` | "How much text should each slide carry?" Lean: about 30 words, the rest in the speaker notes · Standard: up to about 60 words · Detailed: the full text on the slide | the picker prefers layouts of that `density`, and the fit ladder moves whole points to the notes above the target: 30 words on a content slide, 60, or the slide type's budget (`spec.SLIDE_TYPES`). Nothing is reworded by it |
 | `inputs.pictures.source.allow`, `.cap_usd` | `existing` · `generated`; `2.5` (0 to 10) | "Where may the pictures come from?" Only pictures we already have (territory frames and uploads) · Also make new ones, up to $2.50 for this deck (the amount can be changed) | `existing` never calls a provider. `generated` allows it, after the cost card, which shows the cap; the image step stops before the cap is passed |
 | `look.style_pack.use`, `.document_id` | `territory` · `other` | "Which Style Pack should the pictures follow?" The one the territory board uses · Another one (pick from the attached Style Packs) | the image prompt's style block and references. With no Style Pack attached the built-in default style is used |
+| `look.agency_look.use` | `true` · `false` | "Use my agency's look?" Yes, if my agency has set one up · No, the standard look for this deck | whether the agency tier (§6.5) dresses this deck. A per-deck opt-out; not asked as an intake card, set on Start and Review |
 | `look.brand.wears` | `agency` · `client` · `co_branded` | "Whose brand should the deck wear?" Ours, with the client's logo on the cover · The client's · Both, side by side on the cover | which kit `meta.theme` is resolved from, and `logo.placement` |
 | `inputs.pictures.approval.approver`, `.user`, `.label` | `owner` · `named` (with `user: human:<id>`); `Illustrative` (up to 30 characters, no digit) | "Who approves pictures before a client sees them?" Me, the deck's owner · Someone else. "What should a picture be labelled until it is approved?" Illustrative | whose `review.images` decision the runner stamps as `approved`; the label drawn on every picture not yet approved |
 
@@ -339,9 +374,13 @@ Rules:
   `source: person | default`.
 - The label is a fixed label like DRAFT and Illustrative today: it holds no fact, and a digit is refused
   so that it can never read as a figure.
-- `inputs.library.enabled` is still the one gate (ADR 0027, accepted 2026-11-17). While it is false or absent the picture,
-  Style Pack and brand questions are not shown, the runner ignores those preferences, an attached Brand
-  Clan and an attached Style Pack, and the deck is today's. Density does not wait on it.
+- `inputs.library.enabled` is still the one gate for the picture, Style Pack and Brand Clan inputs (ADR 0027, accepted
+  2026-11-17). While it is false or absent those questions are not shown, the runner ignores those preferences, an
+  attached Brand Clan and an attached Style Pack. Density does not wait on it. **One exception, recorded in ADR 0027 and
+  ADR 0036 (Sai, 17 Nov 2026): the agency accent applies automatically.** An agency that has set up a look has its accent on
+  every new deck with the library off, and a deck opts out (`look.agency_look.use: false`). It is colour only and adds no word
+  or number. This replaces "library off means today's deck" for that one case; agencies with no look keep today's default
+  theme, and §6.5 says how.
 - Two things stay rules, whatever the user chooses: a part marked Confidential with `model: false` is never
   sent to a provider (os-layer §4), and a `reference_only` asset never fills a slot.
 - `theme`: `napkin` · `brand` · `classic`. `strict_brand`: only the kit's layouts and given tokens, nothing
@@ -376,6 +415,68 @@ with the default option first and marked `origin: default`. `address` is the fie
 - **Review** shows them again. A change writes the field with `via: review` and takes effect on the next
   build: a picture preference rebuilds images only (the words stay byte-identical); density re-plans layouts.
 - Build never waits for a preference, as it never waits for any question.
+
+### 6.5 Precedence, the Style Pack and the Brand Clan seam (`deck-look-kits`)
+
+**Facts never change.** Words, numbers, names, legal lines and the brief's logos come only from the prompt, the brief, the
+research and the documents. No look input adds, removes or rewords anything. A Style Pack has no field that reaches a slide's
+words. A Brand Clan's voice, strategy, claims, legal lines and pins are never read, and **no brand figure reaches a slide as
+evidence**: `inputs.from_upstream` classifies an attached kit by its app id (the runner passes `lineage.attached[].app_id`; with
+no map, by the kit block a kit carries) so a kit is never the brief or the research, and every pin that arrived with a kit is
+dropped from the facts (a pin marked with the brand layer's `fact://brand/` reference, and any id the runner names). Until the
+OS offers a data-only attach (asked of Shrey) the pins are still merged into the document's own `facts.yaml` by the attach; the
+deck refuses to read them as evidence.
+
+**Per token** (colour roles `accent`, `paper`, `ink`, `panel`, `accent_ink`; type `head`, `body`), the first tier that gives the
+token wins; `meta.theme.from` records it:
+
+1. **Brand tier.** `--master`; the attached Brand Clan's colours and type, only when `look.brand.wears` is `client` or `co_branded`;
+   the `--brand` JSON, the CLI stand-in (so today's `--brand` decks keep their look exactly). With `wears: agency` (the default) a
+   client's Brand Clan adds only its logo for the cover and its imagery bans: never its colours or type.
+2. **Style Pack deck section.** Empty by default. A pointer into the brand (`{brand: <id>}`) only picks one of the brand's own
+   colours and falls through when no kit is attached; `{agency: base|accent}` picks one of the agency look's; a literal (`{hex}`,
+   `{family}`) applies below the brand tier and is ignored under `look.strict_brand`.
+3. **Agency look: the accent only.** Once the agency has set one up its `accent` and `accent_ink` dress every new deck, with no
+   switch; a deck opts out with `look.agency_look.use: false`. An agency with no look changes nothing. Its `base` is shell
+   chrome and is never read; there is no logo and no wordmark; `accent_use` is not stamped (no renderer draws an outline).
+   Ignored under `strict_brand`. Stamped `meta.theme.agency {id, rev}`. **A deck keeps the look it was built with**: the first
+   build copies the agency look into the run folder (`look.json`) and every later build replays that copy, so a recorded run
+   replays byte for byte; a deck built before the agency had a look keeps its look too. The runner (`--update-look`, from
+   `look.agency_look.update_requested`) takes the current look only when a person chooses "update to current look", and
+   Review says "your agency's look changed" when its `rev` moved.
+4. **Default.** `napkin`, or `classic`.
+
+**Readable or reset.** A pale accent (under 3:1 on the paper) is a fill only: thin lines, rules and chart series take
+`meta.theme.accent_line`, the default accent. After merging, an `ink`, `paper` or `accent_ink` that cannot be read (4.5:1)
+against the token it sits on, when the two come from different tiers, is reset to the default (the lower tier loses) and
+named in `problems`, not left to a warning.
+
+**The client's logo has one path.** The kit's dark-ground logo is placed only when the kit's brand name matches the brief's
+client (otherwise it is held, and `meta.theme.held` says so). A placed logo is sanitised, rasterised to PNG and written as a
+deck asset (`deck.assets.<img id>`, rights `client_supplied`) with `meta.theme.logo {asset, placement}`; all three renderers
+read that. A logo that cannot be made safe, or rasterised, is held with a note: never dropped silently.
+
+**A Style Pack that cannot be used is held, not skipped.** It never falls back silently to the default look: `meta.style_hold
+{reason, pack}` is set and the report says why; the picture steps (`deck-frames-in`, `deck-image-gen`) read it and make nothing
+until a person fixes the pack. A pack's free text (`look`, `palette`, `notes`) holds no digit and no quotation mark, and no
+field holds the client's or a brand's name (ADR 0027).
+
+Then `theme.Theme.with_brand` derives the accessible tokens nobody gave (`accent_ink`, `accent_on_dark`, `on_dark_mute`), named in
+`derived`; `check_palette`'s findings go to `problems` and are never fatal. **When no tier above the default gave a token and no
+Style Pack is attached, nothing is stamped and the deck is exactly today's**: that is why every golden is byte-identical. The
+resolved colours and fonts reach the renderers through `meta.brand`, which they already read.
+
+**The Style Pack** (`ie.napkin.style-pack`, `app/templates/style-pack`) is attached to a Deck like any document (os-layer 5.7, one at a
+time; a second replaces the first; its version is `kit.version`). `engine/visuals/style.py` reads a folder or the document into
+one `Style` with one computed hash, for the Territory tool and the Deck. Only references with rights `own` or `licensed` are ever
+sent to an image model (at most 14, first by name); only a pack steward (`kit.stewards`) may mark one so, with a reason (`why`),
+and `licensed` needs a holder and terms; `client_supplied` and `reference_only` never leave. Models come from the existing list
+only, by tier (`draft`, `hero`); the per-deck cap still applies. The guard rails stay in code. Pictures are never remade
+automatically after an update: the notice says what changed and the person chooses.
+
+**The Brand Clan seam** is `deck.look.brand_tokens(frozen_brand)`, the one place that will know Contract 6's shape. Contract 6 is
+unmerged, so it is a stub that returns no tokens; a deck works without it. Shrey's open asks are in
+`features/deck-look-kits.clan` (`design.shrey_asks`).
 
 ## 7. Issues
 
@@ -509,7 +610,8 @@ The schemas state shape. These rules are for the code that arrives with each sli
 
 ## 13. Not in this contract
 
-- The Style Pack template (`ie.napkin.style-pack`) and the Brand Clan section `visual.deck`: `deck-look-kits`.
+- The Brand Clan section `visual.deck` and the real `brand_tokens` mapping (Shrey, Contract 6). The Style Pack template and how a
+  deck attaches its look are in §6.5 (`deck-look-kits`).
 - The picker, the fit ladder, `capacity()`, the per-layout slot rules generated into the template schema:
   `deck-layout-library`.
 - `from_territory.py` and placing frames: `deck-frames-in`. Generation: `deck-image-gen`.

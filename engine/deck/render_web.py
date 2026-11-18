@@ -17,10 +17,12 @@ the appendix and returns), B build mode, O overview, N notes, P presenter view
 """
 from __future__ import annotations
 
+import base64
 import html
 import json
 from pathlib import Path
 
+from . import images
 from .refs import fmt
 from .render_pptx import DARK_TYPES, THEME, _kicker
 from .spec import frame_for, shown_blocks
@@ -176,7 +178,43 @@ class _Slide:
         return f'<div class="frame copy">{body}{self.rv("answer", _e(ans), "p")}</div>'
 
 
-def _body(s, b: _Slide, blocks: list) -> str:
+def data_uri(aid: str, path: Path) -> str:
+    """A picture inline (deck.html stays one self-contained file): the derived JPEG as a data URI."""
+    return "data:image/jpeg;base64," + base64.b64encode(Path(path).read_bytes()).decode()
+
+
+#: Side picture widths in px on the 1920 by 1080 stage, by aspect (tall pictures are given a height): the web twin of render_pptx.SIDE.
+PIC_SIDE = {"16:9": 560, "4:3": 500, "4:5": 460, "9:16": 360}
+
+
+def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: str) -> tuple:
+    """The picture figures for one slide and the class the slide takes: ``(html, class)``, or ``("", "")`` when nothing is drawn. One
+    markup for deck.html and HyperFrames (``src`` makes the image address). Cover-crop with object-fit, alt text, and the label on every
+    picture not yet approved (a flagged one also named Flagged and outlined)."""
+    got = sorted((slot, im) for (i, slot), im in drawn.items() if i == sid and im["asset"] in pictures)
+    if not got:
+        return "", ""
+
+    def fig(slot, im, style=""):
+        flagged = im.get("status") == "flagged"
+        pos = f' style="object-position:{round(im["focal"]["x"] * 100)}% {round(im["focal"]["y"] * 100)}%"' if im.get("focal") else ""
+        tag = ""
+        if im.get("status") != "approved":
+            tag = f'<figcaption class="plabel{" flagged" if flagged else ""}">{_e(label + (" · Flagged" if flagged else ""))}</figcaption>'
+        return (f'<figure class="pic{" flagged" if flagged else ""}" data-slot="{_e(slot)}" style="{style}">'
+                f'<img src="{_e(src(im["asset"], pictures[im["asset"]]))}" alt="{_e(im.get("alt") or "An illustrative picture")}"{pos}>{tag}</figure>')
+
+    if s["type"] == "territory":
+        return '<div class="pics strip">' + "".join(fig(slot, im) for slot, im in got) + "</div>", "pic-strip"
+    slot, im = got[0]
+    a = im["aspect"]
+    w = PIC_SIDE[a]
+    ar = images.ratio(a)
+    style = f"width:{w}px;aspect-ratio:{a.replace(':', '/')}"
+    return f'<div class="pics side">{fig(slot, im, style)}</div>', f"pic-side pw{w}"
+
+
+def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
     """The slide body for its type (mirrors render_pptx's per-type layouts)."""
     typ = s["type"]
     pick = lambda kind: next((x for x in blocks if x["kind"] == kind), None)
@@ -191,14 +229,29 @@ def _body(s, b: _Slide, blocks: list) -> str:
         left = b.blocks(rest("copy"))
         copy = {**pick("copy"), "frame": frame_for(s["title"])}
         vis = s.get("visual") or {}
-        if vis.get("kind") == "image_prompt":
+        if vis.get("kind") == "image_prompt" and not pictured:   # a drawn picture takes the place of the 'Image prompt' note
             b.f += 1
             left += b.rv("b-prompt", _e(f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"), "p")
         return f'<div class="body split exec{" framed" if copy["frame"] else ""}"><div class="col">{left}</div><div class="col">{b.blocks([copy])}</div></div>'
     return f'<div class="body col">{b.blocks(blocks)}</div>'
 
 
-def slide_views(deck, inp, findings: list | None = None) -> list:
+def _cover_logo(deck, assets_dir) -> str | None:
+    """The cover's logo markup: the client's logo the look cleared (``meta.theme.logo``, a PNG deck asset, as an image with alt text), else the
+    ``--brand`` file's inline SVG. Placement ``none`` means no logo."""
+    lg = (deck["meta"].get("theme") or {}).get("logo")
+    if lg:
+        rec = (deck.get("assets") or {}).get(lg.get("asset")) or {}
+        f = Path(assets_dir) / rec["file"] if assets_dir and rec.get("file") else None
+        if lg.get("placement") == "none" or not (f and f.is_file()):
+            return None
+        import base64   # noqa: PLC0415
+        return (f'<img alt="{_e(deck["meta"].get("client", "Client"))} logo" style="height:110px;width:auto;display:block" '
+                f'src="data:image/png;base64,{base64.b64encode(f.read_bytes()).decode()}">')
+    return (deck["meta"].get("brand") or {}).get("logo_dark_svg")
+
+
+def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictures: dict | None = None, src=None, placed: set | None = None) -> list:
     """Per slide, in order: id, number, type, dark, inner markup, notes, build-step count and, per
     step, the latest reveal delay (ms) up to and including it."""
     failed = {}
@@ -208,15 +261,20 @@ def slide_views(deck, inp, findings: list | None = None) -> list:
     n_human = sum(1 for s in deck["slides"].values() if s["status"] == "needs_human")
     audience = deck["meta"].get("audience", "review")
     out = []
+    # Pictures (deck-frames-in): the same slots the pptx draws; with pictures None nothing is drawn and the markup is as it was.
+    drawn = {k: v for k, v in images.drawn(deck, audience).items() if placed is None or k in placed} if pictures else {}   # only what the pptx drew: one content in every format
+    plabel = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or "Illustrative"
+    src = src or data_uri
     for n, sid in enumerate(deck["order"], 1):
         s = deck["slides"][sid]
+        pic_html, pic_cls = picture_markup(sid, s, drawn, pictures or {}, src, plabel) if drawn else ("", "")
         b = _Slide(inp)
         dark = s["type"] in DARK_TYPES
-        logo = (deck["meta"].get("brand") or {}).get("logo_dark_svg") if s["type"] == "title" else None
+        logo = _cover_logo(deck, assets_dir) if s["type"] == "title" else None
         kick = (b.rv("brand-logo", logo, "div", 160) if logo else
                 b.rv("kicker", _e(KICKERS[s["type"]] or _kicker(deck["meta"])), "div", 120) if s["type"] in KICKERS else "")
         title = b.words(s["title"], "title", "h1") if dark else b.rv("title", _e(s["title"]), "h1", 220)
-        body = _body(s, b, shown_blocks(s, audience))
+        body = _body(s, b, shown_blocks(s, audience), bool(pic_html))
         foot = f'<span>{_e(s["section"])}</span>'
         if s.get("footnotes"):
             foot += f'<span class="src">Sources {" ".join(f"[{k}]" for k in s["footnotes"][:14])} (appendix)</span>'
@@ -226,17 +284,32 @@ def slide_views(deck, inp, findings: list | None = None) -> list:
             flags += f'<span class="draft">DRAFT · {"needs a person" if s["status"] == "needs_human" else f"{n_human} slides need a person"}</span>'
         if sid in failed:
             flags += f'<span class="failed">CHECK FAILED: {_e(", ".join(sorted(failed[sid])))}</span>'
-        inner = (f'<div class="flags">{flags}</div><header>{kick}{title}</header>{body}'
+        inner = (f'<div class="flags">{flags}</div><header>{kick}{title}</header>{body}{pic_html}'
                  f'<footer>{foot}</footer>')
         notes = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
-        out.append({"id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark,
+        out.append({"id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
                     "last": [max(v for k, v in b.last.items() if k <= f) for f in range(b.f + 1)]})
     return out
 
 
+#: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.
+PIC_CSS = """
+.pics{position:absolute;z-index:1}
+.pics.side{right:112px;top:230px}
+.pw560 header,.pw560 .body{margin-right:630px}.pw500 header,.pw500 .body{margin-right:570px}.pw460 header,.pw460 .body{margin-right:530px}.pw360 header,.pw360 .body{margin-right:430px}
+.pics.strip{left:112px;right:112px;bottom:90px;display:grid;grid-template-columns:repeat(4,1fr);gap:28px}
+.pic-strip .body{padding-bottom:300px}
+.pic{position:relative;margin:0;overflow:hidden;border-radius:6px;background:var(--tint);aspect-ratio:16/9}
+.pics.side .pic{aspect-ratio:auto}
+.pic img{display:block;width:100%;height:100%;object-fit:cover}
+.pic.flagged{outline:6px solid #c0392b;outline-offset:-6px}
+.plabel{position:absolute;left:14px;bottom:14px;background:#1B2430;color:#fff;font:700 18px/1 var(--body);letter-spacing:.04em;padding:10px 16px;border-radius:4px}
+.plabel.flagged{background:#B03225}
+"""
+
 CSS_LAYOUT = """
-:root{--ink:#INK;--paper:#PAPER;--accent:#ACCENT;--accent-ink:#8A5A10;--muted:#MUTED;--tint:#TINT;--line:#LINE;--dark-text:#DARK;
+:root{--ink:#INK;--paper:#PAPER;--accent:#ACCENT;--accent-line:#ACCENTL;--accent-ink:#8A5A10;--muted:#MUTED;--tint:#TINT;--line:#LINE;--dark-text:#DARK;
 --head:HEAD;--body:BODY;--ease:cubic-bezier(.2,.75,.25,1)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--body);-webkit-font-smoothing:antialiased}
@@ -263,14 +336,14 @@ footer .src{margin-left:auto;text-transform:none;letter-spacing:0}footer .num{ma
 .b-quote{font:italic 400 calc(var(--s)*54px)/1.2 var(--head);color:var(--accent-ink);max-width:1400px}
 .b-text{font-size:calc(var(--s)*36px);line-height:1.38}
 .b-small{font-size:calc(var(--s)*26px);line-height:1.4;color:var(--muted)}.dark .b-small{color:#a9b3bd}
-.b-callout{background:var(--tint);color:var(--ink);border-left:8px solid var(--accent);padding:calc(var(--s)*26px) 36px;font-size:calc(var(--s)*34px);line-height:1.35;border-radius:10px}
+.b-callout{background:var(--tint);color:var(--ink);border-left:8px solid var(--accent-line);padding:calc(var(--s)*26px) 36px;font-size:calc(var(--s)*34px);line-height:1.35;border-radius:10px}
 .b-card{background:var(--tint);color:var(--ink);padding:calc(var(--s)*28px) 36px;border-radius:12px}
 .cap,.b-cap{font:700 calc(var(--s)*22px)/1.2 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
 .b-card p{font-size:calc(var(--s)*32px);line-height:1.38}
 .b-bullets ul{list-style:none;display:flex;flex-direction:column;gap:calc(var(--s)*14px)}
 .b-bullets li{position:relative;padding-left:40px;font-size:calc(var(--s)*34px);line-height:1.34}
 .b-bullets li:before{content:"";position:absolute;left:4px;top:.55em;width:14px;height:14px;border-radius:50%;background:var(--accent)}
-.human{outline:3px dashed var(--accent);outline-offset:8px;border-radius:6px}
+.human{outline:3px dashed var(--accent-line);outline-offset:8px;border-radius:6px}
 .human:after{content:"needs a person";display:inline-block;margin-left:16px;font:700 16px/1 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);vertical-align:middle}.dark .human:after,.dark .b-quote{color:var(--accent)}
 .b-table{width:100%;border-collapse:collapse;font-size:calc(var(--s)*27px);line-height:1.3}
 .b-table.small{font-size:calc(var(--s)*20px)}
@@ -285,17 +358,17 @@ footer .src{margin-left:auto;text-transform:none;letter-spacing:0}footer .num{ma
 .ft{padding:calc(var(--s)*28px) 36px;border-radius:12px;background:var(--tint);color:var(--ink)}
 .ft p{font-size:calc(var(--s)*32px);line-height:1.34}.ft.to{background:var(--ink);color:var(--dark-text)}.ft.to .cap{color:var(--accent)}
 .dark .ft.to{background:#2a3644}
-.ft-arrow{display:grid;place-items:center}.ft-arrow svg{width:90px;fill:none;stroke:var(--accent);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+.ft-arrow{display:grid;place-items:center}.ft-arrow svg{width:90px;fill:none;stroke:var(--accent-line);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
 .ft-arrow path{stroke-dasharray:120;stroke-dashoffset:0}
 .b-steps{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:20px;position:relative}
-.step{background:var(--tint);color:var(--ink);border-radius:12px;padding:calc(var(--s)*26px) 26px;border-top:6px solid var(--accent)}
+.step{background:var(--tint);color:var(--ink);border-radius:12px;padding:calc(var(--s)*26px) 26px;border-top:6px solid var(--accent-line)}
 .step .no{font:700 22px/1 var(--body);color:var(--accent-ink);margin-bottom:14px}
 .step .lab{font:700 calc(var(--s)*27px)/1.2 var(--body);margin-bottom:12px}.step p{font-size:calc(var(--s)*27px);line-height:1.34}
 .b-chart{display:flex;flex-direction:column;gap:calc(var(--s)*22px)}
 .bar{display:grid;grid-template-columns:330px 1fr 110px;align-items:center;gap:22px}
 .bar .lab{font-size:calc(var(--s)*26px);line-height:1.2;text-align:right}
 .bar .track{height:calc(var(--s)*54px);background:var(--tint);border-radius:6px;overflow:hidden}
-.bar i{display:block;height:100%;background:var(--accent);border-radius:6px;transform-origin:0 50%}
+.bar i{display:block;height:100%;background:var(--accent-line);border-radius:6px;transform-origin:0 50%}
 .bar .val{font:700 calc(var(--s)*34px)/1 var(--body);font-variant-numeric:tabular-nums}
 .frame{background:var(--ink);color:var(--dark-text);border-radius:14px;padding:56px 52px;display:flex;flex-direction:column;gap:30px}
 .dark .frame{background:#2a3644}
@@ -331,7 +404,7 @@ footer .src{margin-left:auto;text-transform:none;letter-spacing:0}footer .num{ma
 .poster{width:440px;height:660px;background:#f3ede4;border:14px solid #1b2430;border-radius:6px;padding:52px 40px;display:flex;flex-direction:column;justify-content:space-between;color:var(--ink)}
 .poster .line{font:700 64px/1.05 var(--head)}.poster .answer{font:700 26px/1.3 var(--body);color:var(--accent-ink)}
 .b-stats{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:48px;margin:calc(var(--s)*10px) 0}
-.stat{border-top:8px solid var(--accent);padding-top:22px;display:flex;flex-direction:column;gap:10px}
+.stat{border-top:8px solid var(--accent-line);padding-top:22px;display:flex;flex-direction:column;gap:10px}
 .stat .big{font:700 calc(var(--s)*104px)/1 var(--head);letter-spacing:-.02em}.stat span{font-size:calc(var(--s)*26px);line-height:1.3;color:var(--muted)}
 .dark .stat span{color:#a9b3bd}
 .brand-logo{margin-bottom:48px}.brand-logo svg{height:110px;width:auto;display:block}
@@ -361,7 +434,7 @@ html,body{height:100%;background:#0e1319;overflow:hidden}
 @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes draw{from{stroke-dashoffset:120}to{stroke-dashoffset:0}}
 .still .rv,.still .w{opacity:1!important;animation:none!important}
-#bar{position:absolute;left:0;top:0;height:5px;background:var(--accent);transition:width .5s var(--ease);z-index:3}
+#bar{position:absolute;left:0;top:0;height:5px;background:var(--accent-line);transition:width .5s var(--ease);z-index:3}
 #ui{position:absolute;right:22px;bottom:18px;display:flex;gap:6px;align-items:center;z-index:4;opacity:0;transition:opacity .3s;
   background:rgba(14,19,25,.82);border-radius:999px;padding:6px 10px;color:#fff;font:600 14px/1 var(--body)}
 #app.mouse #ui{opacity:1}
@@ -380,7 +453,7 @@ html,body{height:100%;background:#0e1319;overflow:hidden}
 .overview #ov{display:grid}
 .ov-head{grid-column:1/-1;color:#a9b3bd;font:700 13px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;padding-top:14px;border-top:1px solid #2a3644}
 .thumb{position:relative;height:0;padding-bottom:56.25%;overflow:hidden;border-radius:6px;cursor:pointer;outline:3px solid transparent}
-.thumb:hover,.thumb.cur{outline-color:var(--accent)}
+.thumb:hover,.thumb.cur{outline-color:var(--accent-line)}
 .thumb .slide{transform-origin:0 0;opacity:1;visibility:visible;transition:none}
 .thumb .n{position:absolute;left:8px;bottom:6px;font:700 13px/1 var(--body);color:var(--accent);z-index:2}
 .audience #ui,.audience #bar{display:none}
@@ -491,6 +564,9 @@ def theme_css(css: str | None = None, head: str = HEAD_FONT, body: str = BODY_FO
     overrides by THEME key (accent_ink too)."""
     css = (css or CSS_LAYOUT + CSS_UI).replace("HEAD", head).replace("BODY", body)
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
+    if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
+        T["tint"] = T["panel"]
+    css = css.replace("#ACCENTL", "#" + (T.get("accent_line") or T["accent"]))
     if T.get("accent_ink"):
         css = css.replace("--accent-ink:#8A5A10", "--accent-ink:#" + T["accent_ink"])
     for k, v in (("INK", "ink"), ("PAPER", "paper"), ("ACCENT", "accent"), ("MUTED", "muted"), ("TINT", "tint"),
@@ -505,19 +581,19 @@ def _brand_css(meta: dict) -> dict:
     return {k: v for k, v in (("head", b.get("head")), ("body", b.get("body")), ("colors", b.get("colors"))) if v}
 
 
-def render(deck, inp, out: Path, findings: list | None = None) -> Path:
-    """Write the deck as one self-contained HTML file at ``out``."""
-    views = slide_views(deck, inp, findings)
+def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None) -> Path:
+    """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs)."""
+    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed)
     m = deck["meta"]
     slides = "\n".join(
-        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}" id="{v["id"]}" data-steps="{v["steps"]}" '
+        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}" id="{v["id"]}" data-steps="{v["steps"]}" '
         f'aria-label="Slide {v["n"]}: {_e(v["title"])}">{v["html"]}</section>' for v in views)
     meta = json.dumps([{"id": v["id"], "section": v["section"], "notes": v["notes"]} for v in views], ensure_ascii=False)
     page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m))}</style></head>
+<style>{theme_css(**_brand_css(m))}{PIC_CSS if any(v["cls"] for v in views) else ""}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>

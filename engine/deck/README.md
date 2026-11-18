@@ -57,11 +57,21 @@ python3 -m deck.run_deck --kind investor --brief outputs/deck_inputs/seed/brief.
 | `--research FILE.clan` | The research tool's CLAN. May be given alone |
 | `--doc KEY=PATH` | A document the person attached: `.docx`, `.pdf` (page by page, `[pN]` markers kept), `.txt`, `.md`, `.eml` or an image (read by `brief_ingest.ingest`; nothing dropped). Cited as `doc:KEY#pN`. Repeatable |
 | `--brand FILE` | Brand JSON: `name`, `colors` (THEME keys + `accent_ink`), `head`/`body` fonts, logo SVG/PNG paths |
+| `--style PATH` | A Style Pack: a folder (`style.yaml` + images) or a Style Pack `.clan`, read by `engine/visuals/style.py`. Its `deck` colours and type (empty by default) outrank the agency look; a pack that breaks its rules is not used and the report says why |
+| `--agency-look FILE` | The signed-in person's agency look, JSON (`id`, `rev`, `accent`, `accent_ink`; only the accent is read). It dresses a new deck automatically; pass none for an agency with no look |
+| `--update-look` | Take the agency's current look in place of the one this deck recorded when it was built (a person's "update to current look"). A deck keeps the look it was built with: the first build copies the look into the run folder (`look.json`) and later builds replay it |
+| `--deck FILE` | The runner's path: a Deck document (`.clan`). Brief, research and look preferences come from it; an attached Style Pack or Brand Clan is never read as research and a Brand Clan's pins never reach the facts |
+| `--no-agency-look` | This deck opts out of the agency look (`look.agency_look.use: false`) |
+| `--wears agency\|client\|co_branded`, `--strict-brand` | Whose brand the deck wears (default `agency`: a client kit gives only its logo and imagery bans); `strict_brand` ignores Style Pack literals and the agency look |
 | `--agency NAME` | Agency name for the cover; without it the cover shows an `[Agency]` placeholder |
 | `--master FILE.potx` | Render the `.pptx` onto an agency master |
 | `--animate auto\|click` | Native PowerPoint transitions and builds (not yet checked in real PowerPoint or Keynote) |
 | `--hyperframes` | Also write a HyperFrames slideshow project to `hyperframes/` (`npx hyperframes present`) |
 | `--builds` | HyperFrames: one click per block instead of one per slide |
+| `--pictures creative_cover\|creative\|none` | Place pictures that already exist (`--stages/frames.json` from `deck.from_territory`, and `--image`). `creative_cover`: the creative slides, the cover and the divider. Absent: `frames.json` is ignored and the deck, pptx and html are byte-for-byte what they were |
+| `--image SLIDE.SLOT=FILE`, `--image-rights SLIDE.SLOT=own\|licensed\|client_supplied` | A picture you supply, on a slide of a picture type. Evidence slides, unknown ids and slots, and the slot `logo` are refused before anything is written. No stated right: recorded `reference_only`, not placed |
+| `--review FILE`, `--approver human:<id>` | The person's `review.images` decisions as the app keeps them; only an `approve` by the approver, naming the slot's own asset, is stamped `approved` |
+| `--picture-label TEXT`, `--picture-source existing` | The label of a picture until approved (default Illustrative; no digit, no name). Only existing pictures: `generated` is refused until deck-image-gen |
 
 Every run writes `deck.json`, `validation.json`, `report.json` (time, tokens, cost, coverage),
 `deck.html` (the animated web deck: B builds, O overview, P presenter view, A appendix),
@@ -108,7 +118,7 @@ support it) and `e_copy.json` (tightened copy). Models and effort: `stages.py` d
 ## Check and compare
 
 ```bash
-PYTHONPATH=. python3 -m pytest -q deck/tests        # 397 offline tests; fails to import without PYTHONPATH
+PYTHONPATH=. python3 -m pytest -q deck/tests        # offline tests; fails to import without PYTHONPATH
 python3 -m deck.evaluate outputs/deck_runs/eval/* --html outputs/deck_runs/eval/report.html
 ```
 
@@ -131,6 +141,8 @@ copy and placeholders, and writes a comparison page plus the rows as JSON.
 | `render_web.py` | Single-file animated web deck |
 | `render_pptx.py` | python-pptx renderer: theme, brand or `.potx`, native charts, notes, optional animations |
 | `render_hyperframes.py` | HyperFrames slideshow (appendix as a branch sequence) |
+| `from_territory.py` | `python3 -m deck.from_territory RUN.json --frames <run>.frames/v<N>-<hash>/manifest.json --stages DIR [--brief F] [--chosen TID] [--style-pack DIR] [--replace]`: a Territory run into `c_territories.json`, `frames.json` and `assets/`. No model, no network |
+| `images.py` | Image slots, `deck.assets`, the crop, the approvals and the one click (`python3 -m deck.images approve ...`); Pillow, imported at module level |
 | `evaluate.py` | Scores runs and writes the comparison page |
 | `run_deck.py` | CLI: the whole pipeline and the report |
 | `tests/` | Offline tests: validators, intake, the hand-off loader, the CLI; invented fixtures and a golden brief-only deck |
@@ -159,6 +171,8 @@ copy and placeholders, and writes a comparison page plus the rows as JSON.
 | `min_font` | a run under its floor: title 28 pt, body 12 pt, caption 10 pt |
 | `placeholder` | `[Agency]`, `lorem`, `TBD`, `XXX` on a presented slide (a slide the validator flags for `[Agency]` is skipped) |
 | `contrast` | WCAG ratio of a run's colour on its fill or the slide background: 4.5:1, or 3:1 for large text |
+| `picture_stretch`, `picture_lowres` | a picture drawn off its crop's aspect by more than 1% (read from the pptx crop); fewer than 96 pixels per inch on the crop that is shown |
+| `text_on_image_contrast` | text over a picture, measured on the rendered page (the `contrast` check skips text over a picture: the picture is not a fill) |
 | `mostly_empty`, `one_corner` | from the render: almost no non-background area; or 80% of it in one third both ways |
 
 The pixel pass renders a separate 30 dpi PPM (about 0.1 s for 29 slides) and reads it with a small pure-Python P6 parser. The slide PNGs stay at 60 dpi: 150 dpi measured about four times slower (4.9 s against 1.2 s for 29 slides) for nothing the checks use. Hidden (appendix) slides are checked for geometry only. A pptx that cannot be opened gives one error under `"deck"`.
@@ -194,7 +208,7 @@ Tests: `tests/test_profiles.py` (inference, the card, the profile files and thei
 
 ## The visual checklist (`deck/bench/checklist.py`, `deck/checklist.json`)
 
-The measuring stick for every deck slice: 47 items (41 yes/no, 6 metrics), each defined once in `checklist.json` (question,
+The measuring stick for every deck slice: 51 items (43 yes/no, 8 metrics), each defined once in `checklist.json` (question,
 threshold, source, inputs, `na_when`) with one function of the same name in `bench/checklist.py`. Read-only over a run
 folder; no model, no network. `render_pptx.render(..., layouts_out=PATH)` writes the layout record `layouts.json`
 (`{id, chosen, fallback, relaxed}` per slide id) after the save, so the .pptx is byte-identical with or without it;
@@ -214,9 +228,10 @@ python3 -m deck.bench compare BEFORE.json AFTER.json [--format text|md|json] [--
   `python3 -m deck.bench compare deck/bench/baseline/checklist.json /tmp/new.json --format md` for the PR body, and copy
   `/tmp/new.json` over `deck/bench/baseline/checklist.json`. CI rebuilds geometry-only and compares every answer except
   the pixel items and `m_seconds`. `compare` is not a CI gate.
+- **Tiers.** Each item is a `gate` or `advisory`; `compare --fail-on-regress` ignores advisory items (`l_variety`, `l_repeat_max2`, `w_line_length`, `t_cover_title`, `m_seconds`). A metric has a direction (`higher`, `lower`, or `same`: `w_words_sha` must not change, since no word comes from a look or a picture).
 - `deck/issues.py` holds `severity()` (contract section 7 default) and `slide_id_of()`; `qa_render` gained the pure measures
   `title_box`, `body_columns` and `font_families` (they add nothing to qa.json).
-- Tests: `tests/test_checklist.py` (65 tests). The full deck suite is 495 offline tests.
+- Tests: `tests/test_checklist.py` (76 tests). The full deck suite is 559 offline tests.
 
 ## The evaluation bench (`deck/bench`)
 
@@ -351,3 +366,15 @@ without them it is refused before it starts, and `render: false` stops at the de
 Not yet: the document's brief and research as inputs (the server takes the prompt), the person's intake answers (`--answers`), attached
 documents (`--doc`), `edit` and `retry`, `ask_change`, and a run that survives a restart of the server (a restarted server answers
 404 for a run it did not start; posting the same request again resumes from the cache).
+
+
+## Pictures that already exist (deck-frames-in)
+
+`from_territory` carries a Territory run into a stages folder; `run_deck --pictures` draws the frames on the creative slides:
+each territory's four frames in a strip, the cover with the chosen territory's first frame, the idea with its last (the payoff), all
+labelled Illustrative until the deck's approver approves them. A flagged frame is drawn in a review with a red outline and the word
+Flagged, and never in a client render; a client render draws only pictures approved for their own asset, and only those are copied or
+derived into its folder. One carve in `Renderer.slide` narrows the layout's area to leave the picture's box (no `_lay_*` function
+changed); if the narrowed layout does not fit, the slide is drawn without the picture and an `image_missing` finding says so.
+Contract: `docs/contracts/deck-visuals.md` section 4.5. Pillow (HPND licence) is a python-pptx dependency already; `images.py`
+imports it directly. Offline test count: 806 (`deck/tests` and `territory/tests`).
