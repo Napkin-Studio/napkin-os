@@ -246,17 +246,18 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
 
 const CLIP_MAX_S = 4
 
+/** The recorder's type: MP4 only (owner 2026-11-18: the stand-in's test clips are mp4, as the .clan keeps
+ *  clips; a webm one could not be saved or rendered like a real take). */
+export const CLIP_RECORD_TYPES = ['video/mp4;codecs=avc1.42E01E', 'video/mp4;codecs=avc1', 'video/mp4'] as const
+
 function recorderMime(): string | null {
   if (typeof MediaRecorder === 'undefined') return null
-  for (const m of ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4']) {
-    if (MediaRecorder.isTypeSupported(m)) return m
-  }
-  return null
+  return CLIP_RECORD_TYPES.find((m) => MediaRecorder.isTypeSupported(m)) ?? null
 }
 
 async function record(w: number, h: number, seconds: number, draw: (ctx: CanvasRenderingContext2D, t: number) => void | Promise<void>): Promise<RenderedOutput> {
   const mime = recorderMime()
-  if (!mime) throw new Error('This browser cannot record mock clips.')
+  if (!mime) throw new Error('This browser cannot record mock clips as MP4. Use Chrome or Edge for the mock.')
   const { c, ctx } = canvas(w, h)
   const stream = c.captureStream(30)
   const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1_500_000 })
