@@ -65,6 +65,33 @@ export function copyName(name: string, taken: readonly string[]): string {
 /** One change to the list: applied here at once, then again to the stored list when it is written. */
 type Op = (list: ProjectEntry[]) => ProjectEntry[]
 
+/** A change, and the project whose save mark it clears on purpose (the relay has no copy of it any more). */
+interface Pending {
+  op: Op
+  clears?: string
+}
+
+const later = (a: ServerMark, b: ServerMark) => {
+  const ta = Date.parse(a.savedAt)
+  const tb = Date.parse(b.savedAt)
+  return Number.isFinite(ta) && Number.isFinite(tb) ? ta > tb : false
+}
+
+/**
+ * `next` with every project's save mark moved forward only: an entry that would carry an older mark than `base`
+ * has (or none, unless `clears` names it) keeps `base`'s. The relay's savedAt only grows, so whatever path writes
+ * an entry (a whole-list write, a copy another tab read earlier), a mark never goes back (re-test N3).
+ */
+export function marksForward(base: readonly ProjectEntry[], next: ProjectEntry[], clears: ReadonlySet<string> = new Set()): ProjectEntry[] {
+  const before = new Map(base.map((p) => [p.id, p.server]))
+  return next.map((p) => {
+    const had = before.get(p.id)
+    if (!had) return p
+    if (p.server ? later(had, p.server) : !clears.has(p.id)) return { ...p, server: had }
+    return p
+  })
+}
+
 /** The tabs of this browser say "the index changed" on this channel, and the others read it again. */
 export const INDEX_CHANNEL = 'napkin-production-index'
 
@@ -81,7 +108,7 @@ export class ProjectIndex {
   private readonly now: () => Date
   private writing: Promise<void> = Promise.resolve()
   /** Changes made here and not written yet, oldest first. */
-  private pending: Op[] = []
+  private pending: Pending[] = []
   private readonly channel: BroadcastChannel | null
 
   /** `channel`: tell this browser's other tabs when the index changes, and read it again when they do. */
@@ -105,7 +132,7 @@ export class ProjectIndex {
     this.writing = this.writing.then(async () => {
       const v = await this.storage.get<Stored>(INDEX_KEY)
       if (!v) return
-      const next = this.pending.reduce((l, op) => op(l), v.projects)
+      const next = this.apply(v.projects, this.pending)
       if (JSON.stringify(next) === JSON.stringify(this.list)) return
       this.list = next
       this.emit()
@@ -161,7 +188,7 @@ export class ProjectIndex {
     await this.change(id, (p) => {
       const { server: _old, ...rest } = p
       return server ? { ...rest, server } : rest
-    })
+    }, server ? undefined : id)
   }
 
   async remove(id: string): Promise<void> {
@@ -175,11 +202,11 @@ export class ProjectIndex {
 
   /** A change to one project's entry: made to the entry as stored when it is written, so whatever another tab
    *  wrote to it (or to any other project) since this tab read the index stays. */
-  private async change(id: string, fn: (p: ProjectEntry) => ProjectEntry) {
+  private async change(id: string, fn: (p: ProjectEntry) => ProjectEntry, clears?: string) {
     const i = this.list.findIndex((p) => p.id === id)
     if (i < 0) return
     if (JSON.stringify(fn(this.list[i])) === JSON.stringify(this.list[i])) return
-    await this.commit((l) => l.map((p) => (p.id === id ? fn(p) : p)))
+    await this.commit((l) => l.map((p) => (p.id === id ? fn(p) : p)), clears)
   }
 
   /** Write the index as this tab has it (a first load with nothing to carry over still leaves one): every
@@ -189,30 +216,40 @@ export class ProjectIndex {
     return this.commit((l) => [...l.filter((p) => !mine.some((m) => m.id === p.id)), ...mine])
   }
 
-  /** Apply a change here, then write it into the index as stored now (read, change, write: one at a time). */
-  private commit(op: Op): Promise<void> {
-    this.list = op(this.list)
-    this.pending.push(op)
+  /** Apply a change here, then write it into the index as stored now: read, change and write in one step no
+   *  other tab comes between (storage.update), with every save mark moving forward only (marksForward). */
+  private commit(op: Op, clears?: string): Promise<void> {
+    const change: Pending = { op, clears }
+    this.list = this.apply(this.list, [change])
+    this.pending.push(change)
     this.emit()
     this.writing = this.writing.then(async () => {
       if (!this.pending.length) return
-      let base: ProjectEntry[] | null = null
-      try {
-        base = (await this.storage.get<Stored>(INDEX_KEY))?.projects ?? []
-      } catch { /* storage cannot be read: write what this tab has */ }
-      const ops = this.pending
+      const changes = this.pending
       this.pending = []
-      const written = base ? ops.reduce((l, op) => op(l), base) : this.list
-      await this.storage.put(INDEX_KEY, { version: 1, projects: written } satisfies Stored)
+      let written: ProjectEntry[]
+      try {
+        written = (await this.storage.update<Stored>(INDEX_KEY, (v) => ({ version: 1, projects: this.apply(v?.projects ?? [], changes) }))).projects
+      } catch {
+        // Storage cannot be read: write what this tab has.
+        written = this.list
+        await this.storage.put(INDEX_KEY, { version: 1, projects: written } satisfies Stored)
+      }
       this.channel?.postMessage('changed')
       // What other tabs wrote is here now too, with this tab's newer changes on top.
-      const next = this.pending.reduce((l, op) => op(l), written)
+      const next = this.apply(written, this.pending)
       if (JSON.stringify(next) !== JSON.stringify(this.list)) {
         this.list = next
         this.emit()
       }
     }).catch(() => {})
     return this.writing
+  }
+
+  /** `changes` made to `base`, no save mark going back. */
+  private apply(base: ProjectEntry[], changes: readonly Pending[]): ProjectEntry[] {
+    const clears = new Set(changes.flatMap((c) => (c.clears ? [c.clears] : [])))
+    return marksForward(base, changes.reduce((l, c) => c.op(l), base), clears)
   }
 
   private emit() {
