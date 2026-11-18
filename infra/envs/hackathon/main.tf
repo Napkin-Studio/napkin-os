@@ -11,6 +11,7 @@
 #   observability.tf  log groups (14 d) and the saved Logs Insights queries
 #   deploy.tf         the GitHub OIDC role deploy-production-tool.yml assumes
 #
+#   cp terraform.tfvars.example terraform.tfvars    # cors_origins: every studio that runs the tool
 #   terraform init -backend-config=backend.hcl
 #   AWS_PROFILE=napkin terraform plan -out=hackathon.tfplan   # a person applies it
 #

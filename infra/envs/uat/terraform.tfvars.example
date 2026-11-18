@@ -14,3 +14,7 @@ agencies = {
 # certificate_arn = ""
 
 # No budget_emails: the two budgets are account-wide and staging already has them.
+
+# The Production Tool at /production (features/uat-production-tool.clan): the hackathon stack's relay.
+# production_relay_url        = "https://<id>.lambda-url.eu-west-1.on.aws"
+# production_relay_secret_arn = "arn:aws:secretsmanager:eu-west-1:<account>:secret:napkin-hackathon/TOKEN_SECRET-xxxxxx"

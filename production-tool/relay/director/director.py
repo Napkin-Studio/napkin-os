@@ -532,11 +532,16 @@ def _without_dialogue(op: str, payload: dict) -> dict:
 
 class Director:
     def __init__(self, model_port: ModelPort, prompt_dir: Path, sheets: dict, *,
-                 per_click_model: str = "claude-haiku-4-5", shot_list_model: str = "claude-sonnet-5-5",
+                 per_click_model: Optional[str] = None, shot_list_model: Optional[str] = None,
                  prompt_version: str = "director.v6", contracts: Path = CONTRACTS):
+        """No model ids: the port's own (its default route, resolved for its wire), never a bare id that one
+        wire refuses (UAT 2026-11-18: "claude-sonnet-5-5" is not a Bedrock id). The relay passes its own
+        (director/claude.py PER_CLICK, SHOT_LIST)."""
         self.port = model_port
         self.sheets = sheets
-        self.per_click_model, self.shot_list_model = per_click_model, shot_list_model
+        port_model = getattr(model_port, "model", None) if model_port is not None else None
+        self.per_click_model = per_click_model or port_model
+        self.shot_list_model = shot_list_model or port_model
         self.prompt_dir = Path(prompt_dir)
         require_prompt(prompt_version)
         self.prompt_version = prompt_version

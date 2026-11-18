@@ -10,7 +10,7 @@ import { useConfig, useDoc } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, fitWindows, lastLineOf, masterShots, sameShape } from './film'
+import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape } from './film'
 import { endLineOf, sizesBrief } from '../brief/model'
 import { makeFilmSizes, planFilm, type FilmRow, type ShotMethod } from './filmJobs'
 import type { CampaignDeps } from './make'
@@ -18,6 +18,9 @@ import { setsOf, type MasterInfo } from './master'
 import './campaign.css'
 
 type Step = 'options' | 'planning' | 'plan' | 'tray'
+
+/** Seconds as a person reads them: 12.7, 15. */
+const secs = (s: number) => String(Math.round(s * 10) / 10)
 
 export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
   master: MasterInfo
@@ -31,7 +34,8 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
   const { config } = useConfig()
   const shots = useMemo(() => masterShots(doc, master.id), [doc, master.id])
   const body = shots.filter((s) => !s.endCard)
-  const masterS = Math.round(master.length_s ?? body.reduce((a, s) => a + (s.outS - s.inS), 0) + CARD_S)
+  const filmS = filmSeconds(shots, master.length_s)
+  const masterS = Math.round(filmS + CARD_S)
   // Only lengths shorter than the film start picked (Playwright live test 2026-11-18: 15 s picked for an 8 s film).
   const [lengths, setLengths] = useState<number[]>(() => DEFAULT_FILM_LENGTHS.filter((l) => l < masterS))
   const [extra, setExtra] = useState('')
@@ -147,7 +151,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
       <section className="cf-sheet pt-panel" role="dialog" aria-modal="true" aria-label="Make all sizes" data-film-sheet>
         <header className="cf-sheethead">
           <b>Make all sizes</b>
-          <span className="cf-from">from {master.label} · {masterS} s</span>
+          <span className="cf-from" title={`${secs(filmS)} s of film and the ${secs(CARD_S)} s end card stitch adds`}>from {master.label} · {secs(filmS)} s + end card</span>
           <span className="pt-grow" />
           <button type="button" className="btn sm ghost" onClick={onClose}>Cancel</button>
         </header>

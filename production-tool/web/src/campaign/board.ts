@@ -18,6 +18,9 @@ export const MAX_ROW_W = 1680
 /** A folded lane's stack: the room it takes in place of its tiles (features/art-director.clan, slice 2). */
 export const STACK_W = 230
 export const STACK_H = 130
+/** The board is never narrower than its header's buttons (See all sizes, Safe areas, Export zip, Export at full
+ *  size, an Update or Upscaling note): UAT 2026-11-18, two 6 s films made a board "Export at full size" ran off. */
+export const MIN_BOARD_W = 780
 
 export interface TileIn { id: string; channel: FormatChannel; aspect: { w: number; h: number } }
 export interface TileBox { x: number; y: number; w: number; h: number }
@@ -46,7 +49,7 @@ export function boardLayout(tiles: readonly TileIn[], folded: ReadonlySet<Format
   const lanes: LaneBox[] = []
   const out: Record<string, TileBox> = {}
   let y = HEAD_H
-  let widest = 360
+  let widest = MIN_BOARD_W
   for (const lane of LANES) {
     const mine = tiles.filter((t) => t.channel === lane.channel)
     if (!mine.length) continue

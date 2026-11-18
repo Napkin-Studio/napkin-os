@@ -143,7 +143,8 @@ def test_the_model_writer_asks_sonnet_with_skye_v3_and_the_relay_owns_target_and
     inp["write"]["target"] = target
     out = w.write({"op": "write", "jobId": new_id("job"), "input": inp})
     [asked] = port.asked
-    assert asked["purpose"] == "writer" and asked["model"] == "claude-sonnet-5-5"
+    # No model of her own: the port's route (writer.make hands her the director's, below).
+    assert asked["purpose"] == "writer" and asked["model"] is None
     assert asked["system"].startswith("# Skye · scripts (skye.v6)")
     assert asked["payload"]["input"]["write"]["context"]["refs"] == [{"name": "maya_front", "role": "character"}]
     assert [d["target"] for d in out["writes"]] == [target]
@@ -270,6 +271,50 @@ def test_make_finds_the_model_port_inside_the_claude_director():
 
     assert isinstance(writer.make(ClaudeDirector(Inner())), ModelWriter)
     assert isinstance(writer.make(object()), PassthroughWriter)
+
+
+class BedrockWire:
+    """The Bedrock wire under the real ModelPort: records the model id each call sends."""
+    api = "bedrock"
+
+    def __init__(self, answer: dict):
+        self.answer, self.models = answer, []
+
+    def send(self, **kw):
+        from director.model import Reply
+        self.models.append(kw["model"])
+        return Reply(json.dumps(self.answer), "ok", (10, 10))
+
+
+def test_skye_asks_the_directors_model_on_bedrock_and_follows_config():
+    # UAT 2026-11-18: Skye sent her own "claude-sonnet-5-5" verbatim to Bedrock ("The provided model identifier
+    # is invalid") while the director, on its inference profile, worked. One source now: the director's
+    # per-click model (config.json's director.perClickModel, else director/claude.py PER_CLICK).
+    import writer
+    from director.claude import PER_CLICK, make as make_director
+
+    wire = BedrockWire({"writes": [], "rationale": "x"})
+    d = make_director(wire=wire)
+    w = writer.make(d)
+    w.write({"op": "write", "jobId": new_id("job"), "input": write_input()})
+    assert wire.models == [PER_CLICK] and PER_CLICK.startswith(("eu.anthropic.", "global.anthropic."))
+    assert w.model == PER_CLICK
+    d.use_config({"perClickModel": "global.anthropic.claude-sonnet-5-5"})
+    w.write({"op": "write", "jobId": new_id("job"), "input": write_input()})
+    assert wire.models[-1] == "global.anthropic.claude-sonnet-5-5" == w.model
+
+
+def test_a_write_job_reads_config_directors_model_first(h):
+    # A cold relay whose first job is a write: config.json's director block is on the director before Skye asks.
+    import writer
+    from director.claude import make as make_director
+
+    wire = BedrockWire({"writes": [], "rationale": "x"})
+    d = make_director(wire=wire)
+    h.relay.director, h.relay.writer = d, writer.make(d)
+    h.cfg["director"] = {**(h.cfg.get("director") or {}), "perClickModel": "eu.anthropic.claude-pinned"}
+    post_write(h, h.as_person())
+    assert wire.models == ["eu.anthropic.claude-pinned"]
 
 
 # ── a question that offers no choice (owner 2026-10-15) ─────────────────────

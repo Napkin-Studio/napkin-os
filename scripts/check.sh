@@ -244,7 +244,9 @@ suite_production-tool() {
   done
   [[ $rc -eq 0 ]] || return 1
   # The PR bench on the seed-1 G3 scene (byte, memory and draw-time checks; features/engine-ci.clan), alone.
-  ( cd production-tool/canvas-engine && npm run -s bench ) || return 1
+  # In CI only (owner, 2026-11-19): its draw-time budgets failed pushes on a loaded machine (4.8 ms
+  # against 2 ms). CI's canvas-engine job still runs `npm run bench`, bytes and memory included.
+  :
   # The e2e specs (production-tool/web/e2e/README.md), alone after the rest: real pointer events on the
   # dev server and its in-browser mock. A system Chromium stands in for Playwright's download when there is one.
   if [[ -f production-tool/web/package.json ]]; then

@@ -27,7 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-from writer import PROMPT_VERSION, WRITE_MODEL, ModelWriter, PassthroughWriter, empty_nudge, rough_seconds, settle  # noqa: E402
+from writer import PROMPT_VERSION, ModelWriter, PassthroughWriter, empty_nudge, rough_seconds, settle  # noqa: E402
 
 CASES = HERE / "skye_cases.json"
 RECORDED = HERE / "recorded" / PROMPT_VERSION
@@ -144,11 +144,11 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     data = load()
     if args.cmd == "record":
-        from director.claude import build_wire, settings_from_env
+        from director.claude import PER_CLICK, build_wire, settings_from_env
         from director.model import ModelPort
         from contracts_dir import contracts_dir
         wire = build_wire(settings_from_env())
-        port = ModelPort(wire, model=WRITE_MODEL, timeout=120)
+        port = ModelPort(wire, model=PER_CLICK, timeout=120)  # the relay's: Skye asks the director's model
 
         class Keep:
             def call(self, *a, **kw):
@@ -161,7 +161,7 @@ def main(argv=None) -> int:
 
         def live(case, intent):
             out = writer.write(request(case, intent))
-            (RECORDED / f"{case['id']}.{intent}.json").write_text(json.dumps({"model": WRITE_MODEL, "reply": keep.reply}, indent=1) + "\n")
+            (RECORDED / f"{case['id']}.{intent}.json").write_text(json.dumps({"model": PER_CLICK, "reply": keep.reply}, indent=1) + "\n")
             return out
         print(report(run(live, data, args.case)))
         return 0

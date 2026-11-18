@@ -119,3 +119,19 @@ variable "github_oidc_provider_arn" {
   description = "The account's existing token.actions.githubusercontent.com provider (staging's stack owns it; AWS allows one per account)"
   type        = string
 }
+
+variable "production_relay_url" {
+  description = "The hackathon stack's relay_function_url: napkin-web proxies /production/api to it. Empty: no /production on UAT."
+  type        = string
+  default     = ""
+}
+
+variable "production_relay_secret_arn" {
+  description = "The ARN of napkin-hackathon/TOKEN_SECRET (the hackathon stack's secret_ids output), which napkin-web signs X-Napkin-Identity with"
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_relay_secret_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_relay_secret_arn are set together, or neither"
+  }
+}

@@ -221,10 +221,13 @@ data "aws_iam_policy_document" "stitch" {
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["${aws_cloudwatch_log_group.stitch.arn}:*"]
   }
+  # ads/*: the type layers the relay draws for a render (ads/<job>/endcard.png, text<i>.png) and a
+  # cutdown (ads/cuts/<job>/layer<i>.png), beside the files stitch writes there (UAT 2026-11-18, U4:
+  # every render with an end card or words failed 403 on HeadObject).
   statement {
     sid       = "ReadClips"
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.site.arn}/out/*", "${aws_s3_bucket.site.arn}/in/*"]
+    resources = [for p in ["out/*", "in/*", "ads/*"] : "${aws_s3_bucket.site.arn}/${p}"]
   }
   statement {
     sid       = "WriteAds"

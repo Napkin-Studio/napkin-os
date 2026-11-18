@@ -9,8 +9,10 @@ they know. A question that offers no choice (one option that restates the press)
 the relay for them, and she drafts (`empty_nudge`, skye.v3). Nothing is sent to an image
 or video provider and no Runway money is spent: it is an internal op on the text quota.
 
-`ModelWriter` asks Claude through the director's model port with an explicit model (as the
-director does for shot_list), so the relay needs no new setting. `PassthroughWriter` answers
+`ModelWriter` asks Claude through the director's model port with the director's own per-click model
+(config.json's director.perClickModel, else director/claude.py PER_CLICK: an inference-profile id on
+Bedrock, which the local model backend reads too), so the relay needs no new setting and Skye never
+sends an id of her own (UAT 2026-11-18: a bare "claude-sonnet-5-5" went verbatim to Bedrock, a 400). `PassthroughWriter` answers
 deterministically with no model: the local relay, and the tests' fake-model contract.
 
 The relay, not the model, owns four things: each draft's target and base_hash are the input's
@@ -23,10 +25,10 @@ from __future__ import annotations
 import re
 import time
 from pathlib import Path
+from typing import Callable
 
 from contracts import Contracts
 
-WRITE_MODEL = "claude-sonnet-5-5"
 PROMPT_VERSION = "skye.v6"  # skye.v1–v5 stay bundled: ModelWriter(prompt_version="skye.v5") rolls back (v5: the brief, features/brief-node.clan; v6: one length rule with the band, rough_seconds)
 PURPOSE = "writer"
 PROMPTS = Path(__file__).parent / "prompts"
@@ -146,14 +148,25 @@ def went_ahead(question: dict) -> dict:
 
 
 class ModelWriter:
-    model = WRITE_MODEL
     prompt_version = PROMPT_VERSION
 
-    def __init__(self, port, contracts_root: Path, prompt_dir: Path = PROMPTS, prompt_version: str = PROMPT_VERSION):
+    def __init__(self, port, contracts_root: Path, prompt_dir: Path = PROMPTS, prompt_version: str = PROMPT_VERSION,
+                 model: Callable[[], str] | None = None):
+        """`model`: the id to ask, read at each write (make() passes the director's per-click model). None: the
+        port's own route for the writer purpose (the eval, the tests)."""
         self.port = port
+        self._model = model
         self.prompt_version = prompt_version
         self.system = (prompt_dir / f"{prompt_version}.md").read_text()
         self.schema = output_schema(contracts_root)
+
+    @property
+    def model(self) -> str:
+        """The id this writer asks, for the job's agent block."""
+        if self._model:
+            return self._model()
+        port_model = getattr(self.port, "model", None)
+        return port_model if isinstance(port_model, str) else "unknown"
 
     def write(self, req: dict) -> dict:
         from director.model import Usage
@@ -165,9 +178,11 @@ class ModelWriter:
         usage = Usage()
         t0 = time.monotonic()
 
+        model = self._model() if self._model else None
+
         def ask(payload: dict) -> dict:
             return self.port.call(PURPOSE, self.system, {"op": "write", "input": payload}, self.schema, usage=usage,
-                                  attribution=req.get("jobId", "write"), model=self.model, max_tokens=3000)
+                                  attribution=req.get("jobId", "write"), model=model, max_tokens=3000)
 
         res = settle(inp, ask(inp))
         if empty_nudge(res.get("question")) and not inp.get("answer"):
@@ -263,14 +278,15 @@ class PassthroughWriter:
 
 
 def make(director) -> PassthroughWriter | ModelWriter:
-    """Skye on the director's model port, or the passthrough when the relay has no model."""
+    """Skye on the director's model port with the director's per-click model (as cards.py does), or the
+    passthrough when the relay has no model."""
     inner = getattr(director, "director", director)   # ClaudeDirector wraps the harness lane's Director
     port = getattr(inner, "port", None)
     if port is None:
         return PassthroughWriter()
     from contracts_dir import contracts_dir
 
-    return ModelWriter(port, contracts_dir())
+    return ModelWriter(port, contracts_dir(), model=lambda: inner.per_click_model)
 
 
 def check(contracts: Contracts, out: dict) -> list[str]:
