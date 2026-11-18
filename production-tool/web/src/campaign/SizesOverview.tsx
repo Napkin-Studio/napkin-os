@@ -6,7 +6,7 @@
 
 import { BandBack } from '../ui/shell/ShellBar'
 import { useCanvasPage } from '../ui/chrome/canvasPage'
-import { escapeFree } from '../ui/chrome/escapeBack'
+import { escapeStep, leaveText } from '../ui/chrome/escapeBack'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { FormatSet, PersonRef, Size, SizeMethod } from '../contracts/types'
@@ -56,8 +56,8 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
   const allClosed = groups.length > 0 && groups.every((g) => closed.has(g.key))
 
   useEffect(() => {
-    // Esc puts the size down, then goes back to the canvas, unless the focus is in text or a menu is open.
-    const key = (e: KeyboardEvent) => { if (e.key !== 'Escape' || e.defaultPrevented) return; if (sel) setSel(null); else if (escapeFree(e.target, document, root.current)) onClose() }
+    // Esc puts the size down, leaves a text field, then goes back to the canvas; never while a menu is open.
+    const key = (e: KeyboardEvent) => { if (e.key !== 'Escape' || e.defaultPrevented) return; if (sel) { setSel(null); return } const step = escapeStep(e.target, document, root.current); if (step === 'text') leaveText(e.target); else if (step === 'back') onClose() }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   }, [sel, onClose])

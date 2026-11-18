@@ -90,6 +90,15 @@ describe('Escape leaves an editor only when nothing else would take it', () => {
     expect(escapeFree(el(false), doc('<div role="menu"></div>'))).toBe(false)
     expect(escapeFree(el(false), doc('<div role="dialog"></div>'))).toBe(false)
   })
+  it('from a text field the first Escape leaves the text, the next goes back; an open menu takes it first', async () => {
+    const { escapeStep } = await import('./escapeBack')
+    const doc = (open: boolean) => ({ querySelectorAll: () => (open ? [{}] : []) }) as unknown as Document
+    const el = (text: boolean) => ({ closest: () => (text ? {} : null) }) as unknown as Element
+    expect(escapeStep(el(true), doc(false))).toBe('text')
+    expect(escapeStep(el(false), doc(false))).toBe('back')
+    expect(escapeStep(el(true), doc(true))).toBe('none')
+    expect(escapeStep(el(false), doc(true))).toBe('none')
+  })
 })
 
 describe('the name in the bar (re-test N-D)', () => {

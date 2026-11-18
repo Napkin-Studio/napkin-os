@@ -2,7 +2,7 @@
 //
 // Full screen at /production/p/:project/script/:scriptId?shot=<shotId>, over the stages: the
 // canvas stays mounted underneath, so jobs keep landing. '← Storyboard', browser Back and
-// ⌘[ return, and Esc when nothing else takes it. One row model (compose.ts) under both views; the current shot
+// ⌘[ return, and Esc when nothing else takes it (twice from the text). One row model (compose.ts) under both views; the current shot
 // and any focused fragment mount an editor bound to its own fragment, the rest render static.
 // Typing is LocalUndo steps (typing.ts); every structural change is one step (edits.ts).
 // No chat anywhere (principle 10).
@@ -249,8 +249,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     void ensurePage(store, scriptId).catch(() => {})
   }, [phone, noScenes, store, scriptId])
 
-  // ⌘[ / Ctrl+[ goes back; so does Esc when the caret is not in the page and nothing else takes it
-  // (Shrey 2026-11-19, ui/chrome/TopBars useEscapeBack).
+  // ⌘[ / Ctrl+[ goes back; so does Esc when nothing else takes it: the first Esc leaves the text, the second
+  // goes back (Shrey 2026-11-19, ui/chrome/escapeBack).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key === '[') {
