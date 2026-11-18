@@ -42,12 +42,13 @@ def test_v11_is_v10_with_the_take_tied_to_its_frames():
     assert changed[0].startswith("  - `take_refs`:") and "follows image k" in changed[0] and "No frame is pinned" in changed[0]
 
 
-def test_the_configs_run_v13_and_the_check_allows_v11_and_v12():
-    """v12 is v11 plus frame-edit-or-redraw's lines, v13 is v12 plus the brief (features/brief-node.clan);
-    v11 and v12 stay allowed for a rollback."""
+def test_the_configs_run_v14_and_the_check_allows_v11_to_v13():
+    """v12 is v11 plus frame-edit-or-redraw's lines, v13 is v12 plus the brief (features/brief-node.clan), v14 is
+    v13 plus a redraw's object placement (owner 2026-11-18); v11 to v13 stay allowed for a rollback."""
     for name in ("config.live.json", "config.testing.json", "config.pathway.runway.json"):
-        assert json.loads((CONTRACTS / "examples" / name).read_text())["director"]["promptVersion"] == "director.v13", name
-    assert '"director.v11"' in (CONTRACTS / "check.py").read_text() and '"director.v12"' in (CONTRACTS / "check.py").read_text()
+        assert json.loads((CONTRACTS / "examples" / name).read_text())["director"]["promptVersion"] == "director.v14", name
+    check = (CONTRACTS / "check.py").read_text()
+    assert all(f'"director.v{n}"' in check for n in (11, 12, 13, 14))
 
 
 def test_the_passthrough_ties_each_shot_to_its_frame_and_sends_no_first_frame():

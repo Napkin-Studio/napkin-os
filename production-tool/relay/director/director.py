@@ -82,8 +82,11 @@ CONTINUITY_WORDS = re.compile(r"@(?:anchor|previous)\b|\b(?:anchor|previous) (?:
 EVERYTHING_STAYS = re.compile(r"everything else(?: in @[a-z0-9_]+)? stays(?: exactly)? as it is", re.I)
 # A redraw's prompt places its people in the shot's framing (features/frame-edit-or-redraw.clan, 2026-11-17: shot 4,
 # an insert, redrawn as "an Indian seller and Nigerian buyers" kept the old seller and put the new one on the buyers' side).
+# A shot with no people places its main objects instead, in the same words or by what they rest on (owner
+# 2026-11-18: an insert of a lamp was refused for want of a person to place; director.v14).
 PLACE_WORDS = re.compile(
     r"\b(?:behind|in front of|beside|next to|between|opposite|facing|where\b[^.]{0,40}\b(?:stands?|stood|sits?|sat|is|was|were)"
+    r"|(?:on top of|underneath|under|beneath|against|leaning on|across) the"
     r"|(?:on|to|at) the (?:left|right|far left|far right|centre|center|middle|back|front)"
     r"|(?:left|right) of|in the (?:centre|center|middle|foreground|background|front|back)"
     r"|foreground|background|frame (?:left|right))", re.I)
@@ -803,6 +806,13 @@ class Director:
         return run_as
 
     @staticmethod
+    def _has_people(payload: dict) -> bool:
+        """Whether the shot redrawn has people, as far as its input says: a character among its pictures, or a
+        cast frame (a neighbouring shot redrawn with new people)."""
+        return bool(payload.get("castFrame")) or any(isinstance(r, dict) and r.get("role") == "character"
+                                                    for r in payload.get("refs") or [])
+
+    @staticmethod
     def _check_redraw(payload: dict, output: dict, edit: dict) -> str:
         """Redraw frame (features/frame-edit-or-redraw.clan): drawn again from the shot and the words, as frame,
         with the current frame for its place and light only. Never a previous frame, an anchor or the edit's
@@ -828,7 +838,11 @@ class Director:
         if EVERYTHING_STAYS.search(job["prompt"]):
             raise DirectorError("a redraw never says everything else stays as it is")
         if not PLACE_WORDS.search(job["prompt"]):
-            raise DirectorError("a redraw says where each person stands in the frame (behind the stall, on the left, …)")
+            # The check is the same with no people: their place is the main objects' (owner 2026-11-18).
+            if Director._has_people(payload):
+                raise DirectorError("a redraw says where each person stands in the frame (behind the stall, on the left, …)")
+            raise DirectorError("a redraw of a shot with no people says where its main objects sit in the frame "
+                                "(on the side table on the right, in the foreground, …)")
         who = (edit.get("who") or "").strip()
         if not who:
             raise DirectorError("a redraw says who is where in frameEdit.who")
