@@ -320,6 +320,8 @@ PITCH_MERGES_V3 = (("channel_roles", "execution", None),
 #: then thin slides), nothing is trimmed, reworded or dropped. PITCH_CAP is ADVISORY only (validate: pitch_cap, a warning): asked-for
 #: routes and PITCH_EXECUTIONS executions may rightly give 13-14, and no gate withholds a deck for its length. Agency pitches that
 #: run longer: set DECK_PITCH_TARGET (and DECK_PITCH_CAP) for a run, or change these two numbers. A stated limit always wins.
+#: deck-types: with spec.RECIPES (and LOOK_V3) on, a type's recipe (profiles.recipe: length.target / cap) replaces these two for that
+#: type; they stay the default for a type with none, and the env values still win for a run.
 PITCH_TARGET = int(os.environ.get("DECK_PITCH_TARGET") or 10)
 PITCH_CAP = int(os.environ.get("DECK_PITCH_CAP") or 12)
 #: Slide types the length target never moves (design.length): the story's spine and the ask.
@@ -445,6 +447,24 @@ LOOK_V2 = True
 #: a section band and 0.75 pt hairlines instead of the accent tick and edge stripes, ink figures. OFF by default: every golden
 #: is unchanged until the look commit after the phase-12 review. DECK_LOOK_V3=1 turns it on for one run (the gallery render).
 LOOK_V3 = os.environ.get("DECK_LOOK_V3", "").strip() in ("1", "true", "yes")
+#: deck-types (features/deck-types.clan): a deck type is a full recipe (profiles/<id>.yaml ``recipe`` and ``length.target / cap``,
+#: resolved once by profiles.recipe). Read only when LOOK_V3 is on too (profiles.recipes_on). OFF by default: with it off every
+#: reader uses the constants above and a build is byte-identical; DECK_RECIPES=1 turns it on for one run (the gallery render). It
+#: gets its own golden re-record commit after the look commit (design.rework_risks).
+RECIPES = os.environ.get("DECK_RECIPES", "").strip() in ("1", "true", "yes")
+#: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
+PITCH_LENGTH_FROM_ENV = {"target": bool(os.environ.get("DECK_PITCH_TARGET")), "cap": bool(os.environ.get("DECK_PITCH_CAP"))}
+#: Layouts deck-look has named but not yet built (features/deck-look.clan step 3). A recipe may name one: it is accepted by the
+#: profile check, listed as not built, and skipped at plan time (the next preference, then the general rules, take the slide) until
+#: its file lands in layouts/ or layouts/v3/. Never drawn, never invented.
+LAYOUT_IDS_PLANNED = ("cover_bleed", "statement_split", "grid_points")
+#: The recipe's closed sets (design.schema.recipe). Sizes are deck-slide-size's canvas names (inert until that merges); title forms
+#: select stage-e guidance and a title check (slice 4); ``generate`` narrows which picture slots are planned (slice 4).
+RECIPE_SIZES = ("16:9", "4:3", "a4")
+RECIPE_TITLE_FORMS = ("claim", "label", "criterion")
+RECIPE_GENERATE = ("all", "cover", "none")
+#: The most preferred layouts a recipe lists for one slide type.
+RECIPE_MAX_PREFS = 3
 LAYOUT_FLOW = "flow"
 LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
 #: 40 -> 48 (Q11, Fable): the look's layouts land beside the old; image_text and image_left are offer-only under the look and are
