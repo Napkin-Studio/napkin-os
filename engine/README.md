@@ -75,6 +75,9 @@ callers (`parse_brief._json_call`, `parse_brief.docx_text`, ...) keep working.
 | `NVIDIA_API_KEY` | NIM embeddings (RAG) + chat backstop |
 | `GROQ_API_KEY` / `CEREBRAS_API_KEY` | fast free-tier chat links (recommended) |
 | `QDRANT_CLUSTER_ENDPOINT` + `QDRANT_API_KEY` (+`QDRANT_COLLECTION`) | remote RAG (`RAG_STORE=qdrant`) |
+| `NAPKIN_DECK_IMAGES_MAX_USD` | the ceiling on one deck's picture spend over its whole life (default 2.50; the deck's own cap is lower or equal): the subject call, drafts, heroes, failures and unknowns all count (deck-image-gen) |
+| `NAPKIN_DECK_LEDGER` | the cross-cache spend ledger the Deck's picture step appends to, default `~/.napkin/deck-images/ledger.jsonl`, so the cap survives a deleted cache |
+| `RUNWAYML_API_SECRET` | the Runway key for pictures (Territory frames and the Deck); read from the environment only, at the first create, never from a file and never printed |
 | `BRIEF_MODEL_CHAIN` / `BRIEF_MODEL` | override the model fallback chain |
 | `BRIEF_ROUTES` | `1` (default): each call runs on its job's model (ADR 0011): extraction and insight/SMP drafts on Opus 4.6, RTB and desired response on Opus 5.5, insight/SMP judges and the territory map on Opus 5.5 (low effort), other judges, scorecard and how-to-win on Sonnet 5 (low effort), loop syntheses on Sonnet 5; a judge never runs on its writer's model. `0`, or setting `BRIEF_MODEL` / `BRIEF_MODEL_CHAIN`, restores one model for every call. The routes a run used are in `meta.model_routes` |
 | `BRIEF_ROUTE_<JOB>` | override one job's models, `model[,fallback]`; jobs: `EXTRACT`, `HERO`, `GROUNDED_WRITER`, `HERO_JUDGE`, `JUDGE`, `MECHANICAL`, `SYNTH` |
