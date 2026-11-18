@@ -8,7 +8,7 @@ import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as St
 import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
-import { shotsOf, storyboardOfVideo } from '../model/selectors'
+import { beatsOf, shotsOf, storyboardOfVideo } from '../model/selectors'
 import {
   clipEnd, EMPTY_CUT, pack, r3, sortV1,
   type Cut, type CutClip, type CutEndCard, type CutText, type Transition,
@@ -141,17 +141,49 @@ export function assemble(d: ProductionDocument, videoId: Id, boxes: Box[], gens:
   return { v1: pack(v1), v2: [], text: before.text, endCard: before.endCard ?? endCardFrom(d, videoId) }
 }
 
-/** The end card from the storyboard's end card shot: its words as the headline, its length. */
+/** A shot's words that only name it ("Hearth Oats end card."): the director's label, not a line to show. */
+const END_LABEL = /\s*\bend[ -]?card\b[.!]?$/i
+const sentences = (t: string) => t.trim().split(/(?<=[.!?])\s+/).filter(Boolean)
+const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
+
+/**
+ * The end card from the storyboard's end card shot. Its words when they are words ("SuperSamurai. Clean in one
+ * sweep.": the first sentence is the headline, the rest the line). When they only label the card ("Hearth Oats
+ * end card.", live test 2026-11-18: the card read "Hearth Oats end card" twice), the brand in the label is the
+ * headline and the film's own closing line (its last VO or spoken line) is the line, without the brand again.
+ */
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
-  const sb = storyboardOfVideo(d, videoId)
-  const shot = (sb ? shotsOf(d, sb.id) : []).find((s) => s.kind === 'end_card')
+  return endCardOf(d, storyboardOfVideo(d, videoId)?.id)
+}
+
+/** The end card a storyboard's end card shot makes (endCardFrom), for the Film's cut or the storyboard's cell. */
+export function endCardOf(d: ProductionDocument, storyboardId: Id | undefined): CutEndCard | undefined {
+  const shots = storyboardId ? shotsOf(d, storyboardId) : []
+  const shot = shots.find((s) => s.kind === 'end_card')
   if (!shot) return undefined
-  // "SuperSamurai. Clean in one sweep.": the first sentence is the headline, the rest the line.
-  const [head, ...rest] = (shot.action ?? '').trim().split(/(?<=[.!?])\s+/)
-  const headline = (head ?? '').replace(/[.!?]$/, '').trim()
-  const line = rest.join(' ').trim() || headline
   const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return { headline: headline || named, line: line || named, bg: '#14161B', durS: shot.duration_s || 1.5 }
+  const words = (shot.action ?? '').trim()
+  const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: '#14161B', durS: shot.duration_s || 1.5 })
+  if (words && !END_LABEL.test(words)) {
+    const [head, ...rest] = sentences(words)
+    return card(bare(head ?? ''), rest.join(' '))
+  }
+  const brand = bare(words.replace(END_LABEL, ''))
+  const closing = closingLine(d, shots.map((s) => s.id))
+  if (!closing) return card(brand, '')
+  const [first, ...rest] = sentences(closing)
+  // "Hearth Oats. Slow down, warm up." under the brand "Hearth Oats": the line is what follows the brand.
+  if (brand && bare(first).toLowerCase() === brand.toLowerCase()) return card(brand, rest.join(' ') || closing)
+  return brand ? card(brand, closing) : card(bare(first), rest.join(' '))
+}
+
+/** The film's last spoken words: the last VO or line beat, in shot order. */
+function closingLine(d: ProductionDocument, shotIds: Id[]): string | undefined {
+  for (const id of [...shotIds].reverse()) {
+    const said = beatsOf(d, id).filter((b) => (b.kind === 'vo' || b.kind === 'line') && b.text?.trim())
+    if (said.length) return said[said.length - 1].text!.trim()
+  }
+  return undefined
 }
 
 // ── New take ready ────────────────────────────────────────────────────────────────────────────────────

@@ -12,7 +12,8 @@ import { useConfig, useDoc, useJobsTick, useRouter, useServices, useUi } from '.
 import type { Ask, ProductionDocument, Ratio, Shot } from '../contracts/types'
 import { isRunning, jobAt, ratioAspect } from '../jobs/select'
 import { croppedCaption } from '../canvas/core/sketch'
-import { drawFrame, drawTheRest, firstUndrawn } from '../jobs/frames'
+import { drawFrame, drawTheRest, firstUndrawn, needsFrame } from '../jobs/frames'
+import { endCardOf } from '../rooms/timeline'
 import { planOrJoin, askedShot } from '../jobs/plan'
 import { checkDurations, MAX_SHOTS } from '../lib/shots'
 import { lengthChoices } from '../script/length'
@@ -136,7 +137,7 @@ export function Storyboard() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [selected])
-  const allFramed = shots.length > 0 && shots.every((s) => !!currentFrame(doc, s))
+  const allFramed = shots.length > 0 && shots.every((s) => !needsFrame(s) || !!currentFrame(doc, s))
   const anyFrameRunning = shots.some((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
   const noFrames = !shots.some((s) => framesOf(doc, s.id).length > 0)
   const deps = { relay, doc: docStore, ui: uiStore, runner }
@@ -536,7 +537,17 @@ function ShotCard({ shot, index, prev, selected, onSelect, onOpen, onDraw, onDel
       <div className="sb-frame" style={{ aspectRatio: String(aspect) }}>
         {url && !drawing && <img src={url} alt={`Frame ${index + 1}`} />}
         {frameJob && drawing && <div className="sb-framejob"><JobSlot jobId={frameJob} compact /></div>}
-        {!current && !drawing && !frameFailed && (
+        {!current && !drawing && !frameFailed && !needsFrame(shot) && (() => {
+          // The end card is typeset in the render from its words, so it needs no picture (jobs/frames.ts needsFrame).
+          const card = endCardOf(doc, shot.storyboard_id)
+          return (
+            <div className="sb-endcard" style={{ background: card?.bg }}>
+              <b>{card?.headline}</b>{card?.line && card.line !== card.headline && <span>{card.line}</span>}
+              <small>Set in type when the ad renders · <button type="button" className="linkbtn" onClick={onDraw} disabled={!!frameJob && !frameFailed}>draw a picture instead</button></small>
+            </div>
+          )
+        })()}
+        {!current && !drawing && !frameFailed && needsFrame(shot) && (
           <div className="sb-noframe">
             {prevDrawn
               ? <><span>No frame yet</span><button className="btn xs" onClick={onDraw} disabled={!!frameJob && !frameFailed}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>

@@ -637,6 +637,18 @@ describe('Update what follows', () => {
     expect(lastWorkedModel(s.doc.get(), 'clip', both)).toEqual({ provider: 'runway', model: 'veo3.1_fast' })
   })
 
+  it('an end card is never owed a frame or a clip: the render sets it in type (live test 2026-11-18)', async () => {
+    const s = await setup(3)
+    await s.makeAll(false)
+    await updateDoc(s.doc, (d) => {
+      d.shots[s.shotId(2)].kind = 'end_card'
+      for (const f of Object.values(d.frames)) if (f.shot_id === s.shotId(2)) delete d.frames[f.id]
+      d.shots[s.shotId(2)].pick = undefined
+    })
+    expect(planMissing(s.doc.get()).frames).toEqual([])
+    expect(planMissing(s.doc.get()).clips).not.toContain(s.shotId(2))
+  })
+
   it('leaves out a clip that is being made now: it is not behind', async () => {
     // 2026-10-09: four first clips in the making showed as "4 behind your changes".
     const s = await setup(3)

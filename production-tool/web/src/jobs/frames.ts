@@ -9,7 +9,7 @@
 // `continueDrawing`, which starts the next shot that has no frame. Nothing here
 // polls; the chain only moves when a frame completes, on a click, or at boot.
 
-import type { Aspect, AssetRef, Frame, JobInput, ModelChoice, ProductionDocument } from '../contracts/types'
+import type { Aspect, AssetRef, Frame, JobInput, ModelChoice, ProductionDocument, Shot } from '../contracts/types'
 import { updateDoc, type DocumentStore } from '../doc/store'
 import type { UiState } from '../doc/ui'
 import type { FrameHow, JobPurpose } from '../model/purpose'
@@ -117,8 +117,15 @@ export function frameJobRunning(d: ProductionDocument): boolean {
 
 /** The first shot (0-based, on `storyboardId`, else the main storyboard) with no frame yet, or -1. */
 export function firstUndrawn(d: ProductionDocument, storyboardId?: string): number {
-  return shotsOf(d, boardOf(d, storyboardId)?.id).findIndex((s) => !currentFrame(d, s))
+  return shotsOf(d, boardOf(d, storyboardId)?.id).findIndex((s) => needsFrame(s) && !currentFrame(d, s))
 }
+
+/**
+ * Whether a shot wants a drawn frame. The end card does not (live test 2026-11-18: frame 6 was a paid photo
+ * nearly the same as frame 5): the render typesets it from its words (rooms/timeline.ts endCardFrom), and no
+ * clip is made of it. Draw the rest and "N frames not made yet" pass it by; the person can still draw one.
+ */
+export const needsFrame = (s: Pick<Shot, 'kind'>): boolean => s.kind !== 'end_card'
 
 /** Start "Draw the rest" (from the first shot with no frame). */
 export async function drawTheRest(deps: FrameDeps): Promise<void> {
