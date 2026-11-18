@@ -5,6 +5,7 @@ person marked Confidential (a deny-list of the marked texts: every word not on t
 from __future__ import annotations
 
 import re
+import unicodedata
 from functools import lru_cache
 from pathlib import Path
 
@@ -26,6 +27,13 @@ def allowed() -> frozenset:
     return frozenset(out)
 
 
+def ascii_only(text: str) -> bool:
+    """True when the text, and its NFKC form, is printable ASCII (a space, a newline or a tab included) and nothing else."""
+    s = str(text or "")
+    ok = lambda x: all(32 <= ord(c) <= 126 or c in "\n\t" for c in x)  # noqa: E731
+    return ok(s) and ok(unicodedata.normalize("NFKC", s))
+
+
 def tokens(text: str) -> list[str]:
     return re.findall(r"[a-z]+", str(text).lower())
 
@@ -36,6 +44,8 @@ def lint_text(text: str, banned=(), deny: dict | None = None, allow=()) -> str |
     t = str(text or "")
     if not t.strip():
         return "it is empty"
+    if not ascii_only(t):
+        return "it holds a character outside printable ASCII (fullwidth, non-Latin, invisible, emoji or a symbol form of a digit)"
     if deny:
         why = confidential_hit(t, deny)
         if why:
@@ -68,18 +78,22 @@ def deny_list(marks) -> dict:
     """What a subject may not carry, built from the marked texts: ``{"words": {...}, "shingles": {...}, "texts": [content word sets]}``. Every
     word of a marked text that is not on the common list (codenames, names, figures) is denied; so is every 3-word run of it."""
     ok = allowed()
-    words, shingles, texts = set(), set(), []
+    words, shingles, texts, whole = set(), set(), [], False
     for m in marks or ():
+        if not ascii_only(m.get("text") if isinstance(m, dict) else m):
+            whole = True   # marked text this lint cannot read word by word (non-Latin, fullwidth, invisible) is denied as a whole
         toks = tokens(m.get("text") if isinstance(m, dict) else m)
         words |= {w for w in toks if w not in ok}
         shingles |= {tuple(toks[i:i + 3]) for i in range(len(toks) - 2)}
         for d in re.findall(r"\d+", str(m.get("text") if isinstance(m, dict) else m)):
             words.add(d)
         texts.append({w for w in toks if len(w) >= 4})
-    return {"words": words, "shingles": shingles, "texts": texts}
+    return {"words": words, "shingles": shingles, "texts": texts, "whole": whole}
 
 
 def confidential_hit(text: str, deny: dict) -> str | None:
+    if deny.get("whole"):
+        return "would draw on a Confidential part"
     toks = tokens(text)
     for w in toks:
         if w in deny["words"]:

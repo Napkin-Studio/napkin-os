@@ -200,6 +200,10 @@ def _flat(v) -> str:
     return "" if v is None else str(v)
 
 
+class MarksError(ValueError):
+    """A mark names a part that is not there or is empty: refused, never skipped (a skipped mark would let its text reach a prompt)."""
+
+
 def marks_from_data(data: dict, chain: list | None = None) -> list:
     """The parts a person marked Confidential, with their text: brief parts in ``confidential_fields``, parts a ``classify`` decision marked
     ``model: false`` or ``corpus: false`` (the chain; the target is ``<document>#<path>``), and materials whose licence is
@@ -209,7 +213,9 @@ def marks_from_data(data: dict, chain: list | None = None) -> list:
 
     def add(path, text, kind):
         text = _flat(text).strip()
-        if text and (path, kind) not in seen:
+        if not text:
+            raise MarksError(f"the part marked Confidential at {path!r} ({kind}) resolves to nothing or is empty: fix the path or clear the mark; nothing was skipped")
+        if (path, kind) not in seen:
             seen.add((path, kind))
             out.append({"path": path, "text": text, "kind": kind})
     for path in data.get("confidential_fields") or []:

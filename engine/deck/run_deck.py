@@ -29,6 +29,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -343,15 +344,17 @@ def _picture_style(a, deck_ctx, client: str):
 def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, deck_ctx, rep: dict):
     """The picture step (deck-image-gen), between the placed pictures and the layout plan. Prints the open card(s); makes pictures only for a
     ``--yes-cost`` that names a card's id. Returns what imagegen.step returns."""
-    if a.marks:
+    if a.marks:   # marks given by hand only ADD to the ones the document carried, and must be well formed
         raw = json.loads(a.marks.read_text())
-        inp.marks = raw.get("marks", raw) if isinstance(raw, dict) else raw
+        raw = raw.get("marks", raw) if isinstance(raw, dict) and "marks" in raw else raw
+        if not (isinstance(raw, list) and all(isinstance(m, dict) and isinstance(m.get("text"), str) and m["text"].strip() and isinstance(m.get("path", ""), str) for m in raw)):
+            raise SystemExit("refused: --marks must be a list of {path, text, kind} objects, each with non-empty text (an empty list adds nothing)")
+        inp.marks = (inp.marks or []) + raw
     try:
         if a.images_reviewed:
             imagegen.record_safe_review(review, inp, deck, a.by)
             a.review.write_text(json.dumps({"review": review} if wrapped else review, indent=1, ensure_ascii=False))
-        stages_real = str(a.stages.resolve())
-        deck_id = a.deck_id or hashlib.sha256(stages_real.encode()).hexdigest()[:12]
+        deck_id = a.deck_id or _deck_id(a, inp, deck)
         led = a.ledger or Path(os.environ.get("NAPKIN_DECK_LEDGER") or Path.home() / ".napkin" / "deck-images" / "ledger.jsonl")
         from visuals import jobs as vjobs   # noqa: PLC0415
         ctx = imagegen.Ctx(deck, inp, terr, _picture_style(a, deck_ctx, a.client), a.stages, a.images_cache or (a.stages / "images"), vjobs.Ledger(led, deck_id), deck_id,
@@ -365,6 +368,22 @@ def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, dec
                      "made": (res["made"] or {}).get("created", 0), "stopped": (res["made"] or {}).get("stopped"),
                      "held": [f"{r['slide']}.{r['slot']}: {r.get('reason')}" for r in res["plan"]["slots"].values() if r["status"] in ("held", "rejected")]}
     return res
+
+
+def _deck_id(a, inp, deck: dict) -> str:
+    """The id the spend ledger counts a deck under, from what the deck IS: a Deck document's own id, else a hash of the brief's words and the deck's
+    title (client and project). A copied or renamed stages folder is the same deck and shares its cap."""
+    if a.deck:
+        import zipfile   # noqa: PLC0415
+        try:
+            man = __import__("yaml").safe_load(zipfile.ZipFile(a.deck).read("manifest.yaml")) or {}
+            did = man.get("document_id") or man.get("id")
+            if did:
+                return "doc-" + str(did)
+        except (OSError, KeyError, zipfile.BadZipFile):
+            pass
+    blob = json.dumps([{k: (f or {}).get("value") for k, f in sorted(inp.brief.items())}, deck["meta"].get("client"), deck["meta"].get("project")], sort_keys=True, ensure_ascii=False, default=str)
+    return "brief-" + hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
 def _territory_usd(stages: Path) -> float:
@@ -460,9 +479,11 @@ def main(argv=None):
     ap.add_argument("--remake-style", action="store_true", help="put pictures made with another Style Pack on the card (a changed pack never remakes by itself)")
     ap.add_argument("--marks", type=Path, help="the parts marked Confidential, JSON [{path, text, kind}] (an empty list is a real answer); needed with --images for a deck built from files")
     ap.add_argument("--images-cache", type=Path, help="where the picture jobs, plan and manifest live (default: <stages>/images)")
-    ap.add_argument("--deck-id", help="the id the spend ledger counts this deck under (default: a hash of the --stages path)")
-    ap.add_argument("--ledger", type=Path, help="the cross-cache spend ledger (default: $NAPKIN_DECK_LEDGER or ~/.napkin/deck-images/ledger.jsonl)")
-    ap.add_argument("--cap-usd", type=float, default=None, help="the most this deck may ever spend on pictures (default 2.50, at most 10)")
+    ap.add_argument("--deck-id", help="DEV ONLY (needs --dev): the id the spend ledger counts this deck under. Normally it comes from the deck's content (the document id, "
+                                      "or a hash of the brief and the deck title), so a copied folder shares one cap")
+    ap.add_argument("--ledger", type=Path, help="DEV ONLY (needs --dev): the spend ledger file (normally $NAPKIN_DECK_LEDGER or ~/.napkin/deck-images/ledger.jsonl)")
+    ap.add_argument("--dev", action="store_true", help="allow --deck-id and --ledger: they can split one deck's spend across ledgers, so they are for tests and tools that own both")
+    ap.add_argument("--cap-usd", type=float, default=None, help="a LOWER cap for this deck's pictures (default and most 2.50; the subject call and failures count)")
     ap.add_argument("--images-reviewed", action="store_true", help="record a person's review of a sensitive brief in --review (needs --by human:<id>)")
     ap.add_argument("--by", help="who reviewed (human:<id>) with --images-reviewed")
     ap.add_argument("--images-only", action="store_true", help="rebuild from the recorded stages only (never a text model); refuses if any text stage is missing")
@@ -473,6 +494,12 @@ def main(argv=None):
         a.pictures = "creative_cover"
     if a.images_only and a.live:
         ap.error("--images-only never calls a text model: drop --live")
+    if a.cap_usd is not None and not (0 < a.cap_usd <= 2.5):
+        ap.error("--cap-usd must be above 0 and at most 2.50: the per-deck cap is Sai's and nothing raises it")
+    if (a.deck_id or a.ledger) and not a.dev:
+        ap.error("--deck-id and --ledger split a deck's spend across ledgers and need --dev")
+    if a.dev and (a.deck_id or a.ledger):
+        print("WARNING: --dev: the spend ledger or deck id was set by hand, so this deck's cap is not shared with its other builds. Never use this for a real run.", file=sys.stderr)
     if a.yes_cost and a.images == "off":
         ap.error("--yes-cost is the yes to a picture card: give --images subjects or live with it")
     if a.images_reviewed and not (a.review and a.by):
@@ -506,11 +533,17 @@ def main(argv=None):
     answers, verified = _read_answers(a.answers)
     deck_ctx = None
     if a.deck:
-        inp, deck_ctx = inputs.from_deck_document(a.deck)
+        try:
+            inp, deck_ctx = inputs.from_deck_document(a.deck)
+        except inputs.MarksError as e:
+            raise SystemExit(f"refused: {e}")
         if prompt_text:
             inp.prompt_text = prompt_text
     else:
-        inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
+        try:
+            inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
+        except inputs.MarksError as e:
+            raise SystemExit(f"refused: {e}")
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
     choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
     profile = profiles.load(choice["type"])
@@ -644,7 +677,7 @@ def main(argv=None):
         if ecopy.get("narrowed"):   # headline narrowing: a recorded e_copy.json without it changes nothing
             rep["stages"]["e"]["narrowing"] = assemble.apply_narrowing(deck, ecopy["narrowed"])
     _red_team(a, deck, inp, profile, rep)
-    sources, held, plan_res = {}, [], None
+    sources, held, plan_res, stale_gen = {}, [], None, []
     if a.pictures or supplied:   # pictures that already exist: records and assets only; nothing is made, sent or spent
         try:
             if bound and bound["assets"]:
@@ -660,7 +693,10 @@ def main(argv=None):
                 plan_res = _image_step(a, deck, inp, terr, review, wrapped, deck_ctx, rep)
             gen = images.load_generated(a.stages) if a.pictures else None
             if gen:
-                images.bind_generated(deck, gen, terr, images.deck_names(deck))
+                bound_gen = images.bind_generated(deck, gen, terr, images.deck_names(deck))
+                if bound_gen.get("stale"):
+                    stale_gen.append({"check": "image_missing", "level": "warn", "slide": deck["order"][0],
+                                      "message": f"{bound_gen['stale']} generated picture(s) were made for other words than this deck now has, so none was used: make them again from a card"})
             images.prune_assets(deck)
             stamped = images.stamp_review(deck, review, a.approver)
             hold = deck["meta"].get("style_hold") or (frames or {}).get("style_hold")   # one hold: a failed pack load (look stamping) or the frames plan's
@@ -711,7 +747,7 @@ def main(argv=None):
         rep["layout_plan"] = {"secs": round(time.time() - t, 3), "rungs": rungs, "variety_swaps": (deck["meta"].get("layout_plan") or {}).get("variety_swaps", 0), "skipped": ["condense"]}
         rep["stages"]["layout_plan"] = {"secs": round(time.time() - t, 3), "model": None, "usd": 0}
     t = time.time()
-    findings = validate.run(deck, inp, a.audience)
+    findings = validate.run(deck, inp, a.audience) + stale_gen
     for x in plan_issues:   # the six slot and layout names, warn (slot_missing on a required slot: error)
         findings.append({k: v for k, v in (("check", x["check"]), ("level", x["level"]), ("slide", x["slide"]), ("slot", x.get("slot")),
                                            ("message", x["message"]), ("evidence", x.get("evidence"))) if v is not None})

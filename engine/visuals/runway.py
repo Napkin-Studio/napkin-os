@@ -111,7 +111,9 @@ class Client:
 
     def create(self, model: str, prompt: str, refs: list[dict], ratio: str = RATIO) -> dict:
         if len(refs) > MAX_REFERENCES:
-            raise RunwayError(f"{len(refs)} reference images: Runway takes at most {MAX_REFERENCES}")
+            e = RunwayError(f"{len(refs)} reference images: Runway takes at most {MAX_REFERENCES}")
+            e.pre_send = True   # refused before anything was sent
+            raise e
         body = {"model": model, "promptText": prompt, "ratio": ratio}
         if refs:
             body["referenceImages"] = refs
@@ -122,6 +124,8 @@ class Client:
 
     def download(self, url: str) -> bytes:
         """The output URL is a signed link: fetched without the Runway key."""
+        if not str(url).startswith("https://"):
+            raise RunwayError("the output link is not https: not fetched")
         status, raw = self._transport("GET", url, {}, None)
         if status >= 300:
             raise RunwayError(f"download failed with {status}", status)

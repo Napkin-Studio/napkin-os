@@ -386,16 +386,19 @@ class Server:
         (root / "images").mkdir(parents=True, exist_ok=True)
         marks = root / "marks.json"
         marks.write_text(json.dumps(req["marks"], ensure_ascii=False))
-        argv = ["--images", "plan", "--marks", str(marks), "--images-cache", str(root / "images"), "--ledger", str(self.s.data / "ledger.jsonl"), "--deck-id", d.name]
+        # The host owns the ledger and the deck id (the document id): --dev is how a caller that owns both says so.
+        argv = ["--images", "plan", "--marks", str(marks), "--images-cache", str(root / "images"), "--dev", "--ledger", str(self.s.data / "ledger.jsonl"), "--deck-id", d.name]
         if req.get("review"):
             rv = root / "review.json"
             rv.write_text(json.dumps(req["review"], ensure_ascii=False))
             argv += ["--review", str(rv)]
         if req.get("approver"):
             argv += ["--approver", req["approver"]]
+        plan = rs.read_json(root / "images" / "plan.json") or {}
+        for h in plan.get("heroes") or {}:   # every run asks again for the final pictures the last plan was asked for, so the hero card is on a plain run too
+            argv += ["--hero", h]
         yes = (req["approvals"].get("images") or {}).get("card")
         if yes:
-            plan = rs.read_json(root / "images" / "plan.json") or {}
             kind = next((k for k, c in (plan.get("cards") or {}).items() if c.get("id") == yes), None)
             if kind == "subjects":
                 argv[1] = "subjects"
@@ -403,9 +406,6 @@ class Server:
             elif kind in ("pictures", "heroes"):
                 argv[1] = "live"
                 argv += ["--yes-cost", yes]
-                if kind == "heroes":
-                    for h in plan.get("heroes") or {}:
-                        argv += ["--hero", h]
             else:
                 raise Refused(409, "stale_card", "the yes names a picture card that is not open any more: read the card again; nothing was made")
         return argv

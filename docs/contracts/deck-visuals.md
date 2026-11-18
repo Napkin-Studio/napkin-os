@@ -249,13 +249,13 @@ boxes, executions by `spec.frame_for` (phone 9:16, poster 4:5, none 16:9; search
 `inputs.pictures.source.allow: generated` (CLI: `--images`) fills slots nothing else filled. Sai's rules of 17 November, all enforced in
 code (`engine/deck/imagegen.py`, `engine/visuals/`):
 
-- **Cards and a yes.** Two cards, each with an id (`c_` and 8 hex of the SHA-256 of the jobs, models, ratios, cap and spend): the *subject
+- **Cards and a yes.** Two cards, each with an id (`c_` and 16 hex of the SHA-256 of the jobs, models, ratios, cap, spend and the count of sends so far, so a yes cannot be replayed after a send): the *subject
   card* (stage g: one Claude call, about $0.05, recorded as `g_image_subjects.json`) and the *picture card* (every prompt in full, the
   jobs, what is held back and why). A yes is `--yes-cost <card id>`; a missing, different or stale id is refused before any call. Nothing
   is retried automatically: a failure, a flag or a Style Pack change reaches a card and waits for a person.
-- **Cap.** $2.50 per deck over its life (`min(inputs.pictures.source.cap_usd, NAPKIN_DECK_IMAGES_MAX_USD)`, at most $10), the subject call
+- **Cap.** $2.50 per deck over its life (`min(inputs.pictures.source.cap_usd, NAPKIN_DECK_IMAGES_MAX_USD)`, never above $2.50; the CLI refuses more), the subject call
   and failures and unknowns included, Territory spend shown for information only. Spend is derived from jobs, never stored: the sum over
-  the cache manifest and the cross-cache ledger (`$NAPKIN_DECK_LEDGER`, an append-only JSONL written under `flock`), each job at the
+  the cache manifest and the cross-cache ledger (`$NAPKIN_DECK_LEDGER`, an append-only JSONL written under `flock`), every send of each job (a retried unknown job counts twice) at the
   largest of Runway's estimate, its reported cost and the table price. A cleared cache cannot lower it.
 - **Tiers pinned in code.** Draft is `gemini_image3.1_flash` (1K, 7 credits); pro (`gemini_image3_pro`, 2K, 20 credits) runs only for a
   *hero*: the cover, the idea or a full-bleed slot whose draft the approver approved and the guard checked clean, asked for by a person

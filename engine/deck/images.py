@@ -370,6 +370,14 @@ def anchor_key(anchor: dict, slot: str) -> str:
     return f"{anchor['type']}:{anchor['ref']}.{slot}"
 
 
+def words_sha(deck: dict) -> str:
+    """12 hex of the SHA-256 of the deck's words: every slide's id, type, title and blocks, as canonical JSON. Pictures, layouts and slots are not
+    words. --images-only keeps it equal, the safe-messaging review binds to it, and generated.json records it so a picture made for other words is
+    never bound to these."""
+    rows = [[sid, s.get("type"), s.get("title"), s.get("blocks")] for sid, s in ((k, deck["slides"][k]) for k in deck["order"])]
+    return hashlib.sha256(json.dumps(rows, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str).encode()).hexdigest()[:12]
+
+
 # -------------------------------------------------------------------------------------------------- generated.json
 
 def load_generated(stages: Path) -> dict | None:
@@ -388,6 +396,9 @@ def bind_generated(deck: dict, generated: dict, territories=None, names=()) -> d
     earlier are never replaced. A hero (tier hero) becomes the slot's ``candidate``: the slot keeps its approved draft. Returns ``{bound, candidates}``."""
     anc = anchors(deck, territories)
     got = {"bound": 0, "candidates": 0}
+    if generated.get("words_sha") != words_sha(deck):   # made for other words (a word was edited since): none of it is bound
+        got["stale"] = len(generated.get("pictures") or {})
+        return got
     by_anchor = {}
     for sid, a in anc.items():
         by_anchor.setdefault((a["type"], a["ref"]), sid)

@@ -62,11 +62,7 @@ class GenError(ValueError):
 
 # ---------------------------------------------------------------------------------------------------------- words and anchors
 
-def words_sha(deck: dict) -> str:
-    """12 hex of the SHA-256 of the deck's words: every slide's id, type, title and blocks, as canonical JSON. Pictures, layouts and slots are not
-    words: this is the hash --images-only keeps equal, and the safe-messaging review binds to."""
-    rows = [[sid, s.get("type"), s.get("title"), s.get("blocks")] for sid, s in ((k, deck["slides"][k]) for k in deck["order"])]
-    return hashlib.sha256(json.dumps(rows, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str).encode()).hexdigest()[:12]
+words_sha = images.words_sha
 
 
 anchors, anchor_key = images.anchors, images.anchor_key
@@ -447,20 +443,21 @@ def hero_plan(ctx: Ctx, plan: dict, asked: list, dec: dict, refs: list, style_te
 # ---------------------------------------------------------------------------------------------------------- cards
 
 def _card_id(parts) -> str:
-    return "c_" + hashlib.sha256(json.dumps(parts, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:8]
+    return "c_" + hashlib.sha256(json.dumps(parts, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
 
 
 def build_cards(ctx: Ctx, plan: dict, retry_unknown: bool = False, remake_style: bool = False) -> dict:
     """The cards a person reads: ``subjects`` (while stage g is not recorded for these words), ``pictures`` (drafts) and ``heroes``. Each has an
     id covering exactly its jobs, models, ratios, the cap and the spend so far. The app does no arithmetic: it shows these."""
     spent = jobs.spent_usd(ctx.manifest, ctx.ledger)
+    sends = jobs.send_count(ctx.manifest, ctx.ledger)   # the per-send nonce: after any send every earlier card id is stale, even if the spend came out equal
     cap = ctx.cap
     cards = {}
     if not plan["stage_g"]["recorded"]:
         usd = jobs.SUBJECTS_ESTIMATE_USD
         cards["subjects"] = {"kind": "subjects", "usd": usd, "spent_usd": spent, "cap_usd": cap, "left_usd": round(cap - spent - usd, 2),
                              "over_cap": spent + usd > cap + 1e-9, "rows": [{"what": "stage g: 1 model call writes the picture subjects", "usd": usd}],
-                             "id": _card_id(["subjects", plan["stage_g"]["request_sha"], cap, spent]), "plan_file": "plan.json"}
+                             "id": _card_id(["subjects", plan["stage_g"]["request_sha"], cap, spent, sends]), "plan_file": "plan.json"}
         return cards
     new, held, optional, unknown, over = [], [], [], [], []
     running = spent
@@ -490,7 +487,7 @@ def build_cards(ctx: Ctx, plan: dict, retry_unknown: bool = False, remake_style:
                          "unknown": unknown, "over_cap": over, "territory_usd_info": ctx.territory_usd,
                          "prompts": {f"{r['slide']}.{r['slot']}": r["prompt"] for r in new}, "jobs": [r["job"] for r in new], "plan_file": "plan.json",
                          "preview": any(r.get("preview") for r in new),
-                         "id": _card_id(["drafts", [(r["job"], r["model"], r["ratio"]) for r in new], cap, spent, bool(retry_unknown)])}
+                         "id": _card_id(["drafts", [(r["job"], r["model"], r["ratio"]) for r in new], cap, spent, sends, bool(retry_unknown)])}
     heroes = [h for h in plan.get("heroes", {}).values() if h.get("job")]
     refused = [f"{h['ask']}: {h['reason']}" for h in plan.get("heroes", {}).values() if h.get("reason")]
     if heroes or refused:
@@ -498,7 +495,7 @@ def build_cards(ctx: Ctx, plan: dict, retry_unknown: bool = False, remake_style:
         cards["heroes"] = {"kind": "heroes", "rows": [{"model": runway.TIER_MODEL["hero"], "tier": "hero", "n": len(heroes), "credits_each": 20, "usd": hu}], "usd": hu,
                            "spent_usd": spent, "cap_usd": cap, "left_usd": round(cap - spent - hu, 2), "held_back": refused,
                            "over_cap": spent + hu > cap + 1e-9, "prompts": {h["ask"]: h["prompt"] for h in heroes}, "jobs": [h["job"] for h in heroes],
-                           "id": _card_id(["heroes", [(h["job"], h["model"], h["ratio"]) for h in heroes], cap, spent])}
+                           "id": _card_id(["heroes", [(h["job"], h["model"], h["ratio"]) for h in heroes], cap, spent, sends])}
     return cards
 
 

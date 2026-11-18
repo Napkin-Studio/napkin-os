@@ -31,7 +31,7 @@ from . import runway
 
 USD_PER_CREDIT = runway.USD_PER_CREDIT
 CAP_DEFAULT_USD = 2.5
-CAP_MAX_USD = 10.0
+CAP_MAX_USD = 2.5      # Sai, 17 Nov: $2.50 a deck. No flag or variable raises it; the environment can only lower it
 #: The subject call (stage g) is priced by its card estimate until a measured figure is recorded.
 SUBJECTS_ESTIMATE_USD = 0.05
 POLL_FIRST, POLL_MAX, POLL_BUDGET_S = 4.0, 30.0, 600.0
@@ -136,18 +136,37 @@ def job_usd(j: dict) -> float:
     return round(max(nums) * USD_PER_CREDIT, 4)
 
 
-def spent_usd(manifest: dict, ledger: Ledger | None) -> float:
-    """The deck's spend, derived: the union by job key of the manifest's jobs and the ledger's lines for this deck. Only jobs that were
-    created, or may have been (a ``new`` job that was never sent counts for nothing), are counted."""
-    seen: dict[str, float] = {}
+def _per_key(manifest: dict, ledger: Ledger | None) -> dict:
+    """``{key: {price, sends}}``: every send counts. A ledger line with state ``creating`` is one send (the line is written before the create, so a
+    send that never got an answer, a retried unknown job and every attempt of the subject call each have one); other lines only refine the price."""
+    per: dict[str, dict] = {}
     for key, j in (manifest.get("jobs") or {}).items():
         if j.get("state") == "planned":
             continue
-        seen[key] = max(seen.get(key, 0.0), job_usd(j))
+        per[key] = {"price": job_usd(j), "sends": max(1, int(j.get("sends") or 1))}
+    counted: dict[str, int] = {}
     for row in (ledger.lines() if ledger else []):
-        if row.get("key"):
-            seen[row["key"]] = max(seen.get(row["key"], 0.0), job_usd(row))
-    return round(sum(seen.values()), 4)
+        k = row.get("key")
+        if not k:
+            continue
+        cur = per.setdefault(k, {"price": 0.0, "sends": 0})
+        cur["price"] = max(cur["price"], job_usd(row))
+        if row.get("state") == "creating":
+            counted[k] = counted.get(k, 0) + 1
+    for k, n in counted.items():
+        per[k]["sends"] = max(per[k]["sends"], n)
+    return per
+
+
+def spent_usd(manifest: dict, ledger: Ledger | None) -> float:
+    """The deck's spend, derived: per key, every send at its price (the largest of Runway's estimate, its reported cost and the table price), from
+    the union of the manifest's jobs and the ledger's lines for this deck. A job that was never sent counts for nothing."""
+    return round(sum(v["price"] * v["sends"] for v in _per_key(manifest, ledger).values()), 4)
+
+
+def send_count(manifest: dict, ledger: Ledger | None) -> int:
+    """How many creates (and subject calls) were ever sent for this deck: part of every card id, so a yes cannot be replayed after a send."""
+    return sum(v["sends"] for v in _per_key(manifest, ledger).values())
 
 
 def hero_counts(manifest: dict, ledger: Ledger | None) -> tuple[int, dict]:
@@ -185,6 +204,7 @@ def generate(client, jobs: list[dict], cache: Path, manifest: dict, ledger: Ledg
     cache.mkdir(parents=True, exist_ok=True)
     rows = manifest.setdefault("jobs", {})
     created, stopped, unknown, failed = 0, None, [], []
+    last_est = 0   # the largest estimate Runway has given for a create so far in this run (credits)
     for j in jobs:
         cur = rows.get(j["key"])
         st = state(cur, cache)
@@ -195,24 +215,27 @@ def generate(client, jobs: list[dict], cache: Path, manifest: dict, ledger: Ledg
             continue
         if stopped:
             continue
-        entry = {**job_entry(j), "attempt": (cur or {}).get("attempt", j.get("attempt", 1))}
+        entry = {**job_entry(j), "attempt": (cur or {}).get("attempt", j.get("attempt", 1)), "sends": int((cur or {}).get("sends") or 0) + 1}
         with ledger.locked():
             spent = spent_usd(manifest, ledger)
-            price = entry["table_credits"] * USD_PER_CREDIT
+            # The check uses the larger of the table price and any estimate Runway has given (this job's earlier send, or an earlier create in this run).
+            # What remains is an overshoot of at most one create: a job priced above both when it is sent.
+            known = max([entry["table_credits"], last_est] + [x for x in [(cur or {}).get("estimated_credits")] if isinstance(x, (int, float))])
+            price = known * USD_PER_CREDIT
             if st == "unknown":   # re-created from a card: the first send already counts, so a second send is a second spend
                 entry["key"] = j["key"]
             if spent + price > cap_usd + 1e-9:
                 stopped = f"cap reached: ${spent:.2f} is spent of ${cap_usd:.2f} and the next picture costs ${price:.2f}"
                 continue
             ledger.append({"key": j["key"], "tier": entry["tier"], "model": entry["model"], "table_credits": entry["table_credits"],
-                           "slots": entry["slots"], "state": "creating"})
+                           "slots": entry["slots"], "state": "creating", "send": entry["sends"]})
             rows[j["key"]] = {**entry, "state": "creating", "created_at": now()}
             save_manifest(cache, manifest)   # synced BEFORE the POST: a crash from here on leaves a marker, never a clean slate
             try:
                 t = client.create(entry["model"], j["prompt"], refs_for(j), ratio=entry["ratio"])
                 task = t["id"]
             except runway.RunwayError as e:
-                if e.status is not None and e.status >= 500:   # the server may have taken the request before it failed
+                if (e.status is not None and e.status >= 500) or (e.status is None and not getattr(e, "pre_send", False)):   # it may have taken the request
                     rows[j["key"]].update(state="unknown", error=str(e))
                     unknown.append(j["key"])
                     stopped = "Runway answered a create with a server error: stopped; that job is unknown (it may be charged)"
@@ -233,6 +256,8 @@ def generate(client, jobs: list[dict], cache: Path, manifest: dict, ledger: Ledg
                 log(f"{j['key']}: unknown, the create got no answer ({type(e).__name__})")
                 continue
             est = (t.get("estimatedCost") or {}).get("credits")
+            if isinstance(est, (int, float)):
+                last_est = max(last_est, est)
             rows[j["key"]].update(state="polling", task=task, status="PENDING", estimated_credits=est)
             save_manifest(cache, manifest)
             ledger.append({"key": j["key"], "tier": entry["tier"], "model": entry["model"], "table_credits": entry["table_credits"],

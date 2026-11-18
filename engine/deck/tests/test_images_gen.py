@@ -94,7 +94,7 @@ def go(stages, out, *args, marks=(), cap=None, soffice=False):
     marksf = Path(stages).parent / "marks.json"
     marksf.write_text(json.dumps(list(marks)))
     argv = ["--stages", str(stages), "--brief", str(Path(stages) / "brief_object.json"), "--client", "Lumen Water", "--project", "National awareness campaign",
-            "--out", str(out), "--no-qa", "--density", "detailed", "--marks", str(marksf), "--ledger", str(Path(stages).parent / "ledger.jsonl"), "--deck-id", "d1",
+            "--out", str(out), "--no-qa", "--density", "detailed", "--marks", str(marksf), "--dev", "--ledger", str(Path(stages).parent / "ledger.jsonl"), "--deck-id", "d1",
             "--approver", "human:ann", *args, *(["--cap-usd", str(cap)] if cap else [])]
     saved = (run_deck.subprocess.run, run_deck._soffice)
     run_deck.subprocess.run = lambda *a, **k: None
@@ -110,7 +110,7 @@ def go(stages, out, *args, marks=(), cap=None, soffice=False):
 
 def card_id(text, kind="card"):
     import re
-    return re.search(r"card (c_[0-9a-f]{8})", text).group(1)
+    return re.search(r"card (c_[0-9a-f]+)", text).group(1)
 
 
 def wire(monkeypatch, fake=None, subjects=None):
@@ -278,7 +278,7 @@ MARKS = [{"path": "budget_and_scope", "text": "Project Nightjar launches with oa
 def test_with_no_mark_data_generation_is_refused_for_the_deck(monkeypatch, stages, tmp_path):
     wire(monkeypatch)
     argv = ["--stages", str(stages), "--brief", str(stages / "brief_object.json"), "--client", "Lumen Water", "--project", "x", "--out", str(tmp_path / "o"),
-            "--no-qa", "--images", "plan", "--ledger", str(tmp_path / "l.jsonl")]
+            "--no-qa", "--images", "plan", "--dev", "--ledger", str(tmp_path / "l.jsonl")]
     with pytest.raises(SystemExit) as e:
         run_deck.main(argv)
     assert "no mark data" in str(e.value)
@@ -484,7 +484,7 @@ def test_a_hero_needs_an_approved_clean_draft_a_person_asking_and_a_card_of_its_
     before = len(f.posts)
     d, text = go(stages, tmp_path / "o", "--images", "plan", "--hero", f"{sid}.picture", "--review", str(rv))
     import re
-    hid = re.findall(r"FINAL PICTURE COST CARD  card (c_[0-9a-f]{8})", text)[0]
+    hid = re.findall(r"FINAL PICTURE COST CARD  card (c_[0-9a-f]+)", text)[0]
     assert "gemini_image3_pro" in text and "$0.20" in text
     go(stages, tmp_path / "o", "--images", "live", "--yes-cost", hid, "--hero", f"{sid}.picture", "--review", str(rv))
     assert len(f.posts) == before + 1 and f.posts[-1]["model"] == "gemini_image3_pro" and f.posts[-1]["ratio"] == "2752:1536"
@@ -496,7 +496,7 @@ def test_a_hero_is_a_candidate_beside_the_draft_and_only_an_approval_promotes_it
     sid, rv, a = approve_cover(stages, tmp_path, d)
     d, text = go(stages, tmp_path / "o", "--images", "plan", "--hero", f"{sid}.picture", "--review", str(rv))
     import re
-    hid = re.findall(r"FINAL PICTURE COST CARD  card (c_[0-9a-f]{8})", text)[0]
+    hid = re.findall(r"FINAL PICTURE COST CARD  card (c_[0-9a-f]+)", text)[0]
     d, _ = go(stages, tmp_path / "o", "--images", "live", "--yes-cost", hid, "--hero", f"{sid}.picture", "--review", str(rv))
     im = d["slides"][sid]["slots"]["picture"]["image"]
     assert im["asset"] == a["asset"] and im["status"] == "approved" and im["candidate"]["asset"] != a["asset"]
