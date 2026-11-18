@@ -269,8 +269,18 @@ export class JobRunner {
       parents: parentIds.length, inputs: [...hashes], text: input.text, chips: input.chips, region: input.region,
     })
     jobState(jobId, 'queued', { op })
+    // Durable before it is paid for (re-test N1, 2026-11-18): the stores write on a 250 ms debounce, and a
+    // reload 0.7 s after a Fill lost job_01M7PW4R0B9WS5SRBNSASF7RMA: paid at the relay, never in the document.
+    // Everything written so far (this job, and the row or placeholder the caller put in first) lands now.
+    await this.durable()
     await this.send(request)
     return jobId
+  }
+
+  /** Write the document and the UI state now. A store that refuses never stops the send: the person asked. */
+  private async durable() {
+    const kept = (e: unknown) => console.warn('could not keep the job before sending it', e)
+    await Promise.all([this.ui.flush().catch(kept), this.doc.flush().catch(kept)])
   }
 
   /** How many of this person's jobs the relay runs at once (config inFlightPerParticipant; the session sets it). */

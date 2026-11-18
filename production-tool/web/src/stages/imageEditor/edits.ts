@@ -292,7 +292,8 @@ export function editsForFrame(s: EditSession): { op: string; params?: Record<str
 
 /** Sends an edit with its row in the session first (QA 2026-11-17: a paid fill was lost when the tab closed
  *  while it was being sent, because its row was added only after the relay answered). The row carries the
- *  job id the request will have; if the send fails, the row goes again. */
+ *  job id the request will have; runner.submit writes it down before the relay is asked (re-test N1: a reload
+ *  0.7 s after Fill lost a paid job to the store's debounce). If the send fails, the row goes again. */
 export async function sendWithRow(set: (f: (s: EditSession) => EditSession) => void, row: UnsentEdit,
   submit: (jobId: string) => Promise<string>, jobId: string): Promise<void> {
   set((s) => addEdit(s, { ...row, jobId } as Edit))
