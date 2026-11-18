@@ -107,7 +107,6 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   const runner = new JobRunner(relay, doc, ui)
   // Never send past the relay's per-person limit: the rest wait here, "In the queue" (it answered 429 before).
   runner.inFlightLimit = () => (deps.remoteConfig ?? CONFIGS.live).inFlightPerParticipant
-  runner.briefs = () => !!(deps.remoteConfig ?? CONFIGS.live).flags.briefNode
   // Landed jobs, and the chains they move on: Draw the rest, Fix it in the shot, Update what follows.
   // The Film editor is the rooms (owner 2026-11-18): a new take lands beside the others, never in the cut.
   const frameDeps = { relay, doc, ui, runner, rooms: () => true }

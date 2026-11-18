@@ -93,7 +93,7 @@ src, out, cap, flags = sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4]
 c = json.load(open(src))
 c["spend"] = {"capUsd": cap, "warnUsd": round(cap * 0.8, 2)}
 for f in filter(None, flags.split(",")):
-    c["flags"][f.strip()] = True
+    c.setdefault("flags", {})[f.strip()] = True
 c.setdefault("routing", {}).setdefault("upscale", ["runway"])
 json.dump(c, open(out, "w"), indent=2)
 EOF

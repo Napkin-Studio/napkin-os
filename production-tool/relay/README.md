@@ -30,8 +30,9 @@ Implements `production-tool/contracts/relay-api.schema.json`, contract 3
   and the person's end card into PNGs (typeset.py); stitch's timeline mode (`stitch/timeline.py`) renders it.
 - The library is shelved: `GET /library/{shelf}`, `GET|POST /library/{shelf}/{key}[/{ver}]`, at
   `tenants/<tenantId>/library/<shelf>/…`; kinds key, brand_kit and format_pack.
-- The director runs `prompts/director.v6.md`; its role lines are written from common.schema.json's
-  `refRoleTable` at load. An older prompt version in config.json fails the job loudly.
+- The director runs its newest bundled prompt (`director/claude.py` PROMPT_VERSION, the newest `prompts/director.v*.md`)
+  unless config.json pins one (`director.promptVersion`, for a rollback); its role lines are written from
+  common.schema.json's `refRoleTable` at load. A prompt older than v6 in config.json fails the job loudly.
 
 | File | What |
 |---|---|
@@ -40,7 +41,7 @@ Implements `production-tool/contracts/relay-api.schema.json`, contract 3
 | `rank.py`, `time_rules.py` | Order keys and the note window, the twins of clan-store's (contracts/examples/ranks.json, windows.json) |
 | `store.py` | `MemoryStore` (tests, local) and `DynamoStore` (Lambda) |
 | `blobs.py` | `LocalBlobs` and `S3Blobs` (`in/`, `out/`, `ads/` keys) |
-| `runtime.py` | `config.json` cache (30 s, keeps the last good one), provider keys from Secrets Manager |
+| `runtime.py` | `config.json` cache (30 s, keeps the last good one), its defaults (`with_defaults`: routing, flags, from config.schema.json), provider keys from Secrets Manager |
 | `handler.py` | Lambda entry: HTTP and the one-minute EventBridge sweep |
 | `local.py` | The dev server |
 | `providers/base.py` | The adapter interface (harness lane writes `providers/<name>.py`) |

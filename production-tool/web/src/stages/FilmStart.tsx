@@ -6,7 +6,7 @@
 // canvas takes the card away (stages/startCard.ts showStartCard).
 
 import { useEffect, useRef, useState } from 'react'
-import { useConfig, useServices } from '../app/context'
+import { useServices } from '../app/context'
 import type { Ratio } from '../contracts/types'
 import { cardOf, type NodeEnv } from '../canvas/nodes/nodes'
 import { fitClear } from '../canvas/boards/boards'
@@ -30,7 +30,6 @@ export function StartCard({ env, onPictures, src = pageBriefSource() }: {
   src?: BriefSource
 }) {
   const services = useServices()
-  const { config } = useConfig()
   const name = useProjectName()
   const [offers, setOffers] = useState(false)
   const [briefs, setBriefs] = useState<{ items: OsBriefItem[]; empty?: string } | null>(null)
@@ -47,10 +46,10 @@ export function StartCard({ env, onPictures, src = pageBriefSource() }: {
   const box = useRef<HTMLTextAreaElement>(null)
   const change = useRef<HTMLButtonElement>(null)
 
-  // "Start from a brief" only where the flag is on and this page can read Napkin's briefs (brief/start.ts).
+  // "Start from a brief" only where this page can read Napkin's briefs (brief/start.ts).
   useEffect(() => {
     let live = true
-    void offersStartFromBrief(config.flags, src).then(async (yes) => {
+    void offersStartFromBrief(src).then(async (yes) => {
       if (!live || !yes) return
       setOffers(true)
       const got = await briefChoices(src)
@@ -60,7 +59,7 @@ export function StartCard({ env, onPictures, src = pageBriefSource() }: {
       if (!got.items.length) setMode('none')
     })
     return () => { live = false }
-  }, [config.flags, src])
+  }, [src])
 
   const withBrief = offers && mode !== 'none' && !!picked
   const write = async () => {

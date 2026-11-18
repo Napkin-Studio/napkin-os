@@ -3,10 +3,11 @@
 // bodies per relay-api.schema.json. No token: who is asking comes from the relay's identity seam.
 
 import type {
-  AnswerConflict, AssetRef, Config, ContractError, InputMime, Job, JobAnswer, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output,
+  AnswerConflict, AssetRef, Config, ConfigFile, ContractError, InputMime, Job, JobAnswer, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output,
   UploadResponse,
 } from '../contracts/types'
 import { AGENCY_SHELF } from '../contracts/types'
+import { withDefaults } from '../contracts/load'
 import type { ShellEvent } from '../dogfood/recorder'
 import { sha256Of } from '../lib/hash'
 import { accessOf, type Access } from './access'
@@ -103,7 +104,7 @@ export class HttpRelay implements Relay {
 
   async config(): Promise<Config | null> {
     try {
-      return await this.call<Config>('GET', '/config')
+      return withDefaults(await this.call<ConfigFile>('GET', '/config'))
     } catch {
       return null
     }

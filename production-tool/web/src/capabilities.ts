@@ -19,8 +19,6 @@ export interface Controls {
   views: boolean
   /** Turnaround by exact camera angle (sheet.angles on the view provider). */
   angles: boolean
-  /** Region edits on canvas images (flag regionEditCanvas). */
-  regionEditCanvas: boolean
   /** Storyboard */
   storyboard: boolean
   /** Frames come back as one series call (sheet.series > 0). */
@@ -29,7 +27,7 @@ export interface Controls {
   regionEditFrames: boolean
   /** Paint a mask instead of only a box (sheet.mask on region_edit). */
   maskBrush: boolean
-  /** Click-to-select (sheet.segment on region_edit + flag clickSelect). The Image editor's Click-select
+  /** Click-to-select (sheet.segment on region_edit). The Image editor's Click-select
    *  runs on the device instead (features/image-editor.clan) and needs only a mask. */
   clickSelect: boolean
   /** The Image editor's Upscale: a provider routed for upscale (Magnific on Runway). */
@@ -75,8 +73,8 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
   const clip = s('clip')
   const clipEdit = s('clip_edit')
 
-  const storyboard = f.storyboard && !!frame
-  const regionEditFrames = storyboard && f.regionEditFrames && !!regionEdit
+  const storyboard = !!frame
+  const regionEditFrames = storyboard && !!regionEdit
   const video = f.video && !!clip
   const feelEdit = video && f.feelEdit && !!clipEdit && clipEdit.video.feelEdit !== 'none'
   return {
@@ -85,25 +83,23 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
     generateCharacters: Math.min(14, gen?.refs.maxCharacter ?? gen?.refs.max ?? 0),
     views: !!view,
     angles: !!view && view.angles,
-    regionEditCanvas: f.regionEditCanvas && !!regionEdit,
     storyboard,
     series: storyboard && frame!.series > 0,
     frameRegenerate: storyboard,
     regionEditFrames,
     // The op's own mask over the sheet's: Runway takes none, except region_edit on ideogram_4_5.
     maskBrush: regionEditFrames && (regionEdit!.ops.region_edit?.mask ?? regionEdit!.mask) !== 'none',
-    clickSelect: regionEditFrames && f.clickSelect && regionEdit!.segment,
+    clickSelect: regionEditFrames && regionEdit!.segment,
     upscale: storyboard && !!s('upscale'),
     video,
     videoRegionEdit: video && f.videoRegionEdit && !!clipEdit && clipEdit.video.regionEdit !== 'none',
     fixInShot: video && regionEditFrames,
-    fixMoment: video && !!f.clipPatch && !!s('clip_patch'),
+    fixMoment: video && f.clipPatch && !!s('clip_patch'),
     feelEdit,
     feelStrength: feelEdit && clipEdit!.video.feelEdit === 'strength',
-    // stitch and shot_list run inside the relay (ffmpeg Lambda, director), not at a
-    // provider: no sheet lists them and both configs route them to [], so only the
-    // flags gate them. (Noted for the contract owner.)
-    stitch: video && f.stitch,
+    // stitch runs inside the relay (the ffmpeg Lambda), not at a provider: no sheet lists it and the
+    // default routing sends it to [], so video alone gates it.
+    stitch: video,
     moreOptions: f.moreOptions && (gen?.outputsPerCall ?? 1) > 1,
   }
 }
@@ -323,8 +319,8 @@ export const PROVIDER_CHOICES: { id: ProviderChoice; label: string }[] = [
 ]
 
 const ALL_FLAGS_ON: Flags = {
-  storyboard: true, video: true, stitch: true, regionEditFrames: true, regionEditCanvas: true,
-  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true, clipPatch: true, briefNode: true,
+  video: true, videoRegionEdit: true, feelEdit: true, moreOptions: true, clipPatch: true, connectedVideo: true, ownCanvas: true,
+  dogfood: false,
 }
 
 function routeAll(provider: Provider, sheets: Sheets): Config['routing'] {

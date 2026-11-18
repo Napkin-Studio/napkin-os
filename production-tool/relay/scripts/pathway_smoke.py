@@ -36,6 +36,7 @@ RELAY = HERE.parent
 sys.path.insert(0, str(RELAY))
 
 from contracts_dir import contracts_dir, pricing  # noqa: E402
+from runtime import with_defaults  # noqa: E402
 from providers.types import effective_sheet  # noqa: E402
 
 PATHWAYS = ("runway",)
@@ -52,9 +53,8 @@ def _sheets() -> dict[str, dict]:
 
 
 def _config(name: str) -> dict:
-    cfg = json.loads((contracts_dir() / "examples" / f"config.pathway.{name}.json").read_text())
-    cfg["flags"] = {**cfg["flags"], "regionEditCanvas": True, "regionEditFrames": True, "videoRegionEdit": True,
-                    "feelEdit": True}
+    cfg = with_defaults(json.loads((contracts_dir() / "examples" / f"config.pathway.{name}.json").read_text()))
+    cfg["flags"] = {**cfg["flags"], "videoRegionEdit": True, "feelEdit": True}
     cfg["quotas"] = {"image": 1000, "video": 1000, "render": 1000}
     cfg["inFlightPerParticipant"] = 6
     return cfg

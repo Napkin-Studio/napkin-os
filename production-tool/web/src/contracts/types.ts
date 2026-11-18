@@ -422,27 +422,27 @@ export interface CapabilitySheet {
 }
 
 // ── config.schema.json ──────────────────────────────────────────────────────
+// config.json names only what differs from the schema's defaults (features/config-defaults.clan):
+// ConfigFile is the file, Config what the app reads (contracts/load.ts withDefaults fills it).
 
+/** Every flag, as the app reads it: the file's value, else the schema's default. */
 export interface Flags {
-  storyboard: boolean
+  /** Clips and their edits; the kill switch for video (default on). */
   video: boolean
-  stitch: boolean
-  regionEditFrames: boolean
-  regionEditCanvas: boolean
+  /** Boxed region edits on a clip (default off). */
   videoRegionEdit: boolean
+  /** Feel edits on a clip (default off). */
   feelEdit: boolean
-  clickSelect: boolean
+  /** Ask for 4 variants instead of 1 (default off). */
   moreOptions: boolean
-  /** The beta's record: notice, Beta tag, thumbs, POST /dogfood/* (features/production-tool-dogfood.clan). Optional; absent means off. */
-  dogfood?: boolean
-  /** Fix this moment, op clip_patch (features/clip-moment-edit.clan). Optional; absent means off. */
-  clipPatch?: boolean
-  /** Shots made as runs that join (features/connected-video.clan). Optional; absent means off. */
-  connectedVideo?: boolean
-  /** Our own canvas engine, the default (features/production-tool-land.clan). Optional; absent means on; false is the kill switch (Excalidraw). */
-  ownCanvas?: boolean
-  /** The Brief node: Start from a brief, Brief nodes, JobInput.brief (features/brief-node.clan). Optional; absent means off. */
-  briefNode?: boolean
+  /** The beta's record: notice, Beta tag, thumbs, POST /dogfood/* (features/production-tool-dogfood.clan; default off). */
+  dogfood: boolean
+  /** Fix this moment, op clip_patch (features/clip-moment-edit.clan; default off). */
+  clipPatch: boolean
+  /** Shots made as runs that join (features/connected-video.clan; default on, false is the kill switch). */
+  connectedVideo: boolean
+  /** Our own canvas engine (features/production-tool-land.clan; default on, false is the kill switch: Excalidraw). */
+  ownCanvas: boolean
 }
 
 /** Fix this moment's settings (config.schema clipPatch); every key optional. */
@@ -455,11 +455,19 @@ export interface ClipPatchSettings {
   seamMin?: number
 }
 
+/** config.json as uploaded: routing, director and flags optional (config.schema.json). */
+export type ConfigFile = Omit<Config, 'routing' | 'flags' | 'allow'> & {
+  routing?: Partial<Record<Op, Provider[]>>
+  flags?: Partial<Flags>
+}
+
 export interface Config {
   contractVersion: ContractVersion
-  /** Runway is the floor of every job routed to it (features/runway-fallback.clan). */
+  /** Every op, in order of preference (the file's entry, else the schema's default, else runway).
+   *  Runway is the floor of every job routed to it (features/runway-fallback.clan). */
   routing: Partial<Record<Op, Provider[]>>
-  director: { promptVersion: string; perClickModel: string; shotListModel: string }
+  /** Optional, every key too: the relay runs its newest prompt and its own models when absent. */
+  director?: { promptVersion?: string; perClickModel?: string; shotListModel?: string }
   quotas: { image: number; video: number; render: number }
   inFlightPerParticipant: number
   jobTimeoutS: { image: number; video: number }

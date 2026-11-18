@@ -2,24 +2,29 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/config.schema.json",
   "title": "Remote config (config.json on S3 behind CloudFront)",
-  "description": "Read by the web app at load and every 2 minutes, and by the relay on every job (cached 30 s). Changing it is uploading a file; no deploy. It is public: never put keys or handles in it. Provider keys live in Secrets Manager and the blocked list in the relay's DynamoDB table.",
+  "description": "Read by the web app at load and every 2 minutes, and by the relay on every job (cached 30 s). Changing it is uploading a file; no deploy. It is public: never put keys or handles in it. Provider keys live in Secrets Manager and the blocked list in the relay's DynamoDB table. Only contractVersion, quotas, inFlightPerParticipant, jobTimeoutS, spend and banner are required: routing, director and flags take their defaults when absent (features/config-defaults.clan). The relay (runtime.with_defaults) and the web (contracts/load.ts withDefaults) both read the defaults from this file.",
   "type": "object",
   "properties": {
     "contractVersion": { "$ref": "common.schema.json#/$defs/contractVersion" },
     "routing": {
       "type": "object",
-      "description": "Per op, providers in order of preference. The relay sends a job to the first one whose capability sheet supports the op and that has a free slot; the UI shows controls from the first provider's sheet. An empty list turns the op off. When an op routes to runway, Runway is the floor of every job for it, picks included: a job that fails on another provider for a provider or account reason is made again once on Runway's default model (features/runway-fallback.clan).",
+      "description": "Per op, providers in order of preference. The relay sends a job to the first one whose capability sheet supports the op and that has a free slot; the UI shows controls from the first provider's sheet. An empty list turns the op off. Optional, every op too: an op the file does not name takes this default's entry (shot_list, stitch and cutout run on no provider: []), and an op the default does not name goes to runway. When an op routes to runway, Runway is the floor of every job for it, picks included: a job that fails on another provider for a provider or account reason is made again once on Runway's default model (features/runway-fallback.clan).",
       "propertyNames": { "$ref": "common.schema.json#/$defs/op" },
-      "additionalProperties": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/provider" }, "uniqueItems": true }
+      "additionalProperties": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/provider" }, "uniqueItems": true },
+      "default": {
+        "generate": ["runway"], "view": ["runway"], "shot_list": [],
+        "frame": ["runway"], "region_edit": ["runway"], "frame_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"], "clip_patch": ["runway"], "stitch": [],
+        "upscale": ["runway"], "resize": ["runway"], "cutdown": ["runway"], "cutout": []
+      }
     },
     "director": {
       "type": "object",
+      "description": "Optional, every key too. Absent promptVersion: the newest director prompt the relay bundles (relay/director/claude.py PROMPT_VERSION); a value pins it, for a rollback. Absent model ids: the relay's own (eu.anthropic.claude-sonnet-5-5 per click and for the shot list).",
       "properties": {
         "promptVersion": { "type": "string", "pattern": "^director\\.v[0-9]+(\\.[0-9]+)?$" },
         "perClickModel": { "type": "string" },
         "shotListModel": { "type": "string" }
       },
-      "required": ["promptVersion", "perClickModel", "shotListModel"],
       "additionalProperties": false
     },
     "quotas": {
@@ -58,24 +63,17 @@
     },
     "flags": {
       "type": "object",
-      "description": "Kill switches and the D7 go/no-go flags. A control appears only when its flag is on AND the routed provider's sheet supports it.",
+      "description": "Kill switches, and switches for paths not on yet. Optional, every flag too: an absent flag takes its default. A control appears only when its flag is on AND the routed provider's sheet supports it.",
       "properties": {
-        "storyboard": { "type": "boolean" },
-        "video": { "type": "boolean" },
-        "stitch": { "type": "boolean" },
-        "regionEditFrames": { "type": "boolean" },
-        "regionEditCanvas": { "type": "boolean" },
-        "videoRegionEdit": { "type": "boolean" },
-        "feelEdit": { "type": "boolean" },
-        "clickSelect": { "type": "boolean" },
-        "moreOptions": { "type": "boolean", "description": "Ask for 4 variants instead of 1." },
-        "dogfood": { "type": "boolean", "description": "The beta's record (features/production-tool-dogfood.clan): the notice, the Beta tag and the thumbs in the web app, and POST /dogfood/* on the relay. Optional; absent means off." },
-        "clipPatch": { "type": "boolean", "description": "Fix this moment (features/clip-moment-edit.clan): op clip_patch regenerates only a note's window and splices it back. Optional; absent means off (clip_patch answers flag_off). Separate from videoRegionEdit, which also unlocks boxed Aleph region edits." },
-        "briefNode": {"type": "boolean", "description": "The Brief node (features/brief-node.clan): Start from a brief, Brief nodes on the canvas, and JobInput.brief on the director-backed ops. Optional; absent means off: no brief is offered or sent."},
-        "connectedVideo": { "type": "boolean", "description": "Connected video (features/connected-video.clan): How shots join (As one film), run planning, takes over several shots, landing frames, Remake just this shot; and on the relay, a clip's mode, lastFrame, cuts and redo window (refused flag_off without it). Optional; absent means off: Make clips sends each shot alone, as before." },
-        "ownCanvas": { "type": "boolean", "description": "Our own canvas engine (features/canvas-engine.clan), the default (features/production-tool-land.clan). Optional; absent means on. false is the kill switch: Excalidraw for projects it made or with nothing drawn. A person can pick with ?engine=own or ?engine=excalidraw. On the own engine an Excalidraw scene opens converted, its original kept; a scene the own engine made always opens there." }
+        "video": { "type": "boolean", "default": true, "description": "Clips and their edits (clip, clip_edit). The kill switch for the costliest class: false refuses them with flag_off, and the Film editor says it is off." },
+        "videoRegionEdit": { "type": "boolean", "default": false, "description": "Boxed region edits on a clip (clip_edit with a region or a mask). Off: nothing in the UI makes one yet." },
+        "feelEdit": { "type": "boolean", "default": false, "description": "Feel edits on a clip (clip_edit with no region and no mask: Change this… feel)." },
+        "moreOptions": { "type": "boolean", "default": false, "description": "Ask for 4 variants instead of 1." },
+        "dogfood": { "type": "boolean", "description": "The beta's record (features/production-tool-dogfood.clan): the notice, the Beta tag and the thumbs in the web app, and POST /dogfood/* on the relay.", "default": false },
+        "clipPatch": { "type": "boolean", "description": "Fix this moment (features/clip-moment-edit.clan): op clip_patch regenerates only a note's window and splices it back. Off, clip_patch answers flag_off. Separate from videoRegionEdit, which also unlocks boxed Aleph region edits.", "default": false },
+        "connectedVideo": { "type": "boolean", "description": "Connected video (features/connected-video.clan): How shots join (As one film), run planning, takes over several shots, landing frames, Remake just this shot; and on the relay, a clip's mode, lastFrame, cuts and redo window. false is the kill switch: those are refused flag_off and Make clips sends each shot alone.", "default": true },
+        "ownCanvas": { "type": "boolean", "description": "Our own canvas engine (features/canvas-engine.clan), the default (features/production-tool-land.clan). false is the kill switch: Excalidraw for projects it made or with nothing drawn. A person can pick with ?engine=own or ?engine=excalidraw. On the own engine an Excalidraw scene opens converted, its original kept; a scene the own engine made always opens there.", "default": true }
       },
-      "required": ["storyboard", "video", "stitch", "regionEditFrames", "regionEditCanvas", "videoRegionEdit", "feelEdit", "clickSelect", "moreOptions"],
       "additionalProperties": false
     },
     "banner": { "type": "string", "maxLength": 200 },
@@ -92,6 +90,6 @@
       "additionalProperties": false
     }
   },
-  "required": ["contractVersion", "routing", "director", "quotas", "inFlightPerParticipant", "jobTimeoutS", "spend", "flags", "banner"],
+  "required": ["contractVersion", "quotas", "inFlightPerParticipant", "jobTimeoutS", "spend", "banner"],
   "additionalProperties": false
 }

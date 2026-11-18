@@ -221,8 +221,8 @@ export class JobRunner {
     // The texts linked into the node are its input words (features/canvas-text.clan).
     const linked = withLinkedText(d, op, node, input)
     input = linked.input
-    // The brief in the node's scope, its spine only (features/brief-node.clan; behind flags.briefNode).
-    const briefed = this.briefs() ? withBrief(d, op, extras.briefFrom ?? node, input) : { input, rows: [] }
+    // The brief in the node's scope, its spine only (features/brief-node.clan).
+    const briefed = withBrief(d, op, extras.briefFrom ?? node, input)
     input = briefed.input
     const words = purposeWords(purpose)
     // A fresh nonce for every job: another take is never deduped with the one running (ui-behaviour 4.3).
@@ -294,8 +294,6 @@ export class JobRunner {
 
   /** How many of this person's jobs the relay runs at once (config inFlightPerParticipant; the session sets it). */
   inFlightLimit: () => number = () => Infinity
-  /** Whether jobs carry the node's brief (config flags.briefNode; the session sets it). Off until it does. */
-  briefs: () => boolean = () => false
   /** Jobs the relay holds a place for now (queued or running there), by id. */
   private readonly atRelay = new Set<string>()
   /** Requests waiting in this browser for a place, oldest first: never sent past the limit (it was a 429). */

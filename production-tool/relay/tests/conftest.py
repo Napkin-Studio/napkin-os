@@ -16,6 +16,7 @@ from director import PassthroughDirector, new_id
 from identity import person, tenant_id
 from providers import Registry
 from providers.base import Status, job_op
+from runtime import OPS
 from service import Relay
 from store import MemoryStore
 
@@ -145,10 +146,16 @@ def front_sheet() -> dict:
 
 
 def base_config(**over) -> dict:
+    """config.testing.json with the tests' own routing: every op it does not route is off ([]), not the
+    schema's default (features/config-defaults.clan; tests/test_config_defaults.py tests the defaults),
+    and the director block named, so a test's own director is switched to the newest prompt as before."""
+    from director.claude import PER_CLICK, PROMPT_VERSION, SHOT_LIST
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
-    cfg["routing"] = {"generate": ["mock", "runway"], "view": ["runway"], "shot_list": [],
+    cfg["routing"] = {**{op: [] for op in OPS},
+                      "generate": ["mock", "runway"], "view": ["runway"], "shot_list": [],
                       "frame": ["runway"], "region_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"],
                       "stitch": []}
+    cfg["director"] = {"promptVersion": PROMPT_VERSION, "perClickModel": PER_CLICK, "shotListModel": SHOT_LIST}
     cfg["inFlightPerParticipant"] = 6
     for k, v in over.items():
         cfg[k] = v

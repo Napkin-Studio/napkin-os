@@ -1,10 +1,9 @@
 // The brief → Production spin-off on arrival (features/brief-node.clan): a page opened as
-// /production/…?brief=<doc id> with flags.briefNode on, on our own engine, starts from that brief once:
+// /production/…?brief=<doc id>, on our own engine, starts from that brief once:
 // the Brief node (how: spinoff), a new Script beside it, the link. The parameter leaves the URL so a
 // reload does not start again. No UI of its own: the Start card's "Start from a brief" is the card's.
 
 import { useEffect } from 'react'
-import type { Flags } from '../contracts/types'
 import type { NodeEnv } from '../canvas/nodes/nodes'
 import { pageBriefSource, type BriefSource } from './os'
 import { briefSpinoffOf, startFromBriefId, withoutBriefSpinoff } from './start'
@@ -20,9 +19,9 @@ export function holdBriefSpinoff(id: string | null): void {
   held = id
 }
 
-export function useBriefSpinoff(env: NodeEnv | null, flags: Pick<Flags, 'briefNode'> | undefined, src: BriefSource = pageBriefSource()): void {
+export function useBriefSpinoff(env: NodeEnv | null, src: BriefSource = pageBriefSource()): void {
   useEffect(() => {
-    if (taken || !env || !flags?.briefNode || typeof window === 'undefined') return
+    if (taken || !env || typeof window === 'undefined') return
     const id = held ?? briefSpinoffOf(window.location.search)
     if (!id) return
     taken = true
@@ -36,5 +35,5 @@ export function useBriefSpinoff(env: NodeEnv | null, flags: Pick<Flags, 'briefNo
       env.canvas.select([])
       if (els.length) fitClear(env.canvas, els, { zoomFactor: 0.8 })
     }).catch((e) => console.warn('the brief could not be brought in', e))
-  }, [env, flags?.briefNode, src])
+  }, [env, src])
 }

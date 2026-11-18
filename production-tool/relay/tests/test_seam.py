@@ -15,7 +15,7 @@ from conftest import CDN, Harness, base_config
 from contracts import Contracts
 import names
 from director import PassthroughDirector, load_director
-from director.claude import ClaudeDirector, make as make_director
+from director.claude import PROMPT_VERSION, ClaudeDirector, make as make_director
 from director.model import ModelPort, Reply  # noqa: F401
 from providers import base, load_registry, types
 from providers._seam import Adapted, Resolver
@@ -129,7 +129,7 @@ def test_director_wrapper_output_validates_against_the_contract():
     sheet = types.load_sheet("runway")
     out = d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": generate_input()}, sheet)
     assert out.pop("_model") == d.director.per_click_model
-    assert out.pop("_promptVersion") == "director.v6"
+    assert out.pop("_promptVersion") == PROMPT_VERSION
     assert Contracts().errors("director.schema.json", out) == []
 
 
@@ -169,7 +169,7 @@ def test_director_takes_model_ids_from_config():
     d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": generate_input()},
              types.load_sheet("runway"))
     assert wire.calls[0]["model"] == "eu.anthropic.claude-test"
-    assert d.director.prompt_version == "director.v6"  # v99 is not bundled
+    assert d.director.prompt_version == PROMPT_VERSION  # v99 is not bundled
 
 
 def test_load_director_is_passthrough_without_a_model(monkeypatch):

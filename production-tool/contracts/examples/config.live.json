@@ -1,15 +1,8 @@
 {
   "contractVersion": "3",
-  "routing": {
-    "generate": ["runway"], "view": ["runway"], "shot_list": [],
-    "frame": ["runway"], "region_edit": ["runway"], "frame_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"], "clip_patch": ["runway"], "stitch": [],
-    "upscale": ["runway"], "resize": ["runway"], "cutdown": ["runway"], "cutout": []
-  },
-  "director": { "promptVersion": "director.v14", "perClickModel": "eu.anthropic.claude-sonnet-5-5", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },
   "quotas": { "image": 40, "video": 6, "render": 3 },
   "inFlightPerParticipant": 2,
   "jobTimeoutS": { "image": 180, "video": 600 },
   "spend": { "capUsd": 1300, "warnUsd": 1000 },
-  "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": true, "moreOptions": false, "ownCanvas": true, "connectedVideo": true },
   "banner": ""
 }

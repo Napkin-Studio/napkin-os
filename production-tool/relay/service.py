@@ -62,6 +62,7 @@ from ledger import Ledger, LimitReached, SpendStop
 from providers import Registry
 from providers.base import CapabilityMissing, Moderated, ProviderError, set_job_context
 from providers.types import effective_sheet, op_models, quality_choice, tier_label
+from runtime import with_defaults
 
 log = logging.getLogger("relay")
 
@@ -328,7 +329,8 @@ class Relay:
     def __init__(self, *, store, blobs, registry: Registry, director: Director, config,
                  contracts: Contracts | None = None, clock=time.time, stitch=None, cards=None,
                  who=identity.who, writer=None, cutter=None):
-        """config: () -> config.json dict (cached by the caller).
+        """config: () -> config.json dict (cached by the caller); read through runtime.with_defaults, so
+        every op is routed and every flag set (features/config-defaults.clan).
         stitch: (payload dict) -> None, starts the stitch Lambda asynchronously.
         cards: cards.Cards, what each ref picture shows, for the director (None: no model, no cards).
         who: (method, path_and_query, headers, body) -> {"pid", "h", "t", "name"?, "tenant"} or None,
@@ -339,7 +341,8 @@ class Relay:
         self.writer = writer if writer is not None else writers.make(director)
         # Dex's cutdown plans (cutdowns.py): on the director's model port, or the passthrough without one.
         self.cutter = cutter if cutter is not None else cutdowns.make(director)
-        self.config, self.who = config, who
+        self.config = lambda: with_defaults(config())
+        self.who = who
         self.contracts = contracts or Contracts()
         self.clock = clock
         self.stitch = stitch
@@ -568,7 +571,7 @@ class Relay:
     # ── the beta's record (dogfood.py, features/production-tool-dogfood.clan) ──
     def _dog_on(self) -> bool:
         try:
-            return bool((self.config().get("flags") or {}).get("dogfood"))
+            return self.config()["flags"]["dogfood"]
         except Exception:
             return False
 
@@ -878,16 +881,10 @@ class Relay:
     def _check_flags(self, cfg: dict, req: dict) -> None:
         op, inp, flags = req["op"], req["input"], cfg["flags"]
         off = None
-        if op in ("shot_list", "frame", "frame_edit") and not flags["storyboard"]:
-            off = "The storyboard is switched off for now."
-        elif op in ("clip", "clip_edit") and not flags["video"]:
+        if op in ("clip", "clip_edit") and not flags["video"]:
             off = "Video is switched off for now."
-        elif op == "stitch" and not flags["stitch"]:
-            off = "Stitching is switched off for now."
-        elif op == "clip_patch" and not flags.get("clipPatch"):  # absent means off (config.schema)
+        elif op == "clip_patch" and not flags["clipPatch"]:
             off = "Fix this moment is switched off for now."
-        elif op == "region_edit" and not (flags["regionEditFrames"] or flags["regionEditCanvas"]):
-            off = "Region edits are switched off for now."
         elif op == "clip_edit" and (inp.get("region") or inp.get("mask")) and not flags["videoRegionEdit"]:
             off = "Region edits on video are switched off for now."
         elif op == "clip_edit" and not (inp.get("region") or inp.get("mask")) and not flags["feelEdit"]:
@@ -1004,7 +1001,7 @@ class Relay:
         flags.connectedVideo, and only what the model it runs on can make (connected.problems: a last frame
         needs video.lastFrame, a take video.take.ok within its length and shots). Refused here, before quota
         or spend, as the person's request (400)."""
-        if not cfg["flags"].get("connectedVideo"):  # absent means off (config.schema)
+        if not cfg["flags"]["connectedVideo"]:
             raise ApiError("flag_off", "Joined shots are switched off for now.")
         inp = req["input"]
         last = inp.get("lastFrame")

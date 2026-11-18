@@ -496,7 +496,7 @@ export function Character({ initial, active, onPictureEditor }: {
   // with work in it (re-test N-E).
   const showHint = !!vs && !hasWork(doc) && showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
   // A brief spun off from Brief Maker (?brief=<doc id>): its Brief node and a new Script, once (features/brief-node.clan).
-  useBriefSpinoff(canvas?.engine === 'own' ? { canvas, doc: docStore } : null, config.flags)
+  useBriefSpinoff(canvas?.engine === 'own' ? { canvas, doc: docStore } : null)
   // Dev only: the canvas for window.__seed.brief (dev/seed.ts), so a Brief node can be put on it in a screenshot.
   useEffect(() => {
     if (!import.meta.env.DEV || !canvas) return
@@ -883,7 +883,7 @@ export function Character({ initial, active, onPictureEditor }: {
         {showHint && <StartCard env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} onPictures={() => { if (!panels.assets) panels.toggle('assets') }} />}
         {/* Boards are frames on the canvas (⌥1…⌥9 jump, ⌥0 fits); on touch, with no ⌥, the Boards pill opens the jump sheet. */}
         {narrow && <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow keys={!own} />}
-        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={config.flags.briefNode ? () => { canvas?.select([]); panels.openAssets('napkin') } : undefined} vertical={narrow} />
+        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={() => { canvas?.select([]); panels.openAssets('napkin') }} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
         {!showHint && <LinksToggle chrome={chrome} />}
       </div>

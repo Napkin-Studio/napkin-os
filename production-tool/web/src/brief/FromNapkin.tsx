@@ -4,7 +4,7 @@
 // already on this canvas says so and shows it. Briefs are read-only here: Brief Maker writes them.
 
 import { useEffect, useMemo, useState } from 'react'
-import { useConfig, useDoc } from '../app/context'
+import { useDoc } from '../app/context'
 import type { NodeEnv } from '../canvas/nodes/nodes'
 import { fitClear } from '../canvas/boards/boards'
 import { briefElement, linkBriefLater } from './canvas'
@@ -16,7 +16,6 @@ import './brief.css'
 const message = (e: unknown) => (e instanceof Error ? e.message : 'That brief could not be linked. Try again.')
 
 export function BriefsFromNapkin({ env, src: given }: { env: NodeEnv | null; src?: BriefSource }) {
-  const { config } = useConfig()
   const doc = useDoc()
   const src = useMemo(() => given ?? pageBriefSource(), [given])
   const [offers, setOffers] = useState<boolean | null>(null)
@@ -25,7 +24,7 @@ export function BriefsFromNapkin({ env, src: given }: { env: NodeEnv | null; src
   const [said, setSaid] = useState<string | null>(null)
   useEffect(() => {
     let live = true
-    void offersStartFromBrief(config.flags, src).then(async (yes) => {
+    void offersStartFromBrief(src).then(async (yes) => {
       if (!live) return
       setOffers(yes)
       if (yes) {
@@ -34,7 +33,7 @@ export function BriefsFromNapkin({ env, src: given }: { env: NodeEnv | null; src
       }
     })
     return () => { live = false }
-  }, [config.flags, src])
+  }, [src])
 
   if (offers === null) return <p className="hint" role="status">Looking for your agency’s briefs…</p>
   if (!offers) return <p className="hint">Nothing from Brief Maker or Research here: this page cannot read Napkin’s briefs.</p>
