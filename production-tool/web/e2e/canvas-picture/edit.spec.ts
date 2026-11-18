@@ -80,7 +80,7 @@ test('Edit opens the picture; Apply puts v2 in place with v1 in its versions; Un
   await expect(page.locator('.ie-vbtn')).toContainText('v2 of 2')
 
   // Back on the canvas: the same spot and width, the new picture, and its v2 chip with v1 in it.
-  await page.locator('.image-editor .ptbar').getByRole('button', { name: 'Canvas' }).click()
+  await page.locator('.image-editor .tba-crumb').getByRole('button', { name: 'Canvas' }).click()
   await expect(page.locator('.image-editor')).toHaveCount(0)
   await expect.poll(async () => (await pictures(page))[0].sha).not.toBe(p.sha)
   const [after] = await pictures(page)
@@ -103,7 +103,7 @@ test('a double-click opens a picture on its own; in a group the first picks it o
   // On its own: one double-click opens it.
   await page.mouse.dblclick(...centre(a))
   await expect(page.locator('.image-editor')).toHaveCount(1)
-  await page.locator('.image-editor .ptbar').getByRole('button', { name: 'Canvas' }).click()
+  await page.locator('.image-editor .tba-crumb').getByRole('button', { name: 'Canvas' }).click()
   await expect(page.locator('.image-editor')).toHaveCount(0)
 
   // Group the two (shift-click, Ctrl+G); a click selects the group.
@@ -180,13 +180,16 @@ test('while a picture is open in the Image editor its bar is the only one; Canva
   expect(await accounts()).toBe(1)
   expect(await history()).toBe(1)
   await expect(page.locator('.image-editor .ptbar')).toHaveCount(1)
-  await expect(page.locator('.image-editor .ptbar').getByRole('button', { name: 'Canvas' })).toBeVisible()
+  await expect(page.locator('.image-editor .tba-crumb').getByRole('button', { name: 'Canvas' })).toBeVisible()
+  // Two ways back, both plain: the crumb's Canvas and the band's ← Canvas (Shrey 2026-11-19).
+  await expect(page.locator('.image-editor .band-back')).toHaveText(/Canvas/)
   // The canvas keys stand down: B is the editor's Brush, not the canvas's Board tool.
   await page.keyboard.press('b')
   await expect(page.locator('[aria-label="Image tools"] button[aria-pressed="true"]')).toHaveAttribute('aria-label', 'Brush mask (B)')
-  await page.locator('.image-editor .ptbar').getByRole('button', { name: 'Canvas' }).click()
+  await page.locator('.image-editor .tba-crumb').getByRole('button', { name: 'Canvas' }).click()
   await expect(page.locator('.image-editor')).toHaveCount(0)
   await expect.poll(bars).toBe(1)
   expect(await accounts()).toBe(1)
-  await expect(page.getByRole('button', { name: 'Share' })).toBeVisible()
+  // The canvas's own bar is back: Canvas is where you are.
+  await expect(page.locator('.ptbar .tba-crumb [aria-current="page"]')).toHaveText('Canvas')
 })
