@@ -51,8 +51,14 @@ export function PhoneReview() {
       return [...all, { shot, take, start: prev ? prev.start + prev.dur : 0, dur: take?.duration_s || shot.duration_s, inS: 0 }]
     }, [])
   }, [doc, shots, plan, videoId])
-  const total = plan?.clips.length ? plan.lengthS : items.reduce((a, b) => a + b.dur, 0)
-  const at = items.find((i) => t >= i.start && t < i.start + i.dur) ?? items.at(-1)
+  // One length, the ad's own (re-test 7h: the player said 0:08 for an 8.46 s render while the strip said 0:05 from
+  // the cut, which leaves out the end card and the studio card): the video's once it has loaded, else its asset's.
+  const [played, setPlayed] = useState<number | null>(null)
+  const cutS = plan?.clips.length ? plan.lengthS : items.reduce((a, b) => a + b.dur, 0)
+  const total = played ?? (render ? doc.assets[render.asset]?.duration_s : undefined) ?? cutS
+  // Past the last shot the end card plays: no shot to leave a note on.
+  const shotsEnd = items.reduce((a, i) => Math.max(a, i.start + i.dur), 0)
+  const at = items.find((i) => t >= i.start && t < i.start + i.dur) ?? (t < shotsEnd || !adUrl ? items.at(-1) : undefined)
   const local = at ? t - at.start : 0
   const win = at ? windowOf(local, at.dur) : undefined
   const notes = reviewsList(doc).filter((r) => r.target.kind === 'generation')
@@ -79,11 +85,12 @@ export function PhoneReview() {
         <div className="ph-head"><b>The ad</b>{render && <span className="pt-pill">v{render.version}</span>}{render && <span className="faint"><AgentFigure agent="edie" size={18} decorative /> rendered by the Edit agent</span>}</div>
         <div className="ph-player">
           {adUrl ? (
-            <video ref={video} src={adUrl} controls playsInline preload="metadata" onTimeUpdate={(e) => setT(e.currentTarget.currentTime)} />
+            <video ref={video} src={adUrl} controls playsInline preload="metadata" onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
+              onLoadedMetadata={(e) => { const d = e.currentTarget.duration; setPlayed(Number.isFinite(d) && d > 0 ? d : null) }} />
           ) : (
             <div className="ph-noad">No ad rendered yet. Render it on a laptop or iPad, then watch it here.</div>
           )}
-          {at && adUrl && <span className="ph-shotlabel">Shot {shots.indexOf(at.shot) + 1}</span>}
+          {adUrl && <span className="ph-shotlabel">{at ? `Shot ${shots.indexOf(at.shot) + 1}` : 'End card'}</span>}
           {adUrl && <span className="ph-time">{fmt(t)} / {fmt(total)}</span>}
         </div>
         {adUrl && (
