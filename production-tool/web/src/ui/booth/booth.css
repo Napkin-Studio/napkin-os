@@ -207,3 +207,9 @@ button.bt-pill { cursor: pointer; }
 /* The Storyboard: the Booth's column on the same dotted ground; with it open the cards keep their width. */
 .booth-row > .booth-storyboard { background-color: var(--canvas-bg); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 24px 24px; }
 .booth-row:has(> .booth-storyboard[data-booth-open='true']) .sb-grid:not(.sb-sheet .sb-grid) { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+/* An agent's job line at the top of a Booth (mock .side-agent). */
+.side-agent { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); font: 500 13.5px/1.35 var(--font-ui); }
+.side-agent .t { flex: 1; min-width: 0; }
+.side-agent .t small { display: block; font: 600 10px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ag-base); }
+html[data-theme='dark'] .side-agent .t small { color: var(--ag-acc); }
+.side-agent .step { font: 500 11px var(--font-mono); color: var(--muted, var(--ink3)); white-space: nowrap; }

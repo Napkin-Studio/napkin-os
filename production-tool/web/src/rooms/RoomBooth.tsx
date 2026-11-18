@@ -18,7 +18,8 @@ import { ago, useChain, useLater } from '../ui/booth/hooks'
 import { agentNotes, groupFailures, stageWaiting, triesWords, videoAddresses } from '../ui/booth/notes'
 import { useBooth } from '../ui/booth/useBooth'
 import type { ChangeOpen } from './ChangeDrawer'
-import { boxName, shotTitle, type Gen } from './model'
+import { boxName, makingLine, shotTitle, type Gen } from './model'
+import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Poster } from './Poster'
 import type { RoomData, RoomName, Selection } from './Rooms'
 import { dismissedTakes, newerTake, notNow, readCut } from './timeline'
@@ -167,6 +168,8 @@ export function RoomBooth({ slot, ...p }: RoomProps) {
   const shotId = sel.shotId && box?.shotIds.includes(sel.shotId) ? sel.shotId : box?.shotIds[0]
   const take = (sel.genId && genOf(sel.genId)?.state === 'ready' && inBox(genOf(sel.genId)!, box?.key) ? genOf(sel.genId) : undefined)
     ?? data.gens.find((g) => inBox(g, box?.key) && g.state === 'ready')
+  const { runner } = useServices()
+  const making = box ? data.gens.find((g) => g.state === 'making' && inBox(g, box.key)) : undefined
   const ns = box ? box.shotIds.map((id) => shotNumber(doc, id)).filter((n) => n > 0) : []
   const where = box ? `${boxName(box)}${ns.length > 1 ? ` · shots ${ns[0]}-${ns.at(-1)}` : ns.length ? ` · shot ${ns[0]}` : ''}` : ''
   // The Edit room: the Booth on a picked clip, text or end card (or a change asked from one), never on nothing.
@@ -182,6 +185,14 @@ export function RoomBooth({ slot, ...p }: RoomProps) {
     <Booth state={booth} earned={earned}>
       <div className="sp-crumb"><button type="button" onClick={onClose}>{edit ? '← The cut' : '← Film'}</button><span>›</span><b className="rm-clamp1">{edit ? editWhere : where}</b>
         <button type="button" className="x" onClick={onClose} title="Back (Esc)" aria-label="Close the selection">×</button></div>
+      {room === 'make' && making && box && (
+        // The Camera agent's job line (mock make-working): who is making which take, and where it is.
+        <div className="side-agent" role="status">
+          <AgentFigure agent="wren" size={44} state="working" decorative />
+          <span className="t"><small>Camera agent</small>Making take v{making.version} of {boxName(box)}</span>
+          <span className="step">{makingLine(making.jobId ? runner.liveInfo(making.jobId) : undefined, making.jobId ? doc.jobs[making.jobId]?.state : undefined)}</span>
+        </div>
+      )}
       <div className="rm-boothslot" ref={slot} />
       {apart.map((x) => x.node)}
       {room === 'make' && box && !box.endCard && (
