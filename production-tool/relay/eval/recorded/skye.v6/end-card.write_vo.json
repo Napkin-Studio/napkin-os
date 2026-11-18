@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "The logo settles over a slow pan across a calm sea at dusk."
+     },
+     {
+      "type": "direction",
+      "text": "Leave space for the tagline."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1,
+      "text": "Some things are better when you let them settle."
+     }
+    ],
+    "note": "I added a short VO beat that rides the calm of the dusk pan and leaves room for the tagline."
+   }
+  ],
+  "rationale": "Kept the shot's words and added one VO beat early in the shot, short enough to finish before the tagline space. It echoes the settling logo and calm sea without inventing names."
+ }
+}

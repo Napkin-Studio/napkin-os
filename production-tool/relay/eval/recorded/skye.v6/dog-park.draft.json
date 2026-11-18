@@ -1,0 +1,54 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. PARK - DAY"
+     },
+     {
+      "type": "action",
+      "text": "@maya_front walks the path, an empty leash dangling from her hand."
+     },
+     {
+      "type": "action",
+      "text": "Far off, @dog_rex spots her and tears across the grass."
+     },
+     {
+      "type": "action",
+      "text": "Mud flies from his paws as he plows through a puddle."
+     },
+     {
+      "type": "action",
+      "text": "A muddy @dog_rex leaps into @maya_front's arms, knocking her hat off."
+     },
+     {
+      "type": "action",
+      "text": "She laughs, mud streaking her coat, and hugs him tight."
+     },
+     {
+      "type": "character",
+      "text": "MAYA"
+     },
+     {
+      "type": "dialogue",
+      "text": "Okay, okay. You're forgiven, Rex."
+     },
+     {
+      "type": "action",
+      "text": "The hat rolls away in the grass, forgotten."
+     }
+    ],
+    "note": "I drafted a short park scene from your line, with a single spoken beat."
+   }
+  ],
+  "rationale": "Expanded the one-line moment into a one-location 15 s scene (about 14 s by rule 10) keeping both @names as written and the hat-knocking beat."
+ }
+}

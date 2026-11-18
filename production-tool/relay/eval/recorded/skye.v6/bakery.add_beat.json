@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Flour rises in a beam of light as @maya_front pulls a golden loaf from the oven and taps its base."
+     },
+     {
+      "type": "direction",
+      "text": "Close on the tap; hear the hollow sound."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 2,
+      "text": "@maya_front smiles, satisfied, and lifts the loaf to her ear."
+     }
+    ],
+    "note": "I added a beat where she smiles and listens to the loaf after the tap."
+   }
+  ],
+  "rationale": "The shot lacked a reaction after the tap, so one short moment at 2 s shows her satisfaction without changing the existing words."
+ }
+}

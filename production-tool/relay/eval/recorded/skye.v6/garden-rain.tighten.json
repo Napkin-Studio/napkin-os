@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Rain drums on the greenhouse roof as @maya_front repots a tomato plant, humming."
+     },
+     {
+      "type": "direction",
+      "text": "Rain sound up; soft focus outside."
+     }
+    ],
+    "note": "I tightened the action line and kept the direction as it was."
+   }
+  ],
+  "rationale": "Cut filler words (\"a small\", \"to herself\") while keeping @maya_front, the order of events and the direction last."
+ }
+}

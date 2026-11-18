@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front opens a thin @laptop_silver on a kitchen table; the screen lights his face blue."
+     },
+     {
+      "type": "direction",
+      "text": "Only the screen lights the scene."
+     }
+    ],
+    "note": "I trimmed the action line and kept the names, the order and the direction."
+   }
+  ],
+  "rationale": "Cut \"in the dark room\" and merged the clauses; the direction already says only the screen gives light, so the meaning holds."
+ }
+}

@@ -1,0 +1,5 @@
+{
+ "version": "director.v14",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip_patch\", \"question\": null, \"providerJob\": {\"op\": \"clip_patch\", \"provider\": \"runway\", \"model\": \"aleph2\", \"prompt\": \"redo the whole clip at night. Everything else stays exactly as it is: the people, the place, the light and the camera.\", \"refs\": [{\"name\": \"current\", \"sha256\": \"sha256:7777777777777777777777777777777777777777777777777777777777777777\", \"role\": \"current\"}], \"audio\": false}, \"rationale\": \"The person chose to fix this moment, so the note goes first as written, followed by the standard keep-everything-else line. Only the take is sent, as current.\", \"confidence\": 0.9}"
+}

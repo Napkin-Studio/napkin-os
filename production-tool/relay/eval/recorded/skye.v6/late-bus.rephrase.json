@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front sprints toward the last night bus; its doors shut, then reopen, and the driver waves him aboard."
+     },
+     {
+      "type": "direction",
+      "text": "Wide from across the street."
+     }
+    ],
+    "note": "I reworded the action and kept the same events, the @name and the direction."
+   }
+  ],
+  "rationale": "Rephrase keeps the same facts, order and @sai_front, with a similar length; the direction stays last and unchanged."
+ }
+}

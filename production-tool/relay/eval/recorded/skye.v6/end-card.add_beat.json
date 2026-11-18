@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "The logo settles over a slow pan across a calm sea at dusk."
+     },
+     {
+      "type": "direction",
+      "text": "Leave space for the tagline."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 2,
+      "text": "A last band of orange light slides across the still water."
+     }
+    ],
+    "note": "I added a beat where the dusk light crosses the water, and kept your words as they were."
+   }
+  ],
+  "rationale": "The shot lacked a timed moment, so I added a quiet light beat on the sea that supports the logo and leaves room for the tagline."
+ }
+}

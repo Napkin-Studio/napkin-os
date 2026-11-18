@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "A cold @soda_can sweats on a picnic table. A hand cracks it open; fizz rises."
+     },
+     {
+      "type": "direction",
+      "text": "Macro; slow motion on the fizz."
+     }
+    ],
+    "note": "I tightened the action and kept the order of events and the @soda_can."
+   }
+  ],
+  "rationale": "Cut the reaching and the connective words, keeping the can, the hand, the opening and the fizz in order. The direction is unchanged and stays last."
+ }
+}

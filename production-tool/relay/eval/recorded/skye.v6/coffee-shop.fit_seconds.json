@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "The barista slides a cup to @sai_front, who sips and closes his eyes."
+     },
+     {
+      "type": "direction",
+      "text": "Steam catches the window light."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I cut the shot to one short beat that plays in about 2.5 seconds."
+   }
+  ],
+  "rationale": "Merged the setting and the action into a single 13-word line (about 2.2 s by rule 10), keeping @sai_front, the order of events and the direction last."
+ }
+}

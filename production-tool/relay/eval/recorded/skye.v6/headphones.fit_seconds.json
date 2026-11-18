@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "On a noisy platform @sai_front slips on @headphones_black, and the crowd noise drops to music."
+     },
+     {
+      "type": "direction",
+      "text": "Sound cuts to the music on the put-on."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one 15-word beat so the shot plays in 2.5 seconds."
+   }
+  ],
+  "rationale": "One action line of 15 words counts 2.5 s by rule 10; the direction block takes no time, and all @names and the order of events are kept."
+ }
+}

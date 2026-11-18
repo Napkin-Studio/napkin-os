@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Flour drifts in light as @maya_front pulls a golden loaf out and taps its base."
+     },
+     {
+      "type": "direction",
+      "text": "Close on the tap; hollow sound."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one 15-word beat and trimmed the direction so the shot plays in 2.5 s."
+   }
+  ],
+  "rationale": "One 15-word action line counts 2.5 s by the length rule; the direction takes no time. The order of events and the @name are kept."
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front rolls bright blue paint across a white wall, steps back, tilts his head."
+     },
+     {
+      "type": "direction",
+      "text": "Locked off; he walks out of frame."
+     }
+    ],
+    "note": "I tightened the action and kept the order of events and the direction."
+   }
+  ],
+  "rationale": "Trimmed filler words (\"a stripe of\", \"and\") while keeping @sai_front, the sequence of actions, and the direction block last."
+ }
+}

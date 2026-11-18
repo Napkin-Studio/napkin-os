@@ -1,0 +1,51 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "mode": "draft",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. GREY STREET - DAY"
+     },
+     {
+      "type": "action",
+      "text": "Rain starts on a grey street, first drops darkening the pavement."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front stops mid-stride and glances up at the sky."
+     },
+     {
+      "type": "action",
+      "text": "The patter quickens. Strangers hurry for cover."
+     },
+     {
+      "type": "action",
+      "text": "She lifts @umbrella_open over her head."
+     },
+     {
+      "type": "action",
+      "text": "Rain drums on the canopy while she stays dry."
+     },
+     {
+      "type": "action",
+      "text": "Puddles ripple at her feet as the street turns silver."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front smiles and walks on through the downpour."
+     }
+    ],
+    "note": "I drafted a short visual scene from your line, with no dialogue, built around Maya and the umbrella."
+   }
+  ],
+  "rationale": "Expanded the one-line rain idea into a single-location 15 s scene (about 14 s by the timing rule) using only the listed refs, kept visual with no spoken line."
+ }
+}

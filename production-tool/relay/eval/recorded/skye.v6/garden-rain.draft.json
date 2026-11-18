@@ -1,0 +1,51 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. GREENHOUSE - DAY"
+     },
+     {
+      "type": "action",
+      "text": "Rain drums on the greenhouse roof. Water runs down the glass."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front stands at a wooden bench, a small tomato plant before her."
+     },
+     {
+      "type": "action",
+      "text": "She hums to herself and tips the plant out of its cramped pot."
+     },
+     {
+      "type": "action",
+      "text": "Pale roots curl tight around the soil. She loosens them with her thumbs."
+     },
+     {
+      "type": "action",
+      "text": "She settles the plant into a larger pot and pats soil around it."
+     },
+     {
+      "type": "action",
+      "text": "A drop of rain slides down a leaf. She smiles."
+     },
+     {
+      "type": "action",
+      "text": "She sets the pot on the sill, where grey light touches the green."
+     }
+    ],
+    "note": "I drafted a short, quiet greenhouse scene from your line, all visual, with no spoken words.",
+    "mode": "draft"
+   }
+  ],
+  "rationale": "The scene keeps the person's rain, greenhouse, repotting and humming, and expands them into seven short beats, about 14 s, for the 15 s target. I used only @maya_front, the one listed ref, and added no dialogue so no unlisted name is needed."
+ }
+}

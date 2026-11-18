@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "At a busy market, @sai_front sniffs a ripe mango and pays the stallholder."
+     },
+     {
+      "type": "direction",
+      "text": "Colourful, crowded background."
+     }
+    ],
+    "note": "I tightened the action to one short line and kept the direction as it was."
+   }
+  ],
+  "rationale": "Cut the action to one beat, keeping @sai_front and the order: sniff the mango, then pay. The direction stays last and unchanged."
+ }
+}

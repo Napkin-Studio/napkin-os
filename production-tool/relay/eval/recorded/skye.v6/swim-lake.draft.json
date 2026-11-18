@@ -1,0 +1,50 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. LAKE - DAWN"
+     },
+     {
+      "type": "action",
+      "text": "Mist hangs over @lake_summer, still as glass."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front walks barefoot to the end of the wooden jetty."
+     },
+     {
+      "type": "action",
+      "text": "She curls her toes over the edge and breathes in."
+     },
+     {
+      "type": "action",
+      "text": "She dives. Her body cuts the surface with barely a sound."
+     },
+     {
+      "type": "action",
+      "text": "The water closes over her. The lake goes quiet."
+     },
+     {
+      "type": "action",
+      "text": "Ripples spread slowly across the lake toward the far shore."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front surfaces, laughing, as the last ripple touches the reeds."
+     }
+    ],
+    "note": "I drafted a short, visual dive scene from your line, about 14 seconds."
+   }
+  ],
+  "rationale": "Built the person's dive and spreading ripples into one location and seven single-beat action lines, about 14 s for the 15 s target, with no dialogue."
+ }
+}

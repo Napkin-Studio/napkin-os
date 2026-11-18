@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Inside a small coffee shop, the barista pushes a cup across the counter to @sai_front, who sips, then closes his eyes."
+     },
+     {
+      "type": "direction",
+      "text": "Window light catches the steam."
+     }
+    ],
+    "note": "I rephrased the action and the direction, keeping the same events and @sai_front."
+   }
+  ],
+  "rationale": "Reworded both blocks at similar length, keeping the facts, the order of events, the @name and the direction last."
+ }
+}

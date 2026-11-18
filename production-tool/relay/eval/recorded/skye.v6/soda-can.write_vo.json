@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "A cold @soda_can sweats on a picnic table. A hand reaches in, cracks it open, and the fizz rises."
+     },
+     {
+      "type": "direction",
+      "text": "Macro; slow motion on the fizz."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 2,
+      "text": "Some moments are best opened cold."
+     }
+    ],
+    "note": "I added a short VO line that lands as the can opens, and kept your action and direction as they were."
+   }
+  ],
+  "rationale": "The shot is visual and short, so one brief VO line timed to the can cracking adds voice without crowding the fizz. Words and @soda_can are unchanged."
+ }
+}

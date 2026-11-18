@@ -1,0 +1,54 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. APARTMENT - MORNING"
+     },
+     {
+      "type": "action",
+      "text": "Sunlight falls on a messy living room: crumbs, socks, a toppled mug."
+     },
+     {
+      "type": "action",
+      "text": "@samurai steps in, bows, and rolls up his sleeves."
+     },
+     {
+      "type": "action",
+      "text": "He sweeps the floor in swift, precise strokes."
+     },
+     {
+      "type": "action",
+      "text": "A blade flashes and slices a cloud of dust in two."
+     },
+     {
+      "type": "action",
+      "text": "He wipes the last smudge from the window glass."
+     },
+     {
+      "type": "action",
+      "text": "@samurai bows to the spotless room, calm and still."
+     },
+     {
+      "type": "character",
+      "text": "SAMURAI"
+     },
+     {
+      "type": "dialogue",
+      "text": "Your home is clean. Rest now."
+     }
+    ],
+    "note": "I drafted a short one-room script that shows @samurai doing the cleaning, from your line."
+   }
+  ],
+  "rationale": "Turned the one-line brief into a 15 s single-location scene of about 14 s by rule 10, with one short spoken line and the bare @samurai kept."
+ }
+}

@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front pedals across a busy bridge at rush hour, weaving past stopped cars, smiling under his helmet."
+     },
+     {
+      "type": "direction",
+      "text": "Tracking alongside at handlebar height."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 3,
+      "text": "A driver in a stalled car glances over and watches him glide past."
+     }
+    ],
+    "note": "I added a beat at 3 s: a stuck driver watches him glide by. The rest is unchanged."
+   }
+  ],
+  "rationale": "The shot had no reaction from the traffic. A stuck driver watching him pass adds contrast and keeps to the existing action and refs."
+ }
+}

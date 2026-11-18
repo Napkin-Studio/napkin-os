@@ -1,0 +1,54 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. KITCHEN - NIGHT"
+     },
+     {
+      "type": "action",
+      "text": "@sai_front sits alone at a kitchen table in the dark."
+     },
+     {
+      "type": "action",
+      "text": "He opens a thin @laptop_silver."
+     },
+     {
+      "type": "action",
+      "text": "The screen lights his face blue in the dark room."
+     },
+     {
+      "type": "action",
+      "text": "His fingers fly across the keys, quick and sure."
+     },
+     {
+      "type": "action",
+      "text": "He leans back and smiles at the glow."
+     },
+     {
+      "type": "character",
+      "text": "SAI"
+     },
+     {
+      "type": "dialogue",
+      "text": "Finally, something that keeps up."
+     },
+     {
+      "type": "action",
+      "text": "@laptop_silver sits slim and bright on the table."
+     }
+    ],
+    "note": "I drafted a short one-location night scene from the laptop opening, with one spoken line."
+   }
+  ],
+  "rationale": "Kept the user's opening beat, split into single beats, and added a short payoff with one line; totals about 14 s by rule 10."
+ }
+}

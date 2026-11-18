@@ -1,0 +1,50 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. BRIDGE - DUSK"
+     },
+     {
+      "type": "action",
+      "text": "Rush hour traffic sits bumper to bumper across @bridge_dusk."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front pedals into frame, helmet on, steady and quick."
+     },
+     {
+      "type": "action",
+      "text": "He weaves between stopped cars, brake lights glowing red."
+     },
+     {
+      "type": "action",
+      "text": "Drivers drum their steering wheels, going nowhere."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front grins under his helmet."
+     },
+     {
+      "type": "action",
+      "text": "He glides clear of the jam toward the open end."
+     },
+     {
+      "type": "action",
+      "text": "City lights flicker on as he rides into the evening."
+     }
+    ],
+    "note": "I drafted a short, visual 15-second scene from your line: one location, seven beats, no dialogue."
+   }
+  ],
+  "rationale": "Kept the person's idea (cycling past stopped cars, smiling) as a one-location scene with seven short beats of about 14 s and no dialogue. Used only the references given, @sai_front and @bridge_dusk."
+ }
+}

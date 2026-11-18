@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Beads of condensation roll down a cold @soda_can on a picnic table. A hand reaches in, pops the tab, and fizz climbs up."
+     },
+     {
+      "type": "direction",
+      "text": "Macro; the fizz in slow motion."
+     }
+    ],
+    "note": "I reworded the action and the direction, keeping the same events and @soda_can."
+   }
+  ],
+  "rationale": "Rephrase keeps the facts, the @soda_can reference, the block order and the length, changing only the wording."
+ }
+}

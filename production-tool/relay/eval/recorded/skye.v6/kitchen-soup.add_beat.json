@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front lifts the lid off a steaming pot in a sunny kitchen, tastes the soup from a wooden spoon and nods slowly."
+     },
+     {
+      "type": "direction",
+      "text": "Warm morning light from the left."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 3.5,
+      "text": "A smile spreads across @maya_front's face as she reaches for a pinch of salt."
+     }
+    ],
+    "note": "I added a beat at 3.5 s where Maya smiles and reaches for the salt."
+   }
+  ],
+  "rationale": "The shot ends on a nod, so I added one small moment after the taste that continues the action. The existing words and the @name are unchanged."
+ }
+}

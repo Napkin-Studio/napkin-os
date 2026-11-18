@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "The logo settles over a slow pan across a calm sea at dusk."
+     },
+     {
+      "type": "direction",
+      "text": "Leave space for the tagline."
+     }
+    ],
+    "note": "The shot was already tight, so I left the words as they are."
+   }
+  ],
+  "rationale": "The action is one 11-word beat and the direction is already short, so nothing can be cut without losing meaning. I returned the words unchanged."
+ }
+}

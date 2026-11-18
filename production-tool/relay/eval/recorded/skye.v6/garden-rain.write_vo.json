@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Rain drums on a greenhouse roof while @maya_front repots a small tomato plant, humming to herself."
+     },
+     {
+      "type": "direction",
+      "text": "Rain sound up; soft focus outside."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1,
+      "text": "Some of the best days start slowly, with a little rain."
+     }
+    ],
+    "note": "I added a short VO line that sits over the rain and the repotting."
+   }
+  ],
+  "rationale": "Kept the shot's words and added one calm VO beat that fits the quiet mood and leaves room for the humming."
+ }
+}

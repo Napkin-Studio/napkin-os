@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Flour rises in a beam of light as @maya_front pulls a golden loaf from the oven, tapping its base."
+     },
+     {
+      "type": "direction",
+      "text": "Close on the tap; a hollow sound."
+     }
+    ],
+    "note": "I trimmed both lines and kept the order of events."
+   }
+  ],
+  "rationale": "Tightened the action and direction by dropping a few words, keeping @maya_front, the order and the meaning."
+ }
+}

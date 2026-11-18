@@ -1,0 +1,54 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. FARMHOUSE KITCHEN - DAWN"
+     },
+     {
+      "type": "action",
+      "text": "Frost patterns the window. A tired dad shuffles in, hair flattened."
+     },
+     {
+      "type": "action",
+      "text": "He tips oats from the red Hearth Oats pack into a pot."
+     },
+     {
+      "type": "action",
+      "text": "His sleepy daughter slumps at the table, chin propped on her fist."
+     },
+     {
+      "type": "action",
+      "text": "Dad stirs, eyes closing. The spoon keeps going without him."
+     },
+     {
+      "type": "action",
+      "text": "He sets a steaming bowl beside the red pack. She wakes, smiling."
+     },
+     {
+      "type": "action",
+      "text": "She lifts a spoonful to his mouth. He accepts, eyes still shut."
+     },
+     {
+      "type": "character",
+      "text": "NARRATOR (V.O.)"
+     },
+     {
+      "type": "dialogue",
+      "text": "Hearth Oats. Slow down, warm up."
+     }
+    ],
+    "note": "I drafted a short kitchen scene from your line, ending on the tagline."
+   }
+  ],
+  "rationale": "One location, six short beats with a gentle joke (the spoon-feeding dad) and the red pack on show, closing on the tagline as one spoken line; about 14.4 s by rule 10."
+ }
+}

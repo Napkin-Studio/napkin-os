@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Rain drums on a greenhouse roof while @maya_front repots a small tomato plant, humming to herself."
+     },
+     {
+      "type": "direction",
+      "text": "Rain sound up; soft focus outside."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 3,
+      "text": "@maya_front pats the soil firm and smiles at the tomato plant."
+     }
+    ],
+    "note": "I added one beat: Maya pats the soil and smiles at the plant."
+   }
+  ],
+  "rationale": "The shot had one action and no timed moment, so I added a small closing gesture at 3 s that fits the quiet, rainy mood and keeps the existing words unchanged."
+ }
+}

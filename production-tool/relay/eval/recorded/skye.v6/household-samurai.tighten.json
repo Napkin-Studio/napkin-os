@@ -1,0 +1,30 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@samurai does your cleaning. He sweeps the hall in one clean arc."
+     },
+     {
+      "type": "action",
+      "text": "He folds laundry into sharp squares."
+     },
+     {
+      "type": "direction",
+      "text": "Quick cuts, each task one strike."
+     }
+    ],
+    "note": "I tightened the shot, kept @samurai and the order, and split it into two short beats."
+   }
+  ],
+  "rationale": "Cut the redundant introduction, kept both tasks in order and the direction unchanged, and split the two actions into one beat each."
+ }
+}

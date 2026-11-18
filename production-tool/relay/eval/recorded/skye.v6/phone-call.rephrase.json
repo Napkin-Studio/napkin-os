@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "On a packed train, @maya_front picks up her phone, presses a hand over her free ear, and laughs at the voice on the line."
+     },
+     {
+      "type": "direction",
+      "text": "Handheld, close."
+     }
+    ],
+    "note": "I rephrased the action with the same events and the same @name; the direction is unchanged."
+   }
+  ],
+  "rationale": "Rephrase keeps the facts, order and @maya_front, and keeps the direction block last and unchanged."
+ }
+}

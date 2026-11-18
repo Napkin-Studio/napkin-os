@@ -1,0 +1,54 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. CITY STREET - NIGHT"
+     },
+     {
+      "type": "action",
+      "text": "Rain-slick street. The last night bus idles at the far stop."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front sprints, bag bouncing, breath fogging under the streetlights."
+     },
+     {
+      "type": "action",
+      "text": "The doors hiss shut just before he arrives."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front slaps the glass, shoulders dropping."
+     },
+     {
+      "type": "action",
+      "text": "The doors open again. The driver waves him on."
+     },
+     {
+      "type": "character",
+      "text": "DRIVER"
+     },
+     {
+      "type": "dialogue",
+      "text": "Take your time. I'm not going anywhere."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front climbs aboard, out of breath, grinning."
+     }
+    ],
+    "note": "I drafted a short night-bus scene from your line, with one line for the driver."
+   }
+  ],
+  "rationale": "Expanded the person's single beat into one location, six short action lines and one spoken line, about 14.8 s by rule 10. Kept @sai_front as written."
+ }
+}

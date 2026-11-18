@@ -1,0 +1,51 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Frost on the window. A tired DAD shivers at the stove."
+     },
+     {
+      "type": "action",
+      "text": "He tips Hearth Oats from a red pack into a small pot."
+     },
+     {
+      "type": "action",
+      "text": "His sleepy DAUGHTER shuffles in, coat over pyjamas, one wellington boot."
+     },
+     {
+      "type": "action",
+      "text": "Steam rises and softens the window. His shoulders drop."
+     },
+     {
+      "type": "action",
+      "text": "He sets a warm bowl before her. She sighs."
+     },
+     {
+      "type": "action",
+      "text": "He sits beside her and eats from her bowl. She lets him."
+     },
+     {
+      "type": "character",
+      "text": "NARRATOR (V.O.)"
+     },
+     {
+      "type": "dialogue",
+      "text": "Hearth Oats. Slow down, warm up."
+     }
+    ],
+    "duration_s": 14.4,
+    "note": "I cut the scene to six short beats and the VO line, about 14.4 s."
+   }
+  ],
+  "rationale": "Merged and trimmed beats (dropped the closing pack shot) so six action lines at 2 s plus the 6-word VO at 2.4 s total about 14.4 s."
+ }
+}

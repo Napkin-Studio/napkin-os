@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front grips the wheel of her first car, breathes, turns the key."
+     },
+     {
+      "type": "direction",
+      "text": "Interior, low angle up."
+     }
+    ],
+    "note": "I tightened the action to one 12-word beat and trimmed the direction, keeping the order of events."
+   }
+  ],
+  "rationale": "Cut the action from 19 words to 12, keeping the sequence of grip, breath and key turn and the @maya_front name. The direction is shortened and stays last."
+ }
+}

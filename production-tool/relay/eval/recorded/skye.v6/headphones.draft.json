@@ -1,0 +1,50 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. TRAIN PLATFORM - DAY"
+     },
+     {
+      "type": "action",
+      "text": "Commuters pack a noisy platform. Brakes screech, announcements blare."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front stands squeezed in the crowd, wincing at the noise."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front pulls @headphones_black from a bag."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front slips @headphones_black over the ears."
+     },
+     {
+      "type": "action",
+      "text": "The crowd noise drops away. Soft music swells."
+     },
+     {
+      "type": "action",
+      "text": "The crowd rushes on in silence. @sai_front's shoulders relax."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front smiles, nodding to the beat as a train glides past."
+     }
+    ],
+    "note": "I drafted a short platform scene from your line, keeping the noise-to-music moment."
+   }
+  ],
+  "rationale": "Expanded the one-line idea into a single-location 15 s scene of seven action lines (about 14 s), all visual, keeping both @names as written."
+ }
+}

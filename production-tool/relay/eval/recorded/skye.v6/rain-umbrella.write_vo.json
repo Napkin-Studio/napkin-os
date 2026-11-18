@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "It starts to rain on a grey street. @maya_front opens a bright yellow @umbrella_open and grins up at the sky."
+     },
+     {
+      "type": "direction",
+      "text": "Slow push in; the yellow is the only colour."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1.5,
+      "text": "Let it rain. You've got colour to spare."
+     }
+    ],
+    "note": "I added one VO beat at 1.5 s and kept your words as they were."
+   }
+  ],
+  "rationale": "The VO sits over the opening rain and the umbrella reveal. It is short enough to fit the shot without crowding the action."
+ }
+}
