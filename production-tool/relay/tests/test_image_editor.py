@@ -90,13 +90,25 @@ def test_the_mock_region_edit_stripes_the_masked_area_and_nothing_else():
 
 # ── Change whole frame ─────────────────────────────────────────────────────
 
-def test_a_region_edit_with_no_region_and_no_mask_is_a_whole_frame_edit_priced_as_precise():
+def test_a_region_edit_with_no_region_and_no_mask_runs_on_a_words_only_model_never_the_mask_model():
+    """Change whole frame with nothing marked (features/frame-edit-or-redraw.clan): Ideogram 4.5 given no mask
+    gave the frame back unchanged and charged $0.25 (2026-11-17), so it runs on the op's words-only model
+    (Gemini 3 Pro, the alternate whose mask is none), at that model's price."""
     h = editor_harness()
     token = h.as_person()
     _, job = h.post_job(token, op="region_edit", expect=200, image=stored(h), text="warmer light, keep the bottle")
     (sent,) = h.providers["runway"].submits
-    assert job["model"] == "ideogram_4_5" and "region" not in sent and "mask" not in sent and "ratio" not in sent
-    assert job["cost"]["reserved"] == 0.25  # preciseEdit is high quality (25 credits)
+    assert job["model"] == "gemini_image3_pro" and "region" not in sent and "mask" not in sent
+    assert job["cost"]["reserved"] == 0.2
+
+
+def test_a_region_edit_with_a_mask_still_runs_on_the_mask_model():
+    h = editor_harness()
+    token = h.as_person()
+    mask = stored(h, 9)
+    _, job = h.post_job(token, op="region_edit", expect=200, image=stored(h), mask=mask, text="add condensation drops",
+                        region={"x": 0.4, "y": 0.2, "w": 0.2, "h": 0.6})
+    assert job["model"] == "ideogram_4_5"
 
 
 def test_fill_area_sends_the_mask_and_is_priced_as_a_reference_edit():

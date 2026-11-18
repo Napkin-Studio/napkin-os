@@ -270,6 +270,10 @@ class PassthroughDirector:
         inp = job_request.get("input", {})
         text = inp.get("text") or ""
         answer = (inp.get("answer") or {}).get("value")
+        if inp.get("mode") == "redraw" or answer == "redraw":
+            return self._frame_redraw(inp, sheet)
+        if answer == "edit":
+            answer = None  # "Edit anyway" after a recast ask: read the words as an edit
         reading, patch = fe.reading_of(text, (inp.get("shot") or {}).get("camera") or {}, answer)
         if reading == "ask":
             word = fe.size_word(text) or "bigger"
@@ -302,6 +306,35 @@ class PassthroughDirector:
             job["ratio"] = ratio
         return {"op": op, "frameEdit": edit, "providerJob": job, "question": None, "confidence": 0.1,
                 "rationale": f"passthrough: {said}; your words went as they are"}
+
+    @staticmethod
+    def _frame_redraw(inp: dict, sheet: dict | None) -> dict:
+        """Redraw frame with no model (features/frame-edit-or-redraw.clan): the words, the shot's moment and
+        the current frame for its place and light only, as frame. Never a previous frame, and never the
+        edit's "everything else stays": the old people would come back."""
+        from .director import provider_ratio
+
+        provider = (sheet or {}).get("provider", "mock")
+        model = ((sheet or {}).get("ops", {}).get("frame") or {}).get("model", "unknown")
+        words = (inp.get("text") or "").strip().rstrip(".")
+        action = ((inp.get("shot") or {}).get("action") or "").strip()
+        cast = inp.get("castFrame")  # a neighbouring shot's redrawn frame: its people (2026-11-17)
+        people = "the people are the ones in @cast" if cast else "the people are as said here"
+        prompt = ". ".join(p for p in (words, action) if p) + f". The place and the light stay as they are; {people}. Keep the setting, light and style of @current. Full-bleed cinematic image; no text, captions, borders or panels."
+        refs = [{"sha256": inp["image"]["sha256"], "name": "current", "role": "current"}] if inp.get("image") else []
+        if cast and all(r["sha256"] != cast["sha256"] for r in refs):
+            refs.append({"sha256": cast["sha256"], "name": "cast", "role": "object"})
+        for ref, role in ref_roles(inp, "frame_edit", sheet):
+            if all(r["sha256"] != ref["asset"]["sha256"] for r in refs):
+                refs.append({"sha256": ref["asset"]["sha256"], "name": ref["tag"], "role": role})
+        job = {"provider": provider, "model": model, "prompt": prompt, "refs": refs, "outputs": 1}
+        ratio = provider_ratio(provider, "frame", inp.get("ratio"), model, aspect=inp.get("aspect"))
+        if ratio:
+            job["ratio"] = ratio
+        edit = {"reading": "redraw", "runAs": "frame", "words_as_given": True,
+                **({"maskUnused": True} if inp.get("region") or inp.get("mask") else {})}
+        return {"op": "frame_edit", "frameEdit": edit, "providerJob": job, "question": None, "confidence": 0.1,
+                "rationale": "passthrough: redrawn from your words and the shot, the frame for its place and light"}
 
     def _shot_list(self, job_request: dict) -> dict:
         inp = job_request.get("input", {})

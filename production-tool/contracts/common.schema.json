@@ -412,10 +412,10 @@
     },
     "question": {
       "type": "object",
-      "description": "What an agent asks instead of guessing (ui-behaviour 3.17), the Research tool's question with three additions: kind, recommended_option_id and per-option detail and cost. block: no option proceeds until one is done. nudge: at least one proceeds; one may be recommended. ambiguity: the words could mean two things; nothing is recommended. A job's question id is minted by the relay.",
+      "description": "What an agent asks instead of guessing (ui-behaviour 3.17), the Research tool's question with three additions: kind, recommended_option_id and per-option detail and cost. block: no option proceeds until one is done. nudge: at least one proceeds; one may be recommended. ambiguity: the words could mean two things; nothing is recommended. recast: a change to a frame would swap who is in the picture, which an edit cannot do; options redraw and edit, redraw recommended (features/frame-edit-or-redraw.clan). A job's question id is minted by the relay.",
       "properties": {
         "id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" },
-        "kind": { "enum": ["block", "nudge", "ambiguity"] },
+        "kind": { "enum": ["block", "nudge", "ambiguity", "recast"] },
         "text": { "type": "string", "minLength": 1, "maxLength": 200 },
         "why": { "type": "string", "maxLength": 300 },
         "options": { "type": "array", "maxItems": 6, "items": { "$ref": "#/$defs/questionOption" } },

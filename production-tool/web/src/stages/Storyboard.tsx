@@ -48,7 +48,14 @@ import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { nodeTitle } from '../ui/chrome/panels'
 import { Float } from '../ui/Float'
 import { trayGroups, type TrayRow } from '../ui/tray'
-import { applyClipLine, applyFrameEditStep, cameraDiff, cameraLabel, changeFrame, discardStep, frameEditCopy, frameEditLines, frameEditOf, keepBothStep, proposalOf } from '../jobs/frameEdit'
+import {
+  applyClipLine, applyFrameEditStep, cameBackSame, cameraDiff, cameraLabel, changeFrame, discardStep, frameEditCopy, frameEditLines, frameEditMode, frameEditOf,
+  framePriceUsd, keepBothStep, proposalOf,
+} from '../jobs/frameEdit'
+import type { FrameEditMode } from '../contracts/types'
+import { askOf } from '../jobs/runner'
+import { placeAsk } from '../ui/askPlaces'
+import { modelLabel } from '../capabilities'
 import { ImageEditor } from './ImageEditor'
 import { ScopeLine } from './InputsStrip'
 import './storyboard.css'
@@ -394,8 +401,28 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   }
-  const send = (redoOf?: string) => attempt(async () => {
-    await changeFrame({ relay, doc: docStore, ui: uiStore, runner }, shot.id, words, redoOf ? { redoOf } : {})
+  // Edit parts | Redraw frame (features/frame-edit-or-redraw.clan): the person's pick, and the job's once it says.
+  const { config } = useConfig()
+  // The person's pick holds for the job it was made on; a newer job shows its own mode (a redraw it was sent as,
+  // or one Dex read after "Redraw frame instead").
+  const [pick, setPick] = useState<{ mode: FrameEditMode; job?: string }>({ mode: 'edit' })
+  const jobMode = change ? frameEditMode(change.job) : undefined
+  const mode: FrameEditMode = jobMode && pick.job !== change?.job.id ? jobMode : pick.mode
+  const setMode = (m: FrameEditMode) => setPick({ mode: m, job: change?.job.id })
+  const waiting = change && change.job.state === 'needs_input' ? askOf(doc, change.job.id) : undefined
+  const recast = waiting?.state === 'open' && waiting.question.kind === 'recast' ? waiting : undefined
+  const recastId = recast?.id
+  useEffect(() => (recastId ? placeAsk(recastId) : undefined), [recastId])
+  const price = framePriceUsd(config)
+  const n = index + 1
+  const send = (redoOf?: string, as: FrameEditMode = mode) => attempt(async () => {
+    setMode(as)
+    await changeFrame({ relay, doc: docStore, ui: uiStore, runner }, shot.id, words, { ...(redoOf ? { redoOf } : {}), mode: as })
+  })
+  const answerRecast = (option: 'redraw' | 'edit') => attempt(async () => {
+    if (!change) return
+    if (option === 'redraw') setMode('redraw')
+    await runner.answer(change.job.id, { optionId: option })
   })
   const chips = ([['size', shot.camera.size], ['angle', shot.camera.angle], ['movement', shot.camera.movement ?? 'static'], ['lens_mm', shot.camera.lens_mm]] as const)
     .filter(([, v]) => v !== undefined && v !== null).map(([field, v]) => ({ field, label: cap(cameraLabel(field, v)) }))
@@ -506,39 +533,109 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
       )}
       {(changing || showChange) && (
         <div className="sb-change">
-          <b>Change this frame</b>
-          <div className="row">
-            <input className="input" aria-label="What to change in this frame" placeholder="Make this an overhead aerial shot" value={words} maxLength={1000}
-              onChange={(e) => setWords(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && words.trim() && !changeRunning) void send(showChange ? change?.job.id : undefined) }} />
-            <button className="btn sm" disabled={!words.trim() || changeRunning} onClick={() => void send(showChange ? change?.job.id : undefined)}>{showChange ? 'Redo' : 'Send'}</button>
+          <div className="sb-headrow">
+            <b>Change this frame</b>
+            <div className="sb-mode" role="group" aria-label="How to change it">
+              {(['edit', 'redraw'] as const).map((m) => (
+                <button key={m} type="button" aria-pressed={mode === m} disabled={changeRunning} onClick={() => setMode(m)}>
+                  {m === 'edit' ? <EditIcon /> : <RedrawIcon />}{frameEditCopy.mode[m]}
+                </button>
+              ))}
+            </div>
           </div>
-          {change && changeRunning && <div className="sb-changejob"><JobSlot jobId={change.job.id} compact /></div>}
-          {change && !changeRunning && change.proposal && showChange && (
-            <div className="sb-result">
-              <div className="row"><AgentFigure agent="dex" size={20} decorative /><span>{frameEditLines(change.job)[0]}</span></div>
-              {frameEditLines(change.job).slice(1).map((l) => <span key={l} className="faint">{l}</span>)}
-              <div className="sb-diff">
-                <ProposalThumb sha={change.proposal.asset} version={change.proposal.version} />
-                <div>
-                  {changed?.rows.map((r) => <div key={r.field} className="sb-diffrow"><span>{r.field.replace('_mm', '')}</span><del>{r.from}</del>→<ins>{r.to}</ins></div>)}
-                  {changed?.stay && <div className="faint">{changed.stay}</div>}
-                </div>
-              </div>
+          <div className="sb-modehint">{mode === 'edit' ? frameEditCopy.hint.edit : frameEditCopy.hint.redraw(n)}{price !== undefined && <span className="sb-cost pt-mono">{frameEditCopy.price(price)}</span>}</div>
+          <div className="row">
+            <input className="input" aria-label="What to change in this frame" placeholder={frameEditCopy.placeholder[mode]} value={words} maxLength={1000} disabled={changeRunning && !recast}
+              onChange={(e) => setWords(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && words.trim() && !changeRunning) void send(showChange ? change?.job.id : undefined) }} />
+            <button className="btn sm" disabled={!words.trim() || changeRunning} onClick={() => void send(showChange ? change?.job.id : undefined)}>{showChange && !recast ? frameEditCopy.redo : frameEditCopy.send[mode]}</button>
+          </div>
+          {recast && (
+            <div className="sb-ask" role="group" aria-label="Dex asks">
+              <div className="row"><AgentFigure agent="dex" size={26} state="needs-you" decorative /><p><b>{frameEditCopy.recast.title}</b> {frameEditCopy.recast.body}</p></div>
               <div className="row">
-                <button className="btn sm primary" onClick={() => void attempt(() => applyFrameEditStep(docStore, change.job.id, shot.id))}>{frameEditCopy.apply}</button>
-                <button className="btn sm" onClick={() => void attempt(() => keepBothStep(docStore, change.job.id, shot.id))}>{frameEditCopy.keepBoth}</button>
+                <button className="btn sm dark" onClick={() => void answerRecast('redraw')}>{frameEditCopy.recast.redraw}</button>
+                <button className="btn sm" onClick={() => void answerRecast('edit')}>{frameEditCopy.recast.edit}</button>
                 <span className="spacer" />
-                <button className="btn sm ghost" onClick={() => void attempt(() => discardStep(docStore, change.job.id))}>{frameEditCopy.discard}</button>
+                <span className="faint">{frameEditCopy.recast.unpaid}</span>
               </div>
-              {applyClipLine(doc, shot.id) && <div className="pt-pill warn sb-applyline">{applyClipLine(doc, shot.id)}</div>}
             </div>
           )}
+          {change && changeRunning && !recast && (mode === 'redraw' && change.job.state !== 'needs_input'
+            ? (
+              <div className="sb-running" role="status">
+                <div className="row"><AgentFigure agent="dex" size={26} state="working" decorative />
+                  <div><div>{frameEditCopy.redrawing(n)}</div><div className="faint">{[modelLabel(change.job.provider, change.job.model), price !== undefined ? frameEditCopy.price(price).slice(2) : undefined].filter(Boolean).join(' · ')}</div></div>
+                </div>
+                <div className="sb-bar"><i /></div>
+              </div>
+            )
+            : <div className="sb-changejob"><JobSlot jobId={change.job.id} compact /></div>)}
+          {change && !changeRunning && change.proposal && showChange && (cameBackSame(change.proposal)
+            ? (
+              <div className="sb-nochange">
+                <div className="row"><AgentFigure agent="dex" size={20} decorative />
+                  <p><b>{frameEditCopy.unchanged(n)}</b><br /><span className="faint">{frameEditCopy.charged(providerName(change.job.provider), change.job.cost?.confirmed)}</span></p>
+                </div>
+                <div className="row">
+                  <button className="btn sm dark" disabled={!words.trim()} onClick={() => void send(change.job.id, 'redraw')}>{frameEditCopy.redrawButton}</button>
+                  <span className="spacer" />
+                  <button className="btn sm ghost" onClick={() => void attempt(() => discardStep(docStore, change.job.id))}>{frameEditCopy.discard}</button>
+                </div>
+              </div>
+            )
+            : (
+              <div className="sb-result">
+                {frameEditOf(change.job)?.reading === 'redraw'
+                  ? <div className="row"><AgentFigure agent="dex" size={20} decorative /><span>{frameEditCopy.redrew(n)}</span></div>
+                  : <div className="row"><AgentFigure agent="dex" size={20} decorative /><span>{frameEditOf(change.job)?.reading === 'local' ? frameEditCopy.edited(n) : frameEditLines(change.job)[0]}</span></div>}
+                {frameEditLines(change.job).slice(1).map((l) => <span key={l} className="faint">{l}</span>)}
+                <div className="sb-diff">
+                  <ProposalThumb sha={change.proposal.asset} version={change.proposal.version} />
+                  {frameEditOf(change.job)?.reading === 'redraw'
+                    ? (
+                      <div className="sb-keeps">
+                        <div><b>{frameEditCopy.kept}</b>{frameEditCopy.keptWhat(chips.filter((c) => c.field === 'size' || c.field === 'angle').map((c) => c.label))}</div>
+                        <div><b>{frameEditCopy.made}</b>{frameEditCopy.newWhat(frameEditOf(change.job)?.who)}</div>
+                      </div>
+                    )
+                    : (
+                      <div>
+                        {changed?.rows.map((r) => <div key={r.field} className="sb-diffrow"><span>{r.field.replace('_mm', '')}</span><del>{r.from}</del>→<ins>{r.to}</ins></div>)}
+                        {changed?.stay && <div className="faint">{changed.stay}</div>}
+                        {frameEditOf(change.job)?.reading === 'local' && (
+                          <div className="faint sb-notmeant">{frameEditCopy.notMeant} <button type="button" className="btn link" disabled={!words.trim()} onClick={() => void send(change.job.id, 'redraw')}>{frameEditCopy.redrawLink}</button> {frameEditCopy.withSame}</div>
+                        )}
+                      </div>
+                    )}
+                </div>
+                <div className="row">
+                  <button className="btn sm primary" onClick={() => void attempt(() => applyFrameEditStep(docStore, change.job.id, shot.id))}>{frameEditCopy.apply}</button>
+                  <button className="btn sm" onClick={() => void attempt(() => keepBothStep(docStore, change.job.id, shot.id))}>{frameEditCopy.keepBoth}</button>
+                  <span className="spacer" />
+                  <button className="btn sm ghost" onClick={() => void attempt(() => discardStep(docStore, change.job.id))}>{frameEditCopy.discard}</button>
+                </div>
+                {applyClipLine(doc, shot.id) && <div className="pt-pill warn sb-applyline">{applyClipLine(doc, shot.id)}</div>}
+              </div>
+            ))}
           {!showChange && <button className="btn xs ghost" onClick={() => setChanging(false)}>Close</button>}
         </div>
       )}
       {error && <div role="alert" className="framecard-error">{error}</div>}
     </article>
   )
+}
+
+/** Who charged for a picture, by name ("Runway"). */
+function providerName(provider: string | undefined): string {
+  return provider ? provider[0].toUpperCase() + provider.slice(1) : 'The provider'
+}
+
+function EditIcon() {
+  return <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9.5 2.5l2 2L5 11H3V9z" /></svg>
+}
+
+function RedrawIcon() {
+  return <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="3" width="10" height="8" rx="1.5" /><path d="M4.5 8.5l2-2 1.5 1.5 1.5-1.5" /></svg>
 }
 
 function ProposalThumb({ sha, version }: { sha: string; version: number }) {

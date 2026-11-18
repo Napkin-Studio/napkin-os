@@ -357,7 +357,7 @@ for f in sorted(HERE.glob("examples/config.*.json")):
     # (features/frame-change-edit.clan) adds Change this frame; director.v8 (features/canvas-nodes.clan)
     # holds a shot's required references and lists Dex's additions. v6, v6.1 and v7 stay bundled for a rollback.
     # director.v9 (features/runway-video-models.clan) says which pictures each clip model carries.
-    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9"):
+    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9", "director.v9.1"):
         fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7, v8 or v9")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
