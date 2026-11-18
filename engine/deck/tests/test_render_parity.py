@@ -21,6 +21,8 @@ from pptx.util import Emu
 
 from deck.bench import fixtures
 
+#: The pictured fixture draws pictures on purpose, so it is not part of the no-pictures parity.
+PARITY_NAMES = [n for n in fixtures.FIXTURES if n != fixtures.PICTURED]
 RECORDED = Path(__file__).with_name("fixtures") / "render_parity.json"
 
 
@@ -47,7 +49,7 @@ def fingerprint(run_dir: Path) -> dict:
 @pytest.fixture(scope="module")
 def built(tmp_path_factory):
     root = tmp_path_factory.mktemp("parity")
-    return {n: fixtures.build_one(n, root / n, geometry_only=True) for n in fixtures.FIXTURES}
+    return {n: fixtures.build_one(n, root / n, geometry_only=True) for n in PARITY_NAMES}
 
 
 def test_the_fixture_decks_keep_their_recorded_render_signatures(built):
@@ -55,6 +57,6 @@ def test_the_fixture_decks_keep_their_recorded_render_signatures(built):
     if os.environ.get("RECORD_PARITY") == "1":
         RECORDED.write_text(json.dumps(got, indent=1, ensure_ascii=False, sort_keys=True))
     want = json.loads(RECORDED.read_text())
-    assert set(got) == set(want) == set(fixtures.FIXTURES)
+    assert set(got) == set(want) == set(PARITY_NAMES)
     for n in got:
         assert got[n] == want[n], f"{n}: a deck built with no pictures no longer renders as it did at the merge base"

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "items_version": 3,
+ "items_version": 4,
  "decks": {
   "agency_pitch": {
    "run_dir": "agency_pitch",
@@ -26,12 +26,15 @@
      "answer": "yes"
     },
     "g_no_major": {
-     "answer": "n/a",
-     "reason": "no repair policy with a severity map exists (engine/deck/policy/repair.yaml, deck-repair-loop): without one nothing is major"
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
     },
     "g_checks_current": {
-     "answer": "n/a",
-     "reason": "qa.json carries no deck_sha (deck-repair-loop adds it)"
+     "answer": "yes"
     },
     "q_no_overflow": {
      "answer": "yes"
@@ -86,23 +89,30 @@
      "answer": "yes"
     },
     "l_one_dominant": {
-     "answer": "n/a",
-     "reason": "no layout library on disk (engine/deck/layouts/, deck-layout-library): no slot is marked dominant"
+     "answer": "yes"
     },
     "l_alternatives": {
-     "answer": "n/a",
-     "reason": "no slide records layout.alternatives (written by deck-layout-library)"
+     "answer": "no",
+     "slides": [
+      "s08",
+      "s09"
+     ],
+     "measured": 7,
+     "limit": 9
     },
     "l_slots_clean": {
-     "answer": "n/a",
-     "reason": "no presented slide has slots"
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
     },
     "w_type_budget": {
      "answer": "yes"
     },
     "w_density_met": {
-     "answer": "n/a",
-     "reason": "deck.meta.preferences.density is absent: the build applied no density"
+     "answer": "yes"
     },
     "w_pitch_length": {
      "answer": "yes"
@@ -136,27 +146,13 @@
      "n": 9
     },
     "t_title_one_place": {
-     "answer": "no",
-     "slides": [
-      "s03",
-      "s06",
-      "s08",
-      "s09",
-      "s10"
-     ],
-     "measured": 0.138,
-     "limit": 0.05
+     "answer": "yes"
     },
     "t_title_range": {
      "answer": "yes"
     },
     "t_cover_title": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1.22,
-     "limit": 1.4
+     "answer": "yes"
     },
     "t_two_families": {
      "answer": "yes",
@@ -220,7 +216,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 6.0,
+     "value": 5.3,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -231,11 +227,13 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
+      "layout_plan": 0.04,
       "validate": 0.01,
-      "render_pptx": 0.98,
+      "render_pptx": 0.17,
       "render_web": 0.0,
-      "render_pdf_png": 4.23,
-      "qa_render": 0.74
+      "render_pdf_png": 4.57,
+      "qa_render": 0.33,
+      "repair": 0.17
      }
     },
     "w_words_sha": {
@@ -244,7 +242,7 @@
     },
     "w_notes_kept": {
      "answer": "n/a",
-     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
+     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
     },
     "k_palette_only": {
      "answer": "n/a",
@@ -256,16 +254,16 @@
     }
    },
    "summary": {
-    "yes": 22,
-    "no": 4,
-    "na": 20,
+    "yes": 27,
+    "no": 5,
+    "na": 14,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 14,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 6.0,
+     "m_seconds": 5.3,
      "w_words_sha": "363d4221c4e6"
     }
    }
@@ -294,12 +292,15 @@
      "answer": "yes"
     },
     "g_no_major": {
-     "answer": "n/a",
-     "reason": "no repair policy with a severity map exists (engine/deck/policy/repair.yaml, deck-repair-loop): without one nothing is major"
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
     },
     "g_checks_current": {
-     "answer": "n/a",
-     "reason": "qa.json carries no deck_sha (deck-repair-loop adds it)"
+     "answer": "yes"
     },
     "q_no_overflow": {
      "answer": "yes"
@@ -360,23 +361,30 @@
      "answer": "yes"
     },
     "l_one_dominant": {
-     "answer": "n/a",
-     "reason": "no layout library on disk (engine/deck/layouts/, deck-layout-library): no slot is marked dominant"
+     "answer": "yes"
     },
     "l_alternatives": {
-     "answer": "n/a",
-     "reason": "no slide records layout.alternatives (written by deck-layout-library)"
+     "answer": "no",
+     "slides": [
+      "s06",
+      "s08"
+     ],
+     "measured": 7,
+     "limit": 9
     },
     "l_slots_clean": {
-     "answer": "n/a",
-     "reason": "no presented slide has slots"
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
     },
     "w_type_budget": {
      "answer": "yes"
     },
     "w_density_met": {
-     "answer": "n/a",
-     "reason": "deck.meta.preferences.density is absent: the build applied no density"
+     "answer": "yes"
     },
     "w_pitch_length": {
      "answer": "yes"
@@ -411,12 +419,1087 @@
      "answer": "yes"
     },
     "t_cover_title": {
+     "answer": "yes"
+    },
+    "t_two_families": {
+     "answer": "yes",
+     "measured": [
+      "Calibri",
+      "Cambria"
+     ]
+    },
+    "p_where_asked": {
+     "answer": "n/a",
+     "reason": "deck.meta.preferences.pictures is absent or 'none': the build was not asked for pictures"
+    },
+    "m_creative_pictured": {
+     "answer": "value",
+     "value": 0.0,
+     "n": 3
+    },
+    "p_only_creative": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_all_approved": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
+    "p_one_style": {
+     "answer": "n/a",
+     "reason": "fewer than 2 placed pictures carry a style hash"
+    },
+    "p_assets_resolve": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_rights_ok": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_alt_text": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_no_stretch": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_no_lowres": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_text_on_image": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "m_usd": {
+     "answer": "value",
+     "value": 0
+    },
+    "m_seconds": {
+     "answer": "value",
+     "value": 5.0,
+     "stages": {
+      "inputs": 0.0,
+      "a0": 0,
+      "a": 0,
+      "b": 0,
+      "fit": null,
+      "e": null,
+      "red_team": null,
+      "assemble": 0.0,
+      "layout_plan": 0.019,
+      "validate": 0.01,
+      "render_pptx": 0.09,
+      "render_web": 0.0,
+      "render_pdf_png": 4.45,
+      "qa_render": 0.28,
+      "repair": 0.14
+     }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "2003ece26ded"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    }
+   },
+   "summary": {
+    "yes": 28,
+    "no": 4,
+    "na": 14,
+    "metrics": {
+     "m_share_le_30": 0.889,
+     "m_share_le_60": 1.0,
+     "m_median_words": 4,
+     "m_creative_pictured": 0.0,
+     "m_usd": 0,
+     "m_seconds": 5.0,
+     "w_words_sha": "2003ece26ded"
+    }
+   }
+  },
+  "investor_seed": {
+   "run_dir": "investor_seed",
+   "inputs": {
+    "deck": true,
+    "validation": true,
+    "qa": true,
+    "qa_pixels": true,
+    "layouts": true,
+    "report": true,
+    "pptx": true
+   },
+   "presented": 4,
+   "content": 3,
+   "results": {
+    "g_no_blocker": {
+     "answer": "yes"
+    },
+    "g_no_validator_error": {
+     "answer": "yes"
+    },
+    "g_no_qa_error": {
+     "answer": "yes"
+    },
+    "g_no_major": {
+     "answer": "yes"
+    },
+    "g_checks_current": {
+     "answer": "yes"
+    },
+    "q_no_overflow": {
+     "answer": "yes"
+    },
+    "q_no_overlap": {
+     "answer": "yes"
+    },
+    "q_no_off_slide": {
+     "answer": "yes"
+    },
+    "q_margins_kept": {
+     "answer": "yes"
+    },
+    "q_body_floor": {
+     "answer": "yes"
+    },
+    "q_contrast": {
+     "answer": "yes"
+    },
+    "q_no_filler": {
+     "answer": "yes"
+    },
+    "q_not_empty": {
+     "answer": "yes"
+    },
+    "q_not_cornered": {
+     "answer": "yes"
+    },
+    "l_no_fallback_flow": {
+     "answer": "yes"
+    },
+    "l_no_rule_flow": {
+     "answer": "yes"
+    },
+    "l_not_relaxed": {
+     "answer": "yes"
+    },
+    "l_repeat_max2": {
+     "answer": "yes"
+    },
+    "l_variety": {
+     "answer": "n/a",
+     "reason": "fewer than 5 presented content slides"
+    },
+    "l_in_library": {
+     "answer": "yes"
+    },
+    "l_one_dominant": {
+     "answer": "yes"
+    },
+    "l_alternatives": {
+     "answer": "yes"
+    },
+    "l_slots_clean": {
+     "answer": "yes"
+    },
+    "w_type_budget": {
+     "answer": "yes"
+    },
+    "w_density_met": {
+     "answer": "yes"
+    },
+    "w_pitch_length": {
+     "answer": "yes"
+    },
+    "w_takeaway_titles": {
+     "answer": "yes"
+    },
+    "w_line_length": {
+     "answer": "yes"
+    },
+    "m_share_le_30": {
+     "answer": "value",
+     "value": 1.0,
+     "n": 3,
+     "words": 30
+    },
+    "m_share_le_60": {
+     "answer": "value",
+     "value": 1.0,
+     "n": 3,
+     "words": 60
+    },
+    "m_median_words": {
+     "answer": "value",
+     "value": 10,
+     "n": 3
+    },
+    "t_title_one_place": {
+     "answer": "yes"
+    },
+    "t_title_range": {
+     "answer": "yes"
+    },
+    "t_cover_title": {
+     "answer": "yes"
+    },
+    "t_two_families": {
+     "answer": "yes",
+     "measured": [
+      "Calibri",
+      "Cambria"
+     ]
+    },
+    "p_where_asked": {
+     "answer": "n/a",
+     "reason": "deck.meta.preferences.pictures is absent or 'none': the build was not asked for pictures"
+    },
+    "m_creative_pictured": {
+     "answer": "value",
+     "value": 0.0,
+     "n": 1
+    },
+    "p_only_creative": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_all_approved": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
+    "p_one_style": {
+     "answer": "n/a",
+     "reason": "fewer than 2 placed pictures carry a style hash"
+    },
+    "p_assets_resolve": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_rights_ok": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_alt_text": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_no_stretch": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_no_lowres": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_text_on_image": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "m_usd": {
+     "answer": "value",
+     "value": 0
+    },
+    "m_seconds": {
+     "answer": "value",
+     "value": 4.2,
+     "stages": {
+      "inputs": 0.0,
+      "i": 0,
+      "fit": null,
+      "e": null,
+      "red_team": null,
+      "assemble": 0.0,
+      "layout_plan": 0.01,
+      "validate": 0.01,
+      "render_pptx": 0.04,
+      "render_web": 0.0,
+      "render_pdf_png": 4.02,
+      "qa_render": 0.12
+     }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "20fddf54b073"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    }
+   },
+   "summary": {
+    "yes": 31,
+    "no": 0,
+    "na": 15,
+    "metrics": {
+     "m_share_le_30": 1.0,
+     "m_share_le_60": 1.0,
+     "m_median_words": 10,
+     "m_creative_pictured": 0.0,
+     "m_usd": 0,
+     "m_seconds": 4.2,
+     "w_words_sha": "20fddf54b073"
+    }
+   }
+  },
+  "lumen_water": {
+   "run_dir": "lumen_water",
+   "inputs": {
+    "deck": true,
+    "validation": true,
+    "qa": true,
+    "qa_pixels": true,
+    "layouts": true,
+    "report": true,
+    "pptx": true
+   },
+   "presented": 16,
+   "content": 15,
+   "results": {
+    "g_no_blocker": {
+     "answer": "yes"
+    },
+    "g_no_validator_error": {
+     "answer": "yes"
+    },
+    "g_no_qa_error": {
+     "answer": "yes"
+    },
+    "g_no_major": {
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "g_checks_current": {
+     "answer": "yes"
+    },
+    "q_no_overflow": {
+     "answer": "yes"
+    },
+    "q_no_overlap": {
+     "answer": "yes"
+    },
+    "q_no_off_slide": {
+     "answer": "yes"
+    },
+    "q_margins_kept": {
+     "answer": "yes"
+    },
+    "q_body_floor": {
+     "answer": "yes"
+    },
+    "q_contrast": {
+     "answer": "yes"
+    },
+    "q_no_filler": {
+     "answer": "yes"
+    },
+    "q_not_empty": {
+     "answer": "yes"
+    },
+    "q_not_cornered": {
+     "answer": "yes"
+    },
+    "l_no_fallback_flow": {
+     "answer": "yes"
+    },
+    "l_no_rule_flow": {
+     "answer": "yes"
+    },
+    "l_not_relaxed": {
+     "answer": "yes"
+    },
+    "l_repeat_max2": {
+     "answer": "no",
+     "slides": [
+      "s14",
+      "s15",
+      "s16"
+     ],
+     "measured": 3,
+     "limit": 2
+    },
+    "l_variety": {
+     "answer": "yes"
+    },
+    "l_in_library": {
+     "answer": "yes"
+    },
+    "l_one_dominant": {
+     "answer": "yes"
+    },
+    "l_alternatives": {
+     "answer": "no",
+     "slides": [
+      "s05",
+      "s07",
+      "s11",
+      "s14",
+      "s15"
+     ],
+     "measured": 10,
+     "limit": 15
+    },
+    "l_slots_clean": {
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "w_type_budget": {
+     "answer": "yes"
+    },
+    "w_density_met": {
+     "answer": "yes"
+    },
+    "w_pitch_length": {
+     "answer": "yes"
+    },
+    "w_takeaway_titles": {
+     "answer": "no",
+     "slides": [
+      "s13"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "w_line_length": {
+     "answer": "yes"
+    },
+    "m_share_le_30": {
+     "answer": "value",
+     "value": 0.933,
+     "n": 15,
+     "words": 30
+    },
+    "m_share_le_60": {
+     "answer": "value",
+     "value": 1.0,
+     "n": 15,
+     "words": 60
+    },
+    "m_median_words": {
+     "answer": "value",
+     "value": 9,
+     "n": 15
+    },
+    "t_title_one_place": {
+     "answer": "yes"
+    },
+    "t_title_range": {
+     "answer": "yes"
+    },
+    "t_cover_title": {
+     "answer": "yes"
+    },
+    "t_two_families": {
+     "answer": "yes",
+     "measured": [
+      "Calibri",
+      "Cambria"
+     ]
+    },
+    "p_where_asked": {
+     "answer": "n/a",
+     "reason": "deck.meta.preferences.pictures is absent or 'none': the build was not asked for pictures"
+    },
+    "m_creative_pictured": {
+     "answer": "value",
+     "value": 0.0,
+     "n": 5
+    },
+    "p_only_creative": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_all_approved": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
+    "p_one_style": {
+     "answer": "n/a",
+     "reason": "fewer than 2 placed pictures carry a style hash"
+    },
+    "p_assets_resolve": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_rights_ok": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_alt_text": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_no_stretch": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_no_lowres": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "p_text_on_image": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
+    "m_usd": {
+     "answer": "value",
+     "value": 0
+    },
+    "m_seconds": {
+     "answer": "value",
+     "value": 5.9,
+     "stages": {
+      "inputs": 0.0,
+      "a": 0,
+      "b": 0,
+      "c": 0,
+      "d": 0,
+      "fit": null,
+      "e": null,
+      "red_team": null,
+      "assemble": 0.0,
+      "layout_plan": 0.255,
+      "validate": 0.01,
+      "render_pptx": 0.18,
+      "render_web": 0.0,
+      "render_pdf_png": 4.75,
+      "qa_render": 0.46,
+      "repair": 0.18
+     }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "d62d948a67a9"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    }
+   },
+   "summary": {
+    "yes": 27,
+    "no": 5,
+    "na": 14,
+    "metrics": {
+     "m_share_le_30": 0.933,
+     "m_share_le_60": 1.0,
+     "m_median_words": 9,
+     "m_creative_pictured": 0.0,
+     "m_usd": 0,
+     "m_seconds": 5.9,
+     "w_words_sha": "d62d948a67a9"
+    }
+   }
+  },
+  "lumen_water_pictured": {
+   "run_dir": "lumen_water_pictured",
+   "inputs": {
+    "deck": true,
+    "validation": true,
+    "qa": true,
+    "qa_pixels": true,
+    "layouts": true,
+    "report": true,
+    "pptx": true
+   },
+   "presented": 20,
+   "content": 19,
+   "results": {
+    "g_no_blocker": {
+     "answer": "no",
+     "slides": [
+      "s09"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "g_no_validator_error": {
+     "answer": "yes"
+    },
+    "g_no_qa_error": {
+     "answer": "yes"
+    },
+    "g_no_major": {
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 2,
+     "limit": 0
+    },
+    "g_checks_current": {
+     "answer": "yes"
+    },
+    "q_no_overflow": {
+     "answer": "yes"
+    },
+    "q_no_overlap": {
+     "answer": "yes"
+    },
+    "q_no_off_slide": {
+     "answer": "yes"
+    },
+    "q_margins_kept": {
+     "answer": "yes"
+    },
+    "q_body_floor": {
+     "answer": "yes"
+    },
+    "q_contrast": {
+     "answer": "yes"
+    },
+    "q_no_filler": {
+     "answer": "yes"
+    },
+    "q_not_empty": {
+     "answer": "yes"
+    },
+    "q_not_cornered": {
+     "answer": "yes"
+    },
+    "l_no_fallback_flow": {
+     "answer": "yes"
+    },
+    "l_no_rule_flow": {
+     "answer": "yes"
+    },
+    "l_not_relaxed": {
+     "answer": "yes"
+    },
+    "l_repeat_max2": {
+     "answer": "no",
+     "slides": [
+      "s18",
+      "s19",
+      "s20"
+     ],
+     "measured": 3,
+     "limit": 2
+    },
+    "l_variety": {
+     "answer": "yes"
+    },
+    "l_in_library": {
+     "answer": "yes"
+    },
+    "l_one_dominant": {
+     "answer": "yes"
+    },
+    "l_alternatives": {
+     "answer": "no",
+     "slides": [
+      "s05",
+      "s07",
+      "s10",
+      "s15",
+      "s18",
+      "s19"
+     ],
+     "measured": 13,
+     "limit": 19
+    },
+    "l_slots_clean": {
+     "answer": "no",
+     "slides": [
+      "s01",
+      "s08",
+      "s09"
+     ],
+     "measured": 5,
+     "limit": 0
+    },
+    "w_type_budget": {
+     "answer": "yes"
+    },
+    "w_density_met": {
+     "answer": "yes"
+    },
+    "w_pitch_length": {
+     "answer": "no",
+     "slides": [
+      "deck"
+     ],
+     "measured": 20,
+     "limit": 18
+    },
+    "w_takeaway_titles": {
+     "answer": "no",
+     "slides": [
+      "s17"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "w_line_length": {
+     "answer": "yes"
+    },
+    "m_share_le_30": {
+     "answer": "value",
+     "value": 0.947,
+     "n": 19,
+     "words": 30
+    },
+    "m_share_le_60": {
+     "answer": "value",
+     "value": 1.0,
+     "n": 19,
+     "words": 60
+    },
+    "m_median_words": {
+     "answer": "value",
+     "value": 11,
+     "n": 19
+    },
+    "t_title_one_place": {
+     "answer": "yes"
+    },
+    "t_title_range": {
+     "answer": "yes"
+    },
+    "t_cover_title": {
      "answer": "no",
      "slides": [
       "s01"
      ],
      "measured": 1.22,
      "limit": 1.4
+    },
+    "t_two_families": {
+     "answer": "yes",
+     "measured": [
+      "Calibri",
+      "Cambria"
+     ]
+    },
+    "p_where_asked": {
+     "answer": "no",
+     "slides": [
+      "s05",
+      "s12",
+      "s13"
+     ],
+     "measured": 5,
+     "limit": 8
+    },
+    "m_creative_pictured": {
+     "answer": "value",
+     "value": 0.556,
+     "n": 9
+    },
+    "p_only_creative": {
+     "answer": "yes"
+    },
+    "p_all_approved": {
+     "answer": "value",
+     "value": 0.0,
+     "n": 13,
+     "audience": "review"
+    },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
+    "p_one_style": {
+     "answer": "yes"
+    },
+    "p_assets_resolve": {
+     "answer": "yes"
+    },
+    "p_rights_ok": {
+     "answer": "yes"
+    },
+    "p_alt_text": {
+     "answer": "yes"
+    },
+    "p_no_stretch": {
+     "answer": "yes"
+    },
+    "p_no_lowres": {
+     "answer": "yes"
+    },
+    "p_text_on_image": {
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "m_usd": {
+     "answer": "value",
+     "value": 0
+    },
+    "m_seconds": {
+     "answer": "value",
+     "value": 6.8,
+     "stages": {
+      "inputs": 0.0,
+      "a": 0,
+      "b": 0,
+      "c": 0,
+      "d": 0,
+      "fit": null,
+      "e": null,
+      "red_team": null,
+      "assemble": 0.0,
+      "layout_plan": 0.042,
+      "validate": 0.01,
+      "render_pptx": 0.22,
+      "render_web": 0.01,
+      "render_pdf_png": 5.49,
+      "qa_render": 0.65,
+      "repair": 0.23
+     }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "34b876357189"
+    },
+    "w_notes_kept": {
+     "answer": "n/a",
+     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
+    },
+    "k_palette_only": {
+     "answer": "no",
+     "slides": [
+      "s01",
+      "s03",
+      "s07",
+      "s08",
+      "s09",
+      "s10",
+      "s11",
+      "s18",
+      "s19",
+      "s20"
+     ],
+     "measured": [
+      "595F66",
+      "B03225",
+      "C0392B",
+      "FFFFFF"
+     ],
+     "limit": "meta.theme.colors"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    }
+   },
+   "summary": {
+    "yes": 31,
+    "no": 11,
+    "na": 3,
+    "metrics": {
+     "m_share_le_30": 0.947,
+     "m_share_le_60": 1.0,
+     "m_median_words": 11,
+     "m_creative_pictured": 0.556,
+     "p_all_approved": 0.0,
+     "m_usd": 0,
+     "m_seconds": 6.8,
+     "w_words_sha": "34b876357189"
+    }
+   }
+  },
+  "lumen_water_prompt": {
+   "run_dir": "lumen_water_prompt",
+   "inputs": {
+    "deck": true,
+    "validation": true,
+    "qa": true,
+    "qa_pixels": true,
+    "layouts": true,
+    "report": true,
+    "pptx": true
+   },
+   "presented": 10,
+   "content": 9,
+   "results": {
+    "g_no_blocker": {
+     "answer": "yes"
+    },
+    "g_no_validator_error": {
+     "answer": "yes"
+    },
+    "g_no_qa_error": {
+     "answer": "yes"
+    },
+    "g_no_major": {
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "g_checks_current": {
+     "answer": "yes"
+    },
+    "q_no_overflow": {
+     "answer": "yes"
+    },
+    "q_no_overlap": {
+     "answer": "yes"
+    },
+    "q_no_off_slide": {
+     "answer": "yes"
+    },
+    "q_margins_kept": {
+     "answer": "yes"
+    },
+    "q_body_floor": {
+     "answer": "yes"
+    },
+    "q_contrast": {
+     "answer": "yes"
+    },
+    "q_no_filler": {
+     "answer": "yes"
+    },
+    "q_not_empty": {
+     "answer": "yes"
+    },
+    "q_not_cornered": {
+     "answer": "yes"
+    },
+    "l_no_fallback_flow": {
+     "answer": "yes"
+    },
+    "l_no_rule_flow": {
+     "answer": "yes"
+    },
+    "l_not_relaxed": {
+     "answer": "yes"
+    },
+    "l_repeat_max2": {
+     "answer": "no",
+     "slides": [
+      "s08",
+      "s09",
+      "s10"
+     ],
+     "measured": 3,
+     "limit": 2
+    },
+    "l_variety": {
+     "answer": "yes"
+    },
+    "l_in_library": {
+     "answer": "yes"
+    },
+    "l_one_dominant": {
+     "answer": "yes"
+    },
+    "l_alternatives": {
+     "answer": "no",
+     "slides": [
+      "s08",
+      "s09"
+     ],
+     "measured": 7,
+     "limit": 9
+    },
+    "l_slots_clean": {
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "w_type_budget": {
+     "answer": "yes"
+    },
+    "w_density_met": {
+     "answer": "yes"
+    },
+    "w_pitch_length": {
+     "answer": "yes"
+    },
+    "w_takeaway_titles": {
+     "answer": "no",
+     "slides": [
+      "s05"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "w_line_length": {
+     "answer": "yes"
+    },
+    "m_share_le_30": {
+     "answer": "value",
+     "value": 1.0,
+     "n": 9,
+     "words": 30
+    },
+    "m_share_le_60": {
+     "answer": "value",
+     "value": 1.0,
+     "n": 9,
+     "words": 60
+    },
+    "m_median_words": {
+     "answer": "value",
+     "value": 14,
+     "n": 9
+    },
+    "t_title_one_place": {
+     "answer": "yes"
+    },
+    "t_title_range": {
+     "answer": "yes"
+    },
+    "t_cover_title": {
+     "answer": "yes"
     },
     "t_two_families": {
      "answer": "yes",
@@ -486,798 +1569,19 @@
       "a0": 0,
       "a": 0,
       "b": 0,
-      "fit": null,
-      "e": null,
-      "red_team": null,
-      "assemble": 0.0,
-      "validate": 0.01,
-      "render_pptx": 0.27,
-      "render_web": 0.0,
-      "render_pdf_png": 4.17,
-      "qa_render": 0.69
-     }
-    },
-    "w_words_sha": {
-     "answer": "value",
-     "value": "2003ece26ded"
-    },
-    "w_notes_kept": {
-     "answer": "n/a",
-     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
-    },
-    "k_palette_only": {
-     "answer": "n/a",
-     "reason": "deck.meta.theme is absent (the runner writes it)"
-    },
-    "k_logo_cover": {
-     "answer": "n/a",
-     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
-    }
-   },
-   "summary": {
-    "yes": 24,
-    "no": 2,
-    "na": 20,
-    "metrics": {
-     "m_share_le_30": 0.889,
-     "m_share_le_60": 1.0,
-     "m_median_words": 4,
-     "m_creative_pictured": 0.0,
-     "m_usd": 0,
-     "m_seconds": 5.1,
-     "w_words_sha": "2003ece26ded"
-    }
-   }
-  },
-  "investor_seed": {
-   "run_dir": "investor_seed",
-   "inputs": {
-    "deck": true,
-    "validation": true,
-    "qa": true,
-    "qa_pixels": true,
-    "layouts": true,
-    "report": true,
-    "pptx": true
-   },
-   "presented": 4,
-   "content": 3,
-   "results": {
-    "g_no_blocker": {
-     "answer": "yes"
-    },
-    "g_no_validator_error": {
-     "answer": "yes"
-    },
-    "g_no_qa_error": {
-     "answer": "yes"
-    },
-    "g_no_major": {
-     "answer": "n/a",
-     "reason": "no repair policy with a severity map exists (engine/deck/policy/repair.yaml, deck-repair-loop): without one nothing is major"
-    },
-    "g_checks_current": {
-     "answer": "n/a",
-     "reason": "qa.json carries no deck_sha (deck-repair-loop adds it)"
-    },
-    "q_no_overflow": {
-     "answer": "yes"
-    },
-    "q_no_overlap": {
-     "answer": "yes"
-    },
-    "q_no_off_slide": {
-     "answer": "yes"
-    },
-    "q_margins_kept": {
-     "answer": "yes"
-    },
-    "q_body_floor": {
-     "answer": "yes"
-    },
-    "q_contrast": {
-     "answer": "yes"
-    },
-    "q_no_filler": {
-     "answer": "yes"
-    },
-    "q_not_empty": {
-     "answer": "yes"
-    },
-    "q_not_cornered": {
-     "answer": "yes"
-    },
-    "l_no_fallback_flow": {
-     "answer": "yes"
-    },
-    "l_no_rule_flow": {
-     "answer": "yes"
-    },
-    "l_not_relaxed": {
-     "answer": "yes"
-    },
-    "l_repeat_max2": {
-     "answer": "yes"
-    },
-    "l_variety": {
-     "answer": "n/a",
-     "reason": "fewer than 5 presented content slides"
-    },
-    "l_in_library": {
-     "answer": "yes"
-    },
-    "l_one_dominant": {
-     "answer": "n/a",
-     "reason": "no layout library on disk (engine/deck/layouts/, deck-layout-library): no slot is marked dominant"
-    },
-    "l_alternatives": {
-     "answer": "n/a",
-     "reason": "no slide records layout.alternatives (written by deck-layout-library)"
-    },
-    "l_slots_clean": {
-     "answer": "n/a",
-     "reason": "no presented slide has slots"
-    },
-    "w_type_budget": {
-     "answer": "yes"
-    },
-    "w_density_met": {
-     "answer": "n/a",
-     "reason": "deck.meta.preferences.density is absent: the build applied no density"
-    },
-    "w_pitch_length": {
-     "answer": "yes"
-    },
-    "w_takeaway_titles": {
-     "answer": "yes"
-    },
-    "w_line_length": {
-     "answer": "yes"
-    },
-    "m_share_le_30": {
-     "answer": "value",
-     "value": 1.0,
-     "n": 3,
-     "words": 30
-    },
-    "m_share_le_60": {
-     "answer": "value",
-     "value": 1.0,
-     "n": 3,
-     "words": 60
-    },
-    "m_median_words": {
-     "answer": "value",
-     "value": 10,
-     "n": 3
-    },
-    "t_title_one_place": {
-     "answer": "yes"
-    },
-    "t_title_range": {
-     "answer": "yes"
-    },
-    "t_cover_title": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1.22,
-     "limit": 1.4
-    },
-    "t_two_families": {
-     "answer": "yes",
-     "measured": [
-      "Calibri",
-      "Cambria"
-     ]
-    },
-    "p_where_asked": {
-     "answer": "n/a",
-     "reason": "deck.meta.preferences.pictures is absent or 'none': the build was not asked for pictures"
-    },
-    "m_creative_pictured": {
-     "answer": "value",
-     "value": 0.0,
-     "n": 1
-    },
-    "p_only_creative": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_all_approved": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_client_approved": {
-     "answer": "n/a",
-     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
-    },
-    "p_one_style": {
-     "answer": "n/a",
-     "reason": "fewer than 2 placed pictures carry a style hash"
-    },
-    "p_assets_resolve": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_rights_ok": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_alt_text": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_no_stretch": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_no_lowres": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_text_on_image": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "m_usd": {
-     "answer": "value",
-     "value": 0
-    },
-    "m_seconds": {
-     "answer": "value",
-     "value": 3.3,
-     "stages": {
-      "inputs": 0.0,
-      "i": 0,
-      "fit": null,
-      "e": null,
-      "red_team": null,
-      "assemble": 0.0,
-      "validate": 0.03,
-      "render_pptx": 0.13,
-      "render_web": 0.0,
-      "render_pdf_png": 2.73,
-      "qa_render": 0.36
-     }
-    },
-    "w_words_sha": {
-     "answer": "value",
-     "value": "20fddf54b073"
-    },
-    "w_notes_kept": {
-     "answer": "n/a",
-     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
-    },
-    "k_palette_only": {
-     "answer": "n/a",
-     "reason": "deck.meta.theme is absent (the runner writes it)"
-    },
-    "k_logo_cover": {
-     "answer": "n/a",
-     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
-    }
-   },
-   "summary": {
-    "yes": 24,
-    "no": 1,
-    "na": 21,
-    "metrics": {
-     "m_share_le_30": 1.0,
-     "m_share_le_60": 1.0,
-     "m_median_words": 10,
-     "m_creative_pictured": 0.0,
-     "m_usd": 0,
-     "m_seconds": 3.3,
-     "w_words_sha": "20fddf54b073"
-    }
-   }
-  },
-  "lumen_water": {
-   "run_dir": "lumen_water",
-   "inputs": {
-    "deck": true,
-    "validation": true,
-    "qa": true,
-    "qa_pixels": true,
-    "layouts": true,
-    "report": true,
-    "pptx": true
-   },
-   "presented": 16,
-   "content": 15,
-   "results": {
-    "g_no_blocker": {
-     "answer": "yes"
-    },
-    "g_no_validator_error": {
-     "answer": "yes"
-    },
-    "g_no_qa_error": {
-     "answer": "yes"
-    },
-    "g_no_major": {
-     "answer": "n/a",
-     "reason": "no repair policy with a severity map exists (engine/deck/policy/repair.yaml, deck-repair-loop): without one nothing is major"
-    },
-    "g_checks_current": {
-     "answer": "n/a",
-     "reason": "qa.json carries no deck_sha (deck-repair-loop adds it)"
-    },
-    "q_no_overflow": {
-     "answer": "yes"
-    },
-    "q_no_overlap": {
-     "answer": "yes"
-    },
-    "q_no_off_slide": {
-     "answer": "yes"
-    },
-    "q_margins_kept": {
-     "answer": "yes"
-    },
-    "q_body_floor": {
-     "answer": "yes"
-    },
-    "q_contrast": {
-     "answer": "yes"
-    },
-    "q_no_filler": {
-     "answer": "yes"
-    },
-    "q_not_empty": {
-     "answer": "yes"
-    },
-    "q_not_cornered": {
-     "answer": "yes"
-    },
-    "l_no_fallback_flow": {
-     "answer": "yes"
-    },
-    "l_no_rule_flow": {
-     "answer": "yes"
-    },
-    "l_not_relaxed": {
-     "answer": "yes"
-    },
-    "l_repeat_max2": {
-     "answer": "no",
-     "slides": [
-      "s14",
-      "s15",
-      "s16"
-     ],
-     "measured": 3,
-     "limit": 2
-    },
-    "l_variety": {
-     "answer": "yes"
-    },
-    "l_in_library": {
-     "answer": "yes"
-    },
-    "l_one_dominant": {
-     "answer": "n/a",
-     "reason": "no layout library on disk (engine/deck/layouts/, deck-layout-library): no slot is marked dominant"
-    },
-    "l_alternatives": {
-     "answer": "n/a",
-     "reason": "no slide records layout.alternatives (written by deck-layout-library)"
-    },
-    "l_slots_clean": {
-     "answer": "n/a",
-     "reason": "no presented slide has slots"
-    },
-    "w_type_budget": {
-     "answer": "yes"
-    },
-    "w_density_met": {
-     "answer": "n/a",
-     "reason": "deck.meta.preferences.density is absent: the build applied no density"
-    },
-    "w_pitch_length": {
-     "answer": "yes"
-    },
-    "w_takeaway_titles": {
-     "answer": "no",
-     "slides": [
-      "s13"
-     ],
-     "measured": 1,
-     "limit": 0
-    },
-    "w_line_length": {
-     "answer": "yes"
-    },
-    "m_share_le_30": {
-     "answer": "value",
-     "value": 0.933,
-     "n": 15,
-     "words": 30
-    },
-    "m_share_le_60": {
-     "answer": "value",
-     "value": 1.0,
-     "n": 15,
-     "words": 60
-    },
-    "m_median_words": {
-     "answer": "value",
-     "value": 9,
-     "n": 15
-    },
-    "t_title_one_place": {
-     "answer": "no",
-     "slides": [
-      "s03",
-      "s07",
-      "s08",
-      "s14",
-      "s15",
-      "s16"
-     ],
-     "measured": 0.138,
-     "limit": 0.05
-    },
-    "t_title_range": {
-     "answer": "yes"
-    },
-    "t_cover_title": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1.22,
-     "limit": 1.4
-    },
-    "t_two_families": {
-     "answer": "yes",
-     "measured": [
-      "Calibri",
-      "Cambria"
-     ]
-    },
-    "p_where_asked": {
-     "answer": "n/a",
-     "reason": "deck.meta.preferences.pictures is absent or 'none': the build was not asked for pictures"
-    },
-    "m_creative_pictured": {
-     "answer": "value",
-     "value": 0.0,
-     "n": 5
-    },
-    "p_only_creative": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_all_approved": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_client_approved": {
-     "answer": "n/a",
-     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
-    },
-    "p_one_style": {
-     "answer": "n/a",
-     "reason": "fewer than 2 placed pictures carry a style hash"
-    },
-    "p_assets_resolve": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_rights_ok": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_alt_text": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_no_stretch": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_no_lowres": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_text_on_image": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "m_usd": {
-     "answer": "value",
-     "value": 0
-    },
-    "m_seconds": {
-     "answer": "value",
-     "value": 5.5,
-     "stages": {
-      "inputs": 0.0,
-      "a": 0,
-      "b": 0,
-      "c": 0,
-      "d": 0,
-      "fit": null,
-      "e": null,
-      "red_team": null,
-      "assemble": 0.0,
-      "validate": 0.01,
-      "render_pptx": 0.2,
-      "render_web": 0.0,
-      "render_pdf_png": 4.26,
-      "qa_render": 1.02
-     }
-    },
-    "w_words_sha": {
-     "answer": "value",
-     "value": "d62d948a67a9"
-    },
-    "w_notes_kept": {
-     "answer": "n/a",
-     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
-    },
-    "k_palette_only": {
-     "answer": "n/a",
-     "reason": "deck.meta.theme is absent (the runner writes it)"
-    },
-    "k_logo_cover": {
-     "answer": "n/a",
-     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
-    }
-   },
-   "summary": {
-    "yes": 22,
-    "no": 4,
-    "na": 20,
-    "metrics": {
-     "m_share_le_30": 0.933,
-     "m_share_le_60": 1.0,
-     "m_median_words": 9,
-     "m_creative_pictured": 0.0,
-     "m_usd": 0,
-     "m_seconds": 5.5,
-     "w_words_sha": "d62d948a67a9"
-    }
-   }
-  },
-  "lumen_water_prompt": {
-   "run_dir": "lumen_water_prompt",
-   "inputs": {
-    "deck": true,
-    "validation": true,
-    "qa": true,
-    "qa_pixels": true,
-    "layouts": true,
-    "report": true,
-    "pptx": true
-   },
-   "presented": 10,
-   "content": 9,
-   "results": {
-    "g_no_blocker": {
-     "answer": "yes"
-    },
-    "g_no_validator_error": {
-     "answer": "yes"
-    },
-    "g_no_qa_error": {
-     "answer": "yes"
-    },
-    "g_no_major": {
-     "answer": "n/a",
-     "reason": "no repair policy with a severity map exists (engine/deck/policy/repair.yaml, deck-repair-loop): without one nothing is major"
-    },
-    "g_checks_current": {
-     "answer": "n/a",
-     "reason": "qa.json carries no deck_sha (deck-repair-loop adds it)"
-    },
-    "q_no_overflow": {
-     "answer": "yes"
-    },
-    "q_no_overlap": {
-     "answer": "yes"
-    },
-    "q_no_off_slide": {
-     "answer": "yes"
-    },
-    "q_margins_kept": {
-     "answer": "yes"
-    },
-    "q_body_floor": {
-     "answer": "yes"
-    },
-    "q_contrast": {
-     "answer": "yes"
-    },
-    "q_no_filler": {
-     "answer": "yes"
-    },
-    "q_not_empty": {
-     "answer": "yes"
-    },
-    "q_not_cornered": {
-     "answer": "yes"
-    },
-    "l_no_fallback_flow": {
-     "answer": "yes"
-    },
-    "l_no_rule_flow": {
-     "answer": "yes"
-    },
-    "l_not_relaxed": {
-     "answer": "yes"
-    },
-    "l_repeat_max2": {
-     "answer": "no",
-     "slides": [
-      "s08",
-      "s09",
-      "s10"
-     ],
-     "measured": 3,
-     "limit": 2
-    },
-    "l_variety": {
-     "answer": "yes"
-    },
-    "l_in_library": {
-     "answer": "yes"
-    },
-    "l_one_dominant": {
-     "answer": "n/a",
-     "reason": "no layout library on disk (engine/deck/layouts/, deck-layout-library): no slot is marked dominant"
-    },
-    "l_alternatives": {
-     "answer": "n/a",
-     "reason": "no slide records layout.alternatives (written by deck-layout-library)"
-    },
-    "l_slots_clean": {
-     "answer": "n/a",
-     "reason": "no presented slide has slots"
-    },
-    "w_type_budget": {
-     "answer": "yes"
-    },
-    "w_density_met": {
-     "answer": "n/a",
-     "reason": "deck.meta.preferences.density is absent: the build applied no density"
-    },
-    "w_pitch_length": {
-     "answer": "yes"
-    },
-    "w_takeaway_titles": {
-     "answer": "no",
-     "slides": [
-      "s05"
-     ],
-     "measured": 1,
-     "limit": 0
-    },
-    "w_line_length": {
-     "answer": "yes"
-    },
-    "m_share_le_30": {
-     "answer": "value",
-     "value": 1.0,
-     "n": 9,
-     "words": 30
-    },
-    "m_share_le_60": {
-     "answer": "value",
-     "value": 1.0,
-     "n": 9,
-     "words": 60
-    },
-    "m_median_words": {
-     "answer": "value",
-     "value": 14,
-     "n": 9
-    },
-    "t_title_one_place": {
-     "answer": "no",
-     "slides": [
-      "s03",
-      "s06",
-      "s08",
-      "s09",
-      "s10"
-     ],
-     "measured": 0.138,
-     "limit": 0.05
-    },
-    "t_title_range": {
-     "answer": "yes"
-    },
-    "t_cover_title": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1.22,
-     "limit": 1.4
-    },
-    "t_two_families": {
-     "answer": "yes",
-     "measured": [
-      "Calibri",
-      "Cambria"
-     ]
-    },
-    "p_where_asked": {
-     "answer": "n/a",
-     "reason": "deck.meta.preferences.pictures is absent or 'none': the build was not asked for pictures"
-    },
-    "m_creative_pictured": {
-     "answer": "value",
-     "value": 0.0,
-     "n": 3
-    },
-    "p_only_creative": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_all_approved": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_client_approved": {
-     "answer": "n/a",
-     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
-    },
-    "p_one_style": {
-     "answer": "n/a",
-     "reason": "fewer than 2 placed pictures carry a style hash"
-    },
-    "p_assets_resolve": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_rights_ok": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_alt_text": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_no_stretch": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_no_lowres": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "p_text_on_image": {
-     "answer": "n/a",
-     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
-    },
-    "m_usd": {
-     "answer": "value",
-     "value": 0
-    },
-    "m_seconds": {
-     "answer": "value",
-     "value": 4.8,
-     "stages": {
-      "inputs": 0.0,
-      "a0": 0,
-      "a": 0,
-      "b": 0,
       "c": null,
       "d": 0,
       "fit": null,
       "e": null,
       "red_team": null,
       "assemble": 0.0,
+      "layout_plan": 0.037,
       "validate": 0.01,
-      "render_pptx": 0.47,
+      "render_pptx": 0.13,
       "render_web": 0.0,
-      "render_pdf_png": 3.87,
-      "qa_render": 0.45
+      "render_pdf_png": 4.44,
+      "qa_render": 0.31,
+      "repair": 0.15
      }
     },
     "w_words_sha": {
@@ -1286,7 +1590,7 @@
     },
     "w_notes_kept": {
      "answer": "n/a",
-     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
+     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
     },
     "k_palette_only": {
      "answer": "n/a",
@@ -1298,16 +1602,16 @@
     }
    },
    "summary": {
-    "yes": 22,
-    "no": 4,
-    "na": 20,
+    "yes": 27,
+    "no": 5,
+    "na": 14,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 14,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 4.8,
+     "m_seconds": 5.1,
      "w_words_sha": "9e74ee2219de"
     }
    }
@@ -1336,12 +1640,15 @@
      "answer": "yes"
     },
     "g_no_major": {
-     "answer": "n/a",
-     "reason": "no repair policy with a severity map exists (engine/deck/policy/repair.yaml, deck-repair-loop): without one nothing is major"
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
     },
     "g_checks_current": {
-     "answer": "n/a",
-     "reason": "qa.json carries no deck_sha (deck-repair-loop adds it)"
+     "answer": "yes"
     },
     "q_no_overflow": {
      "answer": "yes"
@@ -1389,23 +1696,25 @@
      "answer": "yes"
     },
     "l_one_dominant": {
-     "answer": "n/a",
-     "reason": "no layout library on disk (engine/deck/layouts/, deck-layout-library): no slot is marked dominant"
+     "answer": "yes"
     },
     "l_alternatives": {
-     "answer": "n/a",
-     "reason": "no slide records layout.alternatives (written by deck-layout-library)"
+     "answer": "yes"
     },
     "l_slots_clean": {
-     "answer": "n/a",
-     "reason": "no presented slide has slots"
+     "answer": "no",
+     "slides": [
+      "s01",
+      "s02"
+     ],
+     "measured": 2,
+     "limit": 0
     },
     "w_type_budget": {
      "answer": "yes"
     },
     "w_density_met": {
-     "answer": "n/a",
-     "reason": "deck.meta.preferences.density is absent: the build applied no density"
+     "answer": "yes"
     },
     "w_pitch_length": {
      "answer": "yes"
@@ -1440,24 +1749,13 @@
      "n": 9
     },
     "t_title_one_place": {
-     "answer": "no",
-     "slides": [
-      "s05",
-      "s07"
-     ],
-     "measured": 0.33,
-     "limit": 0.05
+     "answer": "yes"
     },
     "t_title_range": {
      "answer": "yes"
     },
     "t_cover_title": {
-     "answer": "no",
-     "slides": [
-      "s01"
-     ],
-     "measured": 1.22,
-     "limit": 1.4
+     "answer": "yes"
     },
     "t_two_families": {
      "answer": "yes",
@@ -1521,7 +1819,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 4.6,
+     "value": 5.3,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -1532,12 +1830,14 @@
       "fit": null,
       "e": null,
       "red_team": null,
-      "assemble": 0.01,
-      "validate": 0.02,
-      "render_pptx": 0.46,
+      "assemble": 0.0,
+      "layout_plan": 0.018,
+      "validate": 0.01,
+      "render_pptx": 0.18,
       "render_web": 0.0,
-      "render_pdf_png": 3.49,
-      "qa_render": 0.6
+      "render_pdf_png": 4.58,
+      "qa_render": 0.34,
+      "repair": 0.17
      }
     },
     "w_words_sha": {
@@ -1546,7 +1846,7 @@
     },
     "w_notes_kept": {
      "answer": "n/a",
-     "reason": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)"
+     "reason": "no slide records layout.fit.moved (written by deck-layout-library)"
     },
     "k_palette_only": {
      "answer": "n/a",
@@ -1558,16 +1858,16 @@
     }
    },
    "summary": {
-    "yes": 23,
+    "yes": 29,
     "no": 3,
-    "na": 20,
+    "na": 14,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
      "m_median_words": 11,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 4.6,
+     "m_seconds": 5.3,
      "w_words_sha": "529b08c764da"
     }
    }

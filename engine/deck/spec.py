@@ -464,12 +464,13 @@ ISSUE_FIXES = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes
                "drop_image", "needs_human")
 QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min_font", "placeholder", "contrast", "mostly_empty",
                     "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast")
-RESERVED_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown",
-                   "golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")
+#: Raised by the layout plan (layouts.py) and the repair loop; once reserved, now live, so the checklist's l_slots_clean can answer.
+LAYOUT_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown")
+RESERVED_CHECKS = ("golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")
 #: The vision critic's question ids (visual_rubric.json): issues with source ``critic`` carry these as their check name.
 CRITIC_CHECKS = ("v_one_focus", "v_balance", "v_not_crowded", "v_looks_finished", "v_image_fits", "v_image_clean", "v_text_on_image",
                  "v_crop_ok", "v_one_style", "v_rhythm")
-ISSUE_CHECKS = tuple(dict.fromkeys(CHECKS + QA_RENDER_CHECKS + RESERVED_CHECKS + CRITIC_CHECKS))
+ISSUE_CHECKS = tuple(dict.fromkeys(CHECKS + QA_RENDER_CHECKS + LAYOUT_CHECKS + RESERVED_CHECKS + CRITIC_CHECKS))
 
 #: Repair policy (contract section 8).
 REPAIR_LADDER = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "needs_human")

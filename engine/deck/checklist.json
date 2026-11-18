@@ -1,5 +1,5 @@
 {
- "version": 3,
+ "version": 4,
  "about": "The deck visual checklist: one entry per check. kind yes_no answers yes, no or n/a; kind metric answers a value or n/a. n/a is never a pass. bench/checklist.py holds one function per id. Thresholds read from spec, theme or qa_render are named in the source, not copied. Each item has a tier: gate items count in compare --fail-on-regress; advisory items are reported but never fail it. A metric may carry direction higher, lower or same (any change is worse).",
  "items": [
   {

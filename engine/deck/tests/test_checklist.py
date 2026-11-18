@@ -195,9 +195,9 @@ def test_two_families(tmp_path):
     assert r["answer"] == "no" and r["measured"] == ["Arial", "Calibri", "Georgia"]
 
 
-def test_slots_check_stays_na_while_reserved_and_the_picture_checks_are_live(tmp_path):
+def test_slots_check_is_live_and_the_picture_checks_are_live(tmp_path):
     run = make(tmp_path, deck_edit=with_image())
-    assert answer(run, "l_slots_clean")["answer"] == "n/a" and "RESERVED" in answer(run, "l_slots_clean")["reason"]
+    assert answer(run, "l_slots_clean")["answer"] == "yes"   # the slot names left RESERVED_CHECKS: layouts.py and repair raise them
     for item in ("p_no_stretch", "p_text_on_image"):   # picture_stretch and text_on_image_contrast are raised by qa_render now
         assert "RESERVED" not in (answer(run, item).get("reason") or "")
 
