@@ -31,7 +31,8 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
   const shots = useMemo(() => masterShots(doc, master.id), [doc, master.id])
   const body = shots.filter((s) => !s.endCard)
   const masterS = Math.round(master.length_s ?? body.reduce((a, s) => a + (s.outS - s.inS), 0) + CARD_S)
-  const [lengths, setLengths] = useState<number[]>(DEFAULT_FILM_LENGTHS)
+  // Only lengths shorter than the film start picked (Playwright live test 2026-11-18: 15 s picked for an 8 s film).
+  const [lengths, setLengths] = useState<number[]>(() => DEFAULT_FILM_LENGTHS.filter((l) => l < masterS))
   const [extra, setExtra] = useState('')
   const [shapes, setShapes] = useState<Set<string>>(new Set(['film-16x9', 'film-9x16']))
   const earlier = setsOf(doc, master).find((s) => s.copy)?.copy
