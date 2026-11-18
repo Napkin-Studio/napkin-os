@@ -344,11 +344,9 @@ describe('Start from a brief: the data path', () => {
   const src = (ok: boolean, items: { documentId: string; title: string; updatedAt: string }[] = []) => ({
     available: async () => ok, list: async () => items, read: async () => read(), openUrl: (id: string) => `/?open=${id}`,
   })
-  it('is offered only with the flag on and Napkin\u2019s briefs readable', async () => {
-    expect(await offersStartFromBrief({ briefNode: true }, src(true))).toBe(true)
-    expect(await offersStartFromBrief({ briefNode: false }, src(true))).toBe(false)
-    expect(await offersStartFromBrief(undefined, src(true))).toBe(false)
-    expect(await offersStartFromBrief({ briefNode: true }, src(false))).toBe(false)
+  it('is offered only where Napkin\u2019s briefs are readable (no flag since features/config-defaults.clan)', async () => {
+    expect(await offersStartFromBrief(src(true))).toBe(true)
+    expect(await offersStartFromBrief(src(false))).toBe(false)
   })
   it('lists the briefs newest first, and says what to do when there are none', async () => {
     const got = await briefChoices(src(true, [{ documentId: 'doc-a', title: 'A', updatedAt: '2026-11-01' }, { documentId: 'doc-b', title: 'B', updatedAt: '2026-11-17' }]))

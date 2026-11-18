@@ -7,16 +7,15 @@
 // its words: query parameters carry ids, app/route.ts). The page starts a project from it once and drops
 // the parameter.
 
-import type { Flags } from '../contracts/types'
 import type { NodeEnv } from '../canvas/nodes/nodes'
 import { startFromBrief, type StartedFromBrief } from './canvas'
 import { BriefReadError, type BriefSource, type OsBriefItem } from './os'
 
 const DOC_ID = /^doc-[A-Za-z0-9._-]{1,120}$/
 
-/** Whether the Start card offers "Start from a brief": the flag is on and this page can read Napkin's briefs. */
-export async function offersStartFromBrief(flags: Pick<Flags, 'briefNode'> | undefined, src: BriefSource): Promise<boolean> {
-  return !!flags?.briefNode && (await src.available())
+/** Whether the Start card offers "Start from a brief": this page can read Napkin's briefs. */
+export async function offersStartFromBrief(src: BriefSource): Promise<boolean> {
+  return src.available()
 }
 
 /** The briefs the picker lists, newest first; the words to show when there are none or they cannot be read. */

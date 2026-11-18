@@ -29,10 +29,12 @@ from providers import load_sheets
 log = logging.getLogger(__name__)
 
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
-# config.testing.json's director block; config.json overrides it per call.
+# What runs when config.json's director block does not say (features/config-defaults.clan); a value
+# there overrides it per job, and removing the value comes back here.
 PER_CLICK = "eu.anthropic.claude-sonnet-5-5"  # Sonnet per click (features/director-v5.clan)
 SHOT_LIST = "eu.anthropic.claude-sonnet-5-5"
-PROMPT_VERSION = "director.v6"  # contract 3 (features/contract-v3.clan)
+# The newest director prompt bundled (tests/test_config_defaults.py keeps it so); older ones stay for a pin.
+PROMPT_VERSION = "director.v14"
 # Lambda runs 60 s and the HTTP API answers within 30 s: one model call (and its
 # one retry) must leave room for the provider submit.
 TIMEOUT_S = float(os.environ.get("DIRECTOR_TIMEOUT_S", "20"))
@@ -61,15 +63,17 @@ class ClaudeDirector:
         self.director = director
         self.model = director.per_click_model
         self.prompt_version = director.prompt_version
+        # What it was built with: what runs when config.json names nothing, and again once a pin goes.
+        self.defaults = (director.per_click_model, director.shot_list_model, director.prompt_version)
 
     def use_config(self, cfg: dict) -> None:
         d = self.director
-        d.per_click_model = cfg.get("perClickModel") or d.per_click_model
-        d.shot_list_model = cfg.get("shotListModel") or d.shot_list_model
-        version = cfg.get("promptVersion")
-        if version:
-            require_prompt(version)  # an older prompt under contract 3 is refused, loudly
-        if version and version != d.prompt_version:
+        per_click, shot_list, default_version = self.defaults
+        d.per_click_model = cfg.get("perClickModel") or per_click
+        d.shot_list_model = cfg.get("shotListModel") or shot_list
+        version = cfg.get("promptVersion") or default_version
+        require_prompt(version)  # an older prompt under contract 3 is refused, loudly
+        if version != d.prompt_version:
             path = PROMPTS / f"{version}.md"
             if path.exists():
                 d.system, d.prompt_version = load_prompt(path), version

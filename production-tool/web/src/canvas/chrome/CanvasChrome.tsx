@@ -150,7 +150,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
   ratio: string
   /** A node the canvas cannot make itself (a picture, a sketch area; on Excalidraw, a node to open). */
   onNode: (kind: NewNode) => void
-  /** Briefs on (flag briefNode): opens Assets › From Napkin, where the agency's briefs are. Absent, no brief row. */
+  /** Opens Assets › From Napkin, where the agency's briefs are (features/brief-node.clan). Absent, no brief row. */
   onBrief?: () => void
   /** iPad (mock TabletCanvas): a column on the left, each tool with its name, 44px targets, undo and redo in it. */
   vertical?: boolean

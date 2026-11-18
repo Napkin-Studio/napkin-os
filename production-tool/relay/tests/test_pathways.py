@@ -18,8 +18,9 @@ import httpx
 import pytest
 from PIL import Image
 
-from conftest import CDN, Harness, envelope
+from conftest import CDN, Harness, base_config, envelope
 from contracts_dir import contracts_dir, pricing
+from runtime import with_defaults
 from director import new_id
 from providers import Registry
 from providers._seam import Adapted, Resolver
@@ -108,9 +109,9 @@ class StandIns:
 
 # ── a relay on one pathway, with the real adapters ──────────────────────────
 def pathway_config(name: str) -> dict:
-    cfg = json.loads((contracts_dir() / "examples" / f"config.pathway.{name}.json").read_text())
-    cfg["flags"] = {**cfg["flags"], "regionEditCanvas": True, "regionEditFrames": True, "videoRegionEdit": True,
-                    "feelEdit": True, "storyboard": True, "video": True, "stitch": True}
+    cfg = with_defaults(json.loads((contracts_dir() / "examples" / f"config.pathway.{name}.json").read_text()))
+    cfg["flags"] = {**cfg["flags"], "videoRegionEdit": True, "feelEdit": True}
+    cfg["director"] = base_config()["director"]  # a test's own director on the newest prompt, as configs named it
     cfg["inFlightPerParticipant"] = 6
     cfg["quotas"] = {"image": 1000, "video": 1000, "render": 1000}
     return cfg

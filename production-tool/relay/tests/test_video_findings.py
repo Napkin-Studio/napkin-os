@@ -215,7 +215,7 @@ def test_a_clip_straight_from_the_script_runs_from_its_words(h):
 
 def test_a_clip_edit_with_no_region_is_a_feel_edit_for_its_switch(h):
     token = h.as_person()
-    assert not h.cfg["flags"]["feelEdit"]
+    assert not h.cfg["flags"].get("feelEdit")  # absent means off (config.schema)
     _, out = h.post_job(token, op="clip_edit", expect=403, video=asset(5, "video/mp4"), text="make it golden")
     assert out["error"]["code"] == "flag_off" and "Feel edits" in out["error"]["message"]
 

@@ -8,18 +8,35 @@ import runway from '../../../contracts/capabilities/runway.json'
 import testing from '../../../contracts/examples/config.testing.json'
 import live from '../../../contracts/examples/config.live.json'
 import common from '../../../contracts/common.schema.json'
+import configSchema from '../../../contracts/config.schema.json'
 import spendPolicy from '../../../contracts/spend-policy.json'
 import subprocessors from '../../../contracts/subprocessors.json'
-import type { Allow, CameraWords, CapabilitySheet, Config, LinkRule, Op, Provider, QuotaClass, RefRole, RefRoleLine } from './types'
+import type { Allow, CameraWords, CapabilitySheet, Config, ConfigFile, Flags, LinkRule, Op, Provider, QuotaClass, RefRole, RefRoleLine } from './types'
+import { OPS } from './types'
 
 export const SHEETS: Record<Provider, CapabilitySheet> = {
   mock: mock as CapabilitySheet,
   runway: runway as CapabilitySheet,
 }
 
+// config.json names only what differs from the schema's defaults (features/config-defaults.clan); the relay
+// reads the same ones (relay/runtime.py with_defaults), so the two cannot differ.
+const DEFAULT_ROUTING = configSchema.properties.routing.default as Partial<Record<Op, Provider[]>>
+const DEFAULT_FLAGS = Object.fromEntries(
+  Object.entries(configSchema.properties.flags.properties).map(([k, v]) => [k, v.default]),
+) as unknown as Flags
+
+/** The config as the app reads it: every op routed (the file's entry, else the default's, else runway) and
+ *  every flag set (the file's, else its default). Idempotent, so a relay that filled them already is fine. */
+export function withDefaults(file: ConfigFile | Config): Config {
+  const routing: Config['routing'] = {}
+  for (const op of OPS) routing[op] = [...(file.routing?.[op] ?? DEFAULT_ROUTING[op] ?? ['runway'])]
+  return { ...file, routing, flags: { ...DEFAULT_FLAGS, ...file.flags } }
+}
+
 export const CONFIGS = {
-  testing: testing as Config,
-  live: live as Config,
+  testing: withDefaults(testing as ConfigFile),
+  live: withDefaults(live as ConfigFile),
 }
 
 /** What Dex takes from each role: the picker's line and the prompt's, one table (common refRoleTable). */

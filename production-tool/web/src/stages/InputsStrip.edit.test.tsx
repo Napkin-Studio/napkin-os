@@ -128,7 +128,9 @@ describe('"+ Link input"', () => {
     const el = mount(s, createElement(ScopeLine, { nodeId: sb }))
     await click(el.querySelector('.in-add'))
     const pop = () => document.body.querySelector('.in-pop[aria-label="Link input"]')!
-    const rows = () => [...pop().querySelectorAll('.in-choice')].map((b) => b.querySelector('.in-clabel')?.textContent)
+    // The picture rows; the last row, a brief from Brief Maker, is always offered (features/config-defaults.clan).
+    const rows = () => [...pop().querySelectorAll('.in-choice:not(.in-more)')].map((b) => b.querySelector('.in-clabel')?.textContent)
+    expect(pop().querySelector('.in-more .in-clabel')?.textContent).toBe('A brief from Brief Maker…')
     expect(rows()).not.toContain('@home_front')
     expect(rows()).toEqual(expect.arrayContaining(['@home · 3 views', '@home_closeup', '@home_surroundings', '@home_side-view']))
     // The linked key says so and is not offered again.

@@ -43,7 +43,7 @@ from contracts_dir import contracts_dir
 from director import load_director
 from providers import load_registry
 from providers.base import Status, asset_url
-from runtime import CachedConfig
+from runtime import DEFAULT_ROUTING, CachedConfig
 from service import Raw, Relay
 from store import FileStore, MemoryStore
 
@@ -58,10 +58,11 @@ log = logging.getLogger("relay.local")
 
 def default_config() -> dict:
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
-    cfg["routing"] = {op: ([] if op in ("shot_list", "stitch") else ["mock"]) for op in cfg["routing"]}
+    # Every op the default routing names, on the mock (features/config-defaults.clan).
+    cfg["routing"] = {op: ([] if op in ("shot_list", "stitch") else ["mock"]) for op in DEFAULT_ROUTING}
     # Fix this moment runs here end to end on the mock (an MP4 back as it went) and the real stitch:
     # on, and on the mock's own model (features/clip-moment-edit.clan).
-    cfg["flags"]["clipPatch"] = True
+    cfg.setdefault("flags", {})["clipPatch"] = True
     cfg.setdefault("clipPatch", {}).pop("model", None)
     # Connected video runs here too (features/connected-video.clan): the mock makes takes with visible cuts
     # and lands on a last frame, and the real stitch finds the cuts and cuts a window's stills.

@@ -31,7 +31,7 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 | `examples/patches.json` | Fix this moment's arithmetic: the note window on a generation, the range or cut send, the keyframe, the price per second, a patched generation's stretches, asserted in both vitest and pytest | clan-store `src/patch.ts`, relay `time_rules.py` |
 | `examples/timeline.json` | the Edit room's time arithmetic: adTimeToSource (an ad moment as the clip and the moment of its footage) and momentWindow (a marked stretch snapped to whole seconds), asserted in both vitest and pytest (features/make-and-edit.clan) | clan-store `src/timeline.ts` and `src/patch.ts`, relay `time_rules.py` |
 | `customdata.schema.json` | Excalidraw `customData` on the canvas (pic, drawn, note, gen, provenance; {kind, id} tags for board, sketch, script, storyboard, video, link, document, format_set, suggestion) | ui |
-| `config.schema.json` + `examples/config.*.json` | remote `config.json`: routing per op, director models, quotas, timeouts, spend stop, flags, banner | Shrey uploads it; web and relay read |
+| `config.schema.json` + `examples/config.*.json` | remote `config.json`: quotas, timeouts, spend stop, banner; and, only where they differ from the schema's defaults, routing per op, the director's prompt and models, flags | Shrey uploads it; web and relay read |
 
 ## Relay routes
 
@@ -76,7 +76,7 @@ The relay owns everything around the adapters:
 - the job ledger and idempotency
 - quotas, the fair-share queue and the spend stop
 - copying outputs to S3 and hashing them
-- choosing a provider with `config.routing[op]` (the first that supports the op and has a free slot)
+- choosing a provider with `config.routing[op]` (the first that supports the op and has a free slot; an op the file does not name takes the schema's default routing)
 
 The director, given the routed sheet, owns:
 - the prompt, written with plain `@tag` names
@@ -138,3 +138,4 @@ The adapter owns the exact request:
 
 23. **The own canvas engine is the default (2026-11-16, feature production-tool-land).** Additive: `contractVersion` stays "3". `config.flags.ownCanvas` absent now means on; `false` is the kill switch (Excalidraw for projects it made or with nothing drawn). On the own engine an Excalidraw scene opens converted, its original kept; `?engine=excalidraw` picks the fallback for one person. No relay change.
 24. **One Film editor, no makeAndEdit (2026-11-18, owner; features/production-new-ui.clan).** Breaking for a config that still has it: `config.flags.makeAndEdit` is gone (the Make and Edit rooms are the only Film editor; nothing reads it). Flags are `additionalProperties: false`, so drop it from the deployed `config.json` before the relay that reads this schema goes out. No shim, owner.
+25. **config.json needs no edit for a release (2026-11-18, owner; features/config-defaults.clan).** Only `contractVersion`, `quotas`, `inFlightPerParticipant`, `jobTimeoutS`, `spend` and `banner` are required. `routing`, `director` and `flags` are optional, each key too, and take their defaults from this schema (`default`), which the relay (`runtime.with_defaults`) and the web (`contracts/load.ts` `withDefaults`) both read: an op the file does not name takes the default routing (today's live table: `shot_list`, `stitch` and `cutout` `[]`, the rest `["runway"]`), and an op the default does not name goes to `runway`; an absent `director.promptVersion` runs the newest prompt the relay bundles (`director/claude.py` `PROMPT_VERSION`, director.v14), a value pins it for a rollback, and the model ids default to `eu.anthropic.claude-sonnet-5-5`. Flags: `video` and `connectedVideo` default on (false is the kill switch, as `ownCanvas`); `videoRegionEdit`, `feelEdit`, `moreOptions`, `clipPatch` and `dogfood` default off. Removed, always on or unread: `briefNode` (the Brief node is always on), `storyboard`, `stitch`, `regionEditFrames`, `regionEditCanvas`, `clickSelect`. `contractVersion` stays "3" (as item 24). Breaking for a file that still sets a removed flag: today's deployed `config.json` sets them, and the relay before this change needs them, so no file loads on both. Deploy the web first (it reads either form), then upload the minimal `config.json` (`examples/config.live.json` with the spend cap) and deploy the relay straight after; a warm old relay keeps its last good config meanwhile. Rolling the relay back needs the old file back (the bucket is versioned). No shim, owner. The relay's `GET /config` answers with the defaults filled.

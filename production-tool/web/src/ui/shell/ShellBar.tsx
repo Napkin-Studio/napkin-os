@@ -6,7 +6,7 @@
 // with its count. Each editor's own controls sit in the band row under it (Band).
 
 import { useContext, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { RouterContext, useConfig, useDoc, useServices, useShell } from '../../app/context'
+import { RouterContext, useDoc, useServices, useShell } from '../../app/context'
 import { Float, MenuItem } from '../Float'
 import { saveTime, useSave } from '../useSave'
 import { setThemeChoice } from '../../theme'
@@ -126,7 +126,6 @@ function ContinueIn() {
   const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const { ui } = useServices()
-  const { config } = useConfig()
   // Read at the click only: the bar also shows where no router is (the editors' own tests).
   const router = useContext(RouterContext)
   const panels = usePanels()
@@ -144,9 +143,7 @@ function ContinueIn() {
       <Float anchor={ref} open={open} onClose={() => setOpen(false)} role="menu" label="Continue in" className="pt-menu nui-pop">
         <div className="fhead">Continue in</div>
         <MenuItem icon="+" disabled hint={soon} onSelect={() => {}}>New deck from this film</MenuItem>
-        {config.flags.briefNode
-          ? <MenuItem icon="↔" hint="From Brief Maker, in Assets › From Napkin" onSelect={linkBrief}>Link a brief…</MenuItem>
-          : <MenuItem icon="↔" disabled hint={soon} onSelect={() => {}}>Link a brief…</MenuItem>}
+        <MenuItem icon="↔" hint="From Brief Maker, in Assets › From Napkin" onSelect={linkBrief}>Link a brief…</MenuItem>
       </Float>
     </>
   )

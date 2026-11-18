@@ -44,9 +44,12 @@ def test_v11_is_v10_with_the_take_tied_to_its_frames():
 
 def test_the_configs_run_v14_and_the_check_allows_v11_to_v13():
     """v12 is v11 plus frame-edit-or-redraw's lines, v13 is v12 plus the brief (features/brief-node.clan), v14 is
-    v13 plus a redraw's object placement (owner 2026-11-18); v11 to v13 stay allowed for a rollback."""
+    v13 plus a redraw's object placement (owner 2026-11-18); v11 to v13 stay allowed for a rollback. The configs
+    name no prompt, so they run the bundle's default (features/config-defaults.clan)."""
+    from director.claude import PROMPT_VERSION
+    assert PROMPT_VERSION == "director.v14"
     for name in ("config.live.json", "config.testing.json", "config.pathway.runway.json"):
-        assert json.loads((CONTRACTS / "examples" / name).read_text())["director"]["promptVersion"] == "director.v14", name
+        assert "promptVersion" not in json.loads((CONTRACTS / "examples" / name).read_text()).get("director", {}), name
     check = (CONTRACTS / "check.py").read_text()
     assert all(f'"director.v{n}"' in check for n in (11, 12, 13, 14))
 

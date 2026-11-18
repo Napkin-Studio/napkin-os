@@ -157,7 +157,7 @@ def test_a_frame_edit_takes_no_model_choice_and_needs_its_frame_shot_and_words()
 
 def test_frame_edit_is_off_when_its_routing_is():
     h = harness()
-    del h.cfg["routing"]["frame_edit"]
+    h.cfg["routing"]["frame_edit"] = []  # absent, it takes the default routing (features/config-defaults.clan)
     assert post(h, h.as_person(), edit_input(), expect=403)["error"]["code"] == "flag_off"
 
 

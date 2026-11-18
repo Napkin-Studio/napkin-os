@@ -12,7 +12,7 @@
 // picture in the Image editor (dblclick.ts).
 
 import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { RouterContext, useConfig, useDoc, useServices, useStoredDoc } from '../../app/context'
+import { RouterContext, useDoc, useServices, useStoredDoc } from '../../app/context'
 import { scriptRoute } from '../../app/route'
 import { updateDoc } from '../../doc/store'
 import type { ActiveToolSpec, CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
@@ -58,8 +58,6 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const doc = useStoredDoc()
   // What the layer draws reads the document as the canvas has it alive (model/live.ts).
   const live = useDoc()
-  // The Brief node's compact card (features/brief-node.clan; production-new-ui mock v2.1).
-  const briefCards = !!useConfig().config.flags.briefNode
   const services = useServices()
   const router = useContext(RouterContext)
   const mode = useSyncExternalStore(canvasActions.subscribe, () => canvasActions.mode())
@@ -588,7 +586,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
           </div>
         )
       })}
-      {briefCards && els.filter((e) => briefOfElement(e)).map((e) => {
+      {/* The Brief node's compact card (features/brief-node.clan; production-new-ui mock v2.1). */}
+      {els.filter((e) => briefOfElement(e)).map((e) => {
         const id = briefOfElement(e)!
         const p = toLocal(e.x + (moving?.ids.has(e.id) ? moving.dx : 0), e.y + (moving?.ids.has(e.id) ? moving.dy : 0))
         const state = !source ? '' : e.id === source.id ? 'source' : 'dim'

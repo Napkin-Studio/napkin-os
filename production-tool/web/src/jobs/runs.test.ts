@@ -1,6 +1,6 @@
 // Shots that join (features/connected-video.clan, design section 9): the run planner's vectors, the take's
 // timing and windows, the run driver, Remake just this shot, the stitch request for end-framed clips and
-// windows, and that with flags.connectedVideo absent Make clips sends exactly today's requests.
+// windows, and that with flags.connectedVideo off Make clips sends exactly today's requests.
 
 import { describe, expect, it, vi } from 'vitest'
 import { CONFIGS } from '../contracts/load'
@@ -152,7 +152,7 @@ describe("a take's timing and windows", () => {
 
 const on: Config = { ...CONFIGS.live, flags: { ...CONFIGS.live.flags, connectedVideo: true } }
 // The live config has connected video on since the full test (2026-11-04); "off" is it without the flag.
-const off: Config = { ...CONFIGS.live, flags: { ...CONFIGS.live.flags, connectedVideo: undefined } }
+const off: Config = { ...CONFIGS.live, flags: { ...CONFIGS.live.flags, connectedVideo: false } }
 
 /** Shots of `lengths` on the main storyboard, each with a picked frame, in one scene, same setup. */
 function film(lengths: number[], extra: (i: number) => Partial<Shot> = () => ({}), prep?: (d: ProductionDocument, shots: Shot[]) => void) {

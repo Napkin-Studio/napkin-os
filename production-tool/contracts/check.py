@@ -233,6 +233,7 @@ INVALID_TARGETS = {
     "customdata": ("customdata.schema.json", "", None),
     "question": ("common.schema.json", "#/$defs/question", None),
     "director": ("director.schema.json", "", None),
+    "config": ("config.schema.json", "", None),
 }
 
 failures = 0
@@ -342,11 +343,17 @@ for field, enum in (("size", "cameraSize"), ("angle", "cameraAngle"), ("movement
 if set(COMMON["cameraPatch"]["properties"]) != set(COMMON["camera"]["properties"]):
     fail("✗ common cameraPatch must have exactly camera's leaves")
 
-# Every op a sheet claims must be routable, and config must name only known providers.
+# Every op a sheet claims must be routable, and config must name only known providers. An op a config
+# does not name takes the schema's default routing (features/config-defaults.clan), checked here too.
 sheets = {json.loads(p.read_text())["provider"]: json.loads(p.read_text()) for p in (HERE / "capabilities").glob("*.json")}
+DEFAULT_ROUTING = json.loads((HERE / "config.schema.json").read_text())["properties"]["routing"]["default"]
+for op, providers in DEFAULT_ROUTING.items():
+    for p in providers:
+        if op not in sheets.get(p, {}).get("ops", {}):
+            fail(f"✗ config.schema.json: the default routing sends {op} to {p}, whose sheet does not support it")
 for f in sorted(HERE.glob("examples/config.*.json")):
     cfg = json.loads(f.read_text())
-    for op, providers in cfg["routing"].items():
+    for op, providers in cfg.get("routing", {}).items():
         for p in providers:
             if op not in sheets.get(p, {}).get("ops", {}):
                 fail(f"✗ {f.relative_to(HERE)}: routes {op} to {p}, whose sheet does not support it")
@@ -358,14 +365,15 @@ for f in sorted(HERE.glob("examples/config.*.json")):
     # holds a shot's required references and lists Dex's additions. v6, v6.1 and v7 stay bundled for a rollback.
     # director.v9 (features/runway-video-models.clan) says which pictures each clip model carries; v10 adds
     # the finished-artwork lines for a layout drawing; v11 (features/join-or-cut-shots.clan) ties each line
-    # of a take to the frame it follows ("Shot k [a-b s] ..., follows image k"). Rolling back is this one line.
-    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9", "director.v10", "director.v11", "director.v9.1", "director.v12", "director.v13", "director.v14"):
+    # of a take to the frame it follows ("Shot k [a-b s] ..., follows image k"). Absent, the relay runs its newest
+    # bundled prompt (relay/director/claude.py PROMPT_VERSION); rolling back is naming one.
+    if "promptVersion" in cfg.get("director", {}) and cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9", "director.v10", "director.v11", "director.v9.1", "director.v12", "director.v13", "director.v14"):
         fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7, v8, v9, v10 or v11")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
 # every op to ['runway'] (or nothing), and no sheet or example names a provider that is gone.
 live = json.loads((HERE / "examples" / "config.live.json").read_text())
-for op, providers in live["routing"].items():
+for op, providers in {**DEFAULT_ROUTING, **live.get("routing", {})}.items():
     if providers not in ([], ["runway"]):
         fail(f"✗ examples/config.live.json: routes {op} to {providers}; the live config routes every op to ['runway']")
 GONE = re.compile(r"\b(fal|heygen)\b|fal-ai/", re.I)

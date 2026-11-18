@@ -47,7 +47,7 @@ LOCAL_CONFIG=/path/to/config.json uv run --frozen --python 3.12 python -m local 
 - **Config:**
   - Without `LOCAL_CONFIG`, every step runs on the free **mock** provider, which returns your input stamped "MOCK".
   - With `LOCAL_CONFIG`, it reads your config file (same shape as `contracts/examples/config.*.json`) and re-reads it every 30 s, so routing and flag changes need no restart.
-  - To use Runway, route steps to it, e.g. `"frame": ["runway"]` (as `contracts/examples/config.live.json` does).
+  - A config names only what differs from the defaults in `contracts/config.schema.json` (features/config-defaults.clan): a step it does not route runs on Runway (shot_list, stitch and cutout on no provider), a flag it does not set takes its default, and the director runs its newest prompt. So `contracts/examples/config.live.json`, which routes nothing, runs every step on Runway; route a step to the mock with e.g. `"frame": ["mock"]`.
 - **No director model configured** (`ANTHROPIC_API_KEY` or `NAPKIN_MODEL_API` unset): a simple passthrough director writes prompts from the shot text. That's fine for testing routing; it isn't representative of prompt quality.
 - **Use `--frozen`:** without it, `uv` rewrites the out-of-date `uv.lock` on every run (see [Gotchas](#gotchas)).
 

@@ -505,11 +505,11 @@ def test_old_and_new_configs_load_on_old_and_new_schemas():
     reg = Registry().with_resource(common["$id"], Resource.from_contents(common))
     live = json.loads((contracts_dir() / "examples" / "config.live.json").read_text())
     testing = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
-    old_live = {**live, "routing": {k: v for k, v in live["routing"].items() if k != "clip_patch"}}
+    old_live = {**live, "routing": {"generate": ["runway"]}}  # a file from before clip_patch was routed
     assert not list(Draft202012Validator(old, registry=reg).iter_errors(live))  # the live file loads on an old relay
     assert not list(Draft202012Validator(schema, registry=reg).iter_errors(old_live))  # an old file on the new relay
     assert not Contracts().errors("config.schema.json", testing)
-    assert "clipPatch" not in live and not live["flags"].get("clipPatch")  # off in the live config
+    assert "clipPatch" not in live and not live.get("flags", {}).get("clipPatch")  # off in the live config
 
 
 def test_patch_plan_twin_gives_the_relays_keyframe():
