@@ -586,6 +586,8 @@ def available(rung: str, issue: dict, env: dict) -> tuple:
             return False, env["shorten_why"]
         if not slot:
             return False, "the finding names no slot"
+        if " at " in str((issue.get("evidence") or {}).get("unit") or ""):   # deck-slide-size: only the slide size raised it (layouts.BY_SIZE)
+            return False, "the words fit at 16:9: a size change is taken by the layout ladder, never by a paid shorten"
         return True, ""
     if rung == "overflow_to_notes":
         if env["text_mode"] != "condense":

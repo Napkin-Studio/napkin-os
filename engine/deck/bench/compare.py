@@ -37,6 +37,10 @@ def compare(before: dict, after: dict, tolerance: float = 0.0, direction: dict |
     ``lost_coverage`` counts yes to n/a, a metric that became n/a, a deck or item gone and a changed items version;
     ``metric_regressions`` counts metrics that moved the worse way by more than ``tolerance`` (direction ``same``: any
     change). Only gate items count in those; advisory items are counted in ``advisory`` and shown, never failing."""
+    sb, sa = before.get("size", "16:9"), after.get("size", "16:9")
+    if sb != sa:   # deck-slide-size: a 4:3 run against a 16:9 baseline shows false regressions; compare one size with itself
+        raise ValueError(f"the two checklists were built at different slide sizes ({sb} and {sa}): compare each size with its own baseline "
+                         "(bench/baseline/checklist.json is 16:9; checklist_4x3.json and checklist_a4.json hold the others)")
     direction = direction if direction is not None else directions()
     tier = tier if tier is not None else tiers()
     gate = lambda item: tier.get(item, "gate") == "gate"

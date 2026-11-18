@@ -35,6 +35,7 @@ import time
 from pathlib import Path
 
 from . import assemble, imagegen, images, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, repair, spec, validate
+from . import theme as themes
 
 #: Stage a0 (intake) comes first: it fills the brief fields the brief does not supply.
 STAGE_FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.json", "c": "c_territories.json", "d": "d_idea.json"}
@@ -250,6 +251,60 @@ def _type_change(a, profile: dict) -> dict:
         if a.live and not a.confirm_stages:
             raise SystemExit(f"refused: {profiles.NeedsStages(profile['id'], tc['needs'])}")
     return out
+
+
+def _protect_boxes(a, deck: dict) -> dict:
+    """deck-slide-size: asset id -> the protect boxes (``keep``) of each Production picture the deck binds (stages/production.json), so a re-crop
+    at 4:3 or A4 that cuts them is a finding. Empty without a Production file."""
+    pf = a.stages / "production.json"
+    if not pf.is_file():
+        return {}
+    try:
+        items = (json.loads(pf.read_text()) or {}).get("items") or {}
+    except (OSError, ValueError):
+        return {}
+    used = {(sl.get("image") or {}).get("asset") for s in deck["slides"].values() for sl in (s.get("slots") or {}).values() if isinstance(sl, dict)}
+    out = {}
+    for it in items.values():
+        aid = "img_" + str(it.get("sha256") or "")[:12]
+        if it.get("keep") and aid in used:
+            out[aid] = it["keep"]
+    return out
+
+
+def _resolve_size(a, deck: dict, deck_ctx, rec: dict | None, answers: dict | None = None) -> str:
+    """deck-slide-size: the deck's slide size, stamped once (``deck.meta.preferences.size``, the one place every reader takes it from) before the
+    pictures and the plan. Precedence: --size > the Deck document's look.size.canvas > the answer to the intake's size card > a .potx
+    master's own size (one of the three) > the
+    recipe's (deck-types slice 8: a tender and the read format default to A4; only with the recipes on) > 16:9. Nothing is stamped when
+    nobody gave a size, so a 16:9 deck is today's. An explicit size that differs from the master's is refused (a master fixes its own size;
+    it is never converted). Returns the size name."""
+    lk = (deck_ctx.get("look") if isinstance(deck_ctx, dict) else None) or {}
+    dsz = lk.get("size")
+    dsz = dsz.get("canvas") if isinstance(dsz, dict) else dsz
+    dsz = dsz if dsz in spec.SLIDE_SIZES else None
+    ans = (answers or {}).get(intake.SIZE_QUESTION_ID) or {}   # the person's answer to the intake's size card (not a skip)
+    asz = ans.get("option_id") if isinstance(ans, dict) and not ans.get("skipped") else None
+    explicit = a.size or dsz or (asz if asz in spec.SLIDE_SIZES else None)
+    msz = None
+    if a.master:
+        from pptx import Presentation   # noqa: PLC0415
+        m = Presentation(str(a.master))
+        msz = themes.size_by_emu(int(m.slide_width), int(m.slide_height))
+        if explicit and msz != explicit:
+            w_, h_ = int(m.slide_width) / 914400, int(m.slide_height) / 914400
+            raise SystemExit(f"refused: the master {Path(a.master).name} is {msz or f'{w_:.2f} x {h_:.2f} in'} and the size asked is {explicit}: "
+                             "a master fixes its own slide size and is never converted. Drop --size (the master's size is used) or use a master of that size")
+    if explicit:
+        name, source = explicit, "person"
+    elif msz and msz != spec.SIZE_DEFAULT:
+        name, source = msz, "master"
+    elif rec and rec.get("size") and rec["size"] != spec.SIZE_DEFAULT:
+        name, source = rec["size"], "recipe"
+    else:
+        return spec.SIZE_DEFAULT
+    deck["meta"].setdefault("preferences", {})["size"] = {"canvas": name, "source": source}
+    return name
 
 
 def _stamp_type(deck: dict, profile: dict, choice: dict, fmt: str | None = None) -> None:
@@ -799,6 +854,10 @@ def main(argv=None):
     ap.add_argument("--density", choices=spec.DENSITY_LEVELS, default=None,
                     help="how much a content slide holds: lean (about 30 words), standard (60), detailed (the type's budget). Without it the engine resolves it by format "
                          "(a presented pitch is lean, a leave-behind detailed) and stamps meta.preferences.density with its source")
+    ap.add_argument("--size", choices=spec.SLIDE_SIZES, default=None,
+                    help="the slide size (deck-slide-size): 16:9 (default), 4:3 or a4 (A4 landscape, 297 x 210 mm). Without it: the Deck document's look.size, "
+                         "a --master's own size, the deck type's (with the recipes on: a tender and a deck sent to be read are A4), else 16:9. Margins and type "
+                         "stay the same size; the layouts reflow and the fit ladder takes what no longer fits. A4 defaults to density detailed")
     ap.add_argument("--layout", action="append", default=[], metavar="SLIDE=ID",
                     help="a person's layout swap for one slide (repeatable); honoured when the layout holds the slide, else layout_unknown")
     ap.add_argument("--no-layout-plan", action="store_true", help="skip the layout plan: the renderers choose as before the library (rollback)")
@@ -999,6 +1058,8 @@ def main(argv=None):
             card = None if choice["source"] == "pick" else intake.type_card_for(inp)   # deck-types: a picked type is not asked again (its place goes to another question)
             intake.add_type_question(st[k], card, profile if profile["arrange"] == "spine" else None)   # the deck type is the first question; a legacy type adds none of its own, so its deck is unchanged
             intake.add_supply_questions(st[k], supply)   # after the type question and the stage's own, within the five-question cap
+            if profiles.recipes_on() and not (a.size or ((deck_ctx or {}).get("look") or {}).get("size")):   # deck-slide-size: asked only when nobody chose a size
+                intake.add_size_question(st[k], intake.size_card_for(inp, a.format))
             inp.intake = st[k]
             rep["intake"] = {"applied": intake.apply_a0(inp, st[k]), "gaps": st[k]["gaps"], "questions": asked,
                              "questions_total": len(st[k]["questions"])}
@@ -1061,6 +1122,11 @@ def main(argv=None):
         rep["supply_questions"] = supply + [c for c in intake.gap_questions(assemble.investor_gaps(deck)) if c["id"] not in have]
     rep["confirm"] = intake.confirm_summary(deck, intake.stamp_confirm(deck, inp))   # what to confirm, and how much a person has verified or supplied
     _stamp_type(deck, profile, choice, a.format)
+    size = _resolve_size(a, deck, deck_ctx, rec, answers)
+    if size != spec.SIZE_DEFAULT:   # the report names the size only when it is not 16:9
+        rep["size"] = dict(deck["meta"]["preferences"]["size"])
+    if rec and "recipe" in rep:
+        rep["recipe"]["size"] = {"value": rec["size"], "applied": (deck["meta"].get("preferences") or {}).get("size", {}).get("source") == "recipe"}
     brand = None
     if a.brand:   # colours, fonts and logos: the logo files are read here so the deck carries them
         brand = json.loads(a.brand.read_text())
@@ -1160,7 +1226,7 @@ def main(argv=None):
         dl = lk.get("density")
         dl = dl.get("level") if isinstance(dl, dict) else dl
         dl = dl if dl in spec.DENSITY_LEVELS else None
-        level = a.density or dl or ((rec["density"]["level"] if rec else spec.DENSITY_DEFAULTS.get(a.format)) if spec.LOOK_V2 else None)   # deck-types: the type's level (person > recipe > default)
+        level = a.density or dl or ((spec.SIZE_DENSITY_DEFAULTS.get(size) or (rec["density"]["level"] if rec else spec.DENSITY_DEFAULTS.get(a.format))) if spec.LOOK_V2 else None)   # deck-types: the type's level (person > size (A4: detailed) > recipe > default)
         if a.no_notes:   # no notes means nowhere for a moved point to go: nothing leaves the slide
             level = "detailed"
         if level:
@@ -1184,7 +1250,7 @@ def main(argv=None):
         if spec.LOOK_V3 and (a.pictures or supplied):   # deck-look step 7: measure where words may sit on the cover's and the idea's pictures (Pillow, free)
             from . import theme as _themes
             _th = _themes.get_theme(_themes.DEFAULT, deck["meta"].get("brand") or {})
-            zones = images.solve_text_zones(deck, images.source_paths(deck, a.audience, [a.stages], sources), ink=_th.ink, paper=_th.on_dark)
+            zones = images.solve_text_zones(deck, images.source_paths(deck, a.audience, [a.stages], sources), ink=_th.ink, paper=_th.on_dark, canvas=themes.canvas(size))
             if zones:
                 rep["text_zones"] = {sid: z for sid, z in zones}
         base_deck = deck   # pictures are already bound here: the repair loop re-plans from this deck and never asks for a picture
@@ -1243,7 +1309,7 @@ def main(argv=None):
             raise SystemExit(f"refused: {e}")
     t = time.time()
     pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings, placed=placed,
-                              notes=not a.no_notes, no_plan=a.no_layout_plan, icons=icons)
+                              notes=not a.no_notes, no_plan=a.no_layout_plan, icons=icons, protect=_protect_boxes(a, deck) if size != spec.SIZE_DEFAULT else None)
     if pic_findings:   # a slide drawn without its picture because it would not fit beside it: say so in the findings
         for f in pic_findings:
             f["slide_no"] = deck["order"].index(f["slide"]) + 1

@@ -28,6 +28,7 @@ from visuals import jobs, lint, runway, safety
 from visuals import style as vstyle
 
 from . import images, spec
+from . import theme as themes
 
 RAILS_VERSION = "1"
 DECK_RAILS = "No recognisable real people or public figures. No charts, graphs, diagrams, numbers or screens with content."
@@ -99,6 +100,7 @@ def candidate_slots(deck: dict, territories=None, generate: str = "all") -> list
     ``none`` plans nothing (a tender); ``all`` is today. Narrowing only: it never opens a slot, raises the cap or approves anything."""
     anc = anchors(deck, territories)
     only = GENERATE_TYPES.get(generate, None)
+    cv = themes.canvas_of(deck)
     out = []
     for sid in deck["order"]:
         s = deck["slides"][sid]
@@ -120,7 +122,8 @@ def candidate_slots(deck: dict, territories=None, generate: str = "all") -> list
                 continue
             if (im.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand", "production"):   # production: a rights-pending pull leaves the plan too
                 continue
-            out.append({"sid": sid, "slot": name, "aspect": im["aspect"], "anchor": anc[sid], "key": anchor_key(anc[sid], name), "kind": im.get("kind") or "photo"})
+            aspect = images.slot_aspect(im["aspect"], spec.picture_of(s)[0], name, cv)   # deck-slide-size: the bleed at 4:3 / A4 is made 3:2; 16:9 as declared
+            out.append({"sid": sid, "slot": name, "aspect": aspect, "anchor": anc[sid], "key": anchor_key(anc[sid], name), "kind": im.get("kind") or "photo"})
     return out
 
 

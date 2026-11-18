@@ -442,7 +442,8 @@ def _purpose(t: str, rec: dict, info: dict) -> str:
 
 def card_data() -> list:
     """What the picker shows, one card per type in ids() order (design.schema.resolver): ``{id, label, one_line, kind, flag, default_format, target,
-    cap, max, size, pictures, stages, recipe_only, spine: [{type, section, purpose}], more}`` (``stages``: the model stages a change to this type needs
+    cap, max, size, size_read, pictures, stages, recipe_only, spine: [{type, section, purpose}], more}`` (``size`` / ``size_read``: the
+    recipe's slide size presented and sent to be read, deck-slide-size; ``stages``: the model stages a change to this type needs
     recorded; ``recipe_only``: a type the picker hides unless the engine offers it). Generated into the Deck Maker template (``write_cards``) and compared with it
     by a test, so the app and the engine never disagree on types. Read from the profiles alone: the flags do not change a card."""
     from . import layouts   # late, as in recipe()
@@ -459,7 +460,7 @@ def card_data() -> list:
             word = "few"
         out.append({"id": pid, "label": p["label"], "one_line": p["one_line"], "kind": p["kind"], "flag": kinds.get(pid),
                     "default_format": rec["default_format"], "target": rec["length"]["target"], "cap": rec["length"]["cap"],
-                    "max": p["length"]["max_slides"], "size": rec["size"], "pictures": word,
+                    "max": p["length"]["max_slides"], "size": rec["size"], "size_read": recipe(p, "full")["size"], "pictures": word,
                     "stages": [s for s in p["stages"] if s not in CHANGE_OPTIONAL],   # what a change to this type needs recorded (type_change)
                     "recipe_only": pid in spec.RECIPE_ONLY_TYPES,   # shown only when the engine says the recipes are on (run.types)
                     "spine": [{"type": t, "section": spec.SLIDE_TYPES[t]["section"], "purpose": _purpose(t, rec, info)} for t in spine],

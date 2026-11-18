@@ -19,6 +19,8 @@ alternatives:
 - full_bleed_statement
 - section
 roomier: big_statement
+not_at:   # deck-slide-size (Fable fix 3): at 4:3 the bar's text is 2.8 in wide; the idea and the real question take big_statement
+- '4:3'
 density: lean
 pick: rule
 family: statement

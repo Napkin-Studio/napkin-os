@@ -86,6 +86,22 @@ def ratio(aspect: str) -> float:
     return int(w) / int(h)
 
 
+#: deck-slide-size: the slot whose picture is drawn at the full slide width (the bleed: full_bleed_statement, cover_bleed), by slide type.
+#: Its words sit on the picture, so at 4:3 and A4 its slot takes the IMAGE_ASPECTS entry nearest the box it fills.
+CANVAS_WIDE_TYPES = ("title", "idea", "real_question")
+
+
+def slot_aspect(declared: str, slide_type: str | None = None, slot: str = "picture", canvas=None) -> str:
+    """deck-slide-size: the aspect a picture slot is made at for the deck's size. At 16:9 (or no canvas) always ``declared``, so every
+    request key stays as it was. At 4:3 and A4 a canvas-wide slot (``CANVAS_WIDE_TYPES``' picture: the bleed) takes the spec.IMAGE_ASPECTS
+    entry nearest its box by log ratio (the slide width over the bleed height: 10 x 6.85 = 1.46 and 11.69 x 7.63 = 1.53, both 3:2);
+    panel and side slots keep theirs (the panel crops to cover). A picture already made is never re-made for this: it is re-cropped."""
+    if canvas is None or canvas.identity or slot != "picture" or slide_type not in CANVAS_WIDE_TYPES:
+        return declared
+    r = canvas.w_in / canvas.y(BLEED_H)
+    return min(spec.IMAGE_ASPECTS, key=lambda a: (abs(math.log(ratio(a) / r)), spec.IMAGE_ASPECTS.index(a)))
+
+
 def crop_box(src_w: int, src_h: int, aspect, focal: dict | None = None) -> tuple:
     """The part of a ``src_w`` by ``src_h`` picture to show in a box of ``aspect`` (a name like ``16:9`` or a width/height number),
     as ``(x0, y0, x1, y1)`` in source pixels: the largest such rectangle, centred on ``focal`` ({x, y} 0 to 1; centre when absent)
@@ -1094,6 +1110,17 @@ SCRIM_PAD, SCRIM_FADE = 0.5, 3.0
 _THUMB_W = 160
 
 
+def zone_block(canvas=None, physical: bool = False) -> tuple:
+    """deck-slide-size: the text block of a bleed at the deck's size. It keeps its physical width (6.6 in: type does not shrink with the
+    slide) and its height through the body band; on the 16:9 grid that is ``ZONE_BLOCK[0] / k`` wide (``physical`` False, what the renderer
+    lays out), at the size itself ``ZONE_BLOCK[0]`` (``physical`` True, what the finder measures). 16:9 or None: ZONE_BLOCK."""
+    if canvas is None or canvas.identity:
+        return ZONE_BLOCK
+    w = min(ZONE_BLOCK[0], canvas.w_in - 2 * BLEED_M - 0.5)
+    h = canvas.y(BLEED_H - 0.45) - canvas.y(BLEED_H - 0.45 - ZONE_BLOCK[1])
+    return (w, h) if physical else (w / canvas.k, ZONE_BLOCK[1])
+
+
 def zone_box(zone: str, block: tuple = ZONE_BLOCK, W: float = BLEED_W, H: float = BLEED_H, M: float = BLEED_M) -> tuple:
     """``(x, y, w, h)`` in inches of the text block for ``zone`` on a bleed picture of ``W`` by ``H`` (the top zones sit under the DRAFT mark)."""
     bw, bh = block
@@ -1244,12 +1271,16 @@ def source_paths(deck: dict, audience: str, src_dirs=(), sources: dict | None = 
     return out
 
 
-def solve_text_zones(deck: dict, paths: dict, ink: str = "1B2430", paper: str = "FAF7F1") -> list:
+def solve_text_zones(deck: dict, paths: dict, ink: str = "1B2430", paper: str = "FAF7F1", canvas=None) -> list:
     """Run the finder on the picture slot of every slide of TEXT_OVER_TYPES whose picture is drawable (``paths`` holds its file) and record
     the answer on the slot as ``image.text_zone``; a slot already holding one keeps it (a repair or a person may pin it). Returns
     ``[(slide id, record)]``. The layout picker reads the record: a zone puts the words on the picture (cover_bleed, full_bleed_statement),
-    none keeps them beside it and the plan reports the fallback."""
+    none keeps them beside it and the plan reports the fallback. ``canvas`` (deck-slide-size, a theme.Canvas): at 4:3 and A4 the finder
+    measures the picture as it is cropped at that size and the block as it is drawn there (the bleed box through the canvas map)."""
     out = []
+    kw = {}
+    if canvas is not None and not canvas.identity:
+        kw = {"box": (canvas.w_in, canvas.y(BLEED_H)), "block": zone_block(canvas, physical=True)}
     for sid in deck["order"]:
         s = deck["slides"][sid]
         sl = (s.get("slots") or {}).get("picture")
@@ -1257,7 +1288,7 @@ def solve_text_zones(deck: dict, paths: dict, ink: str = "1B2430", paper: str = 
         if s["type"] not in TEXT_OVER_TYPES or not isinstance(im, dict) or im.get("asset") not in paths:
             continue
         if not im.get("text_zone"):
-            im["text_zone"] = text_zone(paths[im["asset"]], focal=im.get("focal"), ink=ink, paper=paper)
+            im["text_zone"] = text_zone(paths[im["asset"]], focal=im.get("focal"), ink=ink, paper=paper, **kw)
         out.append((sid, im["text_zone"]))
     return out
 

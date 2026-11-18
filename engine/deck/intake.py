@@ -528,6 +528,52 @@ def add_type_question(a0: dict, card: dict, profile: dict | None = None) -> dict
     return a0
 
 
+#: deck-slide-size (design.asking.intake_card): the size question, a preference card (contract 6.4 shape).
+SIZE_QUESTION_ID = "q_pref_size"
+SIZE_ADDRESS = "look.size"
+SIZE_QUESTION_TEXT = "What size should the slides be?"
+SIZE_OPTIONS = (("16:9", "16:9 widescreen, for presenting on a screen"), ("4:3", "4:3 standard, for older projectors and some client templates"),
+                ("a4", "A4 landscape, to print as a leave-behind"))
+
+
+def prints(texts) -> list:
+    """The print words (spec.PRINT_WORDS) a prompt, brief or document names, in the order of the list: the sign a deck will be printed."""
+    hay = " ".join(str(x) for x in texts if x).lower()
+    return [w for w in spec.PRINT_WORDS if re.search(r"(?<![\w-])" + re.escape(w) + r"(?![\w-])", hay)]
+
+
+def size_question(fmt: str = "pitch", prompt_text: str = "", documents=None, brief=None) -> dict | None:
+    """The q_pref_size card, or None: it joins only for a leave-behind (format full) or when the prompt, brief or documents name printing
+    (Fable Q4); otherwise the size is 16:9 and waits on Start and Review. Options default first: A4 for a leave-behind or a print word, else
+    16:9; the default option's origin is ``default``. Skippable: a skip keeps the default. Computed in code."""
+    hits = prints(_texts_of(prompt_text, documents, brief))
+    if fmt != "full" and not hits:
+        return None
+    default = "a4" if (fmt == "full" or any(h in ("print", "printed", "printing", "a4", "handout", "leave-behind", "leave behind") for h in hits)) else "4:3"
+    order = [o for o in SIZE_OPTIONS if o[0] == default] + [o for o in SIZE_OPTIONS if o[0] != default]
+    opts = [{"id": v, "label": lab, "value": v, "origin": "default" if v == default else "asked"} for v, lab in order]
+    card = {"id": SIZE_QUESTION_ID, "text": SIZE_QUESTION_TEXT, "options": opts, "allow_text": False, "address": SIZE_ADDRESS,
+            "skippable": True, "kind": "preference", "default": default}
+    if hits:
+        card["source"] = "the brief says: " + ", ".join(hits[:3])
+    return card
+
+
+def size_card_for(inp, fmt: str = "pitch") -> dict | None:
+    """The size card for a run's inputs (``size_question`` on its prompt, documents and brief)."""
+    return size_question(fmt, inp.prompt_text, inp.docs, {k: f for k, f in inp.brief.items() if not f.get("from_intake")})
+
+
+def add_size_question(a0: dict, card: dict | None) -> dict:
+    """Put the size card last, in place, only in a place left under the five-question cap (a preference never displaces a content question).
+    Idempotent."""
+    qs = list(a0.get("questions") or [])
+    if card and len(qs) < MAX_QUESTIONS and card["id"] not in {q.get("id") for q in qs}:
+        qs.append(card)
+    a0["questions"] = qs
+    return a0
+
+
 def _recognise(text: str) -> str | None:
     """A deck type named in a typed answer: an id or a label, else the type its words point at (medium
     confidence or better). None when the text names nothing."""

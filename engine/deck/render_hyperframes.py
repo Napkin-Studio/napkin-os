@@ -17,7 +17,8 @@ import json
 from pathlib import Path
 
 from . import spec
-from .render_web import CSS_LAYOUT, LOOK_CSS, PIC_CSS, _e, graphics_css, slide_views, theme_css
+from . import theme as themes
+from .render_web import CSS_LAYOUT, LOOK_CSS, PIC_CSS, _e, graphics_css, size_css, slide_views, theme_css
 
 INTRO = 0.35     # s before the first reveal of a slide
 SETTLE = 1.3     # s for the last reveal of a step to finish (bars and counters are the longest)
@@ -100,10 +101,16 @@ def render(deck, inp, out: Path, findings: list | None = None, builds: bool = Fa
             if f"assets/{Path(path).name}" in scenes:
                 shutil.copyfile(path, out / "assets" / Path(path).name)
     m = deck["meta"]
-    css = theme_css(CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + HF_CSS + (PIC_CSS if pictures else "") + graphics_css(scenes),
+    cv = themes.canvas_of(deck)   # deck-slide-size: the composition at the deck's size (16:9: 1920 x 1080, unchanged)
+    W, H = cv.px
+    hf = HF_CSS if cv.identity else HF_CSS.replace("width:1920px;height:1080px", f"width:{W}px;height:{H}px")
+    css = theme_css(CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + hf + (PIC_CSS if pictures else "") + graphics_css(scenes),
                     head="serif", body="system-ui, sans-serif")   # deck-graphics: frames, icons, charts and diagrams carry their own styles here too
+    if not cv.identity:
+        css += size_css(cv)
+        scenes = scenes.replace('data-width="1920" data-height="1080"', f'data-width="{W}" data-height="{H}"')
     (out / "index.html").write_text(f"""<!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=1920, height=1080">
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width={W}, height={H}">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <script src="{GSAP}"></script>
 <script src="{RUNTIME}"></script>
@@ -112,7 +119,7 @@ def render(deck, inp, out: Path, findings: list | None = None, builds: bool = Fa
 <script type="application/hyperframes-slideshow+json">
 {json.dumps(island, indent=1, ensure_ascii=False).replace("</", "<\\/")}
 </script>
-<div id="deck" data-composition-id="deck" data-start="0" data-duration="{total:g}" data-width="1920" data-height="1080">
+<div id="deck" data-composition-id="deck" data-start="0" data-duration="{total:g}" data-width="{W}" data-height="{H}">
 {scenes}
 </div>
 <script>{TIMELINES.replace("INTRO", str(INTRO))}</script>

@@ -244,6 +244,17 @@
     "human_rows": {
       "type": "boolean",
       "$comment": "deck-look: the layout draws a human item (a placeholder a person must supply) as a dashed 'To supply' row, so it accepts a slide that holds one"
+    },
+    "not_at": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "4:3",
+          "a4"
+        ]
+      },
+      "uniqueItems": true,
+      "$comment": "deck-slide-size: sizes this layout is never drawn at (the plan's switch rung takes its alternatives); 16:9 is never listed"
     }
   },
   "definitions": {
