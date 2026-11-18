@@ -12,7 +12,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useDoc, useServices } from '../app/context'
+import { useConfig, useDoc, useServices } from '../app/context'
+import { usePanels } from '../ui/chrome/panels'
 import { canvasActions } from '../canvas/chrome/actions'
 import { linkInput, unlinkInput } from '../canvas/nodes/nodes'
 import { shotNumber } from '../model/selectors'
@@ -103,6 +104,8 @@ export function LinkPicker({ nodeId, onDone }: { nodeId: string; onDone: (said?:
   const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [why, setWhy] = useState<string | null>(null)
+  const { config } = useConfig()
+  const panels = usePanels()
   const all = useMemo(() => linkChoices(doc, nodeId), [doc, nodeId])
   const shown = searchChoices(all, typed)
   const to = nodeEnd(doc, nodeId)
@@ -123,6 +126,7 @@ export function LinkPicker({ nodeId, onDone }: { nodeId: string; onDone: (said?:
     ['Boards', shown.filter((c) => c.from.kind === 'board')],
     ['Groups', shown.filter((c) => c.from.kind === 'key' || c.from.kind === 'group')],
     ['References', shown.filter((c) => c.from.kind === 'ref')],
+    ['Briefs', shown.filter((c) => c.from.kind === 'brief')],
   ]
   return (
     <div className="in-pick">
@@ -144,6 +148,12 @@ export function LinkPicker({ nodeId, onDone }: { nodeId: string; onDone: (said?:
         ))}
         {!shown.length && <p className="in-none">{all.length ? 'Nothing matches.' : 'No boards or named pictures yet.'}</p>}
       </div>
+      {/* A brief not in the film yet comes from Brief Maker: Assets › From Napkin (features/brief-node.clan). */}
+      {config.flags.briefNode && (to?.kind === 'script' || to?.kind === 'storyboard' || to?.kind === 'video') && (
+        <button type="button" className="in-choice in-more" onClick={() => { onDone(); panels.openAssets('napkin') }}>
+          <span className="in-noimg" /><span className="in-clabel">A brief from Brief Maker…</span><span className="in-cwhat">From Napkin</span>
+        </button>
+      )}
     </div>
   )
 }

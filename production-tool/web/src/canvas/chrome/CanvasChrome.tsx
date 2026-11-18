@@ -18,6 +18,8 @@ import { setText, TEXT_SIZE_PX, useTextChoice } from './textStyle'
 import { canvasActions } from './actions'
 import { copyLabel } from '../core/sketchCopy'
 import { RATIOS, type Ratio } from '../../contracts/types'
+import { usePanels } from '../../ui/chrome/panels'
+import { useConfig } from '../../app/context'
 import './canvas.css'
 
 /** What the canvas below can do through the chrome's actions (actions.ts), kept current. */
@@ -159,6 +161,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   // The pen's options: applied to the engine always, shown while the pen is in use.
   const pen = usePenChoice(chrome)
   const actions = useActions()
+  const panels = usePanels()
+  const { config } = useConfig()
   const nodeRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
   // The next sketch area's shape (ui-behaviour 3.7): the storyboard's ratio until the person picks one.
@@ -236,6 +240,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {row('picture', <>{ICON.image}A picture</>, null, has('image'), 'Pictures are not on this canvas yet', () => onNode('picture'))}
       {row('sketch', <>{sketchIcon}A sketch area</>, ratio, has('sketch'), 'Sketch areas are not on this canvas yet', () => onNode('sketch'))}
       {row('board', <>{ICON.board}A board</>, 'B', actions.canBoard, 'New boards need the new canvas (it has boards as frames)', () => canvasActions.board())}
+      {/* A brief comes from Brief Maker, never typed here: Assets › From Napkin lists the agency's (features/brief-node.clan). */}
+      {config.flags.briefNode && row('brief', <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" /><path d="M7 13h10M7 16h6" /></svg>A brief from Brief Maker…</>, null, actions.canNode, 'Briefs need the new canvas', () => panels.openAssets('napkin'))}
     </>
   )
   const nodeButton = (

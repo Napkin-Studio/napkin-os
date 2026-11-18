@@ -6,7 +6,7 @@
 // with its count. Each editor's own controls sit in the band row under it (Band).
 
 import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { useDoc, useServices, useShell } from '../../app/context'
+import { useConfig, useDoc, useRoute, useRouter, useServices, useShell } from '../../app/context'
 import { Float, MenuItem } from '../Float'
 import { saveTime, useSave } from '../useSave'
 import { setThemeChoice } from '../../theme'
@@ -115,18 +115,33 @@ function Crumbs({ crumb }: { crumb: Crumb[] }) {
   )
 }
 
-/** Continue in ▾: where this film goes next. Linking a brief comes with the Brief node (features/brief-node.clan). */
+/** Continue in ▾: where this film goes next. Link a brief… opens Assets › From Napkin on the canvas, where the
+ *  agency's Brief Maker briefs are (features/brief-node.clan; live test 2026-11-18). */
 function ContinueIn() {
   const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
+  const { ui } = useServices()
+  const { config } = useConfig()
+  const route = useRoute()
+  const router = useRouter()
+  const panels = usePanels()
   const soon = 'Not in this version yet'
+  const linkBrief = () => {
+    setOpen(false)
+    // The Brief node goes on the canvas: an editor or a room goes back to it first.
+    if (route.kind === 'script') router.leave()
+    ui.update((u) => { u.stage = 'character' }, 'stage')
+    panels.openAssets('napkin')
+  }
   return (
     <>
       <button ref={ref} type="button" className="tba-btn ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Continue in ▾</button>
       <Float anchor={ref} open={open} onClose={() => setOpen(false)} role="menu" label="Continue in" className="pt-menu nui-pop">
         <div className="fhead">Continue in</div>
         <MenuItem icon="+" disabled hint={soon} onSelect={() => {}}>New deck from this film</MenuItem>
-        <MenuItem icon="↔" disabled hint={soon} onSelect={() => {}}>Link a brief…</MenuItem>
+        {config.flags.briefNode
+          ? <MenuItem icon="↔" hint="From Brief Maker, in Assets › From Napkin" onSelect={linkBrief}>Link a brief…</MenuItem>
+          : <MenuItem icon="↔" disabled hint={soon} onSelect={() => {}}>Link a brief…</MenuItem>}
       </Float>
     </>
   )

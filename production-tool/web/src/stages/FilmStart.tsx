@@ -12,19 +12,16 @@ import { cardOf, type NodeEnv } from '../canvas/nodes/nodes'
 import { briefOfElement } from '../brief/canvas'
 import { scriptFromBrief, scriptFromLine } from '../jobs/prompt'
 import { briefChoices, offersStartFromBrief } from '../brief/start'
-import { osBriefSource, type BriefSource, type OsBriefItem } from '../brief/os'
+import { pageBriefSource, type BriefSource, type OsBriefItem } from '../brief/os'
 import { useProjectName } from '../ui/useDownload'
 import { Float } from '../ui/Float'
 import { START_LENGTHS, START_SHAPES, startFilm } from './startFilm'
 import './filmStart.css'
 
-const OS = osBriefSource()
-/** Dev only: a stand-in for Napkin's briefs (window.__briefSource), for the paired screenshots on a local stack. */
-const devSource = (): BriefSource | null => (import.meta.env.DEV ? (globalThis as unknown as { __briefSource?: BriefSource }).__briefSource ?? null : null)
 type Mode = 'link' | 'spinoff' | 'none'
 const message = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.')
 
-export function StartCard({ env, onPictures, src = devSource() ?? OS }: {
+export function StartCard({ env, onPictures, src = pageBriefSource() }: {
   /** Our own engine's canvas and store; null on the Excalidraw fallback (it cannot lay nodes out). */
   env: NodeEnv | null
   /** Add pictures: the Assets library. */

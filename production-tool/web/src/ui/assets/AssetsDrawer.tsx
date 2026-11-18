@@ -15,9 +15,12 @@ import { keyNamed, keysList, refsList } from '../../model/selectors'
 import { useBlobUrl } from '../hooks'
 import { InlineConfirm } from '../Undo'
 import { CharacterCard } from './CharacterCard'
+import type { AssetsTab } from '../chrome/panels'
+import type { NodeEnv } from '../../canvas/nodes/nodes'
+import { BriefsFromNapkin } from '../../brief/FromNapkin'
 import './assets.css'
 
-type Tab = 'project' | 'library' | 'upload' | 'napkin'
+type Tab = AssetsTab
 const TABS: { id: Tab; label: string }[] = [
   { id: 'project', label: 'This project' }, { id: 'library', label: 'Team library' }, { id: 'upload', label: 'Upload' }, { id: 'napkin', label: 'From Napkin' },
 ]
@@ -27,8 +30,12 @@ const GROUPS: { title: string; roles: RefRole[] | 'other' }[] = [
   { title: 'Characters', roles: ['character'] }, { title: 'Locations', roles: ['location'] }, { title: 'Products', roles: ['product'] }, { title: 'References', roles: 'other' },
 ]
 
-export function AssetsLibrary({ ctrl, onClose, onPicture, onCanvas, onScript }: {
+export function AssetsLibrary({ ctrl, env, tab: firstTab, onClose, onPicture, onCanvas, onScript }: {
   ctrl: CanvasController | null
+  /** Our own engine's canvas and store, to place a linked brief; null on the Excalidraw fallback. */
+  env?: NodeEnv | null
+  /** The tab to open on (Link a brief… opens From Napkin). */
+  tab?: AssetsTab | null
   /** "← Canvas" and ×: the library closes, the Booth with it. */
   onClose: () => void
   /** Upload: the canvas's picture tool. */
@@ -40,7 +47,13 @@ export function AssetsLibrary({ ctrl, onClose, onPicture, onCanvas, onScript }: 
 }) {
   const doc = useDoc()
   const ui = useUi()
-  const [tab, setTab] = useState<Tab>('project')
+  const [tab, setTab] = useState<Tab>(firstTab ?? 'project')
+  // Opened again for a tab (Link a brief… while the library is open): that tab.
+  const [asked, setAsked] = useState(firstTab)
+  if (firstTab !== asked) {
+    setAsked(firstTab)
+    if (firstTab) setTab(firstTab)
+  }
   const [query, setQuery] = useState('')
   const [card, setCard] = useState<string | null>(null)
   const keys = keysList(doc)
@@ -85,7 +98,7 @@ export function AssetsLibrary({ ctrl, onClose, onPicture, onCanvas, onScript }: 
           <button type="button" className="btn-rect wide" onClick={onPicture}>Choose files…</button>
         </>
       )}
-      {tab === 'napkin' && <p className="hint">Nothing from Brief Maker or Research yet. When a brief or research is sent here, it waits under this tab until you bring it in.</p>}
+      {tab === 'napkin' && <BriefsFromNapkin env={env ?? null} />}
       <div className="ad-foot">{ui.me?.team ? `Shared with everyone at ${ui.me.team}` : 'Your library is yours until you sign in with your agency'}</div>
     </div>
   )

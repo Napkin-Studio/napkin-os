@@ -13,7 +13,7 @@ import { UndoKeys } from './ui/UndoButtons'
 import { SaveKeys } from './ui/SaveButton'
 import { PhoneReview } from './stages/PhoneReview'
 import { PHONE, useMedia } from './ui/hooks'
-import { PanelsContext } from './ui/chrome/panels'
+import { PanelsContext, type AssetsTab } from './ui/chrome/panels'
 import { CLAN_DB } from './model/store'
 import { clanDbFor, INDEX_KEY } from './projects/storage'
 import { UpdateBox } from './ui/UpdateBox'
@@ -36,13 +36,16 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   // stays mounted underneath, so its jobs keep landing. Storyboard and Video open the same way.
   const script = route.kind === 'script' && route.projectId === project.id ? route.scriptId : null
   const [panel, setPanel] = useState<'history' | 'assets' | null>(null)
+  const [assetsTab, setAssetsTab] = useState<AssetsTab | null>(null)
   // A canvas picture open in the Image editor: the editor's bar is the page's only bar, as for the other editors.
   const [pictureEditor, setPictureEditor] = useState(false)
   const panels = useMemo(() => ({
     history: panel === 'history',
     assets: panel === 'assets',
-    toggle: (p: 'history' | 'assets') => setPanel((now) => (now === p ? null : p)),
-  }), [panel])
+    assetsTab,
+    toggle: (p: 'history' | 'assets') => { setAssetsTab(null); setPanel((now) => (now === p ? null : p)) },
+    openAssets: (tab: AssetsTab) => { setAssetsTab(tab); setPanel('assets') },
+  }), [panel, assetsTab])
   const phone = useMedia(PHONE)
   const [trouble, setTrouble] = useState<string | null>(null)
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])

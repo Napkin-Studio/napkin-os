@@ -3,13 +3,20 @@
 
 import { createContext, useContext } from 'react'
 
+/** The Assets library's tabs. */
+export type AssetsTab = 'project' | 'library' | 'upload' | 'napkin'
+
 export interface Panels {
   history: boolean
   assets: boolean
+  /** The tab the Assets library opens on, when it was opened for one (Link a brief… opens From Napkin). */
+  assetsTab: AssetsTab | null
   toggle: (p: 'history' | 'assets') => void
+  /** Open the Assets library on a tab (it stays open if it is). */
+  openAssets: (tab: AssetsTab) => void
 }
 
-export const PanelsContext = createContext<Panels>({ history: false, assets: false, toggle: () => {} })
+export const PanelsContext = createContext<Panels>({ history: false, assets: false, assetsTab: null, toggle: () => {}, openAssets: () => {} })
 export const usePanels = () => useContext(PanelsContext)
 
 /** Initials for a person: "Shrey Batra" → "SB", "engineer" → "EN". */

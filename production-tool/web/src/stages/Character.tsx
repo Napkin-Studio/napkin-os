@@ -812,7 +812,7 @@ export function Character({ initial, active, onPictureEditor }: {
       </div>
       <Booth state={booth} earned={boothEarned({ selection: !!selBrief, library: panels.assets })}>
         {selBrief ? <BriefBooth briefId={selBrief} onClose={() => canvas?.select([])} />
-          : panels.assets ? <AssetsLibrary ctrl={ctrl} onClose={() => panels.toggle('assets')} onPicture={() => chrome?.setTool('image')}
+          : panels.assets ? <AssetsLibrary ctrl={ctrl} env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} tab={panels.assetsTab} onClose={() => panels.toggle('assets')} onPicture={() => chrome?.setTool('image')}
               onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} onScript={() => open('script', mainScript(docStore.get())?.id)} />
           : null}
       </Booth>
