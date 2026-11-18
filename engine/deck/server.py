@@ -46,6 +46,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from . import inputs as inputs_mod
+from . import profiles
 from . import run_deck, run_state as rs
 
 #: The stage files each gate's stage writes, and what a replay copies in for each step. Order is the pipeline's.
@@ -108,9 +109,19 @@ def safe_name(doc) -> str:
 def inputs_key(inp: dict) -> str:
     """What a run's cache is keyed by: the inputs that decide its stage outputs. Change one and the run starts again."""
     p = inp.get("prompt") or {}
-    blob = json.dumps({"p": [p.get("text", ""), p.get("client", ""), p.get("project", ""), p.get("agency", "")],
-                       "k": inp.get("kind", "agency"), "f": inp.get("format", "pitch")}, sort_keys=True)
+    key = {"p": [p.get("text", ""), p.get("client", ""), p.get("project", ""), p.get("agency", "")],
+           "k": inp.get("kind", "agency"), "f": inp.get("format", "pitch")}
+    if picked_type(inp):   # deck-types: a picked type is an input too (absent: the key is today's, so existing caches stay)
+        key["t"] = picked_type(inp)
+    blob = json.dumps(key, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def picked_type(inp: dict) -> str | None:
+    """deck-types: the person's explicit pick on the type picker, ``inputs.deck_type.id`` (null or absent: 'Not sure', no pick)."""
+    v = inp.get("deck_type")
+    pid = v.get("id") if isinstance(v, dict) else None
+    return pid if isinstance(pid, str) and pid else None
 
 
 def out_key(inp: dict) -> str:
@@ -136,6 +147,10 @@ def validate_request(body: dict, settings: Settings) -> dict:
         raise Refused(400, "unsupported_kind", f"deck kind {kind!r} is not run by this server yet (it runs {', '.join(KINDS)})")
     if inp.get("format", "pitch") not in ("pitch", "full"):
         raise Refused(400, "bad_request", "format must be pitch or full")
+    if picked_type(inp):
+        if picked_type(inp) not in profiles.ids():
+            raise Refused(400, "bad_request", f"inputs.deck_type.id must be one of {', '.join(profiles.ids())}")
+        kind = profiles.load(picked_type(inp))["kind"]   # the pick names the assembler, so the gate plan follows it
     if not str(prompt.get("text") or "").strip():
         raise Refused(400, "no_inputs", "give the deck something to build from: the prompt text is empty")
     mode = body.get("mode") or ("live" if settings.live and not settings.replay else "replay")
@@ -371,10 +386,12 @@ class Server:
     def call_engine(self, d: Doc, req: dict, until: str | None) -> dict:
         p = req["prompt"]
         argv = ["--prompt-text", str(p.get("text") or ""), "--stages", str(d.stages), "--client", str(p.get("client") or "[Client]"),
-                "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--kind", req["kind"], "--format", req["format"]]   # the QA runs: the repair loop reads it
+                "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--format", req["format"]]   # the QA runs: the repair loop reads it
         inp = req["inputs"]
         if inp.get("text_mode") in ("condense", "preserve"):
             argv += ["--text-mode", inp["text_mode"]]
+        # deck-types: the picker's pick is passed as --type (a --kind would outrank it); with no pick the kind is passed as before
+        argv += ["--type", picked_type(inp)] if picked_type(inp) else ["--kind", req["kind"]]
         if isinstance(inp.get("review"), dict) and inp["review"].get("pinned"):
             rv = d.out / "review.json"
             rv.parent.mkdir(parents=True, exist_ok=True)

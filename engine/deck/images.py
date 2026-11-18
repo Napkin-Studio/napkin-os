@@ -777,13 +777,16 @@ SUPPLIED_ALT = {"title": "A picture for the cover", "appendix": "A picture for t
                 "solution": "A picture for the solution", "product": "A picture for the product"}
 
 
-def add_empty_slots(deck: dict, pictures: str) -> int:
+def add_empty_slots(deck: dict, pictures: str, only=None) -> int:
     """With ``--pictures``, give every slide of the asked types the slots it takes, empty with a reason, where nothing was placed.
     Territory, idea and audience and execution slides always (the creative slides); the cover and the divider with ``creative_cover``.
+    ``only`` (deck-types: the type's recipe ``pictures.types``, when the person set no picture preference) narrows those types; None is today.
     Returns the number added. An empty slot is never drawn."""
     if pictures == "none":
         return 0
     types = CREATIVE_TYPES + (COVER_TYPES if pictures == "creative_cover" else ())
+    if only is not None:
+        types = tuple(x for x in types if x in only)
     n = 0
     for sid in deck["order"]:
         s = deck["slides"][sid]

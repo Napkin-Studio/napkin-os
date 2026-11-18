@@ -34,7 +34,8 @@ from .inputs import BRIEF_FIELDS
 
 PROFILE_DIR = Path(__file__).parent / "profiles"
 #: The ``--kind`` values and the profile each selects (agency and investor are unchanged).
-KIND_TO_PROFILE = {"agency": "agency_pitch", "investor": "investor_seed", "tender": "tender_response", "credentials": "credentials"}
+KIND_TO_PROFILE = {"agency": "agency_pitch", "investor": "investor_seed", "tender": "tender_response", "credentials": "credentials",
+                   "creative": "creative_work"}
 #: Every model stage a profile may run (stages.py). ``fit`` and ``e`` run on the assembled deck.
 STAGES = ("a0", "a", "b", "c", "d", "i", "fit", "e")
 #: The assemblers a profile's ``kind`` names (spec.KINDS).
@@ -323,6 +324,171 @@ def recipe(profile: dict | None, fmt: str = "pitch") -> dict:
     return out
 
 
+def title_guidance(profile: dict | None) -> list:
+    """deck-types slice 4: the stage e lines the type's title form selects (spec.TITLE_FORM_GUIDANCE), only when ``recipes_on``. ``claim`` (today's
+    titles, agency and investor) and ``criterion`` (the tender's own stage e line already says it) select none, so recorded runs replay."""
+    if not profile or not recipes_on():
+        return []
+    return list(spec.TITLE_FORM_GUIDANCE.get(recipe(profile)["titles"]["form"], ()))
+
+
+def label_titles(profile: dict | None, fmt: str = "pitch") -> bool:
+    """True when the type's titles are labels (recipe titles.form ``label``, read only when ``recipes_on``): the claim check (validate action_title)
+    does not apply to them. A title is never rewritten either way."""
+    return bool(profile) and recipes_on() and recipe(profile, fmt)["titles"]["form"] == "label"
+
+
+def picture_policy(profile: dict | None, fmt: str = "pitch") -> dict | None:
+    """deck-types slice 4: the recipe's picture policy ``{on, generate, types}`` (None with the recipes off: today's behaviour). ``on`` is only the
+    default of the person's picture preference; ``types`` narrows which slides get empty slots; ``generate`` narrows which empty slots generation
+    may plan (all, the cover only, none). A recipe never opens an evidence slide, raises the money cap or approves anything."""
+    if not profile or not recipes_on():
+        return None
+    return dict(recipe(profile, fmt)["pictures"])
+
+
+# ---------------------------------------------------------------- deck-types slice 6: changing the type later
+
+class NeedsStages(Exception):
+    """A type change that needs a model stage not yet run: the app names the stages and asks first (design.precedence.changing_later)."""
+
+    def __init__(self, to_type: str, stages: list):
+        self.to_type, self.stages = to_type, list(stages)
+        super().__init__(f"changing to {to_type} needs new writing: stage{'s' if len(stages) != 1 else ''} {', '.join(stages)} "
+                         f"{'have' if len(stages) != 1 else 'has'} not run for this deck. Confirm to run {'them' if len(stages) != 1 else 'it'} "
+                         f"(--confirm-stages); pictures are kept either way")
+
+
+#: Stages a type change never needs recorded first: a0 (intake) adds nothing when the brief supplies everything, and fit / e run on the assembled
+#: deck (a recorded copy is re-applied by title; one that is missing only means no copy edit, never a wrong slide).
+CHANGE_OPTIONAL = ("a0", "fit", "e")
+
+
+def type_change(profile: dict, recorded: set) -> dict:
+    """What building as ``profile`` costs, given the stage outputs already recorded (stage ids): ``{free, needs}``. ``free``: every stage the type
+    runs is recorded (or optional, CHANGE_OPTIONAL), so the change is code only: re-arrange, re-plan, re-check, in seconds, no model call.
+    ``needs``: the stages that must run first (the app asks; run_deck refuses a live run of them without --confirm-stages). Pictures are never
+    part of it: no type, format or size change makes, re-makes or un-approves a picture."""
+    needs = [s for s in profile["stages"] if s not in CHANGE_OPTIONAL and s not in recorded]
+    return {"free": not needs, "needs": needs}
+
+
+def change_sheet(old: dict | None, new: dict, recorded: set, slides: int | None = None) -> dict:
+    """The Change sheet's message before a type change happens (design.ui.later): ``{free, needs, line}``. Free: 'Re-arranges N slides. No new
+    writing. Pictures kept.' Otherwise: 'Needs new writing: <stages>. Pictures kept.' Engine words only; no slide word is read or written."""
+    tc = type_change(new, recorded)
+    if tc["free"]:
+        n = f"{slides} slides" if slides else "the slides"
+        line = f"Re-arranges {n} as {'an' if new['label'][0].lower() in 'aeiou' else 'a'} {new['label'].lower()}. No new writing. Pictures kept."
+    else:
+        line = f"Needs new writing: {', '.join(STAGE_WORDS.get(s, s) for s in tc['needs'])}. Pictures kept."
+    return {**tc, "from": (old or {}).get("id"), "to": new["id"], "line": line}
+
+
+#: What each model stage writes, in the Change sheet's words.
+STAGE_WORDS = {"a": "the requirements", "b": "the storyline", "c": "the routes", "d": "the idea and executions", "i": "the investor story"}
+
+
+# ---------------------------------------------------------------- deck-types slice 7: what the picker shows (generated, never hand-written)
+
+#: The most mini slides a card's spine thumbnail draws (design.ui.thumbnail).
+CARD_SPINE_MAX = 12
+#: The picture word on a card: what the recipe's picture policy means to a person.
+_PICTURE_WORDS = {"all": "many", "cover": "cover only", "none": "none generated"}
+
+
+def _merged_away(spine: list) -> set:
+    """Slide types a legacy pitch folds into another presented slide (spec.PITCH_MERGES, PITCH_MERGES_V3: recipes need the look), when both are in the spine."""
+    return {into for keep, into, _ in spec.PITCH_MERGES + spec.PITCH_MERGES_V3 if keep in spine and into in spine}
+
+
+def card_spine(profile: dict) -> tuple:
+    """``(slide types, more)``: the presented spine a card draws, in story order, and how many more types the spine presents beyond
+    CARD_SPINE_MAX. A ``spine`` type's spine is already its presented order (minus its appendix types). A ``legacy`` type's spine lists every
+    type its assembler may use, so it is cut to what a pitch presents: the target's keeps (spec.TARGET_KEEPS), the slides that keep a merged one
+    (channel_roles, measurement, team) and the types the recipe prefers a layout for; merged-away types are left out."""
+    appx = set(profile.get("appendix") or [])
+    pres = [t for t in profile["spine"] if t not in appx]
+    if profile["arrange"] == "legacy":
+        gone = _merged_away(profile["spine"])
+        keep = set(spec.TARGET_KEEPS) | {k for k, into, _ in spec.PITCH_MERGES + spec.PITCH_MERGES_V3 if into in gone} \
+            | set((profile.get("recipe") or {}).get("layouts") or {})
+        pres = [t for t in pres if t in keep and t not in gone]
+        if "team" in pres and "investment" in pres and pres.index("team") > pres.index("investment"):   # as _arrange_pitch: the team before the ask
+            pres.remove("team")
+            pres.insert(pres.index("investment"), "team")
+    return pres[:CARD_SPINE_MAX], max(0, len(pres) - CARD_SPINE_MAX)
+
+
+def _purpose(t: str, rec: dict, info: dict) -> str:
+    """The layout purpose a thumbnail draws for a slide type: the first drawable preferred layout's, else the highest-priority rule layout that
+    takes the type, else ``statement``."""
+    for lid in rec["layouts"].get(t) or []:
+        if info.get(lid, {}).get("purpose") in spec.LAYOUT_PURPOSES:
+            return info[lid]["purpose"]
+    rule = sorted((v["priority"], k) for k, v in info.items() if t in v["for_types"] and v["pick"] == "rule" and v["priority"])
+    got = info[rule[-1][1]]["purpose"] if rule else None
+    return got if got in spec.LAYOUT_PURPOSES else "statement"
+
+
+def card_data() -> list:
+    """What the picker shows, one card per type in ids() order (design.schema.resolver): ``{id, label, one_line, kind, flag, default_format, target,
+    cap, max, size, pictures, stages, spine: [{type, section, purpose}], more}`` (``stages``: the model stages a change to this type needs recorded). Generated into the Deck Maker template (``write_cards``) and compared with it
+    by a test, so the app and the engine never disagree on types. Read from the profiles alone: the flags do not change a card."""
+    from . import layouts   # late, as in recipe()
+    info = layouts.purposes()
+    out = []
+    for pid in ids():
+        p = load(pid)
+        rec = recipe(p, "pitch")
+        kinds = {v: k for k, v in KIND_TO_PROFILE.items()}
+        spine, more = card_spine(p)
+        pics = rec["pictures"]
+        word = "none" if pics["on"] == "none" else _PICTURE_WORDS[pics["generate"]]
+        if pics["generate"] == "all" and set(pics["types"]) != set(spec.PICTURE_SLIDE_TYPES):
+            word = "few"
+        out.append({"id": pid, "label": p["label"], "one_line": p["one_line"], "kind": p["kind"], "flag": kinds.get(pid),
+                    "default_format": rec["default_format"], "target": rec["length"]["target"], "cap": rec["length"]["cap"],
+                    "max": p["length"]["max_slides"], "size": rec["size"], "pictures": word,
+                    "stages": [s for s in p["stages"] if s not in CHANGE_OPTIONAL],   # what a change to this type needs recorded (type_change)
+                    "spine": [{"type": t, "section": spec.SLIDE_TYPES[t]["section"], "purpose": _purpose(t, rec, info)} for t in spine],
+                    "more": more})
+    return out
+
+
+#: The template the picker lives in, and the markers of its generated block.
+TEMPLATE = Path(__file__).resolve().parents[2] / "app" / "templates" / "deck-maker" / "index.html"
+CARDS_OPEN = "/* @generated deck-type-cards (python3 -m deck.profiles cards, from engine/): do not edit by hand */ "
+CARDS_CLOSE = " /* @end deck-type-cards */"
+
+
+def cards_json() -> str:
+    """The generated block's text: card_data() as stable, compact JSON (one card per line)."""
+    import json   # noqa: PLC0415
+    return "[\n" + ",\n".join(json.dumps(c, ensure_ascii=False, separators=(",", ":")) for c in card_data()) + "\n]"
+
+
+def write_cards(template: Path | None = None) -> bool:
+    """Write card_data() into the template's generated block (between CARDS_OPEN and the next CARDS_CLOSE, a JS literal inside the page's pure
+    block, so app/tests read it too). Returns True when it changed.
+    ``python3 -m deck.profiles cards`` from engine/ runs it; a test fails when the block and the profiles differ."""
+    path = Path(template or TEMPLATE)
+    t = path.read_text(encoding="utf-8")
+    i = t.index(CARDS_OPEN) + len(CARDS_OPEN)
+    j = t.index(CARDS_CLOSE, i)
+    new = t[:i] + cards_json() + t[j:]
+    if new != t:
+        path.write_text(new, encoding="utf-8")
+    return new != t
+
+
+def cards_in_template(template: Path | None = None) -> str:
+    """The generated block as the template holds it now."""
+    t = Path(template or TEMPLATE).read_text(encoding="utf-8")
+    i = t.index(CARDS_OPEN) + len(CARDS_OPEN)
+    return t[i:t.index(CARDS_CLOSE, i)]
+
+
 _CACHE: dict = {}
 
 
@@ -352,6 +518,12 @@ def ids() -> list:
     """The ids of the profiles on disk: the four known types first, in their question order, then any added."""
     found = sorted(p.stem for p in PROFILE_DIR.glob("*.yaml"))
     return [t for t in spec.DECK_TYPES if t in found] + [t for t in found if t not in spec.DECK_TYPES]
+
+
+def offered() -> list:
+    """The types the q_deck_type card, the inference and a typed answer offer: every type, except those that joined with the recipes
+    (spec.RECIPE_ONLY_TYPES) while the recipes are off (byte identity). A pick or a --kind may still name any type in ids()."""
+    return [t for t in ids() if recipes_on() or t not in spec.RECIPE_ONLY_TYPES]
 
 
 def all_profiles() -> list:
@@ -406,3 +578,11 @@ def weights(profile: dict, scoring: list | None) -> dict:
     if rows and len(parsed) == len(rows) and sum(parsed.values()) > 0:
         return {"source": "brief", "label": "the buyer's own weights", "weights": parsed}
     return {"source": "default_assumption", "label": WEIGHTS_LABEL, "weights": dict(profile["rubric_weights"]["weights"])}
+
+
+if __name__ == "__main__":   # python3 -m deck.profiles cards: regenerate the picker's card block in the Deck Maker template
+    import sys
+    if sys.argv[1:] == ["cards"]:
+        print("deck-type cards: " + ("written" if write_cards() else "unchanged") + f" ({TEMPLATE})")
+    else:
+        raise SystemExit("usage: python3 -m deck.profiles cards")

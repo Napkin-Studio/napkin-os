@@ -19,13 +19,15 @@ GOLD = json.loads((FIX / "lumen_water" / "golden_deck.json").read_text())
 FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.json", "c": "c_territories.json",
          "d": "d_idea.json", "i": "i_investor.json"}
 #: The design's numbers (Q3; design.recipe_table): target / cap per type, None for none.
-LENGTHS = {"agency_pitch": (10, 12), "credentials": (10, 14), "investor_seed": (12, 15), "tender_response": (None, None)}
+LENGTHS = {"agency_pitch": (10, 12), "credentials": (10, 14), "investor_seed": (12, 15), "tender_response": (None, None),
+           "creative_work": (12, 16)}
 #: Preferences the catalogue cannot draw yet (a layout not built, or one that does not take that slide type): the general rules stand in.
 #: When deck-look builds one, or a layout learns a slide type, this table changes on purpose.
 NOT_BUILT = {"agency_pitch": {"territory": ["picture_column"]},
              "credentials": {"credentials": ["picture_column"], "questions": ["statement_points"]},
              "investor_seed": {"why_now": ["reframe"], "financials": ["chart_full"], "ask": ["close"]},
-             "tender_response": {"criterion_answer": ["rows_aside"]}}
+             "tender_response": {"criterion_answer": ["rows_aside"]},
+             "creative_work": {"territory": ["picture_column"], "execution": ["frames_strip"], "questions": ["statement_points"]}}
 
 
 def _bare(pid: str) -> dict:
@@ -190,8 +192,9 @@ def test_recipes_are_read_only_with_both_flags(monkeypatch):
         prefs = run_deck._recipe_prefs(profiles.load("investor_seed"), "pitch")
         assert (prefs != {}) is want
     _on(monkeypatch)
+    r = profiles.recipe(profiles.load("investor_seed"))
     assert run_deck._recipe_prefs(profiles.load("investor_seed"), "pitch") == {
-        "prefer": profiles.recipe(profiles.load("investor_seed"))["layouts"], "prefer_type": "investor_seed"}
+        "prefer": r["layouts"], "prefer_type": "investor_seed", "roles": r["density"]["roles"], "windows": r["density"]["windows"]}
 
 
 def test_no_reader_branches_on_a_profile_id():

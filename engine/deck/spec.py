@@ -392,12 +392,15 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
           "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
-          "image_rights", "style_pack_held", "pitch_cap", "role_words")
+          "image_rights", "style_pack_held", "pitch_cap", "role_words", "notes_unread")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.
-DECK_TYPES = ("agency_pitch", "tender_response", "investor_seed", "credentials")
+DECK_TYPES = ("agency_pitch", "tender_response", "investor_seed", "credentials", "creative_work")
 DEFAULT_TYPE = "agency_pitch"
+#: deck-types: types that joined with the recipes. They always load and build (``--kind`` / ``--type``, a document's pick), but the q_deck_type
+#: card, the inference and a typed answer offer them only with spec.RECIPES and LOOK_V3 on (profiles.offered), so a flag-off build is byte-identical.
+RECIPE_ONLY_TYPES = ("creative_work",)
 
 #: The red team (stage red_team, DECK-CRAFT-PLAN 4.2): the most objections kept, the kinds of objection it may raise, and the
 #: change each may suggest. Only ``wording`` and ``order`` on an existing presented slide are ever applied by code.
@@ -483,6 +486,18 @@ RECIPE_TITLE_FORMS = ("claim", "label", "criterion")
 RECIPE_GENERATE = ("all", "cover", "none")
 #: The most preferred layouts a recipe lists for one slide type.
 RECIPE_MAX_PREFS = 3
+#: deck-types slice 4: the stage e guidance lines each title form selects (appended to the type's own, profiles.title_guidance). ``claim`` is
+#: today's titles and selects none (agency and investor runs replay); ``criterion`` is already the tender's own stage e line, so it adds none.
+#: Code never rewrites a title: the form only says what the copy stage is asked for and which title check applies (validate action_title).
+TITLE_FORM_GUIDANCE = {
+    "claim": (),
+    "label": ("Titles here are labels, not claims: a route's own name, the idea's own line, or a short name for what the slide shows. "
+              "Keep a label a label; never stretch it into a sentence.",),
+    "criterion": (),
+}
+#: deck-types slice 8 (the read format, 'Sent to be read'): nobody presents a leave-behind, so a point moved to the notes is unread. A
+#: format full deck with at least this many points moved off a slide is warned (validate notes_unread), naming the slide and the count.
+NOTES_UNREAD_MIN = 1
 LAYOUT_FLOW = "flow"
 LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
 #: 40 -> 48 (Q11, Fable): the look's layouts land beside the old; image_text and image_left are offer-only under the look and are

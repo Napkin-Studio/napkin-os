@@ -36,7 +36,38 @@
           "enum": [
             "pitch",
             "full"
-          ]
+          ],
+          "description": "How the deck will be used: pitch (presented on a screen) or full ('Sent to be read', the leave-behind: every slide in story order, detailed). Written by the format switch under the type picker."
+        },
+        "deck_type": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "description": "deck-types: the person's explicit pick on the type picker, the first step of Start. It ranks above an answer to q_deck_type, an inference from the brief and the default (run_deck --type). Absent or null ('Not sure: decide from my brief'): no pick, so the answer, then a high-confidence inference, then agency_pitch decide. Kept in inputs, not in deck (deck is the engine's own output and is replaced on every build).",
+          "properties": {
+            "id": {
+              "enum": [
+                "agency_pitch",
+                "tender_response",
+                "investor_seed",
+                "credentials",
+                "creative_work"
+              ]
+            },
+            "by": {
+              "type": "string",
+              "description": "Who picked: the person (the app writes 'person'), or human:<id> when known."
+            },
+            "at": {
+              "type": "string",
+              "description": "When the pick was made (ISO 8601)."
+            }
+          }
         },
         "library": {
           "type": "object",
@@ -674,7 +705,8 @@
                     "agency_pitch",
                     "tender_response",
                     "investor_seed",
-                    "credentials"
+                    "credentials",
+                    "creative_work"
                   ],
                   "description": "The deck type the deck was built for."
                 }
@@ -1168,6 +1200,7 @@
                       "style_pack_held",
                       "pitch_cap",
                       "role_words",
+                      "notes_unread",
                       "golden_echo",
                       "picture_stretch",
                       "picture_lowres",
@@ -3511,6 +3544,7 @@
                   "style_pack_held",
                   "pitch_cap",
                   "role_words",
+                  "notes_unread",
                   "golden_echo",
                   "picture_stretch",
                   "picture_lowres",

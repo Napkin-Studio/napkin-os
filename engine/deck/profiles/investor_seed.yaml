@@ -77,4 +77,17 @@ recipe:
     financials: [chart_full, native_table]
     founders: [people_cards]
     ask: [close]
+  density:
+    level: lean
+    roles: {problem: statement, why_now: statement, solution: statement, ask: statement, close: statement, upside: statement,
+            market: argument, traction: argument, business_model: argument, competition: argument, gtm: argument,
+            financials: argument, founders: argument}
+    windows: {argument: [25, 60]}   # one point per slide (judgement, not measured: the gallery is the check)
+  pictures: {"on": creative_cover, generate: all, types: [title, product]}   # light: the cover and the product (a supplied screenshot first)
+  brand: {strict: false}       # the company's own brand; no agency pack
+  titles: {form: claim}        # today's titles: no new stage e line (recorded runs replay)
+  format: pitch
+  full:
+    density: {level: detailed}
+    pictures: {generate: cover, types: [title]}
 sources: [GUIDE.md 3.3, NAPKIN-EDGE.md gap 10, rubric.json]

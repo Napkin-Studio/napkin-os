@@ -88,14 +88,23 @@ def hero_eligible(deck: dict, sid: str, slot: str) -> bool:
     return slot == "picture" and (s.get("type") in HERO_TYPES or ((s.get("layout") or {}).get("id") in HERO_LAYOUTS))
 
 
-def candidate_slots(deck: dict, territories=None) -> list:
+#: deck-types slice 4: which slides a recipe's ``pictures.generate`` lets generation plan for (None: every picture slide).
+GENERATE_TYPES = {"all": None, "cover": ("title",), "none": ()}
+
+
+def candidate_slots(deck: dict, territories=None, generate: str = "all") -> list:
     """The image slots generation may fill: ``[{sid, slot, aspect, anchor, key, kind}]``. A slot named ``picture`` that is empty. A territory slide
-    with no frame at all gets one mood picture slot (kind photo, 4:3); ``frame_n`` slots are never generated."""
+    with no frame at all gets one mood picture slot (kind photo, 4:3); ``frame_n`` slots are never generated. ``generate`` (deck-types: the type's
+    recipe, profiles.picture_policy) narrows it: ``cover`` plans the cover only (a credentials deck never gets a generated person or case),
+    ``none`` plans nothing (a tender); ``all`` is today. Narrowing only: it never opens a slot, raises the cap or approves anything."""
     anc = anchors(deck, territories)
+    only = GENERATE_TYPES.get(generate, None)
     out = []
     for sid in deck["order"]:
         s = deck["slides"][sid]
         if spec.picture_of(s)[0] not in spec.PICTURE_SLIDE_TYPES:
+            continue
+        if only is not None and spec.picture_of(s)[0] not in only:
             continue
         slots = s.setdefault("slots", {}) if s["type"] == "territory" else (s.get("slots") or {})
         if s["type"] == "territory":
@@ -271,13 +280,14 @@ class Ctx:
     """Everything one run of the image step reads. Built by run_deck; tests build it directly."""
 
     def __init__(self, deck, inp, territories, style, stages, cache, ledger, deck_id, review=None, approver=None, cap_usd=None, subjects=None,
-                 banned_extra=(), territory_usd=0.0, names=()):
+                 banned_extra=(), territory_usd=0.0, names=(), generate: str = "all"):
         self.deck, self.inp, self.territories, self.style = deck, inp, territories or [], style
         self.stages, self.cache, self.ledger, self.deck_id = Path(stages), Path(cache), ledger, deck_id
         self.review, self.approver, self.subjects = review or {}, approver, subjects
         self.cap = min(float(cap_usd if cap_usd is not None else jobs.CAP_DEFAULT_USD), jobs.CAP_MAX_USD,
                        float(os.environ.get("NAPKIN_DECK_IMAGES_MAX_USD") or jobs.CAP_DEFAULT_USD))
         self.banned_extra, self.territory_usd, self.names = list(banned_extra), territory_usd, list(names)
+        self.generate = generate if generate in GENERATE_TYPES else "all"   # deck-types: the recipe's picture policy (narrowing only)
         self.manifest = jobs.load_manifest(self.cache)
 
 
@@ -323,7 +333,7 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     safe = safe_state(inp, deck, ctx.review)
     banned = list(dict.fromkeys([*safe["banned"], *ctx.style.banned_imagery, *ctx.banned_extra]))
     deny = lint.deny_list(inp.marks)
-    cands = candidate_slots(deck, ctx.territories)
+    cands = candidate_slots(deck, ctx.territories, ctx.generate)
     req = subject_request(deck, inp, ctx.territories, askable(deck, cands), banned, deny)
     rec = ctx.subjects if ctx.subjects is not None else load_subjects(ctx.stages, req)
     style_text = style_text_for(ctx.style, banned)
@@ -571,7 +581,7 @@ def run_subjects(ctx: Ctx, plan: dict, call=None, log=print) -> dict:
     (so the cap counts it even if the process dies). ``call(request) -> (obj, usage)`` is injected in tests; live it is ``stages.image_subjects``."""
     from . import stages as stg
     call = call or stg.image_subjects
-    cands = candidate_slots(ctx.deck, ctx.territories)
+    cands = candidate_slots(ctx.deck, ctx.territories, ctx.generate)
     banned = plan["banned_imagery"]
     req = subject_request(ctx.deck, ctx.inp, ctx.territories, askable(ctx.deck, cands), banned, lint.deny_list(ctx.inp.marks))
     key = "g_" + request_sha(req)

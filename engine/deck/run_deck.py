@@ -219,21 +219,50 @@ def to_pdf(pptx, outdir, timeout: int = 180):
 
 
 def _recipe_prefs(profile: dict, fmt: str) -> dict:
-    """deck-types: what the layout plan takes from the type's recipe (profiles.recipe): ``{prefer, prefer_type}``, only with spec.RECIPES and
-    spec.LOOK_V3 on and a recipe that prefers a layout the catalogue can draw; ``{}`` otherwise, so the plan's prefs are today's byte for byte."""
+    """deck-types: what the layout plan takes from the type's recipe (profiles.recipe): ``{prefer, prefer_type}`` (when the recipe prefers a layout
+    the catalogue can draw) and ``{roles, windows}`` (its density), only with spec.RECIPES and spec.LOOK_V3 on; ``{}`` otherwise, so the plan's
+    prefs are today's byte for byte."""
     if not profiles.recipes_on():
         return {}
     r = profiles.recipe(profile, fmt)
-    return {"prefer": r["layouts"], "prefer_type": r["type"]} if r["layouts"] else {}
+    out = {"prefer": r["layouts"], "prefer_type": r["type"]} if r["layouts"] else {}
+    return {**out, "roles": r["density"]["roles"], "windows": r["density"]["windows"]}   # slice 4: the type's density roles and word windows
 
 
-def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:
+def _recorded_stages(stages: Path) -> set:
+    """The model stages already recorded in a stages folder (their files exist): what a type change can reuse for free."""
+    files = {**STAGE_FILES, **INVESTOR_STAGE_FILES}
+    return {k for k, fn in files.items() if (stages / fn).exists()}
+
+
+def _type_change(a, profile: dict) -> dict:
+    """deck-types slice 6 (design.precedence.changing_later): what building as ``profile`` costs from what --stages holds. Free (every stage the
+    type runs is recorded): code only, seconds. Otherwise a deck built before (some model stage recorded) changing type needs new writing: with
+    --live it is refused before any call unless the person confirmed (--confirm-stages), naming the stages; without --live the missing stages
+    are reported as today. A first build (nothing recorded) is not a change. Pictures are never part of it: a type change plans no picture job
+    of its own, and a made or approved picture keeps its record."""
+    recorded = _recorded_stages(a.stages)
+    tc = profiles.type_change(profile, recorded)
+    out = {"free": tc["free"], "needs": tc["needs"], "recorded": sorted(recorded)}
+    model = recorded - set(profiles.CHANGE_OPTIONAL)
+    if tc["needs"] and model:
+        out["line"] = profiles.change_sheet(None, profile, recorded)["line"]
+        if a.live and not a.confirm_stages:
+            raise SystemExit(f"refused: {profiles.NeedsStages(profile['id'], tc['needs'])}")
+    return out
+
+
+def _stamp_type(deck: dict, profile: dict, choice: dict, fmt: str | None = None) -> None:
     """Record the deck type in the deck: ``meta.built_from.type`` (the profile id) and ``.profile`` (id,
     label, how it was chosen and why), and ``meta.profile`` when the person was asked (answered or skipped)
     or the type is not a legacy one. A plain default agency or investor deck stays as it always was."""
     rec = {"id": profile["id"], "label": profile["label"], "source": choice["source"], "note": choice["note"]}
+    if choice.get("evidence"):   # deck-types: an inferred type carries the words it was read from (Review quotes them, with Change)
+        rec["evidence"] = list(choice["evidence"])
+    if fmt and profiles.recipes_on():   # deck-types: the format the recipe was resolved for
+        rec["format"] = fmt
     deck["meta"]["built_from"] = {**deck["meta"]["built_from"], "type": profile["id"], "profile": rec}
-    if profile["arrange"] == "spine" or choice["source"] in ("answer", "skipped"):
+    if profile["arrange"] == "spine" or choice["source"] in ("answer", "skipped", "pick", "inferred"):
         deck["meta"]["profile"] = rec
 
 
@@ -270,7 +299,15 @@ def _replay_agency(a, ctx: dict, rep_look: dict) -> tuple[dict | None, bool]:
     return current, use
 
 
-def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None = None) -> None:
+def _strict_default(profile: dict, fmt: str, style, kit) -> bool:
+    """deck-types slice 4: the recipe's brand strictness, the default of the strict_brand preference. It applies only when an agency Style Pack
+    or a Brand Clan is attached (design: 'on when an agency pack is present'): with neither there is no kit to be strict to, and strict mode would
+    only take the agency look away. A person's own strict_brand choice (look.strict_brand, --strict-brand) always wins."""
+    has_pack = style is not None and getattr(style, "source", "") != "built-in default"
+    return bool(profiles.recipe(profile, fmt)["brand"]["strict"]) and (has_pack or look._present(look.brand_tokens(kit)))
+
+
+def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None = None, profile: dict | None = None) -> None:
     """Resolve the deck's look (look.py) and stamp it: ``meta.brand`` (what the renderers read), ``meta.theme`` (what a reader sees) and the
     client's logo as a deck asset. With no --style, no agency look and no --brand nothing is written, so today's decks and every golden are
     unchanged. A Style Pack that cannot be used is never skipped silently: ``meta.style_hold`` and the report say so."""
@@ -298,6 +335,8 @@ def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None =
         wears_problem = f"look.brand.wears {wears!r} is not one of {', '.join(look.WEARS)}: the deck wears the agency"
         wears = "agency"
     strict = bool(lp.get("strict_brand")) or a.strict_brand
+    if profile and profiles.recipes_on() and "strict_brand" not in lp and not a.strict_brand:
+        strict = _strict_default(profile, a.format, style, ctx.get("brand"))   # deck-types slice 4: the type's default (person > recipe)
     got = look.resolve(wears=wears, strict_brand=strict, brand_file=brand, brand=look.brand_tokens(ctx.get("brand")), style=style,
                        agency=agency, use_agency=use, client=client)
     if got.brand:
@@ -635,9 +674,10 @@ def _add_marks(a, inp) -> None:
         inp.marks = (inp.marks or []) + raw
 
 
-def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, deck_ctx, rep: dict):
+def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, deck_ctx, rep: dict, generate: str = "all"):
     """The picture step (deck-image-gen), between the placed pictures and the layout plan. Prints the open card(s); makes pictures only for a
-    ``--yes-cost`` that names a card's id. Returns what imagegen.step returns."""
+    ``--yes-cost`` that names a card's id. ``generate`` (deck-types: the type's recipe) narrows which empty slots generation may plan.
+    Returns what imagegen.step returns."""
     try:
         if a.images_reviewed:
             imagegen.record_safe_review(review, inp, deck, a.by)
@@ -647,7 +687,7 @@ def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, dec
         from visuals import jobs as vjobs   # noqa: PLC0415
         ctx = imagegen.Ctx(deck, inp, terr, _picture_style(a, deck_ctx, a.client), a.stages, a.images_cache or (a.stages / "images"), vjobs.Ledger(led, deck_id), deck_id,
                            review=review, approver=a.approver, cap_usd=a.cap_usd, banned_extra=look.brand_tokens((deck_ctx or {}).get("brand")).get("imagery_bans") or [],
-                           territory_usd=_territory_usd(a.stages))
+                           territory_usd=_territory_usd(a.stages), generate=generate)
         res = imagegen.step(ctx, a.images, a.yes_cost, a.hero, a.retry_unknown, a.remake_style, remake=[x.strip() for v in a.remake for x in v.split(',') if x.strip()])
     except (imagegen.GenError, images.ImageError) as e:
         raise SystemExit(f"refused: {e}")
@@ -732,7 +772,14 @@ def main(argv=None):
     ap.add_argument("--builds", action="store_true", help="HyperFrames: one click per block instead of one per slide")
     ap.add_argument("--kind", choices=tuple(profiles.KIND_TO_PROFILE), default=None,
                     help="the deck type: agency (default, unless the person's answer to q_deck_type chooses), investor (seed) pitch, "
-                         "tender (a tender response, profile tender_response) or credentials (a chemistry-meeting deck)")
+                         "tender (a tender response, profile tender_response), credentials (a chemistry-meeting deck) or creative (a creative work "
+                         "session, profile creative_work)")
+    ap.add_argument("--type", dest="deck_type", choices=profiles.ids(), default=None,
+                    help="the person's explicit pick on the type picker (deck-types): ranks with --kind above an answer to q_deck_type, an inference "
+                         "and the default. A Deck document's inputs.deck_type is the same pick; --kind wins for the run when both are given")
+    ap.add_argument("--confirm-stages", action="store_true",
+                    help="a person's yes to the model stages a type change needs (deck-types, with --live): without it a change that needs new writing is "
+                         "refused before any call, naming the stages. Pictures are never re-made by a type change either way")
     ap.add_argument("--doc", action="append", default=[], metavar="KEY=PATH",
                     help="a client document (PDF page by page, or text), cited as doc:KEY#pN; repeatable")
     ap.add_argument("--brand", type=Path, help="brand JSON: name, colors (THEME keys, accent_ink), head/body fonts, logo files")
@@ -800,6 +847,7 @@ def main(argv=None):
     ap.add_argument("--by", help="who reviewed (human:<id>) with --images-reviewed")
     ap.add_argument("--images-only", action="store_true", help="rebuild from the recorded stages only (never a text model); refuses if any text stage is missing")
     a = ap.parse_args(argv)
+    a.pictures_asked = a.pictures is not None   # deck-types: a person's own --pictures beats the type's picture default
     if a.picture_source == "generated" and a.images == "off":
         a.images = "plan"
     if (a.images != "off" or a.production) and a.pictures is None:
@@ -861,16 +909,24 @@ def main(argv=None):
             raise SystemExit(f"refused: {e}")
     _add_marks(a, inp)
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
-    choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
+    pick = a.deck_type or (deck_ctx or {}).get("deck_type")   # deck-types: the person's explicit pick (--type, or the document's inputs.deck_type)
+    try:
+        choice = intake.chosen_type(inp, a.kind, pick)   # --kind, then the pick, then the person's answer, then (recipes on) a high-confidence inference, then the default
+    except profiles.ProfileError as e:
+        raise SystemExit(f"refused: {e}")
     profile = profiles.load(choice["type"])
     kind = profile["kind"]                     # which assembler: agency or investor
+    rec = profiles.recipe(profile, a.format) if profiles.recipes_on() else None   # deck-types: resolved once (None with the flag off)
+    if rec and not a.pictures_asked and a.pictures is not None:
+        a.pictures = rec["pictures"]["on"]   # the person set no picture preference: the type's default (only where pictures were asked for at all)
     if a.production and kind == "investor":   # never silently ignored, and refused before any stage runs or spends
         raise SystemExit("refused: --production places the Production Tool's campaign pictures on a pitch deck's cover, idea and executions; "
                          "an investor deck has none of those slides. Drop --production")
-    rep["type"] = {"id": profile["id"], "source": choice["source"], "note": choice["note"]}
-    if profiles.recipes_on():   # deck-types: the recipe this run builds from, resolved once (flag off: no key, the report is today's)
-        rec = profiles.recipe(profile, a.format)
-        rep["recipe"] = {"type": rec["type"], "format": rec["format"], "length": rec["length"], "layouts": rec["layouts"], "not_built": rec["not_built"]}
+    rep["type"] = {"id": profile["id"], "source": choice["source"], "note": choice["note"], **({"evidence": choice["evidence"]} if choice.get("evidence") else {})}
+    if rec:   # deck-types: the recipe this run builds from, resolved once (flag off: no key, the report is today's)
+        rep["recipe"] = {"type": rec["type"], "format": rec["format"], "length": rec["length"], "layouts": rec["layouts"], "not_built": rec["not_built"],
+                         "density": rec["density"]["level"], "pictures": rec["pictures"], "brand": rec["brand"], "titles": rec["titles"],
+                         "size": {"value": rec["size"], "applied": False, "waits_on": "deck-slide-size"}}
     rep["type_question"] = intake.type_card_for(inp)   # computed in code: it exists even when no a0 stage ran
     supply = intake.supply_questions(inp, kind, profile if profile["arrange"] == "spine" else None)   # computed in code: what only the person knows
     rep["supply_questions"] = supply
@@ -880,6 +936,8 @@ def main(argv=None):
         rep["doc_pages"] = pages   # every page of every document read (never dropped)
 
     names = profiles.stage_names(profile, INVESTOR_STAGE_FILES if kind == "investor" else STAGE_FILES)
+    if rec:   # deck-types slice 6: a type change re-plans for free from recorded stages, and asks first when it needs a model stage
+        rep["type_change"] = _type_change(a, profile)
     if a.until not in (None, "deck") and a.until not in names:
         ap.error(f"--until {a.until}: this deck type has no such stage (it runs {', '.join(names)})")
     if a.images_only:
@@ -916,7 +974,8 @@ def main(argv=None):
         if k == "a0" and k in st:   # later stages and the build read the brief with the intake's fields in it
             st[k]["gaps"] = intake.gap_report(inp, st[k], kind)
             asked = len(st[k]["questions"])   # the stage's own questions, before the deck type question joins them
-            intake.add_type_question(st[k], intake.type_card_for(inp), profile if profile["arrange"] == "spine" else None)   # the deck type is always the first question; a legacy type adds none of its own, so its deck is unchanged
+            card = None if choice["source"] == "pick" else intake.type_card_for(inp)   # deck-types: a picked type is not asked again (its place goes to another question)
+            intake.add_type_question(st[k], card, profile if profile["arrange"] == "spine" else None)   # the deck type is the first question; a legacy type adds none of its own, so its deck is unchanged
             intake.add_supply_questions(st[k], supply)   # after the type question and the stage's own, within the five-question cap
             inp.intake = st[k]
             rep["intake"] = {"applied": intake.apply_a0(inp, st[k]), "gaps": st[k]["gaps"], "questions": asked,
@@ -974,7 +1033,7 @@ def main(argv=None):
         have = {c["id"] for c in supply}
         rep["supply_questions"] = supply + [c for c in intake.gap_questions(assemble.investor_gaps(deck)) if c["id"] not in have]
     rep["confirm"] = intake.confirm_summary(deck, intake.stamp_confirm(deck, inp))   # what to confirm, and how much a person has verified or supplied
-    _stamp_type(deck, profile, choice)
+    _stamp_type(deck, profile, choice, a.format)
     brand = None
     if a.brand:   # colours, fonts and logos: the logo files are read here so the deck carries them
         brand = json.loads(a.brand.read_text())
@@ -984,7 +1043,7 @@ def main(argv=None):
         for k in ("logo_dark_png", "logo_light_png"):
             if brand.get(k):
                 brand[k] = str(Path(brand[k]).expanduser())
-    _stamp_look(a, deck, brand, rep, deck_ctx)
+    _stamp_look(a, deck, brand, rep, deck_ctx, profile)
     ep = a.stages / "e_copy.json"   # stage e: tighten over-budget presented slides; recorded edits are re-applied by title
     if ep.exists():
         ecopy = json.loads(ep.read_text())
@@ -1016,14 +1075,14 @@ def main(argv=None):
                 rep["production"] = {"project": (prod.get("project") or {}).get("id"), "offer_sha256": prod.get("offer_sha256"),
                                      "placed": pres["placed"], "held": len(pres["held"]), "kept": pres["kept"], "usd": 0,
                                      "key_visual": pres["master"]}
-            if a.pictures:
-                images.add_empty_slots(deck, a.pictures)
+            if a.pictures:   # deck-types: the type's picture types narrow the empty slots when the person set no picture preference
+                images.add_empty_slots(deck, a.pictures, rec["pictures"]["types"] if rec and not a.pictures_asked else None)
             review = json.loads(a.review.read_text()) if a.review else {}
             wrapped = isinstance(review, dict) and "review" in review
             review = review.get("review", review) if isinstance(review, dict) else {}
             terr = (st.get("c") or {}).get("territories") or []
             if a.images != "off":
-                plan_res = _image_step(a, deck, inp, terr, review, wrapped, deck_ctx, rep)
+                plan_res = _image_step(a, deck, inp, terr, review, wrapped, deck_ctx, rep, generate=rec["pictures"]["generate"] if rec else "all")
             gen = images.load_generated(a.stages) if a.pictures else None
             if gen:
                 bound_gen = images.bind_generated(deck, gen, terr, images.deck_names(deck), imagegen.words_sha(deck))
@@ -1060,7 +1119,7 @@ def main(argv=None):
         dl = lk.get("density")
         dl = dl.get("level") if isinstance(dl, dict) else dl
         dl = dl if dl in spec.DENSITY_LEVELS else None
-        level = a.density or dl or (spec.DENSITY_DEFAULTS.get(a.format) if spec.LOOK_V2 else None)
+        level = a.density or dl or ((rec["density"]["level"] if rec else spec.DENSITY_DEFAULTS.get(a.format)) if spec.LOOK_V2 else None)   # deck-types: the type's level (person > recipe > default)
         if a.no_notes:   # no notes means nowhere for a moved point to go: nothing leaves the slide
             level = "detailed"
         if level:

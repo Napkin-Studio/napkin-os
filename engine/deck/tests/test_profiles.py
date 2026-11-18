@@ -54,9 +54,9 @@ def _presented(deck: dict) -> list:
 
 # ---------------------------------------------------------------- the profile files
 
-def test_the_four_types_load_and_check():
-    """Every deck type has a file that loads and validates; the four known ids come first, in question order."""
-    assert profiles.ids() == list(spec.DECK_TYPES) == ["agency_pitch", "tender_response", "investor_seed", "credentials"]
+def test_the_types_load_and_check():
+    """Every deck type has a file that loads and validates; the known ids come first, in question order (deck-types added creative_work)."""
+    assert profiles.ids() == list(spec.DECK_TYPES) == ["agency_pitch", "tender_response", "investor_seed", "credentials", "creative_work"]
     for p in profiles.all_profiles():
         assert profiles.validate_profile(p) == []
         assert p["kind"] in spec.KINDS and set(p["spine"]) <= set(spec.SLIDE_TYPES) and set(p["stages"]) <= set(profiles.STAGES)
@@ -64,9 +64,9 @@ def test_the_four_types_load_and_check():
 
 
 def test_kinds_select_the_profiles():
-    """--kind agency|investor|tender|credentials map to agency_pitch, investor_seed, tender_response, credentials."""
-    assert {k: profiles.for_kind(k)["id"] for k in ("agency", "investor", "tender", "credentials")} == \
-        {"agency": "agency_pitch", "investor": "investor_seed", "tender": "tender_response", "credentials": "credentials"}
+    """--kind agency|investor|tender|credentials|creative map to agency_pitch, investor_seed, tender_response, credentials, creative_work."""
+    assert {k: profiles.for_kind(k)["id"] for k in ("agency", "investor", "tender", "credentials", "creative")} == \
+        {"agency": "agency_pitch", "investor": "investor_seed", "tender": "tender_response", "credentials": "credentials", "creative": "creative_work"}
     with pytest.raises(profiles.ProfileError):
         profiles.for_kind("pitch")
 
@@ -227,8 +227,8 @@ def test_type_question_card_shape():
     q = intake.type_question(inf)
     assert q["id"] == "q_deck_type" and q["address"] == "deck.type" and q["allow_text"] is True and q["skippable"] is True
     assert q["text"] == "What kind of deck is this?" and q["default"] == "agency_pitch"
-    assert [o["id"] for o in q["options"]][0] == "tender_response" and len(q["options"]) == 4
-    assert {o["id"] for o in q["options"]} == set(spec.DECK_TYPES)
+    assert [o["id"] for o in q["options"]][0] == "tender_response" and len(q["options"]) == len(profiles.offered()) == 4   # recipes off: creative_work not offered
+    assert {o["id"] for o in q["options"]} == set(spec.DECK_TYPES) - set(spec.RECIPE_ONLY_TYPES)
     first = q["options"][0]
     assert first["origin"] == "proposed" and first["source"] == " / ".join(inf["evidence"])
     assert all(o["origin"] == "asked" and "source" not in o for o in q["options"][1:])

@@ -100,4 +100,11 @@ recipe:
     timeline: [timeline_rows]
     team: [people_cards]
     investment: [native_table]
+  density: {level: detailed}   # the type's own budgets (criterion_answer 150); no role windows at detailed (validate role_words)
+  pictures: {"on": creative_cover, generate: none, types: [title]}   # none generated; a supplied picture on the cover only
+  brand: {strict: true}        # applied only when an agency Style Pack or a Brand Clan is attached (run_deck._strict_default)
+  titles: {form: criterion}    # the buyer's key words stay in the title (already this type's stage e guidance)
+  format: pitch                # stays a presented build (ANSWER_KEEPS is pitch logic); its default A4 size waits on deck-slide-size
+  full:
+    density: {level: detailed}
 sources: [GUIDE.md 2, GUIDE.md 3.2, rubric.json compliance_gate, NAPKIN-EDGE.md 3]

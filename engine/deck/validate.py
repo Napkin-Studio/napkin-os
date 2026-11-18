@@ -31,7 +31,10 @@ pitch_cap         (spec.LOOK_V3) a pitch with no stated limit presenting more th
                   that never withholds a deck (its target is spec.PITCH_TARGET). With spec.RECIPES on, the deck type's own
                   cap and target (profiles.recipe: none for a tender), on spine types too
 role_words        (spec.LOOK_V3) a presented slide's on-screen words outside its role's window (spec.ROLE_WINDOWS: statement
-                  10-35, argument 35-70): ADVISORY, a warning; a shortfall is met by a brief field, never by a repeated line
+                  10-35, argument 35-70): ADVISORY, a warning; a shortfall is met by a brief field, never by a repeated line. With
+                  spec.RECIPES on, the type's own roles and windows (profiles.recipe density), and none at density detailed
+notes_unread      (spec.RECIPES, format full: 'Sent to be read') a slide whose points the plan moved to the speaker notes, which
+                  nobody reads in a leave-behind: ADVISORY, a warning naming the slide and the count
 rule_broken       a brief rule's quoted phrase ("Avoid 'the Netflix of X' framing") appears in the deck
 source_required   a block or item marked "sourced" that cites nothing: information from outside the
                   three inputs (the user's prompt, the research CLAN, the brief) never reaches a slide
@@ -456,16 +459,27 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
     elif spec.LOOK_V3 and deck["meta"].get("format", "pitch") == "pitch" and not length and len(story) > spec.PITCH_CAP:   # deck-look: ADVISORY only
         add("pitch_cap", "warn", None, f"{len(story)} presented slides; a pitch aims at {spec.PITCH_TARGET} and is usually at most {spec.PITCH_CAP} "
             f"(advisory: asked-for routes and executions may rightly run longer; nothing is withheld for length)")
-    if spec.LOOK_V3:   # deck-look step 6 (Q13): the word windows by role, ADVISORY; never met by repeating a sentence or by words a layout asks for
+    fmt_ = deck["meta"].get("format", "pitch")
+    rd = profiles.recipe(profile, fmt_)["density"] if profiles.recipes_on() else None   # deck-types slice 4: the type's roles and windows
+    lvl = ((deck["meta"].get("preferences") or {}).get("density") or {}).get("level") if rd else None
+    lvl = lvl or (rd or {}).get("level")
+    if spec.LOOK_V3 and not (rd and lvl == "detailed"):   # deck-look step 6 (Q13): the word windows by role, ADVISORY; never met by repeating a sentence or by words a layout asks for
+        roles_, wins_ = (rd["roles"], rd["windows"]) if rd else (spec.ROLE_OF_TYPE, spec.ROLE_WINDOWS)   # with a recipe at detailed (a tender, the read format): no windows
         for x in story:
-            role = spec.ROLE_OF_TYPE.get(deck["slides"][x]["type"])
+            role = roles_.get(deck["slides"][x]["type"])
             if not role:
                 continue
-            lo, hi = spec.ROLE_WINDOWS[role]
+            lo, hi = wins_[role]
             n = words(deck["slides"][x]) + len(str(deck["slides"][x].get("title") or "").split())   # the window counts the title: a statement is often its title
             if not lo <= n <= hi:
                 add("role_words", "warn", x, f"{n} words on screen; {'an' if role[0] in 'aeiou' else 'a'} {role} slide carries {lo}-{hi} (advisory: "
                     + ("add a brief field that says more, never a repeated line)" if n < lo else "the plan moves the rest to the notes)"))
+    if rd and fmt_ == "full":   # deck-types slice 8: nobody presents a leave-behind, so a point the plan moved to the notes is unread (ADVISORY)
+        for x in deck["order"]:
+            n = len((((deck["slides"][x].get("layout") or {}).get("fit") or {}).get("moved")) or [])
+            if n >= spec.NOTES_UNREAD_MIN:
+                add("notes_unread", "warn", x, f"{n} point{'s' if n != 1 else ''} moved to the speaker notes: a deck sent to be read is not presented, so "
+                    f"{'they go' if n != 1 else 'it goes'} unread (choose a roomier layout or a denser level; the A4 export prints notes under each slide once slide size lands)")
     if deck["meta"].get("format", "pitch") == "pitch" and length.get("min_slides") and len(story) < length["min_slides"]:
         add("pitch_length", "warn", None, f"{len(story)} presented slides; a {profile['label'].lower() if profile else 'deck'} presents at least {length['min_slides']}: "
             f"give the stages more to work from (a brief, documents or answers)")
@@ -498,9 +512,10 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
     # titles are takeaways; a sentence is said once
     seen, said_by = {}, {}
     v3 = bool(spec.LOOK_V3)   # deck-look (fix 2, Q13): a sentence is said once, the titles and the campaign line included, from four words
+    labels = profiles.label_titles(profile, fmt_)   # deck-types slice 4: a type whose titles are labels (title form label) is not held to claims
     for x in story:
         sl = deck["slides"][x]
-        if sl["type"] not in spec.LABEL_TITLE_TYPES and len(sl["title"].split()) < 5:
+        if not labels and sl["type"] not in spec.LABEL_TITLE_TYPES and len(sl["title"].split()) < 5:
             add("action_title", "warn", x, f"title \"{sl['title']}\" is a label: write the takeaway as a full sentence")
         for t, basis in (_texts(sl, internal=False, human=False) if v3 else _texts(sl, internal=False, human=False)[1:]):
             if basis == "creative" and not v3:   # copy repeats its sign-off by design (the helpline on every piece)
