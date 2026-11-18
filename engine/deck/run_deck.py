@@ -31,7 +31,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import assemble, images, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, spec, validate
+from . import assemble, images, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, repair, spec, validate
 
 #: Stage a0 (intake) comes first: it fills the brief fields the brief does not supply.
 STAGE_FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.json", "c": "c_territories.json", "d": "d_idea.json"}
@@ -39,6 +39,11 @@ STAGE_FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_story
 INVESTOR_STAGE_FILES = {"a0": "a0_intake.json", "i": "i_investor.json"}
 #: Where ``--until`` may stop: after a stage, or after ``deck`` (the deck assembled and validated, before any file is rendered).
 UNTIL_CHOICES = ("a0", "a", "b", "c", "d", "i", "deck")
+
+
+#: Test seams for the repair loop's rounds (None: the real renderer, converter and QA). ``render_seam(deck, folder, findings)`` returns
+#: ``{pptx, pic_findings, placed}``, ``pdf_seam(pptx, folder)`` a PDF path or None, ``qa_seam(pptx, pdf, folder, findings)`` a qa dict.
+render_seam = pdf_seam = qa_seam = None
 
 
 def _close(a, rep: dict, t0: float) -> dict:
@@ -163,6 +168,128 @@ def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None =
         deck["meta"].setdefault("preferences", {})["agency_look"] = {"use": use, "source": "person" if (a.no_agency_look or ((ctx.get("look") or {}).get("agency_look") or {}).get("by")) else "default"}
     if look_rep:
         rep["look"] = look_rep
+
+
+def _stamp_pinned(a, deck: dict, deck_ctx: dict | None) -> set:
+    """Stamp ``deck.slides.<id>.pinned`` from the person's review (``--review FILE``, or the document's ``review``): a pinned slide is left alone by the
+    plan's fixes and by the repair loop. Models never write it. Returns the pinned slide ids (none when there is no review)."""
+    review = {}
+    if a.review and a.review.exists():
+        raw = json.loads(a.review.read_text())
+        review = raw.get("review", raw) if isinstance(raw, dict) else {}
+    elif (deck_ctx or {}).get("review"):
+        review = deck_ctx["review"]
+    out = {sid for sid in (review.get("pinned") or {}) if sid in deck["slides"]}
+    for sid in sorted(out):
+        deck["slides"][sid]["pinned"] = True
+    return out
+
+
+def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, placed: set, rep: dict, base_deck: dict, pinned: set, swaps: dict, level, tm, policy: dict, pptx):
+    """The repair loop (repair.py) on the finished build: round 0 is what was just written into ``a.out``. Writes issues.json always (the loop is on), and
+    when a round ran: repair.json, repair_record.json, out/repair/ (the base deck, every round's folder, round 0's files) and the report's repair section;
+    when a round was kept, the kept round's files become the deck's (deck.json, validation.json, qa.json, layouts.json, deck.pptx, deck.pdf) and the web deck, the
+    PNGs and the HyperFrames project are made again from it. Returns the deck, findings and placed set the run ends with."""
+    from . import layouts, stages
+    out = a.out
+    if not (out / "deck.pptx").exists():   # nothing was rendered (a renderer stubbed out): the loop never starts
+        return deck, findings, placed
+
+    def render_fn(d, folder, f):
+        if render_seam:
+            got = render_seam(d, folder, f)
+        else:
+            pic_f, pl = [], set()
+            render_pptx.render(d, inp, folder / "deck.pptx", a.master, f, animate=a.animate or False, layouts_out=folder / "layouts.json", pictures=pics, picture_findings=pic_f,
+                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan)
+            got = {"pptx": folder / "deck.pptx", "pic_findings": pic_f, "placed": pl}
+        return {**got, "pptx": got["pptx"] if got.get("pptx") and Path(got["pptx"]).exists() else None}
+
+    def pdf_fn(p, folder):
+        if pdf_seam:
+            return pdf_seam(p, folder)
+        try:
+            subprocess.run([_soffice(), "--headless", "--convert-to", "pdf", "--outdir", str(folder), str(p)], check=True, capture_output=True, timeout=180)
+        except (subprocess.SubprocessError, RuntimeError, OSError):   # no PDF for this round: it loses its pixels, so the gate cannot keep it
+            return None
+        return folder / "deck.pdf" if (folder / "deck.pdf").exists() else None
+
+    def qa_fn(p, pdf, folder, f):
+        return (qa_seam or qa_render.run)(p, pdf, folder, f)
+
+    def call_fn(request):
+        return stages.repair_copy(deck, inp, profile, request)
+
+    def spent() -> float:
+        return sum((_price_stage(v or {}).get("usd") or 0) for v in rep["stages"].values())
+
+    rec_path = next((p for p in (a.stages / "repair_record.json", out / "repair_record.json") if p.exists()), None)
+    record = None
+    if rec_path:
+        try:
+            record = json.loads(rec_path.read_text())
+        except ValueError:
+            record = None
+    ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm}, "swaps": swaps, "base_deck": base_deck,
+           "pinned": pinned, "out": out, "stages": a.stages, "live": a.live, "approve_shorten": a.approve_shorten, "call_fn": call_fn, "spent": spent,
+           "run_cap": repair.run_cap(), "record": record, "render_fn": render_fn, "pdf_fn": pdf_fn, "qa_fn": qa_fn}
+    iss0 = repair.I.derive(findings, qa, deck, policy, 0)
+    (out / "issues.json").write_text(json.dumps(iss0, indent=1, ensure_ascii=False))
+    if not policy["max_rounds"] or not [i for i in iss0 if i["severity"] in policy["repair_on"] and i["source"] != "critic"]:
+        return deck, findings, placed   # max_rounds 0 still writes issues.json, and a clean deck runs no round
+    shutil.rmtree(out / "repair", ignore_errors=True)
+    t = time.time()
+    m0 = repair.existing(deck, findings, qa, out, ctx)
+    if not m0["ok"]:   # the QA could not be read: lost coverage, so no round (S6)
+        return deck, findings, placed
+    res = repair.run(ctx, m0)
+    if not res["ran"] and not res["skipped"]:
+        return deck, findings, placed
+    (out / "repair").mkdir(exist_ok=True)
+    (out / "repair" / "base_deck.json").write_text(json.dumps(base_deck, indent=1, ensure_ascii=False, default=str))
+    final = res["final"]
+    n = res["final_round"]
+    if res["ran"] and n:   # a kept round: its files become the deck's; round 0's go to out/repair/round-0
+        r0 = out / "repair" / "round-0"
+        r0.mkdir(parents=True, exist_ok=True)
+        for name in ("deck.json", "validation.json", "qa.json", "layouts.json", "deck.pptx", "deck.pdf", "issues.json"):
+            if (out / name).exists():
+                shutil.copyfile(out / name, r0 / name)
+        folder = final["folder"]
+        for name in ("deck.json", "validation.json", "qa.json", "layouts.json", "deck.pptx", "deck.pdf"):
+            if (folder / name).exists():
+                shutil.copyfile(folder / name, out / name)
+            elif name == "deck.pdf":
+                (out / name).unlink(missing_ok=True)
+        deck, findings, placed = final["deck"], final["findings"], (final.get("placed") or placed)
+        rep["validation"] = validate.summary(findings)
+        render_web.render(deck, inp, out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
+        if a.hyperframes:
+            render_hyperframes.render(deck, inp, out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
+        if (out / "deck.pdf").exists():
+            (out / "png").mkdir(exist_ok=True)
+            subprocess.run(["pdftoppm", "-png", "-r", "60", str(out / "deck.pdf"), str(out / "png" / "slide")], check=False)
+        rep["qa"] = _qa_line(final["qa"]["summary"], len(deck["order"])) if (final.get("qa") or {}).get("summary") else rep.get("qa")
+    elif res["ran"]:   # nothing kept: the deck stays as built, with the policy stamped (a round ran) and its checks re-stamped
+        deck["meta"]["repair_policy"] = policy
+        (out / "deck.json").write_text(json.dumps(deck, indent=1, ensure_ascii=False, default=str))
+        repair.stamp_qa(out, qa)
+    (out / "issues.json").write_text(json.dumps(res["issues"], indent=1, ensure_ascii=False))
+    (out / "repair.json").write_text(json.dumps(res["repair"], indent=1, ensure_ascii=False))
+    rec_dir = a.stages if a.live else out
+    rec_dir.mkdir(parents=True, exist_ok=True)
+    (rec_dir / "repair_record.json").write_text(json.dumps(res["record"], indent=1, ensure_ascii=False))
+    for k, row in res["stage_rows"].items():
+        rep["stages"][k] = row
+    rep["repair"] = {"policy_sha": res["repair"]["policy_sha"], "rounds": [{**x, "seconds": round(s, 1)} for x, s in zip(res["rounds"], res.get("secs") or [0] * len(res["rounds"]))],
+                     "stopped": res["stopped"], "skipped": res["skipped"], "left_for_person": res["left"], "usd": round(res["usd"], 4)}
+    if res["replayed"]:
+        rep["repair"]["replayed"] = True
+    rep["stages"]["repair"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
+    kept = sum(1 for x in res["rounds"] if x["kept"])
+    fixed = sum(1 for i in res["issues"] if i["status"] == "fixed")
+    print(f"Repair: {len(res['rounds'])} round(s), {kept} kept, {fixed} fixed, {len(res['left'])} left for you, {res['usd']:.2f} USD" + (" (replayed)" if res["replayed"] else ""))
+    return deck, findings, placed
 
 
 def _qa_line(summary: dict, n_slides: int) -> str:
@@ -385,7 +512,12 @@ def main(argv=None):
                     help="a person's layout swap for one slide (repeatable); honoured when the layout holds the slide, else layout_unknown")
     ap.add_argument("--no-layout-plan", action="store_true", help="skip the layout plan: the renderers choose as before the library (rollback)")
     ap.add_argument("--no-notes", action="store_true", help="a notes-free export: no speaker notes in the pptx (the moved points go with them)")
-    ap.add_argument("--no-qa", action="store_true", help="skip stage h, the rendered-slide QA (qa.json)")
+    ap.add_argument("--no-qa", action="store_true", help="skip stage h, the rendered-slide QA (qa.json): the repair loop reads the QA, so it does not run either")
+    ap.add_argument("--no-repair", action="store_true", help="turn the repair loop off: no round, no issues.json, the output is exactly the engine without it")
+    ap.add_argument("--text-mode", choices=spec.TEXT_MODES, default=None,
+                    help="condense: the repair loop may move whole points to the speaker notes and shorten wording with the slide's own words; preserve (also when absent): it never does")
+    ap.add_argument("--repair-policy", type=Path, help="a repair policy file over policy/repair.yaml (tests and experiments)")
+    ap.add_argument("--approve-shorten", action="store_true", help="a person's yes to shortening a deck built for --audience client (recorded in the repair record)")
     ap.add_argument("--until", choices=UNTIL_CHOICES, default=None,
                     help="stop after this stage and write report.json (stages a0 a b c d, or i for an investor deck); 'deck' stops once the deck "
                          "is assembled and validated, before any file is rendered. Stage outputs stay in --stages: a later run carries on from them")
@@ -595,6 +727,7 @@ def main(argv=None):
     rep["stages"]["assemble"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     plan_issues = []
+    loop_on, policy, base_deck, pinned_ids, swaps, level, tm = False, None, None, set(), {}, None, None
     if not a.no_layout_plan:   # the layout plan (deck-layout-library): after stage e, the red team and the pictures, before validate
         from . import layouts
         t = time.time()
@@ -614,7 +747,17 @@ def main(argv=None):
                 raise SystemExit(f"--layout {item}: expected SLIDE=ID with a slide id of this deck")
             swaps[sid_] = lid_
         tm = (deck["meta"].get("preferences") or {}).get("text_mode")
-        deck, plan_issues, _pending = layouts.plan(deck, prefs={"density": level, "text_mode": tm.get("mode") if isinstance(tm, dict) else tm}, swaps=swaps)
+        tm = tm.get("mode") if isinstance(tm, dict) else tm
+        asked_tm = a.text_mode or (deck_ctx or {}).get("text_mode")
+        if asked_tm in spec.TEXT_MODES:   # the person's choice (or the document's): condense lets the loop move points to the notes and shorten; absent means preserve
+            tm = asked_tm
+            deck["meta"].setdefault("preferences", {})["text_mode"] = {"mode": tm, "source": "person" if a.text_mode else "default"}
+        pinned_ids = _stamp_pinned(a, deck, deck_ctx)
+        loop_on = not a.no_repair and not a.no_qa and a.until is None
+        policy = repair.load_policy(profile, a.repair_policy) if loop_on else None
+        stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages)[0]
+        base_deck = deck
+        deck, plan_issues, _pending = layouts.plan(deck, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten)}, swaps=swaps)
         rungs = (deck["meta"].get("layout_plan") or {}).get("rungs", {})
         rep["layout_plan"] = {"secs": round(time.time() - t, 3), "rungs": rungs, "variety_swaps": (deck["meta"].get("layout_plan") or {}).get("variety_swaps", 0), "skipped": ["condense"]}
         rep["stages"]["layout_plan"] = {"secs": round(time.time() - t, 3), "model": None, "usd": 0}
@@ -682,10 +825,13 @@ def main(argv=None):
     # ---- stage h: rendered-slide QA (qa_render.py). It never blocks the build: a finding is only reported. ----
     if not a.no_qa:
         t = time.time()
-        qa = qa_render.run(pptx, a.out / "deck.pdf", a.out, findings)
+        qa = (qa_seam or qa_render.run)(pptx, a.out / "deck.pdf", a.out, findings)
+        qa = repair.stamp_qa(a.out, qa)   # deck_sha: the hash of the deck.json these checks read (the same stamp in every round folder)
         rep["qa"] = _qa_line(qa["summary"], len(deck["order"]))
         rep["stages"]["qa_render"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
         print(rep["qa"])
+        if loop_on:
+            deck, findings, placed = _repair(a, inp, profile, deck, findings, qa, pics, placed, rep, base_deck, pinned_ids, swaps, level, tm, policy, pptx)
     # ---- end stage h ----
 
     rep["slides"] = len(deck["order"])

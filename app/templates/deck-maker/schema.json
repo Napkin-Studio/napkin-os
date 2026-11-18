@@ -1173,7 +1173,17 @@
                       "title_drift",
                       "line_length",
                       "image_style_mixed",
-                      "export_failed"
+                      "export_failed",
+                      "v_one_focus",
+                      "v_balance",
+                      "v_not_crowded",
+                      "v_looks_finished",
+                      "v_image_fits",
+                      "v_image_clean",
+                      "v_text_on_image",
+                      "v_crop_ok",
+                      "v_one_style",
+                      "v_rhythm"
                     ]
                   },
                   "additionalProperties": {
@@ -1233,7 +1243,9 @@
                           "no_new_number",
                           "refs_kept",
                           "not_longer",
-                          "label_titles_untouched"
+                          "label_titles_untouched",
+                          "ledger_kept",
+                          "own_words"
                         ]
                       }
                     }
@@ -2243,6 +2255,13 @@
                                   "type": "string"
                                 }
                               }
+                            },
+                            "scrim": {
+                              "enum": [
+                                "none",
+                                "dark",
+                                "light"
+                              ]
                             }
                           },
                           "if": {
@@ -3292,7 +3311,17 @@
                   "title_drift",
                   "line_length",
                   "image_style_mixed",
-                  "export_failed"
+                  "export_failed",
+                  "v_one_focus",
+                  "v_balance",
+                  "v_not_crowded",
+                  "v_looks_finished",
+                  "v_image_fits",
+                  "v_image_clean",
+                  "v_text_on_image",
+                  "v_crop_ok",
+                  "v_one_style",
+                  "v_rhythm"
                 ]
               },
               "level": {
@@ -3408,11 +3437,66 @@
               "seconds": {
                 "type": "number",
                 "minimum": 0
+              },
+              "why": {
+                "type": "string",
+                "maxLength": 160
+              },
+              "before": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "blocker": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "major": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "minor": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "after": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "blocker": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "major": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "minor": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
               }
             }
           }
         },
         "left_for_person": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stopped": {
+          "enum": [
+            "max_rounds",
+            "nothing_to_do",
+            "clean",
+            "no_progress",
+            "rolled_back",
+            "qa_unreadable",
+            "time_cap"
+          ]
+        },
+        "skipped": {
           "type": "integer",
           "minimum": 0
         }

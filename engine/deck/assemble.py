@@ -1281,6 +1281,52 @@ def _headline_problem(old: str, new, slide_type: str, judged: tuple) -> str:
     return ""
 
 
+# ---------------------------------------------------------------- the shorten guard (deck-repair-loop)
+
+#: Words that do not count as a slide's own words when the own-words guard compares a rewrite with the base text.
+STOP_WORDS = frozenset("a an and are as at be but by for from has have he her his i in is it its of on or our she so that the their them "
+                       "then there these they this those to us was we were what when which who will with you your".split())
+
+
+def content_words(text) -> set:
+    """The lower-cased words of a text without the fixed stop words: what the own-words guard compares."""
+    return {w for w in re.findall(r"[a-z0-9]+(?:['\u2019][a-z]+)?", str(text or "").lower()) if w not in STOP_WORDS}
+
+
+def shorten_problem(old_base: str, new, slide_base_text: str, known=frozenset(), guards: tuple = (), max_cut_ratio: float = 0.35,
+                    current: str | None = None, is_label: bool = False) -> str:
+    """Why a shortened field is refused, or '' when it is acceptable. ``old_base`` is the field in the BASE deck (never the previous
+    round's), ``slide_base_text`` the base text of the whole slide. The guards (spec.REPAIR_SHORTEN_GUARDS), all on by default:
+    ``label_titles_untouched`` (a title or label is never a field), ``not_longer`` than the base, at most ``max_cut_ratio`` of the base's
+    characters cut, ``no_new_number``, ``ledger_kept`` (numbers incl. letter-attached ones, units, %, currency, order, capitalised names,
+    months, years, negations and hedges are the same tokens in the same order: ``ledger.tokens``) and ``own_words`` (every content word
+    already stands in the slide's base text: only deleting or reusing, never a synonym). ``refs_kept`` holds by construction (only a
+    field's text is replaced; refs live beside it)."""
+    from . import ledger
+    from .refs import numbers_in
+    guards = guards or ("no_new_number", "refs_kept", "not_longer", "label_titles_untouched", "ledger_kept", "own_words")
+    new = str(new or "").strip()
+    if "label_titles_untouched" in guards and is_label:
+        return "a title or label is never edited"
+    if not new:
+        return "empty"
+    if new == str(current if current is not None else old_base).strip():
+        return "unchanged"
+    if "not_longer" in guards and len(new) > len(old_base.strip()):
+        return "longer than the base text"
+    if len(new) < (1 - max_cut_ratio) * len(old_base.strip()):
+        return f"cuts more than {int(max_cut_ratio * 100)} percent of the base text"
+    if "no_new_number" in guards and (numbers_in(new) - numbers_in(old_base)):
+        return "adds a number the base text did not have"
+    if "ledger_kept" in guards and ledger.tokens(new, known) != ledger.tokens(old_base, known):
+        return "changes the ledger (a number, unit, name, month, year, negation or hedge, or their order)"
+    if "own_words" in guards:
+        extra = content_words(new) - content_words(slide_base_text)
+        if extra:
+            return "uses words that are not on the slide: " + ", ".join(sorted(extra)[:4])
+    return ""
+
+
 def apply_narrowing(deck: dict, narrowed: list) -> dict:
     """Apply stage e's headline rewrites (``[{slide, headline, reason}]``, keyed by the current title). A rewrite is applied only
     to a presented slide of a judged type whose fit verdict is ``not`` or ``partly``, and only if it passes _headline_problem

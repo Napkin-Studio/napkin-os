@@ -106,7 +106,17 @@
         "title_drift",
         "line_length",
         "image_style_mixed",
-        "export_failed"
+        "export_failed",
+        "v_one_focus",
+        "v_balance",
+        "v_not_crowded",
+        "v_looks_finished",
+        "v_image_fits",
+        "v_image_clean",
+        "v_text_on_image",
+        "v_crop_ok",
+        "v_one_style",
+        "v_rhythm"
       ]
     },
     "level": {
