@@ -1,13 +1,23 @@
 // Routes under both bases: '/' (dev, tests) and '/production/' (behind napkin-web).
 
 import { describe, expect, it } from 'vitest'
-import { formatRoute, parseRoute, projectRoute, routeFor, routeProject, routeRoom, Router, scriptRoute, type HistoryLike } from './route'
+import { formatRoute, frameRoute, parseRoute, projectRoute, routeFor, routeProject, routeRoom, Router, scriptRoute, type HistoryLike } from './route'
 
 const P = 'p_01HZY'
 const S = 'script_01J0000000000000000000000A'
 const H = 'shot_01J0000000000000000000000B'
 
 describe('parseRoute and formatRoute', () => {
+  it('the Image editor on a storyboard shot\u2019s frame is in the URL, so a reload reopens it (re-test 8d)', () => {
+    const P = 'prj_01M7PQ2AQP857QJ78395QNZBXA'
+    const r = frameRoute(P, 'shot_01M7PQ2AQP857QJ78395QNZBXB')
+    expect(formatRoute(r, '/production/')).toBe(`/production/p/${P}/storyboard?frame=shot_01M7PQ2AQP857QJ78395QNZBXB`)
+    expect(parseRoute({ pathname: `/production/p/${P}/storyboard`, search: '?frame=shot_01M7PQ2AQP857QJ78395QNZBXB' }, '/production/')).toEqual(r)
+    expect(formatRoute(frameRoute(P, null), '/production/')).toBe(`/production/p/${P}/storyboard`)
+    // The App's sync keeps it while the Storyboard is the stage, and drops it when the stage changes.
+    expect(routeFor(P, 'storyboard', r)).toBeNull()
+    expect(routeFor(P, 'character', r)).toEqual(projectRoute(P))
+  })
   for (const base of ['/', '/production/']) {
     it(`round-trip under ${base}`, () => {
       const r = scriptRoute(P, S, H)

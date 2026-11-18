@@ -7,7 +7,7 @@
 // Contract 3: the script's words are the main script's scenes; the shots are the main storyboard's,
 // in rank order; the ratio and the target length are the storyboard's; the frame in a shot is its pick.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useUi } from '../app/context'
 import type { Ask, ProductionDocument, Ratio, Shot } from '../contracts/types'
 import { isRunning, jobAt, ratioAspect } from '../jobs/select'
@@ -43,7 +43,7 @@ import { marksNow } from './marksNow'
 import { titleOf } from './shotTitle'
 import { jobCtx, LOCAL_PERSON } from '../jobs/runner'
 import { addShot, answerShotAsk, clipsBehindLine, setRatio, setTarget } from './storyboardEdits'
-import { scriptRoute } from '../app/route'
+import { frameRoute, scriptRoute } from '../app/route'
 import { insertShot } from '../script/edits'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { nodeTitle } from '../ui/chrome/panels'
@@ -82,8 +82,11 @@ export function Storyboard() {
   const [confirmShot, setConfirmShot] = useState<string | null>(null)
   /** "Deleted shot 3." or "Shot 5 is now shot 3." with Undo, after a delete or a move (ui-behaviour 3.3 Delete, 3.11). */
   const [deleted, setDeleted] = useState<string | null>(null)
-  /** The shot whose frame is open in the Image editor (ui-behaviour 3.12). */
-  const [editing, setEditing] = useState<string | null>(null)
+  /** The shot whose frame is open in the Image editor (ui-behaviour 3.12): in the URL (?frame=), so a reload
+   *  reopens it (re-test 8d). */
+  const route = useSyncExternalStore(router.subscribe, router.get)
+  const editing = route.kind === 'project' && route.projectId === project.id && route.stage === 'storyboard' ? route.frame ?? null : null
+  const setEditing = (shotId: string | null) => router.replace(frameRoute(project.id, shotId))
   /** The shot open in the Booth (the Booth rule: no shot selected, no Booth). */
   const [selected, setSelected] = useState<string | null>(null)
   /** Decisions narrowed to one shot (its Booth's History row). */
