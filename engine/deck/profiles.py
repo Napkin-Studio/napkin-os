@@ -353,6 +353,7 @@ class NeedsStages(Exception):
     """A type change that needs a model stage not yet run: the app names the stages and asks first (design.precedence.changing_later)."""
 
     def __init__(self, to_type: str, stages: list):
+        """The type asked for and the model stages it needs, named in the message the app shows before anything runs."""
         self.to_type, self.stages = to_type, list(stages)
         super().__init__(f"changing to {to_type} needs new writing: stage{'s' if len(stages) != 1 else ''} {', '.join(stages)} "
                          f"{'have' if len(stages) != 1 else 'has'} not run for this deck. Confirm to run {'them' if len(stages) != 1 else 'it'} "
