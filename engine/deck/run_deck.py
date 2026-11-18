@@ -768,6 +768,9 @@ def main(argv=None):
     ap.add_argument("--pictures", choices=("creative_cover", "creative", "none"), default=None,
                     help="place pictures that already exist (stages/frames.json from deck.from_territory, and --image): creative_cover (the "
                          "creative slides, the cover and the divider), creative, or none. Absent: frames.json is ignored and no slot is written")
+    ap.add_argument("--production", action="store_true",
+                    help="place the Production Tool's pictures (stages/production.json from deck.from_production): the key visual on the cover and the idea, "
+                         "each execution the size its channel matches. Nothing is made or spent; implies --pictures creative_cover unless --pictures says otherwise")
     ap.add_argument("--image", action="append", default=[], metavar="SLIDE.SLOT=FILE",
                     help="place a picture you supply on a slide of a picture type (never an evidence slide; the slot 'logo' is refused); repeatable")
     ap.add_argument("--image-rights", action="append", default=[], metavar="SLIDE.SLOT=RIGHTS",
@@ -799,8 +802,10 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.picture_source == "generated" and a.images == "off":
         a.images = "plan"
-    if a.images != "off" and a.pictures is None:
+    if (a.images != "off" or a.production) and a.pictures is None:
         a.pictures = "creative_cover"
+    if a.production and a.pictures == "none":
+        ap.error("--production places pictures and --pictures none asks for none: drop one")
     if a.images_only and a.live:
         ap.error("--images-only never calls a text model: drop --live")
     if a.cap_usd is not None and not (0 < a.cap_usd <= 2.5):
@@ -859,6 +864,9 @@ def main(argv=None):
     choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
     profile = profiles.load(choice["type"])
     kind = profile["kind"]                     # which assembler: agency or investor
+    if a.production and kind == "investor":   # never silently ignored, and refused before any stage runs or spends
+        raise SystemExit("refused: --production places the Production Tool's campaign pictures on a pitch deck's cover, idea and executions; "
+                         "an investor deck has none of those slides. Drop --production")
     rep["type"] = {"id": profile["id"], "source": choice["source"], "note": choice["note"]}
     if profiles.recipes_on():   # deck-types: the recipe this run builds from, resolved once (flag off: no key, the report is today's)
         rec = profiles.recipe(profile, a.format)
@@ -922,7 +930,7 @@ def main(argv=None):
     fp = a.stages / "fit.json"   # the fit judge reads an assembled deck; its verdicts decide what a pitch presents
     fit = json.loads(fp.read_text()) if fp.exists() else None
     builder = assemble.build_investor if kind == "investor" else assemble.build
-    frames, bound = None, None
+    frames, bound, prod = None, None, None
     names = [x for x in (a.client, a.agency) if x]
     if a.brand and a.brand.exists():   # the brand's own name may not label or describe a picture either: read before any frame is bound
         try:
@@ -941,6 +949,10 @@ def main(argv=None):
                                         "frames bind by territory id, so they would sit on the wrong slides. Run deck.from_territory again, with --replace")
             if frames:
                 bound = images.bind_frames(None, frames, st.get("c") or {}, a.pictures, names)
+            if a.production:   # production.json is read ONLY with --production: a stray one changes nothing (deck-prod-assets)
+                prod = images.load_production(a.stages)
+                if prod is None:
+                    raise images.ImageError(f"--production: {a.stages}/production.json is missing. Run deck.from_production BUNDLE.zip --stages {a.stages} first")
     except images.ImageError as e:
         raise SystemExit(f"refused: {e}")
     extra = {"pictures": bound} if bound else {}
@@ -997,6 +1009,13 @@ def main(argv=None):
             if bound and bound["assets"]:
                 images.register_assets(deck, bound["assets"])
             held = images.place_supplied(deck, supplied, images.deck_names(deck), sources)
+            if prod:   # after a person's own pictures (kept), before the empty slots and the image step (a filled or rights-pending slot is never planned)
+                brief_doc = next((d for d, app in ((deck_ctx or {}).get("apps") or {}).items() if app == "ie.napkin.brief-maker"), None)
+                pres = images.bind_production(deck, prod, a.pictures, images.deck_names(deck), brief_doc)
+                held = held + pres["held"]
+                rep["production"] = {"project": (prod.get("project") or {}).get("id"), "offer_sha256": prod.get("offer_sha256"),
+                                     "placed": pres["placed"], "held": len(pres["held"]), "kept": pres["kept"], "usd": 0,
+                                     "key_visual": pres["master"]}
             if a.pictures:
                 images.add_empty_slots(deck, a.pictures)
             review = json.loads(a.review.read_text()) if a.review else {}

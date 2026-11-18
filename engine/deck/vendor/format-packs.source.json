@@ -1,0 +1,10 @@
+{
+ "what": "A pinned, unedited copy of the Production Tool's format packs, read by deck.from_production for each size's channel (the export bundle does not carry it). Update by copying the file again and changing this record; never edit the copy.",
+ "repo": "Napkin-Studio/napkin-os",
+ "path": "production-tool/contracts/format-packs.json",
+ "branch": "develop",
+ "commit": "b2064bc2d4ca1fc4abcdece24a386bf56f0efa87",
+ "develop_head": "375e3a77380842868c845130486fcd5dedf48337",
+ "copied": "2026-11-18",
+ "sha256": "e20201b64d573badef8f81668e237334c75adba35e32e052bd2d06a586a55b41"
+}

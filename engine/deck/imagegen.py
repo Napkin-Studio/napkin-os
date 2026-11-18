@@ -109,7 +109,7 @@ def candidate_slots(deck: dict, territories=None) -> list:
             im = v.get("image") if isinstance(v, dict) and v.get("kind") == "image" else None
             if not im or im.get("status") != "empty" or not name.startswith("picture") or im.get("kind") in ("frame", "screenshot", "logo"):
                 continue
-            if (im.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand"):
+            if (im.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand", "production"):   # production: a rights-pending pull leaves the plan too
                 continue
             out.append({"sid": sid, "slot": name, "aspect": im["aspect"], "anchor": anc[sid], "key": anchor_key(anc[sid], name), "kind": im.get("kind") or "photo"})
     return out

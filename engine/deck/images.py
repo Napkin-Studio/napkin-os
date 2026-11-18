@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 import sys
 from datetime import datetime, timezone
@@ -419,7 +420,7 @@ def bind_generated(deck: dict, generated: dict, territories=None, names=(), word
             cur["candidate"] = {"asset": aid, "job": pic["job"]}
             got["candidates"] += 1
             continue
-        if cur is not None and (cur.get("status") != "empty" or (cur.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand")):
+        if cur is not None and (cur.get("status") != "empty" or (cur.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand", "production")):
             continue
         subject = str(pic.get("subject") or "")[:SUBJECT_MAX]
         try:
@@ -443,6 +444,228 @@ def bind_generated(deck: dict, generated: dict, territories=None, names=(), word
         register_assets(deck, {aid: rec})
         slots[slot] = {"kind": "image", "image": image}
         got["bound"] += 1
+    return got
+
+
+# -------------------------------------------------------------------------------------------------- production.json (deck-prod-assets)
+
+PRODUCTION_APP = "ie.napkin.production-tool"
+#: What an execution's channel accepts from Production's format channels (format-packs.json): a poster takes OOH or print.
+PRODUCTION_ACCEPTS = {"social": ("social",), "ooh": ("ooh", "print"), "print": ("print", "ooh"), "display": ("display",)}
+#: Every size, of the slot's channel or of a format the pinned packs do not know (fix 7), must sit within this ratio of the slot's aspect:
+#: a 7.8:1 OOH banner never lands in a 4:5 poster slot, nor a 2:7 skyscraper in a 16:9 one. Nothing fits: the slot stays empty, with why.
+ASPECT_TOL = 1.25
+NEAREST_ASPECT_TOL = ASPECT_TOL
+PRODUCTION_ALT = {"master": "The campaign's key visual", "size": "The campaign picture made for this channel", "frame": "A storyboard frame from the film"}
+_FILM_WORDS = ("film", "tv", "television", "cinema", "broadcast", "bvod", "video", "youtube")
+_PRINT_WORDS = ("print", "press", "magazine", "newspaper")
+_DISPLAY_WORDS = ("display", "banner", "programmatic")
+
+
+def load_production(stages: Path) -> dict | None:
+    """``<stages>/production.json`` (written by deck.from_production), or None. Read only when run_deck is given --production."""
+    p = Path(stages) / "production.json"
+    if not p.is_file():
+        return None
+    f = json.loads(p.read_text())
+    if f.get("stage") != "production" or not isinstance(f.get("items"), dict) or f.get("contract_version") != "3":
+        raise ImageError(f"{p} is not a production stage file (contract 3)")
+    return f
+
+
+def execution_channel(title: str) -> str | None:
+    """The Production channel an execution's title names: social (a phone frame), ooh (a poster frame), film, print or display; None for
+    a channel Production has no picture for (search, audio) or a title that names none."""
+    fr = spec.frame_for(title or "")
+    if fr == "phone":
+        return "social"
+    if fr == "poster":
+        return "ooh"
+    if fr in ("search", "audio"):
+        return None
+    t = (title or "").lower()
+    for ch, words in (("film", _FILM_WORDS), ("print", _PRINT_WORDS), ("display", _DISPLAY_WORDS)):
+        if any(re.search(rf"(?<!\w){w}(?!\w)", t) for w in words):
+            return ch
+    return None
+
+
+def _newest(keys):
+    return max(keys) if keys else None   # ULIDs sort by the time they were made
+
+
+def keeps_protected(it: dict, aspect) -> bool:
+    """Whether cropping this item to ``aspect`` around its focal point (crop_box, as the renderer does) keeps the whole of its protect
+    boxes (``keep``: their union, as fractions of the picture) in view. The boxes, not only their centre: a wide subject in a tall slot
+    is cut even when its centre is kept. An item with no boxes keeps nothing in particular, so any crop is fine."""
+    k, w, h = it.get("keep"), it.get("width"), it.get("height")
+    if not isinstance(k, dict) or not w or not h:
+        return True
+    x0, y0, x1, y1 = crop_box(int(w), int(h), aspect, it.get("focal"))
+    return k["x0"] * w >= x0 - 1 and k["y0"] * h >= y0 - 1 and k["x1"] * w <= x1 + 1 and k["y1"] * h <= y1 + 1
+
+
+def choose_master(prod: dict, brief_document_id: str | None = None) -> tuple:
+    """``(key, set, why)`` of the key visual (Q9): the newest Format set linked to the deck's brief; when none links to it, a placeable
+    key visual before one waiting for its rights, newest first. ``(None, None, why)`` when no set has a master."""
+    items = prod.get("items") or {}
+    sets = {fid: r for fid, r in (prod.get("format_sets") or {}).items() if r.get("master") in items}
+    if not sets:
+        return None, None, "no Format set in the export has a key visual"
+    linked = [fid for fid, r in sets.items() if brief_document_id and (r.get("brief") or {}).get("document_id") == brief_document_id]
+    if linked:
+        fid = _newest(linked)
+        return sets[fid]["master"], fid, "the newest Format set linked to this deck's brief"
+    placeable = [fid for fid in sets if items[sets[fid]["master"]].get("rights") != "reference_only"]
+    if placeable:
+        fid = _newest(placeable)
+        why = "no Format set links to this deck's brief: the newest set whose key visual can be placed"
+        if _newest(list(sets)) != fid:
+            why += " (a newer set's key visual waits for its rights)"
+        return sets[fid]["master"], fid, why
+    fid = _newest(list(sets))
+    return sets[fid]["master"], fid, "no Format set links to this deck's brief and every key visual waits for its rights: the newest set"
+
+
+def production_master(prod: dict, brief_document_id: str | None = None) -> str | None:
+    """The key visual's item key (see choose_master), or None."""
+    return choose_master(prod, brief_document_id)[0]
+
+
+def production_size(prod: dict, channel: str, aspect: str, prefer_set: str | None = None) -> tuple:
+    """``(key, why)``: the size for an execution slot. Sizes whose channel the execution accepts (a size of a format the pinned packs do
+    not know only when the channel has none), within ASPECT_TOL of the slot's aspect and whose protect boxes the slot's crop keeps whole;
+    a placeable one before one waiting for its rights, ready before flagged ('look'), the key visual's own set first, nearest the slot's
+    aspect, newest last. Stale sizes never. ``(None, why)`` when sizes of the channel exist and none fits (the slot is left empty with
+    that reason, never filled with a wrong shape); ``(None, None)`` when Production made nothing for the channel."""
+    want = ratio(aspect)
+    tol = math.log(ASPECT_TOL)
+    acc = PRODUCTION_ACCEPTS.get(channel) or ()
+    matched, nearest, off_shape, cut = [], [], set(), 0
+    for k, it in (prod.get("items") or {}).items():
+        if it.get("role") != "size" or it.get("status") not in ("ready", "look") or not it.get("aspect"):
+            continue
+        ours, unknown = it.get("channel") in acc, it.get("channel") is None
+        if not (ours or unknown):
+            continue
+        r = it["aspect"]["w"] / it["aspect"]["h"]
+        dist = abs(math.log(r / want))
+        if dist > tol:
+            if ours:
+                off_shape.add(f"{it['aspect']['w']}:{it['aspect']['h']}")
+            continue
+        if not keeps_protected(it, aspect):
+            cut += 1 if ours else 0
+            continue
+        row = (it.get("rights") == "reference_only", it.get("status") != "ready", it.get("set") != prefer_set, round(dist, 4), k)   # a placeable picture first
+        (matched if ours else nearest).append(row)
+    pool = matched or nearest
+    if not pool:
+        if not off_shape and not cut:
+            return None, None
+        parts = []
+        if off_shape:
+            parts.append(f"its {channel} size(s) are {', '.join(sorted(off_shape))}, too far from this {aspect} slot")
+        if cut:
+            parts.append(f"{cut} {channel} size(s) would lose part of their protected area in a {aspect} crop")
+        return None, "No Production size fits: " + "; ".join(parts) + ". Make one in this shape in Production, or supply a picture"
+    best = min(p[:4] for p in pool)
+    return _newest([p[4] for p in pool if p[:4] == best]), None
+
+
+def production_frame(prod: dict) -> str | None:
+    """The one picked storyboard frame a film execution shows in v1 (fix 3): the newest storyboard's first shot (by rank) with a picked frame."""
+    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    sb = _newest([it.get("storyboard") or "" for it in frames.values()])
+    first = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
+    return first[0][1] if first else None
+
+
+def production_slot(prod: dict, key: str, aspect: str, names=()) -> tuple:
+    """The slot value for one Production item and its asset record (None when the picture waits for its rights: an empty slot with the
+    reason 'Rights to supply', never placed silently). The slot keeps a focal point, not pixels."""
+    it = prod["items"][key]
+    run = str((prod.get("bundle") or {}).get("clan_sha256") or "")[:12]
+    base = {"kind": "frame" if it["role"] == "frame" else "illustration", "aspect": aspect, "basis": "creative",
+            "from": {"kind": "production", "key": key, **({"run": run} if run else {})}}
+    if it.get("rights") == "reference_only":
+        why = it.get("rights_why") or f"{it.get('origin')} picture with no stated licence"
+        return {"kind": "image", "image": {**base, "status": "empty", "reason": f"{spec.RIGHTS_TO_SUPPLY}: {why} in Production. Set own, licensed or "
+                                                                               f"client_supplied to place it"[:REASON_MAX]}}, None
+    aid = "img_" + it["sha256"][:12]
+    image = {**base, "status": "flagged" if it.get("status") == "look" else "made", "asset": aid, "alt": make_alt(PRODUCTION_ALT[it["role"]], names)}
+    if it.get("focal"):
+        image["focal"] = {"x": float(it["focal"]["x"]), "y": float(it["focal"]["y"])}
+    if it.get("status") == "look":
+        image["reason"] = str(it.get("reason") or "Flagged by review in Production")[:REASON_MAX]
+    src = {"app": PRODUCTION_APP, "project_id": (prod.get("project") or {}).get("id"), "entity": it["entity"], "role": it["role"],
+           "version": it.get("version"), "origin": it.get("origin"), "bundle_sha256": it.get("bundle_sha256")}
+    if it.get("job_id"):
+        src["job_id"] = it["job_id"]
+    if it.get("format", {}).get("format_id"):
+        src["format_id"] = it["format"]["format_id"]
+    if it.get("channel"):
+        src["channel"] = it["channel"]
+    asset = {"sha256": it["sha256"], "file": it["file"], "mime": it["mime"], "width": it["width"], "height": it["height"], "bytes": it.get("bytes", 0),
+             "rights": it["rights"], "guard": {"checked": False, "by": "not checked", "flagged": False},
+             "source": {k: v for k, v in src.items() if v not in (None, "")}}
+    return {"kind": "image", "image": image}, asset
+
+
+def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", names=(), brief_document_id: str | None = None) -> dict:
+    """Fill picture slots from production.json (deck-prod-assets slice 2), by slide type and channel, after the supplied pictures and before
+    the empty slots and the image step, so a filled slot (or one waiting for its rights) never reaches the generation plan. Cover (only with
+    ``creative_cover``) and idea take the key visual; each execution the size its channel and aspect match, a film one storyboard frame.
+    Territory slides never; no slide is added. A person's own picture (upload, brand) is kept; a territory frame's proposal gives way.
+    A slot Production has pictures for but none of the right shape (aspect, or a crop that would cut its protect boxes) is left empty
+    with the reason. Stamps ``meta.production``. Returns ``{placed, held: [{slide, slot, message}], kept, master: {key, set, why}}``."""
+    got = {"placed": 0, "held": [], "kept": 0, "master": None}
+    if pictures == "none":
+        return got
+    master, mset, mwhy = choose_master(prod, brief_document_id)
+    got["master"] = {"key": master, "set": mset, "why": mwhy}
+    run = str((prod.get("bundle") or {}).get("clan_sha256") or "")[:12]
+
+    def unfit(aspect, why):
+        return {"kind": "image", "image": {"kind": "illustration", "status": "empty", "aspect": aspect, "basis": "creative", "reason": why[:REASON_MAX],
+                                           "from": {"kind": "production", **({"run": run} if run else {})}}}
+    for sid in deck["order"]:
+        s = deck["slides"][sid]
+        t, title = spec.picture_of(s)
+        for slot, aspect in slot_specs(s):
+            key, why = None, None
+            if (t == "title" and pictures == "creative_cover") or t == "idea":
+                key = master if slot == "picture" else None
+                if key and not keeps_protected(prod["items"][key], aspect):
+                    key, why = None, (f"The key visual would lose part of its protected area in a {aspect} crop. Make a {aspect} size of it in "
+                                      f"Production, or supply a picture")
+            elif t == "execution" and slot == "picture":
+                ch = execution_channel(title)
+                if ch == "film":
+                    key = production_frame(prod)
+                elif ch:
+                    key, why = production_size(prod, ch, aspect, mset)
+            if not key and not why:
+                continue
+            cur = (s.get("slots") or {}).get(slot)
+            cur_im = cur.get("image") if isinstance(cur, dict) else None
+            if isinstance(cur_im, dict) and (cur_im.get("from") or {}).get("kind") in ("upload", "brand") and cur_im.get("status") != "empty":
+                got["kept"] += 1   # a person's own picture stays
+                continue
+            if not key:   # Production has pictures for this slot, none of the right shape: empty, with why, never a wrong crop
+                _slots(s)[slot] = unfit(aspect, why)
+                got["held"].append({"slide": sid, "slot": slot, "message": why[:REASON_MAX]})
+                continue
+            val, asset = production_slot(prod, key, aspect, names)
+            if asset:
+                register_assets(deck, {val["image"]["asset"]: asset})
+                got["placed"] += 1
+            else:
+                got["held"].append({"slide": sid, "slot": slot, "message": val["image"]["reason"]})
+            _slots(s)[slot] = val
+    deck["meta"]["production"] = {"project_id": (prod.get("project") or {}).get("id"), "title": (prod.get("project") or {}).get("title"),
+                                  "data_sha256": (prod.get("bundle") or {}).get("clan_sha256"), "offer_sha256": prod.get("offer_sha256"),
+                                  "taken": 1, "at": prod.get("taken_at"), "how": "bundle", "placed": got["placed"], "held": len(got["held"])}
     return got
 
 
@@ -709,6 +932,12 @@ def drawn(deck: dict, audience: str) -> dict:
             continue
         out[(sid, name)] = im
     return out
+
+
+def picture_label(im: dict, default: str) -> str:
+    """The label a review render draws on a picture not yet approved: the fixed ``Production`` for a Production Tool picture (deck-prod-assets Q2),
+    else the deck's own label (``Illustrative`` unless the person set another). The renderers place it by deck-look's rule, whatever the word."""
+    return spec.PRODUCTION_LABEL if (im.get("from") or {}).get("kind") == "production" else default
 
 
 def approval_names_asset(im: dict) -> bool:
