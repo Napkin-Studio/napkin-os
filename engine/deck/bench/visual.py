@@ -536,6 +536,7 @@ def plan_cost(key: dict, images: Path, model: str, orders: int, max_usd: float, 
               max_deck_usd: float = DECK_CAP_USD) -> dict:
     """The cost card from the real token estimate of every call (each picture's size and the real prompt text), with a
     card id that ``--yes-cost`` must repeat: the id covers the calls, the estimate, the model and both caps."""
+    max_deck_usd = min(float(max_deck_usd), DECK_CAP_USD)   # the per-deck cap is a ceiling: a flag cannot raise it
     items = rubric_items()
     system = prompt_text()
     est_in = worst = 0.0
@@ -565,6 +566,7 @@ def run(key: dict, images: Path, transport, *, model: str = PRIMARY["model"], or
     rubric = load_rubric()
     items = rubric_items(rubric)
     psha = prompt_sha()
+    max_deck_usd = min(float(max_deck_usd), DECK_CAP_USD)   # the per-deck cap is a ceiling: a flag cannot raise it
     budget = vt.Budget(max_usd, max_deck_usd)
     system = prompt_text()
     if live:

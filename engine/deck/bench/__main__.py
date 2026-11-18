@@ -111,7 +111,7 @@ def main(argv=None) -> int:
     n_.add_argument("--recordings", type=Path, help="replay recorded replies from here (free)")
     n_.add_argument("--record-to", type=Path, help="save each live reply here")
     n_.add_argument("--live", action="store_true", help="make paid calls with the API key")
-    n_.add_argument("--max-deck-usd", type=float, default=visual_mod.DECK_CAP_USD, help="cap per deck (default 0.40)")
+    n_.add_argument("--max-deck-usd", type=float, default=visual_mod.DECK_CAP_USD, help="cap per deck (default and ceiling 0.40)")
     n_.add_argument("--yes-cost", metavar="CARD_ID", help="the id printed on the cost card: a live run is refused without it")
     n_.add_argument("--out", type=Path, required=True)
     g_ = vs.add_parser("agree", help="grade the critic and the code baseline against a person; write the trust file")
@@ -121,6 +121,8 @@ def main(argv=None) -> int:
     g_.add_argument("--out", type=Path, default=visual_mod.TRUST_PATH)
     g_.add_argument("--seed", type=int, default=0)
     a = ap.parse_args(argv)
+    if getattr(a, "max_deck_usd", None) is not None and a.max_deck_usd > visual_mod.DECK_CAP_USD:
+        ap.error(f"--max-deck-usd {a.max_deck_usd}: the per-deck cap is at most {visual_mod.DECK_CAP_USD:.2f}")
     try:
         if a.cmd == "visual":
             return _visual(a)

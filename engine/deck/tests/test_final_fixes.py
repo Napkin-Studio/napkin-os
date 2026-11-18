@@ -218,3 +218,63 @@ def test_with_no_mark_data_a_live_shorten_is_refused_and_nothing_is_sent(tmp_pat
     assert edits is None and called == [] and "no mark data" in skipped[0]["why"]
     ctx["inp"] = __import__("types").SimpleNamespace(marks=[])   # an empty list is a real answer
     assert repair.get_reply(ctx, 1, TR.REQ, [])[0] == [] and len(called) == 1
+
+
+# ---------------------------------------------------------------- minors
+
+from test_images_gen import hermetic, stages as image_stages  # noqa: E402,F401  (fixtures: no network, a copy of the demo stages)
+
+
+def test_no_layout_plan_resets_planned_slots_and_their_prompts(monkeypatch, image_stages, tmp_path):
+    import test_images_gen as TG
+    TG.with_subjects(monkeypatch, image_stages, tmp_path)
+    d, text = TG.go(image_stages, tmp_path / "o", "--images", "plan", "--no-layout-plan")
+    assert "card" in text
+    left = [(sid, k, im.get("status")) for sid, s in d["slides"].items() for k, v in (s.get("slots") or {}).items()
+            for im in [v.get("image") if isinstance(v, dict) else None] if im and (im.get("status") == "planned" or im.get("prompt") or im.get("subject"))]
+    assert left == [], f"planned slots kept their prompt and subject in deck.json under --no-layout-plan: {left[:3]}"
+
+
+def test_the_critic_deck_cap_cannot_be_raised_by_a_flag(tmp_path):
+    from deck.bench import visual as V
+    from deck.bench.__main__ import main as bench_main
+    assert V.DECK_CAP_USD == 0.40
+    with pytest.raises(SystemExit) as e:
+        bench_main(["visual", "run", "--key", "k.json", "--images", str(tmp_path), "--max-usd", "5", "--max-deck-usd", "2.0", "--out", str(tmp_path / "o")])
+    assert e.value.code == 2
+    # and a caller that skips the CLI is clamped too
+    card = V.plan_cost({"slides": {}}, tmp_path, V.PRIMARY["model"], 1, 5.0, max_deck_usd=9.0)
+    assert "$0.40 a deck" in card["text"]
+
+
+def test_the_territory_card_falls_back_to_the_current_prices_and_hides_no_bug(monkeypatch):
+    import sys
+    from territory import cost
+    assert cost._FALLBACK == {"claude-sonnet-5-5": (2.0, 10.0), "claude-opus-5-5": (4.0, 20.0)}
+    from deck import spec
+    assert cost._FALLBACK == {m: spec.PRICE_PER_MTOK[m] for m in cost._FALLBACK}
+    monkeypatch.setitem(sys.modules, "deck", None)   # the deck package cannot be imported: the card's own table
+    assert cost._price("claude-opus-5-5", 1_000_000, 1_000_000) == 24.0
+    monkeypatch.undo()
+    monkeypatch.setattr(spec, "estimate_usd", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("a real bug")))
+    with pytest.raises(RuntimeError):   # a bare except used to swallow this
+        cost._price("claude-opus-5-5", 1, 1)
+
+
+def test_the_docs_and_the_code_agree_on_the_defaults():
+    deck_dir = Path(run_deck.__file__).parent
+    src = (deck_dir / "run_deck.py").read_text()
+    assert "absent means preserve" not in src and "also when absent" not in src
+    assert "does not apply them yet" not in (deck_dir / "spec.py").read_text()
+    contract = (deck_dir.parents[1] / "docs" / "contracts" / "deck-visuals.md").read_text()
+    assert "behaves as it does today (no pictures" not in contract and "spec.DENSITY_DEFAULTS" in contract
+    assert "0.65 to 1.25" not in (deck_dir / "server.py").read_text()
+    from deck import spec
+    assert spec.DENSITY_DEFAULTS == {"pitch": "lean", "full": "detailed"}
+
+
+def test_a_pitch_with_no_density_flag_builds_lean_and_no_text_mode_means_no_loop_shorten(tmp_path):
+    out = _build(tmp_path / "o")   # the default path: no --density, no --text-mode
+    d = json.loads((out / "deck.json").read_text())
+    assert d["meta"]["preferences"]["density"] == {"level": "lean", "source": "default"}
+    assert "text_mode" not in d["meta"]["preferences"]
