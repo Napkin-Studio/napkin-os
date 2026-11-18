@@ -290,7 +290,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   /** What an end is called in the hint and the picker. */
   const word = (e: CanvasElement) => {
     const c = cardOf(e)
-    return c ? WORD[c.kind] : briefOfElement(e) ? 'brief' : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
+    return c ? WORD[c.kind] : briefOfElement(e) ? 'brief' : (e.customData as { kind?: string } | undefined)?.kind === 'format_set' ? 'sizes' : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
   }
 
   const selectedAtPress = useRef<readonly string[]>([])
@@ -550,7 +550,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const hover = pointerAt ? endAt(pointerAt) : undefined
   // A selected picture or sketch area gets a port too (single selection).
   const lone = view.selectedIds.length === 1 ? els.find((e) => e.id === view.selectedIds[0] && !cardOf(e)) : undefined
-  const lonePort = lone && mode !== 'link' && endOf(lone, live) ? lone : undefined
+  // A Format set is only ever a target: no port to drag from.
+  const lonePort = lone && mode !== 'link' && endOf(lone, live) && (lone.customData as { kind?: string } | undefined)?.kind !== 'format_set' ? lone : undefined
   // The key groups, labelled; one selected whole gets a port at its right edge (it links the key).
   const groups = keyGroupsOn(els, live)
   const groupSel = mode !== 'link' ? selectedKeyGroup() : null
