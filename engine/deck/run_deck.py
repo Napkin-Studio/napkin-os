@@ -211,9 +211,10 @@ def to_pdf(pptx, outdir, timeout: int = 180):
                               check=True, capture_output=True, timeout=timeout, env=env)
     finally:
         shutil.rmtree(profile, ignore_errors=True)
-    pdf = Path(outdir) / (Path(pptx).stem + ".pdf")
-    if spec.LOOK_V3 and pdf.exists():
-        check_pdf_fonts(pptx, pdf)
+    if spec.LOOK_V3 and pptx and outdir:   # a test seam may pass no pptx: nothing was rendered, so nothing to check
+        pdf = Path(outdir) / (Path(pptx).stem + ".pdf")
+        if pdf.exists():
+            check_pdf_fonts(pptx, pdf)
     return done
 
 
