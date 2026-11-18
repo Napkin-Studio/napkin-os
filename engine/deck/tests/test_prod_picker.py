@@ -479,6 +479,13 @@ def test_importing_the_picker_loads_no_provider_module():
 
 # ---------------------------------------------------------------- P6 a person's swap, and what the app reads
 
+def _deck6():
+    """_deck with the engine's own slide ids (s01 ...): a swap and the app's schema name slides sNN."""
+    d = _deck()
+    ren = {sid: f"s{int(sid[1:]):02d}" for sid in d["order"]}
+    return {"meta": d["meta"], "order": [ren[x] for x in d["order"]], "slides": {ren[k]: v for k, v in d["slides"].items()}}
+
+
 def test_a_persons_swap_wins_among_the_slots_candidates_and_is_recorded_in_the_stages(tmp_path):
     twin = mb.uid("size", 9)   # a second 9:16 social size, flagged in Production: a candidate, never the rule's pick
 
@@ -486,34 +493,34 @@ def test_a_persons_swap_wins_among_the_slots_candidates_and_is_recorded_in_the_s
         d["sizes"][twin] = {**copy.deepcopy(d["sizes"][mb.S_STORY]), "id": twin, "status": "look"}
     src = pp.Source(clan(tmp_path, mutate=mut, embed=("story", "master")))
     st = tmp_path / "st"
-    d = _deck()
-    res = pp.run(d, src, st, choices={"s3.picture": {"key": twin, "by": "You", "at": "2026-11-18T10:00:00Z"}})
+    d = _deck6()
+    res = pp.run(d, src, st, choices={"s03.picture": {"key": twin, "by": "You", "at": "2026-11-18T10:00:00Z"}})
     pk = {p["slot"]: p for p in res["picker"]["picks"]}
-    assert pk["s3.picture"]["key"] == twin and pk["s3.picture"]["by"] == "person" and _im(d, "s3")["from"]["key"] == twin
-    assert _im(d, "s3")["status"] == "flagged"                                                     # Production's own flag still shows
-    assert {t["key"] for t in pk["s3.picture"]["eligible"]} >= {mb.S_STORY, twin}                  # the rule's pick and the other fits
-    assert all({"key", "label", "reach", "rights", "status"} <= set(t) for t in pk["s3.picture"]["eligible"])
+    assert pk["s03.picture"]["key"] == twin and pk["s03.picture"]["by"] == "person" and _im(d, "s03")["from"]["key"] == twin
+    assert _im(d, "s03")["status"] == "flagged"                                                     # Production's own flag still shows
+    assert {t["key"] for t in pk["s03.picture"]["eligible"]} >= {mb.S_STORY, twin}                  # the rule's pick and the other fits
+    assert all({"key", "label", "reach", "rights", "status"} <= set(t) for t in pk["s03.picture"]["eligible"])
     rec = json.loads((st / pp.CHOICES_FILE).read_text())
-    assert rec["choices"]["s3.picture"]["key"] == twin
-    d2 = _deck()   # a later build with no new swap keeps the recorded one
+    assert rec["choices"]["s03.picture"]["key"] == twin
+    d2 = _deck6()   # a later build with no new swap keeps the recorded one
     res2 = pp.run(d2, src, st)
-    assert {p["slot"]: p["by"] for p in res2["picker"]["picks"]}["s3.picture"] == "person" and _im(d2, "s3")["from"]["key"] == twin
+    assert {p["slot"]: p["by"] for p in res2["picker"]["picks"]}["s03.picture"] == "person" and _im(d2, "s03")["from"]["key"] == twin
 
 
 def test_a_swap_to_a_key_that_is_not_a_candidate_is_ignored_with_a_note(tmp_path):
-    d = _deck()
-    res = pp.run(d, pp.Source(clan(tmp_path, embed=("story",))), tmp_path / "st", choices={"s3.picture": {"key": mb.F2, "by": "You", "at": "t"}})
-    pk = {p["slot"]: p for p in res["picker"]["picks"]}["s3.picture"]
+    d = _deck6()
+    res = pp.run(d, pp.Source(clan(tmp_path, embed=("story",))), tmp_path / "st", choices={"s03.picture": {"key": mb.F2, "by": "You", "at": "t"}})
+    pk = {p["slot"]: p for p in res["picker"]["picks"]}["s03.picture"]
     assert pk["key"] == mb.S_STORY and pk["by"] == "rule" and "does not fit this slot" in pk["note"]
 
 
 def test_a_swap_to_a_picture_waiting_for_its_rights_is_held_never_placed(tmp_path):
     old = f"{mb.FSET_OLD}#master"
-    d = _deck()
+    d = _deck6()
     res = pp.run(d, pp.Source(clan(tmp_path, embed=("master", "upload_master"))), tmp_path / "st",
-                 choices={"s1.picture": {"key": old, "by": "You", "at": "t"}})
-    assert _im(d, "s1")["status"] == "empty" and _im(d, "s1")["reason"].startswith(spec.RIGHTS_TO_SUPPLY) and _im(d, "s2")["status"] == "made"
-    assert {p["slot"]: p["from"] for p in res["picker"]["picks"]}["s1.picture"] == "rights" and "waiting for rights" in res["card"]
+                 choices={"s01.picture": {"key": old, "by": "You", "at": "t"}})
+    assert _im(d, "s01")["status"] == "empty" and _im(d, "s01")["reason"].startswith(spec.RIGHTS_TO_SUPPLY) and _im(d, "s02")["status"] == "made"
+    assert {p["slot"]: p["from"] for p in res["picker"]["picks"]}["s01.picture"] == "rights" and "waiting for rights" in res["card"]
 
 
 def test_the_apps_review_production_reads_as_choices():
@@ -524,11 +531,11 @@ def test_the_apps_review_production_reads_as_choices():
 
 def test_the_payload_gives_the_app_the_picker_without_a_location(tmp_path):
     from deck import run_state
-    d = _deck()
+    d = _deck6()
     res = pp.run(d, pp.Source(clan(tmp_path, embed=("master",))), tmp_path / "st")
     pv = run_state.production_payload({"production": {"picker": res["picker"], "card": res["card"]}})
     assert pv["card"] == res["card"] and pv["fetch"] == {"on": False, "allow_list_empty": True} and pv["look"] == {"on": False}
-    assert {p["slot"] for p in pv["picks"]} == {"s1.picture", "s2.picture", "s3.picture", "s4.picture", "s5.picture"}
+    assert {p["slot"] for p in pv["picks"]} == {"s01.picture", "s02.picture", "s03.picture", "s04.picture", "s05.picture"}
     assert "/out/" not in json.dumps(pv) and "log" not in json.dumps(pv["fetch"])
     assert run_state.production_payload({}) is None
     schema = json.loads((HERE.parents[2] / "app" / "templates" / "deck-maker" / "schema.json").read_text())

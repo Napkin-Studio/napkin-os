@@ -388,8 +388,9 @@ def clean_choices(raw) -> dict:
 
 def choices_from_review(review) -> dict:
     """``review.production`` as the app writes it ({slide: {slot: {key, by, at}}}) as ``{"sNN.slot": {key, by, at}}``."""
-    rp = (review or {}).get("production") if isinstance(review, dict) else None
-    flat = {f"{sid}.{slot}": c for sid, slots in (rp or {}).items() if isinstance(slots, dict) for slot, c in slots.items()}
+    rp = review.get("production") if isinstance(review, dict) else None
+    rp = rp if isinstance(rp, dict) else {}
+    flat = {f"{sid}.{slot}": c for sid, slots in rp.items() if isinstance(slots, dict) for slot, c in slots.items()}
     return clean_choices(flat)
 
 
