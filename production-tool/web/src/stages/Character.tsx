@@ -806,7 +806,7 @@ export function Character({ initial, active, onPictureEditor }: {
         {showHint && <StartCard env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} onPictures={() => { if (!panels.assets) panels.toggle('assets') }} />}
         {/* Boards are frames on the canvas (⌥1…⌥9 jump, ⌥0 fits); on touch, with no ⌥, the Boards pill opens the jump sheet. */}
         {narrow && <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow keys={!own} />}
-        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} vertical={narrow} />
+        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={config.flags.briefNode ? () => panels.openAssets('napkin') : undefined} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
         {!showHint && <LinksToggle chrome={chrome} />}
       </div>

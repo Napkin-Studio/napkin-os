@@ -18,8 +18,6 @@ import { setText, TEXT_SIZE_PX, useTextChoice } from './textStyle'
 import { canvasActions } from './actions'
 import { copyLabel } from '../core/sketchCopy'
 import { RATIOS, type Ratio } from '../../contracts/types'
-import { usePanels } from '../../ui/chrome/panels'
-import { useConfig } from '../../app/context'
 import './canvas.css'
 
 /** What the canvas below can do through the chrome's actions (actions.ts), kept current. */
@@ -146,12 +144,14 @@ const ICON: Record<string, ReactNode> = {
 
 export type NewNode = 'script' | 'storyboard' | 'video' | 'picture' | 'sketch'
 
-export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
+export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false }: {
   chrome: CanvasChrome | null
   /** The storyboard's ratio: the sketch area's shape (ui-behaviour 3.7). */
   ratio: string
   /** A node the canvas cannot make itself (a picture, a sketch area; on Excalidraw, a node to open). */
   onNode: (kind: NewNode) => void
+  /** Briefs on (flag briefNode): opens Assets › From Napkin, where the agency's briefs are. Absent, no brief row. */
+  onBrief?: () => void
   /** iPad (mock TabletCanvas): a column on the left, each tool with its name, 44px targets, undo and redo in it. */
   vertical?: boolean
 }) {
@@ -161,8 +161,6 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   // The pen's options: applied to the engine always, shown while the pen is in use.
   const pen = usePenChoice(chrome)
   const actions = useActions()
-  const panels = usePanels()
-  const { config } = useConfig()
   const nodeRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
   // The next sketch area's shape (ui-behaviour 3.7): the storyboard's ratio until the person picks one.
@@ -241,7 +239,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {row('sketch', <>{sketchIcon}A sketch area</>, ratio, has('sketch'), 'Sketch areas are not on this canvas yet', () => onNode('sketch'))}
       {row('board', <>{ICON.board}A board</>, 'B', actions.canBoard, 'New boards need the new canvas (it has boards as frames)', () => canvasActions.board())}
       {/* A brief comes from Brief Maker, never typed here: Assets › From Napkin lists the agency's (features/brief-node.clan). */}
-      {config.flags.briefNode && row('brief', <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" /><path d="M7 13h10M7 16h6" /></svg>A brief from Brief Maker…</>, null, actions.canNode, 'Briefs need the new canvas', () => panels.openAssets('napkin'))}
+      {onBrief && row('brief', <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" /><path d="M7 13h10M7 16h6" /></svg>A brief from Brief Maker…</>, null, actions.canNode, 'Briefs need the new canvas', onBrief)}
     </>
   )
   const nodeButton = (
