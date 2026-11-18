@@ -521,6 +521,24 @@ export function Character({ initial, active, onPictureEditor }: {
   // sat half under the tool rail, and the Booth's column opening took the right edge). One node or picture,
   // once per selection, after the Booth has slid in; never mid-drag, and not after the person moved it.
   const oneSel = vs?.selected.length === 1 ? vs.selected[0] : ''
+  // A click (not a drag) on the canvas or a card asks again: clicking the node already selected brings it back.
+  const [clicked, setClicked] = useState(0)
+  useEffect(() => {
+    const el = wrap.current
+    if (!el) return
+    let down: { x: number; y: number } | null = null
+    const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY } }
+    const onUp = (e: PointerEvent) => {
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) setClicked((n) => n + 1)
+      down = null
+    }
+    el.addEventListener('pointerdown', onDown, true)
+    el.addEventListener('pointerup', onUp, true)
+    return () => {
+      el.removeEventListener('pointerdown', onDown, true)
+      el.removeEventListener('pointerup', onUp, true)
+    }
+  }, [canvas])
   useEffect(() => {
     if (!canvas || !oneSel || !own || linkMode) return
     const at = canvas.elements().find((e) => e.id === oneSel)
@@ -540,7 +558,7 @@ export function Character({ initial, active, onPictureEditor }: {
     }
     t = setTimeout(reveal, 480)
     return () => clearTimeout(t)
-  }, [canvas, own, oneSel, railInset, linkMode])
+  }, [canvas, own, oneSel, railInset, linkMode, clicked])
   // A picture named on no board goes to its role's board: "Moved to Characters · Undo" (board-autolayout).
   useEffect(() => ctrl?.onRouted((r) => {
     const e = canvas?.elements().find((x) => x.id === r.ids[0])
