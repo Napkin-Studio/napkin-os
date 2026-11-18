@@ -388,7 +388,7 @@ function reconEnv(locked = false) {
   const classes = new Set<string>()
   const walker = { innerHTML: '', classList: { contains: (c: string) => classes.has(c), toggle: (c: string, on: boolean) => { if (on) classes.add(c); else classes.delete(c) } } }
   const env = {
-    RECON, arr, walker, esc, ROLE_NM: {},
+    RECON, arr, walker, esc, ROLE_NM: {}, sideAgent: () => {},
     $: (id: string) => (id === 'walker' ? walker : null),
     calm: () => false,
     setTimeout: () => 0, clearTimeout: () => {},
