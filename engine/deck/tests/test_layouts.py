@@ -386,3 +386,37 @@ def test_golden_slots_validate_against_their_layout(rel):
         lay = LIB[s["layout"]["id"]]
         for name, v in s["slots"].items():
             assert name in lay["slots"] and lay["slots"][name]["kind"] == v["kind"]
+
+
+# ---------------------------------------------------------------------------------------------------------- the hook
+def _over_limit_deck():
+    return with_slide("s05", "audience", [{"kind": "statement", "text": "word " * 120}])
+
+
+def test_a_shorten_hook_that_answers_none_equals_no_hook():
+    d = _over_limit_deck()
+    a = layouts.plan(d, hooks={"shorten": lambda *x: None})
+    b = layouts.plan(d)
+    assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+def test_a_shorten_hook_that_gives_text_binds_that_text_to_the_slot_only():
+    d = _over_limit_deck()
+    seen = []
+
+    def hook(sid, slot, limits, fields):
+        seen.append((sid, slot, limits, fields))
+        return {"text": {f"{fields[0][0]}": "A short line."}}
+    p, issues, pending = layouts.plan(d, hooks={"shorten": hook})
+    s = p["slides"]["s05"]
+    assert seen and seen[0][1] in s["slots"] and s["slots"][seen[0][1]]["text"] == "A short line."
+    assert s["blocks"] == d["slides"]["s05"]["blocks"]   # the blocks are never edited by the plan
+    assert not pending
+
+
+def test_a_deferred_hook_lists_the_slot_in_pending_and_skips_the_notes_rung():
+    d = _over_limit_deck()
+    p, _, pending = layouts.plan(d, prefs={"density": "lean"}, hooks={"shorten": lambda *a: {"deferred": True}})
+    hit = [x for x in pending if x["slide"] == "s05"]
+    assert hit and hit[0]["rungs"][0] == "shorten"
+    assert p["slides"]["s05"]["layout"]["fit"]["moved"] == []
