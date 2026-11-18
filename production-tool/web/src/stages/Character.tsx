@@ -44,7 +44,7 @@ import { AskCard } from '../ui/AskCard'
 import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
-import { scriptToWrite, showStartCard } from './startCard'
+import { hasWork, scriptToWrite, showStartCard } from './startCard'
 import { StartCard } from './FilmStart'
 import { useBriefSpinoff } from '../brief/useBriefSpinoff'
 import { BriefBooth } from '../brief/BriefBooth'
@@ -492,7 +492,9 @@ export function Character({ initial, active, onPictureEditor }: {
     }
   }, [docStore, services, canvas, offerUndo])
 
-  const showHint = showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
+  // Only once the canvas has its scene (vs: its first read, after the engine opened it), and never on a document
+  // with work in it (re-test N-E).
+  const showHint = !!vs && !hasWork(doc) && showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
   // A brief spun off from Brief Maker (?brief=<doc id>): its Brief node and a new Script, once (features/brief-node.clan).
   useBriefSpinoff(canvas?.engine === 'own' ? { canvas, doc: docStore } : null, config.flags)
   // Dev only: the canvas for window.__seed.brief (dev/seed.ts), so a Brief node can be put on it in a screenshot.
