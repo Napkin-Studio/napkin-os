@@ -168,8 +168,34 @@ export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set:
   if (!show) return laid
   const f = formatById(size.format.format_id)
   const fr = f ? rowFracs({ format: f.format }) : ([0, 0, 0, 0] as const)
-  const caps = captionLayers(d, size.edl ?? [], want?.box ?? captionBox(fr), brandKit(d).colour, size.delivery.height)
+  const caps = withoutRepeats(captionLayers(d, size.edl ?? [], want?.box ?? captionBox(fr), brandKit(d).colour, size.delivery.height), laid)
   return [...laid, ...caps.map((c) => (want?.scale && c.sizeFrac ? { ...c, sizeFrac: Math.min(0.5, c.sizeFrac * want.scale) } : c))].slice(0, 40)
+}
+
+const sameWords = (a?: string, b?: string) => {
+  const n = (x?: string) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  return !!n(a) && n(a) === n(b)
+}
+
+/** The captions, none saying the same words as a line or legal on screen at the same time (re-test N-G: the 1:1
+ *  showed "Lumo. Calm, on." twice, as the spoken line's caption and as the words on every version). A caption
+ *  that starts before the line ends where the line starts; one that starts under it goes. */
+export function withoutRepeats(caps: TypeLayer[], laid: readonly TypeLayer[]): TypeLayer[] {
+  const out: TypeLayer[] = []
+  for (const c of caps) {
+    let cap: TypeLayer | null = c
+    for (const l of laid) {
+      if (!cap || l.kind === 'logo' || !sameWords(cap.text, l.text)) continue
+      const cf: number = cap.fromS ?? 0
+      const ct: number = cap.toS ?? Infinity
+      const lf: number = l.fromS ?? 0
+      const lt: number = l.toS ?? Infinity
+      if (ct <= lf || cf >= lt) continue
+      cap = cf < lf - 0.25 ? { ...cap, toS: lf } : null
+    }
+    if (cap) out.push(cap)
+  }
+  return out
 }
 
 /** Make the film's sizes: the set, its sizes on the Film lane of a Campaign board, the paid reframes each

@@ -13,7 +13,7 @@ import type { Relay } from '../relay/types'
 import { MAYA, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addShots, addTake, job } from '../test/model'
 import { alephRatio, captionLayers, cropKeys, edlFor, filmLength, fitWindows, isSocialShape, masterShots, reframeKey, reframesOf } from './film'
-import { cutdownInput, filmLayers } from './filmJobs'
+import { cutdownInput, filmLayers, withoutRepeats } from './filmJobs'
 import { checksFor } from './checks'
 import { fileName } from './exportZip'
 
@@ -156,5 +156,22 @@ describe('the jobs', () => {
     const r = { for: 'reframe' as const, setId: 'fset_01K7C00000000000000000FS01', key: 'take_01K7C00000000000000000TK01@1080x1920' }
     expect(purposeOf({ purpose: purposeWords(r), node: { kind: 'format_set', id: r.setId }, inputs: [] })).toEqual(r)
     expect(purposeOf({ purpose: 'film_plan', node: { kind: 'video', id: 'video_01K7C00000000000000000VD01' }, inputs: [] })).toEqual({ for: 'film_plan', videoId: 'video_01K7C00000000000000000VD01' })
+  })
+})
+
+describe('the words shown once (re-test N-G)', () => {
+  const box = { x: 0.1, y: 0.8, w: 0.8, h: 0.1 }
+  const line = { kind: 'line' as const, box, text: 'Lumo. Calm, on.', fromS: 0, toS: 2 }
+  it('a caption of the same words as the line on screen goes; other captions stay', () => {
+    const caps = [
+      { kind: 'captions' as const, box, text: 'lumo — calm, on', fromS: 0, toS: 2 },
+      { kind: 'captions' as const, box, text: 'Every night, a little light.', fromS: 0, toS: 2 },
+    ]
+    expect(withoutRepeats(caps, [line]).map((c) => c.text)).toEqual(['Every night, a little light.'])
+  })
+  it('one that starts before the line ends where the line starts; one at another time stays whole', () => {
+    const late = { ...line, fromS: 5, toS: 8 }
+    const caps = [{ kind: 'captions' as const, box, text: 'Lumo. Calm, on.', fromS: 3, toS: 8 }, { kind: 'captions' as const, box, text: 'Lumo. Calm, on.', fromS: 0, toS: 2 }]
+    expect(withoutRepeats(caps, [late]).map((c) => [c.fromS, c.toS])).toEqual([[3, 5], [0, 2]])
   })
 })
