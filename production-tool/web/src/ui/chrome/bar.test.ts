@@ -4,8 +4,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { HomeMark, MarkTile } from './Bar'
 import { StudioMark } from '../Mark'
-import { CopyLinkLater } from './MoreMenu'
-import { NOT_YET } from './panels'
 
 const TRIANGLE = 'M2 11 L7 3 L12 11 Z'
 
@@ -43,13 +41,11 @@ describe('the document menu holds what More held; secondary actions live there',
     expect(editor).toContain('<Band ')
     expect(src('../../script/ScriptEditor.tsx')).toContain('<EditorBar className="se-top"')
   })
-  it('Copy link to this: enabled in Script (it has a route), off with the reason in Storyboard, Video and Image', () => {
+  it('every editor\'s menu has the document rows, and no dead Copy link to this (live test 2026-11-18)', () => {
     expect(src('../../script/ScriptEditor.tsx')).toMatch(/<MenuItem icon=\{<LinkIcon \/>\} onSelect=\{[^]*?\}>Copy link to this<\/MenuItem>/)
-    for (const f of ['Storyboard', 'Video', 'ImageEditor']) expect(src(`../../stages/${f}.tsx`)).toContain('more={() => <CopyLinkLater />}')
-    const html = renderToStaticMarkup(createElement(CopyLinkLater))
-    expect(html).toContain('disabled=""')
-    expect(html).toContain(NOT_YET)
-    expect(html).toContain('Copy link to this')
+    for (const f of ['Storyboard', 'Video', 'ImageEditor']) expect(src(`../../stages/${f}.tsx`)).not.toContain('CopyLinkLater')
+    expect(src('../../rooms/Rooms.tsx')).not.toContain('CopyLinkLater')
+    expect(bars).toContain('<CanvasMoreItems close={close} share={false} />')
   })
   it('Storyboard does not repeat the project name, and every title carries its full text for the tooltip', () => {
     expect(src('../../stages/Storyboard.tsx')).not.toContain('<span className="pt-project">{projectName}</span>')

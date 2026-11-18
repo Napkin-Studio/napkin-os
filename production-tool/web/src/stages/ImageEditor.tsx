@@ -35,7 +35,6 @@ import { mediaItem } from '../media/names'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { newId } from '../lib/ulid'
 import { sendWithRow, type UnsentEdit } from './imageEditor/edits'
-import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Float } from '../ui/Float'
 import { Booth } from '../ui/booth/Booth'
@@ -507,7 +506,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             </div>
           </>
         )}
-        more={() => <CopyLinkLater />}
         primary={<button type="button" className="btn primary" disabled={running || !work || !framePic} onClick={apply}
           title={n ? applyWords : 'Make an edit first'}>Apply as new version</button>} />
       <Float anchor={versionsBtn} open={versionsOpen} onClose={() => setVersionsOpen(false)} align="end" label={`Versions of ${subject.label}`} className="ie-versions">

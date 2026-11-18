@@ -42,7 +42,6 @@ import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
 import { currentRender, currentTake, genModel, isImplicit, mainVideo, openVideo, reviewsList, shotFrameAsset, shotNumber, shotSegment, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
-import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { nodeTitle } from '../ui/chrome/panels'
 import './video.css'
 import { SoundView } from './SoundView'
@@ -243,7 +242,6 @@ export function Video() {
       meta={<><span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>
         {video && <QualityDefault videoId={video.id} />}</>}
       view={{ label: 'View', value: view, onPick: (v) => setView(v as typeof view), options: [{ id: 'picture', label: 'Picture' }, { id: 'sound', label: 'Sound' }] }}
-      more={() => <CopyLinkLater />}
       right={<>
         {film && video ? (
           // Make all N: every video of the ad not made yet (the tray first, as before).

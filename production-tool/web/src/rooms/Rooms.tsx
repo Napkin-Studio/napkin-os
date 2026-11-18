@@ -28,7 +28,6 @@ import { EditRoom, RenderAd } from './EditRoom'
 import { MakeRoom } from './MakeRoom'
 import { RoomBooth, RoomWaits } from './RoomBooth'
 import { EditorBar } from '../ui/chrome/TopBars'
-import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { filmMeta, jobWord, roomBoxes, roomGens, type Box, type Gen } from './model'
 import type { Picked } from './Timeline'
 import './rooms.css'
@@ -156,7 +155,7 @@ export function Rooms() {
     <div className="editor rooms" data-room={room}>
       {/* The shell bar and the band (mock production-new-ui-v2 make, edit): Make | Edit, the film's length, what
           is being made, Open Sound, undo; Go to Edit or Render ad in the bar. */}
-      <EditorBar back="Canvas" onBack={back} icon="video" title="Film" undo more={() => <CopyLinkLater />}
+      <EditorBar back="Canvas" onBack={back} icon="video" title="Film" undo
         view={{ label: 'Room', value: room, options: [{ id: 'make', label: 'Make' }, { id: 'edit', label: 'Edit' }], onPick: (v) => setRoom(v as RoomName) }}
         afterView={<><span className="rm-meta pt-mono" title="The film's length now, and the length it is aiming for">{filmMeta(data.ratio, data.lengthS, data.targetS)}</span>
           {room === 'edit' && !sound && <span ref={setViewSlot} className="rm-bandview" />}</>}

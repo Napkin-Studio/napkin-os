@@ -46,7 +46,6 @@ import { addShot, answerShotAsk, clipsBehindLine, setRatio, setTarget } from './
 import { scriptRoute } from '../app/route'
 import { insertShot } from '../script/edits'
 import { EditorBar } from '../ui/chrome/TopBars'
-import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { nodeTitle } from '../ui/chrome/panels'
 import { Float } from '../ui/Float'
 import { trayGroups, type TrayRow } from '../ui/tray'
@@ -244,7 +243,6 @@ export function Storyboard() {
       <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="storyboard"
         undo
         title="Storyboard"
-        more={() => <CopyLinkLater />}
         // The band (mock production-new-ui-v2 sbBand): length, fit, shape and who is at work on the left; how to
         // reorder, undo and + Add shot on the right.
         meta={<>

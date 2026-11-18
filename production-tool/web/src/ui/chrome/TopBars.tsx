@@ -203,6 +203,10 @@ export function EditorBar({ className = '', back, onBack, icon, title, meta, vie
             {view && tight && <ViewItems view={view} close={close} />}
             {more?.(close)}
             {undoMore && <><div className="pt-menusep" /><UndoMenuItems close={close} /></>}
+            {/* The same document rows as on the canvas (live test 2026-11-18: the rooms had only a dead row);
+                Copy link is the bar's Share. */}
+            {(more || undoMore || (view && tight) || moreHead) && <div className="pt-menusep" />}
+            <CanvasMoreItems close={close} share={false} />
           </>
         )} />
       <Band label={`${title}: controls`}>
