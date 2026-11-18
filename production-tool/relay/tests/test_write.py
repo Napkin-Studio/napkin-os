@@ -265,7 +265,7 @@ def test_make_finds_the_model_port_inside_the_claude_director():
     from director.claude import ClaudeDirector
 
     class Inner:
-        per_click_model, prompt_version = "m", "v"
+        per_click_model, shot_list_model, prompt_version = "m", "m", "v"
         port = FakePort({"writes": []})
 
     assert isinstance(writer.make(ClaudeDirector(Inner())), ModelWriter)
