@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "A muddy @dog_rex bounds through the park and leaps into @maya_front's arms, hat flying off."
+     },
+     {
+      "type": "direction",
+      "text": "Wide, then a whip pan to the catch."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to 15 words so the shot plays in 2.5 seconds."
+   }
+  ],
+  "rationale": "The action line was 18 words (3 s); trimming the hat clause to 15 words makes it 2.5 s by rule 10, with names, order and direction kept."
+ }
+}

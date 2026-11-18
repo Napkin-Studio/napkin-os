@@ -65,7 +65,9 @@
 .nui .p33-drow.old { opacity: .6; }
 .nui .p33-drow details > code { display: block; margin: 6px 0; }
 .nui .p33-drow details .dp-ex { padding: 8px 0 0; }
-.nui .dial .dz[aria-disabled="true"] { opacity: .55; }
+/* A Soon quadrant dims its icon and words, never its fill: the whole group at .55 let the desk print
+   through the dial (live test 2026-11-16). */
+.nui .dial .dz[aria-disabled="true"] > :not(path) { opacity: .55; }
 
 /* The drawer sits over the document as it does over the desk. */
 .nui .dtree-drawer .dp-err { margin: 0; }

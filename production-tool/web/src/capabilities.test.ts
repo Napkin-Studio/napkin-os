@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { controlsFor, effectiveConfig, routedProvider, type Controls } from './capabilities'
-import { CONFIGS } from './contracts/load'
+import { CONFIGS, SHEETS, withDefaults } from './contracts/load'
+import type { ConfigFile } from './contracts/types'
 
 const every = (c: Controls) => Object.entries(c).filter(([, v]) => !v).map(([k]) => k)
 
@@ -10,9 +11,11 @@ describe('capability gating', () => {
     expect(every(c)).toEqual([])
   })
 
-  it('Runway hides the mask brush, click-select, angles and the strength control', () => {
+  it('Runway hides click-select, angles and the strength control, and takes a mask on Ideogram', () => {
     const c = controlsFor(effectiveConfig('allon', 'runway'))
-    expect(c.maskBrush).toBe(false)
+    // region_edit runs on ideogram_4_5, which takes a mask (features/image-editor.clan)
+    expect(c.maskBrush).toBe(true)
+    expect(c.upscale).toBe(true)
     expect(c.clickSelect).toBe(false)
     expect(c.angles).toBe(false)
     expect(c.series).toBe(false)
@@ -31,9 +34,8 @@ describe('capability gating', () => {
 
   it('a flag that is off hides the control even when the provider can do it', () => {
     const cfg = effectiveConfig('testing', 'mock')
-    expect(cfg.flags.clickSelect).toBe(false)
+    expect(cfg.flags.feelEdit).toBe(false)
     const c = controlsFor(cfg)
-    expect(c.clickSelect).toBe(false)
     expect(c.feelEdit).toBe(false)
     expect(c.videoRegionEdit).toBe(false)
     expect(c.maskBrush).toBe(true)
@@ -43,7 +45,7 @@ describe('capability gating', () => {
     const cfg = { ...CONFIGS.live, routing: { ...CONFIGS.live.routing, clip: [] } }
     expect(controlsFor(cfg).video).toBe(false)
     const c = controlsFor(CONFIGS.live)
-    expect(c.stitch).toBe(true) // relay-internal: gated by the flag only
+    expect(c.stitch).toBe(true) // relay-internal: gated by video only
     expect(c.generate).toBe(true) // Runway, the only provider routed (features/runway-fallback.clan)
     expect(c.clickSelect).toBe(false) // Runway does not segment
   })
@@ -53,7 +55,6 @@ describe('capability gating', () => {
     expect(c.videoRegionEdit).toBe(false)
     expect(c.feelEdit).toBe(false)
     expect(c.feelStrength).toBe(false)
-    expect(c.regionEditCanvas).toBe(false)
     expect(c.moreOptions).toBe(false)
     expect(c.generate && c.generateMax > 0 && c.views && c.storyboard && c.video && c.stitch).toBe(true)
   })
@@ -66,13 +67,37 @@ describe('capability gating', () => {
       expect(c.videoRegionEdit).toBe(false)
       expect(c.fixInShot, p).toBe(true)
     }
-    const off = { ...CONFIGS.live, flags: { ...CONFIGS.live.flags, regionEditFrames: false } }
+    const off = { ...CONFIGS.live, routing: { ...CONFIGS.live.routing, region_edit: [] } }
     expect(controlsFor(off).fixInShot).toBe(false)
   })
 
   it('reads only the first routed provider', () => {
     const cfg = { ...CONFIGS.live, routing: { ...CONFIGS.live.routing, region_edit: ['runway' as const, 'mock' as const] } }
-    expect(controlsFor(cfg).maskBrush).toBe(false)
-    expect(controlsFor({ ...cfg, routing: { ...cfg.routing, region_edit: ['mock' as const, 'runway' as const] } }).maskBrush).toBe(true)
+    expect(controlsFor(cfg).clickSelect).toBe(false)
+    expect(controlsFor({ ...cfg, routing: { ...cfg.routing, region_edit: ['mock' as const, 'runway' as const] } }).clickSelect).toBe(true)
+  })
+  it('a config.json with none of routing, director or flags reads as the defaults (features/config-defaults.clan)', () => {
+    const file: ConfigFile = {
+      contractVersion: '3', quotas: { image: 40, video: 6, render: 3 }, inFlightPerParticipant: 2,
+      jobTimeoutS: { image: 180, video: 600 }, spend: { capUsd: 1300, warnUsd: 1000 }, banner: '',
+    }
+    const cfg = withDefaults(file)
+    expect(cfg.routing.clip).toEqual(['runway'])
+    expect(cfg.routing.shot_list).toEqual([])
+    expect(cfg.routing.stitch).toEqual([])
+    expect(cfg.routing.cutout).toEqual([])
+    expect(cfg.routing.bridge).toEqual(['runway']) // an op the default does not name
+    expect(cfg.flags).toEqual({ video: true, videoRegionEdit: false, feelEdit: false, moreOptions: false, dogfood: false, clipPatch: false, connectedVideo: true, ownCanvas: true })
+    expect(withDefaults({ ...file, routing: { clip: [] }, flags: { video: false } }).routing.clip).toEqual([])
+    expect(withDefaults(cfg)).toEqual(cfg) // idempotent: the relay's GET /config has them filled
+    const c = controlsFor(cfg)
+    expect(c.generate && c.storyboard && c.regionEditFrames && c.video && c.stitch && c.fixInShot).toBe(true)
+    expect(c.fixMoment || c.feelEdit || c.moreOptions).toBe(false)
+    expect(controlsFor(withDefaults({ ...file, flags: { video: false } })).video).toBe(false)
+  })
+  it("reads an op's own mask over the sheet's", () => {
+    const sheets = structuredClone(SHEETS)
+    delete sheets.runway.ops.region_edit!.mask
+    expect(controlsFor(effectiveConfig('allon', 'runway'), sheets).maskBrush).toBe(false)
   })
 })

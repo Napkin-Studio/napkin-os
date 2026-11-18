@@ -23,6 +23,7 @@ import { accountItems, continueItems, deskItems, docMenuItems, linkList, linkedC
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { betaNoticeOpen, betaNoticeOpener, closeBetaNotice } from '../src/dogfood/notice.ts'
 import { barFrom } from '../src/shell/appBar.ts'
+import { BRIEF_APP_ID, filmFromBriefHref } from '../src/shell/landing/tools.ts'
 
 const noop = () => {}
 const doc = (over: Partial<DocBar> = {}): DocBar => ({
@@ -181,6 +182,21 @@ test('Continue in ▾ groups: Turn it into, Link to an existing one, and Made fr
   for (const want of ['>Turn it into<', '>Link to an existing one<', '>Made from<', '>Start fresh<', 'Up to date with', 'A locked version keeps what it was made from']) {
     assert.ok(src.includes(want), `Toolbar has ${want}`)
   }
+})
+
+test('Continue in on a brief: Production Tool opens /production/?brief=<doc id>, only when offered (features/brief-node.clan)', () => {
+  let ran = 0
+  const cont = continueItems(doc({ onStartFilm: () => { ran++ } }))
+  assert.deepEqual(labels(cont.spin), ['Deck', 'Production Tool'])
+  assert.match(cont.spin[1].hint ?? '', /Brief node/)
+  cont.spin[1].run()
+  assert.equal(ran, 1)
+  assert.deepEqual(labels(continueItems(doc()).spin), ['Deck'], 'no Production Tool where the session has none, or on another tool')
+  assert.equal(filmFromBriefHref('doc-spring brief'), '/production/?brief=doc-spring%20brief')
+  assert.equal(BRIEF_APP_ID, 'ie.napkin.brief-maker')
+  // App.tsx offers it only for a Brief Maker document, off the device, when the session serves the Production Tool.
+  const app = readFileSync('src/App.tsx', 'utf8')
+  assert.match(app, /onStartFilm=\{production && !device && !running\.open\.is_template && running\.open\.manifest\.app\?\.app_id === BRIEF_APP_ID/)
 })
 
 test('the old More menu\'s every action still has a home in the new bar (inventory)', () => {

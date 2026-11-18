@@ -1,0 +1,38 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7G00000000000000000RW01",
+  "op": "clip",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_redowin001",
+  "purpose": "remake shot 2 in its take",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "parentIds": [],
+  "input": {
+    "mode": "redo_window",
+    "ratio": "16:9",
+    "window": {
+      "source": {
+        "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "url": "https://cdn.napkin.test/out/sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "mime": "video/mp4"
+      },
+      "inS": 3,
+      "outS": 6,
+      "withLast": true
+    },
+    "shot": {
+      "id": "shot_01K7B00000000000000000SH02",
+      "kind": "shot",
+      "duration_s": 3,
+      "camera": {
+        "size": "close",
+        "movement": "static"
+      },
+      "action": "He grips the axe.",
+      "refs": []
+    }
+  }
+}

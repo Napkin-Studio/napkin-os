@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front answers her phone on a crowded train, covers her other ear, and laughs at whatever she hears."
+     },
+     {
+      "type": "direction",
+      "text": "Handheld, close."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1,
+      "text": "Some calls are worth the noise."
+     }
+    ],
+    "note": "I kept your shot as written and added a short VO line over the laugh."
+   }
+  ],
+  "rationale": "The shot is a warm, noisy-train moment, so a brief VO line frames the call as worth hearing without overlapping any dialogue. It is six words, which fits the shot's length."
+ }
+}

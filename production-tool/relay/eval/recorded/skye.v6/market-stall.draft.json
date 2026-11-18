@@ -1,0 +1,54 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. STREET MARKET - DAY"
+     },
+     {
+      "type": "action",
+      "text": "Crowds drift between colourful stalls piled with fruit under striped awnings."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front weaves through the crowd and stops at a mango stall."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front holds up a ripe mango, turning it in the light."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front sniffs it and smiles."
+     },
+     {
+      "type": "character",
+      "text": "STALLHOLDER"
+     },
+     {
+      "type": "dialogue",
+      "text": "Sweetest ones in the whole market."
+     },
+     {
+      "type": "action",
+      "text": "The stallholder grins and nods toward the pile."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front hands over coins and tucks the mango into a bag."
+     }
+    ],
+    "note": "I drafted a short market scene from your line, with one spoken line."
+   }
+  ],
+  "rationale": "One location, six short action beats and one six-word line, about 14.4 s by the length rule. Only the listed @sai_front is used."
+ }
+}

@@ -1,0 +1,50 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7C00000000000000000BR01",
+  "op": "write",
+  "projectId": "proj_01K7A00000000000000000PR01",
+  "nonce": "n_br1ef0001",
+  "purpose": "Skye drafts the first scene from the linked brief",
+  "node": {
+    "kind": "script",
+    "id": "script_01K7A00000000000000000SC01"
+  },
+  "parentIds": [],
+  "input": {
+    "write": {
+      "intent": "draft",
+      "mode": "draft",
+      "target": {
+        "kind": "scene",
+        "id": "scene_01K7A00000000000000000SN01"
+      },
+      "base_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "instruction": "A runner drinks Lumen water at dawn on the cliffs.",
+      "lines": [],
+      "context": {
+        "script_title": "First Light",
+        "target_s": 15,
+        "neighbours": "",
+        "refs": []
+      }
+    },
+    "brief": {
+      "title": "First Light brief",
+      "spine": {
+        "insight": "People choose their drink at home, early in the day.",
+        "proposition": "Lumen is what the day starts with.",
+        "audience": "Adults 25 to 40 who start the day at home.",
+        "tone": "Quiet, warm, unhurried; morning light",
+        "feel": "Calm and ready",
+        "mandatories": [
+          "Lumen name first",
+          "Morning moment"
+        ],
+        "donts": [
+          "Don't show a gym or a sports drink cliché"
+        ],
+        "format": "Film: 30 s hero"
+      }
+    }
+  }
+}

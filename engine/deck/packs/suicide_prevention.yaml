@@ -8,46 +8,46 @@
 id: suicide_prevention
 when_any: ["suicide", "suicidal", "self-harm", "self harm"]
 sources:
-  samaritans_media: {title: "Samaritans, Media Guidelines for Reporting Suicide", uri: "https://www.samaritans.org/about-samaritans/media-guidelines/", verify: true}
+  media_guidelines: {title: "National media guidelines for reporting suicide (UK and Ireland)", uri: "withheld: client names scrubbed 2026-11-17, the feature owner holds the citation", verify: true}
   research_codes: {title: "Research CLAN category codes (fi_53NBUSBE5CSF, f_QMVNC7NCKHKK)", uri: "clan:research", verify: false}
-  samaritans_2026: {title: "Samaritans, Media Guidelines 2026 (no method or location, including in images; avoid alarmist, normalising framing)", uri: "https://media.samaritans.org/documents/Media_Guidelines_2026_DIGITAL.pdf", verify: true}
+  media_guidelines_2026: {title: "National media guidelines for reporting suicide, 2026 edition (no method or location, including in images; avoid alarmist, normalising framing)", uri: "withheld: client names scrubbed 2026-11-17, the feature owner holds the citation", verify: true}
   cfl: {title: "Government of Ireland, Connecting for Life 2026-2035 (language: avoid 'epidemic', 'hotspot')", uri: "https://assets.gov.ie/", verify: true}
   mindframe: {title: "Mindframe, Images matter (use images that model hope or support)", uri: "https://mindframe.org.au/", verify: true}
 banned_phrases:          # error if any appears on a slide or in its notes (case-insensitive)
-  - {text: "commit suicide", source: samaritans_media}
-  - {text: "committed suicide", source: samaritans_media}
-  - {text: "suicide victim", source: samaritans_media}
-  - {text: "successful attempt", source: samaritans_media}
-  - {text: "failed attempt", source: samaritans_media}
-  - {text: "unsuccessful attempt", source: samaritans_media}
-  - {text: "cry for help", source: samaritans_media}
-  - {text: "suicide epidemic", source: samaritans_media}
-  - {text: "spate of suicides", source: samaritans_media}
-  - {text: "painless", source: samaritans_media}
+  - {text: "commit suicide", source: media_guidelines}
+  - {text: "committed suicide", source: media_guidelines}
+  - {text: "suicide victim", source: media_guidelines}
+  - {text: "successful attempt", source: media_guidelines}
+  - {text: "failed attempt", source: media_guidelines}
+  - {text: "unsuccessful attempt", source: media_guidelines}
+  - {text: "cry for help", source: media_guidelines}
+  - {text: "suicide epidemic", source: media_guidelines}
+  - {text: "spate of suicides", source: media_guidelines}
+  - {text: "painless", source: media_guidelines}
 watch_words:             # warning: needs a person's read in context (method, location, instant pickup)
-  - {text: "bridge", why: "location", source: samaritans_media}
-  - {text: "cliff", why: "location", source: samaritans_media}
-  - {text: "railway", why: "location", source: samaritans_media}
-  - {text: "overdose", why: "method", source: samaritans_media}
-  - {text: "instantly", why: "never imply instant pickup", source: samaritans_media}
-  - {text: "straight away", why: "never imply instant pickup", source: samaritans_media}
+  - {text: "bridge", why: "location", source: media_guidelines}
+  - {text: "cliff", why: "location", source: media_guidelines}
+  - {text: "railway", why: "location", source: media_guidelines}
+  - {text: "overdose", why: "method", source: media_guidelines}
+  - {text: "instantly", why: "never imply instant pickup", source: media_guidelines}
+  - {text: "straight away", why: "never imply instant pickup", source: media_guidelines}
   - {text: "kintsugi", why: "repair metaphors re-draw the bar (research codes)", source: research_codes}
   - {text: "hotspot", why: "location", source: cfl}
-  - {text: "epidemic", why: "alarmist framing can normalise", source: samaritans_2026}
+  - {text: "epidemic", why: "alarmist framing can normalise", source: media_guidelines_2026}
   - {text: "head in hands", why: "distress imagery; show hope and help-seeking instead", source: mindframe}
 banned_imagery:          # error if an image prompt names one: method or location, in pictures too
-  - {text: "bridge", source: samaritans_2026}
-  - {text: "cliff", source: samaritans_2026}
-  - {text: "railway", source: samaritans_2026}
-  - {text: "rail track", source: samaritans_2026}
-  - {text: "train track", source: samaritans_2026}
-  - {text: "noose", source: samaritans_2026}
-  - {text: "ligature", source: samaritans_2026}
-  - {text: "rope", source: samaritans_2026}
-  - {text: "pills", source: samaritans_2026}
-  - {text: "tablets", source: samaritans_2026}
-  - {text: "blade", source: samaritans_2026}
-  - {text: "razor", source: samaritans_2026}
+  - {text: "bridge", source: media_guidelines_2026}
+  - {text: "cliff", source: media_guidelines_2026}
+  - {text: "railway", source: media_guidelines_2026}
+  - {text: "rail track", source: media_guidelines_2026}
+  - {text: "train track", source: media_guidelines_2026}
+  - {text: "noose", source: media_guidelines_2026}
+  - {text: "ligature", source: media_guidelines_2026}
+  - {text: "rope", source: media_guidelines_2026}
+  - {text: "pills", source: media_guidelines_2026}
+  - {text: "tablets", source: media_guidelines_2026}
+  - {text: "blade", source: media_guidelines_2026}
+  - {text: "razor", source: media_guidelines_2026}
 required_on_deck:        # a guardrails slide must carry these points
   - "No method, no location, ever"
   - "Signposting (the helpline) on every execution"

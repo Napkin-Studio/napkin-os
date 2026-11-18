@@ -1,0 +1,79 @@
+{
+  "op": "shot_list",
+  "shots": [
+    {
+      "kind": "shot",
+      "scene_heading": "EXT. HIGH STREET - RAIN",
+      "duration_s": 5,
+      "camera": {
+        "size": "wide",
+        "angle": "eye_level",
+        "movement": "track",
+        "movement_speed": "slow",
+        "lens_mm": 35
+      },
+      "action": "@hero_three-quarter walks into a rainy street, umbrella closed.",
+      "direction": "Keep her pace unhurried; the rain is the only movement that matters.",
+      "refs": [
+        "hero_three-quarter",
+        "brolly_closed"
+      ],
+      "beats": [
+        {
+          "kind": "moment",
+          "at_s": 2,
+          "text": "she looks up at the sky"
+        },
+        {
+          "kind": "sound",
+          "at_s": 0,
+          "text": "rain on the pavement"
+        }
+      ]
+    },
+    {
+      "kind": "shot",
+      "duration_s": 5,
+      "camera": {
+        "size": "close",
+        "angle": "low_angle",
+        "movement": "push_in",
+        "lens_mm": 85
+      },
+      "action": "@hero_front smiles and opens @brolly_open; the product logo shows.",
+      "refs": [
+        "hero_front",
+        "brolly_open"
+      ],
+      "beats": [
+        {
+          "kind": "line",
+          "at_s": 3,
+          "text": "Finally.",
+          "speaker": "HERO",
+          "parenthetical": "to herself"
+        }
+      ]
+    },
+    {
+      "kind": "end_card",
+      "duration_s": 2.5,
+      "camera": {
+        "size": "graphic",
+        "movement": "static"
+      },
+      "action": "The brolly logo on white.",
+      "refs": []
+    }
+  ],
+  "question": null,
+  "rationale": "Two 5 s shots for a 12.5 s script: establish, then the product moment, then the end card.",
+  "confidence": 0.75,
+  "briefFlags": [
+    {
+      "kind": "other",
+      "line": "Lumen name first",
+      "note": "The script opens on the fridge, so the Lumen name comes in the second shot."
+    }
+  ]
+}

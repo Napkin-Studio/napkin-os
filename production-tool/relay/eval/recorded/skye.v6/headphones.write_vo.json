@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "On a noisy platform @sai_front slips on @headphones_black, and the crowd noise drops away to music."
+     },
+     {
+      "type": "direction",
+      "text": "Sound cuts to the music on the put-on."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1,
+      "text": "Some days, you just need to hear yourself think."
+     }
+    ],
+    "note": "I added one VO line over the put-on and kept your action and direction as they were."
+   }
+  ],
+  "rationale": "The shot already has the action and the sound cut, so a short VO line over the put-on adds the narrator without repeating them. It runs about 2 s, well inside the 15 s target."
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Rain drums on the greenhouse roof as @maya_front repots a small tomato plant, humming."
+     },
+     {
+      "type": "direction",
+      "text": "Rain sound up; soft focus outside."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I trimmed the action to one short beat that plays in about 2.5 s and kept the direction."
+   }
+  ],
+  "rationale": "One action line of 14 words counts about 2.5 s by the length rule; the direction takes no time and stays last, and @maya_front is unchanged."
+ }
+}

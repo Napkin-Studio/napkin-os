@@ -31,7 +31,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
-os.environ.setdefault("BRIEF_CLAUDE_TRANSPORT", "cli")
 os.environ["BRIEF_JEV_CHECKS"] = "0"
 os.environ.pop("BRIEF_JUDGE_DUMP", None)            # a replay must not append to its own input
 import brief_llm  # noqa: E402

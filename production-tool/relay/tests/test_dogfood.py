@@ -3,7 +3,7 @@ write and job state change, never a poll, a header or a key, and runs folded."""
 
 import json
 
-from conftest import Harness, base_config
+from conftest import Harness, base_config, envelope
 from director import new_id
 
 import dogfood
@@ -116,7 +116,7 @@ def test_twenty_identical_queue_full_answers_are_one_queued_line_and_one_repeat(
 def test_what_was_asked_is_kept_capped_but_never_a_header_or_an_upload_url():
     h = on()
     token = agreed(h)
-    h.call("POST", "/jobs", {"contractVersion": "2", "jobId": new_id("job"), "op": "generate", "parentIds": [],
+    h.call("POST", "/jobs", {**envelope("generate", new_id("job")),
                              "input": {"text": "a red coat hero", "refs": []}}, token,
            headers={"X-Api-Key": "SECRET-KEY", "X-Project-Id": "proj_x"})
     h.call("POST", "/uploads", {"sha256": "sha256:" + "a" * 64, "mime": "image/png", "bytes": 10}, token, expect=200)
@@ -126,6 +126,28 @@ def test_what_was_asked_is_kept_capped_but_never_a_header_or_an_upload_url():
     assert len(req) == 1 and "a red coat hero" in req[0]["data"]["body"]["text"] and req[0]["project"] == "proj_x"
     up = [e for e in lines(h) if e["name"] == "POST /uploads"]
     assert up and "body" not in up[0]["data"]
+
+
+def test_a_jobs_brief_never_reaches_the_record():
+    # features/brief-node.clan; owner 2026-11-13: Confidential means Napkin never takes it in.
+    h = on()
+    token = agreed(h)
+    spine = {"proposition": "SECRET-PROPOSITION", "audience": "SECRET-AUDIENCE", "mandatories": ["SECRET-MANDATORY"]}
+    h.call("POST", "/jobs", {**envelope("write", new_id("job")), "node": {"kind": "script", "id": new_id("script")},
+                             "input": {"write": {"intent": "draft", "mode": "draft", "target": {"kind": "scene", "id": new_id("scene")},
+                                                 "base_hash": "sha256:" + "d" * 64, "instruction": "a runner at dawn", "lines": [],
+                                                 "context": {"script_title": "First Light", "target_s": 15, "neighbours": "", "refs": []}},
+                                       "brief": {"title": "First Light brief", "spine": spine}}}, token)
+    everything = b"".join(objects(h).values()).decode()
+    assert "SECRET-" not in everything
+    req = [e for e in lines(h) if e["kind"] == "request" and e["name"] == "POST /jobs"]
+    assert len(req) == 1 and req[0]["data"]["brief"] is True and "a runner at dawn" in req[0]["data"]["body"]["text"]
+
+
+def test_without_brief_leaves_other_bodies_as_they_came():
+    assert dogfood.without_brief(b"not json") == (b"not json", False)
+    raw = json.dumps({"input": {"text": "x"}}).encode()
+    assert dogfood.without_brief(raw) == (raw, False)
 
 
 def test_a_job_event_says_where_it_ran_and_why_it_moved():

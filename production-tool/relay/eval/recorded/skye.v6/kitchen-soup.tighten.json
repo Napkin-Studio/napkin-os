@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front lifts the lid off a steaming pot, tastes the soup and nods."
+     },
+     {
+      "type": "direction",
+      "text": "Warm morning light from the left."
+     }
+    ],
+    "note": "I tightened the action to one beat and kept the direction as it was."
+   }
+  ],
+  "rationale": "Cut the setting detail already covered by the location and direction, and kept the order of events and @maya_front."
+ }
+}

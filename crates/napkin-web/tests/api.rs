@@ -334,6 +334,46 @@ async fn entries_are_readable_and_unknown_ones_are_not_invented() {
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
 }
 
+#[tokio::test]
+async fn a_documents_data_reads_as_json_with_the_hash_links_compare() {
+    // features/brief-node.clan: the Production Tool freezes a brief's spine from this.
+    let s = server(40);
+    let b = browser(&s).await;
+    let (doc, _) = upload(&s, &b, "First Light brief").await;
+    let url = format!("/api/t/{}/d/{}/data", b.tenant, doc);
+    let reply = get(&s, &url, Some(&b.cookie)).await;
+    assert_eq!(reply.status, StatusCode::OK);
+    let v = reply.json();
+    assert_eq!(v["title"], "First Light brief");
+    assert_eq!(v["path"], doc.as_str());
+    assert!(v["data"].is_object(), "{v}");
+    let yaml = get(
+        &s,
+        &format!("/api/t/{}/d/{}/entry/data", b.tenant, doc),
+        Some(&b.cookie),
+    )
+    .await;
+    assert_eq!(
+        v["data_sha256"],
+        clan_sdk::hash::sha256_prefixed(&yaml.body),
+        "the same hash a link keeps"
+    );
+    // Reading changes nothing: the same hash the second time.
+    assert_eq!(
+        get(&s, &url, Some(&b.cookie)).await.json()["data_sha256"],
+        v["data_sha256"]
+    );
+    // Another browser (another tenant) cannot read it.
+    let other = browser(&s).await;
+    let theirs = get(
+        &s,
+        &format!("/api/t/{}/d/{}/data", b.tenant, doc),
+        Some(&other.cookie),
+    )
+    .await;
+    assert_ne!(theirs.status, StatusCode::OK);
+}
+
 // ── The sandbox ──────────────────────────────────────────────────────────────
 
 #[tokio::test]

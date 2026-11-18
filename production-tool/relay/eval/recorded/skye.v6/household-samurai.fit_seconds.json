@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@samurai sweeps the hall in one clean arc, then folds the laundry into sharp squares without pause."
+     },
+     {
+      "type": "direction",
+      "text": "Quick cuts, one strike per task."
+     }
+    ],
+    "duration_s": 3,
+    "note": "I cut the intro line and merged the two tasks so the shot plays in about 3 seconds."
+   }
+  ],
+  "rationale": "Dropped the explanatory first sentence and kept both actions in one 17-word line (about 2.8 s), keeping @samurai and the direction last."
+ }
+}

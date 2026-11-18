@@ -314,6 +314,10 @@ module "services" {
     NAPKIN_JEV_API_KEY    = aws_secretsmanager_secret.jev.arn
   }, local.layer_secrets)
   extra_kms_key_arns = distinct([for s in data.aws_secretsmanager_secret.staging_db : s.kms_key_id])
+
+  # The Production Tool at /production, proxied to the hackathon stack's relay (features/uat-production-tool.clan).
+  production_relay_url        = var.production_relay_url
+  production_relay_secret_arn = var.production_relay_secret_arn
 }
 
 # jev (TypeSafe), the checker research, asks and briefs rely on. Value put by hand:

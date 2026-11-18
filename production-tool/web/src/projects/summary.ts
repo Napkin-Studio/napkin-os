@@ -1,14 +1,17 @@
 // What Home shows of a project without opening it: worked out from the
-// document (and the project's job purposes) whenever the project changes, and
-// kept in the project index.
+// document (contract 3) and the project's UI (which panel is open, what this
+// browser keeps about each job) whenever the project changes, and kept in the
+// project index.
 
-import type { ProductionDocument, Sha256, StageName } from '../contracts/types'
-import type { JobCtx } from '../doc/ui'
+import { MAP_NAMES, type ProductionDocument, type Sha256 } from '../contracts/types'
+import type { ProjectUi, StageName } from '../doc/ui'
 import { isActive } from '../jobs/runner'
+import { purposeOf } from '../model/purpose'
+import { assetsList, currentFrame, currentRender, framesOf, jobsList, refsList, scenesOf, shotNumber, shotsOf, storyboardSeconds } from '../model/selectors'
 import { whoIsWorking } from '../ui/agents/cast'
 
 export interface ProjectSummary {
-  /** The stage the project is on. */
+  /** The panel the project was left on. */
   stage: StageName
   /** Named pictures (refs) and every other image the project holds. */
   pictures: number
@@ -19,7 +22,7 @@ export interface ProjectSummary {
   adSeconds: number | null
   /** Jobs still being made when the project was last open. */
   active: number
-  /** What the newest of them is, in words ("Dex is making the clip for shot 3"). */
+  /** What the newest of them is, in words ("Fin is making the clip for shot 3"). */
   making?: string
   /** The picture on its card: the first shot's frame, else a picture from the canvas. */
   thumb?: Sha256
@@ -29,51 +32,66 @@ export interface ProjectSummary {
 
 export const UNTITLED = 'Untitled project'
 
-export function summarise(d: ProductionDocument, jobCtx: Record<string, JobCtx> = {}): ProjectSummary {
-  const shots = [...(d.shots ?? [])].sort((a, b) => a.order - b.order)
-  const behind = new Set((d.stale ?? []).map((s) => `${s.target.kind}:${s.target.id}`)).size
-  const ad = [...(d.exports ?? [])].reverse().find((e) => e.kind === 'ad_mp4')
-  const adAsset = ad && d.assets.find((a) => a.sha256 === ad.asset)
-  const active = d.jobs.filter((j) => isActive(j.state))
+export function summarise(d: ProductionDocument, ui: Partial<Pick<ProjectUi, 'stage' | 'jobs'>> = {}): ProjectSummary {
+  const shots = shotsOf(d)
+  const behind = new Set(Object.values(d.stale).map((s) => `${s.target.kind}:${s.target.id}`)).size
+  const ad = currentRender(d)
+  const adAsset = ad && d.assets[ad.asset]
+  const active = jobsList(d).filter((j) => isActive(j.state))
   const newest = active.at(-1)
   let making: string | undefined
   if (newest) {
-    const ctx = jobCtx[newest.id]
-    const shotId = ctx && 'shotId' in ctx ? ctx.shotId : undefined
-    const order = shotId ? shots.findIndex((s) => s.id === shotId) + 1 || undefined : undefined
-    making = whoIsWorking(newest, newest.state, ctx, order).line
+    const purpose = purposeOf(newest)
+    const ctx = purpose ? { ...purpose, ...(ui.jobs?.[newest.id]?.fallbackFrom ? { fallbackFrom: ui.jobs[newest.id].fallbackFrom } : {}) } : undefined
+    const shotId = newest.node.kind === 'shot' ? newest.node.id : undefined
+    making = whoIsWorking(newest, newest.state, ctx, shotId ? shotNumber(d, shotId) || undefined : undefined).line
   }
   return {
-    stage: d.stage.current,
-    pictures: d.assets.filter((a) => a.kind === 'image').length,
+    stage: ui.stage ?? 'character',
+    pictures: assetsList(d).filter((a) => a.kind === 'image').length,
     shots: shots.length,
     behind,
-    adSeconds: ad ? Math.round(adAsset?.duration_s ?? shots.reduce((t, s) => t + (s.duration_s ?? 0), 0)) : null,
+    adSeconds: ad ? Math.round(adAsset?.duration_s ?? storyboardSeconds(d)) : null,
     active: active.length,
     ...(making ? { making } : {}),
-    ...thumbOf(d, shots),
-    shas: d.assets.map((a) => a.sha256),
+    ...thumbOf(d),
+    shas: Object.keys(d.assets),
   }
 }
 
-function thumbOf(d: ProductionDocument, shots: NonNullable<ProductionDocument['shots']>): { thumb?: Sha256 } {
-  const frames = d.frames ?? []
-  for (const s of shots) {
-    const f = s.storyboard_frame ?? frames.find((x) => x.shot_id === s.id && x.selected)?.asset ?? frames.find((x) => x.shot_id === s.id)?.asset
+function thumbOf(d: ProductionDocument): { thumb?: Sha256 } {
+  for (const s of shotsOf(d)) {
+    const f = currentFrame(d, s)?.asset ?? framesOf(d, s.id).at(-1)?.asset
     if (f) return { thumb: f }
   }
-  if (frames[0]) return { thumb: frames[0].asset }
-  const ref = d.refs[0]?.asset
+  const frame = Object.values(d.frames).find((f) => f.asset)
+  if (frame) return { thumb: frame.asset }
+  const ref = refsList(d).find((r) => r.asset)?.asset
   if (ref) return { thumb: ref }
-  const pic = d.assets.find((a) => a.kind === 'image' && a.origin !== 'drawn') ?? d.assets.find((a) => a.kind === 'image')
+  const images = assetsList(d).filter((a) => a.kind === 'image')
+  const pic = images.find((a) => a.origin !== 'drawn') ?? images[0]
   return pic ? { thumb: pic.sha256 } : {}
+}
+
+/** The script's words in order: each scene's unplanned text, then the action of the shots planned from it. */
+function scriptLines(d: ProductionDocument): string[] {
+  const lines: string[] = []
+  for (const sc of scenesOf(d)) {
+    lines.push(...(sc.text ?? '').split('\n'))
+    for (const s of Object.values(d.shots).filter((x) => x.scene_id === sc.id).sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))) lines.push(...(s.action ?? '').split('\n'))
+  }
+  return lines
 }
 
 /** The name a project takes by itself: the first line of its script, once it has one. */
 export function autoName(d: ProductionDocument): string | null {
-  const revs = d.script?.revisions ?? []
-  const rev = revs.find((r) => r.id === d.script?.current) ?? revs.at(-1)
-  const line = rev?.imported_text.split('\n').map((l) => l.trim()).find(Boolean)
+  // The film's own title when it has one (a rename writes it into the .clan, so an export or import keeps it),
+  // else its linked brief's title, else the script's first line (live test 2026-11-18).
+  const own = d.project.title?.trim()
+  if (own && !/^untitled/i.test(own)) return clip(own, 80)
+  const brief = Object.values(d.briefs ?? {}).map((b) => b.title?.trim()).find(Boolean)
+  if (brief) return clip(brief, 60)
+  const line = scriptLines(d).map((l) => l.trim()).find(Boolean)
   if (!line) return null
   return clip(line.replace(/\s+/g, ' '), 60)
 }
@@ -85,7 +103,14 @@ function clip(s: string, n: number): string {
   return `${(space > n * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,.;:–—-]+$/, '')}…`
 }
 
-/** Has the person put anything in it? (An empty document is all a first visit ever had.) */
+/** Has the person put anything in it? (A new project's script, storyboard and video are not work.) */
+/** Whether a film holds anything at all: any entity in any map, or any asset. A blank film holds none (its Script,
+ *  Storyboard and Film are made only when someone adds them). What decides that a draft is kept (shell.ts). */
+export function hasContent(d: ProductionDocument): boolean {
+  return Object.keys(d.assets ?? {}).length > 0 || MAP_NAMES.some((m) => Object.keys((d as unknown as Record<string, object | undefined>)[m] ?? {}).length > 0)
+}
+
 export function isEmptyDocument(d: ProductionDocument): boolean {
-  return !d.assets.length && !d.refs.length && !d.jobs.length && !(d.script?.revisions ?? []).length && !(d.shots ?? []).length
+  return !Object.keys(d.assets).length && !Object.keys(d.refs).length && !Object.keys(d.jobs).length && !Object.keys(d.shots).length
+    && !scriptLines(d).some((l) => l.trim())
 }

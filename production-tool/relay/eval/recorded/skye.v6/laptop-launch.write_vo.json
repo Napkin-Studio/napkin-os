@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front opens a thin @laptop_silver on a kitchen table, and the screen lights his face blue in the dark room."
+     },
+     {
+      "type": "direction",
+      "text": "Only the screen lights the scene."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1,
+      "text": "Every big idea starts in the dark."
+     }
+    ],
+    "note": "I added one short VO line and kept your words as they were."
+   }
+  ],
+  "rationale": "Kept the shot's action and direction untouched and added one brief VO beat that matches the quiet, screen-lit mood without adding names."
+ }
+}

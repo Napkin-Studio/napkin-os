@@ -14,6 +14,8 @@ export interface Persistence {
   read(): Promise<Saved | null>
   write(saved: Saved): Promise<void>
   clear(): Promise<void>
+  /** The IndexedDB database this persistence keeps the bytes in, so the store Worker opens the same one (features/engine-store.clan). */
+  readonly idbName?: string
 }
 
 const STORE = 'clan'
@@ -64,6 +66,7 @@ export function indexedDbPersistence(name = 'napkin-production-tool'): Persisten
   let db: Promise<IDBDatabase | null> | null = null
   const get = () => (db ??= open(name))
   return {
+    idbName: name,
     async read() {
       const d = await get()
       if (!d) return null

@@ -8,35 +8,65 @@
 #      unless every one of them carries a `Feature: none` trailer (typo-sized fixes).
 #      Each feature record in the push must pass `scripts/feature verify`: past
 #      `exploring`, its design is complete and approved.
+#   0. The licence policy (always, before the rest): a push that adds or changes anything
+#      in licences/*.toml needs NAPKIN_LICENCE_APPROVED=<name>, a name in the policy's
+#      `approvers`, and every new or changed entry must say approved_by that name
+#      (docs/contracts/licences.md). It is a person's approval, so only a person sets it.
 #
 # Only a person may bypass it: NAPKIN_ALLOW_MAIN=1 permits a push to main,
 # NAPKIN_SKIP_CHECKS=1 skips step 1, and NAPKIN_NO_FEATURE=1 skips step 2.
-# Agents never bypass it, and never use --no-verify.
+# NAPKIN_LICENCE_APPROVED is a person's approval, not a bypass; nothing skips step 0.
+# Agents never set any of these, and never use --no-verify.
 set -uo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 zero=0000000000000000000000000000000000000000
 status=0
+licence_py() {
+  if command -v uv >/dev/null; then uv run -q --no-project --python 3.12 python "$@"; else python3 "$@"; fi
+}
 
 while read -r local_ref local_sha remote_ref remote_sha; do
   [[ "$local_sha" == "$zero" ]] && continue          # deleting a remote ref
   if [[ ( "$remote_ref" == refs/heads/main || "$remote_ref" == refs/heads/develop ) && "${NAPKIN_ALLOW_MAIN:-}" != 1 ]]; then
     echo "pre-push: ${remote_ref#refs/heads/} is reached only by a PR (develop by feature PRs, main by"
-    echo "  a release PR from develop; a merge to main deploys staging)."
+    echo "  a release PR from develop or a hotfix/* PR; a merge to main deploys staging)."
     echo "  Push a branch instead: git switch -c feat/<slug> && git push -u origin feat/<slug>"
     status=1
     continue
   fi
   if [[ "$remote_sha" == "$zero" ]] || ! git cat-file -e "$remote_sha" 2>/dev/null; then
-    trunk="$(git rev-parse -q --verify origin/develop >/dev/null && echo origin/develop || echo origin/main)"
+    # A hotfix/* branch is cut from main (CLAUDE.md, Branches); every other branch from develop.
+    if [[ "$remote_ref" == refs/heads/hotfix/* ]]; then
+      trunk=origin/main
+    else
+      trunk="$(git rev-parse -q --verify origin/develop >/dev/null && echo origin/develop || echo origin/main)"
+    fi
+    # Then the base moves to the closest commit already on any origin branch: a branch cut from an
+    # interim branch (e.g. feat/production-tool-v2) would otherwise re-check, and re-ask approval for,
+    # every commit that branch already pushed through this hook. Owner decision, Shrey 2026-10-15.
+    # CI still runs every check on the PR.
     base="$(git merge-base "$trunk" "$local_sha" 2>/dev/null || git rev-list --max-parents=0 "$local_sha" | tail -1)"
+    best_n="$(git rev-list --count "$base")"
+    while read -r ref_sha; do
+      mb="$(git merge-base "$ref_sha" "$local_sha" 2>/dev/null)" || continue
+      n="$(git rev-list --count "$mb")"
+      if (( n > best_n )); then base="$mb"; best_n="$n"; fi
+    done < <(git for-each-ref --format='%(objectname)' refs/remotes/origin)
   else
     base="$remote_sha"
   fi
   range="$base..$local_sha"
   [[ -z "$(git rev-list "$range")" ]] && continue
   echo "pre-push: ${remote_ref#refs/heads/} ← $(git rev-list --count "$range") commit(s)"
+
+  # 0. a person approves every licence policy change
+  if [[ -n "$(git diff --name-only "$range" -- 'licences/*.toml')" ]] &&
+     ! licence_py scripts/licences/check.py --approval-guard "$base" "$local_sha"; then
+    echo "pre-push: licences/*.toml changed without a person's approval (NAPKIN_LICENCE_APPROVED)"
+    status=1
+  fi
 
   # 1. checks
   if [[ "${NAPKIN_SKIP_CHECKS:-}" == 1 ]]; then

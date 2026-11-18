@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front pedals across a busy bridge at rush hour, weaving past stopped cars, smiling under his helmet."
+     },
+     {
+      "type": "direction",
+      "text": "Tracking alongside at handlebar height."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1,
+      "text": "Rush hour only stops the ones who let it."
+     }
+    ],
+    "note": "I added a short VO line over the ride and kept your action and direction as they were."
+   }
+  ],
+  "rationale": "The shot shows him moving while traffic is still, so the VO states that contrast in one short line without naming anyone or adding action."
+ }
+}

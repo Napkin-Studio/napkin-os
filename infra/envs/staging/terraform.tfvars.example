@@ -17,3 +17,8 @@
 #   acme   = { slot = 1 }
 #   globex = { slot = 2, volume_gb = 10 }
 # }
+
+# The Production Tool at /production (features/os-sign-in.clan), from the
+# hackathon stack's outputs (relay_function_url, secret_ids). Both or neither.
+# production_relay_url        = "https://<id>.lambda-url.eu-west-1.on.aws"
+# production_relay_secret_arn = "arn:aws:secretsmanager:eu-west-1:<account>:secret:napkin-hackathon/TOKEN_SECRET-xxxxxx"

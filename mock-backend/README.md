@@ -31,6 +31,54 @@ cannot; the capture decision's attention note says which ran and why:
 NAPKIN_BRIEF_ENGINE_URL=http://127.0.0.1:8787   # Sai's engine; unset = the middleware's crew
 ```
 
+## One local model backend for every service
+
+This process is also the one way to run Claude locally for every service, on your own Claude
+Code login (features/model-mock.clan). Each service reaches it by URL through the client code it
+already has; no service has a `claude -p` wrapper of its own for plain prompts.
+
+```sh
+scripts/model-local                     # start it on 127.0.0.1:8797 unless it is up (needs `claude`)
+scripts/model-local run <command…>      # start it if needed, then run <command> pointed at it
+source scripts/model-local-env.sh       # bash/zsh: point this shell at it
+source scripts/model-local-env.fish     # fish
+scripts/model-local env [--fish|--json] [--bedrock]   # print the variables
+scripts/model-local status | stop
+```
+
+`MODEL_LOCAL_PORT` picks another port when 8797 is taken. Point only the shell that runs the
+services at it: Claude Code itself reads `ANTHROPIC_BASE_URL`.
+
+| Variable | Value | Read by |
+|---|---|---|
+| `NAPKIN_MODEL_API` | `anthropic` (`bedrock` with `--bedrock`) | the middleware (`server/napkin/model.py`), the relay (`director/claude.py`) |
+| `NAPKIN_MODEL_BASE_URL` | `http://127.0.0.1:8797` | the same two |
+| `NAPKIN_MODEL_API_KEY` | `local` | the same two (on the Bedrock wire, a bearer token: no SigV4) |
+| `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY` | `http://127.0.0.1:8797` / `local` | the Anthropic SDK: the engine (`brief_llm.py`), mock-agent |
+| `ANTHROPIC_BEDROCK_BASE_URL` | `http://127.0.0.1:8797` | `AnthropicBedrock` when no base URL is passed |
+| `AWS_ENDPOINT_URL_BEDROCK_RUNTIME` | `http://127.0.0.1:8797` | boto3's `bedrock-runtime` client (InvokeModel only; Converse is a 404 here) |
+| `NAPKIN_MODEL_REGION` | `eu-west-1` (with `--bedrock`) | the Bedrock clients need a region even with a base URL |
+
+The Bedrock wire locally: `NAPKIN_MODEL_API=bedrock` with the base URL and `NAPKIN_MODEL_API_KEY=local`
+sends InvokeModel with a bearer token. To exercise SigV4 signing instead, unset
+`NAPKIN_MODEL_API_KEY` and set any `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (for example
+`local` / `local`): the signature is accepted and not checked. Mantle:
+`NAPKIN_MODEL_BEDROCK_ENDPOINT=mantle` with `NAPKIN_MODEL_BASE_URL=http://127.0.0.1:8797/anthropic`.
+
+| Service | Run it locally on your login |
+|---|---|
+| middleware | `scripts/model-local run uv run …` in `server/` (or `server/tools/run_sample.py`, which sets the URL itself) |
+| relay (director, character cards, Skye) | `scripts/model-local run uv run python -m local` in `production-tool/relay` |
+| engine | `python3 serve.py --claude-code`, or `scripts/model-local run napkin-brief <brief>` |
+| mock-agent | `python3 serve.py --mock-agent`, or `scripts/model-local run python3 mock-agent/server.py` |
+
+`server/napkin/model.py` (and the relay's copy) refuses a loopback model URL when
+`AWS_LAMBDA_FUNCTION_NAME` or ECS container metadata is set, so this setting cannot reach a
+deployment. The `claude -p` runs that use tools stay Claude Code runs and are not routed here:
+the engine's WebSearch research (`engine/agent-server/research.py`, `RESEARCH_WEB=claude`),
+mock-agent's agentic retrieval (Read/Grep/Glob), and this process's own research and retrieval
+families. Each drops `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` from its child's environment.
+
 Python 3.11+, **standard library only**: no dependency to justify. The
 Claude-backed families need `claude` on `PATH`, signed in. The process refuses
 to start without it unless `MOCK_FAKES=layers`.
@@ -47,7 +95,9 @@ retired once their tests were ported here.
 
 | Family | Route | Answered by |
 |---|---|---|
-| model | `POST /v1/messages` | one `claude -p`, Anthropic Messages shape (§1.3) |
+| model | `POST /v1/messages` | one `claude -p`, Anthropic Messages shape (§1.3); `stream: true` answers SSE; `?beta=true` (the SDK's `beta.messages`) is the same route |
+| model | `POST /anthropic/v1/messages` | the same, at Bedrock mantle's path (base URL `…/anthropic`) |
+| model | `POST /model/{modelId}/invoke` | one `claude -p`, Bedrock InvokeModel with an Anthropic body (§1.3a) |
 | model | `POST /v1/chat/completions` | one `claude -p`, OpenAI-compatible shape with `response_format` `json_schema` (the NIM wire, §1.4) |
 | model | `GET /v1/models` | the id map: Anthropic list shape when the request has `anthropic-version`, OpenAI list shape otherwise |
 | research | `POST /v1/research` | one `claude -p` with WebSearch + WebFetch (§2) |
@@ -70,8 +120,10 @@ temporary directory under `<MOCK_DATA>/work` with these flags:
 and retrieval calls) goes through a pipe fd (`--system-prompt-file
 /dev/fd/N`), so it is never on argv and never on disk. Research sends no
 system prompt: it keeps Claude Code's own, which drives its WebSearch and
-WebFetch tool use, as `mock-research` did. `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL` are removed from
-the child's environment. One semaphore of `MOCK_CONCURRENCY` subprocesses is
+WebFetch tool use, as `mock-research` did. `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`,
+`ANTHROPIC_API_KEY`, `ANTHROPIC_BEDROCK_BASE_URL`, `ANTHROPIC_BEDROCK_MANTLE_BASE_URL` and
+`AWS_ENDPOINT_URL_BEDROCK_RUNTIME` are removed from the child's environment, so a shell pointed
+at this process (scripts/model-local) never routes the CLI back into it or bills the dummy key. One semaphore of `MOCK_CONCURRENCY` subprocesses is
 shared by all families.
 
 ### Model
@@ -96,13 +148,24 @@ shared by all families.
   | `nvidia/llama-3.1-nemotron-70b-instruct` | `sonnet` |
   | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | `haiku` |
 
+  `claude-opus-4-6` (the engine's extraction model) passes through as its full id too.
+
+  **Bedrock ids** resolve on every wire to the Anthropic id's alias: an optional
+  inference-profile prefix (`eu.`, `us.`, `us-gov.`, `global.`, `apac.`, `jp.`, `au.`, `ca.`),
+  `anthropic.`, the Anthropic id with or without its date, and an optional `-v1` / `-v1:0`.
+  So `eu.anthropic.claude-sonnet-5-5` is `claude-sonnet-5-5` and
+  `global.anthropic.claude-haiku-4-5-20251001-v1:0` is `haiku`.
+
   Any other id is a `404` in the wire's shape: `not_found_error` for
-  Anthropic, `model_not_found` for OpenAI. It never falls back to a default.
-  The response echoes the requested id.
+  Anthropic, `model_not_found` for OpenAI, `ResourceNotFoundException` for Bedrock. It never
+  falls back to a default. The response echoes the requested id.
 - **Translation.** One user turn is passed through verbatim. A multi-turn
   history (the port's retry turn) is flattened into a `<user>…</user>` /
   `<assistant>…</assistant>` transcript. The call's `schema` goes to
-  `--json-schema`. The envelope's `structured_output`, serialised, becomes the
+  `--json-schema`, without its `$schema` and `$id` keywords (the CLI tries to resolve
+  them); a schema that is not a plain object at the top (a top-level `oneOf`, `anyOf`, `$ref`
+  or a non-object) goes as `{"answer": <schema>}` with its `$defs` kept at the top, and the
+  answer is unwrapped. The envelope's `structured_output`, serialised, becomes the
   reply text. `effort` becomes `--effort` (Anthropic wire only).
   `stop_reason` is always `end_turn` and `finish_reason` always `stop`.
 - **Images: supported.** Anthropic `image` blocks (`source.type: base64`) and
@@ -118,6 +181,21 @@ shared by all families.
 
   Refused: a remote image URL. The bytes are client-confidential and must not
   be fetched from a link.
+- **Streaming** (`stream: true`, Anthropic wire): the Messages API's SSE sequence,
+  `message_start`, `content_block_start`, `ping`, one `content_block_delta` (`text_delta`),
+  `content_block_stop`, `message_delta` (`stop_reason`, `usage`) and `message_stop`, then the
+  connection closes. The CLI answers whole, so the whole text is one delta, sent once the run is
+  done; a refusal or a CLI failure is a JSON error before any event, as the API answers errors
+  it finds before streaming.
+- **Bedrock InvokeModel** (`/model/{modelId}/invoke`): the body is the Messages body without
+  `model` (it is in the path) or `stream`; `anthropic_version` must be `bedrock-2023-05-31`;
+  `anthropic_beta` is accepted and ignored. The answer is the Anthropic message body. Any
+  SigV4 signature or bearer token is accepted unchecked (with `MOCK_TOKEN` set, the bearer
+  must be it). Errors are Bedrock's: `{"message"}` with `x-amzn-ErrorType`, 400
+  `ValidationException`, 403 `AccessDeniedException`, 404 `ResourceNotFoundException`, 429
+  `ThrottlingException`, 408 `ModelTimeoutException`, 503 `ServiceUnavailableException`, 500
+  `InternalServerException`. `invoke-with-response-stream` (AWS event-stream framing) is a
+  400, and Converse (Nova) is a 404: locally, research goes to the research family.
 - **Usage** comes from the CLI envelope and is never estimated. Anthropic
   `input_tokens` is fresh + cache-creation + cache-read tokens as the CLI
   reports them. The `cache_*` fields are always 0. OpenAI `prompt_tokens` and
@@ -126,7 +204,7 @@ shared by all families.
 
   | Wire | Fields |
   |---|---|
-  | Anthropic | `temperature top_p top_k stop_sequences metadata thinking service_tier cache_control` |
+  | Anthropic | `temperature top_p top_k stop_sequences metadata thinking service_tier cache_control betas fallbacks` |
   | OpenAI | `temperature top_p seed user chat_template_kwargs nvext frequency_penalty presence_penalty stop max_completion_tokens stream_options parallel_tool_calls service_tier metadata store reasoning_effort` |
 
   Other unknown OpenAI fields are ignored too, because the contract refuses
@@ -136,7 +214,7 @@ shared by all families.
   - on both wires:
     - `tools`, `tool_choice`, `functions`, `function_call` and `mcp_servers`;
     - tool blocks and tool messages;
-    - `stream: true`;
+    - `stream: true` on the OpenAI wire (the Anthropic wire streams);
     - an assistant-last prefill;
     - document, audio or file content;
   - on the OpenAI wire:
@@ -378,6 +456,10 @@ The two SDK checks passed as well: anthropic 1.4.0 and openai 3.19.2.
   - Structured output is the CLI's `--json-schema` validation, not
     constrained decoding.
   - Multi-turn history is a flattened transcript.
+  - A stream carries the whole text in one delta, after the run: time to first token is the
+    whole call.
+  - The engine's old wrapper turned thinking off for Opus 4.6 and capped output through the
+    CLI; here thinking is the CLI's default and `max_tokens` is applied after the reply.
   - Latency is not production latency. Never tune `NAPKIN_MODEL_TIMEOUT` to
     the mock.
 - **Research:**

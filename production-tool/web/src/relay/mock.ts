@@ -7,17 +7,27 @@
 // Test hooks, typed into any text box that goes with a job:
 //   #fail      → the job fails with provider_failed (retryable)
 //   #moderate  → the job fails with moderated (not retryable)
+//   [ask]      → the job stops at needs_input with a nudge question (two options, one recommended);
+//                POST /jobs/{id}/answer resumes it, and a second answer is 409 AnswerConflict (in a write,
+//                the item's lines say it, as the relay's passthrough reads them)
+//
+// Contract 3 (features/contract-v3.clan): a request of any other contractVersion is refused, the Job
+// names its project, tenant, starter, crew, node, nonce and purpose, a shot list is PlannedShot[], and
+// the stitch leaves out clips marked endCard (it adds its own end card).
 
+import { crewFor, newUlidId } from '../../../clan-store/src'
 import type {
-  AssetRef, Config, ContractError, InputMime, Job, JobRequest, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output,
-  Me, Shot,
+  Answer, AnswerConflict, AssetRef, CameraMovement, CameraSize, Config, ContractError, CrewId, InputMime, Job, JobAnswer, JobRequest,
+  JobShot, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output, PlannedShot, Question, Write,
 } from '../contracts/types'
-import { quotaClassOf } from '../contracts/types'
+import { mockWrites } from './mockWrite'
+import { AGENCY_SHELF } from '../contracts/types'
+import { quotaClassOf, SPEND_POLICY } from '../contracts/load'
 import { getBlob, putBlob } from '../lib/blobs'
+import { resolveQuality, sizeLabel } from '../capabilities'
 import { hexOf } from '../lib/hash'
-import { newId } from '../lib/ulid'
-import { splitTarget } from '../lib/shots'
-import type { Relay, UploadResult } from './types'
+import { mockFrameEdit, mockRecasts, recastQuestion } from '../jobs/frameWords'
+import type { AnswerResult, Relay, UploadResult } from './types'
 import { RelayError } from './types'
 
 export interface RenderedOutput {
@@ -26,6 +36,8 @@ export interface RenderedOutput {
   w?: number
   h?: number
   durationS?: number
+  /** The size Runway would have rendered before the relay's crop (frame-aspect): metadata only, no crop here. */
+  croppedFrom?: { w: number; h: number }
 }
 
 /** Makes the mock's pictures and clips. The browser one draws on a canvas; tests pass a stub. */
@@ -42,6 +54,8 @@ export interface MockOptions {
   persistKey?: string | null
   putOutput?: (blob: Blob) => Promise<string>
   getInput?: (sha: string) => Promise<Blob | undefined>
+  /** Answer write with 422 capability_missing, as a relay without Skye does. */
+  writeOff?: boolean
 }
 
 interface LedgerItem {
@@ -49,10 +63,27 @@ interface LedgerItem {
   createdAt: number
   startPos: number
   cancelledAt?: number
-  done?: { state: JobState; outputs?: Output[]; shots?: Shot[]; error?: ContractError; at: number }
+  /** [ask]: the question the job stopped at, and the answer that let it go on. */
+  question?: Question
+  answer?: Answer
+  answeredBy?: string
+  answeredAt?: number
+  done?: { state: JobState; outputs?: Output[]; shots?: PlannedShot[]; writes?: Write[]; error?: ContractError; at: number; handoff?: Job['handoff'] }
 }
 
 const MOCK_HOST = 'https://mock.napkin.invalid'
+
+/** The words the mock's question is asked about. */
+const ASK = /\[ask\]/i
+
+/** The value a frame_edit's answer chose (its options' ids are their values: camera, local, both). */
+function frameAnswer(item: LedgerItem): string | undefined {
+  const fromChange = item.req.input.answer?.optionId
+  return item.answer?.option_id ?? fromChange
+}
+
+/** What the contract-3 relay says to a request of another contract. */
+export const OTHER_CONTRACT = 'This build reads contract 3; reload the page.'
 
 function collectHashes(v: unknown, out: Set<string>) {
   if (typeof v === 'string') {
@@ -64,27 +95,139 @@ function collectHashes(v: unknown, out: Set<string>) {
   }
 }
 
-const COMPOSITIONS: Shot['composition'][] = ['wide', 'medium', 'close', 'medium', 'insert', 'close']
-const MOVES: Shot['camera_move'][] = ['track', 'push_in', 'static', 'orbit', 'pan', 'pull_out']
-/** The mock director: split the script into sentences, one shot each, seconds summing to the target;
- * each shot shows every character it was given, by its bare key when it has a front (the real
- * director picks a variant only when the moment needs one). */
-export function mockShotList(script: string, targetS: number, names: string[] = []): Shot[] {
+const SIZES: CameraSize[] = ['wide', 'medium', 'close', 'medium', 'insert', 'close']
+const MOVES: CameraMovement[] = ['track', 'push_in', 'static', 'orbit', 'pan', 'pull_out']
+
+/** A shot already there, as the request sends it (JobShot): its id and words, and what a re-plan keeps. */
+export type ExistingShot = Pick<JobShot, 'id' | 'action'> & Partial<Pick<JobShot, 'kind' | 'camera' | 'refs'>>
+
+const HEADING = /^(INT|EXT|INT\/EXT|I\/E)[. ]/i
+const CLAUSE = /,\s+|\s+(?:and|then)\s+/g
+const norm = (t: string) => t.toLowerCase().split(/\s+/).filter(Boolean).join(' ').replace(/[.!?\s]+$/, '')
+const sentencesOf = (line: string) => line.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter((x) => x.replace(/[.!?\s]/g, ''))
+
+/** A sentence in two at the clause boundary nearest its middle, or undefined. */
+function splitClause(text: string): [string, string] | undefined {
+  const cuts = [...text.matchAll(CLAUSE)].filter((m) => m.index! > 0 && m.index! + m[0].length < text.length)
+  if (!cuts.length) return undefined
+  const m = cuts.reduce((a, b) => (Math.abs(b.index! - text.length / 2) < Math.abs(a.index! - text.length / 2) ? b : a))
+  const a = text.slice(0, m.index).trim()
+  const b = text.slice(m.index! + m[0].length).trim()
+  return a && b ? [a, b[0].toUpperCase() + b.slice(1)] : undefined
+}
+
+/**
+ * What a plan is made of (the same rule as the passthrough director, relay/director/base.py plan_pieces):
+ * the shots already there that keep their id, with their words (a script line, or a sentence, that is a
+ * shot's action keeps that shot, in its order; a shot with no words takes the next new sentence), and the
+ * new shots' words after them, each sentence used once. Fewer sentences than shots make fewer shots (a
+ * sentence splits at a clause only to reach the fewest shots the length needs, 10 s each at most); more
+ * sentences than shots share them.
+ */
+export function planPieces(script: string, existing: ExistingShot[], targetS: number): {
+  kept: { shot: ExistingShot; action: string }[]
+  pieces: { text: string; heading?: string }[]
+} {
+  const used = new Set<number>()
+  const find = (words: string) => existing.findIndex((s, k) => !used.has(k) && !!s.id && !!norm(s.action ?? '') && norm(s.action ?? '') === norm(words))
+  let pieces: { text: string; heading?: string }[] = []
+  let heading: string | undefined
+  for (const line of script.split('\n').map((l) => l.trim()).filter(Boolean)) {
+    // A scene heading line (INT. … / EXT. …) is where, not a moment: the shots after it are in that scene.
+    if (HEADING.test(line)) {
+      heading = line.slice(0, 200)
+      continue
+    }
+    for (const words of find(line) >= 0 ? [line] : sentencesOf(line)) {
+      const k = find(words)
+      if (k >= 0) used.add(k)
+      else pieces.push({ text: words, ...(heading ? { heading } : {}) })
+    }
+  }
+  const kept: { shot: ExistingShot; action: string }[] = []
+  existing.forEach((s, k) => {
+    if (used.has(k)) kept.push({ shot: s, action: s.action })
+    else if (s.id && !(s.action ?? '').trim() && pieces.length) kept.push({ shot: s, action: pieces.shift()!.text }) // a shot with no words takes the next new words
+  })
+  const fewest = Math.max(2, Math.ceil(targetS / 10))
+  const most = Math.max(fewest, Math.ceil(targetS / 5))
+  while (pieces.length && kept.length + pieces.length < fewest) {
+    const i = pieces.reduce((best, p, j) => (p.text.length > pieces[best].text.length ? j : best), 0)
+    const cut = splitClause(pieces[i].text)
+    if (!cut) break
+    pieces.splice(i, 1, { ...pieces[i], text: cut[0] }, { ...pieces[i], text: cut[1] })
+  }
+  const slots = pieces.length ? Math.max(1, most - kept.length) : 0
+  if (pieces.length > slots) {
+    const size = Math.floor(pieces.length / slots)
+    const rest = pieces.length % slots
+    const grouped: typeof pieces = []
+    let at = 0
+    for (let g = 0; g < slots; g++) {
+      const part = pieces.slice(at, at + size + (g < rest ? 1 : 0))
+      at += part.length
+      grouped.push({ text: part.map((p) => p.text).join(' '), ...(part[0].heading ? { heading: part[0].heading } : {}) })
+    }
+    pieces = grouped
+  }
+  return { kept, pieces }
+}
+
+/** The mock director: each sentence of the script once (planPieces), seconds summing to the target; each
+ * new shot shows every character it was given, by its bare key when it has a front (the real director
+ * picks a variant only when the moment needs one). A re-plan (`existing`, the shots the request sent)
+ * keeps the shots whose words are still in the script, by id and camera, so the web merges by id; the
+ * new words come after them. */
+export function mockShotList(script: string, targetS: number, names: string[] = [], existing: ExistingShot[] = []): PlannedShot[] {
   const keys = names.filter((n) => n.endsWith('_front')).map((n) => n.split('_')[0])
   names = [...keys, ...names.filter((n) => !keys.includes(n.split('_')[0]))]
-  const durations = splitTarget(targetS)
-  const sentences = script.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean)
-  return durations.map((d, i) => ({
-    id: newId('shot'),
-    order: i + 1,
-    duration_s: d,
-    composition: COMPOSITIONS[i % COMPOSITIONS.length],
-    action: (sentences[i] ?? sentences[sentences.length - 1] ?? 'Our hero looks at the camera.').slice(0, 300),
-    camera_move: MOVES[i % MOVES.length],
-    refs: names.slice(0, 9),
-    status: 'planned' as const,
-  }))
+  const { kept, pieces } = planPieces(script, existing, targetS)
+  if (!kept.length && !pieces.length) pieces.push({ text: 'Our hero looks at the camera.' })
+  const n = Math.min(24, kept.length + pieces.length)
+  const base = Math.floor(targetS / n)
+  const extra = targetS - base * n
+  return Array.from({ length: n }, (_, i): PlannedShot => {
+    const duration_s = Math.max(1, base + (i < extra ? 1 : 0))
+    const k = kept[i]
+    const camera = k?.shot.camera ?? { size: SIZES[i % SIZES.length], movement: MOVES[i % MOVES.length] }
+    const beats = [{ kind: 'camera' as const, at_s: 0, text: `${(camera.movement ?? 'static').replace('_', ' ')} on a ${camera.size} shot` }]
+    if (k) {
+      return {
+        id: k.shot.id, kind: k.shot.kind ?? 'shot', duration_s, camera, action: k.action.slice(0, 300),
+        refs: (k.shot.refs?.length ? k.shot.refs : names).slice(0, 9), beats,
+      }
+    }
+    const said = pieces[i - kept.length]
+    return {
+      kind: 'shot',
+      ...(said.heading ? { scene_heading: said.heading } : {}),
+      duration_s,
+      camera,
+      action: said.text.slice(0, 300),
+      refs: names.slice(0, 9),
+      beats,
+    }
+  })
 }
+
+/** The mock's question: a nudge with two options, the first recommended. Its id is minted here, like the relay's. */
+function mockQuestion(): Question {
+  return {
+    id: newUlidId('q'),
+    kind: 'nudge',
+    text: 'Open wide on the street, or start close on the hero?',
+    why: 'The words could open either way.',
+    options: [
+      { id: 'wide', label: 'Open wide', detail: 'Set the place first.' },
+      { id: 'close', label: 'Start close', detail: 'Lead with the hero.' },
+    ],
+    allow_text: true,
+    recommended_option_id: 'wide',
+  }
+}
+
+/** The mock's agency: Napkin's own tenant, UUIDv5 of 'napkin:agency:napkin' (as napkin-web's TenantId::of_agency). */
+export const MOCK_TENANT = { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' } as const
 
 export class MockRelay implements Relay {
   readonly kind = 'mock' as const
@@ -102,6 +245,7 @@ export class MockRelay implements Relay {
       persistKey: opts.persistKey === undefined ? 'napkin-pt.mock-ledger' : opts.persistKey,
       putOutput: opts.putOutput ?? putBlob,
       getInput: opts.getInput ?? getBlob,
+      writeOff: opts.writeOff ?? false,
     }
     this.load()
   }
@@ -123,14 +267,17 @@ export class MockRelay implements Relay {
     } catch { /* storage full or blocked */ }
   }
 
-  /** GET /me: always the same local person; the mock has no sign-in (features/drop-hackathon-extras.clan). */
+  /** GET /me: always the same local person, in Napkin's own agency; the mock has no sign-in (features/drop-hackathon-extras.clan). */
   async me(): Promise<Me> {
     return {
       participantId: this.participantId,
       handle: this.handle,
-      team: 'mock',
-      workspace: this.participantId,
-      quotas: { image: 40, video: 6, render: 3 },
+      team: MOCK_TENANT.agency,
+      workspace: MOCK_TENANT.id,
+      tenant: { ...MOCK_TENANT },
+      // As the relay answers with no tenant limits set (contracts/spend-policy.json, features/tenant-limits.clan).
+      allow: { claude: SPEND_POLICY.allow.claude, makers: [...SPEND_POLICY.allow.makers] },
+      quotas: null,
       projects: 0, // nothing is saved to a server without the relay
     }
   }
@@ -148,9 +295,9 @@ export class MockRelay implements Relay {
   }
 
   async createJob(req: JobRequest): Promise<Job> {
-    if (req.contractVersion !== '2') {
-      throw new RelayError({ code: 'invalid_input', message: 'Unknown contract version.', retryable: false }, 400)
-    }
+    if (req.contractVersion !== '3') throw new RelayError({ code: 'invalid_input', message: OTHER_CONTRACT, retryable: false }, 400)
+    // Skye switched off, as an older relay or an agency whose text may not go to the model answers.
+    if (req.op === 'write' && this.opts.writeOff) throw new RelayError({ code: 'capability_missing', message: "The Script agent isn't available here yet.", retryable: false }, 422)
     const existing = this.ledger.get(req.jobId)
     if (!existing) {
       this.ledger.set(req.jobId, { req, createdAt: this.opts.now(), startPos: 1 + Math.floor(Math.random() * 3) })
@@ -173,6 +320,34 @@ export class MockRelay implements Relay {
       this.save()
     }
     return this.snapshot(jobId)
+  }
+
+  /** POST /jobs/{jobId}/answer. `by`: who answers (tests answer as someone else); the mock's own person by default. */
+  async answerJob(jobId: string, answer: JobAnswer, by = `human:${this.participantId}`): Promise<AnswerResult> {
+    if (answer.contractVersion !== '3') throw new RelayError({ code: 'invalid_input', message: OTHER_CONTRACT, retryable: false }, 400)
+    const item = this.ledger.get(jobId)
+    if (!item) throw new RelayError({ code: 'invalid_input', message: 'No such job.', retryable: false }, 404)
+    if (item.answer && item.answeredBy) {
+      const conflict: AnswerConflict = {
+        error: { code: 'conflict', message: 'Someone answered first.', retryable: false },
+        answeredBy: item.answeredBy,
+        answer: item.answer,
+      }
+      return { conflict }
+    }
+    if (!item.question || item.question.id !== answer.questionId) {
+      throw new RelayError({ code: 'invalid_input', message: 'This job is not asking that.', retryable: false }, 400)
+    }
+    item.answer = answer.optionId ? { option_id: answer.optionId } : { text: answer.text! }
+    item.answeredBy = by
+    item.answeredAt = this.opts.now()
+    // The Image editor's whole-frame change answered Redraw frame: this job ends here, free, and the
+    // Storyboard redraws the frame (the relay's handoff; features/frame-edit-or-redraw.clan).
+    if (item.req.op === 'region_edit' && answer.optionId === 'redraw') {
+      item.done = { state: 'cancelled', at: this.opts.now(), outputs: [], handoff: { op: 'frame_edit', mode: 'redraw' } }
+    }
+    this.save()
+    return { job: this.snapshot(jobId) }
   }
 
   async log(entry: LogEntry): Promise<void> {
@@ -203,33 +378,41 @@ export class MockRelay implements Relay {
     } catch { /* storage blocked: memory only */ }
   }
 
-  async library(): Promise<LibraryIndex> {
+  async library(shelf = AGENCY_SHELF): Promise<LibraryIndex> {
     const data = this.libraryData()
     return {
-      workspace: 'mock',
-      keys: Object.values(data).map((versions) => {
+      workspace: MOCK_TENANT.id,
+      shelf,
+      keys: Object.values(data).filter((v) => v.at(-1)!.shelf === shelf).map((versions) => {
         const e = versions[versions.length - 1]
-        const cover = (e.refs.find((r) => r.variant === 'front') ?? e.refs[0]).asset
-        return { key: e.key, ver: e.ver, role: e.role, by: e.by, at: e.at, variants: e.refs.map((r) => r.variant), cover }
+        const refs = e.refs ?? []
+        const front = refs.find((r) => r.variant === 'front') ?? refs[0]
+        return {
+          key: e.key, kind: e.kind, ver: e.ver, ...(e.role ? { role: e.role } : {}), by: e.by, at: e.at,
+          variants: refs.map((r) => r.variant), ...(front ? { cover: front.asset } : {}),
+        }
       }).sort((a, b) => a.key.localeCompare(b.key)),
     }
   }
 
-  async libraryEntry(key: Key, ver?: number): Promise<LibraryEntry> {
+  async libraryEntry(key: Key, ver?: number, _shelf = AGENCY_SHELF): Promise<LibraryEntry> {
     const versions = this.libraryData()[key] ?? []
     const e = ver ? versions.find((v) => v.ver === ver) : versions[versions.length - 1]
     if (!e) throw new RelayError({ code: 'invalid_input', message: `There is no ${key} in your workspace's library.`, retryable: false }, 404)
     return e
   }
 
-  async publish(key: Key, req: LibraryPublish): Promise<LibraryEntry> {
+  async publish(key: Key, req: LibraryPublish, shelf = AGENCY_SHELF): Promise<LibraryEntry> {
     const data = this.libraryData()
     const versions = data[key] ?? []
     const latest = versions.length ? versions[versions.length - 1].ver : 0
     if (req.baseVer !== latest) {
       throw new RelayError({ code: 'conflict', message: `Someone published version ${latest} of this key since yours. Import it first, then publish.`, retryable: false }, 409)
     }
-    const entry: LibraryEntry = { workspace: 'mock', key, ver: latest + 1, role: req.role, by: this.handle, at: new Date(this.opts.now()).toISOString(), refs: req.refs }
+    const entry: LibraryEntry = {
+      workspace: MOCK_TENANT.id, shelf, kind: req.kind, key, ver: latest + 1, ...(req.role ? { role: req.role } : {}), by: this.handle,
+      at: new Date(this.opts.now()).toISOString(), ...(req.refs ? { refs: req.refs } : {}), ...(req.payload ? { payload: req.payload } : {}),
+    }
     this.saveLibrary({ ...data, [key]: [...versions, entry] })
     return entry
   }
@@ -249,15 +432,23 @@ export class MockRelay implements Relay {
   private finish(jobId: string, item: LedgerItem) {
     if (this.running.has(jobId)) return
     const p = (async () => {
-      const { req } = item
+      const req = item.req.op === 'stitch'
+        ? { ...item.req, input: { ...item.req.input, clips: (item.req.input.clips ?? []).filter((c) => !c.endCard) } }
+        : item.req
       const text = `${req.input.text ?? ''} ${req.input.script ?? ''}`
       try {
         if (/#moderate/i.test(text)) {
           item.done = { state: 'failed', at: this.opts.now(), error: { code: 'moderated', message: 'This request was blocked by the safety check.', retryable: false, providerCode: 'SAFETY.INPUT.TEXT' } }
         } else if (/#fail/i.test(text)) {
           item.done = { state: 'failed', at: this.opts.now(), error: { code: 'provider_failed', message: 'The provider could not make this one. Try again.', retryable: true } }
+        } else if (req.op === 'frame_edit' && mockFrameEdit(req.input, frameAnswer(item)).edit?.runAs === 'none') {
+          // Only the camera's move changes: nothing is drawn (features/frame-change-edit.clan).
+          item.done = { state: 'completed', at: this.opts.now(), outputs: [] }
+        } else if (req.op === 'write' && req.input.write) {
+          item.done = { state: 'completed', at: this.opts.now(), writes: mockWrites(req.input.write), outputs: [] }
         } else if (req.op === 'shot_list') {
-          item.done = { state: 'completed', at: this.opts.now(), shots: mockShotList(req.input.script ?? '', req.input.targetS ?? 10, (req.input.refs ?? []).flatMap((r) => (r.name ? [r.name] : []))), outputs: [] }
+          const names = (req.input.refs ?? []).flatMap((r) => (r.name ? [r.name] : []))
+          item.done = { state: 'completed', at: this.opts.now(), shots: mockShotList(req.input.script ?? '', req.input.targetS ?? 10, names, req.input.shots ?? []), outputs: [] }
         } else {
           const rendered = await this.opts.renderer.render(req, this.opts.getInput)
           const outputs: Output[] = []
@@ -267,6 +458,7 @@ export class MockRelay implements Relay {
             if (r.w) o.w = r.w
             if (r.h) o.h = r.h
             if (r.durationS) o.durationS = Math.round(r.durationS * 100) / 100
+            if (r.croppedFrom) o.croppedFrom = { ...r.croppedFrom }
             outputs.push(o)
           }
           if (!item.done) item.done = { state: 'completed', at: this.opts.now(), outputs }
@@ -283,12 +475,25 @@ export class MockRelay implements Relay {
     const item = this.ledger.get(jobId)!
     const { req } = item
     const now = this.opts.now()
-    const elapsed = now - item.createdAt
+    // An answered question starts the job's clock again: it goes on from where it stopped.
+    const elapsed = now - (item.answeredAt ?? item.createdAt)
     const delay = this.delayFor(req.op)
+    // Change this frame: the passthrough's reading of the words (jobs/frameEdit.ts), its ask included.
+    const frameEdit = req.op === 'frame_edit' ? mockFrameEdit(req.input, frameAnswer(item))
+      // The Image editor's whole-frame change on a shot's frame asks the same recast (relay director.v9.1 region_edit).
+      : req.op === 'region_edit' && mockRecasts(req.input, frameAnswer(item)) ? { question: recastQuestion('Change anyway') } : undefined
+    const words = `${req.input.text ?? ''} ${req.input.script ?? ''} ${(req.input.write?.lines ?? []).map((l) => l.text).join(' ')}`
+    const asks = (ASK.test(words) || !!frameEdit?.question) && !req.input.answer
     let state: JobState
     let queuePosition: number | undefined
     if (item.done) {
       state = item.done.state
+    } else if (asks && !item.answer && elapsed >= delay * 0.4) {
+      state = 'needs_input'
+      if (!item.question) {
+        item.question = frameEdit?.question ? { id: newUlidId('q'), ...frameEdit.question } : mockQuestion()
+        this.save()
+      }
     } else if (elapsed < delay * 0.4) {
       state = 'queued'
       queuePosition = Math.max(1, item.startPos - Math.floor(elapsed / (delay * 0.15)))
@@ -302,9 +507,16 @@ export class MockRelay implements Relay {
     const hashes = new Set<string>()
     collectHashes(req.input, hashes)
     const job: Job = {
-      contractVersion: '2',
+      contractVersion: '3',
       jobId,
       participantId: this.participantId,
+      tenantId: MOCK_TENANT.id,
+      projectId: req.projectId,
+      startedBy: `human:${this.participantId}`,
+      crew: crewFor(req.op) as CrewId,
+      node: req.node,
+      nonce: req.nonce,
+      ...(req.purpose ? { purpose: req.purpose } : {}),
       op: req.op,
       quotaClass: quotaClassOf(req.op),
       state,
@@ -319,11 +531,47 @@ export class MockRelay implements Relay {
       updatedAt: new Date(item.done?.at ?? now).toISOString(),
     }
     if (queuePosition !== undefined) job.queuePosition = queuePosition
+    if (req.op === 'clip' || req.op === 'clip_edit') {
+      // What ran, as the relay says it (features/clip-quality.clan): the level and its size on the model's sheet.
+      const sized = resolveQuality(req.op, req.modelChoice?.provider ?? 'mock', req.modelChoice?.model, req.quality)
+      job.model = sized.model
+      if (sized.level && sized.tier && !sized.keepsSize) job.quality = { level: sized.level, size: sizeLabel(sized.tier)! }
+    }
     if (item.done?.outputs) job.outputs = item.done.outputs
+    // A take's cuts (features/connected-video.clan): the mock cuts at the prompt's times, so each is found
+    // there (the relay's take_cuts finds a real one within the model's accuracy).
+    if (item.done?.state === 'completed' && req.op === 'clip' && (req.input.mode === 'take' || req.input.mode === 'take_refs')) {
+      job.cuts = mockCuts(req.input)
+    }
+    // A clip made to end on a frame lands on it (the relay's land stage): the mock's last frame, one before its end.
+    const landed = job.outputs?.[0]?.durationS
+    if (item.done?.state === 'completed' && req.op === 'clip' && (req.input.lastFrame || (req.input.window && 'withLast' in req.input.window && req.input.window.withLast)) && landed) {
+      job.landS = Math.round((landed - 1 / 24) * 1000) / 1000
+    }
     if (item.done?.shots) job.shots = item.done.shots
+    if (item.done?.writes) job.writes = item.done.writes
     if (item.done?.error) job.error = item.done.error
-    if (item.done?.state === 'completed') job.needsUser = null
+    if (item.done?.handoff) job.handoff = item.done.handoff
+    // [same]: the edit came back the same picture (the relay's sameness check), so no Apply is offered.
+    if (item.done?.state === 'completed' && (req.op === 'frame_edit' || req.op === 'region_edit') && /\[same\]/i.test(req.input.text ?? '')) job.unchanged = true
+    if (item.question) job.question = item.question
+    if (frameEdit?.edit && state !== 'needs_input') {
+      job.director = {
+        model: 'passthrough', promptVersion: 'director.v0', rationale: `mock: read as a ${frameEdit.edit.reading} change`,
+        output: { op: 'frame_edit', frameEdit: frameEdit.edit, question: null, rationale: 'mock', confidence: 0.1 },
+      }
+    }
+    if (item.answer && item.answeredBy) {
+      job.answer = item.answer
+      job.answeredBy = item.answeredBy
+    }
     return job
   }
 }
 
+/** Where the mock take cuts: at each shot's start after the first (the request's cuts, else the shots' lengths). */
+export function mockCuts(input: JobRequest['input']): { planned_s: number; found_s: number | null }[] {
+  let at = 0
+  const starts = input.cuts?.map((c) => c.atS) ?? (input.shots ?? []).map((s) => { const a = at; at += s.duration_s; return a })
+  return starts.slice(1).map((s) => ({ planned_s: s, found_s: s }))
+}

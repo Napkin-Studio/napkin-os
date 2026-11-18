@@ -1404,3 +1404,278 @@ async fn another_servers_publish_is_seen_within_recheck() {
     assert_eq!(looks(&s).await[0]["id"], "kin");
     assert_eq!(row(&s, &me, "kin").await["published"], true);
 }
+
+async fn patch_draft(s: &Server, c: &str, id: &str, body: Value) -> (StatusCode, Value) {
+    let (st, v, _) = call(
+        s,
+        "PATCH",
+        &format!("/api/admin/agencies/{id}/draft"),
+        Some(c),
+        Some(body),
+    )
+    .await;
+    (st, v)
+}
+
+#[tokio::test]
+async fn style_switches_draft_validate_and_clear_back_to_default() {
+    let s = server();
+    let me = sign_in(&s, "engineer@napkin").await.unwrap();
+    let rev = published_rothco(&s, &me).await;
+    // a published agency without them carries none, on the row and on agency-looks
+    let r = row(&s, &me, "rothco").await;
+    for k in ["pill", "accent_use", "surface", "accent_ink"] {
+        assert!(r.get(k).is_none(), "{k} on {r}");
+    }
+    assert_eq!(
+        looks(&s).await,
+        json!([{"id": "rothco", "name": "Rothco", "base": "#0F6B5C", "accent": "#9FE6D8", "aliases": ["roth"], "rev": rev}])
+    );
+    // bad values are 400, in plain words, and change nothing
+    for body in [
+        json!({"pill": "outline", "rev": rev}),
+        json!({"pill": true, "rev": rev}),
+        json!({"accent_use": "Fill", "rev": rev}),
+        json!({"accent_use": "stroke", "rev": rev}),
+        json!({"surface": "paper", "rev": rev}),
+        json!({"accent_ink": "navy", "rev": rev}),
+        json!({"accent_ink": "#12345", "rev": rev}),
+        json!({"accentInk": "#000047", "rev": rev}),
+    ] {
+        let (st, v) = patch_draft(&s, &me, "rothco", body.clone()).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST, "{body}: {v}");
+        assert!(v["error"].is_string());
+    }
+    assert_eq!(row(&s, &me, "rothco").await["rev"], rev);
+    // each one drafts; the published look is untouched
+    let (st, v) = patch_draft(
+        &s,
+        &me,
+        "rothco",
+        json!({"pill": "base", "accent_use": "line", "surface": "mono", "accent_ink": "#00004a", "rev": rev}),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    assert_eq!(
+        (
+            &v["draft"]["pill"],
+            &v["draft"]["accent_use"],
+            &v["draft"]["surface"],
+            &v["draft"]["accent_ink"]
+        ),
+        (
+            &json!("base"),
+            &json!("line"),
+            &json!("mono"),
+            &json!("#00004A")
+        )
+    );
+    assert!(v.get("pill").is_none(), "not published yet: {v}");
+    assert!(looks(&s).await[0].get("pill").is_none());
+    // null clears one back to the default; the default named is the same as null
+    let (st, v) = patch_draft(
+        &s,
+        &me,
+        "rothco",
+        json!({"accent_ink": null, "surface": "warm", "rev": rev + 1}),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    assert!(v["draft"].get("accent_ink").is_none(), "{v}");
+    assert!(v["draft"].get("surface").is_none(), "{v}");
+    assert_eq!(v["draft"]["pill"], "base");
+    // all back to the default: no change left, the draft tidies away
+    let (st, v) = patch_draft(
+        &s,
+        &me,
+        "rothco",
+        json!({"pill": "accent", "accent_use": null, "rev": rev + 2}),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    assert_eq!(v["draft"], Value::Null);
+    // an agency in code takes none of them
+    for body in [
+        json!({"pill": "base", "rev": 0}),
+        json!({"accent_use": "line", "rev": 0}),
+        json!({"surface": "mono", "rev": 0}),
+        json!({"accent_ink": "#000000", "rev": 0}),
+        json!({"accent_ink": null, "rev": 0}),
+        json!({"name": "Pluto Dublin", "pill": "accent", "rev": 0}),
+    ] {
+        let (st, v) = patch_draft(&s, &me, "pluto", body.clone()).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST, "{body}: {v}");
+    }
+    assert_eq!(row(&s, &me, "pluto").await["draft"], Value::Null);
+}
+
+#[tokio::test]
+async fn style_switches_publish_reach_agency_looks_and_copy_to_code() {
+    let s = server();
+    let me = sign_in(&s, "engineer@napkin").await.unwrap();
+    // ACNE as made from the page
+    let (st, v, _) = call(
+        &s,
+        "POST",
+        "/api/admin/agencies",
+        Some(&me),
+        Some(json!({"name": "Acne Twin", "base": "#000000", "accent": "#86BC25"})),
+    )
+    .await;
+    assert_eq!(st, StatusCode::CREATED, "{v}");
+    let (st, v) = patch_draft(
+        &s,
+        &me,
+        "acnetwin",
+        json!({"pill": "base", "accent_use": "line", "surface": "mono", "rev": v["rev"]}),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    let (st, v, _) = call(
+        &s,
+        "POST",
+        "/api/admin/agencies/acnetwin/publish",
+        Some(&me),
+        Some(json!({"rev": v["rev"]})),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    assert_eq!(
+        (
+            &v["pill"],
+            &v["accent_use"],
+            &v["surface"],
+            v.get("accent_ink"),
+            &v["draft"]
+        ),
+        (
+            &json!("base"),
+            &json!("line"),
+            &json!("mono"),
+            None,
+            &Value::Null
+        )
+    );
+    let rev = v["rev"].as_u64().unwrap();
+    assert_eq!(
+        looks(&s).await,
+        json!([{"id": "acnetwin", "name": "Acne Twin", "base": "#000000", "accent": "#86BC25",
+                "aliases": [], "rev": rev, "pill": "base", "accent_use": "line", "surface": "mono"}])
+    );
+    let (st, v, _) = call(
+        &s,
+        "GET",
+        "/api/admin/agencies/acnetwin/export",
+        Some(&me),
+        None,
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    assert_eq!(
+        v["palette_ts"],
+        "// AGENCY_COLOURS\n  acnetwin: {\n    name: 'Acne Twin', base: '#000000', accent: '#86BC25', pill: 'base', accentUse: 'line', surface: 'mono',\n  },"
+    );
+    assert_eq!(
+        v["people_rs"], "    (\"acnetwin\", \"Acne Twin\", \"#000000\", \"#86BC25\"),",
+        "the Rust mirror stays four fields"
+    );
+    // a draft that changes them reaches neither until published; discard drops it
+    let (st, v) = patch_draft(
+        &s,
+        &me,
+        "acnetwin",
+        json!({"pill": null, "accent_ink": "#FFFFFF", "rev": rev}),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    assert_eq!(v["pill"], "base");
+    assert!(v["draft"].get("pill").is_none());
+    assert_eq!(v["draft"]["accent_ink"], "#FFFFFF");
+    assert_eq!(looks(&s).await[0]["pill"], "base");
+    assert!(looks(&s).await[0].get("accent_ink").is_none());
+    let (st, v, _) = call(
+        &s,
+        "DELETE",
+        "/api/admin/agencies/acnetwin/draft",
+        Some(&me),
+        None,
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK, "{v}");
+    assert_eq!(
+        (&v["draft"], &v["pill"], v.get("accent_ink")),
+        (&Value::Null, &json!("base"), None)
+    );
+    // publishing the text on the accent puts it in the export too
+    patch_draft(
+        &s,
+        &me,
+        "acnetwin",
+        json!({"accent_ink": "#000047", "rev": rev + 2}),
+    )
+    .await;
+    let (st, _, _) = call(
+        &s,
+        "POST",
+        "/api/admin/agencies/acnetwin/publish",
+        Some(&me),
+        Some(json!({"rev": rev + 3})),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(looks(&s).await[0]["accent_ink"], "#000047");
+    let (_, v, _) = call(
+        &s,
+        "GET",
+        "/api/admin/agencies/acnetwin/export",
+        Some(&me),
+        None,
+    )
+    .await;
+    assert_eq!(
+        v["palette_ts"],
+        "// AGENCY_COLOURS\n  acnetwin: {\n    name: 'Acne Twin', base: '#000000', accent: '#86BC25', pill: 'base', accentUse: 'line', surface: 'mono', accentInk: '#000047',\n  },"
+    );
+}
+
+#[tokio::test]
+async fn an_agency_kept_without_style_switches_is_stored_as_before() {
+    let old = r##"{"people":[{"id":"engineer@napkin","name":"Shrey","agency":"napkin","admin":true,"added_by":"roster","added_at":"2026-11-12T10:00:00Z"}],
+        "agencies":[{"id":"rothco","name":"Rothco","base":"#0F6B5C","accent":"#9FE6D8","aliases":["roth"],"wordmark":null,"published":true,"draft":null,"rev":3,"published_rev":3,"added_by":"engineer@napkin","added_at":"2026-11-12T10:00:00Z"}]}"##;
+    let s = server_with(Some(old));
+    let me = sign_in(&s, "engineer@napkin").await.unwrap();
+    assert_eq!(
+        looks(&s).await,
+        json!([{"id": "rothco", "name": "Rothco", "base": "#0F6B5C", "accent": "#9FE6D8", "aliases": ["roth"], "rev": 3}])
+    );
+    // a change and its publish without style switches write none to the store
+    patch_draft(&s, &me, "rothco", json!({"accent": "#FFFFFF", "rev": 3})).await;
+    call(
+        &s,
+        "POST",
+        "/api/admin/agencies/rothco/publish",
+        Some(&me),
+        Some(json!({"rev": 4})),
+    )
+    .await;
+    let kept: Value =
+        serde_json::from_slice(&std::fs::read(s._dir.path().join("_people/people.json")).unwrap())
+            .unwrap();
+    let a = &kept["agencies"][0];
+    assert_eq!(a["accent"], "#FFFFFF");
+    for k in ["pill", "accent_use", "surface", "accent_ink"] {
+        assert!(a.get(k).is_none(), "{k} kept: {a}");
+    }
+    let (_, v, _) = call(
+        &s,
+        "GET",
+        "/api/admin/agencies/rothco/export",
+        Some(&me),
+        None,
+    )
+    .await;
+    assert_eq!(
+        v["palette_ts"],
+        "// AGENCY_COLOURS\n  rothco: {\n    name: 'Rothco', base: '#0F6B5C', accent: '#FFFFFF',\n  },\n// AGENCY_ALIASES\n  'roth': 'rothco',"
+    );
+}

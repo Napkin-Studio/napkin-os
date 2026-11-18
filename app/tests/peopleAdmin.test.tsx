@@ -20,12 +20,13 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { accountItems } from '../src/components/barMenus.ts'
 import {
   AGENCY_ALIASES, AGENCY_COLOURS, NAPKIN_COLOURS, agencyNameOf, canonicalAgencyId, coloursOf, markOf, pillOf, registerAgencyLooks,
+  type AgencyColours,
 } from '../src/shell/agency/palette.ts'
 import { signInLookOf } from '../src/shell/agency/signInLook.ts'
 import PeoplePage, { AddSheet } from '../src/shell/people/PeoplePage.tsx'
 import { AgencyEditorView } from '../src/shell/people/agencies/AgencyEditor.tsx'
 import { discard, edit, openNew, openRow, publish, resetName, saveDraft, toggleCopy, upload, type EditorState } from '../src/shell/people/agencies/editor.ts'
-import type { BasicRow } from '../src/shell/people/agencies/model.ts'
+import { registerRows, startInk, type BasicRow } from '../src/shell/people/agencies/model.ts'
 import { MOCK_PEOPLE, cannedFiles, fakePeopleApi, mockAgencies } from './peopleFake.ts'
 import {
   PEOPLE_ADMINS, agencyFieldFromSignInName, agencySlug, isPeopleAdmin, napkinPageCss, newAgencyLook, peopleEntryFor,
@@ -354,3 +355,125 @@ test('Copy to code: only for a published basic agency, with its four boxes and t
   assert.match(html, />Hide the code</)
   assert.equal((await toggleCopy(api, shown)).copy, null)
 })
+
+// The Style card (features/agency-style.clan; mock people-agencies-v4, states 9-11)
+const segOf = (html: string, name: string) => {
+  const at = html.indexOf(`data-testid="seg-${name}"`)
+  return [...html.slice(at, html.indexOf('</span>', at)).matchAll(/<button type="button"( class="on")? aria-pressed="(true|false)">([^<]+)<\/button>/g)].map(m => [m[3], m[2] === 'true'] as const)
+}
+const onOf = (html: string, name: string) => segOf(html, name).find(([, on]) => on)?.[0]
+const frame = (html: string, theme: 'light' | 'dark') => { const at = html.indexOf(`data-testid="preview-${theme}"`); return html.slice(html.lastIndexOf('<div', at), html.indexOf('BRIEF HEADER', at)) }
+
+test('the Style card: four switches between Colours and Wordmark, defaults are today\'s look', () => {
+  const api = fakePeopleApi()
+  const html = view(openRow(rowOf(api, 'saltmarsh')))
+  assert.ok(html.indexOf('data-testid="colours"') < html.indexOf('data-testid="style-card"') && html.indexOf('data-testid="style-card"') < html.indexOf('data-testid="wordmark-card"'), 'between Colours and Wordmark')
+  assert.deepEqual(segOf(html, 'Pill'), [['Accent fill', true], ['Base with accent outline', false]])
+  assert.deepEqual(segOf(html, 'Accent use'), [['Fill', true], ['Outline only', false]])
+  assert.deepEqual(segOf(html, 'Surfaces'), [['Warm paper', true], ['Plain', false]])
+  assert.deepEqual(segOf(html, 'Text on accent'), [['Automatic', true], ['Choose a colour', false]])
+  assert.match(html, /data-testid="auto-ink"><i style="background:#101114"><\/i>near-black, worked out/)
+  assert.match(html, /These change how the two colours are used, not the colours\./)
+  // today's look, unchanged: the accent pill, warm desk, and the six rows
+  assert.match(frame(html, 'light'), /data-testid="look-pill" style="background:#9AD1E8;color:#101114"/)
+  assert.match(frame(html, 'light'), /--desk:#/)
+  assert.doesNotMatch(frame(html, 'light'), /--ag-pill-line|--ag-act-line|--desk:#F5F5F4/)
+  assert.equal((html.match(/<li class="good"/g) ?? []).length, 6)
+  // an agency in code has no switches
+  assert.doesNotMatch(view(openRow(rowOf(api, 'acne'))), /data-testid="style-card"/)
+})
+
+test('the Style card: an ACNE twin made on the page; each switch goes to the draft, previews and checks follow, publish carries them', async () => {
+  const api = fakePeopleApi()
+  let st = openRow(rowOf(api, 'saltmarsh'))
+  st = edit(st, { base: '#000000', accent: '#86BC25' })
+  st = edit(st, { pill: 'base' })
+  st = edit(st, { accentUse: 'line' })
+  st = edit(st, { surface: 'mono' })
+  st = await saveDraft(api, st, ['base', 'accent', 'pill', 'accentUse', 'surface', 'accentInk'])
+  assert.deepEqual(api.heard.at(-1), { call: 'patchDraft', args: ['saltmarsh', { rev: 4, base: '#000000', accent: '#86BC25', pill: 'base', accent_use: 'line', surface: 'mono', accent_ink: null }] })
+  const d = (rowOf(api, 'saltmarsh') as BasicRow).draft!
+  assert.deepEqual([d.pill, d.accent_use, d.surface, d.accent_ink], ['base', 'line', 'mono', undefined])
+  const html = view(st)
+  assert.equal(onOf(html, 'Pill'), 'Base with accent outline')
+  assert.equal(onOf(html, 'Accent use'), 'Outline only')
+  assert.equal(onOf(html, 'Surfaces'), 'Plain')
+  // the previews: the base pill with the accent rim, plain surfaces, outlined buttons, in both themes
+  for (const theme of ['light', 'dark'] as const) {
+    const f = frame(html, theme)
+    assert.match(f, /data-testid="look-pill" style="background:#000000;color:#FFFFFF;box-shadow:inset 0 0 0 1.5px #86BC25"/, theme)
+    assert.match(f, /--ag-act:#000000/, `${theme}: the buttons are the base`)
+    assert.match(f, /--ag-act-line:#86BC25/, theme)
+    assert.match(f, theme === 'light' ? /--desk:#F5F5F4/ : /--desk:#000000/, `${theme}: plain`)
+  }
+  // Does it read? follows: the buttons named for the base, the needs badge and the outline
+  const checks = html.slice(html.indexOf('data-testid="checks"'))
+  for (const l of ['Text on the pill', 'Text on the base \\(buttons, light\\)', 'Text on the base \\(buttons, dark\\)', 'Text on the accent \\(needs badge\\)', 'Accent outline on the base \\(pill, buttons\\)'])
+    assert.match(checks, new RegExp(`<span>${l}</span>`), l)
+  assert.match(checks, /<span class="sw" style="background:#000000;box-shadow:inset 0 0 0 2px #86BC25"><\/span><span>Accent outline/)
+  assert.match(checks, /all read/)
+  // back to a default clears the field (null on the wire)
+  const back = await saveDraft(api, edit(st, { surface: 'warm' }), ['surface'])
+  assert.deepEqual(api.heard.at(-1)!.args[1], { rev: 5, surface: null })
+  assert.equal((rowOf(api, 'saltmarsh') as BasicRow).draft!.surface, undefined)
+  // publish: the live look carries them, and so does what /agency-looks would serve
+  const live = await publish(api, await saveDraft(api, edit(back, { surface: 'mono' }), ['surface']))
+  const row = rowOf(api, 'saltmarsh') as BasicRow
+  assert.deepEqual([row.pill, row.accent_use, row.surface, row.accent_ink], ['base', 'line', 'mono', undefined])
+  assert.equal(live.look.pill, 'base')
+  registerRows(api.rows)
+  assert.deepEqual(pick(coloursOf('saltmarsh')!), { pill: 'base', accentUse: 'line', surface: 'mono', accentInk: undefined })
+  registerAgencyLooks([])
+  // Copy to code has the style lines
+  const copy = await toggleCopy(api, live)
+  assert.match(copy.copy!.palette_ts, /\n {4}name: 'Saltmarsh', base: '#000000', accent: '#86BC25', pill: 'base', accentUse: 'line', surface: 'mono',\n/)
+  assert.match(view(copy), /pill: &#x27;base&#x27;, accentUse: &#x27;line&#x27;, surface: &#x27;mono&#x27;,/)
+})
+
+test('the Style card: text on the accent set (Marlow Bay, navy on lime) starts from the base and reads', async () => {
+  const api = fakePeopleApi()
+  let st = edit(openNew(), { name: 'Marlow Bay', base: '#0B1F4D', accent: '#A8E04A' })
+  assert.match(view(st), /near-black, worked out/)
+  // "Choose a colour" starts from the base, which reads on the lime
+  assert.equal(startInk(st.look), '#0B1F4D')
+  assert.equal(startInk({ base: '#1F4E3D', accent: '#5A9A78' }), '#101114', 'a base that does not read: the worked-out ink')
+  st = edit(st, { accentInk: startInk(st.look) })
+  const html = view(st)
+  assert.equal(onOf(html, 'Text on accent'), 'Choose a colour')
+  assert.match(html, /aria-label="Text on accent" class="ag-hex" maxLength="7" placeholder="#RRGGBB" value="#0B1F4D"/)
+  assert.doesNotMatch(html, /data-testid="auto-ink"/)
+  assert.match(frame(html, 'light'), /data-testid="look-pill" style="background:#A8E04A;color:#0B1F4D"/)
+  assert.match(frame(html, 'dark'), /--ag-act:#A8E04A;--ag-act-ink:#0B1F4D/, 'the dark buttons: navy on lime')
+  // a new agency: made, its style to the draft, then published
+  const live = await publish(api, st)
+  assert.deepEqual(calls(api), ['createAgency', 'patchDraft', 'publish'])
+  assert.deepEqual(api.heard[1].args, ['marlowbay', { accent_ink: '#0B1F4D', rev: 1 }])
+  assert.equal((rowOf(api, 'marlowbay') as BasicRow).accent_ink, '#0B1F4D')
+  assert.equal(live.look.accentInk, '#0B1F4D')
+  assert.match((await toggleCopy(api, live)).copy!.palette_ts, /accent: '#A8E04A', accentInk: '#0B1F4D',\n/, 'accentInk at the end of the first line')
+  // a default-style new agency sends no style at all
+  const api2 = fakePeopleApi()
+  await publish(api2, edit(openNew(), { name: 'Plain Co', base: '#0B1F4D', accent: '#A8E04A' }))
+  assert.deepEqual(calls(api2), ['createAgency', 'publish'])
+})
+
+test('the fake server refuses a bad style value, and an agency in code takes no style', async () => {
+  const api = fakePeopleApi()
+  await assert.rejects(api.patchDraft('saltmarsh', { rev: 4, pill: 'round' as never }), /pill/)
+  await assert.rejects(api.patchDraft('saltmarsh', { rev: 4, accent_ink: 'navy' }), /accent_ink/)
+  await assert.rejects(api.patchDraft('acne', { rev: 1, pill: 'base' }), /name only/)
+  assert.throws(() => edit(openRow(rowOf(api, 'acne')), { surface: 'warm' }), /name only/)
+})
+
+test('an agency in code lists its style read-only', () => {
+  const api = fakePeopleApi()
+  const html = view(openRow(rowOf(api, 'acne')))
+  const style = html.slice(html.indexOf('>', html.indexOf('data-testid="code-style"')) + 1, html.indexOf('<label>Logos'))
+  const words = style.replace(/<[^>]+>/g, '').split('·').map(s => s.trim())
+  assert.deepEqual(words, ['Pill: base with accent outline', 'Accent: outline only', 'Surfaces: plain', 'Text on accent: automatic'])
+  const pluto = view(openRow(rowOf(api, 'pluto')))
+  assert.match(pluto, /Text on accent: <i style="background:#000047"><\/i><span class="ag-mono">#000047<\/span>/)
+  assert.match(pluto, /Pill: accent fill.*Accent: fill.*Surfaces: warm paper/)
+})
+
+const pick = (c: AgencyColours) => ({ pill: c.pill, accentUse: c.accentUse, surface: c.surface, accentInk: c.accentInk })

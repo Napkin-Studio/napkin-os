@@ -12,12 +12,13 @@ function relay() {
 }
 
 const clip = (s: string, locations: string[]): DocAsset => ({ sha256: s, kind: 'video', mime: 'video/mp4', origin: 'generated', locations })
+const assets = (...list: DocAsset[]) => Object.fromEntries(list.map((a) => [a.sha256, a]))
 
 describe('an asset the relay already has', () => {
   it('a relay-made clip goes by its https location, not uploaded again, even with no bytes here', async () => {
     const r = relay()
     const s = sha('a')
-    const doc = { assets: [clip(s, [`idb://sha256/${'a'.repeat(64)}`, 'https://cdn.test/out/a'])] }
+    const doc = { assets: assets(clip(s, [`idb://sha256/${'a'.repeat(64)}`, 'https://cdn.test/out/a'])) }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(await assetRef(r as any, s, doc)).toEqual({ sha256: s, url: 'https://cdn.test/out/a', mime: 'video/mp4' })
     expect(r.upload).not.toHaveBeenCalled()
@@ -27,17 +28,27 @@ describe('an asset the relay already has', () => {
     const r = relay()
     const s = sha('b')
     await putBlobAs(s, new Blob(['mp4'], { type: 'video/mp4' }))
-    const doc = { assets: [clip(s, [`idb://sha256/${'b'.repeat(64)}`])] }
+    const doc = { assets: assets(clip(s, [`idb://sha256/${'b'.repeat(64)}`])) }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ref = await assetRef(r as any, s, doc)
     expect(r.upload).toHaveBeenCalledTimes(1)
     expect(ref.url).toBe('https://cdn.test/in/x')
   })
 
+  it('a picture asked for twice at once is uploaded once (QA 2026-11-17: Update sizes raced its new master)', async () => {
+    const r = relay()
+    const s = sha('d')
+    await putBlobAs(s, new Blob(['png'], { type: 'image/png' }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const refs = await Promise.all([assetRef(r as any, s), assetRef(r as any, s), assetRef(r as any, s)])
+    expect(r.upload).toHaveBeenCalledTimes(1)
+    expect(new Set(refs.map((x) => x.url)).size).toBe(1)
+  })
+
   it('remoteUrl is the first https location', () => {
     const s = sha('c')
-    expect(remoteUrl({ assets: [clip(s, ['idb://x', 'https://cdn.test/out/c'])] }, s)).toBe('https://cdn.test/out/c')
-    expect(remoteUrl({ assets: [clip(s, ['idb://x'])] }, s)).toBeUndefined()
-    expect(remoteUrl({ assets: [] }, undefined)).toBeUndefined()
+    expect(remoteUrl({ assets: assets(clip(s, ['idb://x', 'https://cdn.test/out/c'])) }, s)).toBe('https://cdn.test/out/c')
+    expect(remoteUrl({ assets: assets(clip(s, ['idb://x'])) }, s)).toBeUndefined()
+    expect(remoteUrl({ assets: {} }, undefined)).toBeUndefined()
   })
 })

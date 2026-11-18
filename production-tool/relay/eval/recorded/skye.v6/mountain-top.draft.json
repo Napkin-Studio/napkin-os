@@ -1,0 +1,51 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "mode": "draft",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. MOUNTAIN SUMMIT - DAWN"
+     },
+     {
+      "type": "action",
+      "text": "@maya_front climbs the last steps onto @peak_dawn, breathing hard."
+     },
+     {
+      "type": "action",
+      "text": "Clouds roll far below, lit gold by the rising sun."
+     },
+     {
+      "type": "action",
+      "text": "She drops her backpack on the rock."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front spreads her arms. Wind whips her jacket and hair."
+     },
+     {
+      "type": "action",
+      "text": "She tilts her head back and laughs."
+     },
+     {
+      "type": "action",
+      "text": "The sun clears the horizon and floods the summit with light."
+     },
+     {
+      "type": "action",
+      "text": "She stands still, small against the endless sky."
+     }
+    ],
+    "note": "I drafted a short summit scene from your line: arrival, backpack drop, arms out in the wind."
+   }
+  ],
+  "rationale": "Expanded the one-line action into a single-location 15 s scene of seven short action beats (about 14 s), visual only, keeping @maya_front and @peak_dawn as written."
+ }
+}

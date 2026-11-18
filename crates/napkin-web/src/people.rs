@@ -23,8 +23,9 @@
 //! modification time, checked at most every [`RECHECK`].
 //!
 //! Two tiers of agency (features/agency-looks-admin.clan). `agencies` are the
-//! basic ones, made on the page: a name, aliases, base, accent and one SVG
-//! wordmark, every change going to a draft until it is published. `names`
+//! basic ones, made on the page: a name, aliases, base, accent, one SVG
+//! wordmark and the optional style switches (features/agency-style.clan),
+//! every change going to a draft until it is published. `names`
 //! holds the display names given on the page to agencies kept in code, the
 //! only thing about them the page can change. The shell's registry
 //! (app/src/shell/agency/palette.ts `AGENCY_COLOURS`, `AGENCY_ALIASES`) keeps
@@ -118,8 +119,44 @@ where
     Option::<T>::deserialize(d).map(Some)
 }
 
+/// The pill's ground: the accent (the default), or the base with an accent
+/// hairline (palette.ts `AgencyColours.pill`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Pill {
+    #[default]
+    Accent,
+    Base,
+}
+
+/// How the accent is used: as a fill (the default), or only as a line
+/// (palette.ts `AgencyColours.accentUse`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AccentUse {
+    #[default]
+    Fill,
+    Line,
+}
+
+/// The surfaces: the studio's warm paper tinted with the base (the default),
+/// or plain neutral ones (palette.ts `AgencyColours.surface`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Surface {
+    #[default]
+    Warm,
+    Mono,
+}
+
+/// A style switch as kept: the default is not kept (absent means default).
+fn not_default<T: Default + PartialEq>(v: Option<T>) -> Option<T> {
+    v.filter(|v| *v != T::default())
+}
+
 /// What a basic agency's draft changes, field by field; an absent field is the
-/// published one. `wordmark: null` takes the published wordmark away.
+/// published one. `wordmark: null` takes the published wordmark away; a
+/// style switch given as `null` goes back to the default.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BasicDraft {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -136,6 +173,30 @@ pub struct BasicDraft {
         deserialize_with = "present"
     )]
     pub wordmark: Option<Option<Wordmark>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    pub pill: Option<Option<Pill>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    pub accent_use: Option<Option<AccentUse>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    pub surface: Option<Option<Surface>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    pub accent_ink: Option<Option<String>>,
 }
 
 impl BasicDraft {
@@ -161,6 +222,18 @@ pub struct AgencyRec {
     pub aliases: Vec<String>,
     #[serde(default)]
     pub wordmark: Option<Wordmark>,
+    /// The style switches (features/agency-style.clan); absent is the
+    /// default look: accent pill, accent as a fill, warm surfaces, and the
+    /// text on the accent chosen automatically.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pill: Option<Pill>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent_use: Option<AccentUse>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface: Option<Surface>,
+    /// `#RRGGBB`: the text on the accent, instead of the automatic one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent_ink: Option<String>,
     /// False until the first Publish: then it is not on `/agency-looks` and
     /// people cannot be added to it.
     #[serde(default = "yes")]
@@ -197,6 +270,10 @@ pub struct BasicLook {
     pub base: String,
     pub accent: String,
     pub wordmark: Option<Wordmark>,
+    pub pill: Option<Pill>,
+    pub accent_use: Option<AccentUse>,
+    pub surface: Option<Surface>,
+    pub accent_ink: Option<String>,
 }
 
 impl AgencyRec {
@@ -208,6 +285,10 @@ impl AgencyRec {
             base: self.base.clone(),
             accent: self.accent.clone(),
             wordmark: self.wordmark.clone(),
+            pill: self.pill,
+            accent_use: self.accent_use,
+            surface: self.surface,
+            accent_ink: self.accent_ink.clone(),
         }
     }
 
@@ -221,6 +302,10 @@ impl AgencyRec {
             base: d.base.clone().unwrap_or(l.base),
             accent: d.accent.clone().unwrap_or(l.accent),
             wordmark: d.wordmark.clone().unwrap_or(l.wordmark),
+            pill: d.pill.unwrap_or(l.pill),
+            accent_use: d.accent_use.unwrap_or(l.accent_use),
+            surface: d.surface.unwrap_or(l.surface),
+            accent_ink: d.accent_ink.clone().unwrap_or(l.accent_ink),
         })
     }
 
@@ -254,6 +339,18 @@ impl AgencyRec {
             }
             if d.wordmark.as_ref() == Some(&l.wordmark) {
                 d.wordmark = None;
+            }
+            if d.pill == Some(l.pill) {
+                d.pill = None;
+            }
+            if d.accent_use == Some(l.accent_use) {
+                d.accent_use = None;
+            }
+            if d.surface == Some(l.surface) {
+                d.surface = None;
+            }
+            if d.accent_ink.as_ref() == Some(&l.accent_ink) {
+                d.accent_ink = None;
             }
             if self.published && d.is_empty() {
                 self.draft = None;
@@ -494,6 +591,7 @@ pub struct NewAgency {
 
 /// A change to an agency's draft. A basic agency takes any of the fields; an
 /// agency in code only `name`. `rev` is the agency's as the page last read it.
+/// A style switch absent is unchanged; `null` puts it back to the default.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DraftEdit {
@@ -505,6 +603,14 @@ pub struct DraftEdit {
     pub base: Option<String>,
     #[serde(default)]
     pub accent: Option<String>,
+    #[serde(default, deserialize_with = "present")]
+    pub pill: Option<Option<Pill>>,
+    #[serde(default, deserialize_with = "present")]
+    pub accent_use: Option<Option<AccentUse>>,
+    #[serde(default, deserialize_with = "present")]
+    pub surface: Option<Option<Surface>>,
+    #[serde(default, deserialize_with = "present")]
+    pub accent_ink: Option<Option<String>>,
     #[serde(default)]
     pub rev: Option<u64>,
 }
@@ -816,6 +922,10 @@ impl People {
                 accent: accent.clone(),
                 aliases: aliases.clone(),
                 wordmark: None,
+                pill: None,
+                accent_use: None,
+                surface: None,
+                accent_ink: None,
                 published: false,
                 draft: Some(BasicDraft::default()),
                 rev: 1,
@@ -858,10 +968,23 @@ impl People {
             None => None,
         };
         let aliases = req.aliases.as_deref().map(clean_aliases);
+        let pill = req.pill.map(not_default);
+        let accent_use = req.accent_use.map(not_default);
+        let surface = req.surface.map(not_default);
+        let accent_ink = match &req.accent_ink {
+            Some(Some(c)) => Some(Some(hex_colour(c).ok_or_else(|| {
+                Refusal::Bad(
+                    "The text on the accent must be #rrggbb, or null for automatic.".into(),
+                )
+            })?)),
+            other => other.clone(),
+        };
+        let styled =
+            pill.is_some() || accent_use.is_some() || surface.is_some() || accent_ink.is_some();
         self.change(by, "agency draft changed", |book| {
             match kind_of(book, id)? {
                 Kind::Code(code) => {
-                    if aliases.is_some() || base.is_some() || accent.is_some() {
+                    if aliases.is_some() || base.is_some() || accent.is_some() || styled {
                         return code_only_name();
                     }
                     let current = book.names.get(id).map_or(0, |n| n.rev);
@@ -919,11 +1042,25 @@ impl People {
                     if accent.is_some() {
                         d.accent = accent.clone();
                     }
+                    if pill.is_some() {
+                        d.pill = pill;
+                    }
+                    if accent_use.is_some() {
+                        d.accent_use = accent_use;
+                    }
+                    if surface.is_some() {
+                        d.surface = surface;
+                    }
+                    if accent_ink.is_some() {
+                        d.accent_ink = accent_ink.clone();
+                    }
                     a.tidy_draft();
                     a.touched(by);
                     Ok((
                         (),
-                        serde_json::json!({ "agency": id, "name": name, "aliases": aliases, "base": base, "accent": accent }),
+                        serde_json::json!({ "agency": id, "name": name, "aliases": aliases,
+                            "base": base, "accent": accent, "pill": pill, "accent_use": accent_use,
+                            "surface": surface, "accent_ink": accent_ink }),
                     ))
                 }
             }
@@ -1050,6 +1187,10 @@ impl People {
                 a.base = look.base.clone();
                 a.accent = look.accent.clone();
                 a.wordmark = look.wordmark.clone();
+                a.pill = look.pill;
+                a.accent_use = look.accent_use;
+                a.surface = look.surface;
+                a.accent_ink = look.accent_ink.clone();
                 a.published = true;
                 a.draft = None;
                 a.touched(by);
@@ -1060,7 +1201,9 @@ impl People {
                     (),
                     serde_json::json!({ "agency": id, "name": look.name, "aliases": look.aliases,
                         "base": look.base, "accent": look.accent,
-                        "wordmark": look.wordmark.map(|w| w.file) }),
+                        "wordmark": look.wordmark.map(|w| w.file),
+                        "pill": look.pill, "accent_use": look.accent_use,
+                        "surface": look.surface, "accent_ink": look.accent_ink }),
                 ))
             }
         })
@@ -1624,6 +1767,53 @@ mod tests {
             },
         )
         .unwrap();
+    }
+
+    #[test]
+    fn a_record_without_style_switches_round_trips_unchanged() {
+        // as this store wrote a basic agency before the style switches
+        let old = serde_json::json!({
+            "id": "rothco", "name": "Rothco", "base": "#0F6B5C", "accent": "#9FE6D8",
+            "aliases": ["roth"], "wordmark": {"file": "wordmark-0a1b2c3d.svg", "bytes": 120},
+            "published": true,
+            "draft": {"accent": "#FFFFFF", "wordmark": null},
+            "rev": 4, "published_rev": 3,
+            "added_by": "engineer@napkin", "added_at": "2026-11-12T10:00:00Z",
+            "changed_by": "engineer@napkin", "changed_at": "2026-11-12T11:00:00Z",
+            "published_by": "engineer@napkin", "published_at": "2026-11-12T10:30:00Z",
+        });
+        let r: AgencyRec = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(
+            (r.pill, r.accent_use, r.surface, r.accent_ink.clone()),
+            (None, None, None, None)
+        );
+        assert_eq!(serde_json::to_value(&r).unwrap(), old);
+        // and with them: the snake_case names and lower-case values, a cleared
+        // draft switch kept as null
+        let styled = serde_json::json!({
+            "id": "acne2", "name": "ACNE", "base": "#000000", "accent": "#86BC25",
+            "aliases": [], "wordmark": null,
+            "pill": "base", "accent_use": "line", "surface": "mono", "accent_ink": "#000047",
+            "published": true,
+            "draft": {"pill": null, "accent_ink": "#FFFFFF"},
+            "rev": 2, "published_rev": 2,
+        });
+        let r: AgencyRec = serde_json::from_value(styled.clone()).unwrap();
+        assert_eq!(
+            (r.pill, r.accent_use, r.surface),
+            (Some(Pill::Base), Some(AccentUse::Line), Some(Surface::Mono))
+        );
+        let d = r.draft.clone().unwrap();
+        assert_eq!(
+            (d.pill, d.accent_use, d.accent_ink),
+            (Some(None), None, Some(Some("#FFFFFF".into())))
+        );
+        assert_eq!(serde_json::to_value(&r).unwrap(), styled);
+        let look = r.drafted().unwrap();
+        assert_eq!(
+            (look.pill, look.surface, look.accent_ink.as_deref()),
+            (None, Some(Surface::Mono), Some("#FFFFFF"))
+        );
     }
 
     #[test]

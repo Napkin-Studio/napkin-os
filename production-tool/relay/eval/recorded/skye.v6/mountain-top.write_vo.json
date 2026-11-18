@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front reaches the mountain summit, drops her backpack, and spreads her arms in the wind above the clouds."
+     },
+     {
+      "type": "direction",
+      "text": "Drone pull-out to reveal the peaks."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1,
+      "text": "Some views are worth every single step."
+     }
+    ],
+    "note": "I kept your shot as written and added one short VO line over the summit."
+   }
+  ],
+  "rationale": "The shot's words stay as they are. A single short VO line plays over the summit moment and fits inside the shot's length."
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front pedals across a busy bridge at rush hour, weaving past stopped cars, smiling wide."
+     },
+     {
+      "type": "direction",
+      "text": "Tracking alongside at handlebar height."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I trimmed the action to 15 words so it plays in 2.5 seconds, keeping the direction."
+   }
+  ],
+  "rationale": "The action line was 17 words (about 2.8 s); cutting it to 15 words makes it 2.5 s by the length rule. The @name, order of events and direction are unchanged."
+ }
+}

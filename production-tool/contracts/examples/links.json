@@ -1,0 +1,253 @@
+{
+  "description": "canLink(from, to, role) from common linkRule: the canvas, clan-store's integrity check, vitest and check.py agree on every case.",
+  "cases": [
+    {
+      "from": "script",
+      "to": "storyboard",
+      "role": "drives",
+      "ok": true
+    },
+    {
+      "from": "storyboard",
+      "to": "video",
+      "role": "renders",
+      "ok": true
+    },
+    {
+      "from": "video",
+      "to": "script",
+      "role": "renders",
+      "ok": false
+    },
+    {
+      "from": "video",
+      "to": "format_set",
+      "role": "master",
+      "ok": true
+    },
+    {
+      "from": "video",
+      "to": "storyboard",
+      "role": "input",
+      "ok": false
+    },
+    {
+      "from": "ref",
+      "to": "storyboard",
+      "role": "lighting",
+      "ok": true
+    },
+    {
+      "from": "ref",
+      "to": "shot",
+      "role": "layout",
+      "ok": true
+    },
+    {
+      "from": "ref",
+      "to": "shot",
+      "role": "frame",
+      "ok": true
+    },
+    {
+      "from": "frame",
+      "to": "shot",
+      "role": "frame",
+      "ok": true
+    },
+    {
+      "from": "script",
+      "to": "ref",
+      "role": "input",
+      "ok": false
+    },
+    {
+      "from": "board",
+      "to": "storyboard",
+      "role": "input",
+      "ok": true
+    },
+    {
+      "from": "group",
+      "to": "video",
+      "role": "input",
+      "ok": true
+    },
+    {
+      "from": "note",
+      "to": "sketch",
+      "role": "note",
+      "ok": true
+    },
+    {
+      "from": "document",
+      "to": "script",
+      "role": "context",
+      "ok": true
+    },
+    {
+      "from": "document",
+      "to": "ref",
+      "role": "context",
+      "ok": false
+    },
+    {
+      "from": "sketch",
+      "to": "frame",
+      "role": "made_from",
+      "ok": true
+    },
+    {
+      "from": "ink",
+      "to": "shot",
+      "role": "note_on_shot",
+      "ok": true
+    },
+    {
+      "from": "script",
+      "to": "video",
+      "role": "drives",
+      "ok": true
+    },
+    {
+      "from": "storyboard",
+      "to": "storyboard",
+      "role": "drives",
+      "ok": false
+    },
+    {
+      "from": "ref",
+      "to": "document",
+      "role": "character",
+      "ok": false
+    },
+    {
+      "from": "board",
+      "to": "storyboard",
+      "role": "brand",
+      "board_purpose": "brand",
+      "ok": true
+    },
+    {
+      "from": "board",
+      "to": "storyboard",
+      "role": "brand",
+      "board_purpose": "location",
+      "ok": false
+    },
+    {
+      "from": "key",
+      "to": "script",
+      "role": "character",
+      "ok": true
+    },
+    {
+      "from": "key",
+      "to": "sketch",
+      "role": "character",
+      "ok": true
+    },
+    {
+      "from": "key",
+      "to": "shot",
+      "role": "location",
+      "ok": true
+    },
+    {
+      "from": "key",
+      "to": "storyboard",
+      "role": "input",
+      "ok": false
+    },
+    {
+      "from": "script",
+      "to": "key",
+      "role": "character",
+      "ok": false
+    },
+    {
+      "from": "text",
+      "to": "script",
+      "role": "note",
+      "ok": true
+    },
+    {
+      "from": "text",
+      "to": "sketch",
+      "role": "note",
+      "ok": true
+    },
+    {
+      "from": "text",
+      "to": "video",
+      "role": "drives",
+      "ok": false
+    },
+    {
+      "from": "text",
+      "to": "text",
+      "role": "note",
+      "ok": false
+    },
+    {
+      "from": "text",
+      "to": "ref",
+      "role": "note",
+      "ok": false
+    },
+    {
+      "from": "brief",
+      "to": "script",
+      "role": "brief",
+      "ok": true
+    },
+    {
+      "from": "brief",
+      "to": "storyboard",
+      "role": "brief",
+      "ok": true
+    },
+    {
+      "from": "brief",
+      "to": "video",
+      "role": "brief",
+      "ok": true
+    },
+    {
+      "from": "brief",
+      "to": "format_set",
+      "role": "brief",
+      "ok": true
+    },
+    {
+      "from": "brief",
+      "to": "sketch",
+      "role": "brief",
+      "ok": false
+    },
+    {
+      "from": "brief",
+      "to": "shot",
+      "role": "brief",
+      "ok": false
+    },
+    {
+      "from": "brief",
+      "to": "script",
+      "role": "context",
+      "ok": false
+    },
+    {
+      "from": "script",
+      "to": "brief",
+      "role": "brief",
+      "ok": false
+    },
+    {
+      "from": "document",
+      "to": "script",
+      "role": "brief",
+      "ok": false
+    }
+  ]
+}

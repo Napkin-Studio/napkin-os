@@ -1,43 +1,46 @@
-// The chain entries as a list: who (you, the director, the provider), what,
-// why, and which fields changed. Presentational, so it renders in a test.
+// The decisions as a list: who (you, another person, the crew), what, why, the
+// addresses it changed, and its Kind. Presentational, so it renders in a test.
 
 import { cardsFromRationale, type SeenCard } from '../../../clan-store/src/attribution'
 import { Thumbs } from '../dogfood/Dogfood'
-import { aboutItem, kindOf, readable, timeOf, type AgentKind, type ChainLike, type HistoryItem } from './historyItems'
+import type { Kind } from '../model/lineage'
+import type { ProductionDocument } from '../contracts/types'
+import { aboutItem, entryKind, jobCost, jobOf, kindOf, plainWords, readable, timeOf, who, type ChainLike, type HistoryItem } from './historyItems'
+import { AgentFigure } from './agents/AgentFigure'
+import type { CastKey } from './agents/cast'
+import { initials } from './chrome/panels'
 
-const KIND_ICON: Record<AgentKind, string> = { participant: '●', director: '◆', provider: '▲' }
-
-/** Who an entry names, in the panel's words. */
-function who(agent: string, kind: AgentKind, handle: string): { label: string; detail?: string } {
-  if (kind === 'participant') return { label: agent === handle ? 'You' : `@${agent}` }
-  const [, ...rest] = agent.split(' · ')
-  if (kind === 'director') return { label: 'Director', detail: rest.join(' · ') }
-  return { label: agent.split(' · ')[0], detail: rest.join(' · ') }
-}
-
-export function HistoryList({ entries, handle, item }: { entries: ChainLike[]; handle: string; item?: HistoryItem }) {
-  const shown = entries.filter((e) => aboutItem(e, item))
-  if (!shown.length) return <div className="history-empty faint">{item ? 'Nothing recorded about this yet.' : 'Nothing recorded yet.'}</div>
+export function HistoryList({ entries, me, myName, item, kind, doc, tree = false }: { entries: ChainLike[]; me?: string; myName?: string; item?: HistoryItem; kind?: Kind; doc?: ProductionDocument; tree?: boolean }) {
+  const words = (t: string) => readable(doc ? plainWords(t, doc) : t)
+  const shown = entries.filter((e) => aboutItem(e, item) && (!kind || entryKind(e) === kind))
+  if (!shown.length) return <div className="history-empty faint">{item || kind ? 'Nothing recorded about this yet.' : 'Nothing decided yet. Every choice you and the crew make lands here.'}</div>
   return (
-    <ol className="history-list">
+    <ol className={`history-list ${tree ? 'tree' : ''}`}>
       {shown.map((e, i) => {
-        const kind = kindOf(e.agent)
-        const w = who(e.agent, kind, handle)
-        // A director entry ends with the character cards it was given (clan-store attribution.ts).
-        const { rest: why, cards } = kind === 'director' && e.rationale ? cardsFromRationale(e.rationale) : { rest: e.rationale, cards: [] as SeenCard[] }
+        const ak = kindOf(e.agent)
+        const w = who(e.agent, me)
+        // A crew landing's rationale ends with the character cards the director was given (clan-store attribution.ts).
+        const { rest: why, cards } = ak === 'crew' && e.rationale ? cardsFromRationale(e.rationale) : { rest: e.rationale, cards: [] as SeenCard[] }
+        const fields = (e.targets ?? []).filter((t) => /\]\./.test(t)).map((t) => t.slice(t.indexOf('#') + 1))
+        const job = jobOf(e)
+        const cost = doc && job ? jobCost(doc.jobs[job]?.cost) : undefined
         return (
-          <li key={`${e.timestamp}-${i}`} className={`history-entry ${kind}`} data-kind={kind}>
+          <li key={`${e.id ?? e.timestamp}-${i}`} className={`history-entry ${ak} ${entryKind(e) === 'ask' ? 'asked' : ''}`} data-kind={ak} data-decision-kind={entryKind(e)}>
+            <span className="history-gutter" aria-hidden="true">
+              {ak === 'crew' ? <AgentFigure agent={e.agent as CastKey} size={22} decorative /> : <span className="history-who">{w.label === 'You' ? initials(myName ?? me) : initials(w.label)}</span>}
+            </span>
+            <div className="history-card">
             <div className="history-head">
-              <span className={`history-agent ${kind}`} title={e.agent}>
-                <span className="history-icon" aria-hidden>{KIND_ICON[kind]}</span>
+              <span className={`history-agent ${ak}`} title={e.agent}>
                 {w.label}
               </span>
-              {w.detail && <span className="history-model faint" title={e.agent}>{w.detail}</span>}
+              {w.detail && <span className="history-model faint">{w.detail}</span>}
               <span className="spacer" />
               {e.pinned && <span className="history-pin" title="Pinned: never compressed">pinned</span>}
+              {cost && <span className="history-cost faint" title="What this job cost">{cost}</span>}
               <time className="faint" dateTime={e.timestamp} title={e.timestamp}>{timeOf(e.timestamp)}</time>
             </div>
-            <div className="history-action">{readable(e.action)}</div>
+            <div className="history-action" title={e.action}>{words(e.action)}</div>
             {why && <div className="history-why muted" title={why}>{readable(why)}</div>}
             {cards.length > 0 && (
               <details className="history-saw">
@@ -52,17 +55,24 @@ export function HistoryList({ entries, handle, item }: { entries: ChainLike[]; h
                 </ul>
               </details>
             )}
-            {kind === 'director' && (
+            {ak === 'crew' && (
               <div className="history-thumbs">
                 <Thumbs compact target={{
-                  kind: 'director', id: e.timestamp, action: e.action, model: w.detail,
-                  jobId: `${e.action} ${e.rationale ?? ''}`.match(/job_[0-9A-HJKMNP-TV-Z]{26}/)?.[0],
+                  kind: 'director', id: e.id ?? e.timestamp, action: e.action, model: w.detail,
+                  jobId: (e.cites ?? []).map((c) => /#jobs\[(job_[0-9A-HJKMNP-TV-Z]{26})\]/.exec(c)?.[1]).find(Boolean),
                 }} />
               </div>
             )}
-            {!!e.fields_changed?.length && (
-              <div className="history-fields">{e.fields_changed.map((f) => <span key={f} className="history-field">{f}</span>)}</div>
-            )}
+            <div className="history-meta">
+              <span className="history-kind">{entryKind(e)}</span>
+              {fields.length > 0 && (
+                <details className="history-fields">
+                  <summary>{[...new Set(fields.map((f) => words(f)))].join(' · ')}</summary>
+                  {fields.map((f) => <span key={f} className="history-field">{readable(f)}</span>)}
+                </details>
+              )}
+            </div>
+            </div>
           </li>
         )
       })}

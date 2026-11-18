@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "In a sunny kitchen, @maya_front raises the lid from a steaming pot, samples the soup from a wooden spoon and gives a slow nod."
+     },
+     {
+      "type": "direction",
+      "text": "Soft morning light enters from the left."
+     }
+    ],
+    "note": "I rephrased the action and the direction, keeping the same events and @maya_front."
+   }
+  ],
+  "rationale": "Rephrase keeps facts, order, and the @name, changing only the wording of both blocks."
+ }
+}

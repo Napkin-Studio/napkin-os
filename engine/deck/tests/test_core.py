@@ -327,7 +327,23 @@ def _fake_llm(monkeypatch, replies, ledger=None):
     """Install a stand-in brief_llm: each _json_call attempt reads the next reply through ``parse``. Returns the list of calls made."""
     calls = []
     mod = types.ModuleType("brief_llm")
-    mod.CLI_TIMEOUT_S = 1.0
+    efforts = []
+
+    class PinnedEffort:
+        """brief_llm.pinned_effort: the effort the stage's calls run at."""
+
+        def __init__(self, effort):
+            """Remember the effort."""
+            self.effort = effort
+
+        def __enter__(self):
+            """Set it."""
+            efforts.append(self.effort)
+            return self
+
+        def __exit__(self, *a):
+            """Done."""
+            return False
 
     class NoClaudeAvailable(RuntimeError):
         """No usable reply."""
@@ -354,10 +370,11 @@ def _fake_llm(monkeypatch, replies, ledger=None):
 
     def json_call(user, system=None, retries=1, model=None, parse=None, **kw):
         """Answer from the queue; the reader sees the text."""
-        calls.append({"user": user, "system": system, "model": model, "retries": retries})
+        calls.append({"user": user, "system": system, "model": model, "retries": retries, "effort": efforts[-1] if efforts else None})
         return parse(replies.pop(0)) if replies else None
 
     mod.NoClaudeAvailable, mod._stats_scope, mod._loads_lenient, mod._json_call = NoClaudeAvailable, Scope, loads, json_call
+    mod.pinned_effort = PinnedEffort
     monkeypatch.setitem(sys.modules, "brief_llm", mod)
     return calls
 
@@ -368,6 +385,14 @@ def test_a_call_records_an_estimated_usd_from_tokens(monkeypatch):
     obj, usage = stages._call("b", "u", "s")
     assert obj == {"ok": 1} and len(calls) == 1 and "repaired" not in usage
     assert usage["usd"] == spec.estimate_usd("claude-opus-5-5", 1000, 400) > 0 and usage["usd_estimated"] is True
+
+
+def test_each_stage_calls_at_its_own_effort(monkeypatch):
+    """The stage's effort reaches its pinned-model calls through brief_llm.pinned_effort (no env variable)."""
+    for stage in ("b", "fit"):
+        calls = _fake_llm(monkeypatch, ['{"ok": 1}'])
+        stages._call(stage, "u", "s")
+        assert [c["effort"] for c in calls] == [stages.EFFORT[stage]]
 
 
 def test_a_real_usd_from_the_transport_is_kept(monkeypatch):

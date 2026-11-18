@@ -1,103 +1,110 @@
-/* Napkin OS tokens, copied from app/src/index.css (the apps don't import
-   across each other). Light by default; dark follows prefers-color-scheme. */
-:root {
-  --paper: #FFFFFF;
-  --card: #FFFFFF;
-  --soft: #F5F6F8;
-  --soft-2: #F2F3F6;
-  --frost: rgba(255, 255, 255, 0.86);
-  --line: #D6DAE2;
-  --line-soft: #E7E9EE;
-  --ink: #14161B;
-  --ink2: #4A4F5C;
-  --ink3: #737987;
-  --ink-fixed: #14161B;
-  --plan: #14161B;
-  --create: #FF4F2E;
-  --create-fg: #FFFFFF;
-  --create-soft: rgba(255, 79, 46, 0.1);
-  --produce: #8B919E;
-  --learn: #DADDE3;
-  --status-green: #22C55E;
-  --status-amber: #F5A524;
-  --status-red: #FF4F2E;
-  --success: #15803d;
-  --danger: #b91c1c;
-  --ok-bg: #e7f6ed;
-  --warn-bg: #fdf3e3;
-  --danger-bg: #fdecea;
-  --shadow-soft: 0 10px 30px rgba(20, 30, 60, 0.08);
-  --shadow-pop: 0 12px 32px rgba(20, 30, 60, 0.16), 0 2px 6px rgba(20, 30, 60, 0.08);
-  --shadow-pill: 0 1px 3px rgba(20, 22, 27, 0.1);
-  --canvas-bg: #FAFAFB;
-
-  --f-display: 'Geist', 'Helvetica Neue', Arial, sans-serif;
-  --f-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
-  --r-pill: 999px;
-  --r-card: 12px;
-  --r-panel: 18px;
-  --blur: saturate(1.4) blur(14px);
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --dur: 0.35s;
-  --topbar-h: 48px;
-  /* The tool's own colour, the way the OS bar shows Brief Maker in amber
-     (app/src/components/chrome.css .ch-brand-tool). Blue is identity only:
-     the name, the current stage, the selected item, Dex. Actions stay --create. */
-  --tool: #2F64F5;
-  --tool-ink: color-mix(in oklab, var(--tool) 78%, var(--ink));
-  --tool-soft: color-mix(in oklab, var(--tool) 10%, transparent);
-  --plan-eye: #FFFFFF;
-  --warn: #b45309;
+/* The tokens (features/production-new-ui.clan). The new UI's own come from the shell's file,
+   app/src/shell/nui/tokens.css (imported in main.tsx before this one): warm paper, warm ink, the radii,
+   shadows and faces, light and dark. The agency layer (palette.ts surfaceCss, ui/shell/agency.ts) comes
+   after both and tints --desk, --paper, --card, --line and sets the --ag-* tokens. This file adds only the
+   tool's own tokens, each in terms of the shell's, and redefines none of the shell's but one approved
+   difference (--ink3, below); tokens.test.ts holds that. `data-theme` on <html> picks light or dark
+   (theme.ts, the shell's napkin.theme). */
+:root,
+:root[data-theme='light'] {
+  /* Approved difference (ui-behaviour 9, kept): grey text reads at 4.5:1, so --ink3 is the muted ink,
+     not the shell's faint one (decoration only). */
+  --ink3: var(--muted);
+  /* The tool's names for the shell's tokens. */
+  --soft-2: color-mix(in srgb, var(--paper-2) 60%, var(--paper));
+  --frost: color-mix(in srgb, var(--paper) 92%, transparent);
+  --frost-panel: color-mix(in srgb, var(--paper) 96%, transparent);
+  --success: var(--ok);
+  --ok-fg: var(--ok);
+  --ok-bg: var(--ok-soft);
+  --ok-border: color-mix(in srgb, var(--ok) 35%, transparent);
+  --warn-bg: var(--warn-soft);
+  --warn-border: color-mix(in srgb, var(--warn) 40%, transparent);
+  --danger: var(--alert);
+  --danger-bg: var(--alert-soft);
+  --status-green: var(--ok);
+  --status-amber: var(--warn);
+  --status-red: var(--alert);
+  /* The departments of the old loader and figures, now plain inks. */
+  --plan: var(--ink);    --plan-fg: var(--paper);  --plan-eye: var(--paper);
+  --learn: var(--line);  --learn-fg: var(--ink);   --learn-eye: var(--ink);
+  --produce: var(--muted); --produce-fg: var(--paper); --produce-eye: var(--ink);
+  /* Needs you (an ask, a flag): the agency's needs colour where it sets one, else amber; never a brand red. */
+  --create: var(--needs, var(--warn));
+  --create-fg: var(--needs-ink, #FFFFFF);
+  --create-eye: var(--ink);
+  --create-soft: color-mix(in srgb, var(--needs, var(--warn)) 12%, transparent);
+  --ask-line: var(--needs, var(--warn));
+  --ask-glow: color-mix(in srgb, var(--needs, var(--warn)) 8%, transparent);
+  /* The one action, the selection and focus: the agency's act colour (the shell's primary button). */
+  --action: var(--ag-act);
+  --action-hover: color-mix(in srgb, var(--ag-act) 86%, var(--ink));
+  --action-fg: var(--ag-act-ink);
+  --tool: var(--ag-act);
+  --tool-ink: var(--ag-act);
+  --tool-soft: color-mix(in srgb, var(--ag-act) 12%, transparent);
+  --agency: var(--ag-act);
+  --agency-fg: var(--ag-act-ink);
+  --agency-soft: color-mix(in srgb, var(--ag-act) 10%, var(--paper));
+  /* The canvas is the desk: the agency-tinted ground pages sit on. */
+  --canvas-bg: var(--desk);
+  --canvas-dot: color-mix(in srgb, var(--ink) 16%, transparent);
+  --shadow-soft: var(--shadow-card);
+  --shadow-pill: 0 1px 3px rgba(20, 20, 19, 0.10);
+  --shadow-pop: 0 18px 40px -14px rgba(20, 20, 19, 0.38), 0 2px 6px rgba(20, 20, 19, 0.08);
+  /* The pen's six inks (features/theme-and-pencil.clan): a stroke stores the name, the canvas paints
+     these. Each is at least 3:1 on the canvas in its theme. canvas-engine's LIGHT_INK matches light. */
+  --pen-ink: #14161B;
+  --pen-orange: #E2502F;
+  --pen-blue: #2F64F5;
+  --pen-green: #15803D;
+  --pen-amber: #C27803;
+  --pen-grey: #6B7180;
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0F1114;
-    --card: #161A1F;
-    --soft: #1B1F25;
-    --soft-2: #22262D;
-    --frost: rgba(15, 17, 20, 0.84);
-    --line: #2A2F38;
-    --line-soft: #22262D;
-    --ink: #F2F3F5;
-    --ink2: #A6ACB8;
-    --ink3: #7A808C;
-    --plan: #F2F3F5;
-    --learn: #3A3F48;
-    --create-soft: rgba(255, 79, 46, 0.16);
-    --success: #4ade80;
-    --danger: #f87171;
-    --ok-bg: #1e3a2f;
-    --warn-bg: #3a2a1e;
-    --danger-bg: #3a1e1e;
-    --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.4);
-    --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
-    --shadow-pill: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --canvas-bg: #121417;
-    --tool-ink: color-mix(in oklab, var(--tool) 70%, white);
-    --tool-soft: color-mix(in oklab, var(--tool) 22%, transparent);
-    --plan-eye: #14161B;
-    --warn: #fbbf24;
-    color-scheme: dark;
-  }
+:root[data-theme='dark'] {
+  --shadow-pill: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 18px 40px -14px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --pen-ink: #F2F3F5;
+  --pen-orange: #FF6A4F;
+  --pen-blue: #6E95FF;
+  --pen-green: #4ADE80;
+  --pen-amber: #F5A524;
+  --pen-grey: #A6ACB8;
+  color-scheme: dark;
+}
+
+:root {
+  --r-pill: 999px;
+  --r-card: 12px;
+  --r-panel: 14px;
+  --blur: saturate(1.4) blur(14px);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 0.42s;
+  --dur-slow: 0.45s;
+  /* The tool's. */
+  --r-board: 16px;
+  /* The shell bar (62px and its rule) and the band row under an editor's bar. */
+  --topbar-h: 63px;
+  --band-h: 46px;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
   font-family: var(--f-display);
-  background: var(--paper);
+  background: var(--desk);
   color: var(--ink);
   height: 100vh;
   overflow: hidden;
-  font-size: 14px;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
 }
 #root { height: 100vh; display: flex; flex-direction: column; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 2px solid var(--create);
+  outline: 2px solid var(--tool);
   outline-offset: 2px;
 }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -107,7 +114,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .eyebrow {
   font-family: var(--f-mono);
   font-size: 11px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink3);
 }
@@ -118,24 +125,29 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  height: 34px; padding: 0 14px; border-radius: var(--r-pill);
+  height: 32px; padding: 0 14px; border-radius: var(--r-pill);
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
-  font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap;
+  font-weight: 500; font-size: 13px; cursor: pointer; white-space: nowrap; text-decoration: none;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform 0.1s;
 }
 .btn:hover:not(:disabled) { background: var(--soft); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn.primary { background: var(--create); border-color: var(--create); color: var(--create-fg); }
-.btn.primary:hover:not(:disabled) { background: #f0401f; }
-.btn.dark { background: var(--plan); border-color: var(--plan); color: var(--paper); }
+/* The one main action of a surface: the agency's act colour and its ink (the shell's primary). */
+.btn.primary { background: var(--action); border-color: var(--action); color: var(--action-fg); font-weight: 600; padding: 0 16px; }
+.btn.primary:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
+.btn.dark { background: var(--plan); border-color: var(--plan); color: var(--paper); font-weight: 600; }
 .btn.dark:hover:not(:disabled) { opacity: 0.9; background: var(--plan); }
 .btn.ghost { background: transparent; border-color: transparent; }
 .btn.ghost:hover:not(:disabled) { background: var(--soft); }
-.btn.sm { height: 28px; padding: 0 10px; font-size: 12px; }
-.btn.xs { height: 24px; padding: 0 8px; font-size: 11.5px; }
-.btn.icon { width: 30px; padding: 0; }
-.btn.on { background: var(--create-soft); border-color: var(--create); color: var(--create); }
+.btn.link { background: transparent; border-color: transparent; color: var(--tool-ink); padding: 0 6px; }
+.btn.sm { height: 28px; padding: 0 12px; font-size: 12px; }
+.btn.sm.primary { padding: 0 14px; }
+.btn.xs { height: 24px; padding: 0 9px; font-size: 11.5px; }
+.btn.icon { width: 32px; padding: 0; }
+.btn.sm.icon { width: 28px; }
+/* Pressed: a tool-blue tint, the way the Assets and History buttons show they are open. */
+.btn.on { background: var(--tool-soft); border-color: var(--tool); color: var(--tool-ink); font-weight: 600; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px;
@@ -143,7 +155,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
   font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--ink2);
 }
 .chip:hover { background: var(--soft); }
-.chip.on { background: var(--plan); color: var(--paper); border-color: var(--plan); }
+.chip.on { background: var(--tool-soft); color: var(--tool-ink); border-color: var(--tool); }
 
 .input, .textarea, .select {
   width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 10px;
@@ -185,9 +197,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .followchip.failed { background: var(--danger-bg); color: var(--danger); }
 /* On a narrow bar the studio's name gives way; the tool's name stays. */
 @media (max-width: 1100px) { .brand .brand-studio { display: none; } }
-.jobchip { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: var(--r-pill); background: var(--soft); font-size: 12.5px; font-weight: 600; color: var(--ink2); }
-.jobchip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-green); }
-.jobchip.busy .dot { background: var(--create); animation: pulse 1.2s var(--ease) infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
 .handle { font-size: 12.5px; color: var(--ink3); font-family: var(--f-mono); }
 .banner { background: var(--plan); color: var(--paper); text-align: center; padding: 7px 16px; font-size: 13px; font-weight: 600; flex-shrink: 0; }
@@ -220,15 +229,14 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
   background-size: 28px 28px; animation: drift 1.6s linear infinite; border-radius: inherit;
 }
 @keyframes drift { to { background-position: 28px 0; } }
-.pending .state { font-weight: 700; color: var(--ink); font-size: 13px; }
+.pending .state { font-weight: 500; color: var(--ink2); font-size: 12px; line-height: 1.35; max-width: 30ch; }
 /* The agent at work where the result will land: Dex's blue glow under the stripes. */
-.pending { background: radial-gradient(120% 90% at 50% 100%, var(--tool-soft), transparent 60%), repeating-linear-gradient(-45deg, var(--soft) 0 10px, var(--card) 10px 20px); background-size: auto, 28px 28px; animation: drift-2 1.6s linear infinite; }
 @keyframes drift-2 { to { background-position: 0 0, 28px 0; } }
 .pending.compact { gap: 2px; padding: 6px; }
-.pending.compact .meta { font-size: 10.5px; }
+.pending.compact .meta { font-size: 9.5px; letter-spacing: 0.02em; }
 .errnode .agent-figure { margin-bottom: -2px; }
-.pending .meta { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink3); }
-.spinner { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--create); animation: spin 0.9s linear infinite; }
+.pending .meta { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
+.spinner { display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .errnode {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center;
@@ -242,20 +250,31 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 
 /* ── Character stage ─────────────────────────────────────────────────────── */
 .character { position: absolute; inset: 0; display: flex; flex-direction: column; }
-.canvas-wrap { flex: 1; position: relative; min-height: 0; }
-.canvas-wrap .excalidraw { --color-primary: var(--create); --color-primary-darker: #e8401f; --color-primary-darkest: #c9351a; --color-primary-light: var(--create-soft); }
+.canvas-wrap { flex: 1; position: relative; min-height: 0; min-width: 0; }
+/* The canvas and its Booth side by side (the Booth pushes the canvas aside, never over it). */
+.cv-row { flex: 1; display: flex; min-height: 0; }
+.booth-canvas .booth { top: 12px; right: 12px; bottom: 12px; background: var(--paper); }
+/* Excalidraw's own accent (its variables, not ours): selection and its panel in the tool's blue. */
+.canvas-wrap .excalidraw { --color-primary: var(--tool); --color-primary-darker: #2453D6; --color-primary-darkest: #1E4ED8; --color-primary-light: var(--tool-soft); }
 .overlay-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
 .overlay-layer > * { pointer-events: auto; }
-.refchips { position: absolute; display: flex; gap: 4px; align-items: center; transform: translateY(calc(-100% - 6px)); white-space: nowrap; }
+.refchips { position: absolute; display: flex; gap: 4px; align-items: center; transform: translateY(6px); white-space: nowrap; pointer-events: none; }
+/* A named picture's name under it, blue and mono (mock Main). */
+.refchips .tagchip { border: 0; box-shadow: none; background: transparent; padding: 0; height: auto; min-width: 0; font-size: 11px; color: var(--tool-ink); overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .badge { width: 22px; height: 22px; border-radius: 7px; background: var(--create); color: #fff; font-weight: 800; font-size: 12px; display: grid; place-items: center; box-shadow: var(--shadow-pill); }
 .tagchip { height: 22px; border-radius: 7px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow-pill); font-family: var(--f-mono); font-size: 11.5px; padding: 0 6px; color: var(--ink); width: auto; min-width: 48px; }
 .tagchip:focus { border-color: var(--create); outline: none; }
 .rolechip { height: 22px; border-radius: 7px; border: 1px solid var(--line); background: var(--soft); font-size: 11.5px; padding: 0 4px; color: var(--ink2); cursor: pointer; }
 .genlabel { position: absolute; transform: translateY(calc(-100% - 6px)); display: flex; gap: 4px; align-items: center; font-size: 11px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
+.framecrop { font-size: 11px; margin-top: 4px; }
+.gencaption { position: absolute; margin-top: 4px; font-family: var(--f-mono); font-size: 11px; color: var(--ink2); white-space: nowrap; pointer-events: none; }
 .genlabel .pill { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; box-shadow: var(--shadow-pill); }
 .genlabel .pill.pick { font: inherit; color: inherit; cursor: pointer; }
 .genlabel .pill.pick:hover { border-color: var(--create); color: var(--create); }
 .genlabel .pill.view { background: var(--plan); color: var(--paper); border-color: var(--plan); }
+/* A canvas picture's version, top right of it, opening its versions (features/edit-canvas-pictures.clan). */
+.vchip { position: absolute; transform: translate(calc(-100% - 6px), 6px); height: 20px; padding: 0 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 11px; box-shadow: var(--shadow-pill); cursor: pointer; }
+.vchip:hover, .vchip[aria-expanded="true"] { border-color: var(--tool); color: var(--tool-ink); }
 .gennode { position: absolute; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-soft); border: 1px solid var(--line); }
 
 .toolbar {
@@ -310,7 +329,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .place-error { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 9; padding: 6px 10px; border-radius: 10px; background: var(--danger-bg); color: var(--danger); font-size: 12.5px; font-weight: 600; }
 
 .taghint.static { cursor: default; border-style: solid; }
-.taghint.whole { border-style: solid; border-color: var(--create); color: var(--create); font-weight: 700; }
+.taghint.whole { border-style: solid; font-weight: 600; }
 .taghint.static:hover { border-color: var(--line); color: var(--ink2); }
 .taghint.missing { border-color: var(--danger); color: var(--danger); }
 .taghint .x { border: 0; background: none; padding: 0 0 0 4px; color: inherit; cursor: pointer; font-size: 12px; }
@@ -323,6 +342,9 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .shotrow .num { width: 26px; height: 26px; border-radius: 8px; background: var(--plan); color: var(--paper); display: grid; place-items: center; font-weight: 700; font-size: 12px; margin-top: 4px; }
 .shotrow .textarea { min-height: 38px; padding: 6px 8px; font-size: 13px; }
 .shotrow .select, .shotrow .input { padding: 6px 8px; font-size: 13px; }
+/* The "+ ref" pick under a shot's words: a chip-sized select, legible, its arrow clear of the label. */
+.shotrow .select.xs { height: 24px; min-width: 76px; padding: 0 24px 0 8px; font-family: var(--f-mono); font-size: 11.5px; line-height: 22px; color: var(--ink2); background-color: var(--card); border-radius: 6px; }
+.shotrow .select.xs:hover, .shotrow .select.xs:focus-visible { border-color: var(--ink3); color: var(--ink); }
 .sum { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
 .sum.ok { color: var(--success); }
 .sum.bad { color: var(--danger); }
@@ -381,7 +403,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .devswitch .ctl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 8px; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
 .devswitch .ctl .y { color: var(--success); }
 .devswitch .ctl .n { color: var(--ink3); text-decoration: line-through; }
-.signin { margin: auto; width: 380px; padding: 28px; }
+.signin { margin: auto; width: 320px; padding: 28px 24px; text-align: center; gap: 16px; }
+.signin-title { font-size: 15px; font-weight: 600; line-height: 1.4; }
 
 .empty-state { padding: 48px 24px; text-align: center; color: var(--ink2); }
 .empty-state b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 6px; }
@@ -394,6 +417,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .undochip .btn.ghost { color: var(--paper); text-decoration: underline; }
 .undochip .btn.ghost:hover:not(:disabled) { background: transparent; opacity: 0.85; }
 .undochip.oncanvas { position: absolute; transform: translate(-50%, -50%); z-index: 8; pointer-events: auto; }
+/* A node just made: its Undo sits over the node, not on its header (live test 2026-11-16). */
+.undochip.oncanvas.above { transform: translate(-50%, calc(-100% - 36px)); }
 .confirm { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--danger); font-size: 12.5px; max-width: 360px; }
 .confirm .confirm-text { font-weight: 600; color: var(--ink); }
 .shotrow.confirming, .shotrow.undo { display: flex; align-items: center; gap: 8px; }
@@ -414,7 +439,14 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .modelchip { display: inline-flex; align-items: center; gap: 6px; height: 26px; max-width: 220px; padding: 0 9px 0 6px; border-radius: var(--r-pill); border: 1px solid transparent; background: var(--soft); font: inherit; font-size: 12px; font-weight: 600; color: var(--ink2); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .modelchip:hover { border-color: var(--line); }
 .modelchip.open { border-color: var(--tool); background: var(--tool-soft); color: var(--tool-ink); }
-.modelprice { font-size: 11.5px; white-space: nowrap; }
+/* Quality beside Model (features/clip-quality.clan), and the level on a take's card. */
+.qualitypick { padding: 2px; }
+.qualitypick button { height: 24px; padding: 0 9px; font-size: 11.5px; }
+.qualitypick button:disabled { opacity: 0.45; cursor: not-allowed; }
+.qchip { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink2); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.qchip.draft { background: var(--tool-soft); color: var(--tool-ink); }
+.qdefault { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
+.qdefault select { height: 26px; border-radius: var(--r-pill); border: 1px solid var(--line-soft); background: var(--soft); color: var(--ink); font: inherit; font-size: 12px; padding: 0 8px; }
 .caret { font-size: 9px; color: var(--ink3); }
 .pmark { width: 16px; height: 16px; border-radius: 5px; display: inline-grid; place-items: center; flex-shrink: 0; font: 700 9px var(--f-mono); color: #fff; background: var(--produce); }
 .pmark-runway { background: #14161B; }
@@ -480,13 +512,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .arrowcard .ac-foot { margin-top: 8px; font-size: 11.5px; color: var(--ink3); }
 
 /* ── The job tray (ui/JobTray.tsx) ── */
-.jobchip.tray { border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600; padding: 0 12px 0 8px; }
-.jobchip.tray:hover, .jobchip.tray.open { background: var(--card); border-color: var(--line); box-shadow: var(--shadow-pill); }
-.jobchip .faces { display: inline-flex; align-items: flex-end; height: 24px; }
-.jobchip .faces .agent-figure { margin-right: -5px; }
-.jobchip .faces .agent-figure:last-child { margin-right: 0; }
-.jobchip .sep { color: var(--ink3); font-weight: 400; }
-.jobchip .bad { color: var(--danger); }
 .traypop { width: 380px; padding: 6px; max-height: min(70vh, 560px); overflow: auto; }
 .tray-empty { padding: 12px 10px; font-size: 12.5px; line-height: 1.45; }
 .trayrow { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 10px; }
@@ -500,9 +525,10 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .flash { animation: flash 1.2s var(--ease); }
 @keyframes flash { 0%, 60% { box-shadow: 0 0 0 3px var(--tool), var(--shadow-soft); } 100% { box-shadow: var(--shadow-soft); } }
 
-/* The remake bar (ui/Follow.tsx RemakeBar): floats at the bottom of the stage while anything is behind. */
-.remakebar.top { top: 20px; bottom: auto; }
+/* The remake bar (ui/Follow.tsx RemakeBar): floats at the bottom of the stage while anything is behind;
+   inline in the Video editor's timeline head (.inline). */
 .remakebar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 7px 7px 7px 14px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); white-space: nowrap; }
+.remakebar.inline { position: static; transform: none; box-shadow: none; max-width: 100%; min-width: 0; padding: 3px 3px 3px 12px; gap: 8px; }
 .remakebar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-amber); flex-shrink: 0; }
 .remakebar b { font-size: 13px; }
 .remakebar .remake-what { font-size: 12.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -523,6 +549,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .cardstate.drift .linkbtn { color: var(--ink2); font-weight: 500; }
 .oldwords { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--warn); }
 .oldwords .linkbtn { color: var(--warn); }
+/* Dex's question under a shot a re-plan left out: keep it or remove it. */
+.shotask { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); font-size: 12.5px; color: var(--ink); }
 .ub-plan { margin: 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
 .ub-plan li { padding-left: 2px; }
 .ub-plan li b { margin-right: 6px; font-size: 12.5px; }
@@ -552,6 +580,11 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .framecard-foot .faint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .framecard-error { color: var(--danger); font-size: 12px; font-weight: 600; padding: 0 12px 12px; }
 .pending.idle { animation: none; background: var(--soft); }
+/* The Name dialog's role pills (the contract's ten main roles, More… for the rest) and the chosen role's line. */
+.rolepills { gap: 4px; flex-wrap: wrap; max-width: 360px; }
+.roleline { font-size: 12px; margin-top: 4px; }
+/* Waiting for an answer (needs_input): no loader, no busy pointer (ui-behaviour 5.2). */
+.pending.waiting { animation: none; background: var(--soft); cursor: default; }
 .hoverbar .hb-label { display: none; }
 .hoverbar .btn.on .hb-label { display: inline; }
 .framecard .head .faint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -564,7 +597,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .shotmore.open { outline: 2px solid var(--tool); }
 .notechip { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink2); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 
-/* ── Notes (stages/Video.tsx): a composer with its moment, Ellis reading back, one clear action ── */
+/* ── Notes (stages/Video.tsx): a composer with its moment, Nell reading back, one clear action ── */
 .composer { border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 8px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
 .composer:focus-within { border-color: var(--ink3); }
 .composer-input { border: 0; outline: none; resize: vertical; min-height: 40px; background: transparent; font-size: 13.5px; line-height: 1.45; color: var(--ink); padding: 0; }

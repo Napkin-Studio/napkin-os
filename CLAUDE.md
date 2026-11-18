@@ -68,6 +68,8 @@ suites, and `--list` to see what would run.
 | middleware | `uv run pytest` in `server/` | `server/` |
 | mock-backend | unittest in `mock-backend/` | `mock-backend/`, `mock-middleware/` |
 | terraform | fmt, validate, mocked-provider test on staging | `infra/` |
+| production-tool | relay and stitch pytest, the contracts, clan-store and web lint/test/build | `production-tool/` |
+| licences | `scripts/licences` tests, then the licence gate over the tree (lockfiles only when a manifest changed) | lockfiles and manifests, `licences/`, Dockerfiles, fonts, `patches/`, any .py/.ts/.tsx/.js/.html |
 
 The hooks are `.githooks/pre-push` and `.githooks/commit-msg`. Turn them on
 once per clone with `git config core.hooksPath .githooks`. The pre-push hook
@@ -75,6 +77,13 @@ refuses pushes to `main`, failing checks, code without a feature record, and
 records without an approved design. Never use `--no-verify`. The bypass
 variables `NAPKIN_ALLOW_MAIN`, `NAPKIN_SKIP_CHECKS` and `NAPKIN_NO_FEATURE`
 are only for a person to set.
+
+Licences: every dependency, font, binary and model weight must satisfy
+`licences/policy.toml` (`docs/contracts/licences.md`). A push that changes
+`licences/*.toml` needs `NAPKIN_LICENCE_APPROVED=<approver>`: a person's
+approval, which an agent never sets. If the gate fails, an agent records the
+finding in the feature's `open_questions` and asks; it never adds its own
+exception.
 
 ## Map
 
@@ -97,7 +106,7 @@ are only for a person to set.
 ## Git workflow (locked 2026-10-05)
 
 - **Branches:** `<type>/<short-kebab>`, where type is one of feat, fix, docs,
-  chore, eval, refactor, spike. Use lowercase and keep it to 40 characters or
+  chore, eval, refactor, spike, hotfix. Use lowercase and keep it to 40 characters or
   fewer. A feature's branch is `feat/<slug>`. Delete branches after they merge.
 - **Commit subject:** `<area>: <imperative summary>`, 72 characters or fewer,
   for example `shell: name the tool in the OS bar`. The area is a component:
@@ -130,12 +139,17 @@ direct push, no force-push, no deletion, all 9 CI checks green), and
 3. **Release.** Open a PR from `develop` into `main`, titled
    `release: <what changes for people>`, and merge it with a **merge commit**,
    never a squash, so main and develop stay in step. CI's `Release source`
-   check refuses a PR into main from any branch other than develop.
+   check refuses a PR into main from any branch other than develop or
+   `hotfix/*`.
 4. **Make it live.** If the release touches `infra/`, follow "Infrastructure
    changes" below (apply before the deploy). Then verify on staging.
 
 A fix that must reach staging urgently still goes through develop: merge it
-there, then release at once.
+there, then release at once. When develop carries work that must not ship
+yet, and the owner asks, cut `hotfix/<short-kebab>` from `main` with only
+the fix, land the same fix on develop too, merge the hotfix PR into
+`main` with a merge commit, then open a PR from `main` into `develop` so the two
+stay in step.
 
 ## UAT: our own environment for trying a branch (2026-10-29)
 

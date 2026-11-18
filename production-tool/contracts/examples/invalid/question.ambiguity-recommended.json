@@ -1,0 +1,14 @@
+{
+  "id": "q_01K7B00000000000000000Q002",
+  "kind": "ambiguity",
+  "text": "Bigger how?",
+  "allow_text": true,
+  "recommended_option_id": "camera",
+  "options": [
+    {
+      "id": "camera",
+      "label": "Move the camera in",
+      "value": "camera"
+    }
+  ]
+}

@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import type { ProductionDocument, RefRole } from '../contracts/types'
 import { emptyDocument } from '../doc/store'
+import { MAYA } from '../test/model'
 import { cleanKey, cleanVariant, keyRefs, mentions, nameOf, nameProblem, NoFrontError, parseName, subjectRefs, wholeKeys } from './names'
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
+let n = 0
+/** Ids in the order they are made (refs list in naming order). */
+const nextId = (prefix: string) => `${prefix}_01K7A0000000000000000${String(++n).padStart(5, '0')}`
+function addRef(d: ProductionDocument, key: string, variant: string, asset: string, role: RefRole = 'character') {
+  const id = nextId('ref')
+  d.refs[id] = { id, v: 1, field_v: {}, key, variant, role, asset }
+}
 
 describe('names: key_variant with free variants', () => {
   it('a key has no underscore, so the first one splits key from variant', () => {
@@ -23,8 +32,9 @@ describe('names: key_variant with free variants', () => {
   })
 
   it('finds the names written in words, the longest known one first, and the ones that match nothing', () => {
-    const d = emptyDocument()
-    d.refs.push({ id: 'ref_a', key: 'maya', variant: 'front', asset: SHA('a') }, { id: 'ref_b', key: 'lamp', variant: 'on', asset: SHA('b') })
+    const d = emptyDocument(MAYA)
+    addRef(d, 'maya', 'front', SHA('a'))
+    addRef(d, 'lamp', 'on', SHA('b'), 'prop')
     const { found, unknown } = mentions(d, '@maya_front-facing holds @lamp_on and @maya_front, not @maya_sad; mail me@lamp_on.ie')
     expect(found.map(nameOf)).toEqual(['maya_front', 'lamp_on'])
     expect(unknown).toEqual(['maya_sad'])
@@ -33,10 +43,11 @@ describe('names: key_variant with free variants', () => {
 
 describe('a bare key is the whole character', () => {
   const doc = () => {
-    const d = emptyDocument()
-    const add = (variant: string, c: string) => d.refs.push({ id: `ref_${variant}`, key: 'goremon', variant, asset: SHA(c) })
+    const d = emptyDocument(MAYA)
+    const add = (variant: string, c: string) => addRef(d, 'goremon', variant, SHA(c))
     add('laughing', 'a'); add('back', 'b'); add('front', 'c'); add('angry', 'd'); add('side', 'e'); add('three-quarter', 'f')
-    d.keys.push({ key: 'goremon', role: 'character' })
+    const k = nextId('key')
+    d.keys[k] = { id: k, v: 1, field_v: {}, key: 'goremon', role: 'character' }
     return d
   }
 
@@ -46,13 +57,13 @@ describe('a bare key is the whole character', () => {
 
   it('then the other variants as named, when it has fewer views', () => {
     const d = doc()
-    d.refs = d.refs.filter((r) => r.variant !== 'side' && r.variant !== 'back')
+    for (const r of Object.values(d.refs)) if (r.variant === 'side' || r.variant === 'back') delete d.refs[r.id]
     expect(keyRefs(d, 'goremon').map((r) => r.variant)).toEqual(['front', 'three-quarter', 'laughing', 'angry'])
   })
 
   it('without a front, @goremon asks for one (the owner chose this, 2026-10-07)', () => {
     const d = doc()
-    d.refs = d.refs.filter((r) => r.variant !== 'front')
+    for (const r of Object.values(d.refs)) if (r.variant === 'front') delete d.refs[r.id]
     expect(() => keyRefs(d, 'goremon')).toThrow(NoFrontError)
     expect(() => mentions(d, '@goremon dances')).toThrow(/Set a front for goremon first/)
     expect(wholeKeys(d)).toEqual([])

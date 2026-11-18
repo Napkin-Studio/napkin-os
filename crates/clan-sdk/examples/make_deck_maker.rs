@@ -5,7 +5,7 @@
 //!
 //! Defaults: `deck-maker.app.clan` and `deck-maker.example.clan`.
 //!
-//! Same shape as `make_advertising_studio`, plus a spin-off contract: a deck
+//! Same shape as the other app makers, plus a spin-off contract: a deck
 //! is started from the app's own Start screen (a prompt of any length and any
 //! documents), or spun off from a Brief Maker or Research Tool document, whose
 //! data is carried whole under `data.upstream` (ADR 0023, 0028). The contract

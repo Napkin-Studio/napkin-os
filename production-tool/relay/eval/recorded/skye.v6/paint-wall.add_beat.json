@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front rolls a stripe of bright blue paint across a white wall, steps back, and tilts his head."
+     },
+     {
+      "type": "direction",
+      "text": "Locked off; he walks out of frame."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 2,
+      "text": "A slow smile spreads across his face as the wet @paint_blue stripe catches the light."
+     }
+    ],
+    "note": "I added a moment where he smiles at the fresh stripe, so the pause before he leaves has a reason."
+   }
+  ],
+  "rationale": "The shot lacked a reaction between painting and exiting; one timed moment gives the product a payoff while the words stay unchanged."
+ }
+}

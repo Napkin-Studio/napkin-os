@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "On a noisy platform @sai_front slips on @headphones_black, and the crowd noise drops away to music."
+     },
+     {
+      "type": "direction",
+      "text": "Sound cuts to the music on the put-on."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 3,
+      "text": "@sai_front closes his eyes and lets out a slow, relieved breath."
+     }
+    ],
+    "note": "I added a beat where @sai_front exhales as the noise falls away."
+   }
+  ],
+  "rationale": "The shot shows the put-on and the sound drop but not the reaction. A short timed moment after the cut lands the calm without changing the existing words."
+ }
+}

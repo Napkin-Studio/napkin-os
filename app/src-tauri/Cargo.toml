@@ -2,6 +2,7 @@
 name = "clan-app"
 version.workspace = true
 edition = "2021"
+license.workspace = true
 rust-version = "1.74"
 
 [build-dependencies]

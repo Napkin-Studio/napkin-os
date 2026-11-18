@@ -1,0 +1,167 @@
+/* The Script editor in the approved look (docs/production-tool/ui-mocks/ScriptScreenplay,
+   ScriptAV), over script.css: the editor sits on the dot grid, a frosted outline on the left,
+   the page as a white sheet under a floating element bar, a frosted facts panel on the right. */
+.se { background-color: var(--canvas-bg); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 24px 24px; }
+.se-top.ptbar { backdrop-filter: none; }
+.se-top::after { display: none; }
+.se-top .se-switch { margin-left: 12px; }
+.se-body { grid-template-columns: 234px minmax(0, 1fr) 338px; padding: 16px; gap: 0; }
+.se-outline {
+  background: var(--frost-panel); border: 1px solid var(--line-soft); border-radius: var(--r-panel); box-shadow: var(--shadow-soft); backdrop-filter: var(--blur);
+}
+.se-outline { padding: 12px; }
+.se-page { padding: 0 0 96px; }
+.se-page > .sp-rows { max-width: 700px; margin: 0 auto; }
+
+
+/* The page: a white sheet; prose in Geist, headings and shot labels in mono. */
+.sp-rows {
+  padding: 32px 64px 40px 96px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 6px; box-shadow: var(--shadow-soft);
+  font-family: var(--f-display); font-size: 14.5px; line-height: 1.65; counter-reset: scene;
+}
+.sp-scene { position: relative; margin: 28px 0 8px; counter-increment: scene; }
+.sp-scene:first-child { margin-top: 8px; }
+.sp-scene::before { content: counter(scene); position: absolute; left: -64px; top: 3px; font-family: var(--f-mono); font-size: 14px; color: var(--ink3); width: 32px; text-align: right; }
+.sp-heading { font-family: var(--f-mono); font-size: 14px; font-weight: 500; letter-spacing: 0.04em; margin-bottom: 10px; }
+.sp-shot { margin: 10px 0; }
+.sp-shotline { gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; }
+.sp-shotno { font-family: var(--f-mono); font-weight: 500; font-size: 11px; letter-spacing: 0.06em; color: var(--ink2); }
+.sp-chip { font-size: 11px; padding: 2px 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink2); }
+.sp-shot.open { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 12px; box-shadow: var(--shadow-soft); }
+.sp-shot.open .sp-chip { border-color: var(--tool); background: var(--tool-soft); color: var(--tool-ink); font-weight: 600; font-size: 12px; padding: 3px 10px; }
+.sp-len { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink2); }
+.sp-beat .sp-pill { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-mono); font-size: 12px; padding: 2px 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+
+/* The outline */
+.ol-head { display: flex; justify-content: space-between; padding: 4px 8px 10px; font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); }
+.ol-head span:last-child { text-transform: none; letter-spacing: 0; }
+.ol { flex: none; }
+.ol-scene .ol-btn { font-family: var(--f-display); font-size: 12.5px; font-weight: 600; text-transform: uppercase; color: var(--ink); }
+.ol-shot { padding-left: 14px; }
+.ol-shot .ol-btn { font-size: 13px; }
+.ol-shot.on > .ol-btn { font-weight: 600; }
+.ol-len { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); margin-left: auto; }
+.ol-add { margin: 10px 4px 0; padding: 8px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; text-align: left; font-size: 13px; color: var(--ink2); cursor: pointer; }
+.ol-fill { flex: 1; }
+.se-keycard { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--soft); display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.se-keycard > div:not(.pt-label) { display: flex; justify-content: space-between; color: var(--ink); }
+.se-keycard kbd { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+
+/* Who wrote it: a bordered pill, then WHY? */
+.wmarks { gap: 2px; padding: 1px 2px 1px 6px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: var(--card); }
+.wmark { min-width: 0; height: 18px; background: transparent; font-size: 11px; font-weight: 600; color: var(--ink); gap: 3px; display: inline-flex; align-items: center; }
+.wmark-why { font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; color: var(--ink3); padding: 0 4px; }
+.sp-scene .wmarks { position: absolute; right: 0; top: 0; }
+
+
+
+/* Video · Audio takes the full width on the grid. */
+.se[data-view='av'] .se-body { grid-template-columns: minmax(0, 1fr); }
+.se[data-view='av'] .se-outline, .se[data-view='av'] .se-handle { display: none; }
+.av { padding: 0 16px 24px; }
+.av-row { border-color: var(--line); border-radius: var(--r-card); padding: 10px 14px; gap: 16px; }
+.av-row.av-headrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; font-weight: 400; color: var(--ink3); }
+.av-strip { background: transparent; top: 0; }
+@media (max-width: 1179px) {
+  .se-body { padding: 0; }
+  .se-outline { border-radius: 0; }
+}
+/* In the outline a writer mark is only its figure or initials. */
+.se-outline .wmarks { border: 0; padding: 0; background: transparent; }
+.se-outline .wmark-why, .se-outline .wmark .name, .ol-scene .wmarks { display: none; }
+.se-outline .wmark.you { font-size: 0; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--ink); }
+.se-outline .wmark.you::after { content: "you"; font-size: 8px; font-family: var(--f-mono); }
+/* Video · Audio header (mock ScriptAV): title and facts on the left, the labelled length strip on the right. */
+.av-header { display: flex; align-items: flex-end; gap: 32px; padding: 16px 16px 20px; }
+.av-title { flex: 1; min-width: 0; }
+.av-title h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+.av-title span { font-size: 13px; color: var(--ink2); }
+.av-header .av-strip { position: static; width: 600px; flex-direction: column; align-items: stretch; gap: 6px; padding: 0; }
+.av-strip-head { display: flex; justify-content: space-between; }
+.av-strip-words { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink2); }
+.av-header .av-strip-bar { flex: none; height: 22px; gap: 3px; }
+.av-header .av-strip-bar .seg { display: flex; align-items: center; padding: 0 8px; overflow: hidden; white-space: nowrap; border-radius: 4px; background: var(--soft-2); font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+.av-header .av-strip-bar .seg.cur { background: var(--tool-soft); color: var(--tool-ink); outline: 1px solid var(--tool); }
+.av-header .av-strip-bar .seg.moving { outline: 1.5px dashed var(--tool); background: transparent; }
+
+/* The target length in the meter line (script/LengthPicker.tsx): reads as the words it replaces, with a
+   quiet underline that says it can be changed. */
+.se-targetwrap { display: inline-flex; align-items: baseline; }
+.se-target { appearance: none; -webkit-appearance: none; font: inherit; color: var(--ink); background: transparent; border: 0; border-bottom: 1px dashed var(--ink3); border-radius: 0; padding: 0; margin: 0; cursor: pointer; text-align: center; }
+.se-target:hover, .se-target:focus-visible { border-bottom-color: var(--tool); outline: none; }
+select.se-target option { color: var(--ink); background: var(--card); }
+.se-target.custom { border: 0; cursor: auto; }
+.se-target.custom input { width: 4.5em; font: inherit; color: var(--ink); background: var(--soft-2); border: 1px solid var(--tool); border-radius: 6px; padding: 0 4px; }
+
+/* ── The Script editor in the new UI (features/production-new-ui.clan; mock production-new-ui-v2 "script"): the desk,
+   the outline as a plain list on the left, the page as a paper sheet with its tab and head, the Director agent's
+   next step and what waits as lines on the sheet, drafts where they change things. No Booth until a line is
+   selected or the Script agent is asked on purpose. Paper in dark too. ── */
+.se { background: var(--desk); background-image: none; }
+.se-body { grid-template-columns: 240px minmax(0, 1fr); padding: 0; }
+.se-body:has(> .booth-col) { grid-template-columns: 240px minmax(0, 1fr) auto; }
+.se-outline { background: transparent; border: 0; box-shadow: none; backdrop-filter: none; border-radius: 0; padding: 26px 8px 24px 24px; }
+.se-outline .ol-head { padding: 0 8px 8px; font: 600 10.5px var(--font-mono); letter-spacing: .08em; color: var(--muted); }
+.se-outline .se-keycard { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.se-page { padding: 28px 24px 60px; }
+.se-sheet { position: relative; width: min(760px, 100%); min-height: 760px; margin: 18px auto 0; background: #FFFDF8; color: #141413; border-radius: 3px; box-shadow: var(--shadow-paper);
+  --ink: #141413; --ink2: #3A372F; --ink3: #6D655A; --muted: #6D655A; --faint: #9A9183; --line: #E2D9C8; --line-soft: #EDE6D8; --card: #FFFDF8; --soft: #F6F1E6; --paper: #FFFDF8; }
+html[data-theme='dark'] .se-sheet { box-shadow: 0 24px 60px -24px rgba(0, 0, 0, .7); }
+.se-sheet .stab { position: absolute; top: -21px; left: 22px; height: 21px; padding: 0 10px 0 8px; display: inline-flex; align-items: center; gap: 6px; font: 600 10.5px var(--font-mono);
+  letter-spacing: .1em; text-transform: uppercase; background: #FBF8F1; border: 1px solid #E2DACB; border-bottom: 0; border-radius: 3px 3px 0 0; color: #141413; }
+.se-sheet .stab::before { content: ''; width: 14px; height: 9px; background: repeating-linear-gradient(135deg, #1C1F24 0 3px, #FBF8F1 3px 6px); }
+.se-sheet .sh-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 34px 56px 22px; border-bottom: 1px solid #E2DACB; }
+.se-sheet .sh-head small { display: block; font: 600 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: #6D655A; margin-bottom: 8px; }
+.se-sheet .sh-head h1 { margin: 0; font: 800 30px/1.1 var(--font-ui); letter-spacing: -.025em; }
+.se-sheet .sh-head .r { font: 500 11px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: #3A372F; text-align: right; }
+.se-sheet .sheet-note { margin: 14px 56px 0; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-radius: 4px;
+  background: color-mix(in srgb, #E7D5AC 30%, #FBF8F1); font-size: 13px; }
+.se-sheet .sheet-note .wl { display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
+.se-sheet .sheet-note .sp-btn { background: #FFFDF8; color: #141413; border-color: #E2DACB; }
+.se-sheet .se-page-sp, .se-sheet .sp-rows { background: transparent; border: 0; box-shadow: none; border-radius: 0; max-width: none; margin: 0; padding: 30px 72px 60px 96px; font: 400 17px/1.7 var(--font-ui); }
+.se-sheet .sp-rows .fragment, .se-sheet .sp-rows .sp-static { font: 400 17px/1.7 var(--font-ui); }
+.se-sheet .sp-rows[data-page='screenplay'] .fragment, .se-sheet .sp-rows[data-page='screenplay'] .sp-static { font: 400 14.5px/1.65 var(--f-mono); }
+.se-waits, .se-offpage { margin: 14px 56px 0; display: flex; flex-direction: column; gap: 10px; }
+.se-waits-hd .tagcall { font: 700 9px/16px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; padding: 0 7px; border-radius: 999px; background: #FEF3DC; color: #B45309; border: 1px solid rgba(180, 83, 9, .35); }
+.se-draft { border: 1px solid color-mix(in srgb, var(--ag-base, #1E22AA) 40%, #E2D9C8); background: color-mix(in srgb, var(--ag-base, #1E22AA) 5%, #FFFDF8); border-radius: 4px;
+  padding: 10px 12px; margin: 6px -12px 14px; font: 400 15px/1.6 var(--font-ui); color: #141413; user-select: text; }
+.se-draft .dh { display: flex; align-items: center; gap: 8px; font: 600 10px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: #1E22AA; margin-bottom: 6px; }
+.se-draft .dh .where { color: #6D655A; }
+.se-draft .note { margin: 0 0 6px; font-size: 12.5px; color: #6D655A; }
+.se-draft .text { display: grid; gap: 4px; }
+.se-draft .text .l { white-space: pre-wrap; }
+.se-draft del { color: #9A9082; }
+.se-draft ins { text-decoration: none; background: color-mix(in srgb, #1D8A4E 14%, transparent); }
+.se-draft .acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.se-draft .acts button { height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid #E2D9C8; background: #fff; font: 600 12px var(--font-ui); color: #141413; cursor: pointer; }
+.se-draft .acts button.k { background: #141413; color: #FFFDF8; border-color: #141413; }
+.se-draft .acts button:disabled { opacity: .5; cursor: default; }
+.se-draft .why { margin-top: 8px; font-size: 12.5px; color: #3A372F; }
+.se-draft.stale { opacity: .85; border-style: dashed; }
+.se-facts { display: inline-flex; align-items: center; gap: 8px; }
+.se-facts .meta { font: 500 12px var(--font-mono); color: var(--muted); }
+.se-facts .fit { font: 600 10.5px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: var(--ok-soft, color-mix(in srgb, var(--ok) 14%, transparent)); color: var(--ok); }
+.se-facts .fit.over { background: var(--warn-soft, color-mix(in srgb, var(--warn) 14%, transparent)); color: var(--warn); }
+.se-facts .fit.none { background: none; color: var(--muted); }
+.se-ask[aria-pressed='true'] { border-color: var(--ink); }
+.se-refs { width: 320px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.se-refs .bt-refs { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 1179px) { .se-body, .se-body:has(> .booth-col) { grid-template-columns: minmax(0, 1fr); } .se-body:has(> .booth-col) { grid-template-columns: minmax(0, 1fr) auto; } }
+@media (max-width: 720px) { .se-sheet .sp-rows { padding: 20px 18px 40px; } .se-sheet .sh-head { padding: 24px 20px 16px; } .se-sheet .sheet-note, .se-waits { margin: 12px 20px 0; } }
+.se-outline, .se-outline.nothing { background: transparent !important; border: 0; box-shadow: none; }
+.se-sheet .sh-head .r { white-space: nowrap; }
+.se-partmark { border-left-color: #141413; border-radius: 3px; background: color-mix(in srgb, #F6E36B 40%, transparent); }
+.se-saved { font: 500 11.5px var(--font-mono); color: var(--muted); }
+/* The canvas stays mounted under the Script editor (its jobs keep landing) but is not shown: the one sphere
+   scene draws every visible sphere over the page, so a node's would show through the sheet. */
+body:has(> #root .se, .se) .stage { visibility: hidden; }
+.se-partmark { mix-blend-mode: multiply; }
+
+/* At a laptop's width the band keeps Plan shots, Ask and undo on screen (Playwright live test 2026-11-18, 1024 px;
+   Shrey 2026-11-19, 1116 and 1440): the shots and shape (the sheet's head has them) and "the Script agent" give way. */
+@media (max-width: 1480px) {
+  .se-meta-more, .se-ask-more { display: none; }
+}
+@media (max-width: 1279px) {
+  .se-narrow-off { display: none; }
+}

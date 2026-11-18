@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front walks the waterline at dawn, gold light rising behind her, then stops and looks out to sea."
+     },
+     {
+      "type": "direction",
+      "text": "Unhurried; hold on her face."
+     }
+    ],
+    "note": "I tightened the action line and kept the order of events and the direction."
+   }
+  ],
+  "rationale": "Trimmed the action line by dropping filler words, keeping @maya_front, the sequence and the direction unchanged."
+ }
+}

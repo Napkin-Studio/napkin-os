@@ -1,6 +1,6 @@
-// A split button (features/one-to-one-updates.clan): the common, cheap action on the left
-// ("Redraw": this one), and ▾ for the wider ones, each with its count and cost so what it
-// costs is visible ("Redraw this and the frames after (4)", "~$0.60"). The menu is a Float.
+// A split button (features/one-to-one-updates.clan): the common action on the left ("Redraw":
+// this one), and ▾ for the wider ones, each with its count ("Redraw this and the frames after (4)").
+// No price: the UI shows none (owner, 2026-10-13). The menu is a Float.
 
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { Float, MenuItem } from './Float'

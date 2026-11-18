@@ -1,16 +1,27 @@
+// First: tells Excalidraw to load its fonts from our copy (OFL replacements), before anything draws.
+import './excalidrawAssets'
+// The shell's light or dark, on <html> before anything paints.
+import './theme'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// The new UI's tokens from the shell's own file, then the tool's (features/production-new-ui.clan).
+import '@napkin/app/shell/nui/tokens.css'
 import './styles.css'
 import { idbPersister, SnapshotStore } from './doc/store'
 import { initialAppUi, splitUi, type AppUi } from './doc/ui'
 import { migrateSingleProject } from './projects/migrate'
-import { ProjectIndex } from './projects/projectIndex'
+import { INDEX_CHANNEL, ProjectIndex } from './projects/projectIndex'
 import { ProjectServer } from './projects/server'
 import { browserClan } from './projects/session'
 import { Shell } from './projects/shell'
+import { briefSpinoffOf, withoutBriefSpinoff } from './brief/start'
+import { holdBriefSpinoff } from './brief/useBriefSpinoff'
 import { browserStorage } from './projects/storage'
 import { createRelay } from './relay'
+import { AccessStore, type Access } from './relay/access'
 import { Root } from './Root'
+import { Router } from './app/route'
+import { openRouteProject } from './app/routeOpen'
 
 async function boot() {
   const relay = createRelay()
@@ -18,7 +29,7 @@ async function boot() {
 
   // The projects this browser holds (features/project-home.clan). The first load with projects
   // makes the one project of before the first in the list; nothing of it is lost.
-  const index = new ProjectIndex(storage)
+  const index = new ProjectIndex(storage, undefined, { channel: INDEX_CHANNEL })
   if (!(await index.load())) {
     try {
       await migrateSingleProject(storage, index, browserClan)
@@ -34,24 +45,59 @@ async function boot() {
   if (!hadUi && relay.kind === 'http') app.update((u) => { u.configChoice = 'remote'; u.providerChoice = 'config' })
 
   // Who is signed in, asked on every load: the relay's identity seam knows (GET /me), so there is no
-  // sign-in here; signed out shows Root's message (features/drop-hackathon-extras.clan). A 401 on any
-  // route later signs out the same way. The mock always names its local person.
-  relay.onUnauthorised = () => app.update((u) => { u.me = undefined })
+  // sign-in here. Behind Napkin OS, napkin-web's 401 means signed out (Root offers its Sign in, which
+  // comes back here), the relay's 401 means it could not confirm who, and 403 flag_off means the
+  // agency is not on (features/os-sign-in.clan, relay/access.ts). The same on any route later.
+  // The mock always names its local person.
+  const access = new AccessStore()
+  const refused = (why: Access) => {
+    access.set(why)
+    app.update((u) => { u.me = undefined })
+  }
+  relay.onUnauthorised = refused
   // Unreachable: keep who this browser last knew, so the projects here still open.
   try {
     const me = await relay.me()
     app.update((u) => { u.me = me ?? undefined })
   } catch (e) {
-    console.error('could not ask the relay who is signed in', e)
+    if (access.get() === 'ok') console.error('could not ask the relay who is signed in', e)
   }
-  const remoteConfig = relay.kind === 'http' ? await relay.config() : null
+  // Signed out (or not confirmed): nothing to configure, so not asked (a 401 is a state, not an error).
+  const remoteConfig = relay.kind === 'http' && access.get() === 'ok' ? await relay.config() : null
 
   // The person's projects on the relay (features/personal-workspaces.clan): saved from here, listed
   // on Home and opened from any browser under the same name. Not on the in-browser mock relay.
   const relayUrl = import.meta.env.VITE_RELAY_URL as string | undefined
-  const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me }) : undefined
+  const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me, onUnauthorised: refused }) : undefined
   const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server })
-  if (app.get().me) await shell.start().catch((e) => console.error('could not open the last project', e))
+  // A deep link (/production/p/:project/script/:scriptId) opens its project; else back where the person was.
+  // A spin-off from Brief Maker (/production/?brief=<doc id>, features/brief-node.clan): a new film started from
+  // that brief, never the last project. The id is held before the router rewrites the URL (brief/useBriefSpinoff).
+  const spinoff = briefSpinoffOf(window.location.search)
+  if (spinoff) {
+    holdBriefSpinoff(spinoff)
+    // Signed out: the link stays as it came, so Sign in (Root, signInHref) comes back to it with the brief
+    // (re-test N4: the sign-in link was /?next=%2Fproduction%2F and the person landed on Home with no film).
+    if (access.get() === 'ok') window.history.replaceState(window.history.state, '', window.location.pathname + withoutBriefSpinoff(window.location.search) + window.location.hash)
+  }
+  const router = new Router()
+  // The names the relay already lists, so a film naming itself never takes one (re-test N-D). Not waited for,
+  // but a spin-off names itself from the brief at once, so it waits a moment for them.
+  const listed = app.get().me ? shell.serverProjects().catch(() => []) : Promise.resolve([])
+  // Blank films nothing was added to are not kept (owner 2026-11-18): those an earlier visit left go first.
+  if (app.get().me) await shell.pruneDrafts().catch((e) => console.warn('could not tidy blank films', e))
+  if (app.get().me && spinoff) {
+    await Promise.race([listed, new Promise((r) => setTimeout(r, 2000))])
+    await shell.newProject().catch((e) => console.error('could not start a film from the brief', e))
+  } else if (app.get().me) {
+    // Entry is the blank canvas, never All projects and never a question (owner 2026-11-18); a link or a reload
+    // that names a film opens that film.
+    const opened = await openRouteProject(shell, router).catch((e) => {
+      console.error('could not open the linked project', e)
+      return false
+    })
+    if (!opened) await shell.newProject().catch((e) => console.error('could not open a blank canvas', e))
+  }
 
   window.addEventListener('pagehide', () => {
     const s = shell.get().session?.services
@@ -67,10 +113,12 @@ async function boot() {
   if (import.meta.env.DEV) {
     (window as unknown as { __shell: Shell }).__shell = shell
     Object.defineProperty(window, '__pt', { get: () => shell.get().session?.services, configurable: true })
+    // The e2e harness's seed helpers (production-tool/web/e2e/README.md).
+    void import('./dev/seed').then((m) => m.installSeed(shell))
   }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <Root shell={shell} />
+      <Root shell={shell} access={access} router={router} />
     </StrictMode>,
   )
 }

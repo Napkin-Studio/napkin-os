@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front walks the length of the waterline at dawn as the light comes up gold behind her, then stops and looks out to sea."
+     },
+     {
+      "type": "direction",
+      "text": "Unhurried; hold on her face."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 3,
+      "text": "A small wave slides up the sand and erases her footprints."
+     }
+    ],
+    "note": "I added a moment at 3 s: a wave washes over her footprints. Your words are unchanged."
+   }
+  ],
+  "rationale": "Kept the action and direction as written and added one timed moment that deepens the quiet dawn mood without adding names."
+ }
+}

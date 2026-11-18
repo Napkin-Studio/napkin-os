@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Rain starts on a grey street. @maya_front opens a yellow @umbrella_open and grins at the sky."
+     },
+     {
+      "type": "direction",
+      "text": "Slow push in; the yellow is the only colour."
+     }
+    ],
+    "note": "I tightened the action line and kept the order of events and both names."
+   }
+  ],
+  "rationale": "Trimmed filler words (\"It starts to\", \"bright\", \"up\") while keeping both @names, the sequence and the direction block last."
+ }
+}

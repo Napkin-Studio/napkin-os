@@ -1,0 +1,35 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000RS01",
+  "op": "resize",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_resize01a",
+  "node": {
+    "kind": "format_set",
+    "id": "fset_01K7B00000000000000000FS01"
+  },
+  "parentIds": [],
+  "input": {
+    "image": {
+      "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "url": "https://studio.napkin.ie/in/sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "mime": "image/png"
+    },
+    "aspect": {
+      "w": 9,
+      "h": 16
+    },
+    "delivery": {
+      "width": 1440,
+      "height": 2560
+    },
+    "safeArea": {
+      "type": "insets",
+      "top": 14,
+      "right": 6,
+      "bottom": 35,
+      "left": 6,
+      "unit": "%"
+    }
+  }
+}

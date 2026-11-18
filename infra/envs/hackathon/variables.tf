@@ -21,9 +21,13 @@ variable "github_repository_ids" {
 }
 
 variable "cors_origins" {
-  description = "Extra origins allowed to PUT uploads straight to S3 (besides the CloudFront domain), e.g. http://localhost:5173"
+  description = "Every web origin, besides the distribution itself, that runs the Production Tool: the Napkin OS studios serving it at /production (UAT, staging, production; features/os-sign-in.clan) and the dev server. Their browsers PUT uploads straight to S3 and read /in/*, /out/* and /ads/* across origins (frames, clips, canvas exports, downloads); both rules come from this one list. Set the real ones in terraform.tfvars (terraform.tfvars.example)."
   type        = list(string)
   default     = ["http://localhost:5173"]
+  validation {
+    condition     = alltrue([for o in var.cors_origins : can(regex("^https?://[^/]+$", o))])
+    error_message = "cors_origins are origins: scheme and host, no path or trailing slash (https://studio.example.com)"
+  }
 }
 
 variable "domain_aliases" {

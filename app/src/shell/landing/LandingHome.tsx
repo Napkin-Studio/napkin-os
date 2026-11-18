@@ -9,11 +9,12 @@
 // but the registry's offers. The Launcher stays as the app library and the
 // fallback.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ToolPage } from './ToolPage'
 import type { Manage } from './useLanding'
 import { agencySummary, newsOf, whoIs, type AgencySummary } from './model'
-import { TOOLS, isLive, toolById } from './tools'
+import { liveTools, toolById, toolHref, type Tool } from './tools'
+import { productionOn } from '../../host/http'
 import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
 import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
@@ -84,7 +85,17 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     if (said) setNews(said)
   }, [summary])
   const installed = useMemo(() => data.apps.map(app_id => ({ app_id })), [data.apps])
-  const live = useMemo(() => new Set(TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string)), [installed])
+  // The Production Tool, when this server serves it to this person: Prod's tile opens /production.
+  const [production, setProduction] = useState(false)
+  useEffect(() => { void productionOn().then(setProduction) }, [])
+  const live = useMemo(() => liveTools(installed, production), [installed, production])
+  // A tool with a page here: live, and not one that opens outside the shell (Prod).
+  const routable = useCallback((id: string) => live.has(id) && toolHref({ id }) === null, [live])
+  const openTool = (clientId: string, t: Tool) => {
+    const href = toolHref(t)
+    if (href) window.location.assign(href)
+    else go({ level: 'tool', client: clientId, tool: t.id })
+  }
 
   const clientId = route.level === 'client' || route.level === 'tool' ? route.client : null
   const client = clientId ? data.clients.find(c => c.id === clientId) : undefined
@@ -99,7 +110,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   useEffect(() => {
     if (!clientId) return
     if (client) {
-      const fixed = correctRoute(route, { client: () => true, tool: id => live.has(id) })
+      const fixed = correctRoute(route, { client: () => true, tool: routable })
       if (!sameRoute(fixed, route)) go(fixed, true)
       return
     }
@@ -110,7 +121,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     let fresh = true
     void onRefresh().finally(() => { if (fresh) setChecked(clientId) })
     return () => { fresh = false }
-  }, [clientId, client, route, go, checked, onRefresh, live])
+  }, [clientId, client, route, go, checked, onRefresh, routable])
 
   // What the live region says: the level arrived at, or a word about a tool that is not here yet.
   const [soon, setSoon] = useState<{ key: string; text: string; n: number } | null>(null)
@@ -125,7 +136,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   })
 
   let body
-  if (clientId && client && route.level === 'tool' && tool && live.has(tool.id)) {
+  if (clientId && client && route.level === 'tool' && tool && routable(tool.id)) {
     body = (
       <ToolPage
         client={client}
@@ -146,7 +157,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         live={live}
         onOpenItem={onOpenDocument}
         onNew={t => { if (t.appId) onStart(t.appId, client.id) }}
-        onOpenTool={t => go({ level: 'tool', client: client.id, tool: t.id })}
+        onOpenTool={t => openTool(client.id, t)}
         onSoon={sayingSoon}
         onDecisions={onDecisions}
         onRename={manage ? name => manage.rename(client.id, name) : undefined}
@@ -168,12 +179,13 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         manage={manage}
         onAdd={onAdd}
         onOpenClient={id => go({ level: 'client', client: id })}
-        onOpenTool={(id, t) => go({ level: 'tool', client: id, tool: t.id })}
+        onOpenTool={(id, t) => openTool(id, t)}
         onSoon={sayingSoon}
         onOpenDocument={onOpenDocument}
         onOpenFile={onOpenFile}
         onOffline={onOffline}
         onSay={setRegistryNote}
+        productionHref={live.has('prod') ? toolHref({ id: 'prod' }) ?? undefined : undefined}
       />
     )
   }

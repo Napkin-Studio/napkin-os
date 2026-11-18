@@ -1,18 +1,21 @@
-// The relay over HTTP: the infra lane's local server (http://localhost:8787)
-// or the deployed /api. Routes and bodies per relay-api.schema.json. No token: who is
-// asking comes from the relay's identity seam (features/drop-hackathon-extras.clan).
+// The relay over HTTP: the local server (http://localhost:8787), or napkin-web's /production/api,
+// which proxies to the relay with the signed-in person (features/os-sign-in.clan). Routes and
+// bodies per relay-api.schema.json. No token: who is asking comes from the relay's identity seam.
 
 import type {
-  AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output,
+  AnswerConflict, AssetRef, Config, ConfigFile, ContractError, InputMime, Job, JobAnswer, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output,
   UploadResponse,
 } from '../contracts/types'
+import { AGENCY_SHELF } from '../contracts/types'
+import { withDefaults } from '../contracts/load'
 import type { ShellEvent } from '../dogfood/recorder'
 import { sha256Of } from '../lib/hash'
-import { RelayError, type Relay, type UploadResult } from './types'
+import { accessOf, type Access } from './access'
+import { RelayError, type AnswerResult, type Relay, type UploadResult } from './types'
 
 export class HttpRelay implements Relay {
   readonly kind = 'http' as const
-  onUnauthorised?: () => void
+  onUnauthorised?: (why: Access) => void
   private readonly base: string
 
   constructor(base: string) {
@@ -34,14 +37,19 @@ export class HttpRelay implements Relay {
       json = await res.json()
     } catch { /* empty or not JSON */ }
     if (!res.ok) {
-      if (res.status === 401) this.onUnauthorised?.()
+      const access = accessOf(res.status, json, path === '/me')
+      if (access) this.onUnauthorised?.(access)
       const err = (json as { error?: ContractError } | null)?.error
-      throw new RelayError(err ?? { code: 'internal', message: `The server answered ${res.status}.`, retryable: res.status >= 500 }, res.status)
+      if (!err && access === 'signed_out') {
+        throw new RelayError({ code: 'unauthorised', message: 'Sign in to Napkin Studio to use Production.', retryable: false }, res.status)
+      }
+      throw new RelayError(err ?? { code: 'internal', message: `The server answered ${res.status}.`, retryable: res.status >= 500 }, res.status, json)
     }
     return json as T
   }
 
-  /** Signed out (401) is an answer, not an error: null. */
+  /** Signed out or not confirmed (401) is an answer, not an error: null (onUnauthorised says which).
+   *  A 403 flag_off (the agency is not on) throws, after onUnauthorised('not_enabled'). */
   async me(): Promise<Me | null> {
     try {
       return await this.call<Me>('GET', '/me')
@@ -57,7 +65,9 @@ export class HttpRelay implements Relay {
     if (!res.exists && res.putUrl) {
       let put: Response
       try {
-        put = await fetch(res.putUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': mime } })
+        // With the headers the relay names: x-amz-checksum-sha256 binds the PUT to the bytes' hash, so S3
+        // refuses other bytes (features/tenant-limits.clan).
+        put = await fetch(res.putUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': mime, ...res.putHeaders } })
       } catch (_e) {
         throw new RelayError({ code: 'provider_unavailable', message: 'The upload did not go through. Try again.', retryable: true })
       }
@@ -78,28 +88,38 @@ export class HttpRelay implements Relay {
     return this.call<Job>('DELETE', `/jobs/${encodeURIComponent(jobId)}`)
   }
 
+  async answerJob(jobId: string, answer: JobAnswer): Promise<AnswerResult> {
+    try {
+      return { job: await this.call<Job>('POST', `/jobs/${encodeURIComponent(jobId)}/answer`, answer) }
+    } catch (e) {
+      const body = e instanceof RelayError && e.status === 409 ? (e.body as Partial<AnswerConflict> | null) : null
+      if (body?.answeredBy && body.answer && body.error) return { conflict: body as AnswerConflict }
+      throw e
+    }
+  }
+
   async log(entry: LogEntry) {
     await this.call<void>('POST', '/log', entry)
   }
 
   async config(): Promise<Config | null> {
     try {
-      return await this.call<Config>('GET', '/config')
+      return withDefaults(await this.call<ConfigFile>('GET', '/config'))
     } catch {
       return null
     }
   }
 
-  library() {
-    return this.call<LibraryIndex>('GET', '/library')
+  library(shelf = AGENCY_SHELF) {
+    return this.call<LibraryIndex>('GET', `/library/${encodeURIComponent(shelf)}`)
   }
 
-  libraryEntry(key: Key, ver?: number) {
-    return this.call<LibraryEntry>('GET', `/library/${encodeURIComponent(key)}${ver ? `/${ver}` : ''}`)
+  libraryEntry(key: Key, ver?: number, shelf = AGENCY_SHELF) {
+    return this.call<LibraryEntry>('GET', `/library/${encodeURIComponent(shelf)}/${encodeURIComponent(key)}${ver ? `/${ver}` : ''}`)
   }
 
-  publish(key: Key, req: LibraryPublish) {
-    return this.call<LibraryEntry>('POST', `/library/${encodeURIComponent(key)}`, req)
+  publish(key: Key, req: LibraryPublish, shelf = AGENCY_SHELF) {
+    return this.call<LibraryEntry>('POST', `/library/${encodeURIComponent(shelf)}/${encodeURIComponent(key)}`, req)
   }
 
   async dogfoodConsent() {

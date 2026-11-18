@@ -1,0 +1,5 @@
+{
+ "version": "director.v14",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"frame_edit\", \"question\": null, \"frameEdit\": {\"reading\": \"local\", \"runAs\": \"frame\"}, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_image3_pro\", \"prompt\": \"make her scarf red. Everything else in @current stays exactly as it is.\", \"refs\": [{\"name\": \"current\", \"sha256\": \"sha256:138064aac89f3ef36a12a386bf253919c9df1678e0468283a4c72c284bbf1487\", \"role\": \"current\"}, {\"name\": \"maya_front\", \"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"role\": \"character\"}], \"ratio\": \"1344:768\", \"op\": \"frame_edit\"}, \"rationale\": \"The words change only the scarf's colour, so the camera stays. With no box or mask, it runs as an instruction edit of the whole frame.\", \"confidence\": 0.93}"
+}

@@ -1,0 +1,55 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000CQ01",
+  "participantId": "p_a1b2c3",
+  "tenantId": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "projectId": "proj_01K7A00000000000000000PR01",
+  "startedBy": "human:p_a1b2c3",
+  "crew": "wren",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "nonce": "n_7Hq2Lx9Pw4",
+  "purpose": "clip for shot 1",
+  "op": "clip",
+  "quotaClass": "video",
+  "state": "completed",
+  "provider": "runway",
+  "model": "gemini_omni_flash_1.1",
+  "requestId": "4b1c9a2e-0000-4000-8000-000000000000",
+  "inputHashes": [
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  ],
+  "director": {
+    "model": "claude-haiku-4-5",
+    "promptVersion": "director.v6",
+    "output": {},
+    "rationale": "shot 1 at Draft",
+    "latencyMs": 1400
+  },
+  "outputs": [
+    {
+      "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "url": "https://hack.napkin.ie/out/sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "mime": "video/mp4",
+      "durationS": 5
+    }
+  ],
+  "kind": "generated",
+  "cost": {
+    "estimate": 0.17,
+    "reserved": 0.17,
+    "confirmed": 0.17,
+    "currency": "USD",
+    "unknown": false
+  },
+  "createdAt": "2026-10-07T10:12:03Z",
+  "updatedAt": "2026-10-07T10:12:31Z",
+  "quality": {
+    "level": "draft",
+    "size": "360p"
+  }
+}

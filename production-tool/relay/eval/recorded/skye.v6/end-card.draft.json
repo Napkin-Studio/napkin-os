@@ -1,0 +1,50 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. SEA - DUSK"
+     },
+     {
+      "type": "action",
+      "text": "@sea_dusk lies calm under a wash of amber light."
+     },
+     {
+      "type": "action",
+      "text": "A slow pan drifts along the quiet horizon."
+     },
+     {
+      "type": "action",
+      "text": "Small swells fold and glide toward the shore."
+     },
+     {
+      "type": "action",
+      "text": "The last of the sun sinks, and the sky turns violet."
+     },
+     {
+      "type": "action",
+      "text": "Light shimmers on the water, soft and unhurried."
+     },
+     {
+      "type": "action",
+      "text": "The logo fades in over the sea and settles."
+     },
+     {
+      "type": "action",
+      "text": "It holds still as the dusk deepens."
+     }
+    ],
+    "note": "I drafted a calm, visual dusk scene around your logo and slow pan, with no dialogue."
+   }
+  ],
+  "rationale": "Expanded the one-line idea into seven short visual beats (about 14 s) ending on the logo settling, keeping @sea_dusk as the location."
+ }
+}

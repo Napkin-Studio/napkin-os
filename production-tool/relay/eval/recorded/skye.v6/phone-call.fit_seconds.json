@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front answers her phone on a crowded train, covers her other ear, and laughs warmly."
+     },
+     {
+      "type": "direction",
+      "text": "Handheld, close."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one 15-word line so the shot plays in 2.5 s."
+   }
+  ],
+  "rationale": "The action had 19 words (about 3.2 s). Cutting it to 15 words gives 2.5 s by rule 10. The @name, the order of events and the direction block are unchanged."
+ }
+}

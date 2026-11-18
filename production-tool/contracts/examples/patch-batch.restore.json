@@ -1,0 +1,36 @@
+{
+  "patches": [
+    {
+      "op": "set",
+      "entity": "shots",
+      "id": "shot_01K7B00000000000000000SH02",
+      "path": "pick/current",
+      "value": "frame_01K7B00000000000000000FV02",
+      "base_version": 7
+    },
+    {
+      "op": "create",
+      "entity": "stale",
+      "id": "stale_01K7B00000000000000000ST09",
+      "value": {
+        "target": {
+          "kind": "take",
+          "id": "take_01K7B00000000000000000TK01"
+        },
+        "caused_by": {
+          "kind": "frame",
+          "id": "frame_01K7B00000000000000000FV02"
+        },
+        "reason": "frame 2 restored to v2"
+      },
+      "base_version": 0
+    }
+  ],
+  "why": {
+    "action": "restore frames v2 in shot 2",
+    "agent": "human:p_shrey01",
+    "cites": [
+      "doc_lumen01#frames[frame_01K7B00000000000000000FV02]"
+    ]
+  }
+}

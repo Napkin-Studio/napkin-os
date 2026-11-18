@@ -9,11 +9,34 @@ import threading
 import time
 
 from contracts import Contracts
+from contracts_dir import contracts_dir
 
 log = logging.getLogger("relay")
 
 CONFIG_TTL_S = 30
 SECRETS_TTL_S = 300
+
+# config.json names only what differs from these (features/config-defaults.clan). They are the schema's
+# own defaults, which the web reads too (web/src/contracts/load.ts withDefaults), so the two cannot differ.
+_SCHEMA = json.loads((contracts_dir() / "config.schema.json").read_text())["properties"]
+DEFAULT_ROUTING: dict[str, list[str]] = _SCHEMA["routing"]["default"]
+DEFAULT_FLAGS: dict[str, bool] = {k: v["default"] for k, v in _SCHEMA["flags"]["properties"].items()}
+OPS: list[str] = json.loads((contracts_dir() / "common.schema.json").read_text())["$defs"]["op"]["enum"]
+# Where an op goes that neither the file nor the default table names: Runway, the only provider.
+DEFAULT_PROVIDER = "runway"
+
+
+def with_defaults(cfg: dict) -> dict:
+    """The config as the relay reads it: every op routed (the file's entry, else the default table's, else
+    Runway) and every flag set (the file's, else its default). The director block stays as written: the
+    director fills its own prompt and model defaults (director/claude.py)."""
+    routing = cfg.get("routing") or {}
+    return {
+        **cfg,
+        "routing": {op: list(routing.get(op, DEFAULT_ROUTING.get(op, [DEFAULT_PROVIDER]))) for op in OPS},
+        "flags": {**DEFAULT_FLAGS, **(cfg.get("flags") or {})},
+        "director": dict(cfg.get("director") or {}),
+    }
 
 
 class CachedConfig:

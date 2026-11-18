@@ -1,0 +1,34 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front opens a thin @laptop_silver on a kitchen table, and the screen lights his face blue in the dark room."
+     },
+     {
+      "type": "direction",
+      "text": "Only the screen lights the scene."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 2.5,
+      "text": "His eyes widen as the screen brightens and a faint smile spreads."
+     }
+    ],
+    "note": "I added a timed beat at 2.5 s where his face reacts to the screen light.",
+    "mode": "revise"
+   }
+  ],
+  "rationale": "The shot shows the laptop opening but lacks a human reaction. A short moment beat after the open adds it without changing the words."
+ }
+}

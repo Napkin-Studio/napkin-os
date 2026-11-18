@@ -702,6 +702,20 @@ test('Review shows the supply cards and the confirm list, escaped, and Verify wr
   assert.equal(m.writes[0].action, 'verify prompt:2')
 })
 
+test('Review shows the brief-changed notice when the host says so, escaped, and writes nothing', async () => {
+  const changed = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ upstream: [{ status: 'changed', direct: true, title: hostile }] }) })
+  const m = mount({ ...runData(), upstream: { d1: briefDoc } }, changed)
+  await new Promise(r => setTimeout(r, 10))
+  assert.ok(m.app.innerHTML.includes('data-to-supply'), 'this is the Review screen')
+  assert.ok(m.app.innerHTML.includes('data-up-changed'))
+  assert.ok(m.app.innerHTML.includes('changed since this deck'))
+  assert.equal(m.app.innerHTML.includes('<img'), false)
+  assert.equal(m.writes.length, 0, 'a changed brief never refreshes the deck by itself')
+  const current = mount({ ...runData(), upstream: { d1: briefDoc } }, () => Promise.resolve({ ok: true, json: () => Promise.resolve({ upstream: [{ status: 'current', title: 'B' }] }) }))
+  await new Promise(r => setTimeout(r, 10))
+  assert.equal(current.app.innerHTML.includes('data-up-changed'), false)
+})
+
 test('a verified item shows as verified with no button, and the count follows', () => {
   const m = mount(runData({}, { 'slide:team': { by: 'human', at: 't' } }))
   assert.ok(m.app.innerHTML.includes('1 of 3 verified'))

@@ -1,0 +1,54 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. SUBWAY TRAIN - DAY"
+     },
+     {
+      "type": "action",
+      "text": "@maya_front stands wedged between commuters, one hand on the pole."
+     },
+     {
+      "type": "action",
+      "text": "Her phone buzzes. She pulls it from her coat pocket."
+     },
+     {
+      "type": "action",
+      "text": "She answers and covers her other ear against the rumble."
+     },
+     {
+      "type": "character",
+      "text": "MAYA"
+     },
+     {
+      "type": "dialogue",
+      "text": "Wait, say that again. You're kidding!"
+     },
+     {
+      "type": "action",
+      "text": "She bursts out laughing, eyes bright, the crowd forgotten."
+     },
+     {
+      "type": "action",
+      "text": "Strangers glance over, and one of them smiles too."
+     },
+     {
+      "type": "action",
+      "text": "The train glides on; her smile holds, the call still clear."
+     }
+    ],
+    "note": "I drafted a short one-location scene from your line, with a single spoken line."
+   }
+  ],
+  "rationale": "Expanded the user's one-line action into a 15 s single-location scene with a slugline, five action beats and one six-word line, keeping @maya_front as written."
+ }
+}

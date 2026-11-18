@@ -1,0 +1,5 @@
+{
+ "version": "director.v14",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"frame_edit\", \"question\": null, \"frameEdit\": {\"reading\": \"local\", \"runAs\": \"frame\"}, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_image3_pro\", \"prompt\": \"add rain, everything else in @current stays exactly as it is\", \"refs\": [{\"name\": \"current\", \"sha256\": \"sha256:d70ef3340ec3d18a9c4f793db4bfc6c197a3a00f9cf9f7b4dfb6f961996bf0f0\", \"role\": \"current\"}, {\"name\": \"maya_front\", \"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"role\": \"character\"}], \"ratio\": \"1344:768\"}, \"rationale\": \"Rain is a local change with no box or mask, so it runs as an instruction edit of the whole frame. Maya's ref is kept as the shot's character.\", \"confidence\": 0.9}"
+}

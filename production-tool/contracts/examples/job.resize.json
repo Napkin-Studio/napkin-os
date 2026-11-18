@@ -1,0 +1,61 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7C00000000000000000CJ01",
+  "participantId": "p_a1b2c3",
+  "tenantId": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "projectId": "proj_01K7A00000000000000000PR01",
+  "startedBy": "human:p_a1b2c3",
+  "crew": "wren",
+  "node": {
+    "kind": "format_set",
+    "id": "fset_01K7C00000000000000000CF01"
+  },
+  "nonce": "n_7Hq2Lx9Pw4",
+  "purpose": "size size_01K7C00000000000000000CS01",
+  "op": "resize",
+  "quotaClass": "image",
+  "state": "completed",
+  "inputHashes": [
+    "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+  ],
+  "outputs": [
+    {
+      "sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "url": "https://studio.napkin.ie/out/sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "mime": "image/png",
+      "w": 1440,
+      "h": 1800
+    }
+  ],
+  "kind": "generated",
+  "cost": {
+    "estimate": 0,
+    "reserved": 0,
+    "confirmed": 0,
+    "currency": "USD",
+    "unknown": false
+  },
+  "createdAt": "2026-10-07T10:12:03Z",
+  "updatedAt": "2026-10-07T10:12:31Z",
+  "resize": {
+    "method": "crop",
+    "crop": {
+      "x": 514,
+      "y": 0,
+      "w": 691.2,
+      "h": 864
+    },
+    "previewPx": {
+      "width": 1440,
+      "height": 1800
+    },
+    "layers": 2,
+    "plate": {
+      "sha256": "sha256:6767676767676767676767676767676767676767676767676767676767676767",
+      "url": "https://studio.napkin.ie/out/sha256:6767676767676767676767676767676767676767676767676767676767676767",
+      "mime": "image/png",
+      "w": 1440,
+      "h": 1800
+    }
+  }
+}

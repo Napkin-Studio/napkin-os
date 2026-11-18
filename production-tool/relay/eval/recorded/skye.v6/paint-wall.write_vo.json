@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front rolls a stripe of bright blue paint across a white wall, steps back, and tilts his head."
+     },
+     {
+      "type": "direction",
+      "text": "Locked off; he walks out of frame."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 0.5,
+      "text": "One stripe, and it already feels like home."
+     }
+    ],
+    "note": "I kept the shot as it is and added a short VO line over the first stripe."
+   }
+  ],
+  "rationale": "The shot's words stay; one brief VO beat early in the shot fits the 15 s spot without crowding the action."
+ }
+}

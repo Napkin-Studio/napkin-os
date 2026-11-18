@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front sprints for the last night bus; doors close, reopen, the driver waves him on."
+     },
+     {
+      "type": "direction",
+      "text": "Wide from across the street."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one beat that plays in 2.5 seconds and kept the direction."
+   }
+  ],
+  "rationale": "The action keeps the order of events (run, doors close, doors reopen, wave) in 15 words, which rule 10 times at 2.5 s. The direction line is unchanged."
+ }
+}

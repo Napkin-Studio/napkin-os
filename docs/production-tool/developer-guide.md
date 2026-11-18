@@ -36,7 +36,7 @@ Related documents:
 
 ## Start the relay (the local server)
 
-The local relay keeps everything in memory, so restarting it forgets all jobs. There is no sign-in: it runs every request as a fixed local person (the identity seam, `relay/identity.py`). The hosted relay has no identity source until the Napkin OS sign-in is wired in (features/os-sign-in), so it answers 401 to everything. Set `NAPKIN_LOCAL_USER=handle@agency` to run as someone other than `local@napkin`.
+The local relay keeps its jobs, quotas and spend under its `--data` dir (`state/`, `relay/store.py` FileStore), so a restart forgets nothing: it polls every unfinished job again at once, and a result the provider finished meanwhile still lands. Delete `state/` to start clean. There is no sign-in: it runs every request as a fixed local person (the identity seam, `relay/identity.py`). The hosted relay has no identity source until the Napkin OS sign-in is wired in (features/os-sign-in), so it answers 401 to everything. Set `NAPKIN_LOCAL_USER=handle@agency` to run as someone other than `local@napkin`.
 
 ```
 cd production-tool/relay
@@ -47,7 +47,7 @@ LOCAL_CONFIG=/path/to/config.json uv run --frozen --python 3.12 python -m local 
 - **Config:**
   - Without `LOCAL_CONFIG`, every step runs on the free **mock** provider, which returns your input stamped "MOCK".
   - With `LOCAL_CONFIG`, it reads your config file (same shape as `contracts/examples/config.*.json`) and re-reads it every 30 s, so routing and flag changes need no restart.
-  - To use Runway, route steps to it, e.g. `"frame": ["runway"]` (as `contracts/examples/config.live.json` does).
+  - A config names only what differs from the defaults in `contracts/config.schema.json` (features/config-defaults.clan): a step it does not route runs on Runway (shot_list, stitch and cutout on no provider), a flag it does not set takes its default, and the director runs its newest prompt. So `contracts/examples/config.live.json`, which routes nothing, runs every step on Runway; route a step to the mock with e.g. `"frame": ["mock"]`.
 - **No director model configured** (`ANTHROPIC_API_KEY` or `NAPKIN_MODEL_API` unset): a simple passthrough director writes prompts from the shot text. That's fine for testing routing; it isn't representative of prompt quality.
 - **Use `--frozen`:** without it, `uv` rewrites the out-of-date `uv.lock` on every run (see [Gotchas](#gotchas)).
 
@@ -94,7 +94,7 @@ Branches are `feat/<slug>`. Pull requests go into `develop` and are squash-merge
   runs each step through the relay and the real Runway adapter against a stand-in of Runway, and checks every request against the provider's published schema.
 - **Refresh those schemas:** `uv run --frozen --python 3.12 python scripts/refresh_provider_schemas.py`
   in `production-tool/relay` (`--check` shows what changed).
-- **Cost per pathway:** `scripts/pathway_costs.py`.
+- **Cost per ad:** `scripts/ad_costs.py` (contracts/cost-model.json priced by contracts/pricing.py). Live checks a person runs: `scripts/live_check_aleph2.sh`, `scripts/live_check_stop_charge.sh`.
 - **A real run, with a spending cap:** `scripts/pathway_smoke.py --live --max-usd 1 --image-url
   <https picture>`. It's a dry run without `--live`, and reads keys only from your environment.
 - **The provider reference page:** regenerate it with `scripts/provider_reference.py` after a sheet
