@@ -251,7 +251,8 @@ def test_libreoffice_converts_a_render():
     with tempfile.TemporaryDirectory(dir="/tmp") as d:
         out = Path(d) / "d.pptx"
         R.render(_deck(), _inp(), out)
-        subprocess.run([str(SOFFICE), "--headless", "--convert-to", "pdf", "--outdir", d, str(out)], check=True, capture_output=True, timeout=180)
+        with tempfile.TemporaryDirectory() as prof:   # a private profile: a shared one loses a conversion to another running soffice
+            subprocess.run([str(SOFFICE), f"-env:UserInstallation=file://{prof}", "--headless", "--convert-to", "pdf", "--outdir", d, str(out)], check=True, capture_output=True, timeout=180)
         assert (Path(d) / "d.pdf").stat().st_size > 1000
 
 

@@ -30,6 +30,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -73,6 +74,17 @@ def _soffice() -> str:
         if shutil.which(c) or Path(c).exists():
             return c
     raise RuntimeError("LibreOffice not found: the PDF cannot be made")
+
+
+def to_pdf(pptx, outdir, timeout: int = 180):
+    """Convert a pptx to PDF with LibreOffice, in a private profile (``-env:UserInstallation``) that is removed afterwards.
+    Two soffice processes that share a profile hand the second job to the first and exit 0 with no PDF, so every call gets its own."""
+    profile = tempfile.mkdtemp(prefix="deck_lo_")
+    try:
+        return subprocess.run([_soffice(), f"-env:UserInstallation=file://{profile}", "--headless", "--convert-to", "pdf", "--outdir", str(outdir), str(pptx)],
+                              check=True, capture_output=True, timeout=timeout)
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
 
 
 def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:
@@ -211,7 +223,7 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         if pdf_seam:
             return pdf_seam(p, folder)
         try:
-            subprocess.run([_soffice(), "--headless", "--convert-to", "pdf", "--outdir", str(folder), str(p)], check=True, capture_output=True, timeout=180)
+            to_pdf(p, folder)
         except (subprocess.SubprocessError, RuntimeError, OSError):   # no PDF for this round: it loses its pixels, so the gate cannot keep it
             return None
         return folder / "deck.pdf" if (folder / "deck.pdf").exists() else None
@@ -950,11 +962,7 @@ def main(argv=None):
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    for attempt in (1, 2):   # LibreOffice sometimes exits 0 with no PDF when another instance holds its profile (a loaded machine): one more try
-        done = subprocess.run([_soffice(), "--headless", "--convert-to", "pdf", "--outdir", str(a.out), str(pptx)],
-                              check=True, capture_output=True, timeout=180)
-        if done is None or (a.out / "deck.pdf").exists():   # (a test double returns None: nothing to retry)
-            break
+    to_pdf(pptx, a.out)   # a private profile per call: a shared one made a second LibreOffice exit 0 with no PDF
     (a.out / "png").mkdir(exist_ok=True)   # pdftoppm overwrites by name; nothing is deleted
     subprocess.run(["pdftoppm", "-png", "-r", "60", str(a.out / "deck.pdf"), str(a.out / "png" / "slide")], check=True)
     rep["stages"]["render_pdf_png"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
