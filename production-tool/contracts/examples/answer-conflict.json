@@ -1,0 +1,11 @@
+{
+  "error": {
+    "code": "conflict",
+    "message": "Sai answered first: Make clips straight from the script.",
+    "retryable": false
+  },
+  "answeredBy": "human:p_sai0001",
+  "answer": {
+    "option_id": "straight"
+  }
+}

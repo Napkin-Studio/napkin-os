@@ -361,13 +361,7 @@ def main() -> None:
                     help="also judge the paths' finished briefs head to head (pairwise.py: both orders, "
                          "3 rounds, about 6 extra judge calls per brief). Off by default")
     ap.add_argument("--trace", default=None, help="trace every call of ONE brief (a client_briefs stem)")
-    ap.add_argument("--transport", choices=("api", "cli", "auto"), default=None,
-                    help="how Claude links run: api (API key), cli (Claude Code login via `claude -p`), "
-                         "auto (API, switching to the CLI on a credit/auth failure). "
-                         "Default: BRIEF_CLAUDE_TRANSPORT, else api")
     a = ap.parse_args()
-    if a.transport:
-        os.environ["BRIEF_CLAUDE_TRANSPORT"] = a.transport
     if a.trace:
         t = trace_one(a.trace, a.paths.split(",")[0])
         print(json.dumps({"wall_secs": t["wall_secs"], "events": len(t["events"])}))

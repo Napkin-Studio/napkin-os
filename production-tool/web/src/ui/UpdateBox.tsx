@@ -1,5 +1,5 @@
 // The update box (decided 2026-10-09): a steered update shows its plan first when it has
-// more than one item (the items in order, why each one, the cost: Start, Do them as they
+// more than one item (the items in order and why each one, no price: Start, Do them as they
 // are, Cancel; features/one-to-one-updates.clan), then each frame and clip here, one at a
 // time, in order. Words for that request
 // only (never the script), the model (starting on the last that worked for that
@@ -9,17 +9,20 @@
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { choiceToSend, modelChoicesFor } from '../capabilities'
-import type { ModelChoice } from '../contracts/types'
+import type { ClipQuality, ModelChoice } from '../contracts/types'
 import type { FollowItem } from '../doc/ui'
-import { selectedTake } from '../jobs/clips'
-import { beginFollow, cancelFollow, followState, makeAwaited, planSummary, planWords, restAsTheyAre } from '../jobs/follow'
+import { selectedTake, shotQuality } from '../jobs/clips'
+import { beginFollow, cancelFollow, followState, makeAwaited, planWords, restAsTheyAre } from '../jobs/follow'
 import { selectedFrame } from '../jobs/frames'
-import { frameStale, takeStale } from '../jobs/stale'
+import { frameStale } from '../jobs/stale'
+import { ctxReader, jobCtx } from '../jobs/runner'
+import { shotFrameAsset, shotNumber, shotsOf } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
 import { behindLabel } from './behind'
 import { useBlobUrl } from './hooks'
-import { JobNode } from './JobNode'
+import { JobSlot } from './JobSlot'
 import { ModelPick } from './ModelPick'
+import { QualityPick } from './QualityPick'
 
 const keyOf = (c: ModelChoice) => `${c.provider}:${c.model}`
 
@@ -30,7 +33,7 @@ export function UpdateBox() {
   // Minimised to a pill; held here, not in Box, so it stays minimised from one item to the next.
   const [min, setMin] = useState(false)
   const run = ui.following
-  const state = followState(doc, (id) => ui.jobCtx[id], run)
+  const state = followState(doc, ctxReader(doc, ui), run)
   if (!run || !state || run.cancel) return null
   if (run.reviewing) {
     if (min) {
@@ -45,11 +48,11 @@ export function UpdateBox() {
     return <Plan onMinimise={() => setMin(true)} />
   }
   // The item on show: the one waiting for the user, else the steered one being made now.
-  const runningCtx = state.running ? ui.jobCtx[state.running.id] : undefined
+  const runningCtx = state.running ? jobCtx(doc, ui, state.running.id) : undefined
   const making: FollowItem | undefined = runningCtx?.for === 'frame' || runningCtx?.for === 'clip' ? { kind: runningCtx.for, shotId: runningCtx.shotId } : undefined
   const item = run.awaiting ?? (run.steer ? making : undefined)
   if (!item) return null
-  const shot = (doc.shots ?? []).find((s) => s.id === item.shotId)
+  const shot = doc.shots[item.shotId]
   if (min) {
     const waiting = !!run.awaiting && !state.running
     return (
@@ -58,33 +61,31 @@ export function UpdateBox() {
         <AgentFigure agent="dex" state={state.running ? 'working' : 'idle'} size={22} decorative />
         <b>Update</b>
         <span className="faint">{Math.min(state.done + (run.awaiting ? 1 : 0), run.total ?? 99)} of {run.total ?? '…'}</span>
-        {shot && <span className="faint">· Shot {shot.order} {item.kind}{waiting ? ' · waiting for you' : state.running ? ' · making' : ''}</span>}
+        {shot && <span className="faint">· Shot {shotNumber(doc, shot.id)} {item.kind}{waiting ? ' · waiting for you' : state.running ? ' · making' : ''}</span>}
       </button>
     )
   }
   return <Box key={`${item.kind}:${item.shotId}`} item={item} jobId={state.running?.id ?? (run.awaiting ? state.failed?.id : undefined)} onMinimise={() => setMin(true)} />
 }
 
-/** A plan of more than one item, shown before anything is sent: the items in order, each with why, and the cost. */
+/** A plan of more than one item, shown before anything is sent: the items in order, each with why (no price: owner, 2026-10-13). */
 function Plan({ onMinimise }: { onMinimise: () => void }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
-  const { config } = useConfig()
   const run = ui.following!
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const plan = { frames: run.frameShots ?? [], clips: run.clipShots, ad: run.ad }
-  const shots = doc.shots ?? []
+  const shots = shotsOf(doc)
   const rows: { key: string; what: string; why: string }[] = [
     ...shots.filter((s) => plan.frames.includes(s.id)).map((s) => {
       const mark = frameStale(doc, s.id)
-      return { key: `f:${s.id}`, what: `Frame ${s.order}`, why: mark ? behindLabel(doc, mark) : selectedFrame(doc, s.id) ? 'Carries the look forward' : 'Not made yet' }
+      return { key: `f:${s.id}`, what: `Frame ${shotNumber(doc, s.id)}`, why: mark ? behindLabel(doc, mark) : selectedFrame(doc, s.id) ? 'Carries the look forward' : 'Not made yet' }
     }),
     ...shots.filter((s) => plan.clips.includes(s.id)).map((s) => {
-      const mark = takeStale(doc, s.id)
-      return { key: `c:${s.id}`, what: `Clip ${s.order}`, why: mark ? behindLabel(doc, mark) : plan.frames.includes(s.id) ? 'Follows its new frame' : selectedTake(doc, s.id) ? 'Carries forward' : 'Not made yet' }
+      return { key: `c:${s.id}`, what: `Clip ${shotNumber(doc, s.id)}`, why: plan.frames.includes(s.id) ? 'Follows its new frame' : selectedTake(doc, s.id) ? 'Carries forward' : 'Not made yet' }
     }),
     ...(plan.ad ? [{ key: 'ad', what: 'The ad', why: 'Follows the new clips' }] : []),
   ]
@@ -111,7 +112,7 @@ function Plan({ onMinimise }: { onMinimise: () => void }) {
       <ol className="ub-plan">
         {rows.map((r) => <li key={r.key}><b>{r.what}</b><span className="faint">{r.why}</span></li>)}
       </ol>
-      <div className="faint" style={{ fontSize: 12 }}>{planSummary(plan, config, undefined, run.models)}. One at a time, in this order: your words and model for each.</div>
+      <div className="faint" style={{ fontSize: 12 }}>{planWords(plan)}. One at a time, in this order: your words and model for each.</div>
       {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
       <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
         <button className="btn sm ghost" disabled={busy} onClick={() => act(() => cancelFollow(deps))} title="Make nothing">Cancel</button>
@@ -132,21 +133,25 @@ function Box({ item, jobId, onMinimise }: { item: FollowItem; jobId?: string; on
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const [words, setWords] = useState('')
   const [pick, setPick] = useState<ModelChoice | undefined>()
+  const [qPick, setQPick] = useState<ClipQuality | undefined>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const shot = (doc.shots ?? []).find((s) => s.id === item.shotId)
-  const thumb = useBlobUrl(shot ? selectedFrame(doc, shot.id)?.asset ?? shot.storyboard_frame : undefined)
+  const shot = doc.shots[item.shotId]
+  const thumb = useBlobUrl(shot ? shotFrameAsset(doc, shot) : undefined)
   if (!shot) return null
   const options = modelChoicesFor(item.kind, config)
   const sent = run.models?.[item.kind]
   const choice = pick ?? (sent && options.find((o) => keyOf(o) === keyOf(sent))) ?? options[0]
-  const mark = item.kind === 'frame' ? frameStale(doc, shot.id) : takeStale(doc, shot.id)
-  const job = jobId ? doc.jobs.find((j) => j.id === jobId) : undefined
+  // Takes are never out of date (features/make-and-edit.clan): only a frame has a mark.
+  const mark = item.kind === 'frame' ? frameStale(doc, shot.id) : undefined
+  const job = jobId ? doc.jobs[jobId] : undefined
   const making = !!job && !['completed', 'failed', 'cancelled'].includes(job.state)
   const why = making ? (mark ? 'Updating…' : 'Making it…') : mark ? behindLabel(doc, mark) : item.kind === 'frame' ? 'It has no frame' : 'It has no clip'
   const n = Math.min(run.framesDone.length + run.clipsDone.length + (run.awaiting ? 1 : 0), run.total ?? 99)
   const toSend = () => (choice ? choiceToSend(item.kind, config, choice) ?? null : null)
+  // Clips: the quality beside the model (features/clip-quality.clan), the run's pick, else the video's default.
+  const quality = item.kind === 'clip' ? qPick ?? run.clipQuality ?? shotQuality(doc, shot.id) : undefined
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -173,22 +178,25 @@ function Box({ item, jobId, onMinimise }: { item: FollowItem; jobId?: string; on
       <div className="row ub-item">
         {thumb ? <img src={thumb} alt="" /> : <span className="ub-empty" />}
         <div className="stack" style={{ gap: 2 }}>
-          <b>Shot {shot.order} · {item.kind === 'frame' ? 'frame' : 'clip'}</b>
+          <b>Shot {shotNumber(doc, shot.id)} · {item.kind === 'frame' ? 'frame' : 'clip'}</b>
           <span className={`behind ${making ? 'updating' : ''}`} title={mark?.reason}>{why}</span>
         </div>
       </div>
-      {job && <div className="ub-job"><JobNode jobId={job.id} /></div>}
+      {job && <div className="ub-job"><JobSlot jobId={job.id} /></div>}
       {!making && (
         <>
           <textarea className="textarea" rows={2} maxLength={1000} value={words} onChange={(e) => setWords(e.target.value)}
             placeholder={`Add words for this ${item.kind} only (optional)`} />
-          <ModelPick op={item.kind} value={choice} onChange={setPick} />
+          <div className="row wrap" style={{ gap: 6 }}>
+            <ModelPick op={item.kind} value={choice} onChange={setPick} />
+            {quality && <QualityPick op="clip" choice={choice} value={quality} onChange={setQPick} />}
+          </div>
           <div className="faint" style={{ fontSize: 12 }}>{item.kind === 'frame' ? 'The old frame is replaced once the new one lands.' : 'The old clip is replaced once the new one lands.'}</div>
           {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
           <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
-            <button className="btn sm" disabled={busy} onClick={() => act(() => restAsTheyAre(deps, toSend()))}
+            <button className="btn sm" disabled={busy} onClick={() => act(() => restAsTheyAre(deps, toSend(), quality))}
               title="Make this and every one after it on these models, with no words; the ad renders at the end">Do the rest as they are</button>
-            <button className="btn sm primary" disabled={busy} onClick={() => act(() => makeAwaited(deps, { text: words, modelChoice: toSend() }))}>
+            <button className="btn sm primary" disabled={busy} onClick={() => act(() => makeAwaited(deps, { text: words, modelChoice: toSend(), ...(quality ? { quality } : {}) }))}>
               {job ? 'Make it again' : 'Make it'}
             </button>
           </div>

@@ -1,0 +1,140 @@
+{
+  "description": "rank.between(a, b) and rank.n_between(a, b, n): clan-store/src/rank.ts and relay/rank.py must give exactly these. invalid: keys both refuse.",
+  "between": [
+    {
+      "a": null,
+      "b": null,
+      "between": "a0"
+    },
+    {
+      "a": null,
+      "b": "a0",
+      "between": "Zz"
+    },
+    {
+      "a": "a0",
+      "b": null,
+      "between": "a1"
+    },
+    {
+      "a": "a0",
+      "b": "a1",
+      "between": "a0V"
+    },
+    {
+      "a": "a0",
+      "b": "a0V",
+      "between": "a0G"
+    },
+    {
+      "a": "a1",
+      "b": "a2",
+      "between": "a1V"
+    },
+    {
+      "a": "Zz",
+      "b": "a0",
+      "between": "ZzV"
+    },
+    {
+      "a": "a0V",
+      "b": "a1",
+      "between": "a0l"
+    },
+    {
+      "a": "az",
+      "b": null,
+      "between": "b00"
+    },
+    {
+      "a": "b00",
+      "b": null,
+      "between": "b01"
+    },
+    {
+      "a": null,
+      "b": "Zz",
+      "between": "Zy"
+    },
+    {
+      "a": "a0",
+      "b": "a01",
+      "between": "a00V"
+    },
+    {
+      "a": "a01",
+      "b": "a1",
+      "between": "a0W"
+    },
+    {
+      "a": "zzzzzzzzzzzzzzzzzzzzzzzzzzz",
+      "b": null,
+      "between": "zzzzzzzzzzzzzzzzzzzzzzzzzzzV"
+    },
+    {
+      "a": "a1",
+      "b": "a1V",
+      "between": "a1G"
+    },
+    {
+      "a": "ZzV",
+      "b": "a0",
+      "between": "Zzl"
+    }
+  ],
+  "runs": [
+    {
+      "a": null,
+      "b": null,
+      "n": 5,
+      "keys": [
+        "a0",
+        "a1",
+        "a2",
+        "a3",
+        "a4"
+      ]
+    },
+    {
+      "a": "a0",
+      "b": "a1",
+      "n": 4,
+      "keys": [
+        "a08",
+        "a0G",
+        "a0V",
+        "a0l"
+      ]
+    },
+    {
+      "a": null,
+      "b": "a0",
+      "n": 3,
+      "keys": [
+        "Zx",
+        "Zy",
+        "Zz"
+      ]
+    },
+    {
+      "a": "a5",
+      "b": null,
+      "n": 3,
+      "keys": [
+        "a6",
+        "a7",
+        "a8"
+      ]
+    }
+  ],
+  "invalid": [
+    "",
+    "a",
+    "a00",
+    "A00000000000000000000000000",
+    "a 1",
+    "a0 ",
+    "!0",
+    "a0.1"
+  ]
+}

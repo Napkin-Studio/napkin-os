@@ -133,8 +133,7 @@ def ground_row(out_dir: Path, stem: str, row: dict) -> dict:
 
 def preflight(critic: str) -> None:
     """Stop before any brief runs when the critic cannot reach Claude. The critic runs in this
-    process on the same transport as the arms (CLI unless BRIEF_CLAUDE_TRANSPORT says otherwise)."""
-    os.environ.setdefault("BRIEF_CLAUDE_TRANSPORT", "cli")
+    process on the same endpoint as the arms (locally: under scripts/model-local run)."""
     if critic == "trace":
         return
     sys.path.insert(0, str(ENGINE))
@@ -233,7 +232,6 @@ def add_trace_numbers(out_dir: Path, stem: str, row: dict) -> dict:
 def run_one(tree: Path, stem: str, env_extra: dict, out_dir: Path) -> dict:
     """One brief through one tree's e2e_eval --trace; returns the trace's headline numbers."""
     env = {**os.environ, "RAG_STORE": "local", "RAG_INDEX": "_index_v4",
-           "BRIEF_CLAUDE_TRANSPORT": "cli",
            # every judge call's inputs, for the paired judge test (judge_format_ab.py)
            "BRIEF_JUDGE_DUMP": str((out_dir / f"judge_calls_{stem}.jsonl").resolve()), **env_extra}
     (out_dir / f"judge_calls_{stem}.jsonl").unlink(missing_ok=True)
@@ -241,7 +239,7 @@ def run_one(tree: Path, stem: str, env_extra: dict, out_dir: Path) -> dict:
     log = out_dir / f"{stem}.log"
     t0 = time.time()
     with open(log, "w") as f:
-        proc = subprocess.run([sys.executable, "e2e_eval.py", "--trace", stem, "--transport", "cli"],
+        proc = subprocess.run([sys.executable, "e2e_eval.py", "--trace", stem],
                               cwd=rag, env=env, stdout=f, stderr=subprocess.STDOUT)
     src = tree / "engine" / "outputs" / "e2e" / f"trace_mix_{stem}.json"
     src_dir = tree / "engine" / "outputs" / "e2e" / f"trace_mix_{stem}"

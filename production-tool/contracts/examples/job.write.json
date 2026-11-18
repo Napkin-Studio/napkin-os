@@ -1,0 +1,44 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7C00000000000000000WR01",
+  "participantId": "p_a1b2c3",
+  "tenantId": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "projectId": "proj_01K7A00000000000000000PR01",
+  "startedBy": "human:p_a1b2c3",
+  "crew": "skye",
+  "node": {
+    "kind": "script",
+    "id": "script_01K7A00000000000000000SC01"
+  },
+  "nonce": "n_wr1te0001",
+  "purpose": "Skye tightens shot 3",
+  "op": "write",
+  "quotaClass": "text",
+  "state": "completed",
+  "inputHashes": [],
+  "outputs": [],
+  "kind": "generated",
+  "writes": [
+    {
+      "target": {
+        "kind": "shot",
+        "id": "shot_01K7A00000000000000000SH03"
+      },
+      "base_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "lines": [
+        { "type": "action", "text": "@maya_front stops at the waterline." },
+        { "type": "direction", "text": "Unhurried; hold on her face." }
+      ],
+      "note": "I tightened it to fit 1.6 s.",
+      "duration_s": 1.6
+    }
+  ],
+  "cost": {
+    "estimate": 0,
+    "reserved": 0,
+    "currency": "USD",
+    "unknown": false
+  },
+  "createdAt": "2026-10-13T10:12:03Z",
+  "updatedAt": "2026-10-13T10:12:06Z"
+}

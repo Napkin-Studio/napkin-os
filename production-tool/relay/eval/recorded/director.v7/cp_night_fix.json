@@ -1,0 +1,5 @@
+{
+ "version": "director.v7",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip_patch\", \"question\": null, \"providerJob\": {\"provider\": \"runway\", \"model\": \"aleph2\", \"prompt\": \"redo the whole clip at night. Everything else stays exactly as it is: the people, the place, the light and the camera.\", \"refs\": [{\"sha256\": \"sha256:7777777777777777777777777777777777777777777777777777777777777777\", \"name\": \"current\", \"role\": \"current\"}], \"audio\": false}, \"rationale\": \"The person chose to fix this moment, so the job is built without asking again. The prompt is their note, a full stop, then the fixed keep-the-rest line. The only ref is the take as current.\", \"confidence\": 0.9}"
+}

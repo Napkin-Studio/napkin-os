@@ -1,0 +1,10 @@
+{
+  "kind": "gen",
+  "id": "job_01K7B00000000000000000GN01",
+  "op": "generate",
+  "parentIds": [
+    "node_01K7B00000000000000000DR01"
+  ],
+  "state": "completed",
+  "asset": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+}

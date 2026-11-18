@@ -4,15 +4,22 @@
   "input": {
     "shot": {
       "id": "shot_01K6D6J0T5Q1AN7G2V8X3E4ZFH",
-      "order": 4,
+      "kind": "shot",
       "duration_s": 4,
-      "composition": "medium",
+      "camera": {
+        "size": "medium",
+        "movement": "orbit"
+      },
       "action": "The mask rotates slowly on a pedestal. Smooth facets shine while rough, grainy ones swallow the light.",
-      "camera_move": "orbit",
-      "dialogue": "Smooth where it shines.",
-      "status": "locked",
       "refs": [
         "mask"
+      ],
+      "beats": [
+        {
+          "kind": "line",
+          "at_s": 0,
+          "text": "Smooth where it shines."
+        }
       ]
     },
     "ratio": "9:16",
@@ -83,7 +90,7 @@
       "ratio": "768:1344",
       "outputs": 1
     },
-    "needsUser": null,
+    "question": null,
     "rationale": "Three-quarter view for the lead view, front for identity, @anchor for the workshop, @previous for continuity; full-bleed, no text.",
     "confidence": 0.8
   },

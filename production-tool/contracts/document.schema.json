@@ -1,263 +1,3762 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/document.schema.json",
-  "title": "Production Tool document (CLAN shared/data.yaml)",
-  "description": "The source of truth for one participant's work; the canvas and panels render it. snake_case, like all CLAN data in this repo. Shots, frames, takes, jobs and reviews are separate lists joined by id rather than one tree per shot, so a version, a comment or a stale mark can point at anything. The shape borrows from app/templates/advertising-studio/schema.json, but this is its own app and promises no compatibility with it. Bytes are never inline: assets hold hashes and locations, plus an optional thumbnail under 4 KB. Only selected and referenced artifacts go in; other iterations stay in S3. Human verdicts (accept, reject, select) are also appended to the decision chain.",
+  "title": "Production Tool document (CLAN shared/data.yaml), contract 3",
+  "description": "The source of truth for one project; the canvas, the editors and today's panels render it. snake_case. Every entity list is a map keyed by the entity's id (its `id` repeats the key), so a patch can name one leaf of one entity and two people never rewrite each other's work (contracts/collab.md). Every entity carries v and field_v. Order is rank, never position. Live text (shot action and direction, beat, scene and note words) lives in Yjs fragments, and checkpoint() alone writes its flat copies here. Bytes are never inline. A v2 document is refused, never read (features/contract-v3.clan).",
   "type": "object",
   "properties": {
-    "contract_version": { "$ref": "common.schema.json#/$defs/contractVersion" },
-    "app": { "const": "production-tool" },
-    "participant": {
-      "type": "object",
-      "properties": { "id": { "type": "string" }, "handle": { "type": "string" } },
-      "required": ["id", "handle"],
-      "additionalProperties": false
+    "contract_version": {
+      "$ref": "common.schema.json#/$defs/contractVersion"
     },
-    "stage": {
+    "app": {
+      "const": "production-tool"
+    },
+    "project": {
       "type": "object",
+      "description": "Who the project belongs to.",
       "properties": {
-        "current": { "enum": ["character", "storyboard", "video"] },
-        "next_action": { "type": "string", "maxLength": 140 }
+        "id": {
+          "type": "string",
+          "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "tenant_id": {
+          "$ref": "common.schema.json#/$defs/tenantId"
+        },
+        "client_id": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "The client (library shelf) the project is for."
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "created_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["current"],
+      "required": [
+        "id",
+        "tenant_id",
+        "title",
+        "created_by",
+        "created_at"
+      ],
       "additionalProperties": false
     },
-    "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
-    "keys": {
-      "type": "array",
-      "description": "Solid references: one entry per character or object the participant named. A key's refs (its variants) survive Clean up; unnamed canvas nodes are weak and go once nothing reaches them.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "key": { "$ref": "common.schema.json#/$defs/key" },
-          "role": { "$ref": "common.schema.json#/$defs/refRole" },
-          "library": {
-            "type": "object",
-            "description": "Set when the key was published to or imported from the workspace library: the version this document holds. A copy, never a live link.",
-            "properties": {
-              "workspace": { "type": "string", "maxLength": 64 },
-              "ver": { "type": "integer", "minimum": 1 },
-              "by": { "type": "string", "maxLength": 64, "description": "The handle that published this version." },
-              "at": { "type": "string", "format": "date-time" }
-            },
-            "required": ["workspace", "ver", "by", "at"],
-            "additionalProperties": false
-          }
-        },
-        "required": ["key", "role"],
-        "additionalProperties": false
+    "upstream": {
+      "type": "object",
+      "description": "What this project was spun off from (os-layer §5.2): data.upstream.<document_id>, written by the host and read-only (a patch under it is refused, napkin-host ops/edit.rs).",
+      "additionalProperties": {
+        "type": "object"
       }
+    },
+    "boards": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/board"
+      },
+      "maxProperties": 64
+    },
+    "sketches": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/sketch"
+      },
+      "maxProperties": 300
+    },
+    "scripts": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/script"
+      },
+      "maxProperties": 16
+    },
+    "scenes": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/scene"
+      },
+      "maxProperties": 300
+    },
+    "storyboards": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/storyboard"
+      },
+      "maxProperties": 16
+    },
+    "shots": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/shot"
+      },
+      "maxProperties": 300
+    },
+    "beats": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/beat"
+      },
+      "maxProperties": 2400
+    },
+    "frames": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/frame"
+      },
+      "maxProperties": 2000
+    },
+    "videos": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/video"
+      },
+      "maxProperties": 32
+    },
+    "generations": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/generation"
+      },
+      "maxProperties": 2000
+    },
+    "renders": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/render"
+      },
+      "maxProperties": 200
+    },
+    "reviews": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^rev_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/review"
+      },
+      "maxProperties": 1000
+    },
+    "links": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/link"
+      },
+      "maxProperties": 2000
+    },
+    "keys": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/key"
+      },
+      "maxProperties": 300
     },
     "refs": {
-      "type": "array",
-      "description": "Named images: key_variant -> one asset. Scripts and shots use them by name (@maya_laughing).",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "key": { "$ref": "common.schema.json#/$defs/key" },
-          "variant": { "$ref": "common.schema.json#/$defs/variant" },
-          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-          "node": { "$ref": "common.schema.json#/$defs/id", "description": "The canvas node the name sits on (absent for a ref imported from the library and not placed)." },
-          "named_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "key", "variant", "asset"],
-        "additionalProperties": false
-      }
-    },
-    "script": {
       "type": "object",
+      "propertyNames": {
+        "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/ref"
+      },
+      "maxProperties": 1000
+    },
+    "documents": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/document"
+      },
+      "maxProperties": 64
+    },
+    "texts": {
+      "type": "object",
+      "description": "Texts written on the canvas (features/canvas-text.clan, 2026-10-16): each holds its words and the canvas element it is, so a node a text is linked into reads its words without the canvas. Optional: a document made before it has none.",
+      "propertyNames": {
+        "pattern": "^text_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/text"
+      },
+      "maxProperties": 1000
+    },
+    "format_sets": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/format_set"
+      },
+      "maxProperties": 64
+    },
+    "sizes": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/size"
+      },
+      "maxProperties": 1000
+    },
+    "checks": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/check"
+      },
+      "maxProperties": 2000
+    },
+    "asks": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/ask"
+      },
+      "maxProperties": 500
+    },
+    "suggestions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/suggestion"
+      },
+      "maxProperties": 500
+    },
+    "spin_ins": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/spin_in"
+      },
+      "maxProperties": 32
+    },
+    "jobs": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/job"
+      },
+      "maxProperties": 3000
+    },
+    "stale": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^stale_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/stale"
+      },
+      "maxProperties": 2000
+    },
+    "exports": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/export"
+      },
+      "maxProperties": 200
+    },
+    "assets": {
+      "type": "object",
+      "description": "Files, keyed by their sha256.",
+      "propertyNames": {
+        "$ref": "common.schema.json#/$defs/sha256"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/asset"
+      },
+      "maxProperties": 5000
+    }
+  },
+  "required": [
+    "contract_version",
+    "app",
+    "project",
+    "assets",
+    "boards",
+    "sketches",
+    "scripts",
+    "scenes",
+    "storyboards",
+    "shots",
+    "beats",
+    "frames",
+    "videos",
+    "generations",
+    "renders",
+    "reviews",
+    "links",
+    "keys",
+    "refs",
+    "documents",
+    "format_sets",
+    "sizes",
+    "checks",
+    "asks",
+    "suggestions",
+    "spin_ins",
+    "jobs",
+    "stale",
+    "exports"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "v": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The entity's version: every applied patch batch that touches it adds one (PatchBus)."
+    },
+    "field_v": {
+      "type": "object",
+      "description": "For each leaf written since the entity was created, the entity version that wrote it, keyed by the leaf's path inside the entity with '/' between parts (camera/size, edl/edl_X/pick/current). A set whose base_version is older than its leaf's field_v is a conflict.",
+      "propertyNames": {
+        "pattern": "^[a-z_0-9]+(/[A-Za-z_0-9]+)*$",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "maxProperties": 256
+    },
+    "prose": {
+      "type": "object",
+      "description": "A live-text fragment as ProseMirror JSON (clan-store/src/text/extensions.ts), at most 64 KB serialised. hydrate() rebuilds the fragment from it on another device. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text).",
       "properties": {
-        "current": { "$ref": "common.schema.json#/$defs/id" },
-        "revisions": {
+        "type": {
+          "const": "doc"
+        },
+        "content": {
           "type": "array",
+          "maxItems": 400,
           "items": {
-            "type": "object",
-            "properties": {
-              "id": { "$ref": "common.schema.json#/$defs/id" },
-              "parent": { "$ref": "common.schema.json#/$defs/id" },
-              "created_at": { "type": "string", "format": "date-time" },
-              "imported_text": { "type": "string", "maxLength": 1500, "description": "The user's own words, kept verbatim. Up to 1500 characters since 2026-10-09 (was 600)." },
-              "target_s": { "type": "integer", "minimum": 10, "maximum": 20 },
-              "status": { "enum": ["draft", "approved", "superseded"] }
-            },
-            "required": ["id", "created_at", "imported_text", "target_s", "status"],
-            "additionalProperties": false
+            "type": "object"
           }
         }
       },
-      "required": ["revisions"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false
     },
-    "shots": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/shot" } },
-    "frames": {
-      "type": "array",
-      "description": "Storyboard frame versions. shots[].storyboard_frame names the selected one.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "shot_id": { "$ref": "common.schema.json#/$defs/id" },
-          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-          "job_id": { "$ref": "common.schema.json#/$defs/id" },
-          "parent": { "$ref": "common.schema.json#/$defs/id", "description": "The frame this one was edited from." },
-          "selected": { "type": "boolean" },
-          "kind": { "enum": ["generated", "mock"] }
-        },
-        "required": ["id", "shot_id", "asset", "job_id", "selected", "kind"],
-        "additionalProperties": false
-      }
-    },
-    "takes": {
-      "type": "array",
-      "description": "Clips. A take is never deleted to make room.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "shot_id": { "$ref": "common.schema.json#/$defs/id" },
-          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-          "job_id": { "$ref": "common.schema.json#/$defs/id" },
-          "parent": { "$ref": "common.schema.json#/$defs/id" },
-          "kind": { "enum": ["generated", "mock"] },
-          "provider": { "$ref": "common.schema.json#/$defs/madeBy" },
-          "model": { "type": "string" },
-          "duration_s": { "type": "number" },
-          "selected": { "type": "boolean" }
-        },
-        "required": ["id", "shot_id", "asset", "job_id", "kind", "provider", "selected"],
-        "additionalProperties": false
-      }
-    },
-    "jobs": {
-      "type": "array",
-      "description": "One entry per job, written at submit (state queued) and patched as it moves. Mirrors the relay ledger.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "op": { "$ref": "common.schema.json#/$defs/op" },
-          "state": { "$ref": "common.schema.json#/$defs/jobState" },
-          "provider": { "$ref": "common.schema.json#/$defs/madeBy" },
-          "model": { "type": "string" },
-          "remote_id": { "type": "string" },
-          "parent_ids": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" } },
-          "input_hashes": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" } },
-          "region": { "$ref": "common.schema.json#/$defs/region" },
-          "text": { "type": "string" },
-          "chips": { "type": "array", "items": { "type": "string" } },
-          "outputs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" } },
-          "agent": { "$ref": "director.schema.json#/$defs/agentBlock" },
-          "cost": { "$ref": "common.schema.json#/$defs/cost" },
-          "error": { "$ref": "common.schema.json#/$defs/error" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "updated_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "op", "state", "parent_ids", "input_hashes", "created_at"],
-        "additionalProperties": false
-      }
-    },
-    "reviews": {
-      "type": "array",
-      "description": "Comments on a ref, frame or take; with a region they are pins. resolved_by_job is set when the job they caused lands.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "target": { "$ref": "#/$defs/target" },
-          "comment": { "type": "string", "maxLength": 1000 },
-          "chips": { "type": "array", "items": { "type": "string" } },
-          "region": { "$ref": "common.schema.json#/$defs/region" },
-          "at_s": { "type": "number", "minimum": 0, "description": "Takes only: the paused time." },
-          "resolved": { "type": "boolean" },
-          "resolved_by_job": { "$ref": "common.schema.json#/$defs/id" },
-          "created_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "target", "comment", "resolved", "created_at"],
-        "additionalProperties": false
-      }
-    },
-    "stale": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "target": { "$ref": "#/$defs/target" },
-          "caused_by": { "$ref": "#/$defs/target" },
-          "reason": { "type": "string" },
-          "marked_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["target", "caused_by", "reason"],
-        "additionalProperties": false
-      }
-    },
-    "exports": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "kind": { "enum": ["ad_mp4", "bundle_zip"] },
-          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-          "job_id": { "$ref": "common.schema.json#/$defs/id" },
-          "created_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "kind", "asset", "created_at"],
-        "additionalProperties": false
-      }
-    }
-  },
-  "required": ["contract_version", "app", "participant", "stage", "assets", "keys", "refs", "jobs"],
-  "additionalProperties": false,
-  "$defs": {
-    "asset": {
+    "textProblem": {
       "type": "object",
+      "description": "Set by checkpoint() when live text overflows its flat field: the field keeps its last valid value, and job starts for the entity refuse with these words.",
       "properties": {
-        "sha256": { "$ref": "common.schema.json#/$defs/sha256" },
-        "kind": { "enum": ["image", "video"] },
-        "mime": { "type": "string" },
-        "bytes": { "type": "integer" },
-        "w": { "type": "integer" },
-        "h": { "type": "integer" },
-        "duration_s": { "type": "number" },
-        "origin": { "enum": ["uploaded", "drawn", "generated", "mock"] },
-        "job_id": { "$ref": "common.schema.json#/$defs/id" },
-        "locations": {
+        "field": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "field",
+        "length",
+        "limit",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "pick": {
+      "type": "object",
+      "description": "Which version is current, and which are kept beside it (Keep both: ui-behaviour 3.20). A restore is a new pick decision.",
+      "properties": {
+        "current": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "alternates": {
           "type": "array",
-          "description": "Where to find the bytes, in resolution order: idb://sha256/<hex>, s3://<bucket>/assets/<hex>, then our https URL.",
-          "items": { "type": "string", "pattern": "^(idb|s3|https)://" }
-        },
-        "thumb": { "type": "string", "pattern": "^data:image/webp;base64,", "maxLength": 5500 }
+          "items": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "maxItems": 8,
+          "uniqueItems": true
+        }
       },
-      "required": ["sha256", "kind", "mime", "origin", "locations"],
+      "required": [
+        "current"
+      ],
       "additionalProperties": false
     },
-    "shot": {
+    "libraryCopy": {
       "type": "object",
-      "description": "One row of the shot list. Shared with the relay API, so it keeps snake_case there too.",
+      "description": "Set when this came from, or was published to, the team library: the version this project holds. A copy, never a live link.",
       "properties": {
-        "id": { "$ref": "common.schema.json#/$defs/id" },
-        "order": { "type": "integer", "minimum": 1 },
-        "duration_s": { "type": "number", "minimum": 1, "maximum": 10 },
-        "composition": { "enum": ["wide", "medium", "close", "extreme_close", "over_shoulder", "insert"] },
-        "action": { "type": "string", "maxLength": 300 },
-        "camera_move": { "enum": ["static", "pan", "tilt", "push_in", "pull_out", "track", "orbit", "handheld"] },
-        "refs": { "type": "array", "maxItems": 9, "items": { "$ref": "common.schema.json#/$defs/subject" }, "description": "What this shot shows, as written in the script: bare keys for whole characters (@goremon), key_variant for a specific look (@goremon_laughing). Frames and takes send exactly these. At most 9 (set for the hackathon providers; Runway takes up to 14 refs, 5 of them characters)." },
-        "dialogue": { "type": "string", "maxLength": 200 },
-        "storyboard_frame": { "$ref": "common.schema.json#/$defs/sha256" },
-        "selected_take": { "$ref": "common.schema.json#/$defs/id" },
-        "status": { "enum": ["planned", "needs_review", "locked"] }
+        "shelf": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "key": {
+          "$ref": "common.schema.json#/$defs/key"
+        },
+        "ver": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "order", "duration_s", "composition", "action", "camera_move"],
+      "required": [
+        "shelf",
+        "key",
+        "ver",
+        "by",
+        "at"
+      ],
       "additionalProperties": false
     },
     "target": {
       "type": "object",
       "properties": {
-        "kind": { "enum": ["ref", "frame", "take", "shot"] },
-        "id": { "type": "string" }
+        "kind": {
+          "enum": [
+            "ref",
+            "frame",
+            "generation",
+            "render",
+            "video",
+            "shot",
+            "scene",
+            "beat",
+            "script",
+            "storyboard",
+            "size",
+            "format_set",
+            "sketch",
+            "document",
+            "board",
+            "key"
+          ]
+        },
+        "id": {
+          "$ref": "common.schema.json#/$defs/id"
+        }
       },
-      "required": ["kind", "id"],
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "handsOff": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/crewId"
+      },
+      "maxItems": 7,
+      "uniqueItems": true,
+      "description": "Crew who leave this alone: a person pressed Keep mine on their suggestion, so later jobs of theirs skip it."
+    },
+    "window": {
+      "type": "object",
+      "description": "A note's time window in whole seconds (ui-behaviour 3.13): default [floor(t)-1, ceil(t)+1], clamped, at least 2 s, never across a cut. noteWindow() in clan-store/src/time.ts and relay/time_rules.py (examples/windows.json). The time basis follows the note's target: take time for a note on a generation (target.kind generation, written from the take player), shot time otherwise; clan-store noteToTakeWindow maps either onto the generation (features/clip-moment-edit.clan).",
+      "properties": {
+        "from_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_s": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "from_s",
+        "to_s"
+      ],
+      "additionalProperties": false
+    },
+    "asset": {
+      "type": "object",
+      "description": "One file the project uses, keyed by its hash. Bytes are never inline.",
+      "properties": {
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video",
+            "audio",
+            "document",
+            "font",
+            "vector"
+          ]
+        },
+        "mime": {
+          "$ref": "common.schema.json#/$defs/mime"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "w": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "h": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "origin": {
+          "enum": [
+            "uploaded",
+            "drawn",
+            "generated",
+            "mock",
+            "edited",
+            "extracted"
+          ]
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(idb|s3|https)://"
+          },
+          "maxItems": 8,
+          "description": "Where to find the bytes, in resolution order: idb://sha256/<hex>, s3://<bucket>/assets/<hex>, then our https URL."
+        },
+        "thumb": {
+          "type": "string",
+          "pattern": "^data:image/webp;base64,",
+          "maxLength": 5500
+        }
+      },
+      "required": [
+        "sha256",
+        "kind",
+        "mime",
+        "origin",
+        "locations"
+      ],
+      "additionalProperties": false
+    },
+    "board": {
+      "type": "object",
+      "description": "An art board: an Excalidraw frame with a purpose (ui-behaviour 3.2).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 80,
+          "minLength": 1
+        },
+        "purpose": {
+          "enum": [
+            "script",
+            "character",
+            "location",
+            "reference",
+            "product",
+            "storyboard",
+            "video",
+            "sketches",
+            "brand",
+            "formats",
+            "none"
+          ]
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "name_prefix": {
+          "$ref": "common.schema.json#/$defs/key"
+        },
+        "source": {
+          "type": "object",
+          "description": "A Brand board made from a brand book: the Document it reads.",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          },
+          "required": [
+            "document_id"
+          ],
+          "additionalProperties": false
+        },
+        "library": {
+          "$ref": "#/$defs/libraryCopy"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "purpose",
+        "rank"
+      ],
+      "additionalProperties": false
+    },
+    "sketch": {
+      "type": "object",
+      "description": "A ratio-locked sketch area (ui-behaviour 3.7). Its strokes stay on the canvas.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "aspect": {
+          "$ref": "common.schema.json#/$defs/aspect"
+        },
+        "ratio": {
+          "$ref": "common.schema.json#/$defs/ratio"
+        },
+        "format": {
+          "$ref": "common.schema.json#/$defs/formatRef"
+        },
+        "board_id": {
+          "type": "string",
+          "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "drawn_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "aspect",
+        "drawn_by"
+      ],
+      "additionalProperties": false
+    },
+    "script": {
+      "type": "object",
+      "description": "A script. Its text lives in its scenes, shots and beats; its order in their ranks.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "target_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "target_s"
+      ],
+      "additionalProperties": false
+    },
+    "scene": {
+      "type": "object",
+      "description": "A scene of a script. Its fragment (scenes/<id>) holds only script text no shot owns yet.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "script_id": {
+          "type": "string",
+          "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "heading": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "hands_off": {
+          "$ref": "#/$defs/handsOff"
+        },
+        "prose": {
+          "$ref": "#/$defs/prose"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 20000,
+          "description": "The scene's unplanned text, flat. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "last_writer": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "script_id",
+        "rank",
+        "heading"
+      ],
+      "additionalProperties": false
+    },
+    "storyboard": {
+      "type": "object",
+      "description": "A storyboard: shots in rank order. A script drives it through a link.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "ratio": {
+          "$ref": "common.schema.json#/$defs/ratio"
+        },
+        "target_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "implicit": {
+          "type": "boolean",
+          "description": "Planned straight from a script for a Video (ui-behaviour 3.5): owned by the Video, with no canvas node until it is shown. Its shots are that Video's timeline, shown and edited in the Video editor. Make a storyboard from these shots clears it and puts the node on the canvas."
+        },
+        "video_id": {
+          "type": "string",
+          "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "The Video whose own shot list this is (decided 2026-10-15): set when the shots were planned straight from the script into that Video. With implicit it needs no renders link; shown as a node, deleting the node puts the shots back in the Video (implicit again) instead of deleting them."
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "ratio",
+        "target_s"
+      ],
+      "additionalProperties": false
+    },
+    "shot": {
+      "type": "object",
+      "description": "One shot of a storyboard. Camera, duration, rank and status are single-value fields; action, direction and the refs come from its live text (shots/<id>).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "storyboard_id": {
+          "type": "string",
+          "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "kind": {
+          "enum": [
+            "shot",
+            "end_card"
+          ],
+          "description": "end_card: the last clip, edited like any shot (Graphic · Static)."
+        },
+        "scene_id": {
+          "type": "string",
+          "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 30,
+          "multipleOf": 0.1
+        },
+        "camera": {
+          "$ref": "common.schema.json#/$defs/camera"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "needs_review",
+            "locked"
+          ],
+          "description": "Gates today's Video stage."
+        },
+        "pick": {
+          "$ref": "#/$defs/pick"
+        },
+        "hands_off": {
+          "$ref": "#/$defs/handsOff"
+        },
+        "prose": {
+          "$ref": "#/$defs/prose"
+        },
+        "action": {
+          "type": "string",
+          "maxLength": 600,
+          "description": "What happens. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "direction": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Performance direction. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              {
+                "type": "string",
+                "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$"
+              }
+            ]
+          },
+          "maxItems": 14,
+          "uniqueItems": true,
+          "description": "What the shot's text mentions, by id: a ref (one look, @maya_laughing) or a key (the whole character, @maya: its front and up to 3 other views). Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "text_problem": {
+          "$ref": "#/$defs/textProblem"
+        },
+        "last_writer": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        },
+        "direction_condensed": {
+          "type": "object",
+          "description": "Dex's condensed direction for models that read 1,000 characters (Veo 3.1). Written only by Dex's job; read-only to people.",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "from_hash": {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            "job_id": {
+              "type": "string",
+              "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          },
+          "required": [
+            "text",
+            "from_hash",
+            "job_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "storyboard_id",
+        "rank",
+        "kind",
+        "duration_s",
+        "camera",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "beat": {
+      "type": "object",
+      "description": "A timed row inside a shot (ui-behaviour 3.10): a moment, a line, VO, music, a sound or a camera change. Its words live in beats/<id>.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "shot_id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "at_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 30,
+          "multipleOf": 0.5
+        },
+        "kind": {
+          "$ref": "common.schema.json#/$defs/beatKind"
+        },
+        "speaker": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "parenthetical": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "moment_id": {
+          "type": "string",
+          "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "A line tied to a moment: moving either writes both in one batch."
+        },
+        "hands_off": {
+          "$ref": "#/$defs/handsOff"
+        },
+        "prose": {
+          "$ref": "#/$defs/prose"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "The beat's words. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "last_writer": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "shot_id",
+        "rank",
+        "at_s",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "frame": {
+      "type": "object",
+      "description": "A still version: a storyboard frame (shot_id), a frame made from a sketch area (sketch_id), a size of a format set (size_id), or a version of a picture on the canvas (node; features/edit-canvas-pictures.clan).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "shot_id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "sketch_id": {
+          "type": "string",
+          "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "size_id": {
+          "type": "string",
+          "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/sceneId",
+          "description": "The canvas picture (its pic or gen node id) this is a version of. v1 is kind original: the picture as it was before its first edit."
+        },
+        "picked_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "A canvas picture's version: when it was made or picked. The picture shows its version with the latest picked_at (ties: the higher version)."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parent_id": {
+          "type": "string",
+          "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "kind": {
+          "enum": [
+            "generated",
+            "mock",
+            "edited",
+            "original"
+          ],
+          "description": "original: v1 of a canvas picture (node), the picture as it was on the canvas; no crew made it."
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId"
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "provider": {
+          "$ref": "common.schema.json#/$defs/madeBy"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              "params": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "op"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64,
+          "description": "The image editor's non-destructive op list that made an edited frame."
+        },
+        "cropped_to": {
+          "type": "object",
+          "description": "The model's output was not exactly the ratio, so it was centre-cropped ('1344×756 · cropped to 16:9').",
+          "properties": {
+            "from": {
+              "$ref": "common.schema.json#/$defs/aspect"
+            },
+            "to": {
+              "$ref": "common.schema.json#/$defs/aspect"
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "version",
+        "kind",
+        "asset"
+      ],
+      "additionalProperties": false,
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "shot_id",
+              "sketch_id"
+            ]
+          },
+          {
+            "required": [
+              "shot_id",
+              "size_id"
+            ]
+          },
+          {
+            "required": [
+              "sketch_id",
+              "size_id"
+            ]
+          },
+          {
+            "required": [
+              "node",
+              "shot_id"
+            ]
+          },
+          {
+            "required": [
+              "node",
+              "sketch_id"
+            ]
+          },
+          {
+            "required": [
+              "node",
+              "size_id"
+            ]
+          }
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "original"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "node"
+            ],
+            "not": {
+              "required": [
+                "crew"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "crew"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "picked_at"
+            ]
+          },
+          "then": {
+            "required": [
+              "node"
+            ]
+          }
+        }
+      ]
+    },
+    "generation": {
+      "type": "object",
+      "description": "One generation (a take): everything Make produced, uploaded or rendered, each once (features/make-and-edit.clan). A regeneration is a new generation beside its parent, never an overwrite: parent_id and delta say what changed. A box made together is one generation whose segments say where each shot is in it. The full request stays on the relay with its job (held server-side); the document keeps its summary (inputs). Never deleted to make room. No price is kept here: costs are in History (jobs).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "kind": {
+          "enum": [
+            "clip",
+            "together",
+            "change",
+            "patch",
+            "feel",
+            "combine",
+            "extend",
+            "upload",
+            "render"
+          ],
+          "description": "clip: one shot made (op clip). together: a box of shots made as one video (clip mode take or take_refs). change: a new take from a parent with its delta (camera, words), made whole again. patch: a parent with a moment made again (clip_patch), same length. feel: a parent restyled whole (clip_edit). combine: clips and pictures made into one (P4). extend: a parent made longer (P3). upload: footage a person brought. render: an ad render (P2: renders stay in renders until the Bin moves them)."
+        },
+        "parent_id": {
+          "type": "string",
+          "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "The generation it was made from (change, patch, feel, extend)."
+        },
+        "delta": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/generationDelta"
+          },
+          "description": "What changed from the parent, the parent's request otherwise kept. Empty or absent on a first take."
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "The one-line change label a take shows ('Camera: handheld (shot 3)', 'Shirt red 0:00-0:02'). Absent: the web derives it from kind and delta ('First take')."
+        },
+        "inputs": {
+          "type": "object",
+          "description": "A summary of what the request carried, for the Keeps line and lineage; the request itself is on the relay (Job._req). Fields absent when unknown (a migrated take keeps only its model, quality, size and length).",
+          "properties": {
+            "frames": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "enum": [
+                      "start",
+                      "end",
+                      "still"
+                    ]
+                  },
+                  "asset": {
+                    "$ref": "common.schema.json#/$defs/sha256"
+                  },
+                  "shot_id": {
+                    "type": "string",
+                    "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+                  }
+                },
+                "required": [
+                  "role",
+                  "asset"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "refs": {
+              "type": "array",
+              "maxItems": 14,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "$ref": "common.schema.json#/$defs/refName"
+                  },
+                  "asset": {
+                    "$ref": "common.schema.json#/$defs/sha256"
+                  },
+                  "role": {
+                    "$ref": "common.schema.json#/$defs/refRole"
+                  }
+                },
+                "required": [
+                  "asset"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "words": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "camera": {
+              "type": "object",
+              "description": "Each shot's camera as sent, by shot id.",
+              "propertyNames": {
+                "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "additionalProperties": {
+                "$ref": "common.schema.json#/$defs/camera"
+              },
+              "maxProperties": 100
+            },
+            "model": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "quality": {
+              "$ref": "common.schema.json#/$defs/clipQuality"
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(p|K)$"
+            },
+            "length_s": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "sources": {
+              "type": "array",
+              "maxItems": 8,
+              "description": "combine: the clips used, each with its window.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "generation_id": {
+                    "type": "string",
+                    "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "asset": {
+                    "$ref": "common.schema.json#/$defs/sha256"
+                  },
+                  "in_s": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "out_s": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "asset"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "box_id": {
+          "type": "string",
+          "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "The box (video.runs) it was made for: one box, one generation at a time. Absent: not in a box."
+        },
+        "shot_ids": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "description": "The shots it shows, in order. Empty: footage not tied to a shot (combine, upload)."
+        },
+        "segments": {
+          "type": "array",
+          "maxItems": 100,
+          "description": "Where each shot is in it (a box made together): in_s and out_s in its own time. by: prompt (the planned cut times), detected (the relay's take_cuts), human (a person moved it). Absent or empty: one shot, the whole of it.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "shot_id": {
+                "type": "string",
+                "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "in_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "out_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "by": {
+                "enum": [
+                  "prompt",
+                  "detected",
+                  "human"
+                ]
+              }
+            },
+            "required": [
+              "shot_id",
+              "in_s",
+              "out_s"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "patched": {
+          "type": "array",
+          "maxItems": 16,
+          "description": "The stretches made again by Fix this moment (a patch and the patches before it), in its own time: in_s, out_s, the clip_patch job and the generation that job made.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "in_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "out_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "job_id": {
+                "type": "string",
+                "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "generation_id": {
+                "type": "string",
+                "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+              }
+            },
+            "required": [
+              "in_s",
+              "out_s",
+              "job_id"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "state": {
+          "enum": [
+            "making",
+            "ready",
+            "failed"
+          ],
+          "description": "making: its job runs (the Bin shows a placeholder). ready: asset is there. failed: nothing was made (kept so the stack shows what was tried)."
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "provider": {
+          "$ref": "common.schema.json#/$defs/madeBy"
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId"
+        },
+        "mock": {
+          "const": true,
+          "description": "A mock take: labelled everywhere, never final."
+        },
+        "end": {
+          "type": "object",
+          "description": "The frame the generation was made to land on (features/connected-video.clan): next_storyboard, the next shot's storyboard frame (frame_id), sent as the clip's last frame on a continue join; none, no last frame. An end-framed take is retimed whole into its slot (stitch fit speed), never cut from its head. Absent: none.",
+          "properties": {
+            "kind": {
+              "enum": [
+                "next_storyboard",
+                "none"
+              ]
+            },
+            "frame_id": {
+              "type": "string",
+              "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "at_s": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Where in it it reached that frame (the job's landS): the clip is used up to and including the frame at at_s, retimed into its slot, and what the model made after it is left out."
+            },
+            "score": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1,
+              "description": "How closely that frame matches the one given (the job's landScore, SSIM)."
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "by": {
+          "$ref": "common.schema.json#/$defs/personRef",
+          "description": "Who asked for it."
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "kind",
+        "shot_ids",
+        "state",
+        "created_at",
+        "by"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ready"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "asset",
+              "duration_s"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "change",
+                  "patch",
+                  "feel",
+                  "extend"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "parent_id"
+            ]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "video": {
+      "type": "object",
+      "description": "A video: its timeline (the cut, the Edit room), its boxes (runs, the Make room) and its ad renders (features/make-and-edit.clan).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "ratio": {
+          "$ref": "common.schema.json#/$defs/ratio"
+        },
+        "target_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "quality": {
+          "$ref": "common.schema.json#/$defs/clipQuality",
+          "description": "The project's default quality for this video's clips (features/clip-quality.clan); a send may pick another. Absent: standard."
+        },
+        "pick": {
+          "$ref": "#/$defs/pick"
+        },
+        "timeline": {
+          "type": "object",
+          "description": "The cut (the Edit room): items keyed by id, each a clip on V1 or V2 or a text. Written item by item (timeline/<item>, timeline/<item>/<field>; contracts/collab.md §7). It replaced edl (features/make-and-edit.clan): clips point at generations, never at shots.",
+          "propertyNames": {
+            "pattern": "^item_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/timelineItem"
+          },
+          "maxProperties": 300
+        },
+        "end_card": {
+          "$ref": "#/$defs/endCard"
+        },
+        "join": {
+          "enum": [
+            "film",
+            "shots"
+          ],
+          "description": "How shots join (features/connected-video.clan, behind flags.connectedVideo): film (As one film: Make clips plans runs of takes and landing frames) or shots (Shot by shot: each clip alone, as before). Absent: film where the flag is on."
+        },
+        "runs": {
+          "type": "object",
+          "description": "The boxes (runs) the planner made: one box is one generation at a time (its generations name it as box_id) (features/connected-video.clan): the shots made together and how. shot_ids: the run's shots in order. mode: take (one generation of them all), take_refs (one generation from references, no frame), frames (a clip per shot, landing on the next frame on continue joins) or alone. model: the clip model it runs on. state: planned, running, done or failed. job_id: the take's job (take and take_refs). planned_by: crew (Dex's plan) or human (a person's join change re-planned it).",
+          "propertyNames": {
+            "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "shot_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "type": "string",
+                  "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+                }
+              },
+              "mode": {
+                "enum": [
+                  "take",
+                  "take_refs",
+                  "frames",
+                  "alone"
+                ]
+              },
+              "model": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "state": {
+                "enum": [
+                  "planned",
+                  "running",
+                  "done",
+                  "failed"
+                ]
+              },
+              "job_id": {
+                "type": "string",
+                "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "planned_by": {
+                "enum": [
+                  "crew",
+                  "human"
+                ]
+              }
+            },
+            "required": [
+              "shot_ids",
+              "mode",
+              "model",
+              "state",
+              "planned_by"
+            ],
+            "additionalProperties": false
+          },
+          "maxProperties": 100
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "ratio",
+        "timeline"
+      ],
+      "additionalProperties": false
+    },
+    "render": {
+      "type": "object",
+      "description": "An ad render of a video: a version Edie made.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "video_id": {
+          "type": "string",
+          "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parent_id": {
+          "type": "string",
+          "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "video_id",
+        "version",
+        "asset",
+        "job_id"
+      ],
+      "additionalProperties": false
+    },
+    "review": {
+      "type": "object",
+      "description": "A note on a frame, generation, render, ref or video; with a region it is a box, with at_s it has a window. Its words live in reviews/<id>.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^rev_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "frame",
+                "generation",
+                "render",
+                "ref",
+                "video"
+              ]
+            },
+            "id": {
+              "$ref": "common.schema.json#/$defs/id"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "video_id": {
+          "type": "string",
+          "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "render_id": {
+          "type": "string",
+          "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "shot_id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "at_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "window": {
+          "$ref": "#/$defs/window"
+        },
+        "region": {
+          "$ref": "common.schema.json#/$defs/region"
+        },
+        "still": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "chips": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "maxItems": 8
+        },
+        "by": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        },
+        "state": {
+          "enum": [
+            "open",
+            "resolved"
+          ]
+        },
+        "resolved_by_job": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "fixed_in_render": {
+          "type": "string",
+          "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "prose": {
+          "$ref": "#/$defs/prose"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "The note's words. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "last_writer": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "target",
+        "by",
+        "state",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "dependentRequired": {
+        "at_s": [
+          "window"
+        ],
+        "window": [
+          "at_s"
+        ]
+      }
+    },
+    "link": {
+      "type": "object",
+      "description": "A link between two nodes (ui-behaviour 3.4): the only record of drives, renders, inputs, brand and master. Allowed by common linkRule.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "from": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
+        },
+        "to": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
+        },
+        "role": {
+          "$ref": "common.schema.json#/$defs/linkRole"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "from",
+        "to",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "key": {
+      "type": "object",
+      "description": "A solid reference key: one character, place or object. Its refs are its variants.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "key": {
+          "$ref": "common.schema.json#/$defs/key"
+        },
+        "role": {
+          "$ref": "common.schema.json#/$defs/refRole"
+        },
+        "library": {
+          "$ref": "#/$defs/libraryCopy"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "key",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "ref": {
+      "type": "object",
+      "description": "A named reference: key_variant and what it holds for its role (refRoleTable payload: image, swatches, font, rule or document).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "key": {
+          "$ref": "common.schema.json#/$defs/key"
+        },
+        "variant": {
+          "$ref": "common.schema.json#/$defs/variant"
+        },
+        "role": {
+          "$ref": "common.schema.json#/$defs/refRole"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "swatches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hex": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 40
+              }
+            },
+            "required": [
+              "hex"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 24
+        },
+        "font": {
+          "type": "object",
+          "properties": {
+            "family": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "use": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "file": {
+              "$ref": "common.schema.json#/$defs/sha256"
+            }
+          },
+          "required": [
+            "family"
+          ],
+          "additionalProperties": false
+        },
+        "rule": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "do",
+                "dont",
+                "tone"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        "document_id": {
+          "type": "string",
+          "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/sceneId"
+        },
+        "library": {
+          "$ref": "#/$defs/libraryCopy"
+        },
+        "named_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "key",
+        "variant",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "document": {
+      "type": "object",
+      "description": "A Document node: a file Nell reads, used as context once linked (ui-behaviour 3.18).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "file_name": {
+          "type": "string",
+          "maxLength": 200,
+          "minLength": 1
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excerpt": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "read": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "enum": [
+                "unread",
+                "reading",
+                "read",
+                "failed"
+              ]
+            },
+            "pages_read": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "state",
+            "pages_read"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "file_name",
+        "asset",
+        "pages",
+        "read"
+      ],
+      "additionalProperties": false
+    },
+    "text": {
+      "type": "object",
+      "description": "A text on the canvas (the Text tool's). Its words follow the canvas: an edit there rewrites them; a delete takes it out with its links. Linked into a node (role note), its words are that node's input words.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^text_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/sceneId",
+          "description": "The canvas element that is this text."
+        },
+        "words": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "What it says, as typed (lines joined by newlines)."
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "node",
+        "words"
+      ],
+      "additionalProperties": false
+    },
+    "format_set": {
+      "type": "object",
+      "description": "A Format set: a master adapted to every format of a pack or a campaign plan (ui-behaviour 3.19; features/campaign-formats.clan). It shows on the canvas as a Campaign board. Its sizes are their own entities.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "master": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "frame",
+                "ref",
+                "render",
+                "video",
+                "picture"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{6,64}$",
+              "description": "The entity's id, or for a picture the canvas node's id (common id or sceneId)."
+            },
+            "asset": {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            "w": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "h": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "What every size is made from. picture: a picture on the canvas (its id is the canvas node's id). asset, w and h: the master's picture when the set was made (a video's: its render); protect and crop boxes are in these pixels, and a size made from another asset is out of date."
+        },
+        "pack": {
+          "type": "object",
+          "properties": {
+            "pack_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+            },
+            "pack_version": {
+              "type": "string",
+              "maxLength": 40,
+              "minLength": 1
+            },
+            "client_id": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "pack_id",
+            "pack_version"
+          ],
+          "additionalProperties": false
+        },
+        "plan": {
+          "type": "object",
+          "description": "What was asked for in Make all sizes: one pack (kind pack, its pack id) or a campaign plan (kind plan, format-packs.json plans), with the film lengths asked for (30 → 15 and 6 by default).",
+          "properties": {
+            "kind": {
+              "enum": [
+                "pack",
+                "plan"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+            },
+            "lengths_s": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "protect": {
+          "type": "object",
+          "description": "What must stay in every size, asked once per master (Wren: 'What must stay in every size?'). boxes: a still master's, in its pixels. generations: a film's, per generation (keyed by its id), in its pixels. keep_middle: the person chose no box; crops keep the middle. Changing it puts the crop sizes out of date, nothing else.",
+          "properties": {
+            "boxes": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "$ref": "common.schema.json#/$defs/protectBox"
+              }
+            },
+            "generations": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "additionalProperties": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                  "$ref": "common.schema.json#/$defs/protectBox"
+                }
+              }
+            },
+            "keep_middle": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "copy": {
+          "type": "object",
+          "description": "The words every size lays out as type layers (Edit type): the brand line, legal and the supers. Drawn by the relay and stitch, never sent to a model. A size's own words are in its layers.",
+          "properties": {
+            "line": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "legal": {
+              "type": "string",
+              "maxLength": 600
+            },
+            "supers": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "reframes": {
+          "type": "object",
+          "description": "A film's shots made again for a shape (phase 6), keyed <generation id>@<w>x<h> (the size's shape): Aleph 2's outpaint of the generation (new edges, at the nearest of its ratios; 4:5 at 3:4), or Remake for vertical (the shot made again at the shape on a model that carries its characters). Each is its own paid job; every size of that shape that keeps the shot uses it. Added 2026-10-16 (additive).",
+          "propertyNames": {
+            "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$"
+          },
+          "maxProperties": 200,
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "generation_id": {
+                "type": "string",
+                "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "shot_id": {
+                "type": "string",
+                "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "aspect": {
+                "$ref": "common.schema.json#/$defs/aspect"
+              },
+              "method": {
+                "enum": [
+                  "outpaint",
+                  "remake"
+                ]
+              },
+              "job_id": {
+                "type": "string",
+                "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "model": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "asset": {
+                "$ref": "common.schema.json#/$defs/sha256",
+                "description": "The clip it made, once landed."
+              },
+              "size": {
+                "$ref": "common.schema.json#/$defs/aspect",
+                "description": "The clip's pixels."
+              }
+            },
+            "required": [
+              "generation_id",
+              "shot_id",
+              "aspect",
+              "method",
+              "job_id"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "master",
+        "pack"
+      ],
+      "additionalProperties": false
+    },
+    "size": {
+      "type": "object",
+      "description": "One size of a format set: the format's values copied at creation, how it is made and where it stands (features/campaign-formats.clan). A tile on the Campaign board.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "set_id": {
+          "type": "string",
+          "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "format": {
+          "$ref": "common.schema.json#/$defs/formatRef"
+        },
+        "aspect": {
+          "$ref": "common.schema.json#/$defs/aspect"
+        },
+        "delivery": {
+          "$ref": "common.schema.json#/$defs/deliveryPx"
+        },
+        "bleed_mm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "safe_area": {
+          "$ref": "common.schema.json#/$defs/safeArea"
+        },
+        "method": {
+          "$ref": "common.schema.json#/$defs/sizeMethod"
+        },
+        "media": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "status": {
+          "enum": [
+            "making",
+            "ready",
+            "look",
+            "stale"
+          ],
+          "description": "making: its job runs. ready. look: Jude flagged it (needs a look). stale: what it was made from changed (Update sizes). Absent: not made yet (its method waits for a later build)."
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "Locked: Update sizes, Redo and a new master never change it."
+        },
+        "from_asset": {
+          "$ref": "common.schema.json#/$defs/sha256",
+          "description": "The master's asset it was made from: when the master's is another, the size is out of date ('Master changed · N out of date')."
+        },
+        "crop": {
+          "$ref": "common.schema.json#/$defs/pxBox",
+          "description": "The part of the master it shows, in the master's pixels: the subject-aware crop, or the person's (Adjust crop)."
+        },
+        "crop_by": {
+          "enum": [
+            "rule",
+            "person"
+          ],
+          "description": "person: Adjust crop set it, so Update sizes keeps it."
+        },
+        "plate": {
+          "$ref": "common.schema.json#/$defs/sha256",
+          "description": "The size's picture before its type layers (the relay's resize result plate): Edit type draws on it again for free, without making the picture again, and Export at full size upscales it. Added 2026-10-16 (phase 4, additive)."
+        },
+        "render": {
+          "type": "object",
+          "description": "Facts measured when the size's picture landed, read by Jude's checks: drawn is how many type layers the relay drew on it (a logo it could not read is not drawn); look is how far its colour and tone are from the master's, 0 (the same) to 1, measured for extend and regenerate. Added 2026-11-03 (art-director, additive).",
+          "properties": {
+            "drawn": { "type": "integer", "minimum": 0 },
+            "look": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "full": {
+          "type": "object",
+          "description": "The delivery-size file Export at full size made (Magnific's upscale of the plate, the type drawn again at full size), kept so a second export spends nothing. Out of date when the plate or the type changed since (from differs from plate). Added 2026-10-16 (phase 4, additive).",
+          "properties": {
+            "asset": {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            "job_id": {
+              "type": "string",
+              "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "from": {
+              "$ref": "common.schema.json#/$defs/sha256",
+              "description": "The size's asset (the typed preview) it was made for."
+            },
+            "scale": {
+              "enum": [
+                4,
+                8
+              ],
+              "description": "Magnific's scale; absent when the plate was only scaled (Magnific cannot take a side under 300 px)."
+            }
+          },
+          "required": [
+            "from"
+          ],
+          "additionalProperties": false
+        },
+        "layers": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "common.schema.json#/$defs/typeLayerKind"
+          },
+          "additionalProperties": {
+            "$ref": "common.schema.json#/$defs/typeLayerOverride"
+          },
+          "description": "This size's changes to the type layers (Edit type), by layer."
+        },
+        "length_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 600,
+          "description": "A film size's length (a cutdown: 15, 6)."
+        },
+        "edl": {
+          "type": "array",
+          "maxItems": 100,
+          "description": "A cutdown's edit: windows of the master's V1 clips in cut order (each a generation's in/out), each with its crop for a re-aspect (features/make-and-edit.clan: size.edl reads V1).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "shot_id": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "generation_id": {
+                "type": "string",
+                "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "in_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "out_s": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "crop": {
+                "$ref": "common.schema.json#/$defs/pxBox"
+              },
+              "crop_keys": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 3,
+                "description": "A slow pan (phase 6): the crop at points through the window (at 0: in, 1: out), in the generation's pixels. Wins over crop. Added 2026-10-16 (additive).",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "box": {
+                      "$ref": "common.schema.json#/$defs/pxBox"
+                    }
+                  },
+                  "required": [
+                    "at",
+                    "box"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "crop_by": {
+                "enum": [
+                  "rule",
+                  "person"
+                ],
+                "description": "person: Adjust crop on the clip tile set it (a still box). Added 2026-10-16 (additive)."
+              },
+              "take_size": {
+                "$ref": "common.schema.json#/$defs/aspect",
+                "description": "The generation's pixels, which crop and crop_keys are in. Added 2026-10-16 (additive)."
+              },
+              "end_card": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "shot_id",
+              "in_s",
+              "out_s"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "beats": {
+          "type": "array",
+          "maxItems": 100,
+          "description": "A cutdown's beat plan (Dex, phase 5), shown before it renders: every shot of the master in cut order, kept or dropped, with his reason. Keep or drop on the plan changes the edl. Added 2026-10-16 (additive).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "shot_id": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "keep": {
+                "type": "boolean"
+              },
+              "why": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "by": {
+                "enum": [
+                  "dex",
+                  "person"
+                ],
+                "description": "person: kept or dropped by a person against Dex's plan."
+              }
+            },
+            "required": [
+              "shot_id",
+              "keep"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "checks": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "common.schema.json#/$defs/formatCheckCode"
+          },
+          "description": "Jude's per-format checks, by check; they never block. Ignore is recorded on the check.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "enum": [
+                  "pass",
+                  "flag",
+                  "unverified"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "ignored": {
+                "type": "object",
+                "properties": {
+                  "by": {
+                    "$ref": "common.schema.json#/$defs/personRef"
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "by",
+                  "at"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "result",
+              "note"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "set_id",
+        "rank",
+        "format",
+        "aspect",
+        "delivery",
+        "method",
+        "media"
+      ],
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "description": "Jude's check of a result against the shot or the brand rules. Brand rules never block; Ignore is recorded here.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "crew": {
+          "const": "jude"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "result": {
+          "enum": [
+            "pass",
+            "flag"
+          ]
+        },
+        "reason_code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,63}$"
+        },
+        "rule_ref": {
+          "type": "string",
+          "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "ignored": {
+          "type": "object",
+          "properties": {
+            "by": {
+              "$ref": "common.schema.json#/$defs/personRef"
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "by",
+            "at"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "target",
+        "crew",
+        "result",
+        "reason_code",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "ask": {
+      "type": "object",
+      "description": "An agent's question on a node (ui-behaviour 3.17). Its key is question.id; a job's ask copies Job.question (minted by the relay), and the relay decides which answer won. kind is question.kind.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "question": {
+          "$ref": "common.schema.json#/$defs/question"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId"
+        },
+        "state": {
+          "enum": [
+            "open",
+            "answered",
+            "withdrawn"
+          ]
+        },
+        "answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Every answer in order: the first settled it; a later one is a Change.",
+            "properties": {
+              "option_id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,31}$"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 1
+              },
+              "by": {
+                "$ref": "common.schema.json#/$defs/personRef"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "by",
+              "at"
+            ],
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "option_id"
+                ],
+                "not": {
+                  "required": [
+                    "text"
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "text"
+                ],
+                "not": {
+                  "required": [
+                    "option_id"
+                  ]
+                }
+              }
+            ]
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "question",
+        "node",
+        "crew",
+        "state",
+        "answers"
+      ],
+      "additionalProperties": false
+    },
+    "suggestion": {
+      "type": "object",
+      "description": "Skye's proposed words on a scene, shot or beat, shown inline until Keep or Keep mine (ui-behaviour 3.10). Nothing changes until Keep.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "scene",
+                "shot",
+                "beat"
+              ]
+            },
+            "id": {
+              "$ref": "common.schema.json#/$defs/id"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "crew": {
+          "const": "skye"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "for": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "base_hash": {
+          "$ref": "common.schema.json#/$defs/sha256",
+          "description": "The hash of the target's prose the suggestion was written against: a different hash makes it stale."
+        },
+        "mode": {
+          "enum": ["revise", "draft"],
+          "description": "How the draft is meant to land: `draft` is a whole-block insertion (Keep / Discard, no word-diff); `revise` is a rewrite shown as a word-diff (Keep / Keep mine). Absent reads as `revise`."
+        },
+        "proposed": {
+          "type": "object",
+          "properties": {
+            "prose": {
+              "$ref": "#/$defs/prose"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 20000
+            },
+            "duration_s": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 30,
+              "multipleOf": 0.1,
+              "description": "A shot's new length, applied on Keep in the same step (features/script-editor.clan)."
+            },
+            "new_beats": {
+              "type": "array",
+              "maxItems": 6,
+              "description": "Beats Keep adds to the target shot in the same step.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "$ref": "common.schema.json#/$defs/beatKind"
+                  },
+                  "at_s": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 30,
+                    "multipleOf": 0.5
+                  },
+                  "speaker": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "moment_id": {
+                    "type": "string",
+                    "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "prose": {
+                    "$ref": "#/$defs/prose"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "at_s",
+                  "prose"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "prose",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "state": {
+          "enum": [
+            "open",
+            "kept",
+            "dropped",
+            "stale"
+          ]
+        },
+        "decided_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "target",
+        "crew",
+        "job_id",
+        "for",
+        "base_hash",
+        "proposed",
+        "note",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "spin_in": {
+      "type": "object",
+      "description": "A spin-in from Brief Maker or Research waiting on Bring in (ui-behaviour 3.18).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "app": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "document_id",
+            "app"
+          ],
+          "additionalProperties": false
+        },
+        "plan": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "script",
+                  "ref",
+                  "document",
+                  "brand"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "kind",
+              "title"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32
+        },
+        "state": {
+          "enum": [
+            "waiting",
+            "brought_in",
+            "dismissed"
+          ]
+        },
+        "decided_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "source",
+        "plan",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "job": {
+      "type": "object",
+      "description": "One job, written at submit and patched as it moves; mirrors the relay ledger.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "op": {
+          "$ref": "common.schema.json#/$defs/op"
+        },
+        "state": {
+          "$ref": "common.schema.json#/$defs/jobState"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
+        },
+        "purpose": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What the job is for, in the app's words (it was ProjectUi.jobCtx)."
+        },
+        "started_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "tenant_id": {
+          "$ref": "common.schema.json#/$defs/tenantId"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{8,64}$"
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One thing a job used (the send tray's rows): what it was, which link brought it, what it was used as, and whether it was ticked.",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "ref",
+                  "sketch",
+                  "text",
+                  "note",
+                  "ink",
+                  "document",
+                  "brand",
+                  "frame",
+                  "generation",
+                  "render",
+                  "board",
+                  "group"
+                ]
+              },
+              "ref": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "link_id": {
+                "type": "string",
+                "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "used_as": {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              "included": {
+                "type": "boolean"
+              },
+              "confirmed": {
+                "type": "boolean"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 1000
+              }
+            },
+            "required": [
+              "kind",
+              "used_as",
+              "included"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32
+        },
+        "region": {
+          "$ref": "common.schema.json#/$defs/region"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "chips": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "maxItems": 8
+        },
+        "ask_id": {
+          "type": "string",
+          "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "parent_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "maxItems": 32
+        },
+        "input_hashes": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          },
+          "maxItems": 32
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          },
+          "maxItems": 16
+        },
+        "director": {
+          "$ref": "director.schema.json#/$defs/agentBlock"
+        },
+        "cost": {
+          "$ref": "common.schema.json#/$defs/cost"
+        },
+        "error": {
+          "$ref": "common.schema.json#/$defs/error"
+        },
+        "stopped_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "provider": {
+          "$ref": "common.schema.json#/$defs/madeBy"
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "remote_id": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "op",
+        "state",
+        "node",
+        "started_by",
+        "tenant_id",
+        "nonce",
+        "crew",
+        "parent_ids",
+        "input_hashes",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "stale": {
+      "type": "object",
+      "description": "Something out of date because what it was made from changed.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^stale_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "caused_by": {
+          "$ref": "#/$defs/target"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "marked_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "target",
+        "caused_by",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "export": {
+      "type": "object",
+      "description": "A download that was made.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "kind": {
+          "enum": [
+            "ad_mp4",
+            "bundle_zip",
+            "media_zip",
+            "clan_bundle",
+            "script_pdf",
+            "script_fountain",
+            "storyboard_pdf",
+            "sizes_zip"
+          ]
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "kind",
+        "asset",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "transitionIn": {
+      "type": "object",
+      "description": "The join into this clip from the one before on its track (features/make-and-edit.clan): cut, dissolve, or a dip through black or white, over s seconds. The overlap comes from the outgoing clip's out-handle (its footage after source.out_s; its last frame is held when it has none), so the clips keep their places and the film its length. Absent: a cut.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "cut",
+            "dissolve",
+            "dip_black",
+            "dip_white"
+          ]
+        },
+        "s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "generationDelta": {
+      "type": "object",
+      "description": "One thing a generation changed from its parent's request (features/make-and-edit.clan): the field, what it was and what it became, and the shot of the box it applies to. The relay fills `from` from the parent's held request (Job.remake.delta), so it is what was really sent.",
+      "properties": {
+        "field": {
+          "enum": [
+            "camera.size",
+            "camera.angle",
+            "camera.movement",
+            "camera.movement_speed",
+            "camera.lens_mm",
+            "words",
+            "refs",
+            "start_frame",
+            "end_frame",
+            "moment",
+            "feel",
+            "length",
+            "model",
+            "quality",
+            "sources"
+          ]
+        },
+        "shot_id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "from": {
+          "description": "The parent's value (absent: it had none)."
+        },
+        "to": {
+          "description": "The new value. moment: {in_s, out_s, window: {from_s, to_s}, note, region?} in the parent's time; feel: {words?, strength?}."
+        }
+      },
+      "required": [
+        "field",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "timelineItem": {
+      "type": "object",
+      "description": "One clip or text on the timeline (features/make-and-edit.clan). V1 is the main track and magnetic: its clips abut in start_s order (a gap is black) and never overlap; V2 plays over V1 (P3); text lies over both. A clip shows source.in_s to source.out_s of a generation (or an asset) at speed, then holds its last frame for hold_s: it lasts (out_s - in_s) / speed + hold_s. follows names the slot it stands for, so a new take of that box or shot swaps into the same place keeping start, trims, fades and transition. A text item shows words in its style from from_s to to_s (ad time).",
+      "properties": {
+        "track": {
+          "enum": [
+            "V1",
+            "V2",
+            "text"
+          ]
+        },
+        "start_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "generation_id": {
+              "type": "string",
+              "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "asset": {
+              "$ref": "common.schema.json#/$defs/sha256",
+              "description": "Footage that is not a generation (rare: a render placed back on the timeline)."
+            },
+            "in_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "out_s": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "in_s",
+            "out_s"
+          ],
+          "oneOf": [
+            {
+              "required": [
+                "generation_id"
+              ]
+            },
+            {
+              "required": [
+                "asset"
+              ]
+            }
+          ],
+          "additionalProperties": false
+        },
+        "follows": {
+          "type": "object",
+          "properties": {
+            "box_id": {
+              "type": "string",
+              "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "shot_id": {
+              "type": "string",
+              "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "fade_in_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "From black (a clip) or from clear (text)."
+        },
+        "fade_out_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "transition_in": {
+          "$ref": "#/$defs/transitionIn"
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0.75,
+          "maximum": 1.33,
+          "description": "How fast the source plays (Fit the speed). Absent: 1."
+        },
+        "hold_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "description": "Its last frame held this long after out_s (Hold the last frame). Absent: none."
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "V2 only. Absent: 1."
+        },
+        "words": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "style": {
+          "enum": [
+            "caption",
+            "title",
+            "super"
+          ],
+          "description": "caption: bottom band; title: centred; super: lower third."
+        },
+        "from_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "to_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "track"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "track": {
+                "const": "text"
+              }
+            },
+            "required": [
+              "track"
+            ]
+          },
+          "then": {
+            "required": [
+              "words",
+              "style",
+              "from_s",
+              "to_s"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "start_s"
+                  ]
+                },
+                {
+                  "required": [
+                    "source"
+                  ]
+                },
+                {
+                  "required": [
+                    "follows"
+                  ]
+                },
+                {
+                  "required": [
+                    "transition_in"
+                  ]
+                },
+                {
+                  "required": [
+                    "speed"
+                  ]
+                },
+                {
+                  "required": [
+                    "hold_s"
+                  ]
+                },
+                {
+                  "required": [
+                    "opacity"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "start_s",
+              "source"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "words"
+                  ]
+                },
+                {
+                  "required": [
+                    "style"
+                  ]
+                },
+                {
+                  "required": [
+                    "from_s"
+                  ]
+                },
+                {
+                  "required": [
+                    "to_s"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "track": {
+                "const": "V1"
+              }
+            },
+            "required": [
+              "track"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "opacity"
+              ]
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "endCard": {
+      "type": "object",
+      "description": "The person's own end card (features/make-and-edit.clan): drawn by the relay (no model) as the locked last piece of V1, s seconds after the last clip, then the studio's roll-up card. headline and line are its words, cta a short call to action, bg its colour, logo_asset the Brand board's logo. Absent: no card of the person's; the roll-up still ends the ad.",
+      "properties": {
+        "headline": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "line": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "cta": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "bg": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "logo_asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "s": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 10
+        },
+        "transition_in": {
+          "$ref": "#/$defs/transitionIn"
+        }
+      },
+      "required": [
+        "line",
+        "bg",
+        "s"
+      ],
       "additionalProperties": false
     }
   }

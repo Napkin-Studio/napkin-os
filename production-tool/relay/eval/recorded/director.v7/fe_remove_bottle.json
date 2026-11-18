@@ -1,0 +1,5 @@
+{
+ "version": "director.v7",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"frame_edit\", \"question\": null, \"rationale\": \"The words change something in the picture and the camera stays, so this is a local edit. No box or mask was given, so it runs as an instruction edit of the whole frame.\", \"confidence\": 0.95, \"frameEdit\": {\"reading\": \"local\", \"runAs\": \"frame\"}, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_image3_pro\", \"prompt\": \"remove the bottle from the table. Everything else in @current stays exactly as it is.\", \"refs\": [{\"sha256\": \"sha256:571c8be611cad982d9937ccd319ccb9d72d1ed23a3ad59bf3d425b1525d534ef\", \"name\": \"current\", \"role\": \"current\"}], \"ratio\": \"1344:768\"}}"
+}

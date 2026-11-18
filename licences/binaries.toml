@@ -1,0 +1,79 @@
+# Server and system binaries: what we download, install into images, or depend on
+# outside the package managers. The licence gate checks each entry's licence for its
+# tier, that every Dockerfile's runtime image is listed, and that a pinned download
+# (pin_script) uses exactly this version, URL, sha256 and mirror path with
+# `sha256sum -c`.
+#
+# Tiers: server (runs on our servers, never distributed; copyleft needs a reason and
+# approved_by), system (a dependency the user's OS installs; we never bundle it), build.
+# Fields: name, version, url, mirror_url, sha256, licence, tier, used_by, reason,
+# approved_by; image (the FROM reference) for base images; pin_script, pin_prefix and
+# mirror_path for a pinned download.
+
+[[binary]]
+name = "ffmpeg (static build, johnvansickle.com)"
+version = "7.0.2"
+url = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-7.0.2-amd64-static.tar.xz"
+# deploy-production-tool.yml copies the verified tarball here after its first download;
+# build-layer.sh falls back to it when the upstream URL is gone.
+mirror_url = "s3://$BUCKET/build/ffmpeg-7.0.2-amd64-static.tar.xz"
+mirror_path = "build/ffmpeg-7.0.2-amd64-static.tar.xz"
+# sha256 of the tarball, read 2026-10-13; its md5 matches the site's published
+# ffmpeg-release-amd64-static.tar.xz.md5 (7fa72b652e19bf84c9461e332ea1cdf3).
+sha256 = "abda8d77ce8309141f83ab8edf0596834087c52467f6badf376a6a2a4c87cf67"
+licence = "GPL-3.0-or-later"
+tier = "server"
+used_by = ["production-tool/stitch/build-layer.sh", ".github/workflows/deploy-production-tool.yml"]
+pin_script = "production-tool/stitch/build-layer.sh"
+pin_prefix = "FFMPEG"
+reason = "The stitch Lambda's encoder (libx264, libfreetype). It runs only inside our Lambda layer and is never distributed (D6, docs/production-tool/overhaul-plan.md)."
+approved_by = "Shrey (2026-10-13 decision)"
+
+[[binary]]
+name = "debian:bookworm-slim (napkin-web runtime image)"
+image = "debian:bookworm-slim"
+version = "bookworm-slim (floating tag)"
+url = "https://hub.docker.com/_/debian"
+licence = "GPL-2.0-or-later AND LGPL-2.1-or-later AND BSD-3-Clause AND MIT"
+tier = "server"
+used_by = ["Dockerfile"]
+reason = "The napkin-web container's base: Debian main (GPL coreutils and bash, LGPL glibc). Runs on our servers; the image is never distributed."
+approved_by = "Shrey (2026-10-13 decision)"
+
+[[binary]]
+name = "Chromium (Debian package, napkin-web PDF export)"
+version = "bookworm package (apt, floating)"
+url = "https://packages.debian.org/bookworm/chromium"
+licence = "BSD-3-Clause AND LGPL-2.1-or-later"
+tier = "server"
+used_by = ["Dockerfile"]
+reason = "Renders PDF exports inside the napkin-web container (WITH_PDF=1). BSD-3-Clause with LGPL components (its ffmpeg build); runs on our servers only."
+approved_by = "Shrey (2026-10-13 decision)"
+
+[[binary]]
+name = "python:3.12-slim (middleware runtime image)"
+image = "python:3.12-slim"
+version = "3.12-slim (floating tag)"
+url = "https://hub.docker.com/_/python"
+licence = "PSF-2.0 AND GPL-2.0-or-later AND LGPL-2.1-or-later"
+tier = "server"
+used_by = ["server/Dockerfile"]
+reason = "The middleware container's base: CPython (PSF-2.0) on Debian main (GPL/LGPL system packages). Runs on our servers; never distributed."
+approved_by = "Shrey (2026-10-13 decision)"
+
+[[binary]]
+name = "uv (copied into the middleware image)"
+version = "0.8"
+url = "https://github.com/astral-sh/uv"
+licence = "MIT OR Apache-2.0"
+tier = "server"
+used_by = ["server/Dockerfile"]
+
+[[binary]]
+name = "webkit2gtk (desktop .deb dependency)"
+version = "4.1 (the user's distribution package)"
+url = "https://webkitgtk.org/"
+licence = "LGPL-2.1-or-later AND BSD-2-Clause"
+tier = "system"
+used_by = ["app/src-tauri/tauri.conf.json"]
+reason = "Tauri's Linux web view. The .deb declares it as a package dependency; the user's package manager installs it and we never bundle or modify it."

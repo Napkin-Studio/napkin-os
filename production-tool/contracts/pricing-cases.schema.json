@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/pricing-cases.schema.json",
+  "title": "Price vectors",
+  "description": "examples/pricing-cases.json: what contracts/pricing.py must return for a model and its settings on a capability sheet. check.py and the relay's pytest assert every case (features/runway-sheet-sync.clan). Contract 3.",
+  "type": "object",
+  "properties": {
+    "about": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "sheet": { "$ref": "common.schema.json#/$defs/provider" },
+          "model": { "type": "string" },
+          "settings": { "$ref": "capabilities.schema.json#/$defs/defaults" },
+          "credits": { "type": "number", "minimum": 0 },
+          "refused": { "const": true }
+        },
+        "required": ["sheet", "model", "settings"],
+        "oneOf": [{ "required": ["credits"] }, { "required": ["refused"] }],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["cases"],
+  "additionalProperties": false
+}

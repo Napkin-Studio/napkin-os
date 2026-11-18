@@ -304,3 +304,9 @@ test('desk: its reads wait for the open document’s page', async () => {
   assert.match(app, /const deskMayRead = !openDocPath \|\| docIn === openDocPath/)
   assert.match(app, /useDeskFacts\(landing\.data\?\.items \?\? null,\s*landing\.state === 'ready' && !\(device && !serverless\) && deskMayRead\)/)
 })
+
+test('with the Production Tool served the desk links to it, even with no clients; not otherwise', () => {
+  const on = desk(data([]), { productionHref: '/production/' })
+  assert.match(on, /<a class="side-link p33-prod" href="\/production\/"[^>]*data-testid="desk-production"/)
+  assert.doesNotMatch(desk(data([])), /desk-production/)
+})

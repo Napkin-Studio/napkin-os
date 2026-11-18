@@ -22,6 +22,9 @@
 // medallion, the line under the heading, the desk and the Sign in button take
 // its name and colours. Only the registry is read, never the roster or the
 // server, so the look says nothing about who has an account.
+//
+// `/?next=/production/...` (the Production Tool's signed-out page) is followed
+// after sign-in, and at once when the person is already signed in (./next.ts).
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { LogoSpinnerFill } from '../brand/LogoSpinner'
@@ -31,9 +34,10 @@ import { agencyOfSignInName, applyAgency } from './agency/palette'
 import { LOOK_DELAY_MS, signInLookOf, type SignInLook } from './agency/signInLook'
 import { loadAgencyLooks } from './agency/looks'
 import { justSignedOut, markSignedOut, rememberAgency } from './agency/lastAgency'
+import { afterSignIn, nextWhenSignedIn } from './next'
 import './SignIn.css'
 
-type Gate = 'checking' | 'open' | 'signin'
+type Gate = 'checking' | 'open' | 'signin' | 'leaving'
 
 export function SignInGate({ children, check }: { children: ReactNode; check: boolean }) {
   const [gate, setGate] = useState<Gate>(check ? 'checking' : 'open')
@@ -50,14 +54,21 @@ export function SignInGate({ children, check }: { children: ReactNode; check: bo
           const b = await r.json().catch(() => ({}))
           if (b && b.password === false) setAsksPassword(false)
           setGate(b && b.signin ? 'signin' : 'open')
-        } else setGate('open')
+        } else {
+          const next = r.ok ? nextWhenSignedIn(location.search, await r.json().catch(() => null)) : null
+          if (!live) return
+          if (next) { setGate('leaving'); location.replace(next) } else setGate('open')
+        }
       })
       // offline or no server: the studio says so itself
       .catch(() => { if (live) setGate('open') })
     return () => { live = false }
   }, [check])
-  if (gate === 'checking') return <LogoSpinnerFill label="Opening the studio…" />
-  if (gate === 'signin') return <SignIn asksPassword={asksPassword} onDone={() => location.reload()} />
+  if (gate === 'checking' || gate === 'leaving') return <LogoSpinnerFill label="Opening the studio…" />
+  if (gate === 'signin') {
+    return <SignIn asksPassword={asksPassword}
+      onDone={() => afterSignIn(location.search, next => location.replace(next), () => location.reload())} />
+  }
   return <>{children}</>
 }
 

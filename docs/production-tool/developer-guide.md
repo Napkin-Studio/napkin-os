@@ -36,7 +36,7 @@ Related documents:
 
 ## Start the relay (the local server)
 
-The local relay keeps everything in memory, so restarting it forgets all jobs. There is no sign-in: it runs every request as a fixed local person (the identity seam, `relay/identity.py`). The hosted relay has no identity source until the Napkin OS sign-in is wired in (features/os-sign-in), so it answers 401 to everything. Set `NAPKIN_LOCAL_USER=handle@agency` to run as someone other than `local@napkin`.
+The local relay keeps its jobs, quotas and spend under its `--data` dir (`state/`, `relay/store.py` FileStore), so a restart forgets nothing: it polls every unfinished job again at once, and a result the provider finished meanwhile still lands. Delete `state/` to start clean. There is no sign-in: it runs every request as a fixed local person (the identity seam, `relay/identity.py`). The hosted relay has no identity source until the Napkin OS sign-in is wired in (features/os-sign-in), so it answers 401 to everything. Set `NAPKIN_LOCAL_USER=handle@agency` to run as someone other than `local@napkin`.
 
 ```
 cd production-tool/relay
@@ -94,7 +94,7 @@ Branches are `feat/<slug>`. Pull requests go into `develop` and are squash-merge
   runs each step through the relay and the real Runway adapter against a stand-in of Runway, and checks every request against the provider's published schema.
 - **Refresh those schemas:** `uv run --frozen --python 3.12 python scripts/refresh_provider_schemas.py`
   in `production-tool/relay` (`--check` shows what changed).
-- **Cost per pathway:** `scripts/pathway_costs.py`.
+- **Cost per ad:** `scripts/ad_costs.py` (contracts/cost-model.json priced by contracts/pricing.py). Live checks a person runs: `scripts/live_check_aleph2.sh`, `scripts/live_check_stop_charge.sh`.
 - **A real run, with a spending cap:** `scripts/pathway_smoke.py --live --max-usd 1 --image-url
   <https picture>`. It's a dry run without `--live`, and reads keys only from your environment.
 - **The provider reference page:** regenerate it with `scripts/provider_reference.py` after a sheet

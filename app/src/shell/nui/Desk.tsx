@@ -47,6 +47,9 @@ interface Props {
   offlineCount?: number | null
   /** Said in the polite live region (a restore, an adoption). */
   onSay: (words: string) => void
+  /** Where the Production Tool opens, when this server serves it: the desk links to it even with no
+   *  clients yet (its tile otherwise lives only on a client's dial). */
+  productionHref?: string
 }
 
 type PopKey = 'archived' | 'more'
@@ -61,7 +64,7 @@ function placeOf(row: HTMLElement, circle: HTMLElement): { left: number; top: nu
   return { left, top, origin: `${cx - left}px ${dr.height / 2 + 12}px` }
 }
 
-export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
+export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay, productionHref }: Props) {
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -185,6 +188,9 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                   data-testid="client-search" onChange={e => { setQuery(e.target.value); setDial(null) }} />
               </label>
               <span className="sp" />
+              {productionHref && (
+                <a className="side-link p33-prod" href={productionHref} data-testid="desk-production" title="Script, storyboard and video for an ad">Production</a>
+              )}
               {manage && (
                 <button type="button" className="side-link" id="p33-archived" aria-haspopup="menu" aria-expanded={pop.open?.key === 'archived'}
                   data-testid="archived-link" onClick={e => pop.toggle('archived', e.currentTarget)}>Archived · {archived.length}</button>

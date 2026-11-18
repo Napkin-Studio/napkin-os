@@ -7,6 +7,7 @@
 // chooses (projects/shell.ts): keep theirs as a copy, or save this as a new version. Until then
 // no save goes, so the choice is theirs, never a race.
 
+import { engineOf } from '../canvas/adapter'
 import type { CanvasSnapshot } from '../canvas/controller'
 import type { InputMime, ProductionDocument } from '../contracts/types'
 import type { ProjectIndex, ServerMark } from './projectIndex'
@@ -19,7 +20,9 @@ export interface Conflict {
   message: string
 }
 
-type Reason = 'interval' | 'accept' | 'manual'
+// The mirror's reasons; the relay knows three (X-Clan-Reason), so a handoff or an export is saved as manual (features/engine-store.clan).
+type Reason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export'
+const relayReason = (r: Reason): 'interval' | 'accept' | 'manual' => (r === 'handoff' || r === 'export' ? 'manual' : r)
 
 export interface ServerCopyDeps {
   id: string
@@ -57,7 +60,7 @@ export class ServerCopy {
     const entry = index.get(id)
     let saved
     try {
-      saved = await server.save(id, bytes, { reason: meta.reason, ifMatch: entry?.server?.etag, name: entry?.name })
+      saved = await server.save(id, bytes, { reason: relayReason(meta.reason), ifMatch: entry?.server?.etag, name: entry?.name })
     } catch (e) {
       if (e instanceof SaveConflict) this.set({ message: e.message })
       throw e
@@ -67,10 +70,17 @@ export class ServerCopy {
     await this.sendCanvas().catch((e) => console.warn('could not save the canvas to the server', e))
   }
 
-  /** The canvas as it is kept in this browser, elements only (the pictures come back from the assets). */
+  /**
+   * The canvas as it is kept in this browser, elements only (the pictures come back from the assets): an
+   * Excalidraw scene only. A scene on our own engine travels in the .clan itself (its checkpoint,
+   * human/assets/canvas.ybin.zst, written at this same mirror moment; features/engine-store.clan), so
+   * the relay's canvas.json stays as Excalidraw last left it: the original a converted project rolls
+   * back to (features/canvas-engine.clan, production-tool-land.clan).
+   */
   async sendCanvas(): Promise<void> {
     const canvas = await this.d.storage.get<CanvasSnapshot>(this.d.canvasKey)
-    if (canvas) await this.d.server.putCanvas(this.d.id, canvas.elements ?? [])
+    if (!canvas || engineOf(canvas) === 'own') return
+    await this.d.server.putCanvas(this.d.id, canvas.elements ?? [])
   }
 
   /** The person chose (shell.ts): saves go again, on top of `theirs`, the copy now on the relay

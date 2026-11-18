@@ -1,0 +1,28 @@
+
+## data-member (quantised=true, 50 checkpoints of +20 strokes/+30 moves)
+first checkpoint (whole scene): write 642.5 ms (encode 0.00 ms, zstd 0.00 ms) download 360.4 ms payload 4757.8 KB .clan 2061.1 KB
+steady checkpoint: write median 1616.1 ms p90 2136.2 ms (encode 0.00 ms, zstd 0.00 ms) download median 398.2 ms payload 41.8 KB
+.clan size: 2061.1 KB -> 2468.1 KB; data.yaml last 14501.2 KB; decision-chain.yaml 1.0 KB -> 12.6 KB (53 entries)
+
+## asset-quiet (quantised=true, 50 checkpoints of +20 strokes/+30 moves)
+first checkpoint (whole scene): write 158.9 ms (encode 53.8 ms, zstd 26.0 ms) download 61.9 ms payload 1768.4 KB .clan 1793.6 KB
+steady checkpoint: write median 99.5 ms p90 107.1 ms (encode 27.6 ms, zstd 14.3 ms) download median 49.0 ms payload 1961.1 KB
+.clan size: 1793.6 KB -> 2173.9 KB; data.yaml last 0.5 KB; decision-chain.yaml 0.7 KB -> 0.7 KB (2 entries)
+
+## asset-decision (quantised=true, 50 checkpoints of +20 strokes/+30 moves)
+first checkpoint (whole scene): write 87.3 ms (encode 26.4 ms, zstd 13.2 ms) download 43.9 ms payload 1768.4 KB .clan 1793.7 KB
+steady checkpoint: write median 101.1 ms p90 109.1 ms (encode 28.0 ms, zstd 14.0 ms) download median 47.9 ms payload 1961.1 KB
+.clan size: 1793.7 KB -> 2175.1 KB; data.yaml last 0.5 KB; decision-chain.yaml 0.9 KB -> 12.0 KB (53 entries)
+
+## open (median of 5)
+data_member: 7560.5 ms
+data_member_upload_only: 865.9 ms
+asset: 346.9 ms
+asset_upload_only: 50.7 ms
+asset_route_only: 167.4 ms
+data_entry_only: 80.6 ms
+data_yaml_parse_only: 6475.6 ms
+
+JSON:{"out":{"data-member":{"first":{"k":0,"writeMs":642.455638,"encodeMs":0,"compressMs":0,"dlMs":360.354186,"payload":4871952,"clan":2110556,"data":12384132,"chainBytes":974},"steady_write_med":1616.1408840000004,"steady_write_p90":2136.176336999997,"steady_dl_med":398.2362985,"encode_med":0,"compress_med":0,"payload_med":42802,"size_first":2110556,"size_last":2527352,"data_last":14849180,"chain_first":974,"chain_last":12865,"chain_entries":53,"last_write":2574.1407939999917},"asset-quiet":{"first":{"k":0,"writeMs":158.86346599999524,"encodeMs":53.81237200000032,"compressMs":26.04559700000391,"dlMs":61.90140300001076,"payload":1810808,"clan":1836666,"data":514,"chainBytes":737},"steady_write_med":99.51732649999758,"steady_write_p90":107.07298299999093,"steady_dl_med":48.984026999998605,"encode_med":27.62334299999202,"compress_med":14.339880999992602,"payload_med":2008187.5,"size_first":1836666,"size_last":2226027,"data_last":514,"chain_first":737,"chain_last":737,"chain_entries":2,"last_write":116.60144099999161},"asset-decision":{"first":{"k":0,"writeMs":87.27625199999602,"encodeMs":26.4438560000126,"compressMs":13.219298000010895,"dlMs":43.88194099999964,"payload":1810889,"clan":1836799,"data":514,"chainBytes":963},"steady_write_med":101.14136949999374,"steady_write_p90":109.05514599999879,"steady_dl_med":47.92877599999338,"encode_med":27.975475999999617,"compress_med":13.95736599999509,"payload_med":2008120,"size_first":1836799,"size_last":2227258,"data_last":514,"chain_first":963,"chain_last":12263,"chain_entries":53,"last_write":112.11708999999973}},"open":{"data_member":7560.464791000006,"data_member_upload_only":865.9034749999992,"asset":346.8863189999829,"asset_upload_only":50.68528299999889,"asset_route_only":167.40130899997894,"data_entry_only":80.6245329999947,"data_yaml_parse_only":6475.603191000002}}
+(node:2101492) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)

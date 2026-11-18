@@ -1,11 +1,19 @@
-"""The relay on http://localhost:8787 with no AWS: in-memory ledger, quotas and
-queue; uploads and outputs in .local-data/ (served at /in/, /out/, /ads/).
+"""The relay on http://localhost:8787 with no AWS: ledger, quotas and queue kept under
+the --data dir (store.FileStore), uploads and outputs there too (served at /in/, /out/, /ads/).
+A restart reloads every job and polls the unfinished ones again at once, so a paid job
+still lands (features/relay-durable-jobs.clan).
 
     cd production-tool/relay && uv run python -m local [--port 8787]
 
-Every request is the local person (identity.py): NAPKIN_LOCAL_USER="handle@agency",
-else local@napkin. Routes are served both bare (/jobs) and under /api (/api/jobs),
-as CloudFront does.
+Who is asking (identity.py, features/os-sign-in.clan):
+- Standalone (no TOKEN_SECRET): every request is the local person, NAPKIN_LOCAL_USER="handle@agency",
+  else local@napkin. `npm run dev:relay` in production-tool/web uses this.
+- Behind napkin-web (TOKEN_SECRET set to the same dev value as NAPKIN_PRODUCTION_RELAY_SECRET):
+  every request must carry napkin-web's X-Napkin-Identity assertion, as on AWS.
+Tenants on (in memory): NAPKIN_LOCAL_TENANTS="napkin,acme" (agencies), else napkin and the local
+person's agency. Any other agency gets "not on for your agency".
+
+Routes are served both bare (/jobs) and under /api (/api/jobs), as CloudFront does.
 
 Config: LOCAL_CONFIG=<file> (re-read every 30 s), otherwise
 contracts/examples/config.testing.json with every step routed to mock.
@@ -37,12 +45,12 @@ from providers import load_registry
 from providers.base import Status, asset_url
 from runtime import CachedConfig
 from service import Raw, Relay
-from store import MemoryStore
+from store import FileStore, MemoryStore
 
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
 # the request before it leaves the browser.
-CORS_ALLOW_HEADERS = "Authorization, Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name"
+CORS_ALLOW_HEADERS = "Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name, x-amz-checksum-sha256"
 # Response headers the web app reads: GET /clan/{project} carries the project's ETag and when it was saved.
 CORS_EXPOSE_HEADERS = "ETag, X-Saved-At"
 log = logging.getLogger("relay.local")
@@ -51,6 +59,15 @@ log = logging.getLogger("relay.local")
 def default_config() -> dict:
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
     cfg["routing"] = {op: ([] if op in ("shot_list", "stitch") else ["mock"]) for op in cfg["routing"]}
+    # Fix this moment runs here end to end on the mock (an MP4 back as it went) and the real stitch:
+    # on, and on the mock's own model (features/clip-moment-edit.clan).
+    cfg["flags"]["clipPatch"] = True
+    cfg.setdefault("clipPatch", {}).pop("model", None)
+    # Connected video runs here too (features/connected-video.clan): the mock makes takes with visible cuts
+    # and lands on a last frame, and the real stitch finds the cuts and cuts a window's stills.
+    cfg["flags"]["connectedVideo"] = True
+    # Make and Edit (features/make-and-edit.clan): the two rooms over one Bin.
+    cfg["flags"]["makeAndEdit"] = True
     return cfg
 
 
@@ -115,8 +132,23 @@ def local_stitch(blobs: LocalBlobs):
     return run
 
 
+def local_tenants(store: MemoryStore, agencies: list[str], limits: dict | None = None) -> None:
+    """Turn these agencies on in the in-memory tenants table, each with `limits` (NAPKIN_LOCAL_LIMITS: a
+    JSON object of tenant-item fields, e.g. {"capUsdMonthly": 1, "allow": {"claude": true, "makers": ["runway"]}},
+    features/tenant-limits.clan), as scripts/tenants.py would set them."""
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    for agency in agencies:
+        store.put_tenant({**(limits or {}), "tenantId": identity.tenant_id(agency), "agency": agency, "enabled": True,
+                          "updatedAt": now, "by": "local.py"})
+
+
 def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
-    identity.use_local(identity.local_person())  # this dev server only: every request is the local person
+    signed = bool(identity.keys())
+    # Standalone, every request is the local person; behind napkin-web, its signed assertion says who.
+    identity.use_local(None if signed else identity.local_person())
+    agencies = [a.strip() for a in os.environ.get("NAPKIN_LOCAL_TENANTS", "").split(",") if a.strip()]
+    if not agencies:
+        agencies = sorted({"napkin", identity.local_person()["t"]})
     contracts = Contracts(relaxed=True)  # http://localhost URLs pass
     cfg_file = os.environ.get("LOCAL_CONFIG")
     load = (lambda: json.loads(Path(cfg_file).read_text())) if cfg_file else default_config
@@ -128,8 +160,16 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
         sheet = json.loads((contracts_dir() / "capabilities" / "mock.json").read_text())
         registry.register(StubMock(sheet), sheet)
         log.warning("providers/mock.py not found: using the local stub")
+    mock = getattr(registry.get("mock"), "inner", None)
+    if hasattr(mock, "keep_in"):  # the mock's tasks outlive a restart, as a real provider's do
+        mock.keep_in(data_dir / "mock-provider")
     director = load_director()
-    relay = Relay(store=MemoryStore(), blobs=blobs, registry=registry, director=director,
+    # Jobs, counters, claims and holds kept under data_dir/state (features/relay-durable-jobs.clan);
+    # the holds sit beside the bytes they are about, so a restart keeps every saved picture openable
+    # (features/picture-storage.clan). A held.txt left by an earlier build is folded in.
+    store = FileStore(data_dir)
+    local_tenants(store, agencies, json.loads(os.environ.get("NAPKIN_LOCAL_LIMITS") or "{}"))
+    relay = Relay(store=store, blobs=blobs, registry=registry, director=director,
                   config=CachedConfig(load, contracts), contracts=contracts,
                   stitch=local_stitch(blobs), cards=cards.make(director, blobs, background=True))
     return relay, blobs
@@ -178,18 +218,21 @@ def serve(port: int, data_dir: Path) -> None:
                 return self._relay()  # PUT /clan/{project}/canvas
             key = self.path[len("/_upload/"):].split("?", 1)[0]
             data = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-            blobs.put(key, data, self.headers.get("Content-Type", "application/octet-stream"))
+            # As S3 does with the presigned PUT's checksum (features/tenant-limits.clan): other bytes are refused.
+            if not blobs.accept_upload(key, data, self.headers.get("Content-Type", "application/octet-stream"),
+                                       self.headers.get("x-amz-checksum-sha256")):
+                return self._send(400, b'{"error":"BadDigest"}')
             self._send(200, b"{}")
 
         def _relay(self):
-            path = self.path.split("?", 1)[0]
+            path, _, query = self.path.partition("?")
             if self.command == "GET" and path.lstrip("/").split("/", 1)[0] in ("in", "out", "ads"):
                 return self._file()
             if self.command == "GET" and path == "/config.json":
                 path = "/config"
             n = int(self.headers.get("Content-Length", 0) or 0)
             body = self.rfile.read(n) if n else None
-            status, out, ctx = relay.http(self.command, path, dict(self.headers), body)
+            status, out, ctx = relay.http(self.command, path, dict(self.headers), body, query)
             print(json.dumps({k: v for k, v in ctx.items() if v is not None}, default=str), flush=True)
             if isinstance(out, Raw):
                 return self._send(status, out.data, out.mime, headers=out.headers)
@@ -200,18 +243,23 @@ def serve(port: int, data_dir: Path) -> None:
         def log_message(self, *args):
             pass
 
+    unfinished = len(relay.store.list_active("r")) + len(relay.store.list_active("q"))
+    if unfinished:
+        print(f"resuming {unfinished} unfinished job(s) from {data_dir}", flush=True)
+
     def sweeper():
-        while True:
-            time.sleep(15)
+        while True:  # at once first: a restart polls what it left at a provider without waiting
             try:
                 relay.sweep()
             except Exception:
                 log.exception("sweep failed")
+            time.sleep(15)
 
     threading.Thread(target=sweeper, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    me = identity.who({})
-    print(f"relay (local) on http://localhost:{port}  as {me['h']}@{me['t']} ({me['pid']})  data: {data_dir}", flush=True)
+    me = identity.who("GET", "/me", {}, None)
+    who = f"as {me['h']}@{me['t']} ({me['pid']})" if me else "verifying napkin-web's X-Napkin-Identity (TOKEN_SECRET)"
+    print(f"relay (local) on http://localhost:{port}  {who}  data: {data_dir}", flush=True)
     server.serve_forever()
 
 

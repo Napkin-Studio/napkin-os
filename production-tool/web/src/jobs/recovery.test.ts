@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Job } from '../contracts/types'
-import { emptyDocument, SnapshotDocumentStore, SnapshotStore } from '../doc/store'
+import { SnapshotStore } from '../doc/store'
 import { initialUi, type UiState } from '../doc/ui'
 import { getBlob } from '../lib/blobs'
 import { RelayError } from '../relay/types'
+import { snapshotDoc } from '../test/jobFixtures'
 import { FETCH_AGAIN_S, FETCH_BACKOFF_S, JobRunner, LOST_RESENDS } from './runner'
 
 // The Video stage test (2026-10-09, features/video-stage-findings.clan): a lost POST /jobs answer
@@ -15,7 +16,7 @@ const SHA = 'sha256:' + 'ab'.repeat(32)
 
 function job(jobId: string, state: Job['state'], extra: Partial<Job> = {}): Job {
   return {
-    contractVersion: '2', jobId, state, op: 'clip', quotaClass: 'video', inputHashes: [], participantId: 'p_x',
+    contractVersion: '3', jobId, state, op: 'clip', quotaClass: 'video', inputHashes: [], participantId: 'p_x',
     cost: { currency: 'USD', unknown: true }, createdAt: '', updatedAt: '', nextPollS: 5, ...extra,
   } as Job
 }
@@ -36,14 +37,14 @@ function setup() {
     cancelJob: vi.fn(async (id: string): Promise<Job> => job(id, 'cancelled')),
     fetchOutput: vi.fn(async () => new Blob(['mp4'], { type: 'video/mp4' })),
   }
-  const doc = new SnapshotDocumentStore(emptyDocument({ id: 'p_x', handle: 'maya' }), null, 0)
+  const doc = snapshotDoc()
   const ui = new SnapshotStore<UiState>(initialUi())
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runner = new JobRunner(relay as any, doc, ui)
   const landed: string[] = []
   runner.onComplete('clip', (j) => landed.push(j.jobId))
-  const submit = () => runner.submit('clip', { text: 'a clip' }, [], { for: 'clip', shotId: 'shot_1' } as never)
-  const state = (id: string) => doc.get().jobs.find((j) => j.id === id)?.state
+  const submit = () => runner.submit('clip', { text: 'a clip' }, [], { for: 'clip', shotId: 'shot_01K6XA7Q3M9V2D4R8T0B5C1E6F' })
+  const state = (id: string) => doc.get().jobs[id]?.state
   return { relay, doc, ui, runner, landed, submit, state }
 }
 
@@ -90,7 +91,7 @@ describe('a POST /jobs whose answer was lost', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(s.relay.createJob).toHaveBeenCalledTimes(1 + LOST_RESENDS)
     expect(s.state(id)).toBe('failed')
-    expect(s.doc.get().jobs[0].error?.retryable).toBe(true)
+    expect(s.doc.get().jobs[id].error?.retryable).toBe(true)
   })
 })
 
@@ -101,7 +102,7 @@ describe('a job the relay no longer knows', () => {
     s.relay.getJob.mockRejectedValue(gone())
     await vi.advanceTimersByTimeAsync(6000)
     expect(s.state(id)).toBe('failed')
-    const err = s.doc.get().jobs[0].error!
+    const err = s.doc.get().jobs[id].error!
     expect(err.retryable).toBe(true)
     expect(err.message).toMatch(/lost track/)
     expect(s.relay.createJob).toHaveBeenCalledTimes(1)

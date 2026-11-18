@@ -1,0 +1,21 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7F00000000000000000CP02",
+  "op": "clip_patch",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_clippatch02",
+  "node": {
+    "kind": "shot",
+    "id": "shot_01K7B00000000000000000SH04"
+  },
+  "parentIds": [],
+  "input": {
+    "text": "her eyes should open here",
+    "video": {
+      "sha256": "sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+      "url": "https://cdn.napkin.test/out/sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+      "mime": "video/mp4"
+    },
+    "atS": 3.2
+  }
+}

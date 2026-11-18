@@ -114,3 +114,22 @@ variable "middleware_count" {
   type        = number
   default     = 1
 }
+
+# The Production Tool at /production (features/os-sign-in.clan). Set both, from
+# infra/envs/hackathon's outputs, in terraform.tfvars, then plan, read and apply
+# BEFORE the release deploys (rollout step 4). Empty: no /production.
+variable "production_relay_url" {
+  description = "The hackathon stack's relay_function_url"
+  type        = string
+  default     = ""
+}
+
+variable "production_relay_secret_arn" {
+  description = "The ARN of napkin-hackathon/TOKEN_SECRET (the hackathon stack's secret_ids output)"
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_relay_secret_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_relay_secret_arn are set together, or neither"
+  }
+}

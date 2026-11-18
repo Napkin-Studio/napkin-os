@@ -1,6 +1,6 @@
-"""Personal workspaces (features/personal-workspaces.clan): the person the identity seam names has
-saved projects that follow them to any browser: listed, opened, and never silently overwritten by a
-save from somewhere else."""
+"""Agency workspaces (features/os-sign-in.clan; personal-workspaces.clan before it): everyone in the
+agency the identity seam names shares its saved projects, which follow them to any browser: listed,
+opened, and never silently overwritten by a save from somewhere else. Another agency never sees them."""
 
 import hashlib
 
@@ -35,8 +35,8 @@ def open_clan(h, token, project):
     return h.relay.http("GET", f"/api/clan/{project}", {"Authorization": f"Bearer {token}"}, None)
 
 
-def test_a_save_is_listed_for_its_name_only_newest_first(h):
-    maya, sam = h.as_person("maya"), h.as_person("sam")
+def test_a_save_is_listed_for_its_agency_only_newest_first(h):
+    maya, sam = h.as_person("maya"), h.as_person("sam", "red")
     assert h.call("GET", "/projects", token=maya, expect=200)[1] == {"projects": []}
     status, out = save(h, maya, A, clan("one"), name="Maya%20finds%20the%20lamp")
     assert status == 200 and out["project"]["etag"] == hashlib.sha256(clan("one")).hexdigest()
@@ -47,19 +47,20 @@ def test_a_save_is_listed_for_its_name_only_newest_first(h):
     assert rows[1]["name"] == "Maya finds the lamp" and "name" not in rows[0]
     assert rows[1]["bytes"] == len(clan("one")) and rows[0]["savedAt"] > rows[1]["savedAt"]
     assert h.call("GET", "/projects", token=sam, expect=200)[1] == {"projects": []}
-    # The same name from another browser sees them too.
-    again = h.as_person("Maya")
-    assert [r["id"] for r in h.call("GET", "/projects", token=again, expect=200)[1]["projects"]] == [B, A]
+    # The same name from another browser, and a colleague in the agency, see them too.
+    for again in (h.as_person("Maya"), h.as_person("ola")):
+        assert [r["id"] for r in h.call("GET", "/projects", token=again, expect=200)[1]["projects"]] == [B, A]
 
 
-def test_me_says_how_many_projects_the_name_has(h):
+def test_me_says_how_many_projects_the_agency_has(h):
     maya = h.as_person("maya")
     assert h.call("GET", "/me", token=maya, expect=200)[1]["projects"] == 0
     save(h, maya, A, clan("one"))
     save(h, maya, A, clan("one again"))
     save(h, maya, B, clan("two"))
     assert h.call("GET", "/me", token=h.as_person("MAYA"), expect=200)[1]["projects"] == 2
-    assert h.call("GET", "/me", token=h.as_person("sam"), expect=200)[1]["projects"] == 0
+    assert h.call("GET", "/me", token=h.as_person("ola"), expect=200)[1]["projects"] == 2
+    assert h.call("GET", "/me", token=h.as_person("sam", "red"), expect=200)[1]["projects"] == 0
 
 
 def test_open_answers_the_newest_bytes_with_their_etag(h):
@@ -73,9 +74,10 @@ def test_open_answers_the_newest_bytes_with_their_etag(h):
     assert out.headers["ETag"] == f'"{saved["project"]["etag"]}"' and out.headers["X-Saved-At"] == saved["project"]["savedAt"]
 
 
-def test_open_is_only_for_the_owner(h):
-    maya, sam = h.as_person("maya"), h.as_person("sam")
+def test_open_is_only_for_the_agency(h):
+    maya, sam = h.as_person("maya"), h.as_person("sam", "red")
     save(h, maya, A, clan("one"))
+    assert open_clan(h, h.as_person("ola"), A)[1].data == clan("one")  # a colleague opens it
     status, out, _ = open_clan(h, sam, A)
     assert status == 404 and out["error"]["code"] == "invalid_input"
     for bad in ("../x", "prj_short", f"{A}/latest.clan"):
@@ -88,15 +90,15 @@ def test_a_stale_save_is_a_conflict_and_nothing_is_overwritten(h):
     _, first = save(h, maya, A, clan("from the laptop"))
     etag = first["project"]["etag"]
     h.clock.tick(5)
-    # Another browser saved on top of what it opened: fine.
-    _, second = save(h, h.as_person("maya"), A, clan("from the desktop"), if_match=f'"{etag}"')
+    # A colleague saved on top of what they opened: fine.
+    _, second = save(h, h.as_person("ola"), A, clan("from the desktop"), if_match=f'"{etag}"')
     # The laptop, still on the first ETag, is refused; the desktop's save stays the project.
     h.clock.tick(5)
     status, out = save(h, maya, A, clan("the laptop again"), if_match=etag)
     assert status == 409 and out["error"]["code"] == "conflict" and not out["error"]["retryable"]
     assert open_clan(h, maya, A)[1].data == clan("from the desktop")
     # Every save is kept, the refused one is not the project.
-    copies = sorted(k for k in h.blobs.objects if k.startswith("clan/") and k.endswith("-manual.clan"))
+    copies = sorted(k for k in h.blobs.objects if k.startswith("tenants/") and k.endswith("-manual.clan"))
     assert len(copies) == 3
     # Choosing "save this as a new version": the latest ETag, then it goes in.
     status, out = save(h, maya, A, clan("the laptop again"), if_match=second["project"]["etag"])
@@ -108,8 +110,9 @@ def test_a_save_without_if_match_is_taken_as_before(h):
     save(h, maya, A, clan("one"))
     status, _ = save(h, maya, A, clan("two"))
     assert status == 200 and open_clan(h, maya, A)[1].data == clan("two")
-    pid = h.call("GET", "/me", token=maya, expect=200)[1]["participantId"]
-    assert h.blobs.objects[f"clan/{pid}/{A}/latest.clan"][0] == clan("two")  # the latest copy, as before
+    tid = h.call("GET", "/me", token=maya, expect=200)[1]["tenant"]["id"]
+    assert h.blobs.objects[f"tenants/{tid}/projects/{A}/latest.clan"][0] == clan("two")  # the latest copy
+    assert f"tenants/{tid}/projects/index.json" in h.blobs.objects
 
 
 def test_if_match_on_a_project_never_saved_is_taken(h):
@@ -128,7 +131,7 @@ def test_a_rename_carries_and_a_missing_name_keeps_the_last(h):
 
 
 def test_the_canvas_goes_with_the_saved_project(h):
-    maya, sam = h.as_person("maya"), h.as_person("sam")
+    maya, sam = h.as_person("maya"), h.as_person("sam", "red")
     els = [{"id": "e1", "type": "image", "fileId": "ab" * 20, "customData": {"kind": "pic"}}]
     # Not before the project is saved.
     h.call("PUT", f"/clan/{A}/canvas", {"elements": els}, maya, expect=404)
@@ -167,6 +170,13 @@ def test_a_lost_index_race_reads_again(h):
     assert {r["id"] for r in h.call("GET", "/projects", token=maya, expect=200)[1]["projects"]} == {A, B}
 
 
+def test_the_hackathon_saves_are_not_listed(h):
+    maya = h.as_person("maya")
+    pid = h.call("GET", "/me", token=maya, expect=200)[1]["participantId"]
+    h.blobs.put(f"clan/{pid}/projects.json", b'{"projects": [{"id": "%s", "savedAt": "x", "bytes": 1, "etag": "e", "key": "k"}]}' % A.encode(), "application/json")
+    assert h.call("GET", "/projects", token=maya, expect=200)[1] == {"projects": []}
+
+
 def test_local_server_lets_the_browser_send_if_match_and_read_the_etag():
     allowed = {x.strip().lower() for x in local.CORS_ALLOW_HEADERS.split(",")}
     assert {"if-match", "x-project-name"} <= allowed
@@ -182,6 +192,6 @@ def test_the_local_server_round_trip(tmp_path):
         assert relay.http("POST", "/clan", headers, clan("one"))[0] == 200
         status, out, _ = relay.http("GET", f"/clan/{A}", headers, None)
         assert status == 200 and out.data == clan("one")
-        assert (tmp_path / "clan" / me["participantId"] / "projects.json").exists()
+        assert (tmp_path / "tenants" / me["tenant"]["id"] / "projects" / "index.json").exists()
     finally:
         identity.use_local(None)

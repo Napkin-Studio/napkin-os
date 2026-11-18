@@ -48,7 +48,7 @@
       ],
       "ratio": "896:1152"
     },
-    "needsUser": null,
+    "question": null,
     "rationale": "The sketch shows multiple poses (happy, dancing); generated one character in neutral standing pose. The texture tag contributes surface material only to the AI agent character keeping its basic-shape design from the sketch. Ratio 4:5 converts to Runway's 896:1152.",
     "confidence": 0.85
   },

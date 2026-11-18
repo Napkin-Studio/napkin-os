@@ -14,7 +14,8 @@ import { docTitle } from './docTitle'
 import { greeting, lastTouched } from './when'
 import { upcoming } from './comingSoon'
 import { SoonCard } from './SoonCard'
-import { signedInUser } from '../host/http'
+import { productionOn, signedInUser } from '../host/http'
+import { MakeAnAdCard } from './MakeAnAdCard'
 import { signOut } from './signOut'
 import '../components/chrome.css'
 import './Launcher.css'
@@ -209,6 +210,9 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
   // On a server with accounts: who is signed in, and a way out.
   const [user, setUser] = useState<{ username: string; name?: string } | null>(null)
   useEffect(() => { signedInUser().then(u => setUser(u ?? null)) }, [])
+  // The Production Tool, when this server serves it to this person.
+  const [production, setProduction] = useState(false)
+  useEffect(() => { productionOn().then(setProduction) }, [])
 
   return (
     <div className="ln">
@@ -227,6 +231,7 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
         </div>
       ) : (
         <div className="ln-apps">
+          <MakeAnAdCard on={production} />
           {installed.map(app => {
             const home = app.home
             const crew = crewOf(home)
@@ -266,7 +271,7 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
               </button>
             )
           })}
-          {installed.length > 0 && upcoming(installed).map(t => <SoonCard key={t.app_id} teaser={t} />)}
+          {installed.length > 0 && upcoming(installed).filter(t => !(production && t.app_id === 'ie.napkin.production-tool')).map(t => <SoonCard key={t.app_id} teaser={t} />)}
         </div>
       )}
 
