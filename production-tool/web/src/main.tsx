@@ -10,7 +10,7 @@ import './styles.css'
 import { idbPersister, SnapshotStore } from './doc/store'
 import { initialAppUi, splitUi, type AppUi } from './doc/ui'
 import { migrateSingleProject } from './projects/migrate'
-import { ProjectIndex } from './projects/projectIndex'
+import { INDEX_CHANNEL, ProjectIndex } from './projects/projectIndex'
 import { ProjectServer } from './projects/server'
 import { browserClan } from './projects/session'
 import { Shell } from './projects/shell'
@@ -29,7 +29,7 @@ async function boot() {
 
   // The projects this browser holds (features/project-home.clan). The first load with projects
   // makes the one project of before the first in the list; nothing of it is lost.
-  const index = new ProjectIndex(storage)
+  const index = new ProjectIndex(storage, undefined, { channel: INDEX_CHANNEL })
   if (!(await index.load())) {
     try {
       await migrateSingleProject(storage, index, browserClan)

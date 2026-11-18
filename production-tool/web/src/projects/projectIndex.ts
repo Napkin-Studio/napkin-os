@@ -55,17 +55,34 @@ export function copyName(name: string, taken: readonly string[]): string {
   }
 }
 
-/** The index, kept in storage. Changes are written at once (they are few and small). */
+/** One change to the list: applied here at once, then again to the stored list when it is written. */
+type Op = (list: ProjectEntry[]) => ProjectEntry[]
+
+/** The tabs of this browser say "the index changed" on this channel, and the others read it again. */
+export const INDEX_CHANNEL = 'napkin-production-index'
+
+/**
+ * The index, kept in storage. Changes are written at once (they are few and small), each one merged into the
+ * index as stored at that moment, never the whole list this tab holds (re-test N3, 2026-11-18): a second tab
+ * that read the index earlier wrote its copy over the first tab's save mark, and the next save went without
+ * If-Match. A change to one project touches that project's entry only.
+ */
 export class ProjectIndex {
   private list: ProjectEntry[] = []
   private readonly listeners = new Set<() => void>()
   private readonly storage: ProjectStorage
   private readonly now: () => Date
   private writing: Promise<void> = Promise.resolve()
+  /** Changes made here and not written yet, oldest first. */
+  private pending: Op[] = []
+  private readonly channel: BroadcastChannel | null
 
-  constructor(storage: ProjectStorage, now: () => Date = () => new Date()) {
+  /** `channel`: tell this browser's other tabs when the index changes, and read it again when they do. */
+  constructor(storage: ProjectStorage, now: () => Date = () => new Date(), opts: { channel?: string } = {}) {
     this.storage = storage
     this.now = now
+    this.channel = opts.channel && typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(opts.channel) : null
+    if (this.channel) this.channel.onmessage = () => { void this.reload() }
   }
 
   /** Read the index. False when there is none yet (a first load: see migrate.ts). */
@@ -74,6 +91,19 @@ export class ProjectIndex {
     this.list = v?.projects ?? []
     this.emit()
     return !!v
+  }
+
+  /** Another tab wrote the index: take what it has, with this tab's unwritten changes on top. */
+  private reload(): Promise<void> {
+    this.writing = this.writing.then(async () => {
+      const v = await this.storage.get<Stored>(INDEX_KEY)
+      if (!v) return
+      const next = this.pending.reduce((l, op) => op(l), v.projects)
+      if (JSON.stringify(next) === JSON.stringify(this.list)) return
+      this.list = next
+      this.emit()
+    }).catch(() => {})
+    return this.writing
   }
 
   all = (): ProjectEntry[] => this.list
@@ -95,8 +125,7 @@ export class ProjectIndex {
       summary: init.summary ?? emptySummary(),
       ...(init.server ? { server: init.server } : {}),
     }
-    this.list = [...this.list.filter((p) => p.id !== entry.id), entry]
-    await this.save()
+    await this.commit((l) => [...l.filter((p) => p.id !== entry.id), entry])
     return entry
   }
 
@@ -125,8 +154,7 @@ export class ProjectIndex {
   }
 
   async remove(id: string): Promise<void> {
-    this.list = this.list.filter((p) => p.id !== id)
-    await this.save()
+    await this.commit((l) => l.filter((p) => p.id !== id))
   }
 
   /** Is this picture used by a project other than `except`? */
@@ -134,24 +162,45 @@ export class ProjectIndex {
     return this.list.some((p) => p.id !== except && p.summary.shas.includes(sha))
   }
 
+  /** A change to one project's entry: made to the entry as stored when it is written, so whatever another tab
+   *  wrote to it (or to any other project) since this tab read the index stays. */
   private async change(id: string, fn: (p: ProjectEntry) => ProjectEntry) {
     const i = this.list.findIndex((p) => p.id === id)
     if (i < 0) return
-    const next = fn(this.list[i])
-    if (JSON.stringify(next) === JSON.stringify(this.list[i])) return
-    this.list = this.list.map((p, j) => (j === i ? next : p))
-    await this.save()
+    if (JSON.stringify(fn(this.list[i])) === JSON.stringify(this.list[i])) return
+    await this.commit((l) => l.map((p) => (p.id === id ? fn(p) : p)))
   }
 
-  /** Write the index as it is (a first load with nothing to carry over still leaves one). */
+  /** Write the index as this tab has it (a first load with nothing to carry over still leaves one): every
+   *  entry it holds, and any another tab wrote that it does not. */
   saveNow(): Promise<void> {
-    return this.save()
+    const mine = this.list
+    return this.commit((l) => [...l.filter((p) => !mine.some((m) => m.id === p.id)), ...mine])
   }
 
-  private save(): Promise<void> {
+  /** Apply a change here, then write it into the index as stored now (read, change, write: one at a time). */
+  private commit(op: Op): Promise<void> {
+    this.list = op(this.list)
+    this.pending.push(op)
     this.emit()
-    const snapshot: Stored = { version: 1, projects: this.list }
-    this.writing = this.writing.then(() => this.storage.put(INDEX_KEY, snapshot)).catch(() => {})
+    this.writing = this.writing.then(async () => {
+      if (!this.pending.length) return
+      let base: ProjectEntry[] | null = null
+      try {
+        base = (await this.storage.get<Stored>(INDEX_KEY))?.projects ?? []
+      } catch { /* storage cannot be read: write what this tab has */ }
+      const ops = this.pending
+      this.pending = []
+      const written = base ? ops.reduce((l, op) => op(l), base) : this.list
+      await this.storage.put(INDEX_KEY, { version: 1, projects: written } satisfies Stored)
+      this.channel?.postMessage('changed')
+      // What other tabs wrote is here now too, with this tab's newer changes on top.
+      const next = this.pending.reduce((l, op) => op(l), written)
+      if (JSON.stringify(next) !== JSON.stringify(this.list)) {
+        this.list = next
+        this.emit()
+      }
+    }).catch(() => {})
     return this.writing
   }
 

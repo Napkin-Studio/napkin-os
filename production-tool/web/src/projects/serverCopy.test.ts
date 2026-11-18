@@ -13,6 +13,7 @@ function setup() {
   const server = {
     signedIn: true,
     save: vi.fn(async () => ({ etag: 'e1', savedAt: '2026-11-16T12:00:00Z' })),
+    list: vi.fn(async () => []),
     putCanvas: vi.fn(async (id: string, elements: unknown[]) => { relayCanvas.set(id, elements) }),
   }
   const index = { get: () => ({ id: 'p1', name: 'Ad' }), setServer: vi.fn(async () => {}) }

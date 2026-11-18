@@ -319,6 +319,29 @@ describe('a save from somewhere else is never overwritten', () => {
     expect(fake.saves.at(-1)).toMatchObject({ ifMatch: first })
     expect(fake.projects.get(p.id)!.row.etag).not.toBe(first)
   })
+
+  it('a lost mark never saves blind over the relay\u2019s copy: the person chooses (re-test N3)', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    const first = fake.projects.get(p.id)!.row.etag
+    await laptop.index.setServer(p.id, undefined)
+    // The same bytes as the relay's: the mark comes back and nothing is sent.
+    const before = fake.saves.length
+    await services(laptop.shell).clan!.clan.mirrorNow('manual')
+    expect(fake.saves.length).toBe(before)
+    expect(laptop.index.get(p.id)!.server!.etag).toBe(first)
+    // Changed since: no save without If-Match, the choice is asked for.
+    await laptop.index.setServer(p.id, undefined)
+    await nameKey(services(laptop.shell).doc, 'kite')
+    await services(laptop.shell).clan!.flush()
+    const err = await services(laptop.shell).clan!.clan.mirrorNow('manual').catch((x: unknown) => x)
+    expect(err).toBeInstanceOf(SaveConflict)
+    expect(fake.saves.length).toBe(before)
+    expect(fake.projects.get(p.id)!.row.etag).toBe(first)
+    await laptop.shell.saveAsNewVersion()
+    expect(fake.saves.at(-1)).toMatchObject({ id: p.id, ifMatch: first })
+  })
 })
 
 describe('the relay client', () => {

@@ -10,6 +10,7 @@
 import { engineOf } from '../canvas/adapter'
 import type { CanvasSnapshot } from '../canvas/controller'
 import type { InputMime, ProductionDocument } from '../contracts/types'
+import { sha256Hex } from '../lib/hash'
 import type { ProjectIndex, ServerMark } from './projectIndex'
 import { SaveConflict, type ProjectServer } from './server'
 import { sendAssets } from './serverAssets'
@@ -58,6 +59,20 @@ export class ServerCopy {
     // Pictures first: a project the relay lists must open elsewhere with every one of them.
     await sendAssets(this.d.doc(), this.d.upload)
     const entry = index.get(id)
+    // No mark of the relay's copy: never a blind save over one that is there (re-test N3: a lost mark sent a
+    // save with no If-Match, and the relay took it). The same bytes: the mark comes back. Others: the person chooses.
+    if (!entry?.server) {
+      const there = (await server.list()).find((p) => p.id === id)
+      if (there) {
+        if (there.etag === await sha256Hex(bytes)) {
+          await index.setServer(id, { etag: there.etag, savedAt: there.savedAt })
+          return
+        }
+        const message = `This project was saved on the server at ${new Date(there.savedAt).toLocaleString()}, and this browser does not know that copy.`
+        this.set({ message })
+        throw new SaveConflict(message)
+      }
+    }
     let saved
     try {
       saved = await server.save(id, bytes, { reason: relayReason(meta.reason), ifMatch: entry?.server?.etag, name: entry?.name })

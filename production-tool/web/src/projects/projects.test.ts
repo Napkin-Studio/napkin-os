@@ -109,6 +109,32 @@ describe('the project index', () => {
     expect(a.id).toMatch(/^prj_[0-9A-HJKMNP-TV-Z]{26}$/)
   })
 
+  it('two tabs: each writes only what it changed, so a stale tab never drops the other\u2019s save mark (re-test N3)', async () => {
+    const storage = memoryStorage()
+    const first = new ProjectIndex(storage)
+    await first.load()
+    const r1 = await first.create({ name: 'R1' })
+    const r2 = await first.create({ name: 'R2' })
+    // The second tab reads the index now; the first then saves R2 to the relay.
+    const second = new ProjectIndex(storage)
+    await second.load()
+    await first.setServer(r2.id, { etag: 'e2', savedAt: '2026-11-18T13:50:23Z' })
+    // The second tab, still holding the older list, saves its own project, touches R2, starts another.
+    await second.setServer(r1.id, { etag: 'e1', savedAt: '2026-11-18T13:54:49Z' })
+    await second.touch(r2.id, { ...r2.summary, shots: 3 }, { changed: false })
+    const r3 = await second.create({ name: 'R3' })
+    const after = new ProjectIndex(storage)
+    await after.load()
+    expect(after.get(r2.id)?.server?.etag).toBe('e2')
+    expect(after.get(r2.id)?.summary.shots).toBe(3)
+    expect(after.get(r1.id)?.server?.etag).toBe('e1')
+    expect(after.all().map((p) => p.id).sort()).toEqual([r1.id, r2.id, r3.id].sort())
+    // Each tab holds what the other wrote once it writes again.
+    await first.rename(r1.id, 'R1 renamed')
+    expect(first.get(r3.id)?.name).toBe('R3')
+    expect(first.get(r1.id)?.server?.etag).toBe('e1')
+  })
+
   it('names copies so they do not clash', () => {
     expect(copyName('Rain', [])).toBe('Rain (copy)')
     expect(copyName('Rain', ['Rain (copy)'])).toBe('Rain (copy 2)')
