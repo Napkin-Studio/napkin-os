@@ -160,8 +160,8 @@ export function toggleHidden(s: EditSession, id: string): EditSession {
   return { ...s, hidden: s.hidden.includes(id) ? s.hidden.filter((h) => h !== id) : [...s.hidden, id] }
 }
 
-/** An edit that counts: a mask with paint, a result that arrived or is on the way. */
-const counts = (e: Edit) => !(e.kind === 'mask' && !e.ops.length)
+/** An edit that counts: a mask with paint, a text with words, a result that arrived or is on the way. */
+const counts = (e: Edit) => !(e.kind === 'mask' && !e.ops.length) && !(e.kind === 'text' && !e.text.trim())
 
 /** The edits that count and show: what Apply saves (hidden ones are counted apart, by hiddenCount). A mask is
  *  never applied, so it is not an edit here (QA 2026-11-17: "4 edits not applied" when Apply saved 3). */
@@ -236,7 +236,7 @@ export function nextStep(s: EditSession): string | undefined {
 export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' | 'failed' | 'same'): string {
   switch (e.kind) {
     case 'mask': return `${e.name}${s.active === e.id ? ' · painting' : ''}`
-    case 'text': return `Text "${e.text}"`
+    case 'text': return e.text.trim() ? `Text "${e.text}"` : 'Text · typing'
     case 'crop': return 'Crop'
     case 'fill': {
       const m = s.edits.find((x) => x.id === e.maskId)

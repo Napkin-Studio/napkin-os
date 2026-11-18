@@ -371,7 +371,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     setSession((s) => withMaskOp(target(s), op))
   }
 
-  const onAddText = (p: Pt) => setSession((s) => addEdit(s, { id: editId(), kind: 'text', text: 'Your words', x: p.x, y: p.y, size: 0.06 }))
+  const onAddText = (p: Pt) => setSession((s) => addEdit(s, { id: editId(), kind: 'text', text: '', x: p.x, y: p.y, size: 0.06 }))
   const onText = (id: string, patch: { text?: string; x?: number; y?: number }) => {
     if (patch.text !== undefined && !patch.text.trim()) setSession((s) => undoEdit(s, id))
     else setSession((s) => updateEdit(s, id, patch))

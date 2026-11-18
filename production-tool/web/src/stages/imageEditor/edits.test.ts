@@ -220,3 +220,15 @@ describe('fixes from the live test of 2026-11-17 (features/production-new-ui.cla
     expect(s.edits.map((e) => e.id)).toEqual(['w1'])
   })
 })
+
+describe('a text just placed (re-test 6c)', () => {
+  it('starts empty: it is no edit, never in the frame’s record, until it has words', () => {
+    let s = addEdit(EMPTY, { id: 't1', kind: 'text', text: '', x: 0.1, y: 0.1, size: 0.06 })
+    expect(editCount(s)).toBe(0)
+    expect(editsForFrame(s)).toEqual([])
+    expect(editLabel(s.edits[0], s)).toBe('Text · typing')
+    s = { ...s, edits: s.edits.map((e) => (e.kind === 'text' ? { ...e, text: 'Lumo.' } : e)) }
+    expect(editCount(s)).toBe(1)
+    expect(editsForFrame(s)).toEqual([{ op: 'text', params: { text: 'Lumo.' } }])
+  })
+})

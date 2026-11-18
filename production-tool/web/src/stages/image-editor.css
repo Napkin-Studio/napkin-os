@@ -85,6 +85,8 @@
   letter-spacing: -0.01em; text-shadow: 0 1px 8px rgba(20, 22, 27, 0.35); outline: none; }
 .tool-select .ie-text { cursor: move; }
 .tool-text .ie-text { outline: 1px dashed rgba(255, 255, 255, 0.8); }
+/* A text just placed is empty: "Your words" shows only as a placeholder, never as its words. */
+.ie-text:empty::before { content: attr(data-placeholder); opacity: 0.6; }
 .ie-crop { position: absolute; border: 2px solid #FFFFFF; box-shadow: 0 0 0 9999px rgba(20, 22, 27, 0.45); pointer-events: none; }
 .ie-pending { position: absolute; opacity: 0.75; pointer-events: none; border-radius: 8px; }
 /* The live stroke (Stage paintLive): a brush is drawn opaque and shown at the mask's 38%, so its

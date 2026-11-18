@@ -14,7 +14,7 @@
 // never redraws the committed masks. A running job never covers the stage: its area shows the pending
 // stripes (a fill) or a progress edge (a whole-frame job), and its status and Cancel sit in its Edits row.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { EditSession, MaskOp, Pt } from './edits'
 import { edges, rasterize, RasterCache } from './mask'
 import { compose, type Plan } from './compose'
@@ -272,6 +272,9 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
       return
     }
     const p = clamp(raw)
+    // The text tool: the mousedown's own default focus would come after the new text takes the keys, and take
+    // them back (re-test 6c: "hide me" typed at once switched the tool to Hand). The text focuses itself below.
+    if (tool === 'text') e.preventDefault()
     if (tool !== 'text') {
       // No text selection starts here, and one already on the page is let go: pressed inside a selection,
       // the browser drags it instead, cancels this pointer and the stroke is lost.
@@ -335,27 +338,25 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
   const kept = session.edits.find((e) => e.kind === 'crop' && !session.hidden.includes(e.id))
   const crop = cropDrag ? cropRect(cropDrag.a, cropDrag.b) : kept && kept.kind === 'crop' ? kept : undefined
   const texts = session.edits.filter((e) => e.kind === 'text' && !session.hidden.includes(e.id))
-  // A text just placed takes the keys, its words selected (Playwright live test 2026-11-18: focus stayed on the
-  // page, so typing "Lumo." switched to the Lasso and on).
+  // A text just placed takes the keys at once, in the same commit as the click that placed it (Playwright live
+  // test 2026-11-18: focus stayed on the page, so typing "Lumo." switched to the Lasso and on; re-test 6c: a
+  // focus on the next task still let keys typed straight away reach the tools). It starts empty, showing
+  // "Your words" only as a placeholder, so the placeholder can never be applied.
   const textEls = useRef(new Map<string, HTMLDivElement>())
   const lastText = texts.at(-1)?.id
   const seenText = useRef(lastText)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!lastText || lastText === seenText.current) return
     seenText.current = lastText
     if (tool !== 'text') return
-    // After the click that placed it: the mousedown's own default focus comes after this render, and would take it back.
-    const id = window.setTimeout(() => {
-      const el = textEls.current.get(lastText)
-      if (!el) return
-      el.focus()
-      const range = document.createRange()
-      range.selectNodeContents(el)
-      const sel = window.getSelection()
-      sel?.removeAllRanges()
-      sel?.addRange(range)
-    }, 0)
-    return () => window.clearTimeout(id)
+    const el = textEls.current.get(lastText)
+    if (!el) return
+    el.focus()
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const sel = window.getSelection()
+    sel?.removeAllRanges()
+    sel?.addRange(range)
   }, [lastText, tool])
   const pendingMask = pending ? session.edits.find((e) => e.id === pending) : undefined
   const pendingBox = useMemo(() => {
@@ -382,7 +383,7 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
         {pendingBox && <div className="ie-pending pending" style={pendingBox} aria-hidden="true" />}
         {!before && texts.map((t) => t.kind === 'text' && (
           <div key={t.id} ref={(el) => { if (el) textEls.current.set(t.id, el); else textEls.current.delete(t.id) }} className="ie-text" style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%`, fontSize: `${t.size * 100}cqh` }}
-            contentEditable={tool === 'text'} suppressContentEditableWarning spellCheck={false} role="textbox" aria-label="Text on the frame"
+            contentEditable={tool === 'text'} suppressContentEditableWarning spellCheck={false} role="textbox" aria-label="Text on the frame" data-placeholder="Your words"
             onPointerDown={(e) => {
               if (tool === 'text') e.stopPropagation() // typing on it, not a new text
               if (tool !== 'select') return
