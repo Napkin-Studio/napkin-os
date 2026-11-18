@@ -58,7 +58,8 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   DECK_TYPE_CARDS: TypeCard[]
   cardOf(id: string): TypeCard | null
   typeCaption(card: unknown): string
-  pickPatch(type: string | null, at: string): unknown
+  pickPatch(type: string | null, at: string, confirmed?: string[] | null): unknown
+  offeredCards(data: unknown): { id: string; recipe_only: boolean }[]
   builtTypeOf(data: unknown): string | null
   recordedStages(data: unknown): string[]
   changeSheet(data: unknown, type: string): { free: boolean; needs: string[]; line: string; from: string | null; to: string } | null
@@ -177,6 +178,14 @@ test('the summary comes from the inputs, never fixed numbers', () => {
   const full = L.summaryOf({ prompt: { client: 'Lumen' }, kind: 'investor', format: 'full' }, { order: [], slides: {} })
   assert.match(full.title, /investor deck/i)
   assert.match(full.note, /story order/)
+  // the length is the type's own (its recipe, through the generated card), never a fixed 18
+  assert.match(pitch.note, /^About 10 slides, usually at most 12, then a hidden appendix\./)
+  const inv = L.summaryOf({ prompt: {}, kind: 'investor', format: 'pitch' }, { order: [], slides: {} })
+  assert.match(inv.note, /^About 12 slides, usually at most 15/)
+  const tender = L.summaryOf({ prompt: {}, kind: 'agency', format: 'pitch', type: 'tender_response' }, { order: [], slides: {} })
+  assert.match(tender.note, /^At most 18 slides, then a hidden appendix/)
+  const cred = L.summaryOf({ prompt: {}, kind: 'agency', format: 'pitch', type: 'credentials' }, { order: [], slides: {} })
+  assert.match(cred.note, /^About 10 slides, usually at most 14/)
 })
 
 // ── the page ──────────────────────────────────────────────────────────────
@@ -2191,14 +2200,31 @@ test('pickPatch writes inputs.deck_type {id, by, at} for a type, null for Not su
   assert.deepEqual(plain(L.pickPatch('tender_response', '2026-11-18T10:00:00Z')), { inputs: { deck_type: { id: 'tender_response', by: 'person', at: '2026-11-18T10:00:00Z' } } })
   assert.deepEqual(plain(L.pickPatch(null, 't')), { inputs: { deck_type: null } })
   assert.equal(L.pickPatch('bogus', 't'), null)
+  // the person's yes on the Change sheet to new writing travels with the pick (only model stage ids)
+  assert.deepEqual(plain(L.pickPatch('agency_pitch', 't', ['c', 'd', 'zz'])), { inputs: { deck_type: { id: 'agency_pitch', by: 'person', at: 't', confirmed_stages: ['c', 'd'] } } })
+  assert.deepEqual(plain(L.pickPatch('agency_pitch', 't', [])), { inputs: { deck_type: { id: 'agency_pitch', by: 'person', at: 't' } } })
   // merged as the store merges it, the pick is what deckTypeOf reads, and Not sure takes it away again
   const doc = merge({ intake: { questions: [typeQ()] } }, plain(L.pickPatch('investor_seed', 't')))
   assert.equal(L.deckTypeOf(doc).source, 'picked')
   assert.equal(L.deckTypeOf(merge(doc, plain(L.pickPatch(null, 't')))).source, 'inferred')
 })
 
+/** The engine's word that it offers every type (run.types, written through the middleware): the recipes are on. */
+const ALL_TYPES = { recipes: true, offered: ['agency_pitch', 'tender_response', 'investor_seed', 'credentials', 'creative_work'] }
+
+test('a type that needs the deck recipes is shown only when the engine offers it', () => {
+  assert.deepEqual(plain(L.offeredCards({}).map(c => c.id)), ['agency_pitch', 'tender_response', 'investor_seed', 'credentials'])
+  assert.deepEqual(plain(L.offeredCards({ run: { types: { recipes: false, offered: ['agency_pitch', 'tender_response', 'investor_seed', 'credentials'] } } }).map(c => c.id)),
+    ['agency_pitch', 'tender_response', 'investor_seed', 'credentials'])
+  assert.deepEqual(plain(L.offeredCards({ run: { types: ALL_TYPES } }).map(c => c.id)), ALL_TYPES.offered)
+  assert.deepEqual(plain(L.DECK_TYPE_CARDS.filter((c: { recipe_only: boolean }) => c.recipe_only).map((c: { id: string }) => c.id)), ['creative_work'])
+  const h = pickerOf(mount({ inputs: { prompt: {} } }).app.innerHTML)
+  assert.equal(h.includes('data-dpick="creative_work"'), false)
+  assert.equal((h.match(/role="radio"/g) || []).length, 5)
+})
+
 test('Start draws six cards in a radio group, the pick checked, one mini slide per spine entry and +N for more', () => {
-  const m = mount({ inputs: { prompt: {}, deck_type: { id: 'investor_seed', by: 'person', at: 't' } } })
+  const m = mount({ inputs: { prompt: {}, deck_type: { id: 'investor_seed', by: 'person', at: 't' } }, run: { state: 'draft', stages: [], gate: null, types: ALL_TYPES } })
   const h = pickerOf(m.app.innerHTML)
   assert.ok(h.includes('<div class="dtypes" role="radiogroup" aria-label="What kind of deck?">'))
   assert.equal((h.match(/role="radio"/g) || []).length, 6)
@@ -2302,9 +2328,12 @@ test('with a deck built, a different type shows the Change sheet first and write
   m.click({ dcancel: '1' })
   assert.equal(m.app.innerHTML.includes('data-change-sheet'), false)
   m.click({ dpick: 'investor_seed' })
+  assert.ok(m.app.innerHTML.includes('data-dconfirm="investor_seed">Yes, write it: change to investor deck</button>'))
   m.click({ dconfirm: 'investor_seed' })
   assert.equal(m.writes.length, 1)
-  assert.equal((m.writes[0].obj as { inputs: { deck_type: { id: string } } }).inputs.deck_type.id, 'investor_seed')
+  const dt = (m.writes[0].obj as { inputs: { deck_type: { id: string; confirmed_stages?: string[] } } }).inputs.deck_type
+  assert.equal(dt.id, 'investor_seed')
+  assert.deepEqual(plain(dt.confirmed_stages), ['i'], 'the yes to the new writing goes with the pick: the engine refuses the change without it')
   // the type it was built as is picked straight away: nothing changes
   const same = mount(fixture('done')); same.click({ go: 'start' }); same.click({ dpick: 'agency_pitch' })
   assert.equal(same.writes.length, 1)

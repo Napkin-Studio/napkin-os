@@ -567,11 +567,14 @@ def chosen_type(inp, flag: str | None = None, pick: str | None = None) -> dict:
     3. ``inferred`` (deck-types, only with the recipes on): a skipped or unasked question, and the inputs point at one type with high
        confidence (score >= 5, no tie), stamped with the quoted words;
     4. ``skipped`` (they skipped it, or typed something naming no type) or ``default`` (nobody was asked): agency_pitch."""
+    for tid in ([profiles.for_kind(flag)["id"]] if flag else []) + ([pick] if pick else []):
+        if tid not in profiles.ids():
+            raise profiles.ProfileError(f"no deck type {tid!r}: known types are {', '.join(profiles.ids())}")
+        if tid not in profiles.offered():   # a type that joined with the recipes is refused while they are off (no half-built type)
+            raise profiles.ProfileError(f"the deck type {tid} needs the deck recipes (DECK_RECIPES=1 with DECK_LOOK_V3=1), which are off")
     if flag:
         return {"type": profiles.for_kind(flag)["id"], "source": "flag", "note": f"--kind {flag}"}
     if pick:
-        if pick not in profiles.ids():
-            raise profiles.ProfileError(f"no deck type {pick!r}: known types are {', '.join(profiles.ids())}")
         return {"type": pick, "source": "pick", "note": f"the person picked {pick} on the type picker"}
     a = (inp.answers or {}).get(TYPE_QUESTION_ID)
     if isinstance(a, dict) and not a.get("skipped"):

@@ -66,6 +66,19 @@
             "at": {
               "type": "string",
               "description": "When the pick was made (ISO 8601)."
+            },
+            "confirmed_stages": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "i"
+                ]
+              },
+              "description": "The person's yes on the Change sheet to the new writing a type change needs (the model stages it runs). Without it a change that needs a stage not yet recorded is refused (409 needs_stages) before anything runs or spends."
             }
           }
         },
@@ -684,6 +697,21 @@
                 "enum": [
                   "waiting"
                 ]
+              }
+            }
+          }
+        },
+        "types": {
+          "type": "object",
+          "description": "deck-types, written by the engine: which deck types it offers. recipes: whether DECK_RECIPES (with DECK_LOOK_V3) is on; offered: the type ids the picker may show (a type that joined with the recipes is hidden while they are off).",
+          "properties": {
+            "recipes": {
+              "type": "boolean"
+            },
+            "offered": {
+              "type": "array",
+              "items": {
+                "type": "string"
               }
             }
           }

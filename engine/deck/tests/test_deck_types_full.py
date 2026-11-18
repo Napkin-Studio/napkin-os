@@ -298,7 +298,10 @@ def test_with_the_recipes_off_a_skipped_question_stays_the_default(monkeypatch):
     tender = "An invitation to tender with scoring criteria."
     assert intake.chosen_type(_prompt(tender))["source"] == "default"
     assert intake.chosen_type(_prompt(tender, {"q_deck_type": {"skipped": True}}))["source"] == "skipped"
-    assert intake.chosen_type(_prompt(tender), None, "creative_work")["source"] == "pick"   # a document's pick works with the flag off
+    assert intake.chosen_type(_prompt(tender), None, "credentials")["source"] == "pick"   # a document's pick works with the flag off
+    for flag, pick in ((None, "creative_work"), ("creative", None)):   # a type that joined with the recipes is refused while they are off
+        with pytest.raises(profiles.ProfileError, match="needs the deck recipes"):
+            intake.chosen_type(_prompt(tender), flag, pick)
 
 
 def test_a_pick_frees_the_type_questions_place():
@@ -479,3 +482,130 @@ def test_recipes_on_golden(monkeypatch, name, folder, pid):
         path.parent.mkdir(exist_ok=True)
         path.write_text(json.dumps(got, indent=1, ensure_ascii=False) + "\n")
     assert got == json.loads(path.read_text())
+
+
+# ---------------------------------------------------------------- review fixes: the pick end to end through the engine server (server.py)
+
+FERN = FIX / "fernley"
+SRV_INPUTS = {"prompt": {"text": (FERN / "prompt.txt").read_text().strip(), "client": "Fernley Drinks Ltd (FICTIONAL)", "project": "Fernley Tea 2027",
+                         "agency": ""}, "kind": "agency", "format": "pitch"}
+
+
+def _server(tmp_path, monkeypatch):
+    """An engine server replaying the Fernley recording; each segment is recorded, not run (no thread, no engine)."""
+    cfg = server.Settings({"NAPKIN_DECK_DATA": str(tmp_path / "runs"), "NAPKIN_DECK_REPLAY": str(FERN / "stages"), "NAPKIN_DECK_PORT": "0"})
+    s = server.Server(cfg)
+    ran = []
+
+    def segment(self, d, req, until):
+        self.seed(d, req, until)   # what a replay segment writes into the shared stages folder
+        ran.append({"type": req["type"], "until": until, "confirm": req.get("confirm"), "folder": d.folder})
+        with self.lock:
+            self.busy = None
+    monkeypatch.setattr(server.Server, "segment", segment)
+    import threading as _th
+    monkeypatch.setattr(server, "threading", SimpleNamespace(Thread=lambda target, args, **kw: SimpleNamespace(start=lambda: target(*args)), RLock=_th.RLock))
+    return s, ran
+
+
+#: Every gate approved: a segment then runs on as far as the recorded stages allow (a type change is checked first either way).
+ALL_GATES = {g: {"by": "human:sai", "at": "t", "decision": "approve"} for g in ("storyline", "territories", "idea")}
+
+
+def _req(deck_type=None, approvals=None, **inp):
+    i = {**SRV_INPUTS, **inp}
+    if deck_type is not None:
+        i["deck_type"] = deck_type
+    return {"doc": "doc1", "inputs": i, "approvals": approvals or {}, "mode": "replay", "render": False}
+
+
+def test_a_type_change_is_free_from_the_shared_stages_and_needs_a_yes_for_new_writing(tmp_path, monkeypatch):
+    s, ran = _server(tmp_path, monkeypatch)
+    s.run(_req({"id": "credentials", "by": "person", "at": "t"}))   # first run: credentials (a0, a, b) up to its one gate
+    assert ran[-1]["type"] == "credentials" and ran[-1]["until"] == "b"   # credentials has no territories or idea gate
+    s.run(_req({"id": "credentials", "by": "person", "at": "t"}))   # the same type again: held at its gate, nothing to check
+    assert server.inputs_key(_req({"id": "credentials"})["inputs"]) == server.inputs_key(_req()["inputs"]) == server.inputs_key(_req({"id": "agency_pitch"})["inputs"])
+    with pytest.raises(server.Refused) as e:   # credentials -> agency pitch needs the routes and the idea: refused before anything runs
+        s.run(_req({"id": "agency_pitch", "by": "person", "at": "t2"}))
+    assert e.value.status == 409 and e.value.kind == "needs_stages" and e.value.extra == {"stages": ["c", "d"], "to": "agency_pitch"}
+    assert "the routes, the idea and executions" in e.value.message and "pictures are kept" in e.value.message
+    n = len(ran)
+    s.run(_req({"id": "agency_pitch", "by": "person", "at": "t2", "confirmed_stages": ["c", "d"]}, ALL_GATES))   # the person's yes on the Change sheet
+    assert len(ran) == n + 1 and ran[-1]["confirm"] is True and ran[-1]["folder"] == ran[0]["folder"]   # the same stages folder
+    for fn in ("c_territories.json", "d_idea.json"):   # the replay wrote the new stages into it
+        (ran[0]["folder"] / "stages" / fn).write_bytes((FERN / "stages" / fn).read_bytes())
+    s.run(_req({"id": "credentials", "by": "person", "at": "t3"}, ALL_GATES))   # back to credentials: everything it runs is recorded, so it is free
+    assert ran[-1]["confirm"] is False and ran[-1]["type"] == "credentials"
+    s.run(_req({"id": "tender_response", "by": "person", "at": "t4"}, ALL_GATES))   # tender runs a b c d, all recorded: free, no yes needed
+    assert ran[-1]["type"] == "tender_response" and ran[-1]["confirm"] is False
+
+
+def test_the_confirmation_reaches_run_deck_and_the_pick_replaces_the_kind(tmp_path, monkeypatch):
+    s, _ = _server(tmp_path, monkeypatch)
+    seen = []
+    monkeypatch.setattr(server.run_deck, "main", lambda argv: seen.append(list(argv)) or {})
+    d = server.Doc(tmp_path / "doc", "doc")
+    d.folder = tmp_path / "doc" / "k"
+    req = server.validate_request(_req({"id": "tender_response", "by": "person", "at": "t"}), s.s)
+    req["confirm"] = True
+    s.call_engine(d, req, None)
+    argv = seen[-1]
+    assert argv[argv.index("--type") + 1] == "tender_response" and "--kind" not in argv and "--confirm-stages" in argv
+    plain = server.validate_request(_req(), s.s)
+    s.call_engine(d, plain, None)
+    assert seen[-1][seen[-1].index("--kind") + 1] == "agency" and "--type" not in seen[-1] and "--confirm-stages" not in seen[-1]
+
+
+def test_a_tender_pick_builds_with_the_tender_profile_end_to_end(tmp_path, monkeypatch):
+    """App -> middleware -> engine: the body the middleware sends for a document whose inputs.deck_type is a tender (server/tests/test_deck.py
+    checks that the middleware forwards it) reaches run_deck as --type, and the deck is built and stamped as a tender response."""
+    s, _ = _server(tmp_path, monkeypatch)
+    seen = []
+    monkeypatch.setattr(server.run_deck, "main", lambda argv: seen.append(list(argv)) or {})
+    body = _req({"id": "tender_response"})   # the middleware's forward: {id} (and confirmed_stages when there are any)
+    req = server.validate_request(body, s.s)
+    assert req["kind"] == "agency" and req["type"] == "tender_response" and req["type_stages"] == profiles.load("tender_response")["stages"]
+    d = server.Doc(tmp_path / "doc", "doc")
+    d.folder = tmp_path / "doc" / "k"
+    s.call_engine(d, req, None)
+    argv = seen[-1]
+    monkeypatch.undo()   # the real run_deck from here
+    stages_dir = tmp_path / "stages"
+    import shutil
+    shutil.copytree(FERN / "stages", stages_dir)
+    argv[argv.index("--stages") + 1] = str(stages_dir)
+    argv[argv.index("--out") + 1] = str(tmp_path / "out")
+    argv = [a for a in argv if a != "--live"] + (["--until", "deck"] if "--until" not in argv else [])
+    rep = run_deck.main(argv)
+    deck = json.loads((tmp_path / "out" / "deck.json").read_text())
+    assert rep["type"]["id"] == "tender_response" and rep["type"]["source"] == "pick"
+    assert deck["meta"]["built_from"]["type"] == "tender_response" and deck["meta"]["profile"]["source"] == "pick"
+    assert "scoring" in [deck["slides"][x]["type"] for x in deck["order"]]   # the tender spine: the response map comes second
+
+
+def test_a_type_that_needs_the_recipes_is_hidden_and_refused_while_they_are_off(tmp_path, monkeypatch):
+    s, _ = _server(tmp_path, monkeypatch)
+    _on(monkeypatch, recipes=False)
+    assert "creative_work" not in s.status()["types"]["offered"] and s.status()["types"]["recipes"] is False
+    with pytest.raises(server.Refused) as e:
+        server.validate_request(_req({"id": "creative_work"}), s.s)
+    assert e.value.status == 400 and e.value.kind == "type_off"
+    with pytest.raises(SystemExit, match="needs the deck recipes"):
+        run_deck.main(["--prompt-text", "x", "--stages", str(tmp_path / "st"), "--client", "c", "--project", "p", "--out", str(tmp_path / "o"),
+                       "--type", "creative_work", "--until", "deck"])
+    _on(monkeypatch)
+    assert "creative_work" in s.status()["types"]["offered"] and s.status()["types"]["recipes"] is True
+    assert server.validate_request(_req({"id": "creative_work"}), s.s)["type"] == "creative_work"
+
+
+def test_the_engines_view_tells_the_app_which_types_it_offers(tmp_path, monkeypatch):
+    s, _ = _server(tmp_path, monkeypatch)
+    s.run(_req())
+    v = s.get("doc1")
+    assert v["run"]["types"] == server.type_offers()
+
+
+def test_without_a_pick_the_server_plans_as_before(tmp_path):
+    assert server.plan_for("agency") == server.PLAN["agency"] and server.plan_for("investor") == server.PLAN["investor"]
+    assert server.plan_for("agency", profiles.load("credentials")["stages"]) == [("b", "storyline")]
+    assert server.plan_for("agency", profiles.load("agency_pitch")["stages"]) == server.PLAN["agency"]

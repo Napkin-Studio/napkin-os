@@ -14,3 +14,5 @@ Rules the view and any agent keep:
 - What only the user knows (presenter, budget split, agency name) stays a labelled placeholder such as `[Agency]`. It is never made up and the view has no way to fill it for the user.
 - A gate (storyline, territory, idea) stops the run until a person approves. Approve, edit and retry are each one attributed decision. Nothing past an open gate runs.
 - Optional team-library inputs (brand kit, pictures) stay off until ADR 0027 is approved.
+
+The picker shows a type that needs the deck recipes (`recipe_only` on its card, today creative_work) only when the engine's `run.types.offered` names it. A confirmed Change sheet that needs new writing writes `inputs.deck_type.confirmed_stages`; without it the engine refuses the change (409 needs_stages) before anything runs.

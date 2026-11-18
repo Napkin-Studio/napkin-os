@@ -64,9 +64,10 @@ CONTENT = {".html": "text/html; charset=utf-8", ".pptx": "application/vnd.openxm
 class Refused(Exception):
     """A request the server will not run: carries the HTTP status and an error type for the caller."""
 
-    def __init__(self, status: int, kind: str, message: str):
+    def __init__(self, status: int, kind: str, message: str, extra: dict | None = None):
         super().__init__(message)
         self.status, self.kind, self.message = status, kind, message
+        self.extra = dict(extra or {})   # deck-types: what the caller needs to act (needs_stages: the stages to confirm)
 
 
 class Cap:
@@ -111,8 +112,8 @@ def inputs_key(inp: dict) -> str:
     p = inp.get("prompt") or {}
     key = {"p": [p.get("text", ""), p.get("client", ""), p.get("project", ""), p.get("agency", "")],
            "k": inp.get("kind", "agency"), "f": inp.get("format", "pitch")}
-    if picked_type(inp):   # deck-types: a picked type is an input too (absent: the key is today's, so existing caches stay)
-        key["t"] = picked_type(inp)
+    # deck-types: the picked type is NOT part of the key. Types of one assembler share their recorded stages, so a type change re-arranges
+    # from them for free; one that needs a stage they lack is caught by Server.run (409 needs_stages) before anything runs.
     blob = json.dumps(key, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
@@ -122,6 +123,19 @@ def picked_type(inp: dict) -> str | None:
     v = inp.get("deck_type")
     pid = v.get("id") if isinstance(v, dict) else None
     return pid if isinstance(pid, str) and pid else None
+
+
+def confirmed_stages(body: dict, inp: dict) -> set:
+    """deck-types: the model stages the person said yes to on the Change sheet (``inputs.deck_type.confirmed_stages``, or the request's own
+    ``confirm_stages``): a type change that needs them runs them; one that needs any other is refused (409 needs_stages)."""
+    v = inp.get("deck_type") if isinstance(inp.get("deck_type"), dict) else {}
+    got = list(v.get("confirmed_stages") or []) + list(body.get("confirm_stages") or [])
+    return {s for s in got if isinstance(s, str)}
+
+
+def type_offers() -> dict:
+    """deck-types: what the picker may offer on this engine: ``{recipes, offered}`` (the types the recipes flag allows; profiles.offered)."""
+    return {"recipes": profiles.recipes_on(), "offered": profiles.offered()}
 
 
 def out_key(inp: dict) -> str:
@@ -150,7 +164,9 @@ def validate_request(body: dict, settings: Settings) -> dict:
     if picked_type(inp):
         if picked_type(inp) not in profiles.ids():
             raise Refused(400, "bad_request", f"inputs.deck_type.id must be one of {', '.join(profiles.ids())}")
-        kind = profiles.load(picked_type(inp))["kind"]   # the pick names the assembler, so the gate plan follows it
+        if picked_type(inp) not in profiles.offered():   # a type that joined with the recipes is refused while they are off
+            raise Refused(400, "type_off", f"the deck type {picked_type(inp)} needs the deck recipes (DECK_RECIPES and DECK_LOOK_V3), which are off on this engine")
+        kind = profiles.load(picked_type(inp))["kind"]   # the pick names the assembler, so the gate plan (and the --production guard) follow it
     if not str(prompt.get("text") or "").strip():
         raise Refused(400, "no_inputs", "give the deck something to build from: the prompt text is empty")
     mode = body.get("mode") or ("live" if settings.live and not settings.replay else "replay")
@@ -171,15 +187,23 @@ def validate_request(body: dict, settings: Settings) -> dict:
         d = (a or {}).get("decision", "approve")
         if d != "approve":
             raise Refused(400, "not_supported", f"a '{d}' decision at the {gate} gate is recorded but the engine cannot act on it yet: only approve goes on")
+    prof = profiles.load(picked_type(inp)) if picked_type(inp) else profiles.default_for_kind(kind)
     return {"doc": doc, "inputs": inp, "prompt": prompt, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
+            "type": prof["id"], "picked": bool(picked_type(inp)), "type_stages": list(prof["stages"]), "confirmed": confirmed_stages(body, inp),
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or "")}
 
 
-def plan_segment(kind: str, present: set[str], approvals: dict) -> tuple[str | None, str | None]:
+def plan_for(kind: str, stages: list | None = None) -> list:
+    """The gates a run holds at: PLAN[kind], cut to the stages the deck type runs (a credentials deck writes no territories or idea, so it
+    has no gate 2 or 3). With no type given it is PLAN[kind], as before deck types."""
+    return [(s, g) for s, g in PLAN[kind] if stages is None or s in stages]
+
+
+def plan_segment(kind: str, present: set[str], approvals: dict, stages: list | None = None) -> tuple[str | None, str | None]:
     """How far to run: (until, held). ``until`` is the stage to stop after (None: the last segment); ``held`` a gate already waiting.
     A gate goes on only when the person approved it AND its stage output existed already, so an old approval never skips a new gate."""
-    for stage, gate in PLAN[kind]:
+    for stage, gate in plan_for(kind, stages):
         fn = STAGE_FILES[stage][0]
         if fn not in present:
             return stage, None
@@ -224,7 +248,8 @@ class Server:
 
     # -- routes --
     def status(self) -> dict:
-        return {"ok": True, "live": self.s.live, "replay": bool(self.s.replay and self.s.replay.is_dir()), "max_usd": self.s.max_usd, "busy": self.busy}
+        return {"ok": True, "live": self.s.live, "replay": bool(self.s.replay and self.s.replay.is_dir()), "max_usd": self.s.max_usd, "busy": self.busy,
+                "types": type_offers()}
 
     def run(self, body: dict) -> dict:
         req = validate_request(body, self.s)
@@ -237,7 +262,8 @@ class Server:
             d.stages.mkdir(parents=True, exist_ok=True)
             d.req, d.notices, d.error, d.pay = req, [], None, None
             present = {p.name for p in d.stages.glob("*.json")}
-            until, held = plan_segment(req["kind"], present, req["approvals"])
+            self.check_type_change(d, req, present)   # deck-types: before anything runs or spends
+            until, held = plan_segment(req["kind"], present, req["approvals"], req.get("type_stages"))
             self.apply_pick(d, req, present)
             if held:
                 d.state, d.held, d.current = "gate", held, None
@@ -256,6 +282,28 @@ class Server:
             d.thread = threading.Thread(target=self.segment, args=(d, req, until), daemon=True, name=f"deck-{d.name}")
             d.thread.start()
             return self.view(d)
+
+    def check_type_change(self, d: Doc, req: dict, present: set) -> None:
+        """deck-types (design.precedence.changing_later): a change of deck type from the one this document last ran is free when the stages the
+        new type runs are recorded (here, in the shared stages folder): it re-arranges and re-plans them, no model call. One that needs a model
+        stage not recorded is refused with 409 needs_stages, naming them, unless the person confirmed exactly those stages on the Change sheet
+        (inputs.deck_type.confirmed_stages); then it runs them and run_deck gets --confirm-stages. Pictures are never re-made either way.
+        A first run (no type recorded for the document) is not a change. The type each run used is kept in <doc>/type.json."""
+        mark = self.s.data / req["doc"] / "type.json"
+        last = (json.loads(mark.read_text()).get("type") if mark.exists() else None)
+        files = {**{k: v[0] for k, v in STAGE_FILES.items() if k != "final"}}
+        recorded = {k for k, fn in files.items() if fn in present}
+        needs = [s for s in req["type_stages"] if s not in profiles.CHANGE_OPTIONAL and s not in recorded]
+        req["confirm"] = False
+        if last and last != req["type"] and needs:
+            if not set(needs) <= req["confirmed"]:
+                label = profiles.load(req["type"])["label"]
+                words = ", ".join(profiles.STAGE_WORDS.get(s, s) for s in needs)
+                raise Refused(409, "needs_stages", f"changing this deck to {'an' if label[0].lower() in 'aeiou' else 'a'} {label.lower()} needs new writing: "
+                                                   f"{words}. Confirm it on the type picker (Change); pictures are kept", {"stages": needs, "to": req["type"]})
+            req["confirm"] = True
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.write_text(json.dumps({"type": req["type"]}))
 
     def get(self, doc: str) -> dict:
         d = self.docs.get(safe_name(doc))
@@ -286,6 +334,7 @@ class Server:
                             written=[f"{k}" for k in (d.pay or {}).get("exports", {})], done=(d.pay or {}).get("done"))
         if d.images and d.state == "done":
             run = {**run, "images": d.images}
+        run = {**run, "types": type_offers()}   # deck-types: which types this engine offers (the picker hides one that needs the recipes while they are off)
         out = {"doc": d.name, "state": d.state, "run": run, "notices": list(d.notices), "mode": d.req["mode"] if d.req else None}
         if d.state == "done" and d.pay:
             out["payload"] = d.pay
@@ -331,7 +380,7 @@ class Server:
             rep = self.call_engine(d, req, until)
             with self.lock:
                 if until:
-                    d.state, d.held = "gate", next(g for s, g in PLAN[req["kind"]] if s == until)
+                    d.state, d.held = "gate", next(g for s, g in plan_for(req["kind"], req.get("type_stages")) if s == until)
                 else:
                     d.pay = rs.payload(d.out, rep, inp, live=req["mode"] == "live")
                     d.state, d.held = "done", None
@@ -392,6 +441,8 @@ class Server:
             argv += ["--text-mode", inp["text_mode"]]
         # deck-types: the picker's pick is passed as --type (a --kind would outrank it); with no pick the kind is passed as before
         argv += ["--type", picked_type(inp)] if picked_type(inp) else ["--kind", req["kind"]]
+        if req.get("confirm"):   # the person confirmed the new writing this type change needs (check_type_change)
+            argv.append("--confirm-stages")
         if isinstance(inp.get("review"), dict) and inp["review"].get("pinned"):
             rv = d.out / "review.json"
             rv.parent.mkdir(parents=True, exist_ok=True)
@@ -514,7 +565,7 @@ def make_handler(server: Server):
             try:
                 fn()
             except Refused as e:
-                self.json(e.status, {"error": {"type": e.kind, "message": e.message}})
+                self.json(e.status, {"error": {"type": e.kind, "message": e.message, **e.extra}})
             except Exception as e:   # noqa: BLE001
                 traceback.print_exc()
                 self.json(500, {"error": {"type": "server_error", "message": f"{type(e).__name__}: {e}"}})

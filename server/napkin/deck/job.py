@@ -27,7 +27,7 @@ from . import engine as eng
 log = logging.getLogger("napkin.deck")
 
 #: The run keys the middleware writes. The app writes the others (approvals, decisions, gate_requests): never touched here.
-RUN_OWNED = ("state", "stage", "stages", "gate", "agent", "checks", "error", "done", "cost_usd", "images")
+RUN_OWNED = ("state", "stage", "stages", "gate", "agent", "checks", "error", "done", "cost_usd", "images", "types")
 #: Written whole once the deck is built.
 PAYLOAD = ("deck", "validation", "evidence", "report", "exports", "qa", "repair")
 #: Seconds between polls of the engine, and the longest a segment may take (a high-effort stage can run for minutes).

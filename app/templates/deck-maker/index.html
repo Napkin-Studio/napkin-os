@@ -563,9 +563,12 @@ var DeckLogic = (function () {
     var kind = inputs.kind === 'investor' ? 'An investor deck' : 'An agency pitch';
     var known = inputs.type && typeById(inputs.type);
     if (known) kind = known.article;
+    // deck-types: the length comes from the type's own recipe (its card): its target and usual cap, or the most a tender may present
+    var card = cardOf(known ? known.id : (inputs.kind === 'investor' ? 'investor_seed' : DEFAULT_TYPE)) || {};
     var size = inputs.format === 'full'
       ? 'Every slide in story order'
-      : 'At most 18 slides, then a hidden appendix';
+      : (card.target != null && card.cap != null ? 'About ' + card.target + ' slides, usually at most ' + card.cap + ', then a hidden appendix'
+        : 'At most ' + (card.max || 18) + ' slides, then a hidden appendix');
     var n = presented(deck).length;
     return {
       title: kind + ' for ' + (inputs.prompt.client || '[Client]'),
@@ -583,11 +586,11 @@ var DeckLogic = (function () {
   /** deck-types: one card per deck type, generated from the engine's profiles (profiles.card_data): label, one line, kind, length, size,
    *  pictures and the presented spine with each slide's layout purpose. A test fails when this block and the profiles differ. */
   var DECK_TYPE_CARDS = /* @generated deck-type-cards (python3 -m deck.profiles cards, from engine/): do not edit by hand */ [
-{"id":"agency_pitch","label":"Agency pitch","one_line":"An agency answers a client's brief with strategy, one idea, a plan and a price; the default.","kind":"agency","flag":"agency","default_format":"pitch","target":10,"cap":12,"max":18,"size":"16:9","pictures":"many","stages":["a","b","c","d"],"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"},{"type":"measurement","section":"Measurement","purpose":"list"},{"type":"team","section":"Team and work","purpose":"list"},{"type":"investment","section":"Timeline and investment","purpose":"title"}],"more":0},
-{"id":"tender_response","label":"Tender response","one_line":"A public or large buyer scores your answer against published criteria; compliance first.","kind":"agency","flag":"tender","default_format":"pitch","target":null,"cap":null,"max":18,"size":"16:9","pictures":"none generated","stages":["a","b","c","d"],"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"scoring","section":"Your brief","purpose":"data"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"criterion_answer","section":"Our answers","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"image"},{"type":"chart","section":"The real question","purpose":"data"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"statement"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"}],"more":9},
-{"id":"investor_seed","label":"Investor deck","one_line":"A company raises a seed round: problem, why now, traction, market and the ask.","kind":"investor","flag":"investor","default_format":"pitch","target":12,"cap":15,"max":18,"size":"16:9","pictures":"few","stages":["i"],"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"problem","section":"The problem","purpose":"statement"},{"type":"why_now","section":"Why now","purpose":"list"},{"type":"solution","section":"Solution","purpose":"statement"},{"type":"product","section":"Product","purpose":"image"},{"type":"market","section":"Market","purpose":"data"},{"type":"traction","section":"Traction","purpose":"data"},{"type":"competition","section":"Competition","purpose":"compare"},{"type":"financials","section":"Financials","purpose":"data"},{"type":"founders","section":"Team","purpose":"people"},{"type":"ask","section":"The ask","purpose":"list"}],"more":1},
-{"id":"credentials","label":"Credentials deck","one_line":"A short deck for a chemistry meeting: team and proof first, how we work, questions for you.","kind":"agency","flag":"credentials","default_format":"pitch","target":10,"cap":14,"max":14,"size":"16:9","pictures":"cover only","stages":["a","b"],"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"team","section":"Team and work","purpose":"people"},{"type":"credentials","section":"Team and work","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"process","section":"How it runs","purpose":"timeline"},{"type":"guardrails","section":"How it runs","purpose":"list"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0},
-{"id":"creative_work","label":"Creative work session","one_line":"Routes shown for the client's reaction before a pitch: a tissue session, no price and no team.","kind":"agency","flag":"creative","default_format":"pitch","target":12,"cap":16,"max":18,"size":"16:9","pictures":"many","stages":["a","b","c","d"],"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"territory","section":"Territories","purpose":"statement"},{"type":"territory_choice","section":"Territories","purpose":"list"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0}
+{"id":"agency_pitch","label":"Agency pitch","one_line":"An agency answers a client's brief with strategy, one idea, a plan and a price; the default.","kind":"agency","flag":"agency","default_format":"pitch","target":10,"cap":12,"max":18,"size":"16:9","pictures":"many","stages":["a","b","c","d"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"},{"type":"measurement","section":"Measurement","purpose":"list"},{"type":"team","section":"Team and work","purpose":"list"},{"type":"investment","section":"Timeline and investment","purpose":"title"}],"more":0},
+{"id":"tender_response","label":"Tender response","one_line":"A public or large buyer scores your answer against published criteria; compliance first.","kind":"agency","flag":"tender","default_format":"pitch","target":null,"cap":null,"max":18,"size":"16:9","pictures":"none generated","stages":["a","b","c","d"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"scoring","section":"Your brief","purpose":"data"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"criterion_answer","section":"Our answers","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"image"},{"type":"chart","section":"The real question","purpose":"data"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"statement"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"}],"more":9},
+{"id":"investor_seed","label":"Investor deck","one_line":"A company raises a seed round: problem, why now, traction, market and the ask.","kind":"investor","flag":"investor","default_format":"pitch","target":12,"cap":15,"max":18,"size":"16:9","pictures":"few","stages":["i"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"problem","section":"The problem","purpose":"statement"},{"type":"why_now","section":"Why now","purpose":"list"},{"type":"solution","section":"Solution","purpose":"statement"},{"type":"product","section":"Product","purpose":"image"},{"type":"market","section":"Market","purpose":"data"},{"type":"traction","section":"Traction","purpose":"data"},{"type":"competition","section":"Competition","purpose":"compare"},{"type":"financials","section":"Financials","purpose":"data"},{"type":"founders","section":"Team","purpose":"people"},{"type":"ask","section":"The ask","purpose":"list"}],"more":1},
+{"id":"credentials","label":"Credentials deck","one_line":"A short deck for a chemistry meeting: team and proof first, how we work, questions for you.","kind":"agency","flag":"credentials","default_format":"pitch","target":10,"cap":14,"max":14,"size":"16:9","pictures":"cover only","stages":["a","b"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"team","section":"Team and work","purpose":"people"},{"type":"credentials","section":"Team and work","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"process","section":"How it runs","purpose":"timeline"},{"type":"guardrails","section":"How it runs","purpose":"list"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0},
+{"id":"creative_work","label":"Creative work session","one_line":"Routes shown for the client's reaction before a pitch: a tissue session, no price and no team.","kind":"agency","flag":"creative","default_format":"pitch","target":12,"cap":16,"max":18,"size":"16:9","pictures":"many","stages":["a","b","c","d"],"recipe_only":true,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"territory","section":"Territories","purpose":"statement"},{"type":"territory_choice","section":"Territories","purpose":"list"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0}
 ] /* @end deck-type-cards */;
   /** The five deck types, from the generated cards (never a second hand-written copy): id, label, one line and kind, plus the words the
    *  view uses around the label (`looks`: 'a tender response', `article`: 'A tender response'), derived from the label. */
@@ -705,9 +708,25 @@ var DeckLogic = (function () {
    * The patch for a pick on the type picker: { inputs: { deck_type: { id, by: 'person', at } } }, or for 'Not sure'
    * { inputs: { deck_type: null } } (no pick: the answer, the inference or the default decides). Null for an unknown id.
    */
-  function pickPatch(typeId, at) {
+  function pickPatch(typeId, at, confirmed) {
     if (typeId === null) return { inputs: { deck_type: null } };
-    return typeById(typeId) ? { inputs: { deck_type: { id: typeId, by: 'person', at: at } } } : null;
+    if (!typeById(typeId)) return null;
+    var rec = { id: typeId, by: 'person', at: at };
+    // The person's yes on the Change sheet to the new writing a type change needs: without it the engine refuses the change (409 needs_stages).
+    var conf = (Array.isArray(confirmed) ? confirmed : []).filter(function (st) { return own(STAGE_WORDS, st); });
+    if (conf.length) rec.confirmed_stages = conf;
+    return { inputs: { deck_type: rec } };
+  }
+
+  /**
+   * The cards the picker shows: every generated card, except a type that joined with the deck recipes (recipe_only) unless the engine
+   * said it offers it (run.types.offered, written by the engine through the middleware). Before the engine has said anything, such a
+   * type is hidden: the safe side, since an engine with the recipes off refuses it.
+   */
+  function offeredCards(data) {
+    var ty = data && isObj(data.run) && isObj(data.run.types) ? data.run.types : null;
+    var offered = ty && Array.isArray(ty.offered) ? ty.offered : null;
+    return DECK_TYPE_CARDS.filter(function (c) { return !c.recipe_only || (offered && offered.indexOf(c.id) >= 0); });
   }
 
   /** What each model stage writes, in the Change sheet's words (engine profiles.STAGE_WORDS). */
@@ -1575,7 +1594,7 @@ var DeckLogic = (function () {
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
-    DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, pickPatch: pickPatch, builtTypeOf: builtTypeOf,
+    DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
     recordedStages: recordedStages, changeSheet: changeSheet,
     researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
@@ -1812,7 +1831,7 @@ var DeckLogic = (function () {
   function typePicker(s, format) {
     var t = L.deckTypeOf(s.raw), on = shownType(t), ask = view.typeAsk && L.cardOf(view.typeAsk) ? view.typeAsk : null;
     var tagOf = { picked: 'Your pick', answered: 'Your choice', inferred: 'Suggested' };
-    var cards = L.DECK_TYPE_CARDS.map(function (c) {
+    var cards = L.offeredCards(s.raw).map(function (c) {
       var sel = on === c.id;
       return '<button type="button" class="dtc' + (ask === c.id ? ' asking' : '') + '" role="radio" aria-checked="' + sel + '" tabindex="' + (sel ? 0 : -1) + '" data-dpick="' + esc(c.id) + '">' +
         '<span class="dtc-h"><b>' + esc(c.label) + '</b>' + (sel ? '<span class="tag">' + tagOf[t.source] + '</span>' : '') + '</span>' +
@@ -1834,7 +1853,7 @@ var DeckLogic = (function () {
       var cs = L.changeSheet(s.raw, ask), lab = L.cardOf(ask).label, was = L.cardOf(L.builtTypeOf(s.raw) || t.id);
       sheet = '<div class="sheet" data-change-sheet role="group" aria-label="Change the deck type"><div class="eyebrow">Change sheet</div>' +
         '<p class="sheet-l"><b>' + esc('Change to ' + lab + '?') + '</b> ' + esc(cs.line) + '</p>' +
-        '<div class="row" style="margin-top:10px"><button type="button" class="btn sm dark" data-dconfirm="' + esc(ask) + '">' + esc('Change to ' + lab.toLowerCase()) + '</button>' +
+        '<div class="row" style="margin-top:10px"><button type="button" class="btn sm dark" data-dconfirm="' + esc(ask) + '">' + esc((cs.free ? 'Change to ' : 'Yes, write it: change to ') + lab.toLowerCase()) + '</button>' +
         '<button type="button" class="btn sm" data-dcancel="1">' + esc('Keep ' + (was ? was.label.toLowerCase() : 'this type')) + '</button></div></div>';
     }
     var hints = L.typeHints(t.id);
@@ -2533,7 +2552,8 @@ var DeckLogic = (function () {
       // A deck already built as another type: the Change sheet says what will happen, and nothing is written until it is confirmed.
       if (!a.dconfirm && want && built && want !== built && !(cur.source === 'picked' && cur.id === want)) { view.typeAsk = want; return render(); }
       view.typeAsk = null;
-      var pp = L.pickPatch(want, now());
+      var cs = a.dconfirm && want ? L.changeSheet(s.raw, want) : null;   // a confirmed change that needs new writing carries the person's yes to it
+      var pp = L.pickPatch(want, now(), cs && !cs.free ? cs.needs : null);
       if (!pp) return render();
       // 'Not sure' after an answer to q_deck_type clears that answer too, so the brief decides, as the card says.
       if (want === null && cur.source === 'answered') pp.intake = { answers: { q_deck_type: null } };

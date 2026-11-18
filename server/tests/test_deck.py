@@ -305,3 +305,29 @@ def test_the_document_gets_qa_and_repair_and_the_request_carries_the_text_mode_a
     assert host.data["qa"]["summary"]["major"] == 1 and host.data["repair"]["rounds"][0]["kept"] is True and host.data["repair"]["stopped"] == "clean"
     assert fake.posts[0]["inputs"]["text_mode"] == "condense" and fake.posts[0]["inputs"]["review"] == {"pinned": {"s03": {"by": "human:sai", "at": "t"}}}
     assert {"qa", "repair"} <= set(deck_job.PAYLOAD)
+
+
+def test_the_picked_deck_type_and_its_confirmation_go_to_the_engine(deck, monkeypatch):
+    """deck-types: a tender picked on the type picker (inputs.deck_type) reaches the engine, so it builds a tender response, not the agency kind's
+    default; the person's yes to new writing on the Change sheet goes with it. Without a pick the body is as before (no deck_type key)."""
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    data = deck_data()
+    data["inputs"]["deck_type"] = {"id": "tender_response", "by": "person", "at": "2026-11-18T10:00:00Z", "confirmed_stages": ["c", "d"]}
+    build(deck, Host(data=data, schema=SCHEMA))
+    assert fake.posts[0]["inputs"]["deck_type"] == {"id": "tender_response", "confirmed_stages": ["c", "d"]}
+    assert fake.posts[0]["inputs"]["kind"] == "agency"   # the engine derives the assembler (and its gates) from the pick
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    plain = deck_data()
+    plain["inputs"]["deck_type"] = None   # 'Not sure': no pick
+    build(deck, Host(data=plain, schema=SCHEMA))
+    assert "deck_type" not in fake2.posts[0]["inputs"]
+
+
+def test_the_engines_type_offers_land_in_the_run(deck, monkeypatch):
+    """deck-types: the engine says which types it offers (run.types); the picker hides one that needs the recipes while they are off."""
+    v = view("gate", gate=GATE1)
+    v["run"]["types"] = {"recipes": False, "offered": ["agency_pitch", "tender_response", "investor_seed", "credentials"]}
+    use(monkeypatch, FakeEngine(v))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    build(deck, host)
+    assert host.data["run"]["types"] == v["run"]["types"]
