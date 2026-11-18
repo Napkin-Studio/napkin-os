@@ -460,16 +460,16 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
         meta={<span className="pt-mono ie-meta">{ratio ? `${ratio} locked` : 'Picture'}</span>}
         afterView={(
           <>
-            {n + applyLeftOut > 0 && (() => {
-              const long = [n ? notApplied(n) : '', applyLeftOut ? leftOutLine(applyLeftOut) : ''].filter(Boolean).join(' · ')
-              const short = [n ? `${n} ${n === 1 ? 'edit' : 'edits'}` : '', applyLeftOut ? `${applyLeftOut} left out` : ''].filter(Boolean).join(' · ')
-              return <span className="pt-mono ie-pill" title={long}><span className="ie-n-long">{long}</span><span className="ie-n-short">{short}</span></span>
-            })()}
             {frames.length > 0 && (
               <button ref={versionsBtn} type="button" className="btn ie-vbtn" aria-haspopup="menu" aria-expanded={versionsOpen} aria-label={`Version ${version} of ${frames.length}`} onClick={() => setVersionsOpen((o) => !o)}>
                 <span className="pt-mono">v{version}</span><span className="ie-vof"> of {frames.length}</span> <span aria-hidden="true" className="ie-caret">▼</span>
               </button>
             )}
+            {n + applyLeftOut > 0 && (() => {
+              const long = [n ? notApplied(n) : '', applyLeftOut ? leftOutLine(applyLeftOut) : ''].filter(Boolean).join(' · ')
+              const short = [n ? `${n} ${n === 1 ? 'edit' : 'edits'}` : '', applyLeftOut ? `${applyLeftOut} left out` : ''].filter(Boolean).join(' · ')
+              return <span className="pt-mono ie-pill" title={long}><span className="ie-n-long">{long}</span><span className="ie-n-short">{short}</span></span>
+            })()}
             {!(n + applyLeftOut) && <span className="pt-mono ie-pill">No edits yet</span>}
             {/* Either half toggles, pressed or not, so a second press on Before goes back (owner, 2026-10-16). */}
             <div className="pt-seg ie-compare" role="group" aria-label="Compare">
