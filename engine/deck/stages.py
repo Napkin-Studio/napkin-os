@@ -50,7 +50,8 @@ MODELS["red_team"] = "claude-sonnet-5-5"   # a Claude model, never the writer's 
 MODELS["d_criterion"] = "claude-opus-5-5"   # one tender criterion's written answer: the writer's model, as stage d
 MODELS["g"] = "claude-sonnet-5-5"   # the picture subjects (deck-image-gen): one call per deck, on its own card
 MODELS["insight_judge"] = "claude-sonnet-5-5"   # never the writer's model (ADR 0006: Claude only; a non-Claude judge is not wired here)
-EFFORT = {"g": "low", "a0": "medium", "a": "medium", "b": "high", "c": "high", "c_judge": "low", "d": "high", "fit": "medium", "e": "low", "i": "high", "insight_judge": "low", "red_team": "medium", "d_criterion": "medium"}   # copy tightening is mechanical: low effort (medium cost up to $1.27 a deck)
+MODELS["production_pick"] = "claude-sonnet-5-5"   # deck-prod-picker: the optional tie-break on metadata rows only (Claude only, never Gemini)
+EFFORT = {"g": "low", "a0": "medium", "a": "medium", "b": "high", "c": "high", "c_judge": "low", "d": "high", "fit": "medium", "e": "low", "i": "high", "insight_judge": "low", "red_team": "medium", "d_criterion": "medium", "production_pick": "low"}   # copy tightening is mechanical: low effort (medium cost up to $1.27 a deck)
 #: Slide types whose headlines make claims the fit judge reads.
 JUDGED = ("real_question", "chart", "insight", "audience", "proposition", "measurement", "innovation",
           "problem", "why_now", "solution", "product", "market", "business_model", "traction", "competition", "gtm",
@@ -69,6 +70,8 @@ def _sysmsg(name: str, stage: str, profile: dict | None = None) -> str:
     ("Inputs are the only source"), so the rule still has the last word. With no profile, or none for the stage, the text is the file's own."""
     text = (PROMPTS / name).read_text()
     lines = profiles.guidance(profile, stage)
+    if stage == "e":   # deck-types slice 4: the lines the type's title form selects (none for claim and criterion; only with the recipes on)
+        lines = lines + [x for x in profiles.title_guidance(profile) if x not in lines]
     if not lines:
         return text
     block = "<type_guidance>\n" + HOOK + "\n" + "\n".join(f"- {x}" for x in lines) + "\n</type_guidance>\n"
@@ -481,7 +484,25 @@ def red_team(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
 def image_subjects(req: dict) -> tuple[dict, dict]:
     """Stage g (deck-image-gen): the subject of every empty picture slot, from the request ``imagegen.subject_request`` built (marked parts are
     already out of it). One call; the caller records it and the ledger counts it inside the deck's cap."""
-    return _call("g", json.dumps(req, ensure_ascii=False, indent=1), _sysmsg("g_image_subjects.md", "g"))
+    return _call("g", json.dumps(req, ensure_ascii=False, indent=1), g_system())
+
+
+#: deck-graphics slice 2 (design.mockups.generated_subject): under spec.GRAPHICS an execution's picture is the artwork itself, because the
+#: deck draws the frame around it. Placed before the input rule, so that rule keeps the last word. Only the system text changes, never
+#: the request: a recorded stage g stays valid.
+ARTWORK_RULE = ("For a slot whose key starts with execution: describe the artwork itself, filling the picture edge to edge, as the poster, "
+                "post or film frame would show it: never a photograph of a street, a bus shelter, a billboard, a phone, a screen or a room "
+                "with the advert in it. The deck draws the frame around it.")
+
+
+def g_system() -> str:
+    """Stage g's system prompt: the file's own text, plus ARTWORK_RULE before the input rule when spec.GRAPHICS is on."""
+    text = _sysmsg("g_image_subjects.md", "g")
+    if not spec.GRAPHICS:
+        return text
+    body = text.rstrip("\n").split("\n")
+    at = next((i for i, ln in enumerate(body) if ln.startswith("Inputs are the only source:")), len(body))
+    return "\n".join(body[:at] + [ARTWORK_RULE] + body[at:]) + "\n"
 
 
 def investor(inp, st, profile: dict | None = None) -> tuple[dict, dict]:

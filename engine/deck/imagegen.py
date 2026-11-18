@@ -43,7 +43,20 @@ COMPOSITION = {"title": "Keep the lower third calm and uncluttered.", "appendix"
                "real_question": "Keep the left third calm and uncluttered.", "close": "Keep the left third calm and uncluttered.",
                "idea": "Medium shot, one moment.", "audience": "Medium shot, one moment.", "territory": "Medium shot, one moment.",
                "execution": "Wide frame, one clear focal point.", "solution": "Medium shot, one moment.", "product": "Medium shot, one moment."}
+#: deck-look step 7 (spec.LOOK_V3): a slot whose layout may set words over its picture (the cover, the idea, the real question) asks for
+#: the zone the finder tries first to be calm. Prompt text only: the subjects request keeps COMPOSITION (its request_sha and every
+#: recorded subject stay valid), nothing new is asked for or paid, and the finder still measures what comes back (images.text_zone).
+TEXT_ZONE_HINT = {"title": "Keep the lower left calm, plain and uncluttered.",
+                  "idea": "Medium shot, one moment. Keep the lower left calm, plain and uncluttered.",
+                  "real_question": "Keep the left third calm and uncluttered."}
 ILLUSTRATION_LINE = "An illustration, not a photograph."
+
+
+def composition(slide_type: str) -> str:
+    """The composition line of a picture's prompt: the text-zone hint under the look (TEXT_ZONE_HINT), else COMPOSITION."""
+    if spec.LOOK_V3 and slide_type in TEXT_ZONE_HINT:
+        return TEXT_ZONE_HINT[slide_type]
+    return COMPOSITION.get(slide_type, "Medium shot, one moment.")
 #: Code templates: every word is on the allow-list, so they are the fallback a failed subject lands on and the preview before stage g.
 TEMPLATES = {"title": "A quiet morning scene with soft light and a clear subject.", "appendix": "An empty room with soft light and a window.",
              "real_question": "A person at a window, seen from behind, in soft morning light.", "close": "A door open to a bright street in the morning.",
@@ -77,14 +90,23 @@ def hero_eligible(deck: dict, sid: str, slot: str) -> bool:
     return slot == "picture" and (s.get("type") in HERO_TYPES or ((s.get("layout") or {}).get("id") in HERO_LAYOUTS))
 
 
-def candidate_slots(deck: dict, territories=None) -> list:
+#: deck-types slice 4: which slides a recipe's ``pictures.generate`` lets generation plan for (None: every picture slide).
+GENERATE_TYPES = {"all": None, "cover": ("title",), "none": ()}
+
+
+def candidate_slots(deck: dict, territories=None, generate: str = "all") -> list:
     """The image slots generation may fill: ``[{sid, slot, aspect, anchor, key, kind}]``. A slot named ``picture`` that is empty. A territory slide
-    with no frame at all gets one mood picture slot (kind photo, 4:3); ``frame_n`` slots are never generated."""
+    with no frame at all gets one mood picture slot (kind photo, 4:3); ``frame_n`` slots are never generated. ``generate`` (deck-types: the type's
+    recipe, profiles.picture_policy) narrows it: ``cover`` plans the cover only (a credentials deck never gets a generated person or case),
+    ``none`` plans nothing (a tender); ``all`` is today. Narrowing only: it never opens a slot, raises the cap or approves anything."""
     anc = anchors(deck, territories)
+    only = GENERATE_TYPES.get(generate, None)
     out = []
     for sid in deck["order"]:
         s = deck["slides"][sid]
-        if s["type"] not in spec.PICTURE_SLIDE_TYPES:
+        if spec.picture_of(s)[0] not in spec.PICTURE_SLIDE_TYPES:
+            continue
+        if only is not None and spec.picture_of(s)[0] not in only:
             continue
         slots = s.setdefault("slots", {}) if s["type"] == "territory" else (s.get("slots") or {})
         if s["type"] == "territory":
@@ -98,7 +120,7 @@ def candidate_slots(deck: dict, territories=None) -> list:
             im = v.get("image") if isinstance(v, dict) and v.get("kind") == "image" else None
             if not im or im.get("status") != "empty" or not name.startswith("picture") or im.get("kind") in ("frame", "screenshot", "logo"):
                 continue
-            if (im.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand"):
+            if (im.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand", "production"):   # production: a rights-pending pull leaves the plan too
                 continue
             out.append({"sid": sid, "slot": name, "aspect": im["aspect"], "anchor": anc[sid], "key": anchor_key(anc[sid], name), "kind": im.get("kind") or "photo"})
     return out
@@ -260,13 +282,14 @@ class Ctx:
     """Everything one run of the image step reads. Built by run_deck; tests build it directly."""
 
     def __init__(self, deck, inp, territories, style, stages, cache, ledger, deck_id, review=None, approver=None, cap_usd=None, subjects=None,
-                 banned_extra=(), territory_usd=0.0, names=()):
+                 banned_extra=(), territory_usd=0.0, names=(), generate: str = "all"):
         self.deck, self.inp, self.territories, self.style = deck, inp, territories or [], style
         self.stages, self.cache, self.ledger, self.deck_id = Path(stages), Path(cache), ledger, deck_id
         self.review, self.approver, self.subjects = review or {}, approver, subjects
         self.cap = min(float(cap_usd if cap_usd is not None else jobs.CAP_DEFAULT_USD), jobs.CAP_MAX_USD,
                        float(os.environ.get("NAPKIN_DECK_IMAGES_MAX_USD") or jobs.CAP_DEFAULT_USD))
         self.banned_extra, self.territory_usd, self.names = list(banned_extra), territory_usd, list(names)
+        self.generate = generate if generate in GENERATE_TYPES else "all"   # deck-types: the recipe's picture policy (narrowing only)
         self.manifest = jobs.load_manifest(self.cache)
 
 
@@ -315,7 +338,7 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     safe = safe_state(inp, deck, ctx.review)
     banned = list(dict.fromkeys([*safe["banned"], *ctx.style.banned_imagery, *ctx.banned_extra]))
     deny = lint.deny_list(inp.marks)
-    cands = candidate_slots(deck, ctx.territories)
+    cands = candidate_slots(deck, ctx.territories, ctx.generate)
     req = subject_request(deck, inp, ctx.territories, askable(deck, cands), banned, deny)
     rec = ctx.subjects if ctx.subjects is not None else load_subjects(ctx.stages, req)
     style_text = style_text_for(ctx.style, banned)
@@ -394,7 +417,7 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
                 row.update(status="held", reason=f"the Replace note was refused: {nwhy}")
                 continue
             subject = f"{subject} Change: {note.strip().rstrip('.')}."[:SUBJECT_MAX + 120]
-        comp = COMPOSITION.get(s["type"], "Medium shot, one moment.")
+        comp = composition(s["type"])
         prompt = assemble_prompt(subject, comp, style_text, kind)
         ratio = runway.snap(c["aspect"], runway.TIER_MODEL["draft"], runway.TIER_SIZE["draft"])
         attempt = attempts + 1
@@ -470,6 +493,8 @@ def build_cards(ctx: Ctx, plan: dict, retry_unknown: bool = False, remake_style:
         cards["subjects"] = {"kind": "subjects", "usd": usd, "spent_usd": spent, "cap_usd": cap, "left_usd": round(cap - spent - usd, 2),
                              "over_cap": spent + usd > cap + 1e-9, "rows": [{"what": "stage g: 1 model call writes the picture subjects", "usd": usd}],
                              "id": _card_id(["subjects", plan["stage_g"]["request_sha"], cap, spent, sends]), "plan_file": "plan.json"}
+        if getattr(ctx, "production_note", None):
+            cards["subjects"]["production"] = ctx.production_note
         return cards
     new, held, optional, unknown, over = [], [], [], [], []
     running = spent
@@ -503,6 +528,8 @@ def build_cards(ctx: Ctx, plan: dict, retry_unknown: bool = False, remake_style:
     refused_subjects = [f"{r['slide']}.{r['slot']}: description refused ({r['subject_refused']}), generic used" for r in plan["slots"].values() if r.get("subject_refused")]
     cards["pictures"]["refused_subjects"] = refused_subjects
     cards["pictures"]["remade"] = [f"{r['slide']}.{r['slot']}" for r in new if r.get("remake")]
+    if getattr(ctx, "production_note", None):   # deck-prod-picker: what was pulled, for information (pulling costs nothing; not in the card id)
+        cards["pictures"]["production"] = ctx.production_note
     heroes = [h for h in plan.get("heroes", {}).values() if h.get("job")]
     refused = [f"{h['ask']}: {h['reason']}" for h in plan.get("heroes", {}).values() if h.get("reason")]
     if heroes or refused:
@@ -518,12 +545,15 @@ def render_card(card: dict) -> str:
     """The card as the CLI prints it."""
     if card["kind"] == "subjects":
         return (f"SUBJECT CARD  card {card['id']}\n  stage g: 1 Claude call writes the picture subjects   ~${card['usd']:.2f}   (counts inside this deck's cap)\n"
-                f"  preview prompts (code templates, NOT what will be sent): <cache>/plan.json\n  spent ${card['spent_usd']:.2f} | cap ${card['cap_usd']:.2f} | "
+                + (f"  {card['production']} (no cost)\n" if card.get("production") else "")
+                + f"  preview prompts (code templates, NOT what will be sent): <cache>/plan.json\n  spent ${card['spent_usd']:.2f} | cap ${card['cap_usd']:.2f} | "
                 f"left after this card ${card['left_usd']:.2f}     yes: --images subjects --yes-cost {card['id']}")
     word = {"drafts": "PICTURE COST CARD", "heroes": "FINAL PICTURE COST CARD"}[card["kind"]]
     lines = [f"{word}  card {card['id']}  (estimate; nothing is made until you say yes)"]
     for r in card["rows"]:
         lines.append(f"  {r['model']}  {r['tier']}  {r['n']} new x {r['credits_each']} credits = {r['n'] * r['credits_each']} credits  ${r['usd']:.2f}")
+    if card.get("production"):
+        lines.append(f"  {card['production']} (no cost)")
     for h in card.get("refused_subjects") or []:
         lines.append(f"  {h}")
     if card.get("remade"):
@@ -565,7 +595,7 @@ def run_subjects(ctx: Ctx, plan: dict, call=None, log=print) -> dict:
     (so the cap counts it even if the process dies). ``call(request) -> (obj, usage)`` is injected in tests; live it is ``stages.image_subjects``."""
     from . import stages as stg
     call = call or stg.image_subjects
-    cands = candidate_slots(ctx.deck, ctx.territories)
+    cands = candidate_slots(ctx.deck, ctx.territories, ctx.generate)
     banned = plan["banned_imagery"]
     req = subject_request(ctx.deck, ctx.inp, ctx.territories, askable(ctx.deck, cands), banned, lint.deny_list(ctx.inp.marks))
     key = "g_" + request_sha(req)

@@ -39,7 +39,9 @@ def test_wrap_line_counts_against_pdftotext(tmp_path):
         run = tf.paragraphs[0].add_run()
         run.text, run.font.size, run.font.name = TEXT, Pt(size), "Calibri"
     prs.save(str(tmp_path / "cal.pptx"))
-    subprocess.run([SOFFICE, "--headless", "--convert-to", "pdf", "--outdir", str(tmp_path), str(tmp_path / "cal.pptx")], check=True, capture_output=True, timeout=180)
+    # a private LibreOffice profile: a second soffice sharing the default one hands its job to the first and exits 0 with no PDF (run_deck.to_pdf)
+    subprocess.run([SOFFICE, f"-env:UserInstallation=file://{tmp_path / 'lo-profile'}", "--headless", "--convert-to", "pdf", "--outdir", str(tmp_path),
+                    str(tmp_path / "cal.pptx")], check=True, capture_output=True, timeout=180)
     for n, (size, w) in enumerate(CASES, 1):
         txt = subprocess.run(["pdftotext", "-f", str(n), "-l", str(n), "-layout", str(tmp_path / "cal.pdf"), "-"], capture_output=True, text=True, check=True).stdout
         real = len([l for l in txt.splitlines() if l.strip()])

@@ -2,6 +2,7 @@
 
 Kept in one module so the schema file, the assembler, the validators and the renderer agree.
 """
+import os
 
 #: Every slide type the renderer has a layout for, with the word budget for the slide's
 #: on-screen text (title excluded). Budgets follow the agency rule of thumb that a presented
@@ -308,6 +309,54 @@ OPTIONAL = r"(?i)\bif budget allows\b|\boptional\b"
 #: Pairs merged into one presented slide in a pitch: (kept, merged into it, the merged title).
 PITCH_MERGES = (("team", "credentials", "The team you would work with, and work like this we have done"),
                 ("investment", "next_step", "Investment, and what we would like to agree today"))
+#: deck-look step 5 (``LOOK_V3`` only): merges in the title-None mode. The kept slide keeps its own title verbatim; the absorbed
+#: slide's title becomes the heading of its first headless block (else it goes to the kept slide's notes), so no title is said twice
+#: and none is written. channel_roles takes the first PRESENTED execution (assemble._shown_executions): 'how it runs';
+#: measurement takes guardrails: 'how we will know'.
+PITCH_MERGES_V3 = (("channel_roles", "execution", None),
+                   ("measurement", "guardrails", None))
+#: deck-look step 5 (``LOOK_V3`` only): a pitch with no stated limit aims at PITCH_TARGET presented slides (Sai: "the sweet slide size
+#: is 10"). A SOFT target: only the cheap moves run to reach it (assemble._to_target: unfilled placeholders to the 'To supply' part,
+#: then thin slides), nothing is trimmed, reworded or dropped. PITCH_CAP is ADVISORY only (validate: pitch_cap, a warning): asked-for
+#: routes and PITCH_EXECUTIONS executions may rightly give 13-14, and no gate withholds a deck for its length. Agency pitches that
+#: run longer: set DECK_PITCH_TARGET (and DECK_PITCH_CAP) for a run, or change these two numbers. A stated limit always wins.
+def _env_count(name: str, default: int, lo: int = 3, hi: int = 60, warn: bool = True) -> int:
+    """A whole number of slides from the environment, ``lo`` to ``hi``; anything else (not a number, 0, negative, absurd) falls back to
+    ``default`` with a warning on stderr. Read at import, so a bad value must never crash the engine, flag on or off."""
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        n = int(raw)
+    except ValueError:
+        n = None
+    if n is None or not lo <= n <= hi:
+        import sys   # noqa: PLC0415
+        if warn:
+            print(f"deck: {name}={raw!r} is not a slide count from {lo} to {hi}; using {default}", file=sys.stderr)
+        return default
+    return n
+
+
+#: deck-types: with spec.RECIPES (and LOOK_V3) on, a type's recipe (profiles.recipe: length.target / cap) replaces these two for that
+#: type; they stay the default for a type with none, and the env values still win for a run.
+PITCH_TARGET = _env_count("DECK_PITCH_TARGET", 10)
+PITCH_CAP = _env_count("DECK_PITCH_CAP", 12)
+#: Slide types the length target never moves (design.length): the story's spine and the ask.
+TARGET_KEEPS = ("title", "objective", "real_question", "insight", "idea", "investment", "next_step", "ask", "close", "proposition", "audience")
+#: deck-look (fix 2, said once): the notes line that keeps a sentence a presented slide would have said a second time (an idea titled
+#: with the line the proposition already said, a piece's copy that is that line). Engine words; the sentence itself is kept verbatim.
+SAID_ONCE_NOTE = "Said once, on slide {n}:"
+#: The title and text of the divider that opens the appendix's 'To supply' part (engine words, like the Appendix divider's).
+TO_SUPPLY_TITLE = "To supply"
+TO_SUPPLY_TEXT = "Slides that wait for what only a person can give: fill them and they return to the story."
+#: deck-look step 6 (Q13): the on-screen word windows by role, title included, ADVISORY (validate: role_words, a warning). A statement slide says one
+#: thing (10-35 words), an argument slide makes its case (35-70). Never met by repeating a sentence or by words a layout asks for:
+#: a shortfall names the brief field that would fill it.
+ROLE_WINDOWS = {"statement": (10, 35), "argument": (35, 70)}
+ROLE_OF_TYPE = {"title": "statement", "real_question": "statement", "idea": "statement", "investment": "statement", "close": "statement",
+                "objective": "argument", "insight": "argument", "audience": "argument", "proposition": "argument", "territory": "argument",
+                "channel_roles": "argument", "measurement": "argument"}
 
 
 def norm_text(t) -> str:
@@ -343,12 +392,15 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
           "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
-          "image_rights", "style_pack_held")
+          "image_rights", "style_pack_held", "pitch_cap", "role_words", "notes_unread")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.
-DECK_TYPES = ("agency_pitch", "tender_response", "investor_seed", "credentials")
+DECK_TYPES = ("agency_pitch", "tender_response", "investor_seed", "credentials", "creative_work")
 DEFAULT_TYPE = "agency_pitch"
+#: deck-types: types that joined with the recipes. They always load and build (``--kind`` / ``--type``, a document's pick), but the q_deck_type
+#: card, the inference and a typed answer offer them only with spec.RECIPES and LOOK_V3 on (profiles.offered), so a flag-off build is byte-identical.
+RECIPE_ONLY_TYPES = ("creative_work",)
 
 #: The red team (stage red_team, DECK-CRAFT-PLAN 4.2): the most objections kept, the kinds of objection it may raise, and the
 #: change each may suggest. Only ``wording`` and ``order`` on an existing presented slide are ever applied by code.
@@ -397,13 +449,72 @@ LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "compari
               "close", "big_statement", "quote_full", "cards_split", "text_columns", "placeholder_split", "chart_full",
               "timeline_rows", "execution_stack", "territory_wide", "people_cards")
 #: The tests a layout file's ``when.test`` may name; each is a function of the same name in layouts.py (and has a unit test).
-LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready")
+LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3", "rows_aside", "bleed_ready",
+                "steps_3_6", "timed_3_8", "matrix_sourced", "journey_3_5", "points_3_6")
+#: deck-look steps 3-5: the layouts that exist only under ``LOOK_V3`` (``layouts/v3``; the same folder may also rework a layout
+#: of LAYOUT_IDS, such as ``close``). With the flag off the library is the 36 above, byte for byte. rows_aside (step 5) holds a
+#: merged slide: the kept slide's table as hairline rows, the absorbed slide's blocks in a column beside them.
+#: cover_bleed (step 7) sets the cover's words on its picture, on the zone images.text_zone measured (full_bleed_statement is reworked the same way).
+LAYOUT_IDS_V3 = ("statement_points", "reframe", "shift_line", "picture_column", "rows_aside", "cover_bleed")
+#: deck-graphics (features/deck-graphics.clan): the diagram layouts and the grid of points, only under ``spec.GRAPHICS`` (``layouts/graphics``;
+#: the same folder reworks timeline_strip as an equally spaced strip). With the flag off the library is unchanged.
+LAYOUT_IDS_GRAPHICS = ("process_chevrons", "matrix_2x2", "journey_row", "grid_points")
+#: deck-look: a statement set in capitals only when it is at most this many characters (and two lines); sentence case beyond (Q10).
+CAPS_MAX_CHARS = 40
+#: deck-look q_no_hole (design.checklist): the largest empty rectangle of a presented content slide, as a share of the slide, on a
+#: 96 x 54 cell grid of the page render inside 3-97% x and 3-90% y. Above HOLE_GATE is the gate value (advisory in this slice);
+#: above HOLE_ADVISORY is advisory. Gamma's Lumen deck: median 6.6%, max 17%; ours before the look: median 19.4%, max 57.9%.
+HOLE_GATE, HOLE_ADVISORY = 0.20, 0.12
 #: The eight look changes of deck-layout-library (cover 64 pt, a stamped title size and a fixed title box per layout, 48-character
 #: lines, switch before relaxed, picture and close layouts rule-picked). Off while the library lands without a look change; on at the look commit.
 LOOK_V2 = True
+#: deck-look (Gamma-grade look), steps 1-2: Archivo + Source Sans 3 (measured widths, fit under the fallback font's width too),
+#: a section band and 0.75 pt hairlines instead of the accent tick and edge stripes, ink figures. OFF by default: every golden
+#: is unchanged until the look commit after the phase-12 review. DECK_LOOK_V3=1 turns it on for one run (the gallery render).
+LOOK_V3 = os.environ.get("DECK_LOOK_V3", "").strip() in ("1", "true", "yes")
+#: deck-types (features/deck-types.clan): a deck type is a full recipe (profiles/<id>.yaml ``recipe`` and ``length.target / cap``,
+#: resolved once by profiles.recipe). Read only when LOOK_V3 is on too (profiles.recipes_on). OFF by default: with it off every
+#: reader uses the constants above and a build is byte-identical; DECK_RECIPES=1 turns it on for one run (the gallery render). It
+#: gets its own golden re-record commit after the look commit (design.rework_risks).
+RECIPES = os.environ.get("DECK_RECIPES", "").strip() in ("1", "true", "yes")
+#: deck-graphics (features/deck-graphics.clan): icons (slice 1; charts, diagrams and execution mock-ups follow) drawn as native shapes.
+#: DECK_GRAPHICS=1 turns it on for one run, and only together with LOOK_V3 (off with a warning otherwise). OFF by default: nothing in
+#: graphics.py is read and the vendored icons are never loaded, so every build is byte-identical. Its own golden re-record after RECIPES.
+_GRAPHICS_ASKED = os.environ.get("DECK_GRAPHICS", "").strip() in ("1", "true", "yes")
+GRAPHICS = _GRAPHICS_ASKED and LOOK_V3
+if _GRAPHICS_ASKED and not LOOK_V3:
+    import sys as _sys   # noqa: PLC0415
+    print("deck: DECK_GRAPHICS=1 needs DECK_LOOK_V3=1; graphics stay off for this run", file=_sys.stderr)
+#: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
+PITCH_LENGTH_FROM_ENV = {"target": _env_count("DECK_PITCH_TARGET", -1, warn=False) != -1, "cap": _env_count("DECK_PITCH_CAP", -1, warn=False) != -1}   # a bad value is not "from env"
+#: Layouts deck-look has named but not yet built (features/deck-look.clan step 3; cover_bleed landed in step 7). A recipe may name one: it is accepted by the
+#: profile check, listed as not built, and skipped at plan time (the next preference, then the general rules, take the slide) until
+#: its file lands in layouts/ or layouts/v3/. Never drawn, never invented.
+LAYOUT_IDS_PLANNED = ("statement_split", "grid_points")
+#: The recipe's closed sets (design.schema.recipe). Sizes are deck-slide-size's canvas names (inert until that merges); title forms
+#: select stage-e guidance and a title check (slice 4); ``generate`` narrows which picture slots are planned (slice 4).
+RECIPE_SIZES = ("16:9", "4:3", "a4")
+RECIPE_TITLE_FORMS = ("claim", "label", "criterion")
+RECIPE_GENERATE = ("all", "cover", "none")
+#: The most preferred layouts a recipe lists for one slide type.
+RECIPE_MAX_PREFS = 3
+#: deck-types slice 4: the stage e guidance lines each title form selects (appended to the type's own, profiles.title_guidance). ``claim`` is
+#: today's titles and selects none (agency and investor runs replay); ``criterion`` is already the tender's own stage e line, so it adds none.
+#: Code never rewrites a title: the form only says what the copy stage is asked for and which title check applies (validate action_title).
+TITLE_FORM_GUIDANCE = {
+    "claim": (),
+    "label": ("Titles here are labels, not claims: a route's own name, the idea's own line, or a short name for what the slide shows. "
+              "Keep a label a label; never stretch it into a sentence.",),
+    "criterion": (),
+}
+#: deck-types slice 8 (the read format, 'Sent to be read'): nobody presents a leave-behind, so a point moved to the notes is unread. A
+#: format full deck with at least this many points moved off a slide is warned (validate notes_unread), naming the slide and the count.
+NOTES_UNREAD_MIN = 1
 LAYOUT_FLOW = "flow"
 LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
-LAYOUT_MAX = 40
+#: 40 -> 48 (Q11, Fable): the look's layouts land beside the old; image_text and image_left are offer-only under the look and are
+#: retired at the release after the look commit (dated in features/deck-look.clan), so the cap never becomes a habit.
+LAYOUT_MAX = 48
 LAYOUT_GROUPS = ("functional", "content")
 LAYOUT_PURPOSES = ("title", "statement", "list", "compare", "data", "timeline", "image", "people")
 LAYOUT_CHOSEN_BY = ("rule", "fit_ladder", "repair", "person")
@@ -420,7 +531,7 @@ IMAGE_KINDS = ("photo", "illustration", "frame", "screenshot", "logo")
 IMAGE_STATUSES = ("empty", "planned", "made", "flagged", "approved", "rejected", "failed")
 IMAGE_ASPECTS = ("16:9", "3:2", "4:3", "1:1", "4:5", "9:16")
 IMAGE_FITS = ("cover", "contain")
-IMAGE_SOURCES = ("territory_frame", "upload", "brand", "generated")
+IMAGE_SOURCES = ("territory_frame", "upload", "brand", "generated", "production")
 IMAGE_RIGHTS = ("generated", "own", "licensed", "client_supplied", "reference_only")
 IMAGE_MIMES = ("image/png", "image/jpeg", "image/webp", "image/svg+xml")
 IMAGE_DECISIONS = ("approve", "replace", "remove")
@@ -430,9 +541,41 @@ PICTURE_MIN_PPI = 96
 PICTURE_STRETCH_TOL = 0.01
 #: The default label of a picture a person has not approved (ADR 0027): a fixed label, never a fact, no digit.
 PICTURE_LABEL = "Illustrative"
+#: deck-prod-assets (Q2): the fixed label of a Production Tool picture on a review render until approved, in place of PICTURE_LABEL. No digit.
+PRODUCTION_LABEL = "Production"
+#: deck-prod-assets (Q4, fix 8): what an unplaced Production picture with no stated licence says (image_rights, the held list, the picker).
+RIGHTS_TO_SUPPLY = "Rights to supply"
+#: deck-graphics slice 2 (Q6): the fixed label on every drawn execution frame, in every build (client builds too). No digit.
+MOCKUP_LABEL = "Mock-up"
+#: deck-graphics slice 2: the frames the deck draws from native shapes, and each one's default format (vendor/format-packs.json id) whose
+#: aspect a generated or supplied picture takes. A Production size keeps its own format's aspect, whole and uncropped.
+FRAME_FORMATS = {"poster_portrait": "uk-6-sheet", "billboard": "uk-48-sheet", "phone": "meta-stories-9x16", "screen": "film-16x9",
+                 "spread": "mag-a4-dps", "strip": "uk-bus-tside"}
+#: The frame a channel's generated picture is shown in (graphics.frame_of): film in a screen, social on a phone, OOH and print on a poster.
+FRAME_OF_CHANNEL = {"ooh": "poster_portrait", "social": "phone", "film": "screen", "print": "poster_portrait", "display": "strip"}
+#: deck-graphics slice 3: a film execution's storyboard strip takes 3 to 4 Production frames in shot order, all Production or none.
+STRIP_MIN, STRIP_MAX = 3, 4
+#: deck-prod-picker (deck-graphics part 5): what a picked Production picture none of its sources yielded says, in production.json, report.json
+#: and the slot's reason. Never skipped silently and never replaced by a generated picture without the person choosing.
+PRODUCTION_NOT_REACHABLE = "not reachable — re-save or export in Production"
+#: The fetch allow-list of Production's provider output hosts (Q12) lives in this policy file, EMPTY by default: the fetch refuses until
+#: the hosts are named there. A host must also appear in the .clan's own locations.
+PRODUCTION_FETCH_POLICY = "policy/production_fetch.yaml"
 #: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
 PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "audience", "real_question", "close",
                        "solution", "product")
+
+
+def picture_of(slide: dict) -> tuple:
+    """``(type, title)`` a slide's pictures belong to: its own, or, for an evidence slide that absorbed a picture slide in a merge
+    (deck-look: channel_roles takes an execution, ``slide.merged``), the absorbed slide's. So the absorbed execution's picture, its slot
+    aspect and its anchor (``execution:<channel>``) travel with its words onto the merged slide; nothing else changes."""
+    t = slide.get("type")
+    if t not in PICTURE_SLIDE_TYPES:
+        for m in slide.get("merged") or []:
+            if m.get("type") in PICTURE_SLIDE_TYPES:
+                return m["type"], m.get("title") or ""
+    return t, slide.get("title") or ""
 
 #: Theme (contract section 6.1 and 6.2). COLOR_ROLES equals ``theme.COLOR_FIELDS``.
 COLOR_ROLES = ("ink", "paper", "panel", "rule", "mute", "accent", "accent_ink", "on_dark", "on_dark_mute", "accent_on_dark")
@@ -473,7 +616,7 @@ ISSUE_FIXES = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes
 QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min_font", "placeholder", "contrast", "mostly_empty",
                     "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast")
 #: Raised by the layout plan (layouts.py) and the repair loop; once reserved, now live, so the checklist's l_slots_clean can answer.
-LAYOUT_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown")
+LAYOUT_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown", "text_on_image_fallback")
 RESERVED_CHECKS = ("golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")
 #: The vision critic's question ids (visual_rubric.json): issues with source ``critic`` carry these as their check name.
 CRITIC_CHECKS = ("v_one_focus", "v_balance", "v_not_crowded", "v_looks_finished", "v_image_fits", "v_image_clean", "v_text_on_image",

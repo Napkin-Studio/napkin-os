@@ -1,0 +1,81 @@
+# Deck type: creative work session (a tissue session): the agency shows the routes for the client's reaction before a pitch.
+# Source: GUIDE.md 3.1 (WFA/EACA 10.1-10.2 name the tissue session a separate format from the pitch and from credentials:
+# work in progress, shown to react to, not a price or a team), GUIDE.md 1 (asking questions and raising new challenges
+# featured in almost half of wins), NAPKIN-EDGE.md 3. Builds with the agency assembler (kind agency) from the same stages
+# as a pitch (a0 a b c d fit e), arranged by this spine: every route is presented (a territory is not an appendix type
+# here), then where we lean (territory_choice, stage d's lean), the idea and at most spec.PITCH_EXECUTIONS executions,
+# questions for the client and the next step. No investment, team or credentials slide: those are a pitch's.
+# Slides the stages write that a work session does not present (the plan, measurement, the guardrails) stay in the
+# appendix, so every word a stage wrote is still in the deck (per-word survival); nothing is dropped or rewritten.
+# Every number here is a Napkin default, not validated (design.recipe_table, deck-types Q2).
+id: creative_work
+label: "Creative work session"
+one_line: "Routes shown for the client's reaction before a pitch: a tissue session, no price and no team."
+kind: agency
+arrange: spine
+spine: [title, objective, real_question, insight, proposition, territory, territory_choice, idea, execution, questions, next_step]
+appendix: [brief_restated, process, audience, chart, competition, channel_roles, innovation, guardrails, measurement,
+           measurement_plan, timeline, risks, conflicts]
+stages: [a0, a, b, c, d, fit, e]
+length:
+  max_slides: 18
+  minutes: 60
+  respect_stated_limit: true   # a limit the inputs state for the session replaces max_slides (assemble.stated_limit)
+  target: 12                  # deck-types: soft target (routes presented make it longer than a pitch; judgement, not measured)
+  cap: 16                     # deck-types: ADVISORY only (validate pitch_cap, a warning)
+rubric_weights:
+  basis: "default, not validated"
+  source: "rubric.json 2026-10-16, adjusted for a work session (our judgement, not a published split)"
+  weights: {compliance_gate: 4, problem_objective: 12, insight: 16, idea_chain: 24, evidence_trace: 10,
+            headline_fit_limits: 8, team_proof: 2, commercials_ask: 2, presentability: 22}
+  adjustments:
+    - {criterion: compliance_gate, from: 12, to: 4, why: "A work session is not scored against criteria; only the brief's mandatories apply."}
+    - {criterion: insight, from: 14, to: 16, why: "The client reacts to routes that rest on the insight; it must be clear before any route is shown."}
+    - {criterion: idea_chain, from: 14, to: 24, why: "The routes and the lean are the content of the session (WFA/EACA: a tissue session shows work in progress)."}
+    - {criterion: evidence_trace, from: 14, to: 10, why: "Routes are work in progress shown to react to; claims are still traced, but fewer are made."}
+    - {criterion: team_proof, from: 10, to: 2, why: "No team slide: the people are in the room (a pitch or credentials shows the team)."}
+    - {criterion: commercials_ask, from: 6, to: 2, why: "No price in a work session; the ask is the reaction and the next step."}
+    - {criterion: presentability, from: 10, to: 22, why: "The routes are presented to be reacted to: they must read in the room."}
+strict: {}
+prompt_guidance:
+  c:
+    - "This is a creative work session: every route is shown to the client for their reaction. Write each route so it stands on its own."
+  d:
+    - "Say which route we lean towards and why, in one line the client can react to. Do not price the work and do not name a team."
+questions:
+  - id: q_routes
+    text: "How many routes do you want to show?"
+    options: []
+    allow_text: true
+    address: brief.mandatories
+  - id: q_reaction
+    text: "What do you want the client to react to?"
+    options: []
+    allow_text: true
+    address: brief.desired_response
+# deck-types (features/deck-types.clan): the type's recipe, read only with spec.RECIPES and spec.LOOK_V3 on (DECK_RECIPES=1);
+# with the flag off nothing reads it and the type builds from its spine. A preferred layout is tried before the general rules
+# and kept only when it accepts the slide's own blocks and fits as is or shrunk (layouts.plan); a preference never adds,
+# repeats or stretches a word. Said once: the leaned route is shown in territory (its own why) and in idea (the idea line only).
+recipe:
+  layouts:
+    title: [cover_bleed, cover_image]
+    real_question: [reframe]
+    proposition: [shift_line]
+    territory: [picture_column, territory_wide]
+    idea: [full_bleed_statement, big_statement]
+    execution: [execution_visual, frames_strip]
+    questions: [statement_points]
+  density:
+    level: lean
+    roles: {territory: statement, idea: statement, execution: statement, real_question: statement,
+            objective: argument, insight: argument, proposition: argument, territory_choice: argument}
+  pictures: {"on": creative_cover, generate: all}
+  brand: {strict: false}       # work in progress in the client's world: the agency's own look stays
+  titles: {form: label}        # route names and the lines themselves (spec.LABEL_TITLE_TYPES): titles are labels here
+  size: "16:9"
+  format: pitch
+  full:                        # 'Sent to be read': every slide in story order, detailed, pictures narrowed to the cover
+    density: {level: detailed}
+    pictures: {generate: cover, types: [title]}
+sources: [GUIDE.md 3.1, GUIDE.md 1, NAPKIN-EDGE.md 3, rubric.json]

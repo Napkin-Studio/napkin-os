@@ -146,7 +146,7 @@ image: { kind, status, aspect, asset?, from?, subject?, prompt?, style?, referen
 | `status` | `empty` · `planned` · `made` · `flagged` · `approved` · `rejected` · `failed` | §4.3 |
 | `aspect` | `16:9` · `3:2` · `4:3` · `1:1` · `4:5` · `9:16` | the slot's shape. A renderer crops with `cover`; it never stretches |
 | `asset` | `img_` + 12 hex | a key of `deck.assets` |
-| `from` | `{kind, key?, run?}` | `kind`: `territory_frame` · `upload` · `brand` · `generated`. `key`: the frame key `<territory id>-<shot>-<flash\|pro>`, a material id, or a Brand Clan logo id. `run`: the territory run's 12-character hash |
+| `from` | `{kind, key?, run?}` | `kind`: `territory_frame` · `upload` · `brand` · `generated` · `production` (deck-prod-assets: a Production Tool picture; its asset carries `source` {app, project_id, entity, role, version, origin, job_id?, format_id?, channel?, bundle_sha256}). `key`: the frame key `<territory id>-<shot>-<flash\|pro>`, a material id, a Brand Clan logo id, or a Production item key (an entity id; a key visual is `<format set id>#master`). `run`: the territory run's 12-character hash, or the first 12 hex of the exported .clan's sha256 |
 | `subject` | up to 400 characters | what a camera could see, from the slide's own creative text. No brand name, person's name, figure or words to paint |
 | `prompt` | up to 2400 characters | the exact text sent: subject, style block, guard rails. Recorded, never edited by hand |
 | `style` | `{pack, version, hash}` | the Style Pack and its 8-hex hash (`style._hash`) |
@@ -292,7 +292,8 @@ role or renderer stops the load, as `ProfileError` does for a deck type.
 | `purpose` | `title` · `statement` · `list` · `compare` · `data` · `timeline` · `image` · `people`: what the swap menu groups by |
 | `description`, `slot_summary` | how it arranges things (not what it says); one line of its slots |
 | `for_types` | names from `spec.SLIDE_TYPES` |
-| `when` | `{blocks_any, blocks_all, blocks_only, max_blocks, needs_image, needs_number, min_items, max_items, status, test}`: when the picker may choose it. `test` names one of `spec.LAYOUT_TESTS` (`has_target_figure`, `has_human_item`, `compare_table`, `role_rows`, `image_ready`), each implemented in `layouts.py`; `image_ready` is audience-aware (a client counts only an approved picture) |
+| `when` | `{blocks_any, blocks_all, blocks_only, max_blocks, needs_image, needs_number, min_items, max_items, status, test}`: when the picker may choose it. `test` names one of `spec.LAYOUT_TESTS` (`has_target_figure`, `has_human_item`, `compare_table`, `role_rows`, `image_ready`, `points_2_3`, `rows_aside`), each implemented in `layouts.py`; `image_ready` is audience-aware (a client counts only an approved picture); `points_2_3` holds a statement layout to two or three points (never padded, never cut) |
+| `human_rows` | optional, deck-look: the layout draws a human item as a dashed 'To supply' row, so it accepts a slide holding one (otherwise only the `placeholder` family may) |
 | `pick`, `family` | `rule` (the picker may choose it by priority) or `offer` (a swap, an alternative or a fit-ladder switch only); the family the variety rule counts, not the id |
 | `priority` | 0 to 100; highest first, first match wins. Replaces the order of `choose_layout`'s table |
 | `alternatives`, `roomier`, `without_image` | up to 4 swaps; the next layout on the fit ladder; the layout used when its image slot stays empty |
@@ -325,6 +326,27 @@ text layouts: `close` (the dark close: title, one statement, up to three next st
 `territory_wide`, `people_cards`. That is 36 of the 40 the catalogue may hold (`engine/deck/layouts/*.yaml`).
 Picture layouts are rule-picked only when a picture can be drawn for the audience (`image_ready`); the eleven text layouts
 are offers until a gallery review promotes them.
+
+**deck-look, steps 3-4 (`spec.LOOK_V3`, off by default).** Under the flag `layouts.load()` lays `engine/deck/layouts/v3/*.yaml`
+over the 36: four new ids (`spec.LAYOUT_IDS_V3`) and one rework, 40 in all (`LAYOUT_MAX` unchanged). `statement_points` (objective,
+insight, audience, proposition: the title in a 5/12 column with the target figure in ink, two or three points in the 7/12 column
+between hairlines), `reframe` (real question: a hero line, the supporting line, a footnote row of one or two labelled notes),
+`shift_line` (proposition: a hero line, from and to under a two-stop line, the reasons to believe under a hairline) and
+`picture_column` (audience, idea, execution: a full-height 3/8 picture column bleeding off one side, sides alternating across the deck
+by `layouts.picture_sides`, the band and the text column beside it, footer on the text side). `close` v2 (also for `investment`):
+the ask as a hero, the budget as a figure, next steps as hairline rows, a human item as a dashed 'To supply' row (`human_rows`). The
+`cover_image` draw routine becomes a full-height picture column under the flag (same file). A hero line is set in capitals only up to
+`spec.CAPS_MAX_CHARS` (40) and two lines, by the font (`cap="all"`, the words unchanged), with normal letter spacing. The web deck draws
+the same layouts in CSS (`render_web.V3_WEB`). With the flag off the library and every golden are unchanged.
+
+**Amendment, 18 November 2026 (deck-look review).** *Words on pictures.* The scrim floor (`images.SCRIM_FLOOR`, 0.40) is a visual default,
+not a readability guarantee: light text on a 40% dark scrim over white is 2.26:1, dark text on a 40% light scrim over black 2.61:1, and a
+60% scrim still only 3.94:1. The guarantee is the render-time check alone: under `LOOK_V3`, `text_on_image_contrast` (10th percentile on a
+text-free render) below AA is an **error**. A picture a person swaps in later is never re-measured and cannot be guaranteed. The repair
+loop's `add_scrim` picks the tone opposite the text colour (`repair.scrim_tone`: `light` under dark words, `dark` under light ones).
+*Fonts.* A `LOOK_V3` PDF must embed the vendored static faces: `run_deck.to_pdf` runs `pdffonts` and fails (`FontsNotEmbedded`) on a
+substitute or a variable instance. LibreOffice 7.4 on macOS ignores the private profile's fonts folder, so the static faces must be
+installed there (`scripts/install-deck-fonts.sh`); on Linux `to_pdf` points LibreOffice at them through fontconfig (`FONTCONFIG_FILE`).
 
 ### 5.1 The plan (`layouts.plan`) and the fit ladder
 
@@ -442,6 +464,18 @@ Rules:
   sent to a provider (os-layer §4), and a `reference_only` asset never fills a slot.
 - `theme`: `napkin` · `brand` · `classic`. `strict_brand`: only the kit's layouts and given tokens, nothing
   derived. `inputs.text_mode`: `preserve` turns the repair loop's shorten rung and the plan's density moves to the notes off (the cover's unresolved lines still go to the notes: they are a to-do, not words for the room); `condense` is the app's default, passed by the runner (the engine given none behaves as in section 6.3).
+- **Deck types (features/deck-types.clan), with `DECK_RECIPES=1` and `DECK_LOOK_V3=1` only.** A deck type's recipe
+  (`engine/deck/profiles/<id>.yaml`, resolved by `profiles.recipe`) supplies defaults for these preferences. The order of
+  authority for every knob is: **the person's own preference** (`look.*`, a CLI flag, a layout swap) **> a limit the inputs
+  state > an env override for the run > the recipe > the spec default.** The recipe sets the density level and its role
+  windows, the default of `look.pictures.on`, which slide types get empty picture slots when the person set no picture
+  preference, which empty slots generation may plan (`all` · `cover` · `none`: a credentials deck never gets a generated person
+  or case, a tender none; narrowing only, never the cap, never an approval), the default of `strict_brand` (applied only when an
+  agency Style Pack or a Brand Clan is attached), and the title form (which stage e lines are asked for and whether the claim-title
+  check applies; a title is never rewritten). `inputs.deck_type: {id, by, at}` is the person's explicit pick on the type picker
+  (ranks above an answer to `q_deck_type`, a high-confidence inference and the default); `inputs.format: full` is
+  "Sent to be read" on every type (detailed, pictures on the cover only, `notes_unread` warns). The recipe's `size` stays inert
+  until deck-slide-size merges.
 
 ### 6.4 Asking: intake, the Start screen and Review
 
@@ -534,6 +568,85 @@ automatically after an update: the notice says what changed and the person choos
 **The Brand Clan seam** is `deck.look.brand_tokens(frozen_brand)`, the one place that will know Contract 6's shape. Contract 6 is
 unmerged, so it is a stub that returns no tokens; a deck works without it. Shrey's open asks are in
 `features/deck-look-kits.clan` (`design.shrey_asks`).
+
+### 6.6 Graphics (`deck-graphics`, 18 November 2026)
+
+Behind `spec.GRAPHICS` (`DECK_GRAPHICS=1`, read only with `DECK_LOOK_V3=1`; off by default, and off is byte-identical). Graphics are
+native shapes that draw only what the deck already says. Slice 1 is **icons**:
+
+- **Library.** 72 Lucide icons (`lucide-static` 1.75.0, ISC; the Feather-derived ones MIT) vendored as path data in
+  `engine/deck/vendor/icons/` (`icons.json`, `LICENSE`, `icons.source.json` with the version and the tarball's integrity hash), made
+  once by `scripts/vendor_icons.py`. No SVG is parsed at run time. No brand, platform, award or trophy icon (`graphics.ICON_DENY`).
+- **Drawn as** one native freeform per icon (ADR in `features/deck-graphics.clan`: native shapes over SVG pictures): a `p:sp` with a
+  standard `a:custGeom` whose `a:pathLst` holds every sub-path (`moveTo`, `lnTo`, `cubicBezTo`, `close`; `w = h = 24000`,
+  `fill="none"`), `a:noFill`, a round-capped round-joined `a:ln` in the slide's text token (ink, or on-dark on a dark ground), named
+  `Icon: <id>`, marked decorative (`a16` decorative extension). The web draws the same path data as inline SVG (`currentColor`,
+  `aria-hidden`), only where the pptx drew one.
+- **Chosen by** the fixed keyword map `engine/deck/policy/icons.yaml` on the item's heading only (a kv key, a table row's first cell,
+  a card's title, a bullet's first four words), whole words, plurals folded, the longer keyword winning. Two different icons for
+  one heading: none. All-or-none per group of at least two: one miss or one repeat and the group has no icons. Never a fallback glyph.
+- **Placed** on channel-role table rows (`rows_aside`, `picture_column`) and statement points (`statement_points`), at the type size
+  the layout already chose: an icon never shrinks text or changes a layout; if the group does not fit with its icons at that size,
+  it is drawn without them. Not on the measuring pass or the hole probe. Stroke 3:1 or better on its ground, else none.
+- **Off** for a deck type whose recipe says `graphics: {icons: false}` (tender_response) and for a deck whose
+  `meta.preferences.look.graphics.icons` is false. `mockups` is the other switch (frames and strips); charts and diagrams have none:
+  they follow the deck's own data and the fit.
+- **No icon makes a claim of its own** (`graphics.ICON_CLAIMS`, refused by the vendor script and a test): no direction (an arrow, a
+  rising line), no verdict (a tick, a cross, a badge), no approval (a thumb, a star). 'Sales falling 12%' gets no up-arrow.
+- **Checked** by `i_icon_allowlist` and `i_icon_contrast` (gate) and `i_icon_groups` and `i_icon_share` (advisory, at most 3 icon
+  slides in any 10 presented) in `checklist.json`.
+
+Slice 2 is **execution frames**, slice 3 the **storyboard strip**:
+
+- **Frames** (`graphics.frame_geometry`): poster (6-sheet, print page), billboard (48-sheet, 96-sheet), phone (9:16 fills the screen;
+  4:5, 1:1 and other social or film shapes sit as a feed card on a blank screen with two grey bars), screen (film 16:9), spread
+  (magazine DPS, a fold hairline) and strip (bus sides, banners: a plain bezel). Drawn by us from 2 to 5 native shapes in the ink token;
+  no licensed template, no device, street, shop, logo or platform chrome. Drawn wherever an execution's picture is drawn (its own
+  execution slide, or a merged slide that absorbed it), contained in the picture's box; the words never move.
+- **Window aspect.** A Production size: its format's aspect from `vendor/format-packs.json` (else its own pixels), so it is drawn
+  whole. Anything else: the frame's default format (`spec.FRAME_FORMATS`: uk-6-sheet, uk-48-sheet, meta-stories-9x16, film-16x9,
+  mag-a4-dps, uk-bus-tside), cropped to it around its focal point.
+- **Production first.** `images.bind_production` under the flag takes the newest placeable size of the execution's channel whatever its
+  shape (the frame shows it whole); a channel whose sizes are all out of date is held with that reason; a rights-pending size is left
+  empty with `Rights to supply` and its Review notice, never placed and never replaced by a generated picture. A generated picture
+  only where Production made nothing for that channel. Under the flag stage g is told to describe the artwork itself, never a photo of a
+  street or a shelter with the ad in it (`stages.ARTWORK_RULE`; the request, and so a recorded stage g, is unchanged).
+- **Labels.** The fixed `Mock-up` (`spec.MOCKUP_LABEL`) on every frame and strip, in every build (client builds too), beside the
+  picture's own label (`Production` or `Illustrative` until approved), in a row under the frame: never on the frame or the picture.
+- **Storyboard strip.** A film execution whose newest Production storyboard has 3 or 4 placeable picked frames (shot order = the
+  contract's `shot.rank`, a fractional index; end cards, rights-pending and mock frames never count) gets slots `shot_1..shot_n` and is
+  drawn as a numbered strip (numbers only: no shot caption is carried). More than 4: first, last and evenly spaced ones ('4 of 9
+  shots'). Fewer than 3: one frame in a screen frame. All Production or not drawn.
+- **Checked** by `m_mockup_labelled`, `m_frame_aspect`, `m_frame_rights` (gate) and `m_production_first` (metric) and `s_strip_order`
+  (advisory).
+
+Slices 4-9 are **charts**, **diagrams**, the **grid of points**, web parity and the checklist:
+
+- **The ledger, verified in code.** A research fact row is `{id, version, status, entity, key, value, unit, as_of, sources}`; a
+  document figure is `{value, unit, label, as_of, page}`. Neither has a `measure` or `period` field: one measure is one fact `key` (or,
+  for document figures, one document), and a period is a label (`2024`, `Q1 2025`, `FY26`, a month, `Month 3`).
+- **Charts** (`graphics.chart_form`, `assemble` under the flag): every point a fact or docfig ref read from the ledger; at least 2 points
+  of one unit and one measure; bar (categories), column (2 to 6 periods), line (more periods), a 100% segmented bar only when a stated
+  whole is given and found in the ledger (same unit and measure) and the parts sum to it within rounding (else a plain bar: a
+  100% bar would stretch 0.3 and 0.2 to 60 / 40). One value becomes a hero figure, 2 to 4 unlike ones a stat row, more than 8 a table with every row; nothing sourced,
+  no chart. Never a pie, an 'Other', a total or any computed value. A native python-pptx chart part (the workbook stays editable), value
+  axis from zero and hidden, no gridlines, no legend for one series, labels in text tokens, the hero (at most 2) in the accent and the rest
+  in a mute tint, every mark 3:1 on the paper; each mark's label is the ledger's own display ('45%', '€12,000'), the same text the web and
+  the alt text show. Every chart has `Source: <label>, <locator>` under its plot, built from the refs' ledger
+  rows; no label, no chart. `chart` / `chart_full` under the flag: title across, plot in 7 or 8 of 12 columns, commentary beside; the plot
+  never under 3.0 in (the ladder switches layout, and a chart that fits nowhere becomes its table). The web draws the same points as
+  inline SVG with a `<title>` per mark, the source line and a 'Show data' table.
+- **Diagrams** (`layouts/graphics/`, loaded only under the flag): `process_chevrons` (3 to 6 steps, label in the chevron, line under),
+  `timeline_strip` reworked (3 to 8 timed phases on one hairline, equally spaced: no date is plotted to scale), `matrix_2x2` (a table
+  block carrying `matrix` with both axes sourced; items listed in quadrants, never at a coordinate), `journey_row` (3 to 5 stages, each
+  `[stage, line, channel]`), and `grid_points` (3 to 6 headed points, icons above the headings). Each binds the slide's own block and
+  replaces its rows; every word is the block's; under its minimum the slide keeps today's layout.
+- **Report.** `report.json.graphics` lists what each chart block became and why, the diagrams drawn and the near misses
+  ('no diagram: 1 step, needs 3'), and the icons.
+- **Checked** by `c_chart_sourced`, `c_chart_numbers`, `c_chart_form`, `c_chart_contrast`, `d_own_words`, `d_matrix_axes` (gate) and
+  `c_chart_emphasis`, `d_min_items` (advisory).
+- **Recorded.** `tests/fixtures/graphics/golden_lumen_graphics.json` holds Lumen's layouts and icons under LOOK_V3 + GRAPHICS. The
+  default stays off: GRAPHICS needs LOOK_V3, which is not on by default yet, and the design turns graphics on only after RECIPES.
 
 ## 7. Issues
 

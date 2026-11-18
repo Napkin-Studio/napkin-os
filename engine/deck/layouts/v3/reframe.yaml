@@ -1,0 +1,48 @@
+id: reframe
+version: 1
+group: content
+purpose: statement
+description: The question as a hero line across the content frame, the supporting line under it, and a row of one or two labelled notes at the foot.
+slot_summary: title (hero), line, notes row (1-2)
+for_types:
+- real_question
+when:
+  blocks_only:
+  - statement
+  - text
+  - small
+  - kv
+  blocks_any:
+  - statement
+  - text
+priority: 96
+alternatives:
+- emphasis_bar
+- big_statement
+roomier: big_statement
+density: lean
+pick: rule
+family: reframe
+renderer: reframe
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    min_chars: 3
+    max_lines: 3
+  line:
+    kind: text
+    role: lead
+    from_blocks:
+    - statement
+    - text
+    dominant: true
+  notes_row:
+    kind: group
+    role: body
+    from_blocks:
+    - kv
+    - small
+    min_items: 1
+    max_items: 2

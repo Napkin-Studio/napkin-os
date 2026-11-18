@@ -1,0 +1,44 @@
+id: matrix_2x2
+version: 1
+group: content
+purpose: compare
+description: Two sourced axes crossing; the items listed inside their quadrants, never plotted at a point.
+slot_summary: title, matrix (a table's two-axis reading)
+for_types:
+- competition
+- market
+- insight
+- audience
+- what_we_know
+when:
+  blocks_any:
+  - table
+  test: matrix_sourced
+priority: 81
+alternatives:
+- native_table
+roomier: native_table
+density: standard
+pick: rule
+family: diagram
+renderer: matrix_2x2
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  matrix:
+    kind: table
+    role: body
+    from_blocks:
+    - table
+    dominant: true
+  note:
+    kind: text
+    role: small
+    from_blocks:
+    - text
+    - small
+    - statement

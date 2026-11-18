@@ -30,6 +30,10 @@ import yaml
 from . import images, spec
 
 DIR = Path(__file__).with_name("layouts")
+#: deck-look steps 3-4: the layouts laid over the library under ``spec.LOOK_V3`` (new ids and reworks).
+V3_DIR = DIR / "v3"
+#: deck-graphics: the diagram layouts and the reworked timeline strip, laid over the v3 library under ``spec.GRAPHICS`` only.
+GRAPHICS_DIR = DIR / "graphics"
 SCHEMA = Path(__file__).with_name("schemas") / "layout.schema.json"
 #: The keys the plan owns: removed by ``strip_plan``, compared in golden_plan.json.
 PLAN_KEYS = ("layout", "slots", "meta.layout_title_pt")
@@ -48,15 +52,23 @@ class LibraryError(ValueError):
 def load(directory: Path | None = None, force: bool = False) -> dict:
     """``{id: layout}`` in file order (priority breaks ties by it). Every file is validated against the schema and the
     library's own rules: id equals the file name, in ``spec.LAYOUT_IDS``, at most ``spec.LAYOUT_MAX``, ``for_types`` in
-    ``spec.SLIDE_TYPES``, ``pick`` and ``family`` set, no ``max_line_in``, alternatives that exist."""
+    ``spec.SLIDE_TYPES``, ``pick`` and ``family`` set, no ``max_line_in``, alternatives that exist.
+
+    The default library under ``spec.LOOK_V3`` is the 36 files with ``layouts/v3`` laid over them (deck-look steps 3-4): a file there
+    with a new id (``spec.LAYOUT_IDS_V3``) is added, one with an existing id replaces it. With the flag off it is the 36, unchanged."""
+    v3 = directory is None and bool(spec.LOOK_V3)
+    gr = v3 and bool(spec.GRAPHICS)
     d = Path(directory) if directory else DIR
-    key = str(d)
+    key = str(d) + ("+v3" if v3 else "") + ("+graphics" if gr else "")
+    if force:   # a forced reload re-reads the files: the recipe catalogue must not keep the old ones
+        _CACHE.pop("catalogue", None)
     if key in _CACHE and not force:
         return _CACHE[key]
     import jsonschema
     schema = json.loads(SCHEMA.read_text())
     lib: dict = {}
-    for f in sorted(d.glob("*.yaml")):
+    files = sorted(d.glob("*.yaml")) + (sorted(V3_DIR.glob("*.yaml")) if v3 else []) + (sorted(GRAPHICS_DIR.glob("*.yaml")) if gr else [])
+    for f in files:
         lay = yaml.safe_load(f.read_text())
         try:
             jsonschema.validate(lay, schema)
@@ -64,7 +76,8 @@ def load(directory: Path | None = None, force: bool = False) -> dict:
             raise LibraryError(f"{f.name}: {e.message}") from e
         if lay["id"] != f.stem:
             raise LibraryError(f"{f.name}: id {lay['id']!r} is not the file name")
-        if lay["id"] not in spec.LAYOUT_IDS:
+        if lay["id"] not in spec.LAYOUT_IDS and not (f.parent == V3_DIR and lay["id"] in spec.LAYOUT_IDS_V3) \
+                and not (f.parent == GRAPHICS_DIR and lay["id"] in spec.LAYOUT_IDS_GRAPHICS):
             raise LibraryError(f"{f.name}: {lay['id']} is not in spec.LAYOUT_IDS")
         for t in lay["for_types"]:
             if t not in spec.SLIDE_TYPES:
@@ -83,6 +96,34 @@ def load(directory: Path | None = None, force: bool = False) -> dict:
                 raise LibraryError(f"{lay['id']}: {ref} is not a layout")
     _CACHE[key] = lib
     return lib
+
+
+def catalogue() -> dict:
+    """``{layout id: [slide types]}`` of every layout file, ``layouts/v3`` laid over the base whatever spec.LOOK_V3 says (deck-types: a
+    recipe is checked against the whole catalogue, and a layout absent from the ACTIVE library is skipped at plan time). Read only: no
+    schema pass and no cache shared with ``load``, so the active library is never touched. ``load(force=True)`` drops it, so it is read
+    again after a forced reload."""
+    key = "catalogue"
+    if key not in _CACHE:
+        out = {}
+        for f in sorted(DIR.glob("*.yaml")) + sorted(V3_DIR.glob("*.yaml")):
+            lay = yaml.safe_load(f.read_text()) or {}
+            if isinstance(lay, dict) and lay.get("id"):
+                out[lay["id"]] = list(lay.get("for_types") or [])
+        _CACHE[key] = out
+    return {k: list(v) for k, v in _CACHE[key].items()}
+
+
+def purposes() -> dict:
+    """deck-types (the picker's spine thumbnail, profiles.card_data): ``{layout id: {purpose, for_types, priority, pick}}`` of every layout
+    file, ``layouts/v3`` laid over the base whatever spec.LOOK_V3 says. Read only, like ``catalogue``; never touches the active library."""
+    out = {}
+    for f in sorted(DIR.glob("*.yaml")) + sorted(V3_DIR.glob("*.yaml")):
+        lay = yaml.safe_load(f.read_text()) or {}
+        if isinstance(lay, dict) and lay.get("id"):
+            out[lay["id"]] = {"purpose": lay.get("purpose"), "for_types": list(lay.get("for_types") or []),
+                              "priority": lay.get("priority", 0), "pick": lay.get("pick")}
+    return out
 
 
 def family(layout_id: str, library: dict | None = None) -> str:
@@ -154,7 +195,187 @@ def image_ready(lay: dict, ready: set | frozenset) -> bool:
     return bool(need) and all(n in ready for n in need)
 
 
-TESTS = {"has_target_figure": has_target_figure, "has_human_item": has_human_item, "compare_table": compare_table, "role_rows": role_rows}
+#: Block kinds a statement layout sets as one point each (bullets and kv: one point per item).
+POINT_KINDS = ("bullets", "kv", "quote", "text", "statement", "small", "callout", "card")
+
+
+def statement_points(bl: list) -> list | None:
+    """The points a statement layout (statement_points) stacks, from the shown blocks, in order: ``[{heading, text, italic, caption}]``.
+    A bullets or kv block gives one point per item (a kv item's key is its heading), a card its title as the heading, every other text
+    block one point; the 'Illustrative line' label after an unsourced quote is that quote's caption, not a point; empty blocks are
+    skipped. None when a block is of a kind a point cannot hold (a table, a chart, a from-to...). The words are the blocks' own."""
+    out = []
+    for b in bl:
+        k = b["kind"]
+        if k not in POINT_KINDS:
+            return None
+        if k == "small" and b.get("basis") == "meta" and b.get("text") == spec.ILLUSTRATIVE_QUOTE and out and out[-1]["italic"]:
+            out[-1]["caption"] = b["text"]
+            continue
+        if k == "bullets":
+            out += [{"heading": "", "text": _item_text(i).strip(), "italic": False, "caption": ""} for i in _items(b) if _item_text(i).strip()]
+        elif k == "kv":
+            out += [{"heading": str(i[0]).strip(), "text": str(i[1]).strip(), "italic": False, "caption": ""} for i in _items(b) if str(i[1]).strip()]
+        elif str(b.get("text", "")).strip():
+            out.append({"heading": str(b.get("title", "")).strip() if k == "card" else "", "text": str(b["text"]).strip(),
+                        "italic": k == "quote", "caption": ""})
+    return out
+
+
+def points_2_3(s: dict, bl: list) -> bool:
+    """Two or three points for a statement layout (``statement_points``): a slide with fewer is not padded and one with more is not cut;
+    another layout is picked instead (deck-look, 'never pad')."""
+    pts = statement_points(bl)
+    return pts is not None and 2 <= len(pts) <= 3
+
+
+#: The kinds a rows_aside column may hold beside the rows: the absorbed slide's own blocks (a list, a line, labelled pairs, the copy).
+ASIDE_KINDS = ("bullets", "kv", "text", "statement", "copy", "callout", "card")
+
+
+def rows_aside(s: dict, bl: list) -> bool:
+    """A merged slide (deck-look step 5): exactly one table of two to four columns and one to four rows under its header, and at least
+    one block beside it that the aside column holds (``ASIDE_KINDS``); every other block a small line. 'How it runs' (the channel table
+    and an execution) and 'how we will know' (the measures and the guardrails). A table alone is not one: it keeps its own layout."""
+    tables = [b for b in bl if b["kind"] == "table"]
+    if len(tables) != 1:
+        return False
+    rows = tables[0].get("rows") or []
+    if not (2 <= len(rows) <= 5 and all(2 <= len(r) <= 4 for r in rows)):
+        return False
+    rest = [b for b in bl if b is not tables[0]]
+    return any(b["kind"] in ASIDE_KINDS for b in rest) and all(b["kind"] in ASIDE_KINDS + ("small",) for b in rest)
+
+
+def _only_notes(bl: list, keep) -> bool:
+    return all(b is keep or b["kind"] in ("text", "small", "statement") for b in bl)
+
+
+def steps_3_6(s: dict, bl: list) -> bool:
+    """deck-graphics process_chevrons: one steps block of 3 to 6 steps, each with a label that fits a chevron in two lines, beside at most
+    a note; fewer is never drawn as a diagram (nothing is padded) and more keeps its rows."""
+    from . import graphics   # noqa: PLC0415
+    items = graphics.steps_of(bl)
+    st = next((b for b in bl if b["kind"] == "steps"), None)
+    return (items is not None and graphics.PROCESS_MIN <= len(items) <= graphics.PROCESS_MAX and _only_notes(bl, st)
+            and all(it and it[0] and len(it[0]) <= 2 * graphics.CHEVRON_LABEL_MAX for it in items))
+
+
+def timed_3_8(s: dict, bl: list) -> bool:
+    """deck-graphics timeline: one steps block of 3 to 8 phases whose time is the same cell of every step (a phase and its time)."""
+    from . import graphics   # noqa: PLC0415
+    items = graphics.steps_of(bl)
+    st = next((b for b in bl if b["kind"] == "steps"), None)
+    if items is None or not graphics.TIMELINE_MIN <= len(items) <= graphics.TIMELINE_MAX or not _only_notes(bl, st):
+        return False
+    return any(all(len(it) > j and graphics.is_time(it[j]) for it in items) for j in (0, 1))
+
+
+def matrix_sourced(s: dict, bl: list) -> bool:
+    """deck-graphics matrix_2x2: one table carrying a ``matrix`` (x and y axes, cells hh / hl / lh / ll) whose BOTH axes have refs, every
+    item in a named cell. No stage writes one today: it arrives from a document's two-axis table or from a person."""
+    from . import graphics   # noqa: PLC0415
+    return any(graphics.matrix_ok(b) for b in bl if b["kind"] == "table")
+
+
+def journey_3_5(s: dict, bl: list) -> bool:
+    """deck-graphics journey_row: one steps block of 3 to 5 stages, each [stage, text, channel] with all three cells written."""
+    from . import graphics   # noqa: PLC0415
+    items = graphics.steps_of(bl)
+    st = next((b for b in bl if b["kind"] == "steps"), None)
+    return (items is not None and graphics.JOURNEY_MIN <= len(items) <= graphics.JOURNEY_MAX and _only_notes(bl, st)
+            and all(len(it) >= 3 and all(it[:3]) for it in items))
+
+
+def points_3_6(s: dict, bl: list) -> bool:
+    """deck-graphics grid_points: 3 to 6 points (statement_points' reading), every one with a heading of its own."""
+    pts = statement_points(bl)
+    return pts is not None and 3 <= len(pts) <= 6 and all(p["heading"] for p in pts)
+
+
+TESTS = {"has_target_figure": has_target_figure, "has_human_item": has_human_item, "compare_table": compare_table, "role_rows": role_rows,
+         "points_2_3": points_2_3, "rows_aside": rows_aside, "steps_3_6": steps_3_6, "timed_3_8": timed_3_8, "matrix_sourced": matrix_sourced,
+         "journey_3_5": journey_3_5, "points_3_6": points_3_6}
+
+
+def has_text_zone(s: dict) -> bool:
+    """deck-look step 7: the slide's picture carries a passing zone from the finder (``images.text_zone`` recorded on the slot)."""
+    im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
+    return bool((im.get("text_zone") or {}).get("zone"))
+
+
+def text_zone_fallback(s: dict) -> dict | None:
+    """The finder's record when it found no zone for this slide's picture (the words stay beside it), else None."""
+    im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
+    tz = im.get("text_zone") or {}
+    return tz if tz.get("none") else None
+
+
+def bleed_ready(lay: dict, s: dict, ready) -> bool:
+    """A bleed layout (cover_bleed, full_bleed_statement under the look) holds the slide: its picture can be drawn and the finder measured a
+    zone where the words read (AA at the 10th percentile under a scrim of at most images.SCRIM_CAP)."""
+    return image_ready(lay, ready) and has_text_zone(s)
+
+
+_FIGURE = re.compile(r"[<>~≈]?(?:[€$£]|(?:EUR|USD|GBP)\s)\s?\d[\d,.]*(?:\s?(?:[kKmMbB]n?\b|million\b|billion\b))?|\d[\d,.]*\s?(?:%|per ?cent\b|×)")
+
+
+#: accent_phrase: a word-only candidate shorter than this is never the accent (a figure may be). And single generic words that a bound
+#: line can carry but that say nothing about the slide (a copy line "Today." or an item "Now" matched in the title).
+ACCENT_MIN_CHARS = 5
+ACCENT_STOP = frozenset({"today", "now", "tomorrow", "here", "there", "this", "that", "these", "those", "people", "everyone", "everything",
+                         "always", "never", "more", "less", "better", "best", "new", "next", "first", "last", "yes", "no", "all", "every",
+                         "our", "your", "their", "them", "they", "you", "we", "it", "its", "the", "and", "with", "from", "into", "about",
+                         "real", "really", "very", "just", "only", "still", "again", "time", "year", "years", "week", "month", "day"})
+
+
+def accent_phrase(s: dict, bl: list) -> str | None:
+    """deck-look (rea-full A3, Pitch's highlight): the ONE phrase of a slide's action title set in the accent, or None. Only a phrase that
+    is itself a bound field of the same slide: the 'to' of its from-to, a line of its copy, a figure one of its blocks gives, or the whole
+    text of one of its short items (six words at most); never the whole title, matched on word boundaries, case-insensitive. The longest
+    wins; nothing is reworded. At most one per slide (k_accent_marks counts it). Never from an internal block or a person's placeholder
+    (``internal`` / ``human``, a ``placeholder`` basis), never a single generic word (ACCENT_STOP: "today", "now", "people") and never a
+    word-only phrase under ACCENT_MIN_CHARS letters; a figure ("5%", "€2m") may be short."""
+    title = str(s.get("title") or "")
+    tl = title.lower()
+    cands = []
+    for b in bl:
+        if b.get("internal") or b.get("human") or b.get("basis") == "placeholder":
+            continue
+        if b.get("kind") == "fromto" and str(b.get("to") or "").strip():
+            cands.append(str(b["to"]))
+        cands += [str(x) for x in b.get("lines") or []]
+        texts = [str(b.get("text") or "")] + [_item_text(i) if not isinstance(i, (list, tuple)) else str(i[-1]) for i in b.get("items") or []]
+        texts += [str(c) for r in (b.get("rows") or [])[1:] for c in r]
+        cands += [t for t in texts if 0 < len(t.split()) <= 6]
+        cands += [m.group(0) for t in texts for m in _FIGURE.finditer(t)]
+    best = None
+    for c in cands:
+        c = c.strip().rstrip(".")
+        if len(c) < 2 or c.lower() == tl.rstrip(".") or not re.search(r"\w", c):
+            continue
+        if not _FIGURE.fullmatch(c) and (len(c) < ACCENT_MIN_CHARS or c.lower() in ACCENT_STOP):
+            continue
+        m = re.search(r"(?<![\w])" + re.escape(c.lower()) + r"(?![\w])", tl)
+        if m and (best is None or len(c) > len(best)):
+            best = title[m.start():m.end()]
+    return best
+
+
+def picture_sides(deck: dict) -> dict:
+    """``{slide id: "left" | "right"}`` for every slide planned on ``picture_column``, in deck order: the first column on the left, then
+    alternating (design.layouts: picture columns alternate sides). One rule for the pptx and the web deck."""
+    out, side = {}, "left"
+    for sid in deck["order"]:
+        if ((deck["slides"][sid].get("layout") or {}).get("id")) == "picture_column":
+            out[sid] = side
+            side = "right" if side == "left" else "left"
+    return out
+
+
+def caps_ok(text: str) -> bool:
+    """A statement may be set in capitals: at most ``spec.CAPS_MAX_CHARS`` characters (the renderer also asks for two lines at most)."""
+    return len(str(text).strip()) <= spec.CAPS_MAX_CHARS
 
 
 def _matches(lay: dict, s: dict, bl: list, ready) -> bool:
@@ -182,6 +403,8 @@ def _matches(lay: dict, s: dict, bl: list, ready) -> bool:
     t = w.get("test")
     if t == "image_ready":
         return image_ready(lay, ready)
+    if t == "bleed_ready":
+        return bleed_ready(lay, s, ready)
     if t and not TESTS[t](s, bl):
         return False
     return True
@@ -215,21 +438,39 @@ def is_thin(bl: list) -> bool:
     return len(thin) == 1 and thin_blocks(thin[0]) is not None and all(b["kind"] in ("text", "small", "statement") for b in bl if b is not thin[0])
 
 
-def pick_planned(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset()) -> str:
+def pick_planned(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset(), prefer: dict | None = None) -> str:
     """What the plan picks: the rules' choice (``pick``), except that a thin table or timeline gives way to ``big_statement``. ``--no-layout-plan`` and the
-    renderer's own fallback use ``pick`` alone, as before the plan."""
+    renderer's own fallback use ``pick`` alone, as before the plan. ``prefer``: as ``pick``."""
     lib = library or load()
-    got = pick(s, audience, lib, ready)
+    got = pick(s, audience, lib, ready, prefer=prefer)
     if got in THIN_FROM and "big_statement" in lib and is_thin(spec.shown_blocks(s, audience)):
         return "big_statement"
     return got
 
 
-def pick(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset(), offers: bool = False) -> str:
+def preferred(s: dict, bl: list, lib: dict, ready=frozenset(), prefer: dict | None = None) -> str | None:
+    """deck-types: the first layout a recipe prefers for this slide's type (``prefer``: ``{slide type: [layout id, ...]}``,
+    profiles.recipe) that is in the active library and whose ``for_types``, ``when`` and ``accepts`` all take the slide's own blocks;
+    None when there is none. A layout whose ``pick`` is ``offer`` is never preferred: an offer stays in the swap menu for a person until a
+    gallery review promotes it to ``rule`` (a recipe naming one is a suggestion only). An id the active library lacks (not built yet, or
+    LOOK_V3 off) is skipped. It never forces: the fit, the points kept and the hole are the plan's to check."""
+    for lid in (prefer or {}).get(s.get("type")) or []:
+        lay = lib.get(lid)
+        if lay and lay.get("pick") == "rule" and _matches(lay, s, bl, ready) and accepts(lay, s, bl, ready):
+            return lid
+    return None
+
+
+def pick(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset(), offers: bool = False, prefer: dict | None = None) -> str:
     """The layout id the rules choose for one slide dict: highest priority first, first match wins, ``flow`` when none.
-    Only layouts whose ``pick`` is ``rule`` take part (``offers=True`` lets the offered ones in too). Pure, no drawing."""
+    Only layouts whose ``pick`` is ``rule`` take part (``offers=True`` lets the offered ones in too). Pure, no drawing.
+    ``prefer`` (deck-types, a recipe's layout map): its layouts for the slide's type are tried first (``preferred``); None is today."""
     lib = library or load()
     bl = spec.shown_blocks(s, audience)
+    if prefer:
+        got = preferred(s, bl, lib, ready, prefer)
+        if got:
+            return got
     order = {k: i for i, k in enumerate(lib)}
     for lay in sorted(lib.values(), key=lambda l: (-l["priority"], order[l["id"]])):
         if lay["pick"] != "rule" and not offers:
@@ -246,8 +487,8 @@ def accepts(lay: dict, s: dict, bl: list, ready=frozenset()) -> bool:
     picture when it has one."""
     if s["type"] not in lay["for_types"]:
         return False
-    if has_human_item(s, bl) and lay["family"] != "placeholder":
-        return False   # only the placeholder family may draw a human item (dashed, PROPOSED, TO SUPPLY)
+    if has_human_item(s, bl) and lay["family"] != "placeholder" and not lay.get("human_rows"):
+        return False   # only the placeholder family (or a layout with human_rows: dashed To supply rows) may draw a human item
     take = {k for sl in lay["slots"].values() if sl["kind"] != "image" for k in (sl.get("from_blocks") or [])}
     if not {b["kind"] for b in bl} <= take:
         return False
@@ -257,6 +498,8 @@ def accepts(lay: dict, s: dict, bl: list, ready=frozenset()) -> bool:
     if "blocks_any" in w and not {b["kind"] for b in bl} & set(w["blocks_any"]):
         return False
     t = w.get("test")
+    if t == "bleed_ready" and not has_text_zone(s):
+        return False
     if t in TESTS and t != "image_ready" and not TESTS[t](s, bl):
         return False
     return True
@@ -413,7 +656,7 @@ def slot_limit_issues(lay: dict, sid: str, slots: dict) -> list:
 
 
 #: The check names the plan raises (the contract's reserved slot and layout names): in validation.json, warn (slot_missing: error).
-PLAN_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown")
+PLAN_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown", "text_on_image_fallback")
 
 
 def without_plan_findings(findings: list) -> list:
@@ -681,7 +924,7 @@ def title_sizes(deck: dict, ids: dict, probe, aud: str = "review") -> dict:
         by.setdefault(lid, []).append(sid)
     out = {}
     for lid, sids in by.items():
-        if lid in ("flow", "cover", "cover_image", "close", "emphasis_bar", "big_statement", "full_bleed_statement", "section"):
+        if lid in ("flow", "cover", "cover_image", "close", "emphasis_bar", "big_statement", "full_bleed_statement", "section", "cover_bleed"):
             continue
         out[lid] = next((sz for sz in TITLE_SIZES if all(probe(deck["slides"][sid], lid, sz) for sid in sids)), TITLE_SIZES[-1])
     return out
@@ -695,7 +938,12 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     a base deck: it is refused). The plan only overlays: ``slide.layout`` (id, version, chosen_by, alternatives, why, fit with
     ``moved``, blocks_sha), ``slide.slots`` and ``meta.layout_title_pt``. It never edits a block, a note, a claim or the order.
 
-    ``prefs``: ``density`` (lean, standard, detailed; None is detailed), ``text_mode`` (condense or preserve), ``repair`` (bool).
+    ``prefs``: ``density`` (lean, standard, detailed; None is detailed), ``text_mode`` (condense or preserve), ``repair`` (bool),
+    ``prefer`` (deck-types: a recipe's ``{slide type: [layout id, ...]}``, profiles.recipe; None is today), ``prefer_type`` (the type's
+    id, for the why line) and ``roles`` / ``windows`` (deck-types: the recipe's density roles and word windows; None is spec.ROLE_OF_TYPE /
+    ROLE_WINDOWS). A preferred layout (``preferred``) replaces the rule pick only when it fits the slide, as density leaves it,
+    at rung as_is or shrunk; at the ladder, if it no longer does, the rule pick takes the slide back, so a preference never moves a
+    point the rule pick would keep and never draws past shrunk. chosen_by stays ``rule``; why names the recipe.
     ``swaps``: ``{slide id: layout id}`` a person chose. ``fixes``: ``{slides: {sid: {avoid, scale_max, layout, notes}}, images:
     {sid: {slot: {scrim, fit, focal}}}}`` from slice 5, cumulative. ``hooks``: ``{shorten: fn(sid, slot, limits, fields)}``
     returning ``{"deferred": True}``, ``{"text": {field id: text}}`` or None. ``pending``: the slots still over their limits when the
@@ -724,13 +972,57 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     def probe(sl_, lid, relaxed=False, cap=None, stamped=None, cpl=48):
         return R.probe(sl_, lid, relaxed=relaxed, scale_cap=cap, title_pt=stamped, cpl=cpl)
 
+    def before_probe(sid_, s_, lid_):
+        """``(exempt, base, moved)`` before the probe: the cover's held lines, then density (step 0 of the ladder) for layout ``lid_``."""
+        exempt_ = sid_ not in story and deck["meta"].get("format", "pitch") == "pitch"
+        base_ = {**s_}
+        base_.pop("layout", None)
+        moved_: list = _cover_held(s_, aud, prefs) if s_["type"] == "title" else []   # unresolved cover lines go to the notes, labelled, never dropped
+        content_ = lid_ != "flow" and lib[lid_]["group"] == "content" and s_["type"] not in ("title", "close", "next_step")
+        # 0. density: movable points past the target go to the notes
+        if density in spec.DENSITY_WORDS and content_ and not exempt_ and s_["type"] not in ("appendix",) and prefs.get("text_mode") != "preserve":
+            target = spec.DENSITY_WORDS[density]
+            roles_ = prefs.get("roles") or spec.ROLE_OF_TYPE   # deck-types slice 4: the type's roles and windows (profiles.recipe density); today's without
+            wins_ = prefs.get("windows") or spec.ROLE_WINDOWS
+            if spec.LOOK_V3 and density == "lean" and s_["type"] in roles_:   # deck-look (Q13): a pitch's lean density is the role
+                target = max(target, wins_[roles_[s_["type"]]][1])   # window's top: 35 a statement, 70 an argument
+            cands = _movable(deck, sid_, base_, aud, exempt_)
+            words = lambda sl_: sum(len(str(t).split()) for b in spec.shown_blocks(sl_, aud) if b["kind"] != "copy" for t in _block_texts(b))
+            cur = _with_moved(base_, [])
+            for c in cands:
+                if words(cur) <= target:
+                    break
+                moved_.append(_moved_rec(c))
+                cur = _with_moved(base_, moved_)
+        return exempt_, base_, moved_
+
     # ---- the rule pass: a layout per slide
+    prefer = prefs.get("prefer") or None
+    pref_rule = {}   # deck-types: slide id -> (the rule's layout, its why) for a slide a recipe preference took
     ids, by, why = {}, {}, {}
     for sid in deck["order"]:
         s = deck["slides"][sid]
         f = {} if s.get("pinned") else (fx.get(sid) or {})
         rid = pick_planned(s, aud, lib, ready.get(sid, frozenset()))
         by[sid], why[sid] = "rule", "rule table"
+        if prefer:
+            pid = pick_planned(s, aud, lib, ready.get(sid, frozenset()), prefer=prefer)
+            if pid != rid:
+                _ex, b_, m_ = before_probe(sid, s, pid)
+                _rx, _rb, m_rule = before_probe(sid, s, rid)
+                sl_p = _with_moved(b_, m_) if m_ else b_
+                shown_p = {**sl_p, "blocks": spec.shown_blocks(sl_p, aud)}
+                rp = probe(shown_p, pid, cap=f.get("scale_max"))
+                # kept only when it fits as is or shrunk, keeps at least as many points on the slide as the rule's layout (density moves no
+                # more to the notes), and, under the look, opens no hole over the gate (the swap menu's own test); else the rule pick stands
+                keeps = len(m_) <= len(m_rule)
+                hole_ok = True
+                if spec.LOOK_V3 and lib[pid]["group"] == "content":
+                    hole = R.hole_estimate(shown_p, pid)
+                    hole_ok = hole is not None and hole <= spec.HOLE_GATE
+                if rp["ok"] and not rp["relaxed"] and keeps and hole_ok:
+                    pref_rule[sid] = (rid, why[sid])
+                    rid, why[sid] = pid, f"recipe {prefs.get('prefer_type') or 'deck type'}: prefers {pid} for {s['type']}"
         sw = swaps.get(sid)
         if sw:
             if sw in lib and accepts(lib[sw], s, spec.shown_blocks(s, aud), ready.get(sid, frozenset())):
@@ -744,6 +1036,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             if alts:
                 rid, by[sid], why[sid] = alts[0], "repair", "repair: avoid"
         ids[sid] = rid
+        if sid in pref_rule and by[sid] != "rule":   # a person's swap or a repair fix beats a recipe preference
+            pref_rule.pop(sid)
     # ---- variety (look change 4, advisory): families, not ids; a run of one slide type is exempt; functional layouts, a person's swap and a
     # pinned slide are never moved; a run with no other-family alternative that fits stays (and is listed by ``variety``)
     var_swaps = 0
@@ -761,7 +1055,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         return None
 
     def movable(sid_):
-        return by[sid_] == "rule" and not deck["slides"][sid_].get("pinned") and ids[sid_] != "flow" and lib[ids[sid_]]["group"] == "content"
+        return by[sid_] == "rule" and not deck["slides"][sid_].get("pinned") and ids[sid_] != "flow" and lib[ids[sid_]]["group"] == "content" \
+            and sid_ not in pref_rule   # deck-types: variety never undoes a recipe's preference
 
     if look:
         seq = [sid for sid in validate.presented(deck) if ids[sid] != "flow" and lib[ids[sid]]["group"] == "content"
@@ -799,28 +1094,19 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         s = deck["slides"][sid]
         f = {} if s.get("pinned") else (fx.get(sid) or {})
         lid, chosen_by = ids[sid], by[sid]
-        exempt = sid not in story and deck["meta"].get("format", "pitch") == "pitch"
-        base = {**s}
-        base.pop("layout", None)
-        bl = spec.shown_blocks(base, aud)
-        moved: list = _cover_held(s, aud, prefs) if s["type"] == "title" else []   # unresolved cover lines go to the notes, labelled, never dropped
-        content = lid != "flow" and lib[lid]["group"] == "content" and s["type"] not in ("title", "close", "next_step")
-        # 0. density: movable points past the target go to the notes
-        if density in spec.DENSITY_WORDS and content and not exempt and s["type"] not in ("appendix",) and prefs.get("text_mode") != "preserve":
-            target = spec.DENSITY_WORDS[density]
-            cands = _movable(deck, sid, base, aud, exempt)
-            words = lambda sl_: sum(len(str(t).split()) for b in spec.shown_blocks(sl_, aud) if b["kind"] != "copy" for t in _block_texts(b))
-            cur = _with_moved(base, [])
-            for c in cands:
-                if words(cur) <= target:
-                    break
-                moved.append(_moved_rec(c))
-                cur = _with_moved(base, moved)
+        exempt, base, moved = before_probe(sid, s, lid)
         sl_ = _with_moved(base, moved) if moved else base
         shown = spec.shown_blocks(sl_, aud)
         sc_cap = f.get("scale_max")
         rung, scale, relaxed, why_, cpl_ = "as_is", 1.0, False, why[sid], 48
         res = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
+        if sid in pref_rule and not (res is not None and res["ok"] and not res["relaxed"]):   # deck-types: a preference holds only at as_is or shrunk
+            lid, why_ = pref_rule[sid]
+            ids[sid] = lid
+            exempt, base, moved = before_probe(sid, s, lid)
+            sl_ = _with_moved(base, moved) if moved else base
+            shown = spec.shown_blocks(sl_, aud)
+            res = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
         alts_fit: list = []
         if res is not None and res["ok"] and not res["relaxed"]:
             rung, scale = ("as_is" if res["scale"] >= 1.0 else "shrunk"), res["scale"]
@@ -870,11 +1156,23 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             fit["cpl"] = cpl_
         def fits(a, _s={**sl_, "blocks": shown}, _cap=sc_cap):
             r = probe(_s, a, cap=_cap, stamped=pt.get(a))
-            return bool(r["ok"] and not r["relaxed"])
+            if not (r["ok"] and not r["relaxed"]):
+                return False
+            if spec.LOOK_V3 and lib[a]["group"] == "content":   # deck-look (rea-full A4): the menu offers no layout that opens a hole over the gate
+                hole = R.hole_estimate(_s, a, title_pt=pt.get(a))
+                return hole is not None and hole <= spec.HOLE_GATE
+            return True
         alt_ids = _alternatives(lib, lid, base, aud, ready.get(sid, frozenset()), f.get("avoid", []), probe=fits) if lay else []
         layout = {"id": lid, "version": lay["version"] if lay else 1, "chosen_by": chosen_by, "alternatives": alt_ids[:4], "why": why_[:160],
                   "fit": fit, "blocks_sha": blocks_sha(base, aud)}
         s["layout"] = layout
+        fb = text_zone_fallback(s) if spec.LOOK_V3 and s["type"] in images.TEXT_OVER_TYPES and "picture" in ready.get(sid, ()) else None
+        if fb:   # deck-look step 7: no zone of the picture reads at AA under the capped scrim: the words sit beside it, and it is said
+            best = fb.get("best") or {}
+            issues.append(_issue(sid, "picture", "text_on_image_fallback",
+                                 f"the words are set beside the picture ({lid}), not on it: {fb.get('reason', 'no calm zone')}"
+                                 + (f" (best zone {best['zone']}: {best['p10']}:1 at the 10th percentile, s.d. {best['busy_sd']})" if best.get("zone") else ""),
+                                 best.get("p10"), images.TEXT_ON_PICTURE_TARGET, "contrast"))
         if rung in rungs or rung == "overflow_to_notes":
             rungs["overflow_moved" if rung == "overflow_to_notes" else rung] += 1
         if relaxed:

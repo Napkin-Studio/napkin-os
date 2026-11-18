@@ -120,6 +120,52 @@ class Grid:
 
 
 @dataclass(frozen=True)
+class Decor:
+    """Decoration tokens of the look (deck-look, ``spec.LOOK_V3``): structure is hairlines, not filled stripes.
+    ``rule_pt`` is the hairline weight; ``band`` turns the section band on; ``accent_marks_max`` is the most
+    accent-coloured marks a slide carries (figures and labels wear ink). Read by render_pptx and render_web."""
+    band: bool = True
+    rule_pt: float = 0.75
+    accent_marks_max: int = 2
+    band_label_pt: int = 12      # the section label (sentence case, caption role)
+
+
+#: Sans pair of the look: Archivo for titles and figures, Source Sans 3 for text (both SIL OFL, vendored in
+#: ``deck/fonts``). A machine without them substitutes ``FALLBACK_FONT``; fit is checked under that width too.
+LOOK_HEAD, LOOK_BODY, FALLBACK_FONT = "Archivo", "Source Sans 3", "Arial"
+#: Margin over the measured average glyph width (the fit stays deliberately generous; QA catches the rest).
+WIDTH_MARGIN = 1.08
+_WIDTHS: dict = {}
+
+
+def _widths() -> dict:
+    """``fonts/widths.json`` (written by ``fonts/measure_widths.py`` from the font files), read once."""
+    if not _WIDTHS:
+        import json
+        from pathlib import Path
+        _WIDTHS.update(json.loads((Path(__file__).resolve().parent / "fonts" / "widths.json").read_text()))
+    return _WIDTHS
+
+
+def measured_wf(font: str, bold: bool = False, caps: bool = False) -> float | None:
+    """The measured average glyph width of ``font`` as a fraction of the size, or None for a font never measured."""
+    row = _widths()["fonts"].get(font)
+    return row["bold" if bold else "regular"]["caps" if caps else "mixed"] if row else None
+
+
+def fit_wf(font: str, bold: bool = False, caps: bool = False) -> float | None:
+    """The width factor text in ``font`` is fitted at: the wider of the font and its fallback, times
+    ``WIDTH_MARGIN``, so a deck that fits fits under either. None for a font with no measurement (the
+    renderer then keeps its old estimate)."""
+    own = measured_wf(font, bold, caps)
+    if own is None:
+        return None
+    fb = _widths()["fonts"][font].get("fallback")
+    fb_w = measured_wf(fb, bold, caps) if fb else None
+    return round(max(own, fb_w or 0.0) * WIDTH_MARGIN, 4)
+
+
+@dataclass(frozen=True)
 class Theme:
     """The one token object the layouts read. See the module docstring."""
     name: str
@@ -139,6 +185,8 @@ class Theme:
     grid: Grid = field(default_factory=Grid)
     layouts: bool = True      # False: the old single-column flow for every slide
     derived: tuple = ()       # names of tokens derived from a brand rather than given
+    v3: bool = False          # the deck-look reskin (sans fonts, section band, hairlines); set by get_theme from spec.LOOK_V3
+    decor: Decor = field(default_factory=Decor)
     accent_line: str = ""     # the accent where it is a thin line, rule or chart series; "" means the accent itself (a pale accent sets it)
 
     @property
@@ -200,16 +248,23 @@ CLASSIC = Theme(
     accent="E8A33D", accent_ink="E8A33D", on_dark="F5F3EE", on_dark_mute="A9B3BD", accent_on_dark="E8A33D",
     scale=Scale(foot=9, min=0), layouts=False)
 
+#: ``napkin`` under the deck-look flag: the same palette in the sans pair. ``classic`` never changes.
+NAPKIN_V3 = replace(NAPKIN, head=LOOK_HEAD, body=LOOK_BODY, v3=True)
+
 THEMES = {"napkin": NAPKIN, "classic": CLASSIC}
 DEFAULT = "napkin"
 
 
-def get_theme(name: str | Theme = DEFAULT, brand: dict | None = None) -> Theme:
-    """The named theme (or the Theme given) with the brand JSON applied. Unknown names raise ValueError."""
+def get_theme(name: str | Theme = DEFAULT, brand: dict | None = None, v3: bool | None = None) -> Theme:
+    """The named theme (or the Theme given) with the brand JSON applied. Unknown names raise ValueError.
+    ``v3`` None reads ``spec.LOOK_V3``: on, the ``napkin`` theme is the sans look (a brand's own fonts still win)."""
+    if v3 is None:
+        from . import spec
+        v3 = bool(spec.LOOK_V3)
     if isinstance(name, Theme):
         base = name
     elif name in THEMES:
-        base = THEMES[name]
+        base = NAPKIN_V3 if (v3 and name == "napkin") else THEMES[name]
     else:
         raise ValueError(f"unknown theme {name!r}; choose one of {', '.join(THEMES)}")
     return base.with_brand(brand)

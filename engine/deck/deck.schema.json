@@ -152,7 +152,7 @@
       },
       "profile": {
        "type": "object",
-       "$comment": "how the type was chosen: id, label, source (flag, answer, skipped, default) and note",
+       "$comment": "how the type was chosen: id, label, source (pick, flag, answer, inferred, skipped, default), note, and with deck-types the quoted evidence and the format",
        "properties": {
         "id": {
          "type": "string"
@@ -162,14 +162,30 @@
         },
         "source": {
          "enum": [
+          "pick",
           "flag",
           "answer",
+          "inferred",
           "skipped",
           "default"
          ]
         },
         "note": {
          "type": "string"
+        },
+        "evidence": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "$comment": "deck-types: the words quoted from the inputs when the type was inferred"
+        },
+        "format": {
+         "enum": [
+          "pitch",
+          "full"
+         ],
+         "$comment": "deck-types: the format the recipe was resolved for"
         }
        }
       }
@@ -190,8 +206,10 @@
       },
       "source": {
        "enum": [
+        "pick",
         "flag",
         "answer",
+        "inferred",
         "skipped",
         "default"
        ]
@@ -882,11 +900,15 @@
          "slot_stale",
          "block_unbound",
          "layout_unknown",
+         "text_on_image_fallback",
          "image_missing",
          "image_unapproved",
          "image_flagged",
          "image_rights",
          "style_pack_held",
+         "pitch_cap",
+         "role_words",
+         "notes_unread",
          "golden_echo",
          "picture_stretch",
          "picture_lowres",
@@ -1196,6 +1218,25 @@
          ]
         }
        }
+      },
+      "look": {
+       "type": "object",
+       "additionalProperties": false,
+       "description": "deck-graphics: the switchable parts a person turned on or off for this deck (read only under DECK_GRAPHICS=1): icons, mockups.",
+       "properties": {
+        "graphics": {
+         "type": "object",
+         "additionalProperties": false,
+         "properties": {
+          "icons": {
+           "type": "boolean"
+          },
+          "mockups": {
+           "type": "boolean"
+          }
+         }
+        }
+       }
       }
      }
     },
@@ -1226,6 +1267,62 @@
     "layout_plan": {
      "type": "object",
      "description": "What the layout plan did: density and the count of slides per fit rung."
+    },
+    "production": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "project_id",
+      "data_sha256",
+      "offer_sha256",
+      "how"
+     ],
+     "description": "The Production Tool export this deck's pulled pictures were taken from (deck-prod-assets), the shape of Production's own briefs[].source. offer_sha256 (the offered entity ids and asset hashes) is the update key, never the relay ETag. Optional: a deck with no pulled picture has none.",
+     "properties": {
+      "project_id": {
+       "type": "string",
+       "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "title": {
+       "type": "string",
+       "maxLength": 120
+      },
+      "data_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "offer_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "taken": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "at": {
+       "type": "string"
+      },
+      "how": {
+       "enum": [
+        "bundle",
+        "clan",
+        "os"
+       ],
+       "description": "bundle: the export zip through deck.from_production; clan: a Production .clan (or the zip) read by deck.prod_picker, which picks from metadata and pulls only the picked pictures; os: from the OS (later)."
+      },
+      "kept": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "placed": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "held": {
+       "type": "integer",
+       "minimum": 0
+      }
+     }
     }
    }
   },
@@ -2247,16 +2344,17 @@
         "territory_frame",
         "upload",
         "brand",
-        "generated"
+        "generated",
+        "production"
        ]
       },
       "key": {
        "type": "string",
-       "description": "The frame key <territory id>-<shot>-<flash|pro>, a material id, or a Brand Clan logo id."
+       "description": "The frame key <territory id>-<shot>-<flash|pro>, a material id, or a Brand Clan logo id, or a Production Tool item key (an entity id; a key visual is <format set id>#master)."
       },
       "run": {
        "type": "string",
-       "description": "The territory run's 12-character hash."
+       "description": "The territory run's 12-character hash, or for a Production picture the first 12 hex of the exported .clan's sha256."
       }
      }
     },
@@ -2456,6 +2554,61 @@
       "dark",
       "light"
      ]
+    },
+    "text_zone": {
+     "type": "object",
+     "additionalProperties": false,
+     "description": "deck-look (LOOK_V3): where words may sit on this picture, from images.text_zone (the calm-zone finder and scrim solver) or pinned by a repair or a person. A zone: the words' colour, the scrim's colour and alpha (0.40 to 0.60), the 10th-percentile contrast it predicts and the zone's luminance s.d. none: no zone reads at AA, so the words sit beside the picture.",
+     "properties": {
+      "zone": {
+       "enum": [
+        "bottom_left",
+        "top_left",
+        "middle_left",
+        "bottom_right",
+        "top_right",
+        "middle_right"
+       ]
+      },
+      "text": {
+       "type": "string",
+       "pattern": "^[0-9A-Fa-f]{6}$"
+      },
+      "colour": {
+       "type": "string",
+       "pattern": "^[0-9A-Fa-f]{6}$"
+      },
+      "alpha": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1
+      },
+      "p10": {
+       "type": "number",
+       "minimum": 0
+      },
+      "busy_sd": {
+       "type": "number",
+       "minimum": 0
+      },
+      "by": {
+       "enum": [
+        "finder",
+        "repair",
+        "person"
+       ]
+      },
+      "none": {
+       "const": true
+      },
+      "reason": {
+       "type": "string",
+       "maxLength": 300
+      },
+      "best": {
+       "type": "object"
+      }
+     }
     }
    },
    "if": {
@@ -2586,6 +2739,65 @@
       "reason": {
        "type": "string",
        "maxLength": 300
+      }
+     }
+    },
+    "source": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "app",
+      "project_id",
+      "entity"
+     ],
+     "description": "Where a pulled picture came from (deck-prod-assets): the Production Tool project, the entity and its version, the asset's origin, the job that made it and the hash of the exported .clan. Never a file path or a URL.",
+     "properties": {
+      "app": {
+       "const": "ie.napkin.production-tool"
+      },
+      "project_id": {
+       "type": "string",
+       "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "entity": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "role": {
+       "enum": [
+        "master",
+        "size",
+        "frame"
+       ]
+      },
+      "version": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "origin": {
+       "enum": [
+        "uploaded",
+        "drawn",
+        "generated",
+        "edited",
+        "extracted"
+       ]
+      },
+      "job_id": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "format_id": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "channel": {
+       "type": "string",
+       "maxLength": 32
+      },
+      "bundle_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
       }
      }
     }

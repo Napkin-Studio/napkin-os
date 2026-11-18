@@ -24,7 +24,8 @@ from pathlib import Path
 
 from . import images, numfmt, spec
 from .refs import fmt
-from .render_pptx import DARK_TYPES, THEME, _kicker
+from .layouts import picture_sides as _pic_sides
+from .render_pptx import DARK_TYPES, THEME, _kicker, band_label, dark_types
 from .spec import blocks_sha, frame_for, shown_blocks
 
 #: The accent is 2.2:1 on white, so accent-coloured text on light slides uses a darker amber
@@ -62,6 +63,14 @@ class _Slide:
     def __init__(self, inp):
         self.inp, self.t, self.f = inp, 0, 0
         self.last = {0: 0}   # build step -> latest reveal delay in it (ms)
+        self.icons = None    # deck-graphics: the ids of the icons the pptx drew on this slide, in item order (None: none)
+
+    def icon(self, i: int, n: int, size_in: float) -> str:
+        """The inline SVG of item ``i`` of ``n`` when the pptx drew an icon group of exactly ``n`` here, else ''."""
+        if not self.icons or len(self.icons) != n:
+            return ""
+        from . import graphics   # noqa: PLC0415
+        return graphics.icon_svg(self.icons[i], size_in)
 
     def rv(self, cls, inner, tag="div", gap=140, attrs=""):
         """One revealing element: delay from the running clock, build step from the current block."""
@@ -108,7 +117,8 @@ class _Slide:
         if k == "table":
             rows = b["rows"]
             head = self.rv("", "".join(f"<th>{_e(c)}</th>" for c in rows[0]), "tr", 80)
-            body = "".join(self.rv("", "".join(f"<td>{_e(c)}</td>" for c in r), "tr", 55) for r in rows[1:])
+            body = "".join(self.rv("", "".join(f"<td>{self._row_icon(n, len(rows) - 1) if j == 0 else ''}{_e(c)}</td>" for j, c in enumerate(r)), "tr", 55)
+                           for n, r in enumerate(rows[1:]))
             return f'<table class="b-table{" small" if b.get("small") else ""}{hum}"><thead>{head}</thead><tbody>{body}</tbody></table>'
         if k == "kv":
             return '<dl class="b-kv">' + "".join(
@@ -120,8 +130,8 @@ class _Slide:
             return f'<div class="b-fromto{hum}">{a}{arrow}{z}</div>'
         if k == "steps":
             cells = "".join(
-                self.rv("step", f'<div class="no">{i + 1:02d}</div><div class="lab">{_e(lab)}</div><p>{_e(val)}</p>', gap=120)
-                for i, (lab, val) in enumerate(b["items"]))
+                self.rv("step", f'<div class="no">{i + 1:02d}</div><div class="lab">{_e(lab)}</div><p>{_e(" ".join(map(str, val)))}</p>', gap=120)
+                for i, (lab, *val) in enumerate(b["items"]))
             return f'<div class="b-steps" style="--n:{len(b["items"])}">{cells}</div>'
         if k == "chart":
             ch = b["chart"]
@@ -147,6 +157,12 @@ class _Slide:
             return self.mock(b)
         return self.rv("b-text" + hum, _e(t), "p") if t else ""
 
+
+    def _row_icon(self, i: int, n: int) -> str:
+        if not self.icons:
+            return ""
+        from . import graphics   # noqa: PLC0415
+        return self.icon(i, n, graphics.ICON_ROW_IN)
 
     def mock(self, b):
         """The copy in the frame of its channel (b["frame"]: phone, search, audio, poster)."""
@@ -178,6 +194,48 @@ class _Slide:
         return f'<div class="frame copy">{body}{self.rv("answer", _e(ans), "p")}</div>'
 
 
+def _mockup(im: dict | None = None, label: str = "") -> str:
+    """The labels under a frame or a strip: the picture's own (unless approved), then the fixed 'Mock-up'."""
+    own = ""
+    if im is not None and im.get("status") != "approved":
+        flagged = im.get("status") == "flagged"
+        own = f'<span class="mockup own{" flagged" if flagged else ""}">{_e(images.picture_label(im, label) + (" · Flagged" if flagged else ""))}</span>'
+    return own + f'<span class="mockup">{_e(spec.MOCKUP_LABEL)}</span>'
+
+
+def _framed_markup(s: dict, got: list, deck: dict, fig, label: str) -> tuple | None:
+    """deck-graphics on the web: the storyboard strip (3 or 4 shots, numbered, 'Mock-up') or the picture in its drawn frame (CSS boxes
+    around the picture at the window's exact aspect, the labels under the frame). None: no frame for this picture (drawn as before)."""
+    from . import graphics   # noqa: PLC0415
+    if not graphics.part_on(deck, "mockups"):
+        return None
+    shots = [(slot, im) for slot, im in got if slot.startswith("shot_")]
+    if len(shots) >= spec.STRIP_MIN:   # stacked beside the words (a side picture or the picture column), numbered, labels at the foot
+        st = s.get("strip") or {}
+        nums = st.get("shots") if len(st.get("shots") or []) == len(shots) else list(range(1, len(shots) + 1))
+        assets = deck.get("assets") or {}
+
+        def ratio(im):   # each frame keeps its own aspect, as the pptx draws it
+            a = assets.get(im.get("asset")) or {}
+            return f'{a["width"] / a["height"]:.4f}' if a.get("width") and a.get("height") else im["aspect"].replace(":", "/")
+        cells = "".join(f'<div class="sb-cell">{fig(slot, im, "width:100%;aspect-ratio:" + ratio(im))}<div class="sb-n"><b>{n}</b><i></i></div></div>'
+                        for n, (slot, im) in zip(nums, shots))
+        note = f'<span class="sb-note">{_e(st["note"])}</span>' if st.get("note") else ""
+        return (f'<div class="pics side"><div class="frame-wrap sb-col" style="width:380px">{cells}<div class="f-pills">{_mockup(shots[0][1], label)}{note}</div></div></div>',
+                "pic-side pw560")
+    pic = next(((slot, im) for slot, im in got if slot == "picture"), None)
+    fr = graphics.frame_of(deck, spec.picture_of(s)[1], pic[1]) if pic else None
+    if not fr:
+        return None
+    slot, im = pic
+    r = fr["ratio"]
+    w = 360 if r < 0.8 else 460   # the frame's bezel and labels take the class's extra 100 px (PIC_CSS pw460 / pw560)
+    style = f"width:{w}px;aspect-ratio:{r:.4f}"
+    figure = fig(slot, im, style).replace('class="pic', 'class="pic framed', 1)
+    return (f'<div class="pics side"><div class="frame-wrap f-{fr["kind"]}">{figure}'
+            f'<i class="f-stand"></i><div class="f-pills">{_mockup(im, label)}</div></div></div>', f"pic-side pw{w + 100}")
+
+
 def data_uri(aid: str, path: Path) -> str:
     """A picture inline (deck.html stays one self-contained file): the derived JPEG as a data URI."""
     return "data:image/jpeg;base64," + base64.b64encode(Path(path).read_bytes()).decode()
@@ -187,7 +245,7 @@ def data_uri(aid: str, path: Path) -> str:
 PIC_SIDE = {"16:9": 560, "4:3": 500, "4:5": 460, "9:16": 360}
 
 
-def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: str) -> tuple:
+def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: str, deck: dict | None = None) -> tuple:
     """The picture figures for one slide and the class the slide takes: ``(html, class)``, or ``("", "")`` when nothing is drawn. One
     markup for deck.html and HyperFrames (``src`` makes the image address). Cover-crop with object-fit, alt text, and the label on every
     picture not yet approved (a flagged one also named Flagged and outlined)."""
@@ -200,12 +258,16 @@ def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: s
         pos = f' style="object-position:{round(im["focal"]["x"] * 100)}% {round(im["focal"]["y"] * 100)}%"' if im.get("focal") else ""
         tag = ""
         if im.get("status") != "approved":
-            tag = f'<figcaption class="plabel{" flagged" if flagged else ""}">{_e(label + (" · Flagged" if flagged else ""))}</figcaption>'
+            tag = f'<figcaption class="plabel{" flagged" if flagged else ""}">{_e(images.picture_label(im, label) + (" · Flagged" if flagged else ""))}</figcaption>'
         return (f'<figure class="pic{" flagged" if flagged else ""}" data-slot="{_e(slot)}" style="{style}">'
                 f'<img src="{_e(src(im["asset"], pictures[im["asset"]]))}" alt="{_e(im.get("alt") or "An illustrative picture")}"{pos}>{tag}</figure>')
 
     if s["type"] == "territory":
         return '<div class="pics strip">' + "".join(fig(slot, im) for slot, im in got) + "</div>", "pic-strip"
+    if spec.GRAPHICS and deck is not None and spec.picture_of(s)[0] == "execution":   # deck-graphics: frames and the storyboard strip
+        got_framed = _framed_markup(s, got, deck, fig, label)
+        if got_framed:
+            return got_framed
     slot, im = got[0]
     a = im["aspect"]
     w = PIC_SIDE[a]
@@ -236,6 +298,320 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
     return f'<div class="body col">{b.blocks(blocks)}</div>'
 
 
+# ---- deck-look steps 3-4 on the web (spec.LOOK_V3): the same layouts as render_pptx, in CSS ------------------------------------------
+#: The layouts the web draws with their own markup under LOOK_V3 (the rest keep the per-type bodies until step 9 paints from plan boxes).
+V3_WEB = ("statement_points", "reframe", "shift_line", "picture_column", "cover_image", "close", "cover_bleed", "full_bleed_statement")
+PX_IN = 144   # px per inch on the 1920 x 1080 web slide
+
+
+#: deck-graphics (slices 4-8): the chart and diagram layouts the web draws with their own markup under spec.GRAPHICS.
+GRAPHICS_WEB = ("chart", "chart_full", "process_chevrons", "timeline_strip", "matrix_2x2", "journey_row", "grid_points")
+
+
+def _web_ids() -> tuple:
+    return V3_WEB + (GRAPHICS_WEB if spec.GRAPHICS else ())
+
+
+def _graphics_body(s, b: "_Slide", bl: list, lid: str, deck: dict | None = None) -> str:
+    """deck-graphics on the web: the same chart (inline SVG from the same ledger points, its source line, a 'Show data' table) and the same
+    diagrams (boxes with real, selectable text) as the pptx, from the slide's own blocks. '' when the slide does not hold one (the caller
+    then draws the blocks as before)."""
+    from . import graphics, layouts   # noqa: PLC0415
+    from .refs import Resolver   # noqa: PLC0415
+    t = s["title"]
+    title = b.rv("title", _e(t), "h1", 220)
+    notes = "".join(b.rv("g-note", _e(str(x.get("text", "")).strip()), "p", 100) for x in bl
+                    if x["kind"] in ("text", "small", "statement") and str(x.get("text", "")).strip())
+    icon = lambda i, n, sz: b.icon(i, n, sz) if b.icons else ""   # noqa: E731
+    if lid in ("chart", "chart_full"):
+        ch = next((x for x in bl if x["kind"] == "chart"), None)
+        if ch is None:
+            return ""
+        got = graphics.chart_form(ch["chart"], b.inp, Resolver(b.inp))
+        src = graphics.source_line(got["points"], b.inp) if got["form"] in graphics.CHART_FORMS else None
+        if not src:
+            return ""
+        from .theme import DEFAULT as _D, get_theme   # noqa: PLC0415
+        th = get_theme(_D, ((deck or {}).get("meta") or {}).get("brand") or {})   # the deck's own theme, as the pptx; chart_marks checks 3:1
+        cols = graphics.chart_marks(got["form"], got["points"], ch["chart"].get("hero"), th)
+        b.f += 1
+        svg = b.rv("", graphics.chart_svg(got["form"], got["points"], cols, src, ch["chart"].get("title") or t), "div", 300)
+        side = "".join(b.rv("g-cm", _e(str(x.get("text") or "")), "p", 120) for x in bl if x["kind"] in ("text", "small", "statement", "callout") and str(x.get("text") or "").strip())
+        side += "".join(b.rv("g-cm", _e(layouts._item_text(i)), "p", 100) for x in bl if x["kind"] == "bullets" for i in x["items"] if layouts._item_text(i).strip())
+        return f'<div class="body v3 g-chartsl{" full" if lid == "chart_full" else ""}">{title}<div class="g-cols"><div>{svg}</div><div class="g-side">{side}</div></div></div>'
+    items = graphics.steps_of(bl)
+    if lid == "process_chevrons" and items:
+        b.f += 1
+        cells = "".join(f'<div class="g-step">{icon(i, len(items), graphics.ICON_STEP_IN)}<div class="g-chev{" first" if i == 0 else ""}">{_e(it[0])}</div>'
+                        f'<p>{_e(" ".join(c for c in it[1:] if c))}</p></div>' for i, it in enumerate(items))
+        return f'<div class="body v3 g-diag">{title}<div class="g-proc" style="--n:{len(items)}">{b.rv("g-in", cells, "div", 300)}</div>{notes}</div>'
+    if lid == "timeline_strip" and items and layouts.timed_3_8(s, bl):
+        j = 1 if all(len(it) > 1 and graphics.is_time(it[1]) for it in items) else 0
+        b.f += 1
+        cells = "".join(f'<div class="g-ph"><b>{_e(" ".join(c for k, c in enumerate(it) if k != j and c))}</b><i class="g-node{" first" if i == 0 else ""}"></i>'
+                        f'<span>{_e(it[j])}</span></div>' for i, it in enumerate(items))
+        return f'<div class="body v3 g-diag">{title}<div class="g-tl" style="--n:{len(items)}">{b.rv("g-in", cells, "div", 300)}</div>{notes}</div>'
+    if lid == "journey_row" and items:
+        b.f += 1
+        cells = "".join(f'<div class="g-stage"><div class="g-pill">{_e(it[0])}</div>{icon(i, len(items), graphics.ICON_STEP_IN)}'
+                        f'<div class="kick">{_e(it[2] if len(it) > 2 else "")}</div><p>{_e(" ".join(c for c in [it[1]] + it[3:] if c))}</p></div>'
+                        for i, it in enumerate(items))
+        return f'<div class="body v3 g-diag">{title}<div class="g-jr" style="--n:{len(items)}">{b.rv("g-in", cells, "div", 300)}</div>{notes}</div>'
+    if lid == "matrix_2x2":
+        tb = next((x for x in bl if x["kind"] == "table" and graphics.matrix_ok(x)), None)
+        if tb is None:
+            return ""
+        m = tb["matrix"]
+        q = lambda k: "".join(f"<p>{_e(i)}</p>" for i in m["cells"].get(k) or [])   # noqa: E731
+        b.f += 1
+        grid = (f'<div class="g-q lh">{q("lh")}</div><div class="g-q hh">{q("hh")}</div><div class="g-q ll">{q("ll")}</div><div class="g-q hl">{q("hl")}</div>'
+                f'<span class="g-ax xl">{_e(m["x"]["low"])}</span><span class="g-ax xh">{_e(m["x"]["high"])} · {_e(m["x"]["label"])}</span>'
+                f'<span class="g-ax yh">{_e(m["y"]["high"])} · {_e(m["y"]["label"])}</span><span class="g-ax yl">{_e(m["y"]["low"])}</span>')
+        return f'<div class="body v3 g-diag">{title}<div class="g-mx-wrap">{b.rv("g-mx", grid, "div", 300)}<div class="g-side">{notes}</div></div></div>'
+    if lid == "grid_points":
+        pts = layouts.statement_points(bl) or []
+        if not pts:
+            return ""
+        cells = ""
+        for i, x in enumerate(pts):
+            b.f += 1
+            cells += b.rv("g-gp", icon(i, len(pts), graphics.ICON_POINT_IN) + f'<b>{_e(x["heading"])}</b><p>{_e(x["text"])}</p>', "div", 140)
+        return f'<div class="body v3 g-diag">{title}<div class="g-grid{" two" if len(pts) == 4 else ""}">{cells}</div></div>'
+    return ""
+
+
+#: deck-graphics chart and diagram styles: added ONLY when one is drawn (a deck with none keeps its exact bytes).
+GRAPHICS_CSS = """
+.g-chartsl h1.title,.g-diag h1.title{max-width:1500px;font:700 64px/1.05 var(--head)}
+.g-cols{display:grid;grid-template-columns:7fr 5fr;gap:48px;margin-top:28px}.g-chartsl.full .g-cols{grid-template-columns:8fr 4fr}
+.g-side{border-left:1.5px solid var(--ink);padding-left:36px;display:flex;flex-direction:column;gap:22px}.g-side p{font-size:30px;line-height:1.25}
+.g-chart svg{width:100%;height:auto;display:block}.g-chart .cl{font:400 26px var(--body);fill:var(--ink)}.g-chart .cv{font:700 26px var(--body);fill:var(--ink)}
+.g-chart .base{stroke:var(--ink);stroke-width:1.5}.g-src{font-size:22px;color:var(--muted);margin-top:10px}
+.g-data summary{font-size:20px;color:var(--muted);cursor:pointer}.g-data table{font-size:22px;border-collapse:collapse}.g-data td{padding:4px 18px 4px 0}
+.g-diag{display:flex;flex-direction:column}.g-diag .g-note{font-size:26px;color:var(--muted);margin-top:auto;border-top:1.5px solid var(--ink);padding-top:16px}
+.g-proc>.g-in{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:8px;margin-top:56px}
+.g-chev{background:var(--tint);border:1.5px solid var(--ink);clip-path:polygon(0 0,88% 0,100% 50%,88% 100%,0 100%,12% 50%);padding:30px 18% 30px 16%;font:700 30px/1.05 var(--head);text-align:center;min-height:150px;display:flex;align-items:center;justify-content:center}
+.g-chev.first{background:var(--ink);color:var(--paper);clip-path:polygon(0 0,88% 0,100% 50%,88% 100%,0 100%)}.g-step p{font-size:28px;line-height:1.25;margin-top:22px;padding:0 8px}
+.g-step svg.icon{margin:0 0 14px 12px}
+.g-tl>.g-in{display:grid;grid-template-columns:repeat(var(--n),1fr);margin-top:90px;position:relative}
+.g-tl>.g-in:before{content:"";position:absolute;left:calc(50% / var(--n));right:calc(50% / var(--n));top:calc(1.05em * 2 + 62px);height:1.5px;background:var(--ink)}
+.g-ph{display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px}.g-ph b{font:700 32px/1.05 var(--head);min-height:2.1em;display:flex;align-items:flex-end}
+.g-node{width:30px;height:30px;border-radius:50%;border:3px solid var(--ink);background:var(--paper);position:relative;z-index:1}.g-node.first{background:var(--ink)}
+.g-ph span{font-size:28px}
+.g-jr>.g-in{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:24px;margin-top:64px}.g-pill{border:2px solid var(--ink);border-radius:999px;padding:18px;text-align:center;font:700 30px var(--head)}
+.g-stage p{font-size:28px;line-height:1.25}.g-stage .kick{margin-top:18px}
+.g-mx-wrap{display:grid;grid-template-columns:8fr 4fr;gap:48px;margin-top:40px}
+.g-mx{position:relative;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;min-height:620px;margin:40px 0 40px 0}
+.g-mx:before,.g-mx:after{content:"";position:absolute;background:var(--ink)}.g-mx:before{left:0;right:0;top:50%;height:2px}.g-mx:after{top:0;bottom:0;left:50%;width:2px}
+.g-q{padding:22px}.g-q p{font-size:28px;line-height:1.2;margin-bottom:8px}.g-ax{position:absolute;font:700 20px var(--body);color:var(--muted)}
+.g-ax.xl{left:0;top:calc(50% + 8px)}.g-ax.xh{right:0;top:calc(50% + 8px)}.g-ax.yh{left:calc(50% + 10px);top:-34px}.g-ax.yl{left:calc(50% + 10px);bottom:-34px}
+.g-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:48px;margin-top:48px}.g-grid.two{grid-template-columns:repeat(2,1fr)}
+.g-gp{border-top:1.5px solid var(--ink);padding-top:22px}.g-gp b{display:block;font:700 34px/1.1 var(--head);margin:14px 0 10px}.g-gp p{font-size:28px;line-height:1.25}
+"""
+
+
+def _tz(s) -> dict | None:
+    im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
+    tz = im.get("text_zone") or {}
+    return tz if tz.get("zone") else None
+
+
+def _scrim_css(tz: dict) -> str:
+    """The pptx scrim as one CSS gradient (deck-look step 7): solid at the recorded alpha under the block plus its pad, fading to nothing."""
+    g = images.scrim_geometry(tz["zone"], images.zone_box(tz["zone"]))
+    r, g_, b_ = (int(tz["colour"][i:i + 2], 16) for i in (0, 2, 4))
+    a = max(images.SCRIM_FLOOR, min(images.SCRIM_CAP, float(tz.get("alpha", images.SCRIM_FLOOR))))
+    sx, sy, sw, sh = g["solid"]
+    fx, fy, fw, fh = g["fade"]
+    BW, BH = images.BLEED_W, images.BLEED_H
+    solid, end = {"up": (BH - sy, BH - fy), "down": (sy + sh, fy + fh), "right": (sx + sw, fx + fw), "left": (BW - sx, BW - fx)}[g["toward"]]
+    to = {"up": "top", "down": "bottom", "right": "right", "left": "left"}[g["toward"]]
+    c = f"{r},{g_},{b_}"
+    return (f"linear-gradient(to {to},rgba({c},{a}) 0,rgba({c},{a}) {round(solid * PX_IN)}px,rgba({c},0) {round(end * PX_IN)}px)")
+
+
+def _caps(text) -> str:
+    """' caps' when a statement is short enough to set in capitals (the pptx rule, ``layouts.caps_ok``)."""
+    from . import layouts
+    t = str(text).strip()
+    return " caps" if (layouts.caps_ok(t) and len(t) <= 32 and len(t.split()) <= 5) else ""   # the pptx also asks for two lines at most
+
+
+def _kick(b: "_Slide", text, cls="") -> str:
+    return b.rv("kick" + (" " + cls if cls else ""), _e(text), "div", 60) if str(text).strip() else ""
+
+
+def _v3_points(bl: list) -> list:
+    """(heading, text, italic, caption) for statement_points, as layouts.statement_points reads them."""
+    from . import layouts
+    return [(p["heading"], p["text"], p["italic"], p["caption"]) for p in (layouts.statement_points(bl) or [])]
+
+
+def _v3_body(s, b: "_Slide", bl: list, lid: str, deck: dict) -> str:
+    """The body markup of a deck-look layout (the title is part of it: these layouts place the title themselves)."""
+    from .render_pptx import _FIG, _item_text, _objective_facts
+    t = s["title"]
+    text = lambda x: str(x.get("text", "")).strip()
+    hero = b.rv("title hero" + _caps(t), _e(t), "h1", 220)   # the title first: it is the first thing revealed
+    if lid == "statement_points":
+        title = hero.replace("title hero" + _caps(t), "title", 1)
+        pts = _v3_points(bl)
+        facts = _objective_facts([p[1] for p in pts]) if s["type"] == "objective" else None
+        fig = ""
+        if facts:
+            b.f += 1
+            fig = _kick(b, "The target") + b.rv("fig-v", _e(facts["target"]), "b", 200)
+            for lab, key in (("Baseline", "baseline"), ("By when", "date")):
+                if facts.get(key):
+                    fig += _kick(b, lab) + b.rv("fig-d" + _caps(facts[key]), _e(facts[key]), "b", 120)
+            fig = f'<div class="fig">{fig}</div>'
+        rows = ""
+        for i, (h, x, it, cap) in enumerate(pts):
+            b.f += 1
+            inner = (b.icon(i, len(pts), 0.5) if b.icons else "") + (_kick(b, h) if h else "") + b.rv("pt-t" + (" it" if it else ""), _e(x), "p", 120) + (f'<p class="capn">{_e(cap)}</p>' if cap else "")
+            rows += f'<div class="pt">{inner}</div>'
+        return (f'<div class="body v3 v3sp"><div class="sp-l">{title}{fig}</div>'
+                f'<div class="sp-r">{rows}</div></div>')
+    if lid == "reframe":
+        line = "".join(b.rv("lead", _e(text(x)), "p", 160) for x in bl if x["kind"] in ("statement", "text") and text(x))
+        notes = [(k, v) for x in bl if x["kind"] == "kv" for k, v in x["items"]] + [("", text(x)) for x in bl if x["kind"] == "small" and text(x)]
+        b.f += 1
+        row = "".join(f'<div class="note">{_kick(b, k)}{b.rv("", _e(v), "p", 120)}</div>' for k, v in notes)
+        return (f'<div class="body v3 v3rf">{hero}{line}'
+                + (f'<div class="row n{len(notes)}">{row}</div>' if notes else "") + "</div>")
+    if lid == "shift_line":
+        ft = next(x for x in bl if x["kind"] == "fromto")
+        sup = "".join(b.rv("sup", _e(text(x)), "p", 100) for x in bl if x["kind"] in ("text", "small") and text(x))
+        b.f += 1
+        stops = b.rv("stops", '<i class="dot from"></i><i class="bar"></i><i class="dot to"></i>', "div", 260)
+        cols = (f'<div class="cols"><div>{_kick(b, "From", "mute")}{b.rv("val from" + _caps(ft["from"]), _e(ft["from"]), "p", 160)}{sup}</div>'
+                f'<div>{_kick(b, "To")}{b.rv("val" + _caps(ft["to"]), _e(ft["to"]), "p", 160)}</div></div>')
+        rtb = ""
+        for x in bl:
+            if x["kind"] == "bullets":
+                b.f += 1
+                rtb += _kick(b, x.get("title") or "") + "".join(b.rv("", _e(_item_text(i)), "p", 90) for i in x["items"] if _item_text(i).strip())
+        return (f'<div class="body v3 v3sl">{hero}{stops}{cols}'
+                + (f'<div class="rtb">{rtb}</div>' if rtb else "") + "</div>")
+    if lid == "picture_column":
+        out = hero
+        for x in bl:
+            k = x["kind"]
+            if k in ("statement", "text") and text(x):
+                b.f += 1
+                out += b.rv("lead", _e(text(x)), "p", 140)
+            elif k == "copy":
+                b.f += 1
+                out += "".join(b.rv("copyline", _e(c), "p", 140) for c in x.get("lines") or []) + _kick(b, x.get("answer") or "")
+        pts = []
+        for x in bl:
+            if x["kind"] == "kv":
+                pts += [(k, v) for k, v in x["items"]]
+            elif x["kind"] == "bullets":
+                pts += [((x.get("title") or "") if n == 0 else "", _item_text(i)) for n, i in enumerate(x["items"])]
+            elif x["kind"] in ("small", "callout") and text(x):
+                pts.append(("", text(x)))
+        for k, v in pts:
+            b.f += 1
+            out += f'<div class="pt">{_kick(b, k)}{b.rv("", _e(v), "p", 120)}</div>'
+        grid = ""
+        if spec.GRAPHICS:   # deck-graphics: a two-column table's rows at the column's foot, as the pptx draws them (and its icons)
+            from .graphics import ICON_ROW_IN
+            for x in bl:
+                rows = x.get("rows") or []
+                if x["kind"] != "table" or len(rows) < 2 or not all(len(r) == 2 for r in rows):
+                    continue
+                b.f += 1
+                cells = f'<div class="pc-gr pc-gh">{_kick(b, rows[0][0])}{_kick(b, rows[0][1])}</div>'
+                for n, r in enumerate(rows[1:]):
+                    ic = b.icon(n, len(rows) - 1, ICON_ROW_IN) if b.icons else ""
+                    cells += f'<div class="pc-gr">{b.rv("pc-k", ic + _e(r[0]), "div", 90)}{b.rv("", _e(r[1]), "p", 90)}</div>'
+                grid += f'<div class="pc-grid">{cells}</div>'
+        out += grid
+        return f'<div class="body v3 v3pc{" nopts" if not (pts or grid) else ""}">{out}</div>'
+    if spec.GRAPHICS and lid in GRAPHICS_WEB:
+        return _graphics_body(s, b, bl, lid, deck)
+    if lid in ("cover_bleed", "full_bleed_statement"):   # the words on the picture's measured zone, in the recorded colour
+        tz = _tz(s) or {"zone": "bottom_left", "text": "FAF7F1"}
+        x, y, w, h = images.zone_box(tz["zone"])
+        v = tz["zone"].split("_")[0]
+        pos = f"left:{round(x * PX_IN)}px;width:{round(w * PX_IN)}px;" + (f"bottom:{round((images.BLEED_H - y - h) * PX_IN)}px" if v == "bottom" else f"top:{round(y * PX_IN)}px" if v == "top" else f"top:{round(y * PX_IN)}px;height:{round(h * PX_IN)}px;justify-content:center")
+        lead = "".join(b.rv("lead", _e(text(x_)), "p", 160) for x_ in bl if text(x_))
+        kick = _kick(b, _kicker(deck["meta"])) if lid == "cover_bleed" else ""
+        return f'<div class="body v3 v3bl" style="{pos};color:#{tz["text"]};--fg:#{tz["text"]}">{kick}{hero}{lead}</div>'
+    if lid == "cover_image":
+        lead = "".join(b.rv("lead" + (" small" if x["kind"] == "small" else ""), _e(text(x)), "p", 160) for x in bl if text(x))
+        return f'<div class="body v3 v3cv">{_kick(b, _kicker(deck["meta"]))}{hero}{lead}</div>'
+    if lid == "close":
+        import re as _re
+        stat, lead, rows = None, "", ""
+        for x in bl:
+            if x["kind"] in ("statement", "text", "small") and text(x):
+                mm = _re.match(r"^([^:]{2,40}):\s*(.+)$", text(x))
+                if stat is None and mm and _FIG.search(mm.group(2)):
+                    b.f += 1
+                    stat = _kick(b, mm.group(1)) + b.rv("fig-v sm", _e(mm.group(2)), "b", 200)
+                else:
+                    lead += b.rv("lead", _e(text(x)), "p", 140)
+            elif x["kind"] in ("bullets", "kv", "card"):
+                items = x.get("items") or [{"text": text(x), "human": x.get("human")}]
+                for n, i in enumerate(items):
+                    b.f += 1
+                    hum = isinstance(i, dict) and i.get("human")
+                    words = f"{i[0]}: {i[1]}" if isinstance(i, (list, tuple)) else _item_text(i)
+                    head = _kick(b, x.get("title") or "") if n == 0 and x.get("title") else ""
+                    rows += f'<div class="row{" todo" if hum else ""}">{head}{_kick(b, "To supply") if hum else ""}{b.rv("", _e(words), "p", 100)}</div>'
+        return (f'<div class="body v3 v3cl">{hero}'
+                f'<div class="grid"><div class="l">{stat or ""}{lead}</div><div class="r">{rows}</div></div></div>')
+    return ""
+
+
+LOOK_V3_LAYOUT_CSS = """
+.v3 .kick{font:700 26px/1.25 var(--body);color:var(--accent-ink);margin-bottom:6px}.dark .v3 .kick{color:var(--accent)}.v3 .kick.mute{color:var(--muted)}
+.v3 h1.title{max-width:none;text-wrap:balance}.v3 .hero{font:700 104px/.95 var(--head);letter-spacing:0}.v3 .caps{text-transform:uppercase}
+.v3sp,.v3rf,.v3sl{border-left:1.5px solid var(--ink);border-right:1.5px solid var(--ink);margin-top:-14px}
+.v3sp{display:grid;grid-template-columns:5fr 7fr}
+.v3sp .sp-l{display:flex;flex-direction:column;justify-content:space-between;padding:20px 36px 20px 29px;border-right:1.5px solid var(--ink)}
+.v3sp .sp-l h1.title{font:700 64px/1.05 var(--head)}
+.v3 .fig-v{display:block;font:700 200px/.9 var(--head);letter-spacing:-.01em}.v3 .fig-v.sm{font-size:80px;line-height:1}.v3 .fig-d{display:block;font:700 56px/1 var(--head)}
+.v3sp .sp-r{display:flex;flex-direction:column;justify-content:center;padding:0 29px 0 36px}
+.v3sp .pt{padding:34px 0}.v3sp .pt+.pt{border-top:1.5px solid var(--ink)}
+.v3sp .pt-t{font-size:44px;line-height:1.2}.v3sp .pt-t.it{font-style:italic}.v3 .capn{font-size:24px;color:var(--muted);margin-top:8px}
+.v3rf{display:flex;flex-direction:column;padding:56px 29px 24px}
+.v3rf .lead{font-size:46px;line-height:1.2;margin-top:44px;max-width:1500px}
+.v3rf .row{margin-top:auto;border-top:1.5px solid var(--ink);padding-top:34px;display:grid;grid-template-columns:7fr 5fr;gap:48px}
+.v3rf .row.n1{grid-template-columns:8fr 4fr}.v3rf .row .note+.note{border-left:1.5px solid var(--ink);padding-left:36px}
+.v3rf .note p{font-size:34px;line-height:1.3}
+.v3sl{display:flex;flex-direction:column;padding:40px 29px 24px}
+.v3sl .stops{display:flex;align-items:center;margin:56px 0 40px}.v3sl .bar{flex:1;height:8px;background:var(--ink)}
+.v3sl .dot{width:24px;height:24px;border-radius:50%;flex:none}.v3sl .dot.from{border:3px solid var(--ink);background:var(--paper)}.v3sl .dot.to{background:var(--accent)}
+.v3sl .cols{display:grid;grid-template-columns:1fr 1fr}.v3sl .cols>div+div{border-left:1.5px solid var(--ink);padding-left:36px}
+.v3sl .val{font:700 76px/.95 var(--head)}.v3sl .val.from{color:var(--muted)}.v3sl .sup{font-size:32px;line-height:1.3;margin-top:20px}
+.v3sl .rtb{margin-top:auto;border-top:1.5px solid var(--ink);padding-top:30px}.v3sl .rtb p{font-size:38px;line-height:1.25}
+.v3pc{display:flex;flex-direction:column}.v3pc.nopts{justify-content:center;padding-bottom:120px}
+.v3pc .lead{font-size:44px;line-height:1.25;margin-top:48px}.v3pc .copyline{font:700 52px/1.05 var(--head);margin-top:36px}
+.v3pc .pt{border-top:1.5px solid var(--ink);padding-top:28px;margin-top:auto}.v3pc .pt+.pt{margin-top:36px}.v3pc .pt p{font-size:36px;line-height:1.25}
+.dark .v3pc .pt{border-color:var(--dark-text)}
+.v3cv{display:flex;flex-direction:column;justify-content:center;padding-bottom:80px}.v3cv .hero{font-size:100px;margin:24px 0 44px}
+.v3cv .lead{font-size:44px;line-height:1.2}.v3cv .lead.small{font-size:28px;color:var(--muted)}
+.v3cl .hero{font-size:84px;margin:24px 0 36px}.v3cl .grid{display:grid;grid-template-columns:4fr 8fr;border-top:1.5px solid var(--ink);padding-top:36px}
+.v3cl .r{border-left:1.5px solid var(--ink);padding-left:36px;display:flex;flex-direction:column;gap:22px}
+.v3cl .row p{font-size:30px;line-height:1.25}.v3cl .row.todo{outline:2px dashed var(--accent-ink);outline-offset:0;padding:18px 24px}
+.v3cl .lead{font-size:36px;line-height:1.25;margin-top:24px}
+.pics.col{position:absolute;top:0;bottom:0;width:720px;z-index:1}.pics.col.left{left:0}.pics.col.right{right:0}
+.pics.col .pic{height:100%;aspect-ratio:auto;border-radius:0}
+.pics.col .plabel{bottom:112px;left:72px}.pics.col.right .plabel{left:auto;right:72px}
+.pic-col-left{padding-left:814px}.pic-col-right{padding-right:814px}.pic-col-right .flags{right:814px}
+.v3.v3cv h1.title,.v3.v3pc h1.title{max-width:none}
+.pics.bleed{position:absolute;left:0;top:0;width:1920px;height:986px;z-index:1}.pics.bleed .pic{width:100%;height:100%;aspect-ratio:auto;border-radius:0}
+.pics.bleed .scrim{position:absolute;inset:0;z-index:2;pointer-events:none}.pics.bleed .plabel{z-index:3}
+.pics.bleed.lab-top-right .plabel{top:108px;right:72px;left:auto;bottom:auto}.pics.bleed.lab-top-left .plabel{top:108px;left:72px;bottom:auto}
+.pics.bleed.lab-bottom-right .plabel{bottom:72px;right:72px;left:auto}.pics.bleed.lab-bottom-left .plabel{bottom:72px;left:72px}
+.v3bl{position:absolute;z-index:4;display:flex;flex-direction:column}.v3bl .hero{font-size:100px;margin:16px 0 36px;color:inherit}.v3bl .lead{font-size:44px;line-height:1.2;color:inherit}
+.v3bl .kick{color:inherit}.pic-bleed .flags{z-index:5}
+"""
+
+
 def _cover_logo(deck, assets_dir) -> str | None:
     """The cover's logo markup: the client's logo the look cleared (``meta.theme.logo``, a PNG deck asset, as an image with alt text), else the
     ``--brand`` file's inline SVG. Placement ``none`` means no logo."""
@@ -251,7 +627,8 @@ def _cover_logo(deck, assets_dir) -> str | None:
     return (deck["meta"].get("brand") or {}).get("logo_dark_svg")
 
 
-def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictures: dict | None = None, src=None, placed: set | None = None) -> list:
+def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictures: dict | None = None, src=None, placed: set | None = None,
+                icons: dict | None = None) -> list:
     """Per slide, in order: id, number, type, dark, inner markup, notes, build-step count and, per
     step, the latest reveal delay (ms) up to and including it."""
     failed = {}
@@ -267,15 +644,48 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
     src = src or data_uri
     for n, sid in enumerate(deck["order"], 1):
         s = deck["slides"][sid]
-        pic_html, pic_cls = picture_markup(sid, s, drawn, pictures or {}, src, plabel) if drawn else ("", "")
+        pic_html, pic_cls = picture_markup(sid, s, drawn, pictures or {}, src, plabel, deck=deck) if drawn else ("", "")
         b = _Slide(inp)
-        dark = s["type"] in DARK_TYPES
+        if icons and sid in icons:   # deck-graphics: exactly the icons the pptx drew (render_pptx's ``icons``)
+            b.icons = list(icons[sid]["ids"])
+        v3 = bool(spec.LOOK_V3)
+        dark = s["type"] in (dark_types(v3) if v3 else DARK_TYPES)
         logo = _cover_logo(deck, assets_dir) if s["type"] == "title" else None
         kick = (b.rv("brand-logo", logo, "div", 160) if logo else
                 b.rv("kicker", _e(KICKERS[s["type"]] or _kicker(deck["meta"])), "div", 120) if s["type"] in KICKERS else "")
-        title = b.words(s["title"], "title", "h1") if dark else b.rv("title", _e(s["title"]), "h1", 220)
-        body = _body(s, b, shown_blocks(s, audience), bool(pic_html))
-        foot = f'<span>{_e(s["section"])}</span>'
+        if v3 and s["type"] != "title":   # deck-look: the section band replaces the kicker (and the accent tick): a topic, never the title
+            lab = band_label(s, deck["meta"])
+            kick = f'<div class="band">{_e(lab)}</div>' if lab else '<div class="band empty"></div>'
+        lay = s.get("layout") or {}
+        planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
+        v3lid = lay["id"] if (v3 and planned and lay.get("id") in _web_ids()) else None
+        if v3lid in GRAPHICS_WEB and spec.GRAPHICS:   # a chart or diagram the slide cannot hold here: the blocks as before
+            probe = _Slide(inp)
+            probe.icons = b.icons
+            if not _graphics_body(s, probe, shown_blocks(s, audience), v3lid, deck):
+                v3lid = None
+        if v3lid:   # deck-look: the layout places its own title; the band stays in the header (none on the cover and the close)
+            if v3lid in ("cover_image", "close"):
+                kick = ""
+            title = ""
+            body = _v3_body(s, b, shown_blocks(s, audience), v3lid, deck)
+            if pic_html and v3lid in ("cover_bleed", "full_bleed_statement"):
+                import re as _re
+                tz = _tz(s) or {"zone": "bottom_left", "colour": "1B2430", "alpha": images.SCRIM_FLOOR}
+                corner = images.label_corner(tz["zone"]).replace("_", "-")
+                pic_html = _re.sub(r' style="width:\d+px;aspect-ratio:[\d/]+"', "", pic_html.replace(
+                    '<div class="pics side">', f'<div class="pics bleed lab-{corner}"><i class="scrim" style="background:{_scrim_css(tz)}"></i>', 1), count=1)
+                pic_cls = "pic-bleed"
+                kick = ""
+            elif pic_html and v3lid in ("picture_column", "cover_image"):
+                side = "right" if v3lid == "cover_image" else _pic_sides(deck).get(sid, "left")
+                import re as _re
+                pic_html = _re.sub(r' style="width:\d+px;aspect-ratio:[\d/]+"', "", pic_html.replace('<div class="pics side">', f'<div class="pics col {side}">', 1), count=1)
+                pic_cls = f"pic-col pic-col-{side}"
+        else:
+            title = b.words(s["title"], "title", "h1") if dark else b.rv("title", _e(s["title"]), "h1", 220)
+            body = _body(s, b, shown_blocks(s, audience), bool(pic_html))
+        foot = "" if (v3 and s["type"] != "title") else f'<span>{_e(s["section"])}</span>'   # the band carries the section
         if s.get("footnotes"):
             foot += f'<span class="src">Sources {" ".join(f"[{k}]" for k in s["footnotes"][:14])} (appendix)</span>'
         foot += f'<span class="num">{n}</span>'
@@ -284,11 +694,10 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
             flags += f'<span class="draft">DRAFT · {"needs a person" if s["status"] == "needs_human" else f"{n_human} slides need a person"}</span>'
         if sid in failed and audience != "client":
             flags += f'<span class="failed">CHECK FAILED: {_e(", ".join(sorted(failed[sid])))}</span>'
-        inner = (f'<div class="flags">{flags}</div><header>{kick}{title}</header>{body}{pic_html}'
+        head = f"<header>{kick}{title}</header>" if (kick or title) else ""
+        inner = (f'<div class="flags">{flags}</div>{head}{body}{pic_html}'
                  f'<footer>{foot}</footer>')
         notes = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
-        lay = s.get("layout") or {}
-        planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
         if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
             from . import layouts
             notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s))
@@ -298,6 +707,44 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
                     "last": [max(v for k, v in b.last.items() if k <= f) for f in range(b.f + 1)]})
     return out
 
+
+#: deck-graphics icon styles: added ONLY when an icon is drawn (a deck with none keeps its exact bytes). The stroke is currentColor: the text token.
+ICON_CSS = """
+svg.icon{display:block;color:inherit;flex:none}
+.b-table td svg.icon{display:inline-block;vertical-align:middle;margin:-6px 22px 0 0}
+.v3sp .pt svg.icon{margin-bottom:22px}
+.v3pc .pc-grid{margin-top:auto}.v3pc .pc-gr{display:grid;grid-template-columns:2fr 3fr;gap:28px;align-items:center;padding:22px 0}
+.v3pc .pc-gr+.pc-gr{border-top:1.5px solid var(--ink)}.v3pc .pc-gh{padding-top:0}
+.v3pc .pc-k{display:flex;align-items:center;gap:22px;font:700 44px/1.05 var(--head)}.v3pc .pc-gr p{font-size:38px;line-height:1.2}
+"""
+
+def graphics_css(markup: str) -> str:
+    """The deck-graphics styles the markup needs, each ONLY when its markup is present (a deck with none keeps its exact bytes). One rule for
+    deck.html and the HyperFrames project."""
+    return ((ICON_CSS if ('data-icon="' in markup or 'class="pc-grid"' in markup) else "")
+            + (FRAME_CSS if 'class="mockup"' in markup else "")
+            + (GRAPHICS_CSS if ('class="body v3 g-diag"' in markup or 'class="body v3 g-chartsl' in markup) else ""))
+
+
+#: deck-graphics frame and strip styles: added ONLY when a frame is drawn. Bezels in the ink token; the window keeps the picture's aspect.
+FRAME_CSS = """
+.mockup{display:inline-block;background:var(--ink);color:#fff;font:700 20px/1 var(--body);padding:9px 14px;letter-spacing:.02em}
+.frame-wrap{position:relative;display:flex;flex-direction:column;align-items:center}
+.frame-wrap .pic.framed{border:14px solid var(--ink);border-radius:0;box-sizing:content-box}
+.frame-wrap.f-phone .pic.framed{border-width:22px;border-radius:44px}
+.frame-wrap .f-stand{display:block;width:30%;height:44px;background:var(--ink)}
+.frame-wrap.f-phone .f-stand,.frame-wrap.f-strip .f-stand,.frame-wrap.f-spread .f-stand{display:none}
+.frame-wrap.f-billboard .f-stand{width:70%;height:60px;background:linear-gradient(90deg,var(--ink) 0 6%,transparent 6% 94%,var(--ink) 94%)}
+.frame-wrap.f-screen .f-stand{width:12%;height:36px}
+.frame-wrap .f-pills{margin-top:22px;display:flex;gap:12px}
+.frame-wrap .pic .plabel{display:none}
+.pics.col:has(.frame-wrap){display:flex;align-items:center;justify-content:center;background:var(--tint)}
+.pics.col .frame-wrap .pic{height:auto}
+.mockup.own{background:transparent;color:var(--ink);outline:1.5px solid var(--ink);outline-offset:-1.5px}.mockup.own.flagged{color:#B03225;outline-color:#B03225}
+.sb-col{gap:18px}.sb-col .sb-cell{width:100%}.sb-col .pic{border:1.5px solid var(--ink);border-radius:0}.sb-col .pic .plabel{display:none}
+.sb-n{display:flex;align-items:center;gap:14px;margin-top:8px}.sb-note{font-size:20px;color:var(--muted);align-self:center}
+.sb-n b{font:700 30px/1 var(--head)}.sb-n i{flex:1;height:1.5px;background:var(--ink)}
+"""
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.
 PIC_CSS = """
@@ -575,10 +1022,35 @@ LOOK_CSS = """
 """
 
 
-def theme_css(css: str | None = None, head: str = HEAD_FONT, body: str = BODY_FONT, colors: dict | None = None, look: bool = True) -> str:
+#: deck-look on the web (spec.LOOK_V3): the sans pair, the section band, 0.75 pt hairlines (1.5 px on the 1920 canvas) instead of the
+#: accent edge stripes and tick, figures in ink. The fonts load from the machine, else from ``fonts/`` beside the page, else Arial.
+LOOK_V3_FONTS = "'Archivo', Arial, 'Helvetica Neue', sans-serif"
+LOOK_V3_BODY = "'Source Sans 3', Arial, 'Helvetica Neue', sans-serif"
+LOOK_V3_CSS = """
+@font-face{font-family:'Archivo';font-weight:100 900;font-stretch:62% 125%;src:local('Archivo'),url('fonts/Archivo/Archivo%5Bwdth,wght%5D.ttf') format('truetype')}
+@font-face{font-family:'Source Sans 3';font-weight:200 900;src:local('Source Sans 3'),url('fonts/SourceSans3/SourceSans3%5Bwght%5D.ttf') format('truetype')}
+.band{border-top:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);padding:12px 0 10px;margin:-12px 0 36px;font:700 24px/1.2 var(--head)}
+.band.empty{height:16px;padding:0}
+.dark .band{border-color:var(--dark-text)}
+.kicker{display:none}
+.b-callout{border-left:0;border-top:1.5px solid var(--ink);border-radius:0}
+.b-quote{color:var(--ink)}.dark .b-quote{color:var(--dark-text)}
+.step{border-top:1.5px solid var(--ink);border-radius:0}.step .no{color:var(--ink)}
+.stat{border-top:1.5px solid var(--ink)}
+.b-bullets li:before{background:var(--ink)}.dark .b-bullets li:before{background:var(--dark-text)}
+.ft.to{background:var(--tint);color:var(--ink);border-top:1.5px solid var(--ink)}.dark .ft.to{background:#2a3644;color:var(--dark-text)}.ft.to .cap{color:var(--muted)}
+.frame{border-radius:0;border-top:1.5px solid var(--dark-text)}
+.pic,.b-card,.ft{border-radius:0}
+"""
+
+
+def theme_css(css: str | None = None, head: str | None = None, body: str | None = None, colors: dict | None = None, look: bool = True) -> str:
     """A stylesheet with the deck theme filled in (default: the whole web deck's); ``colors``: a brand's
-    overrides by THEME key (accent_ink too)."""
-    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI).replace("HEAD", head).replace("BODY", body)
+    overrides by THEME key (accent_ink too). Under ``spec.LOOK_V3`` the default fonts are the sans pair and the band CSS is added."""
+    v3 = bool(spec.LOOK_V3) and css is None
+    head = head or (LOOK_V3_FONTS if v3 else HEAD_FONT)
+    body = body or (LOOK_V3_BODY if v3 else BODY_FONT)
+    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI + (LOOK_V3_CSS + LOOK_V3_LAYOUT_CSS if v3 else "")).replace("HEAD", head).replace("BODY", body)
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
     if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
         T["tint"] = T["panel"]
@@ -597,9 +1069,11 @@ def _brand_css(meta: dict) -> dict:
     return {k: v for k, v in (("head", b.get("head")), ("body", b.get("body")), ("colors", b.get("colors"))) if v}
 
 
-def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None, look: bool = True) -> Path:
-    """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs)."""
-    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed)
+def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None, look: bool = True,
+           icons: dict | None = None) -> Path:
+    """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs). ``icons``: the icons the
+    pptx drew (deck-graphics), drawn here as inline SVG at the same items; None or empty draws none and changes nothing."""
+    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed, icons=icons)
     m = deck["meta"]
     slides = "\n".join(
         f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}" id="{v["id"]}" data-steps="{v["steps"]}"{" data-layout=" + chr(34) + v["layout"] + chr(34) if (spec.LOOK_V2 and v["layout"]) else ""}{v["tpt"]} '
@@ -609,7 +1083,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}</style></head>
+<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{graphics_css(slides)}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>
@@ -623,4 +1097,8 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <script>{JS}</script></body></html>
 """
     out.write_text(page, encoding="utf-8")
+    if spec.LOOK_V3:   # the fonts folder beside the page (OFL, vendored): the page reads them when the machine has none
+        import shutil
+        shutil.copytree(Path(__file__).resolve().parent / "fonts", Path(out).parent / "fonts", dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("*.py", "widths.json", "__pycache__"))
     return out

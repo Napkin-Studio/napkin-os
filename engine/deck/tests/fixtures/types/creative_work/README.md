@@ -1,0 +1,1 @@
+Invented fixture: the agency_pitch fixture's stages with a second route and a second execution, and a prompt that asks for a tissue session (deck-types slice 5, profile creative_work). No real client material.

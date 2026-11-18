@@ -120,6 +120,33 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .hint{margin-top:12px;font-size:13px;line-height:1.5;color:var(--ink2);background:var(--soft);border-radius:12px;padding:10px 14px}
 .hint b{font-weight:600;color:var(--ink)}
 @media (max-width:640px){.types{grid-template-columns:minmax(0,1fr)}}
+/* the type picker (deck-types): five cards and 'Not sure', a radio group; each card's spine is drawn from the generated card */
+.dtypes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.dtc{display:flex;flex-direction:column;gap:8px;text-align:left;min-height:44px;border-radius:14px;padding:12px 14px;border:1.5px solid var(--line);background:var(--card);color:var(--ink)}
+.dtc:hover{border-color:var(--ink3)}
+.dtc[aria-checked="true"]{border-color:var(--tool);background:var(--tool-soft)}
+.dtc.asking{border-color:var(--tool);border-style:dashed}
+.dtc-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.dtc-h b{font-size:14px;font-weight:600}
+.dtc .tag{font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--tool-ink)}
+.dtc-l{display:block;font-size:12px;line-height:1.4;color:var(--ink2);flex:1}
+.dtc-c{display:block;font-size:11px;color:var(--ink3)}
+.dspine{display:flex;align-items:flex-end;gap:6px;min-height:40px}
+.spine{display:block;flex:1;min-width:0;height:auto}
+.spine .ms{fill:var(--soft);stroke:var(--line);stroke-width:.8}
+.spine .ms.ax{stroke-dasharray:2 1.5}
+.spine .g{fill:var(--ink3)}
+.dtc[aria-checked="true"] .spine .ms{fill:var(--card)}
+.dtc[aria-checked="true"] .spine .g{fill:var(--tool-ink)}
+.dspine .more{font-size:11px;color:var(--ink3);flex:none}
+.dspine .qbox{flex:1;align-self:stretch;min-height:40px;display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--line);border-radius:8px;font-family:var(--f-mono);font-size:16px;color:var(--ink3)}
+.lnk{border:0;background:transparent;padding:0 2px;color:var(--tool-ink);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+.sheet{margin-top:12px;border:1.5px solid var(--tool);border-radius:14px;padding:12px 14px;background:var(--card)}
+.sheet-l{margin-top:4px;font-size:13px;line-height:1.5;color:var(--ink2)} .sheet-l b{color:var(--ink);font-weight:600}
+.tchip{display:flex !important;align-items:center;gap:8px;margin-top:4px;color:var(--ink2)}
+.tchip .chip{color:var(--ink)}
+@media (max-width:900px){.dtypes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.dtypes{grid-template-columns:minmax(0,1fr)}}
 .summary{padding:22px}
 .summary .t{margin:12px 0 4px;font-size:22px;font-weight:700;letter-spacing:-.02em}
 .li{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45;margin-top:10px}
@@ -536,9 +563,12 @@ var DeckLogic = (function () {
     var kind = inputs.kind === 'investor' ? 'An investor deck' : 'An agency pitch';
     var known = inputs.type && typeById(inputs.type);
     if (known) kind = known.article;
+    // deck-types: the length comes from the type's own recipe (its card): its target and usual cap, or the most a tender may present
+    var card = cardOf(known ? known.id : (inputs.kind === 'investor' ? 'investor_seed' : DEFAULT_TYPE)) || {};
     var size = inputs.format === 'full'
       ? 'Every slide in story order'
-      : 'At most 18 slides, then a hidden appendix';
+      : (card.target != null && card.cap != null ? 'About ' + card.target + ' slides, usually at most ' + card.cap + ', then a hidden appendix'
+        : 'At most ' + (card.max || 18) + ' slides, then a hidden appendix');
     var n = presented(deck).length;
     return {
       title: kind + ' for ' + (inputs.prompt.client || '[Client]'),
@@ -553,13 +583,21 @@ var DeckLogic = (function () {
   }
 
   // ── deck types: what kind of deck this is (the engine asks q_deck_type first) ──
-  /** The four deck types the engine tailors to. `looks` and `article` are the words the view uses around the label. */
-  var DECK_TYPES = [
-    { id: 'agency_pitch', label: 'Agency pitch', one_line: 'Territories, one idea, executions for a client brief.', looks: 'an agency pitch', article: 'An agency pitch' },
-    { id: 'tender_response', label: 'Tender response', one_line: 'Answers a buyer\'s scored tender, point by point.', looks: 'a tender', article: 'A tender response' },
-    { id: 'investor_seed', label: 'Investor seed deck', one_line: 'Problem, market, traction and the ask, for a seed round.', looks: 'an investor deck', article: 'An investor seed deck' },
-    { id: 'credentials', label: 'Credentials / chemistry meeting', one_line: 'Who we are and what we have done, for a first meeting.', looks: 'a credentials meeting', article: 'A credentials deck' }
-  ];
+  /** deck-types: one card per deck type, generated from the engine's profiles (profiles.card_data): label, one line, kind, length, size,
+   *  pictures and the presented spine with each slide's layout purpose. A test fails when this block and the profiles differ. */
+  var DECK_TYPE_CARDS = /* @generated deck-type-cards (python3 -m deck.profiles cards, from engine/): do not edit by hand */ [
+{"id":"agency_pitch","label":"Agency pitch","one_line":"An agency answers a client's brief with strategy, one idea, a plan and a price; the default.","kind":"agency","flag":"agency","default_format":"pitch","target":10,"cap":12,"max":18,"size":"16:9","pictures":"many","stages":["a","b","c","d"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"},{"type":"measurement","section":"Measurement","purpose":"list"},{"type":"team","section":"Team and work","purpose":"list"},{"type":"investment","section":"Timeline and investment","purpose":"title"}],"more":0},
+{"id":"tender_response","label":"Tender response","one_line":"A public or large buyer scores your answer against published criteria; compliance first.","kind":"agency","flag":"tender","default_format":"pitch","target":null,"cap":null,"max":18,"size":"16:9","pictures":"none generated","stages":["a","b","c","d"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"scoring","section":"Your brief","purpose":"data"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"criterion_answer","section":"Our answers","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"image"},{"type":"chart","section":"The real question","purpose":"data"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"statement"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"}],"more":9},
+{"id":"investor_seed","label":"Investor deck","one_line":"A company raises a seed round: problem, why now, traction, market and the ask.","kind":"investor","flag":"investor","default_format":"pitch","target":12,"cap":15,"max":18,"size":"16:9","pictures":"few","stages":["i"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"problem","section":"The problem","purpose":"statement"},{"type":"why_now","section":"Why now","purpose":"list"},{"type":"solution","section":"Solution","purpose":"statement"},{"type":"product","section":"Product","purpose":"image"},{"type":"market","section":"Market","purpose":"data"},{"type":"traction","section":"Traction","purpose":"data"},{"type":"competition","section":"Competition","purpose":"compare"},{"type":"financials","section":"Financials","purpose":"data"},{"type":"founders","section":"Team","purpose":"people"},{"type":"ask","section":"The ask","purpose":"list"}],"more":1},
+{"id":"credentials","label":"Credentials deck","one_line":"A short deck for a chemistry meeting: team and proof first, how we work, questions for you.","kind":"agency","flag":"credentials","default_format":"pitch","target":10,"cap":14,"max":14,"size":"16:9","pictures":"cover only","stages":["a","b"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"team","section":"Team and work","purpose":"people"},{"type":"credentials","section":"Team and work","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"process","section":"How it runs","purpose":"timeline"},{"type":"guardrails","section":"How it runs","purpose":"list"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0},
+{"id":"creative_work","label":"Creative work session","one_line":"Routes shown for the client's reaction before a pitch: a tissue session, no price and no team.","kind":"agency","flag":"creative","default_format":"pitch","target":12,"cap":16,"max":18,"size":"16:9","pictures":"many","stages":["a","b","c","d"],"recipe_only":true,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"territory","section":"Territories","purpose":"statement"},{"type":"territory_choice","section":"Territories","purpose":"list"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0}
+] /* @end deck-type-cards */;
+  /** The five deck types, from the generated cards (never a second hand-written copy): id, label, one line and kind, plus the words the
+   *  view uses around the label (`looks`: 'a tender response', `article`: 'A tender response'), derived from the label. */
+  var DECK_TYPES = DECK_TYPE_CARDS.map(function (c) {
+    var low = String(c.label).toLowerCase(), an = /^[aeiou]/.test(low) ? 'an ' : 'a ';
+    return { id: c.id, label: c.label, one_line: c.one_line, kind: c.kind, looks: an + low, article: (an === 'an ' ? 'An ' : 'A ') + low };
+  });
   var DEFAULT_TYPE = 'agency_pitch';
   var TYPE_QID = 'q_deck_type';
 
@@ -591,10 +629,17 @@ var DeckLogic = (function () {
     return '';
   }
 
+  /** The person's explicit pick on the type picker (inputs.deck_type), or null: absent, null ('Not sure') or an unknown id. */
+  function pickOf(data) {
+    var p = data && isObj(data.inputs) && isObj(data.inputs.deck_type) ? data.inputs.deck_type : null;
+    return p && typeof p.id === 'string' && typeById(p.id) ? p : null;
+  }
+
   /**
-   * The deck type for a document: the person's answer, else the one the engine inferred (an option
-   * with origin 'proposed'), else the default. Returns { id, label, one_line, source, quote, skipped,
-   * hasQuestion } where source is 'answered', 'inferred' or 'default'. Never throws.
+   * The deck type for a document (design.precedence): the person's pick on the picker, else their answer to
+   * q_deck_type, else the one the engine inferred (an option with origin 'proposed', with its quoted evidence),
+   * else the default. Returns { id, label, one_line, kind, source, quote, skipped, hasQuestion } where source is
+   * 'picked', 'answered', 'inferred' or 'default'. Never throws.
    */
   function deckTypeOf(data) {
     var q = typeQuestion(data), opts = q && Array.isArray(q.options) ? q.options : [];
@@ -602,8 +647,10 @@ var DeckLogic = (function () {
     var a = isObj(answers[TYPE_QID]) ? answers[TYPE_QID] : null;
     var out = function (id, source, quote, skipped) {
       var t = typeById(id);
-      return { id: t.id, label: t.label, one_line: t.one_line, source: source, quote: quote || '', skipped: !!skipped, hasQuestion: !!q };
+      return { id: t.id, label: t.label, one_line: t.one_line, kind: t.kind, source: source, quote: quote || '', skipped: !!skipped, hasQuestion: !!q };
     };
+    var pk = pickOf(data);
+    if (pk) return out(pk.id, 'picked', '', false);
     var skipped = !!(a && a.skipped);
     if (!skipped && a && a.option_id != null) {
       var chosen = null;
@@ -627,20 +674,101 @@ var DeckLogic = (function () {
     return typeId;
   }
 
-  /** The legacy inputs.kind a deck type maps to: investor_seed is 'investor', every other type 'agency'. */
-  function kindOfType(typeId) { return typeId === 'investor_seed' ? 'investor' : 'agency'; }
+  /** The legacy inputs.kind a deck type maps to: its card's kind (investor_seed is 'investor', every other type 'agency'). */
+  function kindOfType(typeId) { var t = typeById(typeId); return t && t.kind === 'investor' ? 'investor' : 'agency'; }
 
   var HINTS = {
     agency_pitch: ['the brief', 'the budget'],
     tender_response: ['the buyer\'s scoring criteria', 'the page limit'],
     investor_seed: ['traction figures', 'the ask'],
-    credentials: ['the team', 'two examples of past work']
+    credentials: ['the team', 'two examples of past work'],
+    creative_work: ['the routes you want to show', 'what the client should react to']
   };
 
   /** What to bring to make a deck of this type stronger: { type, items, line }. An unknown type is the default. */
   function typeHints(typeId) {
     var id = typeById(typeId) ? typeId : DEFAULT_TYPE, items = HINTS[id].slice();
     return { type: id, items: items, line: 'To make this one stronger, bring: ' + items.join(' and ') };
+  }
+
+  /** One generated card by id, or null. */
+  function cardOf(id) {
+    for (var i = 0; i < DECK_TYPE_CARDS.length; i++) if (DECK_TYPE_CARDS[i].id === id) return DECK_TYPE_CARDS[i];
+    return null;
+  }
+
+  /** A card's caption: 'about 10 slides · 16:9 · pictures: many'; a type with no target says 'up to <max> slides'. */
+  function typeCaption(card) {
+    if (!isObj(card)) return '';
+    var len = card.target != null ? 'about ' + card.target + ' slides' : 'up to ' + card.max + ' slides';
+    return len + ' · ' + card.size + ' · pictures: ' + card.pictures;
+  }
+
+  /**
+   * The patch for a pick on the type picker: { inputs: { deck_type: { id, by: 'person', at } } }, or for 'Not sure'
+   * { inputs: { deck_type: null } } (no pick: the answer, the inference or the default decides). Null for an unknown id.
+   */
+  function pickPatch(typeId, at, confirmed) {
+    if (typeId === null) return { inputs: { deck_type: null } };
+    if (!typeById(typeId)) return null;
+    var rec = { id: typeId, by: 'person', at: at };
+    // The person's yes on the Change sheet to the new writing a type change needs: without it the engine refuses the change (409 needs_stages).
+    var conf = (Array.isArray(confirmed) ? confirmed : []).filter(function (st) { return own(STAGE_WORDS, st); });
+    if (conf.length) rec.confirmed_stages = conf;
+    return { inputs: { deck_type: rec } };
+  }
+
+  /**
+   * The cards the picker shows: every generated card, except a type that joined with the deck recipes (recipe_only) unless the engine
+   * said it offers it (run.types.offered, written by the engine through the middleware). Before the engine has said anything, such a
+   * type is hidden: the safe side, since an engine with the recipes off refuses it.
+   */
+  function offeredCards(data) {
+    var ty = data && isObj(data.run) && isObj(data.run.types) ? data.run.types : null;
+    var offered = ty && Array.isArray(ty.offered) ? ty.offered : null;
+    return DECK_TYPE_CARDS.filter(function (c) { return !c.recipe_only || (offered && offered.indexOf(c.id) >= 0); });
+  }
+
+  /** What each model stage writes, in the Change sheet's words (engine profiles.STAGE_WORDS). */
+  var STAGE_WORDS = { a: 'the requirements', b: 'the storyline', c: 'the routes', d: 'the idea and executions', i: 'the investor story' };
+  /** The run's display rows and the model stages each one records (run_state.STEP_ROW, read backwards); storyline is b, or i for an investor run. */
+  var ROW_STAGES = { inputs: 'a', storyline: 'b', territories: 'c', idea: 'd' };
+
+  /** The type the deck on this document was built as: deck.meta.built_from.type, else null (no deck built yet, or none recorded). */
+  function builtTypeOf(data) {
+    var m = data && isObj(data.deck) && isObj(data.deck.meta) && isObj(data.deck.meta.built_from) ? data.deck.meta.built_from : null;
+    return m && typeById(m.type) ? m.type : null;
+  }
+
+  /** The model stages this document's run has recorded: the stage ids of its done rows (a, b or i, c, d). */
+  function recordedStages(data) {
+    var run = data && isObj(data.run) && Array.isArray(data.run.stages) ? data.run.stages : [];
+    var built = typeById(builtTypeOf(data)), inp = data && isObj(data.inputs) ? data.inputs : {};
+    var investor = built ? built.kind === 'investor' : inp.kind === 'investor';
+    var out = [];
+    run.forEach(function (r) {
+      if (!isObj(r) || r.status !== 'done' || !own(ROW_STAGES, r.id)) return;
+      var st = r.id === 'storyline' && investor ? 'i' : ROW_STAGES[r.id];
+      if (out.indexOf(st) < 0) out.push(st);
+    });
+    return out;
+  }
+
+  /**
+   * The Change sheet (design.ui.later): what changing this deck to typeId will do, before it does. { free, needs, line, from, to }:
+   * free when every stage the new type needs is recorded ('Re-arranges 7 slides as a credentials deck. No new writing. Pictures kept.'),
+   * else the stages that need new writing. Pictures are never part of it. Null for an unknown type. Mirrors profiles.change_sheet.
+   */
+  function changeSheet(data, typeId) {
+    var card = cardOf(typeId), t = typeById(typeId);
+    if (!card || !t) return null;
+    var have = recordedStages(data);
+    var needs = (Array.isArray(card.stages) ? card.stages : []).filter(function (st) { return have.indexOf(st) < 0; });
+    var n = presented(data && data.deck).length;
+    var line = needs.length
+      ? 'Needs new writing: ' + needs.map(function (st) { return STAGE_WORDS[st] || st; }).join(', ') + '. Pictures kept.'
+      : 'Re-arranges ' + (n ? n + ' slides' : 'the slides') + ' as ' + t.looks + '. No new writing. Pictures kept.';
+    return { free: !needs.length, needs: needs, line: line, from: builtTypeOf(data), to: typeId };
   }
 
   /** The patch that records a person's deck-type choice, or a skip. Null for an unknown type. Written with put(). */
@@ -1466,6 +1594,8 @@ var DeckLogic = (function () {
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
+    DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
+    recordedStages: recordedStages, changeSheet: changeSheet,
     researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
@@ -1473,6 +1603,141 @@ var DeckLogic = (function () {
     GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown,
     isObj: isObj, own: own
   };
+})();
+
+// ── Production picker (deck-prod-picker P6) ─────────────────────────────────────────────────────────────────────────
+// Self-contained: reads data.production (the engine's report of the last build) and data.review.production (the person's
+// swaps), and writes only review.production. Pure, like DeckLogic; the page's Production panel is the block of the same
+// name in the page script. Badges say where a picture came from (embedded in the .clan, an https link, the export zip, or
+// not reachable) and whether it may be placed (its rights).
+var DeckProd = (function () {
+  'use strict';
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function str(v, n) { return String(v == null ? '' : v).slice(0, n || 200); }
+  var SLIDE = /^s[0-9]{2,3}$/, SLOT = /^[a-z][a-z0-9_]{1,23}$/, KEY = /^[A-Za-z0-9_#]{6,80}$/;
+  /** Where a picture comes from, as a badge: [tone, word]. Only these four words: idb, s3 and nowhere are not reachable. */
+  var REACH = { embedded: ['ok', 'Embedded'], https: ['plain', 'https link'], zip: ['ok', 'Export zip'] };
+  var NOT_REACHABLE = ['warn', 'Not reachable'];
+  var RIGHTS = { generated: ['ok', 'Made in Production'], own: ['ok', 'Own'], licensed: ['ok', 'Licensed'], client_supplied: ['ok', 'Client supplied'],
+    reference_only: ['warn', 'Rights to supply'] };
+  var BY = { rule: 'Picked by the rules', claude: 'Tie broken by Claude', person: 'Your swap' };
+  var ROLE = { key_visual: 'Key visual', size: 'Channel size', storyboard_frame: 'Storyboard frame' };
+  /** What the vision check costs and where the pictures go: said wherever it can be turned on. */
+  var HAIKU_NOTE = 'It uses the local Ollama model first; when that is not running it falls back to Claude Haiku, which sends the pictures ' +
+    'to Anthropic and is paid (about a cent a picture, 8 at most). While it is on, it runs on every build.';
+
+  /** A candidate's badge: where its bytes could come from (inventory reach). */
+  function reachBadge(reach) { return REACH[reach] || NOT_REACHABLE; }
+  /** The picked picture's badge: where it was pulled from on the last build; a picture held for its rights shows its reach instead. */
+  function pulledBadge(from, reach) {
+    if (from === 'https') return ['ok', 'Fetched link'];
+    if (from === 'embedded' || from === 'zip') return REACH[from];
+    if (from === 'rights') return reachBadge(reach);
+    return NOT_REACHABLE;
+  }
+  function rightsBadge(rights) { return RIGHTS[rights] || ['plain', 'Rights unknown']; }
+
+  function tile(t, badge) {
+    return { key: str(t.key, 80), label: str(t.label || t.key, 120), role: ROLE[t.role] || 'Picture', aspect: str(t.aspect, 20), status: str(t.status, 20),
+      reach: badge || reachBadge(t.reach), rights: rightsBadge(t.rights), placeable: t.rights !== 'reference_only' };
+  }
+
+  /** The picker as the panel shows it, or null when the last build used no Production file. Never throws on junk. */
+  function prodView(data) {
+    var x = isObj(data) ? data : {}, p = isObj(x.production) ? x.production : null;
+    if (!p) return null;
+    var mine = isObj(x.review) && isObj(x.review.production) ? x.review.production : {};
+    var slots = [];
+    (Array.isArray(p.picks) ? p.picks : []).forEach(function (pk) {
+      if (!isObj(pk) || typeof pk.slot !== 'string' || !KEY.test(String(pk.key || ''))) return;
+      var at = pk.slot.indexOf('.'), sid = pk.slot.slice(0, at), slot = pk.slot.slice(at + 1);
+      if (!SLIDE.test(sid) || !SLOT.test(slot)) return;
+      var want = isObj(mine[sid]) && isObj(mine[sid][slot]) ? String(mine[sid][slot].key || '') : '';
+      var elig = (Array.isArray(pk.eligible) ? pk.eligible : []).filter(function (t) { return isObj(t) && KEY.test(String(t.key || '')); });
+      var self = elig.filter(function (t) { return t.key === pk.key; })[0] || {};
+      var cands = elig.filter(function (t) { return t.key !== pk.key; }).map(function (t) { return tile(t, null); });
+      var chosen = tile({ key: pk.key, label: pk.label, role: pk.role, rights: pk.rights, status: pk.status, aspect: self.aspect }, pulledBadge(pk.from, self.reach));
+      slots.push({ id: pk.slot, slide: sid, slot: slot, chosen: chosen, by: BY[pk.by] || BY.rule, note: str(pk.note, 200),
+        notReachable: pk.from === 'not reachable', candidates: cands,
+        pending: want && want !== pk.key && cands.some(function (c) { return c.key === want; }) ? want : '' });
+    });
+    var f = isObj(p.fetch) ? p.fetch : {}, empty = f.allow_list_empty !== false;
+    var fetchLine = f.on
+      ? (empty ? 'Fetching links was on, but no provider host is on the fetch allow-list yet, so nothing was fetched. The hosts go in engine/deck/policy/production_fetch.yaml once they are named.'
+        : 'Fetching links was on: only the picked pictures, only from the allowed hosts, each checked against its hash.')
+      : 'Fetching links is off (opt-in): pictures came from the .clan or its export zip only.' +
+        (empty ? ' Turning it on would fetch nothing yet: the host allow-list is empty until the provider hosts are named.' : '');
+    var look = isObj(p.look) && p.look.on;
+    var lookLine = look ? 'The vision check ran. It only flags a picture for you; it never places or removes one. ' + HAIKU_NOTE
+      : 'The vision check is off (opt-in). It would only flag pictures, never place or remove one. ' + HAIKU_NOTE;
+    return { card: str(p.card, 200), slots: slots, fetchLine: fetchLine, lookLine: lookLine, fetchOn: !!f.on, allowListEmpty: empty, lookOn: !!look,
+      notReachable: slots.filter(function (s) { return s.notReachable; }).length };
+  }
+
+  /** The picker's slots on one slide. */
+  function slideSlots(view, slideId) { return view ? view.slots.filter(function (s) { return s.slide === slideId; }) : []; }
+
+  /** The patch that records a person's swap of one slot to another of its candidates, or null (a bad id, or a key that is not a candidate). */
+  function swapPatch(view, slotId, key, by, at) {
+    var s = view ? view.slots.filter(function (x) { return x.id === slotId; })[0] : null;
+    if (!s || !KEY.test(String(key || '')) || !s.candidates.some(function (c) { return c.key === key; })) return null;
+    var row = {}; row[s.slot] = { key: String(key), by: str(by || 'a person', 60), at: str(at, 40) };
+    var prod = {}; prod[s.slide] = row;
+    return { review: { production: prod } };
+  }
+
+  // ── the Production file itself: which attached file the deck reads, and the two opt-ins ──
+  /** The most a Production file sent to the engine may be: the middleware takes 64 MB a request, base64 included. */
+  var SEND_MAX = 47000000;
+  var HEX = /^[0-9a-f]{64}$/;
+  function isProdFile(name) { return /\.(clan|zip)$/i.test(String(name || '')) && String(name).length <= 200; }
+  function attachedNames(x) {
+    var docs = isObj(x.inputs) && Array.isArray(x.inputs.documents) ? x.inputs.documents : [];
+    return docs.map(function (d) { return typeof d === 'string' ? d : (isObj(d) ? String(d.name || '') : ''); }).filter(isProdFile);
+  }
+  /** The Production file card: null when no .clan or .zip is attached and none is in use (so Start is unchanged for every other deck). */
+  function sourceView(data) {
+    var x = isObj(data) ? data : {}, inp = isObj(x.inputs) ? x.inputs : {};
+    var cur = isObj(inp.production) && isProdFile(inp.production.name) && HEX.test(String(inp.production.sha256 || '')) ? inp.production : null;
+    var names = attachedNames(x);
+    if (!names.length && !cur) return null;
+    var built = isObj(x.production) && isObj(x.production.fetch) ? x.production.fetch : null;
+    var emptyKnown = built ? built.allow_list_empty !== false : null;
+    var fetchNote = cur && cur.fetch
+      ? (emptyKnown === false ? 'On: the next build fetches only the picked pictures, only from the allowed hosts, each checked against its hash.'
+        : 'On, but no provider host is on the engine\'s fetch allow-list yet, so nothing will be fetched until the hosts are named.')
+      : 'Off: pictures come from the file itself (or its export zip). Nothing is downloaded unless you turn this on, and only from hosts on the engine\'s allow-list.';
+    var lookNote = (cur && cur.look ? 'On: a vision check may flag a pulled picture for you. It never places or removes one. '
+      : 'Off: no vision check. It would only flag pictures, never place or remove one. ') + HAIKU_NOTE;
+    return { files: names.map(function (n) { return { name: str(n, 200), inUse: !!cur && cur.name === n }; }),
+      current: cur ? { name: str(cur.name, 200), rows: Number(cur.rows) || 0, eligible: Number(cur.eligible) || 0, fetch: cur.fetch === true, look: cur.look === true } : null,
+      fetchNote: fetchNote, lookNote: lookNote };
+  }
+  /** The patch that records the file the engine now holds (attach_production's result), or null when the result is not one. Opt-ins start off. */
+  function sourcePatch(name, result, at) {
+    var r = isObj(result) ? result : {};
+    if (!isProdFile(name) || !HEX.test(String(r.sha256 || ''))) return null;
+    // A file chosen anew starts with no swaps: the old ones named pictures of another file (the engine drops them too).
+    return { inputs: { production: { name: String(name), sha256: String(r.sha256), fetch: false, look: false, at: str(at, 40),
+      rows: Math.max(0, Number(r.rows) || 0), eligible: Math.max(0, Number(r.eligible) || 0) } }, review: { production: null } };
+  }
+  /** Turn one opt-in on or off: fetch (picked https pictures) or look (the vision check). Null for anything else. */
+  function optionPatch(which, on) {
+    if (which !== 'fetch' && which !== 'look') return null;
+    var row = {}; row[which] = !!on;
+    return { inputs: { production: row } };
+  }
+  /** Stop using the Production file and its swaps (the store merges patches: null removes the key). */
+  function dropPatch() { return { inputs: { production: null }, review: { production: null } }; }
+  /** Bytes as base64, in slices (a whole file at once overflows the argument list). */
+  function toBase64(bytes, btoaFn) {
+    var out = '', CH = 0x8000;
+    for (var i = 0; i < bytes.length; i += CH) out += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+    return btoaFn(out);
+  }
+
+  return { prodView: prodView, slideSlots: slideSlots, swapPatch: swapPatch, REACH: REACH, RIGHTS: RIGHTS,
+    sourceView: sourceView, sourcePatch: sourcePatch, optionPatch: optionPatch, dropPatch: dropPatch, isProdFile: isProdFile, toBase64: toBase64, SEND_MAX: SEND_MAX };
 })();
 </script>
 
@@ -1492,7 +1757,7 @@ var DeckLogic = (function () {
   }
 
   // View state only. Anything the document should keep is written with put().
-  var view = { screen: null, slide: null, tab: 'evidence', present: 0, appendix: false };
+  var view = { screen: null, slide: null, tab: 'evidence', present: 0, appendix: false, typeAsk: null };
   var qdraft = {}; // free-text answers typed but not saved, by question id
   var pending = {}; // inputs picked on the Start screen, written when Build is pressed
   var kitChanged = []; // Style Pack / Brand Clan notices (L.kitNotices); empty when the call fails or nothing moved
@@ -1656,30 +1921,91 @@ var DeckLogic = (function () {
   function draft(key, stored) { return pending[key] != null ? pending[key] : (stored || ''); }
 
   /** The "Built from: ..." line and what is missing, for a built_from record. */
-  function builtLine(bf, hasPrompt) {
+  function builtLine(bf, hasPrompt, chip) {
     var x = L.describeBuiltFrom(bf, hasPrompt);
-    return '<div class="bf" data-built-from>' + esc(x.line) + (x.type ? '<span>Deck type: ' + esc(x.type) + '</span>' : '') + x.missing.map(function (m) { return '<span class="miss">' + esc(m) + '</span>'; }).join('') + '</div>';
+    return '<div class="bf" data-built-from>' + esc(x.line) + (chip || (x.type ? '<span>Deck type: ' + esc(x.type) + '</span>' : '')) + x.missing.map(function (m) { return '<span class="miss">' + esc(m) + '</span>'; }).join('') + '</div>';
   }
 
-  /** The "What kind of deck?" selector: the q_deck_type question as four cards, the inferred one highlighted with its quote, skippable. */
-  function typeSelector(s) {
-    var t = L.deckTypeOf(s.raw), on = t.source !== 'default';
-    var cards = L.DECK_TYPES.map(function (x) {
-      var tag = on && x.id === t.id ? '<span class="tag">' + (t.source === 'answered' ? 'Your choice' : 'Suggested') + '</span>' : '';
-      return '<button class="pick" data-dtype="' + esc(x.id) + '" aria-pressed="' + (on && x.id === t.id) + '"><b>' + esc(x.label) + '</b><span>' + esc(x.one_line) + '</span>' + tag + '</button>';
+  // ── the type picker: the first step of Start (features/deck-types.clan design.ui) ──
+  /** One mini slide's glyph for its layout purpose, in a 32 x 18 box (the 8 purposes; an unknown one draws as a statement). */
+  var GLYPH = {
+    title: '<rect class="g" x="5" y="6.5" width="16" height="2.6" rx=".6"/><rect class="g" x="5" y="10.6" width="9" height="1.3" rx=".5" opacity=".6"/>',
+    statement: '<rect class="g" x="5" y="4.6" width="22" height="2.3" rx=".6"/><rect class="g" x="5" y="8.3" width="16" height="2.3" rx=".6"/><rect class="g" x="5" y="12.6" width="8" height="1.2" rx=".5" opacity=".6"/>',
+    list: '<rect class="g" x="5" y="4.8" width="1.6" height="1.6" rx=".8"/><rect class="g" x="8" y="5" width="15" height="1.2" rx=".5"/><rect class="g" x="5" y="8.4" width="1.6" height="1.6" rx=".8"/><rect class="g" x="8" y="8.6" width="12" height="1.2" rx=".5"/><rect class="g" x="5" y="12" width="1.6" height="1.6" rx=".8"/><rect class="g" x="8" y="12.2" width="14" height="1.2" rx=".5"/>',
+    compare: '<rect class="g" x="4" y="4" width="11" height="10" rx="1" opacity=".45"/><rect class="g" x="17" y="4" width="11" height="10" rx="1" opacity=".45"/><rect class="g" x="6" y="6" width="6" height="1.4" rx=".5"/><rect class="g" x="19" y="6" width="6" height="1.4" rx=".5"/>',
+    data: '<rect class="g" x="7" y="10" width="3.2" height="4" rx=".4"/><rect class="g" x="12.5" y="7.5" width="3.2" height="6.5" rx=".4"/><rect class="g" x="18" y="4.5" width="3.2" height="9.5" rx=".4"/><rect class="g" x="5" y="14" width="20" height=".7" opacity=".6"/>',
+    timeline: '<rect class="g" x="4" y="8.6" width="24" height=".8" opacity=".6"/><circle class="g" cx="8" cy="9" r="1.7"/><circle class="g" cx="16" cy="9" r="1.7"/><circle class="g" cx="24" cy="9" r="1.7"/>',
+    image: '<rect class="g" x="3" y="3" width="26" height="12" rx="1" opacity=".3"/><circle class="g" cx="9" cy="7" r="1.6"/><path class="g" d="M5 14 L12 8 L17 12 L21 9 L27 14 Z" opacity=".7"/>',
+    people: '<circle class="g" cx="10" cy="7.4" r="2.1"/><circle class="g" cx="16" cy="7.4" r="2.1"/><circle class="g" cx="22" cy="7.4" r="2.1"/><rect class="g" x="7.2" y="10.5" width="5.6" height="3" rx="1.5" opacity=".6"/><rect class="g" x="13.2" y="10.5" width="5.6" height="3" rx="1.5" opacity=".6"/><rect class="g" x="19.2" y="10.5" width="5.6" height="3" rx="1.5" opacity=".6"/>'
+  };
+  /**
+   * A card's spine as a strip of mini slides (up to 12, six to a row, 16:9), one glyph each from the slide's layout purpose, drawn
+   * from the generated card, so it is the real spine. Each mini slide names its section. 'more' adds a '+N' after the strip.
+   */
+  function spineThumb(card) {
+    var sp = (Array.isArray(card.spine) ? card.spine : []).slice(0, 12), W = 32, H = 18, G = 4, PER = 6;
+    var rows = Math.max(1, Math.ceil(sp.length / PER)), vw = PER * W + (PER - 1) * G, vh = rows * H + (rows - 1) * G;
+    var minis = sp.map(function (x, i) {
+      var name = String(x.section || x.type || '') + (x.purpose ? ' (' + x.purpose + ')' : '');
+      var ax = x.section === 'Appendix' ? ' ax' : '';
+      return '<g class="mini-s" data-purpose="' + esc(x.purpose) + '" transform="translate(' + ((i % PER) * (W + G)) + ' ' + (Math.floor(i / PER) * (H + G)) + ')"><title>' + esc(name) + '</title>' +
+        '<rect class="ms' + ax + '" x=".5" y=".5" width="' + (W - 1) + '" height="' + (H - 1) + '" rx="2.2"/>' + (GLYPH[x.purpose] || GLYPH.statement) + '</g>';
     }).join('');
-    var looks = L.DECK_TYPES.filter(function (x) { return x.id === t.id; })[0].looks;
-    var say = t.source === 'inferred' && t.quote ? 'Looks like ' + looks + ': you wrote "' + t.quote + '"'
-      : t.source === 'inferred' ? 'Looks like ' + looks
-      : t.source === 'answered' ? 'Building ' + looks.replace(/^an? /, 'a ') + '. You can change this.'
-      : 'Defaults to agency pitch';
+    return '<span class="dspine"><svg class="spine" viewBox="-1 -1 ' + (vw + 2) + ' ' + (vh + 2) + '" role="img" aria-label="' + esc(sp.length + ' slides: ' + sp.map(function (x) { return x.section; }).join(', ')) + '">' + minis + '</svg>' +
+      (card.more > 0 ? '<span class="more mono" data-more>+' + esc(card.more) + '</span>' : '') + '</span>';
+  }
+
+  /** The type the picker shows as selected: the pick, the answer or the inference; null ('Not sure') when only the default applies. */
+  function shownType(t) { return t.source === 'default' ? null : t.id; }
+
+  /**
+   * The type picker: five cards (the default first) and 'Not sure: decide from my brief', as a radio group with a roving tab stop.
+   * An inferred type is preselected with its quoted evidence, not a pick until clicked. With a deck already built, a different type
+   * shows the Change sheet first (view.typeAsk). Under the grid: what to bring, and the format switch.
+   */
+  function typePicker(s, format) {
+    var t = L.deckTypeOf(s.raw), on = shownType(t), ask = view.typeAsk && L.cardOf(view.typeAsk) ? view.typeAsk : null;
+    var tagOf = { picked: 'Your pick', answered: 'Your choice', inferred: 'Suggested' };
+    var cards = L.offeredCards(s.raw).map(function (c) {
+      var sel = on === c.id;
+      return '<button type="button" class="dtc' + (ask === c.id ? ' asking' : '') + '" role="radio" aria-checked="' + sel + '" tabindex="' + (sel ? 0 : -1) + '" data-dpick="' + esc(c.id) + '">' +
+        '<span class="dtc-h"><b>' + esc(c.label) + '</b>' + (sel ? '<span class="tag">' + tagOf[t.source] + '</span>' : '') + '</span>' +
+        '<span class="dtc-l">' + esc(c.one_line) + '</span>' + spineThumb(c) +
+        '<span class="dtc-c mono">' + esc(L.typeCaption(c)) + '</span></button>';
+    }).join('') +
+      '<button type="button" class="dtc unsure" role="radio" aria-checked="' + !on + '" tabindex="' + (on ? -1 : 0) + '" data-dpick="none">' +
+        '<span class="dtc-h"><b>Not sure</b></span><span class="dtc-l">Decide from my brief: your prompt and documents choose, and an agency pitch when nothing says otherwise.</span>' +
+        '<span class="dspine"><span class="qbox" aria-hidden="true">?</span></span><span class="dtc-c mono">read from what you give</span></button>';
+    var looks = (L.DECK_TYPES.filter(function (x) { return x.id === t.id; })[0] || {}).looks;
+    var change = ' <button type="button" class="lnk" data-dfocus="1">Change</button>';
+    var say = t.source === 'inferred' && t.quote ? esc('Looks like ' + looks + ': you wrote "' + t.quote + '"' + (/[.!?]$/.test(t.quote) ? '' : '.')) + change
+      : t.source === 'inferred' ? esc('Looks like ' + looks + '.') + change
+      : t.source === 'picked' ? esc('Building ' + looks + '. You can change this.')
+      : t.source === 'answered' ? esc('Building ' + looks + '. You can change this.')
+      : 'Defaults to agency pitch until you pick one, or your brief says otherwise.';
+    var sheet = '';
+    if (ask) {
+      var cs = L.changeSheet(s.raw, ask), lab = L.cardOf(ask).label, was = L.cardOf(L.builtTypeOf(s.raw) || t.id);
+      sheet = '<div class="sheet" data-change-sheet role="group" aria-label="Change the deck type"><div class="eyebrow">Change sheet</div>' +
+        '<p class="sheet-l"><b>' + esc('Change to ' + lab + '?') + '</b> ' + esc(cs.line) + '</p>' +
+        '<div class="row" style="margin-top:10px"><button type="button" class="btn sm dark" data-dconfirm="' + esc(ask) + '">' + esc((cs.free ? 'Change to ' : 'Yes, write it: change to ') + lab.toLowerCase()) + '</button>' +
+        '<button type="button" class="btn sm" data-dcancel="1">' + esc('Keep ' + (was ? was.label.toLowerCase() : 'this type')) + '</button></div></div>';
+    }
     var hints = L.typeHints(t.id);
-    return '<section class="card sec" id="deck-type"><div class="sec-h"><b>What kind of deck?</b><div class="spacer"></div>' +
-      '<span class="pill ' + (t.source === 'answered' ? 'ok' : 'plain') + '">' + (t.source === 'answered' ? 'Chosen' : t.source === 'inferred' ? 'Suggested' : 'Optional') + '</span></div>' +
-      '<div class="types">' + cards + '</div>' +
-      '<p class="note" style="margin-top:10px" data-type-say>' + esc(say) + '</p>' +
+    var pillTone = t.source === 'picked' || t.source === 'answered' ? 'ok' : 'plain';
+    var pillWord = t.source === 'picked' ? 'Picked' : t.source === 'answered' ? 'Chosen' : t.source === 'inferred' ? 'Suggested' : 'Not picked yet';
+    return '<section class="card sec" id="deck-type" data-type-picker><div class="sec-h"><span class="mono eyebrow">01</span><b>What kind of deck?</b><div class="spacer"></div>' +
+      '<span class="pill ' + pillTone + '">' + pillWord + '</span></div>' +
+      '<p class="note" style="margin:-6px 0 12px">Pick first: the type decides which slides there are, their order and their layouts.</p>' +
+      '<div class="dtypes" role="radiogroup" aria-label="What kind of deck?">' + cards + '</div>' +
+      '<p class="note" style="margin-top:12px" data-type-say>' + say + '</p>' + sheet +
       '<div class="hint" data-type-hints>' + esc(hints.line) + '</div>' +
-      (on ? '' : '<div style="margin-top:10px"><button class="btn sm" data-dtskip="1"' + (t.skipped ? ' aria-pressed="true"' : '') + '>' + (t.skipped ? 'Skipped' : 'Skip') + '</button></div>') +
+      '<div class="rule"></div>' +
+      '<div class="eyebrow dark" style="margin-bottom:8px" id="dfmt-h">How will it be used?</div>' +
+      '<div class="row" role="group" aria-labelledby="dfmt-h" data-format-switch>' +
+        pick('format', 'pitch', format, 'Presented on a screen', 'Short slides you talk to, then a hidden appendix') +
+        pick('format', 'full', format, 'Sent to be read', 'The leave-behind, read without you') + '</div>' +
+      (format === 'full' ? '<p class="note" style="margin-top:8px" data-format-note>Every slide in story order, more words per slide, pictures on the cover only. A4 pages come with the slide-size feature.</p>' : '') +
       '</section>';
   }
 
@@ -1704,7 +2030,7 @@ var DeckLogic = (function () {
       }).join('') + '<button class="btn sm" data-qskip="' + esc(q.id) + '">Skip</button></div>' +
         (q.allow_text ? '<div class="free"><input class="inp" style="height:36px" id="qt_' + esc(q.id) + '" placeholder="Or say it in your own words" /><button class="btn sm" data-qtext="' + esc(q.id) + '">Save</button></div>' : '') + '</div>';
     }).join('');
-    return '<section class="card sec" id="check"><div class="sec-h"><span class="mono eyebrow">04</span><b>Check</b><div class="spacer"></div>' +
+    return '<section class="card sec" id="check"><div class="sec-h"><span class="mono eyebrow">05</span><b>Check</b><div class="spacer"></div>' +
       '<span class="pill ' + (g.hasGaps ? 'warn' : 'ok') + '">' + (g.hasGaps ? 'Gaps found' : 'No gaps') + '</span></div>' +
       '<p class="note">What the deck cannot fill from what you gave it. Answer what you can, skip the rest: Build never waits for these.</p>' +
       gapList('Brief fields nothing supports', g.brief_fields) + gapList('Slide types that would be thin', g.slide_types) +
@@ -1771,10 +2097,10 @@ var DeckLogic = (function () {
     if (an) kitNote += '<div class="upnote" role="status" data-agency-look-notice>' + esc(an.text) +
       (an.canUpdate && !an.requested ? ' <button class="btn sm" data-agency-update>Update to current look</button>' : (an.requested ? ' <b>Asked: the next build takes it.</b>' : '')) + '</div>';
     return '<div class="eyebrow dark">Bring in a brief or research (optional)</div>' + changed + kitNote + '<div class="two">' +
-      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Research</b><div class="spacer"></div>' + (r ? attached : opt) + '</div>' +
+      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">04</span><b>Research</b><div class="spacer"></div>' + (r ? attached : opt) + '</div>' +
         (r ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(r.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (r.findings == null ? 'report brought in' : esc(r.findings) + ' findings · ' + esc(r.rejected) + ' rejected') + '</div></div></div>' +
           '<p class="note" style="margin-top:10px">Rejected findings are never used on a slide.' + (r.findings == null ? ' Finding counts show once the Research Tool shares them.' : '') + '</p>' : '<p class="note">No research brought in. Start one from a Research Tool document with Spin off.</p>') + '</section>' +
-      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Brief</b><div class="spacer"></div>' + (b ? attached : opt) + '</div>' +
+      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">04</span><b>Brief</b><div class="spacer"></div>' + (b ? attached : opt) + '</div>' +
         (b ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(b.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(b.fields_filled) + ' of ' + esc(b.fields_total) + ' fields · ' + esc(b.mandatories) + ' mandatories</div></div></div>' +
           '<p class="note" style="margin-top:10px">Mandatories become requirements the deck must answer.</p>' : '<p class="note">No brief brought in. The deck builds from your prompt and documents.</p>') + '</section></div>';
   }
@@ -1795,7 +2121,7 @@ var DeckLogic = (function () {
 
   function start(s) {
     var inp = s.inputs, p = inp.prompt || {};
-    var dt = L.deckTypeOf(s.raw), typed = dt.source === 'answered';
+    var dt = L.deckTypeOf(s.raw), typed = dt.source === 'picked' || dt.source === 'answered';
     var kind = typed ? L.kindOfType(dt.id) : (pending.kind || inp.kind), format = pending.format || inp.format;
     var docs = L.documentsOf(s.raw);
     var sum = L.summaryOf({ prompt: p, kind: kind, format: format, type: typed ? dt.id : null }, s.deck);
@@ -1812,22 +2138,17 @@ var DeckLogic = (function () {
       '<div class="eyebrow">New deck</div>' +
       '<h1 style="margin:10px 0 6px">What are we pitching?</h1>' +
       '<p class="lede" style="margin-bottom:28px">Tell us in a line or paste everything you have, and attach any documents. A brief or research is optional. Nothing else is used, so every line on a slide traces back to what you gave.</p>' +
-      '<div class="stack">' + typeSelector(s) + lookSection(s) +
-      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">01</span><b>Your prompt</b><div class="spacer"></div>' +
+      '<div class="stack">' + typePicker(s, format) + lookSection(s) +
+      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">02</span><b>Your prompt</b><div class="spacer"></div>' +
         '<span class="pill ' + (hasText ? 'ok' : 'plain') + '">' + (hasText ? 'Ready' : 'A line is enough') + '</span></div>' +
         '<div class="three">' + field('client', 'Client', p.client) + field('project', 'Project', p.project) + field('agency', 'Agency (optional)', p.agency, 'Shows as [Agency]') + '</div>' +
         '<div style="margin-top:14px"><label class="lab" for="ptext">What are we pitching? (a line is enough; paste everything you have)</label><textarea class="inp ta" id="ptext">' + esc(text) + '</textarea></div></section>' +
-      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">02</span><b>Documents</b><div class="spacer"></div><span class="pill ' + (docs.length ? 'ok' : 'plain') + '">' + (docs.length ? docs.length + ' attached' : 'Optional') + '</span></div>' +
+      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Documents</b><div class="spacer"></div><span class="pill ' + (docs.length ? 'ok' : 'plain') + '">' + (docs.length ? docs.length + ' attached' : 'Optional') + '</span></div>' +
         docList + '<div style="margin-top:10px"><label class="btn sm" style="display:inline-flex;align-items:center" for="attach">Attach files</label><input type="file" id="attach" multiple style="position:absolute;left:-9999px" aria-label="Attach documents" />' +
         '<p class="note" style="margin-top:8px">Attaching needs the host. Files stay in this document.</p></div></section>' +
       upstreamCards(s) +
-      checkPanel(s) +
-      '<div class="two">' + (typed ? '' : '<div><div class="eyebrow dark" style="margin-bottom:8px">Kind of deck</div><div class="row">' +
-        pick('kind', 'agency', kind, 'Agency pitch', 'Territories, one idea, executions') + pick('kind', 'investor', kind, 'Investor deck', 'Problem, market, traction, ask') +
-      '</div></div>') + '<div><div class="eyebrow dark" style="margin-bottom:8px">Length</div><div class="row">' +
-        pick('format', 'pitch', format, 'Pitch · 18 slides', 'Then an appendix of backup') + pick('format', 'full', format, 'Full story', 'Every slide in story order') +
-      '</div></div></div></div></div>' +
-      '<aside class="stack">' +
+      checkPanel(s) + '</div></div>' +
+      '<aside class="stack">' + prodSourceCard(s) +
       '<div class="frost summary"><div class="eyebrow">You will get</div><div class="t">' + esc(sum.title) + '</div><div class="note">' + esc(sum.note) + '</div><div class="rule"></div>' +
         builtLine(bf, hasText) + '<div class="rule"></div>' +
         '<div class="li"><span class="dot"></span><span><b style="font-weight:600">Web deck</b> to present in a browser, with a presenter view</span></div>' +
@@ -1847,6 +2168,20 @@ var DeckLogic = (function () {
     }
     return '<div class="lib"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:14px;font-weight:600">From the team library</b><span class="note">optional</span></div>' +
       '<p class="note" style="margin-top:10px">Pictures replace the "illustrative" placeholders. Font files are never taken from a PDF.</p></div>';
+  }
+
+  /**
+   * Review's deck type: a chip with Change (back to Start's picker), and why when the type was read from the brief or is the default:
+   * 'Read as a tender response because: "invitation to tender".'
+   */
+  function typeChip(s) {
+    var t = L.deckTypeOf(s.raw), built = L.builtTypeOf(s.raw) || t.id, card = L.cardOf(built);
+    var why = '';
+    var looks = (L.DECK_TYPES.filter(function (x) { return x.id === t.id; })[0] || {}).looks;
+    if (built === t.id && t.source === 'inferred') why = 'Read as ' + looks + (t.quote ? ' because: "' + t.quote + '"' + (/[.!?]$/.test(t.quote) ? '' : '.') : ' from what you gave.');
+    else if (built === t.id && t.source === 'default') why = 'Nothing picked, so the default.';
+    return '<span class="tchip" data-type-chip>Deck type <span class="chip">' + esc(card ? card.label : built) + '</span>' +
+      '<button type="button" class="lnk" data-dchange="1">Change</button></span>' + (why ? '<span data-type-why>' + esc(why) + '</span>' : '');
   }
 
   /** The built_from the engine recorded on the deck, else what Start would compute from the document. */
@@ -2122,11 +2457,11 @@ var DeckLogic = (function () {
       '<section><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><span class="mono" style="font-size:12px;color:var(--ink3)">' + (inAx ? 'Appendix ' : 'Slide ') + String(n).padStart(2, '0') + '</span><span class="pill ' + st.tone + '">' + st.label + '</span><div class="spacer"></div>' +
         (inAx ? '' : '<button class="btn sm" data-act="appendix">Move to appendix</button>') + '<button class="btn sm" data-tab="evidence">Why this slide</button>' + approve + '</div>' +
       (ds ? approveNote(ds) : '') +
-      '<div style="margin-bottom:12px">' + builtLine(builtOf(s)) + '</div>' +
+      '<div style="margin-bottom:12px">' + builtLine(builtOf(s), null, typeChip(s)) + '</div>' +
       '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' +
         '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (inAx ? 'A' + n : String(n).padStart(2, '0')) + '</span></div></div>' +
       '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(sl.notes || 'No notes for this slide.') + '</div></div></section>' +
-      '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) +
+      '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) + prodPanel(s, id) +
       '<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Ask for a change</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
         [['shorter', 'Shorter'], ['add_figure', 'Add the figure'], ['rephrase', 'Say it another way']].map(function (c) { return '<button class="btn sm" data-change="' + c[0] + '">' + c[1] + '</button>'; }).join('') +
       '</div><p class="note" style="margin-top:10px;font-size:12px;color:var(--ink3)">Only the words on this slide change. Its sources stay.</p></div></aside></main>';
@@ -2273,6 +2608,10 @@ var DeckLogic = (function () {
     var terr = ae.getAttribute('data-territory');
     if (terr != null) return '[data-territory="' + cssEsc(terr) + '"]';
     if (ae.getAttribute('data-appendix') != null) return '[data-appendix]';
+    var dp = ae.getAttribute('data-dpick');
+    if (dp != null) return '[data-dpick="' + cssEsc(dp) + '"]';
+    var fm = ae.getAttribute('data-format');
+    if (fm != null) return '[data-format="' + cssEsc(fm) + '"]';
     return '';
   }
 
@@ -2310,6 +2649,113 @@ var DeckLogic = (function () {
 
   function now() { return new Date().toISOString(); }
 
+  // ── Production picker (deck-prod-picker P6): the panel on a slide's Review aside. Self-contained; DeckProd decides. ──
+  function prodBadge(b) { return '<span class="chip ' + (b[0] === 'ok' ? 'ok' : b[0] === 'warn' ? 'warn' : '') + '">' + esc(b[1]) + '</span>'; }
+  function prodTile(t, swapSlot) {
+    return '<div class="doc" style="margin-top:8px;align-items:flex-start" data-prod-tile="' + esc(t.key) + '"><span class="ico">' + (swapSlot ? 'ALT' : 'PICK') + '</span><div style="flex:1;min-width:0">' +
+      '<div style="font-size:13px;font-weight:600">' + esc(t.label) + '</div>' +
+      '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(t.role) + (t.aspect ? ' · ' + esc(t.aspect) : '') + (t.status && t.status !== 'ready' ? ' · ' + esc(t.status) : '') + '</div>' +
+      '<div class="chips">' + prodBadge(t.reach) + prodBadge(t.rights) + '</div>' +
+      (swapSlot ? '<button class="btn sm" style="margin-top:8px" data-prod-swap="' + esc(swapSlot) + '" data-prod-key="' + esc(t.key) + '">Use this one</button>' : '') + '</div></div>';
+  }
+  function prodPanel(s, slideId) {
+    var pv = typeof DeckProd !== 'undefined' ? DeckProd.prodView(s.raw) : null;
+    if (!pv) return '';
+    var mine = DeckProd.slideSlots(pv, slideId);
+    var body = mine.length ? mine.map(function (x) {
+      return '<div style="margin-top:10px" data-prod-slot="' + esc(x.id) + '"><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">Slot ' + esc(x.slot) + ' · ' + esc(x.by) + '</div>' +
+        prodTile(x.chosen, null) +
+        (x.notReachable ? '<p class="note" style="margin-top:6px">Not reachable: re-save or export it in Production. The slot stays empty; nothing is generated in its place.</p>' : '') +
+        (x.note ? '<p class="note" style="margin-top:6px">' + esc(x.note) + '</p>' : '') +
+        (x.pending ? '<p class="note" style="margin-top:6px" data-prod-pending>Your swap is recorded. The next build uses it.</p>' : '') +
+        (x.candidates.length ? '<div class="eyebrow" style="margin-top:10px">Other candidates for this slot</div>' + x.candidates.map(function (c) { return prodTile(c, x.id); }).join('') : '') + '</div>';
+    }).join('') : '<p class="note" style="margin-top:8px">No Production picture was picked for this slide.</p>';
+    return '<div class="card" style="padding:16px" data-prod-panel><div style="font-size:13px;font-weight:600;margin-bottom:4px">From Production</div>' +
+      '<p class="note">' + esc(pv.card) + '</p>' + body +
+      '<p class="note" style="margin-top:10px;font-size:12px;color:var(--ink3)" data-prod-fetch>' + esc(pv.fetchLine) + '</p>' +
+      '<p class="note" style="margin-top:6px;font-size:12px;color:var(--ink3)" data-prod-look>' + esc(pv.lookLine) + '</p></div>';
+  }
+  function prodSwap(s, a) {
+    var pt = typeof DeckProd !== 'undefined' ? DeckProd.swapPatch(DeckProd.prodView(s.raw), a.prodSwap, a.prodKey, 'You', now()) : null;
+    if (!pt) { toast('That picture is not a candidate for this slot.'); return render(); }
+    put(pt, 'swap production picture ' + a.prodSwap, 'review');
+    toast('Recorded. The next build uses your swap; rights and reach are checked again then.');
+    return render();
+  }
+  function prodSourceCard(s) {
+    var sv = typeof DeckProd !== 'undefined' ? DeckProd.sourceView(s.raw) : null;
+    if (!sv) return '';
+    var body;
+    if (sv.current) {
+      var c = sv.current, sw = function (k, on, label) {
+        return '<button class="btn sm" data-prod-opt="' + k + '" data-prod-on="' + (on ? '0' : '1') + '" aria-pressed="' + on + '">' + label + ': ' + (on ? 'On' : 'Off') + '</button>';
+      };
+      body = '<p class="note">Using <b>' + esc(c.name) + '</b>' + (c.rows ? ': ' + c.rows + ' assets, ' + c.eligible + ' the deck could place.' : '.') +
+        ' Each build picks from it by the rules; you can swap a picture on Review.</p>' +
+        '<div class="chips" style="margin-top:10px">' + sw('fetch', c.fetch, 'Fetch picked links') + sw('look', c.look, 'Vision check') + '</div>' +
+        '<p class="note" style="margin-top:8px;font-size:12px;color:var(--ink3)" data-prod-fetch-note>' + esc(sv.fetchNote) + '</p>' +
+        '<p class="note" style="margin-top:4px;font-size:12px;color:var(--ink3)">' + esc(sv.lookNote) + '</p>' +
+        '<button class="btn sm" style="margin-top:8px" data-prod-drop="1">Stop using it</button>';
+    } else {
+      body = '<p class="note">A Production .clan or export zip is attached. Use it and the deck takes its key visual, channel sizes and storyboard frames, with their rights. Nothing is downloaded.</p>';
+    }
+    var files = sv.files.filter(function (f) { return !f.inUse; }).map(function (f) {
+      return '<div class="doc" style="margin-top:8px"><span class="ico">' + (/\.zip$/i.test(f.name) ? 'ZIP' : 'CLAN') + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + esc(f.name) + '</div></div>' +
+        '<button class="btn sm" data-prod-use="' + esc(f.name) + '">Use for pictures</button></div>';
+    }).join('');
+    return '<div class="card sec" data-prod-source><div class="sec-h"><span class="mono eyebrow">P</span><b>Production pictures</b><div class="spacer"></div>' +
+      '<span class="pill ' + (sv.current ? 'ok' : 'plain') + '">' + (sv.current ? 'In use' : 'Optional') + '</span></div>' + body + files + '</div>';
+  }
+  /** Hand the engine an attached Production file (attach_production), then record what it holds. Local: the host serves the bytes. */
+  function prodUse(name) {
+    if (!(window.clan && window.clan.apiProxy) || typeof fetch !== 'function') { toast('Using a Production file needs the host and the engine.'); return; }
+    toast('Sending ' + name + ' to the deck engine…');
+    fetch(clanScheme + '/assets/' + encodeURIComponent(name)).then(function (r) {
+      if (!r || !r.ok) throw new Error('This file is no longer in the deck: attach it again.');
+      return r.arrayBuffer();
+    }).then(function (buf) {
+      if (buf.byteLength > DeckProd.SEND_MAX) throw new Error('The file is over ' + Math.round(DeckProd.SEND_MAX / 1e6) + ' MB, too large to send to the engine.');
+      return window.clan.apiProxy('middleware', { task: 'attach_production', input: { name: name, data_b64: DeckProd.toBase64(new Uint8Array(buf), btoa) } });
+    }).then(function (res) {
+      var err = hostErr(res);
+      if (err) throw new Error(err);
+      var pt = DeckProd.sourcePatch(name, (mwBody(res) || {}).result, now());
+      if (!pt) throw new Error('The engine did not say it holds the file.');
+      put(pt, 'use production file ' + name, 'inputs');
+      toast('The deck will pick its pictures from ' + name + ' on the next build.');
+      render();
+    }).catch(function (e) { toast((e && e.message) || 'The Production file could not be used.'); });
+  }
+  function prodClick(a) {
+    if (a.prodUse) { prodUse(a.prodUse); return true; }
+    if (a.prodOpt) { var op = DeckProd.optionPatch(a.prodOpt, a.prodOn === '1'); if (op) put(op, 'production ' + a.prodOpt + ' ' + (a.prodOn === '1' ? 'on' : 'off'), 'inputs'); render(); return true; }
+    if (a.prodDrop) { put(DeckProd.dropPatch(), 'stop using the production file', 'inputs'); render(); return true; }
+    return false;
+  }
+  // ── end Production picker ──
+
+  /** Bring the type picker into view and put the keyboard on its selected card (Review's Change, the 'Change' under the grid). */
+  function focusPicker() {
+    if (typeof document.querySelector !== 'function') return;
+    try {
+      var sec = document.getElementById('deck-type'); if (sec && sec.scrollIntoView) sec.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      var c = document.querySelector('#deck-type [role="radio"][tabindex="0"]'); if (c && c.focus) c.focus({ preventScroll: true });
+    } catch (e) { /* nothing to focus */ }
+  }
+
+  // The type picker is a radio group: the arrow keys move the one tab stop between its cards, Enter or Space picks (a button's click).
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (!t || typeof t.closest !== 'function' || !t.closest('[role="radiogroup"]') || t.getAttribute('role') !== 'radio') return;
+    var step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    var all = Array.prototype.slice.call(t.closest('[role="radiogroup"]').querySelectorAll('[role="radio"]'));
+    var i = all.indexOf(t), j = e.key === 'Home' ? 0 : e.key === 'End' ? all.length - 1 : step ? (i + step + all.length) % all.length : -1;
+    if (j < 0) return;
+    e.preventDefault();
+    all.forEach(function (b, k) { b.setAttribute('tabindex', k === j ? '0' : '-1'); });
+    all[j].focus();
+  });
+
   document.addEventListener('change', function (e) {
     var t = e.target;
     if (t && t.id === 'agencyLook') { put(L.agencyPatch(t.checked, null, now()), 'agency look ' + (t.checked ? 'on' : 'off') + ' for this deck', 'look'); render(); }
@@ -2320,6 +2766,24 @@ var DeckLogic = (function () {
     var s = d(), a = t.dataset;
     if (a.orb !== undefined) return pressOrb();
     if (a.go) { view.screen = a.go; return render(); }
+    if (a.dpick || a.dconfirm) {
+      stashDraft();
+      var want = a.dconfirm || (a.dpick === 'none' ? null : a.dpick), cur = L.deckTypeOf(s.raw), built = L.builtTypeOf(s.raw);
+      // A deck already built as another type: the Change sheet says what will happen, and nothing is written until it is confirmed.
+      if (!a.dconfirm && want && built && want !== built && !(cur.source === 'picked' && cur.id === want)) { view.typeAsk = want; return render(); }
+      view.typeAsk = null;
+      var cs = a.dconfirm && want ? L.changeSheet(s.raw, want) : null;   // a confirmed change that needs new writing carries the person's yes to it
+      var pp = L.pickPatch(want, now(), cs && !cs.free ? cs.needs : null);
+      if (!pp) return render();
+      // 'Not sure' after an answer to q_deck_type clears that answer too, so the brief decides, as the card says.
+      if (want === null && cur.source === 'answered') pp.intake = { answers: { q_deck_type: null } };
+      put(pp, want ? 'pick deck type ' + want : 'deck type: not sure', 'deck type');
+      if (a.dconfirm) toast('Saved. Build deck to re-arrange it as ' + (L.DECK_TYPES.filter(function (x) { return x.id === want; })[0] || {}).looks + '.');
+      return render();
+    }
+    if (a.dcancel) { view.typeAsk = null; return render(); }
+    if (a.dfocus) { focusPicker(); return; }
+    if (a.dchange) { view.screen = 'start'; view.typeAsk = null; render(); focusPicker(); return; }
     if (a.dtype || a.dtskip) {
       stashDraft();
       var tp = L.typePatch(s.raw, a.dtype || null, now());
@@ -2337,6 +2801,8 @@ var DeckLogic = (function () {
       return render();
     }
     if (a.tab) { view.tab = a.tab; return render(); }
+    if (a.prodSwap) return prodSwap(s, a); // the Production picker's swap (deck-prod-picker P6)
+    if ((a.prodUse || a.prodOpt || a.prodDrop) && prodClick(a)) return; // the Production file and its opt-ins
     if (a.pres) { view.present += Number(a.pres); return render(); }
     if (t.id === 'build') {
       stashDraft();
@@ -2345,7 +2811,7 @@ var DeckLogic = (function () {
       var guard = L.canBuild({ prompt: prompt }, s.upstream, L.documentsOf(s.raw));
       if (!guard.ok) { toast(guard.message); return; }
       // Only the person's own inputs are written. The brief and research are read from upstream, never stored.
-      var dtb = L.deckTypeOf(s.raw), kindOut = dtb.source === 'answered' ? L.kindOfType(dtb.id) : (pending.kind || s.inputs.kind);
+      var dtb = L.deckTypeOf(s.raw), kindOut = dtb.source === 'picked' || dtb.source === 'answered' ? L.kindOfType(dtb.id) : (pending.kind || s.inputs.kind);
       var saved = put({ inputs: { prompt: prompt, kind: kindOut, format: pending.format || s.inputs.format } }, 'start deck', 'inputs: prompt and documents');
       view.screen = 'build'; render();
       if (mwOn()) {

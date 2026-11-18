@@ -1,0 +1,47 @@
+id: cover_bleed
+version: 1
+group: functional
+purpose: title
+description: 'Full-bleed cover picture; kicker, title and lead on the calm zone the finder measured, under a solved scrim; label in the opposite corner.'
+slot_summary: title (display), lead, picture 16:9 (text over, scrim solved)
+for_types:
+- title
+when:
+  test: bleed_ready
+priority: 100
+alternatives:
+- cover_image
+- cover
+without_image: cover
+density: lean
+pick: rule
+family: cover
+renderer: cover_bleed
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    min_chars: 3
+    max_lines: 4
+  lead:
+    kind: text
+    role: lead
+    from_blocks:
+    - text
+    - statement
+    - small
+    max_chars: 136
+  picture:
+    kind: image
+    required: true
+    dominant: true
+    image:
+      aspect: '16:9'
+      kinds:
+      - photo
+      - illustration
+      - frame
+      fit: cover
+      text_over: true
+      scrim: auto

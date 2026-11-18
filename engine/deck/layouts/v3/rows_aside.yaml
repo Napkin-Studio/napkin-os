@@ -1,0 +1,48 @@
+id: rows_aside
+version: 1
+group: content
+purpose: compare
+description: A merged slide. The title on top, a table as hairline rows in a 7/12 column, the absorbed slide's blocks in a 5/12 column beside them.
+slot_summary: title, rows (table, 1-4 rows), aside (the absorbed blocks)
+for_types:
+- channel_roles
+- measurement
+when:
+  test: rows_aside
+priority: 58
+alternatives:
+- cards
+- cards_split
+roomier: cards
+density: standard
+pick: rule
+family: rows_aside
+renderer: rows_aside
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  rows:
+    kind: group
+    role: body
+    from_blocks:
+    - table
+    dominant: true
+    min_items: 1
+    max_items: 4
+  aside:
+    kind: group
+    role: body
+    from_blocks:
+    - bullets
+    - kv
+    - text
+    - statement
+    - copy
+    - callout
+    - card
+    - small
+    max_items: 4
