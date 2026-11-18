@@ -801,8 +801,11 @@ def main(argv=None):
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    subprocess.run([_soffice(), "--headless", "--convert-to", "pdf", "--outdir", str(a.out), str(pptx)],
-                   check=True, capture_output=True, timeout=180)
+    for attempt in (1, 2):   # LibreOffice sometimes exits 0 with no PDF when another instance holds its profile (a loaded machine): one more try
+        subprocess.run([_soffice(), "--headless", "--convert-to", "pdf", "--outdir", str(a.out), str(pptx)],
+                       check=True, capture_output=True, timeout=180)
+        if (a.out / "deck.pdf").exists():
+            break
     (a.out / "png").mkdir(exist_ok=True)   # pdftoppm overwrites by name; nothing is deleted
     subprocess.run(["pdftoppm", "-png", "-r", "60", str(a.out / "deck.pdf"), str(a.out / "png" / "slide")], check=True)
     rep["stages"]["render_pdf_png"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
