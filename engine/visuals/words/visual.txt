@@ -11,6 +11,7 @@ baker
 bakery
 balcony
 basket
+baskets
 bath
 bathroom
 beach
@@ -29,6 +30,7 @@ bowl
 branch
 brick
 bridge
+brighter
 brown
 brush
 bucket
@@ -37,6 +39,7 @@ bus
 cafe
 cake
 calm
+calmer
 candle
 car
 card
@@ -51,6 +54,7 @@ cinema
 clay
 cliff
 clock
+closer
 cloth
 cloud
 coast
@@ -60,6 +64,7 @@ colour
 colours
 cooking
 cool
+cooler
 copper
 cord
 corner
@@ -75,6 +80,7 @@ crowd
 cup
 curtain
 cushion
+darker
 dawn
 desk
 dew
@@ -91,6 +97,7 @@ drink
 dusk
 dust
 earth
+emptier
 evening
 fabric
 factory
@@ -143,6 +150,7 @@ hedge
 hill
 hills
 holding
+holds
 honey
 hose
 hut
@@ -170,6 +178,7 @@ left
 lemon
 letter
 light
+lighter
 lights
 like
 loaf
@@ -202,6 +211,8 @@ never
 not
 notebook
 oak
+object
+objects
 ocean
 ochre
 office
@@ -246,6 +257,7 @@ pouring
 puddle
 purple
 quiet
+quieter
 rain
 rainbow
 real
@@ -258,6 +270,8 @@ roof
 room
 rope
 rough
+row
+rows
 rug
 rust
 sand
@@ -281,6 +295,8 @@ show
 shower
 sign
 silver
+simpler
+single
 sink
 sitting
 sketch
@@ -293,6 +309,7 @@ snow
 soap
 sock
 sofa
+softer
 soil
 spoon
 spring
@@ -331,9 +348,12 @@ tea
 teapot
 textile
 that
+thing
+things
 third
 this
 thread
+tidier
 tidy
 tile
 tin
@@ -366,6 +386,7 @@ wall
 wallpaper
 wardrobe
 warm
+warmer
 wash
 washing
 wave
@@ -374,6 +395,7 @@ wheat
 wheel
 whisk
 wide
+wider
 window
 windows
 wine

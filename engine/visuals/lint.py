@@ -30,8 +30,9 @@ def tokens(text: str) -> list[str]:
     return re.findall(r"[a-z]+", str(text).lower())
 
 
-def lint_text(text: str, banned=(), deny: dict | None = None) -> str | None:
-    """Why this text may not go to a picture model, or None when it is clean."""
+def lint_text(text: str, banned=(), deny: dict | None = None, allow=()) -> str | None:
+    """Why this text may not go to a picture model, or None when it is clean. ``allow``: extra words that pass (the banned imagery named in
+    a 'Never show' line: curated by a pack steward or a brand, and a pack refuses digits and quotes already)."""
     t = str(text or "")
     if not t.strip():
         return "it is empty"
@@ -50,11 +51,11 @@ def lint_text(text: str, banned=(), deny: dict | None = None) -> str | None:
         before = t[:m.start()].rstrip()
         if before and before[-1] not in ".!?:(\n":
             return f"{m.group(0)!r} is a capital in mid-sentence (a name)"
-    ok = allowed()
+    ok = allowed() | {w for a in allow for w in tokens(a)}
     for w in tokens(t):
         if w in NUMBER_WORDS:
             return f"{w!r} is a number in words"
-        if w not in ok:
+        if w not in ok and not (w.endswith("s") and w[:-1] in ok) and not (w.endswith("es") and w[:-2] in ok):   # a plural of a listed word passes
             return f"{w!r} is not on the allowed word list"
     low = t.lower()
     for b in banned or ():

@@ -339,6 +339,110 @@ def bind_frames(deck_slides: dict | None, frames: dict, c: dict, pictures: str =
     return out
 
 
+def _slug(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(s).lower()).strip("-")[:40] or "x"
+
+
+def anchors(deck: dict, territories=None) -> dict:
+    """``{slide id: {type, ref}}``: the slide type plus a stable reference (the territory id, the execution's channel, the divider's number), never
+    a slide id or position, so a reorder cannot move a picture to another slide."""
+    by_name = {f"Territory: {t.get('name')}": t.get("id") for t in territories or []}
+    out, n_div = {}, 0
+    for sid in deck["order"]:
+        s = deck["slides"][sid]
+        t = s["type"]
+        if t == "territory":
+            ref = by_name.get(s.get("title")) or _slug(s.get("title", ""))
+        elif t == "execution":
+            ref = _slug(s.get("title", ""))
+        elif t == "appendix":
+            n_div += 1
+            ref = f"divider-{n_div}"
+        elif t == "title":
+            ref = "cover"
+        else:
+            ref = t
+        out[sid] = {"type": t, "ref": ref}
+    return out
+
+
+def anchor_key(anchor: dict, slot: str) -> str:
+    return f"{anchor['type']}:{anchor['ref']}.{slot}"
+
+
+# -------------------------------------------------------------------------------------------------- generated.json
+
+def load_generated(stages: Path) -> dict | None:
+    """``<stages>/generated.json`` (written by deck.imagegen), or None. Read only when run_deck is given --pictures."""
+    p = Path(stages) / "generated.json"
+    if not p.is_file():
+        return None
+    g = json.loads(p.read_text())
+    if g.get("stage") != "generated" or not isinstance(g.get("pictures"), dict):
+        raise ImageError(f"{p} is not a generated stage file")
+    return g
+
+
+def bind_generated(deck: dict, generated: dict, territories=None, names=()) -> dict:
+    """Fill the EMPTY picture slots from generated.json, by anchor (the slide type and its stable reference). Frames and uploads placed
+    earlier are never replaced. A hero (tier hero) becomes the slot's ``candidate``: the slot keeps its approved draft. Returns ``{bound, candidates}``."""
+    anc = anchors(deck, territories)
+    got = {"bound": 0, "candidates": 0}
+    by_anchor = {}
+    for sid, a in anc.items():
+        by_anchor.setdefault((a["type"], a["ref"]), sid)
+    safe = (generated.get("safe_messaging") or {})
+    style_hash = (generated.get("style") or {}).get("hash")
+    items = sorted(generated["pictures"].values(), key=lambda x: 0 if x.get("tier") == "draft" else 1)
+    for pic in items:
+        sid = by_anchor.get((pic["anchor"]["type"], pic["anchor"]["ref"]))
+        if sid is None:
+            continue
+        s = deck["slides"][sid]
+        slots = _slots(s)
+        slot = pic["slot"]
+        aid = "img_" + pic["sha256"][:12]
+        g = pic.get("guard") or {}
+        rec = {"sha256": pic["sha256"], "file": pic["file"], "mime": pic["mime"], "width": pic["width"], "height": pic["height"], "rights": "generated",
+               "guard": {"checked": bool(g.get("checked")), "by": "ollama:unrecorded" if g.get("checked") else "not checked", "flagged": bool(g.get("flagged")),
+                         **({"found": g["found"]} if g.get("found") else {}), **({"reason": str(g["reason"])[:REASON_MAX]} if g.get("reason") else {})},
+               "made": {k: v for k, v in (("provider", "runway"), ("model", pic.get("model")), ("task", pic.get("task")), ("at", pic.get("at")),
+                                           ("credits", pic.get("credits"))) if v not in (None, "")}}
+        cur = (slots.get(slot) or {}).get("image")
+        if pic.get("tier") == "hero":
+            if not (isinstance(cur, dict) and cur.get("asset") and cur["asset"] != aid and cur.get("from", {}).get("kind") == "generated"):
+                continue
+            register_assets(deck, {aid: rec})
+            cur["candidate"] = {"asset": aid, "job": pic["job"]}
+            got["candidates"] += 1
+            continue
+        if cur is not None and (cur.get("status") != "empty" or (cur.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand")):
+            continue
+        subject = str(pic.get("subject") or "")[:SUBJECT_MAX]
+        try:
+            alt = make_alt(f"{'Illustration' if pic.get('kind') == 'illustration' else 'Photo'}: " + (re.split(r"[,;.]", subject, 1)[0].strip()[:110] or "a picture"), names)
+        except ImageError:
+            alt = "An illustrative picture"
+        image = {"kind": pic.get("kind") if pic.get("kind") in ("photo", "illustration") else "photo", "status": "flagged" if g.get("flagged") else "made",
+                 "aspect": pic["aspect"], "basis": "creative", "asset": aid, "from": {"kind": "generated", "key": pic["job"]}, "alt": alt,
+                 "attempts": min(2, int(pic.get("attempt") or 1))}
+        if subject:
+            image["subject"] = subject
+        if pic.get("prompt") and len(pic["prompt"]) <= PROMPT_MAX:
+            image["prompt"] = pic["prompt"]
+        if g.get("flagged") and g.get("reason"):
+            image["reason"] = str(g["reason"])[:REASON_MAX]
+        sh = pic.get("style_hash") or style_hash
+        if sh and re.fullmatch(r"[0-9a-f]{8}", str(sh)):
+            image["style"] = {"hash": sh}
+        if safe.get("applies"):
+            image["guards"] = {"safe_messaging": {"packs": list(safe.get("packs") or []), "reviewed": safe.get("reviewed")}}
+        register_assets(deck, {aid: rec})
+        slots[slot] = {"kind": "image", "image": image}
+        got["bound"] += 1
+    return got
+
+
 # -------------------------------------------------------------------------------------------------- the images pass
 
 def _slots(slide: dict) -> dict:
@@ -365,7 +469,7 @@ def register_assets(deck: dict, assets: dict) -> None:
 
 def prune_assets(deck: dict) -> None:
     """Drop asset records no slot holds (a supplied picture can replace a frame): one record per picture in use, none left over."""
-    used = {im.get("asset") for _, _, im in image_slots(deck)}
+    used = {im.get("asset") for _, _, im in image_slots(deck)} | {(im.get("candidate") or {}).get("asset") for _, _, im in image_slots(deck)}
     for aid in [k for k in (deck.get("assets") or {}) if k not in used]:
         del deck["assets"][aid]
     if "assets" in deck and not deck["assets"]:
@@ -468,29 +572,74 @@ def add_empty_slots(deck: dict, pictures: str) -> int:
 
 
 def stamp_review(deck: dict, review: dict | None, approver: str | None) -> dict:
-    """Stamp a person's ``review.images`` decisions on the slots. A decision counts only when it is ``approve``, its ``by`` equals the
-    deck's approver (a ``human:<id>``), its ``asset`` equals the slot's own asset and ``at`` is not empty; then the slot is ``approved``
-    and holds ``approval``. A ``replace`` or ``remove`` for the slot's own asset marks it ``rejected``. Anything else is ignored: a
-    changed picture returns to ``made`` (it has no approval). Returns ``{approved, rejected, ignored}`` counts. With no approver
-    nothing is stamped."""
-    got = {"approved": 0, "rejected": 0, "ignored": 0}
-    imgs = ((review or {}).get("images") or {}) if isinstance(review, dict) else {}
+    """Stamp a person's decisions on the slots. A decision counts only when it is ``approve``, its ``by`` equals the deck's approver (a
+    ``human:<id>``), it names the slot's own asset and ``at`` is not empty; then the slot is ``approved`` and holds ``approval``. A ``replace`` or
+    ``remove`` for the slot's own asset marks it ``rejected``. Decisions are read per asset, from ``review.assets.<asset id>`` (new) and from the
+    older ``review.images.<slide>.<slot>`` entry (one more decision for the asset it names); the latest by ``at`` wins. Anything else is ignored:
+    a changed picture returns to ``made`` (it has no approval). A picture made on a safe-messaging deck that the guard did not check cannot be
+    approved. A hero ``candidate`` approved the same way replaces the draft (promoted, with a new approval); removed or replaced, it is dropped.
+    Returns ``{approved, rejected, ignored, promoted, dropped}`` counts. With no approver nothing is stamped."""
+    got = {"approved": 0, "rejected": 0, "ignored": 0, "promoted": 0, "dropped": 0}
+    r = review if isinstance(review, dict) else {}
+    imgs, by_asset = r.get("images") or {}, r.get("assets") or {}
+    assets = deck.get("assets") or {}
+
+    def valid(d, aid):
+        return (isinstance(d, dict) and approver and APPROVER.match(approver) and d.get("by") == approver and d.get("asset", aid) == aid and d.get("at")
+                and d.get("decision") in spec.IMAGE_DECISIONS)
+
+    def latest(aid, sid, name):
+        c = [x for x in ((imgs.get(sid) or {}).get(name), by_asset.get(aid)) if isinstance(x, dict)]
+        good = [x for x in c if valid(x, aid)]
+        if good:
+            return max(good, key=lambda x: str(x["at"])), True
+        return (c[0] if c else None), False
+
     for sid, name, im in image_slots(deck):
-        d = (imgs.get(sid) or {}).get(name)
-        if not isinstance(d, dict) or im.get("status") not in ("made", "flagged"):
+        cand = im.get("candidate")
+        if isinstance(cand, dict):   # a hero beside the approved draft: only a person's approval of the CANDIDATE's own asset promotes it
+            d, ok = latest(cand["asset"], sid, name)
+            ca = assets.get(cand["asset"]) or {}
+            if d is not None and ok and d["decision"] == "approve":
+                gd = ca.get("guard") or {}
+                safe = (im.get("guards") or {}).get("safe_messaging") is not None
+                if gd.get("flagged") or (safe and not gd.get("checked")):
+                    got["ignored"] += 1
+                else:
+                    im["asset"], im["status"] = cand["asset"], "approved"
+                    im["approval"] = {k: d[k] for k in ("decision", "by", "at", "note") if d.get(k)} | {"asset": cand["asset"]}
+                    im.pop("candidate", None)
+                    im.pop("reason", None)
+                    im["from"] = {"kind": "generated", "key": cand["job"]}
+                    got["promoted"] += 1
+                    continue
+            elif d is not None and ok and d["decision"] in ("remove", "replace"):
+                im.pop("candidate", None)
+                got["dropped"] += 1
+        if im.get("status") not in ("made", "flagged"):
             continue
-        if not (approver and APPROVER.match(approver) and d.get("by") == approver and d.get("asset") == im.get("asset") and d.get("at")):
+        d, ok = latest(im.get("asset"), sid, name)
+        if d is None:
+            continue
+        if not ok or (d.get("asset") is not None and d.get("asset") != im.get("asset")):
             got["ignored"] += 1
             continue
-        if d.get("decision") == "approve":
+        if d["decision"] == "approve":
+            safe = (im.get("guards") or {}).get("safe_messaging") is not None
+            if safe and not ((assets.get(im["asset"]) or {}).get("guard") or {}).get("checked"):
+                got["ignored"] += 1   # an unchecked picture on a safe-messaging deck is never approved
+                continue
             im["status"] = "approved"
-            im["approval"] = {k: d[k] for k in ("asset", "decision", "by", "at", "note") if d.get(k)}
+            im["approval"] = {"asset": im["asset"], **{k: d[k] for k in ("decision", "by", "at", "note") if d.get(k)}}
             im.pop("reason", None)
             got["approved"] += 1
-        elif d.get("decision") in ("replace", "remove"):
+        else:
             im["status"] = "rejected"
             im["reason"] = f"a person asked to {d['decision']} this picture"
             got["rejected"] += 1
+    for k in ("promoted", "dropped"):   # the older three counts stay as they were unless a candidate was decided
+        if not got[k]:
+            del got[k]
     return got
 
 
@@ -521,13 +670,15 @@ def approve_territory(review: dict, deck: dict, tid: str, by: str, at: str | Non
     return out
 
 
-def stamp_preferences(deck: dict, pictures: str, label: str, approver: str | None, hold: dict | None = None, style_hash: str | None = None) -> None:
+def stamp_preferences(deck: dict, pictures: str, label: str, approver: str | None, hold: dict | None = None, style_hash: str | None = None,
+                      generated: bool = False, cap_usd: float | None = None) -> None:
     """Record what the build used in ``meta.preferences`` (source ``person`` for what a flag set, ``default`` for the rest): the pictures
     choice, the source (only existing pictures: nothing generated) and the label; with ``hold``, ``style_pack.hold`` too (a Style Pack
     that could not be read: the build went on and the frames keep the style they were made in)."""
     prefs = deck["meta"].setdefault("preferences", {})
     prefs["pictures"] = {"on": pictures, "source": "person" if pictures != "creative_cover" else "default"}
-    prefs["picture_source"] = {"allow": "existing", "source": "default"}
+    prefs["picture_source"] = ({"allow": "generated", "cap_usd": cap_usd if cap_usd is not None else spec.PICTURE_CAP_USD_DEFAULT, "source": "person"} if generated
+                               else {"allow": "existing", "source": "default"})
     pa = {"approver": "named" if approver else "owner", "label": label, "source": "person" if label != spec.PICTURE_LABEL or approver else "default"}
     if approver:
         pa["user"] = approver
