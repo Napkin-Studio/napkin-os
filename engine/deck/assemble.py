@@ -74,14 +74,18 @@ def _label_thin(S: list, inp) -> None:
             sl["status"] = "drafted"
 
 
-def _slide(type_, title, blocks, claims=None, status="drafted", visual=None, notes="", reqs=None, label=None):
-    """One slide record in the deck contract (deck.schema.json)."""
+def _slide(type_, title, blocks, claims=None, status="drafted", visual=None, notes="", reqs=None, label=None, slots=None):
+    """One slide record in the deck contract (deck.schema.json). ``slots`` (image slots, bound by territory id when pictures are asked
+    for) is written only when given: a deck built with no pictures has no ``slots`` key, so every golden is byte-identical."""
     claims = list(claims or [])
     blocks = _dedupe_blocks(title, blocks, claims)
-    return {"type": type_, "section": spec.SLIDE_TYPES[type_]["section"], "title": title,
-            "label": label or title[:80], "blocks": blocks, "claims": claims,
-            "visual": visual or {"kind": "layout", "hint": type_}, "notes": notes,
-            "status": status, "requirements": reqs or []}
+    sl = {"type": type_, "section": spec.SLIDE_TYPES[type_]["section"], "title": title,
+          "label": label or title[:80], "blocks": blocks, "claims": claims,
+          "visual": visual or {"kind": "layout", "hint": type_}, "notes": notes,
+          "status": status, "requirements": reqs or []}
+    if slots:
+        sl["slots"] = slots
+    return sl
 
 
 def _objective_items(inp, reqs: list) -> list:
@@ -446,12 +450,14 @@ def _criterion_slides(st: dict, scoring: list) -> list:
 
 
 def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]", fmt: str = "pitch", fit: dict | None = None,
-          profile: dict | None = None) -> dict:
+          profile: dict | None = None, pictures: dict | None = None) -> dict:
     """Build the deck dict. ``st`` holds stage outputs keyed a, b, c, d (any may be absent);
     ``fmt``: spec.FORMATS, the agency pitch (default) or the full deck; ``fit``: the fit judge's
     verdicts, which decide the evidence a pitch presents; ``profile``: a deck type (profiles.load).
     With none, or an ``arrange: legacy`` one, the deck is built exactly as before types existed; an
-    ``arrange: spine`` one orders and filters the slides by its spine (_arrange_spine)."""
+    ``arrange: spine`` one orders and filters the slides by its spine (_arrange_spine). ``pictures`` (images.bind_frames) holds the image
+    slots to attach, found by territory id here, never by a slide's title or place; None (the default) writes no slot and no asset."""
+    pictures = pictures or {}
     _intake_apply(inp, st)
     st = _normalize(st)
     a, b, c, d = st.get("a") or {}, st.get("b") or {}, st.get("c") or {}, st.get("d") or {}
@@ -465,7 +471,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     S.append(_slide("title", f"{client}: {project}",
                     [{"kind": "text", "text": f"A response from {agency}"},
                      {"kind": "text", "text": _placeholder("presenter and date", "presented by the account lead and planner", "who presents, and the date"), "human": True}],
-                    status="needs_human"))
+                    status="needs_human", slots=pictures.get("title")))
 
     # 2. Brief restated
     items = _objective_items(inp, reqs)
@@ -535,7 +541,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                      *[{"kind": "quote", "text": v["text"], "refs": v["refs"]} for v in au.get("voices", []) if v.get("refs")],
                      {"kind": "card", "title": "Who the work is written for", "text": f"{au['persona']['name']}. {au['persona']['line']}"} if au.get("persona") else {"kind": "text", "text": ""},
                      {"kind": "small", "text": au.get("also", "")}],
-                    status="drafted"))
+                    status="drafted", slots=None))
 
     # 8. Proposition
     pr = b.get("proposition") or {}
@@ -556,11 +562,11 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     for t in c.get("territories", []):
         S.append(_slide("territory", f"Territory: {t['name']}",
                         [{"kind": "statement", "text": t["thought"], "basis": "creative"},
-                         {"kind": "kv", "items": [["Why it fits", t["why"]], ["Mood", t["mood"]], ["Risks", t["risks"]]], "basis": "creative"},
+                         {"kind": "kv", "items": [["Why it fits", t["why"]]] + [[k, t[f]] for k, f in (("Mood", "mood"), ("Risks", "risks")) if t.get(f)], "basis": "creative"},
                          {"kind": "sketch", "text": t["sketch"], "basis": "creative"}],
                         claims=[{"text": t["thought"], "refs": [], "basis": "creative"}], status="drafted",
-                        visual={"kind": "image_prompt", "prompt": f"Mood frame for '{t['name']}': {t['mood']}", "status": "illustrative, not final"},
-                        label=f"Territory {t['name']}"))
+                        visual={"kind": "image_prompt", "prompt": f"Mood frame for '{t['name']}': {t.get('mood') or t['sketch']}", "status": "illustrative, not final"},
+                        label=f"Territory {t['name']}", slots=(pictures.get("territory") or {}).get(t["id"])))
     if c.get("territories"):
         rk = c.get("ranking") or {}
         names = {t["id"]: t["name"] for t in c["territories"]}
@@ -576,7 +582,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     if d.get("campaign_line"):
         S.append(_slide("idea", d["campaign_line"],
                         [{"kind": "statement", "text": d["idea"]}, {"kind": "text", "text": d.get("how_it_answers", "")}],
-                        claims=[{"text": d["idea"], "refs": [], "basis": "creative"}], status="drafted"))
+                        claims=[{"text": d["idea"], "refs": [], "basis": "creative"}], status="drafted", slots=pictures.get("idea")))
     # 11. Executions
     for x in d.get("executions", []):
         S.append(_slide("execution", x["channel"][:1].upper() + x["channel"][1:],

@@ -1,0 +1,87 @@
+id: native_table
+version: 1
+group: content
+purpose: data
+description: A native table, split in two halves when it is long.
+slot_summary: title, table, note
+for_types:
+- title
+- objective
+- brief_restated
+- scoring
+- criterion_answer
+- real_question
+- chart
+- insight
+- audience
+- proposition
+- territory
+- territory_choice
+- idea
+- execution
+- channel_roles
+- innovation
+- guardrails
+- process
+- measurement
+- measurement_plan
+- timeline
+- investment
+- team
+- credentials
+- next_step
+- appendix
+- problem
+- why_now
+- solution
+- product
+- market
+- business_model
+- traction
+- what_we_know
+- competition
+- gtm
+- financials
+- upside
+- founders
+- ask
+- risks
+- close
+- conflicts
+- questions
+- requirement_trace
+- appendix_sources
+when:
+  blocks_any:
+  - table
+priority: 35
+alternatives:
+- cards
+- cards_split
+density: detailed
+pick: rule
+family: native_table
+renderer: native_table
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  table:
+    kind: table
+    from_blocks:
+    - table
+    dominant: true
+    table:
+      max_rows: 8
+      max_cols: 5
+      cell_max_chars: 140
+  note:
+    kind: text
+    role: small
+    from_blocks:
+    - small
+    - text
+    max_chars: 163

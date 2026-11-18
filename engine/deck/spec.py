@@ -99,21 +99,23 @@ TRIM_ORDER = ("process", "guardrails", "timeline", "innovation", "chart", "execu
 
 #: List prices in USD per million tokens, (input, output), for the cost the CLI transport does not report. An ESTIMATE
 #: from tokens (stages._call). A real usd the transport provides wins.
-PRICE_PER_MTOK = {"claude-opus-5-5": (5.0, 25.0), "claude-sonnet-5-5": (3.0, 15.0)}
-USD_BASIS = "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache tokens at 0.1x and 1.25x input; not a billed amount"
+PRICE_PER_MTOK = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0)}
+USD_BASIS = "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache reads at 0.05x and writes at 1.25x input; an unlisted model at the dearest price; not a billed amount"
 
 
 #: Prompt-cache tokens are priced against the input price: a read at this share, a write at this multiple.
-CACHE_READ_SHARE, CACHE_WRITE_MULT = 0.1, 1.25
+CACHE_READ_SHARE, CACHE_WRITE_MULT = 0.05, 1.25
 
 
 def estimate_usd(model: str, tokens_in: int, tokens_out: int, cache_read: int = 0, cache_creation: int = 0) -> float:
-    """Estimated dollars for one model's tokens at spec.PRICE_PER_MTOK; 0.0 for a model not in the table. Cache reads and
-    writes are priced at CACHE_READ_SHARE and CACHE_WRITE_MULT of the input price. ``model`` may name several (a comma
-    list from a summed stage): the dearest listed one prices the lot, so an estimate is never low."""
-    prices = [PRICE_PER_MTOK[m.strip()] for m in str(model or "").split(",") if m.strip() in PRICE_PER_MTOK]
-    if not prices:
-        return 0.0
+    """Estimated dollars for one model's tokens at spec.PRICE_PER_MTOK. Cache reads and writes are priced at
+    CACHE_READ_SHARE and CACHE_WRITE_MULT of the input price. ``model`` may name several (a comma list from a summed
+    stage): the dearest one prices the lot, so an estimate is never low. A model not in the table (or no model named,
+    when there are tokens) is priced at the dearest listed price, never $0: a new model must not look free."""
+    names = [m.strip() for m in str(model or "").split(",") if m.strip()]
+    prices = [PRICE_PER_MTOK[m] for m in names if m in PRICE_PER_MTOK]
+    if len(prices) < len(names) or not names:
+        prices.append(max(PRICE_PER_MTOK.values(), key=lambda p: p[1]))
     pin, pout = max(prices, key=lambda p: p[1])
     billed_in = (tokens_in or 0) + (cache_read or 0) * CACHE_READ_SHARE + (cache_creation or 0) * CACHE_WRITE_MULT
     return round(billed_in / 1e6 * pin + (tokens_out or 0) / 1e6 * pout, 4)
@@ -200,19 +202,56 @@ CRITERIA_HOME = (
     (r"accessib", ("guardrails", "execution", "channel_roles"), "accessib", False),
 )
 
-def shown_blocks(s: dict, audience: str = "review") -> list:
-    """The blocks a slide shows to an audience: internal notes dropped for a client and labelled
-    for a review; an unsourced (illustrative) quote followed by its label. Shared by renderers."""
+def moved_map(s: dict, audience: str = "review") -> dict:
+    """``{block index: None (the whole block) | set of item indexes}`` moved to the notes by the layout plan (``layout.fit.moved``).
+    The blocks themselves are never edited: the plan only overlays what it moved, so the deck's words, claims and order are unchanged.
+    An overlay whose ``blocks_sha`` no longer matches the slide's words is stale and ignored (contract 3.3 rule 4)."""
+    lay = s.get("layout") or {}
+    moved = ((lay.get("fit") or {}).get("moved")) or []
+    if not moved:
+        return {}
+    if lay.get("blocks_sha") and lay["blocks_sha"] != blocks_sha(s, audience):
+        return {}
+    out: dict = {}
+    for m in moved:
+        bi, it = m.get("block"), m.get("item")
+        if it is None:
+            out[bi] = None
+        elif out.get(bi, set()) is not None:
+            out.setdefault(bi, set()).add(it)
+    return out
+
+
+def _shown(s: dict, audience: str, moved: dict) -> list:
     out = []
-    for b in s["blocks"]:
+    for bi, b in enumerate(s["blocks"]):
+        if bi in moved and moved[bi] is None:
+            continue
         if b.get("internal"):
             if audience == "client":
                 continue
             b = {**b, "text": "Internal note: " + str(b.get("text", ""))}
+        if bi in moved and isinstance(b.get("items"), list):
+            b = {**b, "items": [i for k, i in enumerate(b["items"]) if k not in moved[bi]]}
         out.append(b)
         if b["kind"] == "quote" and not b.get("refs") and str(b.get("text", "")).strip():
             out.append({"kind": "small", "text": ILLUSTRATIVE_QUOTE, "basis": "meta"})
     return out
+
+
+def shown_blocks(s: dict, audience: str = "review") -> list:
+    """The blocks a slide shows to an audience: internal notes dropped for a client and labelled
+    for a review; an unsourced (illustrative) quote followed by its label; the items the layout plan moved to the
+    notes (``layout.fit.moved``) left out. Shared by renderers, validate and the plan itself."""
+    return _shown(s, audience, moved_map(s, audience))
+
+
+def blocks_sha(s: dict, audience: str = "review") -> str:
+    """First 12 hex of the SHA-256 of the canonical JSON of ``[title, shown blocks]`` with nothing moved (contract 3.3 rule 4)."""
+    import hashlib
+    import json
+    blocks = _shown(s, audience, {})
+    return hashlib.sha256(json.dumps([s["title"], blocks], sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:12]
 
 
 #: Channel words in an execution's title -> the frame its copy is shown in (render_web) and the
@@ -295,7 +334,8 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "word_budget", "empty_slot", "placeholder", "requirement_map", "banned_phrase", "watch_word", "message_carried",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
-          "insight_shape", "idea_single", "chain_links", "weight_share")
+          "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
+          "image_rights", "style_pack_held")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.
@@ -344,7 +384,15 @@ LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "compari
               "placeholder_card", "quote_cards", "comparison", "big_number", "kpi_row", "role_grid", "timeline_strip",
               "native_table", "cards",
               "cover_image", "section", "image_text", "image_left", "full_bleed_statement", "frames_strip", "image_grid",
-              "execution_visual")
+              "execution_visual",
+              # the 11 text layouts and the close that arrive with the library (deck-layout-library)
+              "close", "big_statement", "quote_full", "cards_split", "text_columns", "placeholder_split", "chart_full",
+              "timeline_rows", "execution_stack", "territory_wide", "people_cards")
+#: The tests a layout file's ``when.test`` may name; each is a function of the same name in layouts.py (and has a unit test).
+LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready")
+#: The eight look changes of deck-layout-library (cover 64 pt, a stamped title size and a fixed title box per layout, 48-character
+#: lines, switch before relaxed, picture and close layouts rule-picked). Off while the library lands without a look change; on at the look commit.
+LOOK_V2 = True
 LAYOUT_FLOW = "flow"
 LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
 LAYOUT_MAX = 40
@@ -368,6 +416,10 @@ IMAGE_SOURCES = ("territory_frame", "upload", "brand", "generated")
 IMAGE_RIGHTS = ("generated", "own", "licensed", "client_supplied", "reference_only")
 IMAGE_MIMES = ("image/png", "image/jpeg", "image/webp", "image/svg+xml")
 IMAGE_DECISIONS = ("approve", "replace", "remove")
+#: Picture QA (qa_render). A picture below this many pixels per inch of the box it fills is soft; one whose drawn aspect differs
+#: from its crop's by more than this fraction is stretched. 96 ppi is the screen floor for a slide shown full size.
+PICTURE_MIN_PPI = 96
+PICTURE_STRETCH_TOL = 0.01
 #: The default label of a picture a person has not approved (ADR 0027): a fixed label, never a fact, no digit.
 PICTURE_LABEL = "Illustrative"
 #: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
@@ -376,7 +428,9 @@ PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "a
 
 #: Theme (contract section 6.1 and 6.2). COLOR_ROLES equals ``theme.COLOR_FIELDS``.
 COLOR_ROLES = ("ink", "paper", "panel", "rule", "mute", "accent", "accent_ink", "on_dark", "on_dark_mute", "accent_on_dark")
-THEME_SOURCES = ("default", "brand_clan", "agency_look", "brand_file", "master")
+THEME_SOURCES = ("default", "brand_clan", "style_pack", "agency_look", "brand_file", "master")
+#: The tiers that can give a token (meta.theme.from), highest first; "derived" is a token no tier gave (look.py).
+THEME_TIERS = ("master", "brand_clan", "brand_file", "style_pack", "agency_look", "default")
 LOGO_PLACEMENTS = ("cover_only", "cover_and_footer", "none")
 ACCENT_USES = ("fill", "outline")
 HEADER_POSITIONS = ("left", "center")
@@ -409,11 +463,9 @@ ISSUE_STATUSES = ("open", "fixed", "unfixed", "rolled_back", "left_for_person")
 ISSUE_FIXES = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "add_scrim", "crop_image", "regen_image",
                "drop_image", "needs_human")
 QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min_font", "placeholder", "contrast", "mostly_empty",
-                    "one_corner", "qa_internal", "unreadable")
+                    "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast")
 RESERVED_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown",
-                   "image_missing", "image_unapproved", "image_flagged", "image_rights", "golden_echo",
-                   "picture_stretch", "picture_lowres", "text_on_image_contrast", "layout_repeat", "title_drift",
-                   "line_length", "image_style_mixed", "export_failed")
+                   "golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")
 ISSUE_CHECKS = tuple(dict.fromkeys(CHECKS + QA_RENDER_CHECKS + RESERVED_CHECKS))
 
 #: Repair policy (contract section 8).

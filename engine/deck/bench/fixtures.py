@@ -35,11 +35,13 @@ GALLERY_SLUGS = {"lumen_water": "lumen-water", "investor_seed": "investor-seed",
                  "tender_response": "tender-response", "credentials": "credentials"}
 
 
-def build_one(name: str, out: Path, geometry_only: bool = False) -> Path:
-    """Build one fixture deck into ``out`` (a run folder) through run_deck.main; returns ``out``."""
+def build_one(name: str, out: Path, geometry_only: bool = False, density: str | None = "detailed", extra: tuple = ()) -> Path:
+    """Build one fixture deck into ``out`` (a run folder) through run_deck.main; returns ``out``. ``density`` is the tests' and goldens' setting
+    (detailed, for parity with the recorded runs); ``None`` lets the engine resolve it by format, the look a person gets. ``extra`` adds run_deck arguments."""
     from .. import run_deck
     stages, args = FIXTURES[name]
-    argv = ["--stages", str(FIXTURE_ROOT / stages), "--out", str(out), *[a.replace("{fx}", str(FIXTURE_ROOT)) for a in args]]
+    argv = ["--stages", str(FIXTURE_ROOT / stages), "--out", str(out), *[a.replace("{fx}", str(FIXTURE_ROOT)) for a in args],
+            *(["--density", density] if density else []), *extra]
     saved = (run_deck.subprocess.run, run_deck._soffice)
     if geometry_only:   # no PDF, no PNG: qa_render then reports "pixels skipped: no PDF"
         run_deck.subprocess.run = lambda *a, **k: None
@@ -52,7 +54,7 @@ def build_one(name: str, out: Path, geometry_only: bool = False) -> Path:
     return out
 
 
-def build_all(out_dir: Path, geometry_only: bool = False, names=None) -> dict:
+def build_all(out_dir: Path, geometry_only: bool = False, names=None, density: str | None = "detailed") -> dict:
     """Build every fixture into ``out_dir/<name>``; returns ``{name: run folder}``."""
     out_dir = Path(out_dir)
-    return {n: build_one(n, out_dir / n, geometry_only) for n in (names or FIXTURES)}
+    return {n: build_one(n, out_dir / n, geometry_only, density) for n in (names or FIXTURES)}

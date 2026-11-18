@@ -475,5 +475,5 @@
   "needs_human": 5
  },
  "usd_total": 0.6983,
- "usd_basis": "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache tokens at 0.1x and 1.25x input; not a billed amount"
+ "usd_basis": "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache reads at 0.05x and writes at 1.25x input; an unlisted model at the dearest price; not a billed amount"
 }

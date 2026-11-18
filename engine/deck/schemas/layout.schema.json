@@ -132,6 +132,43 @@
             "drafted",
             "needs_human"
           ]
+        },
+        "test": {
+          "enum": [
+            "has_target_figure",
+            "has_human_item",
+            "compare_table",
+            "role_rows",
+            "image_ready"
+          ],
+          "$comment": "a named test from spec.LAYOUT_TESTS, implemented in layouts.py"
+        },
+        "blocks_all": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "text",
+              "small",
+              "statement",
+              "quote",
+              "callout",
+              "card",
+              "bullets",
+              "table",
+              "kv",
+              "fromto",
+              "steps",
+              "chart",
+              "sketch",
+              "copy",
+              "stats"
+            ]
+          }
+        },
+        "max_blocks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
         }
       }
     },
@@ -183,6 +220,18 @@
       "additionalProperties": {
         "$ref": "#/definitions/slot"
       }
+    },
+    "pick": {
+      "enum": [
+        "rule",
+        "offer"
+      ],
+      "$comment": "rule: layouts.pick may choose it by priority and when; offer: only a swap, an alternative or a fit-ladder switch reaches it"
+    },
+    "family": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,31}$",
+      "$comment": "the variety rule counts families, not ids"
     }
   },
   "definitions": {
@@ -286,7 +335,7 @@
         "max_items": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 8
+          "maximum": 10
         },
         "center_when_fewer": {
           "type": "boolean"
@@ -323,7 +372,7 @@
             },
             "cell_max_chars": {
               "type": "integer",
-              "maximum": 60
+              "maximum": 160
             }
           }
         },
@@ -420,6 +469,12 @@
               "$comment": "4 for a territory's frame strip"
             }
           }
+        },
+        "max_cpl": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 75,
+          "$comment": "characters per line for body, small and lead text; replaces max_line_in"
         }
       }
     }

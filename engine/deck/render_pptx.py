@@ -82,6 +82,7 @@ Footer, slide number, watermark and check flags never animate.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import itertools
 import json
 import re
@@ -99,6 +100,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import nsdecls, qn
 from pptx.util import Emu, Inches, Pt
 
+from . import images, layouts, spec
 from . import theme as themes
 from .refs import Resolver, fmt
 from .spec import HUMAN_ONLY_TYPES, shown_blocks
@@ -132,7 +134,13 @@ class NoFit(Exception):
 
 
 def choose_layout(s: dict, audience: str = "review") -> str:
-    """The layout name for one slide dict, by the rule table in the module docstring (pure, no drawing)."""
+    """The layout name for one slide dict, by the rule table in the layout files (``layouts.pick``: pure, no drawing, no fit).
+    Today's 17-rule table lives there as ``priority`` and ``when``; this stays as the one call the renderer and the tests make."""
+    return layouts.pick(s, audience)
+
+
+def _choose_layout_frozen(s: dict, audience: str = "review") -> str:
+    """A frozen copy of the rule table as it stood before the layout library (parity tests compare ``layouts.pick`` with it)."""
     t, st = s["type"], s.get("status")
     bl = shown_blocks(s, audience)
     kinds = [b["kind"] for b in bl]
@@ -170,6 +178,11 @@ def choose_layout(s: dict, audience: str = "review") -> str:
     if set(kinds) <= {"bullets", "text", "small", "statement", "callout", "card", "kv", "quote"}:
         return "cards"
     return "flow"
+
+
+def _item_text(i) -> str:
+    """The text of a bullets item (a string or a dict with ``text``)."""
+    return str(i.get("text", "")) if isinstance(i, dict) else str(i)
 
 
 def _rgb(h):
@@ -318,9 +331,16 @@ def _is_image(path) -> bool:
 class Renderer:
     """Builds one Presentation from a deck dict."""
 
-    def __init__(self, deck, inp, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT):
+    def __init__(self, deck, inp, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
+                 pictures: dict | None = None):
         self.deck, self.inp = _clean_xml(deck), inp
         deck = self.deck
+        # Pictures (deck-frames-in): ``pictures`` maps an asset id to its derived JPEG. None: nothing is drawn and nothing changes.
+        self.pictures = pictures
+        self.drawn = {k: v for k, v in images.drawn(deck, deck["meta"].get("audience", "review")).items() if v["asset"] in (pictures or {})} if pictures else {}
+        self.pic_label = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or spec.PICTURE_LABEL
+        self.picture_findings = []   # [{check, level, slide, message}]: a picture dropped because its slide would not fit it
+        self.placed = set()          # (slide id, slot) of every picture this renderer really drew: the web outputs draw exactly these
         self.th = themes.get_theme(theme, (deck["meta"].get("brand") or {}))
         self.theme_problems = themes.check_palette(self.th)
         self.x0 = self.th.grid.M if self.th.layouts else X0
@@ -331,6 +351,7 @@ class Renderer:
         self._cur, self.steps = None, []
         self.failed = {}
         self.layouts = {}   # slide id -> the layout it was drawn with
+        self.fit_by_slide = {}   # slide id -> the plan's layout.fit, or None
         self.chosen = {}    # slide id -> the layout choose_layout picked (before any fallback)
         self.relaxed = {}   # slide id -> True when the layout fitted only with body text let down to the caption floor
         for f in findings or []:
@@ -349,6 +370,15 @@ class Renderer:
         self._minh = 0.0        # the minimum height a stretchable look takes (set by ``stack``, 0 when measuring)
         self.p = self._palette(False)
         self.fg = self.p.fg
+        # layout plan state (deck-layout-library): the density the deck was planned at, the layout being drawn or probed, the stamped
+        # title sizes, the smallest stack scale used, a scale ceiling from a repair fix, and the picture slots of the slide in hand
+        self.density = (((deck["meta"].get("preferences") or {}).get("density")) or {}).get("level")
+        self._lid, self._tpt, self._min_sc, self._scale_cap, self._pics = None, dict(deck["meta"].get("layout_title_pt") or {}), 1.0, None, {}
+        self.shapes_by_slide = {}   # slide id -> [{name, slot, blocks}]: what each slot shape is, for layouts.json
+        self.no_plan = False        # --no-layout-plan: choose_layout on every slide, as before the library
+        self.notes = True           # False: a notes-free export (no speaker notes at all, the moved points included)
+        self._slotmap, self._shapes_now, self._sid = {}, [], None
+        self._cpl = 48              # characters per line for body, small and lead text (fit.cpl widens it for a slide that fits no other way)
 
     def _layout(self, name):
         """A layout of the master by name, or None."""
@@ -363,11 +393,11 @@ class Renderer:
         if dark:
             card = themes.blend(t.ink, t.on_dark, 0.09)
             return SimpleNamespace(dark=True, bg=t.ink, fg=t.on_dark, mute=t.on_dark_mute, acc_t=t.accent_on_dark,
-                                   acc_f=t.accent_on_dark, card=card, card_fg=t.on_dark, card_mute=t.on_dark_mute,
+                                   acc_f=t.accent_on_dark, acc_l=t.accent_on_dark, card=card, card_fg=t.on_dark, card_mute=t.on_dark_mute,
                                    card_acc=t.accent_on_dark, rule=themes.blend(t.ink, t.on_dark, 0.28), chip_fg=t.ink,
                                    inv=t.panel, inv_fg=t.ink, inv_acc=t.accent_ink, inv_mute=t.mute)
         chip = "FFFFFF" if themes.contrast("FFFFFF", t.accent) >= themes.contrast(t.ink, t.accent) else t.ink
-        return SimpleNamespace(dark=False, bg=t.paper, fg=t.ink, mute=t.mute, acc_t=t.accent_ink, acc_f=t.accent,
+        return SimpleNamespace(dark=False, bg=t.paper, fg=t.ink, mute=t.mute, acc_t=t.accent_ink, acc_f=t.accent, acc_l=t.line_accent,
                                card=t.panel, card_fg=t.ink, card_mute=t.mute, card_acc=t.accent_ink, rule=t.rule,
                                chip_fg=chip, inv=t.ink, inv_fg=t.on_dark, inv_acc=t.accent_on_dark, inv_mute=t.on_dark_mute)
 
@@ -544,6 +574,7 @@ class Renderer:
     def ph(self, paras, w) -> float:
         """Height in inches of a list of paragraph dicts (see ``ptext``) set in ``w`` inches."""
         h = 0.0
+        w = self._clamp(paras, w, all(p_.get("align", "l") == "l" for p_ in paras))
         for p in paras:
             size = p.get("size", self.th.scale.body)
             n = self.nlines(p["t"], w - (0.3 if p.get("bullet") else 0), size, p.get("bold"), p.get("font"))
@@ -555,6 +586,7 @@ class Renderer:
         Margins are zero so the box edge is the text edge; ``sl`` None measures only."""
         if sl is None:
             return None
+        w = self._clamp(paras, w, all(p_.get("align", "l") == "l" for p_ in paras))
         tb = sl.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
         if name:
             tb.name = name
@@ -593,7 +625,18 @@ class Renderer:
         """One paragraph dict for ``ptext`` / ``ph``; the size is held to the theme's floor (body 12 pt, or the
         caption floor when ``cap``). The last two words are joined by a no-break space (``glue``) so a text never
         ends a line on a single orphaned word; the words themselves are untouched."""
-        return dict(t=glue(t), size=self.sz(size, cap), color=color, font=font, cap=cap, **kw)
+        d = dict(t=glue(t), size=self.sz(size, cap), color=color, font=font, cap=cap, **kw)
+        if spec.LOOK_V2 and not cap and d["size"] <= 28 and "cpl" not in kw and not (kw.get("bold") and font == self.th.head):
+            d["cpl"] = self._cpl   # body, small and lead lines run to about 48 characters (the plan may widen a slide to 60 before it relaxes type), whatever the size
+        return d
+
+    def _clamp(self, paras, w, left=True) -> float:
+        """The box width for these paragraphs: ``w``, or less when they carry a ``cpl`` (characters per line): the width of that many glyphs at
+        the largest such size. Only a left-aligned box is narrowed (a centred or right-aligned one keeps its place)."""
+        if not spec.LOOK_V2 or not left:
+            return w
+        cw = [self._cpl_w(p_["size"], p_.get("bold"), p_.get("font"), p_["cpl"]) for p_ in paras if p_.get("cpl")]
+        return min(w, max(cw)) if cw else w
 
     def fit(self, make, w, h, hi, lo):
         """The largest size in [lo, hi] (stepping 1 pt) at which ``make(size)`` (paragraph dicts) fits ``h`` inches
@@ -701,13 +744,13 @@ class Renderer:
         dl.font.size, dl.font.name, dl.font.bold = Pt(self.sz(16)), t_.body, True
         dl.font.color.rgb = _rgb(t_.ink)
         ser = plot.series[0]
-        ser.format.fill.solid(); ser.format.fill.fore_color.rgb = _rgb(t_.accent)
+        ser.format.fill.solid(); ser.format.fill.fore_color.rgb = _rgb(t_.line_accent)
         if hero:
             quiet = themes.blend(t_.mute, t_.paper, 0.45)
             for i, lab in enumerate(labels):
                 pt = ser.points[i]
                 pt.format.fill.solid()
-                pt.format.fill.fore_color.rgb = _rgb(t_.accent if lab in hero else quiet)
+                pt.format.fill.fore_color.rgb = _rgb(t_.line_accent if lab in hero else quiet)
         va = ch.value_axis
         va.visible = False
         va.has_major_gridlines = False
@@ -753,7 +796,7 @@ class Renderer:
         """An emphasis bar: a vertical accent bar and the text beside it, anchored in the middle."""
         paras = [self.para(text, size, color or self.p.fg, font or self.th.head, italic=italic, line=1.1)]
         h = max(self.ph(paras, w - 0.32), minh)
-        self.rect(sl, x, y, 0.09, h, fill=self.p.acc_f)
+        self.rect(sl, x, y, 0.09, h, fill=self.p.acc_l)
         self.ptext(sl, x + 0.32, y, w - 0.32, h, paras, anchor="middle")
         return h
 
@@ -766,7 +809,7 @@ class Renderer:
         paras = [self.para(str(bl["text"]).strip(), self.th.scale.body * sc, self.p.card_fg, line=1.05)]
         h = self.ph(paras, w - 0.6) + 0.4
         self.rect(sl, x, y, w, h, fill=self.p.card)
-        self.rect(sl, x, y, 0.07, h, fill=self.p.acc_f)
+        self.rect(sl, x, y, 0.07, h, fill=self.p.acc_l)
         self.ptext(sl, x + 0.35, y + 0.2, w - 0.6, h - 0.4, paras, anchor="middle")
         return h
 
@@ -779,7 +822,7 @@ class Renderer:
             paras = paras[1:]
         h = self.ph(paras, w - 0.6) + 0.5
         self.rect(sl, x, y, w, h, fill=self.p.card)
-        self.rect(sl, x, y, w, 0.05, fill=self.p.acc_f)
+        self.rect(sl, x, y, w, 0.05, fill=self.p.acc_l)
         self.ptext(sl, x + 0.3, y + 0.3, w - 0.6, h - 0.5, paras)
         return h
 
@@ -795,7 +838,7 @@ class Renderer:
             for i, c in enumerate(cards):
                 cx = x + i * (cw + gap)
                 self.rect(sl, cx, y, cw, h, fill=self.p.card)
-                self.rect(sl, cx, y, cw, 0.05, fill=self.p.acc_f)
+                self.rect(sl, cx, y, cw, 0.05, fill=self.p.acc_l)
                 self.ptext(sl, cx + 0.25, y + 0.25, cw - 0.5, h - 0.35, c)
             return h
         for key, val in bl["items"]:
@@ -884,14 +927,14 @@ class Renderer:
                     self.ptext(sl, cx + 0.25, yy + 0.55 * min(1.0, sc + 0.15), rcw - 0.5, hr - 0.2 - 0.55 * min(1.0, sc + 0.15), paras)
                 elif kind == "num":   # figure and its sentence, the figure on one baseline across the row
                     self.rect(sl, cx, yy, rcw, hr, fill=p.card)
-                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_f)
+                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_l)
                     top = yy + 0.05 + (hr - 0.05 - content) / 2
                     fh = self.ph(paras[:1], rcw - 0.5)
                     self.ptext(sl, cx + 0.25, top, rcw - 0.5, fh, paras[:1])
                     self.ptext(sl, cx + 0.25, top + fh, rcw - 0.5, content - fh, paras[1:])
                 else:
                     self.rect(sl, cx, yy, rcw, hr, fill=p.card)
-                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_f)
+                    self.rect(sl, cx, yy, rcw, 0.05, fill=p.acc_l)
                     self.ptext(sl, cx + 0.25, yy + 0.05 + 0.15, rcw - 0.5, hr - 0.05 - 0.3, paras, anchor="middle")
             yy += hr + gap
         return head_h + total + extra * len(rows)
@@ -930,7 +973,7 @@ class Renderer:
             lp = [self.para(it["label"], (S.body + 2) * sc, p.inv_fg, line=1.05)]
             h = max(1.5 * sc, self.ph(lp, w - vw - 0.9) + 0.5, self._minh)
             self.rect(sl, x, y, w, h, fill=p.inv)
-            self.rect(sl, x, y, 0.09, h, fill=p.acc_f)
+            self.rect(sl, x, y, 0.09, h, fill=p.acc_l)
             self.ptext(sl, x + 0.4, y, vw - 0.6, h, [self.para(it["value"], vs, p.inv_acc, self.th.head, bold=True)], anchor="middle")
             self.ptext(sl, x + vw + 0.3, y, w - vw - 0.7, h, lp, anchor="middle")
             return h
@@ -953,7 +996,7 @@ class Renderer:
         for i in range(n):
             cx = x + i * (cw + gap)
             self.rect(sl, cx, y, cw, h, fill=p.card)
-            self.rect(sl, cx, y, 0.07, h, fill=p.acc_f)
+            self.rect(sl, cx, y, 0.07, h, fill=p.acc_l)
             self.ptext(sl, cx + 0.35, top, tw, fig_h, [fig[i]], anchor="bottom")
             self.ptext(sl, cx + 0.35, top + fig_h + 0.06, tw, lab_h, lab[i])
         return h
@@ -984,7 +1027,7 @@ class Renderer:
         for rcw, cols, ch in geo:
             ch += extra
             span = len(cols) * rcw + (len(cols) - 1) * gap
-            self.rect(sl, x, yy + 0.095, span, 0.035, fill=p.acc_f)
+            self.rect(sl, x, yy + 0.095, span, 0.035, fill=p.acc_l)
             for k, ps in enumerate(cols):
                 cx = x + k * (rcw + gap)
                 self.rect(sl, cx, yy + 0.38, rcw, ch, fill=p.card)
@@ -1018,7 +1061,7 @@ class Renderer:
             self.rect(sl, x, yy, rw, h, fill=p.inv)
             self.ptext(sl, x + 0.3, yy, rw - 0.5, h, rp, anchor="middle")
             self.rect(sl, x + rw, yy, w - rw, h, fill=p.card)
-            self.rect(sl, x + rw, yy, 0.07, h, fill=p.acc_f)
+            self.rect(sl, x + rw, yy, 0.07, h, fill=p.acc_l)
             self.ptext(sl, x + rw + 0.4, yy, w - rw - 0.7, h, jp, anchor="middle")
             yy += h + 0.09
         return yy - y - 0.09
@@ -1071,7 +1114,7 @@ class Renderer:
                 self.rect(sl, cols[1][0], yy, cw, h, fill=p.card)
                 self.ptext(sl, cols[1][0] + 0.25, yy, cw - 0.45, h, ps[1], anchor="middle")
                 self.rect(sl, cols[2][0], yy, cw, h, fill=p.card)
-                self.rect(sl, cols[2][0], yy, 0.07, h, fill=p.acc_f)
+                self.rect(sl, cols[2][0], yy, 0.07, h, fill=p.acc_l)
                 self.ptext(sl, cols[2][0] + 0.3, yy, cw - 0.55, h, ps[2], anchor="middle")
             yy += h + gap
         return yy - y - gap
@@ -1193,12 +1236,37 @@ class Renderer:
         fn = self.LOOKS.get(bl["kind"])
         if fn is None:
             raise NoFit(f"no look for a {bl['kind']} block")
-        return getattr(self, fn)(sl, bl, x, y, w, sc, **kw)
+        n0 = len(sl.shapes) if sl is not None else 0
+        h = getattr(self, fn)(sl, bl, x, y, w, sc, **kw)
+        if sl is not None and sl is self._cur and self._slotmap:
+            self._tag_slot(sl, n0, bl)
+        return h
+
+    _DEFAULT_NAME = re.compile(r"^(TextBox|Rounded Rectangle|Rectangle|Oval|Table|Chart|Connector|Straight Connector|Graphic Frame|Group|Freeform|Shape)\b")
+
+    def _tag_slot(self, sl, n0, bl):
+        """Name the shapes a block's look just drew ``slot:<name>`` (those still carrying their default name; Title, Caption and the other
+        fixed names stay), and record them for layouts.json: ``{name, slot, blocks}``."""
+        slot = self._slotmap.get(id(bl))
+        if not slot:
+            return
+        for sh in list(sl.shapes)[n0:]:
+            if self._DEFAULT_NAME.match(sh.name or ""):
+                sh.name = f"slot:{slot[0]}"
+        self._shapes_now.append({"name": f"slot:{slot[0]}", "slot": slot[0], "blocks": [slot[1]]})
 
     #: Block kinds whose look can take a minimum height (``Renderer._minh``): cards, panels, rows.
     STRETCH = ("bullets", "stats", "steps", "fromto", "callout", "card", "table")
     #: Scales a filling stack tries above 1.0 (largest first) before it stretches what is left.
     UPSCALES = (1.6, 1.45, 1.3, 1.2, 1.1)
+
+    def _upscales(self) -> tuple:
+        """Scales a filling stack tries above 1.0: today's up to 1.6 for a detailed deck, and at most 1.2 under lean and standard (fix 5)."""
+        return self.UPSCALES if self.density in (None, "detailed") else tuple(x for x in self.UPSCALES if x <= 1.2)
+
+    def _stretches(self) -> bool:
+        """Whether cards grow to the foot of the content area: yes for a detailed deck (today), no under lean and standard."""
+        return self.density in (None, "detailed") or self._role   # rows (the role grid, the timeline rows) are not cards: they still fill the height
 
     @staticmethod
     def _stretchable(row, force=False) -> bool:
@@ -1257,7 +1325,9 @@ class Renderer:
             finally:
                 self._minh = 0.0
 
-        scales = (self.UPSCALES if fill else ()) + SCALES
+        scales = (self._upscales() if fill else ()) + SCALES
+        if self._scale_cap is not None:
+            scales = tuple(x for x in scales if x <= self._scale_cap) or SCALES[-1:]
         for sc in scales:
             try:
                 heights = [one(None, r, 0, sc) for r in plan]
@@ -1268,11 +1338,12 @@ class Renderer:
                 break
         else:
             raise NoFit("blocks do not fit the slide")
+        self._min_sc = min(self._min_sc, sc)
         gap = 0.24 * sc
         extra, off = [0.0] * len(plan), 0.0
         slack = bottom - (y + total)
         if fill and slack > 0.05 and plan:
-            idx = [k for k, r in enumerate(plan) if self._stretchable(r, stretch_all)]
+            idx = [k for k, r in enumerate(plan) if self._stretchable(r, stretch_all)] if self._stretches() else []
             if idx:
                 for k in idx:
                     extra[k] = slack / len(idx)
@@ -1295,7 +1366,12 @@ class Renderer:
         last never holds one word alone. Returns the y below it. ``sl`` None measures only."""
         S, g = self.th.scale, self.th.grid
         w = self.x1 - self.x0
-        cands = ((S.title_min,) + ((24,) if self._relaxed else ())) if dense else (S.title, 32, S.title_long, S.title_min)   # relaxed: the last resort may go to 24 pt
+        if spec.LOOK_V2:   # one stamped size per layout, in one fixed box (0.1 in higher than before, the geometry a dense slide had): a dense slide no longer shrinks or lifts its own title
+            dense, fixed = False, True
+            stamped = self._tpt.get(self._lid)
+        else:
+            stamped, fixed = None, False
+        cands = ((S.title_min,) + ((24,) if self._relaxed else ())) if dense else ((stamped,) if stamped else (S.title, 32, S.title_long, S.title_min))   # relaxed: the last resort may go to 24 pt
         for want in ((1, 2) if dense else (2,)):   # dense: a one-line title if one fits at the floor size
             for size in cands:
                 n = self.nlines(glue(s["title"]), w, size, True, self.th.head)
@@ -1305,16 +1381,16 @@ class Renderer:
                 break
         if n > 3:
             raise NoFit("title too long")
-        top = (g.title_y - (0.1 if dense else 0.0)) if y is None else y
+        top = (g.title_y - (0.1 if (dense or fixed) else 0.0)) if y is None else y
         h = n * size * 1.2 / 72 + 0.04
         if sl is not None:
             m = self._mark(sl)
-            self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=self.p.acc_f)
+            self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=self.p.acc_l)
             tp = self.para(s["title"], size, self.p.fg, self.th.head, bold=True)
             bw = self.balance_w(tp["t"], w, size, True, self.th.head)
             self.ptext(sl, self.x0, top, bw, h, [tp], name="Title")
             self._build(sl, m, title=True)
-        return top + h + (0.2 if dense else 0.3)
+        return top + h + (0.2 if (dense or fixed) else 0.3)
 
     def _lay_stack(self, sl, s, role=False):
         """The standard composition: title, then the blocks stacked with their looks (cards, KPI row, timeline
@@ -1340,27 +1416,36 @@ class Renderer:
         """No layout: the caller draws the earlier flow."""
         raise NoFit("flow")
 
-    def _lay_cover(self, sl, s):
+    def _lay_cover(self, sl, s, panel=False):
         """Cover: dark, an accent rule, the title at display size, the lead text and caption under it."""
         S, p, g = self.th.scale, self.p, self.th.grid
-        w = min(10.4, self.x1 - self.x0)
+        pw = 5.0 if panel else 0.0
+        px = self.x1 - pw   # the panel keeps the right margin and sits under the DRAFT mark (y 0.62 to 6.67), so no text runs over the picture
+        if panel:
+            self._own_picture(None, "picture", px, 0, pw, 6.85)   # NoFit without a picture
+        w = (px - 0.5 - self.x0) if panel else (self.x1 - self.x0 if spec.LOOK_V2 else min(10.4, self.x1 - self.x0))
         blocks = [b for b in s["blocks"] if str(b.get("text", "")).strip()]
         if any(b["kind"] not in ("text", "small", "statement") for b in blocks):
             raise NoFit("cover holds text only")
-        for size in (S.display, 40, 36, 32, 28):
-            n = self.nlines(s["title"], w, size, True, self.th.head)
-            if n <= 3:
-                break
-        else:
-            raise NoFit("title too long")
-        th_ = n * size * 1.2 / 72 + 0.04
         paras = []
         for b in blocks:
             if b["kind"] == "small":
                 paras.append((self.para(str(b["text"]).strip(), S.small, p.mute, line=1.05), b))
             else:
                 paras.append((self.para(str(b["text"]).strip(), S.lead, p.fg, line=1.05), b))
-        block = th_ + 0.4 + sum(self.ph([pp], w) + 0.25 for pp, b in paras) - 0.25
+        rest = sum(self.ph([pp], w) + 0.25 for pp, b in paras) - 0.25
+        too_long = True
+        for size in ((64, 60, 54, 48, 44) if (spec.LOOK_V2 or panel) else (S.display, 40, 36, 32, 28)):   # the largest size at which the title takes three lines and the whole cover fits
+            n = self.nlines(s["title"], w, size, True, self.th.head)
+            if n > 3:
+                continue
+            too_long = False
+            th_ = n * size * 1.2 / 72 + 0.04
+            block = th_ + 0.4 + rest
+            if block <= g.body_end - 1.6 or not (spec.LOOK_V2 or panel):
+                break
+        if too_long:
+            raise NoFit("title too long")
         if block > g.body_end - 1.6:
             raise NoFit("cover too full")
         # the title block sits at the optical middle of the slide (a little above centre), never above 1.6 in
@@ -1368,12 +1453,13 @@ class Renderer:
         if sl is None:
             return
         m = self._mark(sl)
-        logo = (self.deck["meta"].get("brand") or {}).get("logo_dark_png")
-        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_f)
+        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
         lx = self._logo(sl, 0.8)   # the brand's lockup for a dark ground, with the kicker label kept beside it
         self.ptext(sl, lx, 0.8 if lx == self.x0 else 1.1, 8, 0.3, [self.para(_kicker(self.deck["meta"]).upper(), S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
         self.ptext(sl, self.x0, y, w, th_, [self.para(s["title"], size, p.fg, self.th.head, bold=True, line=1.0)], name="Title")
         self._build(sl, m, title=True)
+        if panel:
+            self._own_picture(sl, "picture", px, self.PIC_TOP, pw, self.PIC_H)
         yy = y + th_ + 0.4
         for pp, b in paras:
             m = self._mark(sl)
@@ -1415,9 +1501,9 @@ class Renderer:
             return
         # the title and its statement sit as one group at the vertical middle of the content area
         gh = max(self.ph(tp, tw), max(bar[3], 1.2) if bar else 0.0)
-        top += max(0.0, (avail - gh) / 2) * 0.85
+        top += 0.45 if spec.LOOK_V2 else max(0.0, (avail - gh) / 2) * 0.85   # look change 2: one baseline, not floating to the middle
         m = self._mark(sl)
-        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_f)
+        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
         if label:
             self.ptext(sl, self.x0, 0.8, 6, 0.3, [self.para(label, S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
         self.ptext(sl, self.x0, top, tw, self.ph(tp, tw), tp, name="Title")
@@ -1426,7 +1512,7 @@ class Renderer:
             xr, wr, bp, bh = bar
             m = self._mark(sl)
             self.rect(sl, xr - 0.45, top, 0.012, max(bh, 2.0), fill=p.rule)
-            self.rect(sl, xr, top, 0.09, max(bh, 1.2), fill=p.acc_f)
+            self.rect(sl, xr, top, 0.09, max(bh, 1.2), fill=p.acc_l)
             self.ptext(sl, xr + 0.32, top, wr - 0.32, max(bh, 1.2), bp, anchor="middle")
             self._build(sl, m)
 
@@ -1549,7 +1635,7 @@ class Renderer:
             y = self.head(sl, s, dense)
             m = self._mark(sl)
             self.rect(sl, self.x0, y, lw, fh, fill=p.card)
-            self.rect(sl, self.x0, y, lw, 0.05, fill=p.acc_f)
+            self.rect(sl, self.x0, y, lw, 0.05, fill=p.acc_l)
             self.stack(sl, rest, self.x0 + 0.3, y + 0.3, lw - 0.6, g.body_end - 0.3 - nh, fill=True)
             if note:
                 self.ptext(sl, self.x0 + 0.3, g.body_end - 0.25 - (nh - 0.25), lw - 0.6, nh - 0.25, note, anchor="bottom")
@@ -1558,7 +1644,7 @@ class Renderer:
             lines = [self.para(l, size, p.inv_fg, self.th.head, line=1.1, after=10) for l in cp["lines"]]
             lh = self.ph(lines, fw - 0.8)
             self.rect(sl, fx, y, fw, fh, fill=p.inv)
-            self.rect(sl, fx, y, 0.09, fh, fill=p.acc_f)
+            self.rect(sl, fx, y, 0.09, fh, fill=p.acc_l)
             top = y + (fh - (lh + GAP + ah)) / 2
             self.ptext(sl, fx + 0.4, top, fw - 0.8, lh, lines)
             self._build(sl, m)
@@ -1568,7 +1654,7 @@ class Renderer:
             return
         raise NoFit("execution slide too dense")
 
-    def _lay_territory(self, sl, s):
+    def _lay_territory(self, sl, s, wide_only=False):
         """Territory: the thought and reasons on the left, an illustrative sketch panel on the right. When the
         reasons are too long for the left column, the statement sits beside the panel and the reasons run
         full width underneath as cards."""
@@ -1587,12 +1673,12 @@ class Renderer:
                 return
             m = self._mark(sl_)
             self.rect(sl_, px, y, pw, h, fill=p.inv)
-            self.rect(sl_, px, y, 0.09, h, fill=p.acc_f)
+            self.rect(sl_, px, y, 0.09, h, fill=p.acc_l)
             self.ptext(sl_, px + 0.4, y + 0.25, pw - 0.8, h - 0.85, [self.para(t, size, p.inv_fg, self.th.head, line=1.1, after=8) for t in parts], anchor="middle")
             self.ptext(sl_, px + 0.4, y + h - 0.5, pw - 0.8, 0.3, [self.para("Illustrative, not final", S.caption, p.inv_acc, italic=True, cap=True)])
             self._build(sl_, m)
 
-        for dense in (False, True):
+        for dense in (() if wide_only else (False, True)):
             try:
                 y = self.head(None, s, dense)
                 self.stack(None, rest, self.x0, y, lw, g.body_end, fill=True)
@@ -1677,7 +1763,7 @@ class Renderer:
             H = g.body_end - y
             m = self._mark(sl)
             self.rect(sl, self.x0, y, lw, H, fill=p.inv)
-            self.rect(sl, self.x0, y, 0.09, H, fill=p.acc_f)
+            self.rect(sl, self.x0, y, 0.09, H, fill=p.acc_l)
             parts = [([self.para("THE TARGET", S.caption, p.inv_mute, bold=True, track=1.2, cap=True)], 0.08),
                      ([self.para(facts["target"], vs, p.inv_acc, self.th.head, bold=True)], 0.3)]
             for cap, key in (("BASELINE", "baseline"), ("BY WHEN", "date")):
@@ -1695,8 +1781,539 @@ class Renderer:
             return
         raise NoFit("objective slide too dense")
 
+    # -- the layouts the library adds (deck-layout-library): text layouts, the dark close, the picture layouts -------------------
+    LEAD_KINDS = ("text", "small", "statement", "quote", "callout")
+    #: Picture layouts that draw their own picture panel (the rest keep slice 3's carve: execution_visual, frames_strip).
+    PIC_TOP, PIC_H = 0.62, 6.05   # the picture panel of the cover and the image layouts: inside the margins, under the DRAFT mark
+    OWN_PICTURE = ("cover_image", "image_text", "image_left", "full_bleed_statement", "section", "image_grid")
+
+    def _cpl_w(self, size, bold=False, font=None, cpl=48) -> float:
+        """The width in inches of ``cpl`` characters at ``size`` pt (the renderer's glyph estimate): the 48-character line."""
+        return cpl * size * self._wf(bold, font) / 72
+
+    def _text_of(self, b) -> str:
+        return str(b.get("text", "")).strip()
+
+    def _own_picture(self, sl, slot, x, y, w, h):
+        """Draw the slide's picture for ``slot`` in the box (cropped to cover, never stretched). NoFit when there is none; measure-only and
+        probes draw nothing."""
+        im = self._pics.get(slot)
+        if im is None:
+            raise NoFit(f"no picture for {slot}")
+        if sl is None or im.get("probe"):
+            return
+        m = self._mark(sl)
+        self.picture(sl, x, y, w, h, im)
+        self._own_pics.add(slot)
+        self.placed.add((self._sid, slot))
+        self._build(sl, m)
+
+    def _scrim(self, sl, x, y, w, h, color, alpha=0.72):
+        """A solid rectangle at ``alpha`` opacity (a scrim under text over a picture)."""
+        r = self.rect(sl, x, y, w, h, fill=color, name="Scrim")
+        sf = r.fill._xPr.find(qn("a:solidFill"))
+        clr = sf[0]
+        a = etree.SubElement(clr, qn("a:alpha"))
+        a.set("val", str(int(alpha * 100000)))
+        return r
+
+    def _with_width(self, x0, x1, fn):
+        """Run ``fn`` with the content area narrowed to ``x0..x1`` (the footer is drawn by the caller after, at the full width)."""
+        saved = (self.x0, self.x1)
+        self.x0, self.x1 = x0, x1
+        try:
+            return fn()
+        finally:
+            self.x0, self.x1 = saved
+
+    def _lay_image_text(self, sl, s, mirror=False):
+        """Image and text: the title and a short body on one side, one large picture panel on the other (4:3 slot, cropped to its box). The
+        panel runs from the top edge to the footer rule and bleeds off the side, so the picture has a real share of the slide."""
+        g = self.th.grid
+        pw = 5.4
+        if "picture" not in self._pics:
+            raise NoFit("no picture")
+        px = self.x0 if mirror else self.x1 - pw
+        tx0, tx1 = (px + pw + 0.55, self.x1) if mirror else (self.x0, px - 0.55)
+        blocks = [b for b in s["blocks"] if b["kind"] in ("text", "statement", "small", "bullets", "callout", "card") and (self._text_of(b) or b.get("items"))]
+        if len(blocks) != len([b for b in s["blocks"] if self._text_of(b) or b.get("items")]):
+            raise NoFit("image text holds text and bullets only")
+
+        def run(draw):
+            def body():
+                for dense in (False, True):
+                    try:
+                        y = self.head(None, s, dense)
+                        self.stack(None, blocks, self.x0, y, self.x1 - self.x0, g.body_end, fill=True)
+                    except NoFit:
+                        continue
+                    if not draw:
+                        return True
+                    y = self.head(sl, s, dense)
+                    self.stack(sl, blocks, self.x0, y, self.x1 - self.x0, g.body_end, fill=True)
+                    return True
+                raise NoFit("image text slide too dense")
+            return self._with_width(tx0, tx1, body)
+        run(sl is not None)
+        label = {"idea": "THE IDEA", "real_question": "THE REAL QUESTION"}.get(s["type"])
+        if label and sl is not None:   # the kicker label an emphasis bar sets over its title, kept when the idea takes a picture panel
+            S, p = self.th.scale, self.p
+            self.ptext(sl, tx0 + 0.65, g.top - 0.05, 4.0, 0.25, [self.para(label, S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
+        self._own_picture(sl, "picture", px, self.PIC_TOP, pw, self.PIC_H)
+
+    def _lay_image_left(self, sl, s):
+        """Image and text, mirrored: the picture panel on the left."""
+        self._lay_image_text(sl, s, mirror=True)
+
+    def _lay_full_bleed(self, sl, s):
+        """Full bleed statement: the picture fills the slide above the footer, the title and one statement are set on a dark scrim over it."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        if "picture" not in self._pics:
+            raise NoFit("no picture")
+        blocks = [b for b in s["blocks"] if self._text_of(b)]
+        if any(b["kind"] not in ("statement", "text", "small") for b in blocks):
+            raise NoFit("full bleed holds a statement")
+        w = 8.4
+        for size in (40, 36, 32, 28):
+            tp = [self.para(s["title"], size, "FFFFFF", self.th.head, bold=True, line=1.0, after=10)]
+            bp = [self.para(self._text_of(b), S.lead, "FFFFFF", line=1.1, after=8) for b in blocks]
+            h = self.ph(tp, w - 0.8) + self.ph(bp, w - 0.8) + 0.8
+            if h <= 4.6:
+                break
+        else:
+            raise NoFit("statement too long for the picture")
+        if sl is None:
+            self._own_picture(None, "picture", 0, 0, 1, 1)
+            return
+        self._own_picture(sl, "picture", 0, 0, themes.Grid().W, 6.85)
+        y = 6.85 - 0.5 - h
+        m = self._mark(sl)
+        self._scrim(sl, self.x0 - 0.4, y, w, h, p.inv if p.dark else "1B2430", 0.78)
+        self.ptext(sl, self.x0, y + 0.4, w - 0.8, h - 0.8, tp, name="Title")
+        self.ptext(sl, self.x0, y + 0.4 + self.ph(tp, w - 0.8), w - 0.8, self.ph(bp, w - 0.8), bp)
+        self._build(sl, m, title=True)
+
+    def _lay_cover_image(self, sl, s):
+        """Cover with a picture: the title at display size set against a large picture panel that bleeds off the right edge."""
+        self._lay_cover(sl, s, panel=True)
+
+    def _lay_section(self, sl, s):
+        """Section break: the title large on a dark slide with an optional picture panel on the right."""
+        self._lay_cover(sl, s, panel="picture" in self._pics)
+
+    def _lay_image_grid(self, sl, s):
+        """Image grid: two to four pictures in a row of squares with their captions beneath."""
+        g = self.th.grid
+        slots = [n for n in sorted(self._pics) if n.startswith("picture_")]
+        if len(slots) < 2:
+            raise NoFit("image grid needs two pictures")
+        caps = [self._text_of(b) if b["kind"] == "small" else None for b in s["blocks"]]
+        rest = [b for b in s["blocks"] if b["kind"] not in ("bullets", "small")]
+        if rest:
+            raise NoFit("image grid holds captions only")
+        y = self.head(None, s, False)
+        n = len(slots)
+        cw = (self.x1 - self.x0 - g.G * (n - 1)) / n
+        side = min(cw, g.body_end - y - 0.6)
+        if side < 1.5:
+            raise NoFit("no room for the pictures")
+        if sl is None:
+            return
+        y = self.head(sl, s, False)
+        for i, n_ in enumerate(slots):
+            self._own_picture(sl, n_, self.x0 + i * (cw + g.G), y, side, side)
+
+    def _two_col(self, sl, s, left_pred, frac=0.42, balance=False):
+        """Title on top, the blocks ``left_pred`` takes in a text column on the left (48-character lines), the rest as cards on the right."""
+        g = self.th.grid
+        left = [b for b in s["blocks"] if left_pred(b)]
+        right = [b for b in s["blocks"] if not left_pred(b)]
+        if balance and left and not right and len(left) >= 2:   # everything is of the left kind: share the blocks between two columns
+            half = (len(left) + 1) // 2
+            left, right, frac = left[:half], left[half:], 0.5
+        elif balance and len(left) == 1 and not right and len(left[0].get("items") or []) >= 2:   # one block: its items go half and half
+            its, b0 = left[0]["items"], left[0]
+            half = (len(its) + 1) // 2
+            left, right, frac = [{**b0, "items": its[:half]}], [{**b0, "items": its[half:]}], 0.5
+        if not left or not right:
+            raise NoFit("two columns need blocks for both")
+        lw = (self.x1 - self.x0 - g.G) * frac
+        xr = self.x0 + lw + g.G
+        wr = self.x1 - xr
+        for dense in (False, True):
+            try:
+                y = self.head(None, s, dense)
+                self.stack(None, left, self.x0, y, lw, g.body_end)
+                self.stack(None, right, xr, y, wr, g.body_end, fill=True)
+            except NoFit:
+                continue
+            if sl is None:
+                return
+            y = self.head(sl, s, dense)
+            self.stack(sl, left, self.x0, y, lw, g.body_end)
+            self.stack(sl, right, xr, y, wr, g.body_end, fill=True)
+            return
+        raise NoFit("two columns too dense")
+
+    def _lay_cards_split(self, sl, s):
+        """Cards split: the lead text in a column on the left, the points, pairs, figures, steps or table as cards on the right."""
+        self._two_col(sl, s, lambda b: b["kind"] in self.LEAD_KINDS)
+
+    def _lay_placeholder_split(self, sl, s):
+        """Placeholder split: the rows a person must supply on the left (dashed, PROPOSED, TO SUPPLY), what is given as solid cards on the right."""
+        self._two_col(sl, s, lambda b: b["kind"] == "bullets" and any(isinstance(i, dict) and i.get("human") for i in b["items"]), 0.55, balance=True)
+
+    def _lay_text_columns(self, sl, s):
+        """Text columns: two to four open columns of text, an accent rule above each, no card fill (an open, typographic look)."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        cols = []
+        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items")]
+        if len(bl) == 1 and bl[0]["kind"] == "bullets" and 2 <= len(bl[0]["items"]) <= 6:
+            cols = [[(_item_text(i), False)] for i in bl[0]["items"]]
+        else:
+            for b in bl:
+                if b["kind"] == "bullets":
+                    cols.append([(_item_text(i), True) for i in b["items"]])
+                elif b["kind"] in ("text", "card", "small", "statement", "callout"):
+                    cols.append([(self._text_of(b), False)])
+                else:
+                    raise NoFit("text columns hold text, cards and bullets")
+        if not 2 <= len(cols) <= 6:
+            raise NoFit("text columns need two to six columns")
+        per = min(len(cols), 3)
+        rows = [cols[i:i + per] for i in range(0, len(cols), per)]
+        cw = (self.x1 - self.x0 - g.G * 1.6 * (per - 1)) / per
+        for dense in (False, True):
+            try:
+                y = self.head(None, s, dense)
+            except NoFit:
+                continue
+            for size in (18, 17, 16, 15, 14, 13, 12):
+                hs = [[self.ph([self.para(t, size, None, bullet=bu, after=6) for t, bu in c], cw) for c in r] for r in rows]
+                tot = sum(max(h) + 0.4 for h in hs)
+                if y + tot <= g.body_end:
+                    break
+            else:
+                continue
+            if sl is None:
+                return
+            y = self.head(sl, s, dense)
+            for r, rh in zip(rows, hs):
+                m = self._mark(sl)
+                for k, c in enumerate(r):
+                    x = self.x0 + k * (cw + g.G * 1.6)
+                    self.rect(sl, x, y, 0.5, 0.05, fill=p.acc_l)
+                    self.ptext(sl, x, y + 0.2, cw, max(rh), [self.para(t, size, None, bullet=bu, after=6) for t, bu in c], name="slot:columns")
+                self._build(sl, m)
+                y += max(rh) + 0.4
+            return
+        raise NoFit("text columns too dense")
+
+    def _lay_big_statement(self, sl, s):
+        """Big statement: the title, then one statement set large in a 48-character measure, a line of support beneath."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        bl = [b for b in s["blocks"] if self._text_of(b)]
+        if any(b["kind"] not in ("statement", "text", "small") for b in bl) or not bl:
+            raise NoFit("big statement holds a statement")
+        main, rest = bl[0], bl[1:]
+        for dense in (False, True):
+            try:
+                y = self.head(None, s, dense)
+            except NoFit:
+                continue
+            for size in (36, 32, 30, 28, 26, 24):
+                w = min(self.x1 - self.x0, self._cpl_w(size, False, self.th.head))
+                sp = [self.para(self._text_of(main), size, p.fg, self.th.head, line=1.1)]
+                su = [self.para(self._text_of(b), S.body, p.mute, after=6) for b in rest]
+                h = self.ph(sp, w) + (0.3 + self.ph(su, min(self.x1 - self.x0, self._cpl_w(S.body))) if su else 0)
+                if y + 0.3 + h <= g.body_end:
+                    break
+            else:
+                continue
+            if sl is None:
+                return
+            y = self.head(sl, s, dense)
+            m = self._mark(sl)
+            self.rect(sl, self.x0, y + 0.3, 0.09, self.ph(sp, w), fill=p.acc_l)
+            self.ptext(sl, self.x0 + 0.35, y + 0.3, w, self.ph(sp, w), sp, name="slot:statement")
+            if su:
+                self.ptext(sl, self.x0 + 0.35, y + 0.6 + self.ph(sp, w), min(self.x1 - self.x0, self._cpl_w(S.body)), self.ph(su, self._cpl_w(S.body)), su, name="slot:support")
+            self._build(sl, m)
+            return
+        raise NoFit("big statement too long")
+
+    def _lay_quote_full(self, sl, s):
+        """Quote full: the quote set large and italic in a 48-character measure under the title, its source and a note beneath."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        bl = [b for b in s["blocks"] if self._text_of(b)]
+        q = next((b for b in bl if b["kind"] == "quote"), None)
+        if q is None or any(b["kind"] not in ("quote", "small", "text") for b in bl):
+            raise NoFit("quote full holds a quote")
+        rest = [b for b in bl if b is not q]
+        for dense in (False, True):
+            try:
+                y = self.head(None, s, dense)
+            except NoFit:
+                continue
+            for size in (34, 30, 28, 26, 24, 22):
+                w = min(self.x1 - self.x0, self._cpl_w(size, False, self.th.head))
+                qp = [self.para(self._text_of(q), size, p.fg, self.th.head, italic=True, line=1.1)]
+                rp = [self.para(self._text_of(b), S.small, p.mute, after=6) for b in rest]
+                h = self.ph(qp, w) + (0.3 + self.ph(rp, w) if rp else 0)
+                if y + 0.3 + h <= g.body_end:
+                    break
+            else:
+                continue
+            if sl is None:
+                return
+            y = self.head(sl, s, dense)
+            m = self._mark(sl)
+            self.rect(sl, self.x0, y + 0.3, 0.09, self.ph(qp, w), fill=p.acc_l)
+            self.ptext(sl, self.x0 + 0.35, y + 0.3, w, self.ph(qp, w), qp, name="slot:quote")
+            if rp:
+                self.ptext(sl, self.x0 + 0.35, y + 0.6 + self.ph(qp, w), w, self.ph(rp, w), rp, name="slot:source")
+            self._build(sl, m)
+            return
+        raise NoFit("quote too long")
+
+    def _lay_chart_full(self, sl, s):
+        """Chart full: the chart across the width, its commentary as cards beneath."""
+        g = self.th.grid
+        ch = next((b for b in s["blocks"] if b["kind"] == "chart"), None)
+        rest = [b for b in s["blocks"] if b["kind"] != "chart"]
+        if ch is None:
+            raise NoFit("no chart")
+        for dense in (False, True):
+            try:
+                y = self.head(None, s, dense)
+                ch_h = 2.7 if rest else g.body_end - y
+                if g.body_end - y < 2.6:
+                    raise NoFit("no room")
+                if rest:
+                    self.stack(None, rest, self.x0, y + ch_h + 0.2, self.x1 - self.x0, g.body_end)
+            except NoFit:
+                continue
+            if sl is None:
+                return
+            y = self.head(sl, s, dense)
+            m = self._mark(sl)
+            self.chart(sl, self.x0, y, self.x1 - self.x0, ch_h, ch["chart"]["series"], ch["chart"].get("title"), hero=ch["chart"].get("hero"))
+            self._build(sl, m, "wipe")
+            if rest:
+                self.stack(sl, rest, self.x0, y + ch_h + 0.2, self.x1 - self.x0, g.body_end)
+            return
+        raise NoFit("chart too dense")
+
+    def _lay_timeline_rows(self, sl, s):
+        """Timeline rows: the steps as rows (a marker, a label and a line), the standard composition with its steps set as role rows."""
+        if not any(b["kind"] == "steps" for b in s["blocks"]):
+            raise NoFit("no steps")
+        self._lay_stack(sl, s, role=True)
+
+    def _lay_execution_stack(self, sl, s):
+        """Execution stack: the copy in its dark frame across the top, the role and notes beneath in two columns."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        cp = next((b for b in s["blocks"] if b["kind"] == "copy"), None)
+        if cp is None:
+            raise NoFit("no copy block")
+        rest = [b for b in s["blocks"] if b["kind"] != "copy"]
+        half = max(1, (len(rest) + 1) // 2)
+        cols = [rest[:half], rest[half:]] if len(rest) > 1 else [rest, []]
+        cw = (self.x1 - self.x0 - g.G) / 2
+        GAP = 0.3
+        for dense in (False, True):
+            try:
+                y = self.head(None, s, dense)
+                ans = [self.para(cp["answer"], S.body, p.inv_acc, bold=True)]
+                fw = self.x1 - self.x0 - 0.8
+                size = self.fit(lambda sz_: [self.para(l_, sz_, p.inv_fg, self.th.head, line=1.1, after=6) for l_ in cp["lines"]], fw, 2.0, 24, 12)
+                lines = [self.para(l_, size, p.inv_fg, self.th.head, line=1.1, after=6) for l_ in cp["lines"]]
+                fh = self.ph(lines, fw) + self.ph(ans, fw) + GAP + 0.6
+                ty = y + fh + 0.25
+                for k, c in enumerate(cols):
+                    if c:
+                        self.stack(None, c, self.x0 + k * (cw + g.G), ty, cw, g.body_end, fill=False)
+            except NoFit:
+                continue
+            if sl is None:
+                return
+            y = self.head(sl, s, dense)
+            m = self._mark(sl)
+            self.rect(sl, self.x0, y, self.x1 - self.x0, fh, fill=p.inv)
+            self.rect(sl, self.x0, y, 0.09, fh, fill=p.acc_l)
+            self.ptext(sl, self.x0 + 0.4, y + 0.3, fw, self.ph(lines, fw), lines)
+            self.ptext(sl, self.x0 + 0.4, y + 0.3 + self.ph(lines, fw) + GAP, fw, self.ph(ans, fw), ans)
+            self._build(sl, m)
+            for k, c in enumerate(cols):
+                if c:
+                    self.stack(sl, c, self.x0 + k * (cw + g.G), ty, cw, g.body_end, fill=False)
+            return
+        raise NoFit("execution too dense")
+
+    def _lay_territory_wide(self, sl, s):
+        """Territory wide: the thought and sketch on top, the reasons as cards across the width (the narrow variant skipped)."""
+        self._lay_territory(sl, s, wide_only=True)
+
+    def _lay_people_cards(self, sl, s):
+        """People cards: each person (or role) a card with a heading and a short line, two or three to a row. A photo only when one is
+        supplied, never generated (none is drawn here)."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        people = []
+        for b in s["blocks"]:
+            if b["kind"] in ("steps", "kv"):
+                people += [(str(i[0]), str(i[1]) if len(i) > 1 else "") for i in b["items"]]
+            elif b["kind"] == "bullets":
+                people += [("", _item_text(i)) for i in b["items"]]
+            elif b["kind"] == "card":
+                people.append((str(b.get("title") or ""), self._text_of(b)))
+            elif self._text_of(b):
+                raise NoFit("people cards hold people")
+        if not 2 <= len(people) <= 6:
+            raise NoFit("people cards need two to six people")
+        cols = 2 if len(people) == 4 else min(3, len(people))
+        cw = (self.x1 - self.x0 - g.G * (cols - 1)) / cols
+        rows = [people[i:i + cols] for i in range(0, len(people), cols)]
+        for dense in (False, True):
+            try:
+                y = self.head(None, s, dense)
+            except NoFit:
+                continue
+            for sc in (1.0, 0.92, 0.85, 0.78):
+                def card(h_, b_):
+                    ps = ([self.para(h_, S.body * sc, p.card_fg, bold=True, after=4)] if h_ else []) + [self.para(b_, S.small * sc, p.card_fg, line=1.05)]
+                    return ps, self.ph(ps, cw - 0.5) + 0.5
+                hs = [[card(h_, b_)[1] for h_, b_ in r] for r in rows]
+                tot = sum(max(h) for h in hs) + 0.25 * (len(rows) - 1)
+                if y + tot <= g.body_end:
+                    break
+            else:
+                continue
+            if sl is None:
+                return
+            y = self.head(sl, s, dense)
+            for r, rh in zip(rows, hs):
+                m = self._mark(sl)
+                for k, (h_, b_) in enumerate(r):
+                    x = self.x0 + k * (cw + g.G)
+                    self.rect(sl, x, y, cw, max(rh), fill=p.card, name="slot:people")
+                    self.rect(sl, x, y, 0.07, max(rh), fill=p.acc_l, name="slot:people")
+                    self.ptext(sl, x + 0.3, y + 0.25, cw - 0.5, max(rh) - 0.4, card(h_, b_)[0], name="slot:people")
+                self._build(sl, m)
+                y += max(rh) + 0.25
+            return
+        raise NoFit("people cards too dense")
+
+    def _lay_close(self, sl, s):
+        """Close: dark, the title at display size, one statement and up to three next steps as rows. No contact line: nothing in the deck
+        supplies one."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items")]
+        lead = [b for b in bl if b["kind"] in ("statement", "text", "small")]
+        steps = [(i_ if isinstance(i_, str) else (_item_text(i_) if isinstance(i_, dict) else ": ".join(str(z) for z in i_))) for b in bl if b["kind"] in ("bullets", "kv") for i_ in b["items"]]
+        steps += [self._text_of(b) for b in bl if b["kind"] == "card"]
+        if any(b["kind"] not in ("statement", "text", "small", "bullets", "kv", "card") for b in bl) or len(steps) > 3:
+            raise NoFit("close holds a statement and up to three next steps")
+        w = self.x1 - self.x0
+        for size in (54, 48, 44, 40, 36):
+            n = self.nlines(s["title"], w, size, True, self.th.head)
+            if n <= 3:
+                break
+        else:
+            raise NoFit("title too long")
+        th_ = n * size * 1.2 / 72 + 0.04
+        lp = [self.para(self._text_of(b), S.lead, p.fg, line=1.1, after=8) for b in lead]
+        lw = min(w, self._cpl_w(S.lead))
+        lh = self.ph(lp, lw) if lp else 0.0
+        rows = [self.para(t, S.body, p.fg, line=1.05) for t in steps]
+        rw = min(w - 0.5, self._cpl_w(S.body))
+        rh = [self.ph([r], rw) + 0.28 for r in rows]
+        total = th_ + 0.35 + lh + (0.35 if rows else 0) + sum(rh)
+        if total > g.body_end - 1.5:
+            raise NoFit("close too full")
+        if sl is None:
+            return
+        y = max(1.5, (g.body_end + 1.0 - total) / 2 - 0.2)
+        m = self._mark(sl)
+        self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
+        self.ptext(sl, self.x0, y, w, th_, [self.para(s["title"], size, p.fg, self.th.head, bold=True, line=1.0)], name="Title")
+        self._build(sl, m, title=True)
+        y += th_ + 0.35
+        if lp:
+            m = self._mark(sl)
+            self.ptext(sl, self.x0, y, lw, lh, lp, name="slot:statement")
+            self._build(sl, m)
+            y += lh + 0.35
+        for r, h in zip(rows, rh):
+            m = self._mark(sl)
+            self.rect(sl, self.x0, y, 0.07, h - 0.2, fill=p.acc_l, name="slot:next")
+            self.ptext(sl, self.x0 + 0.3, y, rw, h - 0.2, [r], name="slot:next")
+            self._build(sl, m)
+            y += h
+
     LAYOUT_FN = {"objective_panel": "_lay_objective", "risk_cards": "_lay_risks", "cover": "_lay_cover", "emphasis_bar": "_lay_emphasis", "chart": "_lay_chart", "execution": "_lay_execution",
-                 "territory": "_lay_territory", "quote_cards": "_lay_quote", "role_grid": "_lay_role", "flow": "_lay_flow"}
+                 "territory": "_lay_territory", "quote_cards": "_lay_quote", "role_grid": "_lay_role", "flow": "_lay_flow",
+                 # the standard composition: the blocks stacked with their looks
+                 "comparison_grid": "_lay_stack", "placeholder_card": "_lay_stack", "comparison": "_lay_stack", "big_number": "_lay_stack",
+                 "kpi_row": "_lay_stack", "timeline_strip": "_lay_stack", "native_table": "_lay_stack", "cards": "_lay_stack",
+                 "cover_image": "_lay_cover_image", "section": "_lay_section", "image_text": "_lay_image_text", "image_left": "_lay_image_left",
+                 "full_bleed_statement": "_lay_full_bleed", "frames_strip": "_lay_territory", "image_grid": "_lay_image_grid", "execution_visual": "_lay_execution",
+                 "close": "_lay_close", "big_statement": "_lay_big_statement", "quote_full": "_lay_quote_full", "cards_split": "_lay_cards_split",
+                 "text_columns": "_lay_text_columns", "placeholder_split": "_lay_placeholder_split", "chart_full": "_lay_chart_full",
+                 "timeline_rows": "_lay_timeline_rows", "execution_stack": "_lay_execution_stack", "territory_wide": "_lay_territory_wide",
+                 "people_cards": "_lay_people_cards"}
+
+    # -- the plan's measuring: the renderer's own measure-only mode ---------------------------------
+    def probe(self, s: dict, name: str, relaxed: bool = False, scale_cap: float | None = None, title_pt: int | None = None, cpl: int = 48) -> dict:
+        """Measure layout ``name`` for the slide dict ``s`` (blocks already shown) without drawing: ``{ok, scale, relaxed}``. The plan calls
+        this, so the plan and the drawing cannot disagree about what fits. ``scale`` is the smallest stack scale used (1.0 when none)."""
+        fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
+        saved = (self._lid, self._min_sc, self._scale_cap, self._relaxed, self._tpt, self._pics, self.p, self._cpl)
+        self._cpl = cpl
+        lib = layouts.load()
+        self._lid, self._min_sc, self._scale_cap, self._relaxed = name, 1.0, scale_cap, relaxed
+        self.p = self._palette(s["type"] in DARK_TYPES or name in ("close",))
+        if title_pt:
+            self._tpt = {**self._tpt, name: title_pt}
+        self._pics = {n: {"aspect": sl["image"]["aspect"], "asset": None, "probe": True} for n, sl in layouts.image_slots(lib[name])} if name in lib else {}
+        try:
+            fn(None, s)
+            ok = True
+        except NoFit:
+            ok = False
+        finally:
+            out_sc = self._min_sc
+            self._lid, self._min_sc, self._scale_cap, self._relaxed, self._tpt, self._pics, self.p, self._cpl = saved
+        return {"ok": ok, "scale": out_sc, "relaxed": relaxed}
+
+    def title_fits(self, title: str, pt: int, lines: int = 3) -> bool:
+        """Whether a title takes at most ``lines`` lines at ``pt`` across the content width."""
+        return self.nlines(glue(title), self.x1 - self.x0, pt, True, self.th.head) <= lines
+
+    #: Roles' nominal sizes by name, and the box heights (inches) a slot of that role is given in a nominal arrangement.
+    _ROLE_H = {"display": 1.8, "title": 1.0, "lead": 1.3, "body": 2.2, "small": 0.9, "caption": 0.5}
+    _HALF = frozenset({"cards_split", "placeholder_split", "image_text", "image_left", "quote_cards", "execution", "territory",
+                       "objective_panel", "chart", "execution_stack", "cover_image"})
+
+    @staticmethod
+    def slot_boxes(layout_id: str, lay: dict | None = None) -> dict:
+        """``{slot: (width in, height in)}`` of each text slot in the layout's nominal arrangement (the boxes ``layouts.capacity`` reads).
+        The content width is the grid's; a layout that sets text beside a panel gets 45% of it."""
+        lay = lay or layouts.load()[layout_id]
+        g = themes.Grid()
+        cw = g.W - 2 * g.M
+        w = cw * 0.45 if layout_id in Renderer._HALF else cw
+        return {n: (w, Renderer._ROLE_H.get(sl.get("role", "body"), 1.0)) for n, sl in lay["slots"].items() if sl["kind"] == "text"}
+
+    @staticmethod
+    def box_capacity(w: float, h: float, role: str, max_cpl: int | None = None) -> int:
+        """floor(0.85 x characters per line x lines) for a box ``w`` x ``h`` inches at the role's size near its shrink floor, lines held to
+        ``max_cpl`` (48 by default for body, small and lead text)."""
+        S = themes.Scale()
+        size = max(S.body_floor if role not in ("caption",) else S.caption_floor, getattr(S, role if role != "display" else "display") * 0.88)
+        wf = 0.5 + (0.03 if role in ("display", "title") else 0)
+        cpl = min(max_cpl or 48, w * 72 / (size * wf)) if role in ("body", "small", "lead", "caption") else w * 72 / (size * wf)
+        lines = max(1, int(h * 72 / (size * 1.2)))
+        return int(0.85 * cpl * lines)
 
     def _rollback(self, sl, n_shapes, n_steps):
         """Remove what a layout drew before it gave up (shapes past ``n_shapes``, build steps past ``n_steps``)."""
@@ -1709,17 +2326,23 @@ class Renderer:
         """What the renderer did, per slide id, in the names of contract section 3.1: ``{id, chosen, fallback, relaxed}``
         (``id`` the layout drawn, ``chosen`` the one the rules picked, ``fallback`` true when the flow drew a slide whose
         layout raised NoFit, ``relaxed`` true when it fitted only at the caption floor). Written beside the deck, never into it."""
+        def one(sid, name):
+            rec = {"id": name, "chosen": self.chosen.get(sid, name),
+                   "fallback": self.chosen.get(sid, name) != "flow" and name == "flow",
+                   "relaxed": bool(self.relaxed.get(sid))}
+            if spec.LOOK_V2:   # fit (the plan's) and the slot shapes: what a QA finding maps back to
+                rec["fit"] = self.fit_by_slide.get(sid)
+                rec["shapes"] = self.shapes_by_slide.get(sid, [])
+            return rec
         return {"version": 1, "theme": "napkin" if self.th.layouts else "classic",
-                "slides": {sid: {"id": name, "chosen": self.chosen.get(sid, name),
-                                 "fallback": self.chosen.get(sid, name) != "flow" and name == "flow",
-                                 "relaxed": bool(self.relaxed.get(sid))}
-                           for sid, name in self.layouts.items()}}
+                "slides": {sid: one(sid, name) for sid, name in self.layouts.items()}}
 
     def render(self, out: Path, layouts_out: Path | None = None):
         """Render every slide in order and save the .pptx; with ``layouts_out``, also write the layout record there
         (after the save, so the .pptx is the same bytes either way)."""
         if layouts_out is not None:
             Path(layouts_out).unlink(missing_ok=True)   # a failed render must not leave an older record beside it
+        self.assets_dir = Path(out).parent
         nums = {sid: i for i, sid in enumerate(self.deck["order"], 1)}
         for sid in self.deck["order"]:
             self.slide(sid, self.deck["slides"][sid], nums[sid])
@@ -1745,32 +2368,65 @@ class Renderer:
         self.sections[-1][1].append(sl.slide_id)
         self._cur, self.steps = sl, []
         audience = self.deck["meta"].get("audience", "review")
-        name = choose_layout(s, audience) if self.th.layouts else "flow"
+        lib = layouts.load()
+        want = {slot for (i, slot) in self.drawn if i == sid}
+        planned = s.get("layout")
+        if not (planned and self.th.layouts and not self.no_plan and planned.get("blocks_sha") == spec.blocks_sha(s, audience)
+                and (planned["id"] in lib or planned["id"] == "flow")):
+            planned = None   # absent or stale: the rules decide, as before the plan (contract 3.3 rule 4)
+            s = {k: v for k, v in s.items() if k != "layout"}
+        name = planned["id"] if planned else (choose_layout(s, audience) if self.th.layouts else "flow")
         self.chosen[sid] = name
+        ldef = lib.get(name)
+        if ldef and any(sl.get("required") for _, sl in layouts.image_slots(ldef)) and not layouts.image_ready(ldef, want):
+            name = choose_layout({k: v for k, v in s.items() if k != "layout"}, audience)   # the picture cannot be drawn here: the rules' text-only choice
+        s_full = s
         s = {**s, "blocks": shown_blocks(s, audience)}
-        if name != "flow":
+        self._sid, self._pics = sid, {slot: im for (i, slot), im in self.drawn.items() if i == sid}
+        self._cpl = ((planned or {}).get("fit") or {}).get("cpl", 48)
+        self._own_pics = set()
+        self._slotmap, self._shapes_now = {}, []
+        if spec.LOOK_V2 and name in lib:
+            _slots, _ = layouts.bind(lib[name], s, s["blocks"])
+            for slot, v in _slots.items():
+                for bi in v.get("blocks", []):
+                    self._slotmap[id(s["blocks"][bi])] = (slot, bi)
+        plan = self._picture_plan(sid, s, name)
+        if plan:   # one carve: x1 and body_end are narrowed before the layout runs, so the layout (its id) is the one it would pick anyway
             n_sh, n_st = len(sl.shapes), len(self.steps)
+            cs = {**s, "visual": {}} if s["type"] == "execution" else s   # the picture replaces the 'Image prompt' note
+            self._carve(plan)
             try:
-                try:
-                    getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))(sl, s)
-                except NoFit:   # too dense at the body floor: once more with body text allowed down to the caption floor
-                    self._rollback(sl, n_sh, n_st)
-                    self._relaxed = True
-                    try:
-                        getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))(sl, s)
-                        self.relaxed[sid] = True
-                    finally:
-                        self._relaxed = False
-            except NoFit:
-                self._rollback(sl, n_sh, n_st)
-                name = "flow"
-        if name == "flow":
-            self._relaxed = True   # the last resort: stepped down as far as the caption floor, never under it
-            try:
-                getattr(self, "_" + s["type"], self._generic)(sl, s)
+                ok = self._try_layout(sl, cs, name, sid)
             finally:
-                self._relaxed = False
+                self._uncarve()
+            if ok:
+                self._draw_pictures(sl, plan)
+                self.placed |= {(sid, b[0]) for b in plan["boxes"]}
+            else:   # the narrowed layout does not fit: no picture, and a finding
+                self._rollback(sl, n_sh, n_st)
+                self.relaxed.pop(sid, None)
+                plan = None
+        if not plan:
+            if name != "flow":
+                n_sh, n_st = len(sl.shapes), len(self.steps)
+                if not self._try_layout(sl, s, name, sid):
+                    self._rollback(sl, n_sh, n_st)
+                    name = "flow"
+            if name == "flow":
+                self._relaxed = True   # the last resort: stepped down as far as the caption floor, never under it
+                try:
+                    getattr(self, "_" + s["type"], self._generic)(sl, s)
+                finally:
+                    self._relaxed = False
+        for slot in sorted(want - {b[0] for b in (plan or {}).get("boxes", [])} - self._own_pics):   # asked for, not drawn: say so, for every slot
+            why = ("the classic theme has no picture box" if not self.th.layouts else "the slide is drawn by the flow, which has no picture box" if name == "flow"
+                   else f"the {name} layout does not fit beside its picture")
+            self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "slot": slot,
+                                          "message": f"{slot} is not drawn: {why}, so no output carries it"})
         self.layouts[sid] = name
+        self.shapes_by_slide[sid] = self._shapes_now
+        self.fit_by_slide[sid] = (planned or {}).get("fit")
         # footer: section label, footnote keys, slide number
         t, p = self.th, self.p
         foot = t.scale.foot
@@ -1786,15 +2442,124 @@ class Renderer:
         if sid in self.failed:
             red = "FF9B8E" if dark else "B03225"
             self.text(sl, 4.5, 0.12, 4.1, 0.3, "CHECK FAILED: " + ", ".join(sorted(set(self.failed[sid]))), size=foot, cap=True, color=red, bold=True, align=PP_ALIGN.RIGHT, name="CheckFailed")
-        sl.notes_slide.notes_text_frame.text = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
-        if t.layouts and s.get("claims"):   # the claims stay in the file, in the notes, word for word
-            sl.notes_slide.notes_text_frame.text += "\n\nClaims:\n" + "\n".join("- " + c["text"] for c in s["claims"])
+        if self.notes:
+            sl.notes_slide.notes_text_frame.text = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
+            if t.layouts and s.get("claims"):   # the claims stay in the file, in the notes, word for word
+                sl.notes_slide.notes_text_frame.text += "\n\nClaims:\n" + "\n".join("- " + c["text"] for c in s["claims"])
+            if planned and spec.moved_map(s_full, audience):   # points the plan moved off the slide: verbatim, each with its refs, labelled
+                sl.notes_slide.notes_text_frame.text += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s_full))
         if s["type"] == "appendix":
             self.hiding = True
         if getattr(self, "hiding", False):   # the appendix stays in the file, hidden from the slideshow
             sl._element.set("show", "0")
         if self.animate:
             self._animate(sl)
+
+    def _try_layout(self, sl, s, name, sid) -> bool:
+        """Draw the layout ``name``; once more with body text allowed down to the caption floor when it is too dense. True when it drew;
+        False when it raised NoFit twice (the caller rolls back and falls to the flow). Marks ``self.relaxed[sid]``."""
+        n_sh, n_st = len(sl.shapes), len(self.steps)
+        fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
+        self._lid = name
+        try:
+            try:
+                fn(sl, s)
+            except NoFit:
+                self._rollback(sl, n_sh, n_st)
+                self._relaxed = True
+                try:
+                    fn(sl, s)
+                    self.relaxed[sid] = True
+                finally:
+                    self._relaxed = False
+            return True
+        except NoFit:
+            self._rollback(sl, n_sh, n_st)
+            return False
+
+    # -- pictures: one carve, one draw helper (slice 4 moves the boxes into its layout files) --------
+    #: Box sizes in inches per aspect for a picture beside the text, and the gap to it. Tall pictures are given a height.
+    SIDE = {"16:9": (3.6, None), "4:3": (3.3, None), "4:5": (None, 3.6), "9:16": (None, 4.6)}
+    SIDE_COVER = {"16:9": (4.4, None)}
+    GAP_PIC = 0.35
+    BOTTOM_H = 2.2
+
+    def _picture_plan(self, sid, s, name):
+        """Where this slide's drawn pictures go, and how far the layout's area is narrowed to leave room: ``{x1, body_end, boxes}`` or None
+        (no picture drawn on this slide, the classic theme, or the flow). The territory's four frames sit in a strip along the foot; the
+        emphasis bar (idea, divider) takes its picture bottom right; every other layout narrows its right edge. The layouts that draw their
+        own picture panel (``OWN_PICTURE``) take no carve."""
+        if not self.th.layouts or name == "flow" or name in self.OWN_PICTURE:
+            return None
+        got = {slot: im for (i, slot), im in self.drawn.items() if i == sid}
+        if not got:
+            return None
+        g, x0, x1 = self.th.grid, self.x0, self.x1
+        gap = self.GAP_PIC
+        boxes = []
+        if s["type"] == "territory":
+            w = (x1 - x0 - 3 * 0.2) / 4   # four 16:9 boxes across the content width
+            h = w * 9 / 16
+            y = g.body_end - h
+            for i in range(1, 5):
+                if f"frame_{i}" in got:
+                    boxes.append((f"frame_{i}", x0 + (i - 1) * (w + 0.2), y, w, h, got[f"frame_{i}"]))
+            return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": boxes} if boxes else None
+        slot = next(iter(sorted(got)))
+        im = got[slot]
+        a = im["aspect"]
+        if name == "emphasis_bar":
+            h = self.BOTTOM_H
+            w = h * images.ratio(a)
+            return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": [(slot, x1 - w, g.body_end - h, w, h, im)]}
+        table = self.SIDE_COVER if s["type"] == "title" else self.SIDE
+        wv, hv = table.get(a) or self.SIDE[a]
+        w, h = (wv, wv / images.ratio(a)) if wv else (hv * images.ratio(a), hv)
+        top = 1.6
+        y = top + max(0.0, (g.body_end - top - h) / 2)
+        if s["type"] == "execution":   # beside the two cards: level with their top edge, not floating in the middle
+            y = 1.74
+        return {"x1": x1 - w - gap, "body_end": g.body_end, "boxes": [(slot, x1 - w, y, w, h, im)]}
+
+    def _carve(self, plan):
+        self._saved_carve = (self.x1, self.th)
+        self.x1 = plan["x1"]
+        self.th = dataclasses.replace(self.th, grid=dataclasses.replace(self.th.grid, body_end=plan["body_end"]))
+
+    def _uncarve(self):
+        self.x1, self.th = self._saved_carve
+
+    def picture(self, sl, x, y, w, h, im, name="Picture", label=True):
+        """One picture in the box ``x, y, w, h`` (inches): the asset's derived JPEG cropped to the box's aspect with cover (a:srcRect;
+        never stretched), alt text through cNvPr descr, the name ``Picture``. A picture that is not approved carries the deck's label on a
+        solid pill named ``Caption``; a flagged one also gets a red outline and the word Flagged. Returns the picture shape."""
+        from PIL import Image
+        path = self.pictures[im["asset"]]
+        with Image.open(path) as pil:
+            sw, sh = pil.size
+        box = images.crop_box(sw, sh, w / h, im.get("focal"))
+        l, t, r, b = images.src_rect(box, sw, sh)
+        pic = sl.shapes.add_picture(str(path), Inches(x), Inches(y), Inches(w), Inches(h))
+        pic.crop_left, pic.crop_top, pic.crop_right, pic.crop_bottom = l, t, r, b
+        pic.name = name
+        pic._element.nvPicPr.cNvPr.set("descr", im.get("alt") or "An illustrative picture")
+        if label and im.get("status") != "approved":
+            flagged = im.get("status") == "flagged"
+            if flagged:
+                pic.line.color.rgb = _rgb("C0392B")
+                pic.line.width = Pt(3)
+            text = f"{self.pic_label} · Flagged" if flagged else self.pic_label
+            pw = min(w - 0.2, 0.24 + 0.085 * len(text))
+            self.rect(sl, x + 0.1, y + h - 0.38, pw, 0.28, fill="B03225" if flagged else "1B2430", name="PictureLabel")
+            self.text(sl, x + 0.1, y + h - 0.38, pw, 0.28, text, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
+                      anchor=MSO_ANCHOR.MIDDLE, name="Caption")
+        return pic
+
+    def _draw_pictures(self, sl, plan):
+        for slot, x, y, w, h, im in plan["boxes"]:
+            m = self._mark(sl)
+            self.picture(sl, x, y, w, h, im)
+            self._build(sl, m)
 
     # -- the earlier flow (the fallback, and every slide under the classic theme) ----------------
     def _title_text(self, sl, s, size=30, y=0.5, w=None):
@@ -1880,11 +2645,23 @@ class Renderer:
             self._build(sl, m, "wipe" if k in ("fromto", "steps") else "fade")
         return y
 
+    def _logo_file(self):
+        """The cover logo's file: the client's logo the look cleared (``meta.theme.logo.asset``, a deck asset under ``assets/`` in the run
+        folder; placement ``none`` means no logo), else the ``--brand`` file's ``logo_dark_png``."""
+        th = self.deck["meta"].get("theme") or {}
+        lg = th.get("logo")
+        if lg:
+            if lg.get("placement") == "none":
+                return None
+            rec = (self.deck.get("assets") or {}).get(lg.get("asset")) or {}
+            return (self.assets_dir / rec["file"]) if rec.get("file") and self.assets_dir else None
+        return (self.deck["meta"].get("brand") or {}).get("logo_dark_png")
+
     def _logo(self, sl, y) -> float:
         """Place the brand's own dark-ground logo (``meta.brand.logo_dark_png``) at ``y`` with alt text and the
         name "Logo". Returns the x where the kicker label should start: beside the logo, or the left margin
         when the brand has no logo file."""
-        logo = (self.deck["meta"].get("brand") or {}).get("logo_dark_png")
+        logo = self._logo_file()
         if not (logo and _is_image(logo)):
             return self.x0
         try:
@@ -2058,12 +2835,22 @@ class Renderer:
 
 
 def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
-           layouts_out: Path | None = None) -> Path:
+           layouts_out: Path | None = None, pictures: dict | None = None, picture_findings: list | None = None, placed: set | None = None,
+           notes: bool = True, no_plan: bool = False) -> Path:
     """Render a deck to ``out`` (.pptx); slides with a failed check carry a visible flag.
 
     ``animate``: False (static), True or ``"auto"`` (builds play in order), ``"click"`` (one block per click).
     ``theme``: ``"napkin"`` (default, the layout library) or ``"classic"`` (the earlier look, flow only);
     the deck's brand JSON is applied over either, exactly as before.
     ``layouts_out``: a path for the layout record (``layouts.json``); the .pptx is byte-identical with or without it.
+    ``pictures``: asset id -> derived JPEG for the pictures to draw (images.copy_assets); None draws none and changes nothing.
+    ``picture_findings``: a list the renderer appends to when a slide had to be drawn without its picture.
     """
-    return Renderer(deck, inp, master, findings, animate, theme).render(out, layouts_out)
+    r = Renderer(deck, inp, master, findings, animate, theme, pictures)
+    r.notes, r.no_plan = notes, no_plan
+    r.render(out, layouts_out)
+    if picture_findings is not None:
+        picture_findings.extend(r.picture_findings)
+    if placed is not None:
+        placed |= r.placed
+    return out

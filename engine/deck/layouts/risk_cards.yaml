@@ -1,0 +1,40 @@
+id: risk_cards
+version: 1
+group: content
+purpose: list
+description: Risks as cards, each with a heading and a body.
+slot_summary: title, risks (group of 1-4)
+for_types:
+- risks
+when:
+  blocks_only:
+  - kv
+  max_blocks: 1
+  blocks_all:
+  - kv
+priority: 85
+alternatives:
+- cards
+- cards_split
+roomier: cards
+density: standard
+pick: rule
+family: risk_cards
+renderer: risk_cards
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  risks:
+    kind: group
+    role: body
+    from_blocks:
+    - kv
+    min_items: 1
+    max_items: 4
+    item:
+      heading_max_chars: 60
+      body_max_chars: 200

@@ -1,0 +1,48 @@
+id: execution
+version: 1
+group: content
+purpose: image
+description: The channel copy in its frame, the role and notes beside it.
+slot_summary: title, role, notes, copy
+for_types:
+- execution
+priority: 70
+alternatives:
+- execution_stack
+- execution_visual
+roomier: execution_stack
+density: standard
+pick: rule
+family: execution
+renderer: execution
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  role:
+    kind: text
+    role: body
+    from_blocks:
+    - text
+    max_chars: 367
+  notes:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    min_items: 1
+    max_items: 3
+  copy:
+    kind: copy
+    from_blocks:
+    - copy
+    dominant: true
+  prompt_note:
+    kind: text
+    role: caption
+    from_blocks:
+    - small
+    max_chars: 122

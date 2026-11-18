@@ -20,14 +20,14 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
-from .. import issues, spec
+from .. import images, issues, spec
 from ..validate import presented as _presented, words as _words
 from .judges import BenchError
 from .packets import run_ids
 
 DECK = Path(__file__).resolve().parents[1]
 ITEMS_PATH = DECK / "checklist.json"
-PER_SLIDE_PREFIXES = ("q_", "l_", "w_", "t_", "p_")   # checks that judge presented slides
+PER_SLIDE_PREFIXES = ("q_", "l_", "w_", "t_", "p_", "k_")   # checks that judge presented slides
 CONTENT_EXCLUDED = ("title", "appendix", "close")   # content slides: presented slides other than these (Q7)
 CREATIVE_TYPES = ("territory", "idea", "execution", "audience")   # look.pictures.on creative (contract 6.3)
 COVER_TYPES = ("title", "appendix")                                # creative_cover adds these
@@ -336,16 +336,20 @@ def l_repeat_max2(r: Run) -> dict:
         return na(NA_LAYOUT)
     if len(r.content) < 3:
         return na("fewer than 3 presented content slides")
-    rows, longest, run, bad = lay[0], 0, [], []
+    rows, longest, bad = lay[0], 0, []
     limit = _thr(r, "l_repeat_max2")["max_run"]
-    for i in r.content:
-        lid = rows.get(i, {}).get("id")
-        if run and rows.get(run[-1], {}).get("id") == lid:
+    runs, run = [], []
+    for i in r.content:   # runs of one layout among content slides, in order
+        if run and rows.get(run[-1], {}).get("id") == rows.get(i, {}).get("id"):
             run.append(i)
         else:
             run = [i]
+            runs.append(run)
+    for run in runs:
+        if len({r.deck["slides"][i]["type"] for i in run}) == 1:   # parallel slides of one type may look alike
+            continue
         longest = max(longest, len(run))
-        if len(run) > limit and run[-1] not in bad:
+        if len(run) > limit:
             bad += run
     return _verdict(bad, r.ids, longest, limit)
 
@@ -360,19 +364,19 @@ def l_variety(r: Run) -> dict:
     lay = _layout_rows(r)
     if lay is None:
         return na(NA_LAYOUT)
-    if len(r.presented) < 5:
-        return na("fewer than 5 presented slides")
-    if any(i not in lay[0] for i in r.presented):
-        return na("a presented slide has no layout record: its layout is unknown, not a layout of its own")
+    if len(r.content) < 5:
+        return na("fewer than 5 presented content slides")
+    if any(i not in lay[0] for i in r.content):
+        return na("a presented content slide has no layout record: its layout is unknown, not a layout of its own")
     thr = _thr(r, "l_variety")
-    seq = [lay[0].get(i, {}).get("id") for i in r.presented]
+    seq = [lay[0].get(i, {}).get("id") for i in r.content]
     size = min(thr["window"], len(seq))
     need = _min_distinct(len(seq), thr)
     worst, bad = None, []
     for k in range(len(seq) - size + 1):
         d = len(set(seq[k:k + size]))
         if d < need:
-            bad += r.presented[k:k + size]
+            bad += r.content[k:k + size]
         worst = d if worst is None else min(worst, d)
     return _verdict(bad, r.ids, worst, need)
 
@@ -487,7 +491,7 @@ def w_line_length(r: Run) -> dict:
     if r.prs is None:
         return na(NA_PPTX)
     from .. import qa_render
-    limit = _thr(r, "w_line_length")["max_line_in"]
+    thr = _thr(r, "w_line_length")
     bad, widest, seen = [], 0.0, 0
     slides = list(r.prs.slides)
     for i in r.presented:
@@ -496,12 +500,50 @@ def w_line_length(r: Run) -> dict:
         for col in qa_render.body_columns(slides[r.number(i) - 1]):
             seen += 1
             if col["lines"] > 1:
-                widest = max(widest, col["text_in"])
-                if col["text_in"] > limit:
+                widest = max(widest, col["chars"])
+                if col["chars"] > (thr.get("by_role") or {}).get(col["role"], thr["max_chars"]):
                     bad.append(i)
     if not seen:
         return na("no body text frame on a presented slide: nothing measured")
-    return _verdict(bad, r.ids, round(widest, 2), limit)
+    return _verdict(bad, r.ids, round(widest), thr["max_chars"])
+
+
+def words_sha(deck: dict) -> str:
+    """The one hash of a deck's words: 12 hex of the SHA-256 of its slide ids, titles, blocks and notes in slide order (nothing else:
+    not layout, slots, assets, theme or preferences). The checklist's w_words_sha and the frames tests both use THIS function, so a
+    picture, a look or a kit can be shown to have changed no word."""
+    blob = json.dumps(_words_of(deck), sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
+
+
+def _words_of(deck: dict) -> list:
+    """What the words check hashes: per slide in order, the title, the blocks and the notes (nothing else)."""
+    return [[sid, s.get("title"), s.get("blocks"), s.get("notes")] for sid in deck["order"] for s in [deck["slides"][sid]]]
+
+
+@check
+def w_words_sha(r: Run) -> dict:
+    if not r.presented:
+        return na("no presented slide")
+    return value(words_sha(r.deck))
+
+
+@check
+def w_notes_kept(r: Run) -> dict:
+    from .. import layouts
+    moved = [i for i in r.presented if (((r.deck["slides"][i].get("layout") or {}).get("fit") or {}).get("moved"))]
+    if not moved:
+        return na("no slide records layout.fit.moved (written by deck-layout-library)")
+    if r.prs is None:
+        return na(NA_PPTX)
+    slides = list(r.prs.slides)
+    bad = []
+    for i in moved:   # every moved point is in the speaker notes of the pptx: one line, verbatim, with its refs
+        n = r.number(i)
+        notes = slides[n - 1].notes_slide.notes_text_frame.text if n <= len(slides) and slides[n - 1].has_notes_slide else ""
+        if not all(layouts.moved_line(t, refs) in notes for t, refs in layouts.moved_texts(r.deck["slides"][i])):
+            bad.append(i)
+    return _verdict(bad, r.ids, len(moved) - len(bad), len(moved))
 
 
 def _content_words(r: Run) -> list:
@@ -593,11 +635,14 @@ def t_cover_title(r: Run) -> dict:
     if not covers:
         return na("no presented slide of type title")
     boxes = _title_boxes(r)
-    limit = _thr(r, "t_cover_title")["min_pt"]
-    sizes = {i: boxes[i]["size_pt"] for i in covers if i in boxes and boxes[i]["size_pt"] is not None}
-    if not sizes:
-        return na("the cover has no Title shape")
-    return _verdict([i for i, s in sizes.items() if s < limit], r.ids, min(sizes.values()), limit)
+    cover = {i: boxes[i]["size_pt"] for i in covers if i in boxes and boxes[i]["size_pt"] is not None}
+    content = [boxes[i]["size_pt"] for i in r.content if i in boxes and boxes[i]["size_pt"] is not None]
+    if not cover or not content:
+        return na("the cover or the content slides have no sized Title shape")
+    base = statistics.median(content)
+    ratio = _thr(r, "t_cover_title")["min_ratio"]
+    got = min(cover.values()) / base
+    return _verdict([i for i, sz in cover.items() if sz / base < ratio], r.ids, round(got, 2), ratio)
 
 
 @check
@@ -656,21 +701,44 @@ def p_only_creative(r: Run) -> dict:
 
 @check
 def p_all_approved(r: Run) -> dict:
-    if (x := _no_picture(r)):
-        return x
-    bad = [s for s, _, im in r.image_slots()
-           if not (im.get("status") == "approved" and isinstance(im.get("approval"), dict)
-                   and im["approval"].get("decision") == "approve" and im["approval"].get("asset") == im.get("asset"))]
-    return _verdict(bad, r.ids, len(bad), 0)
+    """A metric: the share of placed pictures a person approved (approval naming the slot's own asset). A review build
+    shows it as a number; a client build needs 1.0."""
+    slots = r.image_slots()
+    if not slots:
+        return na(NA_NO_PICTURE)
+    ok = [1 for _, _, im in slots if im.get("status") == "approved" and isinstance(im.get("approval"), dict)
+          and im["approval"].get("decision") == "approve" and im["approval"].get("asset") == im.get("asset")]
+    return value(round(len(ok) / len(slots), 3), n=len(slots), audience=(r.deck.get("meta") or {}).get("audience"))
+
+
+@check
+def p_client_approved(r: Run) -> dict:
+    if (r.deck.get("meta") or {}).get("audience") != "client":
+        return na("the build is not for the client (deck.meta.audience): p_all_approved shows the share instead")
+    slots = r.image_slots()
+    if not slots:
+        return na(NA_NO_PICTURE)
+    return _verdict([s for s, _, im in slots if not _approved(im)], r.ids, None, 0)
+
+
+def _approved(im: dict) -> bool:
+    a = im.get("approval")
+    return im.get("status") == "approved" and isinstance(a, dict) and a.get("decision") == "approve" and a.get("asset") == im.get("asset") and bool(a.get("by"))
 
 
 @check
 def p_one_style(r: Run) -> dict:
-    hashes = {s: (im.get("style") or {}).get("hash") for s, _, im in r.image_slots() if (im.get("style") or {}).get("hash")}
-    if len(hashes) < 2:
+    """One picture style per deck. A hash that differs from the current pack's (``meta.preferences.style_pack.hash``, when the build
+    records it) is STALE: counted on its own (``stale``), never as a second style. The rest must agree."""
+    cur = (((r.deck.get("meta") or {}).get("preferences") or {}).get("style_pack") or {}).get("hash")
+    hashes = {(s, n): (im.get("style") or {}).get("hash") for s, n, im in r.image_slots() if (im.get("style") or {}).get("hash")}   # per picture, not per slide: a territory slide holds four
+    if len(hashes) < 2 and not (cur and hashes):
         return na("fewer than 2 placed pictures carry a style hash")
-    kinds = set(hashes.values())
-    return yes() if len(kinds) == 1 else no(list(hashes), len(kinds), 1)
+    stale = [k for k, h in hashes.items() if cur and h != cur]
+    fresh = {k: h for k, h in hashes.items() if k not in stale}
+    if len(set(fresh.values())) > 1:
+        return no([k[0] for k in fresh], len(set(fresh.values())), 1, stale=len(stale))
+    return yes(stale=len(stale)) if cur else yes()
 
 
 @check
@@ -678,8 +746,12 @@ def p_assets_resolve(r: Run) -> dict:
     if (x := _no_picture(r)):
         return x
     assets = r.deck.get("assets") or {}
-    bad = [s for s, _, im in r.image_slots()
-           if im.get("asset") not in assets or not (r.dir / (assets[im["asset"]].get("file") or "\0")).is_file()]
+    client = (r.deck.get("meta") or {}).get("audience") == "client"
+    slots = [x for x in r.image_slots() if not client or _approved(x[2])]   # a client folder holds only the approved pictures it draws
+    if not slots:
+        return na("a client build with no approved picture: nothing is drawn, so no file is expected")
+    where = (lambda rec: images.derived_path(rec)) if client else (lambda rec: rec.get("file") or "\0")   # a client folder holds the derived JPEGs only
+    bad = [s for s, _, im in slots if im.get("asset") not in assets or not (r.dir / where(assets[im["asset"]])).is_file()]
     return _verdict(bad, r.ids, len(bad), 0)
 
 
@@ -716,8 +788,59 @@ def p_no_stretch(r: Run) -> dict:
 
 
 @check
+def p_no_lowres(r: Run) -> dict:
+    return _picture_qa(r, "picture_lowres")
+
+
+@check
 def p_text_on_image(r: Run) -> dict:
     return _picture_qa(r, "text_on_image_contrast")
+
+
+# ---------------------------------------------------------------- kit (the look the deck wears)
+
+def _theme(r: Run):
+    t = (r.deck.get("meta") or {}).get("theme")
+    return t if isinstance(t, dict) else None
+
+
+@check
+def k_palette_only(r: Run) -> dict:
+    th = _theme(r)
+    if not th or not isinstance(th.get("colors"), dict):
+        return na("deck.meta.theme is absent (the runner writes it)")
+    if r.prs is None:
+        return na(NA_PPTX)
+    from .. import qa_render
+    allowed = {str(c).upper().lstrip("#") for c in th["colors"].values() if isinstance(c, str)}
+    for c in th["colors"].get("chart") or []:
+        allowed.add(str(c).upper().lstrip("#"))
+    allowed |= {str(c).upper().lstrip("#") for c in (th.get("semantic") or {}).values()}
+    slides = list(r.prs.slides)
+    bad, stray = [], set()
+    for i in r.presented:
+        if r.number(i) <= len(slides):
+            out = qa_render.slide_colors(slides[r.number(i) - 1]) - allowed
+            if out:
+                bad.append(i)
+                stray |= out
+    return _verdict(bad, r.ids, sorted(stray), "meta.theme.colors")
+
+
+@check
+def k_logo_cover(r: Run) -> dict:
+    logo = (_theme(r) or {}).get("logo")
+    if not isinstance(logo, dict) or not logo.get("asset") or logo.get("placement") == "none":
+        return na("deck.meta.theme.logo is absent, has no asset or placement none")
+    if r.prs is None:
+        return na(NA_PPTX)
+    covers = [i for i in r.presented if r.deck["slides"][i]["type"] == "title"]
+    if not covers:
+        return na("no presented slide of type title")
+    from .. import qa_render
+    slides = list(r.prs.slides)
+    bad = [i for i in covers if r.number(i) > len(slides) or not qa_render.has_picture(slides[r.number(i) - 1])]
+    return _verdict(bad, r.ids, len(covers) - len(bad), len(covers))
 
 
 # ---------------------------------------------------------------- run
