@@ -1,5 +1,5 @@
 """Tests for the 18 Nov 2026 review of the Territory tool (features/territory-tool.clan): the prompt lint and the Confidential deny-list on
-every shot, the client-to-Runway policy (Sai, 18 Nov: allowed for testing; may change), card ids, the lifetime ledger, paid output saved
+every shot, the client-to-Runway policy (Sai, 18 Nov: refuse by default; VISUALS_CLIENT_TO_RUNWAY=allow for testing), card ids, the lifetime ledger, paid output saved
 first, intake-checked tags and the style pack as the only visual driver. A fake Runway, a fake Ollama and a FakeLLM stand in for every
 paid or local service; every brand, brief and mark here is invented. Run from ``engine/``: ``PYTHONPATH=. python3 -m pytest -q territory/tests``."""
 from __future__ import annotations
@@ -46,20 +46,37 @@ def frames_manifest(run_path):
 
 # ------------------------------------------------------------------------------- the policy switch (one place, said plainly)
 
-def test_the_policy_is_one_switch_that_allows_for_testing_and_fails_closed_on_a_bad_value():
-    assert policy.CLIENT_TO_RUNWAY == "allow" and "Sai 2026-11-18" in policy.DECIDED
-    assert policy.client_to_runway({}) == "allow"
+def test_the_policy_is_one_switch_that_refuses_by_default_and_fails_closed_on_a_bad_value():
+    assert policy.CLIENT_TO_RUNWAY == "refuse" and "Sai 2026-11-18" in policy.DECIDED
+    assert policy.client_to_runway({}) == "refuse"
+    assert policy.client_to_runway({policy.ENV: "allow"}) == "allow"
     assert policy.client_to_runway({policy.ENV: "refuse"}) == "refuse"
     assert policy.client_to_runway({policy.ENV: "maybe"}) == "refuse"
     assert policy.client_to_runway({policy.ENV: ""}) == "refuse"                       # set but empty names no policy: refused, never the default
     assert policy.client_to_runway({policy.ENV: "  "}) == "refuse"
-    assert "allowed (testing policy" in policy.label({}) and "refused (policy)" in policy.label({policy.ENV: "refuse"})
+    assert "allowed (testing override" in policy.label({policy.ENV: "allow"}) and "refused (policy)" in policy.label({})
+
+
+def test_with_no_override_a_client_run_is_refused_and_an_invented_one_is_not(env, monkeypatch):
+    monkeypatch.delenv(policy.ENV, raising=False)                                      # the code's own default: refuse
+    write_run(env, origin="client")
+    code, rw, _ = go(env, *LIVE)
+    assert code == 2 and rw.posts == []
+    write_run(env, origin="invented")
+    code, rw, _ = go(env, *LIVE)
+    assert code == 0 and rw.posts and frames_manifest(env)["provenance"] == "Invented (no brief)"
+
+
+def test_the_manifest_carries_a_provenance_label(env):
+    write_run(env, origin="demo")
+    code, rw, _ = go(env, *LIVE)
+    assert code == 0 and frames_manifest(env)["provenance"] == "Demo (not a client)"
 
 
 def test_the_card_and_the_manifest_say_which_policy_applied(env, capsys):
     write_run(env, origin="client")
     go(env)
-    assert "Client-derived prompts -> Runway: allowed (testing policy" in capsys.readouterr().out
+    assert "Client-derived prompts -> Runway: allowed (testing override" in capsys.readouterr().out
     code, rw, _ = go(env, *LIVE)
     m = frames_manifest(env)["material"]
     assert code == 0 and m["policy"] == "allow" and m["client_derived"] is True and "testing" in m["policy_label"]

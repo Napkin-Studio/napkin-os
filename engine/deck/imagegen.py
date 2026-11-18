@@ -9,7 +9,7 @@ why the generation lives here. Sai's rules of 17 Nov 2026 are enforced in code, 
 3. Drafts use flash; pro runs only for an approved, guard-checked hero a person asked for. Both are pinned in ``visuals.runway.TIER_MODEL``.
 4. Nothing is made while a part marked Confidential could be drawn: with no mark data the deck is refused; marked text never enters stage g;
    every subject, note and style block passes the allow-list lint (``visuals.lint``) and the deny-list of the marked texts.
-5. Client-derived prompts go to Runway only while ``visuals.policy.CLIENT_TO_RUNWAY`` is ``allow`` (allowed for testing, Sai 18 Nov 2026;
+5. Client-derived prompts go to Runway only while ``visuals.policy.CLIENT_TO_RUNWAY`` is ``allow`` (refuse by default, Sai 18 Nov 2026; VISUALS_CLIENT_TO_RUNWAY=allow for testing;
    may change). Under ``refuse`` nothing is planned. Every picture card prints which policy applied; the lint and the deny-list run either way.
 6. Nothing is remade automatically: a failure, a flag or a Style Pack change reaches a card and waits for a person.
 

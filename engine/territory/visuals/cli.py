@@ -10,7 +10,7 @@ THE SWAP (the creative lead's style pack replaces the default; only pictures cha
 The run, the territory text and the frame plan are not touched; the pictures go to a new frames/v<N>-<hash>/ folder.
 
 Pictures go to Runway's Gemini image models. Whether a client-derived prompt may go is one switch, visuals.policy.CLIENT_TO_RUNWAY
-(allowed for testing, Sai 18 Nov 2026; the card always says which), and marks that cannot be known refuse the frames. Every shot passes the picture-prompt lint (visuals.lint: the common-word allow-list, brand words, the
+(refuse by default, Sai 18 Nov 2026; VISUALS_CLIENT_TO_RUNWAY=allow for testing; the card always says which), and marks that cannot be known refuse the frames. Every shot passes the picture-prompt lint (visuals.lint: the common-word allow-list, brand words, the
 Confidential deny-list) before it is sent. A yes is the card's id (``--yes-cost c_...``): a stale or wrong id is refused. Spend is
 derived from an append-only ledger outside the frames folder (visuals.jobs.Ledger), every attempt of every version counted, and capped
 for the run's lifetime (``--max-usd``, default $2.00, never above $2.50).
@@ -348,6 +348,7 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     manifest["style"] = sty.summary()
     manifest["inputs"] = expect                    # what these frames were made from; a re-run with other inputs is refused
     manifest["safe_messaging"] = {k: safe[k] for k in ("applies", "packs", "reviewed")}
+    manifest["provenance"] = material.PROVENANCE.get(mat["origin"], "Unknown origin")
     manifest["material"] = {"origin": mat["origin"], "by": mat["by"], "client_derived": mat["client_derived"], "confidential_parts": len(mat["marks"] or []),
                             "policy": mat["policy"], "policy_label": mat["policy_label"]}
     for r in refused:

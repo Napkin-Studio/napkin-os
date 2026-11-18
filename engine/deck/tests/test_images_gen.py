@@ -37,7 +37,7 @@ def hermetic(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect_ex", lambda self, addr, *a, **k: 111)   # nothing is reached by connect_ex either
     monkeypatch.delenv("RUNWAYML_API_SECRET", raising=False)
     monkeypatch.delenv("NAPKIN_DECK_IMAGES_MAX_USD", raising=False)
-    monkeypatch.delenv("VISUALS_CLIENT_TO_RUNWAY", raising=False)   # the client-to-Runway policy as the code sets it, not this shell
+    monkeypatch.setenv("VISUALS_CLIENT_TO_RUNWAY", "allow")   # the testers' override: most tests send client-derived pictures (the default is refuse)
     for n in ("CLIENT_FACTORY", "SUBJECTS_CALL", "GUARD_POST", "SLEEP"):
         monkeypatch.setattr(imagegen, n, None)
     monkeypatch.setattr(imagegen, "SLEEP", lambda s: None)
@@ -287,12 +287,20 @@ def test_with_no_mark_data_generation_is_refused_for_the_deck(monkeypatch, stage
 
 def test_the_picture_card_says_the_client_to_runway_policy_plainly(monkeypatch, stages, tmp_path):
     from visuals import policy
-    assert policy.CLIENT_TO_RUNWAY == "allow"                                 # allowed for testing, Sai 18 Nov 2026; may change
+    assert policy.CLIENT_TO_RUNWAY == "refuse"                                # refuse by default, Sai 18 Nov 2026
     with_subjects(monkeypatch, stages, tmp_path)
     d, text = go(stages, tmp_path / "o", "--images", "plan")
-    assert "Client-derived prompts -> Runway: allowed (testing policy" in text
+    assert "Client-derived prompts -> Runway: allowed (testing override" in text
     plan = json.loads((stages / "images" / "plan.json").read_text())
     assert plan["client_to_runway"]["policy"] == "allow" and "testing" in plan["client_to_runway"]["label"]
+
+
+def test_by_default_the_deck_sends_nothing(monkeypatch, stages, tmp_path):
+    fake = with_subjects(monkeypatch, stages, tmp_path)
+    monkeypatch.delenv("VISUALS_CLIENT_TO_RUNWAY", raising=False)     # the code's own default: refuse
+    with pytest.raises(SystemExit) as e:
+        go(stages, tmp_path / "o", "--images", "plan")
+    assert "policy" in str(e.value) and fake.posts == []
 
 
 def test_under_the_refuse_policy_the_deck_sends_nothing(monkeypatch, stages, tmp_path):

@@ -6,8 +6,8 @@ Runway's Gemini image models.
     allow    sent, but only after the picture-prompt lint (common-word allow-list, brand words) and the Confidential deny-list
     refuse   never sent; only material a person marked invented or demo goes
 
-Decision (Sai, 18 Nov 2026): ALLOWED FOR TESTING; it may change. To stop it, change ``CLIENT_TO_RUNWAY`` below to "refuse" (the one place),
-or set the environment variable ``VISUALS_CLIENT_TO_RUNWAY=refuse`` for one run. The variable, when set at all, must say ``allow`` or
+Decision (Sai, 18 Nov 2026, later the same day): the default is REFUSE. Testers opt in for one run with the environment variable
+``VISUALS_CLIENT_TO_RUNWAY=allow``; the setting below (the one place) stays "refuse". The variable, when set at all, must say ``allow`` or
 ``refuse``: any other value, the empty string included (``VISUALS_CLIENT_TO_RUNWAY=``), refuses (fail closed); only an unset variable
 falls back to the setting below. Whatever the policy, the lint and the Confidential deny-list
 always run, the brief's marks are always carried, and a part marked Confidential is never drawn. Every cost card and report says which
@@ -17,11 +17,11 @@ from __future__ import annotations
 
 import os
 
-#: allowed for testing, Sai 2026-11-18; may change. Flip to "refuse" to keep every client-derived prompt away from Runway.
-CLIENT_TO_RUNWAY = "allow"
+#: refuse by default, Sai 2026-11-18 (it was allowed for testing earlier that day). VISUALS_CLIENT_TO_RUNWAY=allow overrides it for testers.
+CLIENT_TO_RUNWAY = "refuse"
 ENV = "VISUALS_CLIENT_TO_RUNWAY"
 CHOICES = ("allow", "refuse")
-DECIDED = "allowed for testing, Sai 2026-11-18; may change"
+DECIDED = "refuse by default, Sai 2026-11-18; VISUALS_CLIENT_TO_RUNWAY=allow for testing"
 
 
 def client_to_runway(environ=None) -> str:
@@ -36,5 +36,5 @@ def label(environ=None) -> str:
     """The line a card or report prints."""
     p = client_to_runway(environ)
     if p == "allow":
-        return f"Client-derived prompts -> Runway: allowed (testing policy: {DECIDED}); every prompt is linted and Confidential parts are refused"
+        return f"Client-derived prompts -> Runway: allowed (testing override: {ENV}=allow; the default is refuse); every prompt is linted and Confidential parts are refused"
     return "Client-derived prompts -> Runway: refused (policy); only material marked invented or demo is sent"

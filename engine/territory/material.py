@@ -1,7 +1,7 @@
 """What a territory run was made from, and whether its pictures may be made (the 18 Nov 2026 review, blocker 1).
 
 The frame pictures are made by Runway's Gemini image models. Whether a prompt derived from client material may go there is ONE switch,
-``visuals.policy.CLIENT_TO_RUNWAY`` (Sai, 18 Nov 2026: allowed for testing; may change). Whatever it says:
+``visuals.policy.CLIENT_TO_RUNWAY`` (Sai, 18 Nov 2026: refuse by default; VISUALS_CLIENT_TO_RUNWAY=allow for testing). Whatever it says:
 
 * the run never holds the marked text: ``territory.run`` records only how many parts are marked (``material.marks_count``) and the
   brief's sha256 (``material.brief_sha256``). The frames tool rebuilds the Confidential deny-list from the brief itself
@@ -30,6 +30,8 @@ from visuals import policy
 
 ORIGINS = ("invented", "demo", "client")
 SENDABLE = ("invented", "demo")
+#: The label a manifest carries so a reader of the frames knows what they were made from (a person marked the origin).
+PROVENANCE = {"invented": "Invented (no brief)", "demo": "Demo (not a client)", "client": "Client material"}
 
 
 def block(origin: str | None, brief: str | None, marks, brand: str | None = None, brief_sha256: str | None = None) -> dict:

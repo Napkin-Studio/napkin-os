@@ -98,7 +98,7 @@ def ollama_down(url, body):
 def env(tmp_path, monkeypatch):
     monkeypatch.setenv(runway.KEY_ENV, KEY)
     monkeypatch.delenv("BRIEF_CLAUDE_TRANSPORT", raising=False)
-    monkeypatch.delenv(policy.ENV, raising=False)           # the policy in code, not whatever this shell has set
+    monkeypatch.setenv(policy.ENV, "allow")                  # most tests send client-derived shots: the testers' override, not whatever this shell has set (the default is refuse)
     run_path = tmp_path / "runs" / "jam.json"
     run_path.parent.mkdir()
     run_path.write_text(json.dumps(make_run(), indent=1))
