@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from .. import cards as cards_mod
-from . import runway
+from visuals import runway
 
 
 def _slug(s: str) -> str:

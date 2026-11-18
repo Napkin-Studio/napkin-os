@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-PACKS = Path(__file__).resolve().parents[2] / "deck" / "packs"
+PACKS = Path(__file__).resolve().parents[1] / "deck" / "packs"
 
 
 def _haystack(run: dict) -> str:

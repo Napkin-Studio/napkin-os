@@ -160,10 +160,7 @@ def try_style_pack(folder: Path | None) -> dict | None:
     if not folder:
         return None
     try:
-        try:
-            from visuals import style as mod   # deck-look-kits' home, once it lands
-        except ImportError:
-            from territory.visuals import style as mod
+        from visuals import style as mod   # the one Style Pack reader (engine/visuals)
         mod.load(Path(folder))
     except Exception as e:   # StyleError, or anything a bad pack raises: the build goes on and says so
         if type(e).__name__ == "StyleError" or isinstance(e, (ValueError, OSError)):

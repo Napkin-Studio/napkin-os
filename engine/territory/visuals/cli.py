@@ -21,7 +21,9 @@ import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from . import board, guard, plan as plan_mod, runway, safety, style as style_mod
+from visuals import guard, runway, safety, style as style_mod
+
+from . import board, plan as plan_mod
 
 
 ID_OK = re.compile(r"^[A-Za-z0-9_-]{1,40}$")      # a territory id becomes part of a file name: no slashes, dots or spaces

@@ -12,16 +12,18 @@ import pytest
 
 from territory import cards, compare, llm as llm_mod
 from territory.llm import FakeLLM, LiveLLM
-from territory.visuals import board, guard, plan as plan_mod, runway, safety, style as style_mod
+from territory.visuals import board, plan as plan_mod
+from visuals import guard, runway, safety, style as style_mod
 from test_visuals import KEY, LIVE, FakeRunway, PNG, clean_ollama, env, flag_task, go, make_run, ollama_down, plan_output, style_pack  # noqa: F401
 
-DEMO_NOTE = "DEMO PACK, invented for tests. It is not Laurence's pack."
+DEMO_NOTE = "DEMO PACK, invented for tests. It is not the real pack."
 
 
 def demo_pack(tmp_path, name="demo", look="loose ink wash, cool", banned="crowds", n_images=1):
     d = tmp_path / name
     d.mkdir(exist_ok=True)
-    (d / "style.yaml").write_text(f"look: [{look}]\npalette: [slate]\nfinish: rough\nbanned_imagery: [{banned}]\nnotes: {DEMO_NOTE}\n")
+    refs = "".join(f"  ref{i:02d}.png: {{rights: own, why: invented test image, by: 'human:demo'}}\n" for i in range(n_images))   # the shared reader sends only declared own or licensed images
+    (d / "style.yaml").write_text(f"look: [{look}]\npalette: [slate]\nfinish: rough\nbanned_imagery: [{banned}]\nnotes: {DEMO_NOTE}\n" + (f"references:\n{refs}" if refs else ""))
     for i in range(n_images):
         (d / f"ref{i:02d}.png").write_bytes(PNG + bytes([i, 7]))
     return d
@@ -76,7 +78,7 @@ def test_swapping_the_style_pack_changes_only_image_prompts_and_hashes_never_tex
     for c1, c2 in zip(f1["cards"], f2["cards"]):                              # the picture slot moves; the words around it do not
         assert c1["visual"]["prompt"] != c2["visual"]["prompt"] and c1["visual"]["image"] != c2["visual"]["image"]
     assert "DEMO PACK" in v2.joinpath("manifest.json").read_text()
-    assert style_mod.load(None).source == "default until Laurence answers"
+    assert style_mod.load(None).source == "built-in default"
 
 
 def test_a_saved_plan_for_a_changed_run_is_refused_not_reused(env):
