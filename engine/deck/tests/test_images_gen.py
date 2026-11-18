@@ -404,8 +404,11 @@ def test_made_pictures_are_labelled_assets_with_the_record_slice_three_reads(mon
     assert not any(im["status"] == "approved" for _, _, im in images.image_slots(d))      # a picture is never evidence: nothing is approved by itself
 
 
-def test_territory_slides_with_no_frames_get_one_mood_picture_never_four(monkeypatch, stages, tmp_path):
+def test_territory_slides_with_no_frames_get_one_mood_picture_slot_never_four_and_it_is_held_until_a_layout_draws_it(monkeypatch, stages, tmp_path):
     f, d = made(monkeypatch, stages, tmp_path)
+    plan = json.loads((stages / "images" / "plan.json").read_text())
+    terr = [r for r in plan["slots"].values() if r["anchor"]["type"] == "territory"]
+    assert terr and all(r["status"] == "held" and "no layout draws one picture" in r["reason"] for r in terr)
     for sid in d["order"]:
         s = d["slides"][sid]
         if s["type"] == "territory":

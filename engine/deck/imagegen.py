@@ -49,6 +49,9 @@ TEMPLATES = {"title": "A quiet morning scene with soft light and a clear subject
              "territory": "A calm everyday scene that holds the mood of the idea.", "execution": "A street with a blank wall and soft light.",
              "solution": "A simple everyday thing in soft light, with a clear focal point.", "product": "A simple everyday thing in soft light, with a clear focal point."}
 STAGE_G_FILE = "g_image_subjects.json"
+#: The layout library (slice 4) has no layout that draws ONE picture on a territory slide (frames_strip needs all four frames), so a mood picture made for
+#: a territory would be paid for and never shown. Until a layout draws it, those slots are held back with that reason. Flip when the library gains one.
+TERRITORY_PICTURE_DRAWN = False
 #: Test seams (all None in service): a Runway client factory, the stage g call, the guard's post and the poll sleep. Tests set them; nothing else does.
 CLIENT_FACTORY = SUBJECTS_CALL = GUARD_POST = SLEEP = None
 
@@ -104,6 +107,11 @@ def candidate_slots(deck: dict, territories=None) -> list:
 
 
 # ---------------------------------------------------------------------------------------------------------- confidential marks
+
+def askable(deck: dict, cands: list) -> list:
+    """The candidates stage g is asked about: a slot that cannot be drawn (see TERRITORY_PICTURE_DRAWN) is not paid for."""
+    return [c for c in cands if TERRITORY_PICTURE_DRAWN or deck["slides"][c["sid"]]["type"] != "territory"]
+
 
 def mark_paths(inp) -> list:
     return [str(m.get("path", "")) for m in (inp.marks or [])]
@@ -305,7 +313,7 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     banned = list(dict.fromkeys([*safe["banned"], *ctx.style.banned_imagery, *ctx.banned_extra]))
     deny = lint.deny_list(inp.marks)
     cands = candidate_slots(deck, ctx.territories)
-    req = subject_request(deck, inp, ctx.territories, cands, banned, deny)
+    req = subject_request(deck, inp, ctx.territories, askable(deck, cands), banned, deny)
     rec = ctx.subjects if ctx.subjects is not None else load_subjects(ctx.stages, req)
     style_text = style_text_for(ctx.style, banned)
     refs = [r.sha256 for r in vstyle.sendable(ctx.style)]
@@ -328,6 +336,9 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
             continue
         if safe["applies"] and not safe["reviewed"]:
             row.update(status="held", reason=safe["reason"])
+            continue
+        if s["type"] == "territory" and not TERRITORY_PICTURE_DRAWN:
+            row.update(status="held", reason="no layout draws one picture on a territory slide yet, so it would be paid for and not shown")
             continue
         # a picture that exists already, and a person's decision on it
         prior = [(k, j) for k, j in slot_jobs(ctx.manifest, c["key"], "draft") if jobs.state(j, ctx.cache) == "saved"]
@@ -539,7 +550,7 @@ def run_subjects(ctx: Ctx, plan: dict, call=None, log=print) -> dict:
     call = call or stg.image_subjects
     cands = candidate_slots(ctx.deck, ctx.territories)
     banned = plan["banned_imagery"]
-    req = subject_request(ctx.deck, ctx.inp, ctx.territories, cands, banned, lint.deny_list(ctx.inp.marks))
+    req = subject_request(ctx.deck, ctx.inp, ctx.territories, askable(ctx.deck, cands), banned, lint.deny_list(ctx.inp.marks))
     key = "g_" + request_sha(req)
     with ctx.ledger.locked():
         spent = jobs.spent_usd(ctx.manifest, ctx.ledger)
