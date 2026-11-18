@@ -7,6 +7,8 @@
 # A heading that matches two different icons gets none; a group gets icons only when every item matched a different icon.
 # Every new keyword needs a fixture line in tests/test_deck_graphics.py (rework risk: the map must not grow into a guesser).
 # Never a brand, a platform, an award or a trophy: the deny list in graphics.ICON_DENY is refused by the vendor script and by a test.
+# Never an icon that makes a claim of its own (graphics.ICON_CLAIMS): no direction (an up or down arrow, a rising line), no verdict (a tick,
+# a cross, a badge) and no approval (a thumb, a star). A heading that names a result ('Sales falling 12%') gets no icon that says which way.
 icons:
   # channels first
   signpost-big: [outdoor, ooh, out of home, billboard, poster, six sheet, 6-sheet, 48-sheet]
@@ -46,12 +48,12 @@ icons:
   lightbulb: [idea, insight, innovation]
   eye: [awareness, attention, visibility]
   heart: [love, loyalty, emotion]
-  trending-up: [growth, uplift, increase, sales]
+  sprout: [growth]
   chart-column: [data, analytics, results, kpi]
   clock: [time, hours, deadline]
   flag: [milestone, kickoff, kick-off, start]
   rocket: [launch, go-live]
-  shield-check: [trust, safety, compliance, guardrail, quality]
+  shield: [trust, safety, guardrail]
   leaf: [sustainability, environment, green, climate, nature]
   droplet: [water, drop]
   map: [journey, roadmap]
@@ -72,13 +74,13 @@ icons:
   piggy-bank: [savings, saving]
   file-text: [report, document, documentation]
   clipboard-list: [plan, planning, checklist]
-  list-checks: [tasks, deliverables, requirements]
+  list: [tasks, deliverables, requirements]
   phone: [call, telephone, helpline, contact]
-  thumbs-up: [engagement, approval]
+  messages-square: [engagement]
   heart-handshake: [community, charity, care, volunteering]
   utensils: [food, restaurant, dining, meal]
   stethoscope: [health, healthcare, medical, wellbeing]
-  recycle: [recycling, waste, reuse, circular]
+  recycle: [recycling, reuse, circular]
   truck: [delivery, logistics, shipping]
   package: [product, packaging, pack]
   workflow: [process, operations, workflow, how we work]

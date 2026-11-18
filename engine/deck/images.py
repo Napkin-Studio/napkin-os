@@ -593,13 +593,19 @@ def production_frame(prod: dict) -> str | None:
     return first[0][1] if first else None
 
 
-def production_storyboard(prod: dict) -> list:
-    """The newest storyboard's placeable picked frames in shot order (Production's ``shot.rank``, a fractional index that sorts as a
-    string; end cards and rights-pending frames left out; mock frames never reach production.json): ``[item key]``."""
+def production_shots(prod: dict) -> list:
+    """The newest storyboard's picked shot frames in shot order (Production's ``shot.rank``, a fractional index that sorts as a string; end
+    cards left out; mock frames never reach production.json): ``[(shot number from 1, item key, placeable)]``. A rights-pending frame keeps
+    its number and is not placeable."""
     frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
     sb = _newest([it.get("storyboard") or "" for it in frames.values()])
     ordered = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
-    return [k for _, k in ordered if frames[k].get("rights") != "reference_only" and frames[k].get("status", "ready") == "ready"]
+    return [(n, k, frames[k].get("rights") != "reference_only" and frames[k].get("status", "ready") == "ready") for n, (_, k) in enumerate(ordered, 1)]
+
+
+def production_storyboard(prod: dict) -> list:
+    """The placeable frames of production_shots, in shot order: ``[item key]``."""
+    return [k for _, k, ok in production_shots(prod) if ok]
 
 
 def production_slot(prod: dict, key: str, aspect: str, names=()) -> tuple:
@@ -667,7 +673,9 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                     own = ((((s.get("slots") or {}).get(slot) or {}).get("image") or {}).get("from") or {}).get("kind") in ("upload", "brand")
                     if spec.GRAPHICS and not own:   # deck-graphics slice 3: 3 or 4 Production frames in shot order make a strip, all Production or none
                         from .graphics import strip_picks   # noqa: PLC0415
-                        picks, note = strip_picks(production_storyboard(prod))
+                        shots = production_shots(prod)
+                        number = {k: n for n, k, _ in shots}
+                        picks, note = strip_picks([k for _, k, ok in shots if ok])
                         if picks:
                             key = picks[0]
                             for i, fk in enumerate(picks, 1):
@@ -676,6 +684,9 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                                     register_assets(deck, {val["image"]["asset"]: asset})
                                     got["placed"] += 1
                                 _slots(s)[f"shot_{i}"] = val
+                            if len(picks) < len(shots):   # fewer drawn than the storyboard has: say so on the slide ('4 of 9 shots')
+                                note = f"{len(picks)} of {len(shots)} shots"
+                            s["strip"] = {"shots": [number[k] for k in picks], "of": len(shots), **({"note": note} if note else {})}
                             got.setdefault("strips", []).append({"slide": sid, "shots": len(picks), "note": note})
                 elif ch:
                     key, why = production_size(prod, ch, aspect, mset, any_shape=bool(spec.GRAPHICS))

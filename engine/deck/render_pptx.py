@@ -413,6 +413,7 @@ class Renderer:
             self._icons_on = graphics.icons_on(deck)
         self.icons_drawn = {}       # slide id -> {"layout", "ids"}: the icons really drawn, in item order (the web draws exactly these)
         self._exec_title = None     # deck-graphics: the execution title whose picture this slide shows (frames), else None
+        self._frame_blocked = None  # deck-graphics: a frame refused for contrast on the picture in hand (its shape is then checked plain)
 
     def _layout(self, name):
         """A layout of the master by name, or None."""
@@ -1950,7 +1951,7 @@ class Renderer:
             self._strip_column(sl, x, y, w, h, shots)
         elif fr:   # deck-graphics: the execution's picture shown in place, in its frame on a panel the size of the picture's box
             self._framed(sl, x, y, w, h, im, fr, ground=self.th.panel)
-        else:
+        elif self._plain_ok(im, w, h):
             self.picture(sl, x, y, w, h, im, corner=corner, label=label)
         self._own_pics.add(slot)
         self.placed.add((self._sid, slot))
@@ -1999,12 +2000,30 @@ class Renderer:
     def _frame_for(self, im) -> dict | None:
         """The frame this slide's execution picture is shown in (graphics.frame_of), or None: graphics off, not an execution's picture,
         a channel with no frame, or ink under 3:1 on the slide's ground (then the picture is drawn plain, as before)."""
+        self._frame_blocked = None
         if not spec.GRAPHICS or self._exec_title is None or not im:
             return None
         from . import graphics   # noqa: PLC0415
-        if not graphics.stroke_ok(self.p.fg, self.p.bg) or not graphics.stroke_ok(self.p.fg, self.th.panel):
+        if not graphics.part_on(self.deck, "mockups"):
             return None
-        return graphics.frame_of(self.deck, self._exec_title, im)
+        fr = graphics.frame_of(self.deck, self._exec_title, im)
+        if fr and not (graphics.stroke_ok(self.p.fg, self.p.bg) and graphics.stroke_ok(self.p.fg, self.th.panel)):
+            self._frame_blocked = fr   # the frame cannot be drawn on this ground: the plain picture only if its shape fits (_plain_ok)
+            return None
+        return fr
+
+    def _plain_ok(self, im, w, h) -> bool:
+        """When a frame was refused for contrast: the picture is drawn plain only if its own aspect is within images.ASPECT_TOL of the box
+        (a Production size bound for a frame may be any shape, and the plain box would crop it); else it is left out with a finding."""
+        fr = getattr(self, "_frame_blocked", None)
+        if not fr:
+            return True
+        import math   # noqa: PLC0415
+        if abs(math.log(fr["ratio"] / (w / h))) <= math.log(images.ASPECT_TOL):
+            return True
+        self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": self._sid, "slot": "picture",
+                                      "message": "picture is not drawn: its frame's ink is under 3:1 on this ground and its shape does not fit the plain box"})
+        return False
 
     def _mockup_pill(self, sl, x, y):
         """The fixed 'Mock-up' label (spec.MOCKUP_LABEL): white bold 10 pt on an ink pill, beside the picture's own label. Returns its width."""
@@ -2020,7 +2039,17 @@ class Renderer:
             pw = self._label_w(im, 3.0)
             self._label_pill(sl, x, y, im, pw)
             x += pw + 0.1
-        self._mockup_pill(sl, x, y)
+        return x + self._mockup_pill(sl, x, y)
+
+    def _strip_info(self) -> tuple:
+        """``(shot numbers, note)`` of the slide's storyboard strip (images.bind_production: the storyboard's own shot numbers and, when
+        fewer frames are drawn than it has shots, '4 of 9 shots'); ``(None, '')`` when the slide carries none."""
+        st = ((self.deck.get("slides") or {}).get(self._sid) or {}).get("strip") or {}
+        return st.get("shots"), str(st.get("note") or "")
+
+    def _strip_note(self, sl, x, y, note):
+        if note:
+            self.text(sl, x + 0.12, y, 2.4, self.PILL_H, note, size=12, color=self.p.mute, anchor=MSO_ANCHOR.MIDDLE, name="StripNote")
 
     def _framed(self, sl, x, y, w, h, im, fr, ground=None) -> None:
         """An execution's picture in its drawn frame (graphics.frame_geometry) contained in the box: the frame's parts in the ink token
@@ -2058,16 +2087,21 @@ class Renderer:
         (numbers only: no shot caption is carried or written), the labels above the strip at its right end."""
         boxes = plan["boxes"]
         m = self._mark(sl)
-        self._strip_cells(sl, boxes)
+        numbers, note = self._strip_info()
+        self._strip_cells(sl, boxes, numbers)
         x_end = boxes[-1][1] + boxes[-1][3]
         im0 = boxes[0][5]
         lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
-        self._pills(sl, x_end - lab - (0.24 + 0.085 * len(spec.MOCKUP_LABEL)), boxes[0][2] - self.PILL_H - 0.12, im0)
+        py = boxes[0][2] - self.PILL_H - 0.12
+        self._pills(sl, x_end - lab - (0.24 + 0.085 * len(spec.MOCKUP_LABEL)), py, im0)
+        self._strip_note(sl, boxes[0][1] - 0.12, py, note)
         self._build(sl, m)
 
-    def _strip_cells(self, sl, boxes):
-        """Each storyboard frame in a hairline window at its own aspect, numbered 1 to n under it beside a hairline (numbers only)."""
-        for n, (slot, x, y, w, h, im) in enumerate(boxes, 1):
+    def _strip_cells(self, sl, boxes, numbers=None):
+        """Each storyboard frame in a hairline window at its own aspect, numbered under it beside a hairline with its shot number in the
+        storyboard (numbers only: no caption is carried or written)."""
+        numbers = numbers if numbers and len(numbers) == len(boxes) else list(range(1, len(boxes) + 1))
+        for n, (slot, x, y, w, h, im) in zip(numbers, boxes):
             self.picture(sl, x, y, w, h, im, name="Strip picture", label=False)
             self.rect(sl, x, y, w, h, line=self.p.fg, lw=0.75, name="Frame: storyboard")
             self.text(sl, x, y + h + 0.04, 0.3, 0.3, str(n), size=14, bold=True, font=self.th.head, name="StripNumber")
@@ -2093,8 +2127,10 @@ class Renderer:
         for i, ((k, im), r) in enumerate(zip(shots, rs)):
             fw = fh * r
             boxes.append((k, ix + (iw - fw) / 2, top + i * (fh + num + gap), fw, fh, im))
-        self._strip_cells(sl, boxes)
-        self._pills(sl, boxes[0][1], iy + ih + 0.2, shots[0][1])
+        numbers, note = self._strip_info()
+        self._strip_cells(sl, boxes, numbers)
+        end = self._pills(sl, boxes[0][1], iy + ih + 0.2, shots[0][1])
+        self._strip_note(sl, end, iy + ih + 0.2, note)
         for k, _ in shots:
             self._own_pics.add(k)
             self.placed.add((self._sid, k))
@@ -2461,37 +2497,36 @@ class Renderer:
         plot = ch.plots[0]
         cols = graphics.chart_marks(form, order, hero, t_)
         fmt_ = graphics.number_format(points[0]["unit"])
+        def label(pt, text, colour, pos):   # the ledger's own display ('45%', '€12,000'), never an Excel number format of the value
+            dl_ = pt.data_label
+            dl_.has_text_frame = True
+            dl_.text_frame.text = text
+            if pos is not None:
+                dl_.position = pos
+            dl_.font.size, dl_.font.name, dl_.font.bold = Pt(self.sz(14)), t_.body, True
+            dl_.font.color.rgb = _rgb(colour)
         if form != "line":
             plot.gap_width = 80
-            plot.has_data_labels = True
-            dl = plot.data_labels
-            dl.number_format, dl.number_format_is_linked = fmt_, False
-            if form != "segmented":
-                dl.position = XL_LABEL_POSITION.OUTSIDE_END
-            dl.font.size, dl.font.name, dl.font.bold = Pt(self.sz(14)), t_.body, True
-            dl.font.color.rgb = _rgb(t_.ink if form != "segmented" else "FFFFFF")
             if form == "segmented":
-                steps = [t_.ink, themes.blend(t_.ink, t_.paper, 0.4), themes.blend(t_.ink, t_.paper, 0.7)]
-                for i, ser in enumerate(plot.series):
+                for i, (ser, pt_) in enumerate(zip(plot.series, points)):
+                    fill = cols[i]   # graphics.chart_marks: ink steps, each 3:1 or better on the paper
                     ser.format.fill.solid()
-                    ser.format.fill.fore_color.rgb = _rgb(steps[i % 3])
+                    ser.format.fill.fore_color.rgb = _rgb(fill)
+                    ink = "FFFFFF" if themes.contrast("FFFFFF", fill) >= themes.contrast(t_.ink, fill) else t_.ink
+                    label(ser.points[0], pt_["shown"], ink, XL_LABEL_POSITION.CENTER)
             else:
                 ser = plot.series[0]
-                for i, c in enumerate(cols):
+                for i, (c, pt_) in enumerate(zip(cols, order)):
                     pt = ser.points[i]
                     pt.format.fill.solid()
                     pt.format.fill.fore_color.rgb = _rgb(c)
+                    label(pt, pt_["shown"], t_.ink, XL_LABEL_POSITION.OUTSIDE_END)
         else:
             ser = plot.series[0]
             ser.format.line.color.rgb = _rgb(t_.ink)
             ser.format.line.width = Pt(2)
             ser.smooth = False
-            last = ser.points[len(order) - 1]
-            last.data_label.has_text_frame = True
-            last.data_label.text_frame.text = order[-1]["shown"]
-            last.data_label.position = XL_LABEL_POSITION.ABOVE
-            last.data_label.font.size, last.data_label.font.bold = Pt(self.sz(14)), True
-            last.data_label.font.color.rgb = _rgb(t_.ink)
+            label(ser.points[len(order) - 1], order[-1]["shown"], t_.ink, XL_LABEL_POSITION.ABOVE)
         va = ch.value_axis
         va.has_major_gridlines = False
         va.visible = form == "line"
@@ -4438,10 +4473,10 @@ class Renderer:
             return self._strip_draw(sl, plan)
         for slot, x, y, w, h, im in plan["boxes"]:
             m = self._mark(sl)
-            fr = self._frame_for(im) if plan.get("framed") else None
-            if fr:
+            fr = self._frame_for(im) if (plan.get("framed") or spec.GRAPHICS) else None
+            if fr and plan.get("framed"):
                 self._framed(sl, x, y, w, h, im, fr)
-            else:
+            elif self._plain_ok(im, w, h) if spec.GRAPHICS else True:
                 self.picture(sl, x, y, w, h, im)
             self._build(sl, m)
 

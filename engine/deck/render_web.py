@@ -207,11 +207,21 @@ def _framed_markup(s: dict, got: list, deck: dict, fig, label: str) -> tuple | N
     """deck-graphics on the web: the storyboard strip (3 or 4 shots, numbered, 'Mock-up') or the picture in its drawn frame (CSS boxes
     around the picture at the window's exact aspect, the labels under the frame). None: no frame for this picture (drawn as before)."""
     from . import graphics   # noqa: PLC0415
+    if not graphics.part_on(deck, "mockups"):
+        return None
     shots = [(slot, im) for slot, im in got if slot.startswith("shot_")]
     if len(shots) >= spec.STRIP_MIN:   # stacked beside the words (a side picture or the picture column), numbered, labels at the foot
-        cells = "".join(f'<div class="sb-cell">{fig(slot, im, "width:100%;aspect-ratio:16/9")}<div class="sb-n"><b>{n}</b><i></i></div></div>'
-                        for n, (slot, im) in enumerate(shots, 1))
-        return (f'<div class="pics side"><div class="frame-wrap sb-col" style="width:380px">{cells}<div class="f-pills">{_mockup(shots[0][1], label)}</div></div></div>',
+        st = s.get("strip") or {}
+        nums = st.get("shots") if len(st.get("shots") or []) == len(shots) else list(range(1, len(shots) + 1))
+        assets = deck.get("assets") or {}
+
+        def ratio(im):   # each frame keeps its own aspect, as the pptx draws it
+            a = assets.get(im.get("asset")) or {}
+            return f'{a["width"] / a["height"]:.4f}' if a.get("width") and a.get("height") else im["aspect"].replace(":", "/")
+        cells = "".join(f'<div class="sb-cell">{fig(slot, im, "width:100%;aspect-ratio:" + ratio(im))}<div class="sb-n"><b>{n}</b><i></i></div></div>'
+                        for n, (slot, im) in zip(nums, shots))
+        note = f'<span class="sb-note">{_e(st["note"])}</span>' if st.get("note") else ""
+        return (f'<div class="pics side"><div class="frame-wrap sb-col" style="width:380px">{cells}<div class="f-pills">{_mockup(shots[0][1], label)}{note}</div></div></div>',
                 "pic-side pw560")
     pic = next(((slot, im) for slot, im in got if slot == "picture"), None)
     fr = graphics.frame_of(deck, spec.picture_of(s)[1], pic[1]) if pic else None
@@ -302,7 +312,7 @@ def _web_ids() -> tuple:
     return V3_WEB + (GRAPHICS_WEB if spec.GRAPHICS else ())
 
 
-def _graphics_body(s, b: "_Slide", bl: list, lid: str) -> str:
+def _graphics_body(s, b: "_Slide", bl: list, lid: str, deck: dict | None = None) -> str:
     """deck-graphics on the web: the same chart (inline SVG from the same ledger points, its source line, a 'Show data' table) and the same
     diagrams (boxes with real, selectable text) as the pptx, from the slide's own blocks. '' when the slide does not hold one (the caller
     then draws the blocks as before)."""
@@ -322,7 +332,7 @@ def _graphics_body(s, b: "_Slide", bl: list, lid: str) -> str:
         if not src:
             return ""
         from .theme import DEFAULT as _D, get_theme   # noqa: PLC0415
-        th = get_theme(_D, {})
+        th = get_theme(_D, ((deck or {}).get("meta") or {}).get("brand") or {})   # the deck's own theme, as the pptx; chart_marks checks 3:1
         cols = graphics.chart_marks(got["form"], got["points"], ch["chart"].get("hero"), th)
         b.f += 1
         svg = b.rv("", graphics.chart_svg(got["form"], got["points"], cols, src, ch["chart"].get("title") or t), "div", 300)
@@ -520,7 +530,7 @@ def _v3_body(s, b: "_Slide", bl: list, lid: str, deck: dict) -> str:
         out += grid
         return f'<div class="body v3 v3pc{" nopts" if not (pts or grid) else ""}">{out}</div>'
     if spec.GRAPHICS and lid in GRAPHICS_WEB:
-        return _graphics_body(s, b, bl, lid)
+        return _graphics_body(s, b, bl, lid, deck)
     if lid in ("cover_bleed", "full_bleed_statement"):   # the words on the picture's measured zone, in the recorded colour
         tz = _tz(s) or {"zone": "bottom_left", "text": "FAF7F1"}
         x, y, w, h = images.zone_box(tz["zone"])
@@ -652,7 +662,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         if v3lid in GRAPHICS_WEB and spec.GRAPHICS:   # a chart or diagram the slide cannot hold here: the blocks as before
             probe = _Slide(inp)
             probe.icons = b.icons
-            if not _graphics_body(s, probe, shown_blocks(s, audience), v3lid):
+            if not _graphics_body(s, probe, shown_blocks(s, audience), v3lid, deck):
                 v3lid = None
         if v3lid:   # deck-look: the layout places its own title; the band stays in the header (none on the cover and the close)
             if v3lid in ("cover_image", "close"):
@@ -708,6 +718,14 @@ svg.icon{display:block;color:inherit;flex:none}
 .v3pc .pc-k{display:flex;align-items:center;gap:22px;font:700 44px/1.05 var(--head)}.v3pc .pc-gr p{font-size:38px;line-height:1.2}
 """
 
+def graphics_css(markup: str) -> str:
+    """The deck-graphics styles the markup needs, each ONLY when its markup is present (a deck with none keeps its exact bytes). One rule for
+    deck.html and the HyperFrames project."""
+    return ((ICON_CSS if ('data-icon="' in markup or 'class="pc-grid"' in markup) else "")
+            + (FRAME_CSS if 'class="mockup"' in markup else "")
+            + (GRAPHICS_CSS if ('class="body v3 g-diag"' in markup or 'class="body v3 g-chartsl' in markup) else ""))
+
+
 #: deck-graphics frame and strip styles: added ONLY when a frame is drawn. Bezels in the ink token; the window keeps the picture's aspect.
 FRAME_CSS = """
 .mockup{display:inline-block;background:var(--ink);color:#fff;font:700 20px/1 var(--body);padding:9px 14px;letter-spacing:.02em}
@@ -724,7 +742,7 @@ FRAME_CSS = """
 .pics.col .frame-wrap .pic{height:auto}
 .mockup.own{background:transparent;color:var(--ink);outline:1.5px solid var(--ink);outline-offset:-1.5px}.mockup.own.flagged{color:#B03225;outline-color:#B03225}
 .sb-col{gap:18px}.sb-col .sb-cell{width:100%}.sb-col .pic{border:1.5px solid var(--ink);border-radius:0}.sb-col .pic .plabel{display:none}
-.sb-n{display:flex;align-items:center;gap:14px;margin-top:8px}
+.sb-n{display:flex;align-items:center;gap:14px;margin-top:8px}.sb-note{font-size:20px;color:var(--muted);align-self:center}
 .sb-n b{font:700 30px/1 var(--head)}.sb-n i{flex:1;height:1.5px;background:var(--ink)}
 """
 
@@ -1065,7 +1083,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{ICON_CSS if ('data-icon="' in slides or 'class="pc-grid"' in slides) else ""}{FRAME_CSS if 'class="mockup"' in slides else ""}{GRAPHICS_CSS if 'g-diag' in slides or 'g-chartsl' in slides else ""}</style></head>
+<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{graphics_css(slides)}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>

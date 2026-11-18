@@ -87,10 +87,23 @@ def test_a_non_ledger_ref_or_a_missing_unit_is_not_charted():
     assert got["form"] == "stat_row" and "no unit" in got["why"]
 
 
-def test_segmented_only_with_a_stated_whole():
-    inp = _inp(_facts([("A", 0.5), ("B", 0.3), ("C", 0.2)]))
-    assert graphics.chart_form({**_chart(["A", "B", "C"]), "type": "stack"}, inp, Resolver(inp))["form"] == "bar"
-    assert graphics.chart_form({**_chart(["A", "B", "C"]), "type": "stack", "whole": "f_9"}, inp, Resolver(inp))["form"] == "segmented"
+def test_segmented_only_with_a_whole_in_the_ledger_that_the_parts_sum_to():
+    """A 100% bar stretches its parts to the whole: without a ledger whole they sum to, 0.3 and 0.2 would be drawn as 60 / 40."""
+    f = _facts([("A", 0.5), ("B", 0.3), ("C", 0.2)])
+    inp = _inp(f)
+    stack = {**_chart(["A", "B", "C"]), "type": "stack"}
+    assert graphics.chart_form(stack, inp, Resolver(inp))["form"] == "bar"                                   # no whole
+    assert graphics.chart_form({**stack, "whole": "f_9"}, inp, Resolver(inp))["form"] == "bar"               # a whole the ledger does not hold
+    f["f_9"] = {"id": "f_9", "key": "share_aware", "value": 1.0, "unit": "proportion", "sources": [{"title": "Household survey"}]}
+    assert graphics.chart_form({**stack, "whole": "f_9"}, inp, Resolver(inp))["form"] == "segmented"         # 0.5 + 0.3 + 0.2 = 1.0
+    f["f_9"]["value"] = 0.8
+    got = graphics.chart_form({**stack, "whole": "f_9"}, inp, Resolver(inp))
+    assert got["form"] == "bar" and "do not sum" in got["why"]                                               # parts that do not make the whole
+    f["f_9"].update(value=1.0, unit="count")
+    assert graphics.chart_form({**stack, "whole": "f_9"}, inp, Resolver(inp))["form"] == "bar"               # a whole of another unit
+    two = _inp(_facts([("A", 0.3), ("B", 0.2)]))
+    two.facts["f_9"] = {"id": "f_9", "key": "share_aware", "value": 1.0, "unit": "proportion"}
+    assert graphics.chart_form({**_chart(["A", "B"]), "type": "stack", "whole": "f_9"}, two, Resolver(two))["form"] == "bar"   # never 60 / 40
 
 
 def test_the_source_line_is_built_from_the_ledger_or_there_is_no_chart():
@@ -157,15 +170,18 @@ def _render(d, inp, tmp_path, name="d.pptx"):
     return r, Presentation(str(tmp_path / name))
 
 
-def _chart_deck():
+def _chart_deck(stack=False):
     inp = inputs.load(FIX / "brief_object.json")
-    inp.facts = _facts([("North", 0.58), ("South", 0.47), ("East", 0.62), ("West", 0.4)])
+    inp.facts = _facts([("North", 0.5), ("South", 0.3), ("East", 0.2)] if stack else [("North", 0.58), ("South", 0.47), ("East", 0.62), ("West", 0.4)])
+    if stack:
+        inp.facts["f_9"] = {"id": "f_9", "key": "share_aware", "value": 1.0, "unit": "proportion", "sources": [{"title": "Household survey"}]}
+    chart = ({**_chart(["North", "South", "East"]), "type": "stack", "whole": "f_9", "title": "Share aware"} if stack
+             else _chart(["North", "South", "East", "West"], hero=["East"]))
 
     def edit(d):
         sid = _by_type(d)["measurement"]
         d["slides"][sid]["type"] = "chart"
-        d["slides"][sid]["blocks"] = [{"kind": "chart", "chart": _chart(["North", "South", "East", "West"], hero=["East"])},
-                                      {"kind": "text", "text": "East leads"}]
+        d["slides"][sid]["blocks"] = [{"kind": "chart", "chart": chart}, {"kind": "text", "text": "East leads"}]
         d["meta"]["graphics"] = {"charts": graphics.charts_pass([d["slides"][sid]], inp, Resolver(inp))}
     return _deck(inp, edit, fmt="full")
 
@@ -181,6 +197,8 @@ def test_a_rendered_chart_holds_only_ledger_numbers_and_its_source(gr, tmp_path)
     assert vals == sorted([58.0, 47.0, 62.0, 40.0])   # the ledger's proportions in percent, nothing computed
     assert list(gf.chart.plots[0].categories) == ["West", "East", "South", "North"]   # a horizontal bar lists the first at the top
     assert gf.chart.value_axis.minimum_scale == 0 and not gf.chart.has_legend and not gf.chart.value_axis.has_major_gridlines
+    labels = [pt.data_label.text_frame.text for pt in gf.chart.plots[0].series[0].points]
+    assert labels == ["40%", "62%", "47%", "58%"]   # each mark labelled with the ledger's own display, never an Excel format ('58.%')
     src = next(sh for sh in sl.shapes if sh.name == "ChartSource")
     assert src.text_frame.text.replace("\xa0", " ") == "Source: Household survey"
     assert "North 58%" in gf._element.nvGraphicFramePr.cNvPr.get("descr")
@@ -196,6 +214,30 @@ def test_a_rendered_chart_holds_only_ledger_numbers_and_its_source(gr, tmp_path)
     bad["meta"]["graphics"]["charts"][0]["points"][0]["value"] = 99.0
     (run / "deck.json").write_text(json.dumps(bad))
     assert cl.run_checklist(run)["results"]["c_chart_numbers"]["answer"] == "no"
+
+
+def test_a_segmented_chart_draws_its_stated_parts_and_passes_the_numbers_gate(gr, tmp_path):
+    d, inp = _chart_deck(stack=True)
+    sid = next(s for s in d["order"] if d["slides"][s]["type"] == "chart")
+    r, prs = _render(d, inp, tmp_path)
+    gf = next(sh for sh in prs.slides[d["order"].index(sid)].shapes if getattr(sh, "has_chart", False) and sh.has_chart)
+    from pptx.enum.chart import XL_CHART_TYPE as X
+    assert gf.chart.chart_type == X.BAR_STACKED_100 and [s.name for s in gf.chart.plots[0].series] == ["North", "South", "East"]
+    assert [s.points[0].data_label.text_frame.text for s in gf.chart.plots[0].series] == ["50%", "30%", "20%"]
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "deck.json").write_text(json.dumps(d))
+    (run / "deck.pptx").write_bytes((tmp_path / "d.pptx").read_bytes())
+    res = cl.run_checklist(run)["results"]
+    assert res["c_chart_numbers"]["answer"] == "yes" and res["c_chart_form"]["answer"] == "yes" and res["c_chart_contrast"]["answer"] == "yes"
+    html = render_web.render(d, inp, tmp_path / "deck.html").read_text()
+    assert 'data-form="segmented"' in html and html.count("<title>") >= 3
+
+
+def test_graphics_styles_follow_the_markup_not_its_words():
+    assert render_web.graphics_css('<p>a slide that says g-diag and g-chartsl</p>') == ""
+    assert render_web.graphics_css('<div class="body v3 g-diag">') == render_web.GRAPHICS_CSS
+    assert render_web.graphics_css('<span class="mockup">') == render_web.FRAME_CSS
 
 
 def test_the_plot_is_never_shrunk_under_its_floor(gr, tmp_path, monkeypatch):
@@ -251,7 +293,7 @@ def test_chevrons_draw_the_blocks_own_words_once(gr, tmp_path):
 
 
 def test_the_timeline_is_equally_spaced(gr, tmp_path):
-    d, inp = _steps_deck("timeline", [["Plan", "Month 1"], ["Make", "Before launch"], ["Run", "Launch"], ["Evaluate", "After launch"]])
+    d, inp = _steps_deck("timeline", [["Plan", "March"], ["Make", "April"], ["Run", "June"], ["Evaluate", "September"]])
     sid = _by_type(d)["timeline"]
     assert d["slides"][sid]["layout"]["id"] == "timeline_strip"
     r, prs = _render(d, inp, tmp_path)
@@ -259,6 +301,14 @@ def test_the_timeline_is_equally_spaced(gr, tmp_path):
     xs = [n.left for n in nodes]
     gaps = {round((b - a) / 9144) for a, b in zip(xs, xs[1:])}
     assert len(nodes) == 4 and len(gaps) == 1   # the same gap between every node: dates are never plotted to scale
+
+
+@pytest.mark.parametrize("cell,timed", [("March", True), ("Q3", True), ("2026", True), ("Month 4", True), ("Week 2", True), ("Sept", True),
+                                        ("Marketing", False), ("Decide", False), ("Junior", False), ("separate", False), ("By June", False),
+                                        ("From the start", False), ("After launch", False), ("Launch", False)])
+def test_only_a_real_period_is_a_time(cell, timed):
+    assert graphics.is_time(cell) is timed
+    assert bool(graphics.TIME_LABEL.match(cell)) is timed
 
 
 def test_a_2x2_needs_both_axes_sourced(gr):

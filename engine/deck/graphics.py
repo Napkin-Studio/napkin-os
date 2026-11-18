@@ -33,6 +33,11 @@ ICON_DENY = ("facebook", "instagram", "twitter", "x-twitter", "linkedin", "youtu
              "telegram", "reddit", "discord", "twitch", "spotify", "apple", "android", "google", "chrome", "chromium", "firefox", "safari",
              "microsoft", "windows", "amazon", "netflix", "slack", "figma", "framer", "github", "gitlab", "codepen", "codesandbox",
              "dribbble", "trello", "meta", "paypal", "stripe", "uber", "airbnb", "dropbox", "award", "trophy", "medal", "crown")
+#: Never an icon that makes a claim the words beside it do not (review fix): a direction, a verdict or an approval. Refused by the vendor
+#: script and by a test, whatever the keyword map says.
+ICON_CLAIMS = ("trending-up", "trending-down", "chart-line", "chart-no-axes-combined", "arrow-up", "arrow-down", "arrow-up-right", "arrow-down-right",
+               "move-up", "move-down", "check", "circle-check", "square-check", "shield-check", "badge-check", "list-checks", "x", "circle-x", "ban",
+               "thumbs-up", "thumbs-down", "star", "heart-crack", "circle-alert-check")
 #: Sizes in inches (design.icons.size): table rows 0.42, statement / grid points 0.5, journey and process 0.36; never under 0.3.
 ICON_ROW_IN, ICON_POINT_IN, ICON_STEP_IN, ICON_MIN_IN = 0.42, 0.5, 0.36, 0.3
 #: The space between an icon and the words beside or under it.
@@ -133,10 +138,10 @@ def deck_type(deck: dict) -> str | None:
     return ((meta.get("built_from") or {}).get("type")) or ((meta.get("profile") or {}).get("id"))
 
 
-@functools.lru_cache(maxsize=16)
-def _type_icons(pid: str | None) -> bool:
-    """A deck type's recipe preference ``graphics.icons`` (default on). tender_response sets it off (evaluators read; decoration
-    costs room). Read from the profile itself, so it holds with or without spec.RECIPES."""
+@functools.lru_cache(maxsize=32)
+def _type_part(pid: str | None, part: str) -> bool:
+    """A deck type's recipe switch ``graphics.<part>`` (default on). tender_response sets icons off (evaluators read; decoration costs
+    room). Read from the profile itself, so it holds with or without spec.RECIPES."""
     if not pid:
         return True
     try:
@@ -144,17 +149,24 @@ def _type_icons(pid: str | None) -> bool:
         g = ((profiles.load(pid).get("recipe") or {}).get("graphics")) or {}
     except Exception:
         return True
-    return bool(g.get("icons", True))
+    return bool(g.get(part, True))
 
 
-def icons_on(deck: dict) -> bool:
-    """Icons are drawn: spec.GRAPHICS, the deck type's recipe allows them, and the deck's own preference does not turn them off."""
+def part_on(deck: dict, part: str) -> bool:
+    """A switchable part (profiles.GRAPHICS_PARTS: icons, mockups) is drawn: spec.GRAPHICS, the deck type's recipe allows it, and the
+    deck's own ``meta.preferences.look.graphics.<part>`` does not turn it off. Charts and diagrams have no switch: they follow the deck's
+    own data (a chart block, a steps block) and the fit, never a preference."""
     if not spec.GRAPHICS:
         return False
     pref = (((deck.get("meta") or {}).get("preferences") or {}).get("look") or {}).get("graphics") or {}
-    if pref.get("icons") is False:
+    if pref.get(part) is False:
         return False
-    return _type_icons(deck_type(deck))
+    return _type_part(deck_type(deck), part)
+
+
+def icons_on(deck: dict) -> bool:
+    """Icons are drawn (part_on for 'icons')."""
+    return part_on(deck, "icons")
 
 
 def row_headings(s: dict, rows: list) -> list | None:
@@ -414,7 +426,7 @@ def strip_picks(frames: list) -> tuple:
 
 #: A category label that is a period: then the chart is a column (2 to 6) or a line (more), in the order the stage gave.
 TIME_LABEL = re.compile(r"^(?:(?:19|20)\d\d(?:[/-]\d{2,4})?|(?:Q|H)[1-4](?:\s*(?:19|20)?\d\d)?|FY\s?\d{2,4}|"
-                        r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?(?:\s+(?:19|20)?\d\d)?|"
+                        r"(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?(?:\s+(?:19|20)?\d\d)?|"
                         r"(?:week|month|year|quarter|day|phase|stage)\s+\d{1,2})$", re.I)
 CHART_FORMS = ("bar", "column", "line", "segmented")
 CHART_MAX_CATEGORIES, CHART_MAX_SERIES, CHART_HERO_MAX = 8, 3, 2
@@ -469,11 +481,32 @@ def chart_form(chart: dict, inp, resolver) -> dict:
         return {"form": "stat_row" if n <= 4 else "table", "points": pts, "why": why}
     if n > CHART_MAX_CATEGORIES:
         return {"form": "table", "points": pts, "why": f"{n} categories: a table holds every row (more than {CHART_MAX_CATEGORIES} is never folded)"}
-    if chart.get("type") == "stack" and chart.get("whole"):
-        return {"form": "segmented", "points": pts, "why": ""}
+    if chart.get("type") == "stack":   # a segmented bar only when the source states the whole and the parts sum to it within rounding
+        ok, swhy = whole_ok(chart, pts, inp, resolver)
+        if ok:
+            return {"form": "segmented", "points": pts, "why": ""}
+        why = swhy
     if all(TIME_LABEL.match(p["label"]) for p in pts):
-        return {"form": "column" if n <= 6 else "line", "points": pts, "why": ""}
-    return {"form": "bar", "points": pts, "why": ""}
+        return {"form": "column" if n <= 6 else "line", "points": pts, "why": why}
+    return {"form": "bar", "points": pts, "why": why}
+
+
+def whole_ok(chart: dict, pts: list, inp, resolver) -> tuple:
+    """``(ok, why)``: the chart's ``whole`` is a numeric ledger value (fact or docfig) of the parts' own unit and measure, and the parts sum
+    to it within rounding (1 percentage point for proportions, 1% of the whole otherwise). A 100% bar stretches its parts to the whole, so
+    without that check 0.3 and 0.2 would be drawn as 60 / 40: then the parts are a plain bar."""
+    ref = chart.get("whole")
+    if not ref or resolver.kind(ref) not in ("fact", "docfig"):
+        return False, "no stated whole in the ledger: a bar, not a segmented bar"
+    row = inp.doc_facts.get(ref) or inp.facts.get(ref) or {}
+    if not _numeric(row.get("value")) or row.get("unit") != pts[0]["unit"] or _measure(ref, row) != pts[0]["measure"]:
+        return False, "the stated whole is not a value of the parts' unit and measure: a bar"
+    whole = float(row["value"])
+    total = sum(float(p["value"]) for p in pts)
+    tol = 0.01 if pts[0]["unit"] == "proportion" else 0.01 * abs(whole)
+    if abs(total - whole) > tol + 1e-9:
+        return False, "the parts do not sum to the stated whole: a bar"
+    return True, ""
 
 
 def plot_value(p: dict) -> float:
@@ -483,8 +516,8 @@ def plot_value(p: dict) -> float:
 
 
 def number_format(unit: str) -> str:
-    """The data-label number format for a unit (the ledger's display, never re-rounded beyond it)."""
-    return {"proportion": '0.#"%"', "%": '0.#"%"', "eur": '"€"#,##0', "gbp": '"£"#,##0', "usd": '"$"#,##0'}.get(str(unit or "").lower(), "#,##0.##")
+    """The number format of a line chart's value-axis ticks (the marks themselves carry the ledger's own display as their label text)."""
+    return {"proportion": '0"%"', "%": '0"%"', "eur": '"€"#,##0', "gbp": '"£"#,##0', "usd": '"$"#,##0'}.get(str(unit or "").lower(), "#,##0")
 
 
 def source_line(points: list, inp) -> str | None:
@@ -524,6 +557,9 @@ def chart_marks(form: str, points: list, hero: list, th) -> list:
     hero = [h for h in (hero or [])][:CHART_HERO_MAX]
     if form == "line":
         return [th.ink] * len(points)
+    if form == "segmented":   # one hue in steps (ink 100 / 60 / 30 on the paper), as the pptx; a step under 3:1 falls back to ink
+        steps = [th.ink, themes.blend(th.ink, th.paper, 0.4), themes.blend(th.ink, th.paper, 0.7)]
+        return [s if themes.contrast(s, th.paper) >= ICON_CONTRAST else th.ink for s in (steps[i % 3] for i in range(len(points)))]
     if not hero:
         return [th.ink] * len(points)
     return [acc if p["label"] in hero else quiet for p in points]
@@ -548,7 +584,16 @@ def chart_svg(form: str, points: list, colours: list, source: str, title: str = 
             marks.append(f'<text x="{lab_w - 16}" y="{y + bar_h / 2:.1f}" text-anchor="end" dominant-baseline="middle" class="cl">{e(p["label"])}</text>'
                          f'<rect x="{lab_w}" y="{y:.1f}" width="{w:.1f}" height="{bar_h:.1f}" rx="4" fill="#{c}"><title>{e(p["label"])}: {e(p["shown"])}</title></rect>'
                          f'<text x="{lab_w + w + 12:.1f}" y="{y + bar_h / 2:.1f}" dominant-baseline="middle" class="cv">{e(p["shown"])}</text>')
-    elif form in ("column", "segmented"):
+    elif form == "segmented":   # one bar, the parts side by side in the ledger's order (they sum to the stated whole: whole_ok)
+        total = sum(vals) or 1.0
+        x, y, h = 20.0, H_ / 2 - 60, 120
+        for p, v, c in zip(points, vals, colours):
+            w = (W_ - 40) * v / total
+            marks.append(f'<rect x="{x:.1f}" y="{y}" width="{max(0.0, w - 2):.1f}" height="{h}" fill="#{c}"><title>{e(p["label"])}: {e(p["shown"])}</title></rect>'
+                         f'<text x="{x + w / 2:.1f}" y="{y + h + 40}" text-anchor="middle" class="cv">{e(p["shown"])}</text>'
+                         f'<text x="{x + w / 2:.1f}" y="{y - 22}" text-anchor="middle" class="cl">{e(p["label"])}</text>')
+            x += w
+    elif form == "column":
         step = (W_ - 40) / n
         col_w = min(110, step * 0.55)
         base = H_ - 60
@@ -587,8 +632,8 @@ JOURNEY_MIN, JOURNEY_MAX = 3, 5
 GRID_MIN, GRID_MAX = 3, 6
 CHEVRON_LABEL_MAX = 22
 #: A step's second cell that is a time: the timeline's strip (equal spacing always: dates are never plotted to scale).
-TIME_CELL = re.compile(r"(?i)^(?:(?:week|wk|month|day|year|quarter|phase|sprint)s?\s*\d|q[1-4]\b|h[12]\b|(?:19|20)\d\d|"
-                       r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|by\s|from\s|before\s|after\s|ongoing|launch|day\s*\d)")
+TIME_CELL = re.compile(r"(?i)^(?:(?:week|wk|month|day|year|quarter|phase|sprint)s?\s*\d|q[1-4]\b|h[12]\b|(?:19|20)\d\d\b|"
+                       r"(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b)")   # real month names and abbreviations as whole words only (never 'Marketing', 'Decide', 'By ...')
 
 
 def steps_of(bl: list) -> list | None:
@@ -665,17 +710,29 @@ def charts_pass(S: list, inp, resolver) -> list:
     return recs
 
 
-def report(deck: dict) -> dict:
-    """report.json's ``graphics``: the charts (what each chart block became, and why), the diagrams drawn, the near misses ('2 steps, needs 3')
-    and the icons and frames counts, so a deck with no chart and no diagram says why."""
+def report(deck: dict, layouts_json=None, pptx=None) -> dict:
+    """report.json's ``graphics``: the charts (what each chart block became, and why), the diagrams and icons the final render really drew
+    (``layouts_json``: the renderer's layouts.json; ``pptx``: the deck it wrote), and the near misses ('2 steps, needs 3'), so a deck with
+    no chart and no diagram says why. Without the files, the plan's layouts stand in."""
     from . import spec as _spec   # noqa: PLC0415
     from .validate import presented   # noqa: PLC0415
     charts = ((deck.get("meta") or {}).get("graphics") or {}).get("charts") or []
+    try:
+        drawn = {k: (v or {}).get("id") for k, v in json.loads(Path(layouts_json).read_text())["slides"].items()} if layouts_json else {}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        drawn = {}
+    icons = {}
+    if pptx and Path(pptx).is_file():
+        from pptx import Presentation   # noqa: PLC0415
+        for sid, sl in zip(deck["order"], Presentation(str(pptx)).slides):
+            ids = [sh.name[len("Icon: "):] for sh in sl.shapes if (sh.name or "").startswith("Icon: ")]
+            if ids:
+                icons[sid] = ids
     diagrams, misses = [], []
     fam = {"process_chevrons": "process", "timeline_strip": "timeline", "matrix_2x2": "matrix", "journey_row": "journey"}
     for sid in deck["order"]:
         s = deck["slides"][sid]
-        lid = (s.get("layout") or {}).get("id")
+        lid = drawn.get(sid) or (s.get("layout") or {}).get("id")
         bl = _spec.shown_blocks(s)
         from . import layouts as _L   # noqa: PLC0415
         if lid in fam and (lid != "timeline_strip" or _L.timed_3_8(s, bl)):
@@ -687,4 +744,4 @@ def report(deck: dict) -> dict:
     pres = set(presented(deck))
     return {"charts": charts or [{"chart": None, "why": "no chart: the stages wrote no chart block (no series of sourced figures)"}],
             "diagrams": diagrams, "diagram_misses": misses,
-            "presented_with_diagram": sum(1 for d in diagrams if d["slide"] in pres)}
+            "presented_with_diagram": sum(1 for d in diagrams if d["slide"] in pres), "icons": icons}

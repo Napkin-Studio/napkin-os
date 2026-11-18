@@ -1125,12 +1125,19 @@ def c_chart_numbers(r: Run) -> dict:
         if rec is None:
             bad.append(sid)
             continue
-        allowed = [float(p["value"]) for p in rec["points"]]
-        labels = {str(p["label"]) for p in rec["points"]}
+        ledger = {str(p["label"]): float(p["value"]) for p in rec["points"]}   # meta.graphics.charts: each label with its ledger value
+        from pptx.enum.chart import XL_CHART_TYPE as X
         for gf, _ in rows:
-            vals = _chart_values(gf)
-            cats = {str(x) for pl in gf.chart.plots for x in pl.categories if str(x)}
-            if any(min((abs(v - a) for a in allowed), default=1.0) > 1e-6 for v in vals) or not cats <= labels | {""} | {str(rec.get("slide"))}:
+            pairs = []
+            for pl in gf.chart.plots:
+                cats = [str(x) for x in pl.categories]
+                for ser in pl.series:
+                    vals = [v for v in ser.values]
+                    if gf.chart.chart_type == X.BAR_STACKED_100:   # one series per part: the part is the series' name, its one value
+                        pairs += [(str(ser.name), v) for v in vals]
+                    else:
+                        pairs += list(zip(cats, vals))
+            if not pairs or any(lab not in ledger or v is None or abs(float(v) - ledger[lab]) > 1e-6 for lab, v in pairs):
                 bad.append(sid)
     return _verdict(bad, r.ids)
 

@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 
 from . import spec
-from .render_web import CSS_LAYOUT, LOOK_CSS, PIC_CSS, _e, slide_views, theme_css
+from .render_web import CSS_LAYOUT, LOOK_CSS, PIC_CSS, _e, graphics_css, slide_views, theme_css
 
 INTRO = 0.35     # s before the first reveal of a slide
 SETTLE = 1.3     # s for the last reveal of a step to finish (bars and counters are the longest)
@@ -100,7 +100,8 @@ def render(deck, inp, out: Path, findings: list | None = None, builds: bool = Fa
             if f"assets/{Path(path).name}" in scenes:
                 shutil.copyfile(path, out / "assets" / Path(path).name)
     m = deck["meta"]
-    css = theme_css(CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + HF_CSS + (PIC_CSS if pictures else ""), head="serif", body="system-ui, sans-serif")
+    css = theme_css(CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + HF_CSS + (PIC_CSS if pictures else "") + graphics_css(scenes),
+                    head="serif", body="system-ui, sans-serif")   # deck-graphics: frames, icons, charts and diagrams carry their own styles here too
     (out / "index.html").write_text(f"""<!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=1920, height=1080">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>

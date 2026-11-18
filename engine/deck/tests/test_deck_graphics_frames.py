@@ -186,6 +186,25 @@ def test_a_film_with_three_production_frames_gets_a_strip(gr, prod):
     assert all(s and s["from"]["kind"] == "production" and s["status"] == "made" for s in shots)
     assert [s["from"]["key"] for s in shots] == images.production_storyboard(prod)
     assert _im(d, "s3", "shot_4") is None and got["strips"] == [{"slide": "s3", "shots": 3, "note": ""}]
+    assert d["slides"]["s3"]["strip"] == {"shots": [1, 2, 3], "of": 3}   # the storyboard's own shot numbers, no note when all are drawn
+
+
+def test_a_long_storyboard_shows_first_last_and_spaced_shots_with_its_note(gr, prod):
+    p = copy.deepcopy(prod)
+    base = [k for k in images.production_storyboard(p)][0]
+    for n in range(4, 10):   # six more picked shots after the demo's three: nine in all
+        p["items"][f"frame_x{n}"] = {**p["items"][base], "key": f"frame_x{n}", "entity": f"frame_x{n}", "shot_rank": f"a{n}z"}
+    d = _deck()
+    images.bind_production(d, p)
+    st = d["slides"]["s3"]["strip"]
+    assert st == {"shots": [1, 4, 6, 9], "of": 9, "note": "4 of 9 shots"}
+    assert [k for k in d["slides"]["s3"]["slots"] if k.startswith("shot_")] == ["shot_1", "shot_2", "shot_3", "shot_4"]
+
+
+def test_the_mockups_switch_turns_frames_off(gr):
+    d = {"meta": {"preferences": {"look": {"graphics": {"mockups": False}}}}, "order": [], "slides": {}}
+    assert not graphics.part_on(d, "mockups") and graphics.part_on(d, "icons")
+    assert graphics.part_on({"meta": {}}, "mockups")
 
 
 def test_a_rights_pending_frame_is_not_counted_so_no_strip(gr, prod):
@@ -225,7 +244,7 @@ def _frames_of(prs):
 
 
 def test_rendered_frames_carry_mock_up_and_keep_production_whole(gr, tmp_path, prod_stages, build_demo):
-    run = build_demo(prod_stages, tmp_path / "a", "--pictures", "creative_cover", "--production")
+    run = build_demo(prod_stages, tmp_path / "a", "--pictures", "creative_cover", "--production", "--hyperframes")
     prs = Presentation(str(run / "deck.pptx"))
     framed = {n: v for n, v in _frames_of(prs).items() if any(x.startswith("Frame: ") for x in v)}
     assert framed, "no frame drawn"
@@ -243,6 +262,8 @@ def test_rendered_frames_carry_mock_up_and_keep_production_whole(gr, tmp_path, p
     assert res["m_production_first"]["answer"] == "value" and res["m_production_first"]["value"] > 0
     html = (run / "deck.html").read_text()
     assert html.count('class="mockup"') >= len(framed) and "frame-wrap" in html
+    hf = (run / "hyperframes" / "index.html").read_text()
+    assert 'class="mockup"' in hf and ".mockup{" in hf and ".frame-wrap .pic .plabel{display:none}" in hf   # HyperFrames gets the styles too
 
 
 def test_flag_off_draws_no_frame(monkeypatch, tmp_path, prod_stages, build_demo):

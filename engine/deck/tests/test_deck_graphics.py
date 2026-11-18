@@ -113,6 +113,15 @@ def test_vendored_ids_equal_the_policy_and_no_brand():
     assert not ids & {"award", "trophy", "medal", "crown", "facebook", "instagram", "youtube", "linkedin", "twitter"}
 
 
+def test_no_icon_makes_a_claim_of_its_own():
+    """No icon in the map shows a direction (an arrow, a rising line), a verdict (a tick, a cross, a badge) or an approval (a thumb, a star):
+    the words beside an icon carry the claim; the icon never adds one (review fix)."""
+    ids = set(graphics.keyword_map())
+    assert not ids & set(graphics.ICON_CLAIMS)
+    words = ("trend", "arrow", "check", "thumb", "star", "badge", "award", "trophy", "medal", "ban", "circle-x", "chart-line", "move-up", "move-down")
+    assert not [i for i in ids if any(w in i for w in words)]
+
+
 def test_licence_and_source_are_recorded():
     lic = (VENDOR / "LICENSE").read_text()
     assert "ISC License" in lic and "The MIT License (MIT)" in lic and "Cole Bemis" in lic and "Lucide Icons and Contributors" in lic
@@ -177,7 +186,7 @@ FIXTURE = [
     ("OOH", "signpost-big"), ("48-sheet", "signpost-big"), ("Streaming", "headphones"), ("Website", "globe"),
     ("Audience", "users"), ("Customers", "users"), ("Households", "house"), ("Budget", "wallet"), ("Timing", "calendar"),
     ("Measurement", "ruler"), ("Target", "target"), ("Partners", "handshake"), ("Risks", "triangle-alert"),
-    ("Insight", "lightbulb"), ("Awareness", "eye"), ("Growth", "trending-up"), ("Launch", "rocket"),
+    ("Insight", "lightbulb"), ("Awareness", "eye"), ("Growth", "sprout"), ("Launch", "rocket"),
     ("Sustainability", "leaf"), ("Water", "droplet"), ("Journey", "map"), ("Strategy", "compass"),
     ("Data protection", "lock"), ("Recycling", "recycle"), ("Process", "workflow"), ("How we work", "workflow"),
     ("Cut household use by", "house"),
@@ -190,6 +199,8 @@ FIXTURE = [
     ("Social and search", None), ("Radio and TV", None), ("Budget and timing", None),
     # a brand is never an icon
     ("Facebook", None), ("YouTube", None), ("Instagram", None), ("TikTok", None),
+    # a heading that names a result gets no icon that says which way it went, a verdict or an approval
+    ("Sales falling 12%", None), ("Compliance", None), ("Quality", None), ("Approval", None), ("Waste", None),
 ]
 
 
@@ -303,7 +314,8 @@ def test_statement_points_take_icons_only_when_every_point_matches(gr, tmp_path)
 
 def test_tenders_and_a_deck_preference_turn_icons_off(gr, tmp_path):
     assert profiles.load("tender_response")["recipe"]["graphics"] == {"icons": False}
-    assert profiles.recipe_errors({"graphics": {"icons": False, "charts": True}}, []) == []
+    assert profiles.recipe_errors({"graphics": {"icons": False, "mockups": True}}, []) == []
+    assert profiles.recipe_errors({"graphics": {"charts": True}}, [])   # charts and diagrams have no switch: they follow the deck's data
     assert profiles.recipe_errors({"graphics": {"icons": "no"}}, []) and profiles.recipe_errors({"graphics": {"logos": True}}, [])
     d = _deck()
     d["meta"]["built_from"] = {**(d["meta"].get("built_from") or {}), "type": "tender_response"}

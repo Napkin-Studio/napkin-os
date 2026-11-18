@@ -577,7 +577,10 @@ native shapes that draw only what the deck already says. Slice 1 is **icons**:
   the layout already chose: an icon never shrinks text or changes a layout; if the group does not fit with its icons at that size,
   it is drawn without them. Not on the measuring pass or the hole probe. Stroke 3:1 or better on its ground, else none.
 - **Off** for a deck type whose recipe says `graphics: {icons: false}` (tender_response) and for a deck whose
-  `meta.preferences.look.graphics.icons` is false.
+  `meta.preferences.look.graphics.icons` is false. `mockups` is the other switch (frames and strips); charts and diagrams have none:
+  they follow the deck's own data and the fit.
+- **No icon makes a claim of its own** (`graphics.ICON_CLAIMS`, refused by the vendor script and a test): no direction (an arrow, a
+  rising line), no verdict (a tick, a cross, a badge), no approval (a thumb, a star). 'Sales falling 12%' gets no up-arrow.
 - **Checked** by `i_icon_allowlist` and `i_icon_contrast` (gate) and `i_icon_groups` and `i_icon_share` (advisory, at most 3 icon
   slides in any 10 presented) in `checklist.json`.
 
@@ -612,10 +615,12 @@ Slices 4-9 are **charts**, **diagrams**, the **grid of points**, web parity and 
   for document figures, one document), and a period is a label (`2024`, `Q1 2025`, `FY26`, a month, `Month 3`).
 - **Charts** (`graphics.chart_form`, `assemble` under the flag): every point a fact or docfig ref read from the ledger; at least 2 points
   of one unit and one measure; bar (categories), column (2 to 6 periods), line (more periods), a 100% segmented bar only when a stated
-  whole is given. One value becomes a hero figure, 2 to 4 unlike ones a stat row, more than 8 a table with every row; nothing sourced,
+  whole is given and found in the ledger (same unit and measure) and the parts sum to it within rounding (else a plain bar: a
+  100% bar would stretch 0.3 and 0.2 to 60 / 40). One value becomes a hero figure, 2 to 4 unlike ones a stat row, more than 8 a table with every row; nothing sourced,
   no chart. Never a pie, an 'Other', a total or any computed value. A native python-pptx chart part (the workbook stays editable), value
   axis from zero and hidden, no gridlines, no legend for one series, labels in text tokens, the hero (at most 2) in the accent and the rest
-  in a mute tint, every mark 3:1 on the paper. Every chart has `Source: <label>, <locator>` under its plot, built from the refs' ledger
+  in a mute tint, every mark 3:1 on the paper; each mark's label is the ledger's own display ('45%', '€12,000'), the same text the web and
+  the alt text show. Every chart has `Source: <label>, <locator>` under its plot, built from the refs' ledger
   rows; no label, no chart. `chart` / `chart_full` under the flag: title across, plot in 7 or 8 of 12 columns, commentary beside; the plot
   never under 3.0 in (the ladder switches layout, and a chart that fits nowhere becomes its table). The web draws the same points as
   inline SVG with a `<title>` per mark, the source line and a 'Show data' table.

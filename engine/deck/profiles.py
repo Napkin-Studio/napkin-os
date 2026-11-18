@@ -56,10 +56,11 @@ SCHEMA = {
     "questions": (list, True), "sources": (list, False), "recipe": (dict, False),
 }
 #: deck-types: the keys of a profile's optional ``recipe`` block (design.schema.recipe). ``full`` repeats them for format full.
-#: ``graphics`` (deck-graphics): {icons, charts, diagrams, mockups: bool}, read by graphics.py only under spec.GRAPHICS.
+#: ``graphics`` (deck-graphics): {icons, mockups: bool}, read by graphics.part_on only under spec.GRAPHICS.
 RECIPE_KEYS = ("layouts", "density", "pictures", "brand", "titles", "size", "format", "full", "graphics")
-#: deck-graphics: the parts a recipe (or a deck's meta.preferences.look.graphics) may turn on or off.
-GRAPHICS_PARTS = ("icons", "charts", "diagrams", "mockups")
+#: deck-graphics: the parts a recipe (or a deck's meta.preferences.look.graphics) may turn on or off. Charts and diagrams have no switch:
+#: they follow the deck's own data and the fit.
+GRAPHICS_PARTS = ("icons", "mockups")
 
 
 class ProfileError(ValueError):
@@ -185,7 +186,7 @@ def recipe_errors(r, spine: list, _nested: bool = False) -> list:
     * ``pictures``: ``on`` in spec.PICTURES_ON except custom, ``generate`` in spec.RECIPE_GENERATE, ``types`` within spec.PICTURE_SLIDE_TYPES.
     * ``brand`` {strict: bool}, ``titles`` {form: spec.RECIPE_TITLE_FORMS}, ``size`` in spec.RECIPE_SIZES, ``format`` in spec.FORMATS,
       ``full``: the same keys again (no ``full`` or ``format`` inside).
-    * ``graphics`` (deck-graphics): {icons, charts, diagrams, mockups: true | false}; only graphics.py reads it, under spec.GRAPHICS."""
+    * ``graphics`` (deck-graphics): {icons, mockups: true | false}; only graphics.part_on reads it, under spec.GRAPHICS."""
     if not isinstance(r, dict):
         return ["recipe must be an object"]
     errs = []

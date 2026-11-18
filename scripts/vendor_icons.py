@@ -11,7 +11,8 @@ Beziers, circles and ellipses four arcs, rects with rx rounded corners, lines an
     engine/deck/vendor/icons/LICENSE            the package's own LICENSE text, verbatim (ISC, and MIT for the Feather-derived icons)
     engine/deck/vendor/icons/icons.source.json  package, version, tarball sha512 integrity, licence, ids, date
 
-No SVG is parsed at run time: the engine reads icons.json only. Any id on graphics.ICON_DENY (brands, platforms, awards) is refused.
+No SVG is parsed at run time: the engine reads icons.json only. Any id on graphics.ICON_DENY (brands, platforms, awards) or
+graphics.ICON_CLAIMS (a direction, a verdict, an approval) is refused.
 Stdlib only (plus PyYAML for the policy file); the tarball is read in place, never extracted.
 """
 from __future__ import annotations
@@ -41,7 +42,7 @@ ND = 3   # decimals kept (0.001 of a 24-unit grid)
 def _deny() -> tuple:
     sys.path.insert(0, str(ROOT / "engine"))
     from deck import graphics   # noqa: PLC0415
-    return graphics.ICON_DENY
+    return graphics.ICON_DENY, graphics.ICON_CLAIMS
 
 
 # ---------------------------------------------------------------- SVG geometry -> absolute M / L / C / Z
@@ -265,10 +266,10 @@ def vendor(tgz: Path) -> dict:
         raise SystemExit(f"refused: {tgz} is not {PACKAGE} {VERSION} (integrity {got[:30]}..., expected {INTEGRITY[:30]}...)")
     policy = yaml.safe_load((DECK / "policy" / "icons.yaml").read_text())["icons"]
     ids = list(policy)
-    deny = _deny()
-    bad = [i for i in ids if any(i == d or i.startswith(d + "-") for d in deny)]
+    deny, claims = _deny()
+    bad = [i for i in ids if any(i == d or i.startswith(d + "-") for d in deny) or i in claims]
     if bad:
-        raise SystemExit(f"refused: denied ids in policy/icons.yaml: {bad}")
+        raise SystemExit(f"refused: denied or claim-making ids in policy/icons.yaml: {bad}")
     with tarfile.open(fileobj=__import__("io").BytesIO(data), mode="r:gz") as tf:
         def read(name):
             return tf.extractfile(f"package/{name}").read().decode("utf-8")
