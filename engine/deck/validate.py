@@ -488,20 +488,22 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
         elif not any(x and x in flat for x in parts):
             add("message_carried", "error", None, f"{rid}: its line \"{ln[:50]}\" is on no presented slide")
     # titles are takeaways; a sentence is said once
-    seen = {}
+    seen, said_by = {}, {}
+    v3 = bool(spec.LOOK_V3)   # deck-look (fix 2, Q13): a sentence is said once, the titles and the campaign line included, from four words
     for x in story:
         sl = deck["slides"][x]
         if sl["type"] not in spec.LABEL_TITLE_TYPES and len(sl["title"].split()) < 5:
             add("action_title", "warn", x, f"title \"{sl['title']}\" is a label: write the takeaway as a full sentence")
-        for t, basis in _texts(sl, internal=False, human=False)[1:]:
-            if basis == "creative":   # copy repeats its sign-off by design (the helpline on every piece)
+        for t, basis in (_texts(sl, internal=False, human=False) if v3 else _texts(sl, internal=False, human=False)[1:]):
+            if basis == "creative" and not v3:   # copy repeats its sign-off by design (the helpline on every piece)
                 continue
             for sent in re.split(r"(?<=[.!?])\s+", str(t)):
                 key = re.sub(r"\W+", " ", sent.lower()).strip()
-                if len(key.split()) >= 6:
-                    if key in seen and seen[key] != x:
+                if len(key.split()) >= (4 if v3 else 6):
+                    if key in seen and seen[key] != x and not (basis == "creative" and said_by.get(key) == "creative"):   # one piece's sign-off on another
                         add("repeated_line", "warn", x, f"said on slide {deck['order'].index(seen[key]) + 1} too: \"{sent[:60]}\"")
                     seen.setdefault(key, x)
+                    said_by.setdefault(key, basis)
     # budget spread
     budget = re.search(r"€\s?([\d,]{4,})", _brief_text(inp, "budget_scope", ""))
     cr = next((x for x in deck["order"] if deck["slides"][x]["type"] == "channel_roles"), None)

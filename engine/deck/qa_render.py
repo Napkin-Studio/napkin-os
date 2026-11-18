@@ -31,7 +31,10 @@ Checks (geometry, from the pptx):
   would be compared and the check would pass without looking (text_on_image_contrast measures it instead).
 Pixels (from the render):
   text_on_image_contrast  text over a picture, measured on the rendered page: the text colour against the average of the
-                  pixels around it, 4.5:1 (3:1 for large text)
+                  pixels around it, 4.5:1 (3:1 for large text). Under spec.LOOK_V3 (deck-look step 7, p_text_on_image) it is measured on
+                  a TEXT-FREE render instead (the deck again with every text frame over a picture emptied, its shapes and scrims kept):
+                  the 10th-percentile per-pixel contrast of the text colour over the frame's box, the mean hiding a busy picture no
+                  longer; every measured run is recorded in ``text_on_image`` [{slide, name, text, size, p10, need, pass}]
   mostly_empty    almost nothing but background
   one_corner      the content sits in one corner (share of non-background area per third of the slide)
   q_no_hole       (spec.LOOK_V3 only, advisory) the largest empty rectangle of the slide on a 96 x 54 cell grid inside 3-97% x and
@@ -348,6 +351,62 @@ def _check_text_on_image(frames: list, W_in: float, H_in: float, w: int, h: int,
             seen.add((name, round(cr, 1)))
             _add(out, "text_on_image_contrast", "error" if cr < 2.0 else "warn",
                  f"'{name}' text is {cr:.1f}:1 (needs {need:g}:1) against the picture under it in the render")
+    return out
+
+
+#: deck-look p_text_on_image: the resolution of the text-free render (finer than the hole grid: the 10th percentile needs pixels).
+TEXT_FREE_DPI = 40
+
+
+def text_free_copy(pptx: Path, out: Path) -> int:
+    """Write ``out``: the deck with the words of every text frame that sits on a picture removed (shapes, fills, scrims and pills kept), so
+    a render shows exactly what the words are read against. Returns how many frames were emptied."""
+    from pptx import Presentation
+    prs = Presentation(str(pptx))
+    n = 0
+    for sl in prs.slides:
+        names = {f[0] for f in _over_pictures(sl)}
+        if not names:
+            continue
+        pics = [(sh.left, sh.top, sh.width, sh.height) for sh in _walk(sl.shapes) if _is_picture(sh) and sh.left is not None]
+        for sh in _walk(sl.shapes):
+            if not (sh.has_text_frame and sh.text_frame.text.strip()) or sh.left is None:
+                continue
+            if any(min(sh.left + sh.width, px + pw) - max(sh.left, px) > 0.1 * EMU_IN and min(sh.top + sh.height, py + ph) - max(sh.top, py) > 0.1 * EMU_IN
+                   for px, py, pw, ph in pics):
+                for para in sh.text_frame.paragraphs:
+                    for r in para.runs:
+                        r.text = ""
+                n += 1
+    prs.save(str(out))
+    return n
+
+
+def text_on_image_p10(frames: list, W_in: float, H_in: float, w: int, h: int, px: bytes) -> list:
+    """deck-look p_text_on_image: per text frame over a picture, the 10th-percentile per-pixel contrast of its text colour against the pixels
+    of its box on a TEXT-FREE render (``text_free_copy``): ``[{name, text, size, p10, need, pass}]``. AA: 4.5, or 3.0 for large text
+    (18 pt, or 14 pt bold)."""
+    from .images import p10_contrast
+    out = []
+    for name, x, y, fw, fh, fg, sz, bold in frames:
+        x0, x1 = max(0, int(x / W_in * w)), min(w, int((x + fw) / W_in * w) + 1)
+        y0, y1 = max(0, int(y / H_in * h)), min(h, int((y + fh) / H_in * h) + 1)
+        pix = [(px[i], px[i + 1], px[i + 2]) for yy in range(y0, y1) for i in range((yy * w + x0) * 3, (yy * w + x1) * 3, 3)]
+        if len(pix) < 4:
+            continue
+        need = 3.0 if (sz >= 18 or (sz >= 14 and bold)) else 4.5
+        c = p10_contrast(pix, tuple(fg))
+        out.append({"name": name, "text": "%02X%02X%02X" % tuple(fg), "size": sz, "p10": round(c, 2), "need": need, "pass": c >= need})
+    return out
+
+
+def _p10_findings(recs: list) -> list:
+    out, seen = [], set()
+    for r in recs:
+        if not r["pass"] and r["name"] not in seen:
+            seen.add(r["name"])
+            _add(out, "text_on_image_contrast", "error" if r["p10"] < 2.0 else "warn",
+                 f"'{r['name']}' text is {r['p10']:.1f}:1 at the 10th percentile (needs {r['need']:g}:1) against the picture under it, measured without the words")
     return out
 
 
@@ -734,6 +793,14 @@ def largest_empty_rect(w: int, h: int, px: bytes, tol: int = 36) -> float:
             i = base + x * 3
             if abs(px[i] - br) + abs(px[i + 1] - bg_) + abs(px[i + 2] - bb) > tol:
                 row[min(x * gx // w, gx - 1)] = False
+    return _largest_empty_cells(full)
+
+
+def _largest_empty_cells(full: list) -> float:
+    """The largest rectangle of empty (True) cells of a HOLE_GRID grid inside 3-97% x and 3-90% y, as a share of all the cells."""
+    gx, gy = HOLE_GRID
+    c0, c1 = round(HOLE_X[0] * gx), round(HOLE_X[1] * gx)
+    r0, r1 = round(HOLE_Y[0] * gy), round(HOLE_Y[1] * gy)
     best, heights = 0, [0] * (c1 - c0)
     for r in range(r0, r1):
         for k, c in enumerate(range(c0, c1)):
@@ -747,6 +814,20 @@ def largest_empty_rect(w: int, h: int, px: bytes, tol: int = 36) -> float:
                 best = max(best, hs * (k - start))
             stack.append((start, hk))
     return round(best / (gx * gy), 4)
+
+
+def hole_of_boxes(boxes, W_in: float, H_in: float) -> float:
+    """``largest_empty_rect`` estimated from geometry, before any render: every ``(x, y, w, h)`` box (inches) a layout draws is ink. The
+    swap menu (layouts.plan's alternatives, deck-look) reads it: text boxes are wider than their lines, so it errs toward a smaller hole."""
+    gx, gy = HOLE_GRID
+    full = [[True] * gx for _ in range(gy)]
+    for x, y, w, h in boxes:
+        ca, cb = max(0, int(x / W_in * gx)), min(gx - 1, int((x + max(w, 0.0)) / W_in * gx))
+        ra, rb = max(0, int(y / H_in * gy)), min(gy - 1, int((y + max(h, 0.0)) / H_in * gy))
+        for r in range(ra, rb + 1):
+            for c in range(ca, cb + 1):
+                full[r][c] = False
+    return _largest_empty_cells(full)
 
 
 def hole_findings(share: float) -> list:
@@ -794,6 +875,7 @@ def check_pptx(pptx: Path, pdf: Path | None = None, validation: list | None = No
     slides: dict = {}
     pixels: dict = {}
     notes: list = []
+    out_p10: list = []
     try:
         from pptx import Presentation
         prs = Presentation(str(pptx))
@@ -816,6 +898,16 @@ def check_pptx(pptx: Path, pdf: Path | None = None, validation: list | None = No
                     fr = []
                 if fr:
                     over[n] = fr
+        p10: dict = {}   # slide number -> the p10 records of its text over pictures (deck-look, a text-free render)
+        if pdf and Path(pdf).exists() and spec.LOOK_V3 and any(f[0] != "Caption" for fr in over.values() for f in fr):
+            try:
+                p10 = _text_free_p10(Path(pptx), over, presented, W / EMU_IN, H / EMU_IN)
+            except Exception as e:   # the text-free render is a second LibreOffice run: if it fails, the mean measure stands, and it is said
+                notes.append(f"text-free render skipped: {type(e).__name__}: {e}")
+                p10 = {}
+            out_p10 = [{"slide": n, **r} for n, rs in sorted(p10.items()) for r in rs]
+        else:
+            out_p10 = []
         if pdf and Path(pdf).exists():
             tmp = Path(tempfile.mkdtemp(prefix="qa_ppm_"))
             try:
@@ -829,8 +921,10 @@ def check_pptx(pptx: Path, pdf: Path | None = None, validation: list | None = No
                         if spec.LOOK_V3:   # deck-look q_no_hole: measured on every presented slide (advisory)
                             m["hole"] = largest_empty_rect(*read_ppm(pg))
                             found += hole_findings(m["hole"])
-                        if n in over:
+                        if n in over and n not in p10:
                             found += _check_text_on_image(over[n], W / EMU_IN, H / EMU_IN, *read_ppm(pg))
+                        elif n in p10:
+                            found += _p10_findings(p10[n])
                         m.pop("_counts")
                         pixels[str(n)] = m
                         if found:
@@ -844,11 +938,33 @@ def check_pptx(pptx: Path, pdf: Path | None = None, validation: list | None = No
     except Exception as e:
         slides = {"deck": [{"check": "unreadable", "level": "error", "message": f"the pptx could not be checked: {type(e).__name__}: {e}"}]}
     out = {"slides": slides, "pixels": pixels, "summary": summarise(slides, notes)}
+    if out_p10:
+        out["text_on_image"] = out_p10
     holes = sorted(v["hole"] for v in pixels.values() if "hole" in v)
     if holes:   # deck-look: the deck's hole profile beside Gamma's (median 6.6%, max 17%)
         out["summary"]["holes"] = {"median": holes[len(holes) // 2] if len(holes) % 2 else round((holes[len(holes) // 2 - 1] + holes[len(holes) // 2]) / 2, 4),
                                    "max": holes[-1], "over_gate": sum(1 for x in holes if x > spec.HOLE_GATE)}
     return out
+
+
+def _text_free_p10(pptx: Path, over: dict, presented: list, W_in: float, H_in: float) -> dict:
+    """Render the text-free copy of ``pptx`` (LibreOffice, a private profile) and measure every frame of ``over`` on it: ``{slide: [records]}``."""
+    from .run_deck import to_pdf
+    tmp = Path(tempfile.mkdtemp(prefix="qa_free_"))
+    try:
+        free = tmp / "free.pptx"
+        text_free_copy(pptx, free)
+        to_pdf(free, tmp)
+        pages = render_ppm(tmp / "free.pdf", tmp, dpi=TEXT_FREE_DPI)
+        if len(pages) != len(presented):
+            raise ValueError(f"{len(pages)} text-free pages for {len(presented)} presented slides")
+        out = {}
+        for n, pg in zip(presented, pages):
+            if n in over:
+                out[n] = text_on_image_p10(over[n], W_in, H_in, *read_ppm(pg))
+        return out
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def summarise(slides: dict, notes: list | None = None) -> dict:

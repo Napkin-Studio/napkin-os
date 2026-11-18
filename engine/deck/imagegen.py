@@ -41,7 +41,20 @@ COMPOSITION = {"title": "Keep the lower third calm and uncluttered.", "appendix"
                "real_question": "Keep the left third calm and uncluttered.", "close": "Keep the left third calm and uncluttered.",
                "idea": "Medium shot, one moment.", "audience": "Medium shot, one moment.", "territory": "Medium shot, one moment.",
                "execution": "Wide frame, one clear focal point.", "solution": "Medium shot, one moment.", "product": "Medium shot, one moment."}
+#: deck-look step 7 (spec.LOOK_V3): a slot whose layout may set words over its picture (the cover, the idea, the real question) asks for
+#: the zone the finder tries first to be calm. Prompt text only: the subjects request keeps COMPOSITION (its request_sha and every
+#: recorded subject stay valid), nothing new is asked for or paid, and the finder still measures what comes back (images.text_zone).
+TEXT_ZONE_HINT = {"title": "Keep the lower left calm, plain and uncluttered.",
+                  "idea": "Medium shot, one moment. Keep the lower left calm, plain and uncluttered.",
+                  "real_question": "Keep the left third calm and uncluttered."}
 ILLUSTRATION_LINE = "An illustration, not a photograph."
+
+
+def composition(slide_type: str) -> str:
+    """The composition line of a picture's prompt: the text-zone hint under the look (TEXT_ZONE_HINT), else COMPOSITION."""
+    if spec.LOOK_V3 and slide_type in TEXT_ZONE_HINT:
+        return TEXT_ZONE_HINT[slide_type]
+    return COMPOSITION.get(slide_type, "Medium shot, one moment.")
 #: Code templates: every word is on the allow-list, so they are the fallback a failed subject lands on and the preview before stage g.
 TEMPLATES = {"title": "A quiet morning scene with soft light and a clear subject.", "appendix": "An empty room with soft light and a window.",
              "real_question": "A person at a window, seen from behind, in soft morning light.", "close": "A door open to a bright street in the morning.",
@@ -388,7 +401,7 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
                 row.update(status="held", reason=f"the Replace note was refused: {nwhy}")
                 continue
             subject = f"{subject} Change: {note.strip().rstrip('.')}."[:SUBJECT_MAX + 120]
-        comp = COMPOSITION.get(s["type"], "Medium shot, one moment.")
+        comp = composition(s["type"])
         prompt = assemble_prompt(subject, comp, style_text, kind)
         ratio = runway.snap(c["aspect"], runway.TIER_MODEL["draft"], runway.TIER_SIZE["draft"])
         attempt = attempts + 1

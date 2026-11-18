@@ -769,6 +769,197 @@ def derived_path(asset: dict) -> str:
     return f"assets/derived/{asset['sha256']}-{DERIVED_PX}.jpg"
 
 
+# -------------------------------------------------------------------------------------------------- text on a picture (deck-look)
+#: deck-look step 7 (spec.LOOK_V3, Fable's Q7): words are set over a picture only on a zone the finder measured calm enough, under a
+#: scrim whose alpha is solved, never guessed. Every text-over slot gets at least SCRIM_FLOOR (so a picture a person swaps in later in
+#: PowerPoint stays readable) and at most SCRIM_CAP (a heavier wash makes the picture murky). The target is AA for body text plus a
+#: margin (4.5 + 0.3), held even for the display sizes, so the render (re-measured by qa_render at its 10th percentile) clears AA.
+#: A zone whose luminance s.d. is over BUSY_SD takes the cap (texture under words harms reading even when contrast passes); one whose
+#: texture is still over BUSY_SD under the cap's wash ((1 - SCRIM_CAP) x s.d.) is refused. No zone passes: the slide keeps its words
+#: beside the picture (picture_column) and the plan says so.
+TEXT_OVER_TYPES = ("title", "idea", "real_question")
+SCRIM_FLOOR, SCRIM_CAP, SCRIM_STEP = 0.40, 0.60, 0.01
+TEXT_ON_PICTURE_TARGET = 4.8
+BUSY_SD = 0.12
+#: The picture box of a bleed layout (inches): the full slide width, from the top edge to the footer rule's strip (the footer, the
+#: section and the page number stay on the slide's ground, never on the picture). The margin and the block the finder measures.
+BLEED_W, BLEED_H, BLEED_M = 13.333, 6.85, 0.65
+ZONE_BLOCK = (6.6, 3.2)
+#: Candidate zones in the order a tie is broken (design.pictures.zone_finder): text sits bottom-left first, as Gamma's cover does.
+ZONES = ("bottom_left", "top_left", "middle_left", "bottom_right", "top_right", "middle_right")
+#: How far the scrim stays solid past the text block, and how far it fades to nothing toward the picture's centre (inches).
+SCRIM_PAD, SCRIM_FADE = 0.5, 3.0
+_THUMB_W = 160
+
+
+def zone_box(zone: str, block: tuple = ZONE_BLOCK, W: float = BLEED_W, H: float = BLEED_H, M: float = BLEED_M) -> tuple:
+    """``(x, y, w, h)`` in inches of the text block for ``zone`` on a bleed picture of ``W`` by ``H`` (the top zones sit under the DRAFT mark)."""
+    bw, bh = block
+    x = M if zone.endswith("_left") else W - M - bw
+    y = {"bottom": H - 0.45 - bh, "top": 0.75, "middle": (H - bh) / 2}[zone.split("_")[0]]
+    return (x, y, bw, bh)
+
+
+def scrim_geometry(zone: str, box: tuple, W: float = BLEED_W, H: float = BLEED_H) -> dict:
+    """The scrim for a text block at ``box``: ``{solid: (x, y, w, h), fade: (x, y, w, h), toward}``. Solid under the block plus SCRIM_PAD,
+    fading to nothing over SCRIM_FADE toward the picture's centre: a bottom zone fades upward across the full width, a top zone downward,
+    a middle zone sideways over the full height (no hard band edge on the picture)."""
+    x, y, w, h = box
+    v = zone.split("_")[0]
+    if v == "bottom":
+        top = max(0.0, y - SCRIM_PAD)
+        return {"solid": (0.0, top, W, H - top), "fade": (0.0, max(0.0, top - SCRIM_FADE), W, top - max(0.0, top - SCRIM_FADE)), "toward": "up"}
+    if v == "top":
+        bot = min(H, y + h + SCRIM_PAD)
+        return {"solid": (0.0, 0.0, W, bot), "fade": (0.0, bot, W, min(H, bot + SCRIM_FADE) - bot), "toward": "down"}
+    if zone.endswith("_left"):
+        r = min(W, x + w + SCRIM_PAD)
+        return {"solid": (0.0, 0.0, r, H), "fade": (r, 0.0, min(W, r + SCRIM_FADE) - r, H), "toward": "right"}
+    l = max(0.0, x - SCRIM_PAD)
+    return {"solid": (l, 0.0, W - l, H), "fade": (max(0.0, l - SCRIM_FADE), 0.0, l - max(0.0, l - SCRIM_FADE), H), "toward": "left"}
+
+
+def label_corner(zone: str) -> str:
+    """The picture label's corner: diagonal to the text block (Q8)."""
+    v, side = zone.split("_")
+    return ("top" if v in ("bottom", "middle") else "bottom") + "_" + ("right" if side == "left" else "left")
+
+
+def _lin(c: float) -> float:
+    c /= 255.0
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+_LIN = [_lin(i) for i in range(256)]
+
+
+def _rel_lum(rgb) -> float:
+    r, g, b = (_LIN[max(0, min(255, int(round(v))))] for v in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _hex_rgb(h: str) -> tuple:
+    h = h.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def p10_contrast(pixels: list, text_rgb: tuple, scrim_rgb: tuple | None = None, alpha: float = 0.0) -> float:
+    """The 10th-percentile WCAG contrast of ``text_rgb`` against ``pixels`` ((r, g, b) 0-255) under a scrim of ``scrim_rgb`` at ``alpha``,
+    composited per channel in sRGB (as the PDF renderers composite a transparent fill), so the finder predicts what the render shows."""
+    lt = _rel_lum(text_rgb)
+    cs = []
+    for px in pixels:
+        c = px if not scrim_rgb or alpha <= 0 else tuple((1 - alpha) * p + alpha * s for p, s in zip(px, scrim_rgb))
+        lb = _rel_lum(c)
+        hi, lo = (lt, lb) if lt >= lb else (lb, lt)
+        cs.append((hi + 0.05) / (lo + 0.05))
+    if not cs:
+        return 0.0
+    cs.sort()
+    return cs[int(0.10 * (len(cs) - 1))]
+
+
+def _thumb(src, box_w: float, box_h: float, focal: dict | None):
+    """The picture as it is cropped to a ``box_w`` by ``box_h`` box (cover, the recorded focal point), ``_THUMB_W`` pixels wide, RGB."""
+    with Image.open(src) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        c = im.crop(crop_box(im.width, im.height, box_w / box_h, focal))
+        th = max(1, round(_THUMB_W * box_h / box_w))
+        return c.resize((_THUMB_W, th), Image.BILINEAR)
+
+
+def _zone_pixels(thumb, box: tuple, W: float, H: float) -> list:
+    x, y, w, h = box
+    tw, th = thumb.size
+    x0, x1 = max(0, int(x / W * tw)), min(tw, int(round((x + w) / W * tw)))
+    y0, y1 = max(0, int(y / H * th)), min(th, int(round((y + h) / H * th)))
+    px = thumb.load()
+    return [px[i, j] for j in range(y0, y1) for i in range(x0, x1)]
+
+
+def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, block: tuple = ZONE_BLOCK, zones=ZONES,
+              ink: str = "1B2430", paper: str = "FAF7F1", target: float = TEXT_ON_PICTURE_TARGET) -> dict:
+    """The calm-zone finder and scrim solver (design.pictures.zone_finder), pure Pillow on a 160 px thumbnail, deterministic.
+
+    For each candidate zone of the picture as cropped to ``box`` (inches): the words take the colour the zone already favours (ink on a
+    light zone under a paper scrim, paper on a dark one under an ink scrim: the wash deepens the picture, never flips it), then the least
+    scrim alpha from SCRIM_FLOOR to SCRIM_CAP at which the 10th-percentile per-pixel contrast under the block reaches ``target``. A zone
+    whose luminance s.d. is over BUSY_SD starts at the cap; one still over BUSY_SD under the cap's wash is refused. Score = alpha + 2 x s.d., lowest wins, ties in
+    ``zones`` order. Returns ``{zone, text, colour, alpha, p10, busy_sd, by}`` or, when no zone passes, ``{none: True, reason, best, by}``."""
+    W, H = box
+    thumb = _thumb(src, W, H, focal)
+    ink_rgb, paper_rgb = _hex_rgb(ink), _hex_rgb(paper)
+    best, tried = None, []
+    for z in zones:
+        pix = _zone_pixels(thumb, zone_box(z, block, W, H), W, H)
+        if not pix:
+            continue
+        lums = [_rel_lum(p) for p in pix]
+        mean = sum(lums) / len(lums)
+        sd = (sum((v - mean) ** 2 for v in lums) / len(lums)) ** 0.5
+        lp, li = _rel_lum(paper_rgb), _rel_lum(ink_rgb)   # the words take the colour with more contrast against the zone's mean luminance
+        on_paper = (lp + 0.05) / (mean + 0.05) >= (mean + 0.05) / (li + 0.05)
+        text, scrim = (paper, ink) if on_paper else (ink, paper)
+        t_rgb, s_rgb = (paper_rgb, ink_rgb) if on_paper else (ink_rgb, paper_rgb)
+        rec = {"zone": z, "text": text, "colour": scrim, "busy_sd": round(sd, 3)}
+        if (1 - SCRIM_CAP) * sd > BUSY_SD:
+            tried.append({**rec, "alpha": SCRIM_CAP, "p10": round(p10_contrast(pix, t_rgb, s_rgb, SCRIM_CAP), 2), "why": "too busy"})
+            continue
+        a = SCRIM_CAP if sd > BUSY_SD else SCRIM_FLOOR
+        got = None
+        while a <= SCRIM_CAP + 1e-9:
+            c = p10_contrast(pix, t_rgb, s_rgb, a)
+            if c >= target:
+                got = (round(a, 2), round(c, 2))
+                break
+            a += SCRIM_STEP
+        if got is None:
+            tried.append({**rec, "alpha": SCRIM_CAP, "p10": round(p10_contrast(pix, t_rgb, s_rgb, SCRIM_CAP), 2), "why": "contrast"})
+            continue
+        cand = {**rec, "alpha": got[0], "p10": got[1], "by": "finder"}
+        score = got[0] + 2 * sd
+        if best is None or score < best[0] - 1e-9:
+            best = (score, cand)
+    if best:
+        return best[1]
+    top = max(tried, key=lambda r: r["p10"]) if tried else {}
+    why = ("every zone is too busy under the words" if tried and all(t["why"] == "too busy" for t in tried)
+           else f"no zone reaches {target:g}:1 at the {SCRIM_CAP:.0%} cap")
+    return {"none": True, "reason": why, "best": {k: top[k] for k in ("zone", "text", "p10", "busy_sd") if k in top}, "by": "finder"}
+
+
+def source_paths(deck: dict, audience: str, src_dirs=(), sources: dict | None = None) -> dict:
+    """``{asset id: path}`` of the source file of every picture a render of this audience draws (found as ``copy_assets`` finds it; nothing
+    is copied). A picture not on disk is left out (``copy_assets`` refuses it later, loudly)."""
+    assets, out = deck.get("assets") or {}, {}
+    for (_sid, _name), im in sorted(drawn(deck, audience).items()):
+        aid = im["asset"]
+        rec = assets.get(aid) or {}
+        cands = ([Path((sources or {})[aid])] if aid in (sources or {}) else []) + [Path(d) / rec.get("file", "") for d in src_dirs if rec.get("file")]
+        src = next((c for c in cands if c.is_file()), None)
+        if src is not None:
+            out[aid] = src
+    return out
+
+
+def solve_text_zones(deck: dict, paths: dict, ink: str = "1B2430", paper: str = "FAF7F1") -> list:
+    """Run the finder on the picture slot of every slide of TEXT_OVER_TYPES whose picture is drawable (``paths`` holds its file) and record
+    the answer on the slot as ``image.text_zone``; a slot already holding one keeps it (a repair or a person may pin it). Returns
+    ``[(slide id, record)]``. The layout picker reads the record: a zone puts the words on the picture (cover_bleed, full_bleed_statement),
+    none keeps them beside it and the plan reports the fallback."""
+    out = []
+    for sid in deck["order"]:
+        s = deck["slides"][sid]
+        sl = (s.get("slots") or {}).get("picture")
+        im = (sl or {}).get("image") if isinstance(sl, dict) else None
+        if s["type"] not in TEXT_OVER_TYPES or not isinstance(im, dict) or im.get("asset") not in paths:
+            continue
+        if not im.get("text_zone"):
+            im["text_zone"] = text_zone(paths[im["asset"]], focal=im.get("focal"), ink=ink, paper=paper)
+        out.append((sid, im["text_zone"]))
+    return out
+
+
 # -------------------------------------------------------------------------------------------------- CLI
 
 def main(argv=None) -> int:

@@ -150,7 +150,7 @@ def test_the_new_layouts_exist_only_under_the_flag(monkeypatch):
     assert len(off) == 36 and not set(spec.LAYOUT_IDS_V3) & set(off) and not off["close"].get("human_rows")
     monkeypatch.setattr(spec, "LOOK_V3", True)
     on = layouts.load()
-    assert len(on) == 36 + len(spec.LAYOUT_IDS_V3) == 41 <= spec.LAYOUT_MAX and set(spec.LAYOUT_IDS_V3) <= set(on)
+    assert len(on) == 36 + len(spec.LAYOUT_IDS_V3) == 42 <= spec.LAYOUT_MAX and set(spec.LAYOUT_IDS_V3) <= set(on)
     assert on["close"]["human_rows"] and on["close"]["version"] == 2 and "investment" in on["close"]["for_types"]
     for lid in spec.LAYOUT_IDS_V3:
         lay = on[lid]

@@ -239,7 +239,28 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
 
 # ---- deck-look steps 3-4 on the web (spec.LOOK_V3): the same layouts as render_pptx, in CSS ------------------------------------------
 #: The layouts the web draws with their own markup under LOOK_V3 (the rest keep the per-type bodies until step 9 paints from plan boxes).
-V3_WEB = ("statement_points", "reframe", "shift_line", "picture_column", "cover_image", "close")
+V3_WEB = ("statement_points", "reframe", "shift_line", "picture_column", "cover_image", "close", "cover_bleed", "full_bleed_statement")
+PX_IN = 144   # px per inch on the 1920 x 1080 web slide
+
+
+def _tz(s) -> dict | None:
+    im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
+    tz = im.get("text_zone") or {}
+    return tz if tz.get("zone") else None
+
+
+def _scrim_css(tz: dict) -> str:
+    """The pptx scrim as one CSS gradient (deck-look step 7): solid at the recorded alpha under the block plus its pad, fading to nothing."""
+    g = images.scrim_geometry(tz["zone"], images.zone_box(tz["zone"]))
+    r, g_, b_ = (int(tz["colour"][i:i + 2], 16) for i in (0, 2, 4))
+    a = max(images.SCRIM_FLOOR, min(images.SCRIM_CAP, float(tz.get("alpha", images.SCRIM_FLOOR))))
+    sx, sy, sw, sh = g["solid"]
+    fx, fy, fw, fh = g["fade"]
+    BW, BH = images.BLEED_W, images.BLEED_H
+    solid, end = {"up": (BH - sy, BH - fy), "down": (sy + sh, fy + fh), "right": (sx + sw, fx + fw), "left": (BW - sx, BW - fx)}[g["toward"]]
+    to = {"up": "top", "down": "bottom", "right": "right", "left": "left"}[g["toward"]]
+    c = f"{r},{g_},{b_}"
+    return (f"linear-gradient(to {to},rgba({c},{a}) 0,rgba({c},{a}) {round(solid * PX_IN)}px,rgba({c},0) {round(end * PX_IN)}px)")
 
 
 def _caps(text) -> str:
@@ -327,6 +348,14 @@ def _v3_body(s, b: "_Slide", bl: list, lid: str, deck: dict) -> str:
             b.f += 1
             out += f'<div class="pt">{_kick(b, k)}{b.rv("", _e(v), "p", 120)}</div>'
         return f'<div class="body v3 v3pc{" nopts" if not pts else ""}">{out}</div>'
+    if lid in ("cover_bleed", "full_bleed_statement"):   # the words on the picture's measured zone, in the recorded colour
+        tz = _tz(s) or {"zone": "bottom_left", "text": "FAF7F1"}
+        x, y, w, h = images.zone_box(tz["zone"])
+        v = tz["zone"].split("_")[0]
+        pos = f"left:{round(x * PX_IN)}px;width:{round(w * PX_IN)}px;" + (f"bottom:{round((images.BLEED_H - y - h) * PX_IN)}px" if v == "bottom" else f"top:{round(y * PX_IN)}px" if v == "top" else f"top:{round(y * PX_IN)}px;height:{round(h * PX_IN)}px;justify-content:center")
+        lead = "".join(b.rv("lead", _e(text(x_)), "p", 160) for x_ in bl if text(x_))
+        kick = _kick(b, _kicker(deck["meta"])) if lid == "cover_bleed" else ""
+        return f'<div class="body v3 v3bl" style="{pos};color:#{tz["text"]};--fg:#{tz["text"]}">{kick}{hero}{lead}</div>'
     if lid == "cover_image":
         lead = "".join(b.rv("lead" + (" small" if x["kind"] == "small" else ""), _e(text(x)), "p", 160) for x in bl if text(x))
         return f'<div class="body v3 v3cv">{_kick(b, _kicker(deck["meta"]))}{hero}{lead}</div>'
@@ -391,6 +420,12 @@ LOOK_V3_LAYOUT_CSS = """
 .pics.col .plabel{bottom:112px;left:72px}.pics.col.right .plabel{left:auto;right:72px}
 .pic-col-left{padding-left:814px}.pic-col-right{padding-right:814px}.pic-col-right .flags{right:814px}
 .v3.v3cv h1.title,.v3.v3pc h1.title{max-width:none}
+.pics.bleed{position:absolute;left:0;top:0;width:1920px;height:986px;z-index:1}.pics.bleed .pic{width:100%;height:100%;aspect-ratio:auto;border-radius:0}
+.pics.bleed .scrim{position:absolute;inset:0;z-index:2;pointer-events:none}.pics.bleed .plabel{z-index:3}
+.pics.bleed.lab-top-right .plabel{top:108px;right:72px;left:auto;bottom:auto}.pics.bleed.lab-top-left .plabel{top:108px;left:72px;bottom:auto}
+.pics.bleed.lab-bottom-right .plabel{bottom:72px;right:72px;left:auto}.pics.bleed.lab-bottom-left .plabel{bottom:72px;left:72px}
+.v3bl{position:absolute;z-index:4;display:flex;flex-direction:column}.v3bl .hero{font-size:100px;margin:16px 0 36px;color:inherit}.v3bl .lead{font-size:44px;line-height:1.2;color:inherit}
+.v3bl .kick{color:inherit}.pic-bleed .flags{z-index:5}
 """
 
 
@@ -443,7 +478,15 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
                 kick = ""
             title = ""
             body = _v3_body(s, b, shown_blocks(s, audience), v3lid, deck)
-            if pic_html and v3lid in ("picture_column", "cover_image"):
+            if pic_html and v3lid in ("cover_bleed", "full_bleed_statement"):
+                import re as _re
+                tz = _tz(s) or {"zone": "bottom_left", "colour": "1B2430", "alpha": images.SCRIM_FLOOR}
+                corner = images.label_corner(tz["zone"]).replace("_", "-")
+                pic_html = _re.sub(r' style="width:\d+px;aspect-ratio:[\d/]+"', "", pic_html.replace(
+                    '<div class="pics side">', f'<div class="pics bleed lab-{corner}"><i class="scrim" style="background:{_scrim_css(tz)}"></i>', 1), count=1)
+                pic_cls = "pic-bleed"
+                kick = ""
+            elif pic_html and v3lid in ("picture_column", "cover_image"):
                 side = "right" if v3lid == "cover_image" else _pic_sides(deck).get(sid, "left")
                 import re as _re
                 pic_html = _re.sub(r' style="width:\d+px;aspect-ratio:[\d/]+"', "", pic_html.replace('<div class="pics side">', f'<div class="pics col {side}">', 1), count=1)

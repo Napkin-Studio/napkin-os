@@ -954,6 +954,12 @@ def main(argv=None):
         loop_on = not a.no_repair and not a.no_qa and a.until is None
         policy = repair.load_policy(profile, a.repair_policy) if loop_on else None
         stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages, repair.approval_id(deck), (policy["shorten"] or {}).get("word_rule", "delete_only"))[0]
+        if spec.LOOK_V3 and (a.pictures or supplied):   # deck-look step 7: measure where words may sit on the cover's and the idea's pictures (Pillow, free)
+            from . import theme as _themes
+            _th = _themes.get_theme(_themes.DEFAULT, deck["meta"].get("brand") or {})
+            zones = images.solve_text_zones(deck, images.source_paths(deck, a.audience, [a.stages], sources), ink=_th.ink, paper=_th.on_dark)
+            if zones:
+                rep["text_zones"] = {sid: z for sid, z in zones}
         base_deck = deck   # pictures are already bound here: the repair loop re-plans from this deck and never asks for a picture
         replan = lambda d: layouts.plan(d, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten), "notes": not a.no_notes}, swaps=swaps)   # noqa: E731
         deck, plan_issues, _pending = replan(base_deck)

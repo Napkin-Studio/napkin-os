@@ -141,7 +141,8 @@
             "role_rows",
             "image_ready",
             "points_2_3",
-            "rows_aside"
+            "rows_aside",
+            "bleed_ready"
           ],
           "$comment": "a named test from spec.LAYOUT_TESTS, implemented in layouts.py"
         },
@@ -464,7 +465,8 @@
               "enum": [
                 "none",
                 "dark",
-                "light"
+                "light",
+                "auto"
               ],
               "default": "none"
             },

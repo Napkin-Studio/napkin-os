@@ -760,6 +760,8 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
                            routes_asked(reqs), messages or [], scoring or [], fmt, cap)
     elif fmt == "pitch":   # after mapping, so merged slides carry both slides' requirements
         S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap)
+    if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
+        _say_once(S)
     if sketch:   # the cover says so, with a fixed label (like the DRAFT mark: no input words)
         cover = next((x for x in S if x["type"] == "title"), None)
         if cover:
@@ -1012,6 +1014,52 @@ def _merge(k: dict, m: dict, title) -> None:
     if m.get("supplied"):   # what the person supplied to the absorbed slide still counts as supplied on the merged one
         ks = k.get("supplied")
         k["supplied"] = ({**ks, "refs": sorted(set(ks.get("refs") or []) | set(m["supplied"].get("refs") or []))} if ks else dict(m["supplied"]))
+
+
+def _sentence_keys(text) -> list:
+    """The sentences of a text as comparison keys (lower case, punctuation gone), those of four words or more (validate's repeated_line)."""
+    out = []
+    for sent in re.split(r"(?<=[.!?])\s+", str(text or "")):
+        key = re.sub(r"\W+", " ", sent.lower()).strip()
+        if len(key.split()) >= 4:
+            out.append(key)
+    return out
+
+
+def _say_once(S: list) -> None:
+    """deck-look (fix 2, Q13): no sentence is said twice on the presented slides (the story, before the Appendix divider). In story order:
+    an idea whose title is a line an earlier slide already said (the campaign line the proposition carries as its single thought) leads
+    with its own stage text instead (its first statement becomes its title, so the idea says what it is); a copy block whose every line
+    was already said (the poster's copy is that line) leaves the slide. What leaves goes to the slide's notes verbatim, after
+    spec.SAID_ONCE_NOTE, so no word is lost and none is written. A slide left with nothing else keeps its own layout rules (a statement
+    layout needs no second sentence)."""
+    end = next((i for i, x in enumerate(S) if x["type"] == "appendix"), len(S))
+    said: dict = {}
+    keep = lambda sl, lines: sl.__setitem__("notes", "\n\n".join([x for x in [sl.get("notes") or ""] if x.strip()] + lines))
+    for n, sl in enumerate(S[:end], 1):
+        moved = []
+        if sl["type"] == "idea" and any(k in said for k in _sentence_keys(sl["title"])):
+            st = next((b for b in sl["blocks"] if b["kind"] == "statement" and str(b.get("text") or "").strip()), None)
+            if st is not None:
+                first = min(said[k] for k in _sentence_keys(sl["title"]) if k in said)
+                moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} {sl['title']}")
+                sl["title"] = str(st["text"]).strip()
+                sl["blocks"] = [b for b in sl["blocks"] if b is not st]
+        out = []
+        for b in sl["blocks"]:
+            if b["kind"] == "copy" and b.get("lines") and all(any(k in said for k in _sentence_keys(ln)) and _sentence_keys(ln) for ln in b["lines"]):
+                first = min(said[k] for ln in b["lines"] for k in _sentence_keys(ln) if k in said)
+                moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} " + " / ".join(str(x) for x in b["lines"]) + (f" ({b['answer']})" if b.get("answer") else ""))
+                continue
+            out.append(b)
+        sl["blocks"] = out
+        if moved:
+            keep(sl, moved)
+        for t in [sl["title"]] + [str(b.get(k) or "") for b in sl["blocks"] for k in ("text", "from", "to")] + \
+                 [str(x) for b in sl["blocks"] for x in b.get("lines") or []] + \
+                 [str(i.get("text", "")) if isinstance(i, dict) else " ".join(map(str, i)) if isinstance(i, (list, tuple)) else str(i) for b in sl["blocks"] for i in b.get("items") or []]:
+            for k in _sentence_keys(t):
+                said.setdefault(k, n)
 
 
 def _unfilled(x: dict) -> bool:

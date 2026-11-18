@@ -402,6 +402,10 @@ class Renderer:
         self._foot = None           # deck-look: (x0, x1) of the text side when a picture column takes the rest (footer and DRAFT mark there)
         self._pic_side = {}         # deck-look: slide id -> the side its picture column takes (layouts.picture_sides)
         self._cpl = 48              # characters per line for body, small and lead text (fit.cpl widens it for a slide that fits no other way)
+        self._bleed = False         # deck-look step 7: this slide's words sit on a full-bleed picture (the DRAFT mark then gets its own ground)
+        self._acc = None            # deck-look (rea-full A3): the title's one accent phrase on the slide in hand (layouts.accent_phrase)
+        self._acc_drawn = False
+        self._ink = None            # the hole estimate (layouts' swap menu): boxes drawn, in inches, while it measures
 
     def _layout(self, name):
         """A layout of the master by name, or None."""
@@ -694,20 +698,30 @@ class Renderer:
             if d.get("line"):
                 para.line_spacing = d["line"]
             para.space_after = Pt(d.get("after", 0))
-            run = para.add_run()
             txt = d["t"]
             psz = self.sz(d.get("size", self.th.scale.body), d.get("cap", False))
             if NBSP in txt and self.nlines(txt.replace(NBSP, " "), w, psz, d.get("bold"), d.get("font")) <= 1:
                 txt = txt.replace(NBSP, " ")   # it fits on one line: no glue needed (a no-break space can set wider in some fonts)
-            run.text = txt
-            f = run.font
-            f.size, f.name = Pt(psz), d.get("font") or self.th.body
-            f.bold, f.italic = bool(d.get("bold")), bool(d.get("italic"))
-            f.color.rgb = _rgb(d.get("color") or self.p.fg)
-            if d.get("track"):
-                run._r.get_or_add_rPr().set("spc", str(int(d["track"] * 100)))
-            if d.get("allcaps"):   # set in capitals by the font (the words stay as written, so search and edit see them)
-                run._r.get_or_add_rPr().set("cap", "all")
+            parts = [(txt, d.get("color") or self.p.fg)]
+            acc = self._acc if (name == "Title" and i == 0 and not self._bleed) else None
+            if acc:   # deck-look (rea-full A3): the one bound phrase of the title in the accent; the words and their order unchanged
+                m = re.search(re.escape(acc).replace(r"\ ", "[ \u00a0]"), txt, flags=re.I)
+                if m:
+                    ac = self.th.accent_on_dark if self.p.dark else self.th.accent_ink
+                    parts = [(txt[:m.start()], parts[0][1]), (txt[m.start():m.end()], ac), (txt[m.end():], parts[0][1])]
+                    parts = [x for x in parts if x[0]]
+                    self._acc_drawn = True
+            for txt_, col_ in parts:
+                run = para.add_run()
+                run.text = txt_
+                f = run.font
+                f.size, f.name = Pt(psz), d.get("font") or self.th.body
+                f.bold, f.italic = bool(d.get("bold")), bool(d.get("italic"))
+                f.color.rgb = _rgb(col_)
+                if d.get("track"):
+                    run._r.get_or_add_rPr().set("spc", str(int(d["track"] * 100)))
+                if d.get("allcaps"):   # set in capitals by the font (the words stay as written, so search and edit see them)
+                    run._r.get_or_add_rPr().set("cap", "all")
             if d.get("bullet"):   # a real bullet, hanging indent
                 pPr = para._p.get_or_add_pPr()
                 pPr.set("marL", str(Inches(0.3)))
@@ -1901,7 +1915,7 @@ class Renderer:
     LEAD_KINDS = ("text", "small", "statement", "quote", "callout")
     #: Picture layouts that draw their own picture panel (the rest keep slice 3's carve: execution_visual, frames_strip).
     PIC_TOP, PIC_H = 0.62, 6.05   # the picture panel of the cover and the image layouts: inside the margins, under the DRAFT mark
-    OWN_PICTURE = ("cover_image", "image_text", "image_left", "full_bleed_statement", "section", "image_grid", "picture_column")
+    OWN_PICTURE = ("cover_image", "image_text", "image_left", "full_bleed_statement", "section", "image_grid", "picture_column", "cover_bleed")
 
     def _cpl_w(self, size, bold=False, font=None, cpl=48) -> float:
         """The width in inches of ``cpl`` characters at ``size`` pt (the renderer's glyph estimate): the 48-character line."""
@@ -1910,16 +1924,18 @@ class Renderer:
     def _text_of(self, b) -> str:
         return str(b.get("text", "")).strip()
 
-    def _own_picture(self, sl, slot, x, y, w, h, corner="left"):
+    def _own_picture(self, sl, slot, x, y, w, h, corner="left", label=True):
         """Draw the slide's picture for ``slot`` in the box (cropped to cover, never stretched). NoFit when there is none; measure-only and
-        probes draw nothing."""
+        probes draw nothing (the hole estimate counts the box as ink). ``label`` False: the layout places the picture label itself."""
         im = self._pics.get(slot)
         if im is None:
             raise NoFit(f"no picture for {slot}")
+        if sl is not None and self._ink is not None:
+            self._ink.append((x, y, w, h))
         if sl is None or im.get("probe"):
             return
         m = self._mark(sl)
-        self.picture(sl, x, y, w, h, im, corner=corner)
+        self.picture(sl, x, y, w, h, im, corner=corner, label=label)
         self._own_pics.add(slot)
         self.placed.add((self._sid, slot))
         self._build(sl, m)
@@ -1982,7 +1998,10 @@ class Renderer:
         self._lay_image_text(sl, s, mirror=True)
 
     def _lay_full_bleed(self, sl, s):
-        """Full bleed statement: the picture fills the slide above the footer, the title and one statement are set on a dark scrim over it."""
+        """Full bleed statement: the picture fills the slide above the footer, the title and one statement are set on a dark scrim over it
+        (under deck-look: on the zone the finder measured, under the solved scrim, ``_lay_bleed``)."""
+        if self.th.v3:
+            return self._lay_bleed(sl, s, cover=False)
         S, p, g = self.th.scale, self.p, self.th.grid
         if "picture" not in self._pics:
             raise NoFit("no picture")
@@ -2726,6 +2745,8 @@ class Renderer:
         rows = [[str(c).strip() for c in r] for r in tables[0]["rows"]]
         head, body = rows[0], rows[1:]
         aside = [b for b in bl if b is not tables[0]]
+        if self.th.v3 and len(body) == 1:   # one measure: a stat row under the title, the absorbed blocks at the foot (no empty middle)
+            return self._rows_aside_one(sl, s, head, body[0], aside)
         top, bottom, pad = self.V3_TOP, g.body_end, self.V3_PAD
         lw = self._span(7)
         rx = self.x0 + lw + g.G
@@ -2792,6 +2813,162 @@ class Renderer:
             self.ptext(sl, rx + pad, y, rtw, h, ps, name="slot:aside")
             self._build(sl, m)
             y += h
+        self._rec_slot(sl, "aside")
+
+    # -- the stat row (rea-full A1): figures on hairlines, label above, value in ink, source below --------------------------------------
+    STAT_SIZES = (96, 84, 72, 64, 56, 48, 44, 40, 36, 32, 28, 26, 24)
+
+    def _stat_fit(self, cols, w, max_lines=1, sizes=None):
+        """``(size, [paras per column], height)`` for a stat row of ``cols`` [(label, value, source)] across ``w`` inches: the largest size
+        of the ladder at which every value takes at most ``max_lines`` lines of its column without breaking a word. NoFit when none does."""
+        n = len(cols)
+        G = self.th.grid.G
+        cw = (w - G * (n - 1)) / n - 0.1
+        p = self.p
+        for vs in sizes or self.STAT_SIZES:
+            if not all(self.nlines(glue(v), cw * 0.95, vs, True, self.th.head) <= max_lines and self._units_fit(v, cw * 0.95, vs) for _, v, _ in cols):
+                continue
+            paras = []
+            for lab, v, src in cols:
+                ps = ([self.para(lab, 16, p.fg, bold=True, after=4)] if lab else []) + [self.para(v, vs, p.fg, self.th.head, bold=True, line=0.95, after=4)]
+                if src:
+                    ps.append(self.para(src, self.th.scale.caption, p.mute, cap=True))
+                paras.append(ps)
+            return vs, paras, max(self.ph(ps, cw) for ps in paras)
+        raise NoFit("the figures do not fit their columns")
+
+    def _draw_stat_row(self, sl, x, y, w, paras, h, name="slot:figures"):
+        """Draw a fitted stat row: equal columns, a hairline in each gutter's middle (never a filled card), the words in text tokens."""
+        n = len(paras)
+        G = self.th.grid.G
+        cw = (w - G * (n - 1)) / n
+        for i, ps in enumerate(paras):
+            cx = x + i * (cw + G)
+            if i:
+                self.hairline(sl, cx - G / 2, y, cx - G / 2, y + h)
+            self.ptext(sl, cx, y, cw - 0.1, h, ps, name=name)
+
+    def _src_label(self, refs) -> str:
+        """'Source [n]' for a figure's refs, numbered as the deck's footnotes number them (assemble._sources_slide); '' when none resolves."""
+        if not refs:
+            return ""
+        try:
+            from .assemble import slide_refs   # late: assemble numbers the sources this way (its _sources_slide)
+            keys = []
+            for sid in self.deck["order"]:
+                for ref in slide_refs(self.deck["slides"][sid]):
+                    k = self.R.source_key(ref)[0]
+                    if k != "unknown" and k not in keys:
+                        keys.append(k)
+            nums = sorted({keys.index(self.R.source_key(r)[0]) + 1 for r in refs if self.R.source_key(r)[0] in keys})
+        except Exception:
+            return ""
+        return ("Source " + " ".join(f"[{n}]" for n in nums)) if nums else ""
+
+    def _lay_kpi_row(self, sl, s):
+        """kpi_row: the stack (the KPI cards) before the look; under deck-look a stat row (rea-full A1, Pitch template, Gamma D2): the title,
+        then two to four figures in ink at display size in equal columns with hairlines between, each with its label above and its source
+        below, any note under a hairline at the foot. No card fills, no accent on a figure (dataviz: figures wear text tokens)."""
+        if not self.th.v3:
+            return self._lay_stack(sl, s)
+        S, p, g = self.th.scale, self.p, self.th.grid
+        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items")]
+        stats = [b for b in bl if b["kind"] == "stats"]
+        notes = [b for b in bl if b["kind"] in ("text", "small", "statement")]
+        if len(stats) != 1 or len(stats) + len(notes) != len(bl) or not 2 <= len(stats[0]["items"]) <= 4:
+            raise NoFit("a stat row holds two to four figures and a note")
+        top, bottom, pad = self.V3_TOP, g.body_end, self.V3_PAD
+        w = self.x1 - self.x0 - 2 * pad
+        cols = [(str(i.get("label", "")).strip(), str(i.get("value", "")).strip(), self._src_label(i.get("refs") or stats[0].get("refs")))
+                for i in stats[0]["items"]]
+        for tsize in (36, 32, 30, 28):
+            tp = [self.para(s["title"], tsize, p.fg, self.th.head, bold=True, line=1.05)]
+            if self.nlines(glue(s["title"]), w, tsize, True, self.th.head) <= 3:
+                break
+        th_ = self.ph(tp, w)
+        npar = [self.para(self._text_of(b), S.body, p.fg, line=1.3) for b in notes]
+        nh = self.ph(npar, w) if npar else 0.0
+        vs, paras, rh = self._stat_fit(cols, w)
+        if th_ + 0.5 + rh + (0.6 + nh if npar else 0) > bottom - top - 0.3:
+            raise NoFit("stat row too full")
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self._frame(sl, (self.x0, self.x1), top, bottom)
+        self.ptext(sl, self.x0 + pad, top + 0.15, w, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        ny = bottom - 0.15 - nh
+        free_top, free_bot = top + 0.15 + th_, (ny - 0.3 if npar else bottom - 0.15)
+        y = free_top + max(0.4, (free_bot - free_top - rh) / 2)
+        m = self._mark(sl)
+        self._draw_stat_row(sl, self.x0 + pad, y, w, paras, rh)
+        self._build(sl, m)
+        self._rec_slot(sl, "figures")
+        if npar:
+            m = self._mark(sl)
+            self.hairline(sl, self.x0 + pad, ny - 0.25, self.x1 - pad, ny - 0.25)
+            self.ptext(sl, self.x0 + pad, ny, w, nh, npar, name="slot:note")
+            self._build(sl, m)
+            self._rec_slot(sl, "note")
+
+    def _rows_aside_one(self, sl, s, head, row, aside):
+        """rows_aside with ONE measure (deck-look, phase 14's s09 left the middle empty): the title across the frame, the row as a stat row
+        (each column's header above its value, hairlines between), and the absorbed blocks under a hairline at the foot, each block's own
+        title as its kicker; the free height split evenly above and below the stat row. The words are the table's and the blocks' own."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        top, bottom, pad = self.V3_TOP, g.body_end, self.V3_PAD
+        w = self.x1 - self.x0 - 2 * pad
+        cols = [(h_, v, "") for h_, v in zip(head, row)]
+        fit = None
+        for tsize in (36, 32, 30, 28):
+            if self.nlines(glue(s["title"]), w, tsize, True, self.th.head) > 2:
+                continue
+            tp = [self.para(s["title"], tsize, p.fg, self.th.head, bold=True, line=1.05)]
+            th_ = self.ph(tp, w)
+            for asize in (22, 20, 18, 16):
+                groups = self._aside_groups(aside, asize, w)
+                ah = sum(h for _, h in groups) + 0.4 * (len(groups) - 1)
+                got = None
+                for ml in (2, 3):   # two lines a value at most before three: a value never strands one word on a line of its own
+                    try:
+                        got = self._stat_fit(cols, w, max_lines=ml, sizes=(44, 40, 36, 32, 30, 28, 26, 24))
+                        break
+                    except NoFit:
+                        continue
+                if got is None:
+                    raise NoFit("the measure does not fit a stat row")
+                vs, paras, rh = got
+                if th_ + 0.5 + rh + 0.6 + ah <= bottom - top - 0.3:
+                    fit = (tp, th_, groups, ah, paras, rh)
+                    break
+            if fit:
+                break
+        if not fit:
+            raise NoFit("rows and aside too full")
+        tp, th_, groups, ah, paras, rh = fit
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self._frame(sl, (self.x0, self.x1), top, bottom)
+        free = (bottom - top - 0.3) - (th_ + rh + 0.3 + ah)
+        gap = min(0.7, max(0.4, free / 2))   # title, row and foot kept together, the group centred: no strip of empty paper across the slide
+        ty = top + 0.15 + max(0.0, (free - 2 * gap) / 2)
+        self.ptext(sl, self.x0 + pad, ty, w, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        y = ty + th_ + gap
+        ay = y + rh + gap + 0.3
+        m = self._mark(sl)
+        self._draw_stat_row(sl, self.x0 + pad, y, w, paras, rh, name="slot:rows")
+        self._build(sl, m)
+        self._rec_slot(sl, "rows")
+        self.hairline(sl, self.x0 + pad, ay - 0.3, self.x1 - pad, ay - 0.3)
+        for i, (ps, h) in enumerate(groups):
+            m = self._mark(sl)
+            self.ptext(sl, self.x0 + pad, ay, w, h, ps, name="slot:aside")
+            self._build(sl, m)
+            ay += h + 0.4
         self._rec_slot(sl, "aside")
 
     def _column_points(self, bl):
@@ -3040,6 +3217,115 @@ class Renderer:
             y += h + 0.2
         self._rec_slot(sl, "next")
 
+    # -- deck-look step 7: words on a picture (cover_bleed, full_bleed_statement), only on a measured zone under a solved scrim -------------
+    @staticmethod
+    def _tz(s) -> dict | None:
+        """The finder's passing zone recorded on the slide's picture slot (``images.text_zone``), or None."""
+        im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
+        tz = im.get("text_zone") or {}
+        return tz if tz.get("zone") else None
+
+    def _fade(self, sl, x, y, w, h, color, alpha, toward):
+        """A scrim's fade: a rectangle filled with a two-stop linear gradient from ``alpha`` at the solid side to nothing ``toward`` the picture's
+        centre (up, down, left, right). Native DrawingML (a:gradFill with a:alpha stops): it stays editable in PowerPoint."""
+        if w <= 0.01 or h <= 0.01:
+            return None
+        r = self.rect(sl, x, y, w, h, fill=color, name="ScrimFade")
+        spPr = r.fill._xPr
+        old = spPr.find(qn("a:solidFill"))
+        ang = {"up": 16200000, "down": 5400000, "right": 0, "left": 10800000}[toward]
+        a = int(alpha * 100000)
+        grad = etree.fromstring(
+            f'<a:gradFill {nsdecls("a")} rotWithShape="1"><a:gsLst>'
+            f'<a:gs pos="0"><a:srgbClr val="{color}"><a:alpha val="{a}"/></a:srgbClr></a:gs>'
+            f'<a:gs pos="100000"><a:srgbClr val="{color}"><a:alpha val="0"/></a:srgbClr></a:gs>'
+            f'</a:gsLst><a:lin ang="{ang}" scaled="0"/></a:gradFill>')
+        old.addprevious(grad)
+        spPr.remove(old)
+        return r
+
+    def _lay_cover_bleed(self, sl, s):
+        """cover_bleed (G1): the cover's picture full bleed, its kicker, title and lead on the finder's zone."""
+        self._lay_bleed(sl, s, cover=True)
+
+    def _lay_bleed(self, sl, s, cover=False):
+        """A bleed (cover_bleed, and full_bleed_statement under deck-look): the picture fills the slide from the top edge to the footer's strip;
+        the words sit in the zone ``images.text_zone`` measured (recorded on the slot: their colour, the scrim's colour and alpha), over a scrim
+        solid under the block plus SCRIM_PAD and fading over SCRIM_FADE toward the picture's centre; the label in the corner diagonal to the
+        words, 0.3 in clear of every text box. NoFit without a passing zone (the ladder sets the words beside the picture instead), with a
+        logo on the cover (a logo is never set over a picture), or when the words do not fit the zone at the display sizes."""
+        S = self.th.scale
+        BW, BH = images.BLEED_W, images.BLEED_H
+        self._own_picture(None, "picture", 0, 0, BW, BH)   # NoFit without a picture
+        tz = self._tz(s)
+        if not tz:
+            raise NoFit("no zone of the picture reads at AA: the words go beside it")
+        if cover and self._logo_file():
+            raise NoFit("a logo is not set over a picture: the cover keeps the picture column")
+        blocks = [b for b in s["blocks"] if self._text_of(b)]
+        if any(b["kind"] not in ("text", "small", "statement") for b in blocks) or (not cover and len(blocks) > 2):
+            raise NoFit("a bleed holds a title and a line")
+        col = tz["text"]
+        bx, by, bw, bh = images.zone_box(tz["zone"])
+        tw = bw
+        kp = [self.para(_kicker(self.deck["meta"]), 16, col, bold=True)] if cover else []
+        kh = self.ph(kp, tw) if kp else 0.0
+        sizes = (52, 48, 44, 40) if cover else self.HERO_SIZES
+        fit = None
+        for hs in sizes:
+            try:
+                hp, hh, _ = self._hero(s["title"], tw, sizes=(hs,) + tuple(z for z in sizes if z < hs), max_lines=4 if cover else 3, color=col)
+            except NoFit:
+                break
+            for ls in (22, 20, 18):
+                lp = [self.para(self._text_of(b), S.small if b["kind"] == "small" else ls, col, line=1.2, after=6) for b in blocks]
+                lh = self.ph(lp, tw) if lp else 0.0
+                total = (kh + 0.25 if kp else 0) + hh + (0.35 + lh if lp else 0)
+                if total <= bh:
+                    fit = (hp, hh, lp, lh, total)
+                    break
+            if fit:
+                break
+        if not fit:
+            raise NoFit("the words do not fit the zone")
+        hp, hh, lp, lh, total = fit
+        if sl is None:
+            return
+        self._bleed = True
+        self._own_picture(sl, "picture", 0, 0, BW, BH, label=False)
+        geo = images.scrim_geometry(tz["zone"], (bx, by, bw, bh))
+        m = self._mark(sl)
+        alpha = max(images.SCRIM_FLOOR, min(images.SCRIM_CAP, float(tz.get("alpha", images.SCRIM_FLOOR))))
+        self._scrim(sl, *geo["solid"], tz["colour"], alpha)
+        self._fade(sl, *geo["fade"], tz["colour"], alpha, geo["toward"])
+        self._build(sl, m)
+        v = tz["zone"].split("_")[0]
+        y = by + bh - total if v == "bottom" else by if v == "top" else by + (bh - total) / 2
+        m = self._mark(sl)
+        boxes = []
+        if kp:
+            self.ptext(sl, bx, y, tw, kh, kp, name="Kicker")
+            boxes.append((bx, y, tw, kh))
+            y += kh + 0.25
+        self.ptext(sl, bx, y, tw, hh, hp, name="Title")
+        boxes.append((bx, y, tw, hh))
+        self._build(sl, m, title=True)
+        y += hh + 0.35
+        if lp:
+            m = self._mark(sl)
+            slot = "lead" if cover else "statement"
+            self.ptext(sl, bx, y, tw, lh, lp, name=f"slot:{slot}")
+            boxes.append((bx, y, tw, lh))
+            self._build(sl, m)
+            self._rec_slot(sl, slot)
+        im = self._pics["picture"]
+        if im.get("status") != "approved":   # the label: the corner diagonal to the words, clear of every text box by 0.3 in
+            pw = self._label_w(im, BW)
+            corner = images.label_corner(tz["zone"])
+            lx = BW - 0.5 - pw if corner.endswith("right") else 0.5
+            ly = 0.75 if corner.startswith("top") else BH - 0.38 - 0.28
+            self._label_pill(sl, lx, ly, im, pw)
+
     def _hero_fits(self, text, w, size, max_lines) -> bool:
         """Whether a hero statement takes at most ``max_lines`` lines at ``size`` (as ``_hero`` measures it)."""
         try:
@@ -3052,7 +3338,7 @@ class Renderer:
                  "territory": "_lay_territory", "quote_cards": "_lay_quote", "role_grid": "_lay_role", "flow": "_lay_flow",
                  # the standard composition: the blocks stacked with their looks
                  "comparison_grid": "_lay_stack", "placeholder_card": "_lay_stack", "comparison": "_lay_stack", "big_number": "_lay_stack",
-                 "kpi_row": "_lay_stack", "timeline_strip": "_lay_stack", "native_table": "_lay_stack", "cards": "_lay_stack",
+                 "kpi_row": "_lay_kpi_row", "timeline_strip": "_lay_stack", "native_table": "_lay_stack", "cards": "_lay_stack",
                  "cover_image": "_lay_cover_image", "section": "_lay_section", "image_text": "_lay_image_text", "image_left": "_lay_image_left",
                  "full_bleed_statement": "_lay_full_bleed", "frames_strip": "_lay_territory", "image_grid": "_lay_image_grid", "execution_visual": "_lay_execution",
                  "close": "_lay_close", "big_statement": "_lay_big_statement", "quote_full": "_lay_quote_full", "cards_split": "_lay_cards_split",
@@ -3061,7 +3347,7 @@ class Renderer:
                  "people_cards": "_lay_people_cards",
                  # deck-look steps 3-4 (spec.LOOK_V3 only: layouts/v3)
                  "statement_points": "_lay_statement_points", "reframe": "_lay_reframe", "shift_line": "_lay_shift_line",
-                 "picture_column": "_lay_picture_column", "rows_aside": "_lay_rows_aside"}
+                 "picture_column": "_lay_picture_column", "rows_aside": "_lay_rows_aside", "cover_bleed": "_lay_cover_bleed"}
 
     # -- the plan's measuring: the renderer's own measure-only mode ---------------------------------
     def probe(self, s: dict, name: str, relaxed: bool = False, scale_cap: float | None = None, title_pt: int | None = None, cpl: int = 48) -> dict:
@@ -3085,6 +3371,37 @@ class Renderer:
             out_sc = self._min_sc
             self._lid, self._min_sc, self._scale_cap, self._relaxed, self._tpt, self._pics, self.p, self._cpl = saved
         return {"ok": ok, "scale": out_sc, "relaxed": relaxed}
+
+    def hole_estimate(self, s: dict, name: str, title_pt: int | None = None, cpl: int = 48) -> float | None:
+        """deck-look (rea-full A4): the largest empty rectangle layout ``name`` would leave on slide ``s`` (blocks already shown), estimated from
+        the boxes it draws on a scratch slide (``qa_render.hole_of_boxes``, the q_no_hole grid), a picture box counted as ink. None when the
+        layout does not hold the slide. The swap menu offers only layouts under spec.HOLE_GATE by it. Nothing of the real deck is touched."""
+        from . import qa_render
+        fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
+        lib = layouts.load()
+        scratch = Presentation()
+        scratch.slide_width, scratch.slide_height = Inches(W), Inches(H)
+        sl = scratch.slides.add_slide(scratch.slide_layouts[6])
+        keep = ("_lid", "_min_sc", "_scale_cap", "_relaxed", "_tpt", "_pics", "p", "_cpl", "_cur", "steps", "_ink", "_band_drawn", "_foot",
+                "_shapes_now", "_slotmap", "_sid", "_bleed", "_own_pics", "_acc", "_acc_drawn", "placed")
+        saved = {k: getattr(self, k, None) for k in keep}
+        self._lid, self._min_sc, self._scale_cap, self._relaxed, self._cpl = name, 1.0, None, False, cpl
+        self.p = self._palette(s["type"] in dark_types(self.th.v3) or name in ("close",))
+        if title_pt:
+            self._tpt = {**self._tpt, name: title_pt}
+        self._pics = {n: {"aspect": x["image"]["aspect"], "asset": None, "probe": True} for n, x in layouts.image_slots(lib[name])} if name in lib else {}
+        self._cur, self.steps, self._ink, self._band_drawn, self._foot, self._shapes_now, self._slotmap = sl, [], [], False, None, [], {}
+        self._sid, self._bleed, self._own_pics, self._acc, self.placed = None, False, set(), None, set()
+        try:
+            fn(sl, s)
+            boxes = [(Emu(sh.left).inches, Emu(sh.top).inches, Emu(sh.width).inches, Emu(sh.height).inches) for sh in sl.shapes
+                     if sh.left is not None] + list(self._ink)
+        except NoFit:
+            return None
+        finally:
+            for k, v in saved.items():
+                setattr(self, k, v)
+        return qa_render.hole_of_boxes(boxes, W, H)
 
     def title_fits(self, title: str, pt: int, lines: int = 3) -> bool:
         """Whether a title takes at most ``lines`` lines at ``pt`` across the content width."""
@@ -3163,6 +3480,7 @@ class Renderer:
         dark = s["type"] in dark_types(self.th.v3)
         self._band_drawn = False
         self._foot = None
+        self._bleed = False
         self.p = self._palette(dark)
         self.fg = self.p.fg
         bg = sl.background.fill
@@ -3188,6 +3506,8 @@ class Renderer:
         s = {**s, "blocks": shown_blocks(s, audience)}
         self._sid, self._pics = sid, {slot: im for (i, slot), im in self.drawn.items() if i == sid}
         self._cpl = ((planned or {}).get("fit") or {}).get("cpl", 48)
+        self._acc = layouts.accent_phrase(s, s["blocks"]) if self.th.v3 else None
+        self._acc_drawn = False
         self._own_pics = set()
         self._slotmap, self._shapes_now = {}, []
         if spec.LOOK_V2 and name in lib:
@@ -3248,6 +3568,10 @@ class Renderer:
         if self.n_human:
             tag = "DRAFT · needs a person" if s["status"] == "needs_human" else f"DRAFT · {self.n_human} slides need a person"
             wx = 8.7 if self._foot is None else max(fx0, fx1 - 4.03)
+            if self._bleed:   # on a full-bleed picture the mark sits on a pill of the slide's ground, its box no wider than the pill
+                tw_ = 0.3 + len(tag) * self.th.scale.foot * 0.56 / 72
+                self.rect(sl, fx1 - tw_ + 0.1, 0.08, tw_, 0.38, fill=p.bg, name="MarkGround")
+                wx = fx1 - tw_ + 0.15
             self.text(sl, wx, 0.12, fx1 - wx, 0.3, tag, size=foot, cap=True, color=p.acc_t, bold=True, align=PP_ALIGN.RIGHT, name="Watermark")
         if sid in self.failed and audience != "client":   # a client slide never prints a check id (a failing client build is withheld by run_deck)
             red = "FF9B8E" if dark else "B03225"
@@ -3360,21 +3684,30 @@ class Renderer:
         pic._element.nvPicPr.cNvPr.set("descr", im.get("alt") or "An illustrative picture")
         if im.get("scrim") in ("dark", "light"):   # the repair loop's scrim: a dark layer under light text, a light one under dark text
             self._scrim(sl, x, y, w, h, "1B2430" if im["scrim"] == "dark" else "FFFFFF", 0.45)
+        if im.get("status") == "flagged":
+            pic.line.color.rgb = _rgb("C0392B")
+            pic.line.width = Pt(3)
         if label and im.get("status") != "approved":
-            flagged = im.get("status") == "flagged"
-            if flagged:
-                pic.line.color.rgb = _rgb("C0392B")
-                pic.line.width = Pt(3)
-            text = f"{self.pic_label} · Flagged" if flagged else self.pic_label
-            pw = min(w - 0.2, 0.24 + 0.085 * len(text))
+            pw = self._label_w(im, w)
             bleed = self.th.v3 and (x <= 0.01 or x + w >= W - 0.01)   # deck-look: a bleeding column keeps its label inside the slide margin
             inset = 0.5 if bleed else 0.1
             lx = x + w - inset - pw if corner == "right" else x + inset
             ly = y + h - (0.78 if (self.th.v3 and y + h >= H - 0.01) else 0.38)
-            self.rect(sl, lx, ly, pw, 0.28, fill="B03225" if flagged else "1B2430", name="PictureLabel")
-            self.text(sl, lx, ly, pw, 0.28, text, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
-                      anchor=MSO_ANCHOR.MIDDLE, name="Caption")
+            self._label_pill(sl, lx, ly, im, pw)
         return pic
+
+    def _label_text(self, im) -> str:
+        return f"{self.pic_label} · Flagged" if im.get("status") == "flagged" else self.pic_label
+
+    def _label_w(self, im, w) -> float:
+        return min(w - 0.2, 0.24 + 0.085 * len(self._label_text(im)))
+
+    def _label_pill(self, sl, lx, ly, im, pw):
+        """The picture label (Illustrative, or Flagged): white bold 10 pt on a solid ink pill (red when flagged), at ``lx, ly``."""
+        flagged = im.get("status") == "flagged"
+        self.rect(sl, lx, ly, pw, 0.28, fill="B03225" if flagged else "1B2430", name="PictureLabel")
+        self.text(sl, lx, ly, pw, 0.28, self._label_text(im), size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
+                  anchor=MSO_ANCHOR.MIDDLE, name="Caption")
 
     def _draw_pictures(self, sl, plan):
         for slot, x, y, w, h, im in plan["boxes"]:

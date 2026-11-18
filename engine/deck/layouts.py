@@ -217,6 +217,55 @@ TESTS = {"has_target_figure": has_target_figure, "has_human_item": has_human_ite
          "points_2_3": points_2_3, "rows_aside": rows_aside}
 
 
+def has_text_zone(s: dict) -> bool:
+    """deck-look step 7: the slide's picture carries a passing zone from the finder (``images.text_zone`` recorded on the slot)."""
+    im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
+    return bool((im.get("text_zone") or {}).get("zone"))
+
+
+def text_zone_fallback(s: dict) -> dict | None:
+    """The finder's record when it found no zone for this slide's picture (the words stay beside it), else None."""
+    im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
+    tz = im.get("text_zone") or {}
+    return tz if tz.get("none") else None
+
+
+def bleed_ready(lay: dict, s: dict, ready) -> bool:
+    """A bleed layout (cover_bleed, full_bleed_statement under the look) holds the slide: its picture can be drawn and the finder measured a
+    zone where the words read (AA at the 10th percentile under a scrim of at most images.SCRIM_CAP)."""
+    return image_ready(lay, ready) and has_text_zone(s)
+
+
+_FIGURE = re.compile(r"[<>~≈]?(?:[€$£]|(?:EUR|USD|GBP)\s)\s?\d[\d,.]*(?:\s?(?:[kKmMbB]n?\b|million\b|billion\b))?|\d[\d,.]*\s?(?:%|per ?cent\b|×)")
+
+
+def accent_phrase(s: dict, bl: list) -> str | None:
+    """deck-look (rea-full A3, Pitch's highlight): the ONE phrase of a slide's action title set in the accent, or None. Only a phrase that
+    is itself a bound field of the same slide: the 'to' of its from-to, a line of its copy, a figure one of its blocks gives, or the whole
+    text of one of its short items (six words at most); never the whole title, matched on word boundaries, case-insensitive. The longest
+    wins; nothing is reworded. At most one per slide (k_accent_marks counts it)."""
+    title = str(s.get("title") or "")
+    tl = title.lower()
+    cands = []
+    for b in bl:
+        if b.get("kind") == "fromto" and str(b.get("to") or "").strip():
+            cands.append(str(b["to"]))
+        cands += [str(x) for x in b.get("lines") or []]
+        texts = [str(b.get("text") or "")] + [_item_text(i) if not isinstance(i, (list, tuple)) else str(i[-1]) for i in b.get("items") or []]
+        texts += [str(c) for r in (b.get("rows") or [])[1:] for c in r]
+        cands += [t for t in texts if 0 < len(t.split()) <= 6]
+        cands += [m.group(0) for t in texts for m in _FIGURE.finditer(t)]
+    best = None
+    for c in cands:
+        c = c.strip().rstrip(".")
+        if len(c) < 2 or c.lower() == tl.rstrip(".") or not re.search(r"\w", c):
+            continue
+        m = re.search(r"(?<![\w])" + re.escape(c.lower()) + r"(?![\w])", tl)
+        if m and (best is None or len(c) > len(best)):
+            best = title[m.start():m.end()]
+    return best
+
+
 def picture_sides(deck: dict) -> dict:
     """``{slide id: "left" | "right"}`` for every slide planned on ``picture_column``, in deck order: the first column on the left, then
     alternating (design.layouts: picture columns alternate sides). One rule for the pptx and the web deck."""
@@ -258,6 +307,8 @@ def _matches(lay: dict, s: dict, bl: list, ready) -> bool:
     t = w.get("test")
     if t == "image_ready":
         return image_ready(lay, ready)
+    if t == "bleed_ready":
+        return bleed_ready(lay, s, ready)
     if t and not TESTS[t](s, bl):
         return False
     return True
@@ -333,6 +384,8 @@ def accepts(lay: dict, s: dict, bl: list, ready=frozenset()) -> bool:
     if "blocks_any" in w and not {b["kind"] for b in bl} & set(w["blocks_any"]):
         return False
     t = w.get("test")
+    if t == "bleed_ready" and not has_text_zone(s):
+        return False
     if t in TESTS and t != "image_ready" and not TESTS[t](s, bl):
         return False
     return True
@@ -489,7 +542,7 @@ def slot_limit_issues(lay: dict, sid: str, slots: dict) -> list:
 
 
 #: The check names the plan raises (the contract's reserved slot and layout names): in validation.json, warn (slot_missing: error).
-PLAN_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown")
+PLAN_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown", "text_on_image_fallback")
 
 
 def without_plan_findings(findings: list) -> list:
@@ -757,7 +810,7 @@ def title_sizes(deck: dict, ids: dict, probe, aud: str = "review") -> dict:
         by.setdefault(lid, []).append(sid)
     out = {}
     for lid, sids in by.items():
-        if lid in ("flow", "cover", "cover_image", "close", "emphasis_bar", "big_statement", "full_bleed_statement", "section"):
+        if lid in ("flow", "cover", "cover_image", "close", "emphasis_bar", "big_statement", "full_bleed_statement", "section", "cover_bleed"):
             continue
         out[lid] = next((sz for sz in TITLE_SIZES if all(probe(deck["slides"][sid], lid, sz) for sid in sids)), TITLE_SIZES[-1])
     return out
@@ -948,11 +1001,23 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             fit["cpl"] = cpl_
         def fits(a, _s={**sl_, "blocks": shown}, _cap=sc_cap):
             r = probe(_s, a, cap=_cap, stamped=pt.get(a))
-            return bool(r["ok"] and not r["relaxed"])
+            if not (r["ok"] and not r["relaxed"]):
+                return False
+            if spec.LOOK_V3 and lib[a]["group"] == "content":   # deck-look (rea-full A4): the menu offers no layout that opens a hole over the gate
+                hole = R.hole_estimate(_s, a, title_pt=pt.get(a))
+                return hole is not None and hole <= spec.HOLE_GATE
+            return True
         alt_ids = _alternatives(lib, lid, base, aud, ready.get(sid, frozenset()), f.get("avoid", []), probe=fits) if lay else []
         layout = {"id": lid, "version": lay["version"] if lay else 1, "chosen_by": chosen_by, "alternatives": alt_ids[:4], "why": why_[:160],
                   "fit": fit, "blocks_sha": blocks_sha(base, aud)}
         s["layout"] = layout
+        fb = text_zone_fallback(s) if spec.LOOK_V3 and s["type"] in images.TEXT_OVER_TYPES and "picture" in ready.get(sid, ()) else None
+        if fb:   # deck-look step 7: no zone of the picture reads at AA under the capped scrim: the words sit beside it, and it is said
+            best = fb.get("best") or {}
+            issues.append(_issue(sid, "picture", "text_on_image_fallback",
+                                 f"the words are set beside the picture ({lid}), not on it: {fb.get('reason', 'no calm zone')}"
+                                 + (f" (best zone {best['zone']}: {best['p10']}:1 at the 10th percentile, s.d. {best['busy_sd']})" if best.get("zone") else ""),
+                                 best.get("p10"), images.TEXT_ON_PICTURE_TARGET, "contrast"))
         if rung in rungs or rung == "overflow_to_notes":
             rungs["overflow_moved" if rung == "overflow_to_notes" else rung] += 1
         if relaxed:

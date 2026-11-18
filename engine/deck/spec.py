@@ -324,6 +324,9 @@ PITCH_TARGET = int(os.environ.get("DECK_PITCH_TARGET") or 10)
 PITCH_CAP = int(os.environ.get("DECK_PITCH_CAP") or 12)
 #: Slide types the length target never moves (design.length): the story's spine and the ask.
 TARGET_KEEPS = ("title", "objective", "real_question", "insight", "idea", "investment", "next_step", "ask", "close", "proposition", "audience")
+#: deck-look (fix 2, said once): the notes line that keeps a sentence a presented slide would have said a second time (an idea titled
+#: with the line the proposition already said, a piece's copy that is that line). Engine words; the sentence itself is kept verbatim.
+SAID_ONCE_NOTE = "Said once, on slide {n}:"
 #: The title and text of the divider that opens the appendix's 'To supply' part (engine words, like the Appendix divider's).
 TO_SUPPLY_TITLE = "To supply"
 TO_SUPPLY_TEXT = "Slides that wait for what only a person can give: fill them and they return to the story."
@@ -423,11 +426,12 @@ LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "compari
               "close", "big_statement", "quote_full", "cards_split", "text_columns", "placeholder_split", "chart_full",
               "timeline_rows", "execution_stack", "territory_wide", "people_cards")
 #: The tests a layout file's ``when.test`` may name; each is a function of the same name in layouts.py (and has a unit test).
-LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3", "rows_aside")
+LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3", "rows_aside", "bleed_ready")
 #: deck-look steps 3-5: the layouts that exist only under ``LOOK_V3`` (``layouts/v3``; the same folder may also rework a layout
 #: of LAYOUT_IDS, such as ``close``). With the flag off the library is the 36 above, byte for byte. rows_aside (step 5) holds a
 #: merged slide: the kept slide's table as hairline rows, the absorbed slide's blocks in a column beside them.
-LAYOUT_IDS_V3 = ("statement_points", "reframe", "shift_line", "picture_column", "rows_aside")
+#: cover_bleed (step 7) sets the cover's words on its picture, on the zone images.text_zone measured (full_bleed_statement is reworked the same way).
+LAYOUT_IDS_V3 = ("statement_points", "reframe", "shift_line", "picture_column", "rows_aside", "cover_bleed")
 #: deck-look: a statement set in capitals only when it is at most this many characters (and two lines); sentence case beyond (Q10).
 CAPS_MAX_CHARS = 40
 #: deck-look q_no_hole (design.checklist): the largest empty rectangle of a presented content slide, as a share of the slide, on a

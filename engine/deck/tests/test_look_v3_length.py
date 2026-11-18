@@ -24,7 +24,9 @@ AFTER_10 = ["title", "objective", "real_question", "insight", "audience", "propo
 #: The Lumen golden's words_sha under LOOK_V3 after step 5. RE-RECORDED DELIBERATELY (deck-look step 5, Fable's fix 1): the merges and the
 #: appendix moves change the order, two slides' blocks and notes, and add the 'To supply' divider and count; the per-word multiset tests
 #: below prove no word was lost. The flag-off words_sha of every fixture is unchanged (bench/baseline/checklist.json, the goldens).
-V3_WORDS_SHA = "92bc3896298c"
+#: RE-RECORDED AGAIN at step 7 (fix 2, said once): the idea leads with its own stage text and the campaign line it repeated, and the poster's
+#: copy that repeated it, go to the notes after spec.SAID_ONCE_NOTE (92bc3896298c -> 54ab781d7dc5); the multiset tests still pass.
+V3_WORDS_SHA = "54ab781d7dc5"
 
 
 @pytest.fixture
@@ -46,6 +48,10 @@ def _types(d: dict, sids) -> list:
 
 def _of(d: dict, typ: str) -> dict:
     return next(d["slides"][x] for x in d["order"] if d["slides"][x]["type"] == typ)
+
+
+def _presented_no(d: dict, typ: str) -> int:
+    return d["order"].index(next(x for x in d["order"] if d["slides"][x]["type"] == typ)) + 1
 
 
 def _backup(d: dict) -> list:
@@ -166,9 +172,10 @@ def test_how_it_runs_keeps_its_own_title_and_heads_the_execution_with_its_title(
     d = _build()
     cr = _of(d, "channel_roles")
     assert cr["title"] == "Each channel has one job" and cr["merged"] == [{"type": "execution", "title": "Outdoor"}]
-    assert [b["kind"] for b in cr["blocks"]] == ["table", "text", "copy"]
+    assert [b["kind"] for b in cr["blocks"]] == ["table", "text"]   # the poster's copy is the line the proposition said: said once (fix 2)
     assert cr["blocks"][1] == {"kind": "text", "text": "Role: Make the line famous", "title": "Outdoor"}
-    assert "Every drop has a story." in cr["blocks"][2]["lines"]
+    n = _presented_no(d, "proposition")
+    assert f"{spec.SAID_ONCE_NOTE.format(n=n)} Every drop has a story. (Poster)" in cr["notes"]
     assert not any(d["slides"][x]["type"] == "execution" for x in d["order"])
 
 
@@ -287,8 +294,7 @@ def test_rows_aside_draws_every_word_of_both_slides(v3, tmp_path):
     r = R.Renderer(planned, Inputs(brief={}), theme="napkin")
     r.render(tmp_path / "d.pptx")
     prs = Presentation(str(tmp_path / "d.pptx"))
-    for typ, words in (("channel_roles", ["Each channel has one job", "Channel", "Its one job", "Outdoor", "Fame", "Radio", "Reach", "Role: Make the line famous",
-                                          "Every drop has a story.", "Poster"]),
+    for typ, words in (("channel_roles", ["Each channel has one job", "Channel", "Its one job", "Outdoor", "Fame", "Radio", "Reach", "Role: Make the line famous"]),
                        ("measurement", ["How we will know it worked", "What we measure", "Household use", "Utility meter data",
                                         "What the work must always carry, and never do", "Show the Lumen Water logo on every execution"])):
         sid = next(x for x in planned["order"] if planned["slides"][x]["type"] == typ)
