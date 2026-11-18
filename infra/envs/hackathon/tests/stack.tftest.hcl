@@ -142,17 +142,36 @@ run "plans_the_hackathon_stack" {
     error_message = "the relay may write each agency's projects and library under tenants/"
   }
   assert {
-    condition     = length(aws_cloudfront_response_headers_policy.studio_cors) == 0 && alltrue([for b in aws_cloudfront_distribution.site.ordered_cache_behavior : b.response_headers_policy_id == null || b.response_headers_policy_id == ""])
-    error_message = "no studio origin, no CORS policy"
+    condition     = one(one(one(aws_cloudfront_response_headers_policy.cors).cors_config).access_control_allow_origins).items == toset(["http://localhost:5173"])
+    error_message = "the dev server reads /in, /out and /ads across origins by default"
+  }
+  # UAT 2026-11-18, U4: stitch reads the type layers the relay draws under ads/ (end card, words).
+  assert {
+    condition     = alltrue([for p in ["in/*", "out/*", "ads/*"] : anytrue([for s in data.aws_iam_policy_document.stitch.statement : contains(s.actions, "s3:GetObject") && anytrue([for r in s.resources : endswith(r, "/${p}")])])])
+    error_message = "stitch reads clips under in/ and out/ and the relay's layers under ads/"
   }
 }
 
-# The studio at <origin>/production reads and uploads across origins (features/os-sign-in.clan).
+run "no_cross_origin_reads_without_an_origin" {
+  command = apply
+
+  variables {
+    cors_origins = []
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_response_headers_policy.cors) == 0 && alltrue([for b in aws_cloudfront_distribution.site.ordered_cache_behavior : b.response_headers_policy_id == null || b.response_headers_policy_id == ""])
+    error_message = "no origin, no CORS policy"
+  }
+}
+
+# The studio at <origin>/production reads and uploads across origins (features/os-sign-in.clan): one list,
+# cors_origins, drives both the bucket's PUT rule and CloudFront's answers (UAT 2026-11-18, U2 and U2b).
 run "allows_the_studio_origin" {
   command = apply
 
   variables {
-    studio_origins = ["https://studio.example.com"]
+    cors_origins = ["https://studio.example.com"]
   }
 
   assert {
@@ -164,11 +183,11 @@ run "allows_the_studio_origin" {
     error_message = "a presigned upload carries its checksum header across origins (features/tenant-limits.clan)"
   }
   assert {
-    condition     = one(one(one(aws_cloudfront_response_headers_policy.studio_cors).cors_config).access_control_allow_origins).items == toset(["https://studio.example.com"])
+    condition     = one(one(one(aws_cloudfront_response_headers_policy.cors).cors_config).access_control_allow_origins).items == toset(["https://studio.example.com"])
     error_message = "the CORS response-headers policy allows the studio origin"
   }
   assert {
-    condition     = alltrue([for b in aws_cloudfront_distribution.site.ordered_cache_behavior : b.response_headers_policy_id == one(aws_cloudfront_response_headers_policy.studio_cors).id if contains(["/in/*", "/out/*", "/ads/*"], b.path_pattern)])
+    condition     = alltrue([for b in aws_cloudfront_distribution.site.ordered_cache_behavior : b.response_headers_policy_id == one(aws_cloudfront_response_headers_policy.cors).id if contains(["/in/*", "/out/*", "/ads/*"], b.path_pattern)])
     error_message = "/in/*, /out/* and /ads/* answer the studio with CORS"
   }
   assert {
@@ -177,12 +196,12 @@ run "allows_the_studio_origin" {
   }
 }
 
-run "refuses_a_studio_origin_with_a_path" {
+run "refuses_an_origin_with_a_path" {
   command = plan
 
   variables {
-    studio_origins = ["https://studio.example.com/production/"]
+    cors_origins = ["https://studio.example.com/production/"]
   }
 
-  expect_failures = [var.studio_origins]
+  expect_failures = [var.cors_origins]
 }
