@@ -2,6 +2,7 @@
 // fragment <-> the flat fields the .clan keeps. checkpoint(hydrate(x)) is x for
 // every fragment kind (test/text.test.ts).
 import * as Y from 'yjs'
+import { hexOfBytes, sha256Digest } from '../sha256'
 import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProsemirrorJSON } from '@tiptap/y-tiptap'
 import { FRAGMENT_BLOCKS, textSchema, type FragmentKind } from './extensions'
 
@@ -169,8 +170,7 @@ export function checkpoint(kind: FragmentKind, prose: Prose, opts: { refs: RefNa
 /** A stable hash of prose (a suggestion's base_hash): sha256 of its canonical JSON. */
 export async function proseHash(prose: Prose): Promise<string> {
   const bytes = new TextEncoder().encode(canonical(prose))
-  const digest = await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource)
-  return `sha256:${Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')}`
+  return `sha256:${hexOfBytes(await sha256Digest(bytes))}`
 }
 
 function canonical(v: unknown): string {
