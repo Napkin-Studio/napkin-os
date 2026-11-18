@@ -194,6 +194,38 @@ class _Slide:
         return f'<div class="frame copy">{body}{self.rv("answer", _e(ans), "p")}</div>'
 
 
+def _mockup(im: dict | None = None, label: str = "") -> str:
+    """The labels under a frame or a strip: the picture's own (unless approved), then the fixed 'Mock-up'."""
+    own = ""
+    if im is not None and im.get("status") != "approved":
+        flagged = im.get("status") == "flagged"
+        own = f'<span class="mockup own{" flagged" if flagged else ""}">{_e(images.picture_label(im, label) + (" · Flagged" if flagged else ""))}</span>'
+    return own + f'<span class="mockup">{_e(spec.MOCKUP_LABEL)}</span>'
+
+
+def _framed_markup(s: dict, got: list, deck: dict, fig, label: str) -> tuple | None:
+    """deck-graphics on the web: the storyboard strip (3 or 4 shots, numbered, 'Mock-up') or the picture in its drawn frame (CSS boxes
+    around the picture at the window's exact aspect, the labels under the frame). None: no frame for this picture (drawn as before)."""
+    from . import graphics   # noqa: PLC0415
+    shots = [(slot, im) for slot, im in got if slot.startswith("shot_")]
+    if len(shots) >= spec.STRIP_MIN:   # stacked beside the words (a side picture or the picture column), numbered, labels at the foot
+        cells = "".join(f'<div class="sb-cell">{fig(slot, im, "width:100%;aspect-ratio:16/9")}<div class="sb-n"><b>{n}</b><i></i></div></div>'
+                        for n, (slot, im) in enumerate(shots, 1))
+        return (f'<div class="pics side"><div class="frame-wrap sb-col" style="width:380px">{cells}<div class="f-pills">{_mockup(shots[0][1], label)}</div></div></div>',
+                "pic-side pw560")
+    pic = next(((slot, im) for slot, im in got if slot == "picture"), None)
+    fr = graphics.frame_of(deck, spec.picture_of(s)[1], pic[1]) if pic else None
+    if not fr:
+        return None
+    slot, im = pic
+    r = fr["ratio"]
+    w = 360 if r < 0.8 else 460   # the frame's bezel and labels take the class's extra 100 px (PIC_CSS pw460 / pw560)
+    style = f"width:{w}px;aspect-ratio:{r:.4f}"
+    figure = fig(slot, im, style).replace('class="pic', 'class="pic framed', 1)
+    return (f'<div class="pics side"><div class="frame-wrap f-{fr["kind"]}">{figure}'
+            f'<i class="f-stand"></i><div class="f-pills">{_mockup(im, label)}</div></div></div>', f"pic-side pw{w + 100}")
+
+
 def data_uri(aid: str, path: Path) -> str:
     """A picture inline (deck.html stays one self-contained file): the derived JPEG as a data URI."""
     return "data:image/jpeg;base64," + base64.b64encode(Path(path).read_bytes()).decode()
@@ -203,7 +235,7 @@ def data_uri(aid: str, path: Path) -> str:
 PIC_SIDE = {"16:9": 560, "4:3": 500, "4:5": 460, "9:16": 360}
 
 
-def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: str) -> tuple:
+def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: str, deck: dict | None = None) -> tuple:
     """The picture figures for one slide and the class the slide takes: ``(html, class)``, or ``("", "")`` when nothing is drawn. One
     markup for deck.html and HyperFrames (``src`` makes the image address). Cover-crop with object-fit, alt text, and the label on every
     picture not yet approved (a flagged one also named Flagged and outlined)."""
@@ -222,6 +254,10 @@ def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: s
 
     if s["type"] == "territory":
         return '<div class="pics strip">' + "".join(fig(slot, im) for slot, im in got) + "</div>", "pic-strip"
+    if spec.GRAPHICS and deck is not None and spec.picture_of(s)[0] == "execution":   # deck-graphics: frames and the storyboard strip
+        got_framed = _framed_markup(s, got, deck, fig, label)
+        if got_framed:
+            return got_framed
     slot, im = got[0]
     a = im["aspect"]
     w = PIC_SIDE[a]
@@ -490,7 +526,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
     src = src or data_uri
     for n, sid in enumerate(deck["order"], 1):
         s = deck["slides"][sid]
-        pic_html, pic_cls = picture_markup(sid, s, drawn, pictures or {}, src, plabel) if drawn else ("", "")
+        pic_html, pic_cls = picture_markup(sid, s, drawn, pictures or {}, src, plabel, deck=deck) if drawn else ("", "")
         b = _Slide(inp)
         if icons and sid in icons:   # deck-graphics: exactly the icons the pptx drew (render_pptx's ``icons``)
             b.icons = list(icons[sid]["ids"])
@@ -557,6 +593,26 @@ svg.icon{display:block;color:inherit;flex:none}
 .v3pc .pc-grid{margin-top:auto}.v3pc .pc-gr{display:grid;grid-template-columns:2fr 3fr;gap:28px;align-items:center;padding:22px 0}
 .v3pc .pc-gr+.pc-gr{border-top:1.5px solid var(--ink)}.v3pc .pc-gh{padding-top:0}
 .v3pc .pc-k{display:flex;align-items:center;gap:22px;font:700 44px/1.05 var(--head)}.v3pc .pc-gr p{font-size:38px;line-height:1.2}
+"""
+
+#: deck-graphics frame and strip styles: added ONLY when a frame is drawn. Bezels in the ink token; the window keeps the picture's aspect.
+FRAME_CSS = """
+.mockup{display:inline-block;background:var(--ink);color:#fff;font:700 20px/1 var(--body);padding:9px 14px;letter-spacing:.02em}
+.frame-wrap{position:relative;display:flex;flex-direction:column;align-items:center}
+.frame-wrap .pic.framed{border:14px solid var(--ink);border-radius:0;box-sizing:content-box}
+.frame-wrap.f-phone .pic.framed{border-width:22px;border-radius:44px}
+.frame-wrap .f-stand{display:block;width:30%;height:44px;background:var(--ink)}
+.frame-wrap.f-phone .f-stand,.frame-wrap.f-strip .f-stand,.frame-wrap.f-spread .f-stand{display:none}
+.frame-wrap.f-billboard .f-stand{width:70%;height:60px;background:linear-gradient(90deg,var(--ink) 0 6%,transparent 6% 94%,var(--ink) 94%)}
+.frame-wrap.f-screen .f-stand{width:12%;height:36px}
+.frame-wrap .f-pills{margin-top:22px;display:flex;gap:12px}
+.frame-wrap .pic .plabel{display:none}
+.pics.col:has(.frame-wrap){display:flex;align-items:center;justify-content:center;background:var(--tint)}
+.pics.col .frame-wrap .pic{height:auto}
+.mockup.own{background:transparent;color:var(--ink);outline:1.5px solid var(--ink);outline-offset:-1.5px}.mockup.own.flagged{color:#B03225;outline-color:#B03225}
+.sb-col{gap:18px}.sb-col .sb-cell{width:100%}.sb-col .pic{border:1.5px solid var(--ink);border-radius:0}.sb-col .pic .plabel{display:none}
+.sb-n{display:flex;align-items:center;gap:14px;margin-top:8px}
+.sb-n b{font:700 30px/1 var(--head)}.sb-n i{flex:1;height:1.5px;background:var(--ink)}
 """
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.
@@ -896,7 +952,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{ICON_CSS if ('data-icon="' in slides or 'class="pc-grid"' in slides) else ""}</style></head>
+<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{ICON_CSS if ('data-icon="' in slides or 'class="pc-grid"' in slides) else ""}{FRAME_CSS if 'class="mockup"' in slides else ""}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>

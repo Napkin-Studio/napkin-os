@@ -259,3 +259,147 @@ def icon_svg(iid: str, size_in: float, cls: str = "icon") -> str:
     return (f'<svg class="{cls}" data-icon="{iid}" width="{px}" height="{px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
             f'stroke-width="{sw:g}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
             f'<path d="{svg_d(iid)}"/></svg>')
+
+
+# ================================================================================================ execution frames (slice 2)
+# A pictured execution is shown in place: a frame DRAWN by us from a few native shapes in the ink token (no licensed template, no real
+# device, street, shop or logo), whose window takes the picture's format aspect exactly. A Production typed size keeps its own format's
+# aspect (vendor/format-packs.json, else its own pixels), so it is never cropped; a generated or supplied picture takes the frame's
+# default format (spec.FRAME_FORMATS) and is cropped to it around its focal point. The frame carries the fixed label spec.MOCKUP_LABEL.
+
+PACKS_JSON = DIR / "vendor" / "format-packs.json"
+FRAME_KINDS = tuple(spec.FRAME_FORMATS)
+#: Window aspects within this ratio of 9:16 fill a phone's screen; any other social or film shape sits as a feed card on a blank screen.
+PHONE_FILL_TOL = 1.06
+
+
+@functools.lru_cache(maxsize=1)
+def pack_formats() -> dict:
+    """``{format id: {channel, kind, w, h}}`` from the pinned format packs (the copy deck.from_production already reads)."""
+    out = {}
+    for p in json.loads(PACKS_JSON.read_text(encoding="utf-8")).get("packs") or []:
+        for f in p.get("formats") or []:
+            if f.get("width") and f.get("height"):
+                out.setdefault(f["id"], {"channel": f.get("channel"), "kind": f.get("kind"), "w": float(f["width"]), "h": float(f["height"])})
+    return out
+
+
+def frame_kind(channel: str | None, ratio: float, format_id: str | None = None) -> str | None:
+    """The frame a picture of ``ratio`` (width / height) for ``channel`` is shown in (design.mockups.frames), or None (no frame)."""
+    fid = (format_id or "").lower()
+    if channel == "ooh":
+        if ratio >= 3.0 or "bus" in fid:
+            return "strip"
+        return "billboard" if ratio >= 1.3 else "poster_portrait"
+    if channel in ("social", "film"):
+        if channel == "film" and ratio >= 1.3:
+            return "screen"
+        return "phone" if ratio < 1.3 else "screen"
+    if channel == "print":
+        return "spread" if ratio >= 1.2 or "dps" in fid else "poster_portrait"
+    if channel == "display":
+        return "strip"
+    return None
+
+
+def frame_of(deck: dict, title: str, im: dict) -> dict | None:
+    """``{kind, ratio, production, format_id}`` for an execution's picture, or None when it takes no frame (a channel with no frame, or
+    no channel named). A Production picture: its format's aspect from the packs (else its own pixels), never cropped. Anything else: the
+    default format of the frame its channel takes (spec.FRAME_OF_CHANNEL, spec.FRAME_FORMATS)."""
+    from . import images   # noqa: PLC0415
+    rec = (deck.get("assets") or {}).get(im.get("asset")) or {}
+    src = rec.get("source") or {}
+    prod = (im.get("from") or {}).get("kind") == "production"
+    if prod:
+        fid = src.get("format_id")
+        f = pack_formats().get(fid or "")
+        if f:
+            ratio, ch = f["w"] / f["h"], src.get("channel") or f["channel"]
+        elif rec.get("width") and rec.get("height"):
+            ratio, ch = rec["width"] / rec["height"], src.get("channel") or images.execution_channel(title)
+        else:
+            return None
+        if src.get("role") == "frame":
+            ch = "film"
+        kind = frame_kind(ch or images.execution_channel(title), ratio, fid)
+        return {"kind": kind, "ratio": ratio, "production": True, "format_id": fid} if kind else None
+    ch = images.execution_channel(title)
+    kind = spec.FRAME_OF_CHANNEL.get(ch or "")
+    if not kind:
+        return None
+    f = pack_formats()[spec.FRAME_FORMATS[kind]]
+    return {"kind": kind, "ratio": f["w"] / f["h"], "production": False, "format_id": spec.FRAME_FORMATS[kind]}
+
+
+def frame_geometry(kind: str, ratio: float, x: float, y: float, w: float, h: float) -> dict:
+    """The frame of ``kind`` around a window of aspect ``ratio``, contained in the box ``x, y, w, h`` (inches) and centred in it:
+    ``{"window": (x, y, w, h), "outer": (x, y, w, h), "parts": [(role, shape, x, y, w, h)]}`` where shape is ``rect``, ``rrect`` (a
+    rounded body) or ``screen`` (the blank screen behind a feed card) and role names the part. Pure geometry: the window's aspect is
+    exactly ``ratio``; the frame never leaves the box."""
+    ww, wh = (ratio, 1.0)   # window in units: height 1
+    parts, win = [], (0.0, 0.0, ww, wh)
+    b = 0.045 * min(ww, wh)
+    if kind == "phone":
+        if 9 / 16 / PHONE_FILL_TOL < ratio < 9 / 16 * PHONE_FILL_TOL:   # a 9:16 picture fills the screen
+            sw, sh, screen = ww, wh, None
+        else:   # a feed card on a blank 9:16 screen with two grey bars (no platform chrome, no words)
+            sw, sh = 1.0, 16 / 9
+            cw = 0.92
+            ch_ = cw / ratio
+            if ch_ > sh * 0.66:
+                ch_ = sh * 0.66
+                cw = ch_ * ratio
+            win = ((sw - cw) / 2, (sh - ch_) / 2, cw, ch_)
+            screen = (0.0, 0.0, sw, sh)
+        b = 0.07 * sw
+        parts.append(("bezel", "rrect", -b, -b, sw + 2 * b, sh + 2 * b))
+        if screen:
+            parts.append(("screen", "screen", *screen))
+            parts.append(("bar", "bar", win[0], win[1] - 0.06 * sh, sw * 0.38, 0.025 * sh))
+            parts.append(("bar", "bar", win[0], win[1] + win[3] + 0.035 * sh, sw * 0.6, 0.025 * sh))
+    elif kind == "poster_portrait":
+        parts.append(("bezel", "rect", -b, -b, ww + 2 * b, wh + 2 * b))
+        nw, nh = 0.3 * ww, 0.14 * wh
+        parts.append(("stand", "rect", (ww - nw) / 2, wh + b, nw, nh))
+        parts.append(("foot", "rect", -0.1 * ww, wh + b + nh, 1.2 * ww, max(b * 0.6, 0.018 * wh)))
+    elif kind == "billboard":
+        parts.append(("bezel", "rect", -b, -b, ww + 2 * b, wh + 2 * b))
+        pw, ph = 0.03 * ww, 0.24 * wh
+        for fx in (0.17, 0.8):
+            parts.append(("post", "rect", fx * ww, wh + b, pw, ph))
+    elif kind == "screen":
+        parts.append(("bezel", "rect", -b, -b, ww + 2 * b, wh + 2 * b))
+        parts.append(("stand", "rect", ww * 0.46, wh + b, ww * 0.08, 0.07 * wh))
+        parts.append(("foot", "rect", ww * 0.36, wh + b + 0.07 * wh, ww * 0.28, max(b * 0.6, 0.025 * wh)))
+    elif kind == "spread":
+        b = 0.018 * min(ww, wh)
+        parts.append(("bezel", "rect", -b, -b, ww + 2 * b, wh + 2 * b))
+        parts.append(("gutter", "gutter", ww / 2, 0.0, 0.0, wh))
+    else:   # strip: a plain bezel at the true aspect (no bus, no web page)
+        b = 0.06 * min(ww, wh)
+        parts.append(("bezel", "rect", -b, -b, ww + 2 * b, wh + 2 * b))
+    xs = [p[2] for p in parts] + [win[0]]
+    ys = [p[3] for p in parts] + [win[1]]
+    xe = [p[2] + p[4] for p in parts] + [win[0] + win[2]]
+    ye = [p[3] + p[5] for p in parts] + [win[1] + win[3]]
+    x0, y0, x1, y1 = min(xs), min(ys), max(xe), max(ye)
+    s = min(w / (x1 - x0), h / (y1 - y0))
+    ox = x + (w - (x1 - x0) * s) / 2 - x0 * s
+    oy = y + (h - (y1 - y0) * s) / 2 - y0 * s
+    tf = lambda px, py, pw, ph: (ox + px * s, oy + py * s, pw * s, ph * s)   # noqa: E731
+    return {"window": tf(*win), "outer": tf(x0, y0, x1 - x0, y1 - y0), "parts": [(r, sh, *tf(*p)) for r, sh, *p in parts]}
+
+
+# ================================================================================================ the storyboard strip (slice 3)
+
+def strip_picks(frames: list) -> tuple:
+    """``(picked, note)`` from a storyboard's placeable frames in shot order: all of them when 3 or 4; the first, the last and evenly
+    spaced ones between when more (the note says '4 of 9 shots'); ``([], why)`` when fewer than spec.STRIP_MIN."""
+    n = len(frames)
+    if n < spec.STRIP_MIN:
+        return [], f"{n} placeable storyboard frame(s): a strip needs {spec.STRIP_MIN}"
+    if n <= spec.STRIP_MAX:
+        return list(frames), ""
+    k = spec.STRIP_MAX
+    idx = sorted({round(i * (n - 1) / (k - 1)) for i in range(k)})
+    return [frames[i] for i in idx], f"{k} of {n} shots"

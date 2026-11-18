@@ -581,6 +581,30 @@ native shapes that draw only what the deck already says. Slice 1 is **icons**:
 - **Checked** by `i_icon_allowlist` and `i_icon_contrast` (gate) and `i_icon_groups` and `i_icon_share` (advisory, at most 3 icon
   slides in any 10 presented) in `checklist.json`.
 
+Slice 2 is **execution frames**, slice 3 the **storyboard strip**:
+
+- **Frames** (`graphics.frame_geometry`): poster (6-sheet, print page), billboard (48-sheet, 96-sheet), phone (9:16 fills the screen;
+  4:5, 1:1 and other social or film shapes sit as a feed card on a blank screen with two grey bars), screen (film 16:9), spread
+  (magazine DPS, a fold hairline) and strip (bus sides, banners: a plain bezel). Drawn by us from 2 to 5 native shapes in the ink token;
+  no licensed template, no device, street, shop, logo or platform chrome. Drawn wherever an execution's picture is drawn (its own
+  execution slide, or a merged slide that absorbed it), contained in the picture's box; the words never move.
+- **Window aspect.** A Production size: its format's aspect from `vendor/format-packs.json` (else its own pixels), so it is drawn
+  whole. Anything else: the frame's default format (`spec.FRAME_FORMATS`: uk-6-sheet, uk-48-sheet, meta-stories-9x16, film-16x9,
+  mag-a4-dps, uk-bus-tside), cropped to it around its focal point.
+- **Production first.** `images.bind_production` under the flag takes the newest placeable size of the execution's channel whatever its
+  shape (the frame shows it whole); a channel whose sizes are all out of date is held with that reason; a rights-pending size is left
+  empty with `Rights to supply` and its Review notice, never placed and never replaced by a generated picture. A generated picture
+  only where Production made nothing for that channel. Under the flag stage g is told to describe the artwork itself, never a photo of a
+  street or a shelter with the ad in it (`stages.ARTWORK_RULE`; the request, and so a recorded stage g, is unchanged).
+- **Labels.** The fixed `Mock-up` (`spec.MOCKUP_LABEL`) on every frame and strip, in every build (client builds too), beside the
+  picture's own label (`Production` or `Illustrative` until approved), in a row under the frame: never on the frame or the picture.
+- **Storyboard strip.** A film execution whose newest Production storyboard has 3 or 4 placeable picked frames (shot order = the
+  contract's `shot.rank`, a fractional index; end cards, rights-pending and mock frames never count) gets slots `shot_1..shot_n` and is
+  drawn as a numbered strip (numbers only: no shot caption is carried). More than 4: first, last and evenly spaced ones ('4 of 9
+  shots'). Fewer than 3: one frame in a screen frame. All Production or not drawn.
+- **Checked** by `m_mockup_labelled`, `m_frame_aspect`, `m_frame_rights` (gate) and `m_production_first` (metric) and `s_strip_order`
+  (advisory).
+
 ## 7. Issues
 
 One shape for every finding that code can act on, from any source.

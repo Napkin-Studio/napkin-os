@@ -526,6 +526,16 @@ PICTURE_LABEL = "Illustrative"
 PRODUCTION_LABEL = "Production"
 #: deck-prod-assets (Q4, fix 8): what an unplaced Production picture with no stated licence says (image_rights, the held list, the picker).
 RIGHTS_TO_SUPPLY = "Rights to supply"
+#: deck-graphics slice 2 (Q6): the fixed label on every drawn execution frame, in every build (client builds too). No digit.
+MOCKUP_LABEL = "Mock-up"
+#: deck-graphics slice 2: the frames the deck draws from native shapes, and each one's default format (vendor/format-packs.json id) whose
+#: aspect a generated or supplied picture takes. A Production size keeps its own format's aspect, whole and uncropped.
+FRAME_FORMATS = {"poster_portrait": "uk-6-sheet", "billboard": "uk-48-sheet", "phone": "meta-stories-9x16", "screen": "film-16x9",
+                 "spread": "mag-a4-dps", "strip": "uk-bus-tside"}
+#: The frame a channel's generated picture is shown in (graphics.frame_of): film in a screen, social on a phone, OOH and print on a poster.
+FRAME_OF_CHANNEL = {"ooh": "poster_portrait", "social": "phone", "film": "screen", "print": "poster_portrait", "display": "strip"}
+#: deck-graphics slice 3: a film execution's storyboard strip takes 3 to 4 Production frames in shot order, all Production or none.
+STRIP_MIN, STRIP_MAX = 3, 4
 #: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
 PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "audience", "real_question", "close",
                        "solution", "product")

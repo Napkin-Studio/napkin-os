@@ -815,6 +815,76 @@
    },
    "tier": "advisory",
    "today": "n/a"
+  },
+  {
+   "id": "m_mockup_labelled",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every slide with a drawn frame or storyboard strip carry the fixed 'Mock-up' label (spec.MOCKUP_LABEL)?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (Q6: on every frame, client builds too)",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "m_frame_aspect",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every framed Production picture drawn whole (no crop past spec.PICTURE_STRETCH_TOL on any side) in a window of its own aspect?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.aspect: a Production size is never cropped)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots, assets)"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened; or no framed picture is a Production picture",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "m_frame_rights",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is no rights-pending (reference_only) or mock picture inside a frame or a strip?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.rights; p_rights_ok extended)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots, assets)"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "m_production_first",
+   "group": "graphics",
+   "kind": "metric",
+   "question": "What share of the drawn frames and strips hold a Production picture?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.sources_order: Production first)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots)"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "direction": "higher",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "s_strip_order",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every storyboard strip 3 or 4 Production frames, numbered shot_1 to shot_n with no gap, one drawn picture per shot?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.storyboard_strip: all Production or not drawn)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots)"
+   ],
+   "na_when": "no presented slide carries a storyboard strip; or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
   }
  ]
 }

@@ -412,6 +412,7 @@ class Renderer:
             from . import graphics   # noqa: PLC0415
             self._icons_on = graphics.icons_on(deck)
         self.icons_drawn = {}       # slide id -> {"layout", "ids"}: the icons really drawn, in item order (the web draws exactly these)
+        self._exec_title = None     # deck-graphics: the execution title whose picture this slide shows (frames), else None
 
     def _layout(self, name):
         """A layout of the master by name, or None."""
@@ -1941,7 +1942,14 @@ class Renderer:
         if sl is None or im.get("probe"):
             return
         m = self._mark(sl)
-        self.picture(sl, x, y, w, h, im, corner=corner, label=label)
+        fr = self._frame_for(im)
+        shots = self._strip_shots() if fr else []
+        if shots:   # deck-graphics slice 3: a film execution's Production storyboard, all of it Production, in the picture's column
+            self._strip_column(sl, x, y, w, h, shots)
+        elif fr:   # deck-graphics: the execution's picture shown in place, in its frame on a panel the size of the picture's box
+            self._framed(sl, x, y, w, h, im, fr, ground=self.th.panel)
+        else:
+            self.picture(sl, x, y, w, h, im, corner=corner, label=label)
         self._own_pics.add(slot)
         self.placed.add((self._sid, slot))
         self._build(sl, m)
@@ -1982,6 +1990,112 @@ class Renderer:
         ids = [sh.name[len("Icon: "):] for sh in sl.shapes if sh.name.startswith("Icon: ")]
         if ids:
             self.icons_drawn[sid] = {"layout": name, "ids": ids}
+
+    # -- execution frames and the storyboard strip (deck-graphics slices 2-3) --------------------------------------------------------
+    PILL_H = 0.28
+
+    def _frame_for(self, im) -> dict | None:
+        """The frame this slide's execution picture is shown in (graphics.frame_of), or None: graphics off, not an execution's picture,
+        a channel with no frame, or ink under 3:1 on the slide's ground (then the picture is drawn plain, as before)."""
+        if not spec.GRAPHICS or self._exec_title is None or not im:
+            return None
+        from . import graphics   # noqa: PLC0415
+        if not graphics.stroke_ok(self.p.fg, self.p.bg) or not graphics.stroke_ok(self.p.fg, self.th.panel):
+            return None
+        return graphics.frame_of(self.deck, self._exec_title, im)
+
+    def _mockup_pill(self, sl, x, y):
+        """The fixed 'Mock-up' label (spec.MOCKUP_LABEL): white bold 10 pt on an ink pill, beside the picture's own label. Returns its width."""
+        pw = 0.24 + 0.085 * len(spec.MOCKUP_LABEL)
+        self.rect(sl, x, y, pw, self.PILL_H, fill=self.th.ink, name="MockupPill")
+        self.text(sl, x, y, pw, self.PILL_H, spec.MOCKUP_LABEL, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
+                  anchor=MSO_ANCHOR.MIDDLE, name="MockupLabel")
+        return pw
+
+    def _pills(self, sl, x, y, im):
+        """The picture's own label (unless approved) and 'Mock-up', left to right from ``(x, y)``: always outside the frame."""
+        if im.get("status") != "approved":
+            pw = self._label_w(im, 3.0)
+            self._label_pill(sl, x, y, im, pw)
+            x += pw + 0.1
+        self._mockup_pill(sl, x, y)
+
+    def _framed(self, sl, x, y, w, h, im, fr, ground=None) -> None:
+        """An execution's picture in its drawn frame (graphics.frame_geometry) contained in the box: the frame's parts in the ink token
+        (a blank screen in the paper, its bars in the rule token), the picture in the window at the window's exact aspect (a Production
+        size: its own format's, so nothing is cut), then the labels in a row under the frame, never on it."""
+        from . import graphics   # noqa: PLC0415
+        if ground:
+            self.rect(sl, x, y, w, h, fill=ground, name="FrameGround")
+            x, y, w, h = x + 0.45, y + 0.75, w - 0.9, h - 1.5
+        row = self.PILL_H + 0.18
+        geo = graphics.frame_geometry(fr["kind"], fr["ratio"], x, y, w, h - row)
+        gutter = None
+        for role, shape, px, py, pw, ph in geo["parts"]:
+            name = f"Frame: {fr['kind']}"
+            if shape == "rrect":
+                s_ = self.rect(sl, px, py, pw, ph, fill=self.th.ink, shape=MSO_SHAPE.ROUNDED_RECTANGLE, name=name)
+                s_.adjustments[0] = 0.12
+            elif shape == "rect":
+                self.rect(sl, px, py, pw, ph, fill=self.th.ink, name=name)
+            elif shape == "screen":
+                self.rect(sl, px, py, pw, ph, fill=self.th.paper, name=name)
+            elif shape == "bar":
+                self.rect(sl, px, py, pw, ph, fill=self.th.rule, name=name)
+            elif shape == "gutter":
+                gutter = (px, py, ph)
+        wx, wy, ww, wh = geo["window"]
+        self.picture(sl, wx, wy, ww, wh, im, name="Framed picture", label=False)
+        if gutter:   # a magazine spread: the fold as a hairline over the two pages
+            self.hairline(sl, gutter[0], gutter[1], gutter[0], gutter[1] + gutter[2], color=self.th.rule, name=f"Frame: {fr['kind']}")
+        ox, oy, ow, oh = geo["outer"]
+        self._pills(sl, ox, min(y + h - self.PILL_H, oy + oh + 0.18), im)
+
+    def _strip_draw(self, sl, plan):
+        """The storyboard strip (slice 3): each Production frame in a hairline window at its own aspect, numbered 1 to n under a hairline
+        (numbers only: no shot caption is carried or written), the labels above the strip at its right end."""
+        boxes = plan["boxes"]
+        m = self._mark(sl)
+        self._strip_cells(sl, boxes)
+        x_end = boxes[-1][1] + boxes[-1][3]
+        im0 = boxes[0][5]
+        lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
+        self._pills(sl, x_end - lab - (0.24 + 0.085 * len(spec.MOCKUP_LABEL)), boxes[0][2] - self.PILL_H - 0.12, im0)
+        self._build(sl, m)
+
+    def _strip_cells(self, sl, boxes):
+        """Each storyboard frame in a hairline window at its own aspect, numbered 1 to n under it beside a hairline (numbers only)."""
+        for n, (slot, x, y, w, h, im) in enumerate(boxes, 1):
+            self.picture(sl, x, y, w, h, im, name="Strip picture", label=False)
+            self.rect(sl, x, y, w, h, line=self.p.fg, lw=0.75, name="Frame: storyboard")
+            self.text(sl, x, y + h + 0.04, 0.3, 0.3, str(n), size=14, bold=True, font=self.th.head, name="StripNumber")
+            self.hairline(sl, x + 0.32, y + h + 0.19, x + w, y + h + 0.19)
+
+    def _strip_shots(self) -> list:
+        """``[(slot, image)]`` of the slide's drawn storyboard shots in order, when they make a strip (spec.STRIP_MIN or more), else []."""
+        if not spec.GRAPHICS or self._exec_title is None:
+            return []
+        shots = sorted((k, im) for k, im in self._pics.items() if k.startswith("shot_") and not im.get("probe"))
+        return shots if len(shots) >= spec.STRIP_MIN else []
+
+    def _strip_column(self, sl, x, y, w, h, shots):
+        """A picture column holding a film execution's storyboard: the frames stacked on a panel ground, numbered, the labels at the foot."""
+        self.rect(sl, x, y, w, h, fill=self.th.panel, name="FrameGround")
+        ix, iy, iw, ih = x + 0.5, y + 0.75, w - 1.0, h - 1.5 - self.PILL_H - 0.2
+        n = len(shots)
+        rs = [self._asset_ratio(im) for _, im in shots]
+        gap, num = 0.2, 0.42   # between cells; the number row under each frame
+        fh = min((ih - num * n - gap * (n - 1)) / n, iw / max(rs))
+        top = iy + (ih - ((fh + num) * n + gap * (n - 1))) / 2
+        boxes = []
+        for i, ((k, im), r) in enumerate(zip(shots, rs)):
+            fw = fh * r
+            boxes.append((k, ix + (iw - fw) / 2, top + i * (fh + num + gap), fw, fh, im))
+        self._strip_cells(sl, boxes)
+        self._pills(sl, boxes[0][1], iy + ih + 0.2, shots[0][1])
+        for k, _ in shots:
+            self._own_pics.add(k)
+            self.placed.add((self._sid, k))
 
     def _with_width(self, x0, x1, fn):
         """Run ``fn`` with the content area narrowed to ``x0..x1`` (the footer is drawn by the caller after, at the full width)."""
@@ -3600,6 +3714,10 @@ class Renderer:
         s_full = s
         s = {**s, "blocks": shown_blocks(s, audience)}
         self._sid, self._pics = sid, {slot: im for (i, slot), im in self.drawn.items() if i == sid}
+        self._exec_title = None
+        if spec.GRAPHICS:   # deck-graphics: an execution's picture (its own, or the one a merged slide absorbed) is shown in a frame
+            pt_, ptitle = spec.picture_of(s)
+            self._exec_title = ptitle if pt_ == "execution" else None
         self._cpl = ((planned or {}).get("fit") or {}).get("cpl", 48)
         self._acc = layouts.accent_phrase(s, s["blocks"]) if self.th.v3 else None
         self._acc_drawn = False
@@ -3638,7 +3756,8 @@ class Renderer:
                     getattr(self, "_" + s["type"], self._generic)(sl, s)
                 finally:
                     self._relaxed = False
-        for slot in sorted(want - {b[0] for b in (plan or {}).get("boxes", [])} - self._own_pics):   # asked for, not drawn: say so, for every slot
+        shots = {k for k in want if k.startswith("shot_")} if not (plan and plan.get("strip")) else set()   # strip slots: drawn only as a strip
+        for slot in sorted(want - {b[0] for b in (plan or {}).get("boxes", [])} - set((plan or {}).get("also", [])) - self._own_pics - shots):   # asked for, not drawn: say so, for every slot
             why = ("the classic theme has no picture box" if not self.th.layouts else "the slide is drawn by the flow, which has no picture box" if name == "flow"
                    else f"the {name} layout does not fit beside its picture")
             self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "slot": slot,
@@ -3736,13 +3855,32 @@ class Renderer:
                 if f"frame_{i}" in got:
                     boxes.append((f"frame_{i}", x0 + (i - 1) * (w + 0.2), y, w, h, got[f"frame_{i}"]))
             return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": boxes} if boxes else None
-        slot = next(iter(sorted(got)))
+        slot = "picture" if (spec.GRAPHICS and "picture" in got) else next(iter(sorted(got)))
         im = got[slot]
         a = im["aspect"]
         if name == "emphasis_bar":
             h = self.BOTTOM_H
             w = h * images.ratio(a)
             return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": [(slot, x1 - w, g.body_end - h, w, h, im)]}
+        if s["type"] == "execution" and spec.GRAPHICS:
+            shots = sorted(k for k in got if k.startswith("shot_"))
+            if len(shots) >= spec.STRIP_MIN:   # deck-graphics slice 3: the storyboard strip along the foot, the words above it
+                gx = 0.25
+                ims = [got[k] for k in shots]
+                rs = [self._asset_ratio(im) for im in ims]
+                w = (x1 - x0 - gx * (len(shots) - 1)) / len(shots)
+                h = min(w / max(rs), (g.body_end - self.EXEC_TOP) * 0.42)
+                y = g.body_end - 0.36 - h
+                boxes, cx = [], x0
+                for k, im, r in zip(shots, ims, rs):
+                    bw = min(w, h * r)
+                    boxes.append((k, cx + (w - bw) / 2, y, bw, h, im))
+                    cx += w + gx
+                return {"x1": x1, "body_end": y - self.PILL_H - 0.35, "boxes": boxes, "strip": True, "also": ["picture"]}
+            if self._frame_for(im):   # the frame takes the whole right half and contains itself in it
+                half = (x1 - x0 - gap) / 2
+                return {"x1": x1 - half - gap, "body_end": g.body_end, "framed": True,
+                        "boxes": [(slot, x1 - half, self.EXEC_TOP, half, g.body_end - self.EXEC_TOP, im)]}
         if s["type"] == "execution":   # the work shown as work: the right half of the slide, at the full height of the content (a tall picture keeps its shape, centred in the half)
             half = (x1 - x0 - gap) / 2
             top = self.EXEC_TOP
@@ -3755,6 +3893,13 @@ class Renderer:
         top = 1.6
         y = top + max(0.0, (g.body_end - top - h) / 2)
         return {"x1": x1 - w - gap, "body_end": g.body_end, "boxes": [(slot, x1 - w, y, w, h, im)]}
+
+    def _asset_ratio(self, im) -> float:
+        """Width over height of an image's asset in pixels (deck.assets), else of its slot's aspect."""
+        rec = (self.deck.get("assets") or {}).get(im.get("asset")) or {}
+        if rec.get("width") and rec.get("height"):
+            return rec["width"] / rec["height"]
+        return images.ratio(im["aspect"])
 
     def _carve(self, plan):
         self._saved_carve = (self.x1, self.th)
@@ -3807,9 +3952,15 @@ class Renderer:
                   anchor=MSO_ANCHOR.MIDDLE, name="Caption")
 
     def _draw_pictures(self, sl, plan):
+        if plan.get("strip"):
+            return self._strip_draw(sl, plan)
         for slot, x, y, w, h, im in plan["boxes"]:
             m = self._mark(sl)
-            self.picture(sl, x, y, w, h, im)
+            fr = self._frame_for(im) if plan.get("framed") else None
+            if fr:
+                self._framed(sl, x, y, w, h, im, fr)
+            else:
+                self.picture(sl, x, y, w, h, im)
             self._build(sl, m)
 
     # -- the earlier flow (the fallback, and every slide under the classic theme) ----------------

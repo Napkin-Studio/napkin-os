@@ -946,6 +946,122 @@ def i_icon_share(r: Run) -> dict:
     return _verdict(bad, r.ids, most, cap)
 
 
+FRAME_PREFIX = "Frame: "
+
+
+def _frames(r: Run):
+    """``{slide id: {frames, strip, pictures: [shape], labels: [text]}}`` for presented slides carrying a drawn frame or strip; None when
+    deck.pptx is unreadable."""
+    if "frames" in r._measures:
+        return r._measures["frames"]
+    out = None
+    if r.prs is not None:
+        out = {}
+        slides = list(r.prs.slides)
+        for i in r.presented:
+            if r.number(i) > len(slides):
+                continue
+            shs = list(slides[r.number(i) - 1].shapes)
+            fr = [sh for sh in shs if (sh.name or "").startswith(FRAME_PREFIX)]
+            if not fr:
+                continue
+            out[i] = {"strip": any(sh.name == "Frame: storyboard" for sh in fr) and any(sh.name == "Strip picture" for sh in shs),
+                      "pictures": [sh for sh in shs if sh.name in ("Framed picture", "Strip picture")],
+                      "labels": [sh.text_frame.text.strip() for sh in shs if sh.name == "MockupLabel" and sh.has_text_frame]}
+    r._measures["frames"] = out
+    return out
+
+
+def _frames_na(r: Run):
+    fr = _frames(r)
+    if fr is None:
+        return None, na(NA_PPTX)
+    if not fr:
+        return None, na("no presented slide carries a frame")
+    return fr, None
+
+
+def _exec_images(r: Run, sid: str) -> list:
+    """The drawn picture slots of an execution's frame on this slide: ``picture`` and ``shot_n``, filled ones only."""
+    slots = r.deck["slides"][sid].get("slots") or {}
+    return [(k, v["image"]) for k, v in sorted(slots.items()) if isinstance(v, dict) and v.get("kind") == "image" and (k == "picture" or k.startswith("shot_"))
+            and isinstance(v.get("image"), dict) and v["image"].get("status") in FILLED]
+
+
+def _from_production(im: dict) -> bool:
+    return (im.get("from") or {}).get("kind") == "production"
+
+
+@check
+def m_mockup_labelled(r: Run) -> dict:
+    fr, n = _frames_na(r)
+    if n:
+        return n
+    bad = [sid for sid, v in fr.items() if spec.MOCKUP_LABEL not in v["labels"]]
+    return _verdict(bad, r.ids)
+
+
+@check
+def m_frame_aspect(r: Run) -> dict:
+    fr, n = _frames_na(r)
+    if n:
+        return n
+    tol = spec.PICTURE_STRETCH_TOL
+    seen, bad, worst = 0, [], 0.0
+    for sid, v in fr.items():
+        ims = _exec_images(r, sid)
+        if not ims or not all(_from_production(im) for _, im in ims):
+            continue
+        for sh in v["pictures"]:
+            seen += 1
+            cut = max(sh.crop_left, sh.crop_right, sh.crop_top, sh.crop_bottom)
+            worst = max(worst, cut)
+            if cut > tol:
+                bad.append(sid)
+    if not seen:
+        return na("no framed picture is a Production picture")
+    return _verdict(bad, r.ids, round(worst, 4), tol)
+
+
+@check
+def m_frame_rights(r: Run) -> dict:
+    fr, n = _frames_na(r)
+    if n:
+        return n
+    assets = r.deck.get("assets") or {}
+    bad = [sid for sid in fr for _, im in _exec_images(r, sid)
+           if (assets.get(im.get("asset")) or {}).get("rights") == "reference_only" or (im.get("from") or {}).get("kind") == "mock"]
+    return _verdict(bad, r.ids)
+
+
+@check
+def m_production_first(r: Run) -> dict:
+    fr, n = _frames_na(r)
+    if n:
+        return n
+    prod = sum(1 for sid in fr if (ims := _exec_images(r, sid)) and all(_from_production(im) for _, im in ims))
+    return value(round(prod / len(fr), 3))
+
+
+@check
+def s_strip_order(r: Run) -> dict:
+    fr = _frames(r)
+    if fr is None:
+        return na(NA_PPTX)
+    strips = {sid: v for sid, v in fr.items() if v["strip"]}
+    if not strips:
+        return na("no presented slide carries a storyboard strip")
+    bad = []
+    for sid, v in strips.items():
+        shots = [(k, im) for k, im in _exec_images(r, sid) if k.startswith("shot_")]
+        names = [k for k, _ in shots]
+        ok = (spec.STRIP_MIN <= len(shots) <= spec.STRIP_MAX and names == [f"shot_{i}" for i in range(1, len(shots) + 1)]
+              and all(_from_production(im) for _, im in shots) and len(v["pictures"]) == len(shots))
+        if not ok:
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
 # ---------------------------------------------------------------- run
 
 @check

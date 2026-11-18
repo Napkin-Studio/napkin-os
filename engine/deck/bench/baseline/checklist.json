@@ -255,12 +255,32 @@
     "i_icon_share": {
      "answer": "n/a",
      "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
     }
    },
    "summary": {
     "yes": 30,
     "no": 3,
-    "na": 17,
+    "na": 22,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
@@ -525,12 +545,32 @@
     "i_icon_share": {
      "answer": "n/a",
      "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
     }
    },
    "summary": {
     "yes": 31,
     "no": 2,
-    "na": 17,
+    "na": 22,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
@@ -776,12 +816,32 @@
     "i_icon_share": {
      "answer": "n/a",
      "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
     }
    },
    "summary": {
     "yes": 31,
     "no": 0,
-    "na": 19,
+    "na": 24,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
@@ -1049,12 +1109,32 @@
     "i_icon_share": {
      "answer": "n/a",
      "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
     }
    },
    "summary": {
     "yes": 30,
     "no": 3,
-    "na": 17,
+    "na": 22,
     "metrics": {
      "m_share_le_30": 0.933,
      "m_share_le_60": 1.0,
@@ -1373,12 +1453,32 @@
     "i_icon_share": {
      "answer": "n/a",
      "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
     }
    },
    "summary": {
     "yes": 32,
     "no": 11,
-    "na": 6,
+    "na": 11,
     "metrics": {
      "m_share_le_30": 0.947,
      "m_share_le_60": 1.0,
@@ -1645,12 +1745,32 @@
     "i_icon_share": {
      "answer": "n/a",
      "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
     }
    },
    "summary": {
     "yes": 30,
     "no": 3,
-    "na": 17,
+    "na": 22,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
@@ -1909,12 +2029,32 @@
     "i_icon_share": {
      "answer": "n/a",
      "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
     }
    },
    "summary": {
     "yes": 31,
     "no": 2,
-    "na": 17,
+    "na": 22,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
