@@ -176,3 +176,30 @@ def test_an_event_with_no_mode_still_builds_the_ads_command():
              {"path": "/tmp/c2.png", "still": True, "trimS": 3, "transition": {"kind": "cut", "s": 1}}]
     cmd = stitch.build_command("ffmpeg", clips, (1280, 720), "roll-up", assets, "/tmp/ad.mp4")
     assert [c.replace(str(stitch.ENDCARD_DIR), "<endcard>") for c in cmd] == want["two_clips_and_a_still/roll-up"]
+
+
+def loudness(path: Path, start: float, seconds: float) -> float:
+    """The mean volume (dB) of the sound from `start` for `seconds`; -91 is silence."""
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-ss", f"{start}", "-t", f"{seconds}", "-i", str(path), "-map", "0:a",
+                        "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True)
+    for line in r.stderr.splitlines():
+        if "mean_volume" in line:
+            return float(line.split("mean_volume:")[1].split("dB")[0])
+    return -91.0
+
+
+@needs_ffmpeg
+def test_the_ad_keeps_each_clips_own_sound_until_sound_mixes_one(media):
+    # Owner 2026-11-18: the master render keeps the clips' sound, as the cut-downs do. A clip with a tone, a
+    # silent clip after it; the end card and the roll-up are silent.
+    ff("-f", "lavfi", "-i", "color=c=red:s=320x180:r=24:d=4", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=4",
+       "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(media / "tone.mp4"))
+    plan = {"clips": [{"key": "tone.mp4", "startS": 0, "inS": 0.5, "outS": 2.5},
+                      {"key": "blue.mp4", "startS": 2, "inS": 0, "outS": 1, "transitionIn": {"kind": "dissolve", "s": 0.5}}],
+            "endCard": {"key": "card.png", "s": 1}, "lengthS": 4}
+    res, out = render(media, plan)
+    assert res["ok"] and abs(res["durationS"] - (4 + stitch.CARD_S)) <= 0.1, res
+    assert loudness(out, 0.2, 1.0) > -40          # the tone
+    assert loudness(out, 2.6, 0.3) < -60          # the silent clip after the crossfade
+    assert loudness(out, 4.2, 1.5) < -60          # the roll-up
+    assert near(pixel(out, 1.0), RED)
