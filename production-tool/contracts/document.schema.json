@@ -227,6 +227,17 @@
       },
       "maxProperties": 16
     },
+    "finals": {
+      "type": "object",
+      "description": "The pictures a person marked final (features/prod-assets-route.clan, owner 2026-11-19): what the Deck Maker and later exports take as finished work. Each names the exact picture by hash; its bytes stay out of the document (the relay's GET /assets/{sha256} serves them). Optional: a document made before it has none.",
+      "propertyNames": {
+        "pattern": "^final_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/final"
+      },
+      "maxProperties": 500
+    },
     "texts": {
       "type": "object",
       "description": "Texts written on the canvas (features/canvas-text.clan, 2026-10-16): each holds its words and the canvas element it is, so a node a text is linked into reads its words without the canvas. Optional: a document made before it has none.",
@@ -605,6 +616,15 @@
             "edited",
             "extracted"
           ]
+        },
+        "rights": {
+          "enum": [
+            "generated",
+            "own",
+            "licensed",
+            "unknown"
+          ],
+          "description": "Whether the agency may show it to a client (features/prod-assets-route.clan, 2026-11-19): generated (a provider made it for the agency: Runway's outputs land with it), own (the agency's: a drawing, or a person said so), licensed (a person said it is licensed), unknown (an upload until a person says; the Deck treats it as rights to supply). Absent: not stated (made before it, an edit, a mock); readers infer from origin."
         },
         "job_id": {
           "type": "string",
@@ -2292,6 +2312,117 @@
         "title",
         "source",
         "spine"
+      ],
+      "additionalProperties": false
+    },
+    "final": {
+      "type": "object",
+      "description": "One picture a person marked final: the Final toggle on the version open in the image editor (a frame, or a canvas picture with no versions yet) or on a still size in Make all sizes. asset is the exact picture marked; a size or a picture keeps one final (marking another replaces it), and unmarking removes it. It stands until unmarked, even when what it was of is remade or removed. Added 2026-11-19 (features/prod-assets-route.clan, additive).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^final_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "of": {
+          "type": "object",
+          "description": "What it is a final of. frame: a frame version (frames[id]: a storyboard frame or a canvas picture's version). size: a size of a format set (sizes[id]). picture: a picture on the canvas with no versions yet (its canvas node's id, as format_sets[].master kind picture).",
+          "properties": {
+            "kind": {
+              "enum": [
+                "frame",
+                "size",
+                "picture"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{6,64}$"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "frame"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "id": {
+                    "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "size"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "id": {
+                    "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256",
+          "description": "The picture marked final: a key of assets. For a size, its delivery-size file when one was made for its picture (full.asset), else its picture."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The version shown when it was marked (a frame's version, 'v3'); 1 for a picture with no versions."
+        },
+        "set_id": {
+          "type": "string",
+          "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "A size's format set."
+        },
+        "format": {
+          "$ref": "common.schema.json#/$defs/formatRef",
+          "description": "A size's format, copied when it was marked."
+        },
+        "channel": {
+          "$ref": "common.schema.json#/$defs/formatChannel",
+          "description": "A size's lane on the Campaign board (format-packs.json), copied when it was marked."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "of",
+        "asset",
+        "at",
+        "by"
       ],
       "additionalProperties": false
     },
