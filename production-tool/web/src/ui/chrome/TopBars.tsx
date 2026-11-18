@@ -149,13 +149,13 @@ async function copyLink(url: string): Promise<string> {
 /** The canvas's bar: the shell bar, with Canvas as where you are, the job chip and Assets; the ▾ menu
  *  holds Export's rows and Save now. The questions waiting are the Decisions count (and an amber tag on
  *  the node that asks). */
-export function CanvasBar({ presence }: { presence?: string }) {
+export function CanvasBar({ presence, phone = false }: { presence?: string; /** The phone's cut: watch only, so its job button has no ask dock and no Show. */ phone?: boolean }) {
   const { project, relay } = useServices()
   const mock = useShowMock()
   return (
     <ShellBar bar="canvas" className="ptbar" crumb={[{ label: 'Canvas' }]}
       menu={(close) => <CanvasMoreItems close={close} share />}
-      job={<JobTray />}
+      job={phone ? <JobTray phone /> : <JobTray />}
       tools={<>
         {mock && relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
         <BetaTag screen={{ stage: 'canvas', project: project.id }} />

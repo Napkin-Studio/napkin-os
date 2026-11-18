@@ -52,7 +52,7 @@ export function PhoneReview() {
   return (
     <div className="phone">
       {/* The shell bar in its phone cut (mock phone): the medallion, the document, theme, you and Decisions. */}
-      <CanvasBar />
+      <CanvasBar phone />
       <div className="ph-scroll">
         <div className="ph-banner" role="status">
           <svg width="28" height="20" viewBox="0 0 28 20" aria-hidden="true"><rect x="1" y="2" width="18" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M5 17h10" stroke="currentColor" strokeWidth="1.4" /><rect x="20" y="6" width="7" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>

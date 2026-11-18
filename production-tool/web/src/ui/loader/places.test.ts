@@ -34,6 +34,7 @@ describe('where the Napkin loader turns', () => {
     expect(bars.match(/<JobTray \/>/g)?.length).toBeGreaterThanOrEqual(2)
     // Script is on the shared EditorBar (features/topbar-declutter.clan), so it gets the button from there.
     expect(readFileSync(join(SRC, 'script/ScriptEditor.tsx'), 'utf8')).toContain('<EditorBar')
-    expect(readFileSync(join(SRC, 'stages/PhoneReview.tsx'), 'utf8')).toContain('<JobTray phone />')
+    expect(readFileSync(join(SRC, 'stages/PhoneReview.tsx'), 'utf8')).toContain('<CanvasBar phone />')
+    expect(bars).toContain('<JobTray phone />')
   })
 })

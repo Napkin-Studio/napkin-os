@@ -74,7 +74,9 @@ describe('the job tray keeps its words off the bar', () => {
     expect(src).not.toContain('pt-status-line')
   })
   it('the phone bar has the same button, without the ask dock or Show', () => {
-    expect(readFileSync(new URL('../stages/PhoneReview.tsx', import.meta.url), 'utf8')).toContain('<JobTray phone />')
+    // The phone wears the shell bar's phone cut (mock phone), whose job button is the phone one.
+    expect(readFileSync(new URL('../stages/PhoneReview.tsx', import.meta.url), 'utf8')).toContain('<CanvasBar phone />')
+    expect(readFileSync(new URL('./chrome/TopBars.tsx', import.meta.url), 'utf8')).toContain('<JobTray phone />')
     expect(src).toContain('{!phone && <AskDock />}')
   })
 })
