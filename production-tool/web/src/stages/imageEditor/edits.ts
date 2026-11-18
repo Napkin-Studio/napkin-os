@@ -33,9 +33,6 @@ export interface EditSession {
   hidden: string[]
   /** The mask the brush paints now. */
   active?: string
-  /** Hidden edits carried over from the version before by Apply (keptAfterApply): carried once at most, and
-   *  not counted as yours to keep or discard when leaving (QA 2026-11-17: one hidden fill rode v2 to v5). */
-  carried?: string[]
 }
 
 export const EMPTY: EditSession = { edits: [], hidden: [] }
@@ -175,11 +172,10 @@ export function unfilledMasks(s: EditSession): number {
   return masks(s).filter((m) => m.ops.length && !filled.has(m.id)).length
 }
 
-/** What leaving would keep or discard: the edits and unfilled masks made here, shown or hidden, never the
- *  hidden layers Apply carried over from the version before. */
+/** What leaving would keep or discard: the edits and unfilled masks made here, shown or hidden (Apply carries
+ *  nothing over, so every one of them was made on this version). */
 export function pendingCount(s: EditSession): number {
-  const carried = new Set(s.carried ?? [])
-  return s.edits.filter((e) => counts(e) && e.kind !== 'mask' && !carried.has(e.id)).length + unfilledMasks(s)
+  return s.edits.filter((e) => counts(e) && e.kind !== 'mask').length + unfilledMasks(s)
 }
 
 /** The hidden layers that would otherwise count: hidden edits, and Frame when it is hidden. `ignore`: kinds
@@ -193,21 +189,6 @@ export function leftOutLine(n: number): string {
   return `${plural(n, 'hidden layer')} ${n === 1 ? 'is' : 'are'} left out`
 }
 
-/** After Apply: what stays in the editor (owner answer IM3, nothing vanishes). The hidden edits, still hidden,
- *  and the masks their fills are cut by (hidden too: they were applied). Undefined when nothing stays. */
-export function keptAfterApply(s: EditSession): EditSession | undefined {
-  // Carried once at most: a layer already carried from the version before is let go now (it was made on
-  // an older picture). Masks are never carried on their own.
-  const before = new Set(s.carried ?? [])
-  const kept = s.edits.filter((e) => s.hidden.includes(e.id) && counts(e) && e.kind !== 'mask' && !before.has(e.id))
-  if (!kept.length) return undefined
-  const ids = new Set(kept.map((e) => e.id))
-  const masksNeeded = kept.flatMap((e) => (e.kind === 'fill' ? [e.maskId] : []))
-  const edits = s.edits.filter((e) => ids.has(e.id) || masksNeeded.includes(e.id))
-  // Frame is not carried over: on the new version it is the applied picture itself.
-  return { edits, hidden: edits.map((e) => e.id), carried: edits.map((e) => e.id) }
-}
-
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /** The top bar's pill: "3 edits not applied". */
@@ -215,9 +196,11 @@ export function notApplied(n: number): string {
   return `${plural(n, 'edit')} not applied`
 }
 
-/** What the versions menu says Apply will make (3.12). */
-export function applyLine(n: number, version: number): string {
-  return `Apply saves your ${plural(n, 'edit')} as v${version + 1}. v${version} stays.`
+/** What the versions menu says Apply will make (3.12), and what it lets go: hidden layers stay out of the new
+ *  version entirely and are not kept (owner 2026-11-18, replacing IM3's carry-once). */
+export function applyLine(n: number, version: number, hidden = 0): string {
+  const gone = hidden ? ` ${plural(hidden, 'hidden layer')} ${hidden === 1 ? 'is' : 'are'} left out and not kept.` : ''
+  return `Apply saves your ${plural(n, 'edit')} as v${version + 1}. v${version} stays.${gone}`
 }
 
 /** Asked before moving to another frame with edits not applied (3.12). */

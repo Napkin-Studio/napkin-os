@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY, addEdit, applyLine, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
-  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, keptAfterApply, leftOutLine, NOTHING_TO_TAKE,
+  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, leftOutLine, NOTHING_TO_TAKE,
   afterSend, hasFill, newMask, pendingCount, sendWithRow,
   type EditSession, type MaskOp,
 } from './edits'
@@ -141,7 +141,7 @@ describe('each edit has its own undo', () => {
   })
 })
 
-describe('hidden layers (features/image-editor-masks-layers.clan, IM1 and IM3)', () => {
+describe('hidden layers (features/image-editor-masks-layers.clan, IM1; owner 2026-11-18 replaces IM3)', () => {
   const session = (): EditSession => {
     let s = withMaskOp(EMPTY, stroke())
     const m = s.edits[0].id
@@ -161,14 +161,10 @@ describe('hidden layers (features/image-editor-masks-layers.clan, IM1 and IM3)',
     const s = toggleHidden(session(), 't')
     expect(editsForFrame(s).map((e) => e.op)).toEqual(['mask', 'fill'])
   })
-  it('after Apply the hidden edits stay, hidden, with the masks their fills need', () => {
-    expect(keptAfterApply(session())).toBeUndefined()
-    const s = session()
-    const m = s.edits[0].id
-    const kept = keptAfterApply(toggleHidden(toggleHidden(toggleHidden(s, 'f'), 't'), 'frame'))!
-    expect(kept.edits.map((e) => e.id)).toEqual([m, 'f', 't'])
-    expect(kept.hidden).toEqual([m, 'f', 't'])
-    expect(editCount(kept)).toBe(0)
+  it('the Apply line says hidden layers stay out of the new version and are not kept', () => {
+    expect(applyLine(1, 1)).toBe('Apply saves your 1 edit as v2. v1 stays.')
+    expect(applyLine(1, 1, 1)).toBe('Apply saves your 1 edit as v2. v1 stays. 1 hidden layer is left out and not kept.')
+    expect(applyLine(2, 3, 2)).toBe('Apply saves your 2 edits as v4. v3 stays. 2 hidden layers are left out and not kept.')
   })
 })
 
@@ -185,22 +181,14 @@ describe('fixes from the live test of 2026-11-17 (features/production-new-ui.cla
     const n = newMask(s)
     expect(n.edits.find((e) => e.id === n.active)).toMatchObject({ kind: 'mask', name: 'Mask 3', ops: [] })
   })
-  it('a mask is not an edit in the count; the leave ask counts an unfilled mask but not carried layers', () => {
+  it('a mask is not an edit in the count; the leave ask counts an unfilled mask and hidden edits', () => {
     let s = withMaskOp(EMPTY, op)
     expect(editCount(s)).toBe(0)
     expect(pendingCount(s)).toBe(1)
     s = addEdit(s, { id: 'f1', kind: 'fill', maskId: s.active!, ops: [op], words: 'x', keepOutside: true, jobId: 'job_1' })
     expect(editCount(s)).toBe(1)
     expect(pendingCount(s)).toBe(1)
-    expect(pendingCount({ ...s, carried: ['f1'] })).toBe(0)
-  })
-  it('a hidden layer rides into the next version once, never again', () => {
-    let s = withMaskOp(EMPTY, op)
-    s = addEdit(s, { id: 'f1', kind: 'fill', maskId: s.active!, ops: [op], words: 'x', keepOutside: true, jobId: 'job_1' })
-    s = toggleHidden(s, 'f1')
-    const once = keptAfterApply(s)!
-    expect(once.carried).toContain('f1')
-    expect(keptAfterApply(once)).toBeUndefined()
+    expect(pendingCount(toggleHidden(s, 'f1'))).toBe(1)
   })
   it('an empty mask that is not being painted is not a layer', () => {
     const s = { edits: [{ id: 'm1', kind: 'mask' as const, name: 'Mask 1', ops: [] }], hidden: [] }

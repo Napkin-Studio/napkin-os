@@ -42,7 +42,7 @@ import { useBooth } from '../ui/booth/useBooth'
 import { croppedCaption } from '../canvas/core/sketch'
 import { PromptStart } from '../ui/prompt/PromptStart'
 import {
-  EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, hasFill, newMask, pendingCount, unfilledMasks, editLabel, editsForFrame, hiddenCount, keptAfterApply,
+  EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, hasFill, newMask, pendingCount, unfilledMasks, editLabel, editsForFrame, hiddenCount,
   layersOf, leaveAsk, leftOutLine, nextStep,
   notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
   type Edit, type EditSession, type MaskOp, type Pt, type Undone,
@@ -433,13 +433,11 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     const made = target.kind === 'shot'
       ? current && await applyEditedStep(docStore, target.shotId, current.id, out)
       : await applyPictureEditedStep(docStore, { nodeId: target.nodeId, sha: framePic.sha, w: W, h: H }, out)
-    // The applied edits are in v(n+1) now. Hidden ones were left out of it: they stay, hidden, on the new
-    // version (owner answer IM3: nothing vanishes).
-    const kept = keptAfterApply(session)
+    // The applied edits are in v(n+1) now. Hidden ones were left out of it and go with the rest: nothing
+    // rides on to the new version (owner 2026-11-18, replacing IM3's carry-once).
     if (made) uiStore.update((u) => {
       const all = { ...(u.imageEdits ?? {}) }
       delete all[frameId]
-      if (kept) all[made.id] = kept
       u.imageEdits = all
     }, 'image edits applied')
   })
@@ -461,7 +459,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const shown = sha ? mediaItem(doc, project, sha, target.kind === 'shot' ? 'frame' : undefined) : undefined
   const maskTool = MASK_TOOLS.includes(activeTool)
   const tip = TOOLS.find((t) => t.id === activeTool)!
-  const applyWords = `${applyLine(n, version)}${applyLeftOut ? ` ${capital(leftOutLine(applyLeftOut))}.` : ''}`
+  const applyWords = applyLine(n, version, applyLeftOut)
   const trayItems = (a: Action) => [
     { what: subject.label, detail: `v${version}${n ? ', with your edits' : ''}` },
     ...(a === 'fill' && activeMask ? [{ what: activeMask.name, detail: keepOutside ? 'only the blue area changes' : 'the whole result is kept' }] : []),
