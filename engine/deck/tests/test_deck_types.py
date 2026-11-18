@@ -259,6 +259,7 @@ def _cap_findings(deck, inp) -> list:
 
 
 def test_the_cap_is_the_types_own_and_advisory_on_spine_types_too(monkeypatch):
+    monkeypatch.setattr(assemble, "_sketch", lambda inp: False)   # the fixture is a prompt alone: a sketch's own limit would silence the cap
     deck, inp = _build("credentials")
     _on(monkeypatch, recipes=False)
     assert _cap_findings(deck, inp) == []   # today: a spine type records its length, so no cap is read
@@ -270,6 +271,7 @@ def test_the_cap_is_the_types_own_and_advisory_on_spine_types_too(monkeypatch):
 
 
 def test_a_stated_limit_or_no_cap_silences_the_advisory_cap(monkeypatch):
+    monkeypatch.setattr(assemble, "_sketch", lambda inp: False)   # the fixture is a prompt alone: a sketch's own limit would silence the cap
     deck, inp = _build("credentials")
     _on(monkeypatch)
     real = profiles.recipe
