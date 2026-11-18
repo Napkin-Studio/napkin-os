@@ -17,6 +17,7 @@ import { useLook, useTheme } from './lookContext'
 import { ICON, studioHref, useNeedsCount } from './bar'
 import { usePanels } from '../chrome/panels'
 import './shell.css'
+import { useProjectName } from '../useDownload'
 
 export interface Crumb { label: string; onClick?: () => void }
 
@@ -80,12 +81,10 @@ function savedLine(s: ReturnType<typeof useSave>): string {
 
 /** The document slot: the film's name and its saved line; ▾ opens the document menu. */
 function DocSlot({ menu }: { menu?: (close: () => void) => ReactNode }) {
-  const shell = useShell()
-  const { project } = useServices()
   const save = useSave()
   const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
-  const name = shell.index.get(project.id)?.name ?? 'Untitled film'
+  const name = useProjectName() ?? 'Untitled film'
   return (
     <>
       <button ref={ref} type="button" className="tba-name" aria-haspopup="menu" aria-expanded={open} title={name} onClick={() => setOpen(!open)}>

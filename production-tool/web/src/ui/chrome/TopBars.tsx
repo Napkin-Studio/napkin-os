@@ -23,6 +23,7 @@ import { saveTime, useSave } from '../useSave'
 import { NodeIcon, Presence, type NodeKind } from './Bar'
 import { undoInMore, useFitLevel } from './fit'
 import { LinkIcon } from './MoreMenu'
+import { useProjectName } from '../useDownload'
 
 
 /** Whose History a bar opens: the app's panel, or the Script editor's own. */
@@ -48,7 +49,7 @@ function CanvasMoreItems({ close, share }: { close: () => void; share: boolean }
   const saving = useSave()
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
-  const name = shell.index.get(project.id)?.name
+  const name = useProjectName()
   const files = Object.keys(doc.assets).length
   const run = async (what: string, fn: () => Promise<string | null>) => {
     setBusy(what)

@@ -27,7 +27,7 @@ import { RelayError } from '../relay/types'
 import { addShots, id, job, MAYA, SHA, T, v2Clan, wasm } from '../test/model'
 import { LEGACY, migrateSingleProject } from './migrate'
 import { NotAProject } from './openFile'
-import { copyName, ordered, ProjectIndex, type ProjectEntry } from './projectIndex'
+import { copyName, ordered, ProjectIndex, unusedName, type ProjectEntry } from './projectIndex'
 import { ProjectRefused, type MakeClan } from './session'
 import { Shell } from './shell'
 import { canvasKeyFor, clanDbFor, INDEX_KEY, memoryStorage, uiKeyFor } from './storage'
@@ -133,6 +133,23 @@ describe('the project index', () => {
     await first.rename(r1.id, 'R1 renamed')
     expect(first.get(r3.id)?.name).toBe('R3')
     expect(first.get(r1.id)?.server?.etag).toBe('e1')
+  })
+
+  it('a name it gives itself is its own: "Name 2" when another project has it (re-test N9)', async () => {
+    const index = new ProjectIndex(memoryStorage())
+    await index.load()
+    const r1 = await index.create()
+    const r2 = await index.create()
+    await index.touch(r1.id, r1.summary, { name: 'PW Lumo main film brief' })
+    await index.touch(r2.id, r2.summary, { name: 'PW Lumo main film brief' })
+    expect(index.get(r2.id)?.name).toBe('PW Lumo main film brief 2')
+    // Stable on the next touch; a person's own name is never numbered.
+    await index.touch(r2.id, r2.summary, { name: 'PW Lumo main film brief' })
+    expect(index.get(r2.id)?.name).toBe('PW Lumo main film brief 2')
+    await index.touch(r1.id, r1.summary, { name: null })
+    await index.touch(r2.id, r2.summary, { name: null })
+    expect([index.get(r1.id)?.name, index.get(r2.id)?.name]).toEqual([UNTITLED, UNTITLED])
+    expect(unusedName('Rain', ['rain', 'Rain 2'])).toBe('Rain 3')
   })
 
   it('names copies so they do not clash', () => {

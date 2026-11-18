@@ -1,15 +1,18 @@
 // Saving one piece of media from a control (features/media-download.clan): the state its label
 // shows, and the open project's name the file is named by.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { useDoc, useServices, useShell } from '../app/context'
 import { downloadItem } from '../media/download'
 import type { MediaItem } from '../media/names'
 
 /** The open project's name, as typed (Home's list). */
+/** The open project's name as Home and the server have it (the index), kept current: one naming source
+ *  (re-test N9: the bar said "Untitled project" while the index had named the film after its brief). */
 export function useProjectName(): string | undefined {
   const { project } = useServices()
-  return useShell().index.get(project.id)?.name
+  const { index } = useShell()
+  return useSyncExternalStore(index.subscribe, () => index.get(project.id)?.name)
 }
 
 export type DownloadState = 'idle' | 'busy' | 'missing'

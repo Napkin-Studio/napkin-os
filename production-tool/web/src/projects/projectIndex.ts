@@ -46,6 +46,13 @@ export function ordered(list: readonly ProjectEntry[], sort: Sort = 'recent', qu
   return hits.sort(sort === 'name' ? (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || recent(a, b) : recent)
 }
 
+/** `name`, else "name 2", "name 3", … whichever is not taken yet (case aside). */
+export function unusedName(name: string, taken: readonly string[]): string {
+  const have = new Set(taken.map((t) => t.toLowerCase()))
+  if (!have.has(name.toLowerCase())) return name
+  for (let n = 2; ; n++) if (!have.has(`${name} ${n}`.toLowerCase())) return `${name} ${n}`
+}
+
 /** "Name (copy)", "Name (copy 2)", … not taken yet. */
 export function copyName(name: string, taken: readonly string[]): string {
   const base = name.replace(/ \(copy(?: \d+)?\)$/, '')
@@ -137,10 +144,14 @@ export class ProjectIndex {
 
   /** What the project is now. `name`: the script's first line, taken only while the project names itself. */
   async touch(id: string, summary: ProjectSummary, opts: { name?: string | null; changed?: boolean } = {}): Promise<void> {
+    // A name it gives itself is its own: another project's already is "Name 2", "Name 3"… (re-test N9: two films
+    // named themselves after the same brief, on Home and on the server).
+    const taken = this.list.filter((p) => p.id !== id).map((p) => p.name)
+    const auto = opts.name ? unusedName(opts.name, taken) : UNTITLED
     await this.change(id, (p) => ({
       ...p,
       summary,
-      ...(p.naming === 'auto' ? { name: opts.name || UNTITLED } : {}),
+      ...(p.naming === 'auto' ? { name: auto } : {}),
       ...(opts.changed === false ? {} : { updated: this.now().toISOString() }),
     }))
   }
