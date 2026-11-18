@@ -714,3 +714,10 @@ html[data-theme='dark'] .jc-box.sel { box-shadow: 0 0 0 2px var(--ag-acc, var(--
 .rm-notelist li { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 12.5px; }
 .rm-notelist .pt-mono { font-size: 11px; color: var(--muted, var(--ink3)); }
 .rm-notebox { color: var(--ag-base, var(--tool)); }
+/* The Edit room's band at a laptop's width: the tools shrink to their words and scroll if they must. */
+.rm-bandtools { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+@media (max-width: 1279px) {
+  .rm-tltools .sp-btn kbd { display: none; }
+  .rm-tltools .sp-btn { padding: 0 8px; }
+}
+@media (max-width: 1279px) { .rooms[data-room='edit'] .rm-soundword { display: none; } }

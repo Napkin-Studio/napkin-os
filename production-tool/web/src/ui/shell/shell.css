@@ -41,7 +41,7 @@
 .tba-saved { font: 500 10px var(--font-mono); color: var(--muted); letter-spacing: .03em; white-space: nowrap; }
 .tba-saved.failed { color: var(--alert); }
 .tba-caret { color: var(--muted); font-size: 11px; }
-.tba-crumb { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--font-ui); color: var(--muted); white-space: nowrap; min-width: 0; }
+.tba-crumb { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--font-ui); color: var(--muted); white-space: nowrap; min-width: 0; flex: 0 1 auto; overflow: hidden; }
 .tba-cstep { display: inline-flex; align-items: center; gap: 6px; }
 .tb .tba-crumb button { color: var(--muted); padding: 3px 6px; border-radius: 6px; }
 .tb .tba-crumb button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
@@ -122,6 +122,8 @@
 /* ── phone and narrow ───────────────────────────────────────────────────── */
 @media (max-width: 1180px) {
   .tba-acts .pt-share + *, .tba-crumb .tba-cstep:not(:last-child) { display: none; }
+  /* Mock w1024: the crumb and Continue in / Share give way to the document's name. */
+  .tba-crumb { display: none; }
   .tb { gap: 10px; padding: 0 16px; }
 }
 @media (max-width: 980px) {
@@ -206,3 +208,13 @@
 .send-disc li.promise b { font-weight: 500; }
 /* A long document or node name never runs the crumb into Continue in. */
 .tba-crumb .here { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+
+/* The phone cut of the bar (mock phone): the medallion, the document's name, theme, you and Decisions.
+   The tool pill, Assets and the dev badge give way; nothing scrolls sideways. */
+@media (max-width: 600px) {
+  .tb .tb-client, .tb .mockbadge, .tb .pt-assets { display: none; }
+  .tb .tba-name { min-width: 0; }
+  .tba-n2 b { max-width: 130px; }
+  .tba-n2 small, .tba-n2 .tba-saved { display: none; }
+  .tb .tb-decisions-btn { padding: 0 10px; }
+}

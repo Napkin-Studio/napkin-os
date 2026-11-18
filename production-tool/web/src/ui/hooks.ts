@@ -79,6 +79,8 @@ export function useMedia(q: string): boolean {
 /** A phone (below 600px wide) gets Phone review; an iPad or a narrow window (below 1180px, or touch) the tablet layout. */
 export const PHONE = '(max-width: 599px)'
 export const TABLET = '(max-width: 1179px), (pointer: coarse)'
+/** The touch layout: a touch screen, or a phone's width (the canvas's labelled rail and Boards pill). */
+export const TOUCH_OR_PHONE = '(max-width: 600px), (pointer: coarse)'
 
 /** Marks canvas chrome a floating bar, popover or card keeps clear of (the boards rail, the top bar, the tool bar). */
 export const FLOAT_AVOID = 'data-float-avoid'

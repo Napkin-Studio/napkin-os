@@ -162,9 +162,9 @@ export function Rooms() {
           {room === 'edit' && !sound && <span ref={setViewSlot} className="rm-bandview" />}</>}
         right={<>
           {room === 'edit' && !sound ? <span ref={setToolSlot} className="rm-bandtools" /> : <JobsPill data={data} />}
-          <button type="button" className={`sp-btn rm-sound-btn ${sound ? 'on' : ''}`} aria-pressed={sound} onClick={() => setSound(!sound)} title="Open Sound">
+          <button type="button" className={`sp-btn rm-sound-btn ${sound ? 'on' : ''}`} aria-pressed={sound} onClick={() => setSound(!sound)} title="Open Sound" aria-label="Open Sound">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6v4h3l4 3V3L5 6H2z M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
-            Open Sound
+            <span className="rm-soundword">Open Sound</span>
           </button>
         </>}
         primary={room === 'make'

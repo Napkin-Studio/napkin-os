@@ -8,7 +8,7 @@ test('a 9:16 frame fits at Fit and paints at 95% of its height', async ({ page }
   const inner = await page.evaluate(() => window.innerHeight)
   expect(v.y + v.height).toBeLessThanOrEqual(inner)
   expect(v.height / v.width).toBeCloseTo(16 / 9, 1)
-  const scroll = () => page.evaluate(() => document.querySelector('.ie-body')!.scrollTop)
+  const scroll = () => page.evaluate(() => document.querySelector('.ie-surface')!.scrollTop)
   expect(await scroll()).toBe(0)
   await page.keyboard.press('b')
   const [, y] = await at(page, 0.5, 0.95)
@@ -21,6 +21,7 @@ test('a 9:16 frame fits at Fit and paints at 95% of its height', async ({ page }
 test('a 16:9 frame still fills the column', async ({ page }) => {
   await openEditor(page)
   const v = (await page.locator('.ie-viewport').boundingBox())!
-  const col = (await page.locator('.ie-center').boundingBox())!
+  // The picture's column on the desk (mock image: up to 880 wide, centred left of the Booth).
+  const col = (await page.locator('.ie-stagewrap').boundingBox())!
   expect(Math.abs(v.width - col.width)).toBeLessThanOrEqual(1)
 })

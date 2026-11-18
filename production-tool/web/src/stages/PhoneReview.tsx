@@ -4,14 +4,13 @@
 // as a note on its take (the Film editor's notes), so Fix this moment there picks it up.
 
 import { useMemo, useRef, useState } from 'react'
-import { useDoc, useServices, useShell, useUi } from '../app/context'
+import { useDoc, useServices, useUi } from '../app/context'
 import type { Shot, Generation } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { personOf } from '../projects/session'
 import { currentFrame, currentRender, currentTake, openAsks, reviewsList, shotsOf } from '../model/selectors'
 import { useBlobUrl } from '../ui/hooks'
-import { Account, MarkTile } from '../ui/chrome/Bar'
-import { JobTray } from '../ui/JobTray'
+import { CanvasBar } from '../ui/chrome/TopBars'
 import { initials } from '../ui/chrome/panels'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { addTakeNote } from './videoEdits'
@@ -24,9 +23,7 @@ const windowOf = (at: number, len: number) => ({ from: Math.max(0, Math.round(at
 export function PhoneReview() {
   const doc = useDoc()
   const ui = useUi()
-  const shell = useShell()
-  const { doc: docStore, project } = useServices()
-  const name = shell.index.get(project.id)?.name
+  const { doc: docStore } = useServices()
   const shots = shotsOf(doc)
   const render = currentRender(doc)
   const adUrl = useBlobUrl(render?.asset)
@@ -54,13 +51,8 @@ export function PhoneReview() {
   }
   return (
     <div className="phone">
-      <header className="ph-bar">
-        <MarkTile />
-        <span className="ph-brand"><b>Production</b><span>{name}</span></span>
-        <span className="pt-grow" />
-        <JobTray phone />
-        <Account />
-      </header>
+      {/* The shell bar in its phone cut (mock phone): the medallion, the document, theme, you and Decisions. */}
+      <CanvasBar />
       <div className="ph-scroll">
         <div className="ph-banner" role="status">
           <svg width="28" height="20" viewBox="0 0 28 20" aria-hidden="true"><rect x="1" y="2" width="18" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M5 17h10" stroke="currentColor" strokeWidth="1.4" /><rect x="20" y="6" width="7" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>

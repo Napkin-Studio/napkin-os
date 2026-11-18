@@ -64,7 +64,7 @@ import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
 import { isActive } from '../jobs/runner'
 import { cleanKey, cleanVariant, nameOf, nameProblem, refByName, wholeKeys } from '../lib/names'
-import { TABLET, useColorScheme, useFloating, useMedia } from '../ui/hooks'
+import { TOUCH_OR_PHONE, useColorScheme, useFloating, useMedia } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
 import { ArrowCards } from '../ui/ArrowCard'
@@ -120,7 +120,10 @@ export function Character({ initial, active, onPictureEditor }: {
   const panels = usePanels()
   const [chrome, setChrome] = useState<CanvasChrome | null>(null)
   const [board, setBoard] = useState<string | null>(null)
-  const narrow = useMedia(TABLET)
+  // The touch layout (labelled rail, Boards pill, big zoom) on a touch screen or a phone; a laptop or a
+  // narrow desktop window keeps the desktop rail (owner answer 2026-11-18: the Boards pill on touch only;
+  // mock production-new-ui-v2 w1024-canvas).
+  const narrow = useMedia(TOUCH_OR_PHONE)
   const doc = useDoc()
   const ui = useUi()
   useJobsTick()
