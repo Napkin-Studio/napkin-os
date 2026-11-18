@@ -389,10 +389,9 @@ describe('a row confirmed and never sent (re-test N1: a reload 0.3 s after Fill)
     const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('golden hour'))!
     expect(row.textContent).toContain('not sent')
     const submit = vi.spyOn(services.runner, 'submit')
-    await act(async () => {
-      byText(row as HTMLElement, 'Send again')!.click()
-      await new Promise((r) => setTimeout(r, 50))
-    })
+    act(() => { byText(row as HTMLElement, 'Send again')!.click() })
+    // The picture is composed and uploaded first: wait for the send, however busy the machine is.
+    for (let i = 0; i < 100 && !submit.mock.calls.length && !el.querySelector('.ie-error'); i++) await act(async () => { await new Promise((r) => setTimeout(r, 30)) })
     expect(el.querySelector('.ie-error')?.textContent ?? '').toBe('')
     expect(submit).toHaveBeenCalledTimes(1)
     expect(submit.mock.calls[0][4]).toBe(jobId)
