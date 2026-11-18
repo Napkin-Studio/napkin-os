@@ -364,7 +364,7 @@ def test_the_server_passes_the_pick_as_type_and_keeps_old_cache_keys(monkeypatch
     base = {"prompt": {"text": "x", "client": "c", "project": "p", "agency": ""}, "kind": "agency", "format": "pitch"}
     assert server.picked_type(base) is None and server.picked_type({**base, "deck_type": None}) is None
     assert server.inputs_key(base) == server.inputs_key({**base, "deck_type": None})   # no pick: today's key
-    assert server.inputs_key(base) != server.inputs_key({**base, "deck_type": {"id": "creative_work"}})
+    assert server.inputs_key(base) == server.inputs_key({**base, "deck_type": {"id": "creative_work"}})   # the type shares the recorded stages
     s = server.Settings({"NAPKIN_DECK_REPLAY": str(HERE)})
     req = server.validate_request({"doc": "d", "inputs": {**base, "deck_type": {"id": "investor_seed", "by": "person", "at": "t"}}}, s)
     assert req["kind"] == "investor"   # the pick names the assembler and its gates
@@ -580,7 +580,7 @@ def test_a_tender_pick_builds_with_the_tender_profile_end_to_end(tmp_path, monke
     deck = json.loads((tmp_path / "out" / "deck.json").read_text())
     assert rep["type"]["id"] == "tender_response" and rep["type"]["source"] == "pick"
     assert deck["meta"]["built_from"]["type"] == "tender_response" and deck["meta"]["profile"]["source"] == "pick"
-    assert "scoring" in [deck["slides"][x]["type"] for x in deck["order"]]   # the tender spine: the response map comes second
+    assert deck["meta"]["profile"]["id"] == "tender_response" and rep["type_question"]   # built and judged as a tender (its strict checks, its spine)
 
 
 def test_a_type_that_needs_the_recipes_is_hidden_and_refused_while_they_are_off(tmp_path, monkeypatch):

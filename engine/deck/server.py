@@ -288,8 +288,8 @@ class Server:
         new type runs are recorded (here, in the shared stages folder): it re-arranges and re-plans them, no model call. One that needs a model
         stage not recorded is refused with 409 needs_stages, naming them, unless the person confirmed exactly those stages on the Change sheet
         (inputs.deck_type.confirmed_stages); then it runs them and run_deck gets --confirm-stages. Pictures are never re-made either way.
-        A first run (no type recorded for the document) is not a change. The type each run used is kept in <doc>/type.json."""
-        mark = self.s.data / req["doc"] / "type.json"
+        A first run (no type recorded for the document) is not a change. The type each run used is kept in <data>/.types/<doc>.json."""
+        mark = self.s.data / ".types" / f"{req['doc']}.json"   # beside the documents' folders, so a document's folder holds only its runs
         last = (json.loads(mark.read_text()).get("type") if mark.exists() else None)
         files = {**{k: v[0] for k, v in STAGE_FILES.items() if k != "final"}}
         recorded = {k for k, fn in files.items() if fn in present}
