@@ -32,6 +32,8 @@ from . import images, spec
 DIR = Path(__file__).with_name("layouts")
 #: deck-look steps 3-4: the layouts laid over the library under ``spec.LOOK_V3`` (new ids and reworks).
 V3_DIR = DIR / "v3"
+#: deck-graphics: the diagram layouts and the reworked timeline strip, laid over the v3 library under ``spec.GRAPHICS`` only.
+GRAPHICS_DIR = DIR / "graphics"
 SCHEMA = Path(__file__).with_name("schemas") / "layout.schema.json"
 #: The keys the plan owns: removed by ``strip_plan``, compared in golden_plan.json.
 PLAN_KEYS = ("layout", "slots", "meta.layout_title_pt")
@@ -55,8 +57,9 @@ def load(directory: Path | None = None, force: bool = False) -> dict:
     The default library under ``spec.LOOK_V3`` is the 36 files with ``layouts/v3`` laid over them (deck-look steps 3-4): a file there
     with a new id (``spec.LAYOUT_IDS_V3``) is added, one with an existing id replaces it. With the flag off it is the 36, unchanged."""
     v3 = directory is None and bool(spec.LOOK_V3)
+    gr = v3 and bool(spec.GRAPHICS)
     d = Path(directory) if directory else DIR
-    key = str(d) + ("+v3" if v3 else "")
+    key = str(d) + ("+v3" if v3 else "") + ("+graphics" if gr else "")
     if force:   # a forced reload re-reads the files: the recipe catalogue must not keep the old ones
         _CACHE.pop("catalogue", None)
     if key in _CACHE and not force:
@@ -64,7 +67,7 @@ def load(directory: Path | None = None, force: bool = False) -> dict:
     import jsonschema
     schema = json.loads(SCHEMA.read_text())
     lib: dict = {}
-    files = sorted(d.glob("*.yaml")) + (sorted(V3_DIR.glob("*.yaml")) if v3 else [])
+    files = sorted(d.glob("*.yaml")) + (sorted(V3_DIR.glob("*.yaml")) if v3 else []) + (sorted(GRAPHICS_DIR.glob("*.yaml")) if gr else [])
     for f in files:
         lay = yaml.safe_load(f.read_text())
         try:
@@ -73,7 +76,8 @@ def load(directory: Path | None = None, force: bool = False) -> dict:
             raise LibraryError(f"{f.name}: {e.message}") from e
         if lay["id"] != f.stem:
             raise LibraryError(f"{f.name}: id {lay['id']!r} is not the file name")
-        if lay["id"] not in spec.LAYOUT_IDS and not (f.parent == V3_DIR and lay["id"] in spec.LAYOUT_IDS_V3):
+        if lay["id"] not in spec.LAYOUT_IDS and not (f.parent == V3_DIR and lay["id"] in spec.LAYOUT_IDS_V3) \
+                and not (f.parent == GRAPHICS_DIR and lay["id"] in spec.LAYOUT_IDS_GRAPHICS):
             raise LibraryError(f"{f.name}: {lay['id']} is not in spec.LAYOUT_IDS")
         for t in lay["for_types"]:
             if t not in spec.SLIDE_TYPES:
@@ -231,8 +235,55 @@ def rows_aside(s: dict, bl: list) -> bool:
     return any(b["kind"] in ASIDE_KINDS for b in rest) and all(b["kind"] in ASIDE_KINDS + ("small",) for b in rest)
 
 
+def _only_notes(bl: list, keep) -> bool:
+    return all(b is keep or b["kind"] in ("text", "small", "statement") for b in bl)
+
+
+def steps_3_6(s: dict, bl: list) -> bool:
+    """deck-graphics process_chevrons: one steps block of 3 to 6 steps, each with a label that fits a chevron in two lines, beside at most
+    a note; fewer is never drawn as a diagram (nothing is padded) and more keeps its rows."""
+    from . import graphics   # noqa: PLC0415
+    items = graphics.steps_of(bl)
+    st = next((b for b in bl if b["kind"] == "steps"), None)
+    return (items is not None and graphics.PROCESS_MIN <= len(items) <= graphics.PROCESS_MAX and _only_notes(bl, st)
+            and all(it and it[0] and len(it[0]) <= 2 * graphics.CHEVRON_LABEL_MAX for it in items))
+
+
+def timed_3_8(s: dict, bl: list) -> bool:
+    """deck-graphics timeline: one steps block of 3 to 8 phases whose time is the same cell of every step (a phase and its time)."""
+    from . import graphics   # noqa: PLC0415
+    items = graphics.steps_of(bl)
+    st = next((b for b in bl if b["kind"] == "steps"), None)
+    if items is None or not graphics.TIMELINE_MIN <= len(items) <= graphics.TIMELINE_MAX or not _only_notes(bl, st):
+        return False
+    return any(all(len(it) > j and graphics.is_time(it[j]) for it in items) for j in (0, 1))
+
+
+def matrix_sourced(s: dict, bl: list) -> bool:
+    """deck-graphics matrix_2x2: one table carrying a ``matrix`` (x and y axes, cells hh / hl / lh / ll) whose BOTH axes have refs, every
+    item in a named cell. No stage writes one today: it arrives from a document's two-axis table or from a person."""
+    from . import graphics   # noqa: PLC0415
+    return any(graphics.matrix_ok(b) for b in bl if b["kind"] == "table")
+
+
+def journey_3_5(s: dict, bl: list) -> bool:
+    """deck-graphics journey_row: one steps block of 3 to 5 stages, each [stage, text, channel] with all three cells written."""
+    from . import graphics   # noqa: PLC0415
+    items = graphics.steps_of(bl)
+    st = next((b for b in bl if b["kind"] == "steps"), None)
+    return (items is not None and graphics.JOURNEY_MIN <= len(items) <= graphics.JOURNEY_MAX and _only_notes(bl, st)
+            and all(len(it) >= 3 and all(it[:3]) for it in items))
+
+
+def points_3_6(s: dict, bl: list) -> bool:
+    """deck-graphics grid_points: 3 to 6 points (statement_points' reading), every one with a heading of its own."""
+    pts = statement_points(bl)
+    return pts is not None and 3 <= len(pts) <= 6 and all(p["heading"] for p in pts)
+
+
 TESTS = {"has_target_figure": has_target_figure, "has_human_item": has_human_item, "compare_table": compare_table, "role_rows": role_rows,
-         "points_2_3": points_2_3, "rows_aside": rows_aside}
+         "points_2_3": points_2_3, "rows_aside": rows_aside, "steps_3_6": steps_3_6, "timed_3_8": timed_3_8, "matrix_sourced": matrix_sourced,
+         "journey_3_5": journey_3_5, "points_3_6": points_3_6}
 
 
 def has_text_zone(s: dict) -> bool:

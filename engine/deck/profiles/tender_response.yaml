@@ -93,6 +93,9 @@ questions:
 # The table preference is on scoring (the response map), never on prose: a criterion answer takes rows only when it already
 # carries a table. Not built yet: criterion_answer rows_aside (the layout does not take a criterion answer yet).
 recipe:
+  # deck-graphics (features/deck-graphics.clan, placement.by_recipe): no icons on a tender (evaluators read; decoration costs room).
+  # Read by graphics.icons_on only under DECK_GRAPHICS=1; nothing else reads it.
+  graphics: {icons: false}
   layouts:
     scoring: [native_table]
     criterion_answer: [rows_aside, text_columns]

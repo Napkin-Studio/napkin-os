@@ -757,6 +757,243 @@
    "na_when": "deck.meta.theme.logo is absent, has no asset or placement none; or deck.pptx is missing or cannot be opened; or no presented slide of type title",
    "tier": "gate",
    "today": "n/a"
+  },
+  {
+   "id": "i_icon_allowlist",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every icon shape one of the vendored ids (vendor/icons/icons.json), none a brand, drawn as a native stroke-only freeform?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1); graphics.ICON_DENY",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_contrast",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every icon stroke 3:1 or better against its slide's ground (WCAG non-text contrast)?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1); graphics.ICON_CONTRAST",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_groups",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every icon group have an icon on every item, all different (at least graphics.ICON_GROUP_MIN items)?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1) (all-or-none per group)",
+   "inputs": [
+    "deck.pptx",
+    "layouts.json | deck.slides.<id>.layout"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_share",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Are icons on at most 3 of any 10 presented slides?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1) (design.icons.layouts: at most 3 icon slides in any 10 presented)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "threshold": {
+    "max_slides": 3,
+    "window": 10
+   },
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "m_mockup_labelled",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every slide with a drawn frame or storyboard strip carry the fixed 'Mock-up' label (spec.MOCKUP_LABEL)?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (Q6: on every frame, client builds too)",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "m_frame_aspect",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every framed Production picture drawn whole (no crop past spec.PICTURE_STRETCH_TOL on any side) in a window of its own aspect?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.aspect: a Production size is never cropped)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots, assets)"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened; or no framed picture is a Production picture",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "m_frame_rights",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is no rights-pending (reference_only) or mock picture inside a frame or a strip?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.rights; p_rights_ok extended)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots, assets)"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "m_production_first",
+   "group": "graphics",
+   "kind": "metric",
+   "question": "What share of the drawn frames and strips hold a Production picture?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.sources_order: Production first)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots)"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "direction": "higher",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "s_strip_order",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every storyboard strip 3 or 4 Production frames, numbered shot_1 to shot_n with no gap, one drawn picture per shot?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.storyboard_strip: all Production or not drawn)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots)"
+   ],
+   "na_when": "no presented slide carries a storyboard strip; or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_sourced",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every chart carry its source line ('Source: ...') and a meta.graphics.charts record whose every point is a fact or document-figure ref?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.graphics.charts)"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_numbers",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every number in every chart part (values and categories) a ledger value or label of that chart's record (no computed or stray value)?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.graphics.charts)"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_form",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every chart a bar, column, line or 100% segmented bar, on one axis, bars from zero, at most 8 categories and 3 series?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_contrast",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every chart mark 3:1 or better on its slide's ground?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_emphasis",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every single-series chart pick out at most 2 marks in the accent?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.theme)"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "d_own_words",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every word in a diagram a word of the slide's own blocks or title (no step, label or marker written by code)?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "no presented slide carries a diagram (shapes named 'Diagram: <kind>'), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "d_matrix_axes",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every 2x2 have both axes with sourced refs?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide is laid out as matrix_2x2",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "d_min_items",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is no diagram drawn under its minimum (3 steps, phases or stages)?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "no presented slide carries a diagram (shapes named 'Diagram: <kind>'), or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
   }
  ]
 }

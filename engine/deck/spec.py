@@ -446,12 +446,16 @@ LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "compari
               "close", "big_statement", "quote_full", "cards_split", "text_columns", "placeholder_split", "chart_full",
               "timeline_rows", "execution_stack", "territory_wide", "people_cards")
 #: The tests a layout file's ``when.test`` may name; each is a function of the same name in layouts.py (and has a unit test).
-LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3", "rows_aside", "bleed_ready")
+LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3", "rows_aside", "bleed_ready",
+                "steps_3_6", "timed_3_8", "matrix_sourced", "journey_3_5", "points_3_6")
 #: deck-look steps 3-5: the layouts that exist only under ``LOOK_V3`` (``layouts/v3``; the same folder may also rework a layout
 #: of LAYOUT_IDS, such as ``close``). With the flag off the library is the 36 above, byte for byte. rows_aside (step 5) holds a
 #: merged slide: the kept slide's table as hairline rows, the absorbed slide's blocks in a column beside them.
 #: cover_bleed (step 7) sets the cover's words on its picture, on the zone images.text_zone measured (full_bleed_statement is reworked the same way).
 LAYOUT_IDS_V3 = ("statement_points", "reframe", "shift_line", "picture_column", "rows_aside", "cover_bleed")
+#: deck-graphics (features/deck-graphics.clan): the diagram layouts and the grid of points, only under ``spec.GRAPHICS`` (``layouts/graphics``;
+#: the same folder reworks timeline_strip as an equally spaced strip). With the flag off the library is unchanged.
+LAYOUT_IDS_GRAPHICS = ("process_chevrons", "matrix_2x2", "journey_row", "grid_points")
 #: deck-look: a statement set in capitals only when it is at most this many characters (and two lines); sentence case beyond (Q10).
 CAPS_MAX_CHARS = 40
 #: deck-look q_no_hole (design.checklist): the largest empty rectangle of a presented content slide, as a share of the slide, on a
@@ -470,6 +474,14 @@ LOOK_V3 = os.environ.get("DECK_LOOK_V3", "").strip() in ("1", "true", "yes")
 #: reader uses the constants above and a build is byte-identical; DECK_RECIPES=1 turns it on for one run (the gallery render). It
 #: gets its own golden re-record commit after the look commit (design.rework_risks).
 RECIPES = os.environ.get("DECK_RECIPES", "").strip() in ("1", "true", "yes")
+#: deck-graphics (features/deck-graphics.clan): icons (slice 1; charts, diagrams and execution mock-ups follow) drawn as native shapes.
+#: DECK_GRAPHICS=1 turns it on for one run, and only together with LOOK_V3 (off with a warning otherwise). OFF by default: nothing in
+#: graphics.py is read and the vendored icons are never loaded, so every build is byte-identical. Its own golden re-record after RECIPES.
+_GRAPHICS_ASKED = os.environ.get("DECK_GRAPHICS", "").strip() in ("1", "true", "yes")
+GRAPHICS = _GRAPHICS_ASKED and LOOK_V3
+if _GRAPHICS_ASKED and not LOOK_V3:
+    import sys as _sys   # noqa: PLC0415
+    print("deck: DECK_GRAPHICS=1 needs DECK_LOOK_V3=1; graphics stay off for this run", file=_sys.stderr)
 #: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
 PITCH_LENGTH_FROM_ENV = {"target": _env_count("DECK_PITCH_TARGET", -1, warn=False) != -1, "cap": _env_count("DECK_PITCH_CAP", -1, warn=False) != -1}   # a bad value is not "from env"
 #: Layouts deck-look has named but not yet built (features/deck-look.clan step 3; cover_bleed landed in step 7). A recipe may name one: it is accepted by the
@@ -518,6 +530,16 @@ PICTURE_LABEL = "Illustrative"
 PRODUCTION_LABEL = "Production"
 #: deck-prod-assets (Q4, fix 8): what an unplaced Production picture with no stated licence says (image_rights, the held list, the picker).
 RIGHTS_TO_SUPPLY = "Rights to supply"
+#: deck-graphics slice 2 (Q6): the fixed label on every drawn execution frame, in every build (client builds too). No digit.
+MOCKUP_LABEL = "Mock-up"
+#: deck-graphics slice 2: the frames the deck draws from native shapes, and each one's default format (vendor/format-packs.json id) whose
+#: aspect a generated or supplied picture takes. A Production size keeps its own format's aspect, whole and uncropped.
+FRAME_FORMATS = {"poster_portrait": "uk-6-sheet", "billboard": "uk-48-sheet", "phone": "meta-stories-9x16", "screen": "film-16x9",
+                 "spread": "mag-a4-dps", "strip": "uk-bus-tside"}
+#: The frame a channel's generated picture is shown in (graphics.frame_of): film in a screen, social on a phone, OOH and print on a poster.
+FRAME_OF_CHANNEL = {"ooh": "poster_portrait", "social": "phone", "film": "screen", "print": "poster_portrait", "display": "strip"}
+#: deck-graphics slice 3: a film execution's storyboard strip takes 3 to 4 Production frames in shot order, all Production or none.
+STRIP_MIN, STRIP_MAX = 3, 4
 #: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
 PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "audience", "real_question", "close",
                        "solution", "product")

@@ -142,7 +142,12 @@
             "image_ready",
             "points_2_3",
             "rows_aside",
-            "bleed_ready"
+            "bleed_ready",
+            "steps_3_6",
+            "timed_3_8",
+            "matrix_sourced",
+            "journey_3_5",
+            "points_3_6"
           ],
           "$comment": "a named test from spec.LAYOUT_TESTS, implemented in layouts.py"
         },

@@ -481,7 +481,25 @@ def red_team(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
 def image_subjects(req: dict) -> tuple[dict, dict]:
     """Stage g (deck-image-gen): the subject of every empty picture slot, from the request ``imagegen.subject_request`` built (marked parts are
     already out of it). One call; the caller records it and the ledger counts it inside the deck's cap."""
-    return _call("g", json.dumps(req, ensure_ascii=False, indent=1), _sysmsg("g_image_subjects.md", "g"))
+    return _call("g", json.dumps(req, ensure_ascii=False, indent=1), g_system())
+
+
+#: deck-graphics slice 2 (design.mockups.generated_subject): under spec.GRAPHICS an execution's picture is the artwork itself, because the
+#: deck draws the frame around it. Placed before the input rule, so that rule keeps the last word. Only the system text changes, never
+#: the request: a recorded stage g stays valid.
+ARTWORK_RULE = ("For a slot whose key starts with execution: describe the artwork itself, filling the picture edge to edge, as the poster, "
+                "post or film frame would show it: never a photograph of a street, a bus shelter, a billboard, a phone, a screen or a room "
+                "with the advert in it. The deck draws the frame around it.")
+
+
+def g_system() -> str:
+    """Stage g's system prompt: the file's own text, plus ARTWORK_RULE before the input rule when spec.GRAPHICS is on."""
+    text = _sysmsg("g_image_subjects.md", "g")
+    if not spec.GRAPHICS:
+        return text
+    body = text.rstrip("\n").split("\n")
+    at = next((i for i, ln in enumerate(body) if ln.startswith("Inputs are the only source:")), len(body))
+    return "\n".join(body[:at] + [ARTWORK_RULE] + body[at:]) + "\n"
 
 
 def investor(inp, st, profile: dict | None = None) -> tuple[dict, dict]:

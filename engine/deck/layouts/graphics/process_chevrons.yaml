@@ -1,0 +1,47 @@
+id: process_chevrons
+version: 1
+group: content
+purpose: timeline
+description: The steps as a row of chevrons, the label inside each chevron and its line under it; a note under the row.
+slot_summary: title, steps (3-6), note
+for_types:
+- process
+- gtm
+- credentials
+- solution
+- next_step
+when:
+  blocks_any:
+  - steps
+  test: steps_3_6
+priority: 63
+alternatives:
+- timeline_rows
+- role_grid
+roomier: timeline_rows
+density: standard
+pick: rule
+family: diagram
+renderer: process_chevrons
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  steps:
+    kind: list
+    role: body
+    from_blocks:
+    - steps
+    min_items: 3
+    max_items: 6
+    dominant: true
+  note:
+    kind: text
+    role: small
+    from_blocks:
+    - text
+    - small
+    - statement

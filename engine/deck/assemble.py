@@ -745,6 +745,9 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
             "territories": territories or {}, "slides": {}, "order": []}
     if fit:
         deck["fit"] = fit
+    if spec.GRAPHICS:   # deck-graphics slices 4-5: each chart block is drawn only from ledger values of one measure and unit, else a hero,
+        from . import graphics   # noqa: PLC0415   a stat row or a table (nothing computed, no word added); the record goes in meta.graphics
+        deck["meta"]["graphics"] = {"charts": graphics.charts_pass(S, inp, R)}
 
     if spec.LOOK_V3:   # deck-look: three brief fields the deck never showed, each on its one home slide (said once)
         _surface_brief_fields(S, inp)

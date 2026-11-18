@@ -1199,6 +1199,25 @@
          ]
         }
        }
+      },
+      "look": {
+       "type": "object",
+       "additionalProperties": false,
+       "description": "deck-graphics: the switchable parts a person turned on or off for this deck (read only under DECK_GRAPHICS=1): icons, mockups.",
+       "properties": {
+        "graphics": {
+         "type": "object",
+         "additionalProperties": false,
+         "properties": {
+          "icons": {
+           "type": "boolean"
+          },
+          "mockups": {
+           "type": "boolean"
+          }
+         }
+        }
+       }
       }
      }
     },

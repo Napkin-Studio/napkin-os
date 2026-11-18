@@ -56,7 +56,11 @@ SCHEMA = {
     "questions": (list, True), "sources": (list, False), "recipe": (dict, False),
 }
 #: deck-types: the keys of a profile's optional ``recipe`` block (design.schema.recipe). ``full`` repeats them for format full.
-RECIPE_KEYS = ("layouts", "density", "pictures", "brand", "titles", "size", "format", "full")
+#: ``graphics`` (deck-graphics): {icons, mockups: bool}, read by graphics.part_on only under spec.GRAPHICS.
+RECIPE_KEYS = ("layouts", "density", "pictures", "brand", "titles", "size", "format", "full", "graphics")
+#: deck-graphics: the parts a recipe (or a deck's meta.preferences.look.graphics) may turn on or off. Charts and diagrams have no switch:
+#: they follow the deck's own data and the fit.
+GRAPHICS_PARTS = ("icons", "mockups")
 
 
 class ProfileError(ValueError):
@@ -181,7 +185,8 @@ def recipe_errors(r, spine: list, _nested: bool = False) -> list:
       and hi at most the largest slide budget.
     * ``pictures``: ``on`` in spec.PICTURES_ON except custom, ``generate`` in spec.RECIPE_GENERATE, ``types`` within spec.PICTURE_SLIDE_TYPES.
     * ``brand`` {strict: bool}, ``titles`` {form: spec.RECIPE_TITLE_FORMS}, ``size`` in spec.RECIPE_SIZES, ``format`` in spec.FORMATS,
-      ``full``: the same keys again (no ``full`` or ``format`` inside)."""
+      ``full``: the same keys again (no ``full`` or ``format`` inside).
+    * ``graphics`` (deck-graphics): {icons, mockups: true | false}; only graphics.part_on reads it, under spec.GRAPHICS."""
     if not isinstance(r, dict):
         return ["recipe must be an object"]
     errs = []
@@ -253,6 +258,9 @@ def recipe_errors(r, spine: list, _nested: bool = False) -> list:
     ti = r.get("titles")
     if ti is not None and not (isinstance(ti, dict) and set(ti) <= {"form"} and ti.get("form", "claim") in spec.RECIPE_TITLE_FORMS):
         errs.append(f"recipe.titles must be {{form: {' | '.join(spec.RECIPE_TITLE_FORMS)}}}")
+    gr = r.get("graphics")
+    if gr is not None and not (isinstance(gr, dict) and set(gr) <= set(GRAPHICS_PARTS) and all(isinstance(v, bool) for v in gr.values())):
+        errs.append(f"recipe.graphics must be an object of {', '.join(GRAPHICS_PARTS)}: true | false")
     if "size" in r and r["size"] not in spec.RECIPE_SIZES:
         errs.append(f"recipe.size must be one of {', '.join(spec.RECIPE_SIZES)}")
     if "format" in r and r["format"] not in spec.FORMATS:

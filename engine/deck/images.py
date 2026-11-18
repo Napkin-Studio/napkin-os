@@ -532,17 +532,23 @@ def production_master(prod: dict, brief_document_id: str | None = None) -> str |
     return choose_master(prod, brief_document_id)[0]
 
 
-def production_size(prod: dict, channel: str, aspect: str, prefer_set: str | None = None) -> tuple:
+def production_size(prod: dict, channel: str, aspect: str, prefer_set: str | None = None, any_shape: bool = False) -> tuple:
     """``(key, why)``: the size for an execution slot. Sizes whose channel the execution accepts (a size of a format the pinned packs do
     not know only when the channel has none), within ASPECT_TOL of the slot's aspect and whose protect boxes the slot's crop keeps whole;
     a placeable one before one waiting for its rights, ready before flagged ('look'), the key visual's own set first, nearest the slot's
     aspect, newest last. Stale sizes never. ``(None, why)`` when sizes of the channel exist and none fits (the slot is left empty with
-    that reason, never filled with a wrong shape); ``(None, None)`` when Production made nothing for the channel."""
+    that reason, never filled with a wrong shape); ``(None, None)`` when Production made nothing for the channel.
+
+    ``any_shape`` (deck-graphics, spec.GRAPHICS): the size is shown WHOLE in a frame whose window takes its own format's aspect, so no
+    shape is too far and no crop can cut a protect box: every size of the channel is a candidate, nearest the slot's aspect first; a
+    channel whose only sizes are out of date ('stale') is held with that reason, never passed to a generated picture."""
     want = ratio(aspect)
-    tol = math.log(ASPECT_TOL)
+    tol = math.log(ASPECT_TOL) if not any_shape else float("inf")
     acc = PRODUCTION_ACCEPTS.get(channel) or ()
-    matched, nearest, off_shape, cut = [], [], set(), 0
+    matched, nearest, off_shape, cut, stale = [], [], set(), 0, 0
     for k, it in (prod.get("items") or {}).items():
+        if any_shape and it.get("role") == "size" and it.get("status") == "stale" and it.get("channel") in acc:
+            stale += 1
         if it.get("role") != "size" or it.get("status") not in ("ready", "look") or not it.get("aspect"):
             continue
         ours, unknown = it.get("channel") in acc, it.get("channel") is None
@@ -554,13 +560,19 @@ def production_size(prod: dict, channel: str, aspect: str, prefer_set: str | Non
             if ours:
                 off_shape.add(f"{it['aspect']['w']}:{it['aspect']['h']}")
             continue
-        if not keeps_protected(it, aspect):
+        if not any_shape and not keeps_protected(it, aspect):
             cut += 1 if ours else 0
             continue
         row = (it.get("rights") == "reference_only", it.get("status") != "ready", it.get("set") != prefer_set, round(dist, 4), k)   # a placeable picture first
         (matched if ours else nearest).append(row)
-    pool = matched or nearest
+    if any_shape and stale and not matched:   # the channel's own sizes are all out of date: held, never a size of another format
+        pool = []
+    else:
+        pool = matched or nearest
     if not pool:
+        if any_shape and stale:
+            return None, (f"Out of date in Production: its {channel} size(s) changed since they were made. Make them again in Production, "
+                          f"or supply a picture")
         if not off_shape and not cut:
             return None, None
         parts = []
@@ -579,6 +591,21 @@ def production_frame(prod: dict) -> str | None:
     sb = _newest([it.get("storyboard") or "" for it in frames.values()])
     first = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
     return first[0][1] if first else None
+
+
+def production_shots(prod: dict) -> list:
+    """The newest storyboard's picked shot frames in shot order (Production's ``shot.rank``, a fractional index that sorts as a string; end
+    cards left out; mock frames never reach production.json): ``[(shot number from 1, item key, placeable)]``. A rights-pending frame keeps
+    its number and is not placeable."""
+    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    sb = _newest([it.get("storyboard") or "" for it in frames.values()])
+    ordered = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
+    return [(n, k, frames[k].get("rights") != "reference_only" and frames[k].get("status", "ready") == "ready") for n, (_, k) in enumerate(ordered, 1)]
+
+
+def production_storyboard(prod: dict) -> list:
+    """The placeable frames of production_shots, in shot order: ``[item key]``."""
+    return [k for _, k, ok in production_shots(prod) if ok]
 
 
 def production_slot(prod: dict, key: str, aspect: str, names=()) -> tuple:
@@ -643,8 +670,26 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                 ch = execution_channel(title)
                 if ch == "film":
                     key = production_frame(prod)
+                    own = ((((s.get("slots") or {}).get(slot) or {}).get("image") or {}).get("from") or {}).get("kind") in ("upload", "brand")
+                    if spec.GRAPHICS and not own:   # deck-graphics slice 3: 3 or 4 Production frames in shot order make a strip, all Production or none
+                        from .graphics import strip_picks   # noqa: PLC0415
+                        shots = production_shots(prod)
+                        number = {k: n for n, k, _ in shots}
+                        picks, note = strip_picks([k for _, k, ok in shots if ok])
+                        if picks:
+                            key = picks[0]
+                            for i, fk in enumerate(picks, 1):
+                                val, asset = production_slot(prod, fk, aspect, names)
+                                if asset:
+                                    register_assets(deck, {val["image"]["asset"]: asset})
+                                    got["placed"] += 1
+                                _slots(s)[f"shot_{i}"] = val
+                            if len(picks) < len(shots):   # fewer drawn than the storyboard has: say so on the slide ('4 of 9 shots')
+                                note = f"{len(picks)} of {len(shots)} shots"
+                            s["strip"] = {"shots": [number[k] for k in picks], "of": len(shots), **({"note": note} if note else {})}
+                            got.setdefault("strips", []).append({"slide": sid, "shots": len(picks), "note": note})
                 elif ch:
-                    key, why = production_size(prod, ch, aspect, mset)
+                    key, why = production_size(prod, ch, aspect, mset, any_shape=bool(spec.GRAPHICS))
             if not key and not why:
                 continue
             cur = (s.get("slots") or {}).get(slot)
