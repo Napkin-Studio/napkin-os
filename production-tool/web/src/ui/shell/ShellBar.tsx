@@ -238,6 +238,30 @@ export function ShellBar({ crumb, menu, job, tools, primary, presence, mark = 'a
   )
 }
 
+/** The bar where no film is open (All projects, and the sign-in and access screens): the medallion and agency
+ *  pill, the place's name, light or dark, and you once signed in. A film's slots (its name, Continue in, Share,
+ *  Decisions) are not here (mock production-new-ui-v2 core.js S.bar({ place: 'Production' })). */
+export function PlaceBar({ place = 'Production', account }: {
+  place?: string
+  /** The account button and its menu; none when signed out. */
+  account?: ReactNode
+}) {
+  return (
+    <div className="topbar-outer" data-float-avoid="" data-bar="place">
+      <header className="tb" aria-label="Napkin Studio Top Bar">
+        <span className="tb-lead"><Medallion state="awake" /><AgencyPill /></span>
+        <span className="tb-sep" aria-hidden="true" />
+        <div className="tb-app">
+          <span className="tba-name static"><Ic d={ICON.film} cls="ticon" /><span className="tba-n2"><b>{place}</b></span></span>
+        </div>
+        <span className="tb-spacer" />
+        <ThemeButton />
+        {account && <span className="tb-me">{account}</span>}
+      </header>
+    </div>
+  )
+}
+
 /** The band row under an editor's bar: the editor's own controls (view switch, Format, length, Undo). */
 export function Band({ children, className = '', label }: { children: ReactNode; className?: string; label?: string }) {
   return <div className={`band ${className}`} role="toolbar" aria-label={label ?? 'Editor controls'}>{children}</div>

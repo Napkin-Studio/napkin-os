@@ -35,6 +35,7 @@
 .tb-app { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
 .tb .tba-name { display: inline-flex; align-items: center; gap: 8px; min-width: 132px; border-radius: 7px; padding: 2px 6px 2px 4px; flex-shrink: 1; }
 .tb .tba-name:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.tb .tba-name.static, .tb .tba-name.static:hover { background: none; cursor: default; }
 .tba-name .ticon { width: 18px; height: 18px; color: var(--ink); flex: none; }
 .tba-n2 { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; text-align: left; }
 .tba-n2 b { font: 700 15px var(--font-ui); letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: clamp(140px, 20vw, 340px); }
@@ -169,7 +170,7 @@
 .sp-crumb .x { margin-left: auto; text-decoration: none; font-size: 15px; }
 .booth-canvas .booth-body > .bb { display: flex; flex-direction: column; gap: 14px; }
 
-/* ── The mock's shared controls (production-new-ui-v2 css/shell.css + pt.css), for the canvas, its Booth and the Start card ── */
+/* ── The mock's shared controls (production-new-ui-v2 css/shell.css + pt.css), for the canvas and its Booth ── */
 .btn-rect { min-height: 38px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); color: var(--ink);
   font: 600 13.5px var(--font-ui); display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; cursor: pointer; }
 .btn-rect:hover { border-color: var(--ink); }
@@ -239,3 +240,13 @@
 .pt-menuform { display: flex; gap: 6px; padding: 4px 8px; }
 .pt-menuform .input { flex: 1; min-width: 0; height: 30px; }
 .pt-menuacts { display: flex; gap: 6px; margin-top: 8px; }
+
+/* Signed out, not confirmed, or not on for the agency (Root.tsx NoAccess): the desk under the shell bar, one
+   paper card with what to do (the mock's .cp-box paper; features/production-new-ui.clan). */
+.access-view { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--desk); color: var(--ink); }
+.access-main { flex: 1; display: grid; place-items: center; padding: 24px 16px; }
+.access-card { width: min(480px, 100%); box-sizing: border-box; background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-paper, 0 1px 2px rgba(0, 0, 0, .06)); padding: 24px 26px; display: flex; flex-direction: column; gap: 12px; }
+.access-card h1 { margin: 0; font: 800 22px/1.2 var(--font-ui); letter-spacing: -.02em; color: var(--ink); }
+.access-card p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); }
+.access-card .btn-rect { align-self: flex-start; margin-top: 4px; text-decoration: none; }
