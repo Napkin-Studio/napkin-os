@@ -2176,7 +2176,8 @@ test('DECK_TYPE_CARDS: five cards, agency_pitch first, ids equal the schema enum
 
 test('typeCaption: about N slides, size and pictures; a type with no target says up to its max', () => {
   assert.equal(L.typeCaption(L.cardOf('agency_pitch')), 'about 10 slides · 16:9 · pictures: many')
-  assert.equal(L.typeCaption(L.cardOf('tender_response')), 'up to 18 slides · 16:9 · pictures: none generated')
+  assert.equal(L.typeCaption(L.cardOf('tender_response')), 'up to 18 slides · A4 · pictures: none generated')
+  assert.equal(L.typeCaption(L.cardOf('agency_pitch'), 'full'), 'about 10 slides · A4 · pictures: many')
   assert.equal(L.typeCaption(null), '')
 })
 
@@ -2264,10 +2265,68 @@ test('the format switch sits under the grid with both options, writes through Bu
   assert.equal((m.app.innerHTML.match(/data-format=/g) || []).length, 2, 'no second format picker on Start')
   assert.equal(m.app.innerHTML.includes('data-kind='), false, 'the kind comes from the type')
   m.click({ format: 'full' })
-  assert.ok(m.app.innerHTML.includes('Every slide in story order, more words per slide, pictures on the cover only. A4 pages come with the slide-size feature.'))
-  assert.equal(m.app.innerHTML.includes('A4</'), false)
+  assert.ok(m.app.innerHTML.includes('Every slide in story order, more words per slide, pictures on the cover only. The pages default to A4 landscape; change it under Slide size above.'))
   m.click({}, 'build')
   assert.equal((m.writes[0].obj as { inputs: { format: string } }).inputs.format, 'full')
+})
+
+const sizeOn = (h: string) => [...h.matchAll(/data-size="([^"]+)" aria-pressed="true"/g)].map(x => x[1])
+const sizeStart = (inputs: Record<string, unknown>, look?: unknown) => mount({ inputs: { prompt: { text: 'a line' }, ...inputs }, ...(look ? { look } : {}), upstream: { d1: briefDoc } })
+
+test('the slide size group renders three options after the format switch, the default marked', () => {
+  const m = sizeStart({ format: 'pitch' })
+  const h = pickerOf(m.app.innerHTML)
+  assert.ok(h.includes('Slide size'))
+  assert.equal((h.match(/data-size="/g) || []).length, 3)
+  for (const x of ['Widescreen 16:9', 'Standard 4:3', 'A4 landscape']) assert.ok(h.includes('<b>' + x + '</b>'), x)
+  assert.ok(h.indexOf('data-format-switch') < h.indexOf('data-size-switch'))
+  assert.equal((h.match(/\(default\)/g) || []).length, 1)
+})
+
+test('the size default follows type and format: tender A4, agency pitch presented 16:9, any type sent to be read A4', () => {
+  const tender = { deck_type: { id: 'tender_response', by: 'person', at: 't' } }
+  assert.deepEqual(sizeOn(sizeStart({ format: 'pitch', ...tender }).app.innerHTML), ['a4'])
+  assert.deepEqual(sizeOn(sizeStart({ format: 'pitch', deck_type: { id: 'agency_pitch', by: 'person', at: 't' } }).app.innerHTML), ['16:9'])
+  for (const id of L.DECK_TYPE_CARDS.map(c => c.id)) assert.deepEqual(sizeOn(sizeStart({ format: 'full', deck_type: { id, by: 'person', at: 't' } }).app.innerHTML), ['a4'], id)
+  assert.deepEqual(sizeOn(sizeStart({ format: 'pitch' }).app.innerHTML), ['16:9'])
+  assert.deepEqual(sizeOn(sizeStart({ format: 'full' }).app.innerHTML), ['a4'])
+})
+
+test('picking a size writes look.size with by person, via start, even when it equals the default', () => {
+  const m = sizeStart({ format: 'pitch' })
+  m.click({ size: '4:3' })
+  const w = m.writes[0].obj as { look: { size: { canvas: string; by: string; at: string; via: string } } }
+  assert.deepEqual(Object.keys(w), ['look'])
+  assert.deepEqual([w.look.size.canvas, w.look.size.by, w.look.size.via], ['4:3', 'person', 'start'])
+  assert.ok(!Number.isNaN(Date.parse(w.look.size.at)))
+  m.click({ size: '16:9' })
+  assert.equal(m.writes.length, 2)
+  assert.equal((m.writes[1].obj as { look: { size: { canvas: string } } }).look.size.canvas, '16:9')
+  m.click({ size: 'a5' })
+  assert.equal(m.writes.length, 2, 'an unknown canvas writes nothing')
+})
+
+test('an explicit look.size wins over the default; an invalid stored canvas is ignored', () => {
+  const set = sizeStart({ format: 'full' }, { size: { canvas: '4:3', by: 'person', at: 't', via: 'start' } })
+  assert.deepEqual(sizeOn(set.app.innerHTML), ['4:3'])
+  assert.ok(pickerOf(set.app.innerHTML).includes('A4 landscape</b><span>To print as a leave-behind (default)'))
+  assert.deepEqual(sizeOn(sizeStart({ format: 'pitch' }, { size: { canvas: 'a5' } }).app.innerHTML), ['16:9'])
+})
+
+test('the type card caption shows A4 for a tender, and follows the format', () => {
+  const m = sizeStart({ format: 'pitch' })
+  assert.ok(pickerOf(m.app.innerHTML).includes('up to 18 slides · A4 · pictures: none generated'))
+  assert.ok(pickerOf(m.app.innerHTML).includes('about 10 slides · 16:9 · pictures: many'))
+  const f = sizeStart({ format: 'full' })
+  assert.ok(pickerOf(f.app.innerHTML).includes('about 10 slides · A4 · pictures: many'))
+})
+
+test('schema: look.size refuses a canvas other than 16:9, 4:3 or a4', () => {
+  const sz = schema.properties.look.properties.size
+  assert.deepEqual(plain(sz.properties.canvas.enum), ['16:9', '4:3', 'a4'])
+  assert.equal(sz.additionalProperties, false)
+  assert.ok(!sz.properties.canvas.enum.includes('a5') && !sz.properties.canvas.enum.includes('16x9'))
+  assert.ok(new RegExp(sz.properties.by.pattern).test('person'))
 })
 
 test('picking a type writes inputs.deck_type only; Not sure writes null and clears an answer to q_deck_type', () => {
