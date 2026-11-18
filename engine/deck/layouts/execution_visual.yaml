@@ -2,8 +2,8 @@ id: execution_visual
 version: 1
 group: content
 purpose: image
-description: The channel copy and a key visual beside it.
-slot_summary: title, role, copy, picture
+description: The channel copy on the left, the key visual on the right half at full content height.
+slot_summary: title, role, copy, picture (half the slide)
 for_types:
 - execution
 when:

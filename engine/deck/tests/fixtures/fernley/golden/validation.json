@@ -7,13 +7,6 @@
   "slide_no": 1
  },
  {
-  "check": "internal_leak",
-  "level": "warn",
-  "slide": "s01",
-  "message": "the agency name placeholder on screen: '[Agency]' in \"A response from [Agency]\"",
-  "slide_no": 1
- },
- {
   "check": "word_budget",
   "level": "warn",
   "slide": "s05",

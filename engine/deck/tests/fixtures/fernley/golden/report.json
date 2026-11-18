@@ -385,17 +385,17 @@
  ],
  "validation": {
   "errors": 1,
-  "warnings": 19,
+  "warnings": 18,
   "by_check": {
    "numbers_uncited": {
     "error": 0,
     "warn": 3
    },
-   "internal_leak": {
-    "error": 0,
-    "warn": 3
-   },
    "word_budget": {
+    "error": 0,
+    "warn": 2
+   },
+   "internal_leak": {
     "error": 0,
     "warn": 2
    },

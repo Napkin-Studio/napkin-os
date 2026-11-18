@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 
-from . import spec
+from . import numfmt, spec
 
 MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
           "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec")
@@ -45,7 +45,7 @@ def _words(text: str) -> list:
 def tokens(text, known: frozenset | set = frozenset()) -> list:
     """The ledger of one text: ``[(kind, value)]`` in reading order. ``known`` holds names (lower-case) that count even at the start of
     a sentence: the capitalised words found inside sentences of the same slide's base text."""
-    ws = _words(str(text or ""))
+    ws = _words(numfmt.format_text(str(text or "")))   # what a slide shows (numfmt) and what the deck stores are one ledger
     out: list = []
     first = True
     prev_num, skip = False, False

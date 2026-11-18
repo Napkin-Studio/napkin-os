@@ -170,7 +170,7 @@ def test_slot_words_are_block_words_and_golden_slots_validate_against_their_layo
         for name, v in s["slots"].items():
             assert name in lay["slots"] and v["kind"] == lay["slots"][name]["kind"], (s["title"], name)
             for w in layouts._chars_words and " ".join(str(x) for x in (v.get("text", ""), *[i.get("text", "") + " " + i.get("heading", "") + " " + i.get("value", "") for i in v.get("items", [])])).split():
-                assert w in texts, (s["title"], name, w)
+                assert w.rstrip(":") in texts, (s["title"], name, w)   # a thin table is a statement: only a colon joins a header to its cell
 
 
 def test_the_planned_deck_validates_against_the_deck_schema():

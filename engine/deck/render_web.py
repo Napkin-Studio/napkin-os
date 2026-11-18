@@ -22,7 +22,7 @@ import html
 import json
 from pathlib import Path
 
-from . import images, spec
+from . import images, numfmt, spec
 from .refs import fmt
 from .render_pptx import DARK_TYPES, THEME, _kicker
 from .spec import blocks_sha, frame_for, shown_blocks
@@ -36,7 +36,7 @@ BODY_FONT = "Calibri, Carlito, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
 
 def _e(t) -> str:
     """Escape text for HTML."""
-    return html.escape(str(t), quote=True)
+    return html.escape(numfmt.format_text(str(t)), quote=True)   # money as people write it, at render time only
 
 
 def chart_rows(series: list, inp) -> list:
@@ -282,7 +282,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         flags = ""
         if n_human:
             flags += f'<span class="draft">DRAFT · {"needs a person" if s["status"] == "needs_human" else f"{n_human} slides need a person"}</span>'
-        if sid in failed:
+        if sid in failed and audience != "client":
             flags += f'<span class="failed">CHECK FAILED: {_e(", ".join(sorted(failed[sid])))}</span>'
         inner = (f'<div class="flags">{flags}</div><header>{kick}{title}</header>{body}{pic_html}'
                  f'<footer>{foot}</footer>')

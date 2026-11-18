@@ -57,10 +57,11 @@
    "moved": []
   },
   "s07": {
-   "layout": "native_table",
+   "layout": "big_statement",
    "chosen_by": "rule",
    "alternatives": [
-    "cards"
+    "cards",
+    "native_table"
    ],
    "rung": "as_is",
    "moved": []
@@ -68,7 +69,6 @@
  },
  "layout_title_pt": {
   "cards": 36,
-  "big_number": 36,
-  "native_table": 36
+  "big_number": 36
  }
 }

@@ -441,7 +441,7 @@ Rules:
 - Two things stay rules, whatever the user chooses: a part marked Confidential with `model: false` is never
   sent to a provider (os-layer §4), and a `reference_only` asset never fills a slot.
 - `theme`: `napkin` · `brand` · `classic`. `strict_brand`: only the kit's layouts and given tokens, nothing
-  derived. `inputs.text_mode`: `preserve` turns the repair loop's shorten rung and the plan's moves to the notes off; `condense` is the app's default, passed by the runner (the engine given none behaves as in section 6.3).
+  derived. `inputs.text_mode`: `preserve` turns the repair loop's shorten rung and the plan's density moves to the notes off (the cover's unresolved lines still go to the notes: they are a to-do, not words for the room); `condense` is the app's default, passed by the runner (the engine given none behaves as in section 6.3).
 
 ### 6.4 Asking: intake, the Start screen and Review
 

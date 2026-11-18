@@ -4,11 +4,21 @@
    "layout": "cover",
    "chosen_by": "rule",
    "alternatives": [
-    "cards",
-    "text_columns"
+    "cards"
    ],
    "rung": "as_is",
-   "moved": []
+   "moved": [
+    {
+     "block": 0,
+     "item": null,
+     "sha": "d7ab03d2153c"
+    },
+    {
+     "block": 1,
+     "item": null,
+     "sha": "d5f78d645c8b"
+    }
+   ]
   },
   "s02": {
    "layout": "objective_panel",
@@ -100,20 +110,22 @@
    "moved": []
   },
   "s12": {
-   "layout": "native_table",
+   "layout": "big_statement",
    "chosen_by": "rule",
    "alternatives": [
-    "cards"
+    "cards",
+    "native_table"
    ],
    "rung": "as_is",
    "moved": []
   },
   "s13": {
-   "layout": "timeline_strip",
+   "layout": "big_statement",
    "chosen_by": "rule",
    "alternatives": [
-    "timeline_rows",
-    "cards"
+    "cards",
+    "timeline_strip",
+    "timeline_rows"
    ],
    "rung": "as_is",
    "moved": []
@@ -168,21 +180,23 @@
    "moved": []
   },
   "s20": {
-   "layout": "native_table",
+   "layout": "big_statement",
    "chosen_by": "rule",
    "alternatives": [
     "cards",
+    "native_table",
     "cards_split"
    ],
    "rung": "as_is",
    "moved": []
   },
   "s21": {
-   "layout": "timeline_strip",
+   "layout": "big_statement",
    "chosen_by": "rule",
    "alternatives": [
-    "timeline_rows",
-    "cards"
+    "cards",
+    "timeline_strip",
+    "timeline_rows"
    ],
    "rung": "as_is",
    "moved": []
@@ -221,8 +235,7 @@
   "placeholder_card": 28,
   "execution": 36,
   "role_grid": 36,
-  "native_table": 36,
-  "timeline_strip": 36,
-  "territory": 36
+  "territory": 36,
+  "native_table": 36
  }
 }

@@ -453,3 +453,13 @@ Outputs: `issues.json`, `repair.json`, `repair_record.json` (replayed without me
 key in `report.json` only when a round ran or a rung was skipped. Tests: `deck/tests/test_repair.py` (no model, no LibreOffice: QA is a stand-in seam).
 
 Shortening is delete-only by default (`shorten.word_rule`): the new text is an ordered subsequence of the same field's words and only the allow-listed filler words (`assemble.DELETABLE`: the, an, very, really, ...) go; never a word after a negation or before few or little. `reuse` is a switch and is refused on client decks. `repair.json` rounds carry `shortened` with the deleted words marked for the approver.
+
+
+## Final review fixes (2026-11-18)
+
+- **Cover.** On a review render the cover's unresolved lines (the `Proposed (not given by the client)` placeholder, `[presenter and date]`, `A response from [Agency]`) move to the speaker notes under `Moved from the slide`, verbatim. `A response from <agency>` stays while the agency is known. A client render keeps them on the slide, where `internal_leak` refuses the build.
+- **Client builds.** A client render never prints a check id. A client build with a failing check is withheld: no `deck.pptx`, `deck.html`, PDF or PNG is written (an older one in `--out` is removed) and `report.json` carries `withheld {reason, errors, checks, slides}`. A review render keeps its marks.
+- **Numbers.** `numfmt.py` writes money as people write it at render time: `1500000 euro` as `\u20ac1.5m`, `EUR 1500000` as `EUR 1,500,000`. The stored words and `words_sha` do not change; the form is lossless.
+- **Sparse slides.** A slide whose content fills under about 40% of the body is centred vertically (type growth keeps the 1.2 cap for lean and standard). A one-row table and a one-step timeline are drawn as a `big_statement`, every word kept.
+- **Execution pictures.** The picture takes the right half of the slide at full content height (a tall picture keeps its shape, centred in the half); the copy frame and the notes card stack on the left. Still labelled Illustrative until approved.
+- **LibreOffice.** Every conversion runs in its own profile (`run_deck.to_pdf`), so two renders at once no longer lose a PDF.

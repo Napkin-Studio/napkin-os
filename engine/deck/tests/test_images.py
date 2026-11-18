@@ -460,8 +460,11 @@ def test_layout_ids_equal_the_build_without_pictures_and_nothing_falls_back(demo
     # a picture layout (cover_image, image_text, frames_strip, execution_visual) stands where the rules' text layout stood
     from deck import layouts
     deck = json.loads((with_p / "deck.json").read_text())
+    plain_deck = json.loads((without / "deck.json").read_text())
     for k, v in la.items():
         want = lb[k]["id"]
+        if any(((d["slides"][k].get("layout") or {}).get("why") or "").startswith("variety") for d in (deck, plain_deck)):
+            continue   # a variety swap depends on the families the whole deck holds, which a picture layout changes: not what this test is about
         assert v["id"] == want or (v["id"] in layouts.load() and layouts.pick(deck["slides"][k]) == want and any(
             s.get("required") for s in layouts.load()[v["id"]]["slots"].values() if s["kind"] == "image")), (k, v["id"], want)
     assert sum(v["fallback"] for v in la.values()) == 0

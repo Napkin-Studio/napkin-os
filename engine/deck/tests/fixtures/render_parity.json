@@ -1,7 +1,7 @@
 {
  "agency_pitch": {
-  "html_sha256": "e8d1e9e8e2aac5b31e89e9f4a77f10ca86be5ec73ff39b876497085cadf19943",
-  "layouts_sha256": "7f165077a2b58934f50fb4c6f55961067bf484747b09be7fcd1cc1a3fdb686c3",
+  "html_sha256": "b78681acb297db68faa68352f645606234a0cbc3c9cdcd5cd622b76a84dd3120",
+  "layouts_sha256": "c2e87324a2b1c892b9c4cc44ec85bf61cacfd80934b876164fc47abe7a6691e6",
   "pptx": [
    [
     [
@@ -31,9 +31,9 @@
      "Shape",
      [
       0.65,
-      1.6,
+      2.07,
       12.03,
-      2.04
+      2.17
      ],
      "Lumen Water: Fixture Project"
     ],
@@ -42,36 +42,14 @@
      "Shape",
      [
       0.65,
-      4.04,
-      7.33,
-      0.42
-     ],
-     "A response from [Agency]"
-    ],
-    [
-     "TextBox 5",
-     "Shape",
-     [
-      0.65,
-      4.71,
-      7.33,
-      1.2
-     ],
-     "Proposed (not given by the client): presented by the account lead and planner [presenter and date]. To confirm: who presents, and the date."
-    ],
-    [
-     "TextBox 6",
-     "Shape",
-     [
-      0.65,
-      6.16,
+      4.65,
       4.67,
       0.53
      ],
      "SKETCH · built from a short prompt: to check and extend before use"
     ],
     [
-     "Rectangle 7",
+     "Rectangle 5",
      "Shape",
      [
       0.65,
@@ -864,18 +842,40 @@
      "How we will know it worked"
     ],
     [
-     "slot:table",
-     "GraphicFrame",
+     "Rectangle 3",
+     "Shape",
      [
       0.65,
-      1.54,
-      12.03,
-      5.21
+      3.42,
+      0.09,
+      0.7
      ],
-     null
+     ""
     ],
     [
-     "Rectangle 4",
+     "slot:statement",
+     "Shape",
+     [
+      1.0,
+      3.42,
+      11.68,
+      0.7
+     ],
+     "What we measure: Household use"
+    ],
+    [
+     "slot:support",
+     "Shape",
+     [
+      1.0,
+      4.42,
+      5.33,
+      0.74
+     ],
+     "Baseline: None in the brief: set before launch\nHow: Utility meter data"
+    ],
+    [
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -2068,7 +2068,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.93,
       7.5,
       0.43
      ],
@@ -2466,29 +2466,40 @@
      "We recommend 'The Tap Tells'"
     ],
     [
-     "slot:table",
-     "GraphicFrame",
-     [
-      0.65,
-      1.54,
-      12.03,
-      4.15
-     ],
-     null
-    ],
-    [
-     "slot:note",
+     "Rectangle 3",
      "Shape",
      [
       0.65,
-      6.08,
-      6.33,
-      0.67
+      3.29,
+      0.09,
+      0.7
      ],
-     "Internal note: Chosen by: recorded. Ranked by: recorded."
+     ""
     ],
     [
-     "Rectangle 5",
+     "slot:statement",
+     "Shape",
+     [
+      1.0,
+      3.29,
+      11.68,
+      0.7
+     ],
+     "Territory: The Tap Tells"
+    ],
+    [
+     "slot:support",
+     "Shape",
+     [
+      1.0,
+      4.29,
+      5.33,
+      1.01
+     ],
+     "Why (or why not): Closest to the insight\nInternal note: Chosen by: recorded. Ranked by: recorded."
+    ],
+    [
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -2582,7 +2593,7 @@
      "Shape",
      [
       0.95,
-      2.84,
+      3.69,
       5.28,
       0.43
      ],
@@ -2927,7 +2938,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.63,
       7.95,
       0.41
      ],
@@ -2938,7 +2949,7 @@
      "Shape",
      [
       0.65,
-      3.08,
+      4.16,
       0.09,
       0.5
      ],
@@ -2949,7 +2960,7 @@
      "Shape",
      [
       0.97,
-      3.08,
+      4.16,
       9.17,
       0.5
      ],
@@ -3035,51 +3046,40 @@
      "How we would run it with you"
     ],
     [
-     "slot:steps",
+     "Rectangle 3",
      "Shape",
      [
       0.65,
-      1.64,
-      4.2,
-      0.04
+      3.6,
+      0.09,
+      0.7
      ],
      ""
     ],
     [
-     "slot:steps",
+     "slot:statement",
      "Shape",
      [
-      0.65,
-      1.92,
-      4.2,
-      4.83
+      1.0,
+      3.6,
+      11.68,
+      0.7
      ],
-     ""
+     "Week 1"
     ],
     [
-     "slot:steps",
+     "slot:support",
      "Shape",
      [
-      0.65,
-      1.54,
-      0.22,
-      0.22
+      1.0,
+      4.6,
+      5.33,
+      0.39
      ],
-     ""
+     "Kick off"
     ],
     [
-     "slot:steps",
-     "Shape",
-     [
-      0.85,
-      2.07,
-      3.8,
-      4.53
-     ],
-     "Week 1\nKick off"
-    ],
-    [
-     "Rectangle 7",
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -3147,51 +3147,40 @@
      "From appointment to evaluation"
     ],
     [
-     "slot:steps",
+     "Rectangle 3",
      "Shape",
      [
       0.65,
-      1.64,
-      4.2,
-      0.04
+      3.6,
+      0.09,
+      0.7
      ],
      ""
     ],
     [
-     "slot:steps",
+     "slot:statement",
      "Shape",
      [
-      0.65,
-      1.92,
-      4.2,
-      4.83
+      1.0,
+      3.6,
+      11.68,
+      0.7
      ],
-     ""
+     "Plan"
     ],
     [
-     "slot:steps",
+     "slot:support",
      "Shape",
      [
-      0.65,
-      1.54,
-      0.22,
-      0.22
+      1.0,
+      4.6,
+      5.33,
+      0.39
      ],
-     ""
+     "Month 1"
     ],
     [
-     "slot:steps",
-     "Shape",
-     [
-      0.85,
-      2.07,
-      3.8,
-      4.53
-     ],
-     "Plan\nMonth 1"
-    ],
-    [
-     "Rectangle 7",
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -3464,8 +3453,8 @@
   ]
  },
  "credentials": {
-  "html_sha256": "c99d88d1ba3b8bfa4b73a21cc6449f767322cdcefba83fc0d2984d18652e4c03",
-  "layouts_sha256": "aea12d257d983fd78e8f6230c1169d038f492dbdc5fde0a900ac551f4a790bd9",
+  "html_sha256": "e43d2614a603022d771c899ae64b9ccd3b79dfcf1e4d6bfe1f0327446a231847",
+  "layouts_sha256": "b65cca947a07263827bf31b93614bcc6b5277535de31aae281e11f2610e9829e",
   "pptx": [
    [
     [
@@ -3495,9 +3484,9 @@
      "Shape",
      [
       0.65,
-      1.6,
+      2.07,
       12.03,
-      2.04
+      2.17
      ],
      "Ardent Foods: Credentials"
     ],
@@ -3506,36 +3495,14 @@
      "Shape",
      [
       0.65,
-      4.04,
-      7.33,
-      0.42
-     ],
-     "A response from [Agency]"
-    ],
-    [
-     "TextBox 5",
-     "Shape",
-     [
-      0.65,
-      4.71,
-      7.33,
-      1.2
-     ],
-     "Proposed (not given by the client): presented by the account lead and planner [presenter and date]. To confirm: who presents, and the date."
-    ],
-    [
-     "TextBox 6",
-     "Shape",
-     [
-      0.65,
-      6.16,
+      4.65,
       4.67,
       0.53
      ],
      "SKETCH · built from a short prompt: to check and extend before use"
     ],
     [
-     "Rectangle 7",
+     "Rectangle 5",
      "Shape",
      [
       0.65,
@@ -4385,7 +4352,7 @@
      "Shape",
      [
       0.65,
-      3.14,
+      4.23,
       7.5,
       0.43
      ],
@@ -4708,7 +4675,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.4,
       7.95,
       0.41
      ],
@@ -4719,7 +4686,7 @@
      "Shape",
      [
       0.65,
-      3.08,
+      3.93,
       0.09,
       0.96
      ],
@@ -4730,7 +4697,7 @@
      "Shape",
      [
       0.97,
-      3.08,
+      3.93,
       9.17,
       0.96
      ],
@@ -5374,18 +5341,40 @@
      "Every requirement, and where this deck answers it"
     ],
     [
-     "slot:table",
-     "GraphicFrame",
+     "Rectangle 3",
+     "Shape",
      [
       0.65,
-      2.14,
-      12.03,
-      4.61
+      3.9,
+      0.09,
+      0.7
      ],
-     null
+     ""
     ],
     [
-     "Rectangle 4",
+     "slot:statement",
+     "Shape",
+     [
+      1.0,
+      3.9,
+      11.68,
+      0.7
+     ],
+     "Requirement: Show who the team is"
+    ],
+    [
+     "slot:support",
+     "Shape",
+     [
+      1.0,
+      4.9,
+      5.33,
+      0.39
+     ],
+     "Slides: 2"
+    ],
+    [
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -5511,8 +5500,8 @@
   ]
  },
  "investor_seed": {
-  "html_sha256": "b7f43857f70199e60a0eee8b30c1b60d203a7fafa14711dd2ae9439a13576c30",
-  "layouts_sha256": "8037fd9dc19748d136c1c6e9404b220798ebb30e6f27402be54db2a7dabbaa10",
+  "html_sha256": "ba9824465f3d9d7cffbb064827480b17eea7d0aab9ead8455c386c82afc18baf",
+  "layouts_sha256": "fe6601440aa09f6a68c64bd0b669fae5165e4396540e69ee2439cc2787bf93bd",
   "pptx": [
    [
     [
@@ -5654,7 +5643,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.44,
       10.08,
       0.52
      ],
@@ -5665,7 +5654,7 @@
      "Shape",
      [
       0.65,
-      3.45,
+      4.35,
       0.09,
       0.5
      ],
@@ -5676,7 +5665,7 @@
      "Shape",
      [
       0.97,
-      3.45,
+      4.35,
       9.17,
       0.5
      ],
@@ -5857,28 +5846,28 @@
      [
       0.65,
       0.7,
-      7.46,
-      1.24
+      12.03,
+      0.64
      ],
-     "We are raising a seed round of 1500000 euro"
+     "We are raising a seed round of €1.5m"
     ],
     [
      "slot:lead",
      "Shape",
      [
       0.65,
-      3.14,
+      3.44,
       10.08,
       0.52
      ],
-     "A seed round of 1500000 euro."
+     "A seed round of €1.5m."
     ],
     [
      "slot:points",
      "Shape",
      [
       0.65,
-      4.05,
+      4.35,
       0.09,
       0.5
      ],
@@ -5889,7 +5878,7 @@
      "Shape",
      [
       0.97,
-      4.05,
+      4.35,
       9.17,
       0.5
      ],
@@ -6058,7 +6047,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.9,
       0.09,
       0.5
      ],
@@ -6069,7 +6058,7 @@
      "Shape",
      [
       0.97,
-      2.54,
+      3.9,
       9.17,
       0.5
      ],
@@ -6133,18 +6122,40 @@
      "Sources"
     ],
     [
-     "slot:table",
-     "GraphicFrame",
+     "Rectangle 3",
+     "Shape",
      [
       0.65,
-      1.54,
-      12.03,
-      5.21
+      3.6,
+      0.09,
+      0.7
      ],
-     null
+     ""
     ],
     [
-     "Rectangle 4",
+     "slot:statement",
+     "Shape",
+     [
+      1.0,
+      3.6,
+      11.68,
+      0.7
+     ],
+     "#: [1]"
+    ],
+    [
+     "slot:support",
+     "Shape",
+     [
+      1.0,
+      4.6,
+      5.33,
+      0.39
+     ],
+     "Source: The person's prompt"
+    ],
+    [
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -6180,8 +6191,8 @@
   ]
  },
  "lumen_water": {
-  "html_sha256": "2d9da387c33a6523ad4ed3d29101d0adb8df72c662f0df5657a59e41d1a59e1d",
-  "layouts_sha256": "f8cce62bc8625e07fa8b02fc64a4c5e8bd5775d39b92c3f1f202cd93d9d0d7db",
+  "html_sha256": "8271d25c8860fd34cdbf72b830acdbe88dc93a71180687ea9237626e780fd371",
+  "layouts_sha256": "8273b1a0c4af069e1cbafb5107a090605da82c5b84e14d7e615adc570460e5ff",
   "pptx": [
    [
     [
@@ -6211,36 +6222,14 @@
      "Shape",
      [
       0.65,
-      1.6,
+      2.46,
       12.03,
       2.17
      ],
      "Lumen Water: National awareness campaign"
     ],
     [
-     "TextBox 4",
-     "Shape",
-     [
-      0.65,
-      4.17,
-      7.33,
-      0.42
-     ],
-     "A response from [Agency]"
-    ],
-    [
-     "TextBox 5",
-     "Shape",
-     [
-      0.65,
-      4.85,
-      7.33,
-      1.2
-     ],
-     "Proposed (not given by the client): presented by the account lead and planner [presenter and date]. To confirm: who presents, and the date."
-    ],
-    [
-     "Rectangle 6",
+     "Rectangle 4",
      "Shape",
      [
       0.65,
@@ -6736,7 +6725,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.93,
       7.5,
       0.43
      ],
@@ -7272,7 +7261,7 @@
      "Shape",
      [
       0.95,
-      2.84,
+      3.69,
       5.28,
       0.43
      ],
@@ -7617,7 +7606,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.63,
       7.95,
       0.41
      ],
@@ -7628,7 +7617,7 @@
      "Shape",
      [
       0.65,
-      3.08,
+      4.16,
       0.09,
       0.5
      ],
@@ -7639,7 +7628,7 @@
      "Shape",
      [
       0.97,
-      3.08,
+      4.16,
       9.17,
       0.5
      ],
@@ -7725,18 +7714,40 @@
      "How we will know it worked"
     ],
     [
-     "slot:table",
-     "GraphicFrame",
+     "Rectangle 3",
+     "Shape",
      [
       0.65,
-      1.54,
-      12.03,
-      5.21
+      3.42,
+      0.09,
+      0.7
      ],
-     null
+     ""
     ],
     [
-     "Rectangle 4",
+     "slot:statement",
+     "Shape",
+     [
+      1.0,
+      3.42,
+      11.68,
+      0.7
+     ],
+     "What we measure: Household use"
+    ],
+    [
+     "slot:support",
+     "Shape",
+     [
+      1.0,
+      4.42,
+      5.33,
+      0.74
+     ],
+     "Baseline: None in the brief: set before launch\nHow: Utility meter data"
+    ],
+    [
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -7815,51 +7826,40 @@
      "From appointment to evaluation"
     ],
     [
-     "slot:steps",
+     "Rectangle 3",
      "Shape",
      [
       0.65,
-      1.64,
-      4.2,
-      0.04
+      3.6,
+      0.09,
+      0.7
      ],
      ""
     ],
     [
-     "slot:steps",
+     "slot:statement",
      "Shape",
      [
-      0.65,
-      1.92,
-      4.2,
-      4.83
+      1.0,
+      3.6,
+      11.68,
+      0.7
      ],
-     ""
+     "Plan"
     ],
     [
-     "slot:steps",
+     "slot:support",
      "Shape",
      [
-      0.65,
-      1.54,
-      0.22,
-      0.22
+      1.0,
+      4.6,
+      5.33,
+      0.39
      ],
-     ""
+     "Month 1"
     ],
     [
-     "slot:steps",
-     "Shape",
-     [
-      0.85,
-      2.07,
-      3.8,
-      4.53
-     ],
-     "Plan\nMonth 1"
-    ],
-    [
-     "Rectangle 7",
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -9237,29 +9237,40 @@
      "We recommend 'The Tap Tells'"
     ],
     [
-     "slot:table",
-     "GraphicFrame",
-     [
-      0.65,
-      1.54,
-      12.03,
-      4.15
-     ],
-     null
-    ],
-    [
-     "slot:note",
+     "Rectangle 3",
      "Shape",
      [
       0.65,
-      6.08,
-      6.33,
-      0.67
+      3.29,
+      0.09,
+      0.7
      ],
-     "Internal note: Chosen by: recorded. Ranked by: recorded."
+     ""
     ],
     [
-     "Rectangle 5",
+     "slot:statement",
+     "Shape",
+     [
+      1.0,
+      3.29,
+      11.68,
+      0.7
+     ],
+     "Territory: The Tap Tells"
+    ],
+    [
+     "slot:support",
+     "Shape",
+     [
+      1.0,
+      4.29,
+      5.33,
+      1.01
+     ],
+     "Why (or why not): Closest to the insight\nInternal note: Chosen by: recorded. Ranked by: recorded."
+    ],
+    [
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -9327,51 +9338,40 @@
      "How we would run it with you"
     ],
     [
-     "slot:steps",
+     "Rectangle 3",
      "Shape",
      [
       0.65,
-      1.64,
-      4.2,
-      0.04
+      3.6,
+      0.09,
+      0.7
      ],
      ""
     ],
     [
-     "slot:steps",
+     "slot:statement",
      "Shape",
      [
-      0.65,
-      1.92,
-      4.2,
-      4.83
+      1.0,
+      3.6,
+      11.68,
+      0.7
      ],
-     ""
+     "Week 1"
     ],
     [
-     "slot:steps",
+     "slot:support",
      "Shape",
      [
-      0.65,
-      1.54,
-      0.22,
-      0.22
+      1.0,
+      4.6,
+      5.33,
+      0.39
      ],
-     ""
+     "Kick off"
     ],
     [
-     "slot:steps",
-     "Shape",
-     [
-      0.85,
-      2.07,
-      3.8,
-      4.53
-     ],
-     "Week 1\nKick off"
-    ],
-    [
-     "Rectangle 7",
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -9443,7 +9443,7 @@
      "Shape",
      [
       0.65,
-      3.14,
+      4.2,
       0.09,
       0.5
      ],
@@ -9454,7 +9454,7 @@
      "Shape",
      [
       0.97,
-      3.14,
+      4.2,
       9.17,
       0.5
      ],
@@ -9666,8 +9666,8 @@
   ]
  },
  "lumen_water_prompt": {
-  "html_sha256": "ebb61b8783724fc682d8e4a968d2d3cd752912d30dbea5c07c223343e2a46555",
-  "layouts_sha256": "496f8e2f3491731ecda16390b522cd00b04aa7195f7296f57be8a79433249d54",
+  "html_sha256": "1a17a22cd533a1db539b1211f5d38690ca6ef727519dfb42e24e241fa9a8b94f",
+  "layouts_sha256": "35020ad03fe4e5aca4525476031177f701a410d0e635b30abfb523d9948076ab",
   "pptx": [
    [
     [
@@ -9697,9 +9697,9 @@
      "Shape",
      [
       0.65,
-      1.6,
+      2.07,
       12.03,
-      2.04
+      2.17
      ],
      "Lumen Water: National awareness campaign"
     ],
@@ -9708,36 +9708,14 @@
      "Shape",
      [
       0.65,
-      4.04,
-      7.33,
-      0.42
-     ],
-     "A response from [Agency]"
-    ],
-    [
-     "TextBox 5",
-     "Shape",
-     [
-      0.65,
-      4.71,
-      7.33,
-      1.2
-     ],
-     "Proposed (not given by the client): presented by the account lead and planner [presenter and date]. To confirm: who presents, and the date."
-    ],
-    [
-     "TextBox 6",
-     "Shape",
-     [
-      0.65,
-      6.16,
+      4.65,
       4.67,
       0.53
      ],
      "SKETCH · built from a short prompt: to check and extend before use"
     ],
     [
-     "Rectangle 7",
+     "Rectangle 5",
      "Shape",
      [
       0.65,
@@ -10486,18 +10464,40 @@
      "How we will know it worked"
     ],
     [
-     "slot:table",
-     "GraphicFrame",
+     "Rectangle 3",
+     "Shape",
      [
       0.65,
-      1.54,
-      12.03,
-      5.21
+      3.42,
+      0.09,
+      0.7
      ],
-     null
+     ""
     ],
     [
-     "Rectangle 4",
+     "slot:statement",
+     "Shape",
+     [
+      1.0,
+      3.42,
+      11.68,
+      0.7
+     ],
+     "What we measure: Household use down 5%"
+    ],
+    [
+     "slot:support",
+     "Shape",
+     [
+      1.0,
+      4.42,
+      5.33,
+      0.74
+     ],
+     "Baseline: None in the brief: set before launch\nHow: Utility meter data"
+    ],
+    [
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -11690,7 +11690,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.93,
       7.5,
       0.43
      ],
@@ -11903,7 +11903,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.4,
       7.95,
       0.41
      ],
@@ -11914,7 +11914,7 @@
      "Shape",
      [
       0.65,
-      3.08,
+      3.93,
       0.09,
       0.96
      ],
@@ -11925,7 +11925,7 @@
      "Shape",
      [
       0.97,
-      3.08,
+      3.93,
       9.17,
       0.96
      ],
@@ -12337,8 +12337,8 @@
   ]
  },
  "tender_response": {
-  "html_sha256": "5109edb54228ddb5f3e216afaff6470dc63c8f7e4068644ab58ccbc5270a5fb0",
-  "layouts_sha256": "1adbd044406fafe305365a51d638dec64201e5521439db02bf6e7cefb0baca01",
+  "html_sha256": "fe3d4a070612b5f13a58ae1acb8751a2c24ad468a0a8a7031e11e8f0c96a8fe8",
+  "layouts_sha256": "a8252f579c4820195341aa91b4ed9b47594e0428c8e0986071dfaafaff0d7cfa",
   "pptx": [
    [
     [
@@ -12368,9 +12368,9 @@
      "Shape",
      [
       0.65,
-      1.6,
+      2.07,
       12.03,
-      2.04
+      2.17
      ],
      "Harbour County Council: Recycling awareness"
     ],
@@ -12379,36 +12379,14 @@
      "Shape",
      [
       0.65,
-      4.04,
-      7.33,
-      0.42
-     ],
-     "A response from [Agency]"
-    ],
-    [
-     "TextBox 5",
-     "Shape",
-     [
-      0.65,
-      4.71,
-      7.33,
-      1.2
-     ],
-     "Proposed (not given by the client): presented by the account lead and planner [presenter and date]. To confirm: who presents, and the date."
-    ],
-    [
-     "TextBox 6",
-     "Shape",
-     [
-      0.65,
-      6.16,
+      4.65,
       4.67,
       0.53
      ],
      "SKETCH · built from a short prompt: to check and extend before use"
     ],
     [
-     "Rectangle 7",
+     "Rectangle 5",
      "Shape",
      [
       0.65,
@@ -14251,7 +14229,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.93,
       7.5,
       0.43
      ],
@@ -14526,29 +14504,40 @@
      "We recommend 'Bin Day Ready'"
     ],
     [
-     "slot:table",
-     "GraphicFrame",
-     [
-      0.65,
-      1.54,
-      12.03,
-      4.15
-     ],
-     null
-    ],
-    [
-     "slot:note",
+     "Rectangle 3",
      "Shape",
      [
       0.65,
-      6.08,
-      6.33,
-      0.67
+      3.29,
+      0.09,
+      0.7
      ],
-     "Internal note: Chosen by: recorded. Ranked by: recorded."
+     ""
     ],
     [
-     "Rectangle 5",
+     "slot:statement",
+     "Shape",
+     [
+      1.0,
+      3.29,
+      11.68,
+      0.7
+     ],
+     "Territory: Bin Day Ready"
+    ],
+    [
+     "slot:support",
+     "Shape",
+     [
+      1.0,
+      4.29,
+      5.33,
+      1.01
+     ],
+     "Why (or why not): Closest to the insight\nInternal note: Chosen by: recorded. Ranked by: recorded."
+    ],
+    [
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -14642,7 +14631,7 @@
      "Shape",
      [
       0.95,
-      2.84,
+      3.69,
       5.28,
       0.43
      ],
@@ -14987,7 +14976,7 @@
      "Shape",
      [
       0.65,
-      2.54,
+      3.4,
       7.95,
       0.41
      ],
@@ -14998,7 +14987,7 @@
      "Shape",
      [
       0.65,
-      3.08,
+      3.93,
       0.09,
       0.96
      ],
@@ -15009,7 +14998,7 @@
      "Shape",
      [
       0.97,
-      3.08,
+      3.93,
       9.17,
       0.96
      ],
@@ -15084,18 +15073,40 @@
      "How we will know it worked"
     ],
     [
-     "slot:table",
-     "GraphicFrame",
+     "Rectangle 3",
+     "Shape",
      [
       0.65,
-      1.54,
-      12.03,
-      5.21
+      3.42,
+      0.09,
+      0.7
      ],
-     null
+     ""
     ],
     [
-     "Rectangle 4",
+     "slot:statement",
+     "Shape",
+     [
+      1.0,
+      3.42,
+      11.68,
+      0.7
+     ],
+     "What we measure: Household recycling rate"
+    ],
+    [
+     "slot:support",
+     "Shape",
+     [
+      1.0,
+      4.42,
+      5.33,
+      0.74
+     ],
+     "Baseline: None in the brief: set before launch\nHow: Council collection data"
+    ],
+    [
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -15174,51 +15185,40 @@
      "How we would run it with you"
     ],
     [
-     "slot:steps",
+     "Rectangle 3",
      "Shape",
      [
       0.65,
-      1.64,
-      4.2,
-      0.04
+      3.6,
+      0.09,
+      0.7
      ],
      ""
     ],
     [
-     "slot:steps",
+     "slot:statement",
      "Shape",
      [
-      0.65,
-      1.92,
-      4.2,
-      4.83
+      1.0,
+      3.6,
+      11.68,
+      0.7
      ],
-     ""
+     "Week 1"
     ],
     [
-     "slot:steps",
+     "slot:support",
      "Shape",
      [
-      0.65,
-      1.54,
-      0.22,
-      0.22
+      1.0,
+      4.6,
+      5.33,
+      0.39
      ],
-     ""
+     "Kick off"
     ],
     [
-     "slot:steps",
-     "Shape",
-     [
-      0.85,
-      2.07,
-      3.8,
-      4.53
-     ],
-     "Week 1\nKick off"
-    ],
-    [
-     "Rectangle 7",
+     "Rectangle 6",
      "Shape",
      [
       0.65,
@@ -15286,51 +15286,40 @@
      "From appointment to evaluation"
     ],
     [
-     "slot:steps",
+     "Rectangle 3",
      "Shape",
      [
       0.65,
-      1.64,
-      4.2,
-      0.04
+      3.6,
+      0.09,
+      0.7
      ],
      ""
     ],
     [
-     "slot:steps",
+     "slot:statement",
      "Shape",
      [
-      0.65,
-      1.92,
-      4.2,
-      4.83
+      1.0,
+      3.6,
+      11.68,
+      0.7
      ],
-     ""
+     "Plan"
     ],
     [
-     "slot:steps",
+     "slot:support",
      "Shape",
      [
-      0.65,
-      1.54,
-      0.22,
-      0.22
+      1.0,
+      4.6,
+      5.33,
+      0.39
      ],
-     ""
+     "Month 1"
     ],
     [
-     "slot:steps",
-     "Shape",
-     [
-      0.85,
-      2.07,
-      3.8,
-      4.53
-     ],
-     "Plan\nMonth 1"
-    ],
-    [
-     "Rectangle 7",
+     "Rectangle 6",
      "Shape",
      [
       0.65,

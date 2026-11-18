@@ -10,6 +10,8 @@ import os
 
 
 def pytest_configure(config):
+    from deck import run_deck   # the suite renders client files of fixtures that fail the client gate (placeholders); test_design_fixes sets it back
+    run_deck.WITHHOLD_FAILING_CLIENT = False
     if os.environ.get("BRIEF_TESTS_OFFLINE", "").strip() not in ("1", "true", "yes"):
         return
     import socket

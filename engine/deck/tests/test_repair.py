@@ -300,7 +300,8 @@ def test_a_request_never_carries_a_quote_a_statement_or_an_evidence_item(tmp_pat
     seen = capture_request(monkeypatch, lambda r: [])
     (stages_copy / "e_repair_1.json").write_text("{}")   # a recording exists, so the paid rung is available (its request is stale and unused here)
     out = tmp_path / "o"
-    build(out, fake_qa({S: too_long(SLOT, CAP, BLOCK), "s04": layout_is("quote", "quote_cards"), "s03": layout_is("statement", "emphasis_bar")}), "--text-mode", "condense", stages_dir=stages_copy)
+    # word_budget goes straight to the shorten rung (as _shorten_run does), so the request is deliberate: the cover's old slot_limit used to supply one by accident
+    build(out, fake_qa({S: too_long(SLOT, CAP, BLOCK), "s04": layout_is("quote", "quote_cards"), "s03": layout_is("statement", "emphasis_bar")}, "word_budget"), "--text-mode", "condense", stages_dir=stages_copy)
     sent = [json.dumps(r) for req in seen for r in req]
     assert seen and sent
     deck = jload(out / "repair" / "base_deck.json")

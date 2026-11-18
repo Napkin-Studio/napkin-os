@@ -242,7 +242,24 @@ def _scan_hidden_text(slide, out: list, validated_leak: bool) -> None:
         elif sh.has_text_frame and not _is_draft_mark(sh, sh.text_frame.text):
             _scan_filler(sh.text_frame.text, out, validated_leak)
     if slide.has_notes_slide:
-        _scan_filler(slide.notes_slide.notes_text_frame.text, out, validated_leak)
+        _scan_filler(_notes_to_scan(slide.notes_slide.notes_text_frame.text), out, validated_leak)
+
+
+def _notes_to_scan(text: str) -> str:
+    """The notes without the cover's held lines: an unresolved placeholder line the plan moved off the slide sits in the notes on purpose, labelled
+    ``Moved from the slide:`` (spec.unresolved_line), and is a to-do, not a left-over."""
+    from . import spec
+    lines, moved = [], False
+    for ln in str(text).split("\n"):
+        if ln.strip() == "Moved from the slide:":
+            moved = True
+        elif moved and ln.startswith("- ") and spec.unresolved_line(ln[2:]):
+            continue
+        elif not ln.startswith("- "):
+            moved = False
+        lines.append(ln)
+    return "\n".join(lines)
+
 
 def _is_picture(sh) -> bool:
     return getattr(sh, "shape_type", None) == 13 and (sh.name or "") != "Logo"

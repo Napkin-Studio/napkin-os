@@ -2,7 +2,7 @@ id: big_statement
 version: 1
 group: content
 purpose: statement
-description: One statement set large on a light slide, with a line of support.
+description: One statement set large on a light slide, with a line of support; also a one-row table or one-step timeline, set as a statement.
 slot_summary: title, statement, support
 for_types:
 - real_question
@@ -13,11 +13,17 @@ for_types:
 - why_now
 - solution
 - close
+- measurement
+- measurement_plan
+- timeline
+- process
 when:
   blocks_only:
   - statement
   - text
   - small
+  - table
+  - steps
 priority: 0
 alternatives:
 - emphasis_bar
@@ -39,6 +45,8 @@ slots:
     role: lead
     from_blocks:
     - statement
+    - table
+    - steps
     dominant: true
     max_cpl: 48
     max_chars: 163

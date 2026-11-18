@@ -100,7 +100,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import nsdecls, qn
 from pptx.util import Emu, Inches, Pt
 
-from . import images, layouts, spec
+from . import images, layouts, numfmt, spec
 from . import theme as themes
 from .refs import Resolver, fmt
 from .spec import HUMAN_ONLY_TYPES, shown_blocks
@@ -215,7 +215,7 @@ def glue(text) -> str:
     """``text`` with its last two words joined by a no-break space, so the last line of a wrapped text never
     holds one word alone. Text of fewer than three words, or with a line break, is returned as it was; no word is
     added, dropped or changed (``\\s`` matches the no-break space, so word comparisons are unaffected)."""
-    t = str(text)
+    t = numfmt.format_text(str(text))   # money as people write it (numfmt): at render time only, the stored words stay as they were
     if "\n" in t or t.count(" ") < 2:
         return t
     head, _, last = t.rstrip().rpartition(" ")
@@ -689,7 +689,7 @@ class Renderer:
             t.rows[i].height = Inches(rh[i])
             for j, val in enumerate(r):
                 c = t.cell(i, j)
-                c.text = str(val)
+                c.text = numfmt.format_text(str(val))
                 c.margin_left = c.margin_right = Inches(0.08)
                 c.margin_top = c.margin_bottom = Inches(0.03)
                 c.fill.solid()
@@ -1182,7 +1182,7 @@ class Renderer:
                 c.vertical_anchor = MSO_ANCHOR.MIDDLE
                 c.text_frame.word_wrap = True
                 run = c.text_frame.paragraphs[0].add_run()
-                run.text = val
+                run.text = numfmt.format_text(val)
                 f = run.font
                 f.size, f.name = Pt(size), self.th.body
                 f.bold = i == 0 or j == 0
@@ -1348,7 +1348,8 @@ class Renderer:
                 for k in idx:
                     extra[k] = slack / len(idx)
             else:
-                off = min(slack / 2, 1.0)
+                sparse = total < 0.40 * (bottom - y)   # a sparse slide sits at the middle of the body; otherwise at most 1 in down
+                off = slack / 2 if sparse else min(slack / 2, 1.0)
         yy = y + off
         for k, row in enumerate(plan):
             m = self._mark(sl) if sl is not None else 0
@@ -1604,10 +1605,15 @@ class Renderer:
             raise NoFit("no copy block")
         rest = [b for b in s["blocks"] if b["kind"] != "copy"]
         vis = s.get("visual") or {}
-        fw = 5.9
-        fx = self.x1 - fw
-        lw = fx - self.x0 - g.G
         GAP = 0.4   # the fixed gap between the last line of copy and the closing answer
+        stacked = bool(self._pics)   # the picture takes the right half of the slide: the notes card and the copy frame stack in what is left
+        if stacked:
+            fw = lw = self.x1 - self.x0
+            fx = self.x0
+        else:
+            fw = 5.9
+            fx = self.x1 - fw
+            lw = fx - self.x0 - g.G
         for dense in (False, True):
             try:
                 y = self.head(None, s, dense)
@@ -1617,12 +1623,25 @@ class Renderer:
                 if vis.get("kind") == "image_prompt":
                     note = [self.para("Image prompt (" + vis.get("status", "illustrative") + "): " + vis.get("prompt", ""), S.caption, p.mute, italic=True, cap=True)]
                     nh = self.ph(note, lw - 0.6) + 0.25
-                self.stack(None, rest, self.x0 + 0.3, y + 0.3, lw - 0.6, g.body_end - 0.3 - nh, fill=True)
+                ch, cy, fy, ffh = fh, y, y, fh   # the card's height and top, the frame's top and height
+                if stacked:
+                    ch = None
+                    for share in (0.24, 0.30, 0.36, 0.42):   # the smallest share of the height the notes fit in
+                        try:
+                            self.stack(None, rest, self.x0 + 0.3, y + 0.3, lw - 0.6, y + fh * share - 0.3 - nh, fill=False)
+                            ch = fh * share
+                            break
+                        except NoFit:
+                            continue
+                    if ch is None:
+                        raise NoFit("the notes do not fit above the copy")
+                    fy, ffh = y + ch + 0.2, fh - ch - 0.2
+                self.stack(None, rest, self.x0 + 0.3, cy + 0.3, lw - 0.6, cy + ch - 0.3 - nh, fill=True)
                 for asz in (S.body, 15, S.small, 13, 12):
                     ans = [self.para(cp["answer"], asz, p.inv_acc, bold=True)]
                     ah = self.ph(ans, fw - 0.8)
                     try:
-                        size = self.fit(lambda sz_: [self.para(l, sz_, p.inv_fg, self.th.head, line=1.1, after=10) for l in cp["lines"]], fw - 0.8, fh - 0.8 - ah - GAP, 26, 12)
+                        size = self.fit(lambda sz_: [self.para(l, sz_, p.inv_fg, self.th.head, line=1.1, after=10) for l in cp["lines"]], fw - 0.8, ffh - 0.8 - ah - GAP, 26, 12)
                         break
                     except NoFit:
                         continue
@@ -1634,18 +1653,18 @@ class Renderer:
                 return
             y = self.head(sl, s, dense)
             m = self._mark(sl)
-            self.rect(sl, self.x0, y, lw, fh, fill=p.card)
-            self.rect(sl, self.x0, y, lw, 0.05, fill=p.acc_l)
-            self.stack(sl, rest, self.x0 + 0.3, y + 0.3, lw - 0.6, g.body_end - 0.3 - nh, fill=True)
+            self.rect(sl, self.x0, cy, lw, ch, fill=p.card)
+            self.rect(sl, self.x0, cy, lw, 0.05, fill=p.acc_l)
+            self.stack(sl, rest, self.x0 + 0.3, cy + 0.3, lw - 0.6, cy + ch - 0.3 - nh, fill=True)
             if note:
-                self.ptext(sl, self.x0 + 0.3, g.body_end - 0.25 - (nh - 0.25), lw - 0.6, nh - 0.25, note, anchor="bottom")
+                self.ptext(sl, self.x0 + 0.3, cy + ch - 0.25 - (nh - 0.25), lw - 0.6, nh - 0.25, note, anchor="bottom")
             self._build(sl, m)
             m = self._mark(sl)
             lines = [self.para(l, size, p.inv_fg, self.th.head, line=1.1, after=10) for l in cp["lines"]]
             lh = self.ph(lines, fw - 0.8)
-            self.rect(sl, fx, y, fw, fh, fill=p.inv)
-            self.rect(sl, fx, y, 0.09, fh, fill=p.acc_l)
-            top = y + (fh - (lh + GAP + ah)) / 2
+            self.rect(sl, fx, fy, fw, ffh, fill=p.inv)
+            self.rect(sl, fx, fy, 0.09, ffh, fill=p.acc_l)
+            top = fy + (ffh - (lh + GAP + ah)) / 2
             self.ptext(sl, fx + 0.4, top, fw - 0.8, lh, lines)
             self._build(sl, m)
             m = self._mark(sl)
@@ -2012,19 +2031,29 @@ class Renderer:
     def _lay_big_statement(self, sl, s):
         """Big statement: the title, then one statement set large in a 48-character measure, a line of support beneath."""
         S, p, g = self.th.scale, self.p, self.th.grid
-        bl = [b for b in s["blocks"] if self._text_of(b)]
-        if any(b["kind"] not in ("statement", "text", "small") for b in bl) or not bl:
+        items = []   # (kind, text): a thin table or one-step timeline (layouts.thin_blocks) is its statement and its support lines
+        for b in s["blocks"]:
+            if b["kind"] in ("table", "steps"):
+                tb = layouts.thin_blocks(b)
+                if tb is None:
+                    raise NoFit("big statement holds a statement")
+                items += [("statement", tb[0]), *[("text", x) for x in tb[1]]]
+            elif self._text_of(b):
+                if b["kind"] not in ("statement", "text", "small"):
+                    raise NoFit("big statement holds a statement")
+                items.append((b["kind"], self._text_of(b)))
+        if not items:
             raise NoFit("big statement holds a statement")
-        main, rest = bl[0], bl[1:]
+        main, rest = items[0], items[1:]
         for dense in (False, True):
             try:
                 y = self.head(None, s, dense)
             except NoFit:
                 continue
             for size in (36, 32, 30, 28, 26, 24):
-                w = min(self.x1 - self.x0, self._cpl_w(size, False, self.th.head))
-                sp = [self.para(self._text_of(main), size, p.fg, self.th.head, line=1.1)]
-                su = [self.para(self._text_of(b), S.body, p.mute, after=6) for b in rest]
+                w = min(self.x1 - self.x0 - 0.35, self._cpl_w(size, False, self.th.head))   # the box starts 0.35 in in (the accent bar): it keeps the right margin
+                sp = [self.para(main[1], size, p.fg, self.th.head, line=1.1)]
+                su = [self.para(t_, S.body, p.mute, after=6) for _k, t_ in rest]
                 h = self.ph(sp, w) + (0.3 + self.ph(su, min(self.x1 - self.x0, self._cpl_w(S.body))) if su else 0)
                 if y + 0.3 + h <= g.body_end:
                     break
@@ -2034,6 +2063,8 @@ class Renderer:
                 return
             y = self.head(sl, s, dense)
             m = self._mark(sl)
+            if h < 0.40 * (g.body_end - y):   # a sparse slide (the statement fills under about 40% of the body) sits at the middle, not under the title
+                y += (g.body_end - y - (0.3 + h)) / 2
             self.rect(sl, self.x0, y + 0.3, 0.09, self.ph(sp, w), fill=p.acc_l)
             self.ptext(sl, self.x0 + 0.35, y + 0.3, w, self.ph(sp, w), sp, name="slot:statement")
             if su:
@@ -2439,7 +2470,7 @@ class Renderer:
         if self.n_human:
             tag = "DRAFT · needs a person" if s["status"] == "needs_human" else f"DRAFT · {self.n_human} slides need a person"
             self.text(sl, 8.7, 0.12, self.x1 - 8.7, 0.3, tag, size=foot, cap=True, color=p.acc_t, bold=True, align=PP_ALIGN.RIGHT, name="Watermark")
-        if sid in self.failed:
+        if sid in self.failed and audience != "client":   # a client slide never prints a check id (a failing client build is withheld by run_deck)
             red = "FF9B8E" if dark else "B03225"
             self.text(sl, 4.5, 0.12, 4.1, 0.3, "CHECK FAILED: " + ", ".join(sorted(set(self.failed[sid]))), size=foot, cap=True, color=red, bold=True, align=PP_ALIGN.RIGHT, name="CheckFailed")
         if self.notes:
@@ -2482,6 +2513,7 @@ class Renderer:
     SIDE = {"16:9": (3.6, None), "4:3": (3.3, None), "4:5": (None, 3.6), "9:16": (None, 4.6)}
     SIDE_COVER = {"16:9": (4.4, None)}
     GAP_PIC = 0.35
+    EXEC_TOP = 1.74   # an execution's picture starts level with its cards; the SIDE table does not apply to it (half the slide, full content height)
     BOTTOM_H = 2.2
 
     def _picture_plan(self, sid, s, name):
@@ -2512,13 +2544,17 @@ class Renderer:
             h = self.BOTTOM_H
             w = h * images.ratio(a)
             return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": [(slot, x1 - w, g.body_end - h, w, h, im)]}
+        if s["type"] == "execution":   # the work shown as work: the right half of the slide, at the full height of the content (a tall picture keeps its shape, centred in the half)
+            half = (x1 - x0 - gap) / 2
+            top = self.EXEC_TOP
+            h = g.body_end - top
+            w = min(half, h * images.ratio(a)) if images.ratio(a) < half / h else half
+            return {"x1": x1 - half - gap, "body_end": g.body_end, "boxes": [(slot, x1 - half + (half - w) / 2, top, w, h, im)]}
         table = self.SIDE_COVER if s["type"] == "title" else self.SIDE
         wv, hv = table.get(a) or self.SIDE[a]
         w, h = (wv, wv / images.ratio(a)) if wv else (hv * images.ratio(a), hv)
         top = 1.6
         y = top + max(0.0, (g.body_end - top - h) / 2)
-        if s["type"] == "execution":   # beside the two cards: level with their top edge, not floating in the middle
-            y = 1.74
         return {"x1": x1 - w - gap, "body_end": g.body_end, "boxes": [(slot, x1 - w, y, w, h, im)]}
 
     def _carve(self, plan):

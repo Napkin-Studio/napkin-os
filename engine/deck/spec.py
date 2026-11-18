@@ -148,6 +148,14 @@ HUMAN_ONLY_TYPES = ("team", "credentials", "investment", "next_step")
 
 PLACEHOLDER_PREFIX = "Proposed (not given by the client):"
 
+def unresolved_line(text) -> bool:
+    """A cover line that is still a stand-in: the labelled placeholder (``PLACEHOLDER_PREFIX``) or any text holding a bracketed blank such as
+    ``[Agency]`` or ``[presenter and date]``. Such a line is a to-do for the agency, not a word for the room."""
+    import re
+    t = str(text or "").strip()
+    return bool(t) and (t.startswith(PLACEHOLDER_PREFIX) or bool(re.search(r"\[[^\]\n]{2,60}\]", t)))
+
+
 #: Who a render is for. ``review`` shows agency notes, marked as such; ``client`` drops blocks
 #: marked ``internal`` and fails the gate on any text below (validate: internal_leak).
 AUDIENCES = ("review", "client")

@@ -187,6 +187,44 @@ def _matches(lay: dict, s: dict, bl: list, ready) -> bool:
     return True
 
 
+#: Layouts a thin slide gives way from: a one-row table or a one-step timeline is a statement, not a table or a strip.
+THIN_FROM = ("native_table", "timeline_strip", "timeline_rows")
+
+
+def thin_blocks(b: dict):
+    """``(statement, [support lines])`` for a one-row table (a header and one row: each cell as ``Header: value``) or a one-step timeline (the step, then its line);
+    None for any other block. Every word of the block is in the result, in its order; only a colon joins a header to its cell."""
+    if b.get("kind") == "table" and not b.get("compare"):
+        rows = [[str(c) for c in r] for r in b.get("rows") or []]
+        if len(rows) == 2 and len(rows[0]) == len(rows[1]):
+            lines = [f"{h}: {v}" if h.strip() else v for h, v in zip(*rows)]
+        elif len(rows) == 1:
+            lines = [c for c in rows[0] if c.strip()]
+        else:
+            return None
+        return (lines[0], lines[1:]) if lines else None
+    if b.get("kind") == "steps" and len(b.get("items") or []) == 1:
+        it = [str(x) for x in b["items"][0]]
+        return (it[0], [x for x in it[1:] if x.strip()]) if it and it[0].strip() else None
+    return None
+
+
+def is_thin(bl: list) -> bool:
+    """A slide whose one table or steps block is thin (``thin_blocks``) and whose other blocks are only text, small or statement lines."""
+    thin = [b for b in bl if b["kind"] in ("table", "steps")]
+    return len(thin) == 1 and thin_blocks(thin[0]) is not None and all(b["kind"] in ("text", "small", "statement") for b in bl if b is not thin[0])
+
+
+def pick_planned(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset()) -> str:
+    """What the plan picks: the rules' choice (``pick``), except that a thin table or timeline gives way to ``big_statement``. ``--no-layout-plan`` and the
+    renderer's own fallback use ``pick`` alone, as before the plan."""
+    lib = library or load()
+    got = pick(s, audience, lib, ready)
+    if got in THIN_FROM and "big_statement" in lib and is_thin(spec.shown_blocks(s, audience)):
+        return "big_statement"
+    return got
+
+
 def pick(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset(), offers: bool = False) -> str:
     """The layout id the rules choose for one slide dict: highest priority first, first match wins, ``flow`` when none.
     Only layouts whose ``pick`` is ``rule`` take part (``offers=True`` lets the offered ones in too). Pure, no drawing."""
@@ -261,6 +299,8 @@ def _bound_value(kind: str, b: dict):
     """One shown block as the value part of a slot of ``kind`` (the words are the block's own)."""
     k = b["kind"]
     if kind == "text":
+        if k in ("table", "steps") and thin_blocks(b):   # a thin table or timeline set as a statement (big_statement)
+            return {"text": "\n".join([thin_blocks(b)[0], *thin_blocks(b)[1]])}
         return {"text": str(b.get("text", "")).strip()}
     if kind == "list":
         if k == "steps":
@@ -608,6 +648,16 @@ def _movable(deck: dict, sid: str, s: dict, audience: str, cat_exempt: bool) -> 
     return list(reversed(out))
 
 
+def _cover_held(s: dict, audience: str, prefs: dict) -> list:
+    """The cover's unresolved lines (``spec.unresolved_line``: the labelled placeholder, ``[Agency]``, ``[presenter and date]``) as whole-block moves to the
+    speaker notes. A review only: a client render keeps them on the slide, where the leak check refuses the build, and no note of a client file may carry
+    one. With no notes (``--no-notes``) nothing leaves the slide. The blocks are never edited: the plan overlays, so words_sha does not move."""
+    if audience == "client" or prefs.get("notes") is False or s.get("pinned"):
+        return []
+    return [_moved_rec((bi, None, str(b["text"]).strip(), b.get("refs") or [])) for bi, b in enumerate(s["blocks"])
+            if b["kind"] in ("text", "small") and not b.get("internal") and spec.unresolved_line(b.get("text"))]
+
+
 def _with_moved(s: dict, moved: list) -> dict:
     lay = dict(s.get("layout") or {})
     fit = dict(lay.get("fit") or {})
@@ -679,7 +729,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     for sid in deck["order"]:
         s = deck["slides"][sid]
         f = {} if s.get("pinned") else (fx.get(sid) or {})
-        rid = pick(s, aud, lib, ready.get(sid, frozenset()))
+        rid = pick_planned(s, aud, lib, ready.get(sid, frozenset()))
         by[sid], why[sid] = "rule", "rule table"
         sw = swaps.get(sid)
         if sw:
@@ -728,7 +778,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             need = min(6, -(-len(win) * 6 // 10))
             fams = [fam(x) for x in win]
             if len(win) >= 5 and len(set(fams)) < need:
-                top = max(set(fams), key=fams.count)
+                top = max(sorted(set(fams)), key=fams.count)   # sorted: a tie must not depend on the hash seed
                 for sid_ in reversed([x for x in win if fam(x) == top]):
                     if movable(sid_):
                         a = alt_for(sid_, set(fams))
@@ -753,7 +803,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         base = {**s}
         base.pop("layout", None)
         bl = spec.shown_blocks(base, aud)
-        moved: list = []
+        moved: list = _cover_held(s, aud, prefs) if s["type"] == "title" else []   # unresolved cover lines go to the notes, labelled, never dropped
         content = lid != "flow" and lib[lid]["group"] == "content" and s["type"] not in ("title", "close", "next_step")
         # 0. density: movable points past the target go to the notes
         if density in spec.DENSITY_WORDS and content and not exempt and s["type"] not in ("appendix",) and prefs.get("text_mode") != "preserve":

@@ -60,6 +60,29 @@ def _close(a, rep: dict, t0: float) -> dict:
     return rep
 
 
+#: A client build whose checks fail writes nothing (``_withheld``). The suite sets this False (tests/conftest.py): many tests read the files of a client
+#: render of the invented fixtures, which carry unresolved placeholders and so always fail the gate. tests/test_design_fixes.py sets it back to True.
+WITHHOLD_FAILING_CLIENT = True
+
+
+def _withheld(a, rep: dict, deck: dict, findings: list, t0: float) -> dict:
+    """A client build whose checks fail: no deck.pptx, deck.html, PDF or PNG is written (and none an earlier build left stays), and report.json says why.
+    A client slide never carries a check id; the person reads the reason here and in validation.json. A review render keeps its marks."""
+    bad = [f for f in findings if f["level"] == "error"]
+    for name in ("deck.pptx", "deck.html", "deck.pdf", "layouts.json"):
+        (a.out / name).unlink(missing_ok=True)
+    images.wipe_outputs(a.out)
+    checks = sorted({f["check"] for f in bad})
+    rep["withheld"] = {"reason": f"withheld: the client file was not written because {len(bad)} check{'s' if len(bad) != 1 else ''} failed ({', '.join(checks)}); "
+                                 "fix them, or build the review file to see them", "errors": len(bad), "checks": checks,
+                       "slides": sorted({f["slide"] for f in bad if f.get("slide")})}
+    rep["slides"] = len(deck["order"])
+    rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
+    _close(a, rep, t0)
+    print(json.dumps({"withheld": rep["withheld"], "slides": rep["slides"], "wall_secs": rep["wall_secs"]}, indent=1))
+    return rep
+
+
 def _stopped(a, rep: dict, t0: float, at: str) -> dict:
     """A run stopped by ``--until``: nothing past ``at`` ran or was written. The stage outputs are in --stages, so a later run carries on from them."""
     rep["until"] = at
@@ -248,7 +271,7 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         if p.parent == a.stages or got.get("stages") == str(a.stages.resolve()):   # out/'s record is used only when it was written for these --stages
             record = got
             break
-    ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm}, "swaps": swaps, "base_deck": base_deck,
+    ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm, "notes": not a.no_notes}, "swaps": swaps, "base_deck": base_deck,
            "pinned": pinned, "out": out, "stages": a.stages, "live": a.live, "approve_shorten": a.approve_shorten, "call_fn": call_fn, "spent": spent,
            "run_cap": repair.run_cap(), "shorten_ledger": _shorten_ledger(a, inp, deck), "record": record, "render_fn": render_fn, "pdf_fn": pdf_fn, "qa_fn": qa_fn}
     iss0 = repair.I.derive(findings, qa, deck, policy, 0)
@@ -916,7 +939,7 @@ def main(argv=None):
         policy = repair.load_policy(profile, a.repair_policy) if loop_on else None
         stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages, repair.approval_id(deck), (policy["shorten"] or {}).get("word_rule", "delete_only"))[0]
         base_deck = deck   # pictures are already bound here: the repair loop re-plans from this deck and never asks for a picture
-        replan = lambda d: layouts.plan(d, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten)}, swaps=swaps)   # noqa: E731
+        replan = lambda d: layouts.plan(d, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten), "notes": not a.no_notes}, swaps=swaps)   # noqa: E731
         deck, plan_issues, _pending = replan(base_deck)
         if layouts.unmade_planned(deck):   # slots planned for pictures nobody has paid for: back to empty (in the base deck too, so a repair round never plans them), then plan again without them (free, in code)
             imagegen.unplan(base_deck, rep.get("images") or {})
@@ -949,6 +972,9 @@ def main(argv=None):
         rep["slides"] = len(deck["order"])
         rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
         return _stopped(a, rep, t0, "deck")
+
+    if a.audience == "client" and WITHHOLD_FAILING_CLIENT and any(f["level"] == "error" for f in findings):   # a client file with a failing check is never written
+        return _withheld(a, rep, deck, findings, t0)
 
     pics, pic_findings, placed = None, [], set()
     if a.pictures or supplied or a.audience == "client":   # never ship what an earlier build left in a reused --out (a client folder above all)

@@ -80,7 +80,9 @@ def test_run_deck_with_a_brief_writes_the_golden_deck(monkeypatch, tmp_path):
     assert deck["meta"].pop("audience") == "review"   # run_deck stamps who the render is for
     assert deck["meta"].pop("confirm") and deck["meta"].pop("confirm_summary")["verified"] == 0   # run_deck stamps the confirm list; the build itself is untouched
     assert deck == json.loads((BRIEF / "golden_deck.json").read_text())
-    assert layouts.without_plan_findings(json.loads((out / "validation.json").read_text())) == json.loads((BRIEF / "golden_validation.json").read_text())
+    gold = [f for f in json.loads((BRIEF / "golden_validation.json").read_text())
+            if not (f["check"] == "internal_leak" and f.get("slide") == "s01" and "[Agency]" in f["message"])]   # the cover's "A response from [Agency]" now sits in the notes, not on the slide
+    assert layouts.without_plan_findings(json.loads((out / "validation.json").read_text())) == gold
     assert "intake" not in json.loads((out / "report.json").read_text())   # a complete brief runs no intake
 
 
