@@ -9,6 +9,9 @@ const port = Number(process.env.E2E_PORT || 5199)
 
 export default defineConfig({
   testDir: './e2e',
+  // The pre-push hook (scripts/check.sh) sets E2E_SKIP_PERF: the image editor's perf budget fails under a
+  // loaded machine and blocked pushes (owner, 2026-11-19). CI runs `npm run e2e` without it, so CI keeps it.
+  testIgnore: process.env.E2E_SKIP_PERF ? ['**/image-editor/perf.spec.ts'] : [],
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
