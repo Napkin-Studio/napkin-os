@@ -1,0 +1,23 @@
+{
+  "id": "image_text",
+  "version": 1,
+  "group": "content",
+  "description": "Takeaway title and one picture.",
+  "slot_summary": "title, 1 image 4:3",
+  "for_types": [
+    "idea"
+  ],
+  "density": "standard",
+  "renderer": "image_text",
+  "slots": {
+    "title": {
+      "kind": "text",
+      "role": "title",
+      "required": true
+    },
+    "picture": {
+      "kind": "video",
+      "required": true
+    }
+  }
+}

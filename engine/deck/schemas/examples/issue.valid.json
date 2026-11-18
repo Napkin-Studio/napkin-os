@@ -1,0 +1,23 @@
+{
+  "id": "i_3fa91c07",
+  "round": 0,
+  "slide": "s07",
+  "slot": "body",
+  "source": "qa_render",
+  "check": "text_overflow",
+  "level": "error",
+  "severity": "blocker",
+  "message": "The body text runs past the bottom of the box.",
+  "evidence": {
+    "measured": 5.2,
+    "limit": 4.4,
+    "unit": "in"
+  },
+  "fix": {
+    "kind": "shrink",
+    "params": {
+      "min_scale": 0.85
+    }
+  },
+  "status": "open"
+}

@@ -759,7 +759,7 @@ def build_investor(inp, st: dict, *, client: str, project: str, agency: str = "[
             continue
         blocks, claims = [], []
         if sec.get("statement"):
-            blocks.append({"kind": "statement", "text": sec["statement"], "basis": "creative" if t == "close" else None})
+            blocks.append({"kind": "statement", "text": sec["statement"], "basis": "creative" if t == "close" else "opinion"})
         if sec.get("stats"):
             items = [{"value": str(x.get("value", "")), "label": x.get("label", ""), "refs": x.get("refs", [])} for x in sec["stats"][:3]]
             blocks.append({"kind": "stats", "items": items})
