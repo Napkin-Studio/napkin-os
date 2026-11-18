@@ -540,7 +540,8 @@ def test_compare_flags_lost_coverage_and_n_a_to_no():
 def test_every_metric_has_a_direction_and_compare_flags_the_worse_way(tmp_path):
     dirs = {i["id"]: i.get("direction") for i in ITEMS["items"] if i["kind"] == "metric"}
     assert dirs == {"m_usd": "lower", "m_seconds": "lower", "m_share_le_30": "higher", "m_share_le_60": "higher",
-                    "m_median_words": "lower", "m_creative_pictured": "higher", "w_words_sha": "same", "p_all_approved": "higher"}
+                    "m_median_words": "lower", "m_creative_pictured": "higher", "w_words_sha": "same", "p_all_approved": "higher",
+                    "m_production_first": "higher"}
     base = _file({"m_usd": 1.0, "m_share_le_30": 0.5})
     worse = cmp.compare(base, _file({"m_usd": 1.5, "m_share_le_30": 0.4}), direction=dirs)
     assert worse["metric_regressions"] == 2 and cmp.failed(worse)
