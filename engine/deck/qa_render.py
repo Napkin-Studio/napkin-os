@@ -34,7 +34,9 @@ Pixels (from the render):
                   pixels around it, 4.5:1 (3:1 for large text). Under spec.LOOK_V3 (deck-look step 7, p_text_on_image) it is measured on
                   a TEXT-FREE render instead (the deck again with every text frame over a picture emptied, its shapes and scrims kept):
                   the 10th-percentile per-pixel contrast of the text colour over the frame's box, the mean hiding a busy picture no
-                  longer; every measured run is recorded in ``text_on_image`` [{slide, name, text, size, p10, need, pass}]
+                  longer; every measured run is recorded in ``text_on_image`` [{slide, name, text, size, p10, need, pass}]. Under LOOK_V3
+                  any run under AA there is an ERROR (not a warning). This is a check at render time only: a picture a person swaps
+                  in later (in PowerPoint) is never re-measured, and no scrim floor can guarantee it stays readable.
   mostly_empty    almost nothing but background
   one_corner      the content sits in one corner (share of non-background area per third of the slide)
   q_no_hole       (spec.LOOK_V3 only, advisory) the largest empty rectangle of the slide on a 96 x 54 cell grid inside 3-97% x and
@@ -155,8 +157,9 @@ def _est_height_in(tf, width_in: float) -> float:
 
 def glyph_k(name: str, bold: bool) -> float:
     """Mean glyph width as a fraction of the size: the measured, fallback-safe factor for the two look fonts (deck-look), else the
-    old estimate (0.5, 0.56 bold, +0.02 serif). One place for the three estimators below."""
-    if name in (LOOK_HEAD, LOOK_BODY):
+    old estimate (0.5, 0.56 bold, +0.02 serif). One place for the three estimators below. Only under ``spec.LOOK_V3``: with the flag off a
+    deck's estimates stay exactly what they were, even when a brand happens to name one of the look's fonts."""
+    if spec.LOOK_V3 and name in (LOOK_HEAD, LOOK_BODY):
         return fit_wf(name, bool(bold))
     return (0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0)
 
@@ -405,8 +408,10 @@ def _p10_findings(recs: list) -> list:
     for r in recs:
         if not r["pass"] and r["name"] not in seen:
             seen.add(r["name"])
-            _add(out, "text_on_image_contrast", "error" if r["p10"] < 2.0 else "warn",
-                 f"'{r['name']}' text is {r['p10']:.1f}:1 at the 10th percentile (needs {r['need']:g}:1) against the picture under it, measured without the words")
+            # Under LOOK_V3 (the only caller) anything under AA on the text-free render is an ERROR: the scrim floor does not make a
+            # picture readable by itself, so this render-time measure is the only guarantee there is.
+            _add(out, "text_on_image_contrast", "error" if (spec.LOOK_V3 or r["p10"] < 2.0) else "warn",
+                 f"'{r['name']}' text ({r['text']}) is {r['p10']:.1f}:1 at the 10th percentile (needs {r['need']:g}:1) against the picture under it, measured without the words")
     return out
 
 
@@ -511,36 +516,57 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
     return out
 
 
+def _fill_alpha(shape) -> float:
+    """A solid fill's opacity, 0 to 1 (``a:alpha`` in its colour; 1 when there is none)."""
+    try:
+        A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+        sp_pr = shape._element.find("{http://schemas.openxmlformats.org/presentationml/2006/main}spPr")
+        for el in ([] if sp_pr is None else sp_pr.findall(f"{A}solidFill/*/{A}alpha")):
+            return int(el.get("val", "100000")) / 100000
+    except Exception:
+        pass
+    return 1.0
+
+
+def _over(fg: tuple, alpha: float, ground: tuple) -> tuple:
+    """``fg`` laid at ``alpha`` over ``ground`` (straight alpha compositing in sRGB, as a renderer draws it)."""
+    return tuple(round(alpha * f + (1 - alpha) * g) for f, g in zip(fg, ground))
+
+
 def text_contrasts(slide) -> list:
     """Every text run on a slide with the colour it sits on and its WCAG ratio: ``[{shape, text, fg, bg, ratio, need, size, bold}]``. The
-    ground is the shape's own fill, else the last filled shape drawn before it under its centre, else the slide background; a run over a
-    picture with no fill between is left out (text_on_image_contrast measures it on the render). ``need`` is AA: 4.5, or 3.0 for large
-    text (18 pt, or 14 pt bold). The deck-look contrast test holds every run of a LOOK_V3 render to it."""
+    ground is composed in drawing order under the frame's centre: the slide background, then each filled shape and picture drawn before
+    it, then the frame's own fill. A part-transparent fill (a 40-60% scrim) is COMPOSITED over what is under it, never taken as solid; when
+    what is under it is a picture the ground is unknown here and the run is left out (text_on_image_contrast measures it on the render).
+    ``need`` is AA: 4.5, or 3.0 for large text (18 pt, or 14 pt bold). The deck-look contrast test holds every run of a LOOK_V3 render to it."""
     bg = _bg_rgb(slide)
-    fills, pics, out = [], [], []
+    layers, out = [], []   # (x, y, w, h, rgb or None for a picture, alpha), in drawing order
     for sh in slide.shapes:
         if sh.left is None or sh.width is None:
             continue
         x, y, w, h = sh.left, sh.top, sh.width, sh.height
-        if _is_picture(sh):
-            pics.append((x, y, w, h))
         own = _solid_fill(sh)
         has_text = sh.has_text_frame and sh.text_frame.text.strip()
+        if _is_picture(sh):
+            layers.append((x, y, w, h, None, 1.0))
+            continue
         if own and not has_text:
-            fills.append((x, y, w, h, own))
+            layers.append((x, y, w, h, own, _fill_alpha(sh)))
         if not has_text:
             continue
         cx, cy = x + w // 2, y + h // 2
-        under = own
-        if under is None:
-            for fx, fy, fw, fh, fc in fills:
-                if fx <= cx <= fx + fw and fy <= cy <= fy + fh:
-                    under = fc
-        if under is None:
-            if any(px <= cx <= px + pw and py <= cy <= py + ph for px, py, pw, ph in pics):
+        under, known = (tuple(bg) if bg is not None else None), bg is not None
+        for lx, ly, lw, lh, lc, la in layers + ([(x, y, w, h, own, _fill_alpha(sh))] if own else []):
+            if not (lx <= cx <= lx + lw and ly <= cy <= ly + lh):
                 continue
-            under = bg
-        if under is None:
+            if lc is None:                      # a picture: what is under the words is pixels, not a colour
+                under, known = None, False
+            elif la >= 0.999:
+                under, known = tuple(lc), True
+            elif known:
+                under = _over(tuple(lc), la, under)
+            # a part-transparent fill over a picture: still unknown
+        if not known or under is None:
             continue
         for p in sh.text_frame.paragraphs:
             for r in p.runs:

@@ -99,27 +99,122 @@ def _soffice() -> str:
     raise RuntimeError("LibreOffice not found: the PDF cannot be made")
 
 
-def _load_vendored_fonts(profile: str) -> None:
-    """Copy the vendored OFL fonts' STATIC faces (deck/fonts/*/static: Archivo, Source Sans 3, regular, bold, italic) into the private
-    LibreOffice profile's ``user/fonts``, where LibreOffice reads extra fonts, so the PDF and the PNGs are set in the fonts the deck names,
-    not a substitute (deck-look). Never the variable files: LibreOffice and PowerPoint draw a variable font at its default instance, and
-    Source Sans 3's default is ExtraLight (wght 200), which set every body line as a faint hairline."""
+FONTS_DIR = Path(__file__).resolve().parent / "fonts"
+#: The vendored STATIC faces' PostScript names, by the family the pptx names (deck/fonts/*/static). A LOOK_V3 PDF must embed these and only
+#: these for its Archivo and Source Sans 3 text: a substitute (Arial, Carlito, Liberation) means the fonts were not found, and any other
+#: Archivo / SourceSans3 name (ArchivoRoman-*, SourceSans3-Roman, SourceSans3-ExtraLight, Archivo-SemiBold) is a variable font's instance,
+#: the hairline-weight bug of phase 12.
+STATIC_FACES = {"Archivo": frozenset({"Archivo-Regular", "Archivo-Bold", "Archivo-Italic", "Archivo-BoldItalic"}),
+                "Source Sans 3": frozenset({"SourceSans3-Regular", "SourceSans3-Bold", "SourceSans3-It", "SourceSans3-BoldIt"})}
+_PS_PREFIX = {"Archivo": "Archivo", "Source Sans 3": "SourceSans3"}
+FONT_FIX = ("install the deck's static fonts once with scripts/install-deck-fonts.sh (it copies engine/deck/fonts/*/static/*.ttf into your "
+            "user font folder), and remove any variable Archivo or Source Sans 3 (a file named with [wght]) from your font folders")
+
+
+class FontsNotEmbedded(Exception):
+    """A LOOK_V3 PDF set in a substitute or a variable instance instead of the vendored static faces. Not a RuntimeError on purpose: a caller
+    that treats a failed conversion as "no PDF this round" must not swallow it; the build stops and says how to fix the machine."""
+
+
+def _load_vendored_fonts(profile: str) -> dict:
+    """Point LibreOffice at the vendored OFL fonts' STATIC faces (deck/fonts/*/static), never the variable files: LibreOffice and PowerPoint
+    draw a variable font at its default instance, and Source Sans 3's default is ExtraLight (wght 200), a faint hairline.
+
+    LibreOffice does not reliably read a private profile's ``user/fonts`` (7.4 on macOS ignores it), so that copy alone is not trusted. On Linux
+    LibreOffice finds fonts through fontconfig, and fontconfig's documented ``FONTCONFIG_FILE`` points it at a config that includes the
+    system one plus the vendored static folders: no system install is needed there. macOS LibreOffice uses CoreText, which reads only the
+    installed fonts, so on a Mac the static faces must be installed (scripts/install-deck-fonts.sh). Either way ``check_pdf_fonts`` is the
+    proof: it fails the render unless the static faces were embedded. Returns the environment for the soffice call."""
+    env = dict(os.environ)
+    static = sorted({str(f.parent) for f in FONTS_DIR.glob("*/static/*.ttf")})
     dest = Path(profile) / "user" / "fonts"
     dest.mkdir(parents=True, exist_ok=True)
-    for f in (Path(__file__).resolve().parent / "fonts").glob("*/static/*.ttf"):
+    for f in FONTS_DIR.glob("*/static/*.ttf"):
         shutil.copy2(f, dest / f.name)
+    if sys.platform != "darwin":
+        conf = Path(profile) / "fonts.conf"
+        dirs = "".join(f"<dir>{d}</dir>" for d in static)
+        conf.write_text('<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig>'
+                        f'<include ignore_missing="yes">/etc/fonts/fonts.conf</include>{dirs}<cachedir>{Path(profile) / "fc-cache"}</cachedir>'
+                        '</fontconfig>')
+        env["FONTCONFIG_FILE"] = str(conf)
+    return env
+
+
+_RUN = re.compile(r"<a:r>(.*?)</a:r>", re.S)
+
+
+def named_families(pptx) -> set:
+    """The look's families (Archivo, Source Sans 3) that a run with words names in the pptx's slides."""
+    import zipfile   # noqa: PLC0415
+    out = set()
+    with zipfile.ZipFile(pptx) as z:
+        for n in z.namelist():
+            if not re.match(r"ppt/slides/slide\d+\.xml$", n):
+                continue
+            for run in _RUN.findall(z.read(n).decode("utf-8", "replace")):
+                if not re.search(r"<a:t>[^<]*\S[^<]*</a:t>", run):
+                    continue
+                out.update(fam for fam in STATIC_FACES if f'typeface="{fam}"' in run)
+    return out
+
+
+def pdf_fonts(pdf) -> list:
+    """``[(PostScript name without the subset tag, embedded)]`` from poppler's ``pdffonts``."""
+    exe = shutil.which("pdffonts") or ("/opt/homebrew/bin/pdffonts" if Path("/opt/homebrew/bin/pdffonts").exists() else None)
+    if not exe:
+        raise FontsNotEmbedded("pdffonts (poppler) is not installed, so the LOOK_V3 PDF's fonts cannot be checked; install poppler "
+                               "(brew install poppler, apt install poppler-utils)")
+    out = subprocess.run([exe, str(pdf)], check=True, capture_output=True, text=True, timeout=60).stdout.splitlines()
+    rows = []
+    for line in out[2:]:
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        # name type [type word] encoding emb sub uni id gen: emb is the fifth column from the end
+        rows.append((re.sub(r"^[A-Z]{6}\+", "", parts[0]), parts[-5] == "yes"))
+    return rows
+
+
+def check_pdf_fonts(pptx, pdf) -> dict:
+    """Under LOOK_V3: every family the pptx names (Archivo, Source Sans 3) must reach the PDF as its vendored static faces, embedded, and no
+    Archivo / SourceSans3 face outside the static set (a variable instance) may appear. Raises FontsNotEmbedded naming the one-command fix.
+    Returns ``{"named": [...], "embedded": [...]}``."""
+    named = named_families(pptx)
+    rows = pdf_fonts(pdf)
+    problems = []
+    for fam in sorted(named):
+        prefix, ok = _PS_PREFIX[fam], STATIC_FACES[fam]
+        faces = [(n, e) for n, e in rows if n.startswith(prefix)]
+        if not any(n in ok and e for n, e in faces):
+            problems.append(f"{fam} is named in the deck but no static {fam} face is embedded in the PDF (LibreOffice substituted it)")
+    for n, e in rows:
+        fam = next((f for f, p in _PS_PREFIX.items() if n.startswith(p)), None)
+        if fam and n not in STATIC_FACES[fam]:
+            problems.append(f"{n} is a variable font's instance, not a static face (the hairline-weight bug)")
+        elif fam and not e:
+            problems.append(f"{n} is used but not embedded")
+    if problems:
+        raise FontsNotEmbedded(f"{Path(pdf).name}: " + "; ".join(problems) + f". Fix: {FONT_FIX}.")
+    return {"named": sorted(named), "embedded": sorted({n for n, e in rows if e})}
 
 
 def to_pdf(pptx, outdir, timeout: int = 180):
     """Convert a pptx to PDF with LibreOffice, in a private profile (``-env:UserInstallation``) that is removed afterwards.
-    Two soffice processes that share a profile hand the second job to the first and exit 0 with no PDF, so every call gets its own."""
+    Two soffice processes that share a profile hand the second job to the first and exit 0 with no PDF, so every call gets its own.
+    Under LOOK_V3 the vendored static fonts are offered to LibreOffice and the PDF is then checked with ``pdffonts``: a substitute or a
+    variable instance raises FontsNotEmbedded (the gate and every LOOK_V3 render fail rather than ship the wrong type)."""
     profile = tempfile.mkdtemp(prefix="deck_lo_")
     try:
-        _load_vendored_fonts(profile)
-        return subprocess.run([_soffice(), f"-env:UserInstallation=file://{profile}", "--headless", "--convert-to", "pdf", "--outdir", str(outdir), str(pptx)],
-                              check=True, capture_output=True, timeout=timeout)
+        env = _load_vendored_fonts(profile) if spec.LOOK_V3 else None
+        done = subprocess.run([_soffice(), f"-env:UserInstallation=file://{profile}", "--headless", "--convert-to", "pdf", "--outdir", str(outdir), str(pptx)],
+                              check=True, capture_output=True, timeout=timeout, env=env)
     finally:
         shutil.rmtree(profile, ignore_errors=True)
+    pdf = Path(outdir) / (Path(pptx).stem + ".pdf")
+    if spec.LOOK_V3 and pdf.exists():
+        check_pdf_fonts(pptx, pdf)
+    return done
 
 
 def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:

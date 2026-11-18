@@ -320,8 +320,25 @@ PITCH_MERGES_V3 = (("channel_roles", "execution", None),
 #: then thin slides), nothing is trimmed, reworded or dropped. PITCH_CAP is ADVISORY only (validate: pitch_cap, a warning): asked-for
 #: routes and PITCH_EXECUTIONS executions may rightly give 13-14, and no gate withholds a deck for its length. Agency pitches that
 #: run longer: set DECK_PITCH_TARGET (and DECK_PITCH_CAP) for a run, or change these two numbers. A stated limit always wins.
-PITCH_TARGET = int(os.environ.get("DECK_PITCH_TARGET") or 10)
-PITCH_CAP = int(os.environ.get("DECK_PITCH_CAP") or 12)
+def _env_count(name: str, default: int, lo: int = 3, hi: int = 60) -> int:
+    """A whole number of slides from the environment, ``lo`` to ``hi``; anything else (not a number, 0, negative, absurd) falls back to
+    ``default`` with a warning on stderr. Read at import, so a bad value must never crash the engine, flag on or off."""
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        n = int(raw)
+    except ValueError:
+        n = None
+    if n is None or not lo <= n <= hi:
+        import sys   # noqa: PLC0415
+        print(f"deck: {name}={raw!r} is not a slide count from {lo} to {hi}; using {default}", file=sys.stderr)
+        return default
+    return n
+
+
+PITCH_TARGET = _env_count("DECK_PITCH_TARGET", 10)
+PITCH_CAP = _env_count("DECK_PITCH_CAP", 12)
 #: Slide types the length target never moves (design.length): the story's spine and the ask.
 TARGET_KEEPS = ("title", "objective", "real_question", "insight", "idea", "investment", "next_step", "ask", "close", "proposition", "audience")
 #: deck-look (fix 2, said once): the notes line that keeps a sentence a presented slide would have said a second time (an idea titled

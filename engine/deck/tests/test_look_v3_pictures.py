@@ -73,7 +73,7 @@ def test_the_finder_takes_the_calm_zone_with_the_floor_scrim(tmp_path):
     rec = images.text_zone(_pic(tmp_path, "a.png", _calm_bottom_left()))
     assert rec["zone"] == "bottom_left" and rec["by"] == "finder"
     assert rec["text"] == "1B2430" and rec["colour"] == "FAF7F1"   # a light zone: ink words under a paper scrim (the wash deepens, never flips)
-    assert rec["alpha"] == images.SCRIM_FLOOR == 0.40             # the floor on every text-over slot, even a calm one (a swapped picture stays readable)
+    assert rec["alpha"] == images.SCRIM_FLOOR == 0.40             # the floor on every text-over slot, even a calm one (a visual default: no guarantee for a swapped picture)
     assert rec["p10"] >= images.TEXT_ON_PICTURE_TARGET and rec["busy_sd"] < images.BUSY_SD
 
 
@@ -231,6 +231,39 @@ def test_qa_measures_p10_on_a_text_free_render():
     assert not qa_render._check_text_on_image(frames, W_in, H_in, w, h, bytes(px))   # the old mean measure passes it
 
 
+def test_under_the_look_any_p10_under_aa_is_an_error(monkeypatch):
+    """The scrim floor guarantees nothing (2.26:1 is possible at 40%), so the render-time measure must stop the deck, not warn."""
+    rec = [{"name": "Title", "text": "FFFFFF", "size": 40.0, "p10": 2.6, "need": 3.0, "pass": False}]
+    monkeypatch.setattr(spec, "LOOK_V3", True)
+    f = qa_render._p10_findings(rec)
+    assert f[0]["level"] == "error" and "(FFFFFF)" in f[0]["message"]
+    monkeypatch.setattr(spec, "LOOK_V3", False)
+    assert qa_render._p10_findings(rec)[0]["level"] == "warn"
+
+
+def test_text_contrasts_composites_a_part_transparent_scrim(tmp_path):
+    """A 40% scrim is not a solid ground: over a solid background it is composited; over a picture the run is left to the render."""
+    from pptx.dml.color import RGBColor
+    from pptx.util import Inches, Pt
+    prs = Presentation()
+    sl = prs.slides.add_slide(prs.slide_layouts[6])
+    sl.background.fill.solid()
+    sl.background.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+    from lxml import etree
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.oxml.ns import qn
+    sc = sl.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(13), Inches(7))
+    sc.fill.solid()
+    sc.fill.fore_color.rgb = RGBColor(0, 0, 0)
+    etree.SubElement(sc.fill._xPr.find(qn("a:solidFill"))[0], qn("a:alpha")).set("val", "40000")
+    tb = sl.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1))
+    r = tb.text_frame.paragraphs[0].add_run()
+    r.text, r.font.size = "White words on a 40% black scrim over white", Pt(16)
+    r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+    got = qa_render.text_contrasts(sl)
+    assert got and got[0]["bg"] == "999999" and got[0]["ratio"] < 4.5   # 0.4 black over white is #999999, about 2.8:1: not a pass
+
+
 @pytest.mark.skipif(not (shutil.which("soffice") or Path("/Applications/LibreOffice.app/Contents/MacOS/soffice").exists()), reason="LibreOffice")
 def test_the_render_clears_aa_at_p10_on_a_bleed(v3, tmp_path):
     planned, sid, r, _ = _render_bleed(tmp_path, "idea", ZONE)
@@ -265,6 +298,35 @@ def test_the_campaign_line_is_said_once(v3):
     assert d["slides"][_of(d, "proposition")]["title"] == "Every drop has a story."   # the brief's single thought keeps it, once
 
 
+def test_said_once_moves_only_the_repeated_sentence():
+    """The review's proof: a copy line with a repeated sentence and a new one keeps the new one (the call to action) on the slide."""
+    S = [assemble._slide("proposition", "Every drop has a story.", [{"kind": "text", "text": "One line", "basis": "opinion"}]),
+         assemble._slide("execution", "The poster", [{"kind": "copy", "lines": ["Every drop has a story. Book your free leak check at lumen.ie today."],
+                                                      "answer": "Poster"}])]
+    assemble._say_once(S)
+    b = S[1]["blocks"][0]
+    assert b["kind"] == "copy" and b["lines"] == ["Book your free leak check at lumen.ie today."] and b["answer"] == "Poster"
+    assert S[1]["notes"].endswith(f"{spec.SAID_ONCE_NOTE.format(n=1)} Every drop has a story.")
+    assert "Book your free" not in S[1]["notes"]
+
+
+def test_said_once_keeps_an_idea_titles_new_sentence():
+    S = [assemble._slide("proposition", "Every drop has a story.", [{"kind": "text", "text": "One line", "basis": "opinion"}]),
+         assemble._slide("idea", "Every drop has a story. Each household sees its own water use.",
+                         [{"kind": "statement", "text": "A stage text that stays", "basis": "opinion"}])]
+    assemble._say_once(S)
+    assert S[1]["title"] == "Each household sees its own water use."
+    assert [b["text"] for b in S[1]["blocks"]] == ["A stage text that stays"]
+    assert f"{spec.SAID_ONCE_NOTE.format(n=1)} Every drop has a story." in S[1]["notes"]
+
+
+def test_said_once_drops_a_block_only_when_every_line_was_said():
+    S = [assemble._slide("proposition", "Every drop has a story.", [{"kind": "text", "text": "One line", "basis": "opinion"}]),
+         assemble._slide("execution", "The poster", [{"kind": "copy", "lines": ["Every drop has a story."], "answer": "Poster"}])]
+    assemble._say_once(S)
+    assert S[1]["blocks"] == [] and "Every drop has a story. (Poster)" in S[1]["notes"]
+
+
 def test_said_once_needs_the_flag():
     d = _build()
     assert d["slides"][_of(d, "idea")]["title"] == "Every drop has a story."
@@ -291,6 +353,19 @@ def test_one_accent_phrase_only_from_a_bound_field():
     assert layouts.accent_phrase(s3, s3["blocks"]) is None
     s4 = {"title": "Every drop has a story.", "blocks": [{"kind": "copy", "lines": ["Every drop has a story."]}]}
     assert layouts.accent_phrase(s4, s4["blocks"]) is None   # never the whole title
+
+
+def test_the_accent_phrase_is_never_a_generic_word_or_a_placeholder():
+    s = {"title": "Book your free leak check today", "blocks": [{"kind": "copy", "lines": ["Today"]}, {"kind": "bullets", "items": ["now"]}]}
+    assert layouts.accent_phrase(s, s["blocks"]) is None                      # 'today' is a stop word
+    s2 = {"title": "We meet the water team", "blocks": [{"kind": "bullets", "items": [{"text": "team"}]}]}
+    assert layouts.accent_phrase(s2, s2["blocks"]) is None                    # under ACCENT_MIN_CHARS letters
+    s3 = {"title": "The leak check pays for itself", "blocks": [{"kind": "text", "text": "leak check", "internal": True},
+                                                                   {"kind": "text", "text": "pays for itself", "basis": "placeholder"},
+                                                                   {"kind": "text", "text": "leak check", "human": True}]}
+    assert layouts.accent_phrase(s3, s3["blocks"]) is None                    # internal, placeholder and human blocks are never bound
+    s4 = {"title": "Cut use by 5% in a year", "blocks": [{"kind": "text", "text": "Cut use by 5%"}]}
+    assert layouts.accent_phrase(s4, s4["blocks"]) == "Cut use by 5%"         # a real phrase still wins; a short figure is allowed
 
 
 def test_the_accent_phrase_is_one_run_in_accent_ink(v3, tmp_path):

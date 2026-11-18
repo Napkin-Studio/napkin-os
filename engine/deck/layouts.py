@@ -239,15 +239,28 @@ def bleed_ready(lay: dict, s: dict, ready) -> bool:
 _FIGURE = re.compile(r"[<>~≈]?(?:[€$£]|(?:EUR|USD|GBP)\s)\s?\d[\d,.]*(?:\s?(?:[kKmMbB]n?\b|million\b|billion\b))?|\d[\d,.]*\s?(?:%|per ?cent\b|×)")
 
 
+#: accent_phrase: a word-only candidate shorter than this is never the accent (a figure may be). And single generic words that a bound
+#: line can carry but that say nothing about the slide (a copy line "Today." or an item "Now" matched in the title).
+ACCENT_MIN_CHARS = 5
+ACCENT_STOP = frozenset({"today", "now", "tomorrow", "here", "there", "this", "that", "these", "those", "people", "everyone", "everything",
+                         "always", "never", "more", "less", "better", "best", "new", "next", "first", "last", "yes", "no", "all", "every",
+                         "our", "your", "their", "them", "they", "you", "we", "it", "its", "the", "and", "with", "from", "into", "about",
+                         "real", "really", "very", "just", "only", "still", "again", "time", "year", "years", "week", "month", "day"})
+
+
 def accent_phrase(s: dict, bl: list) -> str | None:
     """deck-look (rea-full A3, Pitch's highlight): the ONE phrase of a slide's action title set in the accent, or None. Only a phrase that
     is itself a bound field of the same slide: the 'to' of its from-to, a line of its copy, a figure one of its blocks gives, or the whole
     text of one of its short items (six words at most); never the whole title, matched on word boundaries, case-insensitive. The longest
-    wins; nothing is reworded. At most one per slide (k_accent_marks counts it)."""
+    wins; nothing is reworded. At most one per slide (k_accent_marks counts it). Never from an internal block or a person's placeholder
+    (``internal`` / ``human``, a ``placeholder`` basis), never a single generic word (ACCENT_STOP: "today", "now", "people") and never a
+    word-only phrase under ACCENT_MIN_CHARS letters; a figure ("5%", "€2m") may be short."""
     title = str(s.get("title") or "")
     tl = title.lower()
     cands = []
     for b in bl:
+        if b.get("internal") or b.get("human") or b.get("basis") == "placeholder":
+            continue
         if b.get("kind") == "fromto" and str(b.get("to") or "").strip():
             cands.append(str(b["to"]))
         cands += [str(x) for x in b.get("lines") or []]
@@ -259,6 +272,8 @@ def accent_phrase(s: dict, bl: list) -> str | None:
     for c in cands:
         c = c.strip().rstrip(".")
         if len(c) < 2 or c.lower() == tl.rstrip(".") or not re.search(r"\w", c):
+            continue
+        if not _FIGURE.fullmatch(c) and (len(c) < ACCENT_MIN_CHARS or c.lower() in ACCENT_STOP):
             continue
         m = re.search(r"(?<![\w])" + re.escape(c.lower()) + r"(?![\w])", tl)
         if m and (best is None or len(c) > len(best)):

@@ -1026,11 +1026,29 @@ def _sentence_keys(text) -> list:
     return out
 
 
+def _split_said(text, said: dict) -> tuple:
+    """``(kept, moved, first)``: the sentences of ``text`` an earlier slide already said (by ``_sentence_keys``) apart from the rest, each
+    verbatim and in order. ``first`` is the earliest slide that said one of them (None when none was said). A sentence under four words is
+    never 'said' (no key), so it always stays."""
+    kept, moved, first = [], [], None
+    for sent in re.split(r"(?<=[.!?])\s+", str(text or "").strip()):
+        if not sent:
+            continue
+        hit = [said[k] for k in _sentence_keys(sent) if k in said]
+        if hit:
+            moved.append(sent)
+            first = min([first, *hit]) if first is not None else min(hit)
+        else:
+            kept.append(sent)
+    return " ".join(kept), moved, first
+
+
 def _say_once(S: list) -> None:
-    """deck-look (fix 2, Q13): no sentence is said twice on the presented slides (the story, before the Appendix divider). In story order:
-    an idea whose title is a line an earlier slide already said (the campaign line the proposition carries as its single thought) leads
-    with its own stage text instead (its first statement becomes its title, so the idea says what it is); a copy block whose every line
-    was already said (the poster's copy is that line) leaves the slide. What leaves goes to the slide's notes verbatim, after
+    """deck-look (fix 2, Q13): no sentence is said twice on the presented slides (the story, before the Appendix divider). In story order,
+    only the REPEATED SENTENCES move, never the line or block around them: an idea title keeps its sentences no earlier slide said, and only
+    when none is left does it lead with its own stage text (its first statement becomes its title, so the idea says what it is); a copy
+    line keeps its new sentences ("Every drop has a story. Book your free leak check at lumen.ie today." keeps the call to action), a line
+    left empty leaves, and a block left with no line leaves the slide. What leaves goes to the slide's notes verbatim, after
     spec.SAID_ONCE_NOTE, so no word is lost and none is written. A slide left with nothing else keeps its own layout rules (a statement
     layout needs no second sentence)."""
     end = next((i for i, x in enumerate(S) if x["type"] == "appendix"), len(S))
@@ -1038,19 +1056,36 @@ def _say_once(S: list) -> None:
     keep = lambda sl, lines: sl.__setitem__("notes", "\n\n".join([x for x in [sl.get("notes") or ""] if x.strip()] + lines))
     for n, sl in enumerate(S[:end], 1):
         moved = []
-        if sl["type"] == "idea" and any(k in said for k in _sentence_keys(sl["title"])):
-            st = next((b for b in sl["blocks"] if b["kind"] == "statement" and str(b.get("text") or "").strip()), None)
-            if st is not None:
-                first = min(said[k] for k in _sentence_keys(sl["title"]) if k in said)
-                moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} {sl['title']}")
-                sl["title"] = str(st["text"]).strip()
-                sl["blocks"] = [b for b in sl["blocks"] if b is not st]
+        if sl["type"] == "idea":
+            rest, gone, first = _split_said(sl["title"], said)
+            if gone:
+                st = next((b for b in sl["blocks"] if b["kind"] == "statement" and str(b.get("text") or "").strip()), None)
+                if rest.strip():
+                    moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} {' '.join(gone)}")
+                    sl["title"] = rest
+                elif st is not None:
+                    moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} {sl['title']}")
+                    sl["title"] = str(st["text"]).strip()
+                    sl["blocks"] = [b for b in sl["blocks"] if b is not st]
         out = []
         for b in sl["blocks"]:
-            if b["kind"] == "copy" and b.get("lines") and all(any(k in said for k in _sentence_keys(ln)) and _sentence_keys(ln) for ln in b["lines"]):
-                first = min(said[k] for ln in b["lines"] for k in _sentence_keys(ln) if k in said)
-                moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} " + " / ".join(str(x) for x in b["lines"]) + (f" ({b['answer']})" if b.get("answer") else ""))
-                continue
+            if b["kind"] == "copy" and b.get("lines"):
+                lines, gone, first = [], [], None
+                for ln in b["lines"]:
+                    rest, g, f = _split_said(ln, said)
+                    if g:
+                        gone += g
+                        first = f if first is None else min(first, f)
+                        if rest.strip():
+                            lines.append(rest)
+                    else:
+                        lines.append(ln)
+                if gone:
+                    whole = not lines
+                    moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} " + " / ".join(gone) + (f" ({b['answer']})" if whole and b.get("answer") else ""))
+                    if whole:
+                        continue
+                    b = {**b, "lines": lines}
             out.append(b)
         sl["blocks"] = out
         if moved:

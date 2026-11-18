@@ -388,3 +388,28 @@ def test_each_brief_field_has_one_home_after_the_merges(v3):
     for text in (b["objectives"]["value"]["attitudinal"], b["background"]["value"], b["desired_response"]["value"]):
         hits = [x for x in validate.presented(d) if any(text in json.dumps(bl) for bl in d["slides"][x]["blocks"])]
         assert len(hits) == 1, (text, hits)
+
+
+# ================================================================================================ DECK_PITCH_TARGET / CAP from the environment
+@pytest.mark.parametrize("raw", ["ten", "0", "-4", "1000", "7.5"])
+def test_a_bad_pitch_target_falls_back_with_a_warning(monkeypatch, capsys, raw):
+    monkeypatch.setenv("DECK_PITCH_TARGET", raw)
+    assert spec._env_count("DECK_PITCH_TARGET", 10) == 10
+    assert "DECK_PITCH_TARGET" in capsys.readouterr().err
+
+
+def test_a_good_pitch_target_is_read(monkeypatch):
+    monkeypatch.setenv("DECK_PITCH_TARGET", " 14 ")
+    assert spec._env_count("DECK_PITCH_TARGET", 10) == 14
+    monkeypatch.delenv("DECK_PITCH_TARGET")
+    assert spec._env_count("DECK_PITCH_TARGET", 10) == 10
+
+
+def test_a_bad_pitch_target_never_breaks_the_import():
+    import os
+    import subprocess
+    import sys
+    engine = Path(spec.__file__).resolve().parents[1]
+    env = {**os.environ, "DECK_PITCH_TARGET": "ten", "DECK_PITCH_CAP": "0", "PYTHONPATH": str(engine)}
+    r = subprocess.run([sys.executable, "-c", "from deck import spec; print(spec.PITCH_TARGET, spec.PITCH_CAP)"], env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0 and r.stdout.split() == ["10", "12"], r.stderr

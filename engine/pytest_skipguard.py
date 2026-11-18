@@ -1,7 +1,7 @@
 """No silent skips (the pre-push hardening): a pytest plugin scripts/check.sh loads into the deck and visuals runs (``-p pytest_skipguard``).
 
-It prints how many tests skipped, and why, at the end of the run. With ``DECK_SKIP_GUARD=1`` a skip whose reason is not on ALLOW fails the
-run (a missing dependency, a missing tool, a test that quietly stopped running). With ``DECK_REQUIRE_SOFFICE=1`` LibreOffice and pdftoppm
+It prints how many tests (and whole modules, skipped while collecting) skipped, and why, at the end of the run. With ``DECK_SKIP_GUARD=1`` a skip whose reason is not on ALLOW fails the
+run (a missing dependency, a missing tool, a test that quietly stopped running). With ``DECK_REQUIRE_SOFFICE=1`` LibreOffice, pdftoppm and pdffonts
 must be there: their absence fails the run at once, and a skip for either is never allowed. check.sh sets both locally; CI (no LibreOffice
 on its runner) sets neither, so its skips are printed, not failed. Pure stdlib; it changes no test's outcome, only the session's status.
 """
@@ -16,7 +16,7 @@ from pathlib import Path
 #: Skips that are fine on a machine that has everything the deck needs: a tool the deck itself never needs, or a font check that depends
 #: on what the machine happens to have installed. Anything else that skips fails a guarded run.
 ALLOW = (r"no SVG rasteriser", r"Arial \(the fallback\) is not on this machine")
-RENDER_TOOLS = re.compile(r"libre ?office|soffice|pdftoppm|pdftotext", re.I)
+RENDER_TOOLS = re.compile(r"libre ?office|soffice|pdftoppm|pdftotext|pdffonts", re.I)
 _skips: list = []
 
 
@@ -29,10 +29,14 @@ def _soffice() -> str | None:
     return shutil.which("soffice") or (mac if Path(mac).exists() else None)
 
 
+def _poppler(tool: str):
+    return shutil.which(tool) or (Path(f"/opt/homebrew/bin/{tool}").exists() or None)
+
+
 def pytest_sessionstart(session):
     if _on("DECK_REQUIRE_SOFFICE"):
-        missing = [t for t, found in (("LibreOffice (soffice)", _soffice()), ("pdftoppm", shutil.which("pdftoppm") or
-                                                                              (Path("/opt/homebrew/bin/pdftoppm").exists() or None))) if not found]
+        missing = [t for t, found in (("LibreOffice (soffice)", _soffice()), ("pdftoppm", _poppler("pdftoppm")),
+                                      ("pdffonts", _poppler("pdffonts"))) if not found]
         if missing:
             import pytest
             pytest.exit(f"skipguard: DECK_REQUIRE_SOFFICE=1 and {', '.join(missing)} is not installed: the render tests would skip silently", returncode=3)
@@ -48,6 +52,15 @@ def _reason(report) -> str:
 def pytest_runtest_logreport(report):
     if report.skipped and not hasattr(report, "wasxfail"):
         _skips.append((report.nodeid, _reason(report)))
+
+
+def pytest_collectreport(report):
+    """A whole module (or class) skipped at collection: ``pytest.skip(..., allow_module_level=True)``, a module-level
+    ``importorskip`` or a ``pytestmark`` that skips while collecting. Its tests never reach ``runtest_logreport``, so without
+    this a skipped file reads as "0 skipped". Recorded once per collector (its tests are not known), under the same ALLOW
+    list and fail rules as a test's skip."""
+    if report.skipped:
+        _skips.append((report.nodeid or ".", _reason(report)))
 
 
 def _bad() -> list:

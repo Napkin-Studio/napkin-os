@@ -771,8 +771,11 @@ def derived_path(asset: dict) -> str:
 
 # -------------------------------------------------------------------------------------------------- text on a picture (deck-look)
 #: deck-look step 7 (spec.LOOK_V3, Fable's Q7): words are set over a picture only on a zone the finder measured calm enough, under a
-#: scrim whose alpha is solved, never guessed. Every text-over slot gets at least SCRIM_FLOOR (so a picture a person swaps in later in
-#: PowerPoint stays readable) and at most SCRIM_CAP (a heavier wash makes the picture murky). The target is AA for body text plus a
+#: scrim whose alpha is solved, never guessed. Every text-over slot gets at least SCRIM_FLOOR and at most SCRIM_CAP (a heavier wash makes
+#: the picture murky). The floor is a visual default, NOT a readability guarantee: computed, light text on a 40% dark scrim over a white
+#: picture is 2.26:1, dark text on a 40% light scrim over black 2.61:1, and even a 60% scrim gives 3.94:1, all under AA. So the only
+#: guarantee is the check at RENDER time (qa_render's p10 on a text-free render, an error under LOOK_V3); a picture a person swaps in later
+#: (in PowerPoint) is never re-measured and cannot be guaranteed readable. The target is AA for body text plus a
 #: margin (4.5 + 0.3), held even for the display sizes, so the render (re-measured by qa_render at its 10th percentile) clears AA.
 #: A zone whose luminance s.d. is over BUSY_SD takes the cap (texture under words harms reading even when contrast passes); one whose
 #: texture is still over BUSY_SD under the cap's wash ((1 - SCRIM_CAP) x s.d.) is refused. No zone passes: the slide keeps its words

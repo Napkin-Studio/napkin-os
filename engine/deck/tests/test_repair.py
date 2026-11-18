@@ -821,6 +821,19 @@ def test_scrim_and_crop_write_the_agreed_image_fixes_and_drop_image_uses_the_lay
     assert [r for r in repair.ACTION_MAP["text_on_image_contrast"]["rungs"]][:3] == ["add_scrim", "switch_layout", "drop_image"]
 
 
+def test_add_scrim_picks_the_tone_opposite_the_text_colour():
+    """A dark wash under dark words only makes them worse: the scrim is light under dark text, dark under light text."""
+    env = _env(_pic_slide())
+    dark_words = {**_issue("text_on_image_contrast"), "message": "'Title' text (1B2430) is 2.6:1 at the 10th percentile (needs 3:1)"}
+    fixes = {}
+    assert repair.apply_effect(fixes, "add_scrim", dark_words, env)["to"] == "light" and fixes["images"]["s01"]["picture"]["scrim"] == "light"
+    light_words = {**_issue("text_on_image_contrast"), "message": "'Title' text (FFFFFF) is 2.3:1 at the 10th percentile (needs 3:1)"}
+    assert repair.apply_effect({}, "add_scrim", light_words, env)["to"] == "dark"
+    # the slot's recorded scrim text colour wins over the message; with neither, the default light-on-picture text takes dark
+    assert repair.scrim_tone({"scrim": {"text": "111111", "colour": "FFFFFF", "alpha": 0.4}}, _issue("text_on_image_contrast")) == "light"
+    assert repair.scrim_tone({}, _issue("text_on_image_contrast")) == "dark"
+
+
 def test_a_scrim_the_loop_sets_is_drawn_in_the_pptx_and_planning_binds_it_to_the_image_slot(tmp_path):
     lib = layouts.load()
     assert "scrim" in json.loads((Path(spec.__file__).parent / "deck.schema.json").read_text())["definitions"]["image_slot"]["properties"]

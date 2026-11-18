@@ -32,9 +32,15 @@ SOFFICE = shutil.which("soffice") or ("/Applications/LibreOffice.app/Contents/Ma
 PDFTOPPM = shutil.which("pdftoppm") or ("/opt/homebrew/bin/pdftoppm" if Path("/opt/homebrew/bin/pdftoppm").exists() else None)
 #: Engine marks a slide carries for its place, not its content (never a lost word): the band, the footer, the page number, the marks.
 MARKS = ("Band", "Section", "SlideNumber", "Watermark", "Footer", "Footnotes", "CheckFailed")
-#: Words of the old look's engine furniture the look replaces with its own (the placeholder card's PROPOSED tag and TO SUPPLY chip: the
-#: close's dashed rows say To supply, and the words themselves still begin 'Proposed (not given by the client)'). The old look's kicker labels over the idea and the real question ('THE IDEA', 'THE REAL QUESTION') are replaced by the section band.
-FURNITURE = {"proposed", "real", "question", "idea"}
+#: The old look's engine furniture the look replaces with its own, as WHOLE LABELS (a shape whose entire text is one of these): the
+#: placeholder card's PROPOSED tag and TO SUPPLY chip (the close's dashed rows say To supply), and the kicker labels over the idea and the
+#: real question ('THE IDEA', 'THE REAL QUESTION'), replaced by the section band. Only the words of such a label are forgiven, once per
+#: label drawn in the old look; "idea", "question", "real" or "proposed" lost from a sentence is still a lost word.
+FURNITURE_LABELS = {"proposed", "to supply", "the idea", "the real question", "idea", "real question"}
+#: Words the look itself writes (never the brief's), besides the engine constants test_no_word_is_invented_by_the_look reads from the
+#: code (spec.SAID_ONCE_NOTE, TO_SUPPLY_TITLE, TO_SUPPLY_TEXT, the labels of assemble.SURFACED_FIELDS): the merge note. Any other word on
+#: the look's render that neither the old look nor the inputs hold is an invented word.
+GENERATED = "merged here from the slide"
 
 needs_render = pytest.mark.skipif(not (SOFFICE and PDFTOPPM), reason="no LibreOffice or pdftoppm: the end-to-end deck gate cannot render")
 
@@ -149,9 +155,64 @@ def test_no_word_is_lost_between_the_looks(off, on):
     p_off, _ = presented_slides(off)
     p_on, _ = presented_slides(on)
     lost = rendered_words(p_off) - rendered_words(p_on)
-    lost -= Counter({k: v for k, v in lost.items() if k in FURNITURE})
+    lost -= furniture_words(p_off)
     section = Counter(w for sl in p_off.slides for sh in sl.shapes if (sh.name or "") == "Section" for w in re.findall(r"[a-z0-9%€]+", sh.text_frame.text.lower()))
     assert not (lost - section), dict(lost - section)
+
+
+def _strings(x):
+    """Every string in a JSON value (keys and values)."""
+    if isinstance(x, str):
+        yield x
+    elif isinstance(x, dict):
+        for k, v in x.items():
+            yield k
+            yield from _strings(v)
+    elif isinstance(x, list):
+        for v in x:
+            yield from _strings(v)
+
+
+def furniture_words(prs) -> Counter:
+    """The words of the old look's furniture labels actually drawn (a shape whose whole text is one of FURNITURE_LABELS), counted."""
+    out = Counter()
+    for sl in prs.slides:
+        for sh in sl.shapes:
+            if sh.has_text_frame and " ".join(re.findall(r"[a-z0-9%€]+", sh.text_frame.text.lower())) in FURNITURE_LABELS:
+                out.update(re.findall(r"[a-z0-9%€]+", sh.text_frame.text.lower()))
+    return out
+
+
+def test_furniture_forgives_only_whole_labels():
+    """A narrowed allowance: 'idea' lost from a sentence counts; only a label shape's own words are forgiven."""
+    class Sh:
+        def __init__(self, t):
+            self.has_text_frame, self.name = True, "x"
+            self.text_frame = type("TF", (), {"text": t})()
+    prs = type("P", (), {"slides": [type("S", (), {"shapes": [Sh("THE IDEA"), Sh("The idea is a real question for people.")]})()]})()
+    assert furniture_words(prs) == Counter({"the": 1, "idea": 1})
+
+
+@needs_render
+def test_no_word_is_invented_by_the_look(off, on):
+    """The look moves and drops words (said once, merges) and shows brief fields the old look held back, but it never writes new ones:
+    every word on the look's render, slides and notes, is a word the old look showed, a word of the inputs (the fixture's brief and
+    stages), one of the look's own generated notes (GENERATED), or a section band word."""
+    p_off, _ = presented_slides(off)
+    p_on, _ = presented_slides(on)
+    have = rendered_words(p_off)
+    for f in sorted((FIX / "stages").glob("*.json")):
+        have.update(set(re.findall(r"[a-z0-9%€]+", " ".join(_strings(json.loads(f.read_text()))).lower())))
+    added = rendered_words(p_on) - have
+    from deck import assemble, spec
+    engine_words = " ".join([GENERATED, spec.SAID_ONCE_NOTE, spec.TO_SUPPLY_TITLE, spec.TO_SUPPLY_TEXT] +
+                            [lab for *_, lab, _k in assemble.SURFACED_FIELDS if lab])
+    gen = Counter({w: 10 ** 6 for w in re.findall(r"[a-z0-9%€]+", engine_words.lower())})
+    section = Counter({w: 10 ** 6 for sl in p_on.slides for sh in sl.shapes if (sh.name or "") == "Section"
+                       for w in re.findall(r"[a-z0-9%€]+", sh.text_frame.text.lower())})
+    digits = Counter({w: 10 ** 6 for w in added if w.isdigit()})   # the said-once note's slide numbers
+    invented = {w: n for w, n in (added - gen - section - digits).items() if w not in have}
+    assert not invented, " ".join(sorted(invented))
 
 
 @needs_render

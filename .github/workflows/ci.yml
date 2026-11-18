@@ -220,6 +220,7 @@ jobs:
 
       # PYTHONPATH=. because deck/ imports its siblings and brief_llm from engine/. pytest_skipguard prints the skips per suite;
       # this runner has no LibreOffice, so DECK_SKIP_GUARD and DECK_REQUIRE_SOFFICE stay unset here (scripts/check.sh sets both).
+      # The end-to-end deck gate (deck/tests/test_lumen_gate.py) therefore skips here: the local pre-push hook is the gate.
       - name: Deck Maker tests
         working-directory: engine
         env:

@@ -339,6 +339,15 @@ the ask as a hero, the budget as a figure, next steps as hairline rows, a human 
 `spec.CAPS_MAX_CHARS` (40) and two lines, by the font (`cap="all"`, the words unchanged), with normal letter spacing. The web deck draws
 the same layouts in CSS (`render_web.V3_WEB`). With the flag off the library and every golden are unchanged.
 
+**Amendment, 18 November 2026 (deck-look review).** *Words on pictures.* The scrim floor (`images.SCRIM_FLOOR`, 0.40) is a visual default,
+not a readability guarantee: light text on a 40% dark scrim over white is 2.26:1, dark text on a 40% light scrim over black 2.61:1, and a
+60% scrim still only 3.94:1. The guarantee is the render-time check alone: under `LOOK_V3`, `text_on_image_contrast` (10th percentile on a
+text-free render) below AA is an **error**. A picture a person swaps in later is never re-measured and cannot be guaranteed. The repair
+loop's `add_scrim` picks the tone opposite the text colour (`repair.scrim_tone`: `light` under dark words, `dark` under light ones).
+*Fonts.* A `LOOK_V3` PDF must embed the vendored static faces: `run_deck.to_pdf` runs `pdffonts` and fails (`FontsNotEmbedded`) on a
+substitute or a variable instance. LibreOffice 7.4 on macOS ignores the private profile's fonts folder, so the static faces must be
+installed there (`scripts/install-deck-fonts.sh`); on Linux `to_pdf` points LibreOffice at them through fontconfig (`FONTCONFIG_FILE`).
+
 ### 5.1 The plan (`layouts.plan`) and the fit ladder
 
 `plan(base_deck, library, prefs, swaps, hooks, fixes) -> (deck, issues, pending)` is pure and deterministic, always runs from the base

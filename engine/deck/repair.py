@@ -525,6 +525,28 @@ def _image_slot(s: dict, issue: dict) -> str | None:
     return next((n for n, v in slots.items() if v.get("kind") == "image"), None)
 
 
+_HEX = re.compile(r"\(([0-9A-Fa-f]{6})\)")
+
+
+def scrim_tone(im: dict, issue: dict) -> str:
+    """The scrim tone OPPOSITE the text colour: ``light`` under dark words, ``dark`` under light ones (a dark wash under dark text only
+    makes it worse). The text colour is the slot's recorded scrim text (images.text_zone: ``image.scrim.text``), else the one the QA
+    finding names (``'Title' text (1B2430) is ...``); with neither, the renderers' default light-on-picture text, so ``dark``."""
+    rec = im.get("scrim") if isinstance(im.get("scrim"), dict) else {}
+    fg = rec.get("text")
+    if not fg:
+        m = _HEX.search(issue.get("message") or "")
+        fg = m.group(1) if m else None
+    if not fg or not re.fullmatch(r"#?[0-9A-Fa-f]{6}", str(fg)):
+        return "dark"
+    h = str(fg).lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    lin = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in (r, g, b)]
+    lum = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    # the tone that gives the text more contrast: against black (dark scrim) or white (light scrim)
+    return "dark" if (lum + 0.05) / 0.05 >= 1.05 / (lum + 0.05) else "light"
+
+
 def _evidence_slide(s: dict) -> bool:
     """A slide of a judged (claiming) type that carries refs: its evidence stays on screen, never to the notes."""
     from . import stages
@@ -617,8 +639,10 @@ def apply_effect(fixes: dict, rung: str, issue: dict, env: dict) -> dict:
         im = ((s.get("slots") or {}).get(slot) or {}).get("image") or {}
         patch = fixes.setdefault("images", {}).setdefault(sid, {}).setdefault(slot, {})
         if rung == "add_scrim":
-            patch["scrim"] = "dark"
-            return {"from": im.get("scrim") or "none", "to": "dark"}
+            tone = scrim_tone(im, issue)
+            patch["scrim"] = tone
+            was = im.get("scrim")
+            return {"from": (was.get("colour") if isinstance(was, dict) else was) or "none", "to": tone}
         patch.update(fit="cover", focal=im.get("focal") or {"x": 0.5, "y": 0.5})
         return {"from": im.get("fit") or "cover", "to": "cover"}
     return {"from": None, "to": None}

@@ -27,6 +27,10 @@
 #     on a text-free render), a sentence said once, no word lost between the looks, the story within the cap,
 #     the hole gate reported, no shape past the canvas, and no gate item of the bench checklist regressed against
 #     engine/deck/tests/fixtures/lumen_gate/checklist_baseline.json. About 25 s on a laptop.
+#   - THE LOCAL PRE-PUSH HOOK IS THE GATE. CI never runs it: its runner has no LibreOffice, pdftoppm or the deck's fonts, so there
+#     test_lumen_gate.py skips (printed by the skip guard, not failed). A push that skips the hook (--no-verify) skips the gate.
+#   - The render needs, on the machine that pushes: LibreOffice, poppler (pdftoppm, pdffonts) and the deck's static fonts installed
+#     once with scripts/install-deck-fonts.sh. Under LOOK_V3 every PDF is checked with pdffonts; a substituted or variable font fails.
 set -uo pipefail
 
 root="$(git rev-parse --show-toplevel)"
