@@ -326,6 +326,19 @@ describe('a job in its Edits row (features/image-editor-masks-layers.clan)', () 
   })
 })
 
+describe('a row whose job this document never recorded (Playwright live test 2026-11-18)', () => {
+  it('asks the relay once: a job it never got reads as did not work, and Apply is free again', async () => {
+    const { el } = await open(() => ({ edits: [
+      { id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] },
+      { id: 'f1', kind: 'fill', maskId: 'm1', ops: [stroke], words: 'a painting', keepOutside: true, jobId: 'job_01M7PP7RMYB329R8NHSNHEG7DM' },
+    ], hidden: [], active: 'm1' }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))!
+    expect(row.textContent).not.toContain('working')
+    expect(row.textContent).toContain('did not work')
+  })
+})
+
 describe('an edit that came back the same (QA 2026-11-17)', () => {
   it('says so in its row and is left out of Apply', async () => {
     const { el, services, ids } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))

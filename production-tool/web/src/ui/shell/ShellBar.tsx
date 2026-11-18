@@ -5,8 +5,8 @@
 // Share; then the job chip, the editor's one primary, the people here, light or dark, you, and Decisions
 // with its count. Each editor's own controls sit in the band row under it (Band).
 
-import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { useConfig, useDoc, useRoute, useRouter, useServices, useShell } from '../../app/context'
+import { useContext, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { RouterContext, useConfig, useDoc, useServices, useShell } from '../../app/context'
 import { Float, MenuItem } from '../Float'
 import { saveTime, useSave } from '../useSave'
 import { setThemeChoice } from '../../theme'
@@ -122,14 +122,14 @@ function ContinueIn() {
   const [open, setOpen] = useState(false)
   const { ui } = useServices()
   const { config } = useConfig()
-  const route = useRoute()
-  const router = useRouter()
+  // Read at the click only: the bar also shows where no router is (the editors' own tests).
+  const router = useContext(RouterContext)
   const panels = usePanels()
   const soon = 'Not in this version yet'
   const linkBrief = () => {
     setOpen(false)
     // The Brief node goes on the canvas: an editor or a room goes back to it first.
-    if (route.kind === 'script') router.leave()
+    if (router?.get().kind === 'script') router.leave()
     ui.update((u) => { u.stage = 'character' }, 'stage')
     panels.openAssets('napkin')
   }

@@ -173,10 +173,26 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     const id = 'jobId' in e ? e.jobId : undefined
     if (!id) return undefined
     if (resultOf(e)) return 'ready'
+    if (runner.isUnstarted(id)) return 'failed'
     if (doc.jobs[id]?.state === 'completed' && ui.jobs[id]?.unchanged) return 'same'
     const s = jobState(id)
     return s === 'failed' || s === 'cancelled' || s === 'uncertain' ? 'failed' : 'running'
   }
+  // A row whose job this document never recorded: the page reloaded while it was being sent (Playwright live test
+  // 2026-11-18: job_01M7PP7RMYB329R8NHSNHEG7DM was completed and paid at the relay, the row said working for
+  // good and held Apply). The relay is asked once (runner.adopt): a job it has is written in and lands like any
+  // other; one it never got reads as did not work, with Try again.
+  const asked = useRef(new Set<string>())
+  const parentKey = (subject?.parents ?? []).join(' ')
+  useEffect(() => {
+    const parentIds = parentKey ? parentKey.split(' ') : []
+    for (const e of session.edits) {
+      const id = 'jobId' in e ? e.jobId : undefined
+      if (!id || doc.jobs[id] || runner.liveInfo(id) || asked.current.has(id)) continue
+      asked.current.add(id)
+      void runner.adopt(id, parentIds).then((r) => { if (r === 'unknown') asked.current.delete(id) })
+    }
+  }, [session.edits, doc.jobs, runner, parentKey])
   // Running is what the list calls working: an 'uncertain' job reads as did not work, so it no longer holds
   // the actions (features/image-editor-masks-layers.clan); its row still offers Stop waiting and Try again.
   const runningEdit = session.edits.find((e) => 'jobId' in e && e.jobId && stateOf(e) === 'running')
