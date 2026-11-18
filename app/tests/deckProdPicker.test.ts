@@ -119,16 +119,19 @@ test('a recorded swap that the last build has not used yet shows as pending', ()
 
 // ---------------------------------------------------------------------------- the panel on Review
 
-function mount(data: Fx) {
+type Extra = { fetch?: unknown; apiProxy?: (kind: string, payload: Fx) => Promise<unknown> }
+function mount(data: Fx, extra: Extra = {}) {
   const writes: { obj: Fx; action: string }[] = []
   const handlers: Record<string, ((e: unknown) => void)[]> = {}
   const app = { innerHTML: '' }
   const toastEl = { textContent: '', classList: { add() {}, remove() {} }, _t: 0 }
   const els: Record<string, unknown> = { app, toast: toastEl }
   const doc = { getElementById: (id: string) => els[id] ?? null, addEventListener: (t: string, f: (e: unknown) => void) => { (handlers[t] ||= []).push(f) }, title: '' }
-  const win = { __CLAN__: { data }, clan: { patchData: (obj: Fx, o: { action: string }) => { writes.push({ obj, action: o.action }); return Promise.resolve() } }, addEventListener() {} }
+  const win = { __CLAN__: { data }, clan: { patchData: (obj: Fx, o: { action: string }) => { writes.push({ obj, action: o.action }); return Promise.resolve() },
+                                          ...(extra.apiProxy ? { apiProxy: extra.apiProxy } : {}) }, addEventListener() {} }
   const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
-  const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, fetch: undefined, Promise, setTimeout, clearTimeout, Date })
+  const btoa = (b: string) => Buffer.from(b, 'binary').toString('base64')
+  const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, fetch: extra.fetch, btoa, Promise, setTimeout, clearTimeout, Date })
   vm.runInContext(logicRun, ctx)
   vm.runInContext(src, ctx)
   const click = (attrs: Record<string, string>) => handlers.click.forEach(h => h({ target: { closest: () => ({ dataset: attrs, id: '' }) } }))
@@ -185,4 +188,106 @@ test('schema: production and review.production check what the engine and the app
   assert.ok(bad({ production: { picks: [{ slot: 's01.picture', key: K(1), from: 'zip', by: 'gemini' }] } }))
   assert.ok(bad({ production: { fetch: { on: 'yes' } } }))
   assert.ok(bad({ production: { location: 'https://example.invalid/out/x.png' } }))   // never a location
+})
+
+// ---------------------------------------------------------------------------- the Production file: attach, use, opt in
+
+const P2 = vm.runInNewContext(`${logicRun}; DeckProd`) as {
+  sourceView(data: unknown): { files: { name: string; inUse: boolean }[]; current: { name: string; fetch: boolean; look: boolean } | null; fetchNote: string; lookNote: string } | null
+  sourcePatch(name: string, result: unknown, at: string): Fx | null
+  optionPatch(which: string, on: boolean): Fx | null
+  dropPatch(): Fx
+}
+const startData = (docs: string[], production?: Fx): Fx => ({
+  inputs: { prompt: { client: 'Lumen', project: 'P', agency: '', text: 'A pitch' }, documents: docs.map(name => ({ name })), kind: 'agency', format: 'pitch',
+            ...(production ? { production } : {}) },
+})
+const flush = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setTimeout(r, 0)) }
+
+test('the Production file card shows only when a .clan or .zip is attached or in use', () => {
+  assert.equal(P2.sourceView(startData(['brief.pdf'])), null)
+  assert.equal(P2.sourceView({}), null)
+  const v = P2.sourceView(startData(['brief.pdf', 'lumen.clan', 'export.ZIP']))!
+  assert.deepEqual(plain(v.files.map(f => f.name)), ['lumen.clan', 'export.ZIP'])
+  assert.equal(v.current, null)
+  assert.ok(!mount(startData(['brief.pdf'])).app.innerHTML.includes('data-prod-source'))
+  const h = mount(startData(['lumen.clan'])).app.innerHTML
+  assert.ok(h.includes('data-prod-source') && h.includes('data-prod-use="lumen.clan"') && h.includes('Nothing is downloaded.'))
+})
+
+test('fetch and the vision check start off, and the card says what an empty allow-list means', () => {
+  const cur = { name: 'lumen.clan', sha256: 'ab'.repeat(32), fetch: false, look: false, rows: 21, eligible: 12 }
+  const off = P2.sourceView(startData(['lumen.clan'], cur))!
+  assert.match(off.fetchNote, /^Off: .*Nothing is downloaded unless you turn this on, and only from hosts on the engine's allow-list/)
+  assert.match(off.lookNote, /^Off: .*never place or remove/)
+  const on = P2.sourceView(startData(['lumen.clan'], { ...cur, fetch: true }))!
+  assert.match(on.fetchNote, /no provider host is on the engine's fetch allow-list yet/)
+  const hosts = P2.sourceView({ ...startData(['lumen.clan'], { ...cur, fetch: true }), production: { fetch: { on: true, allow_list_empty: false } } })!
+  assert.match(hosts.fetchNote, /only from the allowed hosts/)
+  const h = mount(startData(['lumen.clan'], cur)).app.innerHTML
+  assert.ok(h.includes('Fetch picked links: Off') && h.includes('Vision check: Off') && h.includes('Using <b>lumen.clan</b>: 21 assets, 12 the deck could place.'))
+  assert.ok(!h.includes('data-prod-use="lumen.clan"'))
+})
+
+test('the patches: use records the engine\'s hash with the opt-ins off; options and stop are merge patches', () => {
+  assert.deepEqual(plain(P2.sourcePatch('lumen.clan', { sha256: 'ab'.repeat(32), rows: 21, eligible: 12 }, 't')),
+    { inputs: { production: { name: 'lumen.clan', sha256: 'ab'.repeat(32), fetch: false, look: false, at: 't', rows: 21, eligible: 12 } } })
+  assert.equal(P2.sourcePatch('brief.pdf', { sha256: 'ab'.repeat(32) }, 't'), null)
+  assert.equal(P2.sourcePatch('lumen.clan', { sha256: 'nope' }, 't'), null)
+  assert.deepEqual(plain(P2.optionPatch('fetch', true)), { inputs: { production: { fetch: true } } })
+  assert.equal(P2.optionPatch('agent', true), null)
+  assert.deepEqual(plain(P2.dropPatch()), { inputs: { production: null } })
+})
+
+test('Use for pictures reads the attached file from the host, sends it to the engine, then records it', async () => {
+  const bytes = new Uint8Array([80, 75, 3, 4, 1, 2, 3])
+  const fetched: string[] = []
+  const sent: Fx[] = []
+  const m = mount(startData(['lumen.clan']), {
+    fetch: (url: string) => { fetched.push(url); return Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(bytes.buffer) }) },
+    apiProxy: (kind: string, payload: Fx) => {
+      sent.push({ kind, payload })
+      return Promise.resolve({ api: 'napkin.middleware/1', task: 'attach_production', result: { sha256: 'cd'.repeat(32), rows: 21, eligible: 12 } })
+    },
+  })
+  m.click({ prodUse: 'lumen.clan' })
+  await flush()
+  assert.deepEqual(fetched.filter(u => u.includes('/assets/')), ['clan://localhost/assets/lumen.clan'])   // the page also asks the host for the middleware
+  assert.equal(sent[0].payload.task, 'attach_production')
+  assert.equal(sent[0].payload.input.name, 'lumen.clan')
+  assert.equal(Buffer.from(sent[0].payload.input.data_b64, 'base64').toString('hex'), Buffer.from(bytes).toString('hex'))
+  assert.equal(m.writes.length, 1)
+  assert.equal(m.writes[0].action, 'use production file lumen.clan')
+  assert.equal(m.writes[0].obj.inputs.production.sha256, 'cd'.repeat(32))
+  m.click({ prodOpt: 'fetch', prodOn: '1' })
+  m.click({ prodDrop: '1' })
+  assert.deepEqual(plain(m.writes.slice(1).map(w => w.obj)), [{ inputs: { production: { fetch: true } } }, { inputs: { production: null } }])
+})
+
+test('a file too large to send, or one the engine refuses, writes nothing and says why', async () => {
+  const big = mount(startData(['big.zip']), {
+    fetch: () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve({ byteLength: 50_000_000 }) }),
+    apiProxy: () => { throw new Error('never sent') },
+  })
+  big.click({ prodUse: 'big.zip' })
+  await flush()
+  assert.equal(big.writes.length, 0)
+  assert.match(big.toastEl.textContent, /too large to send/)
+  const refused = mount(startData(['x.clan']), {
+    fetch: () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer) }),
+    apiProxy: () => Promise.resolve({ error: { type: 'bad_production', message: 'not a Production file the deck can read' }, status: 400 }),
+  })
+  refused.click({ prodUse: 'x.clan' })
+  await flush()
+  assert.equal(refused.writes.length, 0)
+  assert.match(refused.toastEl.textContent, /not a Production file/)
+})
+
+test('schema: inputs.production takes a .clan or .zip and the engine\'s hash only', () => {
+  const ok = { inputs: { production: { name: 'lumen.clan', sha256: 'ab'.repeat(32), fetch: false, look: true, at: 't', rows: 1, eligible: 1 } } }
+  assert.deepEqual(validate(ok, schema), [])
+  const bad = (o: unknown) => validate(o, schema).length > 0
+  assert.ok(bad({ inputs: { production: { name: 'brief.pdf', sha256: 'ab'.repeat(32) } } }))
+  assert.ok(bad({ inputs: { production: { name: 'lumen.clan', sha256: 'sha256:nope' } } }))
+  assert.ok(bad({ inputs: { production: { name: 'lumen.clan', sha256: 'ab'.repeat(32), url: 'https://x' } } }))
 })

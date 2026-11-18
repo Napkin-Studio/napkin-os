@@ -182,6 +182,43 @@
           ],
           "default": "condense",
           "description": "condense: the repair loop may shorten a slide's text to fit; preserve: it never does. Written by the app."
+        },
+        "production": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "sha256"
+          ],
+          "description": "The Production file this deck's pictures come from (deck-prod-picker): a .clan or export zip the person attached, which the engine holds by its sha256 (attach_production) and reads on every build (--production). fetch and look are the person's opt-ins: fetching picked https pictures (still limited to the engine's host allow-list) and the vision check that only flags. Written by the app.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "\\.([Cc][Ll][Aa][Nn]|[Zz][Ii][Pp])$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "fetch": {
+              "type": "boolean"
+            },
+            "look": {
+              "type": "boolean"
+            },
+            "at": {
+              "type": "string"
+            },
+            "rows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "eligible": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
         }
       }
     },

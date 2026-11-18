@@ -550,3 +550,80 @@ def test_run_deck_takes_a_production_pick(tmp_path, clan_stages, build_demo):
     run = build_demo(clan_stages, tmp_path / "a", "--production", str(c), "--production-pick", f"s99.picture={mb.S_SIX}", "--no-layout-plan")
     assert json.loads((clan_stages / pp.CHOICES_FILE).read_text())["choices"]["s99.picture"]["key"] == mb.S_SIX
     assert json.loads((run / "report.json").read_text())["production"]["picker"]
+
+
+# ---------------------------------------------------------------- the runner keeps the deck's Production file and passes it on every build
+
+def _srv(tmp_path):
+    from deck import server as srv
+    cfg = srv.Settings({"NAPKIN_DECK_DATA": str(tmp_path / "runs"), "NAPKIN_DECK_PORT": "0", "NAPKIN_DECK_REPLAY": str(HERE / "fixtures" / "fernley" / "stages")})
+    return srv, cfg, srv.Server(cfg)
+
+
+def test_the_engine_server_keeps_a_production_file_by_its_hash(tmp_path):
+    import base64
+    srv, cfg, s = _srv(tmp_path)
+    c = clan(tmp_path, embed=("master",))
+    raw = c.read_bytes()
+    got = s.production({"doc": "doc1", "name": "lumen.clan", "data_b64": base64.b64encode(raw).decode()})
+    hx = hashlib.sha256(raw).hexdigest()
+    assert got["sha256"] == hx and got["kind"] == "clan" and got["rows"] >= 12 and got["eligible"] == 12
+    assert (cfg.data / "doc1" / "production" / f"{hx}.clan").read_bytes() == raw
+    assert not [p for p in (cfg.data / "doc1" / "production").iterdir() if p.name.startswith(".")]   # no part file left
+    bundle = tmp_path / "b.zip"
+    mb.build(bundle)
+    assert s.production({"doc": "doc1", "name": "export.zip", "data_b64": base64.b64encode(bundle.read_bytes()).decode()})["kind"] == "zip"
+
+
+@pytest.mark.parametrize("body,kind", [
+    ({"doc": "doc1", "name": "brief.pdf", "data_b64": "eA=="}, "bad_production"),
+    ({"doc": "doc1", "name": "a/b.clan", "data_b64": "eA=="}, "bad_production"),
+    ({"doc": "doc1", "name": "x.clan", "data_b64": "not base64!"}, "bad_production"),
+    ({"doc": "doc1", "name": "x.clan", "data_b64": "eA=="}, "bad_production"),          # one byte: not a CLAN file
+    ({"doc": "../up", "name": "x.clan", "data_b64": "eA=="}, "bad_doc"),
+])
+def test_the_engine_server_refuses_anything_but_a_readable_production_file(tmp_path, body, kind):
+    srv, cfg, s = _srv(tmp_path)
+    with pytest.raises(srv.Refused) as e:
+        s.production(body)
+    assert e.value.kind == kind
+    assert not list((cfg.data / "doc1" / "production").glob("*")) if (cfg.data / "doc1" / "production").exists() else True
+
+
+def test_the_engine_server_refuses_a_file_over_the_cap(tmp_path, monkeypatch):
+    import base64
+    srv, cfg, s = _srv(tmp_path)
+    monkeypatch.setattr(srv, "PRODUCTION_MAX", 10)
+    with pytest.raises(srv.Refused) as e:
+        s.production({"doc": "doc1", "name": "x.clan", "data_b64": base64.b64encode(b"x" * 11).decode()})
+    assert e.value.status == 413
+
+
+def test_every_build_runs_with_the_production_file_its_opt_ins_and_the_swaps(tmp_path, monkeypatch):
+    import base64
+    srv, cfg, s = _srv(tmp_path)
+    c = clan(tmp_path, embed=("master",))
+    hx = s.production({"doc": "doc", "name": "lumen.clan", "data_b64": base64.b64encode(c.read_bytes()).decode()})["sha256"]
+    d = srv.Doc(cfg.data / "doc", "doc")
+    d.folder = cfg.data / "doc" / "k"
+    seen = []
+    monkeypatch.setattr(srv.run_deck, "main", lambda argv: seen.append(list(argv)) or {})
+    base = {"prompt": {"text": "A pitch for Lumen Water", "client": "Lumen Water", "project": "P", "agency": ""}, "kind": "agency", "format": "pitch"}
+    swaps = {"s11": {"picture": {"key": mb.S_SIX, "by": "You", "at": "t"}}}
+    req = srv.validate_request({"doc": "doc", "inputs": {**base, "production": {"sha256": hx, "fetch": True, "look": False}}, "mode": "replay",
+                                "render": True, "review": {"production": swaps}}, cfg)
+    s.call_engine(d, req, None)
+    argv = seen[0]
+    assert Path(argv[argv.index("--production") + 1]).read_bytes() == c.read_bytes()
+    assert "--production-fetch" in argv and "--production-look" not in argv
+    assert json.loads(Path(argv[argv.index("--review") + 1]).read_text()) == {"production": swaps}
+    plain = srv.validate_request({"doc": "doc", "inputs": base, "mode": "replay", "render": True}, cfg)
+    s.call_engine(d, plain, None)
+    assert not {"--production", "--production-fetch", "--production-look", "--review"} & set(seen[1])   # opt-in: nothing without a file
+    inv = srv.validate_request({"doc": "doc", "inputs": {**base, "kind": "investor", "production": {"sha256": hx}}, "mode": "replay", "render": True}, cfg)
+    s.call_engine(d, inv, None)
+    assert "--production" not in seen[2]                                                       # an investor deck has no campaign pictures
+    gone = srv.validate_request({"doc": "doc", "inputs": {**base, "production": {"sha256": "cd" * 32}}, "mode": "replay", "render": True}, cfg)
+    with pytest.raises(srv.Refused) as e:
+        s.call_engine(d, gone, None)
+    assert e.value.kind == "production_missing" and len(seen) == 3

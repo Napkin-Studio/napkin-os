@@ -1875,3 +1875,10 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
   over_cap, prompts {<slide>.<slot>: prompt}`. The app does no arithmetic and the middleware makes no picture: the engine plans, makes only
   for a yes naming an open card, and a yes for a card that is no longer open fails the segment with `stale_card`. The API key is the
   engine host's environment (`RUNWAYML_API_SECRET`) and never travels in a request.
+- **Production pictures (deck-prod-picker).** `attach_production@1` (short, writes nothing) takes `input {name, data_b64}`: a Production
+  `.clan` or export `.zip` the person attached, base64, at most 64 MB (`413 too_large` above; `400` for any other name or bad base64). It
+  sends the bytes to the engine's `POST /production {doc, name, data_b64}`, which checks the file as its picker reads it and keeps it by
+  its sha256; the result is `{summary, sha256, name, kind, rows, eligible}` and the app records `inputs.production`. `build_deck` then
+  passes `inputs.production {sha256, fetch, look}` on every segment (absent when the document names no file); the engine adds
+  `--production FILE`, and `--production-fetch` / `--production-look` only when the person turned them on. The payload gains
+  `production` (the picker's view, never a location). Nothing is fetched by the middleware.

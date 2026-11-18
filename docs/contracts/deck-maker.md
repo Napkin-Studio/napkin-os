@@ -326,8 +326,15 @@ with `allow_list_empty`; the tie-break; the vision check). The Review aside show
 for its rights). A person swaps a slot to another of its candidates: the app writes `review.production.<slide>.<slot>`
 `{key, by, at}`; the engine honours it while the key is still a candidate for that slot (never over a rights or reach check)
 and records it in its stages (`production_choices.json`), as `--production-pick SLIDE.SLOT=KEY` does. Fetch and the vision check
-stay opt-in, and the panel says so; with an empty host allow-list it says nothing can be fetched yet. The runner does not pass a
-Production file yet, so the panel shows only for a build that was given one.
+stay opt-in, and the panel says so; with an empty host allow-list it says nothing can be fetched yet.
+
+**The Production file.** The person attaches a Production .clan or export zip with Attach files (or picks one already attached);
+Start then shows a Production pictures card, and Use for pictures reads the file from the host (`/assets/<name>`) and sends it once
+through the middleware task `attach_production@1` to the engine (`POST /production`, 64 MB at most, checked as the picker reads it,
+kept locally by its sha256). The app records `inputs.production {name, sha256, fetch, look}` with both opt-ins off; every
+`build_deck` passes `{sha256, fetch, look}` and the person's `review` on, and the engine runs with `--production FILE` (plus
+`--production-fetch` / `--production-look` only when turned on, and never for an investor deck). A file the engine no longer holds
+fails the build with `production_missing`: choose it again.
 
 ## Not built
 
