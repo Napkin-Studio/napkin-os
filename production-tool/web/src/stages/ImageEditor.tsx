@@ -716,23 +716,23 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 // The job's status, elapsed time and Cancel (or its question) live in its row, never over the stage.
                 const live = jobId && isActive(jobState(jobId) ?? 'completed') && jobId !== offerJob ? jobId : undefined
                 return (
-                  <li key={e.id} className={`${session.active === e.id ? 'on' : ''} ${live ? 'ie-hasjob' : ''}`}>
+                  <li key={e.id} className={`${session.active === e.id ? 'on' : ''} ${live || st === 'unsent' ? 'ie-hasjob' : ''}`}>
                     <button type="button" className="ie-ebody" onClick={() => { if (e.kind === 'mask') { setPicked(null); setSession((s) => ({ ...s, active: e.id })) } }}>
                       <span className="pt-mono ie-n">{i + 1}</span> {label}
                       {st === 'ready' && <span className="ie-ok">ready</span>}
                       {st === 'running' && !live && <span className="ie-run">{jobId && jobId === offerJob ? 'waiting for your choice' : 'working'}</span>}
                       {st === 'failed' && <span className="ie-bad">did not work</span>}
-                      {st === 'unsent' && <span className="ie-bad" title="You confirmed it, and the page closed before it reached the Retouch agent. Nothing was paid.">not sent</span>}
                       {st === 'same' && <span className="ie-bad" title="Nothing changed in the area, so there is nothing to apply. Try other words, or undo it.">came back the same</span>}
                     </button>
                     {live && <span className="ie-jobrow"><JobSlot jobId={live} row onRetried={(id) => setSession((s) => updateEdit(s, e.id, { jobId: id }))} /></span>}
                     {st === 'unsent' && 'jobId' in e && (
                       <span className="ie-jobrow ie-unsent">
+                        <span className="ie-bad" title="You confirmed it, and the page closed before it reached the Retouch agent. Nothing was paid.">not sent</span>
                         <button type="button" className="btn sm" disabled={running} onClick={() => sendAgain(e)}>Send again</button>
                         <button type="button" className="btn sm ghost" onClick={() => setSession((s) => undoEdit(s, e.id))}>Discard</button>
                       </span>
                     )}
-                    <button type="button" className="ie-undo" aria-label={`Undo edit ${i + 1}, ${label}`} onClick={() => setSession((s) => undoEdit(s, e.id))}>↶</button>
+                    {st !== 'unsent' && <button type="button" className="ie-undo" aria-label={`Undo edit ${i + 1}, ${label}`} onClick={() => setSession((s) => undoEdit(s, e.id))}>↶</button>}
                   </li>
                 )
               })}

@@ -124,6 +124,10 @@
 .ie-elist li.ie-next { border-style: dashed; border-color: var(--line); color: var(--ink2); padding: 6px 12px; background: transparent; }
 .ie-elist li.ie-hasjob { flex-wrap: wrap; }
 .ie-jobrow { display: inline-flex; align-items: center; gap: 6px; }
+/* A row confirmed and never sent (a reload while it was prepared): not sent, Send again, Discard on a line of its own. */
+.ie-elist li.ie-hasjob { max-width: 100%; border-radius: 12px; }
+.ie-elist li.ie-hasjob .ie-ebody { max-width: calc(100% - 32px); }
+.ie-jobrow.ie-unsent { flex-basis: 100%; padding: 0 4px 3px 6px; }
 .ie-jobrow .jobrow { display: inline-flex; align-items: center; gap: 6px; }
 .ie-jobrow .jobrow .meta { font-family: var(--f-mono); font-size: 11px; color: var(--tool-ink); background: var(--tool-soft); padding: 1px 8px; border-radius: var(--r-pill); }
 .ie-jobrow .confirm { position: static; box-shadow: none; padding: 4px 6px; }
