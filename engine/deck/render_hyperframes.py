@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 
 from . import spec
-from .render_web import CSS_LAYOUT, PIC_CSS, _e, slide_views, theme_css
+from .render_web import CSS_LAYOUT, LOOK_CSS, PIC_CSS, _e, slide_views, theme_css
 
 INTRO = 0.35     # s before the first reveal of a slide
 SETTLE = 1.3     # s for the last reveal of a step to finish (bars and counters are the longest)
@@ -77,7 +77,7 @@ def build(deck, inp, findings: list | None = None, builds: bool = False, picture
             f'<div class="scene" id="scene-{v["id"]}" data-composition-id="{v["id"]}" data-start="{st}" data-duration="{du}" '
             f'data-label="{v["n"]}. {_e(v["title"][:60])}" data-width="1920" data-height="1080">'
             f'<section class="clip" id="clip-{v["id"]}" data-start="0" data-duration="{du}" data-track-index="1">'   # relative to its scene
-            f'<div class="{cls}" data-steps="{v["steps"]}">{v["html"]}</div></section></div>')
+            f'<div class="{cls}" data-steps="{v["steps"]}"{v["tpt"]}>{v["html"]}</div></section></div>')
         slides.append({"sceneId": v["id"], "notes": v["notes"], "fragments": [f / 100 for f in frags]})
         t += dur + 1   # a hundredth of a second between slides: float sums never touch
     cut = next((i for i, v in enumerate(views) if v["type"] == "appendix"), len(views))
@@ -100,7 +100,7 @@ def render(deck, inp, out: Path, findings: list | None = None, builds: bool = Fa
             if f"assets/{Path(path).name}" in scenes:
                 shutil.copyfile(path, out / "assets" / Path(path).name)
     m = deck["meta"]
-    css = theme_css(CSS_LAYOUT + HF_CSS + (PIC_CSS if pictures else ""), head="serif", body="system-ui, sans-serif")
+    css = theme_css(CSS_LAYOUT + (LOOK_CSS if spec.LOOK_V2 else "") + HF_CSS + (PIC_CSS if pictures else ""), head="serif", body="system-ui, sans-serif")
     (out / "index.html").write_text(f"""<!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=1920, height=1080">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>

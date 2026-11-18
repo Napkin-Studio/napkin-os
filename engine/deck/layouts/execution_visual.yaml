@@ -14,7 +14,7 @@ alternatives:
 - execution_stack
 without_image: execution
 density: standard
-pick: offer
+pick: rule
 family: execution
 renderer: execution_visual
 slots:

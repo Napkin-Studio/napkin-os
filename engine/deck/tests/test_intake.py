@@ -73,7 +73,7 @@ def test_run_deck_with_a_brief_writes_the_golden_deck(monkeypatch, tmp_path):
     """The CLI path, not only assemble: --brief and no prompt text writes the golden deck.json."""
     out = tmp_path / "out"
     _run_main(monkeypatch, tmp_path, ["--brief", str(BRIEF / "brief_object.json"), "--stages", str(BRIEF), "--client", "Lumen Water",
-                                      "--project", "National awareness campaign", "--out", str(out)])
+                                      "--project", "National awareness campaign", "--out", str(out), "--density", "detailed"])
     deck = layouts.strip_plan(json.loads((out / "deck.json").read_text()))   # the plan's keys are stripped for good: golden_plan.json holds them
     deck["meta"].pop("built_at")
     deck["meta"].pop("built_from")

@@ -457,7 +457,13 @@ def test_layout_ids_equal_the_build_without_pictures_and_nothing_falls_back(demo
     without = build_demo(demo_stages, tmp_path / "b")
     la = json.loads((with_p / "layouts.json").read_text())["slides"]
     lb = json.loads((without / "layouts.json").read_text())["slides"]
-    assert {k: v["id"] for k, v in la.items()} == {k: v["id"] for k, v in lb.items()}
+    # a picture layout (cover_image, image_text, frames_strip, execution_visual) stands where the rules' text layout stood
+    from deck import layouts
+    deck = json.loads((with_p / "deck.json").read_text())
+    for k, v in la.items():
+        want = lb[k]["id"]
+        assert v["id"] == want or (v["id"] in layouts.load() and layouts.pick(deck["slides"][k]) == want and any(
+            s.get("required") for s in layouts.load()[v["id"]]["slots"].values() if s["kind"] == "image")), (k, v["id"], want)
     assert sum(v["fallback"] for v in la.values()) == 0
     assert not any(f["check"] == "image_missing" for f in json.loads((with_p / "validation.json").read_text()))
 

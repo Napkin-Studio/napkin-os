@@ -292,7 +292,8 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
             from . import layouts
             notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s))
-        out.append({"layout": lay["id"] if planned else None, "id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
+        pt = (deck["meta"].get("layout_title_pt") or {}).get(lay.get("id")) if planned else None
+        out.append({"layout": lay["id"] if planned else None, "tpt": f' style="--tpt:{pt * 2}px"' if (spec.LOOK_V2 and pt) else "", "id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
                     "last": [max(v for k, v in b.last.items() if k <= f) for f in range(b.f + 1)]})
     return out
@@ -564,10 +565,20 @@ addEventListener('beforeprint',()=>S.forEach(s=>s.classList.add('still')));addEv
 """
 
 
+#: The look of deck-layout-library on the web: a stamped title size per layout (``--tpt``, px = pt x 2 on the 1920 canvas, not scaled with the body),
+#: body, small and lead text held to 48 characters a line, and the new layout ids sharing the column composition until each has its own grid.
+LOOK_CSS = """
+.slide[style*="--tpt"] h1.title{font-size:var(--tpt) !important}
+.slide .body p,.slide .body li,.slide .body blockquote{max-inline-size:48ch}
+.l-close .body,.l-big_statement .body,.l-quote_full .body{max-width:1200px}
+.l-text_columns .col,.l-cards_split .col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:56px}
+"""
+
+
 def theme_css(css: str | None = None, head: str = HEAD_FONT, body: str = BODY_FONT, colors: dict | None = None) -> str:
     """A stylesheet with the deck theme filled in (default: the whole web deck's); ``colors``: a brand's
     overrides by THEME key (accent_ink too)."""
-    css = (css or CSS_LAYOUT + CSS_UI).replace("HEAD", head).replace("BODY", body)
+    css = (css or CSS_LAYOUT + (LOOK_CSS if spec.LOOK_V2 else "") + CSS_UI).replace("HEAD", head).replace("BODY", body)
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
     if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
         T["tint"] = T["panel"]
@@ -591,7 +602,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
     views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed)
     m = deck["meta"]
     slides = "\n".join(
-        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}" id="{v["id"]}" data-steps="{v["steps"]}"{" data-layout=" + chr(34) + v["layout"] + chr(34) if (spec.LOOK_V2 and v["layout"]) else ""} '
+        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}" id="{v["id"]}" data-steps="{v["steps"]}"{" data-layout=" + chr(34) + v["layout"] + chr(34) if (spec.LOOK_V2 and v["layout"]) else ""}{v["tpt"]} '
         f'aria-label="Slide {v["n"]}: {_e(v["title"])}">{v["html"]}</section>' for v in views)
     meta = json.dumps([{"id": v["id"], "section": v["section"], "notes": v["notes"]} for v in views], ensure_ascii=False)
     page = f"""<!doctype html>

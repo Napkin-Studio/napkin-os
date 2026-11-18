@@ -6,7 +6,7 @@ description: 'Dark cover: the title at display size, the lead and a caption unde
 slot_summary: title (display), lead, sub
 for_types:
 - title
-priority: 100
+priority: 99
 alternatives:
 - cover_image
 density: lean

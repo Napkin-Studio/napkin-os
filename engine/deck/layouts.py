@@ -196,6 +196,8 @@ def accepts(lay: dict, s: dict, bl: list, ready=frozenset()) -> bool:
     picture when it has one."""
     if s["type"] not in lay["for_types"]:
         return False
+    if has_human_item(s, bl) and lay["family"] != "placeholder":
+        return False   # only the placeholder family may draw a human item (dashed, PROPOSED, TO SUPPLY)
     take = {k for sl in lay["slots"].values() if sl["kind"] != "image" for k in (sl.get("from_blocks") or [])}
     if not {b["kind"] for b in bl} <= take:
         return False
@@ -442,6 +444,10 @@ def strip_plan(deck: dict) -> dict:
                 s.pop("slots")
     for k in ("layout_title_pt", "layout_plan"):
         d["meta"].pop(k, None)
+    if "density" in (d["meta"].get("preferences") or {}):   # the density the plan ran at is stamped by run_deck, with its source
+        d["meta"]["preferences"].pop("density")
+        if not d["meta"]["preferences"]:
+            d["meta"].pop("preferences")
     return d
 
 
@@ -593,17 +599,19 @@ def _moved_rec(c) -> dict:
     return {"block": bi, "item": ii, "sha": _sha12(text), "refs": list(refs)}
 
 
-def title_sizes(deck: dict, ids: dict, probe) -> dict:
-    """``{layout id: pt}``: per layout used, the largest of 36, 32, 30, 28 at which every title of that layout takes at most two lines
-    (28 pt when none does). A layout not used has the theme title size (not listed)."""
+def title_sizes(deck: dict, ids: dict, probe, aud: str = "review") -> dict:
+    """``{layout id: pt}``: per layout used, the largest of 36, 32, 30, 28 at which every slide of that layout takes its title in at most
+    three lines and fits without relaxing (measured with the renderer; 28 pt when no size does). One size per layout per deck: titles of one
+    layout no longer differ from slide to slide. A layout not used has the theme title size (not listed). Functional layouts that set their
+    own display size (cover, close, emphasis_bar, big_statement, section, full_bleed_statement) are not stamped."""
     by: dict = {}
     for sid, lid in ids.items():
-        by.setdefault(lid, []).append(deck["slides"][sid]["title"])
+        by.setdefault(lid, []).append(sid)
     out = {}
-    for lid, titles in by.items():
+    for lid, sids in by.items():
         if lid in ("flow", "cover", "cover_image", "close", "emphasis_bar", "big_statement", "full_bleed_statement", "section"):
             continue
-        out[lid] = next((sz for sz in TITLE_SIZES if all(probe(t, sz) <= 2 for t in titles)), TITLE_SIZES[-1])
+        out[lid] = next((sz for sz in TITLE_SIZES if all(probe(deck["slides"][sid], lid, sz) for sid in sids)), TITLE_SIZES[-1])
     return out
 
 
@@ -642,8 +650,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     rungs = {k: 0 for k in ("as_is", "shrunk", "switched", "overflow_moved", "relaxed", "no_fit")}
     look = spec.LOOK_V2
 
-    def probe(sl_, lid, relaxed=False, cap=None, stamped=None):
-        return R.probe(sl_, lid, relaxed=relaxed, scale_cap=cap, title_pt=stamped)
+    def probe(sl_, lid, relaxed=False, cap=None, stamped=None, cpl=48):
+        return R.probe(sl_, lid, relaxed=relaxed, scale_cap=cap, title_pt=stamped, cpl=cpl)
 
     # ---- the rule pass: a layout per slide
     ids, by, why = {}, {}, {}
@@ -665,8 +673,54 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             if alts:
                 rid, by[sid], why[sid] = alts[0], "repair", "repair: avoid"
         ids[sid] = rid
+    # ---- variety (look change 4, advisory): families, not ids; a run of one slide type is exempt; functional layouts, a person's swap and a
+    # pinned slide are never moved; a run with no other-family alternative that fits stays (and is listed by ``variety``)
+    var_swaps = 0
+
+    def alt_for(sid_, avoid_fams):
+        s_ = deck["slides"][sid_]
+        base_ = {k: v for k, v in s_.items() if k != "layout"}
+        shown_ = {**base_, "blocks": spec.shown_blocks(base_, aud)}
+        for a in _alternatives(lib, ids[sid_], base_, aud, ready.get(sid_, frozenset()), (fx.get(sid_) or {}).get("avoid", [])):
+            if lib[a]["family"] in avoid_fams or lib[a]["group"] != "content":
+                continue
+            r = probe(shown_, a)
+            if r["ok"] and not r["relaxed"] and R.title_fits(s_["title"], 36):
+                return a
+        return None
+
+    def movable(sid_):
+        return by[sid_] == "rule" and not deck["slides"][sid_].get("pinned") and ids[sid_] != "flow" and lib[ids[sid_]]["group"] == "content"
+
+    if look:
+        seq = [sid for sid in validate.presented(deck) if ids[sid] != "flow" and lib[ids[sid]]["group"] == "content"
+               and deck["slides"][sid]["type"] not in ("title", "appendix", "close", "next_step")]
+        fam = lambda sid_: lib[ids[sid_]]["family"]
+        for i in range(2, len(seq)):
+            trio = seq[i - 2:i + 1]
+            if len({fam(x) for x in trio}) == 1 and len({deck["slides"][x]["type"] for x in trio}) > 1 and movable(seq[i]):
+                a = alt_for(seq[i], {fam(seq[i])})
+                if a:
+                    ids[seq[i]], why[seq[i]], var_swaps = a, "variety: three of one family in a row", var_swaps + 1
+        for start in range(0, max(1, len(seq) - 9)):
+            win = seq[start:start + 10]
+            need = min(6, -(-len(win) * 6 // 10))
+            fams = [fam(x) for x in win]
+            if len(win) >= 5 and len(set(fams)) < need:
+                top = max(set(fams), key=fams.count)
+                for sid_ in reversed([x for x in win if fam(x) == top]):
+                    if movable(sid_):
+                        a = alt_for(sid_, set(fams))
+                        if a:
+                            ids[sid_], why[sid_], var_swaps = a, "variety: too few families in ten slides", var_swaps + 1
+                            break
     # ---- stamped title sizes (one per layout used, after the rule pass, never recomputed)
-    pt = title_sizes(deck, ids, lambda title, sz: R.nlines(render_pptx.glue(title), R.x1 - R.x0, sz, True, R.th.head)) if look else {}
+    def fits_at(s_, lid_, sz):
+        sh_ = {**{k: v for k, v in s_.items() if k != "layout"}}
+        sh_["blocks"] = spec.shown_blocks(sh_, aud)
+        r = probe(sh_, lid_, stamped=sz)
+        return r["ok"] and not r["relaxed"] and R.title_fits(s_["title"], sz)
+    pt = title_sizes(deck, ids, fits_at, aud) if look else {}
     if pt:
         deck["meta"]["layout_title_pt"] = pt
     # ---- the ladder, slide by slide
@@ -694,7 +748,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         sl_ = _with_moved(base, moved) if moved else base
         shown = spec.shown_blocks(sl_, aud)
         sc_cap = f.get("scale_max")
-        rung, scale, relaxed, why_ = "as_is", 1.0, False, why[sid]
+        rung, scale, relaxed, why_, cpl_ = "as_is", 1.0, False, why[sid], 48
         res = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
         alts_fit: list = []
         if res is not None and res["ok"] and not res["relaxed"]:
@@ -702,7 +756,9 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         else:
             switched = None
             if lid != "flow" and look and not (sid in swaps and by[sid] == "person"):
-                for a in _alternatives(lib, lid, base, aud, ready.get(sid, frozenset()), f.get("avoid", [])):
+                rule_text = pick(base, aud, lib, frozenset())   # a picture layout that does not fit gives way to what the rules choose without the picture
+                cands = ([rule_text] if rule_text != lid and rule_text in lib and image_slots(lib[lid]) else []) + _alternatives(lib, lid, base, aud, ready.get(sid, frozenset()), f.get("avoid", []))
+                for a in cands:
                     ra = probe({**sl_, "blocks": shown}, a, cap=sc_cap, stamped=pt.get(a))
                     if ra["ok"] and not ra["relaxed"] and (pt.get(a) is None or R.title_fits(s["title"], pt.get(a))):
                         switched = (a, ra)
@@ -726,6 +782,10 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
                         if r2["ok"] and not r2["relaxed"]:
                             rung, scale, res, done = "overflow_to_notes", r2["scale"], r2, True
                             break
+                if not done and lid != "flow":   # lines of up to 60 characters before any type goes down to the caption floor
+                    rw = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid), cpl=60)
+                    if rw["ok"] and not rw["relaxed"]:
+                        rung, scale, res, done, cpl_ = ("as_is" if rw["scale"] >= 1.0 else "shrunk"), rw["scale"], rw, True, 60
                 if not done:
                     r3 = probe({**sl_, "blocks": shown}, lid, relaxed=True, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
                     if r3 and r3["ok"]:
@@ -735,6 +795,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         lay = lib.get(lid)
         slots, unbound = _bind(lib, lid, sl_, aud) if lay else ({}, [])
         fit = {"rung": rung, "scale": round(min(1.6, max(0.6, scale)), 3), "relaxed": relaxed, "moved": moved}
+        if cpl_ != 48:
+            fit["cpl"] = cpl_
         def fits(a, _s={**sl_, "blocks": shown}, _cap=sc_cap):
             r = probe(_s, a, cap=_cap, stamped=pt.get(a))
             return bool(r["ok"] and not r["relaxed"])
@@ -775,7 +837,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
                         _apply_text(s["slots"][x["slot"]], ans["text"])
         elif s.get("slots"):
             s["slots"] = old_img
-    deck["meta"]["layout_plan"] = {"density": density, "rungs": rungs}
+    deck["meta"]["layout_plan"] = {"density": density, "rungs": rungs, "variety_swaps": var_swaps}
     deck["meta"]["_plan_secs"] = round(time.time() - t0, 3)
     deck["meta"].pop("_plan_secs", None)
     return deck, issues, pending

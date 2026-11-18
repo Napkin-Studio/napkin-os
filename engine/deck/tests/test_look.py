@@ -220,7 +220,7 @@ def test_every_token_has_a_recorded_winner_and_the_record_matches_the_deck_schem
 # ------------------------------------------------------------------ through run_deck: the golden is the golden, words never move
 
 BRIEF = FIX / "lumen_water"
-BASE_ARGS = ["--brief", str(BRIEF / "brief_object.json"), "--stages", str(BRIEF), "--client", "Lumen Water", "--project", "National awareness campaign"]
+BASE_ARGS = ["--brief", str(BRIEF / "brief_object.json"), "--stages", str(BRIEF), "--client", "Lumen Water", "--project", "National awareness campaign", "--density", "detailed"]
 
 
 def _build(monkeypatch, tmp_path, *extra) -> tuple[dict, dict]:

@@ -378,3 +378,27 @@ derived into its folder. One carve in `Renderer.slide` narrows the layout's area
 changed); if the narrowed layout does not fit, the slide is drawn without the picture and an `image_missing` finding says so.
 Contract: `docs/contracts/deck-visuals.md` section 4.5. Pillow (HPND licence) is a python-pptx dependency already; `images.py`
 imports it directly. Offline test count: 806 (`deck/tests` and `territory/tests`).
+
+
+## The layout library and the plan (deck-layout-library)
+
+`engine/deck/layouts/*.yaml` holds 36 layouts as data; `layouts.py` loads them (`load`), picks by priority and `when` (`pick`: `render_pptx.choose_layout`
+is a call into it), binds blocks to named slots (`bind`), derives each text slot's `max_chars` (`capacity`, `python3 -m deck.layouts --write-capacity`)
+and plans a whole deck (`plan`, see `docs/contracts/deck-visuals.md` 5.1). `run_deck` runs the plan after stage e, the red team and the pictures, before
+validate, so `--until deck` already carries `slide.layout` and `slide.slots`.
+
+    --density lean|standard|detailed   default: the engine resolves it by format (a presented pitch lean, a leave-behind detailed) and stamps
+                                       meta.preferences.density with its source; fixtures and goldens pass --density detailed
+    --layout SLIDE=ID                  a person's swap (repeatable); look.layouts in a Deck document does the same
+    --no-layout-plan                   the renderers choose as before the library (rollback)
+    --no-notes                         a pptx without speaker notes (the moved points go with them)
+
+The look: the cover title steps 64, 60, 54 pt across the content width; a title has one stamped size and one fixed box per layout; body, small and
+lead lines run to about 48 characters (`spec.LOOK_V2` holds the switch for the cover, the lines, the titles and the picture and close layouts; the
+library, the plan and the overlay need none); fill upscaling stops at 1.2 and cards do not stretch under lean and standard (the role rows still fill);
+a slide that does not fit switches layout before its type drops to the caption floor; the idea and cover pictures are a large panel
+(`cover_image`, `image_text`: 5.0 and 5.4 in wide, inside the margins). Goldens: `golden_deck.json` stays at assemble level (`layouts.strip_plan`),
+`golden_plan.json` holds the plan; `tests/fixtures/render_parity.json` was re-recorded once, at the look commit.
+
+Calibration (`deck/tests/test_layout_wrap_calibration.py`, local only): `Renderer.wrap` counts 2 to 3 lines more than LibreOffice on frames of 8 to 12 lines
+(a real line holds about 15 to 25 % more characters than the estimate), so a fit never overflows for want of room the estimate did not see.

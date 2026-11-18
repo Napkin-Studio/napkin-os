@@ -390,7 +390,7 @@ LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "compari
 LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready")
 #: The eight look changes of deck-layout-library (cover 64 pt, a stamped title size and a fixed title box per layout, 48-character
 #: lines, switch before relaxed, picture and close layouts rule-picked). Off while the library lands without a look change; on at the look commit.
-LOOK_V2 = False
+LOOK_V2 = True
 LAYOUT_FLOW = "flow"
 LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
 LAYOUT_MAX = 40

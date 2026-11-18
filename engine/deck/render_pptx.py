@@ -378,6 +378,7 @@ class Renderer:
         self.no_plan = False        # --no-layout-plan: choose_layout on every slide, as before the library
         self.notes = True           # False: a notes-free export (no speaker notes at all, the moved points included)
         self._slotmap, self._shapes_now, self._sid = {}, [], None
+        self._cpl = 48              # characters per line for body, small and lead text (fit.cpl widens it for a slide that fits no other way)
 
     def _layout(self, name):
         """A layout of the master by name, or None."""
@@ -573,6 +574,7 @@ class Renderer:
     def ph(self, paras, w) -> float:
         """Height in inches of a list of paragraph dicts (see ``ptext``) set in ``w`` inches."""
         h = 0.0
+        w = self._clamp(paras, w, all(p_.get("align", "l") == "l" for p_ in paras))
         for p in paras:
             size = p.get("size", self.th.scale.body)
             n = self.nlines(p["t"], w - (0.3 if p.get("bullet") else 0), size, p.get("bold"), p.get("font"))
@@ -584,6 +586,7 @@ class Renderer:
         Margins are zero so the box edge is the text edge; ``sl`` None measures only."""
         if sl is None:
             return None
+        w = self._clamp(paras, w, all(p_.get("align", "l") == "l" for p_ in paras))
         tb = sl.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
         if name:
             tb.name = name
@@ -622,7 +625,18 @@ class Renderer:
         """One paragraph dict for ``ptext`` / ``ph``; the size is held to the theme's floor (body 12 pt, or the
         caption floor when ``cap``). The last two words are joined by a no-break space (``glue``) so a text never
         ends a line on a single orphaned word; the words themselves are untouched."""
-        return dict(t=glue(t), size=self.sz(size, cap), color=color, font=font, cap=cap, **kw)
+        d = dict(t=glue(t), size=self.sz(size, cap), color=color, font=font, cap=cap, **kw)
+        if spec.LOOK_V2 and not cap and d["size"] <= 28 and "cpl" not in kw and not (kw.get("bold") and font == self.th.head):
+            d["cpl"] = self._cpl   # body, small and lead lines run to about 48 characters (the plan may widen a slide to 60 before it relaxes type), whatever the size
+        return d
+
+    def _clamp(self, paras, w, left=True) -> float:
+        """The box width for these paragraphs: ``w``, or less when they carry a ``cpl`` (characters per line): the width of that many glyphs at
+        the largest such size. Only a left-aligned box is narrowed (a centred or right-aligned one keeps its place)."""
+        if not spec.LOOK_V2 or not left:
+            return w
+        cw = [self._cpl_w(p_["size"], p_.get("bold"), p_.get("font"), p_["cpl"]) for p_ in paras if p_.get("cpl")]
+        return min(w, max(cw)) if cw else w
 
     def fit(self, make, w, h, hi, lo):
         """The largest size in [lo, hi] (stepping 1 pt) at which ``make(size)`` (paragraph dicts) fits ``h`` inches
@@ -1252,7 +1266,7 @@ class Renderer:
 
     def _stretches(self) -> bool:
         """Whether cards grow to the foot of the content area: yes for a detailed deck (today), no under lean and standard."""
-        return self.density in (None, "detailed")
+        return self.density in (None, "detailed") or self._role   # rows (the role grid, the timeline rows) are not cards: they still fill the height
 
     @staticmethod
     def _stretchable(row, force=False) -> bool:
@@ -1352,7 +1366,12 @@ class Renderer:
         last never holds one word alone. Returns the y below it. ``sl`` None measures only."""
         S, g = self.th.scale, self.th.grid
         w = self.x1 - self.x0
-        cands = ((S.title_min,) + ((24,) if self._relaxed else ())) if dense else (S.title, 32, S.title_long, S.title_min)   # relaxed: the last resort may go to 24 pt
+        if spec.LOOK_V2:   # one stamped size per layout, in one fixed box (0.1 in higher than before, the geometry a dense slide had): a dense slide no longer shrinks or lifts its own title
+            dense, fixed = False, True
+            stamped = self._tpt.get(self._lid)
+        else:
+            stamped, fixed = None, False
+        cands = ((S.title_min,) + ((24,) if self._relaxed else ())) if dense else ((stamped,) if stamped else (S.title, 32, S.title_long, S.title_min))   # relaxed: the last resort may go to 24 pt
         for want in ((1, 2) if dense else (2,)):   # dense: a one-line title if one fits at the floor size
             for size in cands:
                 n = self.nlines(glue(s["title"]), w, size, True, self.th.head)
@@ -1362,7 +1381,7 @@ class Renderer:
                 break
         if n > 3:
             raise NoFit("title too long")
-        top = (g.title_y - (0.1 if dense else 0.0)) if y is None else y
+        top = (g.title_y - (0.1 if (dense or fixed) else 0.0)) if y is None else y
         h = n * size * 1.2 / 72 + 0.04
         if sl is not None:
             m = self._mark(sl)
@@ -1371,7 +1390,7 @@ class Renderer:
             bw = self.balance_w(tp["t"], w, size, True, self.th.head)
             self.ptext(sl, self.x0, top, bw, h, [tp], name="Title")
             self._build(sl, m, title=True)
-        return top + h + (0.2 if dense else 0.3)
+        return top + h + (0.2 if (dense or fixed) else 0.3)
 
     def _lay_stack(self, sl, s, role=False):
         """The standard composition: title, then the blocks stacked with their looks (cards, KPI row, timeline
@@ -1400,28 +1419,33 @@ class Renderer:
     def _lay_cover(self, sl, s, panel=False):
         """Cover: dark, an accent rule, the title at display size, the lead text and caption under it."""
         S, p, g = self.th.scale, self.p, self.th.grid
-        pw = 4.9 if panel else 0.0
-        px = themes.Grid().W - pw
+        pw = 5.0 if panel else 0.0
+        px = self.x1 - pw   # the panel keeps the right margin and sits under the DRAFT mark (y 0.62 to 6.67), so no text runs over the picture
         if panel:
             self._own_picture(None, "picture", px, 0, pw, 6.85)   # NoFit without a picture
         w = (px - 0.5 - self.x0) if panel else (self.x1 - self.x0 if spec.LOOK_V2 else min(10.4, self.x1 - self.x0))
         blocks = [b for b in s["blocks"] if str(b.get("text", "")).strip()]
         if any(b["kind"] not in ("text", "small", "statement") for b in blocks):
             raise NoFit("cover holds text only")
-        for size in ((64, 60, 54, 48, 44) if (spec.LOOK_V2 or panel) else (S.display, 40, 36, 32, 28)):
-            n = self.nlines(s["title"], w, size, True, self.th.head)
-            if n <= 3:
-                break
-        else:
-            raise NoFit("title too long")
-        th_ = n * size * 1.2 / 72 + 0.04
         paras = []
         for b in blocks:
             if b["kind"] == "small":
                 paras.append((self.para(str(b["text"]).strip(), S.small, p.mute, line=1.05), b))
             else:
                 paras.append((self.para(str(b["text"]).strip(), S.lead, p.fg, line=1.05), b))
-        block = th_ + 0.4 + sum(self.ph([pp], w) + 0.25 for pp, b in paras) - 0.25
+        rest = sum(self.ph([pp], w) + 0.25 for pp, b in paras) - 0.25
+        too_long = True
+        for size in ((64, 60, 54, 48, 44) if (spec.LOOK_V2 or panel) else (S.display, 40, 36, 32, 28)):   # the largest size at which the title takes three lines and the whole cover fits
+            n = self.nlines(s["title"], w, size, True, self.th.head)
+            if n > 3:
+                continue
+            too_long = False
+            th_ = n * size * 1.2 / 72 + 0.04
+            block = th_ + 0.4 + rest
+            if block <= g.body_end - 1.6 or not (spec.LOOK_V2 or panel):
+                break
+        if too_long:
+            raise NoFit("title too long")
         if block > g.body_end - 1.6:
             raise NoFit("cover too full")
         # the title block sits at the optical middle of the slide (a little above centre), never above 1.6 in
@@ -1435,7 +1459,7 @@ class Renderer:
         self.ptext(sl, self.x0, y, w, th_, [self.para(s["title"], size, p.fg, self.th.head, bold=True, line=1.0)], name="Title")
         self._build(sl, m, title=True)
         if panel:
-            self._own_picture(sl, "picture", px, 0, pw, 6.85)
+            self._own_picture(sl, "picture", px, self.PIC_TOP, pw, self.PIC_H)
         yy = y + th_ + 0.4
         for pp, b in paras:
             m = self._mark(sl)
@@ -1477,7 +1501,7 @@ class Renderer:
             return
         # the title and its statement sit as one group at the vertical middle of the content area
         gh = max(self.ph(tp, tw), max(bar[3], 1.2) if bar else 0.0)
-        top += max(0.0, (avail - gh) / 2) * 0.85
+        top += 0.45 if spec.LOOK_V2 else max(0.0, (avail - gh) / 2) * 0.85   # look change 2: one baseline, not floating to the middle
         m = self._mark(sl)
         self.rect(sl, self.x0, g.top, 0.5, 0.06, fill=p.acc_l)
         if label:
@@ -1760,6 +1784,7 @@ class Renderer:
     # -- the layouts the library adds (deck-layout-library): text layouts, the dark close, the picture layouts -------------------
     LEAD_KINDS = ("text", "small", "statement", "quote", "callout")
     #: Picture layouts that draw their own picture panel (the rest keep slice 3's carve: execution_visual, frames_strip).
+    PIC_TOP, PIC_H = 0.62, 6.05   # the picture panel of the cover and the image layouts: inside the margins, under the DRAFT mark
     OWN_PICTURE = ("cover_image", "image_text", "image_left", "full_bleed_statement", "section", "image_grid")
 
     def _cpl_w(self, size, bold=False, font=None, cpl=48) -> float:
@@ -1805,11 +1830,11 @@ class Renderer:
         """Image and text: the title and a short body on one side, one large picture panel on the other (4:3 slot, cropped to its box). The
         panel runs from the top edge to the footer rule and bleeds off the side, so the picture has a real share of the slide."""
         g = self.th.grid
-        pw = 5.6
+        pw = 5.4
         if "picture" not in self._pics:
             raise NoFit("no picture")
-        px = 0.0 if mirror else themes.Grid().W - pw
-        tx0, tx1 = (pw + 0.55, self.x1) if mirror else (self.x0, px - 0.55)
+        px = self.x0 if mirror else self.x1 - pw
+        tx0, tx1 = (px + pw + 0.55, self.x1) if mirror else (self.x0, px - 0.55)
         blocks = [b for b in s["blocks"] if b["kind"] in ("text", "statement", "small", "bullets", "callout", "card") and (self._text_of(b) or b.get("items"))]
         if len(blocks) != len([b for b in s["blocks"] if self._text_of(b) or b.get("items")]):
             raise NoFit("image text holds text and bullets only")
@@ -1830,7 +1855,11 @@ class Renderer:
                 raise NoFit("image text slide too dense")
             return self._with_width(tx0, tx1, body)
         run(sl is not None)
-        self._own_picture(sl, "picture", px, 0, pw, 6.85)
+        label = {"idea": "THE IDEA", "real_question": "THE REAL QUESTION"}.get(s["type"])
+        if label and sl is not None:   # the kicker label an emphasis bar sets over its title, kept when the idea takes a picture panel
+            S, p = self.th.scale, self.p
+            self.ptext(sl, tx0 + 0.65, g.top - 0.05, 4.0, 0.25, [self.para(label, S.caption, p.acc_t, bold=True, track=1.2, cap=True)])
+        self._own_picture(sl, "picture", px, self.PIC_TOP, pw, self.PIC_H)
 
     def _lay_image_left(self, sl, s):
         """Image and text, mirrored: the picture panel on the left."""
@@ -1894,11 +1923,18 @@ class Renderer:
         for i, n_ in enumerate(slots):
             self._own_picture(sl, n_, self.x0 + i * (cw + g.G), y, side, side)
 
-    def _two_col(self, sl, s, left_pred, frac=0.42):
+    def _two_col(self, sl, s, left_pred, frac=0.42, balance=False):
         """Title on top, the blocks ``left_pred`` takes in a text column on the left (48-character lines), the rest as cards on the right."""
         g = self.th.grid
         left = [b for b in s["blocks"] if left_pred(b)]
         right = [b for b in s["blocks"] if not left_pred(b)]
+        if balance and left and not right and len(left) >= 2:   # everything is of the left kind: share the blocks between two columns
+            half = (len(left) + 1) // 2
+            left, right, frac = left[:half], left[half:], 0.5
+        elif balance and len(left) == 1 and not right and len(left[0].get("items") or []) >= 2:   # one block: its items go half and half
+            its, b0 = left[0]["items"], left[0]
+            half = (len(its) + 1) // 2
+            left, right, frac = [{**b0, "items": its[:half]}], [{**b0, "items": its[half:]}], 0.5
         if not left or not right:
             raise NoFit("two columns need blocks for both")
         lw = (self.x1 - self.x0 - g.G) * frac
@@ -1925,7 +1961,7 @@ class Renderer:
 
     def _lay_placeholder_split(self, sl, s):
         """Placeholder split: the rows a person must supply on the left (dashed, PROPOSED, TO SUPPLY), what is given as solid cards on the right."""
-        self._two_col(sl, s, lambda b: b["kind"] == "bullets" and any(isinstance(i, dict) and i.get("human") for i in b["items"]), 0.55)
+        self._two_col(sl, s, lambda b: b["kind"] == "bullets" and any(isinstance(i, dict) and i.get("human") for i in b["items"]), 0.55, balance=True)
 
     def _lay_text_columns(self, sl, s):
         """Text columns: two to four open columns of text, an accent rule above each, no card fill (an open, typographic look)."""
@@ -2227,11 +2263,12 @@ class Renderer:
                  "people_cards": "_lay_people_cards"}
 
     # -- the plan's measuring: the renderer's own measure-only mode ---------------------------------
-    def probe(self, s: dict, name: str, relaxed: bool = False, scale_cap: float | None = None, title_pt: int | None = None) -> dict:
+    def probe(self, s: dict, name: str, relaxed: bool = False, scale_cap: float | None = None, title_pt: int | None = None, cpl: int = 48) -> dict:
         """Measure layout ``name`` for the slide dict ``s`` (blocks already shown) without drawing: ``{ok, scale, relaxed}``. The plan calls
         this, so the plan and the drawing cannot disagree about what fits. ``scale`` is the smallest stack scale used (1.0 when none)."""
         fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
-        saved = (self._lid, self._min_sc, self._scale_cap, self._relaxed, self._tpt, self._pics, self.p)
+        saved = (self._lid, self._min_sc, self._scale_cap, self._relaxed, self._tpt, self._pics, self.p, self._cpl)
+        self._cpl = cpl
         lib = layouts.load()
         self._lid, self._min_sc, self._scale_cap, self._relaxed = name, 1.0, scale_cap, relaxed
         self.p = self._palette(s["type"] in DARK_TYPES or name in ("close",))
@@ -2245,7 +2282,7 @@ class Renderer:
             ok = False
         finally:
             out_sc = self._min_sc
-            self._lid, self._min_sc, self._scale_cap, self._relaxed, self._tpt, self._pics, self.p = saved
+            self._lid, self._min_sc, self._scale_cap, self._relaxed, self._tpt, self._pics, self.p, self._cpl = saved
         return {"ok": ok, "scale": out_sc, "relaxed": relaxed}
 
     def title_fits(self, title: str, pt: int, lines: int = 3) -> bool:
@@ -2342,12 +2379,11 @@ class Renderer:
         self.chosen[sid] = name
         ldef = lib.get(name)
         if ldef and any(sl.get("required") for _, sl in layouts.image_slots(ldef)) and not layouts.image_ready(ldef, want):
-            name = ldef.get("without_image") or "cards"   # the picture cannot be drawn here: the layout's own text-only twin
-            if name not in lib or planned and name == planned["id"]:
-                name = "cards"
+            name = choose_layout({k: v for k, v in s.items() if k != "layout"}, audience)   # the picture cannot be drawn here: the rules' text-only choice
         s_full = s
         s = {**s, "blocks": shown_blocks(s, audience)}
         self._sid, self._pics = sid, {slot: im for (i, slot), im in self.drawn.items() if i == sid}
+        self._cpl = ((planned or {}).get("fit") or {}).get("cpl", 48)
         self._own_pics = set()
         self._slotmap, self._shapes_now = {}, []
         if spec.LOOK_V2 and name in lib:
@@ -2371,11 +2407,6 @@ class Renderer:
                 self._rollback(sl, n_sh, n_st)
                 self.relaxed.pop(sid, None)
                 plan = None
-        for slot in sorted(want - {b[0] for b in (plan or {}).get("boxes", [])} - self._own_pics):   # asked for, not drawn: say so, for every slot
-            why = ("the classic theme has no picture box" if not self.th.layouts else "the slide is drawn by the flow, which has no picture box" if name == "flow"
-                   else f"the {name} layout does not fit beside its picture")
-            self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "slot": slot,
-                                          "message": f"{slot} is not drawn: {why}, so no output carries it"})
         if not plan:
             if name != "flow":
                 n_sh, n_st = len(sl.shapes), len(self.steps)
@@ -2388,6 +2419,11 @@ class Renderer:
                     getattr(self, "_" + s["type"], self._generic)(sl, s)
                 finally:
                     self._relaxed = False
+        for slot in sorted(want - {b[0] for b in (plan or {}).get("boxes", [])} - self._own_pics):   # asked for, not drawn: say so, for every slot
+            why = ("the classic theme has no picture box" if not self.th.layouts else "the slide is drawn by the flow, which has no picture box" if name == "flow"
+                   else f"the {name} layout does not fit beside its picture")
+            self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "slot": slot,
+                                          "message": f"{slot} is not drawn: {why}, so no output carries it"})
         self.layouts[sid] = name
         self.shapes_by_slide[sid] = self._shapes_now
         self.fit_by_slide[sid] = (planned or {}).get("fit")

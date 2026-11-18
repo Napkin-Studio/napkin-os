@@ -96,7 +96,7 @@ def test_capacity_equals_each_max_chars():
 # ---------------------------------------------------------------------------------------------------------- parity
 def test_pick_equals_the_frozen_rule_table_over_every_type_and_block_kind():
     n = bad = 0
-    for t in spec.SLIDE_TYPES:
+    for t in (x for x in spec.SLIDE_TYPES if x not in ("close", "next_step")):   # close and next_step: the dark close layout, a listed parity exception
         for st in ("from_source", "needs_human"):
             for combo in [()] + [(k,) for k in KINDS] + list(itertools.combinations(KINDS, 2)):
                 s = {"type": t, "status": st, "title": "T", "blocks": [_block(k) for k in combo]}
@@ -104,6 +104,14 @@ def test_pick_equals_the_frozen_rule_table_over_every_type_and_block_kind():
                 if layouts.pick(s) != render_pptx._choose_layout_frozen(s):
                     bad += 1
     assert n > 10000 and bad == 0
+
+
+def test_close_and_next_step_take_the_dark_close_layout_unless_they_hold_a_human_item():
+    for t in ("close", "next_step"):
+        s = {"type": t, "status": "from_source", "title": "T", "blocks": [_block("statement"), _block("bullets")]}
+        assert layouts.pick(s) == "close" and render_pptx._choose_layout_frozen(s) == "cards"
+        s["blocks"][1]["items"][0]["human"] = True
+        assert layouts.pick(s) == render_pptx._choose_layout_frozen(s) == "placeholder_card"   # a person still has to supply it: the placeholder layout
 
 
 def test_pick_equals_the_frozen_rule_table_on_every_fixture_slide():
@@ -150,7 +158,7 @@ def test_every_slide_gets_layout_slots_and_a_matching_blocks_sha():
     p, _, _ = _plan(deck())
     for sid, s in p["slides"].items():
         lay = s["layout"]
-        assert lay["id"] in LIB and lay["chosen_by"] == "rule" and lay["blocks_sha"] == spec.blocks_sha(s)
+        assert lay["id"] in LIB and lay["chosen_by"] in ("rule", "fit_ladder") and lay["blocks_sha"] == spec.blocks_sha(s)
         assert lay["fit"]["rung"] in spec.FIT_RUNGS and "title" in s["slots"] and s["slots"]["title"]["text"] == s["title"]
 
 
@@ -305,7 +313,7 @@ def test_fixes_avoid_layout_scale_max_and_notes_deny_change_the_outcome_and_reco
     p, _, _ = layouts.plan(d, fixes={"slides": {"s05": {"avoid": [first["id"]]}}})
     assert p["slides"]["s05"]["layout"]["id"] != first["id"] and p["slides"]["s05"]["layout"]["chosen_by"] == "repair"
     p, _, _ = layouts.plan(d, fixes={"slides": {"s05": {"layout": "cards_split"}}})
-    assert p["slides"]["s05"]["layout"]["chosen_by"] in ("repair", "rule")
+    assert p["slides"]["s05"]["layout"]["chosen_by"] in ("repair", "rule", "fit_ladder")
     p, _, _ = layouts.plan(d, fixes={"slides": {"s05": {"scale_max": 0.85}}})
     assert p["slides"]["s05"]["layout"]["fit"]["scale"] <= 0.85
     pinned = deck()
@@ -356,3 +364,25 @@ def test_plan_record_is_small_and_stable():
     p, _, _ = _plan(deck())
     rec = layouts.plan_record(p)
     assert set(rec) == {"slides", "layout_title_pt"} and set(rec["slides"]) == set(p["order"])
+
+
+# ---------------------------------------------------------------------------------------------------------- goldens
+@pytest.mark.parametrize("rel", ["lumen_water", "types/investor_seed"])
+def test_golden_plan_json_equals_the_plan_of_the_golden_deck_and_the_deck_is_unchanged_after_strip(rel):
+    """golden_deck.json stays at assemble level (no layout, no text slots); golden_plan.json is the plan of it at density detailed (the tests' setting)."""
+    d = json.loads((FIX / rel / "golden_deck.json").read_text())
+    assert layouts.strip_plan(d) == d   # the golden holds none of the plan's keys
+    p, _, _ = layouts.plan(d, prefs={"density": "detailed"})
+    assert layouts.strip_plan(p) == d
+    assert layouts.plan_record(p) == json.loads((FIX / rel / "golden_plan.json").read_text())
+
+
+@pytest.mark.parametrize("rel", ["lumen_water", "types/investor_seed"])
+def test_golden_slots_validate_against_their_layout(rel):
+    d = json.loads((FIX / rel / "golden_deck.json").read_text())
+    p, issues, _ = layouts.plan(d, prefs={"density": "detailed"})
+    assert not [i for i in issues if i["check"] in ("slot_unknown", "slot_missing", "block_unbound")]
+    for s in p["slides"].values():
+        lay = LIB[s["layout"]["id"]]
+        for name, v in s["slots"].items():
+            assert name in lay["slots"] and lay["slots"][name]["kind"] == v["kind"]

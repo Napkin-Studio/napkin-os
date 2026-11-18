@@ -22,7 +22,7 @@ PROJECT = "Fernley Sparkling Tea 2027 Campaign Pitch"
 
 def args(stages: Path, out: Path, *more: str) -> list[str]:
     return ["--prompt-file", str(FERNLEY / "prompt.txt"), "--stages", str(stages), "--client", CLIENT, "--project", PROJECT,
-            "--out", str(out), "--kind", "agency", "--no-qa", *more]
+            "--out", str(out), "--kind", "agency", "--no-qa", "--density", "detailed", *more]
 
 
 def replay(tmp_path: Path, monkeypatch, *more: str, name: str = "run") -> tuple[dict, Path]:

@@ -257,7 +257,8 @@ role or renderer stops the load, as `ProfileError` does for a deck type.
 | `purpose` | `title` · `statement` · `list` · `compare` · `data` · `timeline` · `image` · `people`: what the swap menu groups by |
 | `description`, `slot_summary` | how it arranges things (not what it says); one line of its slots |
 | `for_types` | names from `spec.SLIDE_TYPES` |
-| `when` | `{blocks_any, blocks_only, needs_image, needs_number, min_items, max_items, status}`: when the picker may choose it |
+| `when` | `{blocks_any, blocks_all, blocks_only, max_blocks, needs_image, needs_number, min_items, max_items, status, test}`: when the picker may choose it. `test` names one of `spec.LAYOUT_TESTS` (`has_target_figure`, `has_human_item`, `compare_table`, `role_rows`, `image_ready`), each implemented in `layouts.py`; `image_ready` is audience-aware (a client counts only an approved picture) |
+| `pick`, `family` | `rule` (the picker may choose it by priority) or `offer` (a swap, an alternative or a fit-ladder switch only); the family the variety rule counts, not the id |
 | `priority` | 0 to 100; highest first, first match wins. Replaces the order of `choose_layout`'s table |
 | `alternatives`, `roomier`, `without_image` | up to 4 swaps; the next layout on the fit ladder; the layout used when its image slot stays empty |
 | `density` | `lean` · `standard` · `detailed`: the most text the layout is meant for, the same three words as `look.density` (§6.3) |
@@ -272,9 +273,9 @@ A slot definition:
 | `role` | the type role (§6.2): `display` · `title` · `lead` · `body` · `small` · `caption` |
 | `required`, `dominant` | an empty required slot is an issue; at most one slot per layout is the dominant visual |
 | `from_blocks` | block kinds it takes, in order |
-| `min_chars`, `max_chars`, `max_words`, `max_lines`, `max_line_in` | limits. `max_chars` is derived from the box and the role's size at 0.85 capacity (`layouts.capacity()`); a test fails when the file disagrees. `max_words` never exceeds the slide type's budget in `spec.SLIDE_TYPES` |
+| `min_chars`, `max_chars`, `max_words`, `max_lines`, `max_cpl` | limits. `max_cpl` (characters per line, 20 to 75) replaces `max_line_in`, which stays in the schema but is refused in a layout file: the renderer holds body, small and lead lines to about 48 characters at every size. `max_chars` is derived from the box and the role's size at 0.85 capacity (`layouts.capacity()`); a test fails when the file disagrees. `max_words` never exceeds the slide type's budget in `spec.SLIDE_TYPES` |
 | `min_items`, `max_items`, `center_when_fewer`, `item{heading_max_chars, body_max_chars, max_words}` | lists and groups, at most 8 items |
-| `table{max_rows ≤ 8, max_cols ≤ 5, cell_max_chars}` | tables |
+| `table{max_rows ≤ 8, max_cols ≤ 5, cell_max_chars ≤ 160}` | tables |
 | `chart{types, max_categories ≤ 8, max_series ≤ 4, hero_max ≤ 2}` | native charts only |
 | `image{aspect, kinds, fit, min_px, text_over, scrim, count ≤ 4}` | an image slot's shape; `count` 4 is a territory's frame strip |
 | `master_placeholder` | the placeholder this slot fills on an agency `.potx` master |
@@ -283,8 +284,26 @@ The library starts with the 17 layouts `choose_layout` returns today, with no ch
 `emphasis_bar`, `objective_panel`, `risk_cards`, `comparison_grid`, `chart`, `execution`, `territory`,
 `placeholder_card`, `quote_cards`, `comparison`, `big_number`, `kpi_row`, `role_grid`, `timeline_strip`,
 `native_table`, `cards`. Eight more arrive with pictures (`deck-layout-library`): `cover_image`, `section`,
-`image_text`, `image_left`, `full_bleed_statement`, `frames_strip`, `image_grid`, `execution_visual`. That is
-25 of the 40 the catalogue may hold.
+`image_text`, `image_left`, `full_bleed_statement`, `frames_strip`, `image_grid`, `execution_visual`, and eleven
+text layouts: `close` (the dark close: title, one statement, up to three next steps, no contact slot), `big_statement`,
+`quote_full`, `cards_split`, `text_columns`, `placeholder_split`, `chart_full`, `timeline_rows`, `execution_stack`,
+`territory_wide`, `people_cards`. That is 36 of the 40 the catalogue may hold (`engine/deck/layouts/*.yaml`).
+Picture layouts are rule-picked only when a picture can be drawn for the audience (`image_ready`); the eleven text layouts
+are offers until a gallery review promotes them.
+
+### 5.1 The plan (`layouts.plan`) and the fit ladder
+
+`plan(base_deck, library, prefs, swaps, hooks, fixes) -> (deck, issues, pending)` is pure and deterministic, always runs from the base
+deck (after assembly, stage e, the red team and the pictures) plus the cumulative fixes, and writes only an overlay: `slide.layout`
+(with `fit.moved` and `fit.cpl`), `slide.slots` (text slots; image slots stay as slice 3 wrote them) and `meta.layout_title_pt`
+(`{layout id: pt}`, one title size per layout per deck). It never edits a block, a note, a claim or the order. The ladder: density
+(a preference: lean about 30 words on a content slide, standard 60, detailed the type's budget), as_is, shrink, switch (the layout's
+alternatives that hold the blocks, then the stamped title size must fit), notes (movable points go to `fit.moved`), up to 60
+characters a line, relaxed (caption floor), flag (`no_fit`; the flow draws it). A point moved to the notes is one line,
+`- <verbatim> [refs: a,b]`, under `Moved from the slide:` in the pptx and web notes; it never moves if it holds a figure, is the slide's
+last sourced point, is internal, is human, or sits on `criterion_answer`, `scoring`, `risks`, `guardrails`, `ask`, `financials` or a slide that is not
+presented. `--no-notes` exports a pptx with no speaker notes at all. When `inputs.text_mode` is condense and repair is on, the
+free pass stops after switch and the slots still over their limits are listed in `pending` for slice 5's shorten.
 
 ## 6. Theme and look
 

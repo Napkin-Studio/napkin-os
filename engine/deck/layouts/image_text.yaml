@@ -7,20 +7,18 @@ slot_summary: title, body, points, picture 4:3
 for_types:
 - idea
 - audience
-- execution
 - solution
 - product
-- territory
 when:
   test: image_ready
-priority: 58
+priority: 96
 alternatives:
 - image_left
 - full_bleed_statement
 - cards
 without_image: cards_split
 density: standard
-pick: offer
+pick: rule
 family: image_text
 renderer: image_text
 slots:

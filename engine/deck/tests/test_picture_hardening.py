@@ -55,7 +55,7 @@ def _flow_stages(demo_stages, tmp_path):
     st = tmp_path / "st"
     shutil.copytree(demo_stages, st)
     d = json.loads((st / "d_idea.json").read_text())
-    d["idea"] = "A household sees its own story today. " * 16   # too long for the emphasis bar: the slide falls to the flow
+    d["idea"] = "A household sees its own story today. " * 60   # too long for the emphasis bar and for image text: the slide falls to the flow
     (st / "d_idea.json").write_text(json.dumps(d))
     return st
 
@@ -65,7 +65,7 @@ def test_a_slide_the_pptx_draws_without_its_picture_is_drawn_without_it_in_every
     d = jdeck(run)
     idea = next(i for i, s in d["slides"].items() if s["type"] == "idea")
     hits = [f for f in json.loads((run / "validation.json").read_text()) if f["check"] == "image_missing"]
-    assert [(f["slide"], f["slot"]) for f in hits] == [(idea, "picture")] and "does not fit" in hits[0]["message"]
+    assert [(f["slide"], f["slot"]) for f in hits] == [(idea, "picture")] and "no picture box" in hits[0]["message"]
     n = d["order"].index(idea) + 1
     assert not [sh for sh in Presentation(str(run / "deck.pptx")).slides[n - 1].shapes if sh.shape_type == 13]
     for f in (run / "deck.html", run / "hyperframes" / "index.html"):

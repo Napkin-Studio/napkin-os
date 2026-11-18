@@ -21,7 +21,7 @@ alternatives:
 - big_statement
 roomier: cards
 density: lean
-pick: offer
+pick: rule
 family: close
 renderer: close
 slots:

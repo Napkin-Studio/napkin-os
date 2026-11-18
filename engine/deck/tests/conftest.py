@@ -74,7 +74,7 @@ def build_demo():
 
     def build(stages, out, *args, soffice=False):
         argv = ["--stages", str(stages), "--brief", str(Path(stages) / "brief_object.json"), "--client", "Lumen Water",
-                "--project", "National awareness campaign", "--out", str(out), "--no-qa", *args]
+                "--project", "National awareness campaign", "--out", str(out), "--no-qa", "--density", "detailed", *args]
         saved = (run_deck.subprocess.run, run_deck._soffice)
         if not soffice:
             run_deck.subprocess.run = lambda *a, **k: None

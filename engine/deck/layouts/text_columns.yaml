@@ -72,6 +72,9 @@ slots:
     role: body
     from_blocks:
     - text
+    - small
+    - statement
+    - callout
     - card
     - bullets
     - kv

@@ -14,7 +14,7 @@ alternatives:
 - territory
 without_image: territory
 density: lean
-pick: offer
+pick: rule
 family: territory
 renderer: frames_strip
 slots:

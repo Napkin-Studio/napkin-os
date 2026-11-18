@@ -13,7 +13,7 @@ alternatives:
 - cover
 without_image: cover
 density: lean
-pick: offer
+pick: rule
 family: cover
 renderer: cover_image
 slots:

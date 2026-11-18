@@ -1601,6 +1601,12 @@
                           }
                         },
                         "description": "Points the layout plan moved to the speaker notes: an overlay, never an edit of the blocks. block is the index in slide.blocks, item the index in its items (null: the whole block), sha the first 12 hex of the verbatim text, refs the point's refs."
+                      },
+                      "cpl": {
+                        "type": "integer",
+                        "minimum": 48,
+                        "maximum": 75,
+                        "description": "Characters per line the slide was fitted at when 48 would not fit (60): the last step before type goes to the caption floor."
                       }
                     }
                   },

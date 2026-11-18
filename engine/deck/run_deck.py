@@ -598,10 +598,14 @@ def main(argv=None):
     if not a.no_layout_plan:   # the layout plan (deck-layout-library): after stage e, the red team and the pictures, before validate
         from . import layouts
         t = time.time()
-        level = a.density or (spec.DENSITY_DEFAULTS.get(a.format) if spec.LOOK_V2 else None)
+        lk = (deck_ctx.get("look") if isinstance(deck_ctx, dict) else None) or {}   # the document's look: density (a person's choice) and layouts (their swaps)
+        dl = lk.get("density")
+        dl = dl.get("level") if isinstance(dl, dict) else dl
+        dl = dl if dl in spec.DENSITY_LEVELS else None
+        level = a.density or dl or (spec.DENSITY_DEFAULTS.get(a.format) if spec.LOOK_V2 else None)
         if level:
-            deck["meta"].setdefault("preferences", {})["density"] = {"level": level, "source": "person" if a.density else "default"}
-        swaps = {}
+            deck["meta"].setdefault("preferences", {})["density"] = {"level": level, "source": "person" if (a.density or dl) else "default"}
+        swaps = {k: v for k, v in (lk.get("layouts") or {}).items() if k in deck["slides"] and isinstance(v, str)}
         for item in a.layout:
             sid_, _, lid_ = item.partition("=")
             if sid_ not in deck["slides"] or not lid_:
@@ -610,7 +614,7 @@ def main(argv=None):
         tm = (deck["meta"].get("preferences") or {}).get("text_mode")
         deck, plan_issues, _pending = layouts.plan(deck, prefs={"density": level, "text_mode": tm.get("mode") if isinstance(tm, dict) else tm}, swaps=swaps)
         rungs = (deck["meta"].get("layout_plan") or {}).get("rungs", {})
-        rep["layout_plan"] = {"secs": round(time.time() - t, 3), "rungs": rungs, "variety_swaps": 0, "skipped": ["condense"]}
+        rep["layout_plan"] = {"secs": round(time.time() - t, 3), "rungs": rungs, "variety_swaps": (deck["meta"].get("layout_plan") or {}).get("variety_swaps", 0), "skipped": ["condense"]}
         rep["stages"]["layout_plan"] = {"secs": round(time.time() - t, 3), "model": None, "usd": 0}
     t = time.time()
     findings = validate.run(deck, inp, a.audience)
