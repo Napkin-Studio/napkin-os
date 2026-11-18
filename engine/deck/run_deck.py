@@ -531,7 +531,7 @@ def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, dec
         ctx = imagegen.Ctx(deck, inp, terr, _picture_style(a, deck_ctx, a.client), a.stages, a.images_cache or (a.stages / "images"), vjobs.Ledger(led, deck_id), deck_id,
                            review=review, approver=a.approver, cap_usd=a.cap_usd, banned_extra=look.brand_tokens((deck_ctx or {}).get("brand")).get("imagery_bans") or [],
                            territory_usd=_territory_usd(a.stages))
-        res = imagegen.step(ctx, a.images, a.yes_cost, a.hero, a.retry_unknown, a.remake_style, remake=a.remake)
+        res = imagegen.step(ctx, a.images, a.yes_cost, a.hero, a.retry_unknown, a.remake_style, remake=[x.strip() for v in a.remake for x in v.split(',') if x.strip()])
     except (imagegen.GenError, images.ImageError) as e:
         raise SystemExit(f"refused: {e}")
     rep["images"] = {"mode": a.images, "cards": {k: {"id": c["id"], "usd": c["usd"]} for k, c in res["cards"].items()},
