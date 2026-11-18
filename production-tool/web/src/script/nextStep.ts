@@ -7,7 +7,8 @@ import type { Id, ProductionDocument } from '../contracts/types'
 import { clipMode, countWords, planShotsBlocked, scriptOfVideo, shotCount } from '../jobs/scriptVideo'
 import { runningPlan } from '../jobs/plan'
 import { storyboardOfVideo } from '../jobs/prompt'
-import { currentFrame, currentTake, scenesOf, shotsOf, staleList } from '../model/selectors'
+import { currentFrame, currentRender, currentTake, scenesOf, shotsOf, staleList } from '../model/selectors'
+import { clipBehind } from '../jobs/stale'
 import { drivenStoryboard } from '../canvas/nodes/make'
 import { scriptIsFree } from './freeText'
 
@@ -59,8 +60,19 @@ export function nextStep(d: Doc, scriptId: Id, storyboardId?: Id, behind = false
   const n = shots.length
   const framed = shots.filter((s) => !!currentFrame(d, s)).length
   const clipped = video ? shots.filter((s) => !!currentTake(d, s.id, video)).length : 0
-  const planned = `${n} ${n === 1 ? 'shot' : 'shots'} planned.`
-  if (video && clipped === n) return { step: 'render', line: `Every clip is made. Next: render the ad in the film.`, actions: ['open-video'] }
+  // The sheet counts the end card as a shot: say it, so the two agree (live test 2026-11-18: "6 SHOTS" on the
+  // sheet, "5 shots planned" here).
+  const card = sb ? shotsOf(d, sb.id).some((s) => s.kind === 'end_card') : false
+  const planned = `${n} ${n === 1 ? 'shot' : 'shots'}${card ? ' and an end card' : ''} planned.`
+  if (video && clipped === n) {
+    // Not "every clip is made" while some are behind a changed frame, nor "render the ad" once it is rendered
+    // (Playwright live test 2026-11-18: said so with 3 clips out of date and v1 rendered).
+    const behindN = shots.filter((s) => !!clipBehind(d, s.id)).length
+    if (behindN) return { step: 'clips', line: `${countWords({ n: behindN, exact: true }, 'clip')} ${behindN === 1 ? 'is' : 'are'} behind a changed frame. Next: make ${behindN === 1 ? 'it' : 'them'} again in the film.`, actions: ['open-video'] }
+    const ad = currentRender(d, video)
+    if (ad) return { step: 'render', line: `Every clip is made and the ad is rendered (v${ad.version}). Open the film to change the cut.`, actions: ['open-video'] }
+    return { step: 'render', line: `Every clip is made. Next: render the ad in the film.`, actions: ['open-video'] }
+  }
   if (video && clipMode(d, video) === 'straight' && framed < n) {
     return { step: 'clips', line: `${planned} Next: Make clips in the film makes them straight from the script.`, actions: ['open-video', 'open-storyboard'] }
   }
