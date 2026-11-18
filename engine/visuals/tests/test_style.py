@@ -74,7 +74,7 @@ def test_a_folder_keeps_the_hash_the_territory_tool_gave(vec, tmp_path):
 
 def test_the_default_is_the_default_style():
     st = style.load(None)
-    assert st.source == "built-in default" and st.look == style.DEFAULT["look"] and st.references == [] and st.models == style.DEFAULT_MODELS
+    assert st.source == "default until Laurence answers" and st.look == style.DEFAULT["look"] and st.references == [] and st.models == style.DEFAULT_MODELS
 
 
 def test_folder_and_document_with_the_same_content_give_the_same_style_and_hash(tmp_path):
