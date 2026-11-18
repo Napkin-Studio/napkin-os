@@ -21,9 +21,9 @@ export type Edit =
    *  as it was sent. `maskId` names the mask it came from (its label, its undo), but painting, clearing or
    *  undoing that mask afterwards never changes the fill (fix/editor-apply-keeps-edits: the owner cleared
    *  the blue after the result came, and Apply saved v1 unchanged). */
-  | { id: string; kind: 'fill'; maskId: string; ops: MaskOp[]; words: string; keepOutside: boolean; jobId: string; remove?: true }
-  | { id: string; kind: 'whole'; words: string; jobId: string }
-  | { id: string; kind: 'upscale'; scale: 2 | 4; jobId: string }
+  | { id: string; kind: 'fill'; maskId: string; ops: MaskOp[]; words: string; keepOutside: boolean; jobId: string; remove?: true; unsent?: true }
+  | { id: string; kind: 'whole'; words: string; jobId: string; unsent?: true }
+  | { id: string; kind: 'upscale'; scale: 2 | 4; jobId: string; unsent?: true }
 
 export type EditKind = Edit['kind']
 
@@ -37,8 +37,11 @@ export interface EditSession {
 
 export const EMPTY: EditSession = { edits: [], hidden: [] }
 
-/** An edit that runs a job, before its job id is known (ImageEditor sendWithRow). */
-export type UnsentEdit = Extract<Edit, { jobId: string }> extends infer E ? E extends { jobId: string } ? Omit<E, 'jobId'> : never : never
+/** An edit that runs a job. `unsent`: written down when the person confirmed, and not yet handed to the relay
+ *  (rowFirst, sendRow). */
+export type JobEdit = Extract<Edit, { jobId: string }>
+/** An edit that runs a job, before its job id is known (ImageEditor rowFirst). */
+export type UnsentEdit = JobEdit extends infer E ? E extends { jobId: string } ? Omit<E, 'jobId' | 'unsent'> : never : never
 
 let counter = 0
 export function editId(): string {
@@ -216,7 +219,7 @@ export function nextStep(s: EditSession): string | undefined {
 }
 
 /** An edit as the list says it. `state` is its job's, when it has one. */
-export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' | 'failed' | 'same'): string {
+export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' | 'failed' | 'same' | 'unsent'): string {
   switch (e.kind) {
     case 'mask': return `${e.name}${s.active === e.id ? ' · painting' : ''}`
     case 'text': return e.text.trim() ? `Text "${e.text}"` : 'Text · typing'
@@ -273,18 +276,32 @@ export function editsForFrame(s: EditSession): { op: string; params?: Record<str
   })
 }
 
-/** Sends an edit with its row in the session first (QA 2026-11-17: a paid fill was lost when the tab closed
- *  while it was being sent, because its row was added only after the relay answered). The row carries the
- *  job id the request will have; runner.submit writes it down before the relay is asked (re-test N1: a reload
- *  0.7 s after Fill lost a paid job to the store's debounce). If the send fails, the row goes again. */
-export async function sendWithRow(set: (f: (s: EditSession) => EditSession) => void, row: UnsentEdit,
-  submit: (jobId: string) => Promise<string>, jobId: string): Promise<void> {
-  set((s) => addEdit(s, { ...row, jobId } as Edit))
+/** The row of an edit that runs a job, in the session the moment the person confirms, with the job id the
+ *  request will carry and `unsent` (re-test N1, 2026-11-18: a reload 0.3 s after Fill came back with no row and
+ *  no words, because the row went in only after the picture and the mask were uploaded). `keep` writes the
+ *  session down at once. The relay knows a job id once, so sending the row again never makes a second job. */
+export function rowFirst(set: (f: (s: EditSession) => EditSession) => void, row: UnsentEdit, jobId: string, keep: () => void): JobEdit {
+  const edit = { ...row, jobId, unsent: true } as JobEdit
+  set((s) => addEdit(s, edit))
+  keep()
+  return edit
+}
+
+/** The row's job handed to the relay (runner.submit writes the job down before it asks, re-test N1); then the
+ *  row is sent. If the send fails, a first send takes the row away (the error says why, the words go back),
+ *  a Send again leaves it not sent. */
+export async function sendRow(set: (f: (s: EditSession) => EditSession) => void, edit: JobEdit,
+  submit: (edit: JobEdit) => Promise<string>, opts: { dropOnFail: boolean }): Promise<void> {
   try {
-    const got = await submit(jobId)
-    if (got !== jobId) set((s) => updateEdit(s, row.id, { jobId: got }))
+    const got = await submit(edit)
+    set((s) => ({ ...s, edits: s.edits.map((e) => (e.id === edit.id && 'jobId' in e ? sentAs(e, got) : e)) }))
   } catch (e) {
-    set((s) => undoEdit(s, row.id))
+    if (opts.dropOnFail) set((s) => undoEdit(s, edit.id))
     throw e
   }
+}
+
+function sentAs(e: JobEdit, jobId: string): JobEdit {
+  const { unsent: _u, ...rest } = e
+  return { ...rest, jobId } as JobEdit
 }

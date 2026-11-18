@@ -18,6 +18,7 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
+import { putBlobAs } from '../lib/blobs'
 import { addFrame, addShots, job, MAYA, seedStages, SHA, wasm } from '../test/model'
 import type { EditSession } from './imageEditor/edits'
 import { ImageEditor } from './ImageEditor'
@@ -336,6 +337,50 @@ describe('a row whose job this document never recorded (Playwright live test 202
     const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))!
     expect(row.textContent).not.toContain('working')
     expect(row.textContent).toContain('did not work')
+  })
+})
+
+describe('a row confirmed and never sent (re-test N1: a reload 0.3 s after Fill)', () => {
+  it('comes back not sent with its words', async () => {
+    const jobId = 'job_01M7Q0Q75M8TE7KCAG11N7GB4H'
+    const { el } = await open(() => ({ edits: [
+      { id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] },
+      { id: 'f1', kind: 'fill', maskId: 'm1', ops: [stroke], words: 'a red kite', keepOutside: true, jobId, unsent: true },
+    ], hidden: [], active: 'm1' }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    const row = () => [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))
+    expect(row()!.textContent).toContain('"a red kite"')
+    expect(row()!.textContent).toContain('not sent')
+    expect(row()!.textContent).not.toContain('did not work')
+  })
+  it('Send again goes with the same job id', async () => {
+    const jobId = 'job_01M7Q0Q75M8TE7KCAG11N7GB4K'
+    const { el, services } = await open(() => ({ edits: [
+      { id: 'w1', kind: 'whole', words: 'golden hour', jobId, unsent: true },
+    ], hidden: [] }))
+    await putBlobAs(SHA('a'), new Blob(['a'], { type: 'image/png' }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('golden hour'))!
+    expect(row.textContent).toContain('not sent')
+    const submit = vi.spyOn(services.runner, 'submit')
+    await act(async () => {
+      byText(row as HTMLElement, 'Send again')!.click()
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    expect(el.querySelector('.ie-error')?.textContent ?? '').toBe('')
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(submit.mock.calls[0][4]).toBe(jobId)
+    expect(submit.mock.calls[0][1]).toMatchObject({ text: 'golden hour' })
+  })
+  it('Discard takes the row away', async () => {
+    const { el } = await open(() => ({ edits: [
+      { id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] },
+      { id: 'w1', kind: 'whole', words: 'golden hour', jobId: 'job_01M7Q0Q75M8TE7KCAG11N7GB4J', unsent: true },
+    ], hidden: [], active: 'm1' }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('golden hour'))!
+    await act(async () => { byText(row as HTMLElement, 'Discard')!.click() })
+    expect(el.querySelector('.ie-elist')!.textContent).not.toContain('golden hour')
   })
 })
 

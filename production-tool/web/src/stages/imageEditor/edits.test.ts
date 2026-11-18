@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   EMPTY, addEdit, applyLine, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
   toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, leftOutLine, NOTHING_TO_TAKE,
-  afterSend, hasFill, newMask, pendingCount, sendWithRow,
+  afterSend, hasFill, newMask, pendingCount, rowFirst, sendRow,
   type EditSession, type MaskOp,
 } from './edits'
 
@@ -195,17 +195,34 @@ describe('fixes from the live test of 2026-11-17 (features/production-new-ui.cla
     expect(layersOf(s, 1).map((l) => l.id)).toEqual(['frame'])
     expect(layersOf({ ...s, active: 'm1' }, 1).map((l) => l.id)).toEqual(['m1', 'frame'])
   })
-  it('the row is in the session with its job id before the relay answers, and goes if the send fails', async () => {
+  it('the row is in the session, written down, the moment the person confirms; it goes if the first send fails', async () => {
     let s: EditSession = EMPTY
     const set = (f: (x: EditSession) => EditSession) => { s = f(s) }
+    let kept = 0
+    const a = rowFirst(set, { id: 'w1', kind: 'whole', words: 'golden hour' }, 'job_A', () => { kept++ })
+    // Before anything async: the row with its words, not sent, and written down (re-test N1).
+    expect(s.edits).toEqual([{ id: 'w1', kind: 'whole', words: 'golden hour', jobId: 'job_A', unsent: true }])
+    expect(kept).toBe(1)
     let release!: (id: string) => void
-    const p = sendWithRow(set, { id: 'w1', kind: 'whole', words: 'golden hour' }, () => new Promise((r) => { release = r }), 'job_A')
-    expect(s.edits).toEqual([{ id: 'w1', kind: 'whole', words: 'golden hour', jobId: 'job_A' }])
+    const p = sendRow(set, a, () => new Promise((r) => { release = r }), { dropOnFail: true })
+    expect(s.edits[0]).toMatchObject({ unsent: true })
     release('job_A')
     await p
-    expect(s.edits).toHaveLength(1)
-    await expect(sendWithRow(set, { id: 'w2', kind: 'whole', words: 'no' }, () => Promise.reject(new Error('refused')), 'job_B')).rejects.toThrow('refused')
+    expect(s.edits).toEqual([{ id: 'w1', kind: 'whole', words: 'golden hour', jobId: 'job_A' }])
+    const b = rowFirst(set, { id: 'w2', kind: 'whole', words: 'no' }, 'job_B', () => {})
+    await expect(sendRow(set, b, () => Promise.reject(new Error('refused')), { dropOnFail: true })).rejects.toThrow('refused')
     expect(s.edits.map((e) => e.id)).toEqual(['w1'])
+  })
+  it('Send again goes with the same job id, and a failed one stays not sent', async () => {
+    let s: EditSession = EMPTY
+    const set = (f: (x: EditSession) => EditSession) => { s = f(s) }
+    const a = rowFirst(set, { id: 'f1', kind: 'fill', maskId: 'm1', ops: [], words: 'a red kite', keepOutside: true }, 'job_C', () => {})
+    const ids: string[] = []
+    await expect(sendRow(set, a, (e) => { ids.push(e.jobId); return Promise.reject(new Error('offline')) }, { dropOnFail: false })).rejects.toThrow('offline')
+    expect(s.edits[0]).toMatchObject({ jobId: 'job_C', unsent: true, words: 'a red kite' })
+    await sendRow(set, a, async (e) => { ids.push(e.jobId); return e.jobId }, { dropOnFail: false })
+    expect(ids).toEqual(['job_C', 'job_C'])
+    expect(s.edits[0]).not.toHaveProperty('unsent')
   })
 })
 
