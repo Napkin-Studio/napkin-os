@@ -121,6 +121,9 @@ test('a double-click opens a picture on its own; in a group the first picks it o
   await page.mouse.dblclick(...centre(b))
   await expect.poll(() => selected(page)).toEqual([b.id])
   await expect(page.locator('.image-editor')).toHaveCount(0)
+  // A person pauses between the two double-clicks: a press within 500 ms of the last is read as the
+  // second press of the same double-click (NodeLayer's onDown), so wait past that window first.
+  await page.waitForTimeout(600)
   await page.mouse.dblclick(...centre(b))
   await expect(page.locator('.image-editor')).toHaveCount(1)
 })
