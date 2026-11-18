@@ -180,7 +180,12 @@ jobs:
       # optional links (torch / sentence-transformers / the vendor SDK) are imported
       # lazily by the modules that need them.
       - name: Install dependencies
-        run: pip install numpy requests httpx pypdf pdfplumber python-docx PyYAML python-dotenv pytest
+        run: pip install numpy requests httpx pypdf pdfplumber python-docx PyYAML python-dotenv pytest python-pptx lxml jsonschema
+
+      # The deck tests importorskip these, so a missing one would skip tests silently.
+      # Fail loudly here instead. Keep the pip line above identical to PY_ENGINE_DEPS in scripts/check.sh.
+      - name: Check deck dependencies import
+        run: python -c "import pptx, lxml, jsonschema, docx"
 
       # BRIEF_TESTS_OFFLINE=1 makes every outbound socket connection raise (rag/conftest.py),
       # so a test that quietly reaches a hosted endpoint fails here instead of passing on
@@ -200,6 +205,14 @@ jobs:
       - name: Mock-agent tests
         working-directory: mock-agent
         run: python -m pytest -q -p no:cacheprovider
+
+      # PYTHONPATH=. because deck/ imports its siblings and brief_llm from engine/.
+      - name: Deck Maker tests
+        working-directory: engine
+        env:
+          BRIEF_TESTS_OFFLINE: "1"
+          PYTHONPATH: .
+        run: python -m pytest -q -p no:cacheprovider deck/tests
 
   conformance:
     name: CLI conformance harness
