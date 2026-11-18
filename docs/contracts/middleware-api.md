@@ -1868,4 +1868,10 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
 - **Not yet.** `ask_change` (rewrite one slide's words; no handler, so a request for it is `400 unknown_task`), the document's brief and
   research as inputs, the person's intake answers, attached documents, acting on an `edit` or `retry` decision, and a poll that survives a
   restart of the middleware (an in-memory job store, as everywhere here: the next `build_deck` resumes from the engine's cache).
-
+- **Pictures (deck-image-gen).** With `NAPKIN_DECK_IMAGES=1` on the engine, the request may carry `marks` (always sent by `build_deck`: the
+  document's Confidential parts, `[]` when none), `review` and `approver`, and `run.approvals.images {decision approve, by human:<id>, at,
+  card, usd}` (a yes to ONE card by id). The engine answers with `run.images {state, cards {subjects?, pictures?, heroes?}, spent_usd,
+  cap_usd}` (engine-owned, passed through); each card holds `id, rows, usd, spent_usd, cap_usd, left_usd, held_back, optional, unknown,
+  over_cap, prompts {<slide>.<slot>: prompt}`. The app does no arithmetic and the middleware makes no picture: the engine plans, makes only
+  for a yes naming an open card, and a yes for a card that is no longer open fails the segment with `stale_card`. The API key is the
+  engine host's environment (`RUNWAYML_API_SECRET`) and never travels in a request.

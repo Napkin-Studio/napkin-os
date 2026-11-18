@@ -1,4 +1,4 @@
-"""The Runway client for frames. Runway docs read 2026-11-17 (https://docs.dev.runwayml.com, openapi.json): POST /v1/text_to_image
+"""The Runway client, shared by the Territory tool (frames) and the Deck (pictures; deck-image-gen). Runway docs read 2026-11-17 (https://docs.dev.runwayml.com, openapi.json): POST /v1/text_to_image
 with {model, promptText, ratio, referenceImages:[{uri, tag?, subject?}]} (up to 14 for the gemini image models, uri an https URL,
 a runway:// upload or a data URI under 5MB), answer {id, estimatedCost}; then poll GET /v1/tasks/{id} until SUCCEEDED (output: [url])
 or FAILED. Statuses: PENDING, THROTTLED, RUNNING, SUCCEEDED, FAILED, CANCELLED. Credits are $0.01 each.
@@ -23,10 +23,51 @@ RATIO = "1344:768"
 USD_PER_CREDIT = 0.01
 #: quick: every territory; best: the --shortlist ones. (model id, credits per 1K frame, short name for file names)
 MODELS = {"quick": ("gemini_image3.1_flash", 7, "flash"), "best": ("gemini_image3_pro", 20, "pro")}
+#: The Deck's tiers, pinned in code (Sai, 17 Nov 2026): flash makes drafts, pro makes only approved heroes. There is no --model flag and a Style
+#: Pack's models must equal this map (visuals.style, deck.imagegen.check_models).
+TIER_MODEL = {"draft": "gemini_image3.1_flash", "hero": "gemini_image3_pro"}
+TIER_SIZE = {"draft": "1K", "hero": "2K"}
+#: Credits per picture by model and size (Runway's pricing page, read 17 Nov 2026): a 2K pro picture costs what a 1K one does.
+PRICE = {"gemini_image3.1_flash": {"1K": 7}, "gemini_image3_pro": {"1K": 20, "2K": 20}}
+#: The ratios each model and size offers (Runway openapi, read 17 Nov 2026). The Deck snaps a slot's aspect to one of these.
+RATIO_SETS = {
+    ("gemini_image3.1_flash", "1K"): ("1344:768", "1248:832", "1184:864", "1024:1024", "896:1152", "768:1344"),
+    ("gemini_image3_pro", "1K"): ("1344:768", "1248:832", "1184:864", "1024:1024", "896:1152", "768:1344"),
+    ("gemini_image3_pro", "2K"): ("2752:1536", "2528:1696", "2400:1792", "2048:2048", "1856:2304", "1536:2752"),
+}
 MAX_REFERENCES = 14
 DEFAULT_MAX_USD = 2.0              # hard stop for one live run (plan call plus pictures); --max-usd changes it, a person's choice
 MAX_ATTEMPTS = 3                   # a frame that has failed this often is given up on until a person looks (no endless re-billing)
 STOP_STATUSES = (401, 402, 403, 429)   # bad key, no credit, no access, rate limit: trying every other frame would only repeat it
+
+
+def credits_for(model: str, size: str = "1K") -> int:
+    """The table price of one picture, in credits. An unknown model or size is an error: nothing is priced by guess."""
+    try:
+        return PRICE[model][size]
+    except KeyError:
+        raise RunwayError(f"no price for {model} at {size}") from None
+
+
+def snap(aspect: str, model: str, size: str = "1K") -> str:
+    """The ratio a slot's aspect (``16:9``) becomes: the nearest in the model's size set by log-ratio distance, ties to the larger area.
+    Only the six slot aspects are accepted; nothing is stretched (the renderer crops with cover)."""
+    import math
+    try:
+        w, h = (int(x) for x in aspect.split(":"))
+        cands = RATIO_SETS[(model, size)]
+    except (ValueError, KeyError):
+        raise RunwayError(f"cannot snap aspect {aspect!r} for {model} at {size}") from None
+    want = math.log(w / h)
+    area = lambda r: int(r.split(":")[0]) * int(r.split(":")[1])  # noqa: E731
+    return min(cands, key=lambda r: (abs(math.log(int(r.split(":")[0]) / int(r.split(":")[1])) - want), -area(r)))
+
+
+def request_key(model: str, ratio: str, prompt: str, ref_shas, rails_version: str, attempt: int = 1) -> str:
+    """A job's key: ``j_`` and 16 hex of the SHA-256 over what makes the request what it is (model, ratio, the prompt with its whitespace
+    normalised, the sorted SHA-256s of the references sent, the rails version, the attempt). The same request is the same job."""
+    blob = json.dumps([model, ratio, " ".join(str(prompt).split()), sorted(ref_shas or []), str(rails_version), int(attempt)], ensure_ascii=False)
+    return "j_" + hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
 class RunwayError(Exception):
@@ -68,10 +109,12 @@ class Client:
             raise RunwayError(self._scrub(f"Runway said {status} on {method} {path}: {raw.decode('utf-8', 'replace')[:300]}"), status)
         return json.loads(raw or b"{}")
 
-    def create(self, model: str, prompt: str, refs: list[dict]) -> dict:
+    def create(self, model: str, prompt: str, refs: list[dict], ratio: str = RATIO) -> dict:
         if len(refs) > MAX_REFERENCES:
-            raise RunwayError(f"{len(refs)} reference images: Runway takes at most {MAX_REFERENCES}")
-        body = {"model": model, "promptText": prompt, "ratio": RATIO}
+            e = RunwayError(f"{len(refs)} reference images: Runway takes at most {MAX_REFERENCES}")
+            e.pre_send = True   # refused before anything was sent
+            raise e
+        body = {"model": model, "promptText": prompt, "ratio": ratio}
         if refs:
             body["referenceImages"] = refs
         return self._json("POST", "/text_to_image", body)
@@ -81,6 +124,8 @@ class Client:
 
     def download(self, url: str) -> bytes:
         """The output URL is a signed link: fetched without the Runway key."""
+        if not str(url).startswith("https://"):
+            raise RunwayError("the output link is not https: not fetched")
         status, raw = self._transport("GET", url, {}, None)
         if status >= 300:
             raise RunwayError(f"download failed with {status}", status)

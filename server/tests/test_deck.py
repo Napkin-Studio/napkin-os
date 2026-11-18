@@ -116,7 +116,7 @@ def test_a_segment_runs_to_the_storyline_gate_and_the_document_holds_it(deck, mo
     assert host.data["run"]["state"] == "gate" and host.data["run"]["gate"]["id"] == "storyline" and host.data["run"]["gate"]["beats"]
     assert host.data["run"]["cost_usd"] == 0.3 and "agent" not in host.data["run"], "the agent circle is gone while a gate waits"
     assert fake.posts == [{"doc": "doc-1" if False else fake.posts[0]["doc"], "inputs": {"prompt": {"text": PROMPT, "client": "Fernley", "project": "Tea 2027", "agency": ""},
-                                                                                   "kind": "agency", "format": "pitch"}, "approvals": {}, "render": True}]
+                                                                                   "kind": "agency", "format": "pitch"}, "approvals": {}, "render": True, "marks": []}]
 
 
 def test_the_job_writes_the_engines_keys_and_never_the_apps(deck, monkeypatch):
@@ -261,3 +261,28 @@ def test_a_document_whose_pipeline_names_the_task_with_no_handler_still_finds_it
 def test_the_existing_tasks_resolve_as_before():
     for task, handler in (("draft_brief", "draft_brief@1.0"), ("start_campaign", "start_campaign@1.0"), ("reconsider", "reconsider@2.0")):
         assert registry.resolve(task, {})[1] == handler
+
+
+def test_every_build_sends_the_marks_the_document_holds_and_an_empty_list_when_none(deck, monkeypatch):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["confidential_fields"] = ["inputs.prompt.project"]
+    host.data["upstream"] = {"brief-1": {"budget_and_scope": "Project Nightjar, a secret launch.", "confidential_fields": ["budget_and_scope"]}}
+    host.chain = [{"id": "d_1", "kind": "classify", "targets": ["doc#upstream.brief-1.single_minded_proposition"], "licence": {"model": False, "corpus": False}}]
+    build(deck, host)
+    marks = {m["path"]: m for m in fake.posts[0]["marks"]}
+    assert "upstream.brief-1.budget_and_scope" in marks and "Nightjar" in marks["upstream.brief-1.budget_and_scope"]["text"]
+    assert "inputs.prompt.project" in marks
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    build(deck, Host(data=deck_data(), schema=SCHEMA))
+    assert fake2.posts[0]["marks"] == []
+
+
+def test_the_engines_run_images_reach_the_document_and_the_job_writes_nothing_of_the_apps(deck, monkeypatch):
+    v = view("gate", gate=GATE1)
+    v["run"]["images"] = {"state": "card", "cards": {"subjects": {"id": "c_12345678", "usd": 0.05}}, "spent_usd": 0, "cap_usd": 2.5}
+    use(monkeypatch, FakeEngine(v))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    build(deck, host)
+    assert host.data["run"]["images"]["cards"]["subjects"]["id"] == "c_12345678"
+    assert "approvals" not in host.data["run"] or "images" not in host.data["run"]["approvals"]

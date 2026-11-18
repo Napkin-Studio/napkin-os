@@ -135,6 +135,18 @@ def role_rows(s: dict, bl: list) -> bool:
     return False
 
 
+def picture_source(image: dict | None) -> bool:
+    """The deck-image-gen hook: a slot planned for generation counts as a picture source while the layouts are chosen, so the picker measures the
+    fit of the image layout and of its ``without_image`` and records both. After the image step a slide whose slot ended up unmade is planned again
+    without it (``unmade_planned``)."""
+    return isinstance(image, dict) and image.get("status") == "planned" and (image.get("from") or {}).get("kind") == "generated"
+
+
+def unmade_planned(deck: dict) -> list:
+    """The slots still ``planned`` once the image step is over: ``[(slide id, slot)]``."""
+    return [(sid, name) for sid, name, im in images.image_slots(deck) if picture_source(im)]
+
+
 def image_ready(lay: dict, ready: set | frozenset) -> bool:
     """Every required image slot of the layout can be drawn for this audience (``ready`` holds the slot names the slide has
     a drawable picture for: approved only for a client). A counted slot (frame_1 ... frame_4) needs all of them."""
@@ -650,6 +662,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     stop = prefs.get("text_mode") == "condense" and bool(prefs.get("repair"))
     story = set(validate.presented(deck))
     ready_all = images.drawn(deck, aud)
+    ready_all = {**ready_all, **{(sid, slot): im for sid, slot, im in images.image_slots(deck) if picture_source(im)}}
     ready = {}
     for (sid, slot) in ready_all:
         ready.setdefault(sid, set()).add(slot)

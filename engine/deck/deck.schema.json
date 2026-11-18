@@ -2404,6 +2404,24 @@
        "type": "string"
       }
      }
+    },
+    "candidate": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "asset",
+      "job"
+     ],
+     "description": "A hero (pro) picture beside the approved draft (deck-image-gen). slot.asset stays the draft; only a person's approval of the candidate's own asset promotes it. Never drawn while pending, flagged or removed.",
+     "properties": {
+      "asset": {
+       "type": "string",
+       "pattern": "^img_[0-9a-f]{12}$"
+      },
+      "job": {
+       "type": "string"
+      }
+     }
     }
    },
    "if": {

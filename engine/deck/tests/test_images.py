@@ -174,17 +174,17 @@ def test_the_demo_deck_validates_against_the_deck_schema(demo_stages, build_demo
     assert errs == [], errs[:3]
 
 
-def test_a_generated_source_is_refused_with_the_plain_words(demo_stages, build_demo, tmp_path):
-    with pytest.raises(SystemExit) as e:
+def test_a_generated_source_with_no_mark_data_is_refused_with_the_plain_words(demo_stages, build_demo, tmp_path):
+    with pytest.raises(SystemExit) as e:   # deck-image-gen: generation is built; with no mark data it is refused, and nothing was sent
         build_demo(demo_stages, tmp_path / "o", "--pictures", "creative", "--picture-source", "generated")
-    assert e.value.code == 2
+    assert "no mark data" in str(e.value)
 
 
 def test_generated_is_refused_message(demo_stages, tmp_path, capsys):
     from deck import run_deck
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as e:
         run_deck.main(["--stages", str(demo_stages), "--client", "x", "--project", "y", "--out", str(tmp_path), "--prompt-text", "p", "--picture-source", "generated"])
-    assert "nothing was sent and nothing was spent" in capsys.readouterr().err
+    assert "Confidential" in str(e.value)
 
 
 # ---------------------------------------------------------------- supplied pictures

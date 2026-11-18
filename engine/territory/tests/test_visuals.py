@@ -11,7 +11,8 @@ import pytest
 
 from territory import cards, pipeline
 from territory.llm import FakeLLM
-from territory.visuals import board, guard, plan as plan_mod, runway, safety, style as style_mod
+from territory.visuals import board, plan as plan_mod
+from visuals import guard, runway, safety, style as style_mod
 from territory.visuals.cli import main
 
 KEY = "rwy-test-secret-0123456789"
@@ -99,7 +100,8 @@ def go(run_path, *argv, rw=None, llm=None, ollama=clean_ollama, **kw):
 def style_pack(tmp_path, name="style", n_images=2, look="rough pencil, warm"):
     d = tmp_path / name
     d.mkdir(exist_ok=True)
-    (d / "style.yaml").write_text(f"look: [{look}]\npalette: [ochre, slate]\nthis_not_that:\n  - {{this: quiet kitchens, not: stock smiles}}\nfinish: rough\nbanned_imagery: [crowds]\n")
+    (d / "style.yaml").write_text(f"look: [{look}]\npalette: [ochre, slate]\nthis_not_that:\n  - {{this: quiet kitchens, not: stock smiles}}\nfinish: rough\nbanned_imagery: [crowds]\n"
+                                   + ("references:\n" + "".join(f"  ref{i:02d}.png: {{rights: own, why: invented test image, by: 'human:demo'}}\n" for i in range(n_images)) if n_images else ""))
     for i in range(n_images):
         (d / f"ref{i:02d}.png").write_bytes(PNG + bytes([i]))
     return d
@@ -224,6 +226,7 @@ def test_client_refuses_more_than_14_references():
 
 def test_a_reference_image_over_5mb_is_refused(tmp_path):
     d = style_pack(tmp_path, n_images=0)
+    (d / "style.yaml").write_text((d / "style.yaml").read_text() + "references:\n  big.png: {rights: own, why: invented test image, by: 'human:demo'}\n")
     (d / "big.png").write_bytes(b"0" * (4 * 1024 * 1024))              # 4MB raw is over 5MB once base64 encoded
     with pytest.raises(style_mod.StyleError, match="5MB"):
         style_mod.reference_images(style_mod.load(d))
@@ -439,7 +442,8 @@ def test_board_references_images_by_relative_path_and_deck_slot_keys(env):
 
 def test_the_example_style_pack_loads():
     from pathlib import Path
-    d = Path(style_mod.__file__).parent
+    import territory.visuals as _tv
+    d = Path(_tv.__file__).parent
     import shutil, tempfile
     with tempfile.TemporaryDirectory() as t:
         shutil.copy(d / "style.example.yaml", Path(t) / "style.yaml")

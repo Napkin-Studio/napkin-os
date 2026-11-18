@@ -13,7 +13,8 @@ import pytest
 
 from deck import from_territory as ft, images
 from territory import cards
-from territory.visuals import board, runway
+from territory.visuals import board
+from visuals import runway
 
 HERE = Path(__file__).resolve().parent
 DEMO = HERE / "fixtures" / "frames_demo"

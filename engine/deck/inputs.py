@@ -50,6 +50,7 @@ class Inputs:
     built_from: dict = field(default_factory=dict)   # intake.tier(): {tier, documents, brief, research}
     intake: dict = field(default_factory=dict)       # the a0 gaps/questions as the runner wrote them
     verified: dict = field(default_factory=dict)     # confirm ref -> {by, at}: the person's verify decisions (intake.verified.<ref>)
+    marks: list | None = None                        # parts a person marked Confidential: [{path, text, kind}]; None = never checked (picture generation is refused)
 
     def has_brief(self) -> bool:
         """True when a brief supplied at least one field (a field an intake stage filled does not count)."""
@@ -176,7 +177,67 @@ def empty_brief() -> dict:
                   "rejected_attempt": None, "review": None, "rival": None} for fid in BRIEF_FIELDS}
 
 
-def brief_from_data(data: dict) -> tuple[dict, dict, list, dict]:
+def _at_path(data, path: str):
+    """The value at a data path such as ``objectives.commercial`` or ``mandatories[0]`` (None when absent)."""
+    cur = data
+    for part in re.findall(r"[^.\[\]]+", str(path)):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        elif isinstance(cur, list) and part.isdigit() and int(part) < len(cur):
+            cur = cur[int(part)]
+        else:
+            return None
+    return cur
+
+
+def _flat(v) -> str:
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        return " ".join(_flat(x) for x in v.values())
+    if isinstance(v, (list, tuple)):
+        return " ".join(_flat(x) for x in v)
+    return "" if v is None else str(v)
+
+
+class MarksError(ValueError):
+    """A mark names a part that is not there or is empty: refused, never skipped (a skipped mark would let its text reach a prompt)."""
+
+
+def marks_from_data(data: dict, chain: list | None = None) -> list:
+    """The parts a person marked Confidential, with their text: brief parts in ``confidential_fields``, parts a ``classify`` decision marked
+    ``model: false`` or ``corpus: false`` (the chain; the target is ``<document>#<path>``), and materials whose licence is
+    ``client-confidential``. ``[{path, text, kind}]``; an empty list means the checks ran and found none."""
+    data = data or {}
+    out, seen = [], set()
+
+    def add(path, text, kind):
+        text = _flat(text).strip()
+        if not text:
+            raise MarksError(f"the part marked Confidential at {path!r} ({kind}) resolves to nothing or is empty: fix the path or clear the mark; nothing was skipped")
+        if (path, kind) not in seen:
+            seen.add((path, kind))
+            out.append({"path": path, "text": text, "kind": kind})
+    for path in data.get("confidential_fields") or []:
+        add(str(path), _at_path(data, path), "confidential_field")
+    for d in chain or []:
+        if not isinstance(d, dict) or d.get("kind") != "classify" or d.get("superseded_by"):
+            continue
+        lic = d.get("licence") if isinstance(d.get("licence"), dict) else {}
+        if lic.get("model", False) and lic.get("corpus", False):
+            continue
+        for tg in d.get("targets") or []:
+            if isinstance(tg, str) and "#" in tg:
+                path = tg.split("#", 1)[1]
+                add(path, _at_path(data, path), "classify")
+    mats = data.get("materials")
+    for mid, m in (mats.items() if isinstance(mats, dict) else [(x.get("id"), x) for x in mats or [] if isinstance(x, dict)]):
+        if isinstance(m, dict) and str(m.get("licence") or "").lower() == "client-confidential":
+            add(f"materials[{mid}]", f"{m.get('name') or ''} {m.get('text') or ''}", "licence")
+    return out
+
+
+def brief_from_data(data: dict, chain: list | None = None) -> tuple[dict, dict, list, dict]:
     """The one field mapping for a Brief Maker's data (``shared/data.yaml``, or ``data.upstream.<id>``
     in a Deck document): (fields, how_to_win, open_questions, coverage) via CLAN_FIELDS."""
     data = data or {}
@@ -188,7 +249,8 @@ def brief_from_data(data: dict) -> tuple[dict, dict, list, dict]:
         htw.setdefault(h.get("kind") or "points", []).append({"point": h.get("point"), "evidence": h.get("evidence", "")})
     oq = [{"question": q if isinstance(q, str) else q.get("question"), "why": "", "priority": "normal"} for q in data.get("open_questions") or []]
     cov = {"brief_fields": len(fields), "brief_fields_filled": sum(1 for f in fields.values() if f["value"]),
-           "how_to_win_points": sum(len(v) for v in htw.values()), "open_questions": len(oq), "brief_source": "brief-maker clan"}
+           "how_to_win_points": sum(len(v) for v in htw.values()), "open_questions": len(oq), "brief_source": "brief-maker clan",
+           "marks": marks_from_data(data, chain)}   # popped into Inputs.marks by the loaders: marked texts never stay in the coverage that reaches a report
     return fields, htw, oq, cov
 
 
@@ -196,7 +258,9 @@ def load_brief_clan(clan: Path) -> tuple[dict, dict, list, dict]:
     """Read a Brief Maker .clan (the brief tool's output) into (fields, how_to_win, open_questions,
     coverage), the same shape load_brief returns for a brief_object.json."""
     z = zipfile.ZipFile(clan)
-    return brief_from_data(yaml.safe_load(z.read("shared/data.yaml")) or {})
+    chain = yaml.safe_load(z.read("agent/decision-chain.yaml")) if "agent/decision-chain.yaml" in z.namelist() else []
+    chain = chain.get("decisions") if isinstance(chain, dict) else chain
+    return brief_from_data(yaml.safe_load(z.read("shared/data.yaml")) or {}, chain or [])
 
 
 def _pdf_pages(path: Path) -> tuple[str, int] | None:
@@ -275,8 +339,9 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
     else:
         clan = is_clan(Path(brief))
         fields, htw, oq, cov = load_brief_clan(brief) if clan else load_brief(brief)
+    marks = cov.pop("marks", None)
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=prompt_text or "",
-                 answers=answers or {}, intake=intake or {}, verified=verified or {})
+                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks)
     research = research or (brief if clan else None)
     if research:
         r = load_research(research)
@@ -382,8 +447,10 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
         members, dropped = _drop_kit_pins(members, set(kit_pins or ()), kit_ids)
     elif kit_pins:
         members, dropped = _drop_kit_pins(members, set(kit_pins))
+    chain_list = members.get("decisions") if "decisions" in members else members.get("chain")
+    chain_list = chain_list.get("decisions") if isinstance(chain_list, dict) else chain_list
     if brief_data is not None:
-        fields, htw, oq, cov = brief_from_data(brief_data)
+        fields, htw, oq, cov = brief_from_data(brief_data, chain_list or [])
     else:
         fields, htw, oq, cov = empty_brief(), {}, [], {"brief_fields": len(BRIEF_FIELDS), "brief_fields_filled": 0,
                                                        "how_to_win_points": 0, "open_questions": 0, "brief_source": "none"}
@@ -393,8 +460,11 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
         cov["kit_pins_dropped"] = dropped
     prompt = ((data.get("inputs") or {}).get("prompt") or {})
     intake = data.get("intake") or {}
+    marks = cov.pop("marks", None)
+    if "confidential_fields" in data:   # a Deck that carries its own marks, beside any the brief carried
+        marks = (marks or []) + marks_from_data(data, chain_list or [])
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=str(prompt.get("text") or ""),
-                 answers=dict(intake.get("answers") or {}), intake={k: v for k, v in intake.items() if k != "answers"})
+                 answers=dict(intake.get("answers") or {}), intake={k: v for k, v in intake.items() if k != "answers"}, marks=marks)
     chain = members.get("decisions") if "decisions" in members else members.get("chain")
     if members.get("facts") or members.get("findings") or research_id:
         title = ((up.get(research_id) or {}).get("campaign") or {}).get("name") if research_id else None

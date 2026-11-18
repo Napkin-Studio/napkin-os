@@ -22,6 +22,8 @@ Env (all optional)::
     NAPKIN_DECK_REPLAY     a folder of recorded stage files: with it, mode "replay" replays them, paced by nothing, free
     NAPKIN_DECK_LIVE       1 to allow mode "live": paid model calls (about 0.65 to 1.25 USD a deck). Off by default
     NAPKIN_DECK_MAX_USD    the most one run may spend live (default 2.00); the run stops, with its message, at the cap
+    NAPKIN_DECK_IMAGES     1 to allow picture generation (deck-image-gen): off by default. A cost card and a person's yes come first, always
+    NAPKIN_DECK_IMAGES_MAX_USD  the ceiling on one deck's picture spend over its whole life (default 2.50), failures and stage g included
 
 The gates: storyline (after stage b), territories (after c), idea (after d); an investor deck has the storyline only (after i).
 A gate is held until the request carries the person's approval of it AND that gate's stage output already existed when the request
@@ -92,6 +94,7 @@ class Settings:
         self.replay = Path(e["NAPKIN_DECK_REPLAY"]) if e.get("NAPKIN_DECK_REPLAY") else None
         self.live = (e.get("NAPKIN_DECK_LIVE") or "").strip() == "1"
         self.max_usd = float(e.get("NAPKIN_DECK_MAX_USD") or 2.0)
+        self.images = (e.get("NAPKIN_DECK_IMAGES") or "").strip() == "1"
 
 
 def safe_name(doc) -> str:
@@ -132,12 +135,19 @@ def validate_request(body: dict, settings: Settings) -> dict:
     if mode == "replay" and not (settings.replay and settings.replay.is_dir()):
         raise Refused(409, "no_recording", "there is no recording to replay and live is not asked for: set NAPKIN_DECK_REPLAY to a folder of recorded stages")
     approvals = body.get("approvals") or {}
-    for gate, a in approvals.items():
+    marks = body.get("marks")
+    if marks is not None and not (isinstance(marks, list) and all(isinstance(m, dict) and isinstance(m.get("text"), str) for m in marks)):
+        raise Refused(400, "bad_request", "marks must be a list of {path, text, kind}: the parts a person marked Confidential (an empty list when none)")
+    pics = approvals.get("images")
+    if pics is not None and not (isinstance(pics, dict) and pics.get("decision", "approve") == "approve" and str(pics.get("by") or "").startswith("human:") and pics.get("card")):
+        raise Refused(400, "bad_request", "approvals.images must be {decision: approve, by: human:<id>, at, card, usd}: a yes to one picture card, by a person")
+    for gate, a in {k: v for k, v in approvals.items() if k != "images"}.items():
         d = (a or {}).get("decision", "approve")
         if d != "approve":
             raise Refused(400, "not_supported", f"a '{d}' decision at the {gate} gate is recorded but the engine cannot act on it yet: only approve goes on")
     return {"doc": doc, "inputs": inp, "prompt": prompt, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
-            "approvals": approvals, "render": body.get("render", True) is not False}
+            "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
+            "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or "")}
 
 
 def plan_segment(kind: str, present: set[str], approvals: dict) -> tuple[str | None, str | None]:
@@ -167,6 +177,7 @@ class Doc:
         self.summary: dict | None = None
         self.pay: dict | None = None
         self.cost = 0.0
+        self.images: dict | None = None   # run.images: the picture cards the person reads (engine-owned)
 
     @property
     def stages(self) -> Path:
@@ -245,6 +256,8 @@ class Server:
         run = rs.run_object(state=d.state, stages=d.stages, summary=d.summary, current=cur, held=d.held, cost=(rs.spent(d.stages) if live else None),
                             error=d.error, validation=(d.pay or {}).get("validation"), slow=rs.is_slow(cur, elapsed),
                             written=[f"{k}" for k in (d.pay or {}).get("exports", {})], done=(d.pay or {}).get("done"))
+        if d.images and d.state == "done":
+            run = {**run, "images": d.images}
         out = {"doc": d.name, "state": d.state, "run": run, "notices": list(d.notices), "mode": d.req["mode"] if d.req else None}
         if d.state == "done" and d.pay:
             out["payload"] = d.pay
@@ -295,6 +308,7 @@ class Server:
                     d.pay = rs.payload(d.out, rep, inp, live=req["mode"] == "live")
                     d.state, d.held = "done", None
                 d.error, d.cost = None, rs.spent(d.stages)
+                d.images = self.images_view(d)
         except Refused as e:
             self.fail(d, e.message, retryable=e.kind != "cost_cap")
         except BaseException as e:   # noqa: BLE001 - a failing engine ends the job as failed with its message, never a mock success
@@ -350,6 +364,7 @@ class Server:
             argv += ["--until", "deck"]
         if req["mode"] == "live":
             argv.append("--live")
+        argv += self.image_args(d, req, until)
         err = io.StringIO()
         restore = self.guard_live(d, req) if req["mode"] == "live" else None
         try:
@@ -360,6 +375,50 @@ class Server:
         finally:
             if restore:
                 restore()
+
+    def image_args(self, d: Doc, req: dict, until: str | None) -> list[str]:
+        """The picture step's flags, only on the last segment, only when NAPKIN_DECK_IMAGES=1 and the request carries mark data (marks absent means
+        refuse: nothing is planned). A person's yes (run.approvals.images, naming a card) is passed as --yes-cost for the card it names; any other
+        run only plans (prints the open cards, makes nothing). The cache is keyed by document, never by the inputs; the key is the host's own."""
+        if not self.s.images or until or req.get("marks") is None:
+            return []
+        root = d.root
+        (root / "images").mkdir(parents=True, exist_ok=True)
+        marks = root / "marks.json"
+        marks.write_text(json.dumps(req["marks"], ensure_ascii=False))
+        # The host owns the ledger and the deck id (the document id): --dev is how a caller that owns both says so.
+        argv = ["--images", "plan", "--marks", str(marks), "--images-cache", str(root / "images"), "--dev", "--ledger", str(self.s.data / "ledger.jsonl"), "--deck-id", d.name]
+        if req.get("review"):
+            rv = root / "review.json"
+            rv.write_text(json.dumps(req["review"], ensure_ascii=False))
+            argv += ["--review", str(rv)]
+        if req.get("approver"):
+            argv += ["--approver", req["approver"]]
+        plan = rs.read_json(root / "images" / "plan.json") or {}
+        for h in plan.get("heroes") or {}:   # every run asks again for the final pictures the last plan was asked for, so the hero card is on a plain run too
+            argv += ["--hero", h]
+        yes = (req["approvals"].get("images") or {}).get("card")
+        if yes:
+            kind = next((k for k, c in (plan.get("cards") or {}).items() if c.get("id") == yes), None)
+            if kind == "subjects":
+                argv[1] = "subjects"
+                argv += ["--yes-cost", yes]
+            elif kind in ("pictures", "heroes"):
+                argv[1] = "live"
+                argv += ["--yes-cost", yes]
+            else:
+                raise Refused(409, "stale_card", "the yes names a picture card that is not open any more: read the card again; nothing was made")
+        return argv
+
+    def images_view(self, d: Doc) -> dict | None:
+        """run.images {state, cards, spent_usd, cap_usd}: what the app shows (every prompt readable, one button per card). Engine-owned."""
+        plan = rs.read_json(d.root / "images" / "plan.json")
+        if not self.s.images or not plan:
+            return None
+        keep = ("id", "usd", "rows", "spent_usd", "cap_usd", "left_usd", "held_back", "optional", "unknown", "over_cap", "prompts", "preview")
+        cards = {k: {kk: vv for kk, vv in c.items() if kk in keep} for k, c in (plan.get("cards") or {}).items() if (k == "subjects" or c.get("jobs"))}
+        spent = max([c.get("spent_usd", 0) for c in (plan.get("cards") or {}).values()] or [0])
+        return {"state": "card" if cards else "idle", "cards": cards, "spent_usd": spent, "cap_usd": plan.get("cap_usd")}
 
     def guard_live(self, d: Doc, req: dict):
         """Live only: every paid model call first asks the cap, and adds what it cost, so a run stops at NAPKIN_DECK_MAX_USD."""
