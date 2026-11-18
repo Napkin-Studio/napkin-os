@@ -536,6 +536,7 @@ def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, dec
         raise SystemExit(f"refused: {e}")
     rep["images"] = {"mode": a.images, "cards": {k: {"id": c["id"], "usd": c["usd"]} for k, c in res["cards"].items()},
                      "spent_usd": vjobs.spent_usd(ctx.manifest, ctx.ledger), "cap_usd": ctx.cap,
+                     "client_to_runway": res["plan"].get("client_to_runway"),   # the policy that applied, said in the report too
                      "made": (res["made"] or {}).get("created", 0), "stopped": (res["made"] or {}).get("stopped"),
                      "held": [f"{r['slide']}.{r['slot']}: {r.get('reason')}" for r in res["plan"]["slots"].values() if r["status"] in ("held", "rejected")],
                      "refusals": [{"slot": f"{r['slide']}.{r['slot']}", "reason": r["subject_refused"], "used": "generic template"}

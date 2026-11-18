@@ -8,6 +8,7 @@ never printed or stored; a cost card comes first and nothing goes live without t
 idempotent (a task that exists is polled, not created again; a saved frame is skipped)."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -36,7 +37,8 @@ RATIO_SETS = {
     ("gemini_image3_pro", "2K"): ("2752:1536", "2528:1696", "2400:1792", "2048:2048", "1856:2304", "1536:2752"),
 }
 MAX_REFERENCES = 14
-DEFAULT_MAX_USD = 2.0              # hard stop for one live run (plan call plus pictures); --max-usd changes it, a person's choice
+DEFAULT_MAX_USD = 2.0              # the Territory tool's lifetime cap for one run's frames (plan call plus every picture, every version); --max-usd lowers it
+LIFETIME_CAP_USD = 2.5             # Sai, 17 Nov 2026 (the Deck's rule): no flag raises a run's frames above $2.50
 MAX_ATTEMPTS = 3                   # a frame that has failed this often is given up on until a person looks (no endless re-billing)
 STOP_STATUSES = (401, 402, 403, 429)   # bad key, no credit, no access, rate limit: trying every other frame would only repeat it
 
@@ -181,7 +183,12 @@ def state(job: dict, manifest: dict, vdir: Path) -> str:
     return "new"
 
 
-def cost_card(jobs: list[dict], manifest: dict, vdir: Path, plan_usd: float | None = None, refs: int = 0, max_usd: float = DEFAULT_MAX_USD) -> dict:
+def cost_card(jobs: list[dict], manifest: dict, vdir: Path, plan_usd: float | None = None, refs: int = 0, max_usd: float = DEFAULT_MAX_USD,
+              spent_usd: float = 0.0, sends: int = 0, id_parts=()) -> dict:
+    """The card a person reads before a live run. ``spent_usd`` is what this run has already cost over its lifetime (the ledger: every version,
+    every attempt); the card is over the cap when that plus this card passes ``max_usd``. ``id`` is ``c_`` and 16 hex over exactly the jobs,
+    their states and models, the plan call, the cap, the spend and the send count (and ``id_parts``): a yes is ``--yes-cost <id>``, and any
+    send or change makes every earlier id stale."""
     rows, total = [], 0
     for kind, (model, credits, _) in MODELS.items():
         mine = [j for j in jobs if j["kind"] == kind]
@@ -194,14 +201,20 @@ def cost_card(jobs: list[dict], manifest: dict, vdir: Path, plan_usd: float | No
                      "credits_each": credits, "credits": new * credits})
         total += new * credits
     usd = round(total * USD_PER_CREDIT, 2)
-    return {"rows": rows, "credits": total, "usd": usd, "plan_usd": plan_usd, "reference_images": refs, "max_usd": max_usd,
-            "total_usd": round(usd + (plan_usd or 0), 2), "over_cap": round(usd + (plan_usd or 0), 2) > max_usd,
+    this = round(usd + (plan_usd or 0), 2)
+    spent = round(float(spent_usd or 0), 4)
+    cid = "c_" + hashlib.sha256(json.dumps(["territory-frames", [(j["key"], MODELS[j["kind"]][0], state(j, manifest, vdir)) for j in jobs], plan_usd, refs,
+                                             max_usd, spent, int(sends), list(id_parts)], sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:16]
+    return {"id": cid, "rows": rows, "credits": total, "usd": usd, "plan_usd": plan_usd, "reference_images": refs, "max_usd": max_usd,
+            "spent_usd": spent, "left_usd": round(max_usd - spent - this, 2),
+            "total_usd": this, "over_cap": spent + this > max_usd + 1e-9,
             "estimated": True, "note": "Credits at Runway's published 1K price ($0.01 a credit). Reference images are not billed separately on that page; "
                                        "the manifest records each task's estimatedCost from Runway so you can check."}
 
 
 def render_card(card: dict) -> str:
-    lines = ["RUNWAY COST CARD (estimate; a live run needs --live --yes-cost)"]
+    cid = card.get("id") or "<card id>"
+    lines = [f"RUNWAY COST CARD  card {cid}  (estimate; a live run needs --live --yes-cost {cid})"]
     if card.get("plan_usd") is not None:
         lines.append(f"  frame plan   1 model call (Claude)             ~${card['plan_usd']:.2f}")
     for r in card["rows"]:
@@ -213,15 +226,41 @@ def render_card(card: dict) -> str:
                      "They are never created again automatically; --retry-unknown --live --yes-cost re-creates them and puts them on this card.")
     lines.append(f"  {card['reference_images']} reference image(s) sent with every frame")
     lines.append(f"  total        {card['credits']} credits = ${card['usd']:.2f}" + (f", plus the plan call: about ${card['total_usd']:.2f}" if card.get("plan_usd") is not None else ""))
-    lines.append(f"  hard stop    cap ${card['max_usd']:.2f} for this run (--max-usd)" + ("  ** THE CARD IS OVER THE CAP: nothing will run **" if card.get("over_cap") else ""))
+    lines.append(f"  spent        ${card.get('spent_usd', 0):.2f} already on this run (every version and attempt, from the ledger); "
+                 f"left after this card ${card.get('left_usd', card['max_usd'] - card['total_usd']):.2f}")
+    lines.append(f"  hard stop    cap ${card['max_usd']:.2f} for this run's lifetime (--max-usd lowers it; it never goes above ${LIFETIME_CAP_USD:.2f})"
+                 + ("  ** THE CARD IS OVER THE CAP: nothing will run **" if card.get("over_cap") else ""))
     return "\n".join(lines)
 
 
 # ------------------------------------------------------------------------------------------------------------ generation
 
+def snapshot(e: dict) -> dict:
+    """One earlier attempt of a frame, as it is kept in its ``history``: what was sent and what it cost, never dropped."""
+    return {k: e.get(k) for k in ("task", "status", "estimated_credits", "cost_credits", "credits", "model", "sha256", "file", "error", "attempts", "guard",
+                                  "prompt_sha256") if e.get(k) is not None}
+
+
+def retire(e: dict) -> None:
+    """Move a frame's current attempt into its history (a retry of a flagged or unknown frame): its credits stay counted."""
+    if e.get("task") or e.get("status") in ("FAILED", "CANCELLED", "UNKNOWN", "CREATING", "SUCCEEDED"):
+        e["history"] = list(e.get("history") or []) + [snapshot(e)]
+
+
+def _ledger_spent(ledger) -> float:
+    from . import jobs as _jobs                       # the Deck's ledger and spend rule, shared (jobs imports this module)
+    return _jobs.spent_usd({"jobs": {}}, ledger)
+
+
 def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs: list[dict], sleep=time.sleep,
-             poll_every: float = 4.0, max_rounds: int = 120, log=print, max_credits: float | None = None) -> dict:
-    """Create the tasks that do not exist, then poll all of them. Idempotent: run it again to pick up anything still running."""
+             poll_every: float = 4.0, max_rounds: int = 120, log=print, max_credits: float | None = None, ledger=None,
+             cap_usd: float | None = None) -> dict:
+    """Create the tasks that do not exist, then poll all of them. Idempotent: run it again to pick up anything still running.
+
+    ``ledger`` (a ``visuals.jobs.Ledger``): every create is appended to it under its file lock BEFORE the POST, and with ``cap_usd`` the
+    spend derived from it (every send ever made for this run, at the largest of the table price and Runway's estimate) is checked under
+    that same lock, so a retry never hides the credits an earlier attempt cost and two processes cannot both take the last dollar.
+    A frame made again keeps its earlier attempts in ``history``."""
     frames = manifest.setdefault("frames", {})
     made = polled = 0
     unknown: list[str] = []
@@ -239,36 +278,52 @@ def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs:
             continue
         prior = frames.get(j["key"]) or {}
         attempts = prior.get("attempts", 0) + 1
-        frames[j["key"]] = {**_entry(j), "status": "CREATING", "attempts": attempts}
-        save_manifest(vdir, manifest)          # synced BEFORE the POST: a crash or timeout from here on leaves a marker, never a clean slate
-        try:
-            t = client.create(MODELS[j["kind"]][0], j["prompt"], refs)
-            task_id = t["id"]
-        except RunwayError as e:
-            if e.status is not None and e.status >= 500:         # the server may have taken the request before it failed
-                frames[j["key"]].update(status="UNKNOWN", error=str(e))
+        history = list(prior.get("history") or [])
+        if prior.get("task") or prior.get("status") in ("FAILED", "CANCELLED", "UNKNOWN", "CREATING"):
+            history.append(snapshot(prior))    # an earlier attempt is kept with what it cost, never overwritten
+        keep = {"history": history} if history else {}
+        with (ledger.locked() if ledger is not None else contextlib.nullcontext()):
+            if ledger is not None and cap_usd is not None:
+                spent = _ledger_spent(ledger)
+                if spent + price * USD_PER_CREDIT > cap_usd + 1e-9:
+                    stopped = f"lifetime cap reached: ${spent:.2f} spent on this run of ${cap_usd:.2f}, and the next frame costs ${price * USD_PER_CREDIT:.2f}"
+                    continue
+            if ledger is not None:              # appended and synced BEFORE the POST: a send that never got an answer still counts
+                ledger.append({"key": j["key"], "tier": j["kind"], "model": MODELS[j["kind"]][0], "table_credits": price, "state": "creating",
+                               "send": attempts})
+            frames[j["key"]] = {**_entry(j), "status": "CREATING", "attempts": attempts, **keep}
+            save_manifest(vdir, manifest)          # synced BEFORE the POST: a crash or timeout from here on leaves a marker, never a clean slate
+            try:
+                t = client.create(MODELS[j["kind"]][0], j["prompt"], refs)
+                task_id = t["id"]
+            except RunwayError as e:
+                if e.status is not None and e.status >= 500:         # the server may have taken the request before it failed
+                    frames[j["key"]].update(status="UNKNOWN", error=str(e))
+                    save_manifest(vdir, manifest)
+                    log(f"{j['key']}: UNKNOWN, may be billed: {e}")
+                    unknown.append(j["key"])
+                    stopped = "Runway answered with a server error on a create: stopped; those jobs are unknown (not created again automatically)"
+                    continue
+                frames[j["key"]] = {**_entry(j), "status": "FAILED", "error": str(e), "attempts": attempts, **keep}
                 save_manifest(vdir, manifest)
-                log(f"{j['key']}: UNKNOWN, may be billed: {e}")
-                unknown.append(j["key"])
-                stopped = "Runway answered with a server error on a create: stopped; those jobs are unknown (not created again automatically)"
+                log(f"{j['key']}: not created: {e}")
+                if e.status in STOP_STATUSES:
+                    stopped = ("Runway is rate limiting: run this again later to create the rest" if e.status == 429
+                               else f"Runway refused the request ({e.status}: key, credit or access): stopped, nothing else tried")
                 continue
-            frames[j["key"]] = {**_entry(j), "status": "FAILED", "error": str(e), "attempts": attempts}
-            save_manifest(vdir, manifest)
-            log(f"{j['key']}: not created: {e}")
-            if e.status in STOP_STATUSES:
-                stopped = ("Runway is rate limiting: run this again later to create the rest" if e.status == 429
-                           else f"Runway refused the request ({e.status}: key, credit or access): stopped, nothing else tried")
-            continue
-        except (OSError, ValueError, KeyError, TypeError) as e:   # timeout, reset, no answer, an answer with no task id: it may exist and be billed
-            frames[j["key"]].update(status="UNKNOWN", error=f"{type(e).__name__}: {e}")
-            save_manifest(vdir, manifest)
-            log(f"{j['key']}: UNKNOWN, the create was sent and no answer was seen ({type(e).__name__}); it may be billed and is NOT created again")
-            unknown.append(j["key"])
-            stopped = "a create got no answer (network): stopped; that job is unknown, not created again automatically"
-            continue
-        est = (t.get("estimatedCost") or {}).get("credits")
-        frames[j["key"]] = {**_entry(j), "task": task_id, "status": "PENDING", "estimated_credits": est, "attempts": attempts}
-        save_manifest(vdir, manifest)          # before polling: a crash now cannot lose the task id and create a duplicate
+            except (OSError, ValueError, KeyError, TypeError) as e:   # timeout, reset, no answer, an answer with no task id: it may exist and be billed
+                frames[j["key"]].update(status="UNKNOWN", error=f"{type(e).__name__}: {e}")
+                save_manifest(vdir, manifest)
+                log(f"{j['key']}: UNKNOWN, the create was sent and no answer was seen ({type(e).__name__}); it may be billed and is NOT created again")
+                unknown.append(j["key"])
+                stopped = "a create got no answer (network): stopped; that job is unknown, not created again automatically"
+                continue
+            est = (t.get("estimatedCost") or {}).get("credits")
+            frames[j["key"]] = {**_entry(j), "task": task_id, "status": "PENDING", "estimated_credits": est, "attempts": attempts, **keep}
+            save_manifest(vdir, manifest)          # before polling: a crash now cannot lose the task id and create a duplicate
+            if ledger is not None:
+                ledger.append({"key": j["key"], "tier": j["kind"], "model": MODELS[j["kind"]][0], "table_credits": price, "estimated_credits": est,
+                               "state": "polling", "task": task_id})
         made += 1
         committed += est if isinstance(est, (int, float)) else price
         if isinstance(est, (int, float)) and est > price * 1.5:
@@ -282,8 +337,8 @@ def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs:
             e = frames[j["key"]]
             try:
                 t = client.task(e["task"])
-            except RunwayError as err:
-                log(f"{j['key']}: could not poll: {err}")
+            except (RunwayError, OSError, ValueError) as err:   # a polling timeout or a dropped connection: the task is still there, poll again
+                log(f"{j['key']}: could not poll: {type(err).__name__}: {err}")
                 still.append(j)
                 continue
             polled += 1
@@ -294,7 +349,7 @@ def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs:
                     if not out:
                         raise RunwayError("the task succeeded but gave no output URL")
                     data = client.download(out)
-                except RunwayError as err:
+                except (RunwayError, OSError, ValueError) as err:
                     log(f"{j['key']}: finished but not downloaded ({err}): run again to retry")
                     still.append(j)
                     continue
@@ -302,6 +357,10 @@ def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs:
                 e["file"] = frame_file(j["key"])
                 e["sha256"] = hashlib.sha256(data).hexdigest()
                 e["cost_credits"] = (t.get("cost") or {}).get("credits") if isinstance(t.get("cost"), dict) else t.get("cost")
+                if ledger is not None and isinstance(e["cost_credits"], (int, float)):
+                    with ledger.locked():              # Runway's reported cost refines the price (the largest figure counts), never adds a send
+                        ledger.append({"key": j["key"], "tier": j["kind"], "model": MODELS[j["kind"]][0], "table_credits": MODELS[j["kind"]][1],
+                                       "cost_credits": e["cost_credits"], "state": "saved", "task": e.get("task")})
                 log(f"{j['key']}: saved")
             elif t.get("status") in ("FAILED", "CANCELLED"):
                 e["error"] = str(t.get("failure") or t.get("failureCode") or t.get("status"))

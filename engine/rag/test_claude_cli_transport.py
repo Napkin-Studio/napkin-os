@@ -101,6 +101,15 @@ def test_api_key_is_not_inherited_by_the_cli(cli):
     assert "ANTHROPIC_API_KEY" not in calls[0]["env"]
 
 
+def test_the_runway_key_is_not_inherited_by_the_cli(cli, monkeypatch):
+    """The Territory frames tool reads RUNWAYML_API_SECRET before its plan call; a model child has
+    no use for it, so it is removed from the child's environment (review 18 Nov 2026)."""
+    monkeypatch.setenv("RUNWAYML_API_SECRET", "rwy-test-not-a-key")
+    calls, _ = cli
+    pb._call_link("anthropic", "claude-opus-4-6", "x")
+    assert "RUNWAYML_API_SECRET" not in calls[0]["env"]
+
+
 def test_the_cli_runs_in_an_empty_folder_not_home(cli):
     """From ~ Claude Code attached the home folder's auto-memory to every brief call (audit
     N7); the CLI runs in an empty temp folder of its own, the same one for every call."""

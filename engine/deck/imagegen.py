@@ -9,7 +9,9 @@ why the generation lives here. Sai's rules of 17 Nov 2026 are enforced in code, 
 3. Drafts use flash; pro runs only for an approved, guard-checked hero a person asked for. Both are pinned in ``visuals.runway.TIER_MODEL``.
 4. Nothing is made while a part marked Confidential could be drawn: with no mark data the deck is refused; marked text never enters stage g;
    every subject, note and style block passes the allow-list lint (``visuals.lint``) and the deny-list of the marked texts.
-5. Nothing is remade automatically: a failure, a flag or a Style Pack change reaches a card and waits for a person.
+5. Client-derived prompts go to Runway only while ``visuals.policy.CLIENT_TO_RUNWAY`` is ``allow`` (allowed for testing, Sai 18 Nov 2026;
+   may change). Under ``refuse`` nothing is planned. Every picture card prints which policy applied; the lint and the deny-list run either way.
+6. Nothing is remade automatically: a failure, a flag or a Style Pack change reaches a card and waits for a person.
 
 The recorded outputs are ``<stages>/g_image_subjects.json`` (stage g) and ``<stages>/generated.json`` plus ``<stages>/assets/`` (what slice 3's
 images pass reads, like frames.json). The API key is read by ``visuals.runway.api_key`` at the first create only.
@@ -24,7 +26,7 @@ import shutil
 from pathlib import Path
 
 from visuals import guard as vguard
-from visuals import jobs, lint, runway, safety
+from visuals import jobs, lint, policy as vpolicy, runway, safety
 from visuals import style as vstyle
 
 from . import images, spec
@@ -306,6 +308,9 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     if inp.marks is None:
         raise GenError("picture generation is refused: this deck has no mark data, so it cannot be known whether a prompt would draw on a part marked "
                        "Confidential. Give the marks (--marks FILE, or build from the document) even when none are marked: an empty list is a real answer")
+    if vpolicy.client_to_runway() == "refuse":   # a deck's pictures come from a client brief: one switch, shared with the Territory frames
+        raise GenError("picture generation is refused: the policy keeps client-derived prompts away from Runway (visuals.policy.CLIENT_TO_RUNWAY "
+                       "is 'refuse'). A deck is drawn from a client brief, so nothing is sent; Sai decides when that changes")
     check_models(ctx.style)
     safe = safe_state(inp, deck, ctx.review)
     banned = list(dict.fromkeys([*safe["banned"], *ctx.style.banned_imagery, *ctx.banned_extra]))
@@ -318,7 +323,8 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     dec = decisions(ctx.review, ctx.approver)
     plan = {"version": 1, "deck_id": ctx.deck_id, "rails_version": RAILS_VERSION, "words_sha": words_sha(deck), "style": {"hash": ctx.style.hash, "source": ctx.style.source},
             "safe_messaging": {k: safe[k] for k in ("applies", "packs", "reviewed")}, "stage_g": {"recorded": rec is not None, "request_sha": request_sha(req)},
-            "cap_usd": ctx.cap, "slots": {}, "banned_imagery": banned}
+            "cap_usd": ctx.cap, "slots": {}, "banned_imagery": banned,
+            "client_to_runway": {"policy": vpolicy.client_to_runway(), "label": vpolicy.label(), "confidential_parts": len(inp.marks)}}
     if mode == "subjects" or rec is None:   # before stage g exists the prompts are code templates, marked as a preview
         subj = {}
     else:
@@ -534,6 +540,7 @@ def render_card(card: dict) -> str:
         lines.append(f"  Territory frames already made for this pitch: ${card['territory_usd_info']:.2f} (for information; not counted in this deck's cap)")
     if card.get("preview"):
         lines.append("  Prompts below use code templates (stage g not recorded): preview, not final.")
+    lines.append("  " + vpolicy.label())
     lines.append(f"  This card ${card['usd']:.2f} | spent on this deck ${card['spent_usd']:.2f} | cap ${card['cap_usd']:.2f} | left after this card ${card['left_usd']:.2f}")
     lines.append(f"  Every prompt, in full: <cache>/plan.json.   yes: --images live --yes-cost {card['id']}")
     return "\n".join(lines)

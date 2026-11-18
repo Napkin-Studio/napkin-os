@@ -96,7 +96,7 @@ class Style:
     withheld: list = field(default_factory=list)            # [{name, rights, why}]: held, never sent, never hashed
     models: dict = field(default_factory=lambda: dict(DEFAULT_MODELS))
     deck: dict = field(default_factory=dict)                # the pack's deck colour and type pointers (may be empty)
-    source: str = "built-in default"
+    source: str = "default until Laurence answers"      # the built-in default's label on the board and in the manifest (not hashed)
     hash: str = ""
     document_id: str | None = None
     version: int | None = None
@@ -422,7 +422,9 @@ def style_block(style: Style, extra_banned: list[str] | None = None) -> str:
     if style.notes:
         parts.append(style.notes if style.notes.endswith(".") else style.notes + ".")
     if sendable(style):
-        parts.append("Match the visual style of the reference images (look, light, colour, finish), not their subject.")
+        # worded so the picture-prompt lint passes it: "style of" reads as a request for someone's style (visuals.lint.STYLE_OF), which refused
+        # every pack that sends a reference image (review 18 Nov 2026). Not hashed: the style hash does not move.
+        parts.append("Match the look, light, colour and finish of the reference images, not their subject.")
     banned = list(dict.fromkeys([*style.banned_imagery, *(extra_banned or [])]))
     if banned:
         parts.append("Never show: " + ", ".join(banned) + ".")

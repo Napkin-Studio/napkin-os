@@ -1,12 +1,19 @@
 """Make frames for a SAVED territory run. The text pipeline is never re-run and the run file is only read.
 
-    python -m territory.visuals --from-run <run.json>                          # dry run: plan state, style, cost card, no call
-    python -m territory.visuals --from-run <run.json> --live --yes-cost        # paid: the frame plan (once) and the images
-    python -m territory.visuals --from-run <run.json> --style style --live --yes-cost    # after Laurence's style pack arrives
+    python -m territory.visuals --from-run <run.json>                                  # dry run: plan state, style, cost card with its id, no call
+    python -m territory.visuals --from-run <run.json> --live --yes-cost <card id>      # paid: the frame plan (once) and the images
+    python -m territory.visuals --from-run <run.json> --style style --live --yes-cost <card id>    # after Laurence's style pack arrives
 
 THE SWAP (Laurence's style pack replaces the default; only pictures change): put his style.yaml and images in a folder and run
-    python -m territory.visuals --from-run <run.json> --style <his folder> --live --yes-cost
+    python -m territory.visuals --from-run <run.json> --style <his folder>                 # read the card, then
+    python -m territory.visuals --from-run <run.json> --style <his folder> --live --yes-cost <card id>
 The run, the territory text and the frame plan are not touched; the pictures go to a new frames/v<N>-<hash>/ folder.
+
+Pictures go to Runway's Gemini image models. Whether a client-derived prompt may go is one switch, visuals.policy.CLIENT_TO_RUNWAY
+(allowed for testing, Sai 18 Nov 2026; the card always says which), and marks that cannot be known refuse the frames. Every shot passes the picture-prompt lint (visuals.lint: the common-word allow-list, brand words, the
+Confidential deny-list) before it is sent. A yes is the card's id (``--yes-cost c_...``): a stale or wrong id is refused. Spend is
+derived from an append-only ledger outside the frames folder (visuals.jobs.Ledger), every attempt of every version counted, and capped
+for the run's lifetime (``--max-usd``, default $2.00, never above $2.50).
 
 Runway key: environment variable RUNWAYML_API_SECRET only. The frame plan goes through the engine's model path
 (BRIEF_CLAUDE_TRANSPORT=cli for the Claude Code login). Quick model (gemini_image3.1_flash) for all territories,
@@ -21,12 +28,18 @@ import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from visuals import guard, runway, safety, style as style_mod
+from visuals import guard, jobs as vjobs, lint, runway, safety, style as style_mod
 
+from .. import material
 from . import board, plan as plan_mod
 
 
 ID_OK = re.compile(r"^[A-Za-z0-9_-]{1,40}$")      # a territory id becomes part of a file name: no slashes, dots or spaces
+
+
+def default_ledger() -> Path:
+    """The spend ledger: outside every frames folder, so deleting one cannot lower what a run has spent."""
+    return Path.home() / ".napkin" / "territory-frames" / "ledger.jsonl"
 
 
 def _versions(frames_dir: Path) -> dict:
@@ -47,13 +60,21 @@ def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Frames per territory, from a saved run (text frozen).")
     ap.add_argument("--from-run", required=True, help="a saved territory run JSON (from territory.run --out)")
     ap.add_argument("--style", help="the style pack folder (style.yaml + up to 14 images); default: <run folder>/style if it exists, else the built-in default")
-    ap.add_argument("--live", action="store_true"), ap.add_argument("--yes-cost", action="store_true")
+    ap.add_argument("--live", action="store_true")
+    ap.add_argument("--yes-cost", nargs="?", const="", default=None, metavar="CARD_ID",
+                    help="the id of the cost card you have read (c_ and 16 hex, printed on the card): a stale or wrong id is refused")
     ap.add_argument("--plan-only", action="store_true", help="make the frame plan (one model call) and stop, to read it before spending credits")
     ap.add_argument("--shortlist", default="", help="comma-separated territory ids to make on the best model (gemini_image3_pro)")
     ap.add_argument("--reviewed-by", default="", metavar="NAME", help="the person who has read this safe-messaging run: writes <run>.safe-review.json "
                     "(name, date, run hash) and allows frames. A changed run needs a new review")
-    ap.add_argument("--max-usd", type=float, default=runway.DEFAULT_MAX_USD, help="hard stop for the whole live run (plan call plus pictures); default 2.00")
-    ap.add_argument("--approve", default="", help="comma-separated frame keys a person has looked at and accepts although flagged")
+    ap.add_argument("--material", choices=material.ORIGINS, help="declare what a run saved before territory.run --material was made from "
+                    "(needs --declared-by): writes <run>.material.json bound to the run's hash; client material follows visuals.policy")
+    ap.add_argument("--declared-by", default="", metavar="NAME", help="the person who vouches for the material and that no part of it is marked Confidential")
+    ap.add_argument("--forbid", default="", help="comma-separated names (the client, a brand) the style pack's words may not hold")
+    ap.add_argument("--max-usd", type=float, default=runway.DEFAULT_MAX_USD,
+                    help=f"the cap for this run's frames over its lifetime (plan call plus every picture, every version); default 2.00, at most {runway.LIFETIME_CAP_USD:.2f}")
+    ap.add_argument("--approve", default="", help="comma-separated frame keys a person has looked at and accepts although flagged (needs --approved-by)")
+    ap.add_argument("--approved-by", default="", metavar="NAME", help="the person approving the frames named by --approve")
     ap.add_argument("--retry-flagged", action="store_true", help="regenerate flagged frames that nobody approved (costs credits)")
     ap.add_argument("--retry-unknown", action="store_true", help="re-create jobs whose create got no answer (they may already be billed). Needs --live --yes-cost, "
                     "shows them on the card, and must fit inside --max-usd")
@@ -61,7 +82,21 @@ def _parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=time.sleep, environ=None, poll_every: float = 4.0) -> int:
+def shot_for_prompt(s: dict, plan: dict | None) -> dict:
+    """The shot as it goes into a picture prompt. A plan made before the 18 Nov 2026 prompt (no ``prompt_version``) put lens and light in
+    ``camera``; the style pack is the only visual driver now, so that phrase is left out (framing already says how close the shot is)."""
+    if int((plan or {}).get("prompt_version") or 1) >= plan_mod.PROMPT_VERSION:
+        return s
+    return {k: v for k, v in s.items() if k != "camera"}
+
+
+def shot_text(s: dict) -> str:
+    """The shot description exactly as ``style.frame_prompt`` puts it first in the prompt (what the lint reads)."""
+    return " ".join(str(x).rstrip(".") + "." for x in (s.get("framing"), s.get("camera"), s.get("action")) if x)
+
+
+def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=time.sleep, environ=None, poll_every: float = 4.0,
+         ledger_path: Path | None = None) -> int:
     a = _parser().parse_args(argv)
     run_path = Path(a.from_run).resolve()
     run = json.loads(run_path.read_text())                       # read only: the run file is never opened for writing
@@ -78,6 +113,10 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     short = [s.strip() for s in a.shortlist.split(",") if s.strip()]
     if set(short) - set(ids):
         print(f"--shortlist names unknown territory id(s) {sorted(set(short) - set(ids))}; this run has {ids}")
+        return 2
+    if a.max_usd > runway.LIFETIME_CAP_USD + 1e-9:
+        print(f"--max-usd {a.max_usd:.2f} is over the ${runway.LIFETIME_CAP_USD:.2f} a run's frames may ever cost (Sai, 17 Nov 2026): refused. "
+              "No flag raises it.")
         return 2
 
     rhash = plan_mod.run_hash(run_path)
@@ -98,18 +137,39 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
         print(f"Safe-messaging category ({', '.join(safe['packs'])}), reviewed by {review['reviewer']} on {review['date']}: "
               "banned imagery stays out of every prompt and the guard check.")
 
+    if a.material:
+        try:
+            material.record_declaration(run_path, rhash, a.material, a.declared_by)
+        except ValueError as e:
+            print(e)
+            return 2
+    mat = material.gate(run, material.load_declaration(run_path, rhash))
+
+    forbid = [x.strip() for x in [mat.get("brand") or "", *a.forbid.split(",")] if x and x.strip()]
     try:
-        sty = style_mod.load(a.style if a.style else (run_dir / "style" if (run_dir / "style").is_dir() else None))
+        sty = style_mod.load(a.style if a.style else (run_dir / "style" if (run_dir / "style").is_dir() else None), forbid=forbid)
         refs = style_mod.reference_images(sty)
     except style_mod.StyleError as e:
         print(f"Style pack problem: {e}")
         return 2
     print(f"Style: {sty.source}, finish {sty.finish}, hash {sty.hash}, {len(sty.references)} reference image(s).")
+    for w in sty.warnings:
+        print(f"WARNING: style pack: {w}")
+    if dict(sty.models) != dict(runway.TIER_MODEL):
+        print(f"The style pack maps models {dict(sty.models)}; frames use only {dict(runway.TIER_MODEL)} (draft is the quick model, hero the "
+              "--shortlist one). A pack cannot change the tiers: fix the pack. Nothing was sent.")
+        return 2
     if sty.ignored_references:
         print(f"WARNING: Runway takes at most {style_mod.MAX_REFERENCES} reference images; using the first {style_mod.MAX_REFERENCES} by file name, "
               f"ignoring {len(sty.ignored_references)}: {', '.join(sty.ignored_references)}")
+    banned = list(safe["banned"])                  # the category's list ONLY decides the plan and refuses shots: the style pack's own bans go
+    guard_banned = list(dict.fromkeys([*banned, *sty.banned_imagery]))   # into the picture prompt and the guard check, never into the words
+    why = lint.lint_text(style_mod.style_block(sty, banned), banned=[], allow=guard_banned)
+    if why:
+        print(f"The style pack's words cannot go to a picture model: {why}. A person fixes the pack; nothing was sent.")
+        return 2
 
-    going_live = a.live and a.yes_cost
+    going_live = a.live and bool(a.yes_cost)
     key = None
     if going_live and not a.plan_only:
         try:
@@ -123,19 +183,28 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     version = f"v{n}-{sty.hash}"
     vdir = frames_dir / version
     manifest = runway.load_manifest(vdir)
-    banned = list(safe["banned"])                  # the category's list ONLY decides the plan and refuses shots: the style pack's own bans go
-    guard_banned = list(dict.fromkeys([*banned, *sty.banned_imagery]))   # into the picture prompt and the guard check, never into the words
+    ledger = vjobs.Ledger(ledger_path or default_ledger(), "territory:" + rhash)
+    n_back = backfill(ledger, frames_dir, plan_mod.load(run_path))
+    if n_back:
+        print(f"Spend ledger: {n_back} earlier send(s) of this run were read from its frames folders into the ledger, so they count against the cap.")
 
+    approved = []
     if a.approve:
+        who = a.approved_by.strip()
+        if not who:
+            print("--approve needs --approved-by <your name>: an approval is a person's, and the board records who")
+            return 2
         for k in [x.strip() for x in a.approve.split(",") if x.strip()]:
             e = (manifest.get("frames") or {}).get(k)
             if not e:
                 print(f"--approve: no frame {k} in {version}")
                 return 2
             e["approved_by_person"] = True
+            e["approved_by"] = who
             e["approved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            approved.append(k)
         runway.save_manifest(vdir, manifest)
-        print("Approved by a person: " + a.approve)
+        print(f"Approved by {who}: " + ", ".join(approved))
 
     plan = plan_mod.load(run_path)
     plan_usd = None if plan else plan_mod.estimate()["est_usd"]
@@ -153,62 +222,103 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
         print(f"This version folder ({version}) was made from different inputs than these (run, plan or safety list changed). Refused: "
               f"{json.dumps(have)} against {json.dumps(expect)}. Its frames would not match their prompts.")
         return 2
+    if approved and plan and vdir.is_dir():          # an approval changes what the board and the deck slot show: refresh them now
+        _write_board(run, run_path, vdir, version, manifest, plan, sty, safe)
+        print(f"Board refreshed: {vdir / 'board.html'}")
 
     PLACEHOLDER = {"framing": "[frame plan not made yet: this shot is a placeholder]"}
+    deny = lint.deny_list(mat["marks"] or [])
 
     def build_jobs() -> tuple[list[dict], list[dict]]:
         jobs, refused = [], []
         for tid in ids:
             kind = "best" if tid in short else "quick"
             for s in (plan or {}).get("territories", {}).get(tid) or [{"shot": x, **PLACEHOLDER} for x in plan_mod.SHOTS]:
-                text = " ".join(str(s.get(k) or "") for k in ("framing", "camera", "action"))
-                hit = safety.banned_in(text, banned)
+                s = shot_for_prompt(s, plan)
+                text = shot_text(s)
                 k = runway.job_key(tid, s["shot"], kind)
+                hit = safety.banned_in(text, banned)
+                bad = lint.lint_text(text, banned, deny) if plan and not hit else None    # a placeholder is never sent: the real shot is linted
                 if hit:
                     refused.append({"key": k, "tid": tid, "shot": s["shot"], "kind": kind, "why": "the shot description names banned imagery: " + ", ".join(hit)})
+                elif bad:
+                    refused.append({"key": k, "tid": tid, "shot": s["shot"], "kind": kind, "why": "the shot description cannot go to a picture model: " + bad})
                 else:
                     jobs.append({"key": k, "tid": tid, "shot": s["shot"], "kind": kind, "prompt": style_mod.frame_prompt(s, sty, banned)})
         return jobs, refused
 
     jobs, refused = build_jobs()
+    to_rename = []                                 # flagged files are moved aside only once the card is accepted and under the cap
     if a.retry_flagged:
         for k, e in (manifest.get("frames") or {}).items():
             g = e.get("guard") or {}
             if e.get("file") and g.get("flagged") and not e.get("approved_by_person") and any(j["key"] == k for j in jobs):
-                if going_live:
-                    (vdir / e["file"]).rename(vdir / f"{k}.flagged-{e.get('attempts', 1)}.png")
+                to_rename.append((k, e["file"], f"{k}.flagged-{e.get('attempts', 1)}.png"))
+                runway.retire(e)                   # the flagged attempt and its credits stay in the frame's history
                 e.update({"file": None, "task": None, "status": "RETRY", "guard": None})
     if a.retry_unknown:                            # in memory until the card is shown and accepted: the unknown jobs become 'new' on the card
         for k, e in (manifest.get("frames") or {}).items():
             if not e.get("task") and e.get("status") in ("CREATING", "UNKNOWN") and any(j["key"] == k for j in jobs):
+                runway.retire(e)
                 e.update({"status": "RETRY", "retried_unknown": True})
-    card = runway.cost_card(jobs, manifest, vdir, plan_usd, len(refs), a.max_usd)
+    spent, sends = vjobs.spent_usd({"jobs": {}}, ledger), vjobs.send_count({"jobs": {}}, ledger)
+    card = runway.cost_card(jobs, manifest, vdir, plan_usd, len(refs), a.max_usd, spent, sends,
+                            id_parts=[rhash, sty.hash, version, bool(a.retry_flagged), bool(a.retry_unknown), bool(a.plan_only), short,
+                                      mat["policy"], mat["ok"], len(mat["marks"] or [])])
     print(runway.render_card(card))
     for r in refused:
         print(f"Refused (needs a person): {r['key']}: {r['why']}")
+    print("  " + mat["policy_label"])
+    if mat["ok"]:
+        print(f"Material: {mat['origin']} (marked by {mat['by']})" + (", client-derived" if mat["client_derived"] else "")
+              + f"; {len(mat['marks'])} part(s) marked Confidential, kept out of every prompt by the deny-list.")
+    else:
+        print(f"Frames are refused for this run: {mat['why']}")
     if a.retry_unknown and not going_live:
-        print("--retry-unknown re-creates jobs that may already be billed: it needs --live --yes-cost after you have read the card above. Nothing was made.")
+        print("--retry-unknown re-creates jobs that may already be billed: it needs --live --yes-cost <card id> after you have read the card above. Nothing was made.")
         return 2
     if not going_live:
         if jobs:
             print(runway.preview(jobs[0], refs, placeholder=not plan))
             print(f"  {len(jobs)} request(s) in all; every prompt's sha256 is recorded in the manifest when it is sent.")
-        print("Dry run: no model call and no Runway call made." if not a.live else "Live run needs --yes-cost after you have read the card.")
+        print("Dry run: no model call and no Runway call made." if not a.live else f"Live run needs --yes-cost {card['id']} after you have read the card.")
         return 0
+    if a.yes_cost != card["id"]:
+        print(f"--yes-cost {a.yes_cost} is not this card's id ({card['id']}): the plan, the spend or the flags changed since the card you read, "
+              "or the id is wrong. Nothing was made.")
+        return 2
     if card["over_cap"]:
-        print(f"The card (${card['total_usd']:.2f}) is over the hard stop (${a.max_usd:.2f}): nothing will run. Raise --max-usd only if you mean it.")
+        print(f"The card (${card['total_usd']:.2f}, with ${card['spent_usd']:.2f} already spent on this run) is over the cap (${a.max_usd:.2f}): "
+              "nothing will run.")
+        return 2
+    if not mat["ok"] and not a.plan_only:
+        print(f"Nothing was sent: {mat['why']}")
         return 2
 
     if not plan:
         llm = llm_factory() if llm_factory else _live_llm(min(a.max_usd, plan_usd * 4 + 0.25))
+        with ledger.locked():                      # the plan call counts inside the run's cap, recorded before it is made
+            ledger.append({"key": "frames-plan", "kind": "model_call", "estimate_usd": plan_usd, "state": "creating"})
         plan = plan_mod.make(run, run_path, llm, banned)
+        if isinstance(plan.get("usd"), (int, float)):
+            with ledger.locked():
+                ledger.append({"key": "frames-plan", "kind": "model_call", "usd": plan["usd"], "state": "made"})
         print(f"Frame plan saved: {plan_mod.plan_path(run_path)}")
         expect["plan_sha256_12"] = plan_mod.plan_hash(run_path)
         jobs, refused = build_jobs()
     if a.plan_only:
         return 0
+    if not mat["ok"]:
+        print(f"Nothing was sent: {mat['why']}")
+        return 2
 
     vdir.mkdir(parents=True, exist_ok=True)
+    for k, old, new in to_rename:
+        if (vdir / old).exists():
+            (vdir / old).rename(vdir / new)
+        hist = (manifest["frames"][k].get("history") or [])
+        if hist and hist[-1].get("file") == old:
+            hist[-1]["file"] = new
     if new_version:
         vs = _versions(frames_dir)
         vs["versions"].append({"n": n, "hash": sty.hash, "folder": version, "created": date.today().isoformat(), "style": sty.summary()})
@@ -216,31 +326,71 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     manifest["style"] = sty.summary()
     manifest["inputs"] = expect                    # what these frames were made from; a re-run with other inputs is refused
     manifest["safe_messaging"] = {k: safe[k] for k in ("applies", "packs", "reviewed")}
+    manifest["material"] = {"origin": mat["origin"], "by": mat["by"], "client_derived": mat["client_derived"], "confidential_parts": len(mat["marks"] or []),
+                            "policy": mat["policy"], "policy_label": mat["policy_label"]}
     for r in refused:
-        manifest.setdefault("frames", {})[r["key"]] = {"territory": r["tid"], "shot": r["shot"], "tier": r["kind"], "model": runway.MODELS[r["kind"]][0],
-                                                       "status": "REFUSED", "error": r["why"]}
+        rows = manifest.setdefault("frames", {})
+        old = rows.get(r["key"]) or {}
+        if old.get("file") or old.get("task"):      # made (and paid for) before this rule: kept on record, marked, never sent again
+            old["refused_now"] = r["why"]
+            continue
+        rows[r["key"]] = {"territory": r["tid"], "shot": r["shot"], "tier": r["kind"], "model": runway.MODELS[r["kind"]][0],
+                          "status": "REFUSED", "error": r["why"], **({"history": old["history"]} if old.get("history") else {})}
     runway.save_manifest(vdir, manifest)
     client = runway.Client(key, transport)
-    plan_spent = plan_usd or 0                      # the plan call was made in this run only when it was not saved before
-    res = runway.generate(client, jobs, vdir, manifest, refs, sleep=sleep, poll_every=poll_every,
-                          max_credits=max(0.0, (a.max_usd - plan_spent) / runway.USD_PER_CREDIT))
+    res = runway.generate(client, jobs, vdir, manifest, refs, sleep=sleep, poll_every=poll_every, ledger=ledger, cap_usd=a.max_usd)
     if res["unknown"]:
         print(f"UNKNOWN ({len(res['unknown'])}): {', '.join(res['unknown'])}: the create was sent and no answer was seen. They may be billed: check the Runway "
-              "dashboard. Not created again automatically; --retry-unknown --live --yes-cost re-creates them after a fresh card.")
+              "dashboard. Not created again automatically; --retry-unknown --live --yes-cost <card id> re-creates them after a fresh card.")
     print(f"Runway: {res['created']} task(s) created, {len(res['still_running'])} still running" + (f" ({res['stopped']})" if res["stopped"] else "")
           + (": run the same command again to pick them up." if res["still_running"] else "."))
 
     if not a.no_guard:
         _guard(manifest, vdir, guard_banned, guard_post)
     runway.save_manifest(vdir, manifest)
-    fr = board.frames_for(manifest, vdir, run_dir, version, plan)
-    (vdir / "frames.json").write_text(json.dumps(board.frames_json(run, fr, version), indent=1, ensure_ascii=False))
-    (vdir / "board.html").write_text(board.render_html(run, run_path.stem, fr, plan, vdir, run_dir, version, sty.summary(), safe))
+    fr = _write_board(run, run_path, vdir, version, manifest, plan, sty, safe)
     flagged = sum(f["flagged"] for v in fr.values() for f in v)
-    spent = sum((e.get("cost_credits") or e.get("estimated_credits") or 0) for e in manifest["frames"].values())
+    total = vjobs.spent_usd({"jobs": {}}, ledger)
     print(f"Board: {vdir / 'board.html'}\nCards with frames: {vdir / 'frames.json'}\n{sum(len(v) for v in fr.values())} frame(s) saved, {flagged} flagged as needing a person; "
-          f"credits recorded in the manifest for this version: {spent:g}.")
+          f"spent on this run so far (the ledger: every version and every attempt): ${total:.2f} of the ${a.max_usd:.2f} cap.")
     return 0
+
+
+def backfill(ledger, frames_dir: Path, plan: dict | None) -> int:
+    """Frames made before the ledger existed (the 18 Nov 2026 first run) count too: when the ledger has no line for this run, every send
+    its version manifests record (each attempt, and every attempt kept in a frame's history) and the plan call are appended once, under
+    the lock. Returns how many sends were added."""
+    added = 0
+    with ledger.locked():
+        if ledger.lines():
+            return 0
+        for mpath in sorted(frames_dir.glob("v*/manifest.json")) if frames_dir.is_dir() else []:
+            try:
+                frames = json.loads(mpath.read_text()).get("frames") or {}
+            except (OSError, ValueError):
+                continue
+            for k, e in frames.items():
+                hist = list(e.get("history") or [])
+                # an entry written before histories were kept says only how many attempts it took: each one was a send
+                own = 0 if (e.get("status") in (None, "REFUSED", "RETRY") and not e.get("task")) else max(1, int(e.get("attempts") or 1) - len(hist))
+                for att, times in [*((h, 1) for h in hist), (e, own)]:
+                    model = att.get("model") or e.get("model") or runway.MODELS["quick"][0]
+                    for _ in range(times):
+                        ledger.append({"key": k, "tier": e.get("tier"), "model": model, "table_credits": e.get("credits") or runway.credits_for(model),
+                                       "estimated_credits": att.get("estimated_credits"), "cost_credits": att.get("cost_credits"), "state": "creating",
+                                       "backfilled_from": mpath.parent.name})
+                        added += 1
+        if plan is not None and added:
+            ledger.append({"key": "frames-plan", "kind": "model_call", "usd": plan.get("usd"), "estimate_usd": plan_mod.estimate()["est_usd"],
+                           "state": "creating", "backfilled_from": "frames-plan"})
+    return added
+
+
+def _write_board(run: dict, run_path: Path, vdir: Path, version: str, manifest: dict, plan: dict | None, sty, safe: dict) -> dict:
+    fr = board.frames_for(manifest, vdir, run_path.parent, version, plan)
+    (vdir / "frames.json").write_text(json.dumps(board.frames_json(run, fr, version), indent=1, ensure_ascii=False))
+    (vdir / "board.html").write_text(board.render_html(run, run_path.stem, fr, plan, vdir, run_path.parent, version, sty.summary(), safe))
+    return fr
 
 
 def _guard(manifest: dict, vdir: Path, banned: list[str], post) -> None:
