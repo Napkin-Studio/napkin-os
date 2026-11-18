@@ -206,11 +206,6 @@ export function applyLine(n: number, version: number, hidden = 0): string {
   return `Apply saves your ${plural(n, 'edit')} as v${version + 1}. v${version} stays.${gone}`
 }
 
-/** Asked before moving to another frame with edits not applied (3.12). */
-export function leaveAsk(n: number): string {
-  return `Keep the ${plural(n, 'edit')} for later, or discard them?`
-}
-
 /** "Next: Fill or remove Mask 1": the next Runway step, when a painted mask has no fill yet. */
 export function nextStep(s: EditSession): string | undefined {
   const filled = new Set(s.edits.filter((e) => e.kind === 'fill').map((e) => (e as { maskId: string }).maskId))

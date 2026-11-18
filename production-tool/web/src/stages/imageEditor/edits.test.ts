@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  EMPTY, addEdit, applyLine, textLayerName, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
+  EMPTY, addEdit, applyLine, textLayerName, clearMask, editCount, editLabel, editsForFrame, layersOf, nextStep, notApplied,
   toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, leftOutLine, NOTHING_TO_TAKE,
   afterSend, hasFill, newMask, pendingCount, rowFirst, sendRow,
   type EditSession, type MaskOp,
@@ -12,10 +12,9 @@ const SPEC = readFileSync(new URL('../../../../../docs/production-tool/ui-behavi
 const stroke = (mode: 'add' | 'sub' = 'add'): MaskOp => ({ t: 'brush', mode, r: 0.02, soft: 0.2, pts: [{ x: 0.5, y: 0.5 }] })
 
 describe('the words match 3.12', () => {
-  it('says what Apply makes, what is not applied, and asks before leaving', () => {
+  it('says what Apply makes and what is not applied', () => {
     expect(applyLine(3, 3)).toBe('Apply saves your 3 edits as v4. v3 stays.')
     expect(SPEC).toContain(applyLine(3, 3))
-    expect(SPEC).toContain(leaveAsk(3))
     expect(SPEC).toContain(notApplied(3))
     expect(notApplied(1)).toBe('1 edit not applied')
     expect(SPEC).toContain(leftOutLine(1))
