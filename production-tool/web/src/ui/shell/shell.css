@@ -89,7 +89,12 @@
 .band .pt-seg { border-radius: 4px; }
 
 /* ── menus opened from the bar (the shell's .pop) ───────────────────────── */
-.nui-pop { min-width: 260px; }
+.nui-pop { min-width: 260px; max-width: min(340px, calc(100vw - 16px)); }
+/* Two-line rows, as the mock's .pop .mi (title, then a small line under it): a hint never runs out of the
+   menu (live test 2026-11-18: Share's hint ran past the popover and the window). */
+.nui-pop .fmi { flex-wrap: wrap; align-items: flex-start; row-gap: 2px; }
+.nui-pop .fmi-text { font-weight: 600; }
+.nui-pop .fmi-hint { flex: 1 0 calc(100% - 26px); margin-left: 26px; white-space: normal; font: 400 12px/1.35 var(--font-ui); color: var(--muted); }
 
 /* ── the Decisions drawer (.dtree-drawer) ─────────────────────────────────── */
 .dd-scrim { position: fixed; inset: 0; background: rgba(20,20,19,.28); z-index: 84; border: 0; padding: 0; cursor: default; }
