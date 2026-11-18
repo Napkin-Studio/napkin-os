@@ -4,7 +4,8 @@
 //   - its .clan: the IndexedDB database CLAN_DB + ':' + id (model/store.ts);
 //   - its canvas: kv 'canvas:<id>';
 //   - its UI (job purposes, drafts, undo steps, update runs): kv 'ui:<id>';
-//   - its plain-data fallback, when the .clan engine does not load: kv 'doc:<id>'.
+//   - its plain-data fallback, when the .clan engine does not load: kv 'doc:<id>';
+//   - what this browser's copy is based on (the relay's version, and changes since): kv 'base:<id>' (serverCopy.ts).
 // The project index is kv 'projects'.
 
 import { indexedDbPersistence, memoryPersistence, type Persistence, type Saved } from '../../../clan-store/src'
@@ -17,6 +18,7 @@ export const clanDbFor = (id: string) => `${CLAN_DB}:${id}`
 export const canvasKeyFor = (id: string) => `canvas:${id}`
 export const uiKeyFor = (id: string) => `ui:${id}`
 export const docKeyFor = (id: string) => `doc:${id}`
+export const baseKeyFor = (id: string) => `base:${id}`
 
 /** The browser's storage as the projects use it; tests pass memoryStorage(). */
 export interface ProjectStorage {

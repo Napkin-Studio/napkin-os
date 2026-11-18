@@ -20,6 +20,7 @@ function setup() {
   const copy = new ServerCopy({
     id: 'p1', server: server as never, index: index as never, storage, canvasKey: 'canvas:p1',
     doc: () => ({ assets: {} }) as unknown as ProductionDocument, upload: async () => undefined,
+    base: { mark: null, unsaved: false },
   })
   return { storage, server, relayCanvas, copy }
 }

@@ -15,8 +15,9 @@ export interface ProjectEntry {
   created: string
   updated: string
   summary: ProjectSummary
-  /** The relay's copy this browser last saved or opened (features/personal-workspaces.clan): its ETag
-   *  goes as If-Match on the next save, so a save from somewhere else since is never overwritten. */
+  /** The newest relay copy this browser saved or opened, from any of its tabs (features/personal-workspaces.clan):
+   *  what "saved HH:MM" and Home show. Never a tab's If-Match: each tab sends the version its own document is
+   *  based on (serverCopy.ts, re-test R1). */
   server?: ServerMark
 }
 

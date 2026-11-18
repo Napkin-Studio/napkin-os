@@ -63,11 +63,12 @@ export const saveTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit',
 /** The save state and Save now. `can` is false without the relay and the .clan store (the in-browser
  *  mock, the plain-data fallback): then there is no Save anywhere. */
 export function useSave(): { can: boolean; state: SaveState; save: () => Promise<void> } {
-  const { clan, relay, project } = useServices()
+  const { clan, relay, project, serverCopy } = useServices()
   const index = useContext(ShellContext)?.index
   const manual = useSyncExternalStore(store.subscribe, () => store.get(clan))
   const serverAt = useSyncExternalStore(index ? index.subscribe : noSubscribe, () => index?.get(project.id)?.server?.savedAt ?? null)
-  const state = merged(manual, serverAt)
+  const conflict = useSyncExternalStore(serverCopy ? serverCopy.subscribe : noSubscribe, () => serverCopy?.get()?.message ?? null)
+  const state = merged(manual, serverAt, conflict)
   const can = !!clan && relay.kind === 'http'
   const save = useCallback(async () => {
     if (!clan || relay.kind !== 'http') return
@@ -85,9 +86,11 @@ export function useSave(): { can: boolean; state: SaveState; save: () => Promise
 
 const noSubscribe = () => () => {}
 
-/** A Save now that is running or failed says so; otherwise the latest of a Save now and the server copy's time. */
-export function merged(manual: SaveState, serverAt: string | null): SaveState {
+/** A Save now that is running or failed says so; a choice waiting (SaveConflict, also as a project opens: re-test
+ *  R2) is not saved; otherwise the latest of a Save now and the server copy's time. */
+export function merged(manual: SaveState, serverAt: string | null, conflict: string | null = null): SaveState {
   if (manual.kind === 'saving' || manual.kind === 'failed') return manual
+  if (conflict) return { kind: 'failed', why: conflict }
   const there = serverAt ? new Date(serverAt) : null
   const at = there && !Number.isNaN(there.getTime()) && (manual.kind !== 'saved' || there > manual.at) ? there : manual.kind === 'saved' ? manual.at : null
   return at ? { kind: 'saved', at } : IDLE

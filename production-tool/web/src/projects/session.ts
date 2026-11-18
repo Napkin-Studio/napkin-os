@@ -21,7 +21,7 @@ import { browserClanStore } from '../store/browser'
 import type { Relay } from '../relay'
 import type { ProjectIndex } from './projectIndex'
 import type { ProjectServer } from './server'
-import { ServerCopy } from './serverCopy'
+import { readBase, ServerCopy } from './serverCopy'
 import { canvasKeyFor, clanDbFor, uiKeyFor, type ProjectStorage } from './storage'
 import { autoName, summarise } from './summary'
 import { ProjectUiStore } from './uiStore'
@@ -119,13 +119,14 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
 
   // The project's copy on the relay (POST /clan with X-Project-Id), which the same name opens from
   // any browser: every 5 minutes when something changed, on each lock, on export and on Save, each
-  // checked against the copy this browser last saved or opened (serverCopy.ts). Not on the mock.
+  // checked against the relay's version this tab's document is based on (serverCopy.ts). Not on the mock.
   let serverCopy: ServerCopy | null = null
   if (clan && relay.kind === 'http' && deps.server) {
     serverCopy = new ServerCopy({
       id, server: deps.server, index, storage, canvasKey, doc: () => doc.get(),
       upload: (blob, mime) => relay.upload(blob, mime),
       onPosted: (at) => app.update((a) => { a.savedAt = at.toISOString() }),
+      base: await readBase(storage, index, id),
     })
     clan.clan.startMirror((bytes, meta) => serverCopy!.post(bytes, meta), { everyMs: 300_000 })
   }
@@ -140,6 +141,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   let changedSinceOpen = false
   const offChange = doc.onChange(() => {
     changedSinceOpen = true
+    serverCopy?.edited()
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       timer = null

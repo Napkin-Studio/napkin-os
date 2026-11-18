@@ -19,6 +19,9 @@ describe('the saved line has one source (live test 2026-11-18)', () => {
     expect(merged({ kind: 'failed', why: 'x' }, '2026-11-18T06:22:58Z').kind).toBe('failed')
     expect(merged({ kind: 'idle' }, null).kind).toBe('idle')
     expect(merged({ kind: 'idle' }, 'not a date').kind).toBe('idle')
+    // A choice waiting (a newer version elsewhere, this browser's changes here): not "saved".
+    expect(merged({ kind: 'idle' }, '2026-11-18T06:22:58Z', 'newer there')).toEqual({ kind: 'failed', why: 'newer there' })
+    expect(merged({ kind: 'saving' }, '2026-11-18T06:22:58Z', 'newer there').kind).toBe('saving')
   })
 })
 

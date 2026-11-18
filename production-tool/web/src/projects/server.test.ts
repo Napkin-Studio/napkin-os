@@ -320,19 +320,21 @@ describe('a save from somewhere else is never overwritten', () => {
     expect(fake.projects.get(p.id)!.row.etag).not.toBe(first)
   })
 
-  it('a lost mark never saves blind over the relay\u2019s copy: the person chooses (re-test N3)', async () => {
+  it('a tab with no base never saves blind over the relay\u2019s copy: the person chooses (re-test N3)', async () => {
     forgetSent()
     const fake = new FakeRelay()
     const { laptop, p } = await made(fake)
     const first = fake.projects.get(p.id)!.row.etag
-    await laptop.index.setServer(p.id, undefined)
-    // The same bytes as the relay's: the mark comes back and nothing is sent.
+    const copy = services(laptop.shell).serverCopy!
+    await copy.settle(null) // this tab knows no version of the relay's
+    // The same bytes as the relay's: that is its base, and nothing is sent.
     const before = fake.saves.length
     await services(laptop.shell).clan!.clan.mirrorNow('manual')
     expect(fake.saves.length).toBe(before)
+    expect(copy.basedOn()?.etag).toBe(first)
     expect(laptop.index.get(p.id)!.server!.etag).toBe(first)
     // Changed since: no save without If-Match, the choice is asked for.
-    await laptop.index.setServer(p.id, undefined)
+    await copy.settle(null)
     await nameKey(services(laptop.shell).doc, 'kite')
     await services(laptop.shell).clan!.flush()
     const err = await services(laptop.shell).clan!.clan.mirrorNow('manual').catch((x: unknown) => x)
@@ -341,6 +343,76 @@ describe('a save from somewhere else is never overwritten', () => {
     expect(fake.projects.get(p.id)!.row.etag).toBe(first)
     await laptop.shell.saveAsNewVersion()
     expect(fake.saves.at(-1)).toMatchObject({ id: p.id, ifMatch: first })
+  })
+})
+
+describe('opening a project checks the relay for a newer version (re-test R2)', () => {
+  const quiet = () => new Promise((r) => setTimeout(r, 30))
+  /** The laptop saved and closed it; the desktop then saved a newer version. */
+  async function newerElsewhere(laptopWorks: boolean) {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    if (laptopWorks) {
+      // Work on the laptop that never reached the relay (the tab was closed before its save went).
+      await nameKey(services(laptop.shell).doc, 'kite')
+      await services(laptop.shell).clan!.flush()
+      services(laptop.shell).serverCopy!.hold('the tab closed before its save went') // its close-time save stops
+    }
+    await laptop.shell.goHome()
+    await quiet()
+    const desktop = browser(fake)
+    await desktop.shell.openFromServer({ id: p.id })
+    await nameKey(services(desktop.shell).doc, 'lamp')
+    await services(desktop.shell).clan!.flush()
+    await services(desktop.shell).clan!.clan.mirrorNow('manual')
+    const theirs = fake.projects.get(p.id)!.row
+    const listed = fake.saves.length
+    await laptop.shell.open(p.id)
+    return { fake, laptop, p, theirs, listed }
+  }
+  const keys = (shell: Shell) => Object.values(services(shell).doc.get().keys).map((k) => k.key)
+
+  it('nothing of its own here: the newer version opens, and the next save goes on it', async () => {
+    const { fake, laptop, p, theirs, listed } = await newerElsewhere(false)
+    expect(keys(laptop.shell)).toContain('lamp')
+    const copy = services(laptop.shell).serverCopy!
+    expect(copy.get()).toBeNull()
+    expect(copy.basedOn()?.etag).toBe(theirs.etag)
+    expect(laptop.index.get(p.id)!.server).toEqual({ etag: theirs.etag, savedAt: theirs.savedAt })
+    expect(fake.saves.length).toBe(listed) // opening saved nothing
+    await nameKey(services(laptop.shell).doc, 'kite')
+    await services(laptop.shell).clan!.flush()
+    await services(laptop.shell).clan!.clan.mirrorNow('manual')
+    expect(fake.saves.at(-1)).toMatchObject({ id: p.id, ifMatch: theirs.etag })
+    expect(fake.projects.get(p.id)!.row.etag).not.toBe(theirs.etag)
+  })
+
+  it('work of its own here: it opens as it was, and the choice is asked for before any save', async () => {
+    const { fake, laptop, p, theirs, listed } = await newerElsewhere(true)
+    expect(keys(laptop.shell)).toContain('kite')
+    expect(keys(laptop.shell)).not.toContain('lamp')
+    const copy = services(laptop.shell).serverCopy!
+    expect(copy.get()?.message).toContain('this browser has changes of its own')
+    await expect(services(laptop.shell).clan!.clan.mirrorNow('manual')).rejects.toBeInstanceOf(SaveConflict)
+    expect(fake.saves.length).toBe(listed)
+    expect(fake.projects.get(p.id)!.row.etag).toBe(theirs.etag)
+    await laptop.shell.saveAsNewVersion()
+    expect(fake.saves.at(-1)).toMatchObject({ id: p.id, ifMatch: theirs.etag })
+    expect(copy.get()).toBeNull()
+  })
+
+  it('the same version as here: it opens with no question and no download', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    await laptop.shell.goHome()
+    await quiet()
+    const saves = fake.saves.length
+    await laptop.shell.open(p.id)
+    expect(services(laptop.shell).serverCopy!.get()).toBeNull()
+    expect(services(laptop.shell).serverCopy!.basedOn()?.etag).toBe(fake.projects.get(p.id)!.row.etag)
+    expect(fake.saves.length).toBe(saves)
   })
 })
 

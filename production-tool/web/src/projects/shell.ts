@@ -15,11 +15,14 @@ import { putBlobAs } from '../lib/blobs'
 import { copyName, newProjectId, type ProjectEntry, type ServerMark } from './projectIndex'
 import { NotAProject, unpackFile, type Unpacked } from './openFile'
 import { fetchAssets } from './serverAssets'
-import type { ServerCopy } from './serverCopy'
+import { readBase, type LocalBase, type ServerCopy } from './serverCopy'
 import { openProjectSession, personOf, ProjectRefused, type ProjectSession, type SessionDeps } from './session'
-import { canvasKeyFor, clanDbFor, docKeyFor, uiKeyFor } from './storage'
+import { baseKeyFor, canvasKeyFor, clanDbFor, docKeyFor, uiKeyFor } from './storage'
 import { autoName, summarise, UNTITLED as UNTITLED_TITLE } from './summary'
 import { updateDoc } from '../doc/store'
+import { sha256Hex } from '../lib/hash'
+import { clearLiveLog } from '../store/liveLog'
+import type { ProjectUi } from '../doc/ui'
 
 export interface ShellState {
   view: 'home' | 'project'
@@ -80,7 +83,9 @@ export class Shell {
       if (this.state.session?.id !== id) {
         await this.closeSession()
         try {
+          const held = await this.newerThere(id)
           const session = await openProjectSession(id, this.deps)
+          if (held) session.services.serverCopy?.hold(held)
           this.set({ session })
         } catch (e) {
           if (e instanceof ProjectRefused) await this.remember({ view: 'home' })
@@ -161,7 +166,7 @@ export class Shell {
       const { storage, index } = this.deps
       await index.remove(id)
       await storage.dropClan(clanDbFor(id))
-      await Promise.all([storage.del(canvasKeyFor(id)), storage.del(uiKeyFor(id)), storage.del(docKeyFor(id))])
+      await Promise.all([storage.del(canvasKeyFor(id)), storage.del(uiKeyFor(id)), storage.del(docKeyFor(id)), storage.del(baseKeyFor(id))])
     })
   }
 
@@ -237,7 +242,8 @@ export class Shell {
         { id: newProjectId(), name, naming: 'person', fetchAssets: true, copy: true },
       )
       const saved = await server.save(entry.id, got.bytes, { reason: 'manual', name })
-      await this.index.setServer(entry.id, { etag: saved.etag, savedAt: saved.savedAt })
+      // Its own project id is in this browser's copy only: a change the relay's copy lacks.
+      await this.based(entry.id, { mark: { etag: saved.etag, savedAt: saved.savedAt }, unsaved: true })
       if (got.canvas) await server.putCanvas(entry.id, got.canvas.elements).catch(() => {})
       await this.saveOver(session, copy, { etag: got.etag, savedAt: got.savedAt })
       return entry
@@ -277,6 +283,80 @@ export class Shell {
       await clan.flush()
       await clan.clan.mirrorNow('manual')
     }
+  }
+
+  /**
+   * Before a project of this browser opens: is a newer version on the relay than the one this browser's copy is
+   * based on (saved from another browser, or another tab)? One GET /projects (re-test R2, 2026-11-18: a reload
+   * opened this browser's copy and said "saved", and the next save was refused). With no work of its own here,
+   * the relay's version comes down and opens; with work of its own, the choice is asked for as it opens (the
+   * message returned). Offline or signed out: what is here opens, and a save still checks (If-Match).
+   */
+  private async newerThere(id: string): Promise<string | null> {
+    const { server, storage, index, relay } = this.deps
+    if (!server?.signedIn || relay.kind !== 'http') return null
+    let there: SavedProject | undefined
+    try {
+      const rows = await server.list()
+      index.knowRemote(rows)
+      there = rows.find((p) => p.id === id)
+    } catch {
+      return null
+    }
+    if (!there) return null
+    const base = await readBase(storage, index, id)
+    if (base.mark?.etag === there.etag) return null
+    const mark: ServerMark = { etag: there.etag, savedAt: there.savedAt }
+    // This browser's copy is the relay's version byte for byte: that is its base.
+    const local = await storage.clan(clanDbFor(id)).read().catch(() => null)
+    if (local && (await sha256Hex(local.bytes)) === there.etag) {
+      await this.based(id, { mark, unsaved: false })
+      return null
+    }
+    const at = new Date(there.savedAt).toLocaleString()
+    if (base.unsaved) return `A newer version of this project was saved at ${at}, and this browser has changes of its own.`
+    try {
+      await this.takeFromServer(id)
+      return null
+    } catch (e) {
+      console.warn('could not bring the newer version down', e)
+      return `A newer version of this project was saved at ${at}, and it could not be brought down here: ${e instanceof Error ? e.message : e}`
+    }
+  }
+
+  /** The relay's newest version of a project of this browser, in place of this browser's copy (which has no work
+   *  the relay lacks): its .clan with every picture, its canvas, its scene from the .clan's checkpoint. Undo steps
+   *  made on the copy it replaces go. */
+  private async takeFromServer(id: string): Promise<void> {
+    const { storage, makeClan, index, server } = this.deps
+    const got = await this.download(id)
+    const store = makeClan(storage.clan(clanDbFor(id)), { person: personOf(this.deps.app.get().me) })
+    let doc: ProductionDocument
+    try {
+      doc = await store.open(got.bytes)
+      if (server) await fetchAssets(doc, server)
+    } finally {
+      await store.close().catch(() => {})
+    }
+    if (got.canvas) await storage.put(canvasKeyFor(id), got.canvas satisfies CanvasSnapshot)
+    else await storage.del(canvasKeyFor(id))
+    // The scene's live store is the replaced copy's: the scene opens from the new .clan's checkpoint instead.
+    await clearLiveLog(`${clanDbFor(id)}:scene`)
+    const ui = await storage.get<ProjectUi>(uiKeyFor(id))
+    if (ui?.undo) {
+      const { undo: _gone, ...rest } = ui
+      await storage.put(uiKeyFor(id), rest)
+    }
+    const mark = { etag: got.etag, savedAt: got.savedAt }
+    await index.setServer(id, mark)
+    await index.touch(id, summarise(doc), { name: autoName(doc), changed: false })
+    await this.based(id, { mark, unsaved: false })
+  }
+
+  /** What this browser's copy of `id` is based on now (serverCopy.ts LocalBase). */
+  private async based(id: string, base: LocalBase): Promise<void> {
+    await this.deps.storage.put(baseKeyFor(id), base)
+    if (base.mark) await this.deps.index.setServer(id, base.mark)
   }
 
   private async download(id: string) {
@@ -344,6 +424,8 @@ export class Shell {
     const auto = autoName(doc)
     const name = opts.name ?? auto ?? unpacked.fileName
     const naming = opts.naming ?? (opts.name ? (opts.name === auto ? 'auto' : 'person') : auto || !unpacked.fileName ? 'auto' : 'person')
+    // Brought down from the relay: this browser's copy is that version, with nothing of its own yet.
+    if (opts.server && !opts.copy) await storage.put(baseKeyFor(id), { mark: opts.server, unsaved: false } satisfies LocalBase)
     return index.create({ id, name, naming, summary: summarise(doc), server: opts.server })
   }
 
