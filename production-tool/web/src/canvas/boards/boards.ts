@@ -133,29 +133,46 @@ export function boardKey(e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey'
 }
 
 /**
+ * Fit these elements at most at `max` zoom (100%), centred in the part of the view right of `inset` (the tool
+ * rail's screen pixels; production-ui's fitView): measure the view, then fit a box made to come out at that
+ * zoom and place. Every fit that shows a node uses it, so none lands under the rail (re-test 2b: a Brief
+ * linked from Assets came in at 181% with its left edge under the rail).
+ */
+export function fitClear(canvas: CanvasAdapter, what: readonly CanvasElement[], opts: { inset?: number; zoomFactor?: number; animate?: boolean; max?: number } = {}): void {
+  if (!what.length) return
+  const inset = opts.inset ?? railInsetNow()
+  const k = opts.zoomFactor ?? 0.9
+  canvas.fit(what, { zoomFactor: k, animate: false })
+  const z0 = canvas.view().zoom
+  const vb = canvas.visibleBounds()
+  const vw = (vb.maxX - vb.minX) * z0
+  const vh = (vb.maxY - vb.minY) * z0
+  const b = canvas.bounds(what)
+  const z = Math.min(opts.max ?? 1, k * Math.min(Math.max(1, vw - inset) / Math.max(1, b.w), vh / Math.max(1, b.h)))
+  const cx = b.minX + b.w / 2 - inset / 2 / z
+  const cy = b.minY + b.h / 2
+  const w = (0.9 * vw) / z
+  const h = (0.9 * vh) / z
+  const corner = (id: string, x: number, y: number): CanvasElement => ({ id, type: 'rectangle', x, y, width: 0, height: 0 })
+  canvas.fit([corner('__fit_a', cx - w / 2, cy - h / 2), corner('__fit_b', cx + w / 2, cy + h / 2)], { zoomFactor: 0.9, animate: opts.animate ?? false })
+}
+
+/** The screen pixels the tool rail covers at the canvas's left, measured now (0 with no rail: a test, the fallback). */
+export function railInsetNow(): number {
+  if (typeof document === 'undefined') return 0
+  const rail = document.querySelector('.canvas-toolbar.rail, .canvas-toolbar.vertical')?.getBoundingClientRect()
+  const wrap = document.querySelector('.canvas-wrap')?.getBoundingClientRect()
+  return rail && wrap && rail.width > 0 ? Math.max(0, Math.round(rail.right - wrap.left + 8)) : 0
+}
+
+/**
  * Fit the rail row at this number (a node, or a board with what is on it), an element by id, or
  * everything. `inset`: screen pixels on the left the chrome covers (the board rail), kept clear.
  * Returns false when there is no such row.
  */
 export function jumpTo(canvas: CanvasAdapter, doc: ProductionDocument, which: number | 'fit' | { el: string }, animate = true, inset = 0): boolean {
   const els = canvas.elements()
-  // Fit at most at 100%, centred in the part of the view right of the inset (production-ui's fitView):
-  // measure the view, then fit a box made to come out at that zoom and place.
-  const fit = (what: CanvasElement[]) => {
-    canvas.fit(what, { zoomFactor: 0.9, animate: false })
-    const z0 = canvas.view().zoom
-    const vb = canvas.visibleBounds()
-    const vw = (vb.maxX - vb.minX) * z0
-    const vh = (vb.maxY - vb.minY) * z0
-    const b = canvas.bounds(what)
-    const z = Math.min(1, 0.9 * Math.min(Math.max(1, vw - inset) / Math.max(1, b.w), vh / Math.max(1, b.h)))
-    const cx = b.minX + b.w / 2 - inset / 2 / z
-    const cy = b.minY + b.h / 2
-    const w = (0.9 * vw) / z
-    const h = (0.9 * vh) / z
-    const corner = (id: string, x: number, y: number): CanvasElement => ({ id, type: 'rectangle', x, y, width: 0, height: 0 })
-    canvas.fit([corner('__fit_a', cx - w / 2, cy - h / 2), corner('__fit_b', cx + w / 2, cy + h / 2)], { zoomFactor: 0.9, animate })
-  }
+  const fit = (what: CanvasElement[]) => fitClear(canvas, what, { inset, zoomFactor: 0.9, animate })
   if (which === 'fit') {
     // Bound links run between their ends; their own boxes say nothing about where they are.
     const placed = els.filter((e) => (e.customData as { kind?: string } | undefined)?.kind !== 'link')

@@ -505,6 +505,39 @@ export function Character({ initial, active, onPictureEditor }: {
   const railInset = narrow ? 0 : 64
   // New results land in view right of the rail (board-autolayout).
   useEffect(() => { ctrl?.setInset(railInset) }, [ctrl, railInset])
+  // Assets opened on purpose (+ › A brief from Brief Maker…, Continue in › Link a brief…) is the newest ask: a
+  // selected Brief would keep the Booth on itself and the library never showed (re-test 4c).
+  const assetsAsk = panels.assets ? `assets:${panels.assetsTab ?? ''}` : ''
+  const lastAsk = useRef('')
+  useEffect(() => {
+    const fresh = !!assetsAsk && assetsAsk !== lastAsk.current
+    lastAsk.current = assetsAsk
+    if (fresh && canvas && selBrief) canvas.select([])
+  }, [assetsAsk, canvas, selBrief])
+  // Selecting pans the node into the visible area (production-new-ui design guard; re-test 2b: a selected Brief
+  // sat half under the tool rail, and the Booth's column opening took the right edge). One node or picture,
+  // once per selection, after the Booth has slid in; never mid-drag, and not after the person moved it.
+  const oneSel = vs?.selected.length === 1 ? vs.selected[0] : ''
+  useEffect(() => {
+    if (!canvas || !oneSel || !own) return
+    const at = canvas.elements().find((e) => e.id === oneSel)
+    if (!at || isBoard(at)) return
+    const from = { x: at.x, y: at.y }
+    let tries = 0
+    let t: ReturnType<typeof setTimeout>
+    const reveal = () => {
+      const e = canvas.elements().find((x) => x.id === oneSel && !x.isDeleted)
+      if (!e || canvas.view().selectedIds.join() !== oneSel) return
+      if (canvas.isBusy()) {
+        if (++tries < 20) t = setTimeout(reveal, 150)
+        return
+      }
+      if (e.x !== from.x || e.y !== from.y) return
+      bringIntoView(canvas, { minX: e.x, minY: e.y, maxX: e.x + e.width, maxY: e.y + e.height }, railInset, !matchMedia('(prefers-reduced-motion: reduce)').matches)
+    }
+    t = setTimeout(reveal, 480)
+    return () => clearTimeout(t)
+  }, [canvas, own, oneSel, railInset])
   // A picture named on no board goes to its role's board: "Moved to Characters · Undo" (board-autolayout).
   useEffect(() => ctrl?.onRouted((r) => {
     const e = canvas?.elements().find((x) => x.id === r.ids[0])
@@ -806,7 +839,7 @@ export function Character({ initial, active, onPictureEditor }: {
         {showHint && <StartCard env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} onPictures={() => { if (!panels.assets) panels.toggle('assets') }} />}
         {/* Boards are frames on the canvas (⌥1…⌥9 jump, ⌥0 fits); on touch, with no ⌥, the Boards pill opens the jump sheet. */}
         {narrow && <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow keys={!own} />}
-        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={config.flags.briefNode ? () => panels.openAssets('napkin') : undefined} vertical={narrow} />
+        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={config.flags.briefNode ? () => { canvas?.select([]); panels.openAssets('napkin') } : undefined} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
         {!showHint && <LinksToggle chrome={chrome} />}
       </div>

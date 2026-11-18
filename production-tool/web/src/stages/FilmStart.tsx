@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useConfig, useServices } from '../app/context'
 import type { Ratio } from '../contracts/types'
 import { cardOf, type NodeEnv } from '../canvas/nodes/nodes'
+import { fitClear } from '../canvas/boards/boards'
 import { briefOfElement } from '../brief/canvas'
 import { scriptFromBrief, scriptFromLine } from '../jobs/prompt'
 import { briefChoices, offersStartFromBrief } from '../brief/start'
@@ -78,7 +79,7 @@ export function StartCard({ env, onPictures, src = pageBriefSource() }: {
         const ids = new Set([out.scriptId, out.storyboardId, out.briefId].filter(Boolean))
         const els = env.canvas.elements().filter((e) => !e.isDeleted && ids.has(cardOf(e)?.id ?? briefOfElement(e) ?? ''))
         env.canvas.select([])
-        if (els.length) env.canvas.fit(els, { zoomFactor: 0.8, animate: false })
+        if (els.length) fitClear(env.canvas, els, { zoomFactor: 0.8 })
       }
     } catch (e) {
       setError(message(e))

@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useConfig, useDoc } from '../app/context'
 import type { NodeEnv } from '../canvas/nodes/nodes'
+import { fitClear } from '../canvas/boards/boards'
 import { briefElement, linkBriefLater } from './canvas'
 import { briefFromDocument } from './model'
 import { pageBriefSource, type BriefSource, type OsBriefItem } from './os'
@@ -45,7 +46,7 @@ export function BriefsFromNapkin({ env, src: given }: { env: NodeEnv | null; src
       const r = await linkBriefLater(env, await src.read(b.documentId))
       // Into view with the Script it feeds (it lands left of the Script, maybe off screen).
       const els = [briefElement(env, r.briefId), r.scriptId ? env.canvas.elements().find((e) => !e.isDeleted && (e.customData as { id?: string } | undefined)?.id === r.scriptId) : undefined].filter((e): e is NonNullable<typeof e> => !!e)
-      if (els.length) env.canvas.fit(els, { zoomFactor: 0.8, animate: false })
+      if (els.length) fitClear(env.canvas, els, { zoomFactor: 0.8 })
       const script = r.scriptId ? env.doc.get().scripts[r.scriptId]?.title : undefined
       setSaid(r.scriptId ? `Linked “${b.title}” into ${script && script !== 'Script' ? `Script · ${script}` : 'the Script'}. Every agent now reads it.` : `“${b.title}” is on the canvas. ${r.note ?? ''}`.trim())
     } catch (e) {
@@ -59,7 +60,7 @@ export function BriefsFromNapkin({ env, src: given }: { env: NodeEnv | null; src
     const el = env && there ? briefElement(env, there.id) : undefined
     if (env && el) {
       env.canvas.select([el.id])
-      env.canvas.fit([el], { zoomFactor: 0.8, animate: false })
+      fitClear(env.canvas, [el], { zoomFactor: 0.8 })
     }
   }
   return (
