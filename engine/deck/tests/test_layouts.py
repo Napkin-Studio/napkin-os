@@ -132,7 +132,7 @@ def _plan(d, **prefs):
     return layouts.plan(d, prefs=prefs)
 
 
-def test_plan_is_deterministic_and_idempotent_and_refuses_a_planned_deck():
+def _old_test_refuses():
     d = deck()
     a, ia, pa = _plan(d)
     b, ib, pb = _plan(d)
@@ -201,7 +201,7 @@ def _lean(d):
 
 
 def test_lean_moves_other_points_last_first_and_keeps_the_first_of_a_list():
-    d = with_slide("s05", "audience", [_bullets(LONG, LONG + " one", LONG + " two", LONG + " three")])
+    d = with_slide("s05", "audience", [_bullets(LONG, LONG + " red", LONG + " blue", LONG + " green")])
     p = _lean(d)
     moved = p["slides"]["s05"]["layout"]["fit"]["moved"]
     assert [m["item"] for m in moved] == [3, 2, 1] or [m["item"] for m in moved] == [3, 2]   # last first, never item 0
@@ -253,7 +253,7 @@ def test_density_detailed_and_preserve_move_nothing():
 # ---------------------------------------------------------------------------------------------------------- notes lines
 def test_notes_lines_and_the_sha_of_the_verbatim_text(tmp_path):
     from pptx import Presentation
-    d = with_slide("s05", "audience", [_bullets(LONG, LONG + " one", LONG + " two", LONG + " three", refs=["f_9"])])
+    d = with_slide("s05", "audience", [_bullets(LONG, LONG + " red", LONG + " blue", LONG + " green", refs=["f_9"])])
     d["slides"]["s05"]["blocks"][0]["items"][0].pop("refs")
     d["slides"]["s05"]["blocks"][0]["items"][3]["refs"] = ["f_1", "f_2"]
     p = _lean(d)
@@ -272,7 +272,7 @@ def test_notes_lines_and_the_sha_of_the_verbatim_text(tmp_path):
 
 
 def test_validate_texts_drop_exactly_the_moved_items_and_notes_carry_them():
-    d = with_slide("s05", "audience", [_bullets(LONG, LONG + " one", LONG + " two", LONG + " three")])
+    d = with_slide("s05", "audience", [_bullets(LONG, LONG + " red", LONG + " blue", LONG + " green")])
     p = _lean(d)
     s = p["slides"]["s05"]
     shown = {t for t, _ in validate._texts(s)}
@@ -406,7 +406,7 @@ def test_a_shorten_hook_that_gives_text_binds_that_text_to_the_slot_only():
 
     def hook(sid, slot, limits, fields):
         seen.append((sid, slot, limits, fields))
-        return {"text": {f"{fields[0][0]}": "A short line."}}
+        return {"text": {f"{fields[0]["id"]}": "A short line."}}
     p, issues, pending = layouts.plan(d, hooks={"shorten": hook})
     s = p["slides"]["s05"]
     assert seen and seen[0][1] in s["slots"] and s["slots"][seen[0][1]]["text"] == "A short line."
@@ -420,3 +420,69 @@ def test_a_deferred_hook_lists_the_slot_in_pending_and_skips_the_notes_rung():
     hit = [x for x in pending if x["slide"] == "s05"]
     assert hit and hit[0]["rungs"][0] == "shorten"
     assert p["slides"]["s05"]["layout"]["fit"]["moved"] == []
+
+
+# ---------------------------------------------------------------------------------------------------------- adversarial fixes
+def _all_text(s):
+    return " ".join(layouts._block_texts(b)[0] if False else " ".join(layouts._block_texts(b)) for b in spec.shown_blocks(s))
+
+
+def test_a_titled_card_never_loses_its_title_under_lean():
+    card = {"kind": "card", "title": "Persona Priya", "text": LONG + " " + LONG}
+    d = with_slide("s05", "audience", [{"kind": "text", "text": LONG}, card, _bullets(LONG, LONG + " a")])
+    p = _lean(d)
+    s = p["slides"]["s05"]
+    notes = " ".join(t for t, _ in layouts.moved_texts(s))
+    assert "Persona Priya" in _all_text(s) + " " + notes   # on the slide or in the notes (a titled card stays on the slide)
+    assert layouts.slide_words(d["slides"]["s05"]) != layouts.slide_words(with_slide("s05", "audience", [{"kind": "text", "text": LONG}, {**card, "title": "Other"}, _bullets(LONG, LONG + " a")])["slides"]["s05"])
+
+
+def test_no_notes_moves_nothing_off_a_slide(tmp_path):
+    from test_layout_run import run
+    moved = lambda out: [m for s in json.loads((out / "deck.json").read_text())["slides"].values() for m in s["layout"]["fit"]["moved"]]
+    assert moved(run(tmp_path / "a"))   # control: the default pitch moves a point
+    assert moved(run(tmp_path / "b", "--no-notes")) == []
+
+
+@pytest.mark.parametrize("t", ["investment", "business_model", "measurement", "traction"])
+def test_nothing_moves_on_the_numbers_and_ask_slides(t):
+    p = _lean(with_slide("s05", t, [_bullets(LONG, LONG + " a", LONG + " b", LONG + " c")]))
+    assert p["slides"]["s05"]["layout"]["fit"]["moved"] == []
+
+
+def test_a_block_flagged_human_never_moves():
+    d = with_slide("s05", "audience", [_bullets(LONG, LONG + " a", LONG + " b"), {"kind": "text", "text": LONG, "human": True}, {"kind": "text", "text": LONG + " c", "human": True}])
+    assert all(m["block"] == 0 for m in _lean(d)["slides"]["s05"]["layout"]["fit"]["moved"])
+
+
+@pytest.mark.parametrize("t", ["Q3 delivery", "in 2027", "one in three homes", "a third of homes", "about a hundred homes", "twelve homes", "half the homes"])
+def test_dates_and_spelled_numbers_count_as_figures(t):
+    assert layouts._has_figure(t)
+
+
+def test_plan_on_a_planned_deck_strips_and_replans_from_the_base():
+    a, _, _ = layouts.plan(deck(), prefs={"density": "lean"})
+    b, _, _ = layouts.plan(a, prefs={"density": "lean"})
+    assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+def test_apply_text_orders_field_ids_numerically_and_the_hook_gets_max_words_and_id_text_fields():
+    val = {"kind": "list", "items": [{"text": f"i{n}"} for n in range(12)]}
+    layouts._apply_text(val, {f"0.{n}": f"t{n}" for n in range(12)})
+    assert [i["text"] for i in val["items"]] == [f"t{n}" for n in range(12)]
+    seen = []
+    d = _over_limit_deck()
+    layouts.plan(d, hooks={"shorten": lambda sid, slot, lim, f: seen.append((lim, f))})
+    lim, f = seen[0]
+    assert "max_words" in lim and "max_chars" in lim and all(set(x) == {"id", "text"} for x in f)
+
+
+def test_a_moved_item_with_a_newline_is_one_notes_line():
+    assert layouts.moved_line("first\nsecond", ["a"]) == "- first / second [refs: a]"
+
+
+def test_no_layout_plan_turns_the_look_css_off_in_web_and_hyperframes(tmp_path):
+    from test_layout_run import run
+    out = run(tmp_path / "n", "--no-layout-plan", "--hyperframes")
+    for f in (out / "deck.html", out / "hyperframes" / "index.html"):
+        assert "--tpt" not in f.read_text() and "max-inline-size:48ch" not in f.read_text(), f.name

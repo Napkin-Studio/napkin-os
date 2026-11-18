@@ -88,7 +88,7 @@ def build(deck, inp, findings: list | None = None, builds: bool = False, picture
     return "\n".join(scenes), island, (t - 1) / 100
 
 
-def render(deck, inp, out: Path, findings: list | None = None, builds: bool = False, pictures: dict | None = None, placed: set | None = None) -> Path:
+def render(deck, inp, out: Path, findings: list | None = None, builds: bool = False, pictures: dict | None = None, placed: set | None = None, look: bool = True) -> Path:
     """Write the HyperFrames slideshow project to the directory ``out``; returns ``out``. ``pictures`` (asset id -> derived JPEG, only the
     ones this audience draws) are copied into ``assets/``; nothing else is."""
     out.mkdir(parents=True, exist_ok=True)
@@ -100,7 +100,7 @@ def render(deck, inp, out: Path, findings: list | None = None, builds: bool = Fa
             if f"assets/{Path(path).name}" in scenes:
                 shutil.copyfile(path, out / "assets" / Path(path).name)
     m = deck["meta"]
-    css = theme_css(CSS_LAYOUT + (LOOK_CSS if spec.LOOK_V2 else "") + HF_CSS + (PIC_CSS if pictures else ""), head="serif", body="system-ui, sans-serif")
+    css = theme_css(CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + HF_CSS + (PIC_CSS if pictures else ""), head="serif", body="system-ui, sans-serif")
     (out / "index.html").write_text(f"""<!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=1920, height=1080">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>

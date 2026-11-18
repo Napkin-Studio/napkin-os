@@ -603,8 +603,10 @@ def main(argv=None):
         dl = dl.get("level") if isinstance(dl, dict) else dl
         dl = dl if dl in spec.DENSITY_LEVELS else None
         level = a.density or dl or (spec.DENSITY_DEFAULTS.get(a.format) if spec.LOOK_V2 else None)
+        if a.no_notes:   # no notes means nowhere for a moved point to go: nothing leaves the slide
+            level = "detailed"
         if level:
-            deck["meta"].setdefault("preferences", {})["density"] = {"level": level, "source": "person" if (a.density or dl) else "default"}
+            deck["meta"].setdefault("preferences", {})["density"] = {"level": level, "source": "person" if (a.density or dl or a.no_notes) else "default"}
         swaps = {k: v for k, v in (lk.get("layouts") or {}).items() if k in deck["slides"] and isinstance(v, str)}
         for item in a.layout:
             sid_, _, lid_ = item.partition("=")
@@ -665,9 +667,9 @@ def main(argv=None):
     rep["stages"]["render_pptx"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None)
+    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
     if a.hyperframes:
-        render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None)
+        render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()

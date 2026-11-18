@@ -132,10 +132,14 @@ def test_the_text_diff_between_pictured_and_plain_holds_only_the_label_flagged_a
     from collections import Counter
     for i, (a, b) in enumerate(zip(texts(pictured), texts(plain)), 1):
         wa, wb = Counter(" ".join(a).split()), Counter(" ".join(b).split())   # a picture layout may set the same words in other boxes: compare the words
-        added, removed = wa - wb, wb - wa
-        assert all(allowed.match(x) or x in ("Illustrative", "·", "Flagged") for x in added), (i, added)
-        prompt = set(" ".join(x for x in b if x.startswith("Image prompt")).split())
-        assert all(x in prompt for x in removed), (i, removed)
+        # exact equality: the pictured slide's words are the plain slide's words less the image prompt note, plus the picture labels
+        prompt = " ".join(x for x in b if x.startswith("Image prompt")).split()
+        got = Counter(" ".join(x for x in a if not allowed.match(x)).split())   # the label boxes are the only extras allowed
+        want = Counter(wb)
+        if any(allowed.match(x) for x in a):   # a picture was drawn here: it replaces the image prompt note
+            want.subtract(Counter(prompt))
+        want = +want
+        assert got == want, (i, got - want, want - got)
 
 
 def test_a_narrowed_layout_that_does_not_fit_draws_no_picture_and_raises_a_finding(demo_stages, build_demo, tmp_path):

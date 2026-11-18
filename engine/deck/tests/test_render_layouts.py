@@ -626,3 +626,34 @@ def test_non_image_logo_path_degrades_to_no_logo(tmp_path):
     d["meta"]["brand"] = {"logo_dark_png": str(f)}
     out = R.Renderer(d, _inp(), theme="napkin").render(tmp_path / "y.pptx")
     assert Presentation(str(out)).slides
+
+
+# ---- the same core assertions at the default lean density (the pinned runs above are detailed: no plan, nothing moved)
+def _lean_planned():
+    from deck import layouts
+    d = _deck()
+    d["meta"].setdefault("preferences", {})["density"] = {"level": "lean", "source": "default"}
+    return layouts.plan(d, prefs={"density": "lean"})[0]
+
+
+def test_every_word_survives_at_lean_on_the_slide_or_in_the_notes(tmp_path):
+    base = _deck()
+    deck = _lean_planned()
+    r, prs = _render(tmp_path, deck)
+    for sid, sl in zip(deck["order"], prs.slides):
+        have = slide_text(sl) + " " + norm(sl.notes_slide.notes_text_frame.text)
+        for w in [base["slides"][sid]["title"]] + [x for b in shown_blocks(base["slides"][sid]) for x in strings(b)]:
+            if w.strip():
+                assert norm(w) in have, (sid, r.layouts[sid], w)
+
+
+def test_claims_and_geometry_hold_at_lean(tmp_path):
+    deck = _lean_planned()
+    r, prs = _render(tmp_path, deck)
+    W, H = prs.slide_width, prs.slide_height
+    for sid, sl in zip(deck["order"], prs.slides):
+        have = slide_text(sl) + " " + norm(sl.notes_slide.notes_text_frame.text)
+        for c in deck["slides"][sid]["claims"]:
+            assert norm(c["text"]) in have, (sid, c["text"])
+        for sh in sl.shapes:
+            assert sh.left >= 0 and sh.top >= 0 and sh.left + sh.width <= W + 10 and sh.top + sh.height <= H + 10, (sid, sh.name)

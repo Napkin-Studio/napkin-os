@@ -575,10 +575,10 @@ LOOK_CSS = """
 """
 
 
-def theme_css(css: str | None = None, head: str = HEAD_FONT, body: str = BODY_FONT, colors: dict | None = None) -> str:
+def theme_css(css: str | None = None, head: str = HEAD_FONT, body: str = BODY_FONT, colors: dict | None = None, look: bool = True) -> str:
     """A stylesheet with the deck theme filled in (default: the whole web deck's); ``colors``: a brand's
     overrides by THEME key (accent_ink too)."""
-    css = (css or CSS_LAYOUT + (LOOK_CSS if spec.LOOK_V2 else "") + CSS_UI).replace("HEAD", head).replace("BODY", body)
+    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI).replace("HEAD", head).replace("BODY", body)
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
     if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
         T["tint"] = T["panel"]
@@ -597,7 +597,7 @@ def _brand_css(meta: dict) -> dict:
     return {k: v for k, v in (("head", b.get("head")), ("body", b.get("body")), ("colors", b.get("colors"))) if v}
 
 
-def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None) -> Path:
+def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None, look: bool = True) -> Path:
     """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs)."""
     views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed)
     m = deck["meta"]
@@ -609,7 +609,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m))}{PIC_CSS if any(v["cls"] for v in views) else ""}</style></head>
+<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>

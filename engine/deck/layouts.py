@@ -34,7 +34,7 @@ SCHEMA = Path(__file__).with_name("schemas") / "layout.schema.json"
 #: The keys the plan owns: removed by ``strip_plan``, compared in golden_plan.json.
 PLAN_KEYS = ("layout", "slots", "meta.layout_title_pt")
 #: Slide types whose points never move to the notes (the evidence the buyer scores, the risks and guardrails, the ask and the numbers).
-NEVER_MOVE_TYPES = ("criterion_answer", "scoring", "risks", "guardrails", "ask", "financials")
+NEVER_MOVE_TYPES = ("criterion_answer", "scoring", "risks", "guardrails", "ask", "financials", "investment", "business_model", "measurement", "traction")
 #: The words of a lean and a standard content slide, by density (spec.DENSITY_WORDS).
 TITLE_SIZES = (36, 32, 30, 28)
 _CACHE: dict = {}
@@ -410,6 +410,7 @@ def slide_words(s: dict, audience: str = "review") -> str:
 
 def _block_texts(b: dict) -> list:
     out = [str(b.get("text", ""))] if b.get("text") else []
+    out += [str(b[k]) for k in ("title", "heading") if b.get(k)]
     for i in b.get("items") or []:
         out += [str(x) for x in i] if isinstance(i, list) else [_item_text(i) if not isinstance(i, dict) else " ".join(str(v) for k, v in i.items() if k in ("text", "value", "label"))]
     for r in b.get("rows") or []:
@@ -432,7 +433,7 @@ def shown_sha(s: dict, audience: str = "review") -> str:
     return hashlib.sha256(" ".join(" ".join(str(t).split()).lower() for t in texts).encode()).hexdigest()[:12]
 
 
-def strip_plan(deck: dict) -> dict:
+def strip_plan(deck: dict, keep_density: bool = False) -> dict:
     """A copy of the deck without what the plan wrote: ``slide.layout``, the text slots (image slots stay) and
     ``meta.layout_title_pt`` (and ``meta.layout_plan``). The goldens stay at assemble level; golden_plan.json holds the plan."""
     d = copy.deepcopy(deck)
@@ -444,7 +445,7 @@ def strip_plan(deck: dict) -> dict:
                 s.pop("slots")
     for k in ("layout_title_pt", "layout_plan"):
         d["meta"].pop(k, None)
-    if "density" in (d["meta"].get("preferences") or {}):   # the density the plan ran at is stamped by run_deck, with its source
+    if not keep_density and "density" in (d["meta"].get("preferences") or {}):   # the density the plan ran at is stamped by run_deck, with its source
         d["meta"]["preferences"].pop("density")
         if not d["meta"]["preferences"]:
             d["meta"].pop("preferences")
@@ -506,7 +507,8 @@ def _fmt_refs(refs) -> str:
 
 def moved_line(m_text: str, refs) -> str:
     """The notes line for one moved point: ``- <verbatim> [refs: a,b]`` (no refs: no bracket)."""
-    return f"- {m_text}" + (f" [refs: {_fmt_refs(refs)}]" if refs else "")
+    one = " / ".join(x.strip() for x in str(m_text).splitlines() if x.strip())   # a note line is one line: a newline in a point becomes " / "
+    return f"- {one}" + (f" [refs: {_fmt_refs(refs)}]" if refs else "")
 
 
 def moved_texts(s: dict) -> list:
@@ -532,9 +534,16 @@ def _sha12(t: str) -> str:
     return hashlib.sha256(t.encode()).hexdigest()[:12]
 
 
+_FIGURE_WORDS = re.compile(
+    r"\b(?:Q[1-4]|H[12]|(?:19|20)\d\d|one in (?:\w+)|(?:a|one|two|three|four|five|six|seven|eight|nine|ten|\w+th) (?:third|quarter|half|fifth|tenth)s?|half|third|quarter|"
+    r"(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen)"
+    r"(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?)\b", re.I)
+
+
 def _has_figure(t: str) -> bool:
+    """A figure: a digit figure (``refs.numbers_in``), a quarter or half-year, a year, a fraction (one in three, a third, half) or a number word up to a thousand and more."""
     from .refs import numbers_in
-    return bool(numbers_in(t))
+    return bool(numbers_in(t)) or bool(_FIGURE_WORDS.search(t))
 
 
 def _movable(deck: dict, sid: str, s: dict, audience: str, cat_exempt: bool) -> list:
@@ -547,7 +556,7 @@ def _movable(deck: dict, sid: str, s: dict, audience: str, cat_exempt: bool) -> 
     cands = []
     first_lead = next((i for i, b in enumerate(s["blocks"]) if b["kind"] in ("text", "statement", "quote", "callout")), None)
     for bi, b in enumerate(s["blocks"]):
-        if b.get("internal"):
+        if b.get("internal") or b.get("human"):
             continue
         k = b["kind"]
         if k in ("bullets", "kv"):
@@ -557,7 +566,8 @@ def _movable(deck: dict, sid: str, s: dict, audience: str, cat_exempt: bool) -> 
                 if isinstance(it, dict) and it.get("human"):
                     continue
                 cands.append((bi, ii, item_verbatim(b, ii), (it.get("refs") if isinstance(it, dict) else None) or b.get("refs") or []))
-        elif k == "card" or (k in ("text", "small") and first_lead is not None and bi > first_lead):
+        elif (k == "card" and not b.get("title") and not b.get("heading")) or (k in ("text", "small") and first_lead is not None and bi > first_lead):
+            # a titled card stays on the slide: the notes line carries text only, and a title is a word of the deck
             if str(b.get("text", "")).strip():
                 cands.append((bi, None, str(b["text"]).strip(), b.get("refs") or []))
     sourced = [c for c in cands if c[3]]
@@ -635,9 +645,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     prefs, swaps, hooks = prefs or {}, swaps or {}, hooks or {}
     fx = (fixes or {}).get("slides") or {}
     density = prefs.get("density") or "detailed"
-    if any((s.get("layout") or {}).get("blocks_sha") for s in base_deck["slides"].values()):
-        raise ValueError("plan() takes the base deck, never a planned one")
-    deck = copy.deepcopy(base_deck)
+    deck = strip_plan(base_deck, keep_density=True)   # a planned deck is stripped first: the plan always starts from the base, so planning again changes nothing
     aud = deck["meta"].get("audience", "review")
     stop = prefs.get("text_mode") == "condense" and bool(prefs.get("repair"))
     story = set(validate.presented(deck))
@@ -830,7 +838,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
                 if stop:
                     pending.append(_pend(sid, x))
                 elif hooks.get("shorten"):
-                    ans = hooks["shorten"](sid, x["slot"], {"max_chars": x["evidence"]["limit"]}, _fields(sl_, s["slots"], x["slot"], aud))
+                    ans = hooks["shorten"](sid, x["slot"], {"max_chars": x["evidence"]["limit"], "max_words": lay["slots"][x["slot"]].get("max_words") or max(1, x["evidence"]["limit"] // 6)},
+                                           _field_texts(sl_, s["slots"], x["slot"], aud))
                     if ans and ans.get("deferred"):
                         pending.append(_pend(sid, x))
                     elif ans and ans.get("text"):
@@ -864,10 +873,19 @@ def _fields(s: dict, slots: dict, slot: str, aud: str) -> list:
     return out
 
 
+def _field_texts(s: dict, slots: dict, slot: str, aud: str) -> list:
+    """The slot's fields as ``[{id, text}]``: ``id`` is ``"<block>"`` or ``"<block>.<item>"`` (base-deck field ids), ``text`` the verbatim words."""
+    out = []
+    for bi, ii in _fields(s, slots, slot, aud):
+        b = s["blocks"][bi]
+        out.append({"id": f"{bi}" if ii is None else f"{bi}.{ii}", "text": item_verbatim(b, ii)})
+    return out
+
+
 def _apply_text(val: dict, text: dict) -> None:
     """Bind the condensed fields a hook answered into the slot value only (blocks are never edited: slice 5 owns the guards on that
     text). A field id is ``"<block>"`` or ``"<block>.<item>"``, in the order the slot's fields were given."""
-    keys = sorted(text)
+    keys = sorted(text, key=lambda k: tuple(int(x) if x.isdigit() else x for x in str(k).split(".")))   # "0.2" before "0.10"
     if val["kind"] == "text" and keys:
         val["text"] = text[keys[0]]
     elif val.get("items"):

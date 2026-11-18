@@ -434,7 +434,7 @@ def rebuilt(tmp_path_factory):
 
 
 #: Items that were n/a in slice 2's baseline and that deck-layout-library now answers (the plan writes layouts, alternatives and slots).
-NEWLY_JUDGED = {"l_one_dominant", "l_alternatives", "l_slots_clean", "w_density_met", "w_notes_kept"}
+NEWLY_JUDGED = {"l_alternatives", "l_slots_clean", "w_density_met", "w_notes_kept"}
 
 
 def test_baseline_against_a_geometry_only_rebuild_no_item_turns_from_yes_to_no(rebuilt):
