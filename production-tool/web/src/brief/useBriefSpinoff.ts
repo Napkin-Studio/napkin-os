@@ -8,6 +8,9 @@ import type { Flags } from '../contracts/types'
 import type { NodeEnv } from '../canvas/nodes/nodes'
 import { pageBriefSource, type BriefSource } from './os'
 import { briefSpinoffOf, startFromBriefId, withoutBriefSpinoff } from './start'
+import { fitClear } from '../canvas/boards/boards'
+import { cardOf } from '../canvas/nodes/nodes'
+import { briefOfElement } from './canvas'
 
 let taken = false
 /** The brief the page arrived with, held at boot (main.tsx) before the router rewrites the URL to a project's
@@ -25,6 +28,13 @@ export function useBriefSpinoff(env: NodeEnv | null, flags: Pick<Flags, 'briefNo
     taken = true
     held = null
     if (briefSpinoffOf(window.location.search)) window.history.replaceState(window.history.state, '', window.location.pathname + withoutBriefSpinoff(window.location.search) + window.location.hash)
-    startFromBriefId(env, src, id, 'spinoff').catch((e) => console.warn('the brief could not be brought in', e))
+    startFromBriefId(env, src, id, 'spinoff').then((out) => {
+      // In view clear of the tool rail, nothing selected, as the start card lays a film out (re-test 2b: at
+      // 1116 px the Brief landed half under the rail).
+      const ids = new Set([out.briefId, out.scriptId])
+      const els = env.canvas.elements().filter((e) => !e.isDeleted && ids.has(cardOf(e)?.id ?? briefOfElement(e) ?? ''))
+      env.canvas.select([])
+      if (els.length) fitClear(env.canvas, els, { zoomFactor: 0.8 })
+    }).catch((e) => console.warn('the brief could not be brought in', e))
   }, [env, flags?.briefNode, src])
 }
