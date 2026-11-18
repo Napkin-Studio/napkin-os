@@ -360,6 +360,8 @@ describe('an edit that came back the same (QA 2026-11-17)', () => {
     const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))!
     expect(row.textContent).toContain('came back the same')
     expect(row.textContent).not.toContain('ready')
+    // Not counted as an edit: nothing for Apply to save (Playwright live test 2026-11-18).
+    expect(byText(el, 'Apply as new version')?.disabled).toBe(true)
   })
 })
 

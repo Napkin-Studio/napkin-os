@@ -217,7 +217,9 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     void image(sha).then((b) => { if (alive) setNatural({ sha, w: b.width, h: b.height }) }).catch(() => undefined)
     return () => { alive = false }
   }, [sha, asset?.w, asset?.h, image])
-  const n = editCount(session)
+  // An edit that came back the same changes nothing, so it is not counted (Playwright live test 2026-11-18: Apply
+  // said "saves your 2 edits" with one of them the same).
+  const n = editCount(session) - session.edits.filter((e) => !session.hidden.includes(e.id) && stateOf(e) === 'same').length
   // Work here at all (the edits, and a mask painted and not filled): what Before compares and Apply looks at.
   const work = n + unfilledMasks(session)
   // Before / After: with edits not applied, Before is this version as saved and After has the edits;
