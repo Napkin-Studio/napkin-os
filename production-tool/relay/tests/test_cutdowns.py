@@ -178,6 +178,7 @@ def test_a_render_goes_to_stitch_free_with_its_crops_and_its_words_drawn_here():
     assert job["state"] == "submitted" and job["cost"]["reserved"] == 0 and job["crew"] == "edie"
     [event] = h.stitched
     assert event["mode"] == "cutdown" and event["size"] == [1080, 1920] and event["fadeOutS"] == 0.5
+    assert event["lengthS"] == 15  # stitch holds the card when the windows fall short (re-test N-F)
     assert [c["key"] for c in event["clips"]] == [f"out/{asset(n, 'video/mp4')['sha256']}" for n in (1, 2, 3)]
     assert event["clips"][0]["crop"]["w"] == 607.5 and event["clips"][0]["takeSize"] == [1920, 1080]
     assert len(event["clips"][1]["cropKeys"]) == 2 and "crop" not in event["clips"][2]

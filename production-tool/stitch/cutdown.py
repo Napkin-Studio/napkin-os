@@ -4,7 +4,7 @@ Lambda's "cutdown" mode, beside stitch.py, which hands it the event.
   {"jobId", "mode": "cutdown", "size": [w, h],
    "clips": [{"key", "inS", "outS", "takeSize"?: [w, h], "crop"?: {x, y, w, h},
               "cropKeys"?: [{"at", "box"}]}, …],
-   "layers"?: [{"key", "fromS"?, "toS"?}], "endCard": true, "fadeOutS"?: 0.5,
+   "layers"?: [{"key", "fromS"?, "toS"?}], "endCard": true, "fadeOutS"?: 0.5, "lengthS"?: 6,
    "outKey", "resultKey"}
 
 Each clip is the window inS..outS of its take (a still is held that long), cropped (a box in the
@@ -13,7 +13,7 @@ through the window) or, with no crop, filled to the size from its middle (a rema
 clip, already near the shape), then scaled to the size with lanczos: Aleph 2's 612x1088 grows to the
 delivery size here. The clips are joined by cuts, the type layers (transparent PNGs the relay drew at
 the size) laid over them in their times, then the end card at the size (stitch.card_graph), the dark one
-on every size (SIZE_CARD). Sound: each window's own (silence where a take has none), faded out over fadeOutS before the card; the
+on every size (SIZE_CARD), held longer when the windows cannot fill lengthS (card_seconds). Sound: each window's own (silence where a take has none), faded out over fadeOutS before the card; the
 card is silent. The result is written like stitch's: {"ok", "sha256", "bytes", "w", "h", "durationS",
 "endCard"}.
 """
@@ -68,10 +68,19 @@ def crop_filter(c: dict, src: tuple[int, int], dur: float) -> str:
     return f"crop={w}:{h}:{pos('x', kx, sw - w)}:{pos('y', ky, sh - h)},"
 
 
+def card_seconds(body_s: float, length_s: float | None) -> float:
+    """How long the end card runs: CARD_S, or longer when the kept windows cannot fill the length asked
+    for (their takes have no more to give), so the file is the length the person picked (re-test N-F:
+    a "6 s" size was 2.0 s of shot and a 2.5 s card)."""
+    if not length_s:
+        return st.CARD_S
+    return max(st.CARD_S, round(float(length_s) - body_s, 3))
+
+
 def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version: str, assets: dict,
-                  layers: list[dict], fade_s: float, out: str, fps: int = st.FPS) -> list[str]:
+                  layers: list[dict], fade_s: float, out: str, fps: int = st.FPS, length_s: float | None = None) -> list[str]:
     """clips: [{"path", "inS", "outS", "still"?, "src": (w, h), "audio": bool, "crop"?, "cropKeys"?,
-    "takeSize"?}]; layers: [{"path", "fromS"?, "toS"?}]."""
+    "takeSize"?}]; layers: [{"path", "fromS"?, "toS"?}]. length_s: the size's length, the card included."""
     w, h = size
     cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
     durs = []
@@ -91,7 +100,8 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
     card_at = n + len(layers)
     layout = st.card_layout(w, h, assets)
     layout["paths"] = {name: a["path"] for name, a in assets.items()}
-    card_inputs, card_parts = st.card_graph(card_at, version, layout, fps)
+    card_s = card_seconds(sum(durs), length_s)
+    card_inputs, card_parts = st.card_graph(card_at, version, layout, fps, card_s)
     cmd += card_inputs
     parts = []
     for i, (c, dur) in enumerate(zip(clips, durs)):
@@ -120,7 +130,7 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
     parts.append(f"{''.join(f'[a{i}]' for i in range(n))}concat=n={n}:v=0:a=1[ab]")
     afade = f",afade=t=out:st={st._secs(body - fade)}:d={st._secs(fade)}" if fade > 0 else ""
     parts.append(f"[ab]atrim=duration={st._secs(body)}{afade}[abf]")
-    parts.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=duration={st._secs(st.CARD_S)},aformat=sample_fmts=fltp[acard]")
+    parts.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=duration={st._secs(card_s)},aformat=sample_fmts=fltp[acard]")
     parts.append("[abf][acard]concat=n=2:v=0:a=1[aout]")
     cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-map", "[aout]",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
@@ -165,7 +175,7 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
             size = (st.even(w), st.even(h))
             out = os.path.join(tmp, "cut.mp4")
             cmd = build_command(ffmpeg, clips, size, version, st.load_assets(version), layers,
-                                float(event.get("fadeOutS") or 0), out)
+                                float(event.get("fadeOutS") or 0), out, length_s=event.get("lengthS"))
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
             if r.returncode != 0:
                 print(json.dumps({"kind": "cutdown_ffmpeg", "jobId": event.get("jobId"), "stderr": r.stderr.strip()[-2000:]}))

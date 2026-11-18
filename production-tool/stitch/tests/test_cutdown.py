@@ -109,6 +109,27 @@ def test_a_15s_cutdown_is_its_windows_then_the_end_card_with_the_sound_faded(tak
     assert all(abs(a - b) < 40 for a, b in zip(px, ground)), px
 
 
+def test_a_6s_size_whose_shots_cannot_fill_it_holds_the_card_and_is_6s(takes):
+    # Re-test N-F: one kept shot of 2.0 s and no more take to give; the size asked for is 6 s.
+    out = render(takes, {"mode": "cutdown", "size": [320, 180], "clips": [{"key": "a.mp4", "inS": 0, "outS": 2.0}],
+                         "endCard": True, "fadeOutS": 0.5, "lengthS": 6})
+    s = streams(takes / "out.mp4")
+    assert abs(s["duration"] - 6) <= 2 / stitch.FPS + 0.03, s
+    assert out["durationS"] == pytest.approx(6, abs=0.1) and s["audio"]
+    # From the end of the shot to the end, the end card.
+    ground = stitch.GROUND["roll-up-ink"]
+    for t in (2.05, 5.8):
+        px = frame_at(takes / "out.mp4", t).getpixel((4, 4))
+        assert all(abs(a - b) < 40 for a, b in zip(px, ground)), (t, px)
+
+
+def test_the_card_runs_card_s_unless_the_windows_fall_short():
+    assert cutdown.card_seconds(3.5, 6) == stitch.CARD_S
+    assert cutdown.card_seconds(2.0, 6) == pytest.approx(4.0)
+    assert cutdown.card_seconds(4.0, 6) == stitch.CARD_S  # over: the windows were trimmed upstream; never a shorter card
+    assert cutdown.card_seconds(2.0, None) == stitch.CARD_S
+
+
 def test_a_9x16_reframe_crops_each_shot_its_own_way_and_draws_the_caption_in_its_time(takes):
     size = (180, 320)
     caption_png(takes / "cap.png", size)
