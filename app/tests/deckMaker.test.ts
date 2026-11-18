@@ -876,8 +876,6 @@ const gateRun = () => ({
   },
 })
 const buildData = (r: unknown) => ({ inputs: { prompt: { client: 'Lumen', project: 'P', text: 'x' } }, run: r })
-// The card while nothing runs and no gate holds: in the middle column, the circle at 184, not in the right one.
-const centreCard = (h: string) => /<section class="score">[\s\S]*?<div class="card status hero centre" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
 // the agent stage (deck-studio-new-ui): the working card is the stage's centre, the gate's waiting card heads the right rail
 const statusCard = (h: string) => /<(?:aside class="stack rail"|section class="score")><div class="card(?: status hero)?" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
 
@@ -946,7 +944,6 @@ const rightAside = (h: string) => /<\/section><aside class="stack rail">([\s\S]*
 // the agent stage's centre (deck-studio-new-ui): the working card, its circle at the stage's size (184 with no window), and the caption
 // the stage (deck-studio-new-ui): the one engine's sphere in the agent stage's centre, its caption or gate card under it
 const stageOf = (h: string) => /<section class="score">(<div class="dkstage[^"]*" data-nk-stage[\s\S]*?)<\/section>/.exec(h)?.[1] ?? ''
-const centre = (h: string) => /<section class="score">([\s\S]*?)<\/section>/.exec(h)?.[1] ?? ''
 const box = (h: string) => /<div class="card cbox[^"]*" data-run="(\w+)">([\s\S]*?)<\/aside>/.exec(h)
 
 test('runView: each fixture is the view its name says, and junk never throws', () => {
@@ -1864,28 +1861,6 @@ test('the stage asks on a change only: drawn as it was, then eased; a render tha
 
 
 
-// A page with the engine and a pretend browser: what it does when WebGL is missing, refused or lost.
-function runOrbs(opts: { reducedData?: boolean }) {
-  const made: string[] = []
-  const wrapped: unknown[] = []
-  const el = (tag: string): Record<string, unknown> => ({
-    tag, style: {}, classList: { add() {}, remove() {} }, appendChild() {}, setAttribute() {}, addEventListener() {},
-    getContext: (kind: string) => { made.push(kind); return null },
-  })
-  const svg = {
-    __orb: undefined, parentNode: { insertBefore: (w: unknown) => wrapped.push(w) }, hasAttribute: () => false, closest: () => null,
-    getAttribute: (n: string) => ({ 'data-agent': 'strategy', width: '60', 'data-activity': 'work' } as Record<string, string>)[n] ?? null,
-  }
-  const root = { querySelectorAll: () => [svg] }
-  const ctx = vm.createContext({
-    document: { createElement: el, documentElement: {}, addEventListener() {} },
-    matchMedia: (q: string) => ({ matches: !!opts.reducedData && q.includes('reduced-data'), addEventListener() {} }),
-    navigator: {}, requestAnimationFrame() {}, MutationObserver: class { observe() {} }, getComputedStyle: () => ({ getPropertyValue: () => '' }),
-    performance: { now: () => 0 }, Math, Float32Array, Object, Array, String, Set, Map, Error, parseInt, console,
-  })
-  vm.runInContext(`${logicSrc}; var L = DeckLogic; ${orbsSrc}; var scanned = Orbs.scan(__root, null); var okNow = Orbs.ok(); var why = Orbs.stats().reason`, Object.assign(ctx, { __root: root }))
-  return { made, wrapped, scanned: ctx.scanned as unknown[], ok: ctx.okNow as boolean, why: ctx.why as string }
-}
 
 
 

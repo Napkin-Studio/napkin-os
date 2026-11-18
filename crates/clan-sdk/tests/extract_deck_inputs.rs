@@ -72,6 +72,7 @@ fn app(name: &str, app_id: &str, spinoff: Option<SpinoffSpec>) -> AppInfo {
         prompt_templates: vec![],
         data_seed: None,
         spinoff,
+        attach: None,
     }
 }
 
