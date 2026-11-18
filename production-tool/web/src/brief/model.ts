@@ -15,6 +15,7 @@ import type {
 } from '../contracts/types'
 import { BRIEF_SPINE_PARTS } from '../contracts/types'
 import { newId } from '../lib/ulid'
+import { quoted } from '../lib/quotes'
 import { landUpdate, systemUpdate, updateDoc, type DocumentStore } from '../doc/store'
 import { scopeOf, type ScopeItem } from '../model/scope'
 import { projectSpine, spineSummary, BRIEF_APP_ID } from './spine'
@@ -123,12 +124,17 @@ export function sizesBrief(d: Doc, videoId: Id): BriefNode | undefined {
   return linked ? d.briefs?.[linked.briefId] : briefForJob(d, { kind: 'video', id: videoId })?.brief
 }
 
+/** "must be", "should read", "is": the words between a mandatory's label and its line. */
+const LINE_VERB = /^(?:(?:must|should|will|shall)\s+(?:be|read|say)|reads?|says?|is|to\s+be|as|of)\b\s*[:\-\u2013\u2014]?\s*/i
+
 /** The line a brief says the film ends on, from its mandatories ("End on the line: Lumo. Dein Licht.",
- *  "End line – …", "Sign-off: …", "Tagline: …"), quotes taken off. Undefined: it names none. */
+ *  "End line – …", "End line must be "…"", "Sign-off: …", "Tagline: …"): the quoted words when it quotes them
+ *  (lib/quotes.ts), else what follows the label and its verb. Undefined: it names none. */
 export function endLineOf(spine: BriefSpine | undefined): string | undefined {
   for (const m of spine?.mandatories ?? []) {
     const hit = /\b(?:end(?:s|ing)?\s+(?:on|with)\s+(?:the\s+)?(?:line|words|super)|end[\s-]?line|sign[\s-]?off(?:\s+line)?|tag[\s-]?line|brand\s+line)\b\s*(?:[:\-\u2013\u2014]\s*)?(.+)$/i.exec(m.trim())
-    const line = hit?.[1].trim().replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
+    if (!hit) continue
+    const line = quoted(hit[1]) ?? hit[1].trim().replace(LINE_VERB, '').replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
     if (line) return line.slice(0, 200)
   }
   return undefined

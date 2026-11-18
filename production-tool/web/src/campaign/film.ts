@@ -188,6 +188,15 @@ export function masterShots(d: ProductionDocument, videoId: Id): MasterShot[] {
   return out
 }
 
+/** A film's own length for Make all sizes, without the end card stitch adds (CARD_S): its shots as cut now, else
+ *  `wholeS` (its render's length or its target, card included) less the card. UAT 2026-11-18: the sheet said
+ *  "Film · 15 s", the target, for a 12.7 s cut. */
+export function filmSeconds(shots: readonly MasterShot[], wholeS?: number): number {
+  const body = shots.filter((s) => !s.endCard)
+  if (body.length) return r3(body.reduce((a, s) => a + (s.outS - s.inS), 0))
+  return Math.max(0, (wholeS ?? CARD_S) - CARD_S)
+}
+
 /** A shot's spoken lines, each at its moment in the shot: its line and VO beats, else its script's dialogue
  *  lines spread through it. */
 export function spokenOf(d: ProductionDocument, shotId: Id): { atS: number; text: string }[] {
