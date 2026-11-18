@@ -13,7 +13,7 @@ STAGES = {
     "propositions": (1, 4000, 1500, "claude-opus-5-5"),
 }
 #: dollars per million tokens (in, out); a stand-in table for the card only, deck.spec.PRICE_PER_MTOK is used when importable
-_FALLBACK = {"claude-sonnet-5-5": (3.0, 15.0), "claude-opus-5-5": (15.0, 75.0)}
+_FALLBACK = {"claude-sonnet-5-5": (2.0, 10.0), "claude-opus-5-5": (4.0, 20.0)}   # the 17 Nov 2026 table, as deck.spec.PRICE_PER_MTOK
 
 
 def _price(model, tin, tout):
@@ -22,9 +22,9 @@ def _price(model, tin, tout):
         usd = spec.estimate_usd(model, tin, tout)
         if usd:
             return usd
-    except Exception:
+    except ImportError:   # the deck package is not importable here: the card's own table; any other error is a bug and must show
         pass
-    pin, pout = _FALLBACK.get(model, (15.0, 75.0))
+    pin, pout = _FALLBACK.get(model, (4.0, 20.0))
     return round(tin / 1e6 * pin + tout / 1e6 * pout, 4)
 
 
