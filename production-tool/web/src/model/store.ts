@@ -237,8 +237,9 @@ export class ModelStore implements DocumentStore {
     if (!this.pending.length) {
       const next = this.bus.doc() as unknown as Doc
       // A checkpoint with nothing new (a flush only to read the chain) changes nothing: no emit, so
-      // listeners never count it as an edit (live check F1, 2026-11-18).
-      if (this.value && JSON.stringify(next) === JSON.stringify(this.value)) return
+      // listeners never count it as an edit (live check F1, 2026-11-18). The CLAN store replaces its
+      // document on every write and never edits it in place, so the same object means no change.
+      if (this.value === next) return
       this.value = next
     } else {
       for (const p of this.pending) rebase(p.after)
