@@ -3365,7 +3365,8 @@ class Renderer:
             if flagged:
                 pic.line.color.rgb = _rgb("C0392B")
                 pic.line.width = Pt(3)
-            text = f"{self.pic_label} · Flagged" if flagged else self.pic_label
+            lab = images.picture_label(im, self.pic_label)   # 'Production' for a Production Tool picture, at the same place
+            text = f"{lab} · Flagged" if flagged else lab
             pw = min(w - 0.2, 0.24 + 0.085 * len(text))
             bleed = self.th.v3 and (x <= 0.01 or x + w >= W - 0.01)   # deck-look: a bleeding column keeps its label inside the slide margin
             inset = 0.5 if bleed else 0.1

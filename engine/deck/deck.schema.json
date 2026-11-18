@@ -1228,6 +1228,60 @@
     "layout_plan": {
      "type": "object",
      "description": "What the layout plan did: density and the count of slides per fit rung."
+    },
+    "production": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "project_id",
+      "data_sha256",
+      "offer_sha256",
+      "how"
+     ],
+     "description": "The Production Tool export this deck's pulled pictures were taken from (deck-prod-assets), the shape of Production's own briefs[].source. offer_sha256 (the offered entity ids and asset hashes) is the update key, never the relay ETag. Optional: a deck with no pulled picture has none.",
+     "properties": {
+      "project_id": {
+       "type": "string",
+       "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "title": {
+       "type": "string",
+       "maxLength": 120
+      },
+      "data_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "offer_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "taken": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "at": {
+       "type": "string"
+      },
+      "how": {
+       "enum": [
+        "bundle",
+        "os"
+       ]
+      },
+      "kept": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "placed": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "held": {
+       "type": "integer",
+       "minimum": 0
+      }
+     }
     }
    }
   },
@@ -2249,16 +2303,17 @@
         "territory_frame",
         "upload",
         "brand",
-        "generated"
+        "generated",
+        "production"
        ]
       },
       "key": {
        "type": "string",
-       "description": "The frame key <territory id>-<shot>-<flash|pro>, a material id, or a Brand Clan logo id."
+       "description": "The frame key <territory id>-<shot>-<flash|pro>, a material id, or a Brand Clan logo id, or a Production Tool item key (an entity id; a key visual is <format set id>#master)."
       },
       "run": {
        "type": "string",
-       "description": "The territory run's 12-character hash."
+       "description": "The territory run's 12-character hash, or for a Production picture the first 12 hex of the exported .clan's sha256."
       }
      }
     },
@@ -2588,6 +2643,65 @@
       "reason": {
        "type": "string",
        "maxLength": 300
+      }
+     }
+    },
+    "source": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "app",
+      "project_id",
+      "entity"
+     ],
+     "description": "Where a pulled picture came from (deck-prod-assets): the Production Tool project, the entity and its version, the asset's origin, the job that made it and the hash of the exported .clan. Never a file path or a URL.",
+     "properties": {
+      "app": {
+       "const": "ie.napkin.production-tool"
+      },
+      "project_id": {
+       "type": "string",
+       "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "entity": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "role": {
+       "enum": [
+        "master",
+        "size",
+        "frame"
+       ]
+      },
+      "version": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "origin": {
+       "enum": [
+        "uploaded",
+        "drawn",
+        "generated",
+        "edited",
+        "extracted"
+       ]
+      },
+      "job_id": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "format_id": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "channel": {
+       "type": "string",
+       "maxLength": 32
+      },
+      "bundle_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
       }
      }
     }

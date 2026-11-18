@@ -146,7 +146,7 @@ image: { kind, status, aspect, asset?, from?, subject?, prompt?, style?, referen
 | `status` | `empty` · `planned` · `made` · `flagged` · `approved` · `rejected` · `failed` | §4.3 |
 | `aspect` | `16:9` · `3:2` · `4:3` · `1:1` · `4:5` · `9:16` | the slot's shape. A renderer crops with `cover`; it never stretches |
 | `asset` | `img_` + 12 hex | a key of `deck.assets` |
-| `from` | `{kind, key?, run?}` | `kind`: `territory_frame` · `upload` · `brand` · `generated`. `key`: the frame key `<territory id>-<shot>-<flash\|pro>`, a material id, or a Brand Clan logo id. `run`: the territory run's 12-character hash |
+| `from` | `{kind, key?, run?}` | `kind`: `territory_frame` · `upload` · `brand` · `generated` · `production` (deck-prod-assets: a Production Tool picture; its asset carries `source` {app, project_id, entity, role, version, origin, job_id?, format_id?, channel?, bundle_sha256}). `key`: the frame key `<territory id>-<shot>-<flash\|pro>`, a material id, a Brand Clan logo id, or a Production item key (an entity id; a key visual is `<format set id>#master`). `run`: the territory run's 12-character hash, or the first 12 hex of the exported .clan's sha256 |
 | `subject` | up to 400 characters | what a camera could see, from the slide's own creative text. No brand name, person's name, figure or words to paint |
 | `prompt` | up to 2400 characters | the exact text sent: subject, style block, guard rails. Recorded, never edited by hand |
 | `style` | `{pack, version, hash}` | the Style Pack and its 8-hex hash (`style._hash`) |

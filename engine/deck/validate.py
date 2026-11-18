@@ -625,6 +625,9 @@ def _images(sl: dict, sid: str, deck: dict, audience: str, add) -> None:
         if not (isinstance(v, dict) and v.get("kind") == "image" and isinstance(v.get("image"), dict)):
             continue
         im = v["image"]
+        if im.get("status") == "empty" and (im.get("from") or {}).get("kind") == "production":   # deck-prod-assets: never held back silently
+            add("image_rights", "warn", sid, f"{name}: {(im.get('reason') or spec.RIGHTS_TO_SUPPLY)[:200]}")
+            continue
         if im.get("status") in ("empty", "planned", "failed", "rejected"):
             continue
         aid = im.get("asset")

@@ -462,7 +462,7 @@ IMAGE_KINDS = ("photo", "illustration", "frame", "screenshot", "logo")
 IMAGE_STATUSES = ("empty", "planned", "made", "flagged", "approved", "rejected", "failed")
 IMAGE_ASPECTS = ("16:9", "3:2", "4:3", "1:1", "4:5", "9:16")
 IMAGE_FITS = ("cover", "contain")
-IMAGE_SOURCES = ("territory_frame", "upload", "brand", "generated")
+IMAGE_SOURCES = ("territory_frame", "upload", "brand", "generated", "production")
 IMAGE_RIGHTS = ("generated", "own", "licensed", "client_supplied", "reference_only")
 IMAGE_MIMES = ("image/png", "image/jpeg", "image/webp", "image/svg+xml")
 IMAGE_DECISIONS = ("approve", "replace", "remove")
@@ -472,6 +472,10 @@ PICTURE_MIN_PPI = 96
 PICTURE_STRETCH_TOL = 0.01
 #: The default label of a picture a person has not approved (ADR 0027): a fixed label, never a fact, no digit.
 PICTURE_LABEL = "Illustrative"
+#: deck-prod-assets (Q2): the fixed label of a Production Tool picture on a review render until approved, in place of PICTURE_LABEL. No digit.
+PRODUCTION_LABEL = "Production"
+#: deck-prod-assets (Q4, fix 8): what an unplaced Production picture with no stated licence says (image_rights, the held list, the picker).
+RIGHTS_TO_SUPPLY = "Rights to supply"
 #: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
 PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "audience", "real_question", "close",
                        "solution", "product")

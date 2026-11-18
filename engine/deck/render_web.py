@@ -201,7 +201,7 @@ def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: s
         pos = f' style="object-position:{round(im["focal"]["x"] * 100)}% {round(im["focal"]["y"] * 100)}%"' if im.get("focal") else ""
         tag = ""
         if im.get("status") != "approved":
-            tag = f'<figcaption class="plabel{" flagged" if flagged else ""}">{_e(label + (" · Flagged" if flagged else ""))}</figcaption>'
+            tag = f'<figcaption class="plabel{" flagged" if flagged else ""}">{_e(images.picture_label(im, label) + (" · Flagged" if flagged else ""))}</figcaption>'
         return (f'<figure class="pic{" flagged" if flagged else ""}" data-slot="{_e(slot)}" style="{style}">'
                 f'<img src="{_e(src(im["asset"], pictures[im["asset"]]))}" alt="{_e(im.get("alt") or "An illustrative picture")}"{pos}>{tag}</figure>')
 
