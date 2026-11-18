@@ -1791,9 +1791,7 @@ class Relay:
         claude = self._policy(job.get("_tenant"))["allow"]["claude"]
         director = self.director if claude and job["op"] not in NO_DIRECTOR_OPS else PassthroughDirector()
         try:
-            use_config = getattr(director, "use_config", None)
-            if use_config:  # config.json's director block: the model ids and prompt version
-                use_config(self.config().get("director") or {})
+            self._use_director_config(director)
             req = job["_req"]
             raw = words_for_remove(req.get("input") or {})
             if req["op"] == "clip_patch":
@@ -1884,6 +1882,13 @@ class Relay:
         return self._finish(saved, "completed", shots=out["shots"], director=block, outputs=[],
                             kind="generated", paid=False)
 
+    def _use_director_config(self, director) -> None:
+        """config.json's director block (the model ids and prompt version) on the director, before it or
+        Skye (who asks the director's per-click model, writer.make) calls the model."""
+        use_config = getattr(director, "use_config", None)
+        if use_config:
+            use_config(self.config().get("director") or {})
+
     def _run_write(self, job: dict) -> dict:
         """Skye drafts: no provider, no spend; the text quota was counted at admission."""
         saved = self._save(job, state="submitting", _queue="r")
@@ -1892,6 +1897,7 @@ class Relay:
         req = saved["_req"]
         start = self.clock()
         try:
+            self._use_director_config(self.director)
             out = dict(self.writer.write({**req, "jobId": saved["jobId"]}))
         except Exception as e:
             log.exception("writer failed")
