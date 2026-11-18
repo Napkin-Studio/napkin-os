@@ -11,7 +11,7 @@ import { useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { assetRef } from '../jobs/assets'
 import { isMoving, jobAt } from '../jobs/select'
 import { spokenOf } from '../campaign/film'
-import { currentRender, rendersOf, shotNumber } from '../model/selectors'
+import { currentRender, rendersOf, shotNumber, storyboardOfVideo } from '../model/selectors'
 import { Float } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import type { ChangeOpen } from './ChangeDrawer'
@@ -320,6 +320,10 @@ export function RenderAd({ data }: { data: RoomData }) {
     else if (c.transition) checks.push({ text: `The ${c.transition.kind === 'dissolve' ? 'dissolve' : 'dip'} into ${n ? `shot ${n}` : 'a clip'} has enough footage`, ok: true })
   }
   if (!cut.endCard) checks.push({ text: 'No end card of your own: the film ends on the studio card', ok: true })
+  // The cut against the length it is for (live test 2026-11-18: a 9.8 s cut of a 15 s film went unmentioned).
+  const target = storyboardOfVideo(doc, data.videoId)?.target_s ?? doc.videos[data.videoId]?.target_s
+  const off = target && plan.lengthS ? Math.round((plan.lengthS - target) * 10) / 10 : 0
+  if (Math.abs(off) >= 0.5) checks.push({ text: `The cut is ${Math.round(plan.lengthS * 10) / 10} s: ${Math.abs(off)} s ${off < 0 ? 'short of' : 'over'} the ${target} s it is for`, ok: false })
   checks.push({ text: 'This render has no sound yet. Open Sound to add it.', ok: false })
   const go = () => send(async () => {
     setError(null)
