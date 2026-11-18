@@ -335,6 +335,24 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
   const kept = session.edits.find((e) => e.kind === 'crop' && !session.hidden.includes(e.id))
   const crop = cropDrag ? cropRect(cropDrag.a, cropDrag.b) : kept && kept.kind === 'crop' ? kept : undefined
   const texts = session.edits.filter((e) => e.kind === 'text' && !session.hidden.includes(e.id))
+  // A text just placed takes the keys, its words selected (Playwright live test 2026-11-18: focus stayed on the
+  // page, so typing "Lumo." switched to the Lasso and on).
+  const textEls = useRef(new Map<string, HTMLDivElement>())
+  const lastText = texts.at(-1)?.id
+  const seenText = useRef(lastText)
+  useEffect(() => {
+    if (!lastText || lastText === seenText.current) return
+    seenText.current = lastText
+    if (tool !== 'text') return
+    const el = textEls.current.get(lastText)
+    if (!el) return
+    el.focus()
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const sel = window.getSelection()
+    sel?.removeAllRanges()
+    sel?.addRange(range)
+  }, [lastText, tool])
   const pendingMask = pending ? session.edits.find((e) => e.id === pending) : undefined
   const pendingBox = useMemo(() => {
     if (!pendingMask || pendingMask.kind !== 'mask') return null
@@ -359,7 +377,7 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
         <canvas ref={liveCanvas} className="ie-live" aria-hidden="true" />
         {pendingBox && <div className="ie-pending pending" style={pendingBox} aria-hidden="true" />}
         {!before && texts.map((t) => t.kind === 'text' && (
-          <div key={t.id} className="ie-text" style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%`, fontSize: `${t.size * 100}cqh` }}
+          <div key={t.id} ref={(el) => { if (el) textEls.current.set(t.id, el); else textEls.current.delete(t.id) }} className="ie-text" style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%`, fontSize: `${t.size * 100}cqh` }}
             contentEditable={tool === 'text'} suppressContentEditableWarning spellCheck={false} role="textbox" aria-label="Text on the frame"
             onPointerDown={(e) => {
               if (tool === 'text') e.stopPropagation() // typing on it, not a new text
