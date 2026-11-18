@@ -232,9 +232,11 @@ suite_production-tool() {
   uv run -q --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py >"$d/contracts.log" 2>&1 & pids[contracts]=$!
   # The CLAN store's tests run against the real `clan` CLI; the canvas engine's are features/canvas-engine.clan's.
   ( cd production-tool/clan-store && npm run -s lint && npm test ) >"$d/clan-store.log" 2>&1 & pids[clan-store]=$!
-  ( cd production-tool/canvas-engine && npm run -s lint && npm test ) >"$d/canvas-engine.log" 2>&1 & pids[canvas-engine]=$!
+  ( cd production-tool/canvas-engine && npm run -s lint && npm test -- --testTimeout=20000 ) >"$d/canvas-engine.log" 2>&1 & pids[canvas-engine]=$!
   if [[ -f production-tool/web/package.json ]]; then
-    ( cd production-tool/web && npm run -s lint && npm test && npm run -s build:web ) >"$d/web.log" 2>&1 & pids[web]=$!
+    # 20 s per test here, not vitest's 5 s: the hook runs beside builds and agents, and a test that only ran
+    # slow on a loaded machine is not a failure (owner, 2026-11-19). CI keeps the default.
+    ( cd production-tool/web && npm run -s lint && npm test -- --testTimeout=20000 && npm run -s build:web ) >"$d/web.log" 2>&1 & pids[web]=$!
   fi
   for name in "${!pids[@]}"; do
     p=${pids[$name]}
