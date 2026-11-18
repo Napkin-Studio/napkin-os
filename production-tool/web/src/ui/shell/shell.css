@@ -38,6 +38,10 @@
 .tba-name .ticon { width: 18px; height: 18px; color: var(--ink); flex: none; }
 .tba-n2 { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; text-align: left; }
 .tba-n2 b { font: 700 15px var(--font-ui); letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: clamp(140px, 20vw, 340px); }
+/* The start of the name gives way; its number or copy mark always shows (nameParts). */
+.tba-n2 b.tba-title { display: flex; min-width: 0; }
+.tba-title .tba-head { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tba-title .tba-tail { flex: none; white-space: pre; }
 .tba-saved { font: 500 10px var(--font-mono); color: var(--muted); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tba-saved.failed { color: var(--alert); }
 .tba-caret { color: var(--muted); font-size: 11px; }

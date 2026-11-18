@@ -18,6 +18,7 @@ import { ICON, studioHref, useNeedsCount } from './bar'
 import { usePanels } from '../chrome/panels'
 import './shell.css'
 import { useProjectName } from '../useDownload'
+import { nameParts } from './nameParts'
 
 export interface Crumb { label: string; onClick?: () => void }
 
@@ -89,7 +90,7 @@ function DocSlot({ menu }: { menu?: (close: () => void) => ReactNode }) {
     <>
       <button ref={ref} type="button" className="tba-name" aria-haspopup="menu" aria-expanded={open} title={name} onClick={() => setOpen(!open)}>
         <Ic d={ICON.film} cls="ticon" />
-        <span className="tba-n2"><b>{name}</b><span className={`tba-saved ${save.state.kind === 'failed' ? 'failed' : ''}`}>{savedLine(save)}</span></span>
+        <span className="tba-n2"><NameText name={name} /><span className={`tba-saved ${save.state.kind === 'failed' ? 'failed' : ''}`}>{savedLine(save)}</span></span>
         <span className="tba-caret" aria-hidden="true">▾</span>
       </button>
       <Float anchor={ref} open={open} onClose={() => setOpen(false)} role="menu" label={name} className="pt-menu nui-pop">
@@ -98,6 +99,11 @@ function DocSlot({ menu }: { menu?: (close: () => void) => ReactNode }) {
       </Float>
     </>
   )
+}
+
+function NameText({ name }: { name: string }) {
+  const [head, tail] = nameParts(name)
+  return <b className="tba-title"><span className="tba-head">{head}</span>{tail && <span className="tba-tail">{tail}</span>}</b>
 }
 
 function Crumbs({ crumb }: { crumb: Crumb[] }) {

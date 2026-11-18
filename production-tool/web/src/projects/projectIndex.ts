@@ -140,6 +140,15 @@ export class ProjectIndex {
     return this.writing
   }
 
+  /** The person's projects on the relay (id and name), as last listed: a name a project gives itself is not one of
+   *  theirs either (re-test N-D: a fresh browser's spin-off took the name of a project only the server listed). */
+  private remote: { id: string; name: string }[] = []
+
+  /** What the relay lists now. */
+  knowRemote(rows: readonly { id: string; name?: string }[]) {
+    this.remote = rows.flatMap((r) => (r.name ? [{ id: r.id, name: r.name }] : []))
+  }
+
   all = (): ProjectEntry[] => this.list
   get = (id: string): ProjectEntry | undefined => this.list.find((p) => p.id === id)
 
@@ -173,7 +182,7 @@ export class ProjectIndex {
   async touch(id: string, summary: ProjectSummary, opts: { name?: string | null; changed?: boolean } = {}): Promise<void> {
     // A name it gives itself is its own: another project's already is "Name 2", "Name 3"… (re-test N9: two films
     // named themselves after the same brief, on Home and on the server).
-    const taken = this.list.filter((p) => p.id !== id).map((p) => p.name)
+    const taken = [...this.list, ...this.remote].filter((p) => p.id !== id).map((p) => p.name)
     const auto = opts.name ? unusedName(opts.name, taken) : UNTITLED
     await this.change(id, (p) => ({
       ...p,

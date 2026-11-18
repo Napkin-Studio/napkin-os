@@ -152,6 +152,18 @@ describe('the project index', () => {
     expect(unusedName('Rain', ['rain', 'Rain 2'])).toBe('Rain 3')
   })
 
+  it('a name it gives itself is not one the relay already lists for another project (re-test N-D)', async () => {
+    const index = new ProjectIndex(memoryStorage())
+    await index.load()
+    const p = await index.create()
+    index.knowRemote([{ id: 'prj_01M7Q0JEQCP29Y000000000000', name: 'PW Lumo Gen Z cut-down brief' }, { id: p.id, name: 'Mine' }])
+    await index.touch(p.id, p.summary, { name: 'PW Lumo Gen Z cut-down brief' })
+    expect(index.get(p.id)?.name).toBe('PW Lumo Gen Z cut-down brief 2')
+    // Its own copy on the relay is not another project.
+    await index.touch(p.id, p.summary, { name: 'Mine' })
+    expect(index.get(p.id)?.name).toBe('Mine')
+  })
+
   it('names copies so they do not clash', () => {
     expect(copyName('Rain', [])).toBe('Rain (copy)')
     expect(copyName('Rain', ['Rain (copy)'])).toBe('Rain (copy 2)')

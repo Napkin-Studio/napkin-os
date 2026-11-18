@@ -81,7 +81,11 @@ async function boot() {
     if (access.get() === 'ok') window.history.replaceState(window.history.state, '', window.location.pathname + withoutBriefSpinoff(window.location.search) + window.location.hash)
   }
   const router = new Router()
+  // The names the relay already lists, so a film naming itself never takes one (re-test N-D). Not waited for,
+  // but a spin-off names itself from the brief at once, so it waits a moment for them.
+  const listed = app.get().me ? shell.serverProjects().catch(() => []) : Promise.resolve([])
   if (app.get().me && spinoff) {
+    await Promise.race([listed, new Promise((r) => setTimeout(r, 2000))])
     await shell.newProject().catch((e) => console.error('could not start a film from the brief', e))
   } else if (app.get().me) {
     const opened = await openRouteProject(shell, router).catch((e) => {

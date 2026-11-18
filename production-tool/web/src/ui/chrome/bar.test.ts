@@ -58,3 +58,12 @@ describe('the document menu holds what More held; secondary actions live there',
     expect(image.slice(image.indexOf('<div className="ie-stagewrap">'))).not.toContain('className="ie-zoom"')
   })
 })
+
+describe('the name in the bar (re-test N-D)', () => {
+  it('keeps the number or copy mark apart, so a narrow bar cuts the start, never " 2"', async () => {
+    const { nameParts } = await import('../shell/nameParts')
+    expect(nameParts('PW Lumo Gen Z cut-down brief 2')).toEqual(['PW Lumo Gen Z cut-down brief', ' 2'])
+    expect(nameParts('Rain (copy 3)')).toEqual(['Rain', ' (copy 3)'])
+    expect(nameParts('Lumo 2026 launch')).toEqual(['Lumo 2026 launch', ''])
+  })
+})

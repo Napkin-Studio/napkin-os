@@ -199,7 +199,11 @@ export class Shell {
   /** The person's saved projects on the relay, or none without one. */
   serverProjects(): Promise<SavedProject[]> {
     const { server } = this.deps
-    return server?.signedIn ? server.list() : Promise.resolve([])
+    if (!server?.signedIn) return Promise.resolve([])
+    return server.list().then((rows) => {
+      this.index.knowRemote(rows)
+      return rows
+    })
   }
 
   /** A project saved from another browser: its .clan, canvas and every picture it uses come down, and
