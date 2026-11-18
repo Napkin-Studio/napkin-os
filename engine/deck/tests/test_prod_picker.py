@@ -328,7 +328,6 @@ def test_a_same_host_redirect_is_followed(tmp_path, pics):
     assert why is None and path.read_bytes() == story
 
 
-@pytest.mark.parametrize("ip", ["10.0.0.5", "127.0.0.1", "169.254.169.254", "192.168.1.2", "::1", "100.64.0.1", "::ffff:10.0.0.1"])
 def test_a_host_dripping_bytes_is_cut_off_at_the_total_deadline(tmp_path):
     """A host sending one byte every 19 s never trips a per-read timeout; the fetch's own deadline (20 s, all reads together) does. The
     socket's timeout is set before each read to the time left, and only what has arrived is read (read1)."""
@@ -368,6 +367,7 @@ def test_public_addresses_still_pass():
     assert pp.is_public("93.184.216.34") and pp.is_public("2606:2800:220:1:248:1893:25c8:1946") and pp.is_public("2002:5db8:d822::1")
 
 
+@pytest.mark.parametrize("ip", ["10.0.0.5", "127.0.0.1", "169.254.169.254", "192.168.1.2", "::1", "100.64.0.1", "::ffff:10.0.0.1"])
 def test_a_private_address_is_refused(tmp_path, pics, ip):
     op = png_server(pics)
     f = fetcher(op, resolver=lambda h: [ip])
