@@ -70,6 +70,8 @@ def _sysmsg(name: str, stage: str, profile: dict | None = None) -> str:
     ("Inputs are the only source"), so the rule still has the last word. With no profile, or none for the stage, the text is the file's own."""
     text = (PROMPTS / name).read_text()
     lines = profiles.guidance(profile, stage)
+    if stage == "e":   # deck-types slice 4: the lines the type's title form selects (none for claim and criterion; only with the recipes on)
+        lines = lines + [x for x in profiles.title_guidance(profile) if x not in lines]
     if not lines:
         return text
     block = "<type_guidance>\n" + HOOK + "\n" + "\n".join(f"- {x}" for x in lines) + "\n</type_guidance>\n"

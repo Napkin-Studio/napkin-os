@@ -57,4 +57,12 @@ recipe:
     territory: [picture_column]
     idea: [full_bleed_statement, big_statement]
     investment: [close]
+  density: {level: lean}       # the default role windows: statement 10-35, argument 35-70 (spec.ROLE_OF_TYPE)
+  pictures: {"on": creative_cover, generate: all}   # heavy: the creative slides, the cover and the divider
+  brand: {strict: true}        # applied only when an agency Style Pack or a Brand Clan is attached (run_deck._strict_default)
+  titles: {form: claim}        # today's titles: no new stage e line (recorded runs replay)
+  format: pitch
+  full:                        # 'Sent to be read': every slide in story order, detailed, pictures narrowed to the cover
+    density: {level: detailed}
+    pictures: {generate: cover, types: [title]}
 sources: [GUIDE.md 3.1, GUIDE.md 4.1, rubric.json, NAPKIN-EDGE.md 3]

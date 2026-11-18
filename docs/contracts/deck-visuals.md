@@ -464,6 +464,18 @@ Rules:
   sent to a provider (os-layer §4), and a `reference_only` asset never fills a slot.
 - `theme`: `napkin` · `brand` · `classic`. `strict_brand`: only the kit's layouts and given tokens, nothing
   derived. `inputs.text_mode`: `preserve` turns the repair loop's shorten rung and the plan's density moves to the notes off (the cover's unresolved lines still go to the notes: they are a to-do, not words for the room); `condense` is the app's default, passed by the runner (the engine given none behaves as in section 6.3).
+- **Deck types (features/deck-types.clan), with `DECK_RECIPES=1` and `DECK_LOOK_V3=1` only.** A deck type's recipe
+  (`engine/deck/profiles/<id>.yaml`, resolved by `profiles.recipe`) supplies defaults for these preferences. The order of
+  authority for every knob is: **the person's own preference** (`look.*`, a CLI flag, a layout swap) **> a limit the inputs
+  state > an env override for the run > the recipe > the spec default.** The recipe sets the density level and its role
+  windows, the default of `look.pictures.on`, which slide types get empty picture slots when the person set no picture
+  preference, which empty slots generation may plan (`all` · `cover` · `none`: a credentials deck never gets a generated person
+  or case, a tender none; narrowing only, never the cap, never an approval), the default of `strict_brand` (applied only when an
+  agency Style Pack or a Brand Clan is attached), and the title form (which stage e lines are asked for and whether the claim-title
+  check applies; a title is never rewritten). `inputs.deck_type: {id, by, at}` is the person's explicit pick on the type picker
+  (ranks above an answer to `q_deck_type`, a high-confidence inference and the default); `inputs.format: full` is
+  "Sent to be read" on every type (detailed, pictures on the cover only, `notes_unread` warns). The recipe's `size` stays inert
+  until deck-slide-size merges.
 
 ### 6.4 Asking: intake, the Start screen and Review
 

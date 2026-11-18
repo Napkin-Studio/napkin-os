@@ -36,7 +36,51 @@
           "enum": [
             "pitch",
             "full"
-          ]
+          ],
+          "description": "How the deck will be used: pitch (presented on a screen) or full ('Sent to be read', the leave-behind: every slide in story order, detailed). Written by the format switch under the type picker."
+        },
+        "deck_type": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "description": "deck-types: the person's explicit pick on the type picker, the first step of Start. It ranks above an answer to q_deck_type, an inference from the brief and the default (run_deck --type). Absent or null ('Not sure: decide from my brief'): no pick, so the answer, then a high-confidence inference, then agency_pitch decide. Kept in inputs, not in deck (deck is the engine's own output and is replaced on every build).",
+          "properties": {
+            "id": {
+              "enum": [
+                "agency_pitch",
+                "tender_response",
+                "investor_seed",
+                "credentials",
+                "creative_work"
+              ]
+            },
+            "by": {
+              "type": "string",
+              "description": "Who picked: the person (the app writes 'person'), or human:<id> when known."
+            },
+            "at": {
+              "type": "string",
+              "description": "When the pick was made (ISO 8601)."
+            },
+            "confirmed_stages": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "i"
+                ]
+              },
+              "description": "The person's yes on the Change sheet to the new writing a type change needs (the model stages it runs). Without it a change that needs a stage not yet recorded is refused (409 needs_stages) before anything runs or spends."
+            }
+          }
         },
         "library": {
           "type": "object",
@@ -693,6 +737,21 @@
               }
             }
           }
+        },
+        "types": {
+          "type": "object",
+          "description": "deck-types, written by the engine: which deck types it offers. recipes: whether DECK_RECIPES (with DECK_LOOK_V3) is on; offered: the type ids the picker may show (a type that joined with the recipes is hidden while they are off).",
+          "properties": {
+            "recipes": {
+              "type": "boolean"
+            },
+            "offered": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -711,7 +770,8 @@
                     "agency_pitch",
                     "tender_response",
                     "investor_seed",
-                    "credentials"
+                    "credentials",
+                    "creative_work"
                   ],
                   "description": "The deck type the deck was built for."
                 }
@@ -1205,6 +1265,7 @@
                       "style_pack_held",
                       "pitch_cap",
                       "role_words",
+                      "notes_unread",
                       "golden_echo",
                       "picture_stretch",
                       "picture_lowres",
@@ -3605,6 +3666,7 @@
                   "style_pack_held",
                   "pitch_cap",
                   "role_words",
+                  "notes_unread",
                   "golden_echo",
                   "picture_stretch",
                   "picture_lowres",

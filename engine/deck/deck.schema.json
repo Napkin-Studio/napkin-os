@@ -152,7 +152,7 @@
       },
       "profile": {
        "type": "object",
-       "$comment": "how the type was chosen: id, label, source (flag, answer, skipped, default) and note",
+       "$comment": "how the type was chosen: id, label, source (pick, flag, answer, inferred, skipped, default), note, and with deck-types the quoted evidence and the format",
        "properties": {
         "id": {
          "type": "string"
@@ -162,14 +162,30 @@
         },
         "source": {
          "enum": [
+          "pick",
           "flag",
           "answer",
+          "inferred",
           "skipped",
           "default"
          ]
         },
         "note": {
          "type": "string"
+        },
+        "evidence": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "$comment": "deck-types: the words quoted from the inputs when the type was inferred"
+        },
+        "format": {
+         "enum": [
+          "pitch",
+          "full"
+         ],
+         "$comment": "deck-types: the format the recipe was resolved for"
         }
        }
       }
@@ -190,8 +206,10 @@
       },
       "source": {
        "enum": [
+        "pick",
         "flag",
         "answer",
+        "inferred",
         "skipped",
         "default"
        ]
@@ -890,6 +908,7 @@
          "style_pack_held",
          "pitch_cap",
          "role_words",
+         "notes_unread",
          "golden_echo",
          "picture_stretch",
          "picture_lowres",

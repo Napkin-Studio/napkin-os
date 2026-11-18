@@ -514,4 +514,11 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
     if lib is False and any(app in KIT_APPS for app in apps.values()):
         inp.coverage["kits_gated_off"] = True
     return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand,
-                 "text_mode": (data.get("inputs") or {}).get("text_mode"), "review": data.get("review") or {}}
+                 "text_mode": (data.get("inputs") or {}).get("text_mode"), "review": data.get("review") or {},
+                 "deck_type": _deck_type_pick((data.get("inputs") or {}).get("deck_type"))}
+
+
+def _deck_type_pick(v) -> str | None:
+    """deck-types: the person's explicit pick on the type picker (``inputs.deck_type: {id, by, at}``; null or absent: no pick, 'Not sure')."""
+    pid = v.get("id") if isinstance(v, dict) else None
+    return pid if isinstance(pid, str) and pid else None

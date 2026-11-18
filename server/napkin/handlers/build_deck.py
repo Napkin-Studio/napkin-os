@@ -1,6 +1,6 @@
 """build_deck@1 — Deck Maker: one segment of a run, through the deck engine (middleware-api.md §12).
 
-The document's prompt (inputs.prompt), kind and format go to the engine with the person's approvals (run.approvals, which the app
+The document's prompt (inputs.prompt), kind, format and picked deck type (inputs.deck_type) go to the engine with the person's approvals (run.approvals, which the app
 writes); the engine runs to the next gate, or on to the finished deck once the last gate is approved. With NAPKIN_DECK_ENGINE_URL
 unset there is no engine: the task says so, and writes nothing."""
 
@@ -72,6 +72,23 @@ def marks_of(data: dict, chain: list) -> list:
     return out
 
 
+#: deck-types: the model stages a Change-sheet confirmation may name (inputs.deck_type.confirmed_stages).
+MODEL_STAGES = ("a", "b", "c", "d", "i")
+
+
+def deck_type_of(inputs: dict) -> dict | None:
+    """The person's explicit pick on the type picker, as the engine takes it: ``{id, confirmed_stages?}`` from ``inputs.deck_type``; None when
+    there is no pick ('Not sure', null or absent). The engine checks the id (an unknown or switched-off type is its 400)."""
+    v = inputs.get("deck_type")
+    if not isinstance(v, dict) or not isinstance(v.get("id"), str) or not v["id"].strip():
+        return None
+    out = {"id": v["id"].strip()}
+    conf = [s for s in (v.get("confirmed_stages") or []) if s in MODEL_STAGES]
+    if conf:
+        out["confirmed_stages"] = conf
+    return out
+
+
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
     data = ctx_data(req.clan)
@@ -93,6 +110,9 @@ def start(req, caps, settings, jid):
     if re.fullmatch(r"(sha256:)?[0-9a-f]{64}", str(prod.get("sha256") or "")):   # the person's Production file (attach_production), on every build
         body["inputs"]["production"] = {"sha256": str(prod["sha256"]).removeprefix("sha256:"), "fetch": prod.get("fetch") is True,
                                         "look": prod.get("look") is True}
+    dt = deck_type_of(inputs)
+    if dt:   # deck-types: the person's pick on the type picker (and any new writing they confirmed): the engine builds that type, not the kind's default
+        body["inputs"]["deck_type"] = dt
     if inputs.get("text_mode") in ("condense", "preserve"):   # the person's choice: condense lets the repair loop move points to the notes and shorten
         body["inputs"]["text_mode"] = inputs["text_mode"]
     if isinstance(data.get("review"), dict) and data["review"]:   # the person's whole review (pictures and pins): the picture step reads it, the engine takes the pins from it

@@ -412,12 +412,27 @@ SIGNALS = {
         (r"\bchemistry (?:meeting|session|call)\b", 3, False), (r"\b(?:credentials|capabilities) (?:deck|presentation)\b", 3, False),
         (r"\bcredentials\b", 2, False), (r"\bwho we are\b", 2, False), (r"\bmeet the team\b", 2, False),
         (r"\bintro(?:ductory)? meeting\b", 2, False), (r"\bget to know (?:us|you)\b", 1, False)),
+    # deck-types slice 5: a creative work session (WFA/EACA name it a separate format); 'tissue session' moved here from agency_pitch.
+    "creative_work": (
+        (r"\btissue (?:session|meeting)s?\b", 3, False), (r"\bcreative (?:review|session|presentation|work session)s?\b", 3, False),
+        (r"\bwork in progress\b", 2, False), (r"\broutes?\b", 1, False)),
     "agency_pitch": (
-        (r"\bcreative brief\b", 2, False), (r"\btissue session\b", 2, False), (r"\bpitch\b", 1, False),
+        (r"\bcreative brief\b", 2, False), (r"\bpitch\b", 1, False),
         (r"\bcampaign\b", 1, False), (r"\bagency\b", 1, False)),
 }
+#: With the recipes off the table is the one from before deck-types (byte identity): no creative_work, and 'tissue session' a hint of an agency pitch.
+_SIGNALS_OFF = {**{k: v for k, v in SIGNALS.items() if k not in spec.RECIPE_ONLY_TYPES},
+                "agency_pitch": ((r"\bcreative brief\b", 2, False), (r"\btissue session\b", 2, False), (r"\bpitch\b", 1, False),
+                                 (r"\bcampaign\b", 1, False), (r"\bagency\b", 1, False))}
+
+
+def signals() -> dict:
+    """The signal table in force: SIGNALS with the recipes on, the table from before deck-types with them off."""
+    return SIGNALS if profiles.recipes_on() else _SIGNALS_OFF
+
+
 #: Tie-break order when two types score the same.
-_PRIORITY = ("tender_response", "investor_seed", "credentials", "agency_pitch")
+_PRIORITY = ("tender_response", "investor_seed", "credentials", "creative_work", "agency_pitch")
 _LEVELS = ("low", "medium", "high")
 
 
@@ -444,7 +459,7 @@ def infer_type(prompt_text, documents=None, brief=None) -> dict:
     weaker, is an agency pitch with low confidence and no evidence. The person is still asked."""
     texts = _texts_of(prompt_text, documents, brief)
     found = {}
-    for tid, pats in SIGNALS.items():
+    for tid, pats in signals().items():
         hits, score = [], 0
         for pat, w, case in pats:
             for t in texts:
@@ -455,7 +470,7 @@ def infer_type(prompt_text, documents=None, brief=None) -> dict:
                         hits.append(m.group(0))
                     break
         found[tid] = (score, hits)
-    rank = sorted(found, key=lambda t: (-found[t][0], _PRIORITY.index(t)))
+    rank = sorted(found, key=lambda t: (-found[t][0], _PRIORITY.index(t) if t in _PRIORITY else len(_PRIORITY)))
     best = rank[0]
     score, hits = found[best]
     if best != "agency_pitch" and score < 3:
@@ -474,7 +489,7 @@ def type_question(inferred: dict | None = None) -> dict:
     evidence as ``source``, the others ``asked``. Address ``deck.type``, free text allowed, always skippable;
     ``default`` names what a skip falls back to. Computed in code, so it exists with no model stage."""
     inferred = inferred or {"type": spec.DEFAULT_TYPE, "confidence": "low", "evidence": []}
-    order = [inferred["type"]] + [t for t in profiles.ids() if t != inferred["type"]]
+    order = [inferred["type"]] + [t for t in profiles.offered() if t != inferred["type"]]
     opts = []
     for n, tid in enumerate(order):
         p = profiles.load(tid)
@@ -495,19 +510,21 @@ def add_type_question(a0: dict, card: dict, profile: dict | None = None) -> dict
     """Put the type question first in an a0 output's questions, in place, and return it. The list stays
     at most intake.MAX_QUESTIONS long: the type question and up to four others. Where there is room and a
     profile is known, the profile's own questions fill it, only about a brief field still empty and not
-    already asked. Idempotent: an a0 that already leads with the card is left as it is."""
-    qs = [q for q in a0.get("questions") or [] if q.get("id") != TYPE_QUESTION_ID][:MAX_QUESTIONS - 1]
+    already asked. Idempotent: an a0 that already leads with the card is left as it is. ``card`` None (deck-types: the person
+    already picked the type) adds no type question and frees its place for one more."""
+    room = MAX_QUESTIONS - (1 if card else 0)
+    qs = [q for q in a0.get("questions") or [] if q.get("id") != TYPE_QUESTION_ID][:room]
     if profile:
         gaps = {g.get("field") for g in (a0.get("gaps") or {}).get("brief_fields") or []}
         asked = {q.get("address") for q in qs}   # fields the a0 already asks about; the profile's own questions do not block each other
         seen = {q.get("text") for q in qs}
         for q in profile["questions"]:
-            if len(qs) >= MAX_QUESTIONS - 1:
+            if len(qs) >= room:
                 break
             if q["address"].split(".")[1] in gaps and q["address"] not in asked and q["text"] not in seen \
                     and q["id"] not in {x.get("id") for x in qs}:
                 qs.append({k: q[k] for k in ("id", "text", "options", "allow_text", "address")})
-    a0["questions"] = [card] + qs
+    a0["questions"] = ([card] if card else []) + qs
     return a0
 
 
@@ -515,7 +532,7 @@ def _recognise(text: str) -> str | None:
     """A deck type named in a typed answer: an id or a label, else the type its words point at (medium
     confidence or better). None when the text names nothing."""
     t = text.strip().lower()
-    for tid in profiles.ids():
+    for tid in profiles.offered():
         p = profiles.load(tid)
         if t in (tid, p["label"].lower(), tid.replace("_", " ")):
             return tid
@@ -523,13 +540,42 @@ def _recognise(text: str) -> str | None:
     return inf["type"] if inf["evidence"] and inf["confidence"] != "low" else None
 
 
-def chosen_type(inp, flag: str | None = None) -> dict:
-    """The deck type a run uses and why: ``{type, source, note}``. ``source`` is ``flag`` (an explicit
-    --kind), ``answer`` (the person answered q_deck_type: an option id, or typed words that name a type),
-    ``skipped`` (they skipped it, or typed something naming no type: the stated default, agency_pitch) or
-    ``default`` (nobody was asked). The flag wins over an answer."""
+#: deck-types slice 6: the score an inference needs to decide the type when nobody picked or answered (high confidence, no tie: infer_type).
+INFER_DECIDES = "high"
+
+
+def _inferred(inp) -> dict | None:
+    """The type the inputs point at with high confidence (score >= 5, no tie), with the quoted words; None otherwise. Read only when
+    profiles.recipes_on (design.precedence.change_from_today: with the recipes off a skipped or unasked question stays agency_pitch)."""
+    if not profiles.recipes_on():
+        return None
+    inf = infer_type(inp.prompt_text, inp.docs, {k: f for k, f in (inp.brief or {}).items() if not (isinstance(f, dict) and f.get("from_intake"))})
+    if inf["confidence"] != INFER_DECIDES or not inf["evidence"] or inf["type"] == spec.DEFAULT_TYPE:
+        return None
+    label = profiles.load(inf["type"])["label"].lower()
+    quoted = " / ".join(f'"{e}"' for e in inf["evidence"])
+    return {"type": inf["type"], "source": "inferred", "evidence": list(inf["evidence"]),
+            "note": f"read as {'an' if label[0] in 'aeiou' else 'a'} {label} because: {quoted}. Change it on the type picker"}
+
+
+def chosen_type(inp, flag: str | None = None, pick: str | None = None) -> dict:
+    """The deck type a run uses and why: ``{type, source, note}`` (and ``evidence`` when inferred). The order (deck-types design.precedence):
+
+    1. ``pick``: the person's explicit pick on the type picker (``inputs.deck_type`` in the document, ``run_deck --type``), and ``flag``
+       (an explicit --kind) at the same rank: the flag wins for that run (it is the CLI's own pick);
+    2. ``answer``: the person answered q_deck_type (an option id, or typed words that name a type);
+    3. ``inferred`` (deck-types, only with the recipes on): a skipped or unasked question, and the inputs point at one type with high
+       confidence (score >= 5, no tie), stamped with the quoted words;
+    4. ``skipped`` (they skipped it, or typed something naming no type) or ``default`` (nobody was asked): agency_pitch."""
+    for tid in ([profiles.for_kind(flag)["id"]] if flag else []) + ([pick] if pick else []):
+        if tid not in profiles.ids():
+            raise profiles.ProfileError(f"no deck type {tid!r}: known types are {', '.join(profiles.ids())}")
+        if tid not in profiles.offered():   # a type that joined with the recipes is refused while they are off (no half-built type)
+            raise profiles.ProfileError(f"the deck type {tid} needs the deck recipes (DECK_RECIPES=1 with DECK_LOOK_V3=1), which are off")
     if flag:
         return {"type": profiles.for_kind(flag)["id"], "source": "flag", "note": f"--kind {flag}"}
+    if pick:
+        return {"type": pick, "source": "pick", "note": f"the person picked {pick} on the type picker"}
     a = (inp.answers or {}).get(TYPE_QUESTION_ID)
     if isinstance(a, dict) and not a.get("skipped"):
         if a.get("option_id"):
@@ -539,10 +585,10 @@ def chosen_type(inp, flag: str | None = None) -> dict:
             tid = _recognise(str(a["text"]))
             if tid:
                 return {"type": tid, "source": "answer", "note": f"the person wrote \"{str(a['text']).strip()[:60]}\""}
-        return {"type": spec.DEFAULT_TYPE, "source": "skipped", "note": f"the answer named no deck type: used the stated default, {spec.DEFAULT_TYPE}"}
+        return _inferred(inp) or {"type": spec.DEFAULT_TYPE, "source": "skipped", "note": f"the answer named no deck type: used the stated default, {spec.DEFAULT_TYPE}"}
     if isinstance(a, dict):
-        return {"type": spec.DEFAULT_TYPE, "source": "skipped", "note": f"the deck type question was skipped: used the stated default, {spec.DEFAULT_TYPE}"}
-    return {"type": spec.DEFAULT_TYPE, "source": "default", "note": f"the deck type was not asked or answered: used the stated default, {spec.DEFAULT_TYPE}"}
+        return _inferred(inp) or {"type": spec.DEFAULT_TYPE, "source": "skipped", "note": f"the deck type question was skipped: used the stated default, {spec.DEFAULT_TYPE}"}
+    return _inferred(inp) or {"type": spec.DEFAULT_TYPE, "source": "default", "note": f"the deck type was not asked or answered: used the stated default, {spec.DEFAULT_TYPE}"}
 
 
 # ---------------------------------------------------------------- supply cards: what only the person knows (ADR 0023, 0028)

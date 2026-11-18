@@ -62,7 +62,7 @@ def stage_files(e, doc="doc1") -> set[str]:
 
 def test_status_says_what_is_on(engine):
     status, s = call(engine.base, "/status")
-    assert status == 200 and s == {"ok": True, "live": False, "replay": True, "max_usd": 2.0, "busy": None}
+    assert status == 200 and s == {"ok": True, "live": False, "replay": True, "max_usd": 2.0, "busy": None, "types": srv.type_offers()}   # deck-types: what the picker may offer
 
 
 def test_the_run_stops_at_the_storyline_gate_and_nothing_after_it_runs(engine):

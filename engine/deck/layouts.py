@@ -114,6 +114,18 @@ def catalogue() -> dict:
     return {k: list(v) for k, v in _CACHE[key].items()}
 
 
+def purposes() -> dict:
+    """deck-types (the picker's spine thumbnail, profiles.card_data): ``{layout id: {purpose, for_types, priority, pick}}`` of every layout
+    file, ``layouts/v3`` laid over the base whatever spec.LOOK_V3 says. Read only, like ``catalogue``; never touches the active library."""
+    out = {}
+    for f in sorted(DIR.glob("*.yaml")) + sorted(V3_DIR.glob("*.yaml")):
+        lay = yaml.safe_load(f.read_text()) or {}
+        if isinstance(lay, dict) and lay.get("id"):
+            out[lay["id"]] = {"purpose": lay.get("purpose"), "for_types": list(lay.get("for_types") or []),
+                              "priority": lay.get("priority", 0), "pick": lay.get("pick")}
+    return out
+
+
 def family(layout_id: str, library: dict | None = None) -> str:
     """The family of a layout (``flow`` is its own)."""
     lay = (library or load()).get(layout_id)
@@ -927,8 +939,9 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     ``moved``, blocks_sha), ``slide.slots`` and ``meta.layout_title_pt``. It never edits a block, a note, a claim or the order.
 
     ``prefs``: ``density`` (lean, standard, detailed; None is detailed), ``text_mode`` (condense or preserve), ``repair`` (bool),
-    ``prefer`` (deck-types: a recipe's ``{slide type: [layout id, ...]}``, profiles.recipe; None is today) and ``prefer_type`` (the type's
-    id, for the why line). A preferred layout (``preferred``) replaces the rule pick only when it fits the slide, as density leaves it,
+    ``prefer`` (deck-types: a recipe's ``{slide type: [layout id, ...]}``, profiles.recipe; None is today), ``prefer_type`` (the type's
+    id, for the why line) and ``roles`` / ``windows`` (deck-types: the recipe's density roles and word windows; None is spec.ROLE_OF_TYPE /
+    ROLE_WINDOWS). A preferred layout (``preferred``) replaces the rule pick only when it fits the slide, as density leaves it,
     at rung as_is or shrunk; at the ladder, if it no longer does, the rule pick takes the slide back, so a preference never moves a
     point the rule pick would keep and never draws past shrunk. chosen_by stays ``rule``; why names the recipe.
     ``swaps``: ``{slide id: layout id}`` a person chose. ``fixes``: ``{slides: {sid: {avoid, scale_max, layout, notes}}, images:
@@ -969,8 +982,10 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         # 0. density: movable points past the target go to the notes
         if density in spec.DENSITY_WORDS and content_ and not exempt_ and s_["type"] not in ("appendix",) and prefs.get("text_mode") != "preserve":
             target = spec.DENSITY_WORDS[density]
-            if spec.LOOK_V3 and density == "lean" and s_["type"] in spec.ROLE_OF_TYPE:   # deck-look (Q13): a pitch's lean density is the role
-                target = max(target, spec.ROLE_WINDOWS[spec.ROLE_OF_TYPE[s_["type"]]][1])   # window's top: 35 a statement, 70 an argument
+            roles_ = prefs.get("roles") or spec.ROLE_OF_TYPE   # deck-types slice 4: the type's roles and windows (profiles.recipe density); today's without
+            wins_ = prefs.get("windows") or spec.ROLE_WINDOWS
+            if spec.LOOK_V3 and density == "lean" and s_["type"] in roles_:   # deck-look (Q13): a pitch's lean density is the role
+                target = max(target, wins_[roles_[s_["type"]]][1])   # window's top: 35 a statement, 70 an argument
             cands = _movable(deck, sid_, base_, aud, exempt_)
             words = lambda sl_: sum(len(str(t).split()) for b in spec.shown_blocks(sl_, aud) if b["kind"] != "copy" for t in _block_texts(b))
             cur = _with_moved(base_, [])
