@@ -10,7 +10,7 @@ import { useConfig, useServices } from '../app/context'
 import type { Ratio } from '../contracts/types'
 import { cardOf, type NodeEnv } from '../canvas/nodes/nodes'
 import { briefOfElement } from '../brief/canvas'
-import { scriptFromLine } from '../jobs/prompt'
+import { scriptFromBrief, scriptFromLine } from '../jobs/prompt'
 import { briefChoices, offersStartFromBrief } from '../brief/start'
 import { osBriefSource, type BriefSource, type OsBriefItem } from '../brief/os'
 import { useProjectName } from '../ui/useDownload'
@@ -74,6 +74,8 @@ export function StartCard({ env, onPictures, src = devSource() ?? OS }: {
       // The draft fills in place on the Script node (owner 2026-11-18): Keep or Discard there; the Script editor
       // opens only when the person opens it.
       if (words && services.clan) await scriptFromLine(services, services.clan, out.scriptId, words)
+      // A brief and no line: the Script agent drafts from the brief (mock canvas-filling, flow 10).
+      else if (out.briefId && services.clan) await scriptFromBrief(services, services.clan, out.scriptId, picked?.title ?? '')
       // The film laid out in view, nothing selected: the person watches the nodes fill (mock canvas-filling).
       if (env) {
         const ids = new Set([out.scriptId, out.storyboardId, out.briefId].filter(Boolean))
@@ -144,7 +146,7 @@ export function StartCard({ env, onPictures, src = devSource() ?? OS }: {
             {busy ? 'Starting…' : 'Write the script'}</button>
         </div>
         {error && <p className="sc-error" role="alert">{error}</p>}
-        <p className="hint">{offers ? 'The brief comes from Brief Maker and stays read-only here. ' : ''}Or draw, drop pictures and add nodes yourself; this card goes when you do.</p>
+        <p className="hint">{withBrief ? 'The brief comes from Brief Maker and stays read-only here. ' : ''}Or draw, drop pictures and add nodes yourself; this card goes when you do.</p>
       </section>
     </div>
   )

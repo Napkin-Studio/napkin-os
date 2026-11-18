@@ -104,6 +104,24 @@ export async function scriptFromLine(deps: FrameDeps, store: ModelStore, scriptI
   return { jobId, sceneId }
 }
 
+/** The Script agent's ask when the film starts from a linked brief and no line (mock canvas-filling, flow 10). */
+export function fromBriefWords(title: string): string {
+  return `Write the film from the linked brief${title ? ` "${title}"` : ''}. No line of mine yet: the brief decides what happens.`
+}
+
+/**
+ * Write the script with a brief linked and no line (live test 2026-11-18: nothing was drafted): the Script
+ * agent drafts from the brief alone, in place on the first scene, as from a line. The brief reaches the
+ * job through the Script's link (brief/model.ts withBrief); the instruction says there is no line.
+ */
+export async function scriptFromBrief(deps: FrameDeps, store: ModelStore, scriptId: Id, briefTitle: string): Promise<ScriptStart> {
+  if (!store.get().scripts[scriptId]) throw new Error('This script is gone.')
+  await store.flush()
+  const sceneId = scenesOf(store.get(), scriptId)[0]?.id ?? await addScene(store, scriptId)
+  const jobId = await draftFromBrief({ ...deps, doc: store }, store, scriptId, sceneId, fromBriefWords(briefTitle))
+  return { jobId, sceneId }
+}
+
 // ── storyboard and video ────────────────────────────────────────────────────
 
 /** The script that drives a storyboard (its `drives` link), else the project's. */

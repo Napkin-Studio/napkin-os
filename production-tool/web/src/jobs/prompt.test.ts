@@ -14,7 +14,7 @@ import { addScene } from '../script/edits'
 import { addShots, asset, id, job, MAYA, modelStore, seedStages } from '../test/model'
 import type { FrameDeps } from './frames'
 import {
-  isPastedScript, nameMadePicture, pictureFromWords, pictureJob, promptRefs, scriptFromLine, storyboardFromLine, suggestName,
+  fromBriefWords, isPastedScript, nameMadePicture, pictureFromWords, pictureJob, promptRefs, scriptFromBrief, scriptFromLine, storyboardFromLine, suggestName,
   videoFromWords, videoSeconds,
 } from './prompt'
 
@@ -99,6 +99,19 @@ describe('script from a line', () => {
   it('refuses an empty box', async () => {
     const { store, deps } = await project()
     await expect(scriptFromLine(deps, store, mainScript(doc(store))!.id, '   ')).rejects.toThrow(/idea in a line/)
+  })
+
+  it('with a brief and no line, the Script agent drafts from the brief (live test 2026-11-18: nothing was drafted)', async () => {
+    const { store, deps, sent } = await project()
+    const scriptId = mainScript(doc(store))!.id
+    const r = await scriptFromBrief(deps, store, scriptId, 'PW Lumo main film brief')
+    expect('jobId' in r).toBe(true)
+    expect(sent).toHaveLength(1)
+    const w = sent[0].input.write!
+    expect([sent[0].op, w.intent, w.mode]).toEqual(['write', 'draft', 'draft'])
+    expect(w.target).toEqual({ kind: 'scene', id: scenesOf(doc(store), scriptId)[0].id })
+    expect(w.instruction).toBe(fromBriefWords('PW Lumo main film brief'))
+    expect(w.instruction).toMatch(/from the linked brief "PW Lumo main film brief"/)
   })
 })
 

@@ -85,7 +85,9 @@ Rules:
    away feeling what it says; keep its mandatories (the brand's name where it asks, a moment it
    asks for) and never write what a don't rules out. The person's words still decide what happens:
    the brief shapes how, never adds a scene of its own. Never quote the brief's words as a line, and
-   never put the proposition on screen unless the person's words do.
+   never put the proposition on screen unless the person's words do. When the instruction says to write
+   from the brief alone (no line of the person's), the brief decides what happens as well: one simple
+   idea that lands the proposition for its audience, with its mandatories in and its format's length.
 
 10. Length. The person sees your words timed by one rule, and so do you: an `action` line is one beat,
    about 2 s on screen when it has up to 12 words, and a longer line counts 1 s for every 6 words;
