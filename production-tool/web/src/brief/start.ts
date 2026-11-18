@@ -1,19 +1,19 @@
-// "Start from a brief" (features/brief-node.clan): the data path the empty canvas's Start card and the
-// brief → Production spin-off call. There is no brief screen and no brief typed here: the person picks
-// one of the agency's Brief Maker briefs (link), or arrives from Brief Maker with one (spin-off), and the
-// canvas gets the Brief node with a new Script linked to it.
+// Napkin's briefs here (features/brief-node.clan): the list Assets › From Napkin shows, and the brief a page
+// arrives with. There is no brief screen and no brief typed here: the person links one of the agency's
+// Brief Maker briefs from Assets › From Napkin, or arrives from Brief Maker with one, and the canvas gets
+// its Brief node, alone (owner 2026-11-18: a blank canvas asks nothing).
 //
 // The spin-off arrives as /production/?brief=<OS document id> (the OS's Continue in names the brief, never
 // its words: query parameters carry ids, app/route.ts). The page starts a project from it once and drops
 // the parameter.
 
 import type { NodeEnv } from '../canvas/nodes/nodes'
-import { startFromBrief, type StartedFromBrief } from './canvas'
+import { bringBrief } from './canvas'
 import { BriefReadError, type BriefSource, type OsBriefItem } from './os'
 
 const DOC_ID = /^doc-[A-Za-z0-9._-]{1,120}$/
 
-/** Whether the Start card offers "Start from a brief": this page can read Napkin's briefs. */
+/** Whether Assets › From Napkin lists briefs: this page can read Napkin's briefs. */
 export async function offersStartFromBrief(src: BriefSource): Promise<boolean> {
   return src.available()
 }
@@ -28,9 +28,9 @@ export async function briefChoices(src: BriefSource): Promise<{ items: OsBriefIt
   }
 }
 
-/** Start from the brief the person picked (or arrived with): read it now, then the node, a new Script and the link. */
-export async function startFromBriefId(env: NodeEnv, src: BriefSource, documentId: string, how: 'link' | 'spinoff' = 'link'): Promise<StartedFromBrief> {
-  return startFromBrief(env, await src.read(documentId), how)
+/** Bring the brief the page arrived with: read it now, then its Brief node alone (brief/canvas.ts bringBrief). */
+export async function bringBriefId(env: NodeEnv, src: BriefSource, documentId: string): Promise<Awaited<ReturnType<typeof bringBrief>>> {
+  return bringBrief(env, await src.read(documentId), 'spinoff')
 }
 
 /** The brief a spin-off from Brief Maker names (?brief=<doc id>), or null. */

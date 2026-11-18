@@ -1,5 +1,5 @@
 // The Brief node's model (features/brief-node.clan, owner 2026-11-17). Engine-free and UI-free: the
-// card, the Booth and the Start card call these.
+// card, the Booth, Assets › From Napkin and the brief a page arrives with call these.
 //
 // - A Brief node is made only from a Brief Maker brief, by linking one or spinning one off; never typed
 //   here. It is a frozen copy: the brief's spine at the version taken (source.data_sha256, taken).

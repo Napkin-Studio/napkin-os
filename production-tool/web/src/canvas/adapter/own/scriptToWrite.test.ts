@@ -1,14 +1,14 @@
-// "Write the script" on the Start card (stages/startCard.ts scriptToWrite) on our own engine: a blank
+// The script the board rail's Script row opens (stages/scriptToWrite.ts) on our own engine: a blank
 // project gets a Script node the way + Node → Script makes one (live test 2026-11-16: it did nothing).
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../../../contracts/types'
 import { MAYA, modelStore } from '../../../test/model'
 import { mainScript } from '../../../model/selectors'
 import { cardOf } from '../../nodes/nodes'
-import { scriptToWrite } from '../../../stages/startCard'
+import { scriptToWrite } from '../../../stages/scriptToWrite'
 import { OwnAdapter } from './adapter'
 
-describe('Write the script on the Start card', () => {
+describe('the Script a blank project opens', () => {
   const doc = (s: ReturnType<typeof modelStore>) => s.get() as unknown as ProductionDocument
   it('on a blank project makes a Script node, as + Node → Script does, and gives its id', async () => {
     const s = modelStore()
