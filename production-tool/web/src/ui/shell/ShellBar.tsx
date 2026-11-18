@@ -1,19 +1,18 @@
-// The shell bar on every Production screen (features/production-new-ui.clan; the mock is the spec:
-// ~/Documents/napkin-design-mocks/production-new-ui-v2, core.js S.bar). The same bar Brief Maker and
-// Research wear (app/src/components/Toolbar.tsx, app/src/shell/nui/shell.css): the Deep O medallion and the
-// agency pill, the client chip, the document slot (name, saved line, ▾ menu), the crumb, Continue in and
-// Share; then the job chip, the editor's one primary, the people here, light or dark, you, and Decisions
-// with its count. Each editor's own controls sit in the band row under it (Band).
+// The slim shell bar on every Production screen (features/production-new-ui.clan; owner 2026-11-19): the brand
+// pill (the Deep O medallion and the agency pill), the film's name with its ▾ menu and saved line, and the crumb
+// of where you are (Canvas › Script); on the right only the agents' status dot (Brief Maker's .tb-status),
+// Decisions with its count, and you. Everything else a bar held lives in the film's ▾ menu (New, Open, All
+// projects, Export, Continue in, Share, Rename, Duplicate, Data sharing, Light/Dark, Delete) or in the page's
+// own band row under it (Band), with its page actions.
 
-import { useContext, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { RouterContext, useDoc, useServices, useShell } from '../../app/context'
-import { Float, MenuItem } from '../Float'
+import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useShell } from '../../app/context'
+import { Float } from '../Float'
 import { saveTime, useSave } from '../useSave'
-import { setThemeChoice } from '../../theme'
 import { Account } from '../chrome/Bar'
-import { clientDisc, pillMark } from './agency'
+import { pillMark } from './agency'
 import { DeepO } from './look'
-import { useLook, useTheme } from './lookContext'
+import { useLook } from './lookContext'
 import { ICON, studioHref, useNeedsCount } from './bar'
 import { usePanels } from '../chrome/panels'
 import './shell.css'
@@ -50,27 +49,6 @@ export function AgencyPill() {
       {mark ? <img src={mark} alt={look.name} className="ag-mark" /> : <b>{look.name}</b>}
       <small>Napkin Studio</small>
     </span>
-  )
-}
-
-/** The client this film is for, when it has one; else the tool's own chip. Either goes to Production's home. */
-function ClientChip() {
-  const shell = useShell()
-  const doc = useDoc()
-  const clientId = doc.project.client_id
-  if (clientId) {
-    const name = clientId.replace(/^client[_:-]?/, '').replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-    const disc = clientDisc({ id: clientId, name })
-    return (
-      <button type="button" className="tb-client" onClick={() => void shell.goHome()} title={`${name}: all films`}>
-        <span className="cdisc" style={{ background: disc.bg, color: disc.ink }}>{disc.initials}</span><span className="cn">{name}</span>
-      </button>
-    )
-  }
-  return (
-    <button type="button" className="tb-client tool" onClick={() => void shell.goHome()} title="Production: all films">
-      <span className="cdisc tool"><Ic d={ICON.film} /></span><span className="cn">Production</span>
-    </button>
   )
 }
 
@@ -112,70 +90,12 @@ function Crumbs({ crumb }: { crumb: Crumb[] }) {
       {crumb.map((c, i) => (
         <span key={i} className="tba-cstep">
           <span aria-hidden="true">›</span>
+          {/* Every step before this one is a link back (owner 2026-11-19: "How do I get out of this page back to canvas?"). */}
           {i === crumb.length - 1 || !c.onClick ? <span className="here" aria-current={i === crumb.length - 1 ? 'page' : undefined}>{c.label}</span>
-            : <button type="button" onClick={c.onClick} title={`Back to ${c.label} (Ctrl+[)`}>{c.label}</button>}
+            : <button type="button" className="crumb-link" onClick={c.onClick} title={`Back to ${c.label} (Esc)`}>{c.label}</button>}
         </span>
       ))}
     </nav>
-  )
-}
-
-/** Continue in ▾: where this film goes next. Link a brief… opens Assets › From Napkin on the canvas, where the
- *  agency's Brief Maker briefs are (features/brief-node.clan; live test 2026-11-18). */
-function ContinueIn() {
-  const ref = useRef<HTMLButtonElement>(null)
-  const [open, setOpen] = useState(false)
-  const { ui } = useServices()
-  // Read at the click only: the bar also shows where no router is (the editors' own tests).
-  const router = useContext(RouterContext)
-  const panels = usePanels()
-  const soon = 'Not in this version yet'
-  const linkBrief = () => {
-    setOpen(false)
-    // The Brief node goes on the canvas: an editor or a room goes back to it first.
-    if (router?.get().kind === 'script') router.leave()
-    ui.update((u) => { u.stage = 'character' }, 'stage')
-    panels.openAssets('napkin')
-  }
-  return (
-    <>
-      <button ref={ref} type="button" className="tba-btn ghost pt-continue" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Continue in ▾</button>
-      <Float anchor={ref} open={open} onClose={() => setOpen(false)} role="menu" label="Continue in" className="pt-menu nui-pop">
-        <div className="fhead">Continue in</div>
-        <MenuItem icon="+" disabled hint={soon} onSelect={() => {}}>New deck from this film</MenuItem>
-        <MenuItem icon="↔" hint="From Brief Maker, in Assets › From Napkin" onSelect={linkBrief}>Link a brief…</MenuItem>
-      </Float>
-    </>
-  )
-}
-
-/** Share: copy the link (it opens only for people at your agency who can see the film). */
-function Share() {
-  const ref = useRef<HTMLButtonElement>(null)
-  const [open, setOpen] = useState(false)
-  const [said, setSaid] = useState<string | null>(null)
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(location.href); setSaid('Link copied') } catch { setSaid('Copy the address bar') }
-    setTimeout(() => setSaid(null), 2400)
-  }
-  return (
-    <>
-      <button ref={ref} type="button" className="tba-btn ghost pt-share" aria-haspopup="menu" aria-expanded={open} aria-live="polite" onClick={() => setOpen(!open)}>{said ?? 'Share'}</button>
-      <Float anchor={ref} open={open} onClose={() => setOpen(false)} role="menu" label="Share" className="pt-menu nui-pop">
-        <div className="fhead">Share</div>
-        <MenuItem icon={<Ic d={ICON.link} cls="fmi-svg" />} hint="Opens for people at your agency who can see the film" onSelect={() => { setOpen(false); void copy() }}>Copy link</MenuItem>
-      </Float>
-    </>
-  )
-}
-
-function ThemeButton() {
-  const theme = useTheme()
-  return (
-    <button type="button" className="tb-theme" title="Light or dark" aria-label={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
-      onClick={() => setThemeChoice(theme === 'dark' ? 'light' : 'dark')}>
-      <Ic d={ICON.moon} cls="i-moon" /><Ic d={ICON.sun} cls="i-sun" />
-    </button>
   )
 }
 
@@ -192,19 +112,14 @@ export function DecisionsButton({ needs, own }: { needs: number; own?: { on: boo
   )
 }
 
-/** The bar. `crumb` names where you are past the document (Canvas › Storyboard); `menu` fills the ▾. */
-export function ShellBar({ crumb, menu, job, tools, primary, presence, mark = 'awake', markProgress, className = '', bar, history }: {
+/** The bar. `crumb` names where you are past the film (Canvas › Storyboard); `menu` fills the film's ▾. */
+export function ShellBar({ crumb, menu, job, mark = 'awake', markProgress, className = '', bar, history }: {
   crumb?: Crumb[]
   /** An editor's own Decisions (the Script editor's, narrowed for "Why?"); else the app's drawer. */
   history?: { on: boolean; toggle: () => void }
   menu?: (close: () => void) => ReactNode
-  /** The job chip (ui/JobTray). */
+  /** The agents' status dot (ui/JobTray). */
   job?: ReactNode
-  /** Quiet tools beside the job chip (Assets). */
-  tools?: ReactNode
-  /** The screen's one primary action. */
-  primary?: ReactNode
-  presence?: ReactNode
   mark?: 'awake' | 'working' | 'needs'
   markProgress?: number
   className?: string
@@ -217,30 +132,24 @@ export function ShellBar({ crumb, menu, job, tools, primary, presence, mark = 'a
   useSyncExternalStore(shell.deps.app.subscribe, shell.deps.app.get)
   return (
     <div className={`topbar-outer ${className}`} data-float-avoid="" data-bar={bar}>
-      <header className="tb" aria-label="Napkin Studio Top Bar">
+      <header className="tb slim" aria-label="Napkin Studio Top Bar">
         <span className="tb-lead"><Medallion state={mark} progress={markProgress} /><AgencyPill /></span>
-        <span className="tb-sep" aria-hidden="true" />
-        <ClientChip />
-        <span className="tb-sep" aria-hidden="true" />
         <div className="tb-app">
           <DocSlot menu={menu} />
           {crumb && crumb.length > 0 && <Crumbs crumb={crumb} />}
-          <span className="tba-acts"><ContinueIn /><Share /></span>
         </div>
         <span className="tb-spacer" />
-        <span className="tb-tools">{job}{tools}{primary}</span>
-        {presence}
-        <ThemeButton />
-        <span className="tb-me"><Account /></span>
+        {job && <span className="tb-tools">{job}</span>}
         <DecisionsButton needs={needs} own={history} />
+        <span className="tb-me"><Account /></span>
       </header>
     </div>
   )
 }
 
 /** The bar where no film is open (All projects, and the sign-in and access screens): the medallion and agency
- *  pill, the place's name, light or dark, and you once signed in. A film's slots (its name, Continue in, Share,
- *  Decisions) are not here (mock production-new-ui-v2 core.js S.bar({ place: 'Production' })). */
+ *  pill, the place's name, and you once signed in. A film's slots (its name, Continue in, Share, Decisions)
+ *  are not here (mock production-new-ui-v2 core.js S.bar({ place: 'Production' })). */
 export function PlaceBar({ place = 'Production', account }: {
   place?: string
   /** The account button and its menu; none when signed out. */
@@ -248,14 +157,12 @@ export function PlaceBar({ place = 'Production', account }: {
 }) {
   return (
     <div className="topbar-outer" data-float-avoid="" data-bar="place">
-      <header className="tb" aria-label="Napkin Studio Top Bar">
+      <header className="tb slim" aria-label="Napkin Studio Top Bar">
         <span className="tb-lead"><Medallion state="awake" /><AgencyPill /></span>
-        <span className="tb-sep" aria-hidden="true" />
         <div className="tb-app">
           <span className="tba-name static"><Ic d={ICON.film} cls="ticon" /><span className="tba-n2"><b>{place}</b></span></span>
         </div>
         <span className="tb-spacer" />
-        <ThemeButton />
         {account && <span className="tb-me">{account}</span>}
       </header>
     </div>

@@ -1,52 +1,60 @@
-// The canvas's bar and every editor's bar (features/production-new-ui.clan; the mock is the spec): the
-// shell bar of the new UI (ui/shell/ShellBar) with the document's ▾ menu holding what More held (Export,
-// Save now, Copy link, the editor's own rows), and, under an editor's bar, the band row with its own
-// controls (the view switch, Format, meta, Undo/Redo). History is the Decisions drawer, opened from the
-// bar's Decisions button. No spend, cost or limit in any bar (principle 4); costs show only in Decisions.
+// The canvas's bar and every editor's bar (features/production-new-ui.clan; the slim bar, owner 2026-11-19): the
+// shell bar of the new UI (ui/shell/ShellBar) with the film's ▾ menu (FilmMenu: New, Open a file, All projects,
+// Export, Continue in, Share, Rename, Duplicate, Data sharing, Light/Dark, Delete, after the editor's own rows),
+// and, under an editor's bar, the band row: ← back to the canvas, its own controls (the view switch, Format,
+// meta), its page actions (Plan shots, Make film, Apply…) and Undo/Redo. Escape goes back too, when nothing else
+// takes it. History is the Decisions drawer, from the bar's Decisions button. No spend, cost or limit in any bar
+// (principle 4); costs show only in Decisions.
 
-import { useState, type ReactNode } from 'react'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { DataSharing } from '../DataSharing'
 import { usePanels } from './panels'
-import { useDoc, useServices, useShell, useShowMock, useUi } from '../../app/context'
-import { Band, Icon, ShellBar, type Crumb } from '../shell/ShellBar'
-import { ICON } from '../shell/bar'
+import { RouterContext, useDoc, useServices, useShell, useUi } from '../../app/context'
+import { Band, ShellBar, type Crumb } from '../shell/ShellBar'
 import { exportBundle, download } from '../../export'
 import { downloadAllMedia } from '../../media/download'
 import { viewsOnCanvas } from '../../media/names'
 import { idbGet } from '../../lib/idb'
 import type { CanvasSnapshot } from '../../canvas/controller'
-import { BetaTag } from '../../dogfood/Dogfood'
 import { MenuItem } from '../Float'
 import { JobTray } from '../JobTray'
 import { UndoButtons, UndoMenuItems } from '../UndoButtons'
 import { saveTime, useSave } from '../useSave'
-import { NodeIcon, Presence, type NodeKind } from './Bar'
+import { NodeIcon, type NodeKind } from './Bar'
 import { undoInMore, useFitLevel } from './fit'
 import { LinkIcon } from './MoreMenu'
 import { useProjectName } from '../useDownload'
+import { setThemeChoice } from '../../theme'
+import { useTheme } from '../shell/lookContext'
 
 
 /** Whose History a bar opens: the app's panel, or the Script editor's own. */
 export interface HistoryToggle { on: boolean; toggle: () => void }
 
-/** Assets and characters: the library, opened on purpose (it opens in the Booth beside the canvas). */
-export function AssetsButton() {
-  const { assets, toggle } = usePanels()
-  return (
-    <button type="button" className={`tba-btn pt-assets ${assets ? 'on' : ''}`} aria-pressed={assets}
-      title="Assets and characters: your references, the team library and uploads" onClick={() => toggle('assets')}>
-      <Icon d={ICON.image} /><span className="lt">Assets</span>
-    </button>
-  )
+/** Pick a file from the computer (the input lives on the page, so it outlives the menu that asked). */
+function pickFile(accept: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = accept
+    input.style.display = 'none'
+    input.addEventListener('change', () => { resolve(input.files?.[0] ?? null); input.remove() }, { once: true })
+    input.addEventListener('cancel', () => { resolve(null); input.remove() }, { once: true })
+    document.body.appendChild(input)
+    input.click()
+  })
 }
 
-/** The canvas's More (ui-behaviour 3.18, 2.4): Export's rows (the media, the project, and what is not
- *  built yet, shown as not yet), Save now, and Copy link when Share has left the bar (tight). */
-function CanvasMoreItems({ close, share }: { close: () => void; share: boolean }) {
-  const { doc: docStore, project } = useServices()
+/** The film's ▾ menu, on every screen (owner 2026-11-19): New · Open a file · All projects · Export; Continue in ·
+ *  Share · Rename · Duplicate; Data sharing · Light/Dark · Delete. Two-line rows where the mock has them. */
+function FilmMenu({ close }: { close: () => void }) {
+  const { doc: docStore, project, ui: uiStore } = useServices()
   const shell = useShell()
   const doc = useDoc()
   const saving = useSave()
+  const panels = usePanels()
+  const router = useContext(RouterContext)
+  const theme = useTheme()
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const name = useProjectName()
@@ -58,8 +66,8 @@ function CanvasMoreItems({ close, share }: { close: () => void; share: boolean }
       const said = await fn()
       if (said) setNote(said)
       else close()
-    } catch {
-      setNote('That did not work. Try again.')
+    } catch (e) {
+      setNote(e instanceof Error && e.message ? e.message : 'That did not work. Try again.')
     } finally {
       setBusy(null)
     }
@@ -70,9 +78,51 @@ function CanvasMoreItems({ close, share }: { close: () => void; share: boolean }
   const [renaming, setRenaming] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [sharing, setSharing] = useState(false)
+  // Continue in › Link a brief…: the Brief node goes on the canvas, from Assets › From Napkin (features/brief-node.clan).
+  const linkBrief = () => {
+    close()
+    if (router?.get().kind === 'script') router.leave()
+    uiStore.update((u) => { u.stage = 'character' }, 'stage')
+    panels.openAssets('napkin')
+  }
   return (
     <>
-      {/* The document itself (mock menu): Rename, Duplicate, then Export; Data sharing and Delete last. */}
+      <MenuItem icon="+" hint="A blank canvas" disabled={!!busy} onSelect={() => { close(); void shell.newProject() }}>New film</MenuItem>
+      <MenuItem icon="⇪" hint="A Napkin file (.clan) or an export .zip" disabled={!!busy} onSelect={() => void run('open', async () => {
+        const f = await pickFile('.zip,.clan,application/zip,application/vnd.clan+zip')
+        if (f) await shell.openFile(f, f.name)
+        return null
+      })}>{busy === 'open' ? 'Opening…' : 'Open a file…'}</MenuItem>
+      <MenuItem icon="▤" hint="Every film in this browser and on the server" onSelect={() => { close(); void shell.goHome() }}>All projects</MenuItem>
+      <div className="pt-menusep" />
+      <div className="fhead">Export</div>
+      <MenuItem icon={<ExportIcon kind="zip" />} disabled={!!busy} hint={`${files} files`} onSelect={() => void run('media', async () => {
+        const canvas = await idbGet<CanvasSnapshot>('kv', project.canvasKey).catch(() => undefined)
+        const r = await downloadAllMedia(docStore.get(), name, viewsOnCanvas(docStore.get(), canvas?.elements ?? []))
+        if (!r.packed) return 'Nothing to save in this browser'
+        return r.missing ? `Saved ${r.packed} · ${r.missing} not in this browser` : null
+      })}>{busy === 'media' ? 'Packing…' : 'Download all media (zip)'}</MenuItem>
+      <MenuItem icon={<ExportIcon kind="clan" />} disabled={!!busy} hint="A Napkin file anyone with Napkin can open" onSelect={() => void run('clan', async () => {
+        const { blob, name: file } = await exportBundle(docStore, project.canvasKey, name)
+        download(blob, file)
+        return null
+      })}>{busy === 'clan' ? 'Packing…' : 'Project as .clan + assets'}</MenuItem>
+      <MenuItem icon={<NodeIcon kind="script" size={16} />} disabled hint={soon} onSelect={() => {}}>Script as PDF</MenuItem>
+      <MenuItem icon={<NodeIcon kind="script" size={16} />} disabled hint={soon} onSelect={() => {}}>Script as Fountain</MenuItem>
+      <MenuItem icon={<NodeIcon kind="storyboard" size={16} />} disabled hint={soon} onSelect={() => {}}>Storyboard as PDF</MenuItem>
+      <MenuItem icon={<ExportIcon kind="publish" />} disabled hint="Publish a reference from Assets" onSelect={() => {}}>Publish selected to team library</MenuItem>
+      {saving.can && (
+        <MenuItem icon="⤒" hint={saving.state.kind === 'failed' ? 'Ctrl+S · the last save failed' : saving.state.kind === 'saved' ? `Ctrl+S · saved ${saveTime(saving.state.at)}` : 'Ctrl+S'}
+          disabled={saving.state.kind === 'saving'} onSelect={() => { close(); void saving.save() }}>
+          {saving.state.kind === 'saving' ? 'Saving…' : 'Save now'}
+        </MenuItem>
+      )}
+      {note && <div className="pt-menuhead" role="status">{note}</div>}
+      <div className="pt-menusep" />
+      <div className="fhead">Continue in</div>
+      <MenuItem icon="+" disabled hint={soon} onSelect={() => {}}>New deck from this film</MenuItem>
+      <MenuItem icon="↔" hint="From Brief Maker, in Assets › From Napkin" onSelect={linkBrief}>Link a brief…</MenuItem>
+      <MenuItem icon={<LinkIcon />} hint="Copies the link: it opens for people at your agency who can see the film" onSelect={() => void run('share', async () => copyLink(location.href))}>Share…</MenuItem>
       {renaming !== null ? (
         <form className="pt-menuform" onSubmit={(e) => { e.preventDefault(); const n = renaming.trim(); if (n) void shell.rename(project.id, n).then(close, () => setNote('Could not rename it. Try again.')); else setRenaming(null) }}>
           <input className="input" autoFocus onFocus={(e) => e.currentTarget.select()} aria-label="The project's name" value={renaming} maxLength={120} onChange={(e) => setRenaming(e.target.value)}
@@ -87,32 +137,9 @@ function CanvasMoreItems({ close, share }: { close: () => void; share: boolean }
         return null
       })}>{busy === 'dup' ? 'Duplicating…' : 'Duplicate'}</MenuItem>
       <div className="pt-menusep" />
-      <div className="fhead">Export</div>
-      <MenuItem icon={<ExportIcon kind="zip" />} disabled={!!busy} hint={`${files} files`} onSelect={() => void run('media', async () => {
-        const canvas = await idbGet<CanvasSnapshot>('kv', project.canvasKey).catch(() => undefined)
-        const r = await downloadAllMedia(docStore.get(), name, viewsOnCanvas(docStore.get(), canvas?.elements ?? []))
-        if (!r.packed) return 'Nothing to save in this browser'
-        return r.missing ? `Saved ${r.packed} · ${r.missing} not in this browser` : null
-      })}>{busy === 'media' ? 'Packing…' : 'Download all media (zip)'}</MenuItem>
-      <MenuItem icon={<ExportIcon kind="clan" />} disabled={!!busy} onSelect={() => void run('clan', async () => {
-        const { blob, name: file } = await exportBundle(docStore, project.canvasKey, name)
-        download(blob, file)
-        return null
-      })}>{busy === 'clan' ? 'Packing…' : 'Project as .clan + assets'}</MenuItem>
-      <MenuItem icon={<NodeIcon kind="script" size={16} />} disabled hint={soon} onSelect={() => {}}>Script as PDF</MenuItem>
-      <MenuItem icon={<NodeIcon kind="script" size={16} />} disabled hint={soon} onSelect={() => {}}>Script as Fountain</MenuItem>
-      <MenuItem icon={<NodeIcon kind="storyboard" size={16} />} disabled hint={soon} onSelect={() => {}}>Storyboard as PDF</MenuItem>
-      <MenuItem icon={<ExportIcon kind="publish" />} disabled hint="Publish a reference from Assets" onSelect={() => {}}>Publish selected to team library</MenuItem>
-      {note && <div className="pt-menuhead" role="status">{note}</div>}
-      {(saving.can || share) && <div className="pt-menusep" />}
-      {saving.can && (
-        <MenuItem icon="⤒" hint="Ctrl+S" disabled={saving.state.kind === 'saving'} onSelect={() => { close(); void saving.save() }}>
-          {saving.state.kind === 'saving' ? 'Saving…' : saving.state.kind === 'failed' ? 'Save now · the last save failed' : saving.state.kind === 'saved' ? `Save now · saved ${saveTime(saving.state.at)}` : 'Save now'}
-        </MenuItem>
-      )}
-      {share && <MenuItem icon={<LinkIcon />} onSelect={() => { close(); void copyLink(location.href) }}>Copy link</MenuItem>}
-      <div className="pt-menusep" />
       {allow && <MenuItem icon="⇄" hint="Who receives what your agency puts in" onSelect={() => setSharing(true)}>Data sharing</MenuItem>}
+      <MenuItem icon={theme === 'dark' ? '☼' : '☾'} hint={theme === 'dark' ? 'Switch to the light look' : 'Switch to the dark look'}
+        onSelect={() => setThemeChoice(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? 'Light' : 'Dark'}</MenuItem>
       {deleting ? (
         <div className="pt-menuhead" role="alertdialog" aria-label="Delete this project">
           Delete “{name ?? 'this project'}” from this browser? The server's copy is kept.
@@ -121,7 +148,7 @@ function CanvasMoreItems({ close, share }: { close: () => void; share: boolean }
             <button type="button" className="btn sm ghost" onClick={() => setDeleting(false)}>Cancel</button>
           </span>
         </div>
-      ) : <MenuItem icon="×" danger hint="From this browser" onSelect={() => setDeleting(true)}>Delete…</MenuItem>}
+      ) : <MenuItem icon="×" danger hint="From this browser; the server’s copy is kept" onSelect={() => setDeleting(true)}>Delete…</MenuItem>}
       {sharing && allow && <DataSharing allow={allow} onClose={() => { setSharing(false); close() }} />}
     </>
   )
@@ -147,23 +174,42 @@ async function copyLink(url: string): Promise<string> {
   }
 }
 
-/** The canvas's bar: the shell bar, with Canvas as where you are, the job chip and Assets; the ▾ menu
- *  holds Export's rows and Save now. The questions waiting are the Decisions count (and an amber tag on
- *  the node that asks). */
-export function CanvasBar({ presence, phone = false }: { presence?: string; /** The phone's cut: watch only, so its job button has no ask dock and no Show. */ phone?: boolean }) {
-  const { project, relay } = useServices()
-  const mock = useShowMock()
+/** The canvas's bar: the slim shell bar with Canvas as where you are and the agents' status dot; the ▾ menu is
+ *  the film's. Assets is in the canvas's + menu. */
+export function CanvasBar({ phone = false }: { /** The phone's cut: watch only, so its job button has no ask dock and no Show. */ phone?: boolean }) {
   return (
     <ShellBar bar="canvas" className="ptbar" crumb={[{ label: 'Canvas' }]}
-      menu={(close) => <CanvasMoreItems close={close} share />}
-      job={phone ? <JobTray phone /> : <JobTray />}
-      tools={<>
-        {mock && relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
-        <BetaTag screen={{ stage: 'canvas', project: project.id }} />
-        <AssetsButton />
-      </>}
-      presence={<Presence line={presence} />} />
+      menu={(close) => <FilmMenu close={close} />}
+      job={phone ? <JobTray phone /> : <JobTray />} />
   )
+}
+
+/** Escape goes back from an editor (owner 2026-11-19) when nothing else takes it: not while typing, not while a
+ *  menu, popover or dialog is open, not when something is selected that Escape would clear first. What was
+ *  open is read before anything handles the key (capture), so a menu Escape closes never also leaves. */
+function useEscapeBack(onBack: () => void): void {
+  useEffect(() => {
+    let free = false
+    const OPEN = '[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"], .pt-menu, .traypop, .nui-pop, [aria-selected="true"], [data-selected="true"], .is-selected'
+    const before = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const t = e.target as HTMLElement | null
+      const typing = !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
+      const sel = window.getSelection()
+      free = !typing && !document.querySelector(OPEN) && !(sel && !sel.isCollapsed)
+    }
+    const after = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !free || e.defaultPrevented) return
+      free = false
+      onBack()
+    }
+    window.addEventListener('keydown', before, true)
+    window.addEventListener('keydown', after)
+    return () => {
+      window.removeEventListener('keydown', before, true)
+      window.removeEventListener('keydown', after)
+    }
+  }, [onBack])
 }
 
 /** An editor's bar: the shell bar with the crumb (← where back goes › this editor's title), the job chip and
@@ -195,28 +241,32 @@ export function EditorBar({ className = '', back, onBack, icon, title, meta, vie
   const tight = level === 'tight'
   const undoMore = undo && undoInMore(level, coarse)
   const crumb: Crumb[] = [{ label: back, onClick: onBack }, { label: title }]
+  useEscapeBack(onBack)
   return (
     <div className={`ptbar nui-bars ${className}`} data-bar={icon} data-fit={level}>
-      <ShellBar bar={icon} crumb={crumb} history={history} job={<JobTray />} primary={primary} presence={<Presence />}
+      <ShellBar bar={icon} crumb={crumb} history={history} job={<JobTray />}
         menu={(close) => (
           <>
             {moreHead && <><div className="pt-morehead">{moreHead}</div><div className="pt-menusep" /></>}
             {view && tight && <ViewItems view={view} close={close} />}
             {more?.(close)}
             {undoMore && <><div className="pt-menusep" /><UndoMenuItems close={close} /></>}
-            {/* The same document rows as on the canvas (live test 2026-11-18: the rooms had only a dead row);
-                Copy link is the bar's Share. */}
+            {/* The film's rows, the same on every screen (live test 2026-11-18: the rooms had only a dead row). */}
             {(more || undoMore || (view && tight) || moreHead) && <div className="pt-menusep" />}
-            <CanvasMoreItems close={close} share={false} />
+            <FilmMenu close={close} />
           </>
         )} />
       <Band label={`${title}: controls`}>
+        {/* The way back, as the Booth's crumbs say it (mock .sp-crumb "← Canvas"). */}
+        <button type="button" className="band-back" onClick={onBack} title={`Back to ${back} (Esc)`}><span aria-hidden="true">←</span> {back}</button>
         <h1 className="pt-title sr-title" title={title}>{title}</h1>
         {meta}
         {view && !tight && <ViewSwitch view={view} />}
         {!tight && afterView}
         <span className="band-grow" />
         {right}
+        {/* The page's own actions (Plan shots, Make film, Apply…) are the band's, never the bar's (owner 2026-11-19). */}
+        {primary && <span className="band-primary">{primary}</span>}
         {undo && !undoMore && <UndoButtons />}
       </Band>
     </div>

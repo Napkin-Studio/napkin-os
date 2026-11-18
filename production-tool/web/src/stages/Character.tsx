@@ -879,7 +879,8 @@ export function Character({ initial, active, onPictureEditor }: {
         {placeError && <div className="place-error" role="alert">{placeError}<FrontButtons text={placeError} /> <button className="btn xs ghost" onClick={() => setPlaceError(null)}>OK</button></div>}
         {/* Boards are frames on the canvas (⌥1…⌥9 jump, ⌥0 fits); on touch, with no ⌥, the Boards pill opens the jump sheet. */}
         {narrow && <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow keys={!own} />}
-        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={() => { canvas?.select([]); panels.openAssets('napkin') }} vertical={narrow} />
+        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={() => { canvas?.select([]); panels.openAssets('napkin') }}
+          onAssets={() => { canvas?.select([]); if (!panels.assets) panels.toggle('assets') }} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
         <LinksToggle chrome={chrome} />
       </div>

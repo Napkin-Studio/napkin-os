@@ -1,5 +1,6 @@
-// The job tray (features/production-tool-look.clan; features/topbar-declutter.clan): the top bar's job
-// button, the Napkin logo alone (turning while something runs), with a needs-you mark. It opens a
+// The job tray (features/production-tool-look.clan; features/topbar-declutter.clan): the top bar's agents' status,
+// Brief Maker's dot (owner 2026-11-19: "a dot only works"; the sphere ran off its spot), idle, working, needs
+// you or failed, with a few words beside it while something happens. It opens a
 // floating list, Working now, Waiting for you (a job asking a question) and Needs you; Show on a row
 // goes to its stage and card, and on a waiting row to its question, with the focus on its first answer
 // (the Script editor for Skye's; the ask dock when no card shows it). The ask dock rides here, so every
@@ -16,8 +17,7 @@ import { jobsList, shotNumber } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
 import { AskDock } from './AskDock'
 import { hereOf, homeOf, sameHome, showAsk } from './askPlaces'
-import { jobWhat, whoIsWorking, workOf, type Work } from './agents/cast'
-import { NapkinLoader } from './loader/NapkinLoader'
+import { jobWhat, whoIsWorking } from './agents/cast'
 import { Float } from './Float'
 import { fmtElapsed, useElapsed } from './hooks'
 import { chipText, jobLine, jobLook, trayGroups, WAITING, whereIs, type TrayRow } from './tray'
@@ -45,11 +45,8 @@ export function JobTray({ phone = false }: {
   const look = jobLook(g)
   return (
     <>
-      {look && (
-        <JobButton ref={ref} look={look} line={line} chip={chipText(g.waiting.length, g.working.length, g.needsYou.length, g.working[0] ? what(g.working[0]) : undefined)}
-          open={open} work={g.working[0] ? workOf(g.working[0].job.op, g.working[0].state) : undefined}
-          onClick={() => setOpen(!open)} />
-      )}
+      <JobButton ref={ref} look={look} line={empty ? 'No agent is working' : line} chip={look ? chipText(g.waiting.length, g.working.length, g.needsYou.length, g.working[0] ? what(g.working[0]) : undefined) : undefined}
+        open={open} onClick={() => setOpen(!open)} />
       <span className="pt-sr" role="status" aria-live="polite">{empty ? '' : line}</span>
       {!phone && <AskDock />}
       <Float anchor={ref} open={open} onClose={close} align="end" role="dialog" label="Jobs" className="traypop">
@@ -76,24 +73,23 @@ export function JobTray({ phone = false }: {
   }
 }
 
-/** The chip itself, pure for the tests: the Deep O (turning while a job runs) and its words. */
-export function JobButton({ ref, look, line, chip, open, work, onClick }: {
+/** The status as the shell's bars show it (Brief Maker's .tb-status, app/src/components/Toolbar.tsx): a small dot,
+ *  and its words while something happens. `data-st`: idle, working, needs (a question waits) or error. Pure for
+ *  the tests. */
+export function JobButton({ ref, look, line, chip, open, onClick }: {
   ref?: Ref<HTMLButtonElement>
-  look: NonNullable<ReturnType<typeof jobLook>>
+  look: ReturnType<typeof jobLook>
   line: string
   chip?: string
   open: boolean
-  work?: Work
   onClick: () => void
 }) {
+  const st = !look ? 'idle' : look.mark === 'ask' ? 'needs' : look.spin !== 'still' ? 'working' : look.mark === 'failed' ? 'error' : 'working'
   return (
-    <button ref={ref} type="button" className={`pt-job ${open ? 'open' : ''}`} data-spin={look.spin} data-mark={look.mark}
+    <button ref={ref} type="button" className={`tb-status pt-job ${open ? 'open' : ''}`} data-st={st}
       aria-label={line} data-tip={line} aria-haspopup="dialog" aria-expanded={open} onClick={onClick}>
-      {look.spin === 'still'
-        ? <NapkinLoader state="queued" flat size={20} />
-        : <NapkinLoader work={work} state={look.spin} size={20} />}
+      <i className="sdot" aria-hidden="true" />
       {chip && <span className="jb-text" aria-hidden="true">{chip}</span>}
-      {look.mark && <span className="jb-mark" aria-hidden="true" />}
     </button>
   )
 }

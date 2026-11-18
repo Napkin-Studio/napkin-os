@@ -1,7 +1,5 @@
-/* The beta's notice, Beta tag and thumbs (Dogfood.tsx), after Napkin OS's app/src/dogfood/Dogfood.css.
-   The tag takes the tool's colour (--tool), as the brand name does. */
-
-.df-bar { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; letter-spacing: 0; }
+/* The beta's notice and the thumbs on what the tool makes (Dogfood.tsx), after Napkin OS's app/src/dogfood/Dogfood.css.
+   No Beta tag in any bar (owner 2026-11-19); the notice keeps its static badge. */
 
 .df-badge {
   font: 600 11px/1 var(--f-display);
@@ -12,9 +10,7 @@
   border: 1px solid var(--tool);
   color: var(--tool-ink);
   background: transparent;
-  cursor: pointer;
 }
-.df-badge:hover { background: var(--tool-soft); }
 .df-badge-static { cursor: default; display: inline-block; margin-bottom: 10px; }
 
 .df-veil {

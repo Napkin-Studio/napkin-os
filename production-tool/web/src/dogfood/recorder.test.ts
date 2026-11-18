@@ -4,7 +4,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { BetaTag, DogfoodNotice, Thumbs } from './Dogfood'
+import { DogfoodNotice, Thumbs } from './Dogfood'
 import {
   __flush, __test, capture, errorShown, feedback, feedbackNote, jobState, nameOf, record, Recorder, setScreen, type ShellEvent,
 } from './recorder'
@@ -161,13 +161,11 @@ describe('what people see', () => {
     expect(html).toContain('I understand')
   })
 
-  it('the Beta tag and thumbs show only when the build records', () => {
-    expect(renderToStaticMarkup(createElement(BetaTag, { screen: { stage: 'home' } }))).toContain('>Beta<')
+  it('the thumbs show only when the build records; no bar carries a Beta tag (owner 2026-11-19)', () => {
     const thumbs = renderToStaticMarkup(createElement(Thumbs, { target: { kind: 'clip', id: 'take_1' } }))
     expect(thumbs).toContain('This is right')
     expect(thumbs).toContain('This is wrong')
     __test({ on: false, consented: false })
-    expect(renderToStaticMarkup(createElement(BetaTag, { screen: { stage: 'home' } }))).toBe('')
     expect(renderToStaticMarkup(createElement(Thumbs, { target: { kind: 'clip' } }))).toBe('')
   })
 })

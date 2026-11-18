@@ -13,11 +13,14 @@ describe('the bar is the shell bar of the new UI (features/production-new-ui.cla
     }
     expect(readFileSync(new URL('../home.css', import.meta.url), 'utf8')).not.toContain('.hm-bar')
   })
-  it('the canvas bar and every editor bar are the ShellBar: the medallion, the document slot, Decisions', () => {
+  it('the canvas bar and every editor bar are the slim ShellBar: brand, the film ▾ and crumb; the dot, Decisions, you (owner 2026-11-19)', () => {
     const bars = readFileSync(new URL('./TopBars.tsx', import.meta.url), 'utf8')
     expect(bars.match(/<ShellBar /g)?.length).toBe(2)
     const shell = readFileSync(new URL('../shell/ShellBar.tsx', import.meta.url), 'utf8')
-    for (const part of ['className="m1-medallion"', '<AgencyPill />', '<ClientChip />', '<DocSlot menu={menu} />', '<ContinueIn />', '<Share />', '<ThemeButton />', '<DecisionsButton']) expect(shell).toContain(part)
+    const bar = shell.slice(shell.indexOf('export function ShellBar'), shell.indexOf('export function PlaceBar'))
+    for (const part of ['<Medallion ', '<AgencyPill />', '<DocSlot menu={menu} />', '<Crumbs crumb={crumb} />', '<DecisionsButton', '<Account />']) expect(bar).toContain(part)
+    for (const gone of ['ClientChip', 'ContinueIn', '<Share', 'ThemeButton', 'BetaTag', 'primary', 'presence']) expect(bar).not.toContain(gone)
+    expect(bars).not.toContain('BetaTag')
   })
 })
 
@@ -30,10 +33,10 @@ describe('the document menu holds what More held; secondary actions live there',
   const canvasBar = bars.slice(bars.indexOf('export function CanvasBar'), bars.indexOf('export function EditorBar'))
   it('the canvas bar has no Export button: Export\'s rows and Save now are in its document menu', () => {
     expect(bars).not.toContain('function ExportMenu')
-    expect(canvasBar).toContain('menu={(close) => <CanvasMoreItems close={close} share />}')
+    expect(canvasBar).toContain('menu={(close) => <FilmMenu close={close} />}')
     expect(canvasBar).not.toMatch(/>\s*Export\s*</)
-    const items = bars.slice(bars.indexOf('function CanvasMoreItems'), bars.indexOf('function ExportIcon'))
-    for (const row of ['Download all media (zip)', 'Project as .clan + assets', 'Save now', 'Copy link']) expect(items).toContain(row)
+    const items = bars.slice(bars.indexOf('function FilmMenu'), bars.indexOf('function ExportIcon'))
+    for (const row of ['New film', 'Open a file…', 'All projects', 'Download all media (zip)', 'Project as .clan + assets', 'Save now', 'Link a brief…', 'Share…', 'Rename', 'Duplicate', 'Data sharing', 'Delete…']) expect(items).toContain(row)
   })
   it('every editor bar fills the document menu with its own rows; Script uses the shared EditorBar too', () => {
     const editor = bars.slice(bars.indexOf('export function EditorBar'))
@@ -45,7 +48,7 @@ describe('the document menu holds what More held; secondary actions live there',
     expect(src('../../script/ScriptEditor.tsx')).toMatch(/<MenuItem icon=\{<LinkIcon \/>\} onSelect=\{[^]*?\}>Copy link to this<\/MenuItem>/)
     for (const f of ['Storyboard', 'ImageEditor']) expect(src(`../../stages/${f}.tsx`)).not.toContain('CopyLinkLater')
     expect(src('../../rooms/Rooms.tsx')).not.toContain('CopyLinkLater')
-    expect(bars).toContain('<CanvasMoreItems close={close} share={false} />')
+    expect(bars).toContain('<FilmMenu close={close} />')
   })
   it('Storyboard does not repeat the project name, and every title carries its full text for the tooltip', () => {
     expect(src('../../stages/Storyboard.tsx')).not.toContain('<span className="pt-project">{projectName}</span>')

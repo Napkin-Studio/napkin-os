@@ -48,8 +48,10 @@
 .tba-caret { color: var(--muted); font-size: 11px; }
 .tba-crumb { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--font-ui); color: var(--muted); white-space: nowrap; min-width: 0; flex: 0 1 auto; overflow: hidden; }
 .tba-cstep { display: inline-flex; align-items: center; gap: 6px; }
-.tb .tba-crumb button { color: var(--muted); padding: 3px 6px; border-radius: 6px; }
-.tb .tba-crumb button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.tb .tba-crumb .crumb-link { color: var(--ink-soft); padding: 3px 6px; border-radius: 6px; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ag-act) 55%, transparent);
+  text-underline-offset: 3px; cursor: pointer; }
+.tb .tba-crumb .crumb-link:hover { color: var(--ink); text-decoration-color: currentColor; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.tb .tba-crumb .crumb-link:focus-visible { outline: 2px solid var(--ag-act); outline-offset: 1px; }
 .tba-crumb .here { color: var(--ink); padding: 3px 0; }
 .tba-acts { display: flex; gap: 6px; flex: none; }
 .tb .tba-btn, .band .tba-btn { height: 30px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); font: 600 12.5px var(--font-ui); color: var(--ink-soft); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
@@ -78,12 +80,21 @@
 .tb-decisions-btn.has-needs .cnt { background: var(--needs, var(--warn)); color: var(--needs-ink, #fff); }
 
 /* The job chip ("Working · frame 3 of 5", "Your call · 1"): the shell's .tb-status, with the Deep O. */
-.tb .pt-job { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px 0 5px; border: 1px solid var(--line); border-radius: 999px; background: var(--desk);
-  color: var(--muted); font: 600 10.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; max-width: 300px; }
-.tb .pt-job .jb-text { overflow: hidden; text-overflow: ellipsis; }
-.tb .pt-job[data-mark='ask'] { color: var(--needs, var(--warn)); border-color: color-mix(in srgb, var(--needs, var(--warn)) 40%, transparent); }
-.tb .pt-job[data-mark='failed'] { color: var(--alert); border-color: color-mix(in srgb, var(--alert) 40%, transparent); }
-.tb .pt-job .jb-mark { display: none; }
+/* The agents' status (ui/JobTray.tsx): Brief Maker's .tb-status dot (app/src/shell/nui/nui.css; mock .tb-status),
+   idle as a quiet dot alone, and its words while something happens (owner 2026-11-19: "a dot only works"). */
+.tb .tb-status { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--desk); color: var(--muted); font: 600 10.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; max-width: 280px; }
+.tb .tb-status .jb-text { overflow: hidden; text-overflow: ellipsis; }
+.tb .tb-status .sdot { width: 6px; height: 6px; border-radius: 50%; background: var(--ag-acc); box-shadow: 0 0 0 2px var(--ag-base); flex: none; }
+.tb .tb-status:hover, .tb .tb-status.open { border-color: var(--ink); }
+.tb .tb-status:focus-visible { outline: 2px solid var(--ag-act); outline-offset: 2px; }
+.tb .tb-status[data-st='idle'] { width: 28px; padding: 0; justify-content: center; border-color: transparent; background: none; }
+.tb .tb-status[data-st='idle']:hover, .tb .tb-status[data-st='idle'].open { border-color: var(--line); }
+.tb .tb-status[data-st='idle'] .sdot { background: var(--faint); box-shadow: none; }
+.tb .tb-status[data-st='needs'] { color: var(--needs, var(--warn)); border-color: color-mix(in srgb, var(--needs, var(--warn)) 40%, transparent); }
+.tb .tb-status[data-st='needs'] .sdot { background: var(--needs, var(--warn)); box-shadow: none; }
+.tb .tb-status[data-st='error'] { color: var(--alert); border-color: color-mix(in srgb, var(--alert) 40%, transparent); }
+.tb .tb-status[data-st='error'] .sdot { background: var(--alert); box-shadow: none; }
 
 /* ── the band row: an editor's own controls under the bar ───────────────── */
 .band { display: flex; align-items: center; gap: 10px; min-height: var(--band-h); padding: 6px 24px; border-bottom: 1px solid var(--line);
@@ -131,16 +142,7 @@
 
 /* ── phone and narrow ───────────────────────────────────────────────────── */
 @media (max-width: 1180px) {
-  .tba-acts .pt-share + *, .tba-crumb .tba-cstep:not(:last-child) { display: none; }
-  /* Mock w1024: the crumb and Continue in / Share give way to the document's name. */
-  .tba-crumb { display: none; }
-  /* Continue in gives way too (its Link a brief… is also in + Node and Assets › From Napkin): live test
-     2026-11-18, the name shrank to "U…" with the saved line running under Continue in. */
-  .tba-acts .pt-continue { display: none; }
   .tb { gap: 10px; padding: 0 16px; }
-}
-@media (max-width: 980px) {
-  .tba-acts, .tb .tb-client .cn { display: none; }
 }
 @media (max-width: 720px) {
   .tb { padding: 0 8px; gap: 6px; }
@@ -151,7 +153,7 @@
   .ag-pill b { font-size: 12.5px; }
   .tb-decisions-btn .lbl-t { display: none; }
   .tb-theme, .tb .tb-decisions-btn, .tb-me { min-width: 40px; min-height: 40px; }
-  .tb .pt-job { max-width: 120px; }
+  .tb .tb-status { max-width: 120px; }
 }
 @media (max-width: 420px) { .ag-pill { display: none; } .tba-n2 b { max-width: 150px; } }
 
@@ -230,7 +232,6 @@
 /* The phone cut of the bar (mock phone): the medallion, the document's name, theme, you and Decisions.
    The tool pill, Assets and the dev badge give way; nothing scrolls sideways. */
 @media (max-width: 600px) {
-  .tb .tb-client, .tb .mockbadge, .tb .pt-assets { display: none; }
   .tb .tba-name { min-width: 0; }
   .tba-n2 b { max-width: 130px; }
   .tba-n2 small, .tba-n2 .tba-saved { display: none; }
@@ -250,3 +251,15 @@
 .access-card h1 { margin: 0; font: 800 22px/1.2 var(--font-ui); letter-spacing: -.02em; color: var(--ink); }
 .access-card p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); }
 .access-card .btn-rect { align-self: flex-start; margin-top: 4px; text-decoration: none; }
+
+/* The slim bar (owner 2026-11-19): brand, the film's name ▾ and the crumb; the dot, Decisions and you. Only the
+   film's name gives way on a narrow window. */
+.tb.slim .tb-app { flex: 0 1 auto; margin-left: 6px; }
+.tb.slim .tba-crumb { flex: none; overflow: visible; }
+.tb.slim .tba-name { min-width: 96px; }
+/* The band's way back (mock .sp-crumb "← Canvas"). */
+.band .band-back { font: 500 12px var(--font-mono); color: var(--muted); text-decoration: underline; text-underline-offset: 3px; background: none; border: 0;
+  padding: 4px 6px; margin-right: 4px; border-radius: 6px; cursor: pointer; white-space: nowrap; flex: none; }
+.band .band-back:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.band .band-back:focus-visible { outline: 2px solid var(--ag-act); outline-offset: 1px; }
+.band .band-primary { display: inline-flex; align-items: center; gap: 8px; flex: none; }
