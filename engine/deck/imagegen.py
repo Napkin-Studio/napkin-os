@@ -297,10 +297,12 @@ def slot_jobs(manifest: dict, key: str, tier: str) -> list:
     return [(k, j) for k, j in (manifest.get("jobs") or {}).items() if j.get("tier") == tier and key in (j.get("slots") or [])]
 
 
-def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_style: bool = False) -> dict:
+def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_style: bool = False, remake: list | None = None) -> dict:
     """The whole decision, with no network: which slots are made already, which go on a card, which are held back and why, the prompts in full.
+    ``remake``: ``SLIDE.SLOT`` names a person asked to make again (--remake): each goes on the card as a new attempt, from the recorded subject.
     Returns the plan (also what plan.json holds)."""
     deck, inp = ctx.deck, ctx.inp
+    remake = {str(x) for x in (remake or ())}
     if inp.marks is None:
         raise GenError("picture generation is refused: this deck has no mark data, so it cannot be known whether a prompt would draw on a part marked "
                        "Confidential. Give the marks (--marks FILE, or build from the document) even when none are marked: an empty list is a real answer")
@@ -348,6 +350,8 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
             if d and d["decision"] == "replace":
                 note = d.get("note")
                 row.update(replacing=asset_id(j["sha256"]))
+            elif f"{c['sid']}.{c['slot']}" in remake or c["key"] in remake:
+                row.update(replacing=asset_id(j["sha256"]), remake="asked by a person (--remake)")
             else:
                 cur = (k, j)
         if cur:
@@ -369,6 +373,8 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
         why = lint.lint_text(subject, banned, deny) if subject else "no subject yet"
         if why:
             source = "template"
+            if subj and subject:   # a subject was written and refused: never a silent fallback, the card and report.json say so
+                row.update(subject_refused=why)
             subject = TEMPLATES.get(s["type"], TEMPLATES["territory"])
             if subj and why == "would draw on a Confidential part":
                 row.update(status="held", reason="would draw on a Confidential part")
@@ -488,6 +494,9 @@ def build_cards(ctx: Ctx, plan: dict, retry_unknown: bool = False, remake_style:
                          "prompts": {f"{r['slide']}.{r['slot']}": r["prompt"] for r in new}, "jobs": [r["job"] for r in new], "plan_file": "plan.json",
                          "preview": any(r.get("preview") for r in new),
                          "id": _card_id(["drafts", [(r["job"], r["model"], r["ratio"]) for r in new], cap, spent, sends, bool(retry_unknown)])}
+    refused_subjects = [f"{r['slide']}.{r['slot']}: description refused ({r['subject_refused']}), generic used" for r in plan["slots"].values() if r.get("subject_refused")]
+    cards["pictures"]["refused_subjects"] = refused_subjects
+    cards["pictures"]["remade"] = [f"{r['slide']}.{r['slot']}" for r in new if r.get("remake")]
     heroes = [h for h in plan.get("heroes", {}).values() if h.get("job")]
     refused = [f"{h['ask']}: {h['reason']}" for h in plan.get("heroes", {}).values() if h.get("reason")]
     if heroes or refused:
@@ -509,6 +518,10 @@ def render_card(card: dict) -> str:
     lines = [f"{word}  card {card['id']}  (estimate; nothing is made until you say yes)"]
     for r in card["rows"]:
         lines.append(f"  {r['model']}  {r['tier']}  {r['n']} new x {r['credits_each']} credits = {r['n'] * r['credits_each']} credits  ${r['usd']:.2f}")
+    for h in card.get("refused_subjects") or []:
+        lines.append(f"  {h}")
+    if card.get("remade"):
+        lines.append(f"  Made again at a person's ask (--remake): {', '.join(card['remade'])}")
     for h in card.get("held_back") or []:
         lines.append(f"  Held back, no cost: {h}")
     for o in card.get("optional") or []:
@@ -586,7 +599,8 @@ def make(ctx: Ctx, plan: dict, card: dict, client, retry_unknown=False, guard_po
     for j in todo:   # what each job was made with, for the record and for a later remake
         e = ctx.manifest["jobs"].get(j["key"])
         if e is not None:
-            e.update(prompt=j["prompt"], style_hash=ctx.style.hash, card=card["id"], subject=byjob[j["key"]].get("subject"), kind_hint=byjob[j["key"]].get("kind"))
+            e.update(prompt=j["prompt"], style_hash=ctx.style.hash, card=card["id"], subject=byjob[j["key"]].get("subject"), subject_source=byjob[j["key"]].get("subject_source"),
+                     subject_refused=byjob[j["key"]].get("subject_refused"), kind_hint=byjob[j["key"]].get("kind"))
     ctx.manifest.setdefault("cards", {})[card["id"]] = {"kind": card["kind"], "at": jobs.now(), "usd": card["usd"]}
     jobs.save_manifest(ctx.cache, ctx.manifest)
     return res
@@ -620,7 +634,8 @@ def write_generated(ctx: Ctx, plan: dict) -> dict | None:
                 shutil.copyfile(Path(ctx.cache) / j["file"], dst)
                 g = j.get("guard") or {"checked": False, "flagged": False}
                 pics[f"{key}#{tier}"] = {"anchor": r["anchor"], "slot": r["slot"], "key": key, "tier": tier, "model": j["model"], "prompt": j.get("prompt"),
-                                         "subject": j.get("subject") or r.get("subject"), "file": f"assets/{info['sha256']}.{info['ext']}", "sha256": info["sha256"], "mime": info["mime"],
+                                         "subject": j.get("subject") or r.get("subject"), "subject_source": r.get("subject_source") or j.get("subject_source"),
+                                         "subject_refusal": r.get("subject_refused") or j.get("subject_refused"), "file": f"assets/{info['sha256']}.{info['ext']}", "sha256": info["sha256"], "mime": info["mime"],
                                          "width": info["width"], "height": info["height"], "guard": g, "status": "flagged" if g.get("flagged") else "made", "job": k,
                                          "task": j.get("task"), "credits": j.get("cost_credits") or j.get("estimated_credits") or j.get("table_credits"),
                                          "at": j.get("created_at"), "style_hash": j.get("style_hash"), "kind": j.get("kind_hint") or r.get("kind") or "photo", "attempt": j.get("attempt", 1),
@@ -645,13 +660,13 @@ def write_plan(ctx: Ctx, plan: dict, cards: dict) -> Path:
 
 
 def step(ctx: Ctx, mode: str, yes_cost: str | None = None, hero: list | None = None, retry_unknown=False, remake_style=False, client_factory=None,
-         subjects_call=None, guard_post=None, sleep=None, out=print) -> dict:
+         subjects_call=None, guard_post=None, sleep=None, out=print, remake=None) -> dict:
     """The whole image step for one build. ``mode``: ``subjects`` (the subject card, and stage g on a yes), ``plan`` (the picture card, no network),
     ``live`` (make exactly the jobs on the card the yes names). Writes plan.json and generated.json. Returns ``{plan, cards, made}``."""
     if mode not in MODES[1:]:
         raise GenError(f"--images {mode!r}: use subjects, plan or live")
     client_factory, subjects_call, guard_post, sleep = client_factory or CLIENT_FACTORY, subjects_call or SUBJECTS_CALL, guard_post or GUARD_POST, sleep or SLEEP
-    plan = make_plan(ctx, mode, hero, remake_style)
+    plan = make_plan(ctx, mode, hero, remake_style, remake)
     cards = build_cards(ctx, plan, retry_unknown, remake_style)
     write_plan(ctx, plan, cards)
     made = None
@@ -661,7 +676,7 @@ def step(ctx: Ctx, mode: str, yes_cost: str | None = None, hero: list | None = N
             if yes_cost != cards["subjects"]["id"]:
                 raise GenError(f"--yes-cost {yes_cost} is not this card's id ({cards['subjects']['id']}): the plan changed or the id is wrong; nothing was made")
             run_subjects(ctx, plan, subjects_call, log=out)
-            plan = make_plan(ctx, mode, hero, remake_style)
+            plan = make_plan(ctx, mode, hero, remake_style, remake)
             cards = build_cards(ctx, plan, retry_unknown, remake_style)
             write_plan(ctx, plan, cards)
         elif mode == "live":
@@ -686,7 +701,7 @@ def step(ctx: Ctx, mode: str, yes_cost: str | None = None, hero: list | None = N
             except runway.RunwayError as e:
                 raise GenError(str(e)) from None
             made = make(ctx, plan, card, client, retry_unknown, guard_post, sleep, log=out)
-            plan = make_plan(ctx, mode, hero, remake_style)
+            plan = make_plan(ctx, mode, hero, remake_style)   # no --remake now: the picture just made is current, never remade again by itself
             cards = build_cards(ctx, plan, retry_unknown, remake_style)
             write_plan(ctx, plan, cards)
     gen = write_generated(ctx, plan)

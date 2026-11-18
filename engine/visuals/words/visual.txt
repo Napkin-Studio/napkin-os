@@ -1,7 +1,6 @@
 # A small visual vocabulary: things a camera can see. Reviewed by PR. One word per line.
 alley
 apartment
-apple
 arch
 armchair
 autumn
@@ -407,3 +406,9 @@ worn
 yard
 yellow
 zebra
+tabletop
+countertop
+worktop
+windowsill
+rooftop
+candlelit

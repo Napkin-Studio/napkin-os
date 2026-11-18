@@ -659,3 +659,53 @@ def test_the_server_with_images_off_or_no_mark_data_plans_nothing(monkeypatch, t
         assert s == 400
     finally:
         httpd.shutdown()
+
+
+# ------------------------------------------------------------------------------------------------ a refused subject is never a silent fallback
+
+def refused_stage_g(monkeypatch, stages, tmp_path):
+    with_subjects(monkeypatch, stages, tmp_path)
+    g = json.loads((stages / imagegen.STAGE_G_FILE).read_text())
+    key = list(g["subjects"])[0]
+    g["subjects"][key]["subject"] = "A mural in the style of Banksy."
+    (stages / imagegen.STAGE_G_FILE).write_text(json.dumps(g))
+    return key
+
+
+def test_a_refused_subject_shows_on_the_card_and_in_report_json(monkeypatch, stages, tmp_path):
+    key = refused_stage_g(monkeypatch, stages, tmp_path)
+    d, text = go(stages, tmp_path / "o", "--images", "plan")
+    slot = key.split(":")[0] + "." + key.split(":")[1].split(".")[-1]
+    assert "description refused (it asks for the style of someone), generic used" in text
+    rep = json.loads((tmp_path / "o" / "report.json").read_text())
+    ref = rep["images"]["refusals"]
+    assert len(ref) == 1 and "style" in ref[0]["reason"] and ref[0]["slot"].endswith(slot.split(".")[-1])
+
+
+def test_generated_json_records_the_template_source_and_the_refusal(monkeypatch, stages, tmp_path):
+    key = refused_stage_g(monkeypatch, stages, tmp_path)
+    fake = wire(monkeypatch)
+    live(stages, tmp_path / "o", fake)
+    gen = json.loads((stages / "generated.json").read_text())
+    tpl = [p for p in gen["pictures"].values() if p.get("subject_source") == "template"]
+    assert len(tpl) == 1 and "style" in tpl[0]["subject_refusal"]
+    assert all(p.get("subject_source") in ("template", "stage_g") for p in gen["pictures"].values())
+
+
+def test_remake_puts_made_slots_on_a_new_card_with_their_stage_g_prompt_and_is_never_automatic(monkeypatch, stages, tmp_path):
+    f, d = made(monkeypatch, stages, tmp_path)
+    d1, text1 = go(stages, tmp_path / "o", "--images", "plan")
+    assert "PICTURE COST CARD" not in text1 or "0 new" in text1   # nothing remade by itself
+    sid, n, _ = next((s, n, im) for s, n, im in images.image_slots(d) if (im.get("from") or {}).get("kind") == "generated" and im["status"] == "made")
+    d2, text2 = go(stages, tmp_path / "o", "--images", "plan", "--remake", f"{sid}.{n}")
+    cid = card_id(text2)
+    assert "1 new" in text2 and f"{sid}.{n}" in text2 and "--remake" in text2
+    plan = json.loads((stages / "images" / "plan.json").read_text())
+    row = next(r for r in plan["slots"].values() if r["slide"] == sid and r["slot"] == n)
+    assert row["status"] == "planned" and row["attempt"] == 2 and row["subject_source"] == "stage_g"
+    n_before = len(f.posts) if hasattr(f, "posts") else None
+    with pytest.raises(SystemExit):   # a yes for another card id makes nothing
+        go(stages, tmp_path / "o", "--images", "live", "--yes-cost", "c_00000000", "--remake", f"{sid}.{n}")
+    go(stages, tmp_path / "o", "--images", "live", "--yes-cost", cid, "--remake", f"{sid}.{n}")
+    d3, text3 = go(stages, tmp_path / "o", "--images", "plan")
+    assert "PICTURE COST CARD" not in text3 or "0 new" in text3

@@ -1,5 +1,5 @@
 """The picture-prompt lint (deck-image-gen). It fails closed: a subject, a Replace note or an assembled style block passes only if every word is
-on the allow-list (words/common.txt and words/visual.txt, reviewed by PR) and it holds nothing a picture model should be told: a capital letter
+on the allow-list (data/common_words.txt: about 40,000 common English words, SCOWL size 35, plus words/visual.txt, reviewed by PR) and it holds nothing a picture model should be told: a capital letter
 in mid-sentence (a name), a digit, a spelled-out number, a quotation mark, 'in the style of', any banned imagery, or anything from a part a
 person marked Confidential (a deny-list of the marked texts: every word not on the list, their 3-word shingles, and a paraphrase test)."""
 from __future__ import annotations
@@ -10,6 +10,9 @@ from functools import lru_cache
 from pathlib import Path
 
 WORDS = Path(__file__).resolve().parent / "words"
+DATA = Path(__file__).resolve().parent / "data"
+#: Well-known brand words that never pass, even lower-cased and even if a word list holds them (the capital check only sees capitalised ones).
+BRAND_WORDS = frozenset("apple coca cola coke pepsi nike adidas google ford amazon facebook instagram twitter microsoft tesla uber netflix samsung sony toyota bmw ikea starbucks mcdonald disney lego visa gucci prada rolex honda nissan walmart tesco oracle intel nvidia yahoo youtube tiktok whatsapp snapchat spotify paypal ebay airbnb zara chanel dior hermes levi reebok puma nestle unilever heineken guinness".split())
 NUMBER_WORDS = set("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred thousand million billion dozen half".split())
 QUOTES = set("\"'`«»“”‘’„‚‹›「」『』")
 STYLE_OF = re.compile(r"\b(in the style of|style of|in the manner of|inspired by|à la)\b", re.I)
@@ -19,12 +22,12 @@ MARKED_SHARED_WORDS = 3     # a subject that shares this many distinct content w
 @lru_cache(maxsize=1)
 def allowed() -> frozenset:
     out = set()
-    for f in ("common.txt", "visual.txt"):
-        for ln in (WORDS / f).read_text().splitlines():
+    for d, f in ((DATA, "common_words.txt"), (WORDS, "visual.txt")):
+        for ln in (d / f).read_text().splitlines():
             ln = ln.strip().lower()
             if ln and not ln.startswith("#"):
                 out.add(ln)
-    return frozenset(out)
+    return frozenset(out - BRAND_WORDS)
 
 
 def ascii_only(text: str) -> bool:
@@ -63,6 +66,8 @@ def lint_text(text: str, banned=(), deny: dict | None = None, allow=()) -> str |
             return f"{m.group(0)!r} is a capital in mid-sentence (a name)"
     ok = allowed() | {w for a in allow for w in tokens(a)}
     for w in tokens(t):
+        if w in BRAND_WORDS or (w.endswith("s") and w[:-1] in BRAND_WORDS):
+            return f"{w!r} is a brand name"
         if w in NUMBER_WORDS:
             return f"{w!r} is a number in words"
         if w not in ok and not (w.endswith("s") and w[:-1] in ok) and not (w.endswith("es") and w[:-2] in ok):   # a plural of a listed word passes

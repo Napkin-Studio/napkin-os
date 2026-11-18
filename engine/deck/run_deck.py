@@ -531,13 +531,15 @@ def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, dec
         ctx = imagegen.Ctx(deck, inp, terr, _picture_style(a, deck_ctx, a.client), a.stages, a.images_cache or (a.stages / "images"), vjobs.Ledger(led, deck_id), deck_id,
                            review=review, approver=a.approver, cap_usd=a.cap_usd, banned_extra=look.brand_tokens((deck_ctx or {}).get("brand")).get("imagery_bans") or [],
                            territory_usd=_territory_usd(a.stages))
-        res = imagegen.step(ctx, a.images, a.yes_cost, a.hero, a.retry_unknown, a.remake_style)
+        res = imagegen.step(ctx, a.images, a.yes_cost, a.hero, a.retry_unknown, a.remake_style, remake=a.remake)
     except (imagegen.GenError, images.ImageError) as e:
         raise SystemExit(f"refused: {e}")
     rep["images"] = {"mode": a.images, "cards": {k: {"id": c["id"], "usd": c["usd"]} for k, c in res["cards"].items()},
                      "spent_usd": vjobs.spent_usd(ctx.manifest, ctx.ledger), "cap_usd": ctx.cap,
                      "made": (res["made"] or {}).get("created", 0), "stopped": (res["made"] or {}).get("stopped"),
-                     "held": [f"{r['slide']}.{r['slot']}: {r.get('reason')}" for r in res["plan"]["slots"].values() if r["status"] in ("held", "rejected")]}
+                     "held": [f"{r['slide']}.{r['slot']}: {r.get('reason')}" for r in res["plan"]["slots"].values() if r["status"] in ("held", "rejected")],
+                     "refusals": [{"slot": f"{r['slide']}.{r['slot']}", "reason": r["subject_refused"], "used": "generic template"}
+                                  for r in res["plan"]["slots"].values() if r.get("subject_refused")]}
     return res
 
 
@@ -664,6 +666,8 @@ def main(argv=None):
     ap.add_argument("--yes-cost", metavar="CARD_ID", help="a person's yes to ONE card: its id (c_ and 8 hex). A missing, different or stale id is refused before any call")
     ap.add_argument("--hero", action="append", default=[], metavar="SLIDE.SLOT", help="ask for a final (pro) picture of an approved, guard-checked draft (a card of its own)")
     ap.add_argument("--retry-unknown", action="store_true", help="put jobs whose create got no answer (they may be charged) on the card again")
+    ap.add_argument("--remake", action="append", default=[], metavar="SLIDE.SLOT",
+                    help="a person asks to make this made picture again, from its recorded subject: it goes on the next card as a new attempt (never automatic; two pictures per slot at most)")
     ap.add_argument("--remake-style", action="store_true", help="put pictures made with another Style Pack on the card (a changed pack never remakes by itself)")
     ap.add_argument("--marks", type=Path, help="the parts marked Confidential, JSON [{path, text, kind}] (an empty list is a real answer); needed with --images for a deck built from files")
     ap.add_argument("--images-cache", type=Path, help="where the picture jobs, plan and manifest live (default: <stages>/images)")
