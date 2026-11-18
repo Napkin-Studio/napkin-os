@@ -33,12 +33,12 @@
 .cdisc.tool { background: var(--ink); color: var(--paper); }
 .cdisc.tool svg { width: 15px; height: 15px; }
 .tb-app { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
-.tb .tba-name { display: inline-flex; align-items: center; gap: 8px; min-width: 72px; border-radius: 7px; padding: 2px 6px 2px 4px; flex-shrink: 1; }
+.tb .tba-name { display: inline-flex; align-items: center; gap: 8px; min-width: 132px; border-radius: 7px; padding: 2px 6px 2px 4px; flex-shrink: 1; }
 .tb .tba-name:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .tba-name .ticon { width: 18px; height: 18px; color: var(--ink); flex: none; }
 .tba-n2 { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; text-align: left; }
 .tba-n2 b { font: 700 15px var(--font-ui); letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: clamp(140px, 20vw, 340px); }
-.tba-saved { font: 500 10px var(--font-mono); color: var(--muted); letter-spacing: .03em; white-space: nowrap; }
+.tba-saved { font: 500 10px var(--font-mono); color: var(--muted); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tba-saved.failed { color: var(--alert); }
 .tba-caret { color: var(--muted); font-size: 11px; }
 .tba-crumb { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--font-ui); color: var(--muted); white-space: nowrap; min-width: 0; flex: 0 1 auto; overflow: hidden; }
@@ -129,6 +129,9 @@
   .tba-acts .pt-share + *, .tba-crumb .tba-cstep:not(:last-child) { display: none; }
   /* Mock w1024: the crumb and Continue in / Share give way to the document's name. */
   .tba-crumb { display: none; }
+  /* Continue in gives way too (its Link a brief… is also in + Node and Assets › From Napkin): live test
+     2026-11-18, the name shrank to "U…" with the saved line running under Continue in. */
+  .tba-acts .pt-continue { display: none; }
   .tb { gap: 10px; padding: 0 16px; }
 }
 @media (max-width: 980px) {

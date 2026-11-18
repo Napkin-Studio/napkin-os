@@ -41,7 +41,8 @@ export function ScriptLength({ composed, doc, onError }: { composed: ComposedScr
   }
   return (
     <span className="se-facts" aria-label="This script">
-      <span className="meta">{n ? `${n} ${n === 1 ? 'shot' : 'shots'} · ` : ''}{sb?.ratio ?? '16:9'} · target</span>
+      {/* Below 1180 px the shots and shape give way (the sheet's head says them): the band keeps Import / Export and undo on screen. */}
+      <span className="meta"><span className="se-meta-more">{n ? `${n} ${n === 1 ? 'shot' : 'shots'} · ` : ''}{sb?.ratio ?? '16:9'} · </span>target</span>
       <LengthPicker value={target} onPick={setLength} />
       {est > 0
         ? <span className={`fit ${over > 0 ? 'over' : ''}`}>{rough ? 'about ' : ''}{secs(est)} · {over > 0 ? `${secs(over)} over` : `${secs(-over)} to spare`}</span>

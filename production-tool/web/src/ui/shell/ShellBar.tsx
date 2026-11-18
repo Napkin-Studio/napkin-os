@@ -135,7 +135,7 @@ function ContinueIn() {
   }
   return (
     <>
-      <button ref={ref} type="button" className="tba-btn ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Continue in ▾</button>
+      <button ref={ref} type="button" className="tba-btn ghost pt-continue" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Continue in ▾</button>
       <Float anchor={ref} open={open} onClose={() => setOpen(false)} role="menu" label="Continue in" className="pt-menu nui-pop">
         <div className="fhead">Continue in</div>
         <MenuItem icon="+" disabled hint={soon} onSelect={() => {}}>New deck from this film</MenuItem>

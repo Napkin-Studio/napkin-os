@@ -586,7 +586,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
                 }} />
             )}
             <ScriptLength composed={composed} doc={doc} onError={setError} />
-            <button type="button" className="sp-btn se-ask" aria-pressed={asked} onClick={askOnPurpose}><AgentFigure agent="skye" size={16} decorative />Ask the Script agent…</button>
+            <button type="button" className="sp-btn se-ask" aria-pressed={asked} onClick={askOnPurpose}><AgentFigure agent="skye" size={16} decorative />Ask<span className="se-ask-more"> the Script agent</span>…</button>
           </>
         )}
         right={!phone && (
