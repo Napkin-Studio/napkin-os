@@ -309,6 +309,31 @@ OPTIONAL = r"(?i)\bif budget allows\b|\boptional\b"
 #: Pairs merged into one presented slide in a pitch: (kept, merged into it, the merged title).
 PITCH_MERGES = (("team", "credentials", "The team you would work with, and work like this we have done"),
                 ("investment", "next_step", "Investment, and what we would like to agree today"))
+#: deck-look step 5 (``LOOK_V3`` only): merges in the title-None mode. The kept slide keeps its own title verbatim; the absorbed
+#: slide's title becomes the heading of its first headless block (else it goes to the kept slide's notes), so no title is said twice
+#: and none is written. channel_roles takes the first PRESENTED execution (assemble._shown_executions): 'how it runs';
+#: measurement takes guardrails: 'how we will know'.
+PITCH_MERGES_V3 = (("channel_roles", "execution", None),
+                   ("measurement", "guardrails", None))
+#: deck-look step 5 (``LOOK_V3`` only): a pitch with no stated limit aims at PITCH_TARGET presented slides (Sai: "the sweet slide size
+#: is 10"). A SOFT target: only the cheap moves run to reach it (assemble._to_target: unfilled placeholders to the 'To supply' part,
+#: then thin slides), nothing is trimmed, reworded or dropped. PITCH_CAP is ADVISORY only (validate: pitch_cap, a warning): asked-for
+#: routes and PITCH_EXECUTIONS executions may rightly give 13-14, and no gate withholds a deck for its length. Agency pitches that
+#: run longer: set DECK_PITCH_TARGET (and DECK_PITCH_CAP) for a run, or change these two numbers. A stated limit always wins.
+PITCH_TARGET = int(os.environ.get("DECK_PITCH_TARGET") or 10)
+PITCH_CAP = int(os.environ.get("DECK_PITCH_CAP") or 12)
+#: Slide types the length target never moves (design.length): the story's spine and the ask.
+TARGET_KEEPS = ("title", "objective", "real_question", "insight", "idea", "investment", "next_step", "ask", "close", "proposition", "audience")
+#: The title and text of the divider that opens the appendix's 'To supply' part (engine words, like the Appendix divider's).
+TO_SUPPLY_TITLE = "To supply"
+TO_SUPPLY_TEXT = "Slides that wait for what only a person can give: fill them and they return to the story."
+#: deck-look step 6 (Q13): the on-screen word windows by role, title included, ADVISORY (validate: role_words, a warning). A statement slide says one
+#: thing (10-35 words), an argument slide makes its case (35-70). Never met by repeating a sentence or by words a layout asks for:
+#: a shortfall names the brief field that would fill it.
+ROLE_WINDOWS = {"statement": (10, 35), "argument": (35, 70)}
+ROLE_OF_TYPE = {"title": "statement", "real_question": "statement", "idea": "statement", "investment": "statement", "close": "statement",
+                "objective": "argument", "insight": "argument", "audience": "argument", "proposition": "argument", "territory": "argument",
+                "channel_roles": "argument", "measurement": "argument"}
 
 
 def norm_text(t) -> str:
@@ -344,7 +369,7 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
           "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
-          "image_rights", "style_pack_held")
+          "image_rights", "style_pack_held", "pitch_cap", "role_words")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.
@@ -398,10 +423,11 @@ LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "compari
               "close", "big_statement", "quote_full", "cards_split", "text_columns", "placeholder_split", "chart_full",
               "timeline_rows", "execution_stack", "territory_wide", "people_cards")
 #: The tests a layout file's ``when.test`` may name; each is a function of the same name in layouts.py (and has a unit test).
-LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3")
-#: deck-look steps 3-4: the layouts that exist only under ``LOOK_V3`` (``layouts/v3``; the same folder may also rework a layout
-#: of LAYOUT_IDS, such as ``close``). With the flag off the library is the 36 above, byte for byte.
-LAYOUT_IDS_V3 = ("statement_points", "reframe", "shift_line", "picture_column")
+LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3", "rows_aside")
+#: deck-look steps 3-5: the layouts that exist only under ``LOOK_V3`` (``layouts/v3``; the same folder may also rework a layout
+#: of LAYOUT_IDS, such as ``close``). With the flag off the library is the 36 above, byte for byte. rows_aside (step 5) holds a
+#: merged slide: the kept slide's table as hairline rows, the absorbed slide's blocks in a column beside them.
+LAYOUT_IDS_V3 = ("statement_points", "reframe", "shift_line", "picture_column", "rows_aside")
 #: deck-look: a statement set in capitals only when it is at most this many characters (and two lines); sentence case beyond (Q10).
 CAPS_MAX_CHARS = 40
 #: deck-look q_no_hole (design.checklist): the largest empty rectangle of a presented content slide, as a share of the slide, on a
@@ -417,7 +443,9 @@ LOOK_V2 = True
 LOOK_V3 = os.environ.get("DECK_LOOK_V3", "").strip() in ("1", "true", "yes")
 LAYOUT_FLOW = "flow"
 LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
-LAYOUT_MAX = 40
+#: 40 -> 48 (Q11, Fable): the look's layouts land beside the old; image_text and image_left are offer-only under the look and are
+#: retired at the release after the look commit (dated in features/deck-look.clan), so the cap never becomes a habit.
+LAYOUT_MAX = 48
 LAYOUT_GROUPS = ("functional", "content")
 LAYOUT_PURPOSES = ("title", "statement", "list", "compare", "data", "timeline", "image", "people")
 LAYOUT_CHOSEN_BY = ("rule", "fit_ladder", "repair", "person")
@@ -447,6 +475,18 @@ PICTURE_LABEL = "Illustrative"
 #: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
 PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "audience", "real_question", "close",
                        "solution", "product")
+
+
+def picture_of(slide: dict) -> tuple:
+    """``(type, title)`` a slide's pictures belong to: its own, or, for an evidence slide that absorbed a picture slide in a merge
+    (deck-look: channel_roles takes an execution, ``slide.merged``), the absorbed slide's. So the absorbed execution's picture, its slot
+    aspect and its anchor (``execution:<channel>``) travel with its words onto the merged slide; nothing else changes."""
+    t = slide.get("type")
+    if t not in PICTURE_SLIDE_TYPES:
+        for m in slide.get("merged") or []:
+            if m.get("type") in PICTURE_SLIDE_TYPES:
+                return m["type"], m.get("title") or ""
+    return t, slide.get("title") or ""
 
 #: Theme (contract section 6.1 and 6.2). COLOR_ROLES equals ``theme.COLOR_FIELDS``.
 COLOR_ROLES = ("ink", "paper", "panel", "rule", "mute", "accent", "accent_ink", "on_dark", "on_dark_mute", "accent_on_dark")

@@ -195,8 +195,26 @@ def points_2_3(s: dict, bl: list) -> bool:
     return pts is not None and 2 <= len(pts) <= 3
 
 
+#: The kinds a rows_aside column may hold beside the rows: the absorbed slide's own blocks (a list, a line, labelled pairs, the copy).
+ASIDE_KINDS = ("bullets", "kv", "text", "statement", "copy", "callout", "card")
+
+
+def rows_aside(s: dict, bl: list) -> bool:
+    """A merged slide (deck-look step 5): exactly one table of two to four columns and one to four rows under its header, and at least
+    one block beside it that the aside column holds (``ASIDE_KINDS``); every other block a small line. 'How it runs' (the channel table
+    and an execution) and 'how we will know' (the measures and the guardrails). A table alone is not one: it keeps its own layout."""
+    tables = [b for b in bl if b["kind"] == "table"]
+    if len(tables) != 1:
+        return False
+    rows = tables[0].get("rows") or []
+    if not (2 <= len(rows) <= 5 and all(2 <= len(r) <= 4 for r in rows)):
+        return False
+    rest = [b for b in bl if b is not tables[0]]
+    return any(b["kind"] in ASIDE_KINDS for b in rest) and all(b["kind"] in ASIDE_KINDS + ("small",) for b in rest)
+
+
 TESTS = {"has_target_figure": has_target_figure, "has_human_item": has_human_item, "compare_table": compare_table, "role_rows": role_rows,
-         "points_2_3": points_2_3}
+         "points_2_3": points_2_3, "rows_aside": rows_aside}
 
 
 def picture_sides(deck: dict) -> dict:
@@ -866,6 +884,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         # 0. density: movable points past the target go to the notes
         if density in spec.DENSITY_WORDS and content and not exempt and s["type"] not in ("appendix",) and prefs.get("text_mode") != "preserve":
             target = spec.DENSITY_WORDS[density]
+            if spec.LOOK_V3 and density == "lean" and s["type"] in spec.ROLE_OF_TYPE:   # deck-look (Q13): a pitch's lean density is the role
+                target = max(target, spec.ROLE_WINDOWS[spec.ROLE_OF_TYPE[s["type"]]][1])   # window's top: 35 a statement, 70 an argument
             cands = _movable(deck, sid, base, aud, exempt)
             words = lambda sl_: sum(len(str(t).split()) for b in spec.shown_blocks(sl_, aud) if b["kind"] != "copy" for t in _block_texts(b))
             cur = _with_moved(base, [])

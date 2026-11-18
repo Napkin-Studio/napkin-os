@@ -676,7 +676,7 @@ def p_where_asked(r: Run) -> dict:
         wanted = [i for i in r.presented if (pic.get("slides") or {}).get(i)]
     else:
         types = CREATIVE_TYPES + (COVER_TYPES if on == "creative_cover" else ())
-        wanted = [i for i in r.presented if r.deck["slides"][i]["type"] in types]
+        wanted = [i for i in r.presented if spec.picture_of(r.deck["slides"][i])[0] in types]
     if not wanted:
         return na("the picture preference asks for no picture on any presented slide")
     have = {s for s, _, _ in r.image_slots()}
@@ -686,7 +686,7 @@ def p_where_asked(r: Run) -> dict:
 
 @check
 def m_creative_pictured(r: Run) -> dict:
-    ids = [i for i in r.presented if r.deck["slides"][i]["type"] in spec.PICTURE_SLIDE_TYPES]
+    ids = [i for i in r.presented if spec.picture_of(r.deck["slides"][i])[0] in spec.PICTURE_SLIDE_TYPES]
     if not ids:
         return na("no presented slide of a picture type")
     have = {s for s, _, _ in r.image_slots()}
@@ -695,7 +695,7 @@ def m_creative_pictured(r: Run) -> dict:
 
 @check
 def p_only_creative(r: Run) -> dict:
-    return _no_picture(r) or _verdict([s for s, _, _ in r.image_slots() if r.deck["slides"][s]["type"] not in spec.PICTURE_SLIDE_TYPES],
+    return _no_picture(r) or _verdict([s for s, _, _ in r.image_slots() if spec.picture_of(r.deck["slides"][s])[0] not in spec.PICTURE_SLIDE_TYPES],
                                       r.ids, None, 0)
 
 

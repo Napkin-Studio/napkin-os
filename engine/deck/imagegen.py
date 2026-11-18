@@ -82,7 +82,7 @@ def candidate_slots(deck: dict, territories=None) -> list:
     out = []
     for sid in deck["order"]:
         s = deck["slides"][sid]
-        if s["type"] not in spec.PICTURE_SLIDE_TYPES:
+        if spec.picture_of(s)[0] not in spec.PICTURE_SLIDE_TYPES:
             continue
         slots = s.setdefault("slots", {}) if s["type"] == "territory" else (s.get("slots") or {})
         if s["type"] == "territory":

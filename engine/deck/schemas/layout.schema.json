@@ -140,7 +140,8 @@
             "compare_table",
             "role_rows",
             "image_ready",
-            "points_2_3"
+            "points_2_3",
+            "rows_aside"
           ],
           "$comment": "a named test from spec.LAYOUT_TESTS, implemented in layouts.py"
         },

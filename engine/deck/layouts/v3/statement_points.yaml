@@ -1,5 +1,5 @@
 id: statement_points
-version: 1
+version: 2
 group: content
 purpose: statement
 description: The title in a 5/12 column with the target figure under it when there is one; two or three points stacked on the right between hairlines.
@@ -49,4 +49,4 @@ slots:
     - card
     dominant: true
     min_items: 2
-    max_items: 3
+    max_items: 4

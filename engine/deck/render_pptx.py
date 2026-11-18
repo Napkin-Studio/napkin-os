@@ -2467,6 +2467,18 @@ class Renderer:
                     fig += [([self._kick(lab)], 0.02),
                             ([self.para(facts[key], 30, p.fg, self.th.head, bold=True, line=1.0, allcaps=layouts.caps_ok(facts[key]))], 0.15)]
             fig[-1] = (fig[-1][0], 0.0)
+        elif len(pts) >= 2:   # no figure (an insight, an audience): the first point anchors the left column's foot, so the title's column
+            first, pts = pts[0], pts[1:]   # is not a hole (phase 13 s04); a quote stays italic with its Illustrative caption under it
+            for fs in (30, 28, 26, 24, 22, 20, 18):
+                ps = ([self._kick(first["heading"])] if first["heading"] else []) + \
+                     [self.para(first["text"], fs, p.fg, self.th.head if not first["italic"] else None, bold=not first["italic"], italic=first["italic"], line=1.15)]
+                if first["caption"]:
+                    ps.append(self.para(first["caption"], S.body_floor, p.mute))
+                if self.ph(ps, ltw) <= avail * 0.45 and self._units_fit(first["text"], ltw, fs, bold=not first["italic"], font=None if not first["italic"] else self.th.body):
+                    break
+            else:
+                raise NoFit("the anchor point is too long for the title's column")
+            fig = [(ps, 0.0)]
         fh = sum(self.ph(ps, ltw) + gap for ps, gap in fig)
         for tsize in (36, 32, 30, 28):
             tp = [self.para(s["title"], tsize, p.fg, self.th.head, bold=True, line=1.05)]
@@ -2490,7 +2502,7 @@ class Renderer:
                 break
         else:
             raise NoFit("points too long for the column")
-        gap = min(0.6, max(0.25, (avail - sum(hs)) / (2 * (len(hs) - 1))))
+        gap = min(0.6, max(0.25, (avail - sum(hs)) / (2 * (len(hs) - 1)))) if len(hs) > 1 else 0.0
         total = sum(hs) + 2 * (len(hs) - 1) * gap
         if sl is None:
             return
@@ -2677,11 +2689,121 @@ class Renderer:
         M, pw = self.th.grid.M, self.PIC_COL
         return (0.0, pw + M, W - M) if side == "left" else (W - pw, M, W - pw - M)
 
+    def _aside_groups(self, bl, size, w) -> list:
+        """The paragraph groups of a rows_aside column (deck-look step 5), one per block, in order: a block's own title (the absorbed slide's
+        title, or its list heading) as the kicker; bullets and kv items, a text line, ad copy (lines in the display face, the answer as its
+        kicker after) at ``size``. The words are the blocks' own."""
+        p, out = self.p, []
+        for b in bl:
+            ps = [self._kick(str(b["title"]).strip())] if str(b.get("title") or "").strip() else []
+            k = b["kind"]
+            if k == "bullets":
+                ps += [self.para(_item_text(i).strip(), size, p.fg, line=1.2, after=6) for i in b.get("items") or [] if _item_text(i).strip()]
+            elif k == "kv":
+                for kk, v in b.get("items") or []:
+                    ps += [self._kick(str(kk).strip()), self.para(str(v).strip(), size, p.fg, line=1.2, after=6)]
+            elif k == "copy":
+                ps += [self.para(str(x), size + 4, p.fg, self.th.head, bold=True, line=1.05, after=4) for x in b.get("lines") or []]
+                if b.get("answer"):
+                    ps.append(self._kick(str(b["answer"])))
+            elif self._text_of(b):
+                small = k == "small"
+                ps.append(self.para(self._text_of(b), self.th.scale.small if small else size, p.mute if small else p.fg, line=1.2))
+            if ps:
+                out.append((ps, self.ph(ps, w)))
+        return out
+
+    def _lay_rows_aside(self, sl, s):
+        """rows_aside (deck-look step 5, the merged slides 'how it runs' and 'how we will know'): the kept slide's title at the top of a
+        7/12 column and its table under it as hairline rows (the header row as kickers, the first cell of a row in the display face); the
+        absorbed slide's blocks in the 5/12 column beside it, centred, a hairline between blocks. Content frame and column rule in
+        hairlines. NoFit when the words do not fit at 14 pt (the fit ladder then switches to an alternative: no point moves to the notes)."""
+        S, p, g = self.th.scale, self.p, self.th.grid
+        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items") or b.get("lines") or b.get("rows")]
+        tables = [b for b in bl if b["kind"] == "table"]
+        if not layouts.rows_aside(s, bl):
+            raise NoFit("rows_aside holds one table and the blocks beside it")
+        rows = [[str(c).strip() for c in r] for r in tables[0]["rows"]]
+        head, body = rows[0], rows[1:]
+        aside = [b for b in bl if b is not tables[0]]
+        top, bottom, pad = self.V3_TOP, g.body_end, self.V3_PAD
+        lw = self._span(7)
+        rx = self.x0 + lw + g.G
+        ltw, rtw = lw - pad - 0.15, self.x1 - rx - 2 * pad
+        avail = bottom - top - 0.3
+        nc = len(head)
+        cw0 = ltw * (0.4 if nc > 2 else 0.45)
+        cws = [cw0] + [(ltw - cw0 - 0.2 * (nc - 1)) / (nc - 1)] * (nc - 1)
+        fit = None
+        for tsize in (36, 32, 30, 28):
+            tp = [self.para(s["title"], tsize, p.fg, self.th.head, bold=True, line=1.05)]
+            th_ = self.ph(tp, ltw)
+            if self.nlines(glue(s["title"]), ltw, tsize, True, self.th.head) > 3:
+                continue
+            for bsize in (28, 26, 24, 22, 20, 18, 16, 14):
+                hk = [[self._kick(h)] for h in head]
+                hh = max(self.ph(x, w) for x, w in zip(hk, cws))
+                cells = [[[self.para(c, bsize + 2, p.fg, self.th.head, bold=True, line=1.05)] if j == 0 else [self.para(c, bsize - 2, p.fg, line=1.2)]
+                          for j, c in enumerate(r)] for r in body]
+                if not all(self._units_fit(r[0], cws[0] * 0.95, bsize + 2) and all(self._units_fit(c, cws[j] * 0.95, bsize - 2, bold=False, font=self.th.body)
+                                                                                   for j, c in enumerate(r) if j) for r in body):
+                    continue   # no word may break inside itself in a narrow cell
+                rhs = [max(self.ph(x, w) for x, w in zip(cr, cws)) for cr in cells]
+                rows_h = hh + 0.15 + sum(h + 0.4 for h in rhs)
+                groups = self._aside_groups(aside, bsize, rtw)
+                gh = sum(h for _, h in groups) + 0.5 * (len(groups) - 1)
+                if th_ + 0.45 + rows_h <= avail and gh <= avail:
+                    fit = (tp, th_, hk, hh, cells, rhs, rows_h, groups, gh)
+                    break
+            if fit:
+                break
+        if not fit:
+            raise NoFit("rows and aside too full")
+        tp, th_, hk, hh, cells, rhs, rows_h, groups, gh = fit
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self._frame(sl, (self.x0, self.x0 + lw + g.G / 2, self.x1), top, bottom)
+        self.ptext(sl, self.x0 + pad, top + 0.15, ltw, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        free = avail - th_ - rows_h
+        y = top + 0.15 + th_ + max(0.45, free / 2)   # the rows sit in the middle of what the title leaves
+        m = self._mark(sl)
+        xs = [self.x0 + pad]
+        for w in cws[:-1]:
+            xs.append(xs[-1] + w + 0.2)
+        for x, w, ps in zip(xs, cws, hk):
+            self.ptext(sl, x, y, w, hh, ps, name="slot:rows")
+        y += hh + 0.15
+        for cr, h in zip(cells, rhs):
+            self.hairline(sl, self.x0 + pad, y, self.x0 + pad + ltw, y)
+            for x, w, ps in zip(xs, cws, cr):
+                self.ptext(sl, x, y + 0.2, w, h, ps, name="slot:rows")
+            y += h + 0.4
+        self._build(sl, m)
+        self._rec_slot(sl, "rows")
+        y = top + 0.15 + (avail - gh) / 2
+        for i, (ps, h) in enumerate(groups):
+            m = self._mark(sl)
+            if i:
+                self.hairline(sl, rx + pad, y + 0.25, self.x1 - pad, y + 0.25)
+                y += 0.5
+            self.ptext(sl, rx + pad, y, rtw, h, ps, name="slot:aside")
+            self._build(sl, m)
+            y += h
+        self._rec_slot(sl, "aside")
+
     def _column_points(self, bl):
-        """The labelled points of a picture column: kv items (key as the kicker), bullets items, small and callout lines."""
+        """The labelled points of a picture column: kv items (key as the kicker), bullets items, small and callout lines; a two-column table
+        (deck-look step 5: 'how it runs') gives one point per row, its first cell the kicker, after a point of the header row's labels."""
         out = []
         for b in bl:
-            if b["kind"] == "kv":
+            if b["kind"] == "table":
+                rows = [[str(c).strip() for c in r] for r in b.get("rows") or []]
+                if rows and all(len(r) == 2 for r in rows):
+                    out += [(r[0], r[1]) for r in rows]
+            elif b["kind"] == "kv":
                 out += [(str(k).strip(), str(v).strip()) for k, v in b["items"] if str(v).strip()]
             elif b["kind"] == "bullets":
                 out += [(str(b.get("title") or "").strip() if n == 0 else "", _item_text(i).strip()) for n, i in enumerate(b["items"]) if _item_text(i).strip()]
@@ -2698,18 +2820,24 @@ class Renderer:
         side = self._pic_side.get(self._sid, "left") if sl is not None else "left"
         px, tx0, tx1 = self._pic_box(side)
         self._own_picture(None, "picture", px, 0, self.PIC_COL, H)   # NoFit without a picture
-        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items") or b.get("lines")]
-        if any(b["kind"] not in ("statement", "text", "copy", "kv", "bullets", "small", "callout") for b in bl):
+        bl = [b for b in s["blocks"] if self._text_of(b) or b.get("items") or b.get("lines") or b.get("rows")]
+        if any(b["kind"] not in ("statement", "text", "copy", "kv", "bullets", "small", "callout", "table") for b in bl):
             raise NoFit("picture column holds text, copy and labelled points")
+        if any(b["kind"] == "table" and not all(len(r) == 2 for r in b.get("rows") or [[]]) for b in bl):
+            raise NoFit("a picture column holds a two-column table only")
         lead = [b for b in bl if b["kind"] in ("statement", "text")]
         copy = [b for b in bl if b["kind"] == "copy"]
-        pts = self._column_points(bl)
-        if len(pts) > 3:
+        pts = self._column_points([b for b in bl if b["kind"] != "table"])
+        grid = self._column_points([b for b in bl if b["kind"] == "table"])   # deck-look step 5: a table's rows, a compact grid at the foot
+        if len(pts) > 3 or len(grid) > 5 or (grid and pts):
             raise NoFit("at most three points beside a picture")
         tw = tx1 - tx0
+        gw0 = tw * 0.4
+        gw1 = tw - gw0 - 0.2
         top, bottom = BAND_TITLE_Y + 0.25, g.body_end
-        for bsize in (22, 20, 18, 16):
-            lp = [self.para(self._text_of(b), bsize, p.fg, line=1.25, after=6) for b in lead]
+        for bsize in (22, 20, 18, 16, 14):
+            lp = [x for b in lead for x in ([self._kick(str(b["title"]).strip())] if str(b.get("title") or "").strip() else [])   # a merged slide: the absorbed title heads its line
+                  + [self.para(self._text_of(b), bsize, p.fg, line=1.25, after=6)]]
             cp = []
             for c in copy:
                 cp += [self.para(str(x), bsize + 4, p.fg, self.th.head, bold=True, line=1.05, after=4) for x in c.get("lines") or []]
@@ -2719,7 +2847,11 @@ class Renderer:
             lh = self.ph(lp, tw) if lp else 0.0
             ch = self.ph(cp, tw) if cp else 0.0
             ph_ = [self.ph(ps, tw) for ps in pg]
-            body = (lh + 0.3 if lp else 0) + (ch + 0.3 if cp else 0) + sum(h + 0.5 for h in ph_)
+            gc = [([self._kick(a)], [self._kick(b)]) if n == 0 else ([self.para(a, bsize, p.fg, self.th.head, bold=True, line=1.05)], [self.para(b, bsize - 2, p.fg, line=1.2)])
+                  for n, (a, b) in enumerate(grid)]
+            gh = [max(self.ph(a, gw0), self.ph(b, gw1)) for a, b in gc]
+            grid_h = sum(h + (0.15 if n == 0 else 0.35) for n, h in enumerate(gh))
+            body = (lh + 0.3 if lp else 0) + (ch + 0.3 if cp else 0) + sum(h + 0.5 for h in ph_) + (grid_h + 0.2 if gc else 0) - (0.1 if gc else 0)   # rows: a tighter gap under the title
             try:
                 hp, hh, _ = self._hero(s["title"], tw, max_lines=4)
             except NoFit:
@@ -2739,10 +2871,11 @@ class Renderer:
         self._foot = (tx0, tx1)
         m = self._mark(sl)
         used = hh + 0.45 + (lh + 0.3 if lp else 0) + (ch + 0.3 if cp else 0)
-        y = top if pg else top + max(0.0, (bottom - top - used) * 0.4)   # no points: the block sits a little above the column's middle
+        tg = 0.35 if gc else 0.45
+        y = top if (pg or gc) else top + max(0.0, (bottom - top - used) * 0.4)   # no points: the block sits a little above the column's middle
         self.ptext(sl, tx0, y, tw, hh, hp, name="Title")
         self._build(sl, m, title=True)
-        y += hh + 0.45
+        y += hh + tg
         if lp:
             m = self._mark(sl)
             self.ptext(sl, tx0, y, tw, lh, lp, name="slot:lead")
@@ -2763,6 +2896,18 @@ class Renderer:
                 self.ptext(sl, tx0, y + 0.45, tw, h, ps, name="slot:points")
                 self._build(sl, m)
                 y += h + 0.5
+            self._rec_slot(sl, "points")
+        if gc:
+            y = max(y, bottom - grid_h)   # the rows sit at the foot of the column: the header's labels, then a hairline over each row
+            m = self._mark(sl)
+            for n, ((a, b), h) in enumerate(zip(gc, gh)):
+                if n:
+                    self.hairline(sl, tx0, y, tx1, y)
+                    y += 0.1
+                self.ptext(sl, tx0, y, gw0, h, a, name="slot:points")
+                self.ptext(sl, tx0 + gw0 + 0.2, y, gw1, h, b, name="slot:points")
+                y += h + (0.15 if n == 0 else 0.25)
+            self._build(sl, m)
             self._rec_slot(sl, "points")
 
     def _lay_cover_column(self, sl, s):
@@ -2916,7 +3061,7 @@ class Renderer:
                  "people_cards": "_lay_people_cards",
                  # deck-look steps 3-4 (spec.LOOK_V3 only: layouts/v3)
                  "statement_points": "_lay_statement_points", "reframe": "_lay_reframe", "shift_line": "_lay_shift_line",
-                 "picture_column": "_lay_picture_column"}
+                 "picture_column": "_lay_picture_column", "rows_aside": "_lay_rows_aside"}
 
     # -- the plan's measuring: the renderer's own measure-only mode ---------------------------------
     def probe(self, s: dict, name: str, relaxed: bool = False, scale_cap: float | None = None, title_pt: int | None = None, cpl: int = 48) -> dict:

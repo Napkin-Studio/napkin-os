@@ -943,18 +943,11 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
     the presented executions are the ones that carry the most mandated messages (messages). ``limit``
     (a stated limit or a sketch's) moves the least needed slides behind the divider until the story fits (_trim)."""
     by_type = lambda t: next((x for x in S if x["type"] == t), None)
-    for keep, into, title in spec.PITCH_MERGES:
-        k, m = by_type(keep), by_type(into)
+    for keep, into, title in spec.PITCH_MERGES + (spec.PITCH_MERGES_V3 if spec.LOOK_V3 else ()):
+        k = by_type(keep)
+        m = (_shown_executions(S, messages)[:1] or [None])[0] if into == "execution" else by_type(into)   # the first PRESENTED execution
         if k and m:
-            k["title"], k["label"] = title, title[:80]
-            k["blocks"] = k["blocks"] + [{**b, "title": b.get("title") or m["title"]} if b["kind"] == "bullets" else b for b in m["blocks"]]
-            k["claims"] += m["claims"]
-            k["requirements"] += [r for r in m["requirements"] if r not in k["requirements"]]
-            if m["status"] == "needs_human":
-                k["status"] = "needs_human"
-            if m.get("supplied"):   # what the person supplied to the absorbed slide still counts as supplied on the merged one
-                ks = k.get("supplied")
-                k["supplied"] = ({**ks, "refs": sorted(set(ks.get("refs") or []) | set(m["supplied"].get("refs") or []))} if ks else dict(m["supplied"]))
+            _merge(k, m, title)
             S = [x for x in S if x is not m]
     shown = _shown_executions(S, messages)
     shown_charts = _shown_charts(S, supported)
@@ -968,10 +961,94 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
         story.remove(team)
         story.insert(story.index(inv), team)
     story, backup = _trim(S, story, backup, limit)
-    if not backup:
+    supply = []
+    if spec.LOOK_V3 and not limit:   # deck-look step 5: a soft target by cheap moves only (a stated limit keeps _trim, above)
+        story, backup, supply = _to_target(S, story, backup, spec.PITCH_TARGET, keep)
+    if not backup and not supply:
         return story
     divider = _slide("appendix", "Appendix", [{"kind": "text", "text": "Backup for questions: everything this presentation rests on."}], status="from_source")
-    return story + [divider] + backup
+    if supply:   # the 'To supply' part: last in the appendix, and counted on the close of a review build (Q6) so no gap is buried
+        ask = next((x for x in reversed(story) if x["type"] in ("investment", "ask", "close", "next_step")), None)
+        if ask is not None:
+            ask["blocks"] = ask["blocks"] + [{"kind": "small", "text": f"To supply: {len(supply)} slide{'s' if len(supply) != 1 else ''} in the appendix",
+                                              "basis": "meta", "internal": True}]
+        supply = [_slide("appendix", spec.TO_SUPPLY_TITLE, [{"kind": "text", "text": spec.TO_SUPPLY_TEXT}], status="from_source")] + supply
+    return story + [divider] + backup + supply
+
+
+#: deck-look step 5: the absorbed blocks that can carry the absorbed slide's title as their heading (a bullets list's title, a card's,
+#: a kv or text block's title as its kicker). The first headless one takes it.
+_HEADED = ("bullets", "text", "statement", "kv", "card")
+
+
+def _merge(k: dict, m: dict, title) -> None:
+    """Merge slide ``m`` into ``k`` in place (spec.PITCH_MERGES rows). ``title`` a string: the merged slide takes it and every absorbed
+    bullets block is headed by ``m``'s title (as before). ``title`` None (deck-look, spec.PITCH_MERGES_V3): ``k`` keeps its own title
+    verbatim; ``m``'s title heads the first headless absorbed block that can carry a heading, else it goes to ``k``'s notes, so it is
+    never said twice and never lost; ``m``'s notes join ``k``'s and ``k.merged`` records what was absorbed (its picture follows it:
+    spec.picture_of). Claims, requirements, the needs-a-person status and what a person supplied carry over in both modes."""
+    if title is not None:
+        k["title"], k["label"] = title, title[:80]
+        k["blocks"] = k["blocks"] + [{**b, "title": b.get("title") or m["title"]} if b["kind"] == "bullets" else b for b in m["blocks"]]
+    else:
+        put, add = False, []
+        for b in m["blocks"]:
+            if not put and b["kind"] in _HEADED and not b.get("title") and str(m.get("title") or "").strip():
+                b, put = {**b, "title": m["title"]}, True
+            add.append(b)
+        k["blocks"] = k["blocks"] + add
+        vis = m.get("visual") or {}
+        shown = [f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"] if vis.get("kind") == "image_prompt" else []   # drawn on the absorbed slide
+        extra = [x for x in ([] if put else [f"Merged here from the slide '{m['title']}'."]) + shown + [m.get("notes") or ""] if str(x).strip()]
+        if extra:
+            k["notes"] = "\n\n".join([x for x in [k.get("notes") or ""] if x.strip()] + extra)
+        k["merged"] = list(k.get("merged") or []) + [{"type": m["type"], "title": m["title"]}]
+        if m.get("slots") and not k.get("slots"):
+            k["slots"] = m["slots"]
+    k["claims"] += m["claims"]
+    k["requirements"] += [r for r in m["requirements"] if r not in k["requirements"]]
+    if m["status"] == "needs_human":
+        k["status"] = "needs_human"
+    if m.get("supplied"):   # what the person supplied to the absorbed slide still counts as supplied on the merged one
+        ks = k.get("supplied")
+        k["supplied"] = ({**ks, "refs": sorted(set(ks.get("refs") or []) | set(m["supplied"].get("refs") or []))} if ks else dict(m["supplied"]))
+
+
+def _unfilled(x: dict) -> bool:
+    """A placeholder slide still waiting for a person: needs_human, and every item and text it shows is a labelled placeholder (a
+    competition, risks, team or credentials slide nobody has filled). One sourced line on it and it is not unfilled."""
+    if x["status"] != "needs_human":
+        return False
+    seen = False
+    for b in x["blocks"]:
+        for i in b.get("items") or []:
+            seen = True
+            if not (isinstance(i, dict) and i.get("human")):
+                return False
+        if str(b.get("text") or "").strip():
+            seen = True
+            if not (b.get("human") or str(b["text"]).strip().startswith(spec.PLACEHOLDER_PREFIX)):
+                return False
+    return seen
+
+
+def _to_target(S: list, story: list, backup: list, target: int, keep: set) -> tuple:
+    """Bring a pitch's presented story toward ``target`` slides by the cheap moves only, in order, one slide at a time and only while it
+    is longer (design.length.order): an unfilled placeholder slide (``_unfilled``) to the 'To supply' part, then a thin slide
+    (``layouts.is_thin``: a one-row table, a one-step timeline) to the backup. Types in spec.TARGET_KEEPS, routes the client asked
+    to see and the presented executions and charts (``keep``) never move. Nothing is trimmed past that, reworded or dropped: a story
+    still over the target stays so (the target is soft, PITCH_CAP only advisory). Returns ``(story, backup, supply)``."""
+    from . import layouts   # late: layouts imports spec, not this module
+    story, backup, supply = list(story), list(backup), []
+    movable = lambda x: x["type"] not in spec.TARGET_KEEPS and id(x) not in keep
+    for test, dest in ((_unfilled, supply), (lambda x: layouts.is_thin(x["blocks"]), backup)):
+        for x in [y for y in story if movable(y) and test(y)]:
+            if len(story) <= target:
+                break
+            story.remove(x)
+            dest.append(x)
+    at = {id(x): i for i, x in enumerate(S)}
+    return story, sorted(backup, key=lambda x: at.get(id(x), len(S))), supply
 
 
 def _trim(S: list, story: list, backup: list, limit: int | None) -> tuple:

@@ -66,13 +66,13 @@ SLOT_NAME = re.compile(r"^[a-z][a-z0-9_]{1,23}$")
 
 def slot_specs(slide: dict) -> list:
     """The slots this slide takes: ``[(name, aspect)]``, a counted slot expanded (frame_1 ... frame_4). Empty for an evidence slide."""
-    t = slide.get("type")
+    t, title = spec.picture_of(slide)   # a merged slide takes the slots of the picture slide it absorbed (deck-look)
     if t not in SLOT_TABLE or t not in spec.PICTURE_SLIDE_TYPES:
         return []
     out = []
     for name, aspect, n in SLOT_TABLE[t]:
         if t == "execution":
-            aspect = EXECUTION_ASPECT[spec.frame_for(slide.get("title") or "")]
+            aspect = EXECUTION_ASPECT[spec.frame_for(title)]
             if aspect is None:
                 continue
         out += [(f"{name}_{i}" if n > 1 else name, aspect) for i in range(1, n + 1)]
@@ -350,11 +350,11 @@ def anchors(deck: dict, territories=None) -> dict:
     out, n_div = {}, 0
     for sid in deck["order"]:
         s = deck["slides"][sid]
-        t = s["type"]
+        t, title = spec.picture_of(s)   # a merged slide keeps the anchor of the picture slide it absorbed (deck-look)
         if t == "territory":
             ref = by_name.get(s.get("title")) or _slug(s.get("title", ""))
         elif t == "execution":
-            ref = _slug(s.get("title", ""))
+            ref = _slug(title)
         elif t == "appendix":
             n_div += 1
             ref = f"divider-{n_div}"
@@ -518,7 +518,7 @@ def place_supplied(deck: dict, supplied: dict, names=(), sources: dict | None = 
         s = (deck.get("slides") or {}).get(sid)
         if s is None:
             raise ImageError(f"--image {sid}.{slot}: the deck has no slide {sid}")
-        if s["type"] not in spec.PICTURE_SLIDE_TYPES or s["type"] not in SLOT_TABLE:
+        if spec.picture_of(s)[0] not in spec.PICTURE_SLIDE_TYPES or spec.picture_of(s)[0] not in SLOT_TABLE:
             raise ImageError(f"--image {sid}.{slot}: a {s['type']} slide is an evidence slide and takes no picture")
         want = dict(slot_specs(s))
         if slot not in want and not (s["type"] == "execution" and EXECUTION_ASPECT[spec.frame_for(s.get("title") or "")] is None):
@@ -564,7 +564,7 @@ def add_empty_slots(deck: dict, pictures: str) -> int:
     n = 0
     for sid in deck["order"]:
         s = deck["slides"][sid]
-        if s["type"] not in types:
+        if spec.picture_of(s)[0] not in types:
             continue
         for name, aspect in slot_specs(s):
             if name not in (s.get("slots") or {}):

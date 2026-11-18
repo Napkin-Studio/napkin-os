@@ -1,11 +1,12 @@
 id: picture_column
-version: 1
+version: 2
 group: content
 purpose: image
-description: A full-height picture column bleeding off one side (sides alternate), the title, a lead and up to three labelled points beside it.
-slot_summary: title (hero), lead, copy, points (0-3), picture
+description: A full-height picture column bleeding off one side (sides alternate), the title, a lead and up to three labelled points or table rows beside it.
+slot_summary: title (hero), lead, copy, points (0-3, or a table's rows), picture
 for_types:
 - audience
+- channel_roles
 - execution
 - idea
 - solution
@@ -48,6 +49,7 @@ slots:
     - bullets
     - small
     - callout
+    - table
     max_items: 3
   picture:
     kind: image

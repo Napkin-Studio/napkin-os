@@ -150,7 +150,7 @@ def test_the_new_layouts_exist_only_under_the_flag(monkeypatch):
     assert len(off) == 36 and not set(spec.LAYOUT_IDS_V3) & set(off) and not off["close"].get("human_rows")
     monkeypatch.setattr(spec, "LOOK_V3", True)
     on = layouts.load()
-    assert len(on) == 40 <= spec.LAYOUT_MAX and set(spec.LAYOUT_IDS_V3) <= set(on)
+    assert len(on) == 36 + len(spec.LAYOUT_IDS_V3) == 41 <= spec.LAYOUT_MAX and set(spec.LAYOUT_IDS_V3) <= set(on)
     assert on["close"]["human_rows"] and on["close"]["version"] == 2 and "investment" in on["close"]["for_types"]
     for lid in spec.LAYOUT_IDS_V3:
         lay = on[lid]
@@ -243,8 +243,11 @@ def test_no_word_of_the_old_look_is_lost(tmp_path, monkeypatch):
     _, before = _render(_deck(), tmp_path, "a.pptx")
     monkeypatch.setattr(spec, "LOOK_V3", True)
     _, after = _render(_deck(), tmp_path, "b.pptx")
+    marks = ("SlideNumber", "Watermark", "Footnotes")   # place marks: the order and the merges (step 5) renumber them
+    gen = r"Slide id s\d+ · status \w+ · requirements [^\n]*|^Evidence:|^Moved from the slide:|\[refs: [^\]]*\]"   # notes lines the engine writes
     words = lambda prs: Counter(w for sl in prs.slides for w in re.findall(r"[a-z0-9%€]+", (" ".join(
-        sh.text_frame.text for sh in sl.shapes if sh.has_text_frame) + " " + sl.notes_slide.notes_text_frame.text).lower()))
+        sh.text_frame.text for sh in sl.shapes if sh.has_text_frame and not sh.name.startswith(marks)) + " "
+        + re.sub(gen, " ", sl.notes_slide.notes_text_frame.text, flags=re.M)).lower()))
     lost = words(before) - words(after)
     lost -= Counter({k: v for k, v in lost.items() if k in ("proposed",)})   # the placeholder card's PROPOSED tag (an engine mark): the close's dashed rows say To supply, and the words themselves begin 'Proposed (not given by the client)'
 
