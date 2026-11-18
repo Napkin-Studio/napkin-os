@@ -13,7 +13,7 @@ import { roomBoxes } from './model'
 
 const config = (() => {
   const c = effectiveConfig('live', 'mock')
-  return { ...c, flags: { ...c.flags, connectedVideo: true, makeAndEdit: true } }
+  return { ...c, flags: { ...c.flags, connectedVideo: true } }
 })()
 const UI = { jobs: {} }
 

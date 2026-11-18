@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../contracts/types'
-import { adBehindLabel, behindCount, behindLabel, driftLabel, notMadeCount, oldWordsLine } from './behind'
+import { behindCount, behindLabel, driftLabel, notMadeCount, oldWordsLine } from './behind'
 
 // Shot numbers come from rank on the storyboard, not from the ids.
 const d = {
@@ -36,9 +36,7 @@ describe('what an out-of-date item is behind', () => {
     expect(oldWordsLine('take', 3, { reason: "Shot 3's length changed" })).toBe('Clip 3 uses the old length')
     expect(driftLabel(2)).toBe('Drawn from an older frame 2')
   })
-  it('the ad is behind its clips or the shots; the bar counts what is out of date, and what is not made yet apart', () => {
-    expect(adBehindLabel("Shot 2's clip changed")).toBe('Behind the clips')
-    expect(adBehindLabel('A shot was deleted')).toBe('Behind the shots')
+  it('the bar counts what is out of date, and what is not made yet apart', () => {
     expect(behindCount(3)).toBe('3 out of date')
     expect(notMadeCount(0, 3)).toBe('3 clips not made yet')
     expect(notMadeCount(1, 2)).toBe('1 frame and 2 clips not made yet')

@@ -15,7 +15,6 @@ import { SnapshotStore } from '../doc/store'
 import { initialProjectUi, type AppUi, type ProjectUi } from '../doc/ui'
 import { JobRunner } from '../jobs/runner'
 import { CONFIGS } from '../contracts/load'
-import { effectiveConfig } from '../capabilities'
 import { resumeChains, wireJobs } from '../jobs/wire'
 import { ModelStore, type ModelStoreOptions } from '../model/store'
 import { browserClanStore } from '../store/browser'
@@ -110,9 +109,8 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   runner.inFlightLimit = () => (deps.remoteConfig ?? CONFIGS.live).inFlightPerParticipant
   runner.briefs = () => !!(deps.remoteConfig ?? CONFIGS.live).flags.briefNode
   // Landed jobs, and the chains they move on: Draw the rest, Fix it in the shot, Update what follows.
-  // The rooms (flags.makeAndEdit) read from the config the person runs on, at each landing.
-  const rooms = () => !!effectiveConfig(ui.get().configChoice, ui.get().providerChoice, undefined, deps.remoteConfig).flags.makeAndEdit
-  const frameDeps = { relay, doc, ui, runner, rooms }
+  // The Film editor is the rooms (owner 2026-11-18): a new take lands beside the others, never in the cut.
+  const frameDeps = { relay, doc, ui, runner, rooms: () => true }
   wireJobs(frameDeps)
   runner.resume()
   void resumeChains(frameDeps)

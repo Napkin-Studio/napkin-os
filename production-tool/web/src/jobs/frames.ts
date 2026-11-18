@@ -29,8 +29,9 @@ export interface FrameDeps {
   doc: DocumentStore
   ui: UiStore
   runner: JobRunner
-  /** The Film editor is the two rooms (flags.makeAndEdit): a new take lands beside the others and never
-   *  touches the cut. Absent or false: the Film editor, which picks each new take in the cut. */
+  /** The Film editor is the two rooms: a new take lands beside the others and never touches the cut. The app
+   *  always says so (projects/session.ts); absent, a new take is picked in the cut, as the legacy Film editor
+   *  did (owner 2026-11-18 retired it; the jobs tests still land that way, to be moved to the rooms). */
   rooms?: () => boolean
 }
 

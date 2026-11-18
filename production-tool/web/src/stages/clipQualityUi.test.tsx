@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 // Quality on screen (features/clip-quality.clan): the chip beside Model greys a level the model cannot make
-// with why, the Make clips tray says the level and the output size before sending (never a price), and the
-// level picked there is what is sent.
+// with why, and says a pick. (The legacy Film editor's Make clips tray went with it, owner 2026-11-18.)
 
-import { act, createElement, createRef } from 'react'
+import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ServicesContext, type Services } from '../app/context'
@@ -12,12 +11,10 @@ import { SnapshotDocumentStore, SnapshotStore } from '../doc/store'
 import { initialUi, type UiState } from '../doc/ui'
 import { loadJson } from '../test/schemas'
 import { QualityPick } from '../ui/QualityPick'
-import { ClipTray } from './ClipTray'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const ex = loadJson<ProductionDocument>('examples/document.ad.json')
-const SHOT = 'shot_01K7A000000000000000000015'
 
 let root: Root | null = null
 afterEach(() => {
@@ -58,26 +55,5 @@ describe('the Quality chip', () => {
     const el = mount(createElement(QualityPick, { op: 'clip', choice: { provider: 'runway', model: 'hailuo3' }, value: 'standard', onChange }))
     act(() => buttons(el)[2].click())
     expect(onChange).toHaveBeenCalledWith('final')
-  })
-})
-
-describe('the Make clips tray', () => {
-  it('says the level and the output size, and sends the level picked there', () => {
-    const onMake = vi.fn()
-    const anchor = createRef<HTMLButtonElement>()
-    const shot = ex.shots[SHOT]
-    const el = mount(createElement('div', null,
-      createElement('button', { ref: anchor }, 'Make clips'),
-      createElement(ClipTray, { anchor, open: true, onClose: () => {}, shots: [{ shot, n: 1 }], fromWords: true, ratio: '16:9', quality: 'draft', onMake })))
-    const foot = () => document.body.querySelector('.tray-model')?.textContent
-    // The model that last worked in this project (Veo 3.1 Fast), at the video's default.
-    expect(foot()).toBe('Veo 3.1 Fast on Runway · Draft 720p · 16:9')
-    act(() => buttons(document.body)[2].click())
-    expect(foot()).toBe('Veo 3.1 Fast on Runway · Final 1080p · 16:9')
-    expect(foot()).not.toMatch(/\$|credit/i)
-    const make = [...document.body.querySelectorAll<HTMLButtonElement>('.tray-foot button')].find((b) => b.textContent?.startsWith('Make'))!
-    act(() => make.click())
-    expect(onMake).toHaveBeenCalledWith([SHOT], { provider: 'runway', model: 'veo3.1_fast' }, 'final')
-    void el
   })
 })

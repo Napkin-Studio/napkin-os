@@ -294,16 +294,6 @@ export function runProgress(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, vi
   return out
 }
 
-/** The take job a shot is being made in, if it is (for its card's progress). */
-export function runJobFor(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, shotId: Id): Id | undefined {
-  return jobAt(d, ui, (c) => c.for === 'run' && !!d.videos[c.videoId]?.runs?.[c.runId]?.shot_ids.includes(shotId))
-}
-
-/** A shot's clip in the cut is a window of a take (Remake just this shot applies). */
-export function inTake(d: ProductionDocument, shotId: Id, videoId?: Id): boolean {
-  return !!shotSegment(currentTake(d, shotId, videoId), shotId)
-}
-
 export type FrameMark = 'pin' | 'guide'
 
 /** The pin (the video must hit this frame) or "guide" (the video takes it as a guide, inside a take) on each
@@ -344,10 +334,3 @@ export function missedGuide(_d: ProductionDocument, _shotId: Id): boolean {
   return false
 }
 
-/** The shots between two cards (inclusive), in order. */
-export function shotRange(order: Id[], a: Id, b: Id): Id[] {
-  const i = order.indexOf(a)
-  const j = order.indexOf(b)
-  if (i < 0 || j < 0) return [b]
-  return order.slice(Math.min(i, j), Math.max(i, j) + 1)
-}

@@ -5,7 +5,7 @@ import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, ty
 import type { CanvasSnapshot } from './canvas/controller'
 import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
-import { Video } from './stages/Video'
+import './stages/video.css'
 import { DecisionsDrawer } from './ui/History'
 import { RemakeBar } from './ui/Follow'
 import { CanvasBar } from './ui/chrome/TopBars'
@@ -23,7 +23,7 @@ import { errorShown, setScreen } from './dogfood/recorder'
 
 // The Script editor is its own chunk: projects that never open it never load Tiptap.
 const ScriptEditor = lazy(() => import('./script/ScriptEditor').then((m) => ({ default: m.ScriptEditor })))
-// The rooms are their own chunk too (behind flags.makeAndEdit).
+// The rooms (the Film editor) are their own chunk too.
 const Rooms = lazy(() => import('./rooms/Rooms').then((m) => ({ default: m.Rooms })))
 
 export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null }) {
@@ -77,10 +77,9 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         </div>
         {stage === 'storyboard' && <div className="stage-pane editor-pane" data-dogfood-area="storyboard"><Storyboard /></div>}
         {stage === 'video' && <div className="stage-pane editor-pane" data-dogfood-area="video">
-          {/* The Film editor as two rooms, Make and Edit (features/make-and-edit.clan); absent flag: as before. */}
-          {config.flags.makeAndEdit ? <Suspense fallback={<div className="editor" role="status" aria-busy="true" />}><Rooms /></Suspense> : <Video />}
+          {/* The Film editor is the two rooms, Make and Edit (features/make-and-edit.clan; owner 2026-11-18). */}
+          <Suspense fallback={<div className="editor" role="status" aria-busy="true" />}><Rooms /></Suspense>
         </div>}
-        {/* The Film editor shows it in its timeline head (stages/Video.tsx). */}
         {stage === 'storyboard' && <RemakeBar />}
         {panel === 'history' && <DecisionsDrawer store={clan} onClose={() => setPanel(null)} />}
       </div>
