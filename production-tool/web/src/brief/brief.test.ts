@@ -13,7 +13,7 @@ import { removeBrief } from '../doc/remove'
 import { BRIEF_SPINE, cutAtWord, isDont, projectSpine, spineLines, spineSummary } from './spine'
 import {
   BRIEF_OPS, briefFeeds, briefFlagsOn, briefForJob, briefNotice, briefOf, briefSendRow, freshness, ignoreBriefFlag, keepVersion, newBrief,
-  recordBriefFlags, takeNewer, withBrief,
+  endLineOf, recordBriefFlags, sizesBrief, sizesBriefOf, takeNewer, withBrief,
 } from './model'
 import { osBriefSource, type OsBriefRead } from './os'
 import { newId } from '../lib/ulid'
@@ -130,7 +130,7 @@ describe('scope', () => {
     const d = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
     d.format_sets = { fset_01K7A0000000000000000000F1: fs({ kind: 'video', id: VIDEO }) }
     expect(briefOf(d, 'fset_01K7A0000000000000000000F1')).toMatchObject({ via: 'upstream', through: VIDEO, brief: { id: b1.id } })
-    expect(briefSendRow(d, 'fset_01K7A0000000000000000000F1')!.detail).toMatch(/from Video/)
+    expect(briefSendRow(d, 'fset_01K7A0000000000000000000F1')!.detail).toMatch(/from Film/)
     expect(withBrief(d, 'resize', { kind: 'format_set', id: 'fset_01K7A0000000000000000000F1' }, {}).input.brief?.title).toBe('First Light brief')
     // Through an ad render of the video.
     d.renders = { ...d.renders, render_x: { id: 'render_x', v: 1, field_v: {}, video_id: VIDEO, version: 1, asset: SHA('a'), job_id: 'job_x' } as never }
@@ -143,6 +143,46 @@ describe('scope', () => {
     const own = withBrief_(d, b2, link(b2.id, { kind: 'format_set', id: 'fset_01K7A0000000000000000000F1' }))
     expect(briefOf(own, 'fset_01K7A0000000000000000000F1')).toMatchObject({ via: 'link', brief: { id: b2.id } })
     expect(scopeOf(own, 'fset_01K7A0000000000000000000F1').filter((i) => i.kind === 'brief')).toHaveLength(1)
+  })
+
+  it('Make all sizes reads a brief linked straight to the film\u2019s newest Format set, not the film\u2019s (re-test N2)', () => {
+    const fs = (id: string, master: { kind: 'video' | 'render'; id: string }) => ({
+      id, v: 1, field_v: {}, master, pack: { pack_id: 'film', pack_version: '1' },
+    }) as unknown as ProductionDocument['format_sets'][string]
+    const OLD = 'fset_01K7A0000000000000000000F1'
+    const NEW = 'fset_01K7A0000000000000000000F2'
+    const d = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
+    d.format_sets = { [OLD]: fs(OLD, { kind: 'video', id: VIDEO }) }
+    // Only the film's own brief: no override, the plan reads the film.
+    expect(sizesBriefOf(d, VIDEO)).toBeUndefined()
+    const own = withBrief_(d, b2, link(b2.id, { kind: 'format_set', id: OLD }))
+    expect(sizesBriefOf(own, VIDEO)).toEqual({ setId: OLD, briefId: b2.id })
+    // The plan, on the Film node, reads it from the set (runner extras.briefFrom).
+    expect(withBrief(own, 'cutdown', { kind: 'format_set', id: OLD }, {}).input.brief?.title).toBe('First Light DE')
+    expect(withBrief(own, 'cutdown', { kind: 'video', id: VIDEO }, {}).input.brief?.title).toBe('First Light brief')
+    // Only the newest set decides (owner 2026-11-18): a newer set with no link hands it back to the film's own
+    // brief, whatever the older set is linked to; its own link decides; a set of another film never does.
+    own.format_sets[NEW] = fs(NEW, { kind: 'video', id: VIDEO })
+    expect(sizesBriefOf(own, VIDEO)).toBeUndefined()
+    const newer = withBrief_(own, b1, link(b1.id, { kind: 'format_set', id: NEW }))
+    expect(sizesBriefOf(newer, VIDEO)).toEqual({ setId: NEW, briefId: b1.id })
+    expect(sizesBriefOf(newer, 'video_other')).toBeUndefined()
+  })
+
+  it('the sizes\u2019 line is the end line of the brief that drives them (re-test N2)', () => {
+    expect(endLineOf({ mandatories: ['Show the lamp in a small bedroom', 'Do not show alcohol', 'End on the line: Lumo. Dein Licht.'] })).toBe('Lumo. Dein Licht.')
+    expect(endLineOf({ mandatories: ['End line \u2013 \u201cLumo. Calm, on.\u201d'] })).toBe('Lumo. Calm, on.')
+    expect(endLineOf({ mandatories: ["Sign-off: 'Hearth. Every morning.'"] })).toBe('Hearth. Every morning.')
+    expect(endLineOf({ mandatories: ['Never show a phone screen'] })).toBeUndefined()
+    expect(endLineOf(undefined)).toBeUndefined()
+    const fs = (id: string) => ({ id, v: 1, field_v: {}, master: { kind: 'video', id: VIDEO }, pack: { pack_id: 'film', pack_version: '1' } }) as unknown as ProductionDocument['format_sets'][string]
+    const NEW = 'fset_01K7A0000000000000000000F2'
+    const d = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
+    // No set yet: the film's own brief.
+    expect(sizesBrief(d, VIDEO)?.id).toBe(b1.id)
+    d.format_sets = { [NEW]: fs(NEW) }
+    const linked = withBrief_(d, b2, link(b2.id, { kind: 'format_set', id: NEW }))
+    expect(sizesBrief(linked, VIDEO)?.id).toBe(b2.id)
   })
 
   it('no brief: nothing in scope, and a job is sent exactly as before', () => {

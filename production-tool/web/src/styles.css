@@ -1,64 +1,57 @@
-/* The tokens. The Napkin OS shell's palette first, value for value from app/src/index.css (the apps
-   don't import across each other; tokens.test.ts fails if one drifts). `data-theme` on <html> picks
-   light or dark, set by theme.ts from the same stored choice as the shell (napkin.theme), the OS
-   only when there is none. Then the tool's own tokens, and the owner's deliberate differences from
-   the shell (ui-behaviour 9, approved 2026-10-14), each marked "approved difference". */
+/* The tokens (features/production-new-ui.clan). The new UI's own come from the shell's file,
+   app/src/shell/nui/tokens.css (imported in main.tsx before this one): warm paper, warm ink, the radii,
+   shadows and faces, light and dark. The agency layer (palette.ts surfaceCss, ui/shell/agency.ts) comes
+   after both and tints --desk, --paper, --card, --line and sets the --ag-* tokens. This file adds only the
+   tool's own tokens, each in terms of the shell's, and redefines none of the shell's but one approved
+   difference (--ink3, below); tokens.test.ts holds that. `data-theme` on <html> picks light or dark
+   (theme.ts, the shell's napkin.theme). */
 :root,
 :root[data-theme='light'] {
-  /* ── The shell's design tokens (app/src/index.css) ── */
-  --paper: #FFFFFF;
-  --card: #FFFFFF;
-  --soft: #F5F6F8;
-  --soft-2: #F2F3F6;
-  --frost: rgba(255, 255, 255, 0.82);
-  --line: #D6DAE2;
-  --line-soft: #E7E9EE;
-  --ink: #14161B;
-  --ink2: #4A4F5C;
-  --ink-fixed: #14161B;
-  --plan: #14161B;    --plan-fg: #FFFFFF;    --plan-eye: #FFFFFF;
-  --create: #FF4F2E;  --create-fg: #FFFFFF;  --create-eye: #14161B;
-  --produce: #8B919E; --produce-fg: #FFFFFF; --produce-eye: #14161B;
-  --learn: #DADDE3;   --learn-fg: #14161B;   --learn-eye: #14161B;
-  --desk: #14161B;    --desk-fg: #FFFFFF;    --desk-eye: #FFFFFF;
-  --status-green: #22C55E;
-  --status-amber: #F5A524;
-  --status-red: #FF4F2E;
-  --shadow-soft: 0 10px 30px rgba(20, 30, 60, 0.08);
-  --shadow-pill: 0 1px 3px rgba(20, 22, 27, 0.1);
-  --warn: #b45309;
-  --danger: #b91c1c;
-  --ok-bg: #e7f6ed;
-  --ok-border: #a7d8ba;
-  --warn-bg: #fdf3e3;
-  --warn-border: #e0b473;
-
-  /* ── Approved differences from the shell (ui-behaviour 9; features/production-ui.clan) ── */
-  /* Grey text: #6B7180 meets 4.5:1 on white and on --soft (the shell's #737987 does not). */
-  --ink3: #6B7180;
-  /* Green (ok) text, also on --ok-bg. */
-  --success: #166534;
-  --ok-fg: #166534;
-
-  /* ── The tool's own ── */
-  --create-soft: rgba(255, 79, 46, 0.1);
-  /* The primary button (approved difference): white on #D63B1F is 4.66:1; brand orange carries no text. */
-  --action: #D63B1F;
-  --action-hover: #B8321A;
-  --action-fg: #FFFFFF;
-  --danger-bg: #fdecea;
-  --shadow-pop: 0 12px 32px rgba(20, 30, 60, 0.16), 0 2px 6px rgba(20, 30, 60, 0.08);
-  --canvas-bg: #FAFAFB;
-  --canvas-dot: #D6DAE2;
-  --frost-panel: rgba(255, 255, 255, 0.9);
-  /* The tool's colour, the way the OS bar shows Brief Maker in amber. Fills (selection, focus, glows). */
-  --tool: #2F64F5;
-  /* Tool-blue text (approved difference), also on a 10-12% blue tint. */
-  --tool-ink: #1E4ED8;
-  --tool-soft: rgba(47, 100, 245, 0.10);
-  /* an agent's ask beside the work it is about (features/frame-edit-or-redraw.clan) */
-  --ask-line: #F08A6E;
-  --ask-glow: rgba(255, 79, 46, 0.08);
+  /* Approved difference (ui-behaviour 9, kept): grey text reads at 4.5:1, so --ink3 is the muted ink,
+     not the shell's faint one (decoration only). */
+  --ink3: var(--muted);
+  /* The tool's names for the shell's tokens. */
+  --soft-2: color-mix(in srgb, var(--paper-2) 60%, var(--paper));
+  --frost: color-mix(in srgb, var(--paper) 92%, transparent);
+  --frost-panel: color-mix(in srgb, var(--paper) 96%, transparent);
+  --success: var(--ok);
+  --ok-fg: var(--ok);
+  --ok-bg: var(--ok-soft);
+  --ok-border: color-mix(in srgb, var(--ok) 35%, transparent);
+  --warn-bg: var(--warn-soft);
+  --warn-border: color-mix(in srgb, var(--warn) 40%, transparent);
+  --danger: var(--alert);
+  --danger-bg: var(--alert-soft);
+  --status-green: var(--ok);
+  --status-amber: var(--warn);
+  --status-red: var(--alert);
+  /* The departments of the old loader and figures, now plain inks. */
+  --plan: var(--ink);    --plan-fg: var(--paper);  --plan-eye: var(--paper);
+  --learn: var(--line);  --learn-fg: var(--ink);   --learn-eye: var(--ink);
+  --produce: var(--muted); --produce-fg: var(--paper); --produce-eye: var(--ink);
+  /* Needs you (an ask, a flag): the agency's needs colour where it sets one, else amber; never a brand red. */
+  --create: var(--needs, var(--warn));
+  --create-fg: var(--needs-ink, #FFFFFF);
+  --create-eye: var(--ink);
+  --create-soft: color-mix(in srgb, var(--needs, var(--warn)) 12%, transparent);
+  --ask-line: var(--needs, var(--warn));
+  --ask-glow: color-mix(in srgb, var(--needs, var(--warn)) 8%, transparent);
+  /* The one action, the selection and focus: the agency's act colour (the shell's primary button). */
+  --action: var(--ag-act);
+  --action-hover: color-mix(in srgb, var(--ag-act) 86%, var(--ink));
+  --action-fg: var(--ag-act-ink);
+  --tool: var(--ag-act);
+  --tool-ink: var(--ag-act);
+  --tool-soft: color-mix(in srgb, var(--ag-act) 12%, transparent);
+  --agency: var(--ag-act);
+  --agency-fg: var(--ag-act-ink);
+  --agency-soft: color-mix(in srgb, var(--ag-act) 10%, var(--paper));
+  /* The canvas is the desk: the agency-tinted ground pages sit on. */
+  --canvas-bg: var(--desk);
+  --canvas-dot: color-mix(in srgb, var(--ink) 16%, transparent);
+  --shadow-soft: var(--shadow-card);
+  --shadow-pill: 0 1px 3px rgba(20, 20, 19, 0.10);
+  --shadow-pop: 0 18px 40px -14px rgba(20, 20, 19, 0.38), 0 2px 6px rgba(20, 20, 19, 0.08);
   /* The pen's six inks (features/theme-and-pencil.clan): a stroke stores the name, the canvas paints
      these. Each is at least 3:1 on the canvas in its theme. canvas-engine's LIGHT_INK matches light. */
   --pen-ink: #14161B;
@@ -67,93 +60,45 @@
   --pen-green: #15803D;
   --pen-amber: #C27803;
   --pen-grey: #6B7180;
-  /* The shell's agency layer (app/src/shell/agency/palette.ts), carried so the palette stays the
-     shell's; the tool does not paint with it yet. */
-  --agency: #14161B;
-  --agency-fg: #FFFFFF;
-  --agency-soft: #F2F3F6;
   color-scheme: light;
 }
 
 :root[data-theme='dark'] {
-  /* ── The shell's design tokens, dark (app/src/index.css) ── */
-  --paper: #0F1114;
-  --card: #161A1F;
-  --soft: #1B1F25;
-  --soft-2: #22262D;
-  --frost: rgba(15, 17, 20, 0.8);
-  --line: #2A2F38;
-  --line-soft: #22262D;
-  --ink: #F2F3F5;
-  --ink2: #A6ACB8;
-  --ink3: #7A808C;
-  --plan: #F2F3F5;    --plan-fg: #0F1114;    --plan-eye: #0F1114;
-  --learn: #3A3F48;   --learn-fg: #F2F3F5;   --learn-eye: #F2F3F5;
-  --desk: #F2F3F5;    --desk-fg: #0F1114;    --desk-eye: #0F1114;
-  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.4);
   --shadow-pill: 0 1px 3px rgba(0, 0, 0, 0.5);
-  --success: #4ade80;
-  --warn: #f59e0b;
-  --danger: #f87171;
-  --ok-bg: #1e3a2f;
-  --ok-fg: #4ade80;
-  --ok-border: #166534;
-  --warn-bg: #3a2a1e;
-  --warn-border: #92400e;
-
-  /* ── The tool's own, dark ── */
-  --create-soft: rgba(255, 79, 46, 0.16);
-  /* The primary button, dark: the same #D63B1F (white text 4.66:1, ui-behaviour 9). #E2502F was 3.87:1. */
-  --action: #D63B1F;
-  --action-hover: #B8321A;
-  --danger-bg: #3a1e1e;
-  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
-  --canvas-bg: #121417;
-  --canvas-dot: #2A2F38;
-  --frost-panel: rgba(22, 26, 31, 0.9);
-  --tool-ink: #8FB0FF;
-  --tool-soft: rgba(47, 100, 245, 0.22);
-  --ask-line: #C8664C;
-  --ask-glow: rgba(255, 79, 46, 0.10);
+  --shadow-pop: 0 18px 40px -14px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.4);
   --pen-ink: #F2F3F5;
   --pen-orange: #FF6A4F;
   --pen-blue: #6E95FF;
   --pen-green: #4ADE80;
   --pen-amber: #F5A524;
   --pen-grey: #A6ACB8;
-  --agency: #F2F3F5;
-  --agency-fg: #14161B;
-  --agency-soft: #22262D;
   color-scheme: dark;
 }
 
 :root {
-  /* The shell's type, radii and motion. */
-  --f-display: 'Geist', 'Helvetica Neue', Arial, sans-serif;
-  --f-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
   --r-pill: 999px;
   --r-card: 12px;
-  --r-panel: 18px;
+  --r-panel: 14px;
   --blur: saturate(1.4) blur(14px);
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --dur: 0.35s;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 0.42s;
   --dur-slow: 0.45s;
   /* The tool's. */
   --r-board: 16px;
-  --topbar-h: 48px;
+  /* The shell bar (62px and its rule) and the band row under an editor's bar. */
+  --topbar-h: 63px;
+  --band-h: 46px;
 }
-/* Touch: a 56px top bar for 44px targets (ui-behaviour 8; features/topbar-declutter.clan). */
-@media (pointer: coarse) { :root { --topbar-h: 56px; } }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
   font-family: var(--f-display);
-  background: var(--paper);
+  background: var(--desk);
   color: var(--ink);
   height: 100vh;
   overflow: hidden;
-  font-size: 14px;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
 }
 #root { height: 100vh; display: flex; flex-direction: column; }
@@ -188,7 +133,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .btn:hover:not(:disabled) { background: var(--soft); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-/* The one main action of a surface: #D63B1F with white text (ui-behaviour 9). */
+/* The one main action of a surface: the agency's act colour and its ink (the shell's primary). */
 .btn.primary { background: var(--action); border-color: var(--action); color: var(--action-fg); font-weight: 600; padding: 0 16px; }
 .btn.primary:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
 .btn.dark { background: var(--plan); border-color: var(--plan); color: var(--paper); font-weight: 600; }
@@ -305,7 +250,10 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 
 /* ── Character stage ─────────────────────────────────────────────────────── */
 .character { position: absolute; inset: 0; display: flex; flex-direction: column; }
-.canvas-wrap { flex: 1; position: relative; min-height: 0; }
+.canvas-wrap { flex: 1; position: relative; min-height: 0; min-width: 0; }
+/* The canvas and its Booth side by side (the Booth pushes the canvas aside, never over it). */
+.cv-row { flex: 1; display: flex; min-height: 0; }
+.booth-canvas .booth { top: 12px; right: 12px; bottom: 12px; background: var(--paper); }
 /* Excalidraw's own accent (its variables, not ours): selection and its panel in the tool's blue. */
 .canvas-wrap .excalidraw { --color-primary: var(--tool); --color-primary-darker: #2453D6; --color-primary-darkest: #1E4ED8; --color-primary-light: var(--tool-soft); }
 .overlay-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }

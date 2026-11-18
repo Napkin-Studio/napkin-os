@@ -2,6 +2,7 @@
 // or a pack and the film lengths, Wren's ask "What must stay in every size?" (once per master), and the
 // send tray: every format with the method the rule table picked, no prices, untick any, Send.
 
+import { sheetLine } from './boardWords'
 import { useMemo, useState } from 'react'
 import type { PersonRef, ProtectBox } from '../contracts/types'
 import { useConfig, useDoc } from '../app/context'
@@ -134,7 +135,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
               {master.media === 'image' && <button type="button" className="btn xs ghost" onClick={() => setStep('protect')}>
                 {keepMiddle ? 'Keeping the middle' : `${boxes.length} kept in every size`} · Change</button>}
             </div>
-            <div className="cf-tray" role="list" aria-label="What Wren will make">
+            <div className="cf-tray" role="list" aria-label="What the Camera agent will make">
               {LANES.map((lane) => {
                 const mine = rows.filter((r) => r.channel === lane.channel)
                 if (!mine.length) return null
@@ -162,7 +163,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot">
-              <span className="cf-note">{makeable.length} of {rows.length} can be made now{paidCount ? `; ${paidCount} on a model (cost in History)` : ''}. Each lands on a Campaign board beside the master.</span>
+              <span className="cf-note">{sheetLine(makeable.length, rows.filter((r) => !r.pick.unavailable && !r.on).length, rows.filter((r) => r.pick.unavailable).length, paidCount)}. Each lands on a Campaign board beside the master.</span>
               <span className="pt-grow" />
               <button type="button" className="btn ghost" onClick={() => setStep(master.media === 'image' ? 'protect' : 'plan')}>Back</button>
               <button type="button" className="btn primary" disabled={busy || !makeable.length} onClick={() => void send()}>

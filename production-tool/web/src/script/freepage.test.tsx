@@ -244,7 +244,7 @@ describe('the Format menu holds the elements; Tab still cycles them', () => {
     return { ...o, editor }
   }
 
-  it('lists Skye\'s Format as screenplay, the line elements with the current one ticked, Shot, Moment and the Tab hint', async () => {
+  it('lists the Script agent\'s Format as screenplay, the line elements with the current one ticked, Shot, Moment and the Tab hint', async () => {
     const { el } = await withWords('She runs.\nThe sea is loud.')
     await act(async () => { (el.querySelector('.ptbar .se-fmt') as HTMLButtonElement).click() })
     const menu = document.querySelector('.se-fmtmenu')!
@@ -278,7 +278,7 @@ describe('the Format menu holds the elements; Tab still cycles them', () => {
     expect(blocks(store.text.prose('scene', scenes[0].id))).toEqual([{ type: 'action', text: 'She runs.' }])
   })
 
-  it('Format as screenplay asks Skye with an instruct write on the free text; nothing changes until it is kept', async () => {
+  it('Format as screenplay asks the Script agent with an instruct write on the free text; nothing changes until it is kept', async () => {
     const { el, store, scriptId, services } = await withWords('She runs.\nThe sea is loud.')
     await act(async () => { await store.flush() })
     const submit = vi.spyOn(services.runner, 'submit')
@@ -305,7 +305,7 @@ describe('the Format menu holds the elements; Tab still cycles them', () => {
 })
 
 describe('Plan shots reads free text as it is', () => {
-  it('free prose unblocks Plan shots, Dex says so, and the shot_list request carries the words verbatim', async () => {
+  it('free prose unblocks Plan shots, the Director agent says so, and the shot_list request carries the words verbatim', async () => {
     const { el, store, scriptId, services, render } = await open()
     await paste(pageEditor(el), PROSE)
     await act(async () => { await store.flush() })

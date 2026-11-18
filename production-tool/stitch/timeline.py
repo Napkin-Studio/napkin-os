@@ -17,7 +17,9 @@ last frame held when it has none), so every clip keeps its place: stitch.py's ru
 (a PNG the relay drew) follows the last clip for s seconds with its own transition. The texts lie over the
 whole film at their times, fading in and out with their alpha. The film is exactly lengthS long; then the
 studio's roll-up card (stitch.card_graph) as always. Every input is scaled and padded to one size (the
-first clip's, even, at most 1280 on the long side), 24 fps, silent (no sound until audio-mix). The result
+first clip's, even, at most 1280 on the long side), 24 fps. The sound is each clip's own, as the cut-downs
+keep it (owner 2026-11-18, until the Sound feature mixes one): placed, sped, faded and crossfaded with its
+picture; a gap, a still, a clip with no sound, the end card and the roll-up are silent. The result
 is written like stitch's: {"ok", "sha256", "bytes", "w", "h", "durationS", "endCard", "lengthS"}.
 """
 
@@ -31,6 +33,7 @@ import tempfile
 from pathlib import Path
 
 import stitch as st
+from cutdown import AUDIO_RATE, has_audio
 
 EPS = 1e-3
 XFADE = {"dissolve": "fade", "dip_black": "fadeblack", "dip_white": "fadewhite"}  # ffmpeg xfade's names
@@ -91,10 +94,38 @@ def _fades(c: dict, length: float) -> str:
     return out
 
 
+def _atempo(speed: float) -> str:
+    """atempo takes 0.5 to 2 at a time: a chain of them for any speed."""
+    out, left = [], speed
+    while left > 2.0 + EPS:
+        out.append("atempo=2.0")
+        left /= 2.0
+    while left < 0.5 - EPS:
+        out.append("atempo=0.5")
+        left /= 0.5
+    if abs(left - 1.0) > EPS:
+        out.append(f"atempo={left:.6f}")
+    return "".join(f"{a}," for a in out)
+
+
+def _afades(c: dict, length: float) -> str:
+    out = ""
+    if c.get("fadeInS"):
+        out += f",afade=t=in:st=0:d={st._secs(min(float(c['fadeInS']), length))}"
+    if c.get("fadeOutS"):
+        d = min(float(c["fadeOutS"]), length)
+        out += f",afade=t=out:st={st._secs(length - d)}:d={st._secs(d)}"
+    return out
+
+
+def _silence(seconds: float, label: str) -> str:
+    return f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=duration={st._secs(seconds)},aformat=sample_fmts=fltp:channel_layouts=stereo[{label}]"
+
+
 def build_command(ffmpeg: str, clips: list[dict], texts: list[dict], end_card: dict | None, size: tuple[int, int],
                   version: str, assets: dict, out: str, fps: int = st.FPS) -> list[str]:
-    """clips: the event's clips with "path" (and "still" for a picture); texts: [{"path", "fromS", "toS",
-    "fadeInS"?, "fadeOutS"?}]; end_card: {"path", "s", "transitionIn"?} or None."""
+    """clips: the event's clips with "path" (and "still" for a picture, "audio" when it has sound); texts:
+    [{"path", "fromS", "toS", "fadeInS"?, "fadeOutS"?}]; end_card: {"path", "s", "transitionIn"?} or None."""
     w, h = size
     plan = pieces(clips, end_card, fps)
     length = film_length(clips, end_card)
@@ -137,32 +168,48 @@ def build_command(ffmpeg: str, clips: list[dict], texts: list[dict], end_card: d
         hold = f"tpad=stop_mode=clone:stop_duration={st._secs(span)},trim=duration={st._secs(span)},setpts=PTS-STARTPTS"
         if p["kind"] == "gap":
             parts.append(f"color=c=black:s={w}x{h}:r={fps}:d={st._secs(span)},format=yuv420p,setsar=1[p{k}]")
+            parts.append(_silence(span, f"q{k}"))
             continue
         src = f"[{labels_in[k]}:v]"
         if p["kind"] == "card":
             parts.append(f"{src}{norm},fps={fps},format=yuv420p,{hold}[p{k}]")
+            parts.append(_silence(span, f"q{k}"))
             continue
         c = clips[p["index"]]
         retime = f"setpts=(PTS-STARTPTS)/{float(c['speed']):.6f}," if c.get("speed") and not c.get("still") else ""
         parts.append(f"{src}{norm},{retime}fps={fps},format=yuv420p,{hold},fps={fps}{_fades(c, p['len'])}[p{k}]")
+        # Its own sound over the same span: sped with it, then silence under a held frame and the handle's end.
+        if c.get("audio") and not c.get("still"):
+            tempo = _atempo(float(c["speed"])) if c.get("speed") else ""
+            parts.append(f"[{labels_in[k]}:a]aresample={AUDIO_RATE},aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS,"
+                         f"{tempo}apad,atrim=duration={st._secs(span)},asetpts=PTS-STARTPTS{_afades(c, p['len'])}[q{k}]")
+        else:
+            parts.append(_silence(span, f"q{k}"))
     # Pieces joined by transitions form one run (xfade offsets from the run's start); runs are concatenated.
+    # The sound follows the same runs: a transition crossfades it over the same seconds.
     runs: list[str] = []
+    aruns: list[str] = []
     acc = 0.0
     for k, p in enumerate(plan):
         kind, s = p["join"]
         span = p["len"] + p["handle"]
         if kind == "cut":
             runs.append(f"p{k}")
+            aruns.append(f"q{k}")
             acc = span
             continue
         offset = acc - s
         parts.append(f"[{runs[-1]}][p{k}]xfade=transition={XFADE[kind]}:duration={st._secs(s)}:offset={st._secs(offset)}[x{k}]")
+        parts.append(f"[{aruns[-1]}][q{k}]acrossfade=d={st._secs(s)}:c1=tri:c2=tri[y{k}]")
         runs[-1] = f"x{k}"
+        aruns[-1] = f"y{k}"
         acc = offset + span
     if len(runs) > 1:
         parts.append(f"{''.join(f'[{r}]' for r in runs)}concat=n={len(runs)}:v=1:a=0[body0]")
+        parts.append(f"{''.join(f'[{r}]' for r in aruns)}concat=n={len(aruns)}:v=0:a=1[abody]")
     else:
         parts.append(f"[{runs[0]}]null[body0]")
+        parts.append(f"[{aruns[0]}]anull[abody]")
     label = "body0"
     for j, t in enumerate(texts):
         a, b = float(t["fromS"]), float(t["toS"])
@@ -178,9 +225,12 @@ def build_command(ffmpeg: str, clips: list[dict], texts: list[dict], end_card: d
     parts.append(f"[{label}]trim=duration={st._secs(length)},setpts=PTS-STARTPTS[film]")
     parts += card_parts
     parts.append("[film][card]concat=n=2:v=1:a=0[out]")
-    cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-an",
+    parts.append(f"[abody]atrim=duration={st._secs(length)},asetpts=PTS-STARTPTS[afilm]")
+    parts.append(_silence(st.CARD_S, "acard"))
+    parts.append("[afilm][acard]concat=n=2:v=0:a=1[aout]")
+    cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-map", "[aout]",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart", out]
+            "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out]
     return cmd
 
 
@@ -189,11 +239,9 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
     try:
         with tempfile.TemporaryDirectory() as tmp:
             clips, first = [], None
-            fetched: dict[str, tuple[str, str | None]] = {}  # windows of one generation: fetched once
+            fetched: dict[str, tuple[str, str | None, bool]] = {}  # windows of one generation: fetched once
             for i, c in enumerate(event["clips"]):
-                if c["key"] in fetched:
-                    dest, ext = fetched[c["key"]]
-                else:
+                if c["key"] not in fetched:
                     dest = os.path.join(tmp, f"clip{i}.mp4")
                     get(c["key"], dest)
                     ext = st.still_ext(dest)
@@ -207,8 +255,9 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
                         print(json.dumps({"kind": "timeline_probe", "jobId": event.get("jobId"), "clip": i, "error": str(e)[:500]}))
                         raise st.BadClip(i) from e
                     first = first or meta
-                    fetched[c["key"]] = (dest, ext)
-                clips.append({"path": dest, **({"still": True} if ext else {}),
+                    fetched[c["key"]] = (dest, ext, not ext and has_audio(ffprobe, dest))
+                dest, ext, sound = fetched[c["key"]]
+                clips.append({"path": dest, **({"still": True} if ext else {}), **({"audio": True} if sound else {}),
                               **{k: c[k] for k in ("startS", "inS", "outS", "speed", "holdS", "fadeInS", "fadeOutS", "transitionIn")
                                  if c.get(k) is not None}})
             texts = []

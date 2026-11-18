@@ -35,8 +35,10 @@ const Chevron = ({ dir }: { dir: 'left' | 'right' }) => (
 
 export type { BoothState } from './useBooth'
 
-export function Booth({ state, scoped = false, count = 0, asks = 0, children, footer }: {
+export function Booth({ state, earned, scoped = false, count = 0, asks = 0, children, footer }: {
   state: BoothState
+  /** Whether the Booth shows at all here (state.ts boothEarned): when not, no column and no edge tab. */
+  earned: boolean
   /** A part or a selection is open (the Script editor): the wider Booth. */
   scoped?: boolean
   /** Things waiting for the person: the edge tab's count dot. */
@@ -105,6 +107,7 @@ export function Booth({ state, scoped = false, count = 0, asks = 0, children, fo
     return () => window.removeEventListener(BOOTH_OPEN_EVENT, on)
   }, [hidden, bringIn])
 
+  if (!earned) return null
   const style = { '--bw': `${width}px`, '--bgut': `${boothGutter(place)}px` } as CSSProperties
   const cls = ['booth-col', `booth-${place}`, place === 'room' ? 'flush' : '', hidden ? 'booth-off' : '', still ? 'booth-still' : '', instant ? 'booth-instant' : ''].filter(Boolean).join(' ')
   return (

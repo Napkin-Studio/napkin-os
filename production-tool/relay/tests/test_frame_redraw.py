@@ -377,6 +377,17 @@ def test_sameness_calls_a_picture_given_back_the_same_and_a_small_real_edit_chan
     assert not sameness.same_picture(a, png_bytes())
 
 
+def test_a_region_edit_is_judged_inside_its_area():
+    """QA 2026-11-17: a no-op fill left its area as it was while the rest of the frame moved a little."""
+    a = scene()
+    elsewhere = scene(patch=[1100, 600, 1300, 740])  # a change outside the area
+    region = {"x": 0.0, "y": 0.0, "w": 0.34, "h": 0.34}
+    assert not sameness.same_picture(a, elsewhere)
+    assert sameness.same_picture(a, elsewhere, region)
+    inside = scene(patch=[60, 40, 300, 200])  # a real fill inside the area
+    assert not sameness.same_picture(a, inside, region)
+
+
 def test_a_frame_edit_whose_picture_came_back_the_same_is_marked_unchanged():
     h = harness()
     h.blobs.objects[f"in/{FRAME['sha256']}"] = (scene(), "image/png")
@@ -408,3 +419,49 @@ def test_the_bundled_v9_1_prompt_carries_redraw_recast_and_the_take_budget():
                  "Keep the setting, light and style of @current.", "where they stand in this shot's framing",
                  "is not in this picture", "`input.castFrame`", "`frameEdit.who`"):
         assert line in text, line
+
+
+# ── A shot with no people: its main objects are placed instead (owner 2026-11-18, director.v14) ─────────
+
+LAMP_WORDS = "make the lamp a brass Lumo lamp and switch it on"
+LAMP = ("An insert, eye level, static. The brass Lumo lamp stands on the side table on the right, switched on, its amber "
+        "light falling across the sofa behind it. The place and the light stay as they are. "
+        "Keep the setting, light and style of @current. Full-bleed cinematic image; no text, captions, borders or panels.")
+LAMP_UNPLACED = ("A brass Lumo lamp, switched on, amber light. The place and the light stay as they are. "
+                 "Keep the setting, light and style of @current. Full-bleed cinematic image; no text, captions, borders or panels.")
+LAMP_WHO = "The brass Lumo lamp stands on the side table on the right; the sofa is behind it."
+
+
+def lamp_input() -> dict:
+    """An insert of an object: no character among its pictures."""
+    return edit_input(LAMP_WORDS, mode="redraw", shot={**shot(size="insert", angle="eye_level", movement="static"),
+                                                       "action": "The lamp on the side table.", "refs": []}, refs=[])
+
+
+def test_a_redraw_of_a_shot_with_no_people_that_places_its_objects_goes_as_dex_wrote_it():
+    h = harness()
+    dex(h, redraw_reply(prompt=LAMP, who=LAMP_WHO, refs=[{"sha256": FRAME["sha256"], "name": "current", "role": "current"}]))
+    job = post(h, h.as_person(), lamp_input())
+    (sent,) = h.providers["runway"].submits
+    assert job["director"]["model"] != "passthrough" and sent["prompt"].startswith(LAMP[:40])
+    assert job["director"]["output"]["frameEdit"]["who"] == LAMP_WHO
+
+
+def test_a_redraw_of_a_shot_with_no_people_that_places_nothing_is_still_refused():
+    h = harness()
+    dex(h, redraw_reply(prompt=LAMP_UNPLACED, who=LAMP_WHO, refs=[{"sha256": FRAME["sha256"], "name": "current", "role": "current"}]))
+    job = post(h, h.as_person(), lamp_input())
+    assert job["director"]["model"] == "passthrough"
+    reply = redraw_reply(prompt=LAMP_UNPLACED, who=LAMP_WHO)
+    with pytest.raises(DirectorError, match="no people says where its main objects sit"):
+        Director._check_redraw(lamp_input(), reply, dict(reply["frameEdit"]))
+    with pytest.raises(DirectorError, match="where each person stands"):
+        Director._check_redraw(edit_input(RECAST_WORDS, mode="redraw"), redraw_reply(prompt=UNPLACED), dict(redraw_reply()["frameEdit"]))
+
+
+def test_v14_is_v13_plus_the_object_placement_line_only():
+    v13 = (PROMPTS / "director.v13.md").read_text().splitlines()
+    v14 = (PROMPTS / "director.v14.md").read_text().splitlines()
+    assert [line for line in v13 if line not in v14] == []
+    added = [line for line in v14 if line not in v13]
+    assert len(added) == 1 and added[0].startswith("- A shot with no people in it") and "frameEdit.who" in added[0]

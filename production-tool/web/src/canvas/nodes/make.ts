@@ -1,5 +1,5 @@
-// Nodes made from other nodes (ui-behaviour 3.5 Make video, 3.10 Plan shots; features/production-ui.clan):
-// a Video from a Script, a Storyboard or both, and the Storyboard a Script drives when it has none.
+// Nodes made from other nodes (ui-behaviour 3.5 Make film, 3.10 Plan shots; features/production-ui.clan):
+// a Film from a Script, a Storyboard or both, and the Storyboard a Script drives when it has none.
 // Engine-neutral, through CanvasAdapter v2, like nodes.ts.
 //
 // Each make is ONE undo step: the new node and every link it brings are written to the canvas in one
@@ -124,7 +124,7 @@ export async function storyboardFromShots(env: NodeEnv, videoId: string): Promis
   return { storyboardId: sb.id, el }
 }
 
-/** What Make video was given: at most one script and one storyboard (an ambiguous selection is asked about first). */
+/** What Make film was given: at most one script and one storyboard (an ambiguous selection is asked about first). */
 export interface MakeVideoFrom { scriptId?: string; storyboardId?: string }
 
 export interface MadeVideo {
@@ -137,7 +137,7 @@ export interface MadeVideo {
 }
 
 /**
- * Make video (3.5), as one undo step: the Video node to the right of the storyboard (else the script),
+ * Make film (3.5), as one undo step: the Film node to the right of the storyboard (else the script),
  * with a `renders` link from the storyboard, the script's `drives` link into the storyboard when it is
  * missing, or, from a script alone, a `drives` link from the script into the video (Dex then asks how to
  * make its clips, before anything is spent). No job starts.

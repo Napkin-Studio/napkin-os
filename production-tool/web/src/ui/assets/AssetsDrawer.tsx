@@ -1,24 +1,26 @@
-// The Assets drawer (ui-behaviour 3.18; mock Assets): it takes the board rail's place while open,
-// ⌥1…⌥9 keep jumping and "Boards ⌥0" brings the rail back. Tabs: This project (the named
-// references by role, Make views, Publish, Clean up), Team library (the agency's shelf, Import),
-// Upload, and From Napkin (spin-ins from Brief Maker and Research, none until that lands).
+// Assets and characters (ui-behaviour 3.18; mock production-new-ui-v2 "assets" and "character"): a library
+// opened on purpose from the bar's Assets button, so it lives in the canvas's Booth (the Booth rule, Shrey
+// 2026-11-17). Tabs: This project (the named references as tiles by role, Unused pictures with Clean up),
+// Team library (the agency's shelf, Bring in / Update), Upload, and From Napkin. A tile opens its character
+// in the Booth (Assets › @name): views, Make the other views, its role, Use it, Publish.
 
 import { useEffect, useState } from 'react'
-import { useConfig, useDoc, useServices, useUi } from '../../app/context'
-import { OTHER_VIEWS, type CanvasController } from '../../canvas/controller'
-import { AGENCY_SHELF, REF_ROLES, type KeyEntry, type LibraryIndex, type NamedRef, type RefRole, type View } from '../../contracts/types'
+import { useDoc, useServices, useUi } from '../../app/context'
+import type { CanvasController } from '../../canvas/controller'
+import { AGENCY_SHELF, type KeyEntry, type LibraryIndex, type RefRole } from '../../contracts/types'
 import { systemUpdate } from '../../doc/store'
 import { sweep, unused } from '../../doc/gc'
 import { deleteBlob } from '../../lib/blobs'
-import { nameOf } from '../../lib/names'
 import { keyNamed, keysList, refsList } from '../../model/selectors'
-import { RelayError } from '../../relay'
 import { useBlobUrl } from '../hooks'
 import { InlineConfirm } from '../Undo'
 import { CharacterCard } from './CharacterCard'
+import type { AssetsTab } from '../chrome/panels'
+import type { NodeEnv } from '../../canvas/nodes/nodes'
+import { BriefsFromNapkin } from '../../brief/FromNapkin'
 import './assets.css'
 
-type Tab = 'project' | 'library' | 'upload' | 'napkin'
+type Tab = AssetsTab
 const TABS: { id: Tab; label: string }[] = [
   { id: 'project', label: 'This project' }, { id: 'library', label: 'Team library' }, { id: 'upload', label: 'Upload' }, { id: 'napkin', label: 'From Napkin' },
 ]
@@ -28,123 +30,91 @@ const GROUPS: { title: string; roles: RefRole[] | 'other' }[] = [
   { title: 'Characters', roles: ['character'] }, { title: 'Locations', roles: ['location'] }, { title: 'Products', roles: ['product'] }, { title: 'References', roles: 'other' },
 ]
 
-export function AssetsDrawer({ ctrl, onClose, onBoards, onPicture, onCanvas }: {
+export function AssetsLibrary({ ctrl, env, tab: firstTab, onClose, onPicture, onCanvas, onScript }: {
   ctrl: CanvasController | null
+  /** Our own engine's canvas and store, to place a linked brief; null on the Excalidraw fallback. */
+  env?: NodeEnv | null
+  /** The tab to open on (Link a brief… opens From Napkin). */
+  tab?: AssetsTab | null
+  /** "← Canvas" and ×: the library closes, the Booth with it. */
   onClose: () => void
-  /** "Boards ⌥0": close the drawer and bring the rail back. */
-  onBoards: () => void
   /** Upload: the canvas's picture tool. */
   onPicture: () => void
   /** The pictures on the canvas now (Clean up keeps them). */
   onCanvas: string[]
+  /** "Type @name in the script": opens the Script editor. */
+  onScript: () => void
 }) {
   const doc = useDoc()
   const ui = useUi()
-  const [tab, setTab] = useState<Tab>('project')
+  const [tab, setTab] = useState<Tab>(firstTab ?? 'project')
+  // Opened again for a tab (Link a brief… while the library is open): that tab.
+  const [asked, setAsked] = useState(firstTab)
+  if (firstTab !== asked) {
+    setAsked(firstTab)
+    if (firstTab) setTab(firstTab)
+  }
   const [query, setQuery] = useState('')
   const [card, setCard] = useState<string | null>(null)
   const keys = keysList(doc)
   const q = query.trim().toLowerCase()
   const shown = keys.filter((k) => !q || k.key.includes(q))
+  const open = card ? keys.find((k) => k.key === card) : undefined
+  if (open) return <CharacterCard k={open} ctrl={ctrl} onBack={() => setCard(null)} onClose={onClose} onScript={onScript} />
   return (
-    <aside className="assets-drawer pt-panel" aria-label="Assets">
-      <div className="ad-head">
-        <b>Assets</b>
-        <span className="pt-grow" />
-        <button type="button" className="btn sm" onClick={onBoards} title="Back to the boards (⌥0)">Boards <span className="pt-mono">⌥0</span></button>
-        <button type="button" className="ad-x" aria-label="Close" onClick={onClose}>×</button>
-      </div>
-      <div className="ad-tabs" role="tablist" aria-label="Where from">
+    <div className="assets-lib" aria-label="Assets">
+      <div className="sp-crumb"><button type="button" onClick={onClose}>← Canvas</button><span>›</span><b>Assets</b>
+        <button type="button" className="x" aria-label="Close the assets" title="Close (Esc)" onClick={onClose}>×</button></div>
+      <div className="seg-row ad-tabs" role="tablist" aria-label="Where from">
         {TABS.map((t) => (
-          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} title={t.label} onClick={() => setTab(t.id)}>{t.label}</button>
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} aria-pressed={tab === t.id} title={t.label} onClick={() => setTab(t.id)}>{t.label}</button>
         ))}
       </div>
       {tab === 'project' && (
-        <div className="ad-body">
+        <>
           <label className="ad-search">
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.3" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M9.3 9.3 L12.5 12.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
-            <input aria-label="Search this project" placeholder="Search this project" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+            <input aria-label="Search pictures, characters, places" placeholder="Search pictures, characters, places" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
           </label>
-          {!keys.length && <p className="ad-empty">Name a picture on the canvas (select it, then Name…) to keep it here. Your script uses the names.</p>}
+          {!keys.length && <p className="hint">Name a picture on the canvas (select it, then Name…) to keep it here. Your script uses the names.</p>}
           {GROUPS.map((g) => {
             const mine = shown.filter((k) => (g.roles === 'other' ? !['character', 'location', 'product'].includes(k.role) : g.roles.includes(k.role)))
             if (!mine.length) return null
             return (
-              <section key={g.title}>
-                <div className="pt-label ad-section"><span>{g.title}</span><span>{mine.length}</span></div>
-                {mine.map((k) => <KeyCard key={k.key} k={k} ctrl={ctrl} onCard={() => setCard(k.key)} />)}
+              <section key={g.title} className="bsec">
+                <h4>{g.title} · {mine.length}{g.roles !== 'other' && g.roles.includes('character') && <span className="r"><button type="button" className="side-link" onClick={() => setCard(mine[0].key)}>Open @{mine[0].key}</button></span>}</h4>
+                <div className="agrid">{mine.map((k) => <KeyTile key={k.key} k={k} onOpen={() => setCard(k.key)} />)}</div>
               </section>
             )
           })}
           <CleanUp onCanvas={onCanvas} />
-        </div>
+          <p className="hint">Drag a picture onto the canvas, or type @ in the script or a shot to use it. Click one to open it.</p>
+        </>
       )}
       {tab === 'library' && ctrl && <Library ctrl={ctrl} />}
       {tab === 'upload' && (
-        <div className="ad-body">
-          <p className="ad-empty">Pick a picture to put on the canvas. On a board it takes the board's role; anywhere else you name it.</p>
-          <button type="button" className="btn primary" onClick={onPicture}>Add a picture</button>
-        </div>
+        <>
+          <div className="drop">Pick a picture to put on the canvas. On a board it takes the board's role; anywhere else you name it.</div>
+          <button type="button" className="btn-rect wide" onClick={onPicture}>Choose files…</button>
+        </>
       )}
-      {tab === 'napkin' && (
-        <div className="ad-body">
-          <p className="ad-empty">Nothing from Brief Maker or Research yet. When a brief or research is sent here, it waits under this tab until you bring it in.</p>
-        </div>
-      )}
-      {card && keys.find((k) => k.key === card) && <CharacterCard k={keys.find((k) => k.key === card)!} onClose={() => setCard(null)} />}
+      {tab === 'napkin' && <BriefsFromNapkin env={env ?? null} />}
       <div className="ad-foot">{ui.me?.team ? `Shared with everyone at ${ui.me.team}` : 'Your library is yours until you sign in with your agency'}</div>
-    </aside>
-  )
-}
-
-function KeyCard({ k, ctrl, onCard }: { k: KeyEntry; ctrl: CanvasController | null; onCard: () => void }) {
-  const doc = useDoc()
-  const { controls } = useConfig()
-  const [busy, setBusy] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const refs = refsList(doc).filter((r) => r.key === k.key)
-  const front = refs.find((r) => r.variant === 'front')
-  const missingViews = OTHER_VIEWS.filter((v: View) => !refs.some((r) => r.variant === v))
-  const run = async (label: string, fn: () => Promise<void>) => {
-    setBusy(label)
-    setError(null)
-    try {
-      await fn()
-    } catch (e) {
-      setError(e instanceof RelayError && e.error.code === 'conflict' ? e.message : errText(e))
-    } finally {
-      setBusy(null)
-    }
-  }
-  return (
-    <div className="ad-key">
-      <div className="ad-thumbs">{refs.slice(0, 3).map((r) => <Thumb key={r.id} r={r} onShow={() => r.node && ctrl?.scrollTo(r.node)} />)}</div>
-      <div className="ad-keytext">
-        <button type="button" className="pt-ref ad-name" onClick={onCard} title="Open its card: views, voice, wardrobe, where it is used">@{k.key}</button>
-        <span className="ad-meta">
-          <select className="ad-role" aria-label={`What ${k.key} is`} value={k.role} onChange={(e) => ctrl?.setRole(k.key, e.target.value as RefRole)}>
-            {REF_ROLES.map((r) => <option key={r} value={r}>{roleWord(r)}</option>)}
-          </select>
-          · {refs.length} {refs.length === 1 ? 'view' : 'views'}
-        </span>
-        {k.library && <span className="ad-meta">v{k.library.ver} · in the library</span>}
-        <span className="ad-actions">
-          {controls.views && front && missingViews.length > 0 && <button type="button" className="btn xs" disabled={!!busy || !ctrl} onClick={() => run('views', () => ctrl!.makeViews(k.key, missingViews))}>{busy === 'views' ? 'Starting…' : 'Make views'}</button>}
-          <button type="button" className="btn xs" disabled={!!busy || !ctrl || !refs.length} title="Keep it in the team library, for your other projects" onClick={() => run('publish', () => ctrl!.publish(k.key))}>
-            {busy === 'publish' ? 'Publishing…' : k.library ? `Publish v${k.library.ver + 1}` : 'Publish'}
-          </button>
-        </span>
-        {error && <span role="alert" className="ad-error">{error}</span>}
-      </div>
     </div>
   )
 }
 
-function Thumb({ r, onShow }: { r: NamedRef; onShow: () => void }) {
-  const url = useBlobUrl(r.asset)
+/** One named reference as a tile: its front (or first) picture, @name, what it is and how many views. */
+function KeyTile({ k, onOpen }: { k: KeyEntry; onOpen: () => void }) {
+  const doc = useDoc()
+  const refs = refsList(doc).filter((r) => r.key === k.key)
+  const pic = refs.find((r) => r.variant === 'front') ?? refs[0]
+  const url = useBlobUrl(pic?.asset)
   return (
-    <button type="button" className="ad-thumb" onClick={onShow} title={`@${nameOf(r)}: show it on the canvas`}>
-      {url && <img src={url} alt="" />}
+    <button type="button" className="a" onClick={onOpen} title={`@${k.key}: open its card (views, voice, wardrobe, where it is used)`}>
+      {url ? <img src={url} alt="" /> : <span className="a-empty" />}
+      <span>@{k.key}</span>
+      <small>{roleWord(k.role)} · {refs.length} {refs.length === 1 ? 'view' : 'views'}{k.library ? ` · v${k.library.ver}` : ''}</small>
     </button>
   )
 }
@@ -167,11 +137,10 @@ function CleanUp({ onCanvas }: { onCanvas: string[] }) {
     setNote(`Removed ${gone.length} unused ${gone.length === 1 ? 'picture' : 'pictures'}.`)
   }
   return (
-    <section className="ad-clean" aria-label="Unused pictures">
+    <section className="ad-clean bsec" aria-label="Unused pictures">
       {/* Its own labelled place, not a lone button under the last group (live test 2026-11-16). */}
-      <div className="pt-label ad-section"><span>Unused pictures</span></div>
-      <p className="ad-meta">Pictures nothing uses any more stay in this browser until you clean them up.</p>
-      <button type="button" className="btn sm" onClick={start} title="Remove pictures nothing uses any more">Clean up unused pictures</button>
+      <h4>Unused pictures<span className="r"><button type="button" className="side-link" onClick={start} title="Remove pictures nothing uses any more">Clean up</button></span></h4>
+      <p className="hint">Pictures nothing uses any more stay in this browser until you clean them up.</p>
       {cleaning && <InlineConfirm text={`Remove ${cleaning.length} unused ${cleaning.length === 1 ? 'picture' : 'pictures'} from this browser? Named images and anything on the canvas or in the storyboard stay.`} yes="Remove" onYes={() => void clean(cleaning)} onNo={() => setCleaning(null)} />}
       {note && <span className="ad-meta">{note}</span>}
     </section>

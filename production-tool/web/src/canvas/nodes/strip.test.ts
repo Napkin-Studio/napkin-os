@@ -13,12 +13,12 @@ describe('the Storyboard node strip', () => {
 })
 
 describe('the Storyboard node line', () => {
-  it('counts the shots Dex planned, not those added by hand', () => {
+  it('counts the shots the Director agent planned, not those added by hand', () => {
     const dex = { last_writer: 'dex' }
     const hand = {}
-    expect(plannedLine([dex, dex, dex, dex, hand, hand, hand])).toBe('Dex planned 4 of the 7 shots from the script')
-    expect(plannedLine([dex, dex])).toBe('Dex planned 2 shots from the script')
+    expect(plannedLine([dex, dex, dex, dex, hand, hand, hand])).toBe('The Director agent planned 4 of the 7 shots from the script')
+    expect(plannedLine([dex, dex])).toBe('The Director agent planned 2 shots from the script')
     expect(plannedLine([hand, hand, hand])).toBe('3 shots')
-    expect(plannedLine([dex])).toBe('Dex planned 1 shot from the script')
+    expect(plannedLine([dex])).toBe('The Director agent planned 1 shot from the script')
   })
 })

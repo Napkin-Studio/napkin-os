@@ -75,4 +75,20 @@ describe('composeScript', () => {
   it('a rough length from the words before there are shots', () => {
     expect(roughSeconds('Maya walks.\nShe stops.\n\nMAYA\nIt is perfect today, isn\'t it?')).toBe(6.4)
   })
+
+  it('a slugline is no speaker, and a cue speaks only the next line (live test 2026-11-18: 60 s for a 15 s draft)', () => {
+    // The Script agent's draft as the scene stores it: heading, then one block per line, no blank lines.
+    const draft = [
+      'INT. FARMHOUSE KITCHEN - DAWN',
+      'Pale blue light. Frost on the window. A tired DAD stands at the stove.',
+      'He tears open a red Hearth Oats pack and tips oats into a pot.',
+      'NARRATOR (V.O.)',
+      '(warmly)',
+      'Hearth Oats. Slow down, warm up.',
+      'She yawns back.',
+    ].join('\n')
+    // 14 words of action: 14/6; 14 words: 14/6; the VO, 6 words / 2.5; a short line 2 s.
+    expect(roughSeconds(draft)).toBe(9.1)
+    expect(roughSeconds('CUT TO:\nEXT. BEACH - DAY\nWaves.')).toBe(2)
+  })
 })

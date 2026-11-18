@@ -10,6 +10,7 @@ import { routeProject, type Router } from './app/route'
 import type { Shell } from './projects/shell'
 import { Home } from './ui/Home'
 import { MarkTile } from './ui/chrome/Bar'
+import { LookProvider } from './ui/shell/look'
 import { NO_ACCESS, signInHref, type Access, type AccessStore } from './relay/access'
 import './ui/home.css'
 
@@ -43,9 +44,12 @@ export function Root({ shell, access, router }: { shell: Shell; access: AccessSt
   return (
     <ShellContext.Provider value={shell}>
       <RouterContext.Provider value={router}>
-        {body}
-        {/* The beta's notice, once signed in (features/production-tool-dogfood.clan). */}
-        <DogfoodGate shell={shell} />
+        {/* The agency's look, from who is signed in (features/production-new-ui.clan). */}
+        <LookProvider me={app.me}>
+          {body}
+          {/* The beta's notice, once signed in (features/production-tool-dogfood.clan). */}
+          <DogfoodGate shell={shell} />
+        </LookProvider>
       </RouterContext.Provider>
     </ShellContext.Provider>
   )

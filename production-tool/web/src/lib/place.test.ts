@@ -66,3 +66,21 @@ describe('placeBeside (a panel next to its picture)', () => {
     expect(p.top).toBe(view.h - size.h - 8)
   })
 })
+
+describe('a size tile\'s bar under the board header (QA 2026-11-17)', () => {
+  it('goes below the tile, centred, rather than sliding sideways', () => {
+    const head = { left: 0, top: 80, right: 1400, bottom: 120 }
+    const p = placeFloating({ x: 700, top: 130, bottom: 400 }, { w: 300, h: 40 }, { w: 1440, h: 900 }, 10, 8, [head], true)
+    expect(p).toEqual({ left: 550, top: 410, below: true })
+  })
+})
+
+describe('placeMenu beside a rail button (features/production-new-ui.clan: the canvas tool rail)', () => {
+  it('opens to the right of the button, top lined up, kept inside the view', () => {
+    const a = { left: 14, right: 60, top: 600, bottom: 636, width: 46, height: 36 } as DOMRect
+    const p = placeMenu(a, { w: 220, h: 200 }, { w: 1440, h: 900 }, 'start', 'right')
+    expect(p.left).toBeGreaterThan(60)
+    expect(p.top).toBe(600)
+    expect(placeMenu(a, { w: 220, h: 400 }, { w: 1440, h: 900 }, 'start', 'right').top).toBe(900 - 400 - 8)
+  })
+})

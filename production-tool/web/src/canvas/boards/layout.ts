@@ -1,7 +1,7 @@
 // Where the Ad template's boards and nodes go on a canvas that already has
 // pictures (mock Main; features/production-ui.clan): each picture board wraps
 // the named pictures of its role, the Script board stands to their left, the
-// Storyboard board below and the Video board beside it, with the three nodes
+// Storyboard board below and the Film board beside it, with the three nodes
 // inside their boards. The same geometry production-ui's Excalidraw overlay draws
 // (chrome/boards.ts boardFrames), so a project opens on either engine alike.
 // Engine-neutral and pure: seedNodes and seedBoards place by it.

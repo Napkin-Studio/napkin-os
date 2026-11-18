@@ -147,7 +147,7 @@ export function shotRefRows(doc: ProductionDocument, shotId: string, declined: r
   }
   for (const a of lastAdditions(doc, shotId)) {
     if (rows.some((r) => r.kind === 'asked' && r.refIds.includes(a.refId))) continue // the words name it now
-    rows.push({ key: `added:${a.refId}`, kind: 'added', label: `Added by Dex: @${a.name}`, detail: a.why, refIds: [a.refId], on: !declined.includes(a.refId) })
+    rows.push({ key: `added:${a.refId}`, kind: 'added', label: `Added by the Director agent: @${a.name}`, detail: a.why, refIds: [a.refId], on: !declined.includes(a.refId) })
   }
   return rows
 }

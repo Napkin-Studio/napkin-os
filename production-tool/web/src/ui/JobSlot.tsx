@@ -1,4 +1,4 @@
-// A job's place in a panel (the Storyboard's plan and frames, the Video's clips and ad, the update box):
+// A job's place in a panel (the Storyboard's plan and frames, the Film's clips and ad, the update box):
 // its node, or, while the job waits on a question, the ask card instead (ui-behaviour 3.17, 5.2: no
 // loader, no busy pointer while it waits for you).
 

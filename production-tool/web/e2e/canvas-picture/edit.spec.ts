@@ -80,7 +80,7 @@ test('Edit opens the picture; Apply puts v2 in place with v1 in its versions; Un
   await expect(page.locator('.ie-vbtn')).toContainText('v2 of 2')
 
   // Back on the canvas: the same spot and width, the new picture, and its v2 chip with v1 in it.
-  await page.getByRole('button', { name: 'Canvas' }).click()
+  await page.locator('.image-editor .ptbar').getByRole('button', { name: 'Canvas' }).click()
   await expect(page.locator('.image-editor')).toHaveCount(0)
   await expect.poll(async () => (await pictures(page))[0].sha).not.toBe(p.sha)
   const [after] = await pictures(page)
@@ -103,7 +103,7 @@ test('a double-click opens a picture on its own; in a group the first picks it o
   // On its own: one double-click opens it.
   await page.mouse.dblclick(...centre(a))
   await expect(page.locator('.image-editor')).toHaveCount(1)
-  await page.getByRole('button', { name: 'Canvas' }).click()
+  await page.locator('.image-editor .ptbar').getByRole('button', { name: 'Canvas' }).click()
   await expect(page.locator('.image-editor')).toHaveCount(0)
 
   // Group the two (shift-click, Ctrl+G); a click selects the group.
@@ -112,7 +112,8 @@ test('a double-click opens a picture on its own; in a group the first picks it o
   await page.mouse.click(...centre(b))
   await page.keyboard.up('Shift')
   await page.keyboard.press('Control+g')
-  await page.mouse.click(30, 860)
+  // An empty spot to clear the selection: bottom centre (the zoom pill sits bottom left, the tool rail on the left).
+  await page.mouse.click(720, 860)
   await page.mouse.click(...centre(b))
   expect((await selected(page)).sort()).toEqual([a.id, b.id].sort())
 
@@ -158,6 +159,7 @@ test('on a canvas picture the region tools work: Brush, Subtract, Lasso, Clear, 
   for (const q of [pt(0.6, 0.3), pt(0.6, 0.6), pt(0.3, 0.6)]) await page.mouse.move(...q, { steps: 4 })
   await page.mouse.up()
   await expect.poll(painted).toBeGreaterThan(0)
+  await page.locator('.ie-actseg').getByRole('button', { name: 'Remove', exact: true }).click()
   await page.locator('.ie-action').getByRole('button', { name: 'Remove what the mask covers' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click()
   await expect(page.locator('.ie-elist li', { hasText: 'Remove Mask' })).toContainText('ready', { timeout: 20_000 })
@@ -168,12 +170,12 @@ test('while a picture is open in the Image editor its bar is the only one; Canva
   const [p] = await oneDropped(page)
   const bars = () => page.locator('.ptbar').count()
   const accounts = () => page.getByRole('button', { name: 'Your account' }).count()
-  const history = () => page.getByRole('button', { name: /^History/ }).count()
+  const history = () => page.getByRole('button', { name: /^Decisions/ }).count()
   expect(await bars()).toBe(1)
   await page.mouse.click(...centre(p))
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await page.locator('canvas.ie-pic:not([hidden])').waitFor()
-  // One bar, one account button, one History (owner, 2026-10-16: "Double buttons?").
+  // One bar, one account button, one Decisions (owner, 2026-10-16: "Double buttons?").
   await expect.poll(bars).toBe(1)
   expect(await accounts()).toBe(1)
   expect(await history()).toBe(1)
@@ -181,8 +183,8 @@ test('while a picture is open in the Image editor its bar is the only one; Canva
   await expect(page.locator('.image-editor .ptbar').getByRole('button', { name: 'Canvas' })).toBeVisible()
   // The canvas keys stand down: B is the editor's Brush, not the canvas's Board tool.
   await page.keyboard.press('b')
-  await expect(page.locator('.ie-tools button[aria-pressed="true"]')).toHaveAttribute('aria-label', 'Brush mask (B)')
-  await page.getByRole('button', { name: 'Canvas' }).click()
+  await expect(page.locator('[aria-label="Image tools"] button[aria-pressed="true"]')).toHaveAttribute('aria-label', 'Brush mask (B)')
+  await page.locator('.image-editor .ptbar').getByRole('button', { name: 'Canvas' }).click()
   await expect(page.locator('.image-editor')).toHaveCount(0)
   await expect.poll(bars).toBe(1)
   expect(await accounts()).toBe(1)

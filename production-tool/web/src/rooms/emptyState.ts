@@ -28,7 +28,7 @@ export function roomEmpty(live: ProductionDocument, stored: ProductionDocument, 
   if (!shots) {
     const script = sb ? scriptOfStoryboard(live, sb.id) : undefined
     const canPlan = !!script && !!scriptText(live, script.id).trim()
-    if (sb && runningPlan(live, sb.id)) return { kind: 'no-shots', ...base, planning: true, canPlan, player: 'Dex is planning the shots…' }
+    if (sb && runningPlan(live, sb.id)) return { kind: 'no-shots', ...base, planning: true, canPlan, player: 'The Director agent is planning the shots…' }
     const fronts = script ? keysWithoutFront(live, stored, scriptText(live, script.id)) : []
     const plan = sb ? jobsList(live).filter((j) => j.op === 'shot_list' && j.node?.kind === 'storyboard' && j.node.id === sb.id).at(-1) : undefined
     const why = fronts.length ? new FrontsMissingError(fronts).message

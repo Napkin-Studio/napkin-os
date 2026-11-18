@@ -23,7 +23,7 @@ import { framesOf, shotsOf, staleList, takesOf, scriptText } from '../model/sele
 import { answerShotAsk } from '../stages/storyboardEdits'
 import { sayer } from '../ui/agents/cast'
 import { MenuItem } from '../ui/Float'
-import { HistoryPanel, type HistoryFocus } from '../ui/History'
+import { DecisionsDrawer, type HistoryFocus } from '../ui/History'
 import { BackButton } from '../ui/chrome/Bar'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { LinkIcon } from '../ui/chrome/MoreMenu'
@@ -42,7 +42,13 @@ import { Outline } from './Outline'
 import { skyeAsks, skyeState, startWrite } from './skye'
 import { answerLocalAsk, settleNameAsks } from './nameAsks'
 import { SkyeBooth } from './SkyeBooth'
-import { partAt, wholeScope, type SkyeScope } from './skyeBooth'
+import { partAt, scriptSuggestions, wholeScope, type SkyeScope } from './skyeBooth'
+import { DraftCard } from './DraftCard'
+import { PageWaits } from './PageWaits'
+import { ScriptLength, ScriptRefs } from './ScriptFacts'
+import { Float } from '../ui/Float'
+import { SendDisclosure } from '../ui/SendDisclosure'
+import { sendRows } from '../ui/sendRows'
 import { useBooth } from '../ui/booth/useBooth'
 import { scriptFromLine } from '../jobs/prompt'
 import { AVView } from './AVView'
@@ -102,7 +108,7 @@ export function ScriptEditor({ scriptId }: { scriptId: string }) {
   const router = useRouter()
   // Back to where the editor was opened from (ui-behaviour 2.3): the canvas, or the Storyboard editor.
   const [from] = useState(() => services.ui.get().stage)
-  const backTo = from === 'storyboard' ? 'Storyboard' : from === 'video' ? 'Video' : 'Canvas'
+  const backTo = from === 'storyboard' ? 'Storyboard' : from === 'video' ? 'Film' : 'Canvas'
   const back = useCallback(() => {
     services.ui.update((u) => { u.stage = from })
     router.leave()
@@ -288,8 +294,26 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     }
   })()
   const whyOf = (kind: 'scene' | 'shot', id: string, label: string) => () => openWhy({ label, addresses: [`${docId}#${kind}s[${id}]`] })
-  // Skye's drafts are cards in her Booth now (SkyeBooth.tsx): nothing of hers sits on the items.
-  const drafts = (_kind: WriteTarget['kind'], _id: string): ReactNode => null
+  // Skye's drafts and edits land on the page where they change things (DraftCard.tsx; mock production-new-ui-v2
+  // "script"), each on its item; one whose item is not on this page waits at the top of the sheet.
+  const sugs = composed ? scriptSuggestions(doc, composed) : []
+  const mine = sugs.filter((s) => s.for === person)
+  const [done, setDone] = useState<{ id: string; text: string; undo?: boolean }[]>([])
+  const decided = (id: string, text: string, undo = false) => setDone((d) => [{ id, text, undo }, ...d.filter((x) => x.id !== id)].slice(0, 3))
+  const onPage = new Set(view === 'av' ? [] : (composed?.rows ?? []).map((r) => `${r.kind === 'end_card' ? 'shot' : r.kind}:${r.id}`))
+  const draftCard = (s: (typeof mine)[number]) => composed && (
+    <DraftCard key={s.id} sug={s} store={store} doc={doc} composed={composed} empty={!hasWords(doc, scriptId)}
+      requestOf={(jobId) => ui.jobs[jobId]?.request?.input.write}
+      onWrite={(target, intent, opts) => startWrite(skyeDeps, store, scriptId, target, intent, opts)}
+      onWhy={openWhy} onDone={(text, undo) => decided(s.id, text, undo)} />
+  )
+  const drafts = (kind: WriteTarget['kind'], id: string): ReactNode => {
+    const here = mine.filter((s) => s.target.kind === kind && s.target.id === id)
+    return here.length ? here.map(draftCard) : null
+  }
+  const offPage = mine.filter((s) => !onPage.has(`${s.target.kind}:${s.target.id}`))
+  /** Asked on purpose from the band (Ask the Script agent…): the Booth on the whole script. */
+  const [asked, setAsked] = useState(false)
 
   // The Booth (ui/booth): hidden or shown, and the part of the page it came back on.
   const booth = useBooth('script')
@@ -309,16 +333,29 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     setPart(partAt(store.get(), c, target, k === 'heading' ? 0 : want.block, proseOf))
   }, [store, scriptId, pickedBoard, proseOf])
   useEffect(() => { resolvePart() }, [focus?.key, resolvePart])
-  // A click on the page while the Booth is hidden brings it back on that part (booth.clan B · Full).
+  // A click on a line of the page puts the Booth on that line (the Booth rule: a selected line earns it).
   const onPagePoint = (e: React.MouseEvent) => {
-    if (booth.shown || phone) return
+    if (phone || (e.target as Element).closest?.('.se-draft, .se-waits, .sp-note, .sheet-note, button, a, input, select, textarea')) return
     pagePoint.current = { block: blockIndexAt(e.target as Element), at: Date.now() }
-    booth.setOpen(true)
+    if (!booth.shown) booth.setOpen(true)
     setTimeout(resolvePart, 0)
     setTimeout(resolvePart, 250)
   }
-  // Hidden again: the part goes with it.
-  if (!booth.shown && part) setPart(null)
+  const askOnPurpose = () => {
+    setPart(null)
+    setAsked(true)
+    booth.setOpen(true)
+    booth.bringIn()
+  }
+  const closeBooth = () => {
+    setPart(null)
+    setAsked(false)
+  }
+  // Hidden (the person's Hide): the line or the ask goes with it, and so does the Booth.
+  if (!booth.shown && (part || asked)) {
+    setPart(null)
+    setAsked(false)
+  }
   const behind = !!sb && (staleList(doc).some((m) => m.target.kind === ('storyboard' as string) && m.target.id === sb.id)
     || (composed!.shots.length > 0 && Object.values(doc.scenes).some((s) => s.script_id === scriptId && !!s.text?.trim())))
   // Plan shots needs words; with none it is off and says so (ui-behaviour 3.10).
@@ -329,11 +366,11 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     // none, Dex plans on a new one, made beside the script on the canvas with its drives link.
     if (sb) {
       const r = await planOrJoin(deps, { storyboardId: sb.id })
-      if (r.joined) say('Dex is already planning these shots.')
+      if (r.joined) say('The Director agent is already planning these shots.')
       return
     }
     const r = await planFromScript(deps, scriptId)
-    if (r.made) say('Dex is planning the shots on a new storyboard, beside this script on the canvas.')
+    if (r.made) say('The Director agent is planning the shots on a new storyboard, beside this script on the canvas.')
   })
   // Out of the editor to the canvas, or to an editor over it (ui-behaviour 2.2).
   const goTo = (stage: 'character' | 'storyboard' | 'video', id?: string) => {
@@ -343,13 +380,13 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     })
     router.leave()
   }
-  // Make video from the script (3.5): with the storyboard when Dex has planned it, else from the script
-  // alone, and Dex asks on the new Video node how to make its clips. Then the canvas, where the node is.
+  // Make film from the script (3.5): with the storyboard when Dex has planned it, else from the script
+  // alone, and Dex asks on the new Film node how to make its clips. Then the canvas, where the node is.
   const makeVideo = () => attempt(async () => {
     const d = docStore.get()
     const withBoard = sb && shotsOf(d, sb.id).length ? sb.id : undefined
     const made = canvasActions.makeVideo({ scriptId, ...(withBoard ? { storyboardId: withBoard } : {}) })
-    if (!made) throw new Error('Make video from the canvas: select this script there.')
+    if (!made) throw new Error('Make film from the canvas: select this script there.')
     await made
     goTo('character')
   })
@@ -426,7 +463,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     const focused = k === 'scene' || k === 'heading' ? doc.scenes[id] : undefined
     const scenes = focused && sceneIsFree(focused) ? [focused] : composed.rows.flatMap((r) => (r.kind === 'scene' && sceneIsFree(r.scene) && r.scene.text?.trim() ? [r.scene] : []))
     const targets = scenes.length ? scenes : focused ? [focused] : []
-    if (!targets.length) return setError('Write something first: Skye lays out the words on the page.')
+    if (!targets.length) return setError('Write something first: The Script agent lays out the words on the page.')
     void attempt(async () => {
       for (const sc of targets) await startWrite(skyeDeps, store, scriptId, { kind: 'scene', id: sc.id }, 'instruct', { instruction: FORMAT_INSTRUCTION, mode: 'revise' })
     })
@@ -458,7 +495,29 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         e.preventDefault()
         void doImport(f)
       }}>
-      {(view === 'av' && !phone) && waitingHere}
+      <article className="se-sheet" aria-label="Script sheet">
+      <span className="stab">{(projectName ?? 'Untitled').split(' · ').at(-1)} · script</span>
+      <div className="sh-head">
+        <div><small>Script · {composed.storyboard?.target_s ?? composed.script.target_s} seconds</small><h1>{title}</h1></div>
+        <div className="r">{composed.shots.length ? `${composed.shots.length} ${composed.shots.length === 1 ? 'shot' : 'shots'} · ` : ''}{composed.storyboard?.ratio ?? '16:9'}</div>
+      </div>
+      {!phone && next && (
+        <div className="sheet-note se-next" role="status" aria-label="What comes next" data-next={next.step}>
+          <span className="wl"><AgentFigure agent="dex" size={20} decorative /><span><b>{sayer('dex')}:</b> {next.line}</span></span>
+          {/* Plan shots, Update storyboard and Make film are in the bar: the line does not repeat them. */}
+          {next.actions.filter((a) => a !== 'plan' && a !== 'update' && a !== 'make-video' && !(a === 'open-video' && nextVideoId)).map((a) => <button key={a} type="button" className="sp-btn" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
+        </div>
+      )}
+      {!phone && (
+        <PageWaits doc={doc} composed={composed} questions={skyeQs} others={sugs.filter((s) => s.for !== person)} newScene={!!skye.newScene && !skye.working && !skye.waiting}
+          done={done} onUndo={(id) => { setDone((x) => x.filter((y) => y.id !== id)); void store.undo() }}
+          onNameAnswer={(askId, option) => void attempt(() => answerLocalAsk(store, askId, option, person, (shotId, name) => startWrite(skyeDeps, store, scriptId, { kind: 'shot', id: shotId }, 'cut_name', { name })))}
+          onShotAsk={(a, shotId, option) => void attempt(async () => {
+            if (option === 'keep') return updateDoc(docStore, (d) => answerShotAsk(d, a.id, 'keep', person), `answer ${a.question.text}`)
+            return deleteFrom(docStore, (d) => { answerShotAsk(d, a.id, 'remove', person); return removeShot(d, shotId) })
+          })} />
+      )}
+      {!phone && offPage.length > 0 && <div className="se-offpage">{offPage.map(draftCard)}</div>}
       {view === 'av' && !phone ? (
         <AVView composed={composed} doc={doc} store={store} chain={chain} current={current} setCurrent={(id) => setCurrent(id)}
           mentions={mentions} say={say} onError={setError} disabled={!!planning} onRemove={removeItem} />
@@ -482,11 +541,12 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             }}>Keep it as plain text</button>
           </div>
         )}
-        {empty && !phone && (
+        {/* Not under a draft waiting on the page (live test 2026-11-18: the card showed "Just write." through it). */}
+        {empty && !phone && !mine.length && (
           <div className="sp-hint" aria-hidden="true">
             <div className="big">Just write.</div>
             <p>An idea, notes, bullets or a whole screenplay: type or paste it here and it stays as you wrote it. Nothing to pick first.</p>
-            <p>Want a draft? Tell Skye in the Booth. Her words wait there until you keep them.</p>
+            <p>Want a draft? Ask the Script agent in the band above. Its words land here, and nothing changes until you keep them.</p>
             <div className="ways"><span>Prose and bullets stay prose</span><span>A pasted screenplay keeps its layout</span><span>Fountain files too</span></div>
           </div>
         )}
@@ -499,6 +559,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             hooksFor={hooksFor} focusOn={focusOn} say={say} onError={setError} onRemove={removeItem} />
         ))}
       </div>}
+      </article>
       {part && <PartMark part={part} focus={focus} />}
     </main>
   )
@@ -507,25 +568,39 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     <div className={`se ${sheet ? `sheet-${sheet}` : ''}`} data-script-page="" data-view={view}>
       {/* The shared editor bar (features/topbar-declutter.clan): the view switch, Undo, History, More
           (Import Fountain, Copy link to this, Shots from) and Plan shots, fitted like every editor's. */}
-      <EditorBar className="se-top" back={backTo} onBack={onBack} icon="script" title={`Script · ${title}`}
-        meta={<span className={`pt-mono se-saved ${saved === 'Saved' ? '' : 'busy'}`} role="status">{saved}</span>}
+      <EditorBar className="se-top" back={backTo} onBack={onBack} icon="script" title="Script"
+
         view={phone ? undefined : {
           label: 'Script view', value: view,
           onPick: (v) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: v as typeof view } } }),
           // 'Page' (owner 2026-11-16): free text or a screenplay, the same page; the stored view id stays.
           options: [{ id: 'screenplay', label: 'Page' }, { id: 'av', label: 'Video · Audio' }],
         }}
-        afterView={!phone && view === 'screenplay' && (
-          <FormatButton focus={focus} composed={composed} store={store} chain={chain} onError={setError} say={say}
-            onSkye={formatWithSkye} skyeOff={skye.off || empty}
-            onOpenChange={(o) => {
-              const [k, id] = (focus?.key ?? ':').split(':')
-              setFmtLine(o && k === 'scene' && focus?.editor && !focus.editor.isDestroyed ? { sceneId: id, index: focus.editor.state.selection.$from.index(0) } : null)
-            }} />
+        afterView={!phone && (
+          <>
+            {view === 'screenplay' && (
+              <FormatButton focus={focus} composed={composed} store={store} chain={chain} onError={setError} say={say}
+                onSkye={formatWithSkye} skyeOff={skye.off || empty}
+                onOpenChange={(o) => {
+                  const [k, id] = (focus?.key ?? ':').split(':')
+                  setFmtLine(o && k === 'scene' && focus?.editor && !focus.editor.isDestroyed ? { sceneId: id, index: focus.editor.state.selection.$from.index(0) } : null)
+                }} />
+            )}
+            <ScriptLength composed={composed} doc={doc} onError={setError} />
+            <button type="button" className="sp-btn se-ask" aria-pressed={asked} onClick={askOnPurpose}><AgentFigure agent="skye" size={16} decorative />Ask<span className="se-ask-more"> the Script agent</span>…</button>
+          </>
+        )}
+        right={!phone && (
+          <>
+            {/* The bar's saved line is the one save state (ui/useSave.ts); the band says only that this browser is offline. */}
+            {saved.startsWith('Offline') && <span className="pt-mono se-saved busy" role="status">{saved}</span>}
+            <ScriptRefs composed={composed} doc={doc} store={store} onError={setError} say={say} />
+            <ImportExport onImport={() => fileRef.current?.click()} onFountain={() => void exportFountain()} onPdf={() => void exportPdf()} />
+          </>
         )}
         undo={!phone}
         history={{ on: history, toggle: () => { setHistoryFocus(undefined); setHistory((h) => !h) } }}
-        moreTip={phone ? 'More: copy link' : 'More: import and export Fountain, export PDF, copy link'}
+        moreTip={phone ? 'More: export, copy link' : 'More: copy link'}
         moreHead={storyboardsOf(doc, scriptId).length > 1 && (
           <label className="se-from">Shots from
             <select className="select xs" value={sb?.id ?? ''} onChange={(e) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { view, ...u.script?.[scriptId], storyboard: e.target.value } } })}>
@@ -535,9 +610,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         )}
         more={(close) => (
           <>
-            {!phone && <MenuItem icon="⇪" onSelect={() => { close(); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
-            <MenuItem icon="⬇" onSelect={() => { close(); void exportFountain() }}>Export Fountain…</MenuItem>
-            <MenuItem icon="🖨" onSelect={() => { close(); void exportPdf() }}>Export PDF…</MenuItem>
+            {phone && <MenuItem icon="⬇" onSelect={() => { close(); void exportFountain() }}>Export Fountain…</MenuItem>}
+            {phone && <MenuItem icon="🖨" onSelect={() => { close(); void exportPdf() }}>Export PDF…</MenuItem>}
             <MenuItem icon={<LinkIcon />} onSelect={() => {
               close()
               const url = new URL(formatRoute(route), location.origin).href
@@ -549,14 +623,18 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
           <>
             {/* Why Plan shots is off, said beside it (a disabled button never says why). */}
             {blocked && !planning && <span className="se-why" id="se-plan-why">{blocked}</span>}
-            {/* Make video straight from the words (3.5): beside Plan shots, off while there are none. */}
-            <button type="button" className="btn se-makevideo" disabled={!!blocked || !!planning} onClick={() => void (nextVideoId ? goTo('video', nextVideoId) : makeVideo())}>
-              {nextVideoId ? 'Open the video' : 'Make video'}
+            {/* Make film straight from the words (3.5): beside Plan shots, off while there are none. */}
+            <button type="button" className="sp-btn se-makevideo" disabled={!!blocked || !!planning} onClick={() => void (nextVideoId ? goTo('video', nextVideoId) : makeVideo())}>
+              {nextVideoId ? 'Open the film' : 'Make film'}
             </button>
-            <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
-              data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
-              {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
-            </button>
+            <SendDisclosure who="the Director agent" rows={sendRows(doc, sb?.id ?? scriptId, [
+              { key: 'script', label: 'The script’s words', detail: `${scriptText(doc, scriptId).trim().split(/\s+/).filter(Boolean).length} words` },
+              { key: 'fit', label: `${composed.storyboard?.target_s ?? composed.script.target_s} s at ${composed.storyboard?.ratio ?? '16:9'}`, detail: 'the length and shape to plan to' },
+            ], behind ? 'Update storyboard' : 'Plan shots')} primary={
+              <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
+                data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
+                {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
+              </button>} />
           </>
         )} />
       <input ref={fileRef} type="file" accept=".fountain,.spmd,.txt,text/plain" hidden onChange={(e) => {
@@ -565,15 +643,6 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         if (f) void doImport(f)
       }} />
       {phone && <div className="banner" role="status">You can watch and leave notes here. Open on a laptop or iPad to edit.</div>}
-      {!phone && next && (
-        <div className="se-next" role="status" aria-label="What comes next" data-next={next.step}>
-          <AgentFigure agent="dex" size={22} decorative />
-          <span><span className="who">{sayer('dex')}:</span> {next.line}</span>
-          <span className="pt-grow" />
-          {/* Plan shots, Update storyboard and Make video are in the bar: the line does not repeat them. */}
-          {next.actions.filter((a) => a !== 'plan' && a !== 'update' && a !== 'make-video' && !(a === 'open-video' && nextVideoId)).map((a) => <button key={a} type="button" className="btn sm" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
-        </div>
-      )}
       {confirm && (
         <div className="se-line se-confirm">
           <InlineConfirm text={confirm.text} yes={confirm.yes} onNo={() => setConfirm(null)} onYes={confirm.go} />
@@ -604,31 +673,42 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         )}
         {page}
         {!phone && (
-          <SkyeBooth booth={booth} store={store} doc={doc} composed={composed} person={person} current={current}
-            editor={focus?.editor ?? null} focusTarget={focusTarget} part={part} onClearPart={() => setPart(null)}
+          <SkyeBooth booth={booth} doc={doc} composed={composed}
+            editor={focus?.editor ?? null} focusTarget={focusTarget} part={part} onClearPart={() => { setPart(null); setAsked(true) }}
             whole={wholeScope(doc, composed, (k, id) => store.text.prose(k, id), focusTarget?.kind === 'scene' ? focusTarget.id : undefined)}
-            skye={skye} questions={skyeQs} planning={planning} empty={empty}
-            requestOf={(jobId) => ui.jobs[jobId]?.request?.input.write}
+            asked={asked} onClose={closeBooth} skye={skye} planning={planning} empty={empty}
             onWrite={(target, intent, opts) => startWrite(skyeDeps, store, scriptId, target, intent, opts)}
             onDraftScript={async (words) => {
               const r = await scriptFromLine(skyeDeps, store, scriptId, words)
               if ('pasted' in r) say([`Pasted ${r.pasted} ${r.pasted === 1 ? 'scene' : 'scenes'}.`, r.dropped].filter(Boolean).join(' '))
             }}
-            onNameAnswer={(askId, option) => void attempt(() => answerLocalAsk(store, askId, option, person, (shotId, name) => startWrite(skyeDeps, store, scriptId, { kind: 'shot', id: shotId }, 'cut_name', { name })))}
-            onShotAsk={(a, shotId, option) => void attempt(async () => {
-              if (option === 'keep') return updateDoc(docStore, (d) => answerShotAsk(d, a.id, 'keep', person), `answer ${a.question.text}`)
-              return deleteFrom(docStore, (d) => { answerShotAsk(d, a.id, 'remove', person); return removeShot(d, shotId) })
-            })}
-            onWhy={openWhy} onError={setError} say={say} />
+            onError={setError} />
         )}
-        {history && <HistoryPanel key={historyFocus?.addresses.join() ?? 'all'} store={store} focus={historyFocus} onClose={() => { setHistory(false); setHistoryFocus(undefined) }} />}
+        {history && <DecisionsDrawer key={historyFocus?.addresses.join() ?? 'all'} store={store} focus={historyFocus} onClose={() => { setHistory(false); setHistoryFocus(undefined) }} />}
       </div>
     </div>
   )
 }
 
+/** The band's Import / Export menu (mock scriptBand): Import Fountain, Export Fountain, Export PDF. */
+function ImportExport({ onImport, onFountain, onPdf }: { onImport: () => void; onFountain: () => void; onPdf: () => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLButtonElement>(null)
+  const close = () => setOpen(false)
+  return (
+    <>
+      <button ref={ref} type="button" className="sp-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Import / Export ▾</button>
+      <Float anchor={ref} open={open} onClose={close} label="Import or export" align="end" className="pt-menu">
+        <MenuItem icon="⇪" onSelect={() => { close(); onImport() }}>Import Fountain…</MenuItem>
+        <MenuItem icon="⬇" onSelect={() => { close(); onFountain() }}>Export Fountain…</MenuItem>
+        <MenuItem icon="🖨" onSelect={() => { close(); onPdf() }}>Export PDF…</MenuItem>
+      </Float>
+    </>
+  )
+}
+
 const NEXT_LABEL: Record<NextAction, string> = {
-  plan: 'Plan shots', update: 'Update storyboard', 'make-video': 'Make video', 'open-storyboard': 'Open the storyboard', 'open-video': 'Open the video',
+  plan: 'Plan shots', update: 'Update storyboard', 'make-video': 'Make film', 'open-storyboard': 'Open the storyboard', 'open-video': 'Open the film',
 }
 
 /** The chain's keys in script order: a scene's heading and text, a shot, the current shot's beats. */

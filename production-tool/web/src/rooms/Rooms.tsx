@@ -1,14 +1,14 @@
-// The Video editor as two rooms over one Bin (features/make-and-edit.clan; boards Make room, Edit room and
+// The Film editor as two rooms over one Bin (features/make-and-edit.clan; boards Make room, Edit room and
 // Change a take). Make is the shoot: boxes of shots, takes, Compare and Change. Edit is the cutting room: a
 // timeline of V1, Text and the end card, a preview from the same compiled plan as the render, and Render ad.
-// Make never moves the edit; Edit never spends. Behind flags.makeAndEdit (stages/Video.tsx is the editor
-// when it is off).
+// Make never moves the edit; Edit never spends. The only Film editor (owner 2026-11-18).
 //
 // One top bar for both rooms: Back to the canvas, the film's name, Make | Edit, the Jobs pill, Open Sound and
 // the room's main action. Esc closes a drawer first, then acts as Back. 1 and 2 switch rooms, and the
 // selection carries across: a clip picked in Edit opens its box in Make.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useConfig, useDoc, useJobsTick, useRoute, useRouter, useServices, useUi } from '../app/context'
 import { projectRoute, routeRoom, type RoomRoute } from '../app/route'
 import { isActive } from '../jobs/runner'
@@ -25,8 +25,10 @@ import { Bin } from './Bin'
 import { ChangeDrawer, type ChangeOpen } from './ChangeDrawer'
 import { EditRoom, RenderAd } from './EditRoom'
 import { MakeRoom } from './MakeRoom'
-import { RoomBooth } from './RoomBooth'
+import { RoomBooth, RoomWaits } from './RoomBooth'
+import { EditorBar } from '../ui/chrome/TopBars'
 import { filmMeta, jobWord, roomBoxes, roomGens, type Box, type Gen } from './model'
+import type { Picked } from './Timeline'
 import './rooms.css'
 
 export type RoomName = 'make' | 'edit'
@@ -68,7 +70,7 @@ export function Rooms() {
   const data: RoomData | null = video ? {
     videoId: video.id,
     // The film's name: the video's own, else the storyboard's that renders it, else the project's.
-    title: video.title && video.title !== 'Video' ? video.title : isMain && sb && !sb.implicit && sb.title !== 'Storyboard' ? sb.title : nodeTitle(video.title, 'Video', projectName),
+    title: video.title && video.title !== 'Video' && video.title !== 'Film' ? video.title : isMain && sb && !sb.implicit && sb.title !== 'Storyboard' ? sb.title : nodeTitle(video.title, 'Film', projectName),
     ratio: sb?.ratio ?? video.ratio ?? '16:9',
     targetS: sb?.target_s ?? video.target_s ?? 15,
     lengthS: shots.reduce((a, s) => a + (s.duration_s ?? 0), 0),
@@ -93,7 +95,14 @@ export function Rooms() {
   const sound = now === 'sound'
   const setRoom = useCallback((r: RoomName) => goRoom(r), [goRoom])
   const setSound = useCallback((on: boolean) => goRoom(on ? 'sound' : picture), [goRoom, picture])
-  const [sel, setSel] = useState<Selection>(() => ({ shotId: shots[0]?.id, boxKey: boxes[0]?.key }))
+  // Nothing selected at first: no Booth until a box, shot, take or clip is picked (the Booth rule).
+  const [sel, setSel] = useState<Selection>({})
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null)
+  // The Edit room's controls live in the band (mock edit): Preview | Rendered after the film's length, the
+  // timeline's tools on the right. Its Inspector is the Booth, only while a clip, a text or the card is picked.
+  const [viewSlot, setViewSlot] = useState<HTMLSpanElement | null>(null)
+  const [toolSlot, setToolSlot] = useState<HTMLSpanElement | null>(null)
+  const [picked, setPicked] = useState<Picked>(null)
   const [change, setChange] = useState<ChangeOpen | null>(null)
   const [ready, setReady] = useState<{ clipId: string; takeId: string; n: number } | null>(null)
   // The last join or cut made in the strip: Fin says so in the Booth, with Undo (features/join-or-cut-shots.clan).
@@ -128,11 +137,11 @@ export function Rooms() {
     return () => window.removeEventListener('keydown', key)
   }, [change, sound, back, setRoom, setSound])
 
-  if (!controls.video) return <div className="panel"><div className="empty-state"><b>Video is off right now.</b></div></div>
+  if (!controls.video) return <div className="panel"><div className="empty-state"><b>Film is off right now.</b></div></div>
   if (!data) return (
     <div className="panel"><div className="empty-state">
-      <b>No video here yet.</b>
-      <p>Select a storyboard or script on the canvas and choose Make video.</p>
+      <b>No film here yet.</b>
+      <p>Select a storyboard or script on the canvas and choose Make film.</p>
       <button type="button" className="btn" onClick={back}>‹ Back to the canvas</button>
     </div></div>
   )
@@ -143,7 +152,19 @@ export function Rooms() {
   }
   return (
     <div className="editor rooms" data-room={room}>
-      <RoomsBar data={data} room={room} onRoom={setRoom} onBack={back} sound={sound} onSound={() => setSound(!sound)}
+      {/* The shell bar and the band (mock production-new-ui-v2 make, edit): Make | Edit, the film's length, what
+          is being made, Open Sound, undo; Go to Edit or Render ad in the bar. */}
+      <EditorBar back="Canvas" onBack={back} icon="video" title="Film" undo
+        view={{ label: 'Room', value: room, options: [{ id: 'make', label: 'Make' }, { id: 'edit', label: 'Edit' }], onPick: (v) => setRoom(v as RoomName) }}
+        afterView={<><span className="rm-meta pt-mono" title="The film's length now, and the length it is aiming for">{filmMeta(data.ratio, data.lengthS, data.targetS)}</span>
+          {room === 'edit' && !sound && <span ref={setViewSlot} className="rm-bandview" />}</>}
+        right={<>
+          {room === 'edit' && !sound ? <span ref={setToolSlot} className="rm-bandtools" /> : <JobsPill data={data} />}
+          <button type="button" className={`sp-btn rm-sound-btn ${sound ? 'on' : ''}`} aria-pressed={sound} onClick={() => setSound(!sound)} title="Open Sound" aria-label="Open Sound">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6v4h3l4 3V3L5 6H2z M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
+            <span className="rm-soundword">Open Sound</span>
+          </button>
+        </>}
         primary={room === 'make'
           ? <button type="button" className="btn primary rm-primary" onClick={() => setRoom('edit')}>Go to Edit</button>
           : <RenderAd data={data} />} />
@@ -154,57 +175,32 @@ export function Rooms() {
         </div>
       ) : (
         <div className="booth-row">
+          <div className="rm-main">
+          <RoomWaits room={room} data={data} sel={sel} change={room === 'make' ? change : null} onChange={openChange}
+            done={room === 'make' ? done : null} onUndo={() => { setDone(null); void undo(docStore) }}
+            onApart={(shotId) => void takeShotOut(docStore, data.videoId, shotId).then(() => { setChange(null); setSel({ shotId }) })}
+            onReady={(clipId, takeId) => setReady((r) => ({ clipId, takeId, n: (r?.n ?? 0) + 1 }))} />
           <div className="rm-body" data-room={room}>
             <Bin data={data} sel={sel} room={room} onPick={(g) => setSel((s) => ({ ...s, genId: g.id, boxKey: g.boxKey, shotId: g.shotIds.includes(s.shotId ?? '') ? s.shotId : g.shotIds[0] }))} />
             {room === 'make'
               ? <MakeRoom data={data} shots={shots} sel={sel} onSel={setSel} change={change} onChange={openChange} onCloseChange={() => setChange(null)} onRoom={setRoom} register={register}
-                  onDone={(text) => setDone((d) => ({ id: (d?.id ?? 0) + 1, text }))} />
-              : <EditRoom data={data} sel={sel} onSel={setSel} onChange={openChange} onSound={() => setSound(true)} register={register} ready={ready} />}
+                  onDone={(text) => setDone((d) => ({ id: (d?.id ?? 0) + 1, text }))} slot={slot} />
+              : <EditRoom data={data} sel={sel} onSel={setSel} onChange={openChange} onSound={() => setSound(true)} register={register} ready={ready}
+                  picked={picked} onPicked={setPicked} booth={change ? null : slot} viewSlot={viewSlot} toolSlot={toolSlot} />}
           </div>
-          {/* The Booth (features/script-freeform.clan): Fin in Make, Edie in Edit. */}
-          <RoomBooth room={room} data={data} sel={sel} change={room === 'make' ? change : null} onChange={openChange}
-            done={room === 'make' ? done : null} onUndo={() => { setDone(null); void undo(docStore) }}
+          </div>
+          {/* The Booth on a selection only (the Booth rule): the Make room's Box | Shot | Change panel goes in it. */}
+          <RoomBooth room={room} data={data} sel={sel} change={change} onChange={openChange} slot={setSlot} picked={picked}
+            onClose={() => { setSel({}); setChange(null); setPicked(null) }}
             onApart={(shotId) => void takeShotOut(docStore, data.videoId, shotId).then(() => { setChange(null); setSel({ shotId }) })}
             onReady={(clipId, takeId) => setReady((r) => ({ clipId, takeId, n: (r?.n ?? 0) + 1 }))} />
         </div>
       )}
-      {room === 'edit' && change && !sound && (
-        <div className="rm-drawerwrap" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) setChange(null) }}>
-          <ChangeDrawer data={data} open={change} onClose={() => setChange(null)} variant="drawer"
-            onMade={() => setChange(null)} onApart={(shotId) => { setChange(null); void takeShotOut(docStore, video!.id, shotId).then(() => { setSel({ shotId }); setRoom('make') }) }} />
-        </div>
-      )}
+      {/* A change asked from a clip (Change this…, Change the feel…, Change this part…) is the Booth's, in place of the clip's panel. */}
+      {room === 'edit' && change && !sound && slot && createPortal(
+        <ChangeDrawer data={data} open={change} onClose={() => setChange(null)} variant="tab"
+          onMade={() => setChange(null)} onApart={(shotId) => { setChange(null); void takeShotOut(docStore, video!.id, shotId).then(() => { setSel({ shotId }); setRoom('make') }) }} />, slot)}
     </div>
-  )
-}
-
-/** The shared top bar: ‹ Canvas, the film's name, Make | Edit, Jobs, Open Sound, the main action. */
-function RoomsBar({ data, room, onRoom, onBack, sound, onSound, primary }: {
-  data: RoomData; room: RoomName; onRoom: (r: RoomName) => void; onBack: () => void; sound: boolean; onSound: () => void; primary: React.ReactNode
-}) {
-  return (
-    <header className="rm-bar" data-float-avoid="">
-      <div className="rm-barleft">
-        <button type="button" className="rm-back" onClick={onBack} aria-label="Back to the canvas" title="Back to the canvas (Esc)">
-          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 L5.5 8 L10 12.5" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          <span>Canvas</span>
-        </button>
-        <h1 className="rm-title" title={data.title}>{data.title}</h1>
-        <span className="rm-meta pt-mono" title="The film's length now, and the length it is aiming for">{filmMeta(data.ratio, data.lengthS, data.targetS)}</span>
-      </div>
-      <div className="rm-switch" role="group" aria-label="Room">
-        <button type="button" aria-pressed={room === 'make' && !sound} onClick={() => onRoom('make')} title="Make: ask for footage (1)">Make</button>
-        <button type="button" aria-pressed={room === 'edit' && !sound} onClick={() => onRoom('edit')} title="Edit: cut what you have (2)">Edit</button>
-      </div>
-      <div className="rm-barright">
-        <JobsPill data={data} />
-        <button type="button" className={`btn rm-sound-btn ${sound ? 'on' : ''}`} aria-pressed={sound} onClick={onSound} title="Open Sound">
-          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6v4h3l4 3V3L5 6H2z M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
-          <span className="rm-hide-narrow">Open Sound</span>
-        </button>
-        {primary}
-      </div>
-    </header>
   )
 }
 
@@ -228,10 +224,10 @@ function JobsPill({ data }: { data: RoomData }) {
   const word = jobWord
   return (
     <>
-      <button ref={ref} type="button" className={`rm-jobs ${n ? 'busy' : ''}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}
+      <button ref={ref} type="button" className={`sp-btn rm-jobs ${n ? 'busy' : ''}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}
         title={n ? `${n} being made` : 'Nothing is being made'}>
         <span className="rm-jobdot" aria-hidden="true" />
-        {n ? `${n} making` : 'Jobs'}
+        {n ? `${n} making` : 'Nothing making'}
       </button>
       <Float anchor={ref} open={open} onClose={close} role="dialog" label="Being made" align="end" className="rm-jobsfloat">
         <div className="rm-floathead">Being made</div>

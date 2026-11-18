@@ -15,7 +15,7 @@ import { clipLen } from './cut'
 import { appendTake, assembleFirstCut, editCut } from './editOps'
 import { boxKeyOf, roomGens, type Box } from './model'
 import type { RoomData } from './Rooms'
-import { compileFor, readCut, readyTakes, renderPlan } from './timeline'
+import { compileFor, endCardFrom, readCut, readyTakes, renderPlan } from './timeline'
 
 const BY = `human:${MAYA.id}`
 
@@ -251,5 +251,19 @@ describe('a project from before generations (the owner\'s samurai copy), moved w
     // An edit of the moved cut is accepted by the store.
     await editCut.fades(store, v.id, cut.v1[0], { inS: 0.2 })
     await ok(store)
+  })
+})
+
+describe('the end card\'s words (live test 2026-11-18: "Hearth Oats end card" as headline and line)', () => {
+  it('a label of a shot takes the brand from the label and the film\'s closing VO as the line; words stay words', async () => {
+    const { store, shots, videoId } = await film()
+    await systemUpdate(store, (d) => {
+      d.shots[shots[3].id].action = 'SuperSamurai end card.'
+      const b = { id: id('beat'), v: 1, field_v: {}, shot_id: shots[2].id, rank: 'a0', at_s: 0.5, kind: 'vo' as const, text: 'SuperSamurai. Clean in one sweep.' }
+      d.beats[b.id] = b
+    }, 'sync')
+    expect(endCardFrom(store.get(), videoId)).toMatchObject({ headline: 'SuperSamurai', line: 'Clean in one sweep.' })
+    await systemUpdate(store, (d) => { d.shots[shots[3].id].action = 'Clean like a samurai. Sweep once.' }, 'sync')
+    expect(endCardFrom(store.get(), videoId)).toMatchObject({ headline: 'Clean like a samurai', line: 'Sweep once.' })
   })
 })

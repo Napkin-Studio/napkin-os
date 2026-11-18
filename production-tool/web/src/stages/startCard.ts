@@ -3,6 +3,7 @@
 import { cardOf, createNode, type NodeEnv } from '../canvas/nodes/nodes'
 import type { ProductionDocument } from '../contracts/types'
 import { mainScript } from '../model/selectors'
+import { isEmptyDocument } from '../projects/summary'
 import { imageOf, isText, isUserDrawing, type El } from '../canvas/scene'
 
 /**
@@ -12,6 +13,14 @@ import { imageOf, isText, isUserDrawing, type El } from '../canvas/scene'
 export function showStartCard(els: readonly El[], o: { dismissed: boolean; refs: number }): boolean {
   if (o.dismissed || o.refs > 0) return false
   return !els.some((e) => isUserDrawing(e) || isText(e) || !!imageOf(e) || !!cardOf(e))
+}
+
+/** Whether the document holds work a node shows: script lines, shots, pictures, jobs, a brief, a Format set or a
+ *  text (an empty Script, Storyboard and Film of a blank project are not). The start card never shows on one,
+ *  whatever the canvas has drawn so far (re-test N-E: a cold open flashed "What should this film be?" over a
+ *  project with nodes). */
+export function hasWork(d: ProductionDocument): boolean {
+  return !isEmptyDocument(d) || [d.briefs, d.format_sets, d.texts].some((m) => !!m && Object.keys(m).length > 0)
 }
 
 /**

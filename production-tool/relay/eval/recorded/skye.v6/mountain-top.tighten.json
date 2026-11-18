@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front reaches the summit, drops her pack, spreads her arms above the clouds."
+     },
+     {
+      "type": "direction",
+      "text": "Drone pull-out reveals the peaks."
+     }
+    ],
+    "note": "I tightened the action and the direction, keeping the order of events."
+   }
+  ],
+  "rationale": "Trimmed wording while keeping @maya_front, the sequence of events, and the direction last."
+ }
+}

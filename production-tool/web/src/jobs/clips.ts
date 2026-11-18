@@ -1,4 +1,4 @@
-// Clips and the ad, as requests. Shared by the Video stage, "Fix it in the shot"
+// Clips and the ad, as requests. Shared by the Film stage, "Fix it in the shot"
 // (jobs/fix.ts) and "Update what follows" (jobs/follow.ts). The clip in a shot
 // is its video's cut item for it (its edl pick: the video its storyboard renders,
 // selectors videoOfShot); the ad is a render of a video (contract 3).
@@ -34,7 +34,7 @@ function ratioOf(d: ProductionDocument, videoId: string | undefined, storyboardI
 }
 
 /** The quality a video's clips are made at unless a send picks another (features/clip-quality.clan): the
- *  video's default, set in the Video editor's bar; standard when it has none. */
+ *  video's default, set in the Film editor's bar; standard when it has none. */
 export function videoQuality(d: ProductionDocument, videoId: string | undefined): ClipQuality {
   return (videoId && d.videos[videoId]?.quality) || DEFAULT_QUALITY
 }

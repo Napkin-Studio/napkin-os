@@ -1,4 +1,4 @@
-// "You can always switch later" (ui-behaviour 3.5, 3.17): the Video editor shows how its clips are
+// "You can always switch later" (ui-behaviour 3.5, 3.17): the Film editor shows how its clips are
 // made, as the person chose on Dex's "Plan a storyboard first?", with Change. Changing it is a new
 // answer on the same ask (in History); it does not undo work already done.
 

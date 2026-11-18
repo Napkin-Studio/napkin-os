@@ -1,0 +1,78 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. GYM - BEFORE DAWN"
+     },
+     {
+      "type": "action",
+      "text": "Dark, empty gym. One bank of lights flickers on."
+     },
+     {
+      "type": "action",
+      "text": "A man laces his worn shoes on a lone bench."
+     },
+     {
+      "type": "action",
+      "text": "He chalks his hands. Dust hangs in the cold air."
+     },
+     {
+      "type": "action",
+      "text": "He loads a barbell plate by plate, the clang echoing."
+     },
+     {
+      "type": "action",
+      "text": "The bar leaves the floor. His jaw sets, veins rising."
+     },
+     {
+      "type": "action",
+      "text": "Rep after rep. Sweat drips onto the rubber floor."
+     },
+     {
+      "type": "action",
+      "text": "Beyond the window, the sky is still black."
+     },
+     {
+      "type": "action",
+      "text": "He racks the bar and meets his own eyes in the mirror."
+     },
+     {
+      "type": "character",
+      "text": "MAN"
+     },
+     {
+      "type": "dialogue",
+      "text": "Nobody's watching. That's when it counts. Nobody but me."
+     },
+     {
+      "type": "action",
+      "text": "He slides on more weight and goes again."
+     },
+     {
+      "type": "action",
+      "text": "The window behind him turns pale gold as first light arrives."
+     },
+     {
+      "type": "action",
+      "text": "The door opens. Early members arrive to find him already finishing."
+     },
+     {
+      "type": "action",
+      "text": "He walks out past them, towel over his shoulder, unhurried."
+     }
+    ],
+    "note": "I drafted a one-location gym scene from your line, with one short spoken line."
+   }
+  ],
+  "rationale": "Wrote a single-location 30 s scene with about 13 action beats and one spoken line, summing to roughly 28 s by the timing rule. No refs exist, so no @names were used."
+ }
+}

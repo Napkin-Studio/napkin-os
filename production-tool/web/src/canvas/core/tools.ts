@@ -1,5 +1,5 @@
 // The scoped ToolRegistry (features/canvas-core.clan; plan §3). A tool belongs
-// to one surface (the canvas, the image editor, the video editor or the
+// to one surface (the canvas, the image editor, the film editor or the
 // script), and a shortcut letter is unique only within its surface, since §7
 // reuses V, B, L, T, H and S across them. Letter tools never fire while a text
 // field has focus. Pure: React is imported for a type only.

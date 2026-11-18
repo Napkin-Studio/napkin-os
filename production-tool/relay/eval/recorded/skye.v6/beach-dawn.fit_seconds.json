@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front walks waterline at dawn, gold light behind her, then stops, gazing out to sea."
+     },
+     {
+      "type": "direction",
+      "text": "Unhurried; hold on her face."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one beat that plays in 2.5 seconds and kept the direction."
+   }
+  ],
+  "rationale": "Reduced the single long action line to 15 words (2.5 s by rule 10), keeping @maya_front, the order of events and the direction."
+ }
+}

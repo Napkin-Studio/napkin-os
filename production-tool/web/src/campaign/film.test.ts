@@ -13,7 +13,7 @@ import type { Relay } from '../relay/types'
 import { MAYA, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addShots, addTake, job } from '../test/model'
 import { alephRatio, captionLayers, cropKeys, edlFor, filmLength, fitWindows, isSocialShape, masterShots, reframeKey, reframesOf } from './film'
-import { cutdownInput, filmLayers } from './filmJobs'
+import { cutdownInput, filmLayers, withoutRepeats } from './filmJobs'
 import { checksFor } from './checks'
 import { fileName } from './exportZip'
 
@@ -72,7 +72,7 @@ const PLAN = (shotIds: string[]): CutdownPlan => ({
   crops: shotIds.map((id, i) => ({ shotId: id, aspect: { w: 1080, h: 1920 }, keys: [{ at: 0, box: { x: 656.25, y: 0, w: 607.5, h: 1080 } }], cuts: i === 4 })),
 })
 
-describe('the master as Dex reads it', () => {
+describe('the master as the Director agent reads it', () => {
   it('every shot with its window, its take and its spoken line, in cut order', () => {
     const { d, shots, video } = master()
     const m = masterShots(d, video.id)
@@ -104,7 +104,7 @@ describe('a 15 s at 9:16', () => {
     expect(over).toBeCloseTo(0, 3)
     expect(size.edl![0]).toMatchObject({ in_s: 0, out_s: 2.5, crop: { x: 656.25, w: 607.5 }, crop_by: 'rule', take_size: { w: 1920, h: 1080 } })
   })
-  it('captions each spoken line in its time in the cut, and Jude counts them for sound off', () => {
+  it('captions each spoken line in its time in the cut, and the Review agent counts them for sound off', () => {
     const { d, size, set } = sized()
     const caps = captionLayers(d, size.edl!, { x: 0.1, y: 0.6, w: 0.8, h: 0.08 })
     expect(caps).toHaveLength(1)
@@ -156,5 +156,22 @@ describe('the jobs', () => {
     const r = { for: 'reframe' as const, setId: 'fset_01K7C00000000000000000FS01', key: 'take_01K7C00000000000000000TK01@1080x1920' }
     expect(purposeOf({ purpose: purposeWords(r), node: { kind: 'format_set', id: r.setId }, inputs: [] })).toEqual(r)
     expect(purposeOf({ purpose: 'film_plan', node: { kind: 'video', id: 'video_01K7C00000000000000000VD01' }, inputs: [] })).toEqual({ for: 'film_plan', videoId: 'video_01K7C00000000000000000VD01' })
+  })
+})
+
+describe('the words shown once (re-test N-G)', () => {
+  const box = { x: 0.1, y: 0.8, w: 0.8, h: 0.1 }
+  const line = { kind: 'line' as const, box, text: 'Lumo. Calm, on.', fromS: 0, toS: 2 }
+  it('a caption of the same words as the line on screen goes; other captions stay', () => {
+    const caps = [
+      { kind: 'captions' as const, box, text: 'lumo — calm, on', fromS: 0, toS: 2 },
+      { kind: 'captions' as const, box, text: 'Every night, a little light.', fromS: 0, toS: 2 },
+    ]
+    expect(withoutRepeats(caps, [line]).map((c) => c.text)).toEqual(['Every night, a little light.'])
+  })
+  it('one that starts before the line ends where the line starts; one at another time stays whole', () => {
+    const late = { ...line, fromS: 5, toS: 8 }
+    const caps = [{ kind: 'captions' as const, box, text: 'Lumo. Calm, on.', fromS: 3, toS: 8 }, { kind: 'captions' as const, box, text: 'Lumo. Calm, on.', fromS: 0, toS: 2 }]
+    expect(withoutRepeats(caps, [late]).map((c) => [c.fromS, c.toS])).toEqual([[3, 5], [0, 2]])
   })
 })

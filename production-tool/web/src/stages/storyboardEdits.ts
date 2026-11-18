@@ -57,3 +57,11 @@ export function answerShotAsk(d: Doc, askId: string, optionId: 'keep' | 'remove'
   a.answers = [...a.answers, { option_id: optionId, by, at }].slice(-16)
   a.state = 'answered'
 }
+
+/** The sheet's out-of-date line (features/production-new-ui.clan, mock "storyboard"): "2 clips out of date: frames 4
+ *  and 5 changed after the clips were made." from the numbers of the shots whose clip is behind its frame. */
+export function clipsBehindLine(ns: readonly number[]): string {
+  if (!ns.length) return 'Clips up to date'
+  const list = ns.length === 1 ? `frame ${ns[0]}` : `frames ${ns.slice(0, -1).join(', ')} and ${ns.at(-1)}`
+  return `${ns.length} ${ns.length === 1 ? 'clip' : 'clips'} out of date: ${list} changed after the ${ns.length === 1 ? 'clip was' : 'clips were'} made.`
+}

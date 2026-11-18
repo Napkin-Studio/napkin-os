@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@samurai is the warrior who handles every chore for you. He sweeps the hall in a single clean arc and folds the laundry into crisp squares."
+     },
+     {
+      "type": "direction",
+      "text": "Quick cuts, each task one strike."
+     }
+    ],
+    "note": "I rephrased the action and kept the direction as it was."
+   }
+  ],
+  "rationale": "Same facts, same length and the @samurai name kept; only the wording changed. The direction block stays last and unchanged."
+ }
+}

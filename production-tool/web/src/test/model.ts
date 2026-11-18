@@ -99,7 +99,7 @@ export function addFrame(d: ProductionDocument, shot: Shot, sha: string, opts: {
 }
 
 /** A ready take (a generation) of one shot, made by job `j`; with `pick` it is the shot's clip in the main
- *  video's cut (its V1 clip, as the Video editor puts it there). */
+ *  video's cut (its V1 clip, as the Film editor puts it there). */
 export function addTake(d: ProductionDocument, shot: Shot, sha: string, j: DocJob, opts: { pick?: boolean; parent?: Generation } = {}): Generation {
   const g = base('gen', {
     kind: opts.parent ? 'change' : 'clip', ...(opts.parent ? { parent_id: opts.parent.id } : {}),

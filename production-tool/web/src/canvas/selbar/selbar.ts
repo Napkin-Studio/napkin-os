@@ -53,8 +53,8 @@ export interface MoreAction {
 const LATER = 'Not built yet.'
 const OFF: Partial<Record<ActionId, string>> = {
   'make-clips': 'Make clips from the Storyboard for now (Open).',
-  'render-ad': 'Render the ad from the Video for now (Open).',
-  convert: 'Nell reading your ink comes in a later build.',
+  'render-ad': 'Render the ad from the Film for now (Open).',
+  convert: 'The Knowledge agent reading your ink comes in a later build.',
   'move-to-board': 'Drag it onto a board for now.',
 }
 
@@ -62,7 +62,7 @@ const base = (id: ActionId, label: string, extra: Partial<BarAction> = {}): BarA
 const DELETE = base('delete', 'Delete', { icon: true })
 
 /**
- * The bar for a selection (the 3.9 table), or [] when the canvas's picture bar has it instead. Make video
+ * The bar for a selection (the 3.9 table), or [] when the canvas's picture bar has it instead. Make film
  * is also on a Script or a Storyboard alone, and on two scripts or two storyboards (3.5: Dex asks which
  * one drives); an action this selection cannot run now is greyed with its reason (`s.off`).
  */
@@ -83,21 +83,21 @@ export function barFor(s: SelInfo): BarAction[] {
   }
   const only = s.cards.length === s.units && !s.links
   if (only && s.units === 2 && s.cards.includes('script') && s.cards.includes('storyboard')) {
-    return [act('make-video', 'Make video', { primary: true }), act('plan-shots', 'Plan shots'), act('group', 'Group')]
+    return [act('make-video', 'Make film', { primary: true }), act('plan-shots', 'Plan shots'), act('group', 'Group')]
   }
   if (only && s.units === 1) {
     switch (s.cards[0]) {
-      case 'script': return [act('open', 'Open'), act('plan-shots', 'Plan shots'), act('make-video', 'Make video')]
-      case 'storyboard': return [act('open', 'Open'), act('make-clips', 'Make clips…'), act('make-video', 'Make video')]
+      case 'script': return [act('open', 'Open'), act('plan-shots', 'Plan shots'), act('make-video', 'Make film')]
+      case 'storyboard': return [act('open', 'Open'), act('make-clips', 'Make clips…'), act('make-video', 'Make film')]
       case 'video': return [act('open', 'Open'), act('render-ad', 'Render ad…'), act('make-sizes', 'Make all sizes…')]
     }
   }
   if (s.links === s.units) return [DELETE]
-  // Two scripts or two storyboards (and no video): Make video asks which one drives (3.5).
+  // Two scripts or two storyboards (and no video): Make film asks which one drives (3.5).
   const scripts = s.cards.filter((c) => c === 'script').length
   const boards = s.cards.filter((c) => c === 'storyboard').length
   if (only && !s.cards.includes('video') && scripts <= 3 && boards <= 3 && (scripts > 1 || boards > 1)) {
-    return [act('make-video', 'Make video', { primary: true }), act('group', 'Group'), act('move-to-board', 'Move to board'), DELETE]
+    return [act('make-video', 'Make film', { primary: true }), act('group', 'Group'), act('move-to-board', 'Move to board'), DELETE]
   }
   // Nodes with pictures among them: Resize… makes only the pictures at other shapes.
   return [...(s.pictures ? [act('resize', 'Resize…')] : []), act('group', 'Group'), act('move-to-board', 'Move to board'), DELETE]
@@ -137,5 +137,5 @@ function making(d: ProductionDocument, j: DocJob): string {
 /** The question before deleting a node with a job still running on it (3.3 Delete). */
 export function busyQuestion(d: ProductionDocument, j: DocJob): string {
   const who = CAST[j.op === 'shot_list' ? 'dex' : j.crew ? castOf(j.crew) : MAKER_OF[j.op] ?? 'dex'].given
-  return `${who} is still ${VERB[j.op] ?? 'making'} ${making(d, j)}. Stop it and delete?`
+  return `The ${who} is still ${VERB[j.op] ?? 'making'} ${making(d, j)}. Stop it and delete?`
 }

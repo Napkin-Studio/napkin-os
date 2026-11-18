@@ -70,8 +70,9 @@ export interface ConvertedScene {
   notices: string[]
 }
 
-/** The document's nodes drawn on the canvas as a box with {kind, id} (customdata.schema.json). */
-const DOC_NODES = new Set(['script', 'storyboard', 'video', 'document', 'format_set', 'suggestion'])
+/** The document's nodes drawn on the canvas as a box with {kind, id} (customdata.schema.json). A brief
+ *  (features/brief-node.clan) is a DOM card like the rest, so it is a node too and a click selects it. */
+const DOC_NODES = new Set(['script', 'storyboard', 'video', 'document', 'format_set', 'suggestion', 'brief'])
 
 export const NOTICES = {
   rough: 'Hand-drawn shapes are drawn clean on the new canvas.',

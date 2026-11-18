@@ -4,8 +4,7 @@
 // left the bar at the narrower fit levels (the meta pills, the save state).
 
 import { useCallback, useRef, useState, type ReactNode } from 'react'
-import { Float, MenuItem } from '../Float'
-import { NOT_YET } from './panels'
+import { Float } from '../Float'
 
 export function MoreMenu({ where, tip, head, children }: {
   /** The surface, for the beta's record ("more: canvas"). */
@@ -30,11 +29,6 @@ export function MoreMenu({ where, tip, head, children }: {
       </Float>
     </>
   )
-}
-
-/** "Copy link to this" where the editor has no route yet (selbar.ts does the same on the canvas). */
-export function CopyLinkLater() {
-  return <MenuItem icon={<LinkIcon />} disabled hint={NOT_YET} onSelect={() => {}}>Copy link to this</MenuItem>
 }
 
 export function LinkIcon() {

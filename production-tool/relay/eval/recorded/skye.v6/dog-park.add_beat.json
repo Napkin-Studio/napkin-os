@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "A muddy @dog_rex bounds through the park and leaps into @maya_front's arms, knocking her hat off."
+     },
+     {
+      "type": "direction",
+      "text": "Wide, then a whip pan to the catch."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 2,
+      "text": "@maya_front laughs, mud smearing her cheek, and hugs @dog_rex tight."
+     }
+    ],
+    "note": "I kept your words and added a beat where Maya laughs and hugs the dog."
+   }
+  ],
+  "rationale": "The shot had the leap but no reaction, so one moment beat after the catch gives the payoff. Words and direction are unchanged."
+ }
+}

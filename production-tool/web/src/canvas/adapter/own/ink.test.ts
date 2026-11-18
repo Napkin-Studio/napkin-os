@@ -96,8 +96,9 @@ describe('the ink names', () => {
       expect(token(light, c)?.toUpperCase()).toBe(LIGHT_INK[c].toUpperCase())
       expect(token(dark, c), `--pen-${c} in dark`).toMatch(/^#[0-9A-Fa-f]{6}$/)
     }
-    // The default ink is the theme's own: dark on light, light on dark.
-    expect(token(light, 'ink')).toBe(light.match(/--ink:\s*([^;]+);/)?.[1])
-    expect(token(dark, 'ink')).toBe(dark.match(/--ink:\s*([^;]+);/)?.[1])
+    // The default ink is the theme's own: dark on light, light on dark (the new UI's warm ink is close to
+    // these; the pen keeps the engine's values so strokes saved before read the same).
+    expect(token(light, 'ink')).toBe('#14161B')
+    expect(token(dark, 'ink')).toBe('#F2F3F5')
   })
 })

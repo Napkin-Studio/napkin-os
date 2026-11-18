@@ -165,7 +165,7 @@ function ScriptStart({ scriptId, place, seed, onClose }: { scriptId: Id; place: 
     }
   }
   return (
-    <section className="pstart-card" aria-label="Write with Skye">
+    <section className="pstart-card" aria-label="Write with the Script agent">
       <Signed agent="skye">
         {onClose && <button type="button" className="askcard-latr pstart-close" onClick={onClose} aria-label="Close">Cancel</button>}
       </Signed>
@@ -345,9 +345,9 @@ function VideoBlock({ videoId }: { videoId: Id }) {
 
 /**
  * Dex's nudge on a video a script drives and no storyboard renders (3.5, 3.17, artboard 4c): "Plan a
- * storyboard first?". Either answer is stored on the video (Change in the Video editor switches later),
+ * storyboard first?". Either answer is stored on the video (Change in the Film editor switches later),
  * gives it the storyboard its script drives with Dex planning the shots, and opens where the next step is:
- * the Storyboard to check frames, or the Video, whose Make clips makes them straight from the script.
+ * the Storyboard to check frames, or the Film, whose Make clips makes them straight from the script.
  */
 function ScriptVideoAsk({ videoId, scriptId }: { videoId: Id; scriptId: Id }) {
   const services = useServices()
@@ -376,7 +376,7 @@ function ScriptVideoAsk({ videoId, scriptId }: { videoId: Id; scriptId: Id }) {
   if (later) {
     return (
       <button className="askcard-later" onClick={() => setLater(false)} aria-label={`Waiting for you: ${q.text}`}>
-        <AgentFigure agent="dex" size={20} state="needs-you" decorative /><b>Waiting for you</b><span>· Make video</span>
+        <AgentFigure agent="dex" size={20} state="needs-you" decorative /><b>Waiting for you</b><span>· Make film</span>
       </button>
     )
   }
@@ -392,7 +392,7 @@ function ScriptVideoAsk({ videoId, scriptId }: { videoId: Id; scriptId: Id }) {
       {q.why && <div className="askcard-why faint">{q.why}</div>}
       <AskOptions q={q} disabled={busy} onPick={(id) => void pick(id)} />
       <div className="askcard-why faint">{PROMPT_COPY.later}</div>
-      {busy && <AtWork agent="dex" line="Dex is setting up the storyboard and planning the shots" />}
+      {busy && <AtWork agent="dex" line="The Director agent is setting up the storyboard and planning the shots" />}
       {error && <div className="askcard-note" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
@@ -452,7 +452,7 @@ function FrameStart({ shotId }: { shotId: Id }) {
   return (
     <section className="pstart-card" aria-label="Start the picture">
       <Signed agent="wren" />
-      <PromptBox placeholder={PROMPT_COPY.image.placeholder} hint="Fin draws this shot's frame from it" label="Describe the picture" submit={submit} busy={busy} />
+      <PromptBox placeholder={PROMPT_COPY.image.placeholder} hint="The Camera agent draws this shot's frame from it" label="Describe the picture" submit={submit} busy={busy} />
       {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
@@ -485,7 +485,7 @@ function PictureStart({ nodeId }: { nodeId: Id }) {
     <section className="pstart-card" aria-label="Start the picture">
       <Signed agent="wren" />
       <PromptBox placeholder={PROMPT_COPY.image.placeholder} hint={PROMPT_COPY.image.hint} label="Describe the picture" submit={submit} busy={busy} />
-      {job?.state === 'failed' && !error && <div className="pstart-error" role="alert">{job.error ? plainJobError(job.error, job.op).message : 'Fin could not make it. Try again.'}</div>}
+      {job?.state === 'failed' && !error && <div className="pstart-error" role="alert">{job.error ? plainJobError(job.error, job.op).message : 'The Camera agent could not make it. Try again.'}</div>}
       {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
@@ -521,7 +521,7 @@ function RolePicker({ jobId, nodeId, asset, words }: { jobId: Id; nodeId: Id; as
   return (
     <section className="pstart-card pstart-roles" aria-label="Name this picture">
       <Signed agent="wren"><span className="faint">· made it</span></Signed>
-      {url && <img className="pstart-pic" src={url} alt={words || 'The picture Fin made'} />}
+      {url && <img className="pstart-pic" src={url} alt={words || 'The picture the Camera agent made'} />}
       <div className="pstart-q">What is it for?</div>
       <div className="pstart-pills" role="radiogroup" aria-label="What it is for">
         {roles.map((r) => (

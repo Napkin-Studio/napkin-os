@@ -143,6 +143,7 @@ export class OwnAdapter implements CanvasAdapter {
   private readonly rev = new Map<string, number>()
   private vp = { scrollX: 0, scrollY: 0, zoom: 1, offsetLeft: 0, offsetTop: 0, width: 800, height: 600 }
   private emph: Emphasis = {}
+  private allLinks = false
   private tool: ActiveToolSpec = { type: 'native', id: 'selection' }
   private theme: 'light' | 'dark' = 'light'
   private caps: InputCapabilities = CAPS_NONE
@@ -381,6 +382,16 @@ export class OwnAdapter implements CanvasAdapter {
 
   emphasis(): Emphasis {
     return this.emph
+  }
+
+  /** "Show all links": every link lit, whatever is selected (otherwise only the selection's own links are). */
+  showAllLinks(on: boolean) {
+    this.allLinks = on
+    this.changed()
+  }
+
+  allLinksShown(): boolean {
+    return this.allLinks
   }
 
   // ── pictures, by sha256 ──
@@ -969,6 +980,7 @@ export class OwnAdapter implements CanvasAdapter {
       this.renderer.inkPalette = this.surface?.s.ink ?? LIGHT_INK
       this.renderer.boardLook = this.surface?.s.board ?? null
       this.renderer.linkLook = this.surface?.s.link ?? null
+      this.renderer.linksAll = this.allLinks
       this.renderer.currentBoard = this.currentBoard
       this.renderer.editing = this.text.session?.fresh === false ? this.text.session.id : null
       this.renderer.draw(ctx as never, { scrollX, scrollY, zoom }, { width, height }, dpr, this.surface?.s.background ?? (this.theme === 'dark' ? '#121212' : '#ffffff'))

@@ -155,7 +155,7 @@ export class CanvasDocSync {
 
   /**
    * The document's nodes deleted or brought back since the last call (features/canvas-edit-tools.clan):
-   * a Script, Storyboard or Video node takes its entity out through removeNode (a running job on it is
+   * a Script, Storyboard or Film node takes its entity out through removeNode (a running job on it is
    * stopped first) and puts it back with restoreTo, in step with the canvas's undo.
    */
   nodes(els: readonly SceneEl[]): Promise<void> {

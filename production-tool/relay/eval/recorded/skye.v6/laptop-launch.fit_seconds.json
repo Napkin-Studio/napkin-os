@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front opens @laptop_silver; its screen lights his face blue in the dark."
+     },
+     {
+      "type": "direction",
+      "text": "Only the screen lights the scene."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one 12-word beat and kept the direction, so the shot plays in about 2.5 seconds."
+   }
+  ],
+  "rationale": "The action becomes one beat of 12 words (2 s) and keeps both @names and the blue-lit face. The direction stays last and takes no time, so the shot fits 2.5 s."
+ }
+}

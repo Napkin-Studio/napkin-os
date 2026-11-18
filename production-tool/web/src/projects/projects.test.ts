@@ -27,7 +27,7 @@ import { RelayError } from '../relay/types'
 import { addShots, id, job, MAYA, SHA, T, v2Clan, wasm } from '../test/model'
 import { LEGACY, migrateSingleProject } from './migrate'
 import { NotAProject } from './openFile'
-import { copyName, ordered, ProjectIndex, type ProjectEntry } from './projectIndex'
+import { copyName, ordered, ProjectIndex, unusedName, type ProjectEntry } from './projectIndex'
 import { ProjectRefused, type MakeClan } from './session'
 import { Shell } from './shell'
 import { canvasKeyFor, clanDbFor, INDEX_KEY, memoryStorage, uiKeyFor } from './storage'
@@ -109,6 +109,61 @@ describe('the project index', () => {
     expect(a.id).toMatch(/^prj_[0-9A-HJKMNP-TV-Z]{26}$/)
   })
 
+  it('two tabs: each writes only what it changed, so a stale tab never drops the other\u2019s save mark (re-test N3)', async () => {
+    const storage = memoryStorage()
+    const first = new ProjectIndex(storage)
+    await first.load()
+    const r1 = await first.create({ name: 'R1' })
+    const r2 = await first.create({ name: 'R2' })
+    // The second tab reads the index now; the first then saves R2 to the relay.
+    const second = new ProjectIndex(storage)
+    await second.load()
+    await first.setServer(r2.id, { etag: 'e2', savedAt: '2026-11-18T13:50:23Z' })
+    // The second tab, still holding the older list, saves its own project, touches R2, starts another.
+    await second.setServer(r1.id, { etag: 'e1', savedAt: '2026-11-18T13:54:49Z' })
+    await second.touch(r2.id, { ...r2.summary, shots: 3 }, { changed: false })
+    const r3 = await second.create({ name: 'R3' })
+    const after = new ProjectIndex(storage)
+    await after.load()
+    expect(after.get(r2.id)?.server?.etag).toBe('e2')
+    expect(after.get(r2.id)?.summary.shots).toBe(3)
+    expect(after.get(r1.id)?.server?.etag).toBe('e1')
+    expect(after.all().map((p) => p.id).sort()).toEqual([r1.id, r2.id, r3.id].sort())
+    // Each tab holds what the other wrote once it writes again.
+    await first.rename(r1.id, 'R1 renamed')
+    expect(first.get(r3.id)?.name).toBe('R3')
+    expect(first.get(r1.id)?.server?.etag).toBe('e1')
+  })
+
+  it('a name it gives itself is its own: "Name 2" when another project has it (re-test N9)', async () => {
+    const index = new ProjectIndex(memoryStorage())
+    await index.load()
+    const r1 = await index.create()
+    const r2 = await index.create()
+    await index.touch(r1.id, r1.summary, { name: 'PW Lumo main film brief' })
+    await index.touch(r2.id, r2.summary, { name: 'PW Lumo main film brief' })
+    expect(index.get(r2.id)?.name).toBe('PW Lumo main film brief 2')
+    // Stable on the next touch; a person's own name is never numbered.
+    await index.touch(r2.id, r2.summary, { name: 'PW Lumo main film brief' })
+    expect(index.get(r2.id)?.name).toBe('PW Lumo main film brief 2')
+    await index.touch(r1.id, r1.summary, { name: null })
+    await index.touch(r2.id, r2.summary, { name: null })
+    expect([index.get(r1.id)?.name, index.get(r2.id)?.name]).toEqual([UNTITLED, UNTITLED])
+    expect(unusedName('Rain', ['rain', 'Rain 2'])).toBe('Rain 3')
+  })
+
+  it('a name it gives itself is not one the relay already lists for another project (re-test N-D)', async () => {
+    const index = new ProjectIndex(memoryStorage())
+    await index.load()
+    const p = await index.create()
+    index.knowRemote([{ id: 'prj_01M7Q0JEQCP29Y000000000000', name: 'PW Lumo Gen Z cut-down brief' }, { id: p.id, name: 'Mine' }])
+    await index.touch(p.id, p.summary, { name: 'PW Lumo Gen Z cut-down brief' })
+    expect(index.get(p.id)?.name).toBe('PW Lumo Gen Z cut-down brief 2')
+    // Its own copy on the relay is not another project.
+    await index.touch(p.id, p.summary, { name: 'Mine' })
+    expect(index.get(p.id)?.name).toBe('Mine')
+  })
+
   it('names copies so they do not clash', () => {
     expect(copyName('Rain', [])).toBe('Rain (copy)')
     expect(copyName('Rain', ['Rain (copy)'])).toBe('Rain (copy 2)')
@@ -125,10 +180,15 @@ describe('the project index', () => {
     await storage.put(canvasKeyFor(p.id), { elements: [{ id: 'e1' }], files: {} })
     await shell.goHome()
 
+    await shell.open(p.id)
+    const originalProjectId = open(shell).doc.get().project.id
+    await shell.goHome()
     const copy = await shell.duplicate(p.id)
     expect(copy.name).toBe(`${UNTITLED} (copy)`)
     expect(index.get(copy.id)!.summary.pictures).toBe(1)
     await shell.open(copy.id)
+    // A copy is its own project to the relay (QA 2026-11-17).
+    expect(open(shell).doc.get().project.id).not.toBe(originalProjectId)
     expect(Object.keys(open(shell).doc.get().assets)).toEqual([pic])
     expect(open(shell).ui.get().stage).toBe('storyboard')
     expect(open(shell).project.usedElsewhere(pic)).toBe(true)
@@ -330,6 +390,9 @@ describe('naming', () => {
     await s.doc.flush()
     await shell.get().session!.record()
     expect(index.get(p.id)!.name).toBe('Rainy street, yellow umbrella')
+    // The name is in the .clan too, so an export or an import keeps it (live test 2026-11-18).
+    expect(s.doc.get().project.title).toBe('Rainy street, yellow umbrella')
+    expect(autoName(s.doc.get())).toBe('Rainy street, yellow umbrella')
     // Blank goes back to naming itself.
     await shell.rename(p.id, '  ')
     await shell.get().session!.record()
@@ -347,6 +410,11 @@ describe('naming', () => {
     d.scenes[sid].text = ''
     addShots(d, 1, { scene_id: sid, action: 'The hero runs.' })
     expect(autoName(d)).toBe('The hero runs.')
+    // A linked brief's title comes before the script's first line; the film's own title before both.
+    d.briefs = { brief_01K7A0000000000000000000B1: { title: 'PW Lumo main film brief' } as never }
+    expect(autoName(d)).toBe('PW Lumo main film brief')
+    d.project.title = 'Dusk at the window'
+    expect(autoName(d)).toBe('Dusk at the window')
   })
 })
 
@@ -377,7 +445,7 @@ describe('what a card shows', () => {
     d.jobs[j.id] = j
     const s = summarise(d)
     expect(s.active).toBe(1)
-    expect(s.making).toBe('Fin is making the clip for shot 2')
+    expect(s.making).toBe('The Camera agent is making the clip for shot 2')
   })
 })
 
@@ -424,7 +492,8 @@ describe('the first load: a project of before', () => {
     const { id: pid, left } = await migrateSingleProject(storage, index, makeClan)
     expect(left).toBe(false)
     expect(pid).toMatch(/^prj_/)
-    expect(index.get(pid!) as ProjectEntry).toMatchObject({ name: 'Maya opens the shop.', naming: 'auto' })
+    // Named by the document's own title (autoName: the title before the script's first line).
+    expect(index.get(pid!) as ProjectEntry).toMatchObject({ name: 'Shop', naming: 'auto' })
     // Moved: the .clan's bytes as they were, the canvas, the project's UI; the old places cleared.
     expect((await storage.clan(clanDbFor(pid!)).read())!.bytes).toEqual(before)
     expect(await storage.clan(LEGACY.clanDb).read()).toBeNull()
@@ -490,8 +559,13 @@ describe('Open a file', () => {
     expect(files).toEqual(expect.arrayContaining(['canvas.excalidraw']))
     expect(files.filter((f) => f.endsWith('.clan'))).toHaveLength(1)
 
+    await shell.open(p.id)
+    const originalProjectId = open(shell).doc.get().project.id
+    await shell.goHome()
     const entry = await shell.openFile(blob, name)
     expect(entry.id).not.toBe(p.id)
+    // Its jobs are never filed under the original's project id (QA 2026-11-17).
+    expect(open(shell).doc.get().project.id).not.toBe(originalProjectId)
     expect(index.all()).toHaveLength(2)
     expect(entry.name).toBe('Maya and the lamp.')
     expect(shell.get().session!.id).toBe(entry.id)

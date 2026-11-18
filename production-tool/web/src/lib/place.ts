@@ -8,6 +8,8 @@ export interface Anchor {
   top: number
   /** Bottom of the selection. */
   bottom: number
+  /** Line the bar's left edge up with this (a node's left edge, mock production-new-ui-v2) instead of centring it. */
+  left?: number
 }
 
 /**
@@ -16,7 +18,7 @@ export interface Anchor {
  * each, centred, else moved clear beside whatever it would cover; covering chrome only when nothing fits.
  */
 export function placeFloating(anchor: Anchor, size: { w: number; h: number }, box: { w: number; h: number }, gap = 14, margin = 8,
-  avoid: readonly Rect[] = []): { left: number; top: number; below: boolean } {
+  avoid: readonly Rect[] = [], centredFirst = false): { left: number; top: number; below: boolean } {
   const clampLeft = (x: number) => {
     const maxLeft = box.w - size.w - margin
     return maxLeft < margin ? margin : Math.min(Math.max(x, margin), maxLeft)
@@ -25,12 +27,15 @@ export function placeFloating(anchor: Anchor, size: { w: number; h: number }, bo
     const maxTop = box.h - size.h - margin
     return maxTop < margin ? margin : Math.min(Math.max(y, margin), maxTop)
   }
-  const left = clampLeft(anchor.x - size.w / 2)
+  const left = clampLeft(anchor.left ?? anchor.x - size.w / 2)
   const aboveTop = anchor.top - gap - size.h
   const rows: { top: number; below: boolean }[] = []
   if (aboveTop >= margin) rows.push({ top: clampTop(aboveTop), below: false })
   rows.push({ top: clampTop(anchor.bottom + gap), below: true })
   const covers = (l: number, t: number) => avoid.find((r) => l < r.right && l + size.w > r.left && t < r.bottom && t + size.h > r.top)
+  // `centredFirst`: centred on the anchor, above or else below, before anything moves it sideways (QA
+  // 2026-11-17: a size tile's Adjust crop bar slid far left over the Boards panel under the board's header).
+  if (centredFirst) for (const row of rows) if (!covers(left, row.top)) return { left, ...row }
   for (const row of rows) {
     if (!covers(left, row.top)) return { left, ...row }
     // Beside what it would cover: to its right or its left, the nearer to the centred place first.
@@ -50,7 +55,13 @@ export interface Rect { left: number; top: number; right: number; bottom: number
  * when there is no room; always fully inside the viewport.
  */
 export function placeMenu(anchor: Rect, size: { w: number; h: number }, view: { w: number; h: number },
-  align: 'start' | 'end' | 'center' = 'start', side: 'below' | 'above' = 'below', gap = 6, margin = 8): { left: number; top: number; above: boolean } {
+  align: 'start' | 'end' | 'center' = 'start', side: 'below' | 'above' | 'right' = 'below', gap = 6, margin = 8): { left: number; top: number; above: boolean } {
+  // Beside a rail's button (the canvas's tool rail, features/production-new-ui.clan): to its right, top lined up, inside the view.
+  if (side === 'right') {
+    const maxTop = view.h - size.h - margin
+    const maxL = view.w - size.w - margin
+    return { left: Math.max(margin, Math.min(anchor.right + gap + 4, maxL)), top: maxTop < margin ? margin : Math.min(Math.max(anchor.top, margin), maxTop), above: false }
+  }
   const want = align === 'end' ? anchor.right - size.w : align === 'center' ? (anchor.left + anchor.right) / 2 - size.w / 2 : anchor.left
   const maxLeft = view.w - size.w - margin
   const left = maxLeft < margin ? margin : Math.min(Math.max(want, margin), maxLeft)

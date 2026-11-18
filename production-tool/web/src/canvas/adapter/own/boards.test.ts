@@ -9,7 +9,7 @@ import * as Y from 'yjs'
 import { SceneStore } from '../../../../../canvas-engine/src'
 import type { ProductionDocument } from '../../../contracts/types'
 import { modelStore, MAYA } from '../../../test/model'
-import { boardIdOf, boardKey, bringIntoView, isBoard, jumpTo, newBoard, railTargets, seedBoards } from '../../boards/boards'
+import { boardIdOf, boardKey, bringIntoView, fitClear, isBoard, jumpTo, newBoard, railTargets, seedBoards } from '../../boards/boards'
 import { AD_TEMPLATE, withAdBoards } from '../../../test/adBoards'
 import { cardOf, seedNodes } from '../../nodes/nodes'
 import { OwnAdapter } from './adapter'
@@ -134,6 +134,16 @@ describe('art-boards on the own engine', () => {
     expect(board(a, doc, 'storyboard').x).toBe(sb.x + 200)
     a.undoScene('undo')
     expect(node(a, 'storyboard').x).toBe(n.x)
+  })
+
+  it('a node brought into view (a Brief from Assets, a new film) is never above 100% nor under the rail (re-test 2b)', async () => {
+    const { a } = await seeded()
+    const script = node(a, 'script')
+    fitClear(a, [script], { inset: 64, zoomFactor: 0.8 })
+    const v = a.view()
+    expect(v.zoom).toBeLessThanOrEqual(1)
+    expect(a.sceneToViewport({ x: script.x, y: script.y }, v).x).toBeGreaterThanOrEqual(64)
+    expect(a.sceneToViewport({ x: script.x + script.width, y: script.y }, v).x).toBeLessThanOrEqual(1200)
   })
 
   it('⌥2 fits the second board by rank, ⌥0 everything; typing keeps the keys', async () => {

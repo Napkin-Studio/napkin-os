@@ -59,14 +59,14 @@ async function newScript(store: ModelStore, words = 'EXT. CLIFFS - DAWN. A runne
   return sc
 }
 
-/** A video the script drives (Make video from a script alone). */
+/** A video the script drives (Make film from a script alone). */
 async function videoFrom(store: ModelStore, scriptId: string): Promise<string> {
   const v = id('video')
   const l = id('link')
   await systemUpdate(store, (d) => {
     d.videos[v] = { id: v, v: 1, field_v: {}, title: 'Video 2', ratio: '16:9', target_s: 15, timeline: {} }
     d.links[l] = { id: l, v: 1, field_v: {}, from: { kind: 'script', id: scriptId }, to: { kind: 'video', id: v }, role: 'drives' }
-  }, 'make video')
+  }, 'make film')
   await store.flush()
   return v
 }
@@ -78,7 +78,7 @@ describe('Plan shots from a script (3.10)', () => {
     expect(planShotsBlocked(doc(store), sc)).toBe('Write something first')
   })
 
-  it('a script with words and no storyboard gets one, linked, and Dex plans on it', async () => {
+  it('a script with words and no storyboard gets one, linked, and the Director agent plans on it', async () => {
     const { store, deps, sent } = await project()
     const sc = await newScript(store)
     expect(planShotsBlocked(doc(store), sc)).toBeNull()
@@ -121,7 +121,7 @@ describe('"Plan a storyboard first?" (3.5, 3.17)', () => {
     expect(clipMode(doc(store), v)).toBe('frames')
   })
 
-  it('Make clips straight from the script: stored on the video, its own shot list (no Storyboard node, no link), Dex plans there', async () => {
+  it('Make clips straight from the script: stored on the video, its own shot list (no Storyboard node, no link), the Director agent plans there', async () => {
     const { store, deps, sent } = await project()
     const sc = await newScript(store)
     const v = await videoFrom(store, sc)
@@ -150,7 +150,7 @@ describe('"Plan a storyboard first?" (3.5, 3.17)', () => {
     expect(sent.filter((s) => s.op === 'shot_list')).toHaveLength(1)
   })
 
-  it('Plan the storyboard first on a video a script drives: the storyboard beside the script, linked; Dex plans', async () => {
+  it('Plan the storyboard first on a video a script drives: the storyboard beside the script, linked; the Director agent plans', async () => {
     const { store, deps, sent } = await project()
     const sc = await newScript(store)
     const v = await videoFrom(store, sc)
@@ -207,7 +207,7 @@ describe('clips straight from the script (3.5)', () => {
 
   it('in a video made straight from the script, every clip request on a frameless shot uses its words (2026-10-15)', async () => {
     // New take, a note's new version and Remake call makeClip without fromWords: they failed with
-    // "This shot has no frame yet." on every shot the Video editor had made from its words.
+    // "This shot has no frame yet." on every shot the Film editor had made from its words.
     const { store, deps, sent } = await project()
     const v = mainVideo(doc(store))!.id
     let shotId = ''

@@ -320,11 +320,6 @@ export function modeWords(mode: RunMode): string {
 
 // ── The driver ──────────────────────────────────────────────────────────────
 
-/** The run the live plan puts a shot in. */
-export function planRunOf(plan: RunPlan | undefined, shotId: Id): PlannedRun | undefined {
-  return plan?.runs.find((r) => r.shotIds.includes(shotId))
-}
-
 /** A take run of the plan: one generation over its shots. */
 export function isTakeRun(r: PlannedRun | undefined): boolean {
   return !!r && (r.mode === 'take' || r.mode === 'take_refs') && r.shotIds.length > 1

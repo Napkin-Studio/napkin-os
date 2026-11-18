@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "A @jogger runs past far behind @maya_front, who ties her laces on a bench."
+     },
+     {
+      "type": "direction",
+      "text": "Shallow focus on Maya."
+     }
+    ],
+    "note": "I tightened the action line and kept both names, the order of events and the direction."
+   }
+  ],
+  "rationale": "Trimmed \"as she ties her laces on a park bench\" to a shorter clause; meaning, @names and block order unchanged."
+ }
+}

@@ -1,6 +1,7 @@
 // The Edit room's Inspector (board Edit room, right): for a clip its take with Change this… and Swap take, in and
 // out, speed, fades and the join into it; for a text its words, style and timing; for the end card its words,
-// colour and length. Nothing picked: the cut in numbers and the keys. Every field writes one undo step.
+// colour and length. It is the Booth's, only while something is picked (the cut line and the band's Keys hold the
+// rest). Every field writes one undo step.
 
 import { useState } from 'react'
 import { useDoc, useServices } from '../app/context'
@@ -11,6 +12,7 @@ import { genTitle, sharesBox, shotTitle, type Gen } from './model'
 import { tc } from './media'
 import type { RoomData } from './Rooms'
 import type { Picked } from './Timeline'
+import { TakeNotes } from './TakeNotes'
 
 const STYLES: { id: TextStyle; label: string }[] = [{ id: 'super', label: 'Lower third' }, { id: 'title', label: 'Centre title' }, { id: 'caption', label: 'Caption' }]
 const r1 = (x: number) => Math.round(x * 10) / 10
@@ -38,11 +40,10 @@ function Seconds({ label, value, step = 0.1, min = 0, max = 600, onSet, suffix =
   )
 }
 
-export function Inspector({ data, cut, picked, t, onPick, onChange, onFeel, onSwap, handleShort }: {
+export function Inspector({ data, cut, picked, onPick, onChange, onFeel, onSwap, handleShort }: {
   data: RoomData
   cut: Cut
   picked: Picked
-  t: number
   onPick: (p: Picked) => void
   onChange: (c: CutClip) => void
   onFeel: (c: CutClip) => void
@@ -54,7 +55,7 @@ export function Inspector({ data, cut, picked, t, onPick, onChange, onFeel, onSw
   const v = data.videoId
   if (picked?.kind === 'clip') {
     const c = cut.v1.find((x) => x.id === picked.id)
-    if (!c) return <Empty data={data} cut={cut} t={t} />
+    if (!c) return null
     const g = data.gens.find((x) => x.id === c.genId)
     const n = c.follows?.shotId ? shotNumber(doc, c.follows.shotId) : 0
     const others = g ? data.gens.filter((x) => sharesBox(g, x) && x.state === 'ready' && x.id !== g.id) : []
@@ -96,13 +97,14 @@ export function Inspector({ data, cut, picked, t, onPick, onChange, onFeel, onSw
             {c.transition && short > 0 && <p className="rm-note">The clip before runs out of footage: its last frame holds for {short.toFixed(1)} s.</p>}
           </fieldset>
         )}
+        {g && <TakeNotes parent={g} videoId={v} shotId={c.follows?.shotId} />}
         <button type="button" className="btn ghost rm-wide" onClick={() => { void editCut.remove(docStore, v, c, true); onPick(null) }}>Remove from the cut</button>
       </div>
     )
   }
   if (picked?.kind === 'text') {
     const tx = cut.text.find((x) => x.id === picked.id)
-    if (!tx) return <Empty data={data} cut={cut} t={t} />
+    if (!tx) return null
     return (
       <div className="rm-tab">
         <div className="rm-tabhead"><span className="rm-kicker pt-mono">Text</span><b className="rm-clamp2" title={tx.words}>{tx.words || 'Text'}</b></div>
@@ -126,7 +128,7 @@ export function Inspector({ data, cut, picked, t, onPick, onChange, onFeel, onSw
   }
   if (picked?.kind === 'card') {
     const e = cut.endCard
-    if (!e) return <Empty data={data} cut={cut} t={t} />
+    if (!e) return null
     return (
       <div className="rm-tab">
         <div className="rm-tabhead"><span className="rm-kicker pt-mono">End card · locked last</span><b className="rm-clamp2" title={e.headline || e.line}>{e.headline || e.line}</b></div>
@@ -143,28 +145,7 @@ export function Inspector({ data, cut, picked, t, onPick, onChange, onFeel, onSw
       </div>
     )
   }
-  return <Empty data={data} cut={cut} t={t} />
-}
-
-function Empty({ data, cut, t }: { data: RoomData; cut: Cut; t: number }) {
-  const { doc: docStore } = useServices()
-  return (
-    <div className="rm-tab">
-      <div className="rm-tabhead"><span className="rm-kicker pt-mono">The cut</span><b>{cut.v1.length} {cut.v1.length === 1 ? 'clip' : 'clips'} · {cut.text.length} text</b></div>
-      <p className="rm-note">Pick a clip, a text or the end card to change it. The playhead is at {tc(t)}.</p>
-      {!cut.endCard && cut.v1.length > 0 && <button type="button" className="btn rm-wide" onClick={() => void editCut.endCard(docStore, data.videoId, {})}>Add an end card</button>}
-      <dl className="rm-keys">
-        <dt><kbd>Space</kbd></dt><dd>Play or pause</dd>
-        <dt><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></dt><dd>Back a second, stop, play</dd>
-        <dt><kbd>I</kbd> <kbd>O</kbd></dt><dd>Mark a stretch to change</dd>
-        <dt><kbd>S</kbd></dt><dd>Split at the playhead</dd>
-        <dt><kbd>T</kbd></dt><dd>Add text</dd>
-        <dt><kbd>Delete</kbd></dt><dd>Remove and close the gap (Shift leaves it)</dd>
-        <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>Undo</dd>
-      </dl>
-      <p className="rm-faint">Editing never spends anything.</p>
-    </div>
-  )
+  return null
 }
 
 function TextWords({ words, onSet }: { words: string; onSet: (w: string) => void }) {

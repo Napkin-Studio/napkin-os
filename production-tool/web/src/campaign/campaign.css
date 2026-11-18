@@ -124,6 +124,8 @@
 .cb-trayhead { display: flex; align-items: baseline; gap: 8px; }
 .cb-trayrows { display: flex; flex-direction: column; gap: 4px; overflow: auto; }
 .cb-trayrow { display: flex; align-items: baseline; gap: 6px; }
+.cb-trayrow.off { opacity: .5; }
+.cb-trayrow input { margin: 0; align-self: center; }
 .cb-trayname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
 .cb-traywords { white-space: nowrap; color: var(--ink2); }
 /* The picked tile's bar and Jude's flag list (pick.ts): on the page, one at a time, placed like the
@@ -165,7 +167,8 @@
 .cb-stack .ov-st { bottom: 0; }
 
 /* The Sizes overview screen (SizesOverview.tsx): over the canvas, under the send tray and tile bar (z 30). */
-.ov { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); font-size: 13px; }
+/* Under the shell bar (62 px and its rule), never beneath it (Playwright live test 2026-11-18: Close sat under Decisions). */
+.ov { position: fixed; inset: 63px 0 0 0; z-index: 20; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); font-size: 13px; }
 .ov-head { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .ov-head h1 { font-size: 14px; margin: 0; font-weight: 600; }
 .ov-seg { display: flex; align-items: center; gap: 4px; color: var(--ink3); }
@@ -174,7 +177,7 @@
 .ov-main { flex: 1; display: flex; min-height: 0; }
 .ov-side { width: 230px; border-right: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
 .ov-master { aspect-ratio: 3 / 2; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); position: relative; overflow: hidden; }
-.ov-master img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ov-master img, .ov-master video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ov-master i { position: absolute; left: 10px; bottom: 8px; font-style: normal; font-size: 11px; color: #fff; text-shadow: 0 1px 3px #000a; }
 .ov-stat { display: flex; justify-content: space-between; color: var(--ink2); }
 .ov-stat b { color: var(--ink); }
@@ -193,11 +196,11 @@
 .ov-badge.run { background: var(--tool-soft); color: var(--tool); }
 .ov-stack { position: relative; display: block; height: 118px; width: 200px; margin: 4px 0 0 6px; cursor: pointer; background: none; border: 0; padding: 0; }
 .ov-st { position: absolute; bottom: 0; max-width: 90px; border-radius: 5px; border: 1px solid var(--line); background: var(--soft); overflow: hidden; display: block; }
-.ov-st img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ov-st img, .ov-st video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ov-grid { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
 .ov-tile { cursor: pointer; position: relative; }
 .ov-pic { width: 100%; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); position: relative; overflow: hidden; }
-.ov-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ov-pic img, .ov-pic video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ov-blank { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--ink3); }
 .ov-tile.sel .ov-pic { outline: 2px solid var(--tool); outline-offset: 2px; }
 .ov-chip { position: absolute; left: 6px; top: 6px; font-size: 10.5px; padding: 1px 7px; border-radius: 999px; color: #fff; z-index: 1; }

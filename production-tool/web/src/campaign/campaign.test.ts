@@ -139,7 +139,7 @@ function size(over: Partial<Size> = {}): Size {
 }
 const doc = (sizes: Size[]): ProductionDocument => ({ format_sets: { [SET.id]: SET }, sizes: Object.fromEntries(sizes.map((s) => [s.id, s])), assets: {}, refs: { r1: { id: 'r1', role: 'logo', asset: `sha256:${'a'.repeat(64)}`, key: 'brand', variant: 'logo' } }, jobs: {}, project: { title: 'First Light' } } as unknown as ProductionDocument)
 
-describe('landing and Jude', () => {
+describe('landing and the Review agent', () => {
   it('a crop lands as the size\'s picture; one cutting the subject needs a look', () => {
     const d = doc([size()])
     const out = { sha256: `sha256:${'6'.repeat(64)}`, url: 'https://x/y', mime: 'image/png', w: 1152, h: 2048 }

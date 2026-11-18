@@ -36,7 +36,7 @@ export function UpdateFollows() {
 }
 
 /** The one place to start an update of the whole project: a bar while anything is out of date or not made
- *  yet. `dock`: floating at the bottom of the stage, or `inline` in the Video editor's timeline head (it
+ *  yet. `dock`: floating at the bottom of the stage, or `inline` in the Film editor's timeline head (it
  *  floated over the top bar there and hid Picture | Sound, 2026-10-15). */
 export function RemakeBar({ dock = 'bottom' }: { dock?: 'bottom' | 'inline' } = {}) {
   const update = useUpdate()

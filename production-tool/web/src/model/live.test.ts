@@ -224,7 +224,7 @@ describe('a bare @key with no front stops a plan before anything is sent', () =>
 describe('the relay’s director error in plain words', () => {
   it('a refused plan says what to do; other errors stay as they came', () => {
     const e = { code: 'internal' as const, message: 'The director failed (DirectorError).', retryable: true }
-    expect(plainJobError(e, 'shot_list').message).toMatch(/^Dex could not plan these shots/)
+    expect(plainJobError(e, 'shot_list').message).toMatch(/^The Director agent could not plan these shots/)
     expect(plainJobError(e, 'shot_list').code).toBe('internal')
     const other = { code: 'timeout' as const, message: 'Runway took too long.', retryable: true }
     expect(plainJobError(other, 'clip')).toBe(other)

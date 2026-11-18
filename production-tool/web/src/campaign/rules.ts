@@ -8,7 +8,7 @@
 // What runs (phase 4): crop and layout (free, on the relay), extend (Ideogram 4.5 at high) and
 // regenerate (Gemini 3 Pro), each paid method on the model the agency allows (an agency with Ideogram
 // off regenerates instead of extending). A film's lengths (reedit) and shapes (reframe) are made from a
-// Video node through its own sheet (phases 5 and 6: film.ts, filmJobs.ts, FilmSizesSheet.tsx).
+// Film node through its own sheet (phases 5 and 6: film.ts, filmJobs.ts, FilmSizesSheet.tsx).
 
 import type { Aspect, CapabilitySheet, Config, Provider, ProtectBox, SizeMethod } from '../contracts/types'
 import { SHEETS } from '../contracts/load'
@@ -19,7 +19,7 @@ import type { PlanRow } from './formats'
 /** Methods built now, and the build each other one waits for. */
 export const RUNNABLE: ReadonlySet<SizeMethod> = new Set(['crop', 'layout', 'extend', 'regenerate'])
 export const WAITS_FOR: Partial<Record<SizeMethod, string>> = {
-  nearest: 'a later build', reedit: 'the Video node\'s Make all sizes', reframe: 'the Video node\'s Make all sizes',
+  nearest: 'a later build', reedit: 'the Film node\'s Make all sizes', reframe: 'the Film node\'s Make all sizes',
 }
 /** The methods a still can be changed to on its tile. */
 export const STILL_METHODS = ['crop', 'extend', 'regenerate', 'layout'] as const
@@ -119,7 +119,7 @@ const wait = (m: SizeMethod) => `${METHOD_WORD[m]} needs ${WAITS_FOR[m] ?? 'a la
 export function methodFor(row: PlanRow, master: Master, protect: readonly ProtectBox[] | undefined, available: ReadonlySet<SizeMethod> = availableMethods(), masterLengthS?: number): MethodChoice {
   const target = aspectOf(row)
   if (row.media === 'video') {
-    if (master.media !== 'video') return { method: 'reedit', now: null, unavailable: 'Films are made from the ad: select the Video node.', fits: false }
+    if (master.media !== 'video') return { method: 'reedit', now: null, unavailable: 'Films are made from the ad: select the Film node.', fits: false }
     const same = Math.abs(Math.log(master.w / master.h) - Math.log(target.w / target.h)) < 0.01
     const method: SizeMethod = same ? 'reedit' : 'reframe'
     if (same && masterLengthS && row.length_s && Math.abs(row.length_s - masterLengthS) < 0.5) return { method, now: null, waits: 'The ad itself', fits: true }

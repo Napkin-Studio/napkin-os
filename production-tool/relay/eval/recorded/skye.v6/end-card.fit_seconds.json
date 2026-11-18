@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "The logo settles over a slow pan across a calm sea at dusk, leaving room."
+     },
+     {
+      "type": "direction",
+      "text": "Leave space for the tagline."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I trimmed the shot to about 2.5 seconds and kept the logo, the sea and the direction."
+   }
+  ],
+  "rationale": "The shot already had one action beat; the line now runs 15 words, which rule 10 times at 2.5 s, and the direction stays last."
+ }
+}

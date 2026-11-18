@@ -4,7 +4,7 @@ import type { ProjectSummary } from '../projects/summary'
 
 /** Where the project is: blue on its way, amber when things wait for an update, green once the ad is made. */
 export function stageChip(s: ProjectSummary): { tone: 'on' | 'warn' | 'done'; text: string } {
-  const label = s.stage === 'character' ? 'Canvas' : s.stage === 'storyboard' ? 'Storyboard' : 'Video'
+  const label = s.stage === 'character' ? 'Canvas' : s.stage === 'storyboard' ? 'Storyboard' : 'Film'
   if (s.behind > 0) return { tone: 'warn', text: `${label} · ${s.behind} behind` }
   if (s.adSeconds !== null) return { tone: 'done', text: `Ad rendered · ${s.adSeconds} s` }
   if (s.stage === 'character') return { tone: 'on', text: s.pictures ? `Canvas · ${s.pictures} ${s.pictures === 1 ? 'picture' : 'pictures'}` : 'Canvas · empty' }
@@ -63,4 +63,4 @@ export function menuName(me: { handle?: string; name?: string } | null | undefin
 }
 
 /** Dex's first-visit line on Home: what to bring, and who does what with it (the crew row above names each). */
-export const FIRST_AD = 'Draw or drop your characters and write a few lines of script. Skye drafts the rest, I plan the shots, Fin films the frames and clips, Rhea retouches them and Edie edits the ad. Nell notes what you ask for and reads it back; Jude judges each result.'
+export const FIRST_AD = 'Draw or drop your characters and write a few lines of script. The Script agent drafts the rest, I plan the shots, the Camera agent films the frames and clips, the Retouch agent retouches them and the Edit agent edits the ad. The Knowledge agent notes what you ask for and reads it back; the Review agent judges each result.'

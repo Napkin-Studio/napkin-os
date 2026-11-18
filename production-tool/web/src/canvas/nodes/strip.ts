@@ -18,5 +18,5 @@ export function plannedLine(shots: readonly { last_writer?: unknown }[]): string
   const n = shots.length
   const many = (k: number) => `${k} ${k === 1 ? 'shot' : 'shots'}`
   if (!dex) return many(n)
-  return dex === n ? `Dex planned ${many(n)} from the script` : `Dex planned ${dex} of the ${many(n)} from the script`
+  return dex === n ? `The Director agent planned ${many(n)} from the script` : `The Director agent planned ${dex} of the ${many(n)} from the script`
 }

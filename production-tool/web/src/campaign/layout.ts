@@ -42,6 +42,8 @@ export interface LayoutIn {
   copy: { line?: string; legal?: string; supers?: string[] }
   brand: BrandKit
   overrides?: Partial<Record<TypeLayerKind, TypeLayerOverride>>
+  /** What must stay (the set's protect boxes), in 0-1 of this size: the line and legal keep off it. */
+  keep?: Region[]
 }
 
 /** A laid-out layer: the wire TypeLayer, with the logo's asset still a hash. */
@@ -153,7 +155,32 @@ export function layoutType(inp: LayoutIn): Laid[] {
     lineLayer({ x: S.x, y: S.y + S.h - foot - lineH * 1.1, w: S.w, h: lineH }, 'centre')
     if (legal) legalLayer({ x: S.x, y: S.y + S.h - foot, w: S.w, h: foot }, 'centre')
   }
-  return out
+  return keepOff(out, S, inp.keep, overrides)
+}
+
+const hits = (a: Region, b: Region) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+/** The line and legal keep off what must stay (QA 2026-11-17: the brand line ran across the woman's chest on
+ *  Reels, 300x250 and 1:1). A layer the rule placed over a kept box moves to the mirror band of the safe area
+ *  (bottom to top), when that is clear; a box a person placed (an override) stays where they put it. What
+ *  still covers it is flagged by the subject check (checks.ts). */
+export function keepOff(laid: Laid[], S: Region, keep: Region[] | undefined, overrides: LayoutIn['overrides'] = {}): Laid[] {
+  if (!keep?.length) return laid
+  return laid.map((l) => {
+    if (l.kind === 'logo' || overrides?.[l.kind]?.box || !keep.some((k) => hits(l.box, k))) return l
+    const mirrored: Region = { ...l.box, y: S.y + (S.y + S.h) - (l.box.y + l.box.h) }
+    return keep.some((k) => hits(mirrored, k)) || laid.some((o) => o !== l && hits(mirrored, o.box)) ? l : { ...l, box: mirrored }
+  })
+}
+
+/** The set's protect boxes in 0-1 of a cropped size (a crop shows part of the master); none for a method
+ *  whose picture is placed or drawn anew (their placement is the relay's). */
+export function keepOf(set: FormatSet, size: Size): Region[] {
+  const boxes = set.protect?.boxes ?? []
+  const c = size.crop
+  if (!boxes.length || !c || size.method !== 'crop' || !c.w || !c.h) return []
+  return boxes.map((b) => ({ x: (b.x - c.x) / c.w, y: (b.y - c.y) / c.h, w: b.w / c.w, h: b.h / c.h }))
+    .filter((r) => r.x < 1 && r.y < 1 && r.x + r.w > 0 && r.y + r.h > 0)
 }
 
 /**
@@ -191,7 +218,7 @@ export function layoutInput(d: ProductionDocument, set: FormatSet, size: Size): 
   return {
     w: size.delivery.width, h: size.delivery.height, channel: channelOfSize(size), kind: f?.format.kind,
     fracs: size.method === 'layout' ? besidePanel(fracs, layoutPanel({ w: size.delivery.width, h: size.delivery.height }, master)) : fracs,
-    copy: set.copy ?? {}, brand: brandKit(d), overrides: size.layers,
+    copy: set.copy ?? {}, brand: brandKit(d), overrides: size.layers, keep: keepOf(set, size),
   }
 }
 

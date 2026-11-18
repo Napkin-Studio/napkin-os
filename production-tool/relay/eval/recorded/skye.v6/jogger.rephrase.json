@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "On a park bench, @maya_front ties her laces while a @jogger passes far behind her."
+     },
+     {
+      "type": "direction",
+      "text": "Shallow focus on Maya."
+     }
+    ],
+    "note": "I rephrased the action and kept the same facts, names and direction."
+   }
+  ],
+  "rationale": "Reworded the single action line with the same events and @names, and left the direction block last and unchanged."
+ }
+}

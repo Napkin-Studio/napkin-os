@@ -10,11 +10,11 @@ import type { Id, Link, LinkEndpoint } from '../contracts/types'
 import type { CanvasElement, Pt } from '../canvas/core/canvasAdapter'
 import { cardOf, createNode, elementOfEnd, linkInput, type NodeEnv } from '../canvas/nodes/nodes'
 import { clearOffset } from '../canvas/boards/fitting'
-import { addBrief, briefFromDocument, newBrief } from './model'
+import { addBrief, briefFromDocument, briefOf, newBrief } from './model'
 import type { OsBriefRead } from './os'
 
 /** The card's box on the canvas (the compact card; the Booth shows the whole spine). */
-export const BRIEF_CARD = { w: 280, h: 196 } as const
+export const BRIEF_CARD = { w: 300, h: 132 } as const
 /** The gap between the Brief card and the Script it feeds. */
 const GAP = 72
 
@@ -78,4 +78,36 @@ export async function startFromBrief(env: NodeEnv, read: OsBriefRead, how: 'link
   const linked = await linkBrief(env, brief.id, { kind: 'script', id: scriptId })
   env.canvas.select([scriptEl.id])
   return { briefId: brief.id, scriptId, ...(linked.ok ? { link: linked.link } : {}) }
+}
+
+/** What linking a brief later did: the Brief node, and the Script it now feeds when there was one to feed. */
+export interface LinkedLater {
+  briefId: Id
+  /** The Script the brief was linked into: the only Script with no brief of its own, if there was one. */
+  scriptId?: Id
+  /** Why it was placed but not linked (several Scripts, or each already has a brief). */
+  note?: string
+}
+
+/**
+ * Link a brief to a film started without one (live test 2026-11-18; Assets › From Napkin, Continue in ›
+ * Link a brief…): its Brief node (the one already made from this brief, else a new frozen copy) beside
+ * the film's Script, linked into it when exactly one Script has no brief yet; otherwise placed, selected,
+ * for the person to link (its port, or + Link input).
+ */
+export async function linkBriefLater(env: NodeEnv, read: OsBriefRead): Promise<LinkedLater> {
+  const brief = briefFromDocument(env.doc.get(), read.documentId) ?? (await addBrief(env.doc, newBrief(read, 'link')))
+  const d = env.doc.get()
+  const open = Object.values(d.scripts ?? {}).filter((sc) => !briefOf(d, sc.id))
+  const target = open.length === 1 ? open[0].id : undefined
+  const scriptEl = target ? elementOfEnd(env.canvas.elements(), d, { kind: 'script', id: target }) : undefined
+  const at = scriptEl ? { x: scriptEl.x - GAP - BRIEF_CARD.w / 2, y: scriptEl.y + Math.min(scriptEl.height / 3, BRIEF_CARD.h / 2 + 24) } : undefined
+  const el = placeBrief(env, brief.id, at)
+  if (!target || !scriptEl) {
+    env.canvas.select([el.id])
+    return { briefId: brief.id, note: open.length ? 'Link it into the Script it is for: drag from its port.' : 'Every Script has a brief already: link this one where you want it.' }
+  }
+  const linked = await linkBrief(env, brief.id, { kind: 'script', id: target })
+  env.canvas.select([el.id])
+  return linked.ok ? { briefId: brief.id, scriptId: target } : { briefId: brief.id, note: linked.reason }
 }

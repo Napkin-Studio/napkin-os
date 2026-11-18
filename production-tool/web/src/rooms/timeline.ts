@@ -8,7 +8,7 @@ import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as St
 import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
-import { shotsOf, storyboardOfVideo } from '../model/selectors'
+import { beatsOf, shotsOf, storyboardOfVideo } from '../model/selectors'
 import {
   clipEnd, EMPTY_CUT, pack, r3, sortV1,
   type Cut, type CutClip, type CutEndCard, type CutText, type Transition,
@@ -141,17 +141,49 @@ export function assemble(d: ProductionDocument, videoId: Id, boxes: Box[], gens:
   return { v1: pack(v1), v2: [], text: before.text, endCard: before.endCard ?? endCardFrom(d, videoId) }
 }
 
-/** The end card from the storyboard's end card shot: its words as the headline, its length. */
+/** A shot's words that only name it ("Hearth Oats end card."): the director's label, not a line to show. */
+const END_LABEL = /\s*\bend[ -]?card\b[.!]?$/i
+const sentences = (t: string) => t.trim().split(/(?<=[.!?])\s+/).filter(Boolean)
+const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
+
+/**
+ * The end card from the storyboard's end card shot. Its words when they are words ("SuperSamurai. Clean in one
+ * sweep.": the first sentence is the headline, the rest the line). When they only label the card ("Hearth Oats
+ * end card.", live test 2026-11-18: the card read "Hearth Oats end card" twice), the brand in the label is the
+ * headline and the film's own closing line (its last VO or spoken line) is the line, without the brand again.
+ */
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
-  const sb = storyboardOfVideo(d, videoId)
-  const shot = (sb ? shotsOf(d, sb.id) : []).find((s) => s.kind === 'end_card')
+  return endCardOf(d, storyboardOfVideo(d, videoId)?.id)
+}
+
+/** The end card a storyboard's end card shot makes (endCardFrom), for the Film's cut or the storyboard's cell. */
+export function endCardOf(d: ProductionDocument, storyboardId: Id | undefined): CutEndCard | undefined {
+  const shots = storyboardId ? shotsOf(d, storyboardId) : []
+  const shot = shots.find((s) => s.kind === 'end_card')
   if (!shot) return undefined
-  // "SuperSamurai. Clean in one sweep.": the first sentence is the headline, the rest the line.
-  const [head, ...rest] = (shot.action ?? '').trim().split(/(?<=[.!?])\s+/)
-  const headline = (head ?? '').replace(/[.!?]$/, '').trim()
-  const line = rest.join(' ').trim() || headline
   const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return { headline: headline || named, line: line || named, bg: '#14161B', durS: shot.duration_s || 1.5 }
+  const words = (shot.action ?? '').trim()
+  const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: '#14161B', durS: shot.duration_s || 1.5 })
+  if (words && !END_LABEL.test(words)) {
+    const [head, ...rest] = sentences(words)
+    return card(bare(head ?? ''), rest.join(' '))
+  }
+  const brand = bare(words.replace(END_LABEL, ''))
+  const closing = closingLine(d, shots.map((s) => s.id))
+  if (!closing) return card(brand, '')
+  const [first, ...rest] = sentences(closing)
+  // "Hearth Oats. Slow down, warm up." under the brand "Hearth Oats": the line is what follows the brand.
+  if (brand && bare(first).toLowerCase() === brand.toLowerCase()) return card(brand, rest.join(' ') || closing)
+  return brand ? card(brand, closing) : card(bare(first), rest.join(' '))
+}
+
+/** The film's last spoken words: the last VO or line beat, in shot order. */
+function closingLine(d: ProductionDocument, shotIds: Id[]): string | undefined {
+  for (const id of [...shotIds].reverse()) {
+    const said = beatsOf(d, id).filter((b) => (b.kind === 'vo' || b.kind === 'line') && b.text?.trim())
+    if (said.length) return said[said.length - 1].text!.trim()
+  }
+  return undefined
 }
 
 // ── New take ready ────────────────────────────────────────────────────────────────────────────────────
@@ -294,6 +326,35 @@ export function frameAt(plan: Plan, t: number): Frame {
   const e = plan.endCard
   const endCard = e && t >= e.startS - 1e-6 && t < e.startS + e.s ? { card: e, alpha: e.transitionIn && e.transitionIn.s > 0 && t - e.startS < e.transitionIn.s ? (t - e.startS) / e.transitionIn.s : 1 } : undefined
   return { layers, text, ...(endCard ? { endCard } : {}), wash }
+}
+
+/** One clip's sound at a moment: where in its take, and how loud (0..1). */
+export interface Sound { clip: PlanClip; srcS: number; gain: number }
+
+/** What the preview hears at ad time `t`, as stitch mixes the render (stitch/timeline.py; owner 2026-11-18,
+ *  until the Sound feature mixes one): each clip's own sound inside its window, at its speed; its fades; a
+ *  transition (a dissolve or a dip) crossfades the two linearly over its seconds, the outgoing clip running on
+ *  into its footage after its out point, silent when it holds its last frame instead, has faded out or has no
+ *  footage left. Silent under a held last frame, a gap and the end card (and the roll-up after it). A still
+ *  has no sound: the preview never plays a picture. */
+export function soundAt(plan: Plan, t: number): Sound[] {
+  const cur = [...plan.clips].reverse().find((c) => t >= c.startS - 1e-6 && t < c.startS + c.durS - 1e-6)
+  if (!cur) return []
+  const out: Sound[] = []
+  const into = t - cur.startS
+  let gain = fadeAlpha(into, cur.durS, cur.fadeInS ?? 0, cur.fadeOutS ?? 0)
+  const tr = cur.transitionIn
+  const i = plan.clips.indexOf(cur)
+  const prev = i > 0 ? plan.clips[i - 1] : undefined
+  if (tr && tr.s > 0 && into < tr.s && prev) {
+    const k = into / tr.s
+    gain *= k
+    const handle = prev.outS + into * (prev.speed ?? 1)
+    if (!prev.holdS && !prev.fadeOutS && handle < prev.takeS - 0.02) out.push({ clip: prev, srcS: r3(handle), gain: r3(1 - k) })
+  }
+  const src = cur.inS + into * (cur.speed ?? 1)
+  if (src < cur.outS - 0.02) out.push({ clip: cur, srcS: r3(src), gain: r3(gain) })
+  return out
 }
 
 /** The clip under the playhead in words, for the transport: "Box 1 at 0:01.0". */

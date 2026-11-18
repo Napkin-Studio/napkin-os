@@ -235,7 +235,12 @@ export class ModelStore implements DocumentStore {
       }
     }
     if (!this.pending.length) {
-      this.value = this.bus.doc() as unknown as Doc
+      const next = this.bus.doc() as unknown as Doc
+      // A checkpoint with nothing new (a flush only to read the chain) changes nothing: no emit, so
+      // listeners never count it as an edit (live check F1, 2026-11-18). The CLAN store replaces its
+      // document on every write and never edits it in place, so the same object means no change.
+      if (this.value === next) return
+      this.value = next
     } else {
       for (const p of this.pending) rebase(p.after)
       if (this.value) {
@@ -319,7 +324,11 @@ export class ModelStore implements DocumentStore {
 
   private async drain() {
     let wrote = false
+    // Whether this drain changed anything: a flush with nothing waiting must not tell listeners the
+    // document changed (live check F1: opening the Storyboard or closing a tab marked the copy as edited).
+    let drained = false
     while (this.pending.length) {
+      drained = true
       const item = this.pending[0]
       this.current = item
       try {
@@ -366,7 +375,7 @@ export class ModelStore implements DocumentStore {
     }
     if (await this.recordOutcomes()) wrote = true
     // Nothing more waiting: show what the buses hold, with checkpoint's fields (prose, refs, last writer).
-    if (!this.pending.length) {
+    if (!this.pending.length && (drained || wrote)) {
       this.value = this.bus.doc() as unknown as Doc
       this.emit()
     }

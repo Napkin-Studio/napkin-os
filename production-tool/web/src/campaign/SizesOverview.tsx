@@ -85,7 +85,10 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
       </header>
       <div className="ov-main">
         <aside className="ov-side">
-          <div className="ov-master">{masterUrl ? <img src={masterUrl} alt="Master" /> : null}<i>Master</i></div>
+          {/* A film's master is a video: a still of it, never an <img> of a video (Playwright live test 2026-11-18). */}
+          <div className="ov-master">{masterUrl ? (set.master.kind === 'render' || set.master.kind === 'video'
+            ? <video src={masterUrl} muted playsInline preload="metadata" aria-label="Master" />
+            : <img src={masterUrl} alt="Master" />) : null}<i>Master</i></div>
           <div className="ov-stat"><span>Sizes</span><b>{sizes.length}</b></div>
           <div className="ov-bar" aria-hidden>
             <i style={{ width: `${(counts.ready / Math.max(1, sizes.length)) * 100}%`, background: 'var(--ok, #2fa36b)' }} />
@@ -177,7 +180,9 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
 
 /** A size's picture; a film or a size not made yet shows a plain tile. */
 function OvPic({ size }: { size: Size }) {
-  const url = useBlobUrl(size.media === 'image' ? size.asset : undefined)
+  const url = useBlobUrl(size.asset)
+  // A film size shows its first frame (its own video, paused), not a blank tile.
+  if (url && size.media === 'video') return <video src={url} muted playsInline preload="metadata" />
   return url ? <img src={url} alt="" draggable={false} /> : <span className="ov-blank">{size.media === 'video' ? '▶' : ''}</span>
 }
 

@@ -45,7 +45,8 @@ describe('node cards, one per node (+ Node; ui-behaviour 3.3)', () => {
     const main = render(services, DEFAULT_CHROME, createElement(NodeCard, { kind: 'script', id: mainScript(d)!.id, onOpen: () => {} }))
     const second = render(services, DEFAULT_CHROME, createElement(NodeCard, { kind: 'script', id: ids.script, onOpen: () => {} }))
     expect(main).toContain('Maya runs through the rain')
-    expect(second).toContain('Script · Script 2')
+    expect(second).toContain('title="Script · Script 2"')
+    expect(second).toContain('<span class="bl-kind">· Script 2</span>')
     expect(second).not.toContain('Maya runs through the rain')
     expect(second).toContain('No script yet')
   })
@@ -65,11 +66,12 @@ describe('node cards, one per node (+ Node; ui-behaviour 3.3)', () => {
   it('a card without an id is the main one (the Excalidraw overlay)', () => {
     const { d, services } = project()
     const html = render(services, DEFAULT_CHROME, createElement(NodeCard, { kind: 'storyboard', onOpen: () => {} }))
-    expect(html).toContain(`${mainStoryboard(d)!.ratio} · 0 shots`)
+    expect(html).toContain(`· ${mainStoryboard(d)!.ratio}</span>`)
+    expect(html).toContain("0 shots · ")
   })
 })
 
-describe("the script card while Skye's draft waits on a question (owner 2026-10-15)", () => {
+describe("the script card while the Script agent's draft waits on a question (owner 2026-10-15)", () => {
   const withWrite = (state: 'needs_input' | 'submitted') => {
     const p = project()
     const scriptId = mainScript(p.d)!.id
@@ -84,7 +86,12 @@ describe("the script card while Skye's draft waits on a question (owner 2026-10-
   it('says it waits for you with the question, not that she is writing', () => {
     const html = withWrite('needs_input')
     expect(html).toContain('Waiting for you: Open wide or close?')
-    expect(html).not.toContain('Skye is writing a draft')
-    expect(withWrite('submitted')).toContain('Skye is writing a draft')
+    expect(html).not.toContain('The Script agent is writing a draft')
+    expect(withWrite('submitted')).toContain('The Script agent is writing a draft')
+  })
+
+  it('carries the amber "Needs your call" tag on its edge while it waits (features/production-new-ui.clan, mock "ask")', () => {
+    expect(withWrite('needs_input')).toContain('<span class="paper-tag" role="status">Needs your call</span>')
+    expect(withWrite('submitted')).not.toContain('paper-tag')
   })
 })

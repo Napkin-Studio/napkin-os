@@ -1,13 +1,15 @@
-// The tool follows the Napkin OS shell's palette exactly (features/production-ui.clan): every design
-// token the shell defines (app/src/index.css) has the shell's value here, in light and in dark, except
-// the owner's approved differences (ui-behaviour 9). The crew colours match the shell's figures.
+// The tool wears the new UI's tokens (features/production-new-ui.clan): the shell's own file
+// (app/src/shell/nui/tokens.css) is imported before styles.css, which adds only the tool's tokens, in
+// terms of the shell's, and redefines none of the shell's but the approved --ink3. The agency layer
+// (palette.ts surfaceCss) comes after both (ui/shell/agency.ts).
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { storedTheme } from './theme'
 
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8')
-const SHELL = read('../../../app/src/index.css')
+const SHELL = read('../../../app/src/shell/nui/tokens.css')
 const OURS = read('./styles.css')
+const MAIN = read('./main.tsx')
 
 /** The custom properties in the first block whose selector starts with `selector`. */
 function block(css: string, selector: string): Map<string, string> {
@@ -19,43 +21,30 @@ function block(css: string, selector: string): Map<string, string> {
   return out
 }
 
-/** The shell's legacy aliases (--bg, --text …) are its own compatibility layer, not design tokens. */
-const LEGACY = new Set(['bg', 'surface', 'border', 'text', 'muted', 'accent', 'chip-bg', 'sidebar-w', 'toolbar-h'])
-/** The owner's approved differences (ui-behaviour 9, 2026-10-14): grey text and green text. */
-const APPROVED: Record<'light' | 'dark', Record<string, string>> = {
-  light: { ink3: '#6b7180', success: '#166534', 'ok-fg': '#166534' },
-  dark: {},
-}
+/** Every custom property a stylesheet defines anywhere. */
+const defined = (css: string) => new Set([...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|[;{\s])--([\w-]+)\s*:/g)].map((m) => m[1]))
 
-describe('the tokens are the shell\'s', () => {
-  const cases = [
-    ['light', ":root,\n:root[data-theme='light']"],
-    ['dark', ":root[data-theme='dark']"],
-    ['shared', ':root {\n  --f-display'],
-  ] as const
-  for (const [name, sel] of cases) {
-    it(`${name}: every shell token has the shell's value, or an approved difference`, () => {
-      const shell = block(SHELL, sel)
-      const ours = name === 'shared' ? block(OURS, ':root {\n  /* The shell') : block(OURS, sel)
-      const approved = name === 'shared' ? {} : APPROVED[name]
-      const drift: string[] = []
-      for (const [k, v] of shell) {
-        if (LEGACY.has(k)) continue
-        const want = approved[k] ?? v
-        if (ours.get(k) !== want) drift.push(`--${k}: shell ${v}, ours ${ours.get(k) ?? 'missing'}`)
-      }
-      expect(drift).toEqual([])
-    })
-  }
-  it('the approved differences are the ones the owner chose', () => {
+describe('the tokens are the new UI\'s', () => {
+  it('main.tsx imports the shell\'s tokens before the tool\'s', () => {
+    const a = MAIN.indexOf("import '@napkin/app/shell/nui/tokens.css'")
+    const b = MAIN.indexOf("import './styles.css'")
+    expect(a).toBeGreaterThan(-1)
+    expect(b).toBeGreaterThan(a)
+  })
+  it('styles.css redefines no shell token but the approved --ink3', () => {
+    const shell = defined(SHELL)
+    const clash = [...defined(OURS)].filter((k) => shell.has(k) && k !== 'ink3')
+    expect(clash).toEqual([])
+    expect(block(OURS, ":root,\n:root[data-theme='light']").get('ink3')).toBe('var(--muted)')
+  })
+  it('the action, the selection and the agency are the agency\'s act colour; needs are amber, never brand red', () => {
     const light = block(OURS, ":root,\n:root[data-theme='light']")
-    expect(light.get('action')).toBe('#d63b1f')
-    expect(light.get('ink3')).toBe('#6b7180')
-    expect(light.get('tool-ink')).toBe('#1e4ed8')
-    expect(light.get('success')).toBe('#166534')
-    // The primary button keeps white text at AA in dark too (ui-behaviour 9: #D63B1F on every surface).
-    const dark = block(OURS, ":root[data-theme='dark']")
-    expect(dark.get('action')).toBe('#d63b1f')
+    expect(light.get('action')).toBe('var(--ag-act)')
+    expect(light.get('action-fg')).toBe('var(--ag-act-ink)')
+    expect(light.get('tool')).toBe('var(--ag-act)')
+    expect(light.get('agency')).toBe('var(--ag-act)')
+    expect(light.get('create')).toBe('var(--needs, var(--warn))')
+    expect(OURS).not.toMatch(/#d63b1f|#ff4f2e/i)
   })
   it('the crew colours are the shell figures\'', () => {
     // The shell moved to role spheres (#151); the tool keeps its crew until its own rework, so its colours

@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "rationale": "Rephrased the action with the same facts and the @maya_front name, and kept the direction block last.",
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front lifts a golden loaf from the oven and knocks its base, flour drifting through a beam of light."
+     },
+     {
+      "type": "direction",
+      "text": "Close on the knock; the hollow sound rings out."
+     }
+    ],
+    "note": "I rephrased the action and the direction, keeping the same events and @maya_front."
+   }
+  ]
+ }
+}

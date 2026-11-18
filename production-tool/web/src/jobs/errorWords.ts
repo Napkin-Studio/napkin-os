@@ -12,8 +12,8 @@ export function plainJobError(error: ContractError, op: Op | undefined): Contrac
   if (!m) return error
   const message = m[1] === 'DirectorError'
     ? op === 'shot_list'
-      ? 'Dex could not plan these shots: the plan named a picture that was not sent. Check that each @name in the script has a picture (a bare @name needs its front), then plan again.'
-      : 'Dex could not direct this: a name or a setting did not match the pictures sent. Check the @names, then try again.'
-    : 'Dex could not work this out. Try again.'
+      ? 'The Director agent could not plan these shots: the plan named a picture that was not sent. Check that each @name in the script has a picture (a bare @name needs its front), then plan again.'
+      : 'The Director agent could not direct this: a name or a setting did not match the pictures sent. Check the @names, then try again.'
+    : 'The Director agent could not work this out. Try again.'
   return { ...error, message }
 }

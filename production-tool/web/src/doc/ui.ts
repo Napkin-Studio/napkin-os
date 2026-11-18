@@ -34,6 +34,9 @@ export interface JobLocal {
   fallbackReason?: string
   /** The "Napkin's got you" notice for this fallback was shown: once per job. */
   fallbackShown?: boolean
+  /** The relay found the edit came back the same as the picture sent (Job.unchanged, relay sameness.py):
+   *  nothing to apply. Kept here, not in the document, as the frame-edit flow keeps it on its frame. */
+  unchanged?: boolean
   /** The character cards the director was given: they go into the landing's rationale. */
   cards?: DirectorCard[]
   /** Started by that run of "Update what follows" (jobs/follow.ts). */

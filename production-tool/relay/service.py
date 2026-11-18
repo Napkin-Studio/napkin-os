@@ -1344,12 +1344,15 @@ class Relay:
     def _came_back_same(self, job: dict, out: dict) -> bool:
         """The edited picture is the one sent, almost pixel for pixel (sameness.py): the client offers no
         Apply. Only pictures in our own store are read, and a picture that cannot be read is not the same."""
-        sent = ((job.get("_req") or {}).get("input") or {}).get("image") or {}
+        inp = (job.get("_req") or {}).get("input") or {}
+        sent = inp.get("image") or {}
         urls = [sent.get("url"), out.get("url")]
         if not all(urls) or any(self.blobs.key_for_url(u) is None for u in urls):
             return False
+        # A region edit is judged inside the area it was sent to change (the mask's bounds).
+        region = inp.get("region") if job.get("op") == "region_edit" else None
         try:
-            return sameness.same_picture(self.blobs.fetch(urls[0]), self.blobs.fetch(urls[1]))
+            return sameness.same_picture(self.blobs.fetch(urls[0]), self.blobs.fetch(urls[1]), region)
         except Exception as e:  # never fails the job: the person still sees the picture
             log.warning("job %s: could not compare the edit with its frame: %s", job["jobId"], e)
             return False

@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front reaches the summit, drops her backpack, spreads her arms in the wind above clouds."
+     },
+     {
+      "type": "direction",
+      "text": "Drone pull-out to reveal the peaks."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one 15-word line so the shot plays in 2.5 seconds."
+   }
+  ],
+  "rationale": "One action line of 15 words counts 2.5 s by rule 10; the @name, event order and direction are kept."
+ }
+}

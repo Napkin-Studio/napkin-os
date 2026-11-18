@@ -21,9 +21,9 @@ export type Edit =
    *  as it was sent. `maskId` names the mask it came from (its label, its undo), but painting, clearing or
    *  undoing that mask afterwards never changes the fill (fix/editor-apply-keeps-edits: the owner cleared
    *  the blue after the result came, and Apply saved v1 unchanged). */
-  | { id: string; kind: 'fill'; maskId: string; ops: MaskOp[]; words: string; keepOutside: boolean; jobId: string; remove?: true }
-  | { id: string; kind: 'whole'; words: string; jobId: string }
-  | { id: string; kind: 'upscale'; scale: 2 | 4; jobId: string }
+  | { id: string; kind: 'fill'; maskId: string; ops: MaskOp[]; words: string; keepOutside: boolean; jobId: string; remove?: true; unsent?: true }
+  | { id: string; kind: 'whole'; words: string; jobId: string; unsent?: true }
+  | { id: string; kind: 'upscale'; scale: 2 | 4; jobId: string; unsent?: true }
 
 export type EditKind = Edit['kind']
 
@@ -36,6 +36,12 @@ export interface EditSession {
 }
 
 export const EMPTY: EditSession = { edits: [], hidden: [] }
+
+/** An edit that runs a job. `unsent`: written down when the person confirmed, and not yet handed to the relay
+ *  (rowFirst, sendRow). */
+export type JobEdit = Extract<Edit, { jobId: string }>
+/** An edit that runs a job, before its job id is known (ImageEditor rowFirst). */
+export type UnsentEdit = JobEdit extends infer E ? E extends { jobId: string } ? Omit<E, 'jobId' | 'unsent'> : never : never
 
 let counter = 0
 export function editId(): string {
@@ -71,6 +77,23 @@ export function withMaskOp(s: EditSession, op: MaskOp): EditSession {
 /** A step that takes paint away with no mask to take it from: it would make an empty mask. */
 export function nothingToTake(s: EditSession, op: MaskOp): boolean {
   return !masks(s).some((m) => m.id === s.active) && op.mode === 'sub'
+}
+
+/** Whether a mask has a Fill or Remove sent on it. */
+export const hasFill = (s: EditSession, maskId: string): boolean => s.edits.some((e) => e.kind === 'fill' && e.maskId === maskId)
+
+/** Once a mask's Fill or Remove is sent, the next stroke starts a new mask (QA 2026-11-17: a second lasso
+ *  joined Mask 1 and Fill 2 repainted Fill 1's area). */
+export function afterSend(s: EditSession): EditSession {
+  return s.active ? { ...s, active: undefined } : s
+}
+
+/** "New mask": an empty mask, active, so the next stroke paints it. An empty mask never shows in Layers
+ *  or the Edits list unless it is the active one. */
+export function newMask(s: EditSession): EditSession {
+  const m: Edit = { id: editId(), kind: 'mask', name: nextMaskName(s), ops: [] }
+  const dropEmpty = s.edits.filter((e) => !(e.kind === 'mask' && !e.ops.length))
+  return { ...s, edits: [...dropEmpty, m], active: m.id }
 }
 
 /** What the strip says when there is nothing to take away. */
@@ -137,12 +160,25 @@ export function toggleHidden(s: EditSession, id: string): EditSession {
   return { ...s, hidden: s.hidden.includes(id) ? s.hidden.filter((h) => h !== id) : [...s.hidden, id] }
 }
 
-/** An edit that counts: a mask with paint, a result that arrived or is on the way. */
-const counts = (e: Edit) => !(e.kind === 'mask' && !e.ops.length)
+/** An edit that counts: a mask with paint, a text with words, a result that arrived or is on the way. */
+const counts = (e: Edit) => !(e.kind === 'mask' && !e.ops.length) && !(e.kind === 'text' && !e.text.trim())
 
-/** The edits that count and show: what Apply saves (hidden ones are counted apart, by hiddenCount). */
+/** The edits that count and show: what Apply saves (hidden ones are counted apart, by hiddenCount). A mask is
+ *  never applied, so it is not an edit here (QA 2026-11-17: "4 edits not applied" when Apply saved 3). */
 export function editCount(s: EditSession): number {
-  return s.edits.filter((e) => counts(e) && !s.hidden.includes(e.id)).length
+  return s.edits.filter((e) => counts(e) && e.kind !== 'mask' && !s.hidden.includes(e.id)).length
+}
+
+/** A mask painted and not filled yet: work the leave ask keeps or discards with the edits. */
+export function unfilledMasks(s: EditSession): number {
+  const filled = new Set(s.edits.flatMap((e) => (e.kind === 'fill' ? [e.maskId] : [])))
+  return masks(s).filter((m) => m.ops.length && !filled.has(m.id)).length
+}
+
+/** What leaving would keep or discard: the edits and unfilled masks made here, shown or hidden (Apply carries
+ *  nothing over, so every one of them was made on this version). */
+export function pendingCount(s: EditSession): number {
+  return s.edits.filter((e) => counts(e) && e.kind !== 'mask').length + unfilledMasks(s)
 }
 
 /** The hidden layers that would otherwise count: hidden edits, and Frame when it is hidden. `ignore`: kinds
@@ -156,18 +192,6 @@ export function leftOutLine(n: number): string {
   return `${plural(n, 'hidden layer')} ${n === 1 ? 'is' : 'are'} left out`
 }
 
-/** After Apply: what stays in the editor (owner answer IM3, nothing vanishes). The hidden edits, still hidden,
- *  and the masks their fills are cut by (hidden too: they were applied). Undefined when nothing stays. */
-export function keptAfterApply(s: EditSession): EditSession | undefined {
-  const kept = s.edits.filter((e) => s.hidden.includes(e.id) && counts(e))
-  if (!kept.length) return undefined
-  const ids = new Set(kept.map((e) => e.id))
-  const masksNeeded = kept.flatMap((e) => (e.kind === 'fill' ? [e.maskId] : []))
-  const edits = s.edits.filter((e) => ids.has(e.id) || masksNeeded.includes(e.id))
-  // Frame is not carried over: on the new version it is the applied picture itself.
-  return { edits, hidden: edits.map((e) => e.id) }
-}
-
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /** The top bar's pill: "3 edits not applied". */
@@ -175,9 +199,11 @@ export function notApplied(n: number): string {
   return `${plural(n, 'edit')} not applied`
 }
 
-/** What the versions menu says Apply will make (3.12). */
-export function applyLine(n: number, version: number): string {
-  return `Apply saves your ${plural(n, 'edit')} as v${version + 1}. v${version} stays.`
+/** What the versions menu says Apply will make (3.12), and what it lets go: hidden layers stay out of the new
+ *  version entirely and are not kept (owner 2026-11-18, replacing IM3's carry-once). */
+export function applyLine(n: number, version: number, hidden = 0): string {
+  const gone = hidden ? ` ${plural(hidden, 'hidden layer')} ${hidden === 1 ? 'is' : 'are'} left out and not kept.` : ''
+  return `Apply saves your ${plural(n, 'edit')} as v${version + 1}. v${version} stays.${gone}`
 }
 
 /** Asked before moving to another frame with edits not applied (3.12). */
@@ -193,10 +219,10 @@ export function nextStep(s: EditSession): string | undefined {
 }
 
 /** An edit as the list says it. `state` is its job's, when it has one. */
-export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' | 'failed'): string {
+export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' | 'failed' | 'same' | 'unsent'): string {
   switch (e.kind) {
     case 'mask': return `${e.name}${s.active === e.id ? ' · painting' : ''}`
-    case 'text': return `Text "${e.text}"`
+    case 'text': return e.text.trim() ? `Text "${e.text}"` : 'Text · typing'
     case 'crop': return 'Crop'
     case 'fill': {
       const m = s.edits.find((x) => x.id === e.maskId)
@@ -210,16 +236,25 @@ export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' |
 
 export interface Layer { id: string; kind: EditKind | 'frame'; label: string; hidden: boolean; locked?: boolean; active?: boolean }
 
+/** A text layer is called by its words, cut to fit the panel (re-test R3: every one was "Text", so hiding one could
+ *  not say which); "Text" while it has none. */
+export function textLayerName(text: string, max = 24): string {
+  const words = text.trim().replace(/\s+/g, ' ')
+  if (!words) return 'Text'
+  return `"${words.length > max ? `${words.slice(0, max - 1).trimEnd()}…` : words}"`
+}
+
 /** The Layers panel, front first: text, masks, results, then the locked Frame (3.12). */
 export function layersOf(s: EditSession, version: number): Layer[] {
   const rank: Record<EditKind, number> = { text: 0, mask: 1, fill: 3, whole: 3, upscale: 3, crop: 4 }
   const out = s.edits
-    .filter((e) => e.kind !== 'crop')
+    // An empty mask that is not being painted is nothing (QA 2026-11-17: after Clear mask it stayed for good).
+    .filter((e) => e.kind !== 'crop' && !(e.kind === 'mask' && !e.ops.length && s.active !== e.id))
     .map((e, i) => ({ e, i }))
     .sort((a, b) => rank[a.e.kind] - rank[b.e.kind] || b.i - a.i)
     .map(({ e }): Layer => ({
       id: e.id, kind: e.kind, hidden: s.hidden.includes(e.id), active: s.active === e.id,
-      label: e.kind === 'text' ? 'Text' : e.kind === 'mask' ? e.name
+      label: e.kind === 'text' ? textLayerName(e.text) : e.kind === 'mask' ? e.name
         : e.kind === 'fill' ? (e.remove ? 'Remove' : 'Fill') : e.kind === 'whole' ? 'Whole frame' : e.kind === 'upscale' ? `Upscale ${e.scale}×` : 'Crop',
     }))
   out.push({ id: 'frame', kind: 'frame', label: 'Frame', hidden: s.hidden.includes('frame'), locked: true })
@@ -247,4 +282,34 @@ export function editsForFrame(s: EditSession): { op: string; params?: Record<str
       case 'upscale': return { op: 'upscale', params: { scale: e.scale, job: e.jobId } }
     }
   })
+}
+
+/** The row of an edit that runs a job, in the session the moment the person confirms, with the job id the
+ *  request will carry and `unsent` (re-test N1, 2026-11-18: a reload 0.3 s after Fill came back with no row and
+ *  no words, because the row went in only after the picture and the mask were uploaded). `keep` writes the
+ *  session down at once. The relay knows a job id once, so sending the row again never makes a second job. */
+export function rowFirst(set: (f: (s: EditSession) => EditSession) => void, row: UnsentEdit, jobId: string, keep: () => void): JobEdit {
+  const edit = { ...row, jobId, unsent: true } as JobEdit
+  set((s) => addEdit(s, edit))
+  keep()
+  return edit
+}
+
+/** The row's job handed to the relay (runner.submit writes the job down before it asks, re-test N1); then the
+ *  row is sent. If the send fails, a first send takes the row away (the error says why, the words go back),
+ *  a Send again leaves it not sent. */
+export async function sendRow(set: (f: (s: EditSession) => EditSession) => void, edit: JobEdit,
+  submit: (edit: JobEdit) => Promise<string>, opts: { dropOnFail: boolean }): Promise<void> {
+  try {
+    const got = await submit(edit)
+    set((s) => ({ ...s, edits: s.edits.map((e) => (e.id === edit.id && 'jobId' in e ? sentAs(e, got) : e)) }))
+  } catch (e) {
+    if (opts.dropOnFail) set((s) => undoEdit(s, edit.id))
+    throw e
+  }
+}
+
+function sentAs(e: JobEdit, jobId: string): JobEdit {
+  const { unsent: _u, ...rest } = e
+  return { ...rest, jobId } as JobEdit
 }

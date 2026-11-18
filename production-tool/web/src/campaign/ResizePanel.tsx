@@ -153,9 +153,9 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
         <>
           <div className="cf-trayhead">
             <AgentFigure agent="wren" size={22} decorative />
-            <span><b>Wren</b> will make</span>
+            <span><b>The Camera agent</b> will make</span>
           </div>
-          <div className="cb-trayrows rs-trayrows" role="list" aria-label="What Wren will make">
+          <div className="cb-trayrows rs-trayrows" role="list" aria-label="What the Camera agent will make">
             {trayRows(planned, models, (s, i) => `${KIND_WORD[s.kind]} ${i + 1}`).map((r) => (
               <div key={r.id} className="cb-trayrow" role="listitem"><span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}</span></div>
             ))}

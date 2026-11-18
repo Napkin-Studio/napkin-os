@@ -1,0 +1,50 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. PARK - AFTERNOON"
+     },
+     {
+      "type": "action",
+      "text": "A cold @soda_can sweats on a picnic table."
+     },
+     {
+      "type": "action",
+      "text": "Heat shimmers off the grass. The park is bright and still."
+     },
+     {
+      "type": "action",
+      "text": "A hand grabs the @soda_can, leaving a clean print in the water beads."
+     },
+     {
+      "type": "action",
+      "text": "The tab cracks open. Fizz sprays into the sunlight."
+     },
+     {
+      "type": "action",
+      "text": "A thirsty walker tilts her head back and drinks deep."
+     },
+     {
+      "type": "action",
+      "text": "Her shoulders drop. She smiles, eyes closed."
+     },
+     {
+      "type": "action",
+      "text": "The @soda_can lands back on the table, still dripping."
+     }
+    ],
+    "note": "I drafted a short, visual 15 s scene from your line: one park, one cold drink, no dialogue."
+   }
+  ],
+  "rationale": "Expanded the one-line brief into a single-location scene of seven short action beats (about 14 s by the length rule), keeping @soda_can as the product hero."
+ }
+}

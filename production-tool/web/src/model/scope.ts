@@ -211,7 +211,7 @@ function linkItems(d: Doc, l: Link, via: ScopeVia, opts: ScopeOptions, through?:
     }
     case 'video': {
       const v = d.videos?.[e.id]
-      return [{ ...base, kind: 'video', id: e.id, label: titled('Video', v?.title) }]
+      return [{ ...base, kind: 'video', id: e.id, label: titled('Film', v?.title) }]
     }
     case 'document': {
       const doc = d.documents?.[e.id]

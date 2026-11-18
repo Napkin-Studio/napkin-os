@@ -216,7 +216,7 @@ describe('limits before Make', () => {
     expect(failed).toEqual(['Shots 1–7: 7 shots is more than WAN 3 makes in one go (6). Cut it into two videos first.'])
   })
 
-  it('what Fin sends lists the characters (clean views first), then Image k for each shot', async () => {
+  it('what the Camera agent sends lists the characters (clean views first), then Image k for each shot', async () => {
     const a = film([3, 3], { views: 2 })
     await joinHere(a.store, a.videoId, a.shots[1].id)
     expect(boxPictures(a.store.get(), a.boxes()[0]).map((p) => p.label)).toEqual(['@mira · three-quarter', '@mira · front', 'Image 1', 'Image 2'])

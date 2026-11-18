@@ -42,11 +42,6 @@ export function oldWordsLine(kind: 'frame' | 'take', n: number, mark: Pick<Stale
 /** The quiet note on a frame drawn from an older frame before it (jobs/stale.ts frameDrift): not out of date. */
 export const driftLabel = (n: number) => `Drawn from an older frame ${n}`
 
-/** The ad, which carries no mark (jobs/stale.ts adStatus): behind its clips, or the shots. */
-export function adBehindLabel(reason: string | undefined): string {
-  return reason === 'A shot was deleted' ? 'Behind the shots' : 'Behind the clips'
-}
-
 /** The floating bar's count of what is out of date (never what is not made yet, or being made). */
 export const behindCount = (n: number) => `${n} out of date`
 

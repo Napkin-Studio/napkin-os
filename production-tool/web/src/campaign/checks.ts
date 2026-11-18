@@ -57,7 +57,9 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
   if (size.media === 'image') {
     // The logo is a layer from the Brand board, never part of the model's picture. Without one on the board, or
     // when the relay could not draw it, the size has none: say so instead of passing quietly.
-    if (!inp.brand.logo) out.logo_present = flag('There is no logo on the Brand board, so this size has none. Add the logo there.')
+    // No logo on the Brand board is one fact about the project, said once on the board (CampaignLayer), never
+    // a "Needs a look" on every size (QA 2026-11-17: 11 of 11 sizes flagged for it).
+    if (!inp.brand.logo) { /* the board says it */ }
     else if (logo && size.asset && size.render?.drawn !== undefined && size.render.drawn - typedDrawnCount(laid) < 1) {
       out.logo_present = flag('The logo is not on this picture: the relay could not read its file. Redo this size.')
     } else if (logo) out.logo_present = pass('The logo is on this size.')
@@ -76,6 +78,11 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
       out.clear_space = typed.some((l) => overlaps(l.box, zone)) ? flag('Words sit in the logo\'s clear space.') : pass('The logo has its clear space.')
     }
   }
+  // The brand line or legal over what must stay (QA 2026-11-17): the subject is not safe, whatever the crop.
+  const covering = typed.filter((l) => (inp.keep ?? []).some((k) => overlaps(l.box, k)))
+  if (size.media === 'image' && covering.length) {
+    out.subject_safe = flag(`The ${covering[0].kind === 'legal' ? 'legal line' : 'brand line'} sits over what must stay. Move it in Edit type.`)
+  }
   if (typed.length) {
     const min = MIN_CAP[inp.channel]
     const small = typed.filter((l) => l.kind !== 'legal' && (l.capPx ?? 0) + 0.01 < Math.max(min.frac * inp.h, min.px))
@@ -93,7 +100,7 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
   }
   if (size.media === 'video') {
     const edl = size.edl ?? []
-    // A cutdown made from a Video node (it has Dex's beats) always ends on the end card stitch draws at its size.
+    // A cutdown made from a Film node (it has Dex's beats) always ends on the end card stitch draws at its size.
     if (edl.length) out.end_card = edl.at(-1)?.end_card || size.beats ? pass('The film ends on its end card.') : flag('This film does not end on its end card.')
     const r = size.delivery.width / size.delivery.height
     if (SOCIAL_SHAPES.some(([a, b]) => Math.abs(r - a / b) < 0.02)) {

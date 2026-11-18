@@ -37,7 +37,7 @@ import { jobsList, shotsOf } from '../model/selectors'
 import { clipSource, makeClip, renderAd, selectedTake } from './clips'
 import { shotFromWords } from './clipMode'
 import { shotsBeingFixed } from './fix'
-import { drawFrame, selectedFrame, type FrameDeps } from './frames'
+import { drawFrame, needsFrame, selectedFrame, type FrameDeps } from './frames'
 import { isActive, jobCtx } from './runner'
 import { adStatus, clipBehind, frameDrift, frameStale } from './stale'
 
@@ -101,8 +101,9 @@ export function planFor(d: ProductionDocument, scope: FollowScope, fixing: Reado
     }
     case 'missing':
       return {
-        frames: hasFrames ? ids(shots.filter((s) => !drawing.has(s.id) && !selectedFrame(d, s.id))) : [],
-        clips: hasTakes ? ids(shots.filter((s) => !fixing.has(s.id) && !selectedTake(d, s.id))) : [],
+        // The end card is typeset, never drawn or made into a clip (jobs/frames.ts needsFrame).
+        frames: hasFrames ? ids(shots.filter((s) => needsFrame(s) && !drawing.has(s.id) && !selectedFrame(d, s.id))) : [],
+        clips: hasTakes ? ids(shots.filter((s) => needsFrame(s) && !fixing.has(s.id) && !selectedTake(d, s.id))) : [],
         ad: false,
       }
     case 'carry': {

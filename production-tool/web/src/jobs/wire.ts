@@ -34,7 +34,7 @@ export function wireJobs(deps: FrameDeps) {
     if (ctx.for !== 'frame_edit') return
     void landFrameEditIn(doc, job, ctx).catch(warn('change this frame'))
   })
-  // A new take: in the Video editor it is picked in the cut; in the rooms it lands beside the others only.
+  // A new take: in the Film editor it is picked in the cut; in the rooms it lands beside the others only.
   const inCut = () => ({ inCut: !deps.rooms?.() })
   runner.onComplete('clip', (job, ctx) => {
     if (ctx.for !== 'clip') return
@@ -52,7 +52,7 @@ export function wireJobs(deps: FrameDeps) {
   })
   // The Image editor's actions land nowhere: the editor shows each result as a layer until Apply.
   runner.onComplete('image_edit', () => {})
-  runner.onComplete('write', (job) => void landWrites(doc, job).catch(warn("Skye's draft")))
+  runner.onComplete('write', (job) => void landWrites(doc, job).catch(warn("The Script agent's draft")))
   // Make all sizes: a crop lands as its size's picture (features/campaign-formats.clan).
   runner.onComplete('size', (job, ctx) => {
     if (ctx.for === 'size') void landSize(doc, job, ctx, deps.relay).catch(warn('the size'))

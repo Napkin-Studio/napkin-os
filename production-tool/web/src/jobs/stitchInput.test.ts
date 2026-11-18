@@ -7,7 +7,7 @@ import { SHA, addShots, addTake, job } from '../test/model'
 import { stitchAt, stitchTimeline } from '../relay/mockRender'
 import { stitchInput } from './clips'
 
-// The Video editor's stitch request (features/make-and-edit.clan: from the cut's V1 clips): each shot's clip
+// The Film editor's stitch request (features/make-and-edit.clan: from the cut's V1 clips): each shot's clip
 // with its in and out points, in shot order.
 
 const CDN = 'https://cdn.test/out'

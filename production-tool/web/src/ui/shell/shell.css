@@ -1,0 +1,241 @@
+/* The shell bar, the band row, the Decisions drawer and the menus of the new UI (features/production-new-ui.clan).
+   Ported, value for value, from the shell's own app/src/shell/nui/shell.css + nui.css as the approved mock
+   restates them (~/Documents/napkin-design-mocks/production-new-ui-v2/css/shell.css); the Production Tool is
+   its own Vite app, so these rules are the minimum it needs, not an import of the shell's whole sheet. */
+
+/* ── the bar ─────────────────────────────────────────────────────────────── */
+.topbar-outer { position: relative; z-index: 50; flex-shrink: 0; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--desk) 94%, transparent); backdrop-filter: blur(12px); }
+:root[data-theme='dark'] .topbar-outer { background: color-mix(in srgb, var(--desk) 92%, transparent); }
+.tb { height: 62px; padding: 0 24px; display: flex; align-items: center; gap: 14px; position: relative; white-space: nowrap; }
+.tb button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+.tb-lead { display: flex; align-items: center; flex: none; position: relative; height: 62px; }
+.tb .m1-medallion { position: relative; z-index: 2; top: 4px; width: 64px; height: 64px; border-radius: 50%; background: var(--card);
+  border: 1px solid var(--line); display: grid; place-items: center; flex: none;
+  box-shadow: 0 10px 22px -6px rgba(16,17,20,.20), 0 2px 6px rgba(16,17,20,.08); transition: transform .2s; }
+.tb .m1-medallion:hover { transform: scale(1.03); }
+.tb .m1-medallion svg { width: 54px; height: 54px; overflow: visible; }
+.pt-deepo { display: inline-grid; place-items: center; flex: none; }
+.pt-deepo svg { display: block; }
+.ag-pill { position: relative; z-index: 1; margin-left: -30px; height: 40px; border-radius: 999px; padding: 0 18px 0 38px;
+  display: flex; flex-direction: column; justify-content: center; background: var(--ag-pill, var(--ag-acc)); color: var(--ag-pill-ink, var(--ag-acc-ink));
+  box-shadow: inset 0 0 0 1px var(--ag-pill-line, transparent); white-space: nowrap; }
+.ag-pill b { font: 700 14px/1.1 var(--font-ui); letter-spacing: -.01em; }
+.ag-pill .ag-mark { height: 13px; width: auto; display: block; margin-bottom: 2px; }
+.ag-pill small { font: 700 9px/1.3 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; display: flex; align-items: center; gap: 5px; }
+.ag-pill small::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .85; }
+.ag-pill.solo small { display: none; }
+.tb .tb-sep { width: 1px; height: 26px; background: var(--line); flex: none; }
+.tb .tb-client { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 4px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--paper); font: 600 13px var(--font-ui); color: var(--ink); white-space: nowrap; flex: none; }
+.tb .tb-client:hover, .tb .tba-btn:hover { background: color-mix(in srgb, var(--ag-act) 10%, transparent); }
+.cdisc { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 800 10.5px var(--font-ui); flex: none; }
+.cdisc.tool { background: var(--ink); color: var(--paper); }
+.cdisc.tool svg { width: 15px; height: 15px; }
+.tb-app { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.tb .tba-name { display: inline-flex; align-items: center; gap: 8px; min-width: 132px; border-radius: 7px; padding: 2px 6px 2px 4px; flex-shrink: 1; }
+.tb .tba-name:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.tba-name .ticon { width: 18px; height: 18px; color: var(--ink); flex: none; }
+.tba-n2 { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; text-align: left; }
+.tba-n2 b { font: 700 15px var(--font-ui); letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: clamp(140px, 20vw, 340px); }
+/* The start of the name gives way; its number or copy mark always shows (nameParts). */
+.tba-n2 b.tba-title { display: flex; min-width: 0; }
+.tba-title .tba-head { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tba-title .tba-tail { flex: none; white-space: pre; }
+.tba-saved { font: 500 10px var(--font-mono); color: var(--muted); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tba-saved.failed { color: var(--alert); }
+.tba-caret { color: var(--muted); font-size: 11px; }
+.tba-crumb { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--font-ui); color: var(--muted); white-space: nowrap; min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.tba-cstep { display: inline-flex; align-items: center; gap: 6px; }
+.tb .tba-crumb button { color: var(--muted); padding: 3px 6px; border-radius: 6px; }
+.tb .tba-crumb button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.tba-crumb .here { color: var(--ink); padding: 3px 0; }
+.tba-acts { display: flex; gap: 6px; flex: none; }
+.tb .tba-btn, .band .tba-btn { height: 30px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); font: 600 12.5px var(--font-ui); color: var(--ink-soft); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.tb .tba-btn.ghost { border-color: transparent; background: none; }
+.tba-btn svg { width: 14px; height: 14px; }
+.tba-btn[aria-pressed='true'] { background: color-mix(in srgb, var(--ag-act) 12%, var(--card)); color: var(--ink); border-color: color-mix(in srgb, var(--ag-act) 45%, var(--line)); }
+.tb-spacer { flex: 1 1 0; min-width: 0; }
+.tb-tools { display: flex; align-items: center; gap: 8px; flex: none; }
+/* The screen's one primary, in the bar (the shell's .tba-btn.primary). */
+.tb-tools .btn.primary, .tb-tools .pt-primary { height: 34px; border-radius: 8px; padding: 0 14px; font: 600 13px var(--font-ui);
+  background: var(--ag-act); color: var(--ag-act-ink); border: 1px solid var(--ag-act-line, var(--ag-act)); }
+.tb-theme { width: 36px; height: 36px; border-radius: 50% !important; border: 1px solid var(--line) !important; background: var(--paper) !important; display: grid !important; place-items: center; flex: none; }
+.tb-theme svg { width: 17px; height: 17px; }
+.tb-theme .i-sun { display: none; }
+:root[data-theme='dark'] .tb-theme .i-moon { display: none; }
+:root[data-theme='dark'] .tb-theme .i-sun { display: block; }
+.tb-me { display: inline-flex; flex: none; }
+.tb-me .pt-account { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--ag-base); color: #fff;
+  font: 700 10.5px var(--font-ui); box-shadow: 0 0 0 2px var(--desk); border: 0; }
+:root[data-theme='dark'] .tb-me .pt-account { color: var(--ag-act-ink); background: var(--ag-act); }
+.tb .tb-decisions-btn { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; }
+.tb .tb-decisions-btn:hover, .tb .tb-decisions-btn[aria-pressed='true'] { border-color: var(--ink); }
+.tb-decisions-btn .cnt { padding: 1px 6px; border-radius: 999px; font: 700 10px/1.2 var(--font-mono); background: var(--ag-acc); color: var(--ag-acc-ink); }
+.tb .tb-decisions-btn.has-needs { border-color: color-mix(in srgb, var(--needs, var(--warn)) 55%, transparent); background: color-mix(in srgb, var(--needs, var(--warn)) 12%, var(--paper)); }
+.tb-decisions-btn.has-needs .cnt { background: var(--needs, var(--warn)); color: var(--needs-ink, #fff); }
+
+/* The job chip ("Working · frame 3 of 5", "Your call · 1"): the shell's .tb-status, with the Deep O. */
+.tb .pt-job { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px 0 5px; border: 1px solid var(--line); border-radius: 999px; background: var(--desk);
+  color: var(--muted); font: 600 10.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; max-width: 300px; }
+.tb .pt-job .jb-text { overflow: hidden; text-overflow: ellipsis; }
+.tb .pt-job[data-mark='ask'] { color: var(--needs, var(--warn)); border-color: color-mix(in srgb, var(--needs, var(--warn)) 40%, transparent); }
+.tb .pt-job[data-mark='failed'] { color: var(--alert); border-color: color-mix(in srgb, var(--alert) 40%, transparent); }
+.tb .pt-job .jb-mark { display: none; }
+
+/* ── the band row: an editor's own controls under the bar ───────────────── */
+.band { display: flex; align-items: center; gap: 10px; min-height: var(--band-h); padding: 6px 24px; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--desk) 96%, transparent); flex-shrink: 0; white-space: nowrap; overflow-x: auto; scrollbar-width: none; position: relative; z-index: 19; }
+.band > * { flex-shrink: 0; }
+.band .band-grow { flex: 1; min-width: 0; }
+.band .band-sep { width: 1px; height: 22px; background: var(--line); }
+.band .pt-seg { border-radius: 4px; }
+
+/* ── menus opened from the bar (the shell's .pop) ───────────────────────── */
+.nui-pop { min-width: 260px; max-width: min(340px, calc(100vw - 16px)); }
+/* Two-line rows, as the mock's .pop .mi (title, then a small line under it): a hint never runs out of the
+   menu (live test 2026-11-18: Share's hint ran past the popover and the window). */
+.nui-pop .fmi { flex-wrap: wrap; align-items: flex-start; row-gap: 2px; }
+.nui-pop .fmi-text { font-weight: 600; }
+.nui-pop .fmi-hint { flex: 1 0 calc(100% - 26px); margin-left: 26px; white-space: normal; font: 400 12px/1.35 var(--font-ui); color: var(--muted); }
+
+/* ── the Decisions drawer (.dtree-drawer) ─────────────────────────────────── */
+.dd-scrim { position: fixed; inset: 0; background: rgba(20,20,19,.28); z-index: 84; border: 0; padding: 0; cursor: default; }
+.dtree-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(540px, 94vw); background: var(--paper); border-left: 1px solid var(--line-strong);
+  box-shadow: -16px 0 40px rgba(20,20,19,.18); z-index: 85; display: flex; flex-direction: column; color: var(--ink); }
+.dd-head { padding: 18px 22px; background: var(--card); border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: 12px; }
+.dd-head .eb { font: 600 10.5px var(--font-mono); letter-spacing: .12em; color: var(--muted); }
+.dd-head h3 { margin: 4px 0 0; font: 800 18px var(--font-ui); letter-spacing: -.01em; }
+.dd-head .close { margin-left: auto; height: 30px; padding: 0 12px; border: 1px solid var(--ink); border-radius: 6px; font: 600 12px var(--font-ui); background: none; color: var(--ink); cursor: pointer; }
+.dd-body { flex: 1; overflow-y: auto; padding: 18px 22px 30px; display: flex; flex-direction: column; gap: 16px; }
+.callcard { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 38%, transparent); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.callcard .h { display: flex; font: 600 13.5px var(--font-ui); color: var(--warn); }
+.callcard .h span { margin-left: auto; font: 700 10px var(--font-mono); letter-spacing: .1em; }
+.callrow { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.callrow .t { flex: 1; }
+.seg-row { display: flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--card); }
+.seg-row button { flex: 1; min-height: 32px; padding: 0 12px; font: 600 12px var(--font-ui); color: var(--muted); white-space: nowrap; background: none; border: 0; cursor: pointer; }
+.seg-row button[aria-pressed='true'] { background: var(--ag-act); color: var(--ag-act-ink); }
+.sp-btn { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); font: 600 12px var(--font-ui); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--ink); cursor: pointer; }
+.sp-btn:hover { border-color: var(--ink); }
+.dd-hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0; }
+.dd-body .history { position: static; width: auto; border: 0; box-shadow: none; background: none; max-height: none; }
+.brow { display: flex; align-items: center; gap: 10px; padding: 9px 10px; margin: 0 -10px; border-radius: 8px; text-align: left; width: calc(100% + 20px); background: none; border: 0; color: inherit; cursor: pointer; }
+.brow:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.brow .t { flex: 1; min-width: 0; }
+.brow .t b { display: block; font: 600 13.5px var(--font-ui); }
+.brow .t small { display: block; font-size: 12px; color: var(--muted); }
+.brow .go { color: var(--faint); }
+
+/* ── phone and narrow ───────────────────────────────────────────────────── */
+@media (max-width: 1180px) {
+  .tba-acts .pt-share + *, .tba-crumb .tba-cstep:not(:last-child) { display: none; }
+  /* Mock w1024: the crumb and Continue in / Share give way to the document's name. */
+  .tba-crumb { display: none; }
+  /* Continue in gives way too (its Link a brief… is also in + Node and Assets › From Napkin): live test
+     2026-11-18, the name shrank to "U…" with the saved line running under Continue in. */
+  .tba-acts .pt-continue { display: none; }
+  .tb { gap: 10px; padding: 0 16px; }
+}
+@media (max-width: 980px) {
+  .tba-acts, .tb .tb-client .cn { display: none; }
+}
+@media (max-width: 720px) {
+  .tb { padding: 0 8px; gap: 6px; }
+  .ag-pill small, .tb .tb-sep, .tba-saved, .tba-crumb { display: none; }
+  .tb .m1-medallion { width: 52px; height: 52px; top: 2px; }
+  .tb .m1-medallion svg { width: 44px; height: 44px; }
+  .ag-pill { padding: 0 12px 0 32px; margin-left: -26px; height: 34px; }
+  .ag-pill b { font-size: 12.5px; }
+  .tb-decisions-btn .lbl-t { display: none; }
+  .tb-theme, .tb .tb-decisions-btn, .tb-me { min-width: 40px; min-height: 40px; }
+  .tb .pt-job { max-width: 120px; }
+}
+@media (max-width: 420px) { .ag-pill { display: none; } .tba-n2 b { max-width: 150px; } }
+
+/* The old .ptbar (ui/chrome/chrome.css) is now only the wrapper: the shell bar, then an editor's band. */
+:root .ptbar.nui-bars { height: auto; display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; background: none; border-bottom: 0; white-space: normal; z-index: 20; }
+:root .topbar-outer.ptbar, :root[data-theme='dark'] .topbar-outer.ptbar { height: auto; display: block; padding: 0; gap: 0; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--desk) 94%, transparent); }
+.ptbar.nui-bars > .topbar-outer { flex-shrink: 0; }
+.sr-title { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
+.dtree-drawer .history-filter { background: none; border: 0; padding: 0; margin: 0; }
+.dtree-drawer .history-list { padding: 0; }
+.dtree-drawer .history-foot { border-top: 1px solid var(--line); padding: 12px 0 0; background: none; }
+/* The Booth's crumb (the mock's .sp-crumb) */
+.sp-crumb { font: 500 12px var(--font-mono); color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sp-crumb button { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
+.sp-crumb b { color: var(--ink); font-weight: 600; }
+.sp-crumb .x { margin-left: auto; text-decoration: none; font-size: 15px; }
+.booth-canvas .booth-body > .bb { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── The mock's shared controls (production-new-ui-v2 css/shell.css + pt.css), for the canvas, its Booth and the Start card ── */
+.btn-rect { min-height: 38px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+  font: 600 13.5px var(--font-ui); display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; cursor: pointer; }
+.btn-rect:hover { border-color: var(--ink); }
+.btn-rect.primary { background: var(--ag-act); color: var(--ag-act-ink); border-color: var(--ag-act-line, var(--ag-act)); }
+.btn-rect.primary:hover { filter: brightness(1.07); }
+.btn-rect.wide { width: 100%; }
+.btn-rect[disabled] { opacity: .45; cursor: not-allowed; }
+.sp-btn.on { background: var(--ag-act); color: var(--ag-act-ink); border-color: var(--ag-act); }
+.sp-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.sp-btn svg { width: 14px; height: 14px; flex: none; }
+.side-link { font: 600 13px var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ag-act) 55%, transparent); text-underline-offset: 3px;
+  color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; }
+.side-link[disabled] { opacity: .5; cursor: not-allowed; }
+.seg-row.sm button { min-height: 26px; font-size: 11.5px; padding: 0 9px; }
+.lbl { font: 600 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+  font: 500 11.5px var(--font-ui); color: var(--ink-soft); white-space: nowrap; }
+.chip.brief { background: #F3E8CC; border-color: #C4AA75; color: #3b2f17; }
+.field { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 10px 12px; font-size: 14px; color: var(--ink); resize: none; }
+.field:focus { outline: 2px solid color-mix(in srgb, var(--ag-act) 60%, transparent); outline-offset: 0; }
+.hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0; }
+.badge-pill { font: 700 10.5px/1.2 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; padding: 4px 10px; border-radius: 999px; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-soft); }
+.bsec { display: flex; flex-direction: column; gap: 10px; }
+.bsec + .bsec, .bsec.sep { border-top: 1px solid var(--line); padding-top: 16px; }
+.bsec h4 { margin: 0; font: 600 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.bsec h4 .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-family: var(--font-ui); font-weight: 600; }
+.btitle { display: flex; align-items: center; gap: 10px; }
+.btitle b { font: 700 16px var(--font-ui); letter-spacing: -.01em; }
+.btitle .meta { margin-left: auto; font: 500 11px var(--font-mono); color: var(--faint); }
+.agrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.agrid .a { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--card); text-align: left; padding: 0; cursor: pointer; color: var(--ink); }
+.agrid .a:hover { border-color: var(--ink); }
+.agrid .a img, .agrid .a .a-empty { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.agrid .a span:not(.a-empty) { display: block; padding: 4px 6px; font: 600 11px var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agrid .a small { display: block; padding: 0 6px 5px; font-size: 10px; color: var(--muted); }
+.drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; }
+/* A paid next step and its "What the X agent will send" (mock .split-act, .disc). */
+.split-act { display: inline-flex; align-items: stretch; }
+.split-act > .btn.primary, .split-act > .pt-primary { border-radius: 8px 0 0 8px !important; }
+.split-act > .disc { border-radius: 0 8px 8px 0; padding: 0 8px; border: 1px solid var(--ag-act); border-left: 0; background: var(--ag-act); color: var(--ag-act-ink); filter: brightness(.92); font-size: 11px; cursor: pointer; }
+.send-disc { width: 340px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.send-disc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.send-disc li { display: flex; flex-direction: column; font-size: 12.5px; line-height: 1.4; }
+.send-disc li b { font-weight: 600; }
+.send-disc li small { color: var(--muted); font-size: 12px; }
+.send-disc li.promise { color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; }
+.send-disc li.promise b { font-weight: 500; }
+/* A long document or node name never runs the crumb into Continue in. */
+.tba-crumb .here { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+/* The crumb keeps its words; the document's name gives way first, down to its own minimum (re-test N10: at
+   1440 in the Script editor the crumb read "› Canvas › Sc" beside a name that could still shrink). */
+.tb-app .tba-crumb { flex-shrink: 0; }
+.tb-app .tba-name { flex: 0 1 auto; min-width: 132px; overflow: hidden; }
+.tb-app .tba-n2 { min-width: 0; overflow: hidden; }
+
+/* The phone cut of the bar (mock phone): the medallion, the document's name, theme, you and Decisions.
+   The tool pill, Assets and the dev badge give way; nothing scrolls sideways. */
+@media (max-width: 600px) {
+  .tb .tb-client, .tb .mockbadge, .tb .pt-assets { display: none; }
+  .tb .tba-name { min-width: 0; }
+  .tba-n2 b { max-width: 130px; }
+  .tba-n2 small, .tba-n2 .tba-saved { display: none; }
+  .tb .tb-decisions-btn { padding: 0 10px; }
+}
+/* The document menu's inline forms (Rename, Delete's confirm). */
+.pt-menuform { display: flex; gap: 6px; padding: 4px 8px; }
+.pt-menuform .input { flex: 1; min-width: 0; height: 30px; }
+.pt-menuacts { display: flex; gap: 6px; margin-top: 8px; }

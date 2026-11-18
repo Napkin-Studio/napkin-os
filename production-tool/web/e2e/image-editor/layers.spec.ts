@@ -1,6 +1,6 @@
-// e2e 7 and 8 (features/image-editor-masks-layers.clan, owner answers IM1-IM3): every eye does what it
-// says on the picture; hiding Frame hides only the original picture, so a Fill result stays; hidden
-// layers are left out of Apply, which says so, and stay in the editor.
+// e2e 7 and 8 (features/image-editor-masks-layers.clan, owner answers IM1-IM2; owner 2026-11-18 replaces
+// IM3): every eye does what it says on the picture; hiding Frame hides only the original picture, so a Fill
+// result stays; hidden layers are left out of Apply, which says so, and are not kept on the new version.
 import type { Page } from '@playwright/test'
 import { at, expect, openEditor, overlay, picPixel, session, stroke, test } from '../fixtures'
 
@@ -40,10 +40,13 @@ test('each eye shows and hides its layer, Frame stays unless clicked, and hiding
   const [tx, ty] = await at(page, 0.3, 0.6)
   await page.mouse.click(tx, ty)
   await expect(page.locator('.ie-text')).toHaveCount(1)
+  // A placed text starts empty ("Your words" is only its placeholder) and goes if left empty (re-test 6c).
+  await page.keyboard.type('Hello')
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Hide Text' }).click()
+  // A text layer is named by its words (re-test R3).
+  await page.getByRole('button', { name: 'Hide "Hello"' }).click()
   await expect(page.locator('.ie-text')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Show Text' }).click()
+  await page.getByRole('button', { name: 'Show "Hello"' }).click()
   await expect(page.locator('.ie-text')).toHaveCount(1)
 
   // Frame's eye: with Frame hidden, only the Fill is left.
@@ -55,21 +58,23 @@ test('each eye shows and hides its layer, Frame stays unless clicked, and hiding
   await expect.poll(async () => near(await picPixel(page, 0.7, 0.2), filled, 10)).toBe(true)
 })
 
-test('Apply leaves hidden layers out, says so, and keeps them for the new version', async ({ page }) => {
+test('Apply leaves hidden layers out, says so, and does not keep them on the new version', async ({ page }) => {
   const seeded = await openEditor(page)
   // One text shown and one hidden: Apply saves the shown one (a painted mask alone would change nothing,
   // and Apply refuses that rather than save a copy of v1: fix/editor-apply-keeps-edits).
   await page.keyboard.press('t')
   const [sx, sy] = await at(page, 0.3, 0.2)
   await page.mouse.click(sx, sy)
+  await page.keyboard.type('Shown')
   await page.keyboard.press('Escape')
   const [tx, ty] = await at(page, 0.3, 0.6)
   await page.mouse.click(tx, ty)
+  await page.keyboard.type('Hidden')
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Hide Text' }).first().click() // the newest text is first (front)
+  await page.getByRole('button', { name: 'Hide "Hidden"' }).click() // a text layer is named by its words (re-test R3)
   await expect(page.locator('.ie-pill .ie-n-long')).toHaveText('1 edit not applied · 1 hidden layer is left out')
   await page.getByRole('button', { name: 'Version 1 of 1' }).click()
-  await expect(page.locator('.ie-vfoot')).toContainText('Apply saves your 1 edit as v2. v1 stays. 1 hidden layer is left out.')
+  await expect(page.locator('.ie-vfoot')).toContainText('Apply saves your 1 edit as v2. v1 stays. 1 hidden layer is left out and not kept.')
   await page.keyboard.press('Escape')
 
   const v1 = await picPixel(page, 0.32, 0.62)
@@ -90,16 +95,14 @@ test('Apply leaves hidden layers out, says so, and keeps them for the new versio
   expect(saved.version).toBe(2)
   expect(saved.edits).toEqual(['text'])
   expect(near(saved.px, v1)).toBe(true)
-  // The hidden text stays in the editor, still hidden, on v2 (IM3).
-  const kept = await session(page, saved.id)
-  expect(kept.edits.map((e: { kind: string }) => e.kind)).toEqual(['text'])
-  expect(kept.hidden).toEqual([kept.edits[0].id])
-  await expect(page.getByRole('button', { name: 'Show Text' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Hide Text' })).toHaveCount(0)
-  await expect(page.locator('.ie-pill .ie-n-long')).toHaveText('1 hidden layer is left out')
+  // The hidden text does not ride on to v2 (owner 2026-11-18): v2 starts with no edits.
+  expect(await session(page, saved.id)).toEqual({ edits: [], hidden: [] })
+  expect(await session(page, seeded.frameId)).toEqual({ edits: [], hidden: [] })
+  await expect(page.getByRole('button', { name: 'Show "Hidden"' })).toHaveCount(0)
+  await expect(page.locator('.ie-pill')).toHaveText('No edits yet')
 })
 
-test('when the picture cannot be drawn, the last good one stays and Rhea says why', async ({ page }) => {
+test('when the picture cannot be drawn, the last good one stays and the Retouch agent says why', async ({ page }) => {
   const seeded = await openEditor(page)
   const before = await picPixel(page, 0.7, 0.2)
   // A Change whole frame whose result is not in this browser: a finished job with an output no browser has.

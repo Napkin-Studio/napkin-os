@@ -4,14 +4,18 @@ import './excalidrawAssets'
 import './theme'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// The new UI's tokens from the shell's own file, then the tool's (features/production-new-ui.clan).
+import '@napkin/app/shell/nui/tokens.css'
 import './styles.css'
 import { idbPersister, SnapshotStore } from './doc/store'
 import { initialAppUi, splitUi, type AppUi } from './doc/ui'
 import { migrateSingleProject } from './projects/migrate'
-import { ProjectIndex } from './projects/projectIndex'
+import { INDEX_CHANNEL, ProjectIndex } from './projects/projectIndex'
 import { ProjectServer } from './projects/server'
 import { browserClan } from './projects/session'
 import { Shell } from './projects/shell'
+import { briefSpinoffOf, withoutBriefSpinoff } from './brief/start'
+import { holdBriefSpinoff } from './brief/useBriefSpinoff'
 import { browserStorage } from './projects/storage'
 import { createRelay } from './relay'
 import { AccessStore, type Access } from './relay/access'
@@ -25,7 +29,7 @@ async function boot() {
 
   // The projects this browser holds (features/project-home.clan). The first load with projects
   // makes the one project of before the first in the list; nothing of it is lost.
-  const index = new ProjectIndex(storage)
+  const index = new ProjectIndex(storage, undefined, { channel: INDEX_CHANNEL })
   if (!(await index.load())) {
     try {
       await migrateSingleProject(storage, index, browserClan)
@@ -67,8 +71,23 @@ async function boot() {
   const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me, onUnauthorised: refused }) : undefined
   const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server })
   // A deep link (/production/p/:project/script/:scriptId) opens its project; else back where the person was.
+  // A spin-off from Brief Maker (/production/?brief=<doc id>, features/brief-node.clan): a new film started from
+  // that brief, never the last project. The id is held before the router rewrites the URL (brief/useBriefSpinoff).
+  const spinoff = briefSpinoffOf(window.location.search)
+  if (spinoff) {
+    holdBriefSpinoff(spinoff)
+    // Signed out: the link stays as it came, so Sign in (Root, signInHref) comes back to it with the brief
+    // (re-test N4: the sign-in link was /?next=%2Fproduction%2F and the person landed on Home with no film).
+    if (access.get() === 'ok') window.history.replaceState(window.history.state, '', window.location.pathname + withoutBriefSpinoff(window.location.search) + window.location.hash)
+  }
   const router = new Router()
-  if (app.get().me) {
+  // The names the relay already lists, so a film naming itself never takes one (re-test N-D). Not waited for,
+  // but a spin-off names itself from the brief at once, so it waits a moment for them.
+  const listed = app.get().me ? shell.serverProjects().catch(() => []) : Promise.resolve([])
+  if (app.get().me && spinoff) {
+    await Promise.race([listed, new Promise((r) => setTimeout(r, 2000))])
+    await shell.newProject().catch((e) => console.error('could not start a film from the brief', e))
+  } else if (app.get().me) {
     const opened = await openRouteProject(shell, router).catch((e) => {
       console.error('could not open the linked project', e)
       return false

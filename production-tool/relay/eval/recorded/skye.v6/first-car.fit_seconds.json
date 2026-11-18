@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front grips the wheel of her first car with hands, breathes, and turns the key."
+     },
+     {
+      "type": "direction",
+      "text": "Interior, low angle up at her."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one 15-word beat so the shot plays in 2.5 seconds."
+   }
+  ],
+  "rationale": "The original ran 19 words, about 3.2 s by rule 10. A single 15-word action line counts 2.5 s, and the direction stays last and untimed."
+ }
+}

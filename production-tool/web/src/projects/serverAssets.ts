@@ -9,23 +9,40 @@ import type { DocAsset, InputMime, ProductionDocument } from '../contracts/types
 import { getBlob, putBlobAs } from '../lib/blobs'
 import { framesOf, refsList, shotName, takesOf } from '../model/selectors'
 import { hexOf, sha256Hex } from '../lib/hash'
+import { idbGet, idbPut } from '../lib/idb'
 import { NotAProject } from './openFile'
 import { SENDABLE, type ProjectServer } from './server'
 
-/** Pictures the relay has, as far as this tab knows. */
+/** Pictures the relay has, as far as this browser knows: kept between page loads (re-test N6: every new
+ *  page asked POST /uploads again, once per picture, for pictures it had sent or brought down before). */
 const onServer = new Set<string>()
+const HAS_KEY = 'relay-has'
+const HAS_MAX = 20_000
+let restored: Promise<void> | null = null
+const restore = () => (restored ??= idbGet<string[]>('kv', HAS_KEY).then((v) => { for (const sha of v ?? []) onServer.add(sha) }, () => {}))
+let keeping: ReturnType<typeof setTimeout> | null = null
+/** Remember them, once the burst is over (a cold open brings dozens down at once). */
+function remember(sha: string) {
+  onServer.add(sha)
+  if (keeping) return
+  keeping = setTimeout(() => {
+    keeping = null
+    void idbPut('kv', HAS_KEY, [...onServer].slice(-HAS_MAX)).catch(() => {})
+  }, 500)
+}
 
 const reachable = (a: DocAsset) => a.locations.some((l) => l.startsWith('https://'))
 
 /** Send the pictures the relay cannot reach yet. `upload` is the relay's (POST /uploads, then PUT). */
 export async function sendAssets(doc: ProductionDocument, upload: (blob: Blob, mime: InputMime) => Promise<unknown>): Promise<number> {
   let sent = 0
+  await restore()
   for (const a of Object.values(doc.assets)) {
     if (onServer.has(a.sha256) || reachable(a) || !SENDABLE.includes(a.mime as InputMime)) continue
     const blob = await getBlob(a.sha256)
     if (!blob) continue // not in this browser: it came from elsewhere, and is wherever it came from
     await upload(blob, a.mime as InputMime)
-    onServer.add(a.sha256)
+    remember(a.sha256)
     sent++
   }
   return sent
@@ -77,7 +94,7 @@ export async function fetchAssets(doc: ProductionDocument, server: Pick<ProjectS
       return
     }
     await putBlobAs(a.sha256, new Blob([bytes.slice().buffer as ArrayBuffer], { type: a.mime }))
-    onServer.add(a.sha256)
+    remember(a.sha256)
     got++
     bytesIn += bytes.byteLength
   }
@@ -99,4 +116,5 @@ export async function fetchAssets(doc: ProductionDocument, server: Pick<ProjectS
 /** For tests: forget what this tab sent. */
 export function forgetSent() {
   onServer.clear()
+  restored = Promise.resolve()
 }

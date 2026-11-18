@@ -35,7 +35,8 @@ import { pictureToOpen } from './dblclick'
 import './nodes.css'
 import { keyViews } from '../../lib/names'
 import { liveGet } from '../../model/live'
-import { BriefCardMin } from '../../brief/BriefCardMin'
+import { BriefCard } from '../../brief/BriefCard'
+import { briefOpenUrl } from '../../brief/feedWords'
 import { briefOfElement } from '../../brief/canvas'
 
 type Local = { x: number; y: number }
@@ -57,7 +58,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const doc = useStoredDoc()
   // What the layer draws reads the document as the canvas has it alive (model/live.ts).
   const live = useDoc()
-  // The Brief node's minimal card, until the new UI's compact card (features/brief-node.clan).
+  // The Brief node's compact card (features/brief-node.clan; production-new-ui mock v2.1).
   const briefCards = !!useConfig().config.flags.briefNode
   const services = useServices()
   const router = useContext(RouterContext)
@@ -98,7 +99,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     },
   }), [canvas, services, markNew])
 
-  // Nodes made from nodes (3.5 Make video, 3.10 Plan shots), for the selection bar and the editors:
+  // Nodes made from nodes (3.5 Make film, 3.10 Plan shots), for the selection bar and the editors:
   // beside what they come from, with their links, marked new.
   useEffect(() => {
     // A node made beside one at the edge of the view may land outside it: bring both into view.
@@ -289,7 +290,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   /** What an end is called in the hint and the picker. */
   const word = (e: CanvasElement) => {
     const c = cardOf(e)
-    return c ? WORD[c.kind] : briefOfElement(e) ? 'brief' : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
+    return c ? WORD[c.kind] : briefOfElement(e) ? 'brief' : (e.customData as { kind?: string } | undefined)?.kind === 'format_set' ? 'sizes' : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
   }
 
   const selectedAtPress = useRef<readonly string[]>([])
@@ -549,7 +550,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const hover = pointerAt ? endAt(pointerAt) : undefined
   // A selected picture or sketch area gets a port too (single selection).
   const lone = view.selectedIds.length === 1 ? els.find((e) => e.id === view.selectedIds[0] && !cardOf(e)) : undefined
-  const lonePort = lone && mode !== 'link' && endOf(lone, live) ? lone : undefined
+  // A Format set is only ever a target: no port to drag from.
+  const lonePort = lone && mode !== 'link' && endOf(lone, live) && (lone.customData as { kind?: string } | undefined)?.kind !== 'format_set' ? lone : undefined
   // The key groups, labelled; one selected whole gets a port at its right edge (it links the key).
   const groups = keyGroupsOn(els, live)
   const groupSel = mode !== 'link' ? selectedKeyGroup() : null
@@ -560,6 +562,12 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   // ⌘Z took the merge back: its words leave with it.
   const saying = said && !(said.links.length && said.links.every((id) => !els.some((e) => e.id === id && !e.isDeleted))) ? said : null
   const saidGroup = saying ? groups.find((g) => g.key === saying.key) : undefined
+  // One node selected: what feeds it stays lit, every other node steps back (mock production-new-ui-v2 canvas-node).
+  const picked = !source ? nodes.filter((e) => selected.has(e.id)) : []
+  const focus = picked.length === 1 ? cardOf(picked[0]) : undefined
+  const docLinks = Object.values(services.doc.get().links ?? {})
+  const lit = (c: NonNullable<ReturnType<typeof cardOf>>) => !focus || (c.kind === focus.kind && c.id === focus.id)
+    || docLinks.some((l) => l.to.kind === focus.kind && l.to.id === focus.id && l.from.kind === c.kind && l.from.id === c.id)
   return (
     <div className={`node-layer ${source ? 'linking' : ''} ${inking ? 'inking' : ''}`} ref={root}>
       {nodes.map((e) => {
@@ -570,12 +578,10 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         const check = checks.get(e.id)
         const state = !source ? '' : e.id === source.id ? 'source' : check?.ok ? 'target' : 'dim'
         return (
-          <div key={e.id} className={`bl-cardbox ${on ? 'selected' : ''} ${state} ${fresh.has(e.id) ? 'new' : ''}`} data-node={c.kind} data-id={c.id}
+          <div key={e.id} className={`bl-cardbox ${on ? 'selected' : ''} ${state} ${!lit(c) ? 'ctxdim' : ''} ${fresh.has(e.id) ? 'new' : ''}`} data-node={c.kind} data-id={c.id}
             style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
             <NodeCard kind={c.kind} id={c.id} onOpen={() => open(c.kind, c.id)} />
             {fresh.has(e.id) && <span className="nl-new">New</span>}
-            {on && !linking && <button type="button" className="nl-linkin" style={{ top: e.height + 10 }} title="Link something into this node (a picture, a script…)"
-              onPointerDown={(ev) => ev.stopPropagation()} onClick={() => linkInto(e)}>+ Link input</button>}
             {on && !linking && <span className="nl-port" role="button" aria-label={`Link from this ${c.kind}`} title="Drag to link (L)"
               style={{ left: e.width - 16, top: e.height / 2 }}
               onPointerDown={(ev) => startLink(e, ev)} onPointerMove={follow} onPointerUp={endLink} />}
@@ -587,9 +593,9 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         const p = toLocal(e.x + (moving?.ids.has(e.id) ? moving.dx : 0), e.y + (moving?.ids.has(e.id) ? moving.dy : 0))
         const state = !source ? '' : e.id === source.id ? 'source' : 'dim'
         return (
-          <div key={e.id} className={`bl-cardbox ${selected.has(e.id) ? 'selected' : ''} ${state}`} data-node="brief" data-id={id}
+          <div key={e.id} className={`bl-cardbox ${selected.has(e.id) ? 'selected' : ''} ${state} ${focus && !docLinks.some((l) => l.from.kind === 'brief' && l.from.id === id && l.to.kind === focus.kind && l.to.id === focus.id) ? 'ctxdim' : ''}`} data-node="brief" data-id={id}
             style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
-            <BriefCardMin doc={live} id={id} />
+            <BriefCard doc={live} id={id} openUrl={briefOpenUrl(live, id)} />
           </div>
         )
       })}

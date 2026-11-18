@@ -3,14 +3,14 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-// The Napkin logo turns only on the busy pointer's badge and in the top bar's job button (owner,
-// 2026-10-15: "The Napkin logo turning should only be with the mouse and on top bar. The rest
-// everywhere it should be the agent working."; ui-behaviour 6.5). Everywhere else a job runs, the
+// The working sign (the Deep O) turns only in the top bar's job chip (owner, 2026-10-15 "only with the mouse
+// and on top bar"; Shrey 2026-11-17, features/production-new-ui.clan: the Deep O and the bar's job chip replace
+// the quadrant loader and the busy pointer, so the pointer is gone; ui-behaviour 6.5). Everywhere else a job runs, the
 // crew member doing it shows in AgentFigure's working state. This test fails when the loader, or its
 // SVG class, shows up in any other source file.
 
 const SRC = fileURLToPath(new URL('../../', import.meta.url))
-const ALLOWED = new Set(['ui/loader/NapkinLoader.tsx', 'ui/loader/BusyPointer.tsx', 'ui/JobTray.tsx'])
+const ALLOWED = new Set(['ui/loader/NapkinLoader.tsx', 'ui/JobTray.tsx'])
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -21,7 +21,8 @@ function sources(dir: string): string[] {
 }
 
 describe('where the Napkin loader turns', () => {
-  it('only the busy pointer and the top bar job button render it', () => {
+  it('only the top bar job chip renders it; there is no busy pointer any more', () => {
+    expect(sources(SRC).some((p) => /BusyPointer/.test(p))).toBe(false)
     const offenders = sources(SRC)
       .map((path) => relative(SRC, path).split('\\').join('/'))
       .filter((rel) => !ALLOWED.has(rel))
@@ -33,6 +34,7 @@ describe('where the Napkin loader turns', () => {
     expect(bars.match(/<JobTray \/>/g)?.length).toBeGreaterThanOrEqual(2)
     // Script is on the shared EditorBar (features/topbar-declutter.clan), so it gets the button from there.
     expect(readFileSync(join(SRC, 'script/ScriptEditor.tsx'), 'utf8')).toContain('<EditorBar')
-    expect(readFileSync(join(SRC, 'stages/PhoneReview.tsx'), 'utf8')).toContain('<JobTray phone />')
+    expect(readFileSync(join(SRC, 'stages/PhoneReview.tsx'), 'utf8')).toContain('<CanvasBar phone />')
+    expect(bars).toContain('<JobTray phone />')
   })
 })

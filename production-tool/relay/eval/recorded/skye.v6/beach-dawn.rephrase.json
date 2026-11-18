@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "At dawn, @maya_front strolls along the edge of the water, gold light rising behind her, then pauses and gazes out at the sea."
+     },
+     {
+      "type": "direction",
+      "text": "Unhurried; hold on her face."
+     }
+    ],
+    "note": "I rephrased the action and kept the direction as it was."
+   }
+  ],
+  "rationale": "Rephrased the single action line with the same facts and @name, same length; direction kept last and unchanged."
+ }
+}

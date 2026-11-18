@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// The Video node while Dex plans its shots straight from the script (live test 2026-11-16): it went blank
+// The Film node while Dex plans its shots straight from the script (live test 2026-11-16): it went blank
 // and its title became "Video · Video" (its implicit shot list named it).
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -24,8 +24,8 @@ afterEach(async () => {
   store = null
 })
 
-describe('the Video node while Dex plans straight from the script', () => {
-  it('keeps its title and says Dex is planning', async () => {
+describe('the Film node while the Director agent plans straight from the script', () => {
+  it('keeps its title and says the Director agent is planning', async () => {
     const s = modelStore()
     store = s
     await s.create(MAYA, 'EXT. CITY STREET - DUSK')
@@ -43,12 +43,12 @@ describe('the Video node while Dex plans straight from the script', () => {
     document.body.appendChild(el)
     act(() => {
       root = createRoot(el)
-      const shell = { index: { get: () => ({ name: 'EXT. CITY STREET - DUSK' }) } }
+      const shell = { index: { get: () => ({ name: 'EXT. CITY STREET - DUSK' }), subscribe: () => () => {} } }
       root.render(createElement(ShellContext.Provider, { value: shell as never },
         createElement(ServicesContext.Provider, { value: { doc: s, ui, runner, project: { id: 'p1' } } as unknown as Services },
           createElement(VideoCard, { id: videoId, onOpen: () => {} }))))
     })
     expect(el.querySelector('.bl-cardhead b')?.textContent).not.toBe('Video · Video')
-    expect(el.textContent).toContain('Dex is planning the shots from the script')
+    expect(el.textContent).toContain('The Director agent is planning the shots from the script')
   })
 })

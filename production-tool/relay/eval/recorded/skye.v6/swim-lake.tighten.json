@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front dives off a wooden jetty into a still lake; ripples reach the far shore."
+     },
+     {
+      "type": "direction",
+      "text": "Hold on the ripples after she is gone."
+     }
+    ],
+    "note": "I tightened the action line and kept the order of events and the direction."
+   }
+  ],
+  "rationale": "Shortened the single action line by merging the clauses, keeping @maya_front, the order of events and the closing direction unchanged."
+ }
+}

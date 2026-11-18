@@ -63,7 +63,7 @@ const size = (format_id: string, w: number, h: number, over: Partial<Size> = {})
   aspect: { w, h }, delivery: { width: w, height: h }, method: 'crop', media: 'image', ...over,
 })
 
-describe('Jude on the fixtures', () => {
+describe('The Review agent on the fixtures', () => {
   it('a clean Reels size passes; a logo moved into its bottom 35% is flagged', () => {
     const ok = checksFor(size('meta-reels-9x16', 1440, 2560), SET, DOC)
     expect(ok.logo_safe?.result).toBe('pass')
@@ -92,7 +92,7 @@ describe('Jude on the fixtures', () => {
   })
 })
 
-describe('Jude on what a picture cannot show (art-director)', () => {
+describe('The Review agent on what a picture cannot show (art-director)', () => {
   const boxes = [{ role: 'subject' as const, x: 600, y: 200, w: 300, h: 400 }]
   const SETP = { ...SET, protect: { boxes } }
   const made = (over: Partial<Size>) => size('meta-reels-9x16', 1440, 2560, { asset: `sha256:${'7'.repeat(64)}`, ...over })
@@ -105,10 +105,11 @@ describe('Jude on what a picture cannot show (art-director)', () => {
     const { flagged } = await import('./checks')
     expect(flagged({ checks: checksFor(made({ method: 'regenerate' }), SETP, DOC) })).toBe(false)
   })
-  it('no logo on the Brand board is said out loud, not passed over', () => {
+  it('no logo on the Brand board is said once on the board, never a "Needs a look" on every size (QA 2026-11-17)', () => {
     const none = { refs: {}, assets: {} } as unknown as ProductionDocument
-    expect(checksFor(made({}), SET, none).logo_present?.result).toBe('flag')
-    expect(checksFor(made({}), SET, none).logo_present?.note).toMatch(/no logo on the Brand board/i)
+    expect(checksFor(made({}), SET, none).logo_present).toBeUndefined()
+    const { flagged } = { flagged: (c: ReturnType<typeof checksFor>) => Object.values(c).some((x) => x?.result === 'flag') }
+    expect(flagged(checksFor(made({}), SET, none))).toBe(false)
   })
   it('a logo the relay could not draw is a flag; one it drew passes; before the picture lands there is no claim', () => {
     // Words drawn: line and legal (2). A third layer drawn means the logo was.

@@ -18,6 +18,7 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
+import { putBlobAs } from '../lib/blobs'
 import { addFrame, addShots, job, MAYA, seedStages, SHA, wasm } from '../test/model'
 import type { EditSession } from './imageEditor/edits'
 import { ImageEditor } from './ImageEditor'
@@ -78,7 +79,8 @@ describe('the tools (3.12)', () => {
     const { el } = await open()
     const tools = [...el.querySelectorAll('[role="toolbar"][aria-label="Image tools"] button')].map((b) => b.getAttribute('aria-label'))
     expect(tools).toEqual(['Select (V)', 'Brush mask (B)', 'Lasso (L)', 'Text (T)', 'Crop, kept at 16:9 (C)', 'Hand, pan the frame (H)'])
-    expect(el.querySelector('[role="tooltip"]')?.textContent).toBe('Brush mask B')
+    // The Booth's tool grid (mock image): each tool by name with its key; the one in hand is pressed.
+    expect(el.querySelector('.ie-tool.on')?.textContent).toBe('Brush maskB')
   })
   it('a key chooses its tool, Space holds the Hand, and [ ] change the brush size', async () => {
     const { el } = await open()
@@ -102,7 +104,7 @@ describe('the tools (3.12)', () => {
     const strip = el.querySelector('[aria-label="Brush mask options"]')!
     expect(strip.querySelector('b')?.textContent).toBe('New mask') // until the first paint (features/image-editor-masks-layers.clan)
     for (const l of ['Brush size', 'Brush softness']) expect(strip.querySelector(`input[aria-label="${l}"]`)).not.toBeNull()
-    expect([...strip.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Add', 'Subtract', 'Clear mask'])
+    expect([...strip.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Add', 'Subtract', 'Clear mask', 'New mask'])
     const mode = () => strip.querySelector('[aria-label="Brush mode"] [aria-pressed="true"]')?.textContent
     expect(mode()).toBe('Add')
     act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' })) })
@@ -127,19 +129,20 @@ describe('the edits and layers', () => {
     const { el } = await open(painted)
     const items = [...el.querySelectorAll('.ie-elist li')].map((li) => li.textContent?.replace('↶', '').trim())
     expect(items).toEqual(['1 Mask 1 · painting', '2 Text "Drink the morning."', 'Next: Fill or remove Mask 1'])
-    expect(el.textContent).toContain('2 edits not applied')
+    // A mask is never applied, so it is not an edit in the count (QA 2026-11-17).
+    expect(el.textContent).toContain('1 edit not applied')
     expect(el.textContent).toContain('Nothing is sent until you run an action. v1 is never changed.')
     expect(byText(el, 'Apply as new version')?.disabled).toBe(false)
     act(() => byLabel(el, 'Undo edit 2, Text "Drink the morning."')!.click())
-    expect(el.textContent).toContain('1 edit not applied')
+    expect(el.textContent).not.toContain('1 edit not applied')
   })
   it('layers run text, masks, then the locked frame, each can be hidden', async () => {
     const { el } = await open(painted)
     const names = [...el.querySelectorAll('.ie-layer .ie-lname > span:first-child')].map((s) => s.textContent)
-    expect(names).toEqual(['Text', 'Mask 1', 'Frame'])
+    expect(names).toEqual(['"Drink the morning."', 'Mask 1', 'Frame'])
     expect(el.querySelector('.ie-layer [aria-label="Locked"]')).not.toBeNull()
-    act(() => byLabel(el, 'Hide Text')!.click())
-    expect(byLabel(el, 'Show Text')).toBeTruthy()
+    act(() => byLabel(el, 'Hide "Drink the morning."')!.click())
+    expect(byLabel(el, 'Show "Drink the morning."')).toBeTruthy()
   })
   it('Before labels the frame as saved; After brings the edits back', async () => {
     const { el } = await open(painted)
@@ -198,11 +201,11 @@ describe('the edits and layers', () => {
   it('the versions menu says what Apply makes', async () => {
     const { el } = await open(painted)
     act(() => byText(el, 'v1 of 1 ▼')!.click())
-    expect(document.body.textContent).toContain('Apply saves your 2 edits as v2. v1 stays.')
+    expect(document.body.textContent).toContain('Apply saves your 1 edit as v2. v1 stays.')
   })
 })
 
-describe("arriving from Jude's brand flag", () => {
+describe("arriving from the Review agent's brand flag", () => {
   it('shows the rule at the top of the Edits panel, and nothing runs', async () => {
     const { el, services, ids } = await open()
     await act(async () => {
@@ -217,20 +220,25 @@ describe("arriving from Jude's brand flag", () => {
 })
 
 describe('the actions (3.12), none with a price', () => {
-  it('offers Fill area, Change whole frame and Upscale with its output size, and no Remove background (owner, 2026-10-16)', async () => {
+  it('offers Fill area, Remove, Whole frame and Upscale with its output size, one at a time, and no Remove background (owner, 2026-10-16)', async () => {
     const { el } = await open()
     const actions = el.querySelector('[aria-label="Actions"]')!
-    const titles = [...actions.querySelectorAll('.ie-action b')].map((b) => b.textContent)
-    expect(titles).toEqual(['Fill area', 'Change whole frame', 'Upscale'])
+    // What to do with the blue (mock image): a segment picks one action; Fill area first.
+    expect([...actions.querySelectorAll('.ie-actseg button')].map((b) => b.textContent)).toEqual(['Fill area', 'Remove', 'Whole frame', 'Upscale'])
+    expect([...actions.querySelectorAll('.ie-action b')].map((b) => b.textContent)).toEqual(['Fill area'])
     expect(el.textContent).not.toMatch(/background|cut-out/i)
+    expect(actions.textContent).toContain('Only the blue area changes')
+    act(() => byText(el, 'Whole frame')!.click())
+    expect([...actions.querySelectorAll('.ie-action b')].map((b) => b.textContent)).toEqual(['Change whole frame'])
+    act(() => byText(el, 'Upscale')!.click())
     expect(actions.textContent).toContain('→ 2688 × 1536')
     act(() => byText(el, '4×')!.click())
     expect(actions.textContent).toContain('→ 5376 × 3072')
-    expect(actions.textContent).toContain('Only the blue area changes')
     expect(actions.textContent).not.toMatch(/\$|credit|cost|price/i)
   })
   it('Change whole frame has room for its words: a two-line field, its whole placeholder (live test 2026-11-16)', async () => {
     const { el } = await open()
+    act(() => byText(el, 'Whole frame')!.click())
     const box = el.querySelector('[aria-label="Describe the change to the whole frame"]') as HTMLTextAreaElement
     expect(box.tagName).toBe('TEXTAREA')
     expect(box.getAttribute('rows')).toBe('2')
@@ -239,8 +247,10 @@ describe('the actions (3.12), none with a price', () => {
   it('an agency with Magnific and Ideogram off: Upscale says why and cannot run', async () => {
     const { el } = await open(undefined, ['runway', 'google'])
     const actions = el.querySelector('[aria-label="Actions"]')!
+    act(() => byText(el, 'Upscale')!.click())
     expect(actions.textContent).toContain('Magnific, the upscaler, is off for your agency')
-    expect(byText(el, 'Upscale')?.disabled).toBe(true)
+    expect((actions.querySelector('.ie-action .btn') as HTMLButtonElement).disabled).toBe(true)
+    act(() => byText(el, 'Fill area')!.click())
     // Fill area still runs, on Gemini 3 Pro (the box drawn), and the tray says so
     const box = el.querySelector('#ie-fill') as HTMLTextAreaElement
     expect(box.disabled).toBe(true)
@@ -256,16 +266,19 @@ describe('the actions (3.12), none with a price', () => {
   it('Fill waits for a painted mask and words; Remove for a painted mask only', async () => {
     const { el } = await open()
     expect(byText(el, 'Fill')?.disabled).toBe(true)
+    act(() => byText(el, 'Remove')!.click())
     expect(byLabel(el, 'Remove what the mask covers')?.disabled).toBe(true)
     const { el: el2 } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
     expect(byText(el2, 'Fill')?.disabled).toBe(true) // no words yet
+    act(() => byText(el2, 'Remove')!.click())
     expect(byLabel(el2, 'Remove what the mask covers')?.disabled).toBe(false)
   })
   it('Remove needs no words: its tray names the mask and the model, with no words and no price', async () => {
     const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
+    act(() => byText(el, 'Remove')!.click())
     act(() => byLabel(el, 'Remove what the mask covers')!.click())
     const tray = document.querySelector('.ie-tray')!
-    expect(tray.textContent).toContain('What Rhea will send to remove what is in the area')
+    expect(tray.textContent).toContain('What the Retouch agent will send to remove what is in the area')
     expect(tray.textContent).toContain('Mask 1')
     expect(tray.textContent).toContain('the background continues over it')
     expect(tray.textContent).not.toContain('"')
@@ -280,7 +293,7 @@ describe('the actions (3.12), none with a price', () => {
     act(() => { set.call(box, 'add condensation drops'); box.dispatchEvent(new Event('input', { bubbles: true })) })
     act(() => byText(el, 'Fill')!.click())
     const tray = document.querySelector('.ie-tray')!
-    expect(tray.textContent).toContain('What Rhea will send to fill the area')
+    expect(tray.textContent).toContain('What the Retouch agent will send to fill the area')
     expect(tray.textContent).toContain('Mask 1')
     expect(tray.textContent).toContain('"add condensation drops"')
     expect(tray.textContent).toContain('Ideogram 4.5 on Runway')
@@ -314,6 +327,114 @@ describe('a job in its Edits row (features/image-editor-masks-layers.clan)', () 
   })
 })
 
+describe('a row whose job this document never recorded (Playwright live test 2026-11-18)', () => {
+  it('asks the relay once: a job it never got reads as did not work, and Apply is free again', async () => {
+    const { el } = await open(() => ({ edits: [
+      { id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] },
+      { id: 'f1', kind: 'fill', maskId: 'm1', ops: [stroke], words: 'a painting', keepOutside: true, jobId: 'job_01M7PP7RMYB329R8NHSNHEG7DM' },
+    ], hidden: [], active: 'm1' }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))!
+    expect(row.textContent).not.toContain('working')
+    expect(row.textContent).toContain('did not work')
+  })
+})
+
+describe('Escape on an empty new text (re-test N-B)', () => {
+  it('lets go of the keys: the text before it never takes them back, so V picks Select and its words stay', async () => {
+    const { el, services, ids } = await open(() => ({ edits: [{ id: 't1', kind: 'text', text: 'hash bv', x: 0.3, y: 0.7, size: 0.06 }], hidden: [] }))
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' })) })
+    // A second text placed (what a click with the Text tool does): it takes the keys.
+    act(() => services.ui.update((u) => {
+      const s = u.imageEdits![ids.frame]
+      u.imageEdits = { [ids.frame]: { ...s, edits: [...s.edits, { id: 't2', kind: 'text', text: '', x: 0.7, y: 0.3, size: 0.06 }] } }
+    }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+    const texts = () => [...el.querySelectorAll<HTMLElement>('.ie-text')]
+    expect(document.activeElement).toBe(texts()[1])
+    // Escape on it, still empty: it goes, and no text has the keys.
+    await act(async () => {
+      texts()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(texts()).toHaveLength(1)
+    expect(document.activeElement?.closest('.ie-text')).toBeNull()
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' })) })
+    expect(texts()[0].textContent).toBe('hash bv')
+    expect(byLabel(el, 'Select (V)')?.getAttribute('aria-pressed')).toBe('true')
+    expect(services.ui.get().imageEdits?.[ids.frame]?.edits).toEqual([{ id: 't1', kind: 'text', text: 'hash bv', x: 0.3, y: 0.7, size: 0.06 }])
+  })
+})
+
+describe('a row confirmed and never sent (re-test N1: a reload 0.3 s after Fill)', () => {
+  it('comes back not sent with its words', async () => {
+    const jobId = 'job_01M7Q0Q75M8TE7KCAG11N7GB4H'
+    const { el } = await open(() => ({ edits: [
+      { id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] },
+      { id: 'f1', kind: 'fill', maskId: 'm1', ops: [stroke], words: 'a red kite', keepOutside: true, jobId, unsent: true },
+    ], hidden: [], active: 'm1' }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    const row = () => [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))
+    expect(row()!.textContent).toContain('"a red kite"')
+    expect(row()!.textContent).toContain('not sent')
+    expect(row()!.textContent).not.toContain('did not work')
+  })
+  it('Send again goes with the same job id', async () => {
+    const jobId = 'job_01M7Q0Q75M8TE7KCAG11N7GB4K'
+    const { el, services } = await open(() => ({ edits: [
+      { id: 'w1', kind: 'whole', words: 'golden hour', jobId, unsent: true },
+    ], hidden: [] }))
+    await putBlobAs(SHA('a'), new Blob(['a'], { type: 'image/png' }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('golden hour'))!
+    expect(row.textContent).toContain('not sent')
+    const submit = vi.spyOn(services.runner, 'submit')
+    act(() => { byText(row as HTMLElement, 'Send again')!.click() })
+    // The picture is composed and uploaded first: wait for the send, however busy the machine is.
+    for (let i = 0; i < 100 && !submit.mock.calls.length && !el.querySelector('.ie-error'); i++) await act(async () => { await new Promise((r) => setTimeout(r, 30)) })
+    expect(el.querySelector('.ie-error')?.textContent ?? '').toBe('')
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(submit.mock.calls[0][4]).toBe(jobId)
+    expect(submit.mock.calls[0][1]).toMatchObject({ text: 'golden hour' })
+  })
+  it('Discard takes the row away', async () => {
+    const { el } = await open(() => ({ edits: [
+      { id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] },
+      { id: 'w1', kind: 'whole', words: 'golden hour', jobId: 'job_01M7Q0Q75M8TE7KCAG11N7GB4J', unsent: true },
+    ], hidden: [], active: 'm1' }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('golden hour'))!
+    await act(async () => { byText(row as HTMLElement, 'Discard')!.click() })
+    expect(el.querySelector('.ie-elist')!.textContent).not.toContain('golden hour')
+  })
+})
+
+describe('an edit that came back the same (QA 2026-11-17)', () => {
+  it('says so in its row and is left out of Apply', async () => {
+    const { el, services, ids } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
+    await act(async () => {
+      let jobId = ''
+      await systemUpdate(services.doc, (d) => {
+        const j = job(d, 'region_edit', [], null, { state: 'completed', crew: 'rhea' })
+        j.outputs = [SHA('a')]
+        d.jobs[j.id] = j
+        jobId = j.id
+      })
+      services.ui.update((u) => {
+        u.jobs[jobId] = { ...u.jobs[jobId], unchanged: true }
+        const s = u.imageEdits![ids.frame]
+        u.imageEdits = { [ids.frame]: { ...s, edits: [...s.edits, { id: 'f1', kind: 'fill', maskId: 'm1', ops: [stroke], words: 'the sky as it is', keepOutside: true, jobId }] } }
+      })
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))!
+    expect(row.textContent).toContain('came back the same')
+    expect(row.textContent).not.toContain('ready')
+    // Not counted as an edit: nothing for Apply to save (Playwright live test 2026-11-18).
+    expect(byText(el, 'Apply as new version')?.disabled).toBe(true)
+  })
+})
+
 describe('hidden layers (features/image-editor-masks-layers.clan)', () => {
   it('a hidden mask cannot be filled and says why', async () => {
     const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: ['m1'], active: 'm1' }))
@@ -322,6 +443,6 @@ describe('hidden layers (features/image-editor-masks-layers.clan)', () => {
   })
   it('the pill counts hidden layers apart', async () => {
     const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }, { id: 't1', kind: 'text', text: 'Hi', x: 0.1, y: 0.1, size: 0.06 }], hidden: ['t1'], active: 'm1' }))
-    expect(el.querySelector('.ie-pill .ie-n-long')?.textContent).toBe('1 edit not applied · 1 hidden layer is left out')
+    expect(el.querySelector('.ie-pill .ie-n-long')?.textContent).toBe('1 hidden layer is left out')
   })
 })

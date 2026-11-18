@@ -61,7 +61,7 @@
 /* At Fit the whole frame shows: as wide as the column, but never taller than the room under the strip
    (a 9:16 frame would otherwise be 880 x 1564 and scroll). --ie-ratio is the frame's w / h (Stage). */
 .ie-viewport { touch-action: none; user-select: none; align-self: center; flex-shrink: 0;
-  --ie-room: calc(100dvh - var(--topbar-h, 48px) - 32px - 44px - 16px);
+  --ie-room: calc(100dvh - var(--topbar-h, 48px) - var(--band-h, 0px) - 32px - 44px - 16px);
   width: min(100%, calc(var(--ie-room) * var(--ie-ratio, 1.7778))); }
 .ie-viewport[data-tool='brush'] { cursor: none; }
 .ie-viewport[data-tool='lasso'], .ie-viewport[data-tool='crop'] { cursor: crosshair; }
@@ -85,6 +85,8 @@
   letter-spacing: -0.01em; text-shadow: 0 1px 8px rgba(20, 22, 27, 0.35); outline: none; }
 .tool-select .ie-text { cursor: move; }
 .tool-text .ie-text { outline: 1px dashed rgba(255, 255, 255, 0.8); }
+/* A text just placed is empty: "Your words" shows only as a placeholder, never as its words. */
+.ie-text:empty::before { content: attr(data-placeholder); opacity: 0.6; }
 .ie-crop { position: absolute; border: 2px solid #FFFFFF; box-shadow: 0 0 0 9999px rgba(20, 22, 27, 0.45); pointer-events: none; }
 .ie-pending { position: absolute; opacity: 0.75; pointer-events: none; border-radius: 8px; }
 /* The live stroke (Stage paintLive): a brush is drawn opaque and shown at the mask's 38%, so its
@@ -122,6 +124,10 @@
 .ie-elist li.ie-next { border-style: dashed; border-color: var(--line); color: var(--ink2); padding: 6px 12px; background: transparent; }
 .ie-elist li.ie-hasjob { flex-wrap: wrap; }
 .ie-jobrow { display: inline-flex; align-items: center; gap: 6px; }
+/* A row confirmed and never sent (a reload while it was prepared): not sent, Send again, Discard on a line of its own. */
+.ie-elist li.ie-hasjob { max-width: 100%; border-radius: 12px; }
+.ie-elist li.ie-hasjob .ie-ebody { max-width: calc(100% - 32px); }
+.ie-jobrow.ie-unsent { flex-basis: 100%; padding: 0 4px 3px 6px; }
 .ie-jobrow .jobrow { display: inline-flex; align-items: center; gap: 6px; }
 .ie-jobrow .jobrow .meta { font-family: var(--f-mono); font-size: 11px; color: var(--tool-ink); background: var(--tool-soft); padding: 1px 8px; border-radius: var(--r-pill); }
 .ie-jobrow .confirm { position: static; box-shadow: none; padding: 4px 6px; }
@@ -216,3 +222,45 @@
   border: 1px solid var(--ask-line, #F08A6E); box-shadow: 0 0 0 4px var(--ask-glow, rgba(255, 79, 46, .08)); }
 .ie-offer .row { align-items: flex-start; flex-wrap: wrap; }
 .ie-offer p { margin: 0; line-height: 1.45; flex: 1; min-width: 180px; font-size: 12.5px; }
+
+/* ── The new UI (mock production-new-ui-v2 image): the picture on the desk, full width; the version, the
+   edit count, Before | After in the band and the zoom on its right; the tools, what to do with the blue,
+   the edits and the layers in the Booth. ─────────────────────────────────────────────────────────── */
+.ie-row { flex: 1; min-height: 0; }
+.ie-surface { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 24px 32px 16px; display: flex; flex-direction: column;
+  background: var(--desk, var(--canvas-bg)); }
+.ie-surface .ie-center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+.ie-surface .ie-stagewrap { width: min(100%, 880px); }
+.ie-surface .ie-under { width: min(100%, 880px); justify-content: center; flex-wrap: wrap; color: var(--muted, var(--ink3)); }
+.ie-surface .ie-legend { font: 500 12px var(--font-ui); color: var(--muted, var(--ink3)); }
+.ie-surface .ie-foot { width: min(100%, 880px); }
+/* The zoom in the band: a plain group, not a pill on the stage. */
+.ptbar .ie-zoom, .band .ie-zoom { position: static; box-shadow: none; background: transparent; border: 0; padding: 0; gap: 6px; }
+.ptbar .ie-zoom button, .band .ie-zoom button { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); font-weight: 600; }
+.ptbar .ie-zoom .ie-fit, .band .ie-zoom .ie-fit { width: auto; padding: 0 10px; background: var(--paper); }
+.ie-compare button:disabled { opacity: .5; }
+/* The Booth's sections. */
+.ie-toolgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ie-tool { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 8px 0 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper);
+  font: 600 12.5px var(--font-ui); color: var(--ink); cursor: pointer; text-align: left; }
+.ie-tool svg { width: 15px; height: 15px; flex: none; }
+.ie-tool .ie-tname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ie-tool kbd { font: 500 10px var(--font-mono); padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--ink2); }
+.ie-tool.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.ie-tool.on kbd { color: var(--paper); border-color: color-mix(in srgb, var(--paper) 50%, transparent); }
+@media (pointer: coarse) { .ie-tool { height: 44px; } }
+.ie-btools .ie-strip { align-self: stretch; height: auto; padding: 8px 0 0; flex-wrap: wrap; gap: 8px 10px; background: none; border: 0; box-shadow: none; border-radius: 0; }
+.ie-btools .ie-strip > b { width: 100%; font: 500 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted, var(--ink3)); }
+.ie-btools .ie-strip label { display: flex; align-items: center; gap: 6px; font: 500 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted, var(--ink3)); }
+.ie-actseg { display: flex; width: 100%; }
+.ie-actseg button { flex: 1; }
+.ie-actions .ie-action { border: 0; padding: 8px 0 0; background: none; box-shadow: none; }
+.ie-actions .ie-action .row { display: flex; align-items: center; gap: 8px; }
+.ie-actions .ie-action textarea { width: 100%; box-sizing: border-box; }
+.ie-edits { padding: 0; border: 0; background: none; box-shadow: none; }
+.ie-editsub { font-size: 12px; }
+.ie-layers .r { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.ie-layers .ie-layer { border-radius: 4px; }
+.ie-actseg button { white-space: nowrap; font-size: 12px; padding: 0 6px; }
+.ie-tool kbd { background: transparent; }
+.ie-edits { border-radius: 0; }

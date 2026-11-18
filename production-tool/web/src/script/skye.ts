@@ -24,7 +24,7 @@ import { refNames } from './extensions'
 
 type Doc = ProductionDocument
 
-export const SKYE = 'Skye · scripts'
+export const SKYE = 'Script agent'
 /** The options on Skye's bar, in its order. */
 export const SKYE_OPTIONS: { intent: WriteIntent; label: (seconds: number) => string }[] = [
   { intent: 'tighten', label: () => 'Tighten' },
@@ -34,14 +34,14 @@ export const SKYE_OPTIONS: { intent: WriteIntent; label: (seconds: number) => st
   { intent: 'rephrase', label: () => 'Say it another way' },
 ]
 /** The free 'Tell Skye' field beside the canned verbs: the typed words ride as the write's instruction. */
-export const TELL_SKYE_PLACEHOLDER = 'Tell Skye…'
-export const HANDS_OFF_LINE = 'Skye is leaving this alone. Ask her anyway?'
-export const NOT_HERE = "Skye isn't available here yet"
-export const QUOTA_OUT = "Skye has used today's writing allowance"
-export const keptLine = (shotNo?: number, seconds?: number) => `Kept Skye's draft.${shotNo && seconds ? ` Shot ${shotNo} now runs ${seconds} s.` : ''}`
+export const TELL_SKYE_PLACEHOLDER = 'Tell the Script agent…'
+export const HANDS_OFF_LINE = 'The Script agent is leaving this alone. Ask it anyway?'
+export const NOT_HERE = "The Script agent isn't available here yet"
+export const QUOTA_OUT = "The Script agent has used today's writing allowance"
+export const keptLine = (shotNo?: number, seconds?: number) => `Kept the Script agent's draft.${shotNo && seconds ? ` Shot ${shotNo} now runs ${seconds} s.` : ''}`
 /** Skye's line when the scene she drafted for was gone and her draft became a new first scene (owner 2026-10-15). */
 export const NEW_SCENE_LINE = 'That scene was gone, so I put my draft in a new first scene. Undo takes it back.'
-export const keptMineLine = (kind: WriteTarget['kind']) => `Kept yours. Skye will leave this ${kind} alone.`
+export const keptMineLine = (kind: WriteTarget['kind']) => `Kept yours. The Script agent will leave this ${kind} alone.`
 
 const KIND: Record<WriteTarget['kind'], FragmentKind> = { scene: 'scene', shot: 'shot', beat: 'beat' }
 
@@ -152,7 +152,7 @@ export function skyeState(d: Doc, scriptId: Id, liveState: (jobId: string) => Jo
 }
 
 /** What Skye says in the facts while a job of hers waits on the person: the question itself. */
-export const waitingLine = (ask?: Ask) => (ask ? `Waiting for you: ${ask.question.text}` : 'Waiting for you: Skye has a question about a draft.')
+export const waitingLine = (ask?: Ask) => (ask ? `Waiting for you: ${ask.question.text}` : 'Waiting for you: The Script agent has a question about a draft.')
 
 /**
  * Skye's waiting questions on a script and where each shows (owner 2026-10-15: "Draft the scene as
@@ -335,7 +335,7 @@ export async function keepMineDraft(store: ModelStore, sugId: string): Promise<{
   return { line: keptMineLine(sug?.target.kind ?? 'shot') }
 }
 
-export const DISCARDED_LINE = 'Discarded Skye\'s draft.'
+export const DISCARDED_LINE = 'Discarded the Script agent\'s draft.'
 
 /**
  * Discard a draft (a whole-block insertion, mode 'draft'): the suggestion is dropped and nothing lands.

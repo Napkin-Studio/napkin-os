@@ -31,7 +31,7 @@ describe('the target length', () => {
     expect(cleanTarget('soon')).toBeNull()
   })
 
-  it('sets the script, its storyboard and its video in one undo step; Dex plans to it and the meter reads it', async () => {
+  it('sets the script, its storyboard and its video in one undo step; the Director agent plans to it and the meter reads it', async () => {
     const store = modelStore()
     await store.create(MAYA, 'Length')
     const d0 = store.get()

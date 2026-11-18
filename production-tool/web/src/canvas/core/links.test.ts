@@ -50,8 +50,8 @@ const CASES: Case[] = [
   ['Anything → Product (refused)', 'script', product, 'A script cannot feed a product'],
   ['Anything → Document (refused)', 'note', 'document', 'A note cannot feed a document'],
   ['Anything → Brand board (refused)', 'picture', brand, 'A reference cannot feed a brand board'],
-  ['Video → anything but a Format set (refused)', 'video', 'storyboard', 'A video cannot feed a storyboard'],
-  ['Video → Shot (refused)', 'video', 'shot', 'A video cannot feed a shot'],
+  ['Video → anything but a Format set (refused)', 'video', 'storyboard', 'A film cannot feed a storyboard'],
+  ['Video → Shot (refused)', 'video', 'shot', 'A film cannot feed a shot'],
   // features/brief-node.clan: brief → script/storyboard/video/format_set only.
   ['Brief → Script', 'brief', 'script', ['brief']],
   ['Brief → Storyboard', 'brief', 'storyboard', ['brief']],
@@ -107,7 +107,7 @@ describe('checkLink: the limits', () => {
 
   it('one script per video, and a script may drive a storyboard and a video at once', () => {
     const g = graph([['s1', 'script'], ['s2', 'script'], ['sb', 'storyboard'], ['v', 'video']], [['s1', 'v', 'drives']])
-    expect(checkLink(g, 's2', 'v', 'drives')).toEqual({ ok: false, reason: 'This video already has a script.' })
+    expect(checkLink(g, 's2', 'v', 'drives')).toEqual({ ok: false, reason: 'This film already has a script.' })
     expect(checkLink(g, 's1', 'sb', 'drives')).toEqual({ ok: true })
     // The recommended path still works beside it: the storyboard renders the same video.
     const both: LinkGraph = { ...g, links: [...g.links, { from: 's1', to: 'sb', role: 'drives' }] }
@@ -116,7 +116,7 @@ describe('checkLink: the limits', () => {
 
   it('one storyboard per video, while a storyboard renders many videos', () => {
     const g = graph([['a', 'storyboard'], ['b', 'storyboard'], ['v1', 'video'], ['v2', 'video']], [['a', 'v1', 'renders']])
-    expect(checkLink(g, 'b', 'v1', 'renders')).toEqual({ ok: false, reason: 'This video already has a storyboard.' })
+    expect(checkLink(g, 'b', 'v1', 'renders')).toEqual({ ok: false, reason: 'This film already has a storyboard.' })
     expect(checkLink(g, 'a', 'v2', 'renders')).toEqual({ ok: true })
   })
 
@@ -178,15 +178,15 @@ describe('checkLink: the limits', () => {
 
   it('a target with a running job refuses with the job’s line', () => {
     const g = graph([['p', 'picture'], ['v', 'video']])
-    const busy = (id: string) => (id === 'v' ? 'Fin is still making clip 4.' : undefined)
-    expect(checkLink(g, 'p', 'v', 'reference', { busy })).toEqual({ ok: false, reason: 'Fin is still making clip 4. Link it when that\'s done.' })
+    const busy = (id: string) => (id === 'v' ? 'The Camera agent is still making clip 4.' : undefined)
+    expect(checkLink(g, 'p', 'v', 'reference', { busy })).toEqual({ ok: false, reason: 'The Camera agent is still making clip 4. Link it when that\'s done.' })
     expect(checkLink(g, 'p', 'v', 'reference')).toEqual({ ok: true })
   })
 
   it('Video → Format set (master) is the only link out of a video', () => {
     const g = graph([['v', 'video'], ['set', 'format_set'], ['s', 'script']])
     expect(checkLink(g, 'v', 'set', 'master', { system: true })).toEqual({ ok: true })
-    expect(checkLink(g, 'v', 's', 'reference')).toEqual({ ok: false, reason: 'A video cannot feed a script' })
+    expect(checkLink(g, 'v', 's', 'reference')).toEqual({ ok: false, reason: 'A film cannot feed a script' })
   })
 
   it('a role the pair does not take is refused', () => {

@@ -159,7 +159,7 @@ describe('a new take', () => {
     expect(s.doc.get().jobs[id].inputs).toContainEqual({ kind: 'generation', ref: s.takeOf(0).id, used_as: 'new version of', included: true })
   })
 
-  it('a take lands as a generation and, in the Video editor, as the shot\'s clip in the main video\'s cut, made by wren', async () => {
+  it('a take lands as a generation and, in the Film editor, as the shot\'s clip in the main video\'s cut, made by wren', async () => {
     const s = await setup(2)
     await s.makeAll(false)
     const d = s.doc.get()
@@ -635,6 +635,18 @@ describe('Update what follows', () => {
       d.jobs[id] = { ...clip, id, provider: 'runway', model: 'veo3.1', state: 'failed', created_at: new Date(Date.now() + 1000).toISOString() }
     })
     expect(lastWorkedModel(s.doc.get(), 'clip', both)).toEqual({ provider: 'runway', model: 'veo3.1_fast' })
+  })
+
+  it('an end card is never owed a frame or a clip: the render sets it in type (live test 2026-11-18)', async () => {
+    const s = await setup(3)
+    await s.makeAll(false)
+    await updateDoc(s.doc, (d) => {
+      d.shots[s.shotId(2)].kind = 'end_card'
+      for (const f of Object.values(d.frames)) if (f.shot_id === s.shotId(2)) delete d.frames[f.id]
+      d.shots[s.shotId(2)].pick = undefined
+    })
+    expect(planMissing(s.doc.get()).frames).toEqual([])
+    expect(planMissing(s.doc.get()).clips).not.toContain(s.shotId(2))
   })
 
   it('leaves out a clip that is being made now: it is not behind', async () => {

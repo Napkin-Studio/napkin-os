@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "At a busy street market, @sai_front holds up a ripe mango, sniffs it, and hands coins to the stallholder."
+     },
+     {
+      "type": "direction",
+      "text": "Colourful, crowded background."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 0.5,
+      "text": "Fresh picks, fair prices, every single day."
+     }
+    ],
+    "note": "I added a short VO line over the shot and kept your action and direction as they were."
+   }
+  ],
+  "rationale": "The VO is one short line of about seven words, so it fits the shot and a 15 s ad. It adds the retail message without repeating the action."
+ }
+}

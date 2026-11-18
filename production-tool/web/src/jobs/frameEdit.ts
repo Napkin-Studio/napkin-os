@@ -17,11 +17,10 @@
 // the Edit parts | Redraw frame switch (owner, 2026-11-17, mock frame-edit-or-redraw-v2; features/frame-edit-or-redraw.clan).
 
 import { crewFor, newUlidId } from '../../../clan-store/src'
-import { CAMERA_WORDS, SHEETS } from '../contracts/load'
+import { CAMERA_WORDS } from '../contracts/load'
 import type {
-  Camera, CameraPatch, CameraWordField, Config, CrewId, DocJob, Frame, FrameEditMode, FrameEditOutput, FrameReading, Job, JobInput, ProductionDocument, Region,
+  Camera, CameraPatch, CameraWordField, CrewId, DocJob, Frame, FrameEditMode, FrameEditOutput, FrameReading, Job, JobInput, ProductionDocument, Region,
 } from '../contracts/types'
-import { routedSheet } from '../capabilities'
 import { landUpdate, updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import { currentFrame, currentTake, framesOf, shotName, shotNumber, shotsOf } from '../model/selectors'
@@ -37,10 +36,10 @@ import { liveGet } from '../model/live'
 
 export const frameEditCopy = {
   reading: {
-    camera: 'Dex read this as a camera change',
-    local: 'Dex read this as a local change',
-    both: 'Dex read this as a camera change and a local change',
-    redraw: 'Dex redrew this frame from the shot',
+    camera: 'The Director agent read this as a camera change',
+    local: 'The Director agent read this as a local change',
+    both: 'The Director agent read this as a camera change and a local change',
+    redraw: 'The Director agent redrew this frame from the shot',
   } satisfies Record<FrameReading, string>,
   // Edit parts | Redraw frame (features/frame-edit-or-redraw.clan, mock frame-edit-or-redraw-v2).
   mode: { edit: 'Edit parts', redraw: 'Redraw frame' } satisfies Record<FrameEditMode, string>,
@@ -50,7 +49,6 @@ export const frameEditCopy = {
   },
   placeholder: { edit: 'Make her scarf red', redraw: 'An Indian seller, Nigerian buyers in the line' } satisfies Record<FrameEditMode, string>,
   send: { edit: 'Send', redraw: 'Redraw' } satisfies Record<FrameEditMode, string>,
-  price: (usd: number) => `≈ ${dollars(usd)}`,
   recast: {
     title: 'This changes who is in the picture.',
     body: 'An edit keeps everyone already there, so it would add people rather than swap them. Redraw the frame instead?',
@@ -61,24 +59,25 @@ export const frameEditCopy = {
     changeAnyway: 'Change anyway',
     unpaid: 'Nothing paid yet',
   },
-  redrawing: (n: number) => `Dex is redrawing frame ${n}`,
-  redrew: (n: number) => `Dex redrew frame ${n} from the shot.`,
+  redrawing: (n: number) => `The Director agent is redrawing frame ${n}`,
+  redrew: (n: number) => `The Director agent redrew frame ${n} from the shot.`,
   kept: 'Kept',
   made: 'New',
   keptWhat: (chips: string[]) => ['the place', 'the light', ...chips].join(', '),
   /** The New line of a Redraw result: Dex's own sentence of who is where; an older job without one says what changed. */
   newWhat: (who: string | undefined) => who?.trim() || 'who is in it and where they stand',
-  edited: (n: number) => `Dex edited frame ${n}; everything else in it stays.`,
+  edited: (n: number) => `The Director agent edited frame ${n}; everything else in it stays.`,
   notMeant: 'Not what you meant?',
   redrawLink: 'Redraw the frame',
   withSame: 'with the same words.',
   unchanged: (n: number) => `This edit came back the same as frame ${n}.`,
-  charged: (who: string, usd: number | undefined) => `${who} ${usd !== undefined ? `charged ${dollars(usd)} for it` : 'still charged for it'}. Say it another way, or redraw the frame.`,
+  // No price (features/production-new-ui.clan, noPrices): what it cost is in Decisions only.
+  nothingMade: 'Nothing in it changed. Say it another way, or redraw the frame.',
   redrawButton: 'Redraw frame',
   /** Laurence's step 4: a box or mask with a camera change. */
   maskUnused: 'A camera change redraws the whole frame, so the area you marked was not used.',
   /** job.director.model is passthrough. */
-  passthrough: 'Dex sent your words as they are.',
+  passthrough: 'The Director agent sent your words as they are.',
   /** Only the camera's movement changed: nothing was drawn. */
   movementOnly: 'Only the camera move changes, so the frame stays as it is.',
   apply: 'Apply',
@@ -90,9 +89,6 @@ export const frameEditCopy = {
   newVersion: (version: number) => `v${version} new`,
 } as const
 
-function dollars(usd: number): string {
-  return '$' + usd.toFixed(2)
-}
 
 function sentence(words: string[]): string {
   const [first, ...rest] = words
@@ -102,18 +98,6 @@ function sentence(words: string[]): string {
 }
 
 // ── the reading ────────────────────────────────────────────────────────────────────────────────
-
-/** What Change this frame costs, about: the frame model's price on the sheet frame_edit is routed to (Runway's
- *  when no config routes it), credits times the sheet's USD per credit; undefined when it costs nothing. */
-export function framePriceUsd(config?: Config | null): number | undefined {
-  const sheet = (config ? routedSheet('frame_edit', config) : null) ?? SHEETS.runway
-  const s = sheet as unknown as { usdPerCredit?: number; ops?: Record<string, { model?: string }>; models?: Record<string, { pricing?: { byResolution?: Record<string, number>; credits?: number } }> }
-  const model = s.ops?.frame_edit?.model ?? s.ops?.frame?.model
-  const price = model ? s.models?.[model]?.pricing : undefined
-  const credits = price?.byResolution?.['1K'] ?? price?.credits
-  // A model that costs nothing (the mock provider) shows no price rather than "$0.00".
-  return credits && s.usdPerCredit ? Math.round(credits * s.usdPerCredit * 100) / 100 : undefined
-}
 
 /** The mode a frame_edit ran in: redraw when it was asked for, or when Dex read it so (a recast answered
  *  Redraw frame instead); otherwise edit. */

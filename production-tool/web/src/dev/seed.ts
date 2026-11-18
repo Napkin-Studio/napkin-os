@@ -9,10 +9,16 @@ import { newProjectData, newUlidId, ranksBetween } from '../../../clan-store/src
 import type { Job, Mime, ProductionDocument, Shot } from '../contracts/types'
 import type { Services } from '../app/context'
 import { systemUpdate } from '../doc/store'
-import { applyFrame } from '../jobs/handlers'
+import { applyFrame, applyTake } from '../jobs/handlers'
+import { splitHere } from '../jobs/runView'
+import { selectedFrame } from '../jobs/frames'
 import { idbLocation, putBlob } from '../lib/blobs'
-import { mainStoryboard, shotsOf } from '../model/selectors'
+import { mainScript, mainStoryboard, mainVideo, shotsOf } from '../model/selectors'
+import type { NodeEnv } from '../canvas/nodes/nodes'
+import { addBrief, newBrief } from '../brief/model'
+import { linkBrief, placeBrief } from '../brief/canvas'
 import type { Shell } from '../projects/shell'
+import { formatRoute, scriptRoute } from '../app/route'
 
 export interface SeedFrameOpts {
   /** The storyboard's ratio ('16:9', '9:16', '1:1', '4:5'); 16:9 by default. */
@@ -102,6 +108,86 @@ export function installSeed(shell: Shell) {
       if (!shell.get().session) await shell.newProject()
       // A new project is blank (2026-11-04), so the first-run Start card would sit where specs drop pictures.
       shell.get().session?.services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+    },
+    /** A Brief node from Brief Maker's data, placed on the canvas and linked into the main script (the
+     *  paired screenshots of features/production-new-ui.clan). Needs the canvas open on our own engine. */
+    brief: async (data: unknown, title = 'Colour of the market') => {
+      const env = (window as unknown as { __canvasEnv?: NodeEnv }).__canvasEnv
+      const services = shell.get().session?.services
+      if (!env || !services) throw new Error('open a project on the canvas first')
+      services.ui.update((u) => { u.configChoice = 'allon' }, 'e2e seed')
+      const b = await addBrief(services.doc, newBrief({ documentId: 'doc-seed', title, appId: 'ie.napkin.brief-maker', dataSha256: `sha256:${'b'.repeat(64)}`, data }, 'link'))
+      const el = placeBrief(env, b.id)
+      const script = mainScript(services.doc.get())
+      if (script) await linkBrief(env, b.id, { kind: 'script', id: script.id }).catch(() => undefined)
+      return { briefId: b.id, elementId: el.id }
+    },
+    /** The paired screenshots' project (features/production-new-ui.clan; the mock's "Market day"): a title, and
+     *  one shot per picture with its words, length and a drawn frame. `pics` are data URLs. */
+    market: async (o: { title?: string; shots: { pic: string; action: string; s: number }[] }) => {
+      if (!shell.get().session) await shell.newProject()
+      const services: Services = shell.get().session!.services
+      const blobs = await Promise.all(o.shots.map(async (x) => (await fetch(x.pic)).blob()))
+      const shas = await Promise.all(blobs.map((b) => putBlob(b)))
+      await systemUpdate(services.doc, (d: ProductionDocument) => {
+        if (!mainStoryboard(d)) {
+          const person = { id: String(d.project.created_by ?? 'human:e2e').replace(/^human:/, ''), handle: 'e2e', tenant_id: String(d.project.tenant_id ?? '') }
+          const stages = newProjectData({ person, title: o.title ?? 'Market day', newId: newUlidId, now: new Date().toISOString() }) as unknown as ProductionDocument
+          Object.assign(d.scripts, stages.scripts); Object.assign(d.storyboards, stages.storyboards); Object.assign(d.videos, stages.videos); Object.assign(d.links, stages.links)
+        }
+        if (o.title) d.project.title = o.title
+        const sb = mainStoryboard(d)!
+        const sc = mainScript(d)
+        if (sc) sc.target_s = o.shots.reduce((a, x) => a + x.s, 0)
+        const ranks = ranksBetween(shotsOf(d, sb.id).at(-1)?.rank ?? null, null, o.shots.length)
+        o.shots.forEach((x, i) => {
+          const s: Shot = { id: newUlidId('shot'), v: 1, field_v: {}, storyboard_id: sb.id, rank: ranks[i], kind: 'shot', duration_s: x.s, action: x.action, camera: { size: i === 2 ? 'close' : i === 0 ? 'wide' : 'medium' }, status: 'locked' } as Shot
+          d.shots[s.id] = s
+          d.assets[shas[i]] = { sha256: shas[i], kind: 'image', mime: 'image/jpeg' as Mime, bytes: blobs[i].size, w: 1344, h: 756, origin: 'generated', locations: [idbLocation(shas[i])] }
+          const job = { jobId: newUlidId('job'), op: 'frame', kind: 'mock', outputs: [{ sha256: shas[i], w: 1344, h: 756 }] } as unknown as Job
+          applyFrame(d, job, { shotId: s.id })
+        })
+      }, 'e2e seed')
+      await (services.doc as { flush?: () => Promise<void> }).flush?.()
+      services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+    },
+    /** The Film's rooms with footage (the paired screenshots' make/edit states): after market(), each shot its
+     *  own box with one ready mock take (its frame as a still), each in the Edit room's cut. */
+    takes: async () => {
+      const services: Services = shell.get().session!.services
+      const d0 = services.doc.get()
+      const sb = mainStoryboard(d0)
+      const video = mainVideo(d0)
+      if (!sb || !video) return
+      const shots = shotsOf(d0, sb.id)
+      for (const s of shots.slice(1)) await splitHere(services.doc, video.id, s.id)
+      await systemUpdate(services.doc, (d: ProductionDocument) => {
+        for (const s of shotsOf(d, sb.id)) {
+          const sha = selectedFrame(d, s.id)?.asset
+          if (!sha) continue
+          const job = { jobId: newUlidId('job'), op: 'clip', kind: 'mock', provider: 'mock', model: 'mock', outputs: [{ sha256: sha, durationS: s.duration_s }] } as unknown as Job
+          applyTake(d, job, { for: 'clip', shotId: s.id } as never, { inCut: true } as never)
+        }
+      }, 'e2e seed')
+      await (services.doc as { flush?: () => Promise<void> }).flush?.()
+    },
+    /** Opens the main script in the Script editor (the paired screenshots' script states). */
+    script: async () => {
+      if (!shell.get().session) await shell.newProject()
+      const services: Services = shell.get().session!.services
+      // A blank project has no stages: give it a script, storyboard and video as a non-blank one starts with.
+      if (!mainScript(services.doc.get())) {
+        await systemUpdate(services.doc, (d: ProductionDocument) => {
+          const person = { id: String(d.project.created_by ?? 'human:e2e').replace(/^human:/, ''), handle: 'e2e', tenant_id: String(d.project.tenant_id ?? '') }
+          const stages = newProjectData({ person, title: d.project.title ?? 'Market day', newId: newUlidId, now: new Date().toISOString() }) as unknown as ProductionDocument
+          Object.assign(d.scripts, stages.scripts); Object.assign(d.storyboards, stages.storyboards); Object.assign(d.videos, stages.videos); Object.assign(d.links, stages.links)
+        }, 'e2e seed')
+      }
+      const sc = mainScript(services.doc.get())
+      if (!sc) throw new Error('no script')
+      history.pushState(history.state, '', formatRoute(scriptRoute(services.project.id, sc.id)))
+      dispatchEvent(new PopStateEvent('popstate'))
+      return sc.id
     },
     /** Opens the storyboard stage (the Image editor opens from a shot there). */
     storyboard: () => shell.get().session?.services.ui.update((u) => { u.stage = 'storyboard' }, 'e2e seed'),

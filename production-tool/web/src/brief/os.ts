@@ -85,3 +85,12 @@ export function osBriefSource(base = '', fetcher: Fetch = (i, init) => fetch(i, 
     },
   }
 }
+
+/** The briefs this page reads: Napkin's (the OS), or in dev a stand-in (window.__briefSource) for the paired
+ *  screenshots on a local stack. The Start card and Assets › From Napkin read the same one. */
+let OS: BriefSource | null = null
+export function pageBriefSource(): BriefSource {
+  const dev = import.meta.env.DEV ? (globalThis as unknown as { __briefSource?: BriefSource }).__briefSource : undefined
+  // One source for the page: callers put it in effects' dependencies.
+  return dev ?? (OS ??= osBriefSource())
+}

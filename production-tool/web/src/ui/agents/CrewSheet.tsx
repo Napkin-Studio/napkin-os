@@ -24,9 +24,9 @@ const DOES: Record<CastKey, string> = {
 const WHERE: Record<CastKey, string> = {
   dex: 'Storyboard node and editor, a shot\'s camera fields, "Insert a shot here"',
   skye: 'Script node and editor, drafts in place, the VO column',
-  wren: 'Empty frames and clips, the Video board, the jobs list',
+  wren: 'Empty frames and clips, the Film board, the jobs list',
   rhea: 'Image editor: fill or remove an area, change the frame, upscale',
-  edie: 'Video editor timeline, patch windows, Make video',
+  edie: 'Film editor timeline, patch windows, Make film',
   ellis: 'Sketches on the canvas, notes on a frame or a moment, Convert',
   jude: 'The check mark on frames and clips, retries in the jobs list',
 }

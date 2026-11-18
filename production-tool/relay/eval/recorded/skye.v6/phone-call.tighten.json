@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front answers her phone on a crowded train, covers one ear, laughs."
+     },
+     {
+      "type": "direction",
+      "text": "Handheld, close."
+     }
+    ],
+    "note": "I tightened the action to one 12-word beat and kept the order of events and the direction."
+   }
+  ],
+  "rationale": "Cut filler ('her other ear', 'and laughs at whatever she hears') while keeping @maya_front, the sequence of events and the meaning. The direction block is unchanged and stays last."
+ }
+}

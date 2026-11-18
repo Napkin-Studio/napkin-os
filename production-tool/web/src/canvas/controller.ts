@@ -85,10 +85,14 @@ export class CanvasController {
   readonly sync: CanvasDocSync
   /** Each Drawing's members as last seen (ids, and boxes from the frame's corner), so a change re-exports its picture. */
   private readonly drawnSeen = new Map<string, string>()
+  /** The scene's elements as last written here (JSON): a write that changes them is work the relay lacks
+   *  (serverCopy.edited; a selection or a pan is not). */
+  private written: string
 
   constructor(canvas: CanvasAdapter, services: Services) {
     this.canvas = canvas
     this.s = services
+    this.written = JSON.stringify(canvas.serialize().elements ?? [])
     this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId), drawnBy: () => this.person() })
     this.reportLife()
     this.sync.gens(this.els())
@@ -162,7 +166,13 @@ export class CanvasController {
   }
 
   async save() {
-    await idbPut('kv', this.s.project.canvasKey, this.canvas.serialize())
+    const scene = this.canvas.serialize()
+    const now = JSON.stringify(scene.elements ?? [])
+    if (now !== this.written) {
+      this.written = now
+      this.s.serverCopy?.edited()
+    }
+    await idbPut('kv', this.s.project.canvasKey, scene)
   }
 
   /**

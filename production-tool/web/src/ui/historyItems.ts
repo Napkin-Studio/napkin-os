@@ -184,3 +184,10 @@ export function projectEntries<E extends ChainLike>(entries: E[]): E[] {
   const start = entries.findIndex((e) => e.action === 'start the project')
   return start < 0 ? entries.filter((e) => !e.agent.startsWith('clan-store')) : entries.slice(0, start + 1)
 }
+
+/** What every job of this film has cost so far (the confirmed and the estimated), for the drawer's foot. */
+export function spendSoFar(jobs: Record<string, { cost?: { confirmed?: number | null; estimate?: number | null; unknown?: boolean } }>): number {
+  let sum = 0
+  for (const j of Object.values(jobs)) sum += j.cost?.confirmed ?? j.cost?.estimate ?? 0
+  return sum
+}

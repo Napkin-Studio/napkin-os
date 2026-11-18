@@ -1,6 +1,6 @@
 // What an empty node offers to start from (features/prompt-start.clan; ui-behaviour 3.5, 3.10,
 // 3.17; plan decision 1), apart from the component so it can be tested: when each kind is empty,
-// which start it shows, the words, and the two asks (the Video's hard block, the Storyboard's nudge).
+// which start it shows, the words, and the two asks (the Film's hard block, the Storyboard's nudge).
 // The asks are derived from the node's state, never stored: a link or a plan settles them.
 
 import type { Id, ProductionDocument, Question } from '../../contracts/types'
@@ -16,10 +16,10 @@ export type { PromptKind } from '../../jobs/prompt'
 
 /** The words each start shows (the spec's, where it has them). One copy for the card and the editors. */
 export const PROMPT_COPY = {
-  script: { placeholder: 'Paste a script, or write the idea in a line.', hint: 'Enter: Skye drafts it here · Shift+Enter: new line', busy: 'Skye is drafting from your line' },
-  storyboard: { placeholder: 'Describe the ad in a line', hint: 'Dex plans the shots from it', fromScript: 'Dex plans the shots from the script.', busy: 'Dex is planning the shots' },
-  video: { placeholder: 'Describe it in a line or two. Type @ to pull in a character, place or product.', busy: 'Dex is planning the shots' },
-  image: { placeholder: 'Describe the picture', hint: 'Fin makes it, then you say what it is', busy: 'Fin is making the picture' },
+  script: { placeholder: 'Paste a script, or write the idea in a line.', hint: 'Enter: The Script agent drafts it here · Shift+Enter: new line', busy: 'The Script agent is drafting from your line' },
+  storyboard: { placeholder: 'Describe the ad in a line', hint: 'The Director agent plans the shots from it', fromScript: 'The Director agent plans the shots from the script.', busy: 'The Director agent is planning the shots' },
+  video: { placeholder: 'Describe it in a line or two. Type @ to pull in a character, place or product.', busy: 'The Director agent is planning the shots' },
+  image: { placeholder: 'Describe the picture', hint: 'The Camera agent makes it, then you say what it is', busy: 'The Camera agent is making the picture' },
   later: 'You can always switch later.',
 } as const
 
@@ -90,7 +90,7 @@ export function promptState(d: Doc, kind: PromptKind, nodeId: Id): PromptState {
   }
 }
 
-/** Option ids of the Video's hard block and the Storyboard's nudge. */
+/** Option ids of the Film's hard block and the Storyboard's nudge. */
 export const DESCRIBE = 'describe'
 export const LINK_SCRIPT = 'link_script'
 export const LINK_STORYBOARD = 'link_storyboard'
@@ -98,7 +98,7 @@ export const SCRIPT_FIRST = 'script_first'
 export const PLAN_NOW = 'plan_now'
 
 /**
- * Dex's hard block on a Video with nothing linked or described (3.5, 3.17): no option is
+ * Dex's hard block on a Film with nothing linked or described (3.5, 3.17): no option is
  * recommended, the text box is the Describe it option, and nothing runs until one is done.
  */
 export function videoBlock(videoId: Id): Question {
@@ -124,15 +124,15 @@ export function storyboardNudge(storyboardId: Id): Question {
     text: 'Write a script first?',
     why: 'Shots come out better from a script you have checked.',
     options: [
-      { id: SCRIPT_FIRST, label: 'Write the script first', detail: 'Skye drafts it from your line; you keep what you like', value: { route: SCRIPT_FIRST } },
-      { id: PLAN_NOW, label: 'Plan shots from the line', detail: 'Dex plans the shots straight from it', value: { route: PLAN_NOW } },
+      { id: SCRIPT_FIRST, label: 'Write the script first', detail: 'The Script agent drafts it from your line; you keep what you like', value: { route: SCRIPT_FIRST } },
+      { id: PLAN_NOW, label: 'Plan shots from the line', detail: 'The Director agent plans the shots straight from it', value: { route: PLAN_NOW } },
     ],
     allow_text: false,
     recommended_option_id: SCRIPT_FIRST,
   }
 }
 
-/** The primary of the Video's block: "15 s · Make it". */
+/** The primary of the Film's block: "15 s · Make it". */
 export const makeItLabel = (seconds: number) => `${seconds} s · Make it`
 
 /** The @word being typed at the caret, if any: what the mention list filters by. */

@@ -37,7 +37,7 @@ const unlinkVideo = async (store: ModelStore) => {
 }
 
 describe('which start an empty node shows', () => {
-  it('a script with no words shows the box; one with words, or Skye at work, shows none', async () => {
+  it('a script with no words shows the box; one with words, or the Script agent at work, shows none', async () => {
     const s = await project()
     const id = mainScript(s.get())!.id
     expect(promptState(s.get(), 'script', id)).toEqual({ show: 'script' })
@@ -68,7 +68,7 @@ describe('which start an empty node shows', () => {
     expect(promptState(s.get(), 'video', v)).toEqual({ show: 'video-block' })
   })
 
-  it('a video a script drives and no storyboard renders waits on Dex\'s question (3.5)', async () => {
+  it('a video a script drives and no storyboard renders waits on the Director agent\'s question (3.5)', async () => {
     const s = await project()
     const v = await unlinkVideo(s)
     const sc = mainScript(s.get())!.id
@@ -205,7 +205,7 @@ const enter = async (el: Element) => {
 }
 
 describe('PromptStart, rendered', () => {
-  it('an empty script: the line goes in, and Skye\'s draft is asked for', async () => {
+  it('an empty script: the line goes in, and the Script agent\'s draft is asked for', async () => {
     const store = await project()
     const { host, sent } = await render(store, createElement(PromptStart, { kind: 'script', nodeId: mainScript(store.get())!.id, place: 'editor' }))
     const area = host.querySelector('textarea')!
@@ -215,7 +215,7 @@ describe('PromptStart, rendered', () => {
     expect(sent.map((x) => [x.op, x.input.write?.intent])).toEqual([['write', 'draft']])
   })
 
-  it('an unlinked video: Dex\'s block, Describe it opens the box, "15 s · Make it" plans', async () => {
+  it('an unlinked video: The Director agent\'s block, Describe it opens the box, "15 s · Make it" plans', async () => {
     const store = await project()
     const v = await unlinkVideo(store)
     const { host, sent } = await render(store, createElement(PromptStart, { kind: 'video', nodeId: v }))
@@ -232,7 +232,7 @@ describe('PromptStart, rendered', () => {
     expect(Object.values(store.get().links).some((l) => l.to.id === v && l.role === 'renders')).toBe(true)
   })
 
-  it('a video from a script alone: "Plan a storyboard first?"; straight from the script plans into the video\'s own shot list, no storyboard node, and opens the Video', async () => {
+  it('a video from a script alone: "Plan a storyboard first?"; straight from the script plans into the video\'s own shot list, no storyboard node, and opens the Film', async () => {
     const store = await project()
     const v = await unlinkVideo(store)
     const sc = mainScript(store.get())!.id
@@ -241,7 +241,7 @@ describe('PromptStart, rendered', () => {
       d.scenes[scene].text = 'A runner crests the cliff at dawn.'
       const l = id('link')
       d.links[l] = { id: l, v: 1, field_v: {}, from: { kind: 'script', id: sc }, to: { kind: 'video', id: v }, role: 'drives' }
-    }, 'make video')
+    }, 'make film')
     await store.flush()
     const { s, sent } = services(store)
     const host = document.createElement('div')

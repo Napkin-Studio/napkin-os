@@ -85,3 +85,11 @@ export function jobLook(g: TrayGroups): { spin: 'run' | 'queued' | 'still'; mark
   if (!first && !mark) return null
   return { spin: !first ? 'still' : first.state === 'queued' ? 'queued' : 'run', mark }
 }
+
+/** The job chip's words (features/production-new-ui.clan, the shell's .tb-status): "Your call · 1" while a
+ *  question waits, "Working · frame 3" while one runs (with how many when more do), else "1 failed". */
+export function chipText(waiting: number, working: number, failed: number, leadWhat: string | undefined): string {
+  if (waiting) return `Your call · ${waiting}`
+  if (working) return `Working · ${leadWhat ?? 'a job'}${working > 1 ? ` · ${working} jobs` : ''}`
+  return failed ? `${failed} failed` : ''
+}

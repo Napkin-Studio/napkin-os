@@ -99,6 +99,41 @@ export function briefForJob(d: Doc, node: LinkEndpoint): BriefInScope | undefine
   return undefined
 }
 
+/**
+ * The brief linked straight to the NEWEST Format set made from this film (its master the film, or an ad
+ * render of it): what Make all sizes reads (re-test N2; owner 2026-11-18). The sizes are planned on the Film
+ * node and land in a new set, so neither read the set the person linked, while its Booth said "the sizes read
+ * this brief". The explicit link overrides the film's own brief, as on any node. Only the newest set decides:
+ * when it has no brief link the film's own brief does, whatever an older set is linked to. Undefined: the
+ * newest set has none (or the film has no set).
+ */
+export function sizesBriefOf(d: Doc, videoId: Id): { setId: Id; briefId: Id } | undefined {
+  const newest = Object.values(d.format_sets ?? {}).filter((s) => {
+    const m = s.master
+    return (m.kind === 'video' && m.id === videoId) || (m.kind === 'render' && d.renders?.[m.id]?.video_id === videoId)
+  }).sort((a, b) => (a.id < b.id ? 1 : -1))[0]
+  if (!newest) return undefined
+  const l = Object.values(d.links ?? {}).find((x) => x.role === 'brief' && x.from.kind === 'brief' && x.to.kind === 'format_set' && x.to.id === newest.id && d.briefs?.[x.from.id])
+  return l ? { setId: newest.id, briefId: l.from.id } : undefined
+}
+
+/** The brief Make all sizes reads: the one linked to the film's newest Format set, else the film's own. */
+export function sizesBrief(d: Doc, videoId: Id): BriefNode | undefined {
+  const linked = sizesBriefOf(d, videoId)
+  return linked ? d.briefs?.[linked.briefId] : briefForJob(d, { kind: 'video', id: videoId })?.brief
+}
+
+/** The line a brief says the film ends on, from its mandatories ("End on the line: Lumo. Dein Licht.",
+ *  "End line – …", "Sign-off: …", "Tagline: …"), quotes taken off. Undefined: it names none. */
+export function endLineOf(spine: BriefSpine | undefined): string | undefined {
+  for (const m of spine?.mandatories ?? []) {
+    const hit = /\b(?:end(?:s|ing)?\s+(?:on|with)\s+(?:the\s+)?(?:line|words|super)|end[\s-]?line|sign[\s-]?off(?:\s+line)?|tag[\s-]?line|brand\s+line)\b\s*(?:[:\-\u2013\u2014]\s*)?(.+)$/i.exec(m.trim())
+    const line = hit?.[1].trim().replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
+    if (line) return line.slice(0, 200)
+  }
+  return undefined
+}
+
 /** JobInput.brief: the title and the spine, nothing else of the brief. */
 export const jobBrief = (b: BriefNode): JobBrief => ({ title: b.title.slice(0, 200) || 'Brief', spine: { ...b.spine } })
 
@@ -133,7 +168,7 @@ export function briefSendRow(d: Doc, nodeId: Id): BriefSendRow | undefined {
   if (!b) return undefined
   const t = b.through
   const from = b.via === 'link' ? 'linked'
-    : `from ${t && d.scripts?.[t] ? `Script · ${d.scripts[t].title}` : t && d.storyboards?.[t] ? `Storyboard · ${d.storyboards[t].title}` : t && d.videos?.[t] ? `Video · ${d.videos[t].title}` : 'upstream'}`
+    : `from ${t && d.scripts?.[t] ? `Script · ${d.scripts[t].title}` : t && d.storyboards?.[t] ? `Storyboard · ${d.storyboards[t].title}` : t && d.videos?.[t] ? `Film · ${d.videos[t].title}` : 'upstream'}`
   return { key: `brief:${b.brief.id}`, briefId: b.brief.id, label: b.item.label, detail: [spineSummary(b.brief.spine), from].filter(Boolean).join(' · '), via: b.via }
 }
 

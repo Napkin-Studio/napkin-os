@@ -4,12 +4,12 @@
 // "Plan a storyboard first?", with Plan the storyboard first (Recommended) and Make clips straight from
 // the script, "You can always switch later." and Later. The question is derived from the video's links;
 // the person's answer is stored as an ask on the video (asks[id], node {kind: 'video'}), so it is in
-// History, Change works, and the Video editor reads it: straight from the script, Make clips makes each
+// History, Change works, and the Film editor reads it: straight from the script, Make clips makes each
 // shot's clip from its words when it has no frame yet (jobs/clips.ts), through the send tray.
 //
 // Straight from the script makes no Storyboard node (decided 2026-10-15): the video gets its own shot list
 // (an implicit storyboard owned by the video, contracts storyboard.implicit and video_id), Dex plans into
-// it, and the Video editor shows and edits the shots on its timeline. Plan the storyboard first links the
+// it, and the Film editor shows and edits the shots on its timeline. Plan the storyboard first links the
 // storyboard its script drives (made beside the script on the canvas when there is none), or turns the
 // video's own shot list into a node (Make a storyboard from these shots). Planning is free; no clip starts.
 
@@ -174,7 +174,7 @@ export async function answerScriptVideo(deps: FrameDeps, videoId: Id, optionId: 
   const scriptId = scriptOfVideo(d, videoId) ?? (had ? scriptOf(d, had.id) : undefined)
   if (!had || !shotsOf(d, had.id).length) {
     if (!scriptId) throw new Error('Link a script to this video first.')
-    if (!scriptText(d, scriptId).trim()) throw new Error('Write the script first: Dex plans the shots from its words.')
+    if (!scriptText(d, scriptId).trim()) throw new Error('Write the script first: The Director agent plans the shots from its words.')
   }
   if (optionId !== STRAIGHT && had?.implicit && !canvasActions.canMake()) throw new Error('Make a storyboard from these shots on the canvas: open this project with the canvas.')
   await recordScriptVideoAnswer(deps.doc, videoId, optionId, by)

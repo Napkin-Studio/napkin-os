@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Mud-caked @dog_rex races across the park and jumps into @maya_front's arms, sending her hat flying."
+     },
+     {
+      "type": "direction",
+      "text": "Wide, then a whip pan to the catch."
+     }
+    ],
+    "note": "I reworded the action and kept the names, the order of events and the direction."
+   }
+  ],
+  "rationale": "Rephrased the single action line with the same facts and @names, similar length, and left the direction block unchanged and last."
+ }
+}

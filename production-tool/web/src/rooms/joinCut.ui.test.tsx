@@ -27,7 +27,7 @@ import { MockRelay } from '../relay/mock'
 import { addFrame, addShots, MAYA, SHA, seedStages, wasm } from '../test/model'
 import { MakeRoom } from './MakeRoom'
 import { roomBoxes, roomGens } from './model'
-import { RoomBooth } from './RoomBooth'
+import { RoomBooth, RoomWaits } from './RoomBooth'
 import type { Selection } from './Rooms'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -59,10 +59,13 @@ function Harness() {
   const data = { videoId, title: 'Mira in the rain', ratio: '16:9', targetS: 15, boxes, gens: roomGens(doc, ui, videoId, boxes) }
   const [sel, setSel] = useState<Selection>({})
   const [done, setDone] = useState<{ id: number; text: string } | null>(null)
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null)
+  const props = { room: 'make' as const, data, sel, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {}, done, onUndo: () => { setDone(null); void undo(store) } }
   return createElement('div', { className: 'rooms' },
+    createElement(RoomWaits, props),
     createElement(MakeRoom, { data, shots: shotsOf(doc, mainStoryboard(doc)!.id), sel, onSel: setSel, change: null, onChange: () => {}, onCloseChange: () => {},
-      onRoom: () => {}, register: () => () => {}, onDone: (text: string) => setDone((d) => ({ id: (d?.id ?? 0) + 1, text })) }),
-    createElement(RoomBooth, { room: 'make', data, sel, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {}, done, onUndo: () => { setDone(null); void undo(store) } }))
+      onRoom: () => {}, register: () => () => {}, onDone: (text: string) => setDone((d) => ({ id: (d?.id ?? 0) + 1, text })), slot }),
+    createElement(RoomBooth, { ...props, slot: setSlot, onClose: () => setSel({}) }))
 }
 
 async function room(lengths: number[]) {
@@ -95,7 +98,7 @@ async function room(lengths: number[]) {
 }
 
 describe('the Make room strip', () => {
-  it('a gap flips a cut to a join and back, Fin says so in the Booth, and Undo restores it', async () => {
+  it('a gap flips a cut to a join and back, the Camera agent says so on the room, and Undo restores it', async () => {
     const r = await room([3.5, 3.5, 4, 4])
     expect(r.boxes()).toEqual([1, 1, 1, 1])
     expect(r.gaps().map((g) => [g.getAttribute('aria-pressed'), g.textContent])).toEqual([['false', 'cut'], ['false', 'cut'], ['false', 'cut']])
@@ -103,13 +106,13 @@ describe('the Make room strip', () => {
     await until(() => r.boxes().length === 3)
     expect(r.boxes()).toEqual([2, 1, 1])
     expect(r.el.querySelector('.jc-box')?.getAttribute('aria-label')).toBe('Box 1: One video · 2 shots · 7 s')
-    await until(() => !!r.el.querySelector('.booth .bc.done')?.textContent?.includes('Joined shots 1 and 2'))
-    const note = r.el.querySelector('.booth .bc.done')!
+    await until(() => !!r.el.querySelector('.rm-waits .bc.done')?.textContent?.includes('Joined shots 1 and 2'))
+    const note = r.el.querySelector('.rm-waits .bc.done')!
     expect(note.textContent).toContain('Joined shots 1 and 2: one video now. Nothing is sent until you press Make.')
     await act(async () => { (note.querySelector('button') as HTMLButtonElement).click() })
     await until(() => r.boxes().length === 4)
     expect(r.boxes()).toEqual([1, 1, 1, 1])
-    expect(r.el.querySelector('.booth .bc.done')).toBeNull()
+    expect(r.el.querySelector('.rm-waits .bc.done')).toBeNull()
   })
 
   it('← and → move between gaps; a keyboard flip keeps the focus on its gap; the tip says what a flip does', async () => {
@@ -175,7 +178,7 @@ describe('the Make room strip', () => {
     await until(() => r.boxes().length === 3)
     expect(r.boxes()).toEqual([2, 1, 1])
     expect(r.el.querySelector('.jc-box.over')).toBeNull()
-    await until(() => !!r.el.querySelector('.booth .bc.done')?.textContent?.includes('Cut before shot 3'))
-    expect(r.el.querySelector('.booth .bc.done')?.textContent).toContain('Cut before shot 3: two videos now.')
+    await until(() => !!r.el.querySelector('.rm-waits .bc.done')?.textContent?.includes('Cut before shot 3'))
+    expect(r.el.querySelector('.rm-waits .bc.done')?.textContent).toContain('Cut before shot 3: two videos now.')
   })
 })

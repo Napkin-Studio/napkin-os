@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front reaches the mountain summit, drops her backpack, and spreads her arms in the wind above the clouds."
+     },
+     {
+      "type": "direction",
+      "text": "Drone pull-out to reveal the peaks."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 3,
+      "text": "Sunlight breaks over @peak_dawn and warms her face as she laughs."
+     }
+    ],
+    "note": "I added a moment at 3 s where the sunrise hits her face, and left your words as they were."
+   }
+  ],
+  "rationale": "The shot had the arrival and the pull-out but no payoff. A short sunrise-and-laugh beat after she spreads her arms adds one visual moment without changing the action."
+ }
+}

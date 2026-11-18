@@ -26,6 +26,7 @@ import { useProjectName } from '../ui/useDownload'
 import { boardLayout, CAPTION_H, type TileBox } from './board'
 import { campaignFold, isFolded } from './fold'
 import { brandKit } from './layout'
+import { boardCounts, countLine } from './boardWords'
 import { ProtectSheet } from './ProtectSheet'
 import { SizesOverview } from './SizesOverview'
 import { panCrop, zoomCrop } from './crop'
@@ -144,12 +145,11 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
     setTimeout(() => setNote(null), 4000)
   }, [])
 
-  const counts = {
-    ready: sizes.filter((s) => s.status === 'ready').length,
-    look: sizes.filter((s) => s.status === 'look').length,
-    making: sizes.filter((s) => s.status === 'making').length,
-    notMade: sizes.filter((s) => !s.status).length,
-  }
+  // A size whose job failed is failed, not making (QA 2026-11-17: the header said "1 making" by a Failed tile).
+  const failedNow = (z: Size) => !!z.job_id && (services.runner.liveInfo(z.job_id)?.state ?? doc.jobs[z.job_id]?.state) === 'failed'
+  const counts = boardCounts(sizes, failedNow)
+  // Sizes drawn without the logo (the board had none, or the relay could not read it): Draw all again.
+  const noLogoYet = sizes.filter((z) => z.media === 'image' && !z.locked && z.checks?.logo_present?.result === 'flag' && !z.checks.logo_present.ignored && z.render?.drawn !== undefined)
   const exportAll = async (full = false) => {
     try {
       const out = await exportSizes(doc, set.id, project || doc.project.title, undefined, full ? { model: upscaler?.label ?? 'Magnific' } : undefined)
@@ -174,24 +174,26 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
     }
     setTray({
       who: 'rhea', title: 'Export at full size',
-      rows: toUpscale.map(({ s, plan }) => ({ id: s.id, name: tileName(s), words: `Upscale ×${plan!.kind === 'upscale' ? plan!.scale : 4} · ${upscaler.label}` })),
-      note: `${plans.filter((p) => p.plan && p.plan.kind !== 'upscale').length} more go as they are. The type is drawn again at full size on our server.`,
-      send: async () => {
+      rows: toUpscale.map(({ s, plan }) => ({ id: s.id, name: tileName(s), words: `Upscale ×${plan!.kind === 'upscale' ? plan!.scale : 4} · ${upscaler.label}`, paid: true })),
+      note: `${plans.filter((p) => p.plan && p.plan.kind !== 'upscale').length} more go as they are. An unticked size goes at preview size. The type is drawn again at full size on our server.`,
+      send: async (ids) => {
         setFullWanted(true)
-        for (const { s, plan } of toUpscale) if (plan?.kind === 'upscale') await upscaleForDelivery(deps, s.id, plan.scale)
-        say(`Upscaling ${toUpscale.length} for delivery`)
+        const picked = toUpscale.filter(({ s }) => ids.includes(s.id))
+        for (const { s, plan } of picked) if (plan?.kind === 'upscale') await upscaleForDelivery(deps, s.id, plan.scale)
+        if (!picked.length) void exportAll(true)
+        else say(`Upscaling ${picked.length} for delivery`)
       },
     })
   }
   const update = () => {
     const paid = stale.filter((s) => PAID.has(s.method))
-    const go = () => void updateSizes(deps, set.id, by).then((n) => say(`Updating ${n} sizes`))
+    const go = (only?: string[]) => void updateSizes(deps, set.id, by, only).then((n) => say(`Updating ${n} ${n === 1 ? 'size' : 'sizes'}`))
     if (!paid.length) return go()
     setTray({
       who: 'wren', title: 'Update sizes',
-      rows: stale.map((s) => ({ id: s.id, name: tileName(s), words: methodWords(s.method, models) })),
-      note: 'Locked sizes stay as they are.',
-      send: async () => go(),
+      rows: stale.map((s) => ({ id: s.id, name: tileName(s), words: methodWords(s.method, models), paid: PAID.has(s.method) })),
+      note: 'Locked sizes stay as they are. An unticked size stays out of date.',
+      send: async (ids) => go(ids),
     })
   }
   const title = doc.boards ? Object.values(doc.boards).find((b) => b.id === (els.find((e) => e.id === el.frameId)?.customData as { id?: string } | undefined)?.id)?.title : undefined
@@ -200,12 +202,20 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
     <div className={`cb-board ${selected ? 'selected' : ''}`} style={{ ...style, height: layout.h }} data-set={set.id}>
       <header className="cb-head">
         <b className="cb-title" onDoubleClick={() => setOverview(true)}>{(title ?? 'Campaign').replace(/^Campaign · /, '')}</b>
-        <span className="cb-count">{sizes.length} formats · {counts.ready} ready{counts.look ? ` · ${counts.look} need a look` : ''}{counts.making ? ` · ${counts.making} making` : ''}{counts.notMade ? ` · ${counts.notMade} not made yet` : ''}</span>
+        <span className="cb-count">{countLine(sizes.length, counts)}</span>
         <span className="pt-grow" />
         {stale.length > 0 && (
           <span className="cb-stale" role="status">{stale.length} out of date
             <button type="button" className="btn xs primary" onClick={update}>Update sizes</button>
           </span>
+        )}
+        {sizes.some((z) => z.media === 'image') && !brandKit(doc).logo && (
+          <span className="cb-note" role="note" title="Add the logo on the Brand board; then Draw all again adds it to every size">No logo on the Brand board: no size has one</span>
+        )}
+        {noLogoYet.length > 0 && !!brandKit(doc).logo && (
+          <button type="button" className="btn xs" title="The Brand board has a logo now: draw it on every size that has none (free)"
+            onClick={() => { for (const z of noLogoYet) void sendSize(deps, set.id, z.id, by, { retype: true }); say(`Drawing the logo on ${noLogoYet.length} ${noLogoYet.length === 1 ? 'size' : 'sizes'}`) }}>
+            Draw all again · {noLogoYet.length}</button>
         )}
         {sizes.some((z) => z.media === 'image') && (
           <button type="button" className="btn xs ghost" title="What must stay in every size: mark, move, rename or remove" onClick={() => setProtectOpen(true)}>
@@ -253,7 +263,7 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
             if (c) c.ignored = { by, at: new Date().toISOString() }
             const sz = x.sizes[s.id]
             if (sz && sz.status === 'look' && !Object.values(sz.checks ?? {}).some((k) => k && k.result === 'flag' && !k.ignored)) sz.status = 'ready'
-          }, `ignore Jude's ${code} check on sizes[${s.id}]`)}
+          }, `ignore the Review agent's ${code} check on sizes[${s.id}]`)}
           deps={deps} by={by} say={say} />
       })}
       {note && <div className="cb-note" role="status">{note}</div>}
@@ -288,9 +298,11 @@ function tileName(s: Size): string {
 interface TrayOpen {
   who: 'wren' | 'rhea'
   title: string
-  rows: { id: string; name: string; words: string }[]
+  /** `paid`: this row costs (the person may untick it; QA 2026-11-17: paid board trays could not untick a row). */
+  rows: { id: string; name: string; words: string; paid?: boolean }[]
   note?: string
-  send(): Promise<void>
+  /** Sends the rows still ticked. */
+  send(ids: string[]): Promise<void>
 }
 
 /**
@@ -300,6 +312,9 @@ interface TrayOpen {
  */
 function SendTray({ tray, setId, onClose }: { tray: TrayOpen; setId: string; onClose(): void }) {
   const [busy, setBusy] = useState(false)
+  const [off, setOff] = useState<string[]>([])
+  const ticked = tray.rows.filter((r) => !off.includes(r.id)).map((r) => r.id)
+  const many = tray.rows.length > 1
   const panel = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const el = panel.current
@@ -319,18 +334,21 @@ function SendTray({ tray, setId, onClose }: { tray: TrayOpen; setId: string; onC
   })
   return createPortal(
     <div ref={panel} className="cb-tray pt-panel" role="dialog" aria-label={tray.title} style={{ left: 0, top: 0, visibility: 'hidden' }} onPointerDown={(e) => e.stopPropagation()}>
-      <div className="cb-trayhead"><b>{tray.title}</b><span className="faint">{tray.who === 'rhea' ? 'Rhea' : 'Wren'} will make</span></div>
+      <div className="cb-trayhead"><b>{tray.title}</b><span className="faint">{tray.who === 'rhea' ? 'The Retouch agent' : 'The Camera agent'} will make</span></div>
       <div className="cb-trayrows" role="list">
         {tray.rows.map((r) => (
-          <div key={r.id} className="cb-trayrow" role="listitem"><span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}</span></div>
+          <div key={r.id} className={`cb-trayrow ${off.includes(r.id) ? 'off' : ''}`} role="listitem">
+            {many && <input type="checkbox" checked={!off.includes(r.id)} aria-label={`Send ${r.name}`}
+              onChange={(e) => setOff((o) => (e.target.checked ? o.filter((x) => x !== r.id) : [...o, r.id]))} />}
+            <span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}{r.paid ? ' · paid' : ''}</span></div>
         ))}
       </div>
       {tray.note && <p className="cb-hint">{tray.note}</p>}
       <div className="cb-row">
         <span className="pt-grow" />
         <button type="button" className="btn xs ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn xs primary" disabled={busy} onClick={() => { setBusy(true); void tray.send().finally(onClose) }}>
-          {busy ? 'Sending…' : `Send ${tray.rows.length === 1 ? '' : tray.rows.length}`.trim()}
+        <button type="button" className="btn xs primary" disabled={busy || (many && !ticked.length)} onClick={() => { setBusy(true); void tray.send(ticked).finally(onClose) }}>
+          {busy ? 'Sending…' : `Send ${!many ? '' : ticked.length}`.trim()}
         </button>
       </div>
     </div>,
@@ -396,7 +414,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
   const paidTray = (method: SizeMethod, title: string, send: () => Promise<unknown>) => onTray({
     who: 'wren', title, rows: [{ id: size.id, name, words: methodWords(method, models) }],
     note: method === 'extend' ? 'Keeps the picture exactly and makes its new edges.' : 'Remakes the picture at this shape from the master.',
-    send: async () => { await send() },
+    send: async (ids) => { if (ids.length) await send() },
   })
   const pickMethod = (m: SizeMethod) => {
     setMethodOpen(false)
@@ -441,11 +459,16 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
           <span key={i} className="cb-pbox" style={{ left: (b.x - adjusting.x) * s, top: (b.y - adjusting.y) * s, width: b.w * s, height: b.h * s }} />
         ))}
         <span className={`cb-status ${status ?? 'notmade'}`} title={failure}>{status === 'failed' ? 'Failed' : status ? STATUS[status] : 'Not made'}</span>
+        {status === 'failed' && !PAID.has(size.method) && (
+          // A free size that failed is made again from here (QA 2026-11-17: only Adjust crop → Reset did it).
+          <button type="button" className="btn xs" onPointerDown={(e) => e.stopPropagation()} title={failure ? `Make it again. ${failure}` : 'Make it again'}
+            onClick={() => void sendSize(deps, set.id, size.id, by).then(() => say('Making it again'))}>Try again</button>
+        )}
         {size.locked && <span className="cb-lock" title="Locked: Update sizes never changes it">🔒</span>}
         {checks.length > 0 && (
           <button type="button" className={`cb-flag ${flags.every(([, c]) => c!.ignored) ? 'ignored' : ''}`} onPointerDown={(e) => e.stopPropagation()}
             onClick={() => tilePick.toggleFlags(set.id, size.id)} aria-expanded={flagsOpen}>
-            {flags.length ? `⚑ Jude · ${flags.length}` : 'Jude · cannot verify'}</button>
+            {flags.length ? `⚑ Review agent · ${flags.length}` : 'Review agent · cannot verify'}</button>
         )}
       </div>
       <div className="cb-caption" style={{ height: CAPTION_H }}>
@@ -454,7 +477,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
       </div>
       {picked && !typing && <TileFloat anchor={pic}>
       {flagsOpen && checks.length > 0 && (
-        <div className="cb-flags pt-panel" role="dialog" aria-label="Jude's checks">
+        <div className="cb-flags pt-panel" role="dialog" aria-label="The Review agent's checks">
           {checks.map(([code, c]) => (
             <div key={code} className="cb-check">
               <span>{c!.result === 'unverified' ? <><b>Cannot verify.</b> {c!.note}</> : c!.note}</span>

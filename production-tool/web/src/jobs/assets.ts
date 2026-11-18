@@ -7,6 +7,9 @@ import type { Relay } from '../relay'
 import { RelayError } from '../relay'
 
 const uploaded = new Map<string, AssetRef>()
+/** Uploads on the way: a second ask for the same picture waits for the first (QA 2026-11-17: Update sizes sent 8
+ *  sizes of a new master at once, each uploading it, and one failed with UnidentifiedImageError). */
+const inflight = new Map<string, Promise<AssetRef>>()
 
 /** Where the relay already keeps an asset's bytes: its first https location (a relay output, out/ or ads/). */
 export function remoteUrl(doc: Pick<ProductionDocument, 'assets'>, sha: string | undefined): string | undefined {
@@ -21,6 +24,14 @@ export function remoteUrl(doc: Pick<ProductionDocument, 'assets'>, sha: string |
 export async function assetRef(relay: Relay, sha: string, doc?: Pick<ProductionDocument, 'assets'>): Promise<AssetRef> {
   const hit = uploaded.get(sha)
   if (hit) return hit
+  const going = inflight.get(sha)
+  if (going) return going
+  const p = upload(relay, sha, doc).finally(() => inflight.delete(sha))
+  inflight.set(sha, p)
+  return p
+}
+
+async function upload(relay: Relay, sha: string, doc?: Pick<ProductionDocument, 'assets'>): Promise<AssetRef> {
   const known = doc?.assets[sha]
   const at = doc && known?.kind === 'video' && known.mime === 'video/mp4' ? remoteUrl(doc, sha) : undefined
   if (at) return { sha256: sha, url: at, mime: 'video/mp4' }

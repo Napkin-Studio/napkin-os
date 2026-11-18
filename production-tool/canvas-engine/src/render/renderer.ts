@@ -157,6 +157,15 @@ export interface BoardLook {
   title: string
   /** The chip behind the title: the canvas's background, so the frame line breaks under it. */
   titleBg: string
+  /** A dashed frame (the new UI's boards, production-new-ui): the dash in screen px. Absent: a solid line. */
+  dash?: readonly number[]
+  /** The title's font family, set in capitals with letter-spacing when `caps` (the new UI's mono label). */
+  titleFont?: string
+  caps?: boolean
+  /** The frame's line width in screen px (1 by default). */
+  lineWidth?: number
+  /** The frame line's opacity (the new UI draws it in the ink at 25%). */
+  strokeAlpha?: number
 }
 
 /** How bound links look, from the host's tokens: solid ink, lit in the tool colour, the role in a pill. */
@@ -169,6 +178,10 @@ export interface LinkLook {
   labelLine: string
   /** Roles written on the line (mock Main writes "drives" only). */
   roles: readonly string[]
+  /** The resting line's opacity (the new UI draws it in the ink at 28%). */
+  strokeAlpha?: number
+  /** A line that does not touch the selection, while something is selected (the new UI: .25). */
+  dimAlpha?: number
 }
 
 /** Is this link or arrow bound to something at either end? (Then it is drawn from its ends, or not at all.) */
@@ -200,6 +213,8 @@ export class Renderer {
   hover: { x: number; y: number; w: number; h: number } | null = null
   boardLook: BoardLook | null = null
   linkLook: LinkLook | null = null
+  /** Every link lit, whatever is selected (the canvas's "Show all links"). */
+  linksAll = false
   currentBoard: string | null = null
   /** What the ink names mean in the host's theme (ink/palette.ts); the light values until it says. */
   inkPalette: InkPalette = LIGHT_INK
@@ -521,11 +536,14 @@ export class Renderer {
     if (pts.length < 2) return
     const sel = (id: string) => this.selected.has(id)
     const inGroup = (g: string | null) => !!g && (this.groups.get(g) ?? []).some((m) => sel(m.id))
-    const lit = all.some((l) => sel(l.id)) || sel(route.from.id) || sel(route.to.id) || inGroup(route.fromGroup) || inGroup(route.toGroup)
+    const lit = this.linksAll || all.some((l) => sel(l.id)) || sel(route.from.id) || sel(route.to.id) || inGroup(route.fromGroup) || inGroup(route.toGroup)
     const look = this.linkLook
-    ctx.globalAlpha = lit || look ? 1 : 0.3
+    // With a look: lit in its colour; resting in the ink, faint; with something selected, a line that
+    // does not touch it steps back further (mock production-new-ui-v2 .links path.lit / .dim).
+    const rest = look?.strokeAlpha ?? 1
+    ctx.globalAlpha = !look ? (lit ? 1 : 0.3) : lit ? 1 : this.selected.size ? rest * (look.dimAlpha ?? 1) : rest
     ctx.strokeStyle = look ? (lit ? look.lit : look.stroke) : '#4a7fd4'
-    ctx.lineWidth = (lit ? 2 : 1.5) / cam.zoom
+    ctx.lineWidth = (lit ? (look ? 2.2 : 2) : 1.5) / cam.zoom
     ctx.beginPath()
     ctx.moveTo(pts[0].x, pts[0].y)
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
@@ -543,6 +561,7 @@ export class Renderer {
     const m = midway(pts)
     if (look) {
       if (role && look.roles.includes(role) && cam.zoom > 0.2) {
+        ctx.globalAlpha = lit || !this.selected.size ? 1 : (look.dimAlpha ?? 1)
         // A pill beside the line's middle, in scene units (it scales with the canvas, as Main's does).
         const w = role.length * 6.5 + 16
         const x = m.x + 10
@@ -696,8 +715,13 @@ export class Renderer {
     ctx.fill()
     const current = this.currentBoard === r.id
     ctx.strokeStyle = current ? look.current : look.stroke
-    ctx.lineWidth = current ? 2 : 1
+    ctx.lineWidth = (current ? 2 : look.lineWidth ?? 1) / (look.dash ? cam.zoom : 1)
+    if (look.dash) ctx.setLineDash?.(look.dash.map((d) => d / cam.zoom))
+    const alpha = ctx.globalAlpha
+    if (!current && look.strokeAlpha != null) ctx.globalAlpha = alpha * look.strokeAlpha
     ctx.stroke()
+    ctx.globalAlpha = alpha
+    if (look.dash) ctx.setLineDash?.([])
     const empty = this.emptyBoard(r)
     if (empty) {
       const hint = dropHint(typeof r.props.purpose === 'string' ? r.props.purpose : '')
@@ -711,16 +735,19 @@ export class Renderer {
 
   /** A board's title chip (boards/grab boardTitleRect): 20 px tall on screen at least, the frame line broken under it. */
   private drawBoardTitle(ctx: DrawContext, r: ElementRecord, cam: Camera, look: BoardLook) {
-    const name = typeof r.props.name === 'string' ? r.props.name : ''
-    if (!name) return
+    const raw = typeof r.props.name === 'string' ? r.props.name : ''
+    if (!raw) return
+    const name = look.caps ? raw.toUpperCase() : raw
     const t = boardTitleRect(r, cam.zoom)
     const k = titleScale(cam.zoom)
     const current = this.currentBoard === r.id
     ctx.fillStyle = look.titleBg
     ctx.fillRect(t.x, t.y, t.w, t.h)
     ctx.fillStyle = current ? look.current : look.title
-    ctx.font = `600 ${12 * k}px Geist, sans-serif`
+    ctx.font = look.titleFont ? `600 ${10.5 * k}px ${look.titleFont}` : `600 ${12 * k}px Geist, sans-serif`
+    if (look.caps && 'letterSpacing' in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = `${0.08 * 10.5 * k}px`
     ctx.fillText(name, t.x + 8 * k, t.y + t.h / 2 + 4 * k, Math.max(0, t.w - 16 * k))
+    if (look.caps && 'letterSpacing' in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = '0px'
   }
 
   /** Where moving boards will land: dashed, in the tool colour (BoardLook.current), rounded as a board. */

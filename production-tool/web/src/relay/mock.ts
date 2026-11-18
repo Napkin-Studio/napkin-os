@@ -297,7 +297,7 @@ export class MockRelay implements Relay {
   async createJob(req: JobRequest): Promise<Job> {
     if (req.contractVersion !== '3') throw new RelayError({ code: 'invalid_input', message: OTHER_CONTRACT, retryable: false }, 400)
     // Skye switched off, as an older relay or an agency whose text may not go to the model answers.
-    if (req.op === 'write' && this.opts.writeOff) throw new RelayError({ code: 'capability_missing', message: "Skye isn't available here yet.", retryable: false }, 422)
+    if (req.op === 'write' && this.opts.writeOff) throw new RelayError({ code: 'capability_missing', message: "The Script agent isn't available here yet.", retryable: false }, 422)
     const existing = this.ledger.get(req.jobId)
     if (!existing) {
       this.ledger.set(req.jobId, { req, createdAt: this.opts.now(), startPos: 1 + Math.floor(Math.random() * 3) })

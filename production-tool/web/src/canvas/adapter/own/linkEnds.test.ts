@@ -37,6 +37,25 @@ async function setup() {
   return { s, a, doc, node, maya, plain, sketch, write }
 }
 
+describe('a brief into a Format set (live test 2026-11-18: the Sizes board never offered itself)', () => {
+  it('the Format set\'s node is a link end, a target the brief may feed; it feeds nothing itself', async () => {
+    const { s, a, doc } = await setup()
+    const briefEl = a.node({ x: 0, y: 900, width: 300, height: 132, customData: { kind: 'brief', id: 'brief_01K7A0000000000000000000B1' } })
+    const setEl = a.node({ x: 600, y: 900, width: 400, height: 300, customData: { kind: 'format_set', id: 'fset_01K7A0000000000000000000F1' } })
+    a.transact((els) => [...els, briefEl, setEl], { undoable: false })
+    const d = structuredClone(doc())
+    d.briefs = { brief_01K7A0000000000000000000B1: { id: 'brief_01K7A0000000000000000000B1', title: 'Cut-down brief' } as never }
+    d.format_sets = { fset_01K7A0000000000000000000F1: { id: 'fset_01K7A0000000000000000000F1' } as never }
+    const els = a.elements()
+    const b = els.find((e) => e.id === briefEl.id)!
+    const f = els.find((e) => e.id === setEl.id)!
+    expect(endOf(f, d)).toMatchObject({ doc: { kind: 'format_set', id: 'fset_01K7A0000000000000000000F1' }, core: { kind: 'format_set' } })
+    expect(linkCheck(els, d, b, f)).toMatchObject({ ok: true })
+    expect(linkCheck(els, d, f, b)).toMatchObject({ ok: false })
+    await s.close()
+  })
+})
+
 describe('links from pictures and into sketch areas', () => {
   it('a named picture feeds a script, a storyboard, a video and a sketch area in its own role; the store takes the link', async () => {
     const { s, a, doc, node, maya, sketch, write } = await setup()

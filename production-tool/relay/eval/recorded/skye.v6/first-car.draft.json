@@ -1,0 +1,46 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. CAR - DAY"
+     },
+     {
+      "type": "action",
+      "text": "@maya_front sits behind the wheel of @car_red, her first car."
+     },
+     {
+      "type": "action",
+      "text": "She grips the wheel with both hands."
+     },
+     {
+      "type": "action",
+      "text": "She takes a breath and turns the key."
+     },
+     {
+      "type": "action",
+      "text": "The engine catches. Her eyes go wide, then bright."
+     },
+     {
+      "type": "action",
+      "text": "@car_red rolls out of the driveway into golden light."
+     },
+     {
+      "type": "action",
+      "text": "She laughs, window down, hair in the wind."
+     }
+    ],
+    "note": "I drafted a short, visual first-car scene from your line."
+   }
+  ],
+  "rationale": "One location, six short beats (about 12 s) that expand the person's action into a small arc, with no dialogue so the visuals carry it."
+ }
+}

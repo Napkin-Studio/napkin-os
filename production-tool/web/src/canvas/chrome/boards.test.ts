@@ -21,7 +21,7 @@ describe('the board rail (ui-behaviour 3.2)', () => {
     named(d, 'beach', 'wide', 'location', 'n3')
     named(d, 'golden', 'hour', 'lighting', 'n4')
     const rows = boardRows(d)
-    expect(rows.map(rowLabel)).toEqual(['Script', 'Characters · 2', 'Locations · 1', 'References · 1', 'Products', 'Storyboard', 'Video'])
+    expect(rows.map(rowLabel)).toEqual(['Script', 'Characters · 2', 'Locations · 1', 'References · 1', 'Products', 'Storyboard', 'Film'])
     expect(rows[1].target).toEqual({ kind: 'refs', nodes: ['n1', 'n2'] })
     expect(rows[4].off).toBe('No products named yet')
     expect(rows[0].target).toEqual({ kind: 'open', editor: 'script' })
@@ -41,16 +41,16 @@ describe('the board rail (ui-behaviour 3.2)', () => {
     const d = doc()
     const nodes = [{ card: 'script' as const, elId: 'e1' }, { card: 'storyboard' as const, elId: 'e2' }, { card: 'video' as const, elId: 'e3' }]
     expect(boardRows(d, true, {}, nodes).map((r) => [r.title, r.target])).toEqual([
-      ['Script', { kind: 'node', id: 'e1' }], ['Storyboard', { kind: 'node', id: 'e2' }], ['Video', { kind: 'node', id: 'e3' }],
+      ['Script', { kind: 'node', id: 'e1' }], ['Storyboard', { kind: 'node', id: 'e2' }], ['Film', { kind: 'node', id: 'e3' }],
     ])
     expect(boardRows(d, true)).toEqual([])
     d.boards = { b1: { id: 'b1', v: 1, field_v: {}, title: 'Characters', purpose: 'character', rank: 'a' } as Board }
-    expect(boardRows(d, true, { b1: 3 }, nodes).map(rowLabel)).toEqual(['Script', 'Storyboard', 'Video', 'Characters · 3'])
+    expect(boardRows(d, true, { b1: 3 }, nodes).map(rowLabel)).toEqual(['Script', 'Storyboard', 'Film', 'Characters · 3'])
   })
   it('keeps the template rows on a canvas without board frames (Excalidraw), whatever doc.boards holds', () => {
     const d = doc()
     d.boards = { b1: { id: 'b1', v: 1, field_v: {}, title: 'Script', purpose: 'script', rank: 'a' } as Board }
-    expect(boardRows(d).map((r) => r.title)).toEqual(['Script', 'Characters', 'Locations', 'References', 'Products', 'Storyboard', 'Video'])
+    expect(boardRows(d).map((r) => r.title)).toEqual(['Script', 'Characters', 'Locations', 'References', 'Products', 'Storyboard', 'Film'])
   })
   it('jumps with ⌥1…⌥9 read from event.code, fits with ⌥0, and never while typing', () => {
     const k = (code: string, extra: Partial<KeyboardEvent> = {}, target: unknown = null) =>

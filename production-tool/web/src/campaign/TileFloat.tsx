@@ -26,7 +26,7 @@ export function TileFloat({ anchor, children, onOffscreen = () => tilePick.clear
     const avoid = head ? [{ left: head.left, top: head.top, right: head.right, bottom: head.bottom }] : []
     // Below the tile's caption, not across it.
     const bottom = anchor.current?.closest('.cb-tile')?.getBoundingClientRect().bottom ?? a.bottom
-    const p = placeFloating({ x: (a.left + a.right) / 2, top: a.top, bottom }, { w: el.offsetWidth, h: el.offsetHeight }, view, 10, 8, avoid)
+    const p = placeFloating({ x: (a.left + a.right) / 2, top: a.top, bottom }, { w: el.offsetWidth, h: el.offsetHeight }, view, 10, 8, avoid, true)
     // Placed on the element itself after every render (the board moves with the canvas's view).
     el.style.left = `${p.left}px`
     el.style.top = `${p.top}px`

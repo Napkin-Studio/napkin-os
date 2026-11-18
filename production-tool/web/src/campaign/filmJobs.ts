@@ -27,6 +27,7 @@ import { FRAME_PAD, FRAME_TOP, channelOfSize, placeBoard, sizesOf, type Campaign
 import type { MasterInfo } from './master'
 import { rowFracs } from './rules'
 import { liveGet } from '../model/live'
+import { briefLink, sizesBriefOf } from '../brief/model'
 
 /** What a film's jobs need: no canvas (they land after a reload too). */
 export type FilmDeps = Pick<CampaignDeps, 'doc' | 'runner' | 'relay'>
@@ -59,7 +60,7 @@ export function landFilmPlan(job: Job) {
   if (!w) return
   waiting.delete(job.jobId)
   if (job.cutdownPlan) w.resolve(job.cutdownPlan)
-  else w.reject(new Error('Dex sent no plan. Try again.'))
+  else w.reject(new Error('The Director agent sent no plan. Try again.'))
 }
 
 /** Up to three stills of a take's window (in, middle, out) as small JPEGs, for Claude to look at. Empty
@@ -129,19 +130,22 @@ export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: Master
       const live = deps.runner.liveInfo(jobId)
       if (live?.state === 'failed' || live?.state === 'cancelled' || live?.state === 'uncertain') {
         waiting.delete(jobId)
-        reject(new Error(liveGet(deps.doc).jobs[jobId]?.error?.message ?? 'Dex could not plan the cuts. Try again.'))
+        reject(new Error(liveGet(deps.doc).jobs[jobId]?.error?.message ?? 'The Director agent could not plan the cuts. Try again.'))
         return
       }
       if (Date.now() - started > timeoutMs) {
         waiting.delete(jobId)
-        reject(new Error('Dex took too long to plan. Try again.'))
+        reject(new Error('The Director agent took too long to plan. Try again.'))
         return
       }
       setTimeout(watch, 400)
     }
     setTimeout(watch, 400)
   })
-  await deps.runner.submit('cutdown', input, [], { for: 'film_plan', videoId: master.id }, jobId)
+  // The sizes' brief: one linked straight to a Format set of this film overrides the film's own (re-test N2).
+  const linked = sizesBriefOf(liveGet(deps.doc), master.id)
+  await deps.runner.submit('cutdown', input, [], { for: 'film_plan', videoId: master.id }, jobId, undefined,
+    linked ? { briefFrom: { kind: 'format_set', id: linked.setId } } : {})
   return plan
 }
 
@@ -164,8 +168,34 @@ export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set:
   if (!show) return laid
   const f = formatById(size.format.format_id)
   const fr = f ? rowFracs({ format: f.format }) : ([0, 0, 0, 0] as const)
-  const caps = captionLayers(d, size.edl ?? [], want?.box ?? captionBox(fr), brandKit(d).colour, size.delivery.height)
+  const caps = withoutRepeats(captionLayers(d, size.edl ?? [], want?.box ?? captionBox(fr), brandKit(d).colour, size.delivery.height), laid)
   return [...laid, ...caps.map((c) => (want?.scale && c.sizeFrac ? { ...c, sizeFrac: Math.min(0.5, c.sizeFrac * want.scale) } : c))].slice(0, 40)
+}
+
+const sameWords = (a?: string, b?: string) => {
+  const n = (x?: string) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  return !!n(a) && n(a) === n(b)
+}
+
+/** The captions, none saying the same words as a line or legal on screen at the same time (re-test N-G: the 1:1
+ *  showed "Lumo. Calm, on." twice, as the spoken line's caption and as the words on every version). A caption
+ *  that starts before the line ends where the line starts; one that starts under it goes. */
+export function withoutRepeats(caps: TypeLayer[], laid: readonly TypeLayer[]): TypeLayer[] {
+  const out: TypeLayer[] = []
+  for (const c of caps) {
+    let cap: TypeLayer | null = c
+    for (const l of laid) {
+      if (!cap || l.kind === 'logo' || !sameWords(cap.text, l.text)) continue
+      const cf: number = cap.fromS ?? 0
+      const ct: number = cap.toS ?? Infinity
+      const lf: number = l.fromS ?? 0
+      const lt: number = l.toS ?? Infinity
+      if (ct <= lf || cf >= lt) continue
+      cap = cf < lf - 0.25 ? { ...cap, toS: lf } : null
+    }
+    if (cap) out.push(cap)
+  }
+  return out
 }
 
 /** Make the film's sizes: the set, its sizes on the Film lane of a Campaign board, the paid reframes each
@@ -228,10 +258,17 @@ export async function makeFilmSizes(deps: CampaignDeps, req: FilmRequest, by: Pe
   const frame = canvas.board({ x: box.x, y: box.y, width: box.w, height: box.h, title: board.title, boardId: board.id, purpose: 'formats' })
   const el = canvas.patch(canvas.node({ x: box.x + FRAME_PAD, y: box.y + FRAME_TOP, width: layout.w, height: layout.h, customData: { kind: 'format_set', id: setId } }), { frameId: frame.id })
   canvas.transact((all) => [...all, frame, el], { undoable: true })
+  // A brief linked straight to this film's sizes carries on to the new set, so its sizes and reframes read it
+  // as the plan did (re-test N2: the Booth said "the sizes read this brief", and the new set never did).
+  const linked = sizesBriefOf(d, req.master.id)
   await systemUpdate(doc, (x) => {
     x.boards[board.id] = board
     x.format_sets[setId] = set
     for (const s of sizes) x.sizes[s.id] = s
+    if (linked) {
+      const l = briefLink(linked.briefId, { kind: 'format_set', id: setId })
+      x.links[l.id] = l
+    }
   }, `make the film's sizes of ${req.master.label}: ${sizes.length} versions`)
   canvas.select([el.id])
   for (const [key, r] of Object.entries(reframes)) {

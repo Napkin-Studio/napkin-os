@@ -84,7 +84,7 @@ describe('fixRoute', () => {
 })
 
 describe('landPatch', () => {
-  it('lands the patched take beside its parent in one landing by Edie, the cut and the note left as they are', async () => {
+  it('lands the patched take beside its parent in one landing by the Edit agent, the cut and the note left as they are', async () => {
     const { store, shot, take } = setup()
     const d = structuredClone(store.get())
     d.reviews.review_1 = note(d, { at_s: 3.2, window: { from_s: 2, to_s: 4 } })

@@ -2,12 +2,41 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { createSaveStore } from './useSave'
+import { createSaveStore, merged, saveThrough } from './useSave'
 
 // One save state (features/topbar-declutter.clan): the canvas bar's status and More's "Save now"
 // read the same store, and Ctrl/Cmd+S is bound once.
 
+describe('the saved line has one source (live test 2026-11-18)', () => {
+  const at = new Date('2026-11-18T06:17:00Z')
+  it('the server copy\'s time, from a 5-minute or lock save, or after a reload, says saved', () => {
+    expect(merged({ kind: 'idle' }, '2026-11-18T06:22:58Z')).toEqual({ kind: 'saved', at: new Date('2026-11-18T06:22:58Z') })
+    expect(merged({ kind: 'saved', at }, '2026-11-18T06:37:58Z')).toEqual({ kind: 'saved', at: new Date('2026-11-18T06:37:58Z') })
+  })
+  it('a later Save now wins; a running or failed one says so; nothing saved yet is idle', () => {
+    expect(merged({ kind: 'saved', at }, '2026-11-18T06:00:00Z')).toEqual({ kind: 'saved', at })
+    expect(merged({ kind: 'saving' }, '2026-11-18T06:22:58Z').kind).toBe('saving')
+    expect(merged({ kind: 'failed', why: 'x' }, '2026-11-18T06:22:58Z').kind).toBe('failed')
+    expect(merged({ kind: 'idle' }, null).kind).toBe('idle')
+    expect(merged({ kind: 'idle' }, 'not a date').kind).toBe('idle')
+    // A choice waiting (a newer version elsewhere, this browser's changes here): not "saved".
+    expect(merged({ kind: 'idle' }, '2026-11-18T06:22:58Z', 'newer there')).toEqual({ kind: 'failed', why: 'newer there' })
+    expect(merged({ kind: 'saving' }, '2026-11-18T06:22:58Z', 'newer there').kind).toBe('saving')
+  })
+})
+
 describe('the save store', () => {
+  it('a conflict resolved by saving as a new version clears "not saved" (re-test N-C)', async () => {
+    const s = createSaveStore()
+    const me = {}
+    const conflict = new Error('This project was saved from somewhere else')
+    await s.run(me, async () => { throw conflict })
+    expect(s.get(me).kind).toBe('failed')
+    await saveThrough(me, async () => {}, s)
+    expect(s.get(me).kind).toBe('saved')
+    await expect(saveThrough(me, async () => { throw conflict }, s)).rejects.toBe(conflict)
+    expect(s.get(me).kind).toBe('failed')
+  })
   it('saving, then saved', async () => {
     const s = createSaveStore()
     const me = {}

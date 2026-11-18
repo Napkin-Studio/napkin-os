@@ -596,7 +596,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **Change this frame** (review item 5), in the card's More menu or the Image editor:
 1. Type the change ("Make this an overhead aerial shot"). **Redo** lets you reword it after reading Dex's answer.
-2. Dex classifies the words as a **camera change** or a **local change**. The answer always names which: "Dex read this as a camera change".
+2. Dex classifies the words as a **camera change** or a **local change**. The answer always names which: "The Director agent read this as a camera change".
    - **When the words could be either** ("make the bottle bigger"), Dex asks "Bigger how?" on the card, with a camera option and an edit option (artboard 4c). This is an ambiguity ask, so no option is preselected or marked Recommended (3.17).
 3. **Camera change:**
    - The card's affected chips keep their current values with dashed amber outlines.
@@ -605,7 +605,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
    - **Keep both** keeps the new frame as an extra version without touching the fields.
    - **Discard** drops it. The card says nothing about cost; the render it took is recorded, with its cost, in the decision tree (3.20).
 4. **Local change:** Dex sends you to the Image editor with the words in Fill area, or applies the change as an instruction edit. Either way the result returns as a new version with Apply, Keep both and Discard.
-5. **When Dex used the words as given** without restructuring them (passthrough), the result says so: "Dex sent your words as they are."
+5. **When Dex used the words as given** without restructuring them (passthrough), the result says so: "The Director agent sent your words as they are."
 
 **Direction** (review item 6):
 - Collapsed to one line ("Direction · first words · 1,186 / 4,000"). Empty: "Add direction · 0 / 4,000".

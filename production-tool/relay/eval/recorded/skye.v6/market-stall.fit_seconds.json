@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "At a street market, @sai_front sniffs a ripe mango and hands coins to the stallholder."
+     },
+     {
+      "type": "direction",
+      "text": "Colourful, crowded background."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one beat of 15 words so the shot plays in 2.5 seconds."
+   }
+  ],
+  "rationale": "Merged the holding and sniffing into one beat and dropped \"busy\" (the direction already says crowded), so the 15-word action line times at 2.5 s by rule 10."
+ }
+}

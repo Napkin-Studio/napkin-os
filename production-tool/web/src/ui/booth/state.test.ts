@@ -2,7 +2,7 @@
 // what is open, where it may hide, what a room starts as, and whose remembered state it is.
 
 import { describe, expect, it } from 'vitest'
-import { boothCanHide, boothGutter, boothKey, boothWidth, edgeLabel, rememberedOpen, shownOpen, startsOpen } from './state'
+import { boothCanHide, boothEarned, boothGutter, boothKey, boothWidth, edgeLabel, rememberedOpen, shownOpen, startsOpen } from './state'
 
 describe('the Booth', () => {
   it('is 420 for the whole script, 440 on a part or a selection, 420 in the Storyboard, 380 in the rooms; 320 in a narrow window', () => {
@@ -24,8 +24,8 @@ describe('the Booth', () => {
     expect(shownOpen('script', 1600, false)).toBe(false)
   })
 
-  it('a room below 1280 px starts hidden; elsewhere it starts as the person left it', () => {
-    expect(startsOpen('room', 1279, true)).toBe(false)
+  it('starts as the person left it, a room on a laptop too (live test 2026-11-18: a selected box got only the tab)', () => {
+    expect(startsOpen('room', 1116, true)).toBe(true)
     expect(startsOpen('room', 1280, true)).toBe(true)
     expect(startsOpen('room', 1600, false)).toBe(false)
     expect(startsOpen('script', 1024, true)).toBe(true)
@@ -51,5 +51,13 @@ describe('the Booth', () => {
     expect(edgeLabel(0)).toBe('Open the Booth')
     expect(edgeLabel(1)).toBe('Open the Booth, 1 thing waiting for you')
     expect(edgeLabel(2)).toBe('Open the Booth, 2 things waiting for you')
+  })
+  it('earns its place only for a selection, a library or the agent asked on purpose, or something waiting', () => {
+    expect(boothEarned({})).toBe(false)
+    expect(boothEarned({ waiting: 0 })).toBe(false)
+    expect(boothEarned({ selection: true })).toBe(true)
+    expect(boothEarned({ library: true })).toBe(true)
+    expect(boothEarned({ asked: true })).toBe(true)
+    expect(boothEarned({ waiting: 1 })).toBe(true)
   })
 })

@@ -103,3 +103,16 @@ export function idbLiveLog(name: string): LiveLog {
     size: () => count,
   }
 }
+
+/** Empty the live store in IndexedDB database `name`, so the scene next opens from the .clan's checkpoint (a
+ *  project whose copy was replaced by the relay's newer version, projects/shell.ts). Nothing without IndexedDB. */
+export async function clearLiveLog(name: string): Promise<void> {
+  const db = await openDb(name)
+  if (!db) return
+  await run(db, 'readwrite', (s) => s.clear())
+  try {
+    db.close()
+  } catch {
+    // closed already
+  }
+}

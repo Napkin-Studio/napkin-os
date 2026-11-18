@@ -74,6 +74,9 @@ export interface SubmitExtras {
   promoteFrom?: string
   /** Change this… (features/make-and-edit.clan): a new take of a parent with one thing changed. */
   remakeWith?: RemakeWith
+  /** The node whose scope the brief is read from, when not the job's own: Make all sizes plans on the Film
+   *  node for the sizes, which read the brief linked to their Format set (brief/model.ts sizesBriefOf). */
+  briefFrom?: LinkEndpoint
 }
 
 /** A person's answer to a job's question. */
@@ -219,7 +222,7 @@ export class JobRunner {
     const linked = withLinkedText(d, op, node, input)
     input = linked.input
     // The brief in the node's scope, its spine only (features/brief-node.clan; behind flags.briefNode).
-    const briefed = this.briefs() ? withBrief(d, op, node, input) : { input, rows: [] }
+    const briefed = this.briefs() ? withBrief(d, op, extras.briefFrom ?? node, input) : { input, rows: [] }
     input = briefed.input
     const words = purposeWords(purpose)
     // A fresh nonce for every job: another take is never deduped with the one running (ui-behaviour 4.3).
@@ -269,8 +272,24 @@ export class JobRunner {
       parents: parentIds.length, inputs: [...hashes], text: input.text, chips: input.chips, region: input.region,
     })
     jobState(jobId, 'queued', { op })
+    // Durable before it is paid for (re-test N1, 2026-11-18): the stores write on a 250 ms debounce, and a
+    // reload 0.7 s after a Fill lost job_01M7PW4R0B9WS5SRBNSASF7RMA: paid at the relay, never in the document.
+    // Everything written so far (this job, and the row or placeholder the caller put in first) lands now.
+    await this.durable()
     await this.send(request)
     return jobId
+  }
+
+  /** Write the document and the UI state now. A store that refuses never stops the send: the person asked. */
+  private async durable() {
+    const keep = async (store: { flush(): Promise<void> }) => {
+      try {
+        await store.flush()
+      } catch (e) {
+        console.warn('could not keep the job before sending it', e)
+      }
+    }
+    await Promise.all([keep(this.ui), keep(this.doc)])
   }
 
   /** How many of this person's jobs the relay runs at once (config inFlightPerParticipant; the session sets it). */
@@ -756,6 +775,7 @@ export class JobRunner {
           j.updated_at = new Date().toISOString()
         }
       }, `complete ${job.op}`)
+      if (job.unchanged) this.ui.update((u) => { u.jobs[job.jobId] = { ...u.jobs[job.jobId], unchanged: true } })
       this.live.set(job.jobId, { state: 'completed' })
       jobState(job.jobId, 'completed', { op: job.op, provider: job.provider, model: job.model, outputs: assets.map((a) => a.sha256), ms: this.ageMs(job.jobId) })
       this.emit()

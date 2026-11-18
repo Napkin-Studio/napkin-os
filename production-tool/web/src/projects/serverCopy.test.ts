@@ -13,12 +13,14 @@ function setup() {
   const server = {
     signedIn: true,
     save: vi.fn(async () => ({ etag: 'e1', savedAt: '2026-11-16T12:00:00Z' })),
+    list: vi.fn(async () => []),
     putCanvas: vi.fn(async (id: string, elements: unknown[]) => { relayCanvas.set(id, elements) }),
   }
   const index = { get: () => ({ id: 'p1', name: 'Ad' }), setServer: vi.fn(async () => {}) }
   const copy = new ServerCopy({
     id: 'p1', server: server as never, index: index as never, storage, canvasKey: 'canvas:p1',
     doc: () => ({ assets: {} }) as unknown as ProductionDocument, upload: async () => undefined,
+    base: { mark: null, unsaved: false },
   })
   return { storage, server, relayCanvas, copy }
 }

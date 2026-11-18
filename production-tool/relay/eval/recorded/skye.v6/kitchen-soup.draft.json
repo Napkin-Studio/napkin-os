@@ -1,0 +1,50 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. KITCHEN - DAY"
+     },
+     {
+      "type": "action",
+      "text": "Sunlight spills across the kitchen. Steam rises from a pot."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front lifts the lid and breathes in the steam."
+     },
+     {
+      "type": "action",
+      "text": "She dips a wooden spoon into the soup."
+     },
+     {
+      "type": "action",
+      "text": "She tastes it. A slow nod."
+     },
+     {
+      "type": "action",
+      "text": "A smile spreads across her face."
+     },
+     {
+      "type": "character",
+      "text": "MAYA"
+     },
+     {
+      "type": "dialogue",
+      "text": "Now that's exactly what I wanted."
+     }
+    ],
+    "note": "I drafted a short kitchen scene from your line, ending on one spoken line."
+   }
+  ],
+  "rationale": "Expanded the one-line action into a single-location 15 s scene with a slugline, five beats and one six-word line, about 14.4 s by the length rule."
+ }
+}

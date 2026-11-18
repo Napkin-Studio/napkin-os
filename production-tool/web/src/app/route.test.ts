@@ -1,13 +1,23 @@
 // Routes under both bases: '/' (dev, tests) and '/production/' (behind napkin-web).
 
 import { describe, expect, it } from 'vitest'
-import { formatRoute, parseRoute, projectRoute, routeFor, routeProject, routeRoom, Router, scriptRoute, type HistoryLike } from './route'
+import { formatRoute, frameRoute, parseRoute, projectRoute, routeFor, routeProject, routeRoom, Router, scriptRoute, type HistoryLike } from './route'
 
 const P = 'p_01HZY'
 const S = 'script_01J0000000000000000000000A'
 const H = 'shot_01J0000000000000000000000B'
 
 describe('parseRoute and formatRoute', () => {
+  it('the Image editor on a storyboard shot\u2019s frame is in the URL, so a reload reopens it (re-test 8d)', () => {
+    const P = 'prj_01M7PQ2AQP857QJ78395QNZBXA'
+    const r = frameRoute(P, 'shot_01M7PQ2AQP857QJ78395QNZBXB')
+    expect(formatRoute(r, '/production/')).toBe(`/production/p/${P}/storyboard?frame=shot_01M7PQ2AQP857QJ78395QNZBXB`)
+    expect(parseRoute({ pathname: `/production/p/${P}/storyboard`, search: '?frame=shot_01M7PQ2AQP857QJ78395QNZBXB' }, '/production/')).toEqual(r)
+    expect(formatRoute(frameRoute(P, null), '/production/')).toBe(`/production/p/${P}/storyboard`)
+    // The App's sync keeps it while the Storyboard is the stage, and drops it when the stage changes.
+    expect(routeFor(P, 'storyboard', r)).toBeNull()
+    expect(routeFor(P, 'character', r)).toEqual(projectRoute(P))
+  })
   for (const base of ['/', '/production/']) {
     it(`round-trip under ${base}`, () => {
       const r = scriptRoute(P, S, H)
@@ -33,7 +43,7 @@ describe('parseRoute and formatRoute', () => {
   }
 
   for (const base of ['/', '/production/']) {
-    it(`each Video editor room has its own route under ${base} (reload, Back and Share return to the room)`, () => {
+    it(`each Film editor room has its own route under ${base} (reload, Back and Share return to the room)`, () => {
       for (const room of ['make', 'edit', 'sound'] as const) {
         const r = projectRoute(P, 'video', room)
         expect(formatRoute(r, base)).toBe(`${base}p/${P}/video/${room}`)
@@ -41,7 +51,7 @@ describe('parseRoute and formatRoute', () => {
         expect(routeRoom(r)).toBe(room)
         expect(routeProject(r)).toBe(P)
       }
-      // The Video editor with no room is Make; a room is only a Video editor's.
+      // The Film editor with no room is Make; a room is only a Film editor's.
       expect(routeRoom(projectRoute(P, 'video'))).toBe('make')
       expect(formatRoute(projectRoute(P, 'storyboard', 'edit'), base)).toBe(`${base}p/${P}/storyboard`)
       expect(parseRoute({ pathname: `${base}p/${P}/video/cut` }, base)).toEqual({ kind: 'none' })
@@ -49,7 +59,7 @@ describe('parseRoute and formatRoute', () => {
     })
   }
 
-  it('the open project keeps the Video editor\'s room in the URL, and drops it on leaving', () => {
+  it('the open project keeps the Film editor\'s room in the URL, and drops it on leaving', () => {
     expect(routeFor(P, 'video', projectRoute(P, 'video', 'edit'))).toBeNull()
     expect(routeFor(P, 'video', projectRoute(P, 'video', 'sound'))).toBeNull()
     expect(routeFor(P, 'character', projectRoute(P, 'video', 'edit'))).toEqual(projectRoute(P))

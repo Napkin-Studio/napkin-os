@@ -10,7 +10,7 @@ from pathlib import Path
 from conftest import envelope
 from contracts_dir import contracts_dir
 from director import new_id
-from writer import ModelWriter, PassthroughWriter, output_schema, settle
+from writer import ModelWriter, PassthroughWriter, output_schema, rough_seconds, settle
 
 BASE = "sha256:" + "d" * 64
 
@@ -46,7 +46,7 @@ def test_write_is_skyes_internal_job_on_the_text_quota_with_no_spend(h):
     assert draft["base_hash"] == BASE  # echoed: a draft lands after a reload, and goes stale on Keep if the text moved
     assert draft["lines"][0]["text"] == "@maya_front walks the waterline."
     assert draft["note"] == "I tightened it."
-    assert job["director"]["promptVersion"] == "skye.v5"
+    assert job["director"]["promptVersion"] == "skye.v6"
 
 
 def test_a_draft_writes_from_the_instruction_not_the_items_words(h):
@@ -144,7 +144,7 @@ def test_the_model_writer_asks_sonnet_with_skye_v3_and_the_relay_owns_target_and
     out = w.write({"op": "write", "jobId": new_id("job"), "input": inp})
     [asked] = port.asked
     assert asked["purpose"] == "writer" and asked["model"] == "claude-sonnet-5-5"
-    assert asked["system"].startswith("# Skye · scripts (skye.v5)")
+    assert asked["system"].startswith("# Skye · scripts (skye.v6)")
     assert asked["payload"]["input"]["write"]["context"]["refs"] == [{"name": "maya_front", "role": "character"}]
     assert [d["target"] for d in out["writes"]] == [target]
     assert out["writes"][0]["base_hash"] == BASE
@@ -184,6 +184,47 @@ def test_a_free_instruct_lands_as_a_revise_with_its_note(h):
     assert draft["note"] == "I did what you asked."
 
 
+def test_v6_is_v5_plus_one_length_rule_with_the_band_and_v5_still_loads():
+    """Live test 2026-11-18: a 15 s film drafted at about 60 s on the band. skye.v6 sizes a page by the band's
+    rule (web script/compose.ts roughSeconds = writer.rough_seconds); skye.v5 stays loadable for a rollback."""
+    root = Path(__file__).parent.parent / "prompts"
+    v6 = (root / "skye.v6.md").read_text()
+    assert "10. Length." in v6 and "2.5 words a second" in v6 and "1 s for every 6 words" in v6
+    assert "input.write.too_long" in v6 and "input.brief" in v6
+    old = ModelWriter(FakePort({"writes": []}), contracts_dir(), prompt_version="skye.v5")
+    assert old.system.startswith("# Skye · scripts (skye.v5)")
+
+
+def test_rough_seconds_is_the_bands_rule():
+    # The same lines as web compose.test.ts ('a slugline is no speaker…'): 14/6 + 14/6 + 6/2.5 + 2 = 9.1.
+    lines = [{"type": "action", "text": "INT. FARMHOUSE KITCHEN - DAWN"},
+             {"type": "action", "text": "Pale blue light. Frost on the window. A tired DAD stands at the stove."},
+             {"type": "action", "text": "He tears open a red Hearth Oats pack and tips oats into a pot."},
+             {"type": "character", "text": "NARRATOR (V.O.)"}, {"type": "parenthetical", "text": "warmly"},
+             {"type": "dialogue", "text": "Hearth Oats. Slow down, warm up."}, {"type": "action", "text": "She yawns back."}]
+    assert rough_seconds(lines) == 9.1
+
+
+def test_a_page_draft_far_over_its_length_is_asked_once_to_fit():
+    """A draft for a 15 s scene that runs about 30 s goes back once with too_long; the second answer stands."""
+    long = [{"type": "action", "text": f"Beat {i}: the dad does one more slow thing at the stove while the frost melts."} for i in range(8)]
+    short = [{"type": "action", "text": "Frost on the window."}, {"type": "action", "text": "Dad stirs the oats."},
+             {"type": "action", "text": "She yawns. He yawns."}, {"type": "action", "text": "The red pack in the sun."}]
+    port = FakePort([{"writes": [{"lines": long, "note": "n"}], "rationale": "r1"}, {"writes": [{"lines": short, "note": "n2"}], "rationale": "r2"}])
+    inp = write_input()
+    inp["write"] = {**inp["write"], "intent": "draft", "mode": "draft", "target": {"kind": "scene", "id": inp["write"]["target"]["id"]},
+                    "lines": [], "instruction": "a dad makes oats", "context": {**inp["write"]["context"], "target_s": 15}}
+    out = ModelWriter(port, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": inp})
+    assert len(port.asked) == 2
+    assert port.asked[1]["payload"]["input"]["write"]["too_long"] == {"about_s": rough_seconds(long), "target_s": 15}
+    assert [x["text"] for x in out["writes"][0]["lines"]] == [x["text"] for x in short]
+    assert out["rationale"].startswith("relay: the first draft ran about")
+    # One that fits is never asked again.
+    port2 = FakePort({"writes": [{"lines": short, "note": "n"}], "rationale": "r"})
+    ModelWriter(port2, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": inp})
+    assert len(port2.asked) == 1
+
+
 def test_settle_keeps_new_beats_inside_the_length():
     inp = write_input(seconds=1.6)
     out = settle(inp, {"writes": [{"lines": [], "note": "n", "duration_s": 1.6, "new_beats": [{"kind": "moment", "at_s": 3.0, "text": "late"}]}]})
@@ -191,7 +232,7 @@ def test_settle_keeps_new_beats_inside_the_length():
 
 
 def test_the_prompt_file_is_versioned_and_says_no_chat():
-    for v in ("skye.v1", "skye.v2", "skye.v3", "skye.v4", "skye.v5"):
+    for v in ("skye.v1", "skye.v2", "skye.v3", "skye.v4", "skye.v5", "skye.v6"):
         text = (Path(__file__).parent.parent / "prompts" / f"{v}.md").read_text()
         assert "You never chat" in text and "No prices, no costs" in text
 

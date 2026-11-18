@@ -441,8 +441,6 @@ export interface Flags {
   connectedVideo?: boolean
   /** Our own canvas engine, the default (features/production-tool-land.clan). Optional; absent means on; false is the kill switch (Excalidraw). */
   ownCanvas?: boolean
-  /** The Video editor as two rooms, Make and Edit, over one Bin (features/make-and-edit.clan). Optional; absent means off. */
-  makeAndEdit?: boolean
   /** The Brief node: Start from a brief, Brief nodes, JobInput.brief (features/brief-node.clan). Optional; absent means off. */
   briefNode?: boolean
 }

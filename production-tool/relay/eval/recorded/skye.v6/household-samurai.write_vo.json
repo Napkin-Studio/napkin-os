@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@samurai is the samurai who does all the cleaning work for you. He sweeps the hall in one clean arc and folds the laundry into sharp squares."
+     },
+     {
+      "type": "direction",
+      "text": "Quick cuts, each task one strike."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1,
+      "text": "Every chore, done in a single stroke."
+     }
+    ],
+    "note": "I kept your words and added one short VO line over the shot."
+   }
+  ],
+  "rationale": "The VO adds a brief narrator line that echoes the single-strike idea of the shot without repeating its action. It is short enough to fit the 15 s ad."
+ }
+}

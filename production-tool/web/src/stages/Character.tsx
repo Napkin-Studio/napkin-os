@@ -12,7 +12,7 @@ import type { ViewSnapshot } from '../canvas/core/canvasAdapter'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
 import { scriptRoute } from '../app/route'
-import { BoardRail, CanvasToolbar, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
+import { BoardRail, CanvasToolbar, LinksToggle, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
 import { boardFrames, boardRows, type BoardRow, type RailNode } from '../canvas/chrome/boards'
 import { BoardsLayer } from '../canvas/chrome/BoardsLayer'
 import { PRODUCTION_CARD_CHROME } from '../canvas/chrome/cardChrome'
@@ -34,7 +34,7 @@ import { planOrJoin } from '../jobs/plan'
 import { linkInto } from '../jobs/prompt'
 import { AskOptions } from '../ui/AskCard'
 import { usePanels } from '../ui/chrome/panels'
-import { AssetsDrawer } from '../ui/assets/AssetsDrawer'
+import { AssetsLibrary } from '../ui/assets/AssetsDrawer'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { CanvasController, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
@@ -44,21 +44,27 @@ import { AskCard } from '../ui/AskCard'
 import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
-import { scriptToWrite, showStartCard } from './startCard'
+import { hasWork, scriptToWrite, showStartCard } from './startCard'
+import { StartCard } from './FilmStart'
 import { useBriefSpinoff } from '../brief/useBriefSpinoff'
+import { BriefBooth } from '../brief/BriefBooth'
+import { briefOfElement } from '../brief/canvas'
+import { Booth } from '../ui/booth/Booth'
+import { useBooth } from '../ui/booth/useBooth'
+import { boothEarned } from '../ui/booth/state'
 import { ImageEditor, VersionRow } from './ImageEditor'
 import { editablePicture } from '../canvas/nodes/dblclick'
 import { pickPictureVersionStep } from './imageEditor/apply'
 import { Float } from '../ui/Float'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
-import { currentPictureFrame, keyNamed, keysList, mainStoryboard, pictureVersions, refsList } from '../model/selectors'
+import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList } from '../model/selectors'
 import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
 import { isActive } from '../jobs/runner'
 import { cleanKey, cleanVariant, nameOf, nameProblem, refByName, wholeKeys } from '../lib/names'
-import { TABLET, useColorScheme, useFloating, useMedia } from '../ui/hooks'
+import { TOUCH_OR_PHONE, useColorScheme, useFloating, useMedia } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
 import { ArrowCards } from '../ui/ArrowCard'
@@ -114,7 +120,10 @@ export function Character({ initial, active, onPictureEditor }: {
   const panels = usePanels()
   const [chrome, setChrome] = useState<CanvasChrome | null>(null)
   const [board, setBoard] = useState<string | null>(null)
-  const narrow = useMedia(TABLET)
+  // The touch layout (labelled rail, Boards pill, big zoom) on a touch screen or a phone; a laptop or a
+  // narrow desktop window keeps the desktop rail (owner answer 2026-11-18: the Boards pill on touch only;
+  // mock production-new-ui-v2 w1024-canvas).
+  const narrow = useMedia(TOUCH_OR_PHONE)
   const doc = useDoc()
   const ui = useUi()
   useJobsTick()
@@ -152,7 +161,7 @@ export function Character({ initial, active, onPictureEditor }: {
   const [placeError, setPlaceError] = useState<string | null>(null)
   /** Resize… from the node bar (a selection with nodes and pictures): the pictures it resizes. */
   const [resizeOn, setResizeOn] = useState<{ els: El[]; key: string } | null>(null)
-  /** Dex's question when Make video has two scripts or two storyboards (3.5): which one drives. */
+  /** Dex's question when Make film has two scripts or two storyboards (3.5): which one drives. */
   // Generate opened from an ink group's bar (container-select): the popover over the group's strokes.
   const [genFor, setGenFor] = useState<string[] | null>(null)
   const [which, setWhich] = useState<{ scripts: string[]; storyboards: string[]; at: Pt } | null>(null)
@@ -238,6 +247,16 @@ export function Character({ initial, active, onPictureEditor }: {
   }, [vs, canvas])
 
   const els = useMemo(() => (vs ? alive(vs.els) : []), [vs])
+  // The canvas's Booth (features/production-new-ui.clan, the Booth rule): only for a selected Brief node, whose
+  // whole spine needs room; with nothing of that selected the canvas takes the full width.
+  const booth = useBooth('canvas')
+  // In link mode the first click picks the source: no Booth for it, so the targets on the right stay in reach
+  // (re-test N8: the Brief's Booth covered the Storyboard and the Sizes board until Hide).
+  const linkMode = useSyncExternalStore(canvasActions.subscribe, () => canvasActions.mode() === 'link')
+  const selBrief = useMemo(() => {
+    const ids = vs?.selected ?? []
+    return ids.length === 1 && !linkMode ? briefOfElement(els.find((e) => e.id === ids[0])) : null
+  }, [vs, els, linkMode])
   // The picture open in the Image editor, as the canvas shows it now; gone from the canvas, the editor closes.
   const editingPic = useMemo(() => {
     if (!editing) return null
@@ -290,7 +309,7 @@ export function Character({ initial, active, onPictureEditor }: {
       const other = boards.length === 1 ? drivers(d, { kind: 'storyboard', id: boards[0] }).filter((s) => s !== scripts[0]) : []
       if (!why && other.length) off['plan-shots'] = 'That storyboard follows another script'
     }
-    if (!canvasActions.canMake()) off['make-video'] = 'Make video needs the canvas'
+    if (!canvasActions.canMake()) off['make-video'] = 'Make film needs the canvas'
     if (!controls.generate) off.generate = 'Generate is turned off here'
     const pictures = resizableIn(all).count
     return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked), off, ...(pictures ? { pictures } : {}) }, els: all }
@@ -410,19 +429,19 @@ export function Character({ initial, active, onPictureEditor }: {
     }
   }, [ctrl, asking, limits])
 
-  // A node made from an editor (the Video editor's Make a storyboard from these shots): its Undo here.
+  // A node made from an editor (the Film editor's Make a storyboard from these shots): its Undo here.
   useEffect(() => canvasActions.onMade((m) => {
     const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
     offerUndo({ label: m.label, at: { x: m.el.x + m.el.width / 2, y: m.el.y }, above: true, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([m.el.id]) })
   }), [canvas, offerUndo])
 
-  /** Make video from a script, a storyboard or both (3.5): one undo step, said with Undo. */
+  /** Make film from a script, a storyboard or both (3.5): one undo step, said with Undo. */
   const makeVideoFrom = useCallback(async (from: MakeVideoFrom) => {
     setWhich(null)
     setPlaceError(null)
     try {
       const made = canvasActions.makeVideo(from)
-      if (!made) throw new Error('Make video needs the canvas.')
+      if (!made) throw new Error('Make film needs the canvas.')
       const r = await made
       const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
       offerUndo({ label: r.label, at: { x: r.el.x + r.el.width / 2, y: r.el.y }, above: true, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([r.el.id]) })
@@ -466,24 +485,103 @@ export function Character({ initial, active, onPictureEditor }: {
       if (r.made) {
         const el = canvas ? alive(canvas.elements()).find((e) => cardOf(e)?.id === r.storyboardId) : undefined
         const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
-        if (el) offerUndo({ label: 'Storyboard made from Script · Dex is planning the shots', at: { x: el.x + el.width / 2, y: el.y }, undo: () => { undoScene?.call(canvas, 'undo') } })
+        if (el) offerUndo({ label: 'Storyboard made from Script · The Director agent is planning the shots', at: { x: el.x + el.width / 2, y: el.y }, undo: () => { undoScene?.call(canvas, 'undo') } })
       }
     } catch (err) {
       setPlaceError(errText(err))
     }
   }, [docStore, services, canvas, offerUndo])
 
-  const showHint = showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
+  // Only once the canvas has its scene (vs: its first read, after the engine opened it), and never on a document
+  // with work in it (re-test N-E).
+  const showHint = !!vs && !hasWork(doc) && showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
   // A brief spun off from Brief Maker (?brief=<doc id>): its Brief node and a new Script, once (features/brief-node.clan).
   useBriefSpinoff(canvas?.engine === 'own' ? { canvas, doc: docStore } : null, config.flags)
+  // Dev only: the canvas for window.__seed.brief (dev/seed.ts), so a Brief node can be put on it in a screenshot.
+  useEffect(() => {
+    if (!import.meta.env.DEV || !canvas) return
+    ;(window as unknown as { __canvasEnv?: unknown }).__canvasEnv = { canvas, doc: docStore }
+  }, [canvas, docStore])
 
   // Our own engine has the boards as real frames and the nodes as real elements (art-boards,
   // canvas-nodes): the rail jumps to the frames, and nothing is drawn over the canvas for them.
   const own = canvas?.engine === 'own'
-  // The rail's left edge: what a jump keeps clear (the rail covers the left 240px; none when narrow).
-  const railInset = narrow || panels.assets ? 0 : 240
+  // What a jump keeps clear on the left: the tool rail's column (none when narrow, where it sits over the top).
+  const railInset = narrow ? 0 : 64
   // New results land in view right of the rail (board-autolayout).
   useEffect(() => { ctrl?.setInset(railInset) }, [ctrl, railInset])
+  // Assets opened on purpose (+ › A brief from Brief Maker…, Continue in › Link a brief…) is the newest ask: a
+  // selected Brief would keep the Booth on itself and the library never showed (re-test 4c).
+  const assetsAsk = panels.assets ? `assets:${panels.assetsTab ?? ''}` : ''
+  const lastAsk = useRef('')
+  useEffect(() => {
+    const fresh = !!assetsAsk && assetsAsk !== lastAsk.current
+    lastAsk.current = assetsAsk
+    if (fresh && canvas && selBrief) canvas.select([])
+  }, [assetsAsk, canvas, selBrief])
+  // And the other way: a Brief selected while the library is open takes the Booth, and the library closes under
+  // it. Closing the Brief's Booth (✕) then leaves nothing behind (re-test N-H: the library came back, and stayed
+  // open in link mode over the Script target).
+  const lastBrief = useRef<string | null>(null)
+  useEffect(() => {
+    const fresh = !!selBrief && selBrief !== lastBrief.current
+    lastBrief.current = selBrief
+    if (fresh && panels.assets) panels.toggle('assets')
+  }, [selBrief, panels])
+  // Selecting pans the node into the visible area (production-new-ui design guard; re-test 2b: a selected Brief
+  // sat half under the tool rail, and the Booth's column opening took the right edge). One node (never a picture),
+  // once per selection, after the Booth has slid in; never mid-drag, and not after the person moved it.
+  const oneSel = vs?.selected.length === 1 ? vs.selected[0] : ''
+  const revealOpts = useRef({ own, linkMode, railInset })
+  useEffect(() => { revealOpts.current = { own, linkMode, railInset } }, [own, linkMode, railInset])
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Imperative, never a state change: a re-render between the two presses of a double-click reset the node
+  // layer's press tracking (e2e canvas-picture: a group's picture opened on the first double-click).
+  const scheduleReveal = useCallback(() => {
+    if (revealTimer.current) clearTimeout(revealTimer.current)
+    revealTimer.current = null
+    const o = revealOpts.current
+    const ids = canvas?.view().selectedIds ?? []
+    if (!canvas || !o.own || o.linkMode || ids.length !== 1) return
+    const id = ids[0]
+    const at = canvas.elements().find((e) => e.id === id)
+    if (!at || isBoard(at) || !(cardOf(at) || briefOfElement(at))) return
+    const from = { x: at.x, y: at.y }
+    let tries = 0
+    const reveal = () => {
+      revealTimer.current = null
+      const e = canvas.elements().find((x) => x.id === id && !x.isDeleted)
+      if (!e || canvas.view().selectedIds.join() !== id) return
+      if (canvas.isBusy()) {
+        if (++tries < 20) revealTimer.current = setTimeout(reveal, 150)
+        return
+      }
+      if (e.x !== from.x || e.y !== from.y) return
+      bringIntoView(canvas, { minX: e.x, minY: e.y, maxX: e.x + e.width, maxY: e.y + e.height }, revealOpts.current.railInset, !matchMedia('(prefers-reduced-motion: reduce)').matches)
+    }
+    revealTimer.current = setTimeout(reveal, 480)
+  }, [canvas])
+  useEffect(() => {
+    if (oneSel) scheduleReveal()
+    return () => { if (revealTimer.current) clearTimeout(revealTimer.current) }
+  }, [oneSel, linkMode, scheduleReveal])
+  // A click (not a drag) on the canvas or a card asks again: clicking the node already selected brings it back.
+  useEffect(() => {
+    const el = wrap.current
+    if (!el) return
+    let down: { x: number; y: number } | null = null
+    const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY } }
+    const onUp = (e: PointerEvent) => {
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) setTimeout(scheduleReveal, 0)
+      down = null
+    }
+    el.addEventListener('pointerdown', onDown, true)
+    el.addEventListener('pointerup', onUp, true)
+    return () => {
+      el.removeEventListener('pointerdown', onDown, true)
+      el.removeEventListener('pointerup', onUp, true)
+    }
+  }, [scheduleReveal])
   // A picture named on no board goes to its role's board: "Moved to Characters · Undo" (board-autolayout).
   useEffect(() => ctrl?.onRouted((r) => {
     const e = canvas?.elements().find((x) => x.id === r.ids[0])
@@ -551,7 +649,23 @@ export function Character({ initial, active, onPictureEditor }: {
     })
     if (hit.length) canvas.fit(hit, { zoomFactor: 0.8, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
   }, [canvas, open, own, docStore, railInset])
-  // On our own engine the canvas takes ⌥1…⌥9 (canvas/boards/BoardLayer); the rail only shows which is current.
+  // The Excalidraw fallback has no frames of its own: ⌥1…⌥9 pick its rows (the rail took them; it is gone).
+  const pickRef = useRef<(r: BoardRow) => void>(() => {})
+  const fitRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    if (own || narrow) return
+    const onKey = (e: KeyboardEvent) => {
+      const k = boardKey(e)
+      if (k === null) return
+      e.preventDefault()
+      if (k === 'fit') return fitRef.current()
+      const row = rows[k]
+      if (row && !row.off) pickRef.current(row)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [own, narrow, rows])
+  // On our own engine the canvas takes ⌥1…⌥9 (canvas/boards/BoardLayer) and keeps which is current.
   useEffect(() => {
     if (!own || !canvas) return
     const onKey = (e: KeyboardEvent) => {
@@ -604,9 +718,12 @@ export function Character({ initial, active, onPictureEditor }: {
   // The dot grid moves with the canvas.
   const grid = vs ? { '--grid-x': `${vs.view.scrollX * vs.view.zoom}px`, '--grid-y': `${vs.view.scrollY * vs.view.zoom}px`, '--grid-s': `${24 * vs.view.zoom}px` } as React.CSSProperties : undefined
 
+  useEffect(() => { pickRef.current = pickBoard; fitRef.current = fitEverything })
+
   return (
     <div className="character">
       <CardChromeContext.Provider value={PRODUCTION_CARD_CHROME}>
+      <div className="cv-row">
       <div className="canvas-wrap pt-grid" ref={wrap} style={grid}>
         {frames.length > 0 && <BoardsLayer part="frames" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <CanvasMount initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} railInset={railInset} />
@@ -633,7 +750,7 @@ export function Character({ initial, active, onPictureEditor }: {
             const top = toView({ x: b.minX + b.w / 2, y: b.minY })
             return r.count ? <ResizeFor ctrl={ctrl} items={r.items} strokes={r.strokes} total={r.total} onSent={onResized} at={{ x: top.x, top: top.y, bottom: toView({ x: b.minX, y: b.maxY }).y }} onClose={() => setResizing(null)} /> : null
           })()}
-          {ctrl && canvas && ownSel && !resizing && !confirming && !placing && !which && (() => {
+          {ctrl && canvas && ownSel && !selBrief && !resizing && !confirming && !placing && !which && (() => {
             const b = bounds(ownSel.els)
             const top = toView({ x: b.minX + b.w / 2, y: b.minY })
             const ids = ownSel.els.map((e) => e.id)
@@ -642,7 +759,7 @@ export function Character({ initial, active, onPictureEditor }: {
                 onClose={() => setGenFor(null)} onPlace={(ids, text, more, modelChoice) => { setGenFor(null); setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
             }
             return (
-              <SelectionBar info={ownSel.info} anchor={{ x: top.x, top: top.y - (ownSel.info.group?.ink ? 30 : 0), bottom: toView({ x: b.minX, y: b.maxY }).y }} actions={{
+              <SelectionBar info={ownSel.info} anchor={{ x: top.x, top: top.y - (ownSel.info.group?.ink ? 30 : 0), bottom: toView({ x: b.minX, y: b.maxY }).y, ...(ownSel.info.cards.length ? { left: toView({ x: b.minX, y: b.minY }).x } : {}) }} actions={{
                 open: () => { const c = ownSel.els.map(cardOf).find(Boolean); if (c) open(c.kind, c.id) },
                 makeVideo: () => onMakeVideo(ownSel.els),
                 planShots: () => void onPlanShots(ownSel.els),
@@ -669,7 +786,7 @@ export function Character({ initial, active, onPictureEditor }: {
               }} />
             )
           })()}
-          {ctrl && selected.length > 0 && !ownSel && !confirming && !placing && (
+          {ctrl && selected.length > 0 && !ownSel && !selBrief && !confirming && !placing && (
             <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits} onEdit={setEditing} gather={gather} onGather={onGather}
               onSizes={own ? (el) => {
                 // A picture, or a scamp's picture (a Drawing's strokes, a sketch area's region) as the master.
@@ -763,13 +880,19 @@ export function Character({ initial, active, onPictureEditor }: {
         )}
         <FrontChooser />
         {placeError && <div className="place-error" role="alert">{placeError}<FrontButtons text={placeError} /> <button className="btn xs ghost" onClick={() => setPlaceError(null)}>OK</button></div>}
-        {showHint && <StartCard onScript={() => open('script')} onPictures={() => chrome?.setTool('image')} />}
-        {panels.assets
-          ? <AssetsDrawer ctrl={ctrl} onClose={() => panels.toggle('assets')} onBoards={() => { panels.toggle('assets'); chrome?.fitAll() }}
-              onPicture={() => chrome?.setTool('image')} onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} />
-          : <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow={narrow} keys={!own} />}
-        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} vertical={narrow} />
+        {showHint && <StartCard env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} onPictures={() => { if (!panels.assets) panels.toggle('assets') }} />}
+        {/* Boards are frames on the canvas (⌥1…⌥9 jump, ⌥0 fits); on touch, with no ⌥, the Boards pill opens the jump sheet. */}
+        {narrow && <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow keys={!own} />}
+        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} onBrief={config.flags.briefNode ? () => { canvas?.select([]); panels.openAssets('napkin') } : undefined} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
+        {!showHint && <LinksToggle chrome={chrome} />}
+      </div>
+      <Booth state={booth} earned={boothEarned({ selection: !!selBrief, library: panels.assets })}>
+        {selBrief ? <BriefBooth briefId={selBrief} onClose={() => canvas?.select([])} />
+          : panels.assets ? <AssetsLibrary ctrl={ctrl} env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} tab={panels.assetsTab} onClose={() => panels.toggle('assets')} onPicture={() => chrome?.setTool('image')}
+              onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} onScript={() => open('script', mainScript(docStore.get())?.id)} />
+          : null}
+      </Booth>
       </div>
       </CardChromeContext.Provider>
       {editingPic && <ImageEditor target={{ kind: 'picture', nodeId: editingPic.nodeId }} picture={editingPic.picture} onBack={() => setEditing(null)} />}
@@ -1192,7 +1315,7 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
           <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d={open ? 'M3 7.5 L6 4.5 L9 7.5' : 'M3 4.5 L6 7.5 L9 4.5'} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
         </button>
         <AgentFigure agent="dex" size={22} decorative />
-        <div className="tray-title"><b>What Dex will send</b><span>{sayer('dex')}</span></div>
+        <div className="tray-title"><b>What the Director agent will send</b><span>{sayer('dex')}</span></div>
       </div>
       {!open && <button type="button" className="tray-line" onClick={() => setOpen(true)}>{summary}</button>}
       {open && (
@@ -1318,21 +1441,4 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   )
 }
 
-/** A new project's first card (mock States, "New project · Ad template"): Skye offers the script. */
-function StartCard({ onScript, onPictures }: { onScript: () => void; onPictures: () => void }) {
-  return (
-    <div className="start-card pt-card" role="note">
-      <div className="row" style={{ gap: 10 }}>
-        <AgentFigure agent="skye" size={22} decorative />
-        <b>Start with the script</b>
-        <span className="pt-mono">{sayer('skye')}</span>
-      </div>
-      <p>Paste a script, or tell Skye the idea. Then draw or drop your characters, places and products.</p>
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <button type="button" className="btn" onClick={onPictures}>Add pictures</button>
-        <button type="button" className="btn primary" onClick={onScript}>Write the script</button>
-      </div>
-    </div>
-  )
-}
 

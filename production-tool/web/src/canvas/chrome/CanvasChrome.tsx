@@ -1,6 +1,6 @@
 // The canvas's own chrome (ui-behaviour 3.2, 3.3, 7; mocks Main, CanvasReferences, SketchInk):
-// the frosted Boards rail with ⌥1…⌥9, the tool bar at the bottom with + Node, and the zoom and undo
-// pill. Engine-neutral: it reads the engine only through CanvasChrome (controls.ts) and is fed its
+// the tool rail on the canvas's left with + Node, the zoom and undo pill bottom left, and on touch the
+// Boards pill (⌥1…⌥9 jump on a keyboard; boards are frames on the canvas, the floating rail is gone). Engine-neutral: it reads the engine only through CanvasChrome (controls.ts) and is fed its
 // rows and actions by the stage, so it sits over either canvas adapter.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
@@ -129,24 +129,29 @@ export function BoardRail({ rows, current, onPick, onFit, narrow = false, keys =
 
 // ── The tool bar ────────────────────────────────────────────────────────────
 
+// The rail's icons (mock production-new-ui-v2 core.js: 24px line icons in the ink, 1.7 stroke).
+const line = (d: ReactNode) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
 const ICON: Record<string, ReactNode> = {
-  select: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2 L13 8 L8 9 L6 14 Z" fill="currentColor" /></svg>,
-  hand: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 8 V3.5 a1 1 0 0 1 2 0 V7 M7 7 V2.5 a1 1 0 0 1 2 0 V7 M9 7 V3.5 a1 1 0 0 1 2 0 V9 c0 3 -2 5 -4.5 5 C4 14 3 12 2.5 10 L2 8.5 a1 1 0 0 1 1.8 -0.8 L5 9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>,
-  pen: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 L4 9.5 L11 2.5 L13.5 5 L6.5 12 Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>,
-  board: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 2" /></svg>,
-  image: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M3 12 L7 8 L10 11 L12 9 L14 11" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>,
-  link: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="8" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.3" /><circle cx="12" cy="8" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M6.2 8 H9.8" stroke="currentColor" strokeWidth="1.3" /></svg>,
-  eraser: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 13 H13 M3.5 10.5 L9 5 L12 8 L7.5 12.5 H5.5 Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>,
+  select: line(<path d="M5 3l14 8-6 2-2 6z" />),
+  hand: line(<path d="M8 13V5a1.5 1.5 0 0 1 3 0v6M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L3 14a1.5 1.5 0 0 1 2.5-1.7L8 15" />),
+  pen: line(<><path d="M4 20l4-1 11-11-3-3L5 16z" /><path d="M14 6l3 3" /></>),
+  board: line(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18" /></>),
+  image: line(<><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></>),
+  link: line(<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />),
+  eraser: line(<path d="M7 20h12M5 15l8-8 5 5-6 6H8z" />),
+  text: line(<path d="M5 6V4h14v2M12 4v16M9 20h6" />),
 }
 
 export type NewNode = 'script' | 'storyboard' | 'video' | 'picture' | 'sketch'
 
-export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
+export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false }: {
   chrome: CanvasChrome | null
   /** The storyboard's ratio: the sketch area's shape (ui-behaviour 3.7). */
   ratio: string
   /** A node the canvas cannot make itself (a picture, a sketch area; on Excalidraw, a node to open). */
   onNode: (kind: NewNode) => void
+  /** Briefs on (flag briefNode): opens Assets › From Napkin, where the agency's briefs are. Absent, no brief row. */
+  onBrief?: () => void
   /** iPad (mock TabletCanvas): a column on the left, each tool with its name, 44px targets, undo and redo in it. */
   vertical?: boolean
 }) {
@@ -174,7 +179,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   const [selSize, selColor] = text ? text.split('|') : []
   const textLook = text ? { size: Number(selSize), color: selColor } : { size: TEXT_SIZE_PX[textChoice.size], color: textChoice.color }
   const textOptions = !!chrome?.setText && shown !== 'pen' && (shown === 'text' || !!text) && (
-    <TextOptions look={textLook} recent={pen.recent} vertical={vertical}
+    <TextOptions look={textLook} recent={pen.recent} vertical
       onSize={(s) => { setText({ size: s }); chrome?.styleText?.({ size: TEXT_SIZE_PX[s] }) }}
       onColor={(c, remember, live) => {
         if (remember) rememberColour(c)
@@ -183,7 +188,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
         if (!live) chrome?.styleText?.({ color: c.toLowerCase() })
       }} />
   )
-  const penOptions = shown === 'pen' ? <PenOptions pen={pen} vertical={vertical} /> : textOptions
+  // Both layouts are columns on the canvas's left now: the options open beside them.
+  const penOptions = shown === 'pen' ? <PenOptions pen={pen} vertical /> : textOptions
   useEffect(() => {
     if (!actions.mode || !chrome) return
     const was = chrome.tool()
@@ -209,7 +215,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {ICON[m]}{vertical && <span className="tb-name">{label}</span>}
     </button>
   )
-  const NAME: Record<'script' | 'storyboard' | 'video', string> = { script: 'Script', storyboard: 'Storyboard', video: 'Video' }
+  const NAME: Record<'script' | 'storyboard' | 'video', string> = { script: 'Script', storyboard: 'Storyboard', video: 'Film' }
   const newKind = (k: 'script' | 'storyboard' | 'video') => {
     setMenu(false)
     if (!canvasActions.node(k)) onNode(k)
@@ -232,6 +238,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {row('picture', <>{ICON.image}A picture</>, null, has('image'), 'Pictures are not on this canvas yet', () => onNode('picture'))}
       {row('sketch', <>{sketchIcon}A sketch area</>, ratio, has('sketch'), 'Sketch areas are not on this canvas yet', () => onNode('sketch'))}
       {row('board', <>{ICON.board}A board</>, 'B', actions.canBoard, 'New boards need the new canvas (it has boards as frames)', () => canvasActions.board())}
+      {/* A brief comes from Brief Maker, never typed here: Assets › From Napkin lists the agency's (features/brief-node.clan). */}
+      {onBrief && row('brief', <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" /><path d="M7 13h10M7 16h6" /></svg>A brief from Brief Maker…</>, null, actions.canNode, 'Briefs need the new canvas', onBrief)}
     </>
   )
   const nodeButton = (
@@ -258,22 +266,23 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       </div>
     )
   }
+  // The desk's tool rail (mock production-new-ui-v2 canvas: a quiet column on the canvas's left, icons only,
+  // every name and key in its tooltip): Select, Hand, Pen, Eraser, Text, Sketch area, Board, Picture, Link, + Node.
   return (
-    <div className="canvas-toolbar" data-float-avoid="" role="toolbar" aria-label="Canvas tools">
+    <div className="canvas-toolbar rail" data-float-avoid="" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
       {penOptions}
       {t('select', 'Select', 'V')}
       {t('hand', 'Hand', 'H')}
       {t('pen', 'Pen', 'P')}
       {t('eraser', 'Eraser', 'E')}
-      {t('text', 'Text', 'T', <span className="tb-t">T</span>)}
-      <span aria-hidden="true" className="tb-sep" />
+      {t('text', 'Text', 'T', ICON.text)}
       {(() => {
         const on = has('sketch')
         const active = shown === 'sketch'
         const copying = !!area && !!chrome?.copySketch
         return (
           <>
-            <button ref={shapeRef} type="button" className={`tb-tool wide ${active ? 'on' : ''}`} aria-pressed={active} aria-label={`Sketch area ${shape} (S)`}
+            <button ref={shapeRef} type="button" className={`tb-tool ${active ? 'on' : ''}`} aria-pressed={active} aria-label={`Sketch area ${shape} (S)`}
               aria-haspopup={on && (active || copying) ? 'dialog' : undefined} aria-expanded={on && (active || copying) ? shapes : undefined}
               aria-disabled={on ? undefined : 'true'}
               data-tip={!on ? 'Sketch area (S) · not on this canvas yet' : copying ? `Copy this ${areaRatio ?? ''} area into another shape` : active ? `Sketch area ${shape}: press again to pick the shape` : `Sketch area ${shape} (S): drag to draw, then Generate brings back a picture at its shape`}
@@ -283,9 +292,9 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
                 canvasActions.setMode(null)
                 chrome?.setTool('sketch')
               }}>
-              <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>{shape}
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeDasharray="3 2" /></svg>
             </button>
-            <Float anchor={shapeRef} open={shapes} onClose={() => setShapes(false)} side="above" align="start" role="dialog" label="Sketch area shape" className="tb-shapes pt-menu">
+            <Float anchor={shapeRef} open={shapes} onClose={() => setShapes(false)} side="right" align="start" role="dialog" label="Sketch area shape" className="tb-shapes pt-menu">
               {copying ? (
                 <>
                   <span className="pt-label">Copy this area</span>
@@ -321,9 +330,11 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {mode('board', 'Board', 'B', actions.canBoard, 'Board (B): drag out a board, or click for one', 'Board (B) · needs the new canvas (it has boards as frames)')}
       {t('image', 'Add a picture', 'I', ICON.image)}
       {mode('link', 'Link two nodes', 'L', actions.canNode, 'Link (L): click a node, then the node it feeds', 'Link (L) · needs the new canvas (it has nodes on it)')}
-      <span aria-hidden="true" className="tb-sep" />
-      {nodeButton}
-      <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="above" align="end" label="Add" className="pt-menu">{menuItems}</Float>
+      <button ref={nodeRef} type="button" className="tb-tool tb-node" aria-label="+ Node" aria-haspopup="menu" aria-expanded={menu}
+        data-tip="+ Node: Script, Storyboard, Video, a picture, a sketch area or a board" onClick={() => setMenu(!menu)}>
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+      </button>
+      <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="right" align="start" label="Add" className="pt-menu">{menuItems}</Float>
     </div>
   )
 }
@@ -339,6 +350,26 @@ export function ZoomPill({ chrome, touch = false }: { chrome: CanvasChrome | nul
       <button type="button" className="zp-value" aria-label={`Zoom ${Math.round(zoom * 100)}%: fit everything (${OPTION}0)`} data-tip={`Fit everything (${OPTION}0)`} onClick={() => chrome?.fitAll()}>{Math.round(zoom * 100)}%</button>
       <button type="button" aria-label="Zoom in" data-tip="Zoom in (Ctrl +)" onClick={() => chrome?.zoomBy(1)}>+</button>
       {touch && <><span aria-hidden="true" className="zp-sep" /><button type="button" className="zp-fit" onClick={() => chrome?.fitAll()}>Fit</button></>}
+    </div>
+  )
+}
+
+// ── Show all links ─────────────────────────────────────────────────────────
+
+/**
+ * Bottom right (mock v2 .cv-links): with a node selected only its own links are lit and the rest step
+ * back; this lights every link, and "Hide links" puts them back. Only where the engine draws its own links.
+ */
+export function LinksToggle({ chrome }: { chrome: CanvasChrome | null }) {
+  const sub = useCallback((cb: () => void) => (chrome ? chrome.onChange(cb) : () => {}), [chrome])
+  const on = useSyncExternalStore(sub, () => !!chrome?.allLinksShown?.(), () => false)
+  if (!chrome?.showAllLinks) return null
+  return (
+    <div className="cv-links" data-float-avoid="">
+      <button type="button" className="sp-btn" aria-pressed={on} onClick={() => chrome.showAllLinks!(!on)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+        {on ? 'Hide links' : 'Show all links'}
+      </button>
     </div>
   )
 }

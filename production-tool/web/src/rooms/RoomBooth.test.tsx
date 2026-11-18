@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-// The Booth in the Storyboard and the Video rooms (features/script-freeform.clan; mock states storyboard,
+// The Booth in the Storyboard and the Film rooms (features/script-freeform.clan; mock states storyboard,
 // make, edit): what already needs the person there waits as cards (Dex's questions on shots a re-plan left
 // out, a failed frame or take not cleared), the agent's recent notes from the decision chain, Fin's box goes
-// to the Change tab's Words row, and a room below 1280 px starts with its Booth hidden.
+// to the Change tab's Words row, and a room on a laptop opens its Booth on a selected box (live test 2026-11-18).
 
 import { act, createElement, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -11,7 +11,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () => '{}' }))
 import { ClanDocumentStore } from '../../../clan-store/src'
 import { ServicesContext, type Services } from '../app/context'
-import type { Ask } from '../contracts/types'
 import { SnapshotStore, updateDoc } from '../doc/store'
 import { initialAppUi, type AppUi } from '../doc/ui'
 import { mainStoryboard, shotsOf } from '../model/selectors'
@@ -21,11 +20,10 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { DexBooth } from '../stages/DexBooth'
 import { addShots, id, job, MAYA, seedStages, wasm } from '../test/model'
 import type { ChangeOpen } from './ChangeDrawer'
 import type { Box, Gen } from './model'
-import { RoomBooth } from './RoomBooth'
+import { RoomBooth, RoomWaits } from './RoomBooth'
 import type { RoomData } from './Rooms'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -78,62 +76,31 @@ function typeInto(t: HTMLTextAreaElement, text: string) {
   t.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-describe("Dex's Booth in the Storyboard", () => {
-  it("waits with his question on a shot a re-plan left out, and a frame that did not draw; Clear clears it; his notes follow", async () => {
-    const { services, sb, shots, el, render } = await project()
-    const answered: string[] = []
-    const q = id('q')
-    const ask: Ask = {
-      id: q, v: 1, field_v: {}, node: { kind: 'storyboard', id: sb }, crew: 'dex', state: 'open', answers: [],
-      question: { id: q, kind: 'block', text: 'Shot 2 no longer has a scene. Keep it or remove it?', options: [
-        { id: 'keep', label: 'Keep', value: { route: 'keep_shot', node: { kind: 'shot', id: shots[1] } } },
-        { id: 'remove', label: 'Remove', value: { route: 'remove_shot', node: { kind: 'shot', id: shots[1] } } }], allow_text: false },
-    }
-    await updateDoc(services.doc, (d) => { d.asks[q] = ask }, 'ask')
-    await failed(services, shots[2], 'frame')
-    const docId = services.clan!.documentId()
-    await services.clan!.record('plan 3 shots on the storyboard', undefined, { agent: 'dex', targets: [`${docId}#storyboards[${sb}]`] })
-    render(createElement(DexBooth, { storyboardId: sb, onShotAsk: (_a: Ask, shotId: string, o: 'keep' | 'remove') => { answered.push(`${o}:${shotId}`) } }))
-    await until(() => !!el.querySelector('.booth [data-booth-note]') && el.querySelectorAll('.booth .bc.ask').length === 2)
-    const booth = el.querySelector('.booth') as HTMLElement
-    expect(booth.querySelector('.bt-agent')?.textContent).toContain('Dex · directs')
-    expect(booth.querySelector('textarea')).toBeNull()
-    expect(booth.querySelector('.bt-sec')?.textContent).toBe('Waiting for you2')
-    const cards = [...booth.querySelectorAll('.bc.ask')]
-    expect(cards.map((c) => c.querySelector('.bc-q')?.textContent)).toEqual(['Shot 2 no longer has a scene. Keep it or remove it?', 'Shot 3’s frame did not draw.'])
-    expect(cards[1].querySelector('.bc-note')?.textContent).toBe('@mira is not one of the images this step was given.')
-    await act(async () => { buttonIn(cards[0], 'Keep').click() })
-    expect(answered).toEqual([`keep:${shots[1]}`])
-    await act(async () => { buttonIn(cards[1], 'Clear').click() })
-    await until(() => booth.querySelectorAll('.bc.ask').length === 1)
-    expect(booth.querySelectorAll('.bc.ask')).toHaveLength(1)
-    expect([...booth.querySelectorAll('[data-booth-note] .bc-note')].map((n) => n.textContent)).toEqual(['Planned 3 shots on the storyboard.'])
-    expect(el.querySelector('.booth-col')?.getAttribute('style')).toContain('--bw: 420px')
-  })
-})
-
-describe('the Booth in the Video rooms', () => {
+describe('the Booth in the Film rooms', () => {
   const data = (shots: string[], gens: Gen[] = []): RoomData => ({
     videoId: 'video_main', title: 'Lost puppy', ratio: '16:9', targetS: 15, lengthS: 9,
     boxes: shots.map((s, i): Box => ({ key: s, n: i + 1, shotIds: [s], together: false, endCard: false, lengthS: 3 })), gens,
   })
   const take = (shotId: string): Gen => ({ id: id('gen'), kind: 'take' as Gen['kind'], boxKey: shotId, shotIds: [shotId], version: 1, delta: [], label: 'First take', durationS: 3, segments: [{ shotId, inS: 0, outS: 3 }], state: 'ready' })
 
-  it("Make: Fin waits with a take that did not work, and his box sends words to Change's Words row for the shot's next take", async () => {
+  it("Make: The Camera agent waits with a take that did not work, and his box sends words to Change's Words row for the shot's next take", async () => {
     const { services, shots, el, render } = await project()
     await failed(services, shots[0], 'clip')
     const opened: ChangeOpen[] = []
     const t = take(shots[1])
-    render(createElement(RoomBooth, { room: 'make', data: data(shots, [t]), sel: { shotId: shots[1], boxKey: shots[1] }, change: null,
-      onChange: (c: ChangeOpen) => { opened.push(c) }, onApart: () => {}, onReady: () => {} }))
+    const props = { room: 'make' as const, data: data(shots, [t]), sel: { shotId: shots[1], boxKey: shots[1] }, change: null,
+      onChange: (c: ChangeOpen) => { opened.push(c) }, onApart: () => {}, onReady: () => {} }
+    render(createElement('div', null, createElement(RoomWaits, props), createElement(RoomBooth, props)))
     await settle()
     const booth = el.querySelector('.booth') as HTMLElement
-    expect(booth.querySelector('.bt-agent')?.textContent).toContain('Fin · films')
+    expect(booth.querySelector('.sp-crumb')?.textContent).toBe('← Film›Box 2 · shot 2×')
     expect(el.querySelector('.booth-col')?.getAttribute('style')).toContain('--bw: 380px')
-    expect(booth.querySelector('.bc.ask .bc-q')?.textContent).toBe('The take of shot 1 did not work.')
+    // What waits is a line on the room, not the Booth (the Booth rule).
+    expect(booth.querySelector('.bc.ask')).toBeNull()
+    expect(el.querySelector('.rm-waits .bc.ask .bc-q')?.textContent).toBe('The take of shot 1 did not work.')
     expect(booth.querySelector('.bt-scope')?.textContent).toBe('Shot 2 · Box 2')
     await act(async () => { typeInto(booth.querySelector('textarea') as HTMLTextAreaElement, 'she looks up at the rain') })
-    await act(async () => { buttonIn(booth, 'Ask Fin').click() })
+    await act(async () => { buttonIn(booth, 'Ask the Camera agent').click() })
     expect(opened).toEqual([{ parentId: t.id, shotId: shots[1], verb: 'words', words: 'she looks up at the rain' }])
   })
 
@@ -141,15 +108,16 @@ describe('the Booth in the Video rooms', () => {
     const { services, shots, el, render } = await project()
     await failed(services, shots[0], 'clip')
     await failed(services, shots[0], 'clip')
-    render(createElement(RoomBooth, { room: 'make', data: data(shots), sel: {}, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
+    render(createElement(RoomWaits, { room: 'make', data: data(shots), sel: {}, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
     await settle()
-    const cards = el.querySelectorAll('.booth .bc.ask')
+    const cards = el.querySelectorAll('.rm-waits .bc.ask')
     expect(cards).toHaveLength(1)
     expect(cards[0].querySelector('.bc-tries')?.textContent).toBe('Tried 2 times, stopped the same way each time.')
-    expect(el.querySelector('.booth .bt-sec')?.textContent).toBe('Waiting for you1')
+    expect(el.querySelector('.rm-waits-hd')?.textContent).toBe('Needs your call · 1')
+    expect(el.querySelector('.booth')).toBeNull()
     await act(async () => { buttonIn(cards[0], 'Clear').click() })
-    await until(() => el.querySelectorAll('.booth .bc.ask').length === 0)
-    expect(el.querySelectorAll('.booth .bc.ask')).toHaveLength(0)
+    await until(() => el.querySelectorAll('.rm-waits .bc.ask').length === 0)
+    expect(el.querySelectorAll('.rm-waits .bc.ask')).toHaveLength(0)
     expect(Object.values(services.ui.get().jobs).filter((j) => j.dismissed)).toHaveLength(2)
   })
 
@@ -158,7 +126,7 @@ describe('the Booth in the Video rooms', () => {
     render(createElement(RoomBooth, { room: 'make', data: data(shots), sel: { shotId: shots[0], boxKey: shots[0] }, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
     await settle()
     expect((el.querySelector('.booth textarea') as HTMLTextAreaElement).disabled).toBe(true)
-    expect(el.querySelector('.booth .bt-hint')?.textContent).toBe('Make a take of this box first. Then tell Fin what changes in the next one.')
+    expect(el.querySelector('.booth .bt-hint')?.textContent).toBe('Make a take of this box first. Then tell the Camera agent what changes in the next one.')
   })
 
   it('Make: the Change tab on a shot filmed with others offers to make it apart', async () => {
@@ -176,24 +144,20 @@ describe('the Booth in the Video rooms', () => {
     expect(apart).toEqual([shots[1]])
   })
 
-  it('Edit: Edie has no box', async () => {
+  it('Edit with nothing selected and nothing waiting: no Booth at all (the Booth rule)', async () => {
     const { shots, el, render } = await project()
     render(createElement(RoomBooth, { room: 'edit', data: data(shots), sel: {}, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
     await settle()
-    expect(el.querySelector('.booth .bt-agent')?.textContent).toContain('Edie · edits')
-    expect(el.querySelector('.booth textarea')).toBeNull()
+    expect(el.querySelector('.booth')).toBeNull()
+    expect(el.querySelector('.booth-edge')).toBeNull()
   })
 
-  it('a room below 1280 px starts with its Booth hidden as its edge tab, with a 44 px gutter', async () => {
-    const { services, shots, el, render } = await project(1200)
-    await failed(services, shots[0], 'clip')
-    render(createElement(RoomBooth, { room: 'make', data: data(shots), sel: {}, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
+  it('a room on a laptop (1116 px) opens its Booth on a selected box, not only its edge tab (live test 2026-11-18)', async () => {
+    const { shots, el, render } = await project(1116)
+    render(createElement(RoomBooth, { room: 'make', data: data(shots), sel: { boxKey: shots[0] }, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
     await settle()
     const col = el.querySelector('.booth-col') as HTMLElement
-    expect(col.dataset.boothOpen).toBe('false')
-    expect(col.style.getPropertyValue('--bgut')).toBe('44px')
-    const edge = el.querySelector('.booth-edge') as HTMLElement
-    expect(edge.classList.contains('on')).toBe(true)
-    expect(edge.querySelector('.booth-ct')?.textContent).toBe('1')
+    expect(col.dataset.boothOpen).toBe('true')
+    expect(el.querySelector('.booth')).not.toBeNull()
   })
 })

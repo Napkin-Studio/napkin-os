@@ -254,13 +254,13 @@ describe('the jobs', () => {
 })
 
 describe('Make all sizes from a picture or a scamp: stills only (owner, 2026-10-16)', () => {
-  it('Campaign launch from a picture is its 17 stills, no film; from a Video node the films are there', () => {
+  it('Campaign launch from a picture is its 17 stills, no film; from a Film node the films are there', () => {
     const still = rowsFor({ kind: 'plan', id: 'campaign-launch' }, 'image')
     expect(still).toHaveLength(17)
     expect(still.every((r) => r.media === 'image')).toBe(true)
     expect(rowsFor({ kind: 'plan', id: 'campaign-launch' }, 'video').some((r) => r.media === 'video')).toBe(true)
     expect(choicesFor('image').some((c) => c.id === 'film')).toBe(false)
     expect(choicesFor('video').some((c) => c.id === 'film')).toBe(true)
-    expect(FILMS_FROM_VIDEO).toBe('Films come from a Video node.')
+    expect(FILMS_FROM_VIDEO).toBe('Films come from a Film node.')
   })
 })

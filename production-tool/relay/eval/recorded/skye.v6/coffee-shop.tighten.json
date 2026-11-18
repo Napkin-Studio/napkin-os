@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "The barista slides @sai_front a cup; he sips, eyes closed."
+     },
+     {
+      "type": "direction",
+      "text": "Steam catches the window light."
+     }
+    ],
+    "note": "I tightened the action to one short beat and kept the order and the direction."
+   }
+  ],
+  "rationale": "Cut the action from 23 words to 10, keeping @sai_front, the order of events and the direction line unchanged."
+ }
+}

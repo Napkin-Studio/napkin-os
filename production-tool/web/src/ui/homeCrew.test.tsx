@@ -35,7 +35,7 @@ describe("Home's crew", () => {
     expect(renderToStaticMarkup(<CrewLine />).match(/<svg/g)?.length).toBe(7)
   })
 
-  it("Dex's line names everyone else", () => {
+  it("The Director agent's line names everyone else", () => {
     for (const k of SEVEN.filter((x) => x !== 'dex')) expect(FIRST_AD).toContain(CAST[k as keyof typeof CAST].given)
   })
 })

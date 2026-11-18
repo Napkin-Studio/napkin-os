@@ -1,0 +1,50 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. BEACH - DAWN"
+     },
+     {
+      "type": "action",
+      "text": "Pale gold light spills over the horizon onto empty wet sand."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front walks the waterline, barefoot, waves lapping at her ankles."
+     },
+     {
+      "type": "action",
+      "text": "Her footprints fill with water behind her."
+     },
+     {
+      "type": "action",
+      "text": "The light climbs, turning the sea from grey to gold."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front stops and looks out to sea."
+     },
+     {
+      "type": "action",
+      "text": "She breathes in, and a slow smile arrives."
+     },
+     {
+      "type": "action",
+      "text": "Gulls wheel over the glittering water."
+     }
+    ],
+    "note": "I drafted a quiet, visual dawn scene from your line, about 14 seconds."
+   }
+  ],
+  "rationale": "Expanded the single action line into a one-location, visual 15 s scene with seven short beats and no dialogue, keeping @maya_front as written."
+ }
+}

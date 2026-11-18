@@ -19,9 +19,10 @@ test('Subtract, an Alt-held stroke and a Subtract lasso with no mask make no edi
   await lasso(page, [[0.5, 0.5], [0.7, 0.5], [0.7, 0.7]])
   await expect(page.locator('.ie-hint')).toBeVisible()
   expect((await session(page, seeded.frameId)).edits).toHaveLength(0)
-  expect(await editRows(page)).toEqual(['No edits yet. Pick a tool on the left.'])
+  expect(await editRows(page)).toEqual(['No edits yet. Paint the blue over what should change, then Fill.'])
   expect((await overlay(page)).painted).toBe(0)
   await expect(page.locator('.ie-action').getByRole('button', { name: 'Fill', exact: true })).toBeDisabled()
+  await page.locator('.ie-actseg').getByRole('button', { name: 'Remove', exact: true }).click()
   await expect(page.locator('.ie-action').getByRole('button', { name: 'Remove what the mask covers' })).toBeDisabled()
 })
 

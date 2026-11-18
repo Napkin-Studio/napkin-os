@@ -49,7 +49,7 @@ async function board(n = 6, clips: number[] = []) {
   return { store, order: () => shotsOf(store.get()).map((s) => s.id) }
 }
 
-describe("Dex's words while dragging", () => {
+describe("The Director agent's words while dragging", () => {
   it('names the neighbours, and says their clips stay as they are', async () => {
     const { store, order } = await board(6, [1, 4])
     const o = order()
@@ -148,7 +148,7 @@ const pointer = async (target: EventTarget, type: string, x: number, y: number) 
 }
 
 describe('the drag over the cards', () => {
-  it('pointer: dragging shot 5 between 2 and 3 shows the line and Dex, and the drop moves it there', async () => {
+  it('pointer: dragging shot 5 between 2 and 3 shows the line and the Director agent, and the drop moves it there', async () => {
     const { store, order } = await board(6, [1, 4])
     const o = order()
     const { moves, el } = await mount(store.get(), o)

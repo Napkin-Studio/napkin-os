@@ -41,7 +41,7 @@ describe('History (contract 3)', () => {
   it('knows people and the crew, and says who in the panel\'s words', () => {
     expect(entries.map((e) => kindOf(e.agent))).toEqual(['person', 'crew', 'crew', 'person', 'crew', 'person'])
     expect(who('human:p_maya001', 'p_maya001')).toEqual({ label: 'You' })
-    expect(who('rhea', 'p_maya001')).toEqual({ label: 'Rhea', detail: 'retouches' })
+    expect(who('rhea', 'p_maya001')).toEqual({ label: 'Retouch agent', detail: 'retouches' })
   })
 
   it('gives each decision its Kind from its verb and targets', () => {
@@ -63,7 +63,7 @@ describe('History (contract 3)', () => {
     const html = renderToStaticMarkup(createElement(HistoryList, { entries: [entries[0], entries[3], withCards], me: 'p_maya001' }))
     expect(html).toContain('You')
     expect(html).toContain('p_sai0001')
-    expect(html).toContain('Fin')
+    expect(html).toContain('Camera agent')
     expect(html).toContain('films')
     expect(html).toContain('pinned')
     expect(html).toContain('pick')

@@ -62,7 +62,7 @@ export function nameAsk(d: Doc, scriptId: Id, shotId: Id, name: string, line: st
   const shot = { kind: 'shot' as const, id: shotId }
   const question: Question = {
     id, kind: 'block',
-    text: `Who is the ${name.replace(/_/g, ' ')}? There's no ref called @${name}, so I can't tell Dex how to show them.`.slice(0, 200),
+    text: `Who is the ${name.replace(/_/g, ' ')}? There's no ref called @${name}, so I can't tell the Director agent how to show them.`.slice(0, 200),
     why: `${n >= 0 ? `Shot ${n + 1}` : 'A shot'} · '${quote}'`.slice(0, 300),
     options: [
       { id: 'character', label: 'A character', value: { route: NAME_ROUTES.character, node: shot } },

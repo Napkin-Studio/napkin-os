@@ -1,4 +1,4 @@
-// The Video editor's writes land in the video that is open: a second video's take pick and notes went
+// The Film editor's writes land in the video that is open: a second video's take pick and notes went
 // into the main video's cut (2026-10-15), so its player and timeline showed another cut.
 
 import { describe, expect, it } from 'vitest'
@@ -51,7 +51,7 @@ describe('a second video\'s cut and notes', () => {
   })
 })
 
-describe('a video\'s own shots, edited in the Video editor (decided 2026-10-15)', () => {
+describe('a video\'s own shots, edited in the Film editor (decided 2026-10-15)', () => {
   it('+ Shot adds to the video\'s own shot list, and moves stay inside it', async () => {
     const store = modelStore()
     await store.create(MAYA, 'First Light')

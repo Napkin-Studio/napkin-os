@@ -1,5 +1,5 @@
 // The Booth's open state (features/booth.clan, features/script-freeform.clan): the person's remembered one
-// (AppUi.booth, keyed by who is signed in), a room below 1280 px starting hidden, and the window's width.
+// (AppUi.booth, keyed by who is signed in) and the window's width.
 
 import { useCallback, useState, useSyncExternalStore } from 'react'
 import { useServices, useUi } from '../../app/context'
@@ -29,14 +29,13 @@ export interface BoothState {
   bringIn: () => void
 }
 
-/** The Booth's open state here: the person's remembered one, and a room below 1280 px starting hidden. */
+/** The Booth's open state here: the person's remembered one. */
 export function useBooth(place: BoothPlace): BoothState {
   const { ui: uiStore } = useServices()
   const ui = useUi()
   const windowWidth = useWindowWidth()
   const key = boothKey(ui.me?.participantId)
   const remembered = rememberedOpen(ui.booth, key)
-  // A room's start below 1280 px, until the person hides or shows it; then what they chose.
   const [start] = useState(() => startsOpen(place, typeof window === 'undefined' ? 1600 : window.innerWidth, remembered))
   const [local, setLocal] = useState<boolean | null>(start === remembered ? null : start)
   const open = local ?? remembered

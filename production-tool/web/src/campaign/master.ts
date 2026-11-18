@@ -1,5 +1,5 @@
 // What a format set is made from (features/campaign-formats.clan): a picture on the canvas (a key
-// visual, a frame drawn there), or the ad (a Video node and its current render). Where its picture is
+// visual, a frame drawn there), or the ad (a Film node and its current render). Where its picture is
 // now, so a size made from another one is out of date ("Master changed · N out of date").
 
 import type { FormatSet, ProductionDocument, Sha256 } from '../contracts/types'
@@ -48,7 +48,7 @@ export async function pictureMaster(doc: ProductionDocument, pic: { id: string; 
   return { kind: 'picture', id: pic.id, asset: pic.asset, ...dims, media: 'image', label: named ? `@${nameOf(named)}` : 'Key visual' }
 }
 
-/** The master for a Video node: its current render (the ad). Null when it has none yet. */
+/** The master for a Film node: its current render (the ad). Null when it has none yet. */
 export function videoMaster(doc: ProductionDocument, videoId: string): MasterInfo | null {
   const v = doc.videos[videoId]
   const r = currentRender(doc, videoId)

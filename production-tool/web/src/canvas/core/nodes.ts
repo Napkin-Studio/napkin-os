@@ -50,7 +50,7 @@ const entry = (e: Omit<NodeEntry, 'system' | 'onCanvas'> & Partial<Pick<NodeEntr
 export const NODE_REGISTRY: readonly NodeEntry[] = [
   entry({ kind: 'script', label: 'Script', tag: 'script', tagStatus: 'v3', element: 'rectangle', generates: true, opensEditor: true, port: 'coral' }),
   entry({ kind: 'storyboard', label: 'Storyboard', tag: 'storyboard', tagStatus: 'v3', element: 'rectangle', generates: true, opensEditor: true, port: 'blue' }),
-  entry({ kind: 'video', label: 'Video', tag: 'video', tagStatus: 'v3', element: 'rectangle', generates: true, opensEditor: true, port: 'ink' }),
+  entry({ kind: 'video', label: 'Film', tag: 'video', tagStatus: 'v3', element: 'rectangle', generates: true, opensEditor: true, port: 'ink' }),
   // A reference; product and key visual are reference roles, not kinds.
   entry({ kind: 'picture', label: 'Reference', tag: 'pic', tagStatus: 'v2', element: 'image', generates: false, opensEditor: false, port: 'grey' }),
   // "Frame (made from a sketch)" and "generated picture".

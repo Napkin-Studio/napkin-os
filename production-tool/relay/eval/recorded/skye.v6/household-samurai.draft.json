@@ -1,0 +1,54 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. LIVING ROOM - DAY"
+     },
+     {
+      "type": "action",
+      "text": "A messy room. Crumbs and dust cover the floor."
+     },
+     {
+      "type": "action",
+      "text": "@samurai strides in, a bamboo broom held like a blade."
+     },
+     {
+      "type": "action",
+      "text": "He sweeps in one swift arc. The dust vanishes."
+     },
+     {
+      "type": "action",
+      "text": "He slices a sponge across a smeared window. It squeaks clean."
+     },
+     {
+      "type": "action",
+      "text": "Sunlight gleams off the spotless floor."
+     },
+     {
+      "type": "action",
+      "text": "@samurai bows to the shining room, calm and silent."
+     },
+     {
+      "type": "character",
+      "text": "SAMURAI"
+     },
+     {
+      "type": "dialogue",
+      "text": "Your home is clean. Rest now."
+     }
+    ],
+    "note": "I drafted a one-room scene where @samurai cleans the home like a swordsman, with one short closing line."
+   }
+  ],
+  "rationale": "Turned the one-line brief into a single-location 15 s scene (six action beats, one six-word line, about 14.4 s by rule 10), keeping @samurai bare."
+ }
+}

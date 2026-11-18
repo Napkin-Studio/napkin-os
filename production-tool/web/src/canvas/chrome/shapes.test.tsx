@@ -25,7 +25,7 @@ describe('the sketch area shape picker', () => {
     const render = () => root.render(createElement(CanvasToolbar, { chrome, ratio: '16:9', onNode: () => {} }))
     await act(async () => render())
     const button = () => host.querySelector('button[aria-label^="Sketch area"]') as HTMLButtonElement
-    expect(button().textContent).toContain('16:9')
+    expect(button().getAttribute('aria-label')).toContain('16:9')
     // First press: the tool. Not the picker yet.
     await act(async () => button().click())
     expect(tool).toBe('sketch')
@@ -38,7 +38,7 @@ describe('the sketch area shape picker', () => {
     expect(radios[0].getAttribute('aria-checked')).toBe('true')
     await act(async () => radios[1].click())
     expect(sent).toEqual(['9:16'])
-    expect(button().textContent).toContain('9:16')
+    expect(button().getAttribute('aria-label')).toContain('9:16')
     expect(document.querySelector('[role="radiogroup"]')).toBeNull()
     await act(async () => root.unmount())
   })

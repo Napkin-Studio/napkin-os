@@ -1,4 +1,4 @@
-// Make all sizes from a Video node (features/campaign-formats.clan, phases 5 and 6; owner 2026-10-16: "video
+// Make all sizes from a Film node (features/campaign-formats.clan, phases 5 and 6; owner 2026-10-16: "video
 // versions from video nodes"): the film's options (lengths × shapes), Dex's plan shown before anything
 // renders (each length's beats, kept or dropped with his reason, editable; each shape's shots, cropped or
 // made again), then the tray (what Edie and Wren will make: every version, and every shot × method ×
@@ -10,7 +10,8 @@ import { useConfig, useDoc } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, fitWindows, masterShots, sameShape } from './film'
+import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, fitWindows, lastLineOf, masterShots, sameShape } from './film'
+import { endLineOf, sizesBrief } from '../brief/model'
 import { makeFilmSizes, planFilm, type FilmRow, type ShotMethod } from './filmJobs'
 import type { CampaignDeps } from './make'
 import { setsOf, type MasterInfo } from './master'
@@ -31,11 +32,18 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
   const shots = useMemo(() => masterShots(doc, master.id), [doc, master.id])
   const body = shots.filter((s) => !s.endCard)
   const masterS = Math.round(master.length_s ?? body.reduce((a, s) => a + (s.outS - s.inS), 0) + CARD_S)
-  const [lengths, setLengths] = useState<number[]>(DEFAULT_FILM_LENGTHS)
+  // Only lengths shorter than the film start picked (Playwright live test 2026-11-18: 15 s picked for an 8 s film).
+  const [lengths, setLengths] = useState<number[]>(() => DEFAULT_FILM_LENGTHS.filter((l) => l < masterS))
   const [extra, setExtra] = useState('')
   const [shapes, setShapes] = useState<Set<string>>(new Set(['film-16x9', 'film-9x16']))
   const earlier = setsOf(doc, master).find((s) => s.copy)?.copy
-  const [line, setLine] = useState(earlier?.line ?? '')
+  // The line on every version: the end line of the brief that drives the sizes (the newest set's linked brief,
+  // else the film's own), else what the last set carried, else the film's last spoken line (re-test N2: the
+  // main brief's "Lumo. Calm, on." came back from the last set while the linked brief ends on "Lumo. Dein Licht.").
+  const [line, setLine] = useState(() => {
+    const videoId = master.kind === 'render' ? doc.renders?.[master.id]?.video_id : master.kind === 'video' ? master.id : undefined
+    return (videoId ? endLineOf(sizesBrief(doc, videoId)?.spine) : undefined) ?? earlier?.line ?? lastLineOf(doc, shots) ?? ''
+  })
   const [legal, setLegal] = useState(earlier?.legal ?? '')
   const [step, setStep] = useState<Step>('options')
   const [plan, setPlan] = useState<CutdownPlan | null>(null)
@@ -101,7 +109,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
       setMethods(m)
       setStep('plan')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Dex could not plan the cuts. Try again.')
+      setError(e instanceof Error ? e.message : 'The Director agent could not plan the cuts. Try again.')
       setStep('options')
     }
   }
@@ -174,7 +182,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
               <input className="cf-input" value={line} maxLength={200} placeholder="The brand line (optional)" aria-label="The brand line" onChange={(e) => setLine(e.target.value)} />
               <input className="cf-input" value={legal} maxLength={600} placeholder="Legal (optional)" aria-label="Legal" onChange={(e) => setLegal(e.target.value)} />
             </div>
-            <p className="cf-note">{rows.length} versions from the ad's own {body.length} shots. Dex plans which shots each length keeps and how each shot fits each shape, before anything is made. On 9:16, 4:5 and 1:1 the spoken lines are captioned for sound off; turn them off on any tile.</p>
+            <p className="cf-note">{rows.length} versions from the ad's own {body.length} shots. The Director agent plans which shots each length keeps and how each shot fits each shape, before anything is made. On 9:16, 4:5 and 1:1 the spoken lines are captioned for sound off; turn them off on any tile.</p>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" disabled={!rows.length || !body.length} onClick={() => void startPlan()}>Plan the cuts</button></footer>
           </div>
@@ -202,7 +210,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
                 const why = plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.why
                 return (
                   <div key={l} className="cf-lane" role="group" aria-label={`The ${l} s cut`}>
-                    <div className="cf-lanehead">{l} s · keeps {windows.length} of {body.length} shots{over > 0.05 ? ` · over by ${over.toFixed(1)} s: drop a beat` : ''}</div>
+                    <div className="cf-lanehead">{l} s · keeps {windows.length} of {body.length} shots{over > 0.05 ? ` · over by ${over.toFixed(1)} s: drop a beat` : over < -0.05 ? ` · comes out ${(-over).toFixed(1)} s short: keep a beat to fill it` : ''}</div>
                     {why && <p className="cf-note">{why}</p>}
                     {body.map((s) => {
                       const w = windows.find((x) => x.shotId === s.shotId)
@@ -256,7 +264,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
               <AgentFigure agent="edie" size={24} decorative />
               <span><b>{sayer('edie')}</b>: what I will make</span>
             </div>
-            <div className="cf-tray" role="list" aria-label="What Edie will make">
+            <div className="cf-tray" role="list" aria-label="What the Edit agent will make">
               <div className="cf-lane" role="group" aria-label="Film and online video">
                 <div className="cf-lanehead">Film and online video</div>
                 {rows.map((r) => (

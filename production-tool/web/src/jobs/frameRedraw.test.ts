@@ -8,7 +8,7 @@ import { purposeOf, purposeWords } from '../model/purpose'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { addKey, addRef, addScene, addShots as planShots, snapshotDoc } from '../test/jobFixtures'
 import {
-  applyFrameEditStep, cameBackSame, castFrameFor, changeFrame, frameEditCopy, frameEditInput, frameEditMode, frameEditOf, framePriceUsd,
+  applyFrameEditStep, cameBackSame, castFrameFor, changeFrame, frameEditCopy, frameEditInput, frameEditMode, frameEditOf,
   landFrameEdit, proposalOf, wasRedrawn,
 } from './frameEdit'
 import { mockFrameEdit, mockRecasts } from './frameWords'
@@ -62,11 +62,10 @@ describe('the words and the price', () => {
     expect(frameEditCopy.hint.redraw(5)).toMatch(/^Draws frame 5 again from the shot\./)
     expect(frameEditCopy.send).toEqual({ edit: 'Send', redraw: 'Redraw' })
     expect(frameEditCopy.recast.redraw).toBe('Redraw frame instead')
-    expect(frameEditCopy.charged('Runway', 0.25)).toBe('Runway charged $0.25 for it. Say it another way, or redraw the frame.')
+    expect(frameEditCopy.nothingMade).toBe('Nothing in it changed. Say it another way, or redraw the frame.')
   })
-  it('prices the change from the frame model on the sheet: Gemini 3 Pro at 20 credits is about $0.20', () => {
-    expect(framePriceUsd()).toBe(0.2)
-    expect(frameEditCopy.price(0.2)).toBe('≈ $0.20')
+  it('names no price: what a change cost is in Decisions only (features/production-new-ui.clan)', () => {
+    expect(JSON.stringify(frameEditCopy)).not.toMatch(/\$|≈|charged/)
   })
 })
 
@@ -77,14 +76,14 @@ describe('the mode is kept with the job', () => {
     expect(purposeOf({ purpose: words, node: { kind: 'shot', id: 'shot_x' }, inputs: [] })).toEqual({ for: 'frame_edit', shotId: 'shot_x', mode: 'redraw' })
     expect(purposeWords({ for: 'frame_edit', shotId: 'shot_x' })).toBe('frame_edit')
   })
-  it('a job is a redraw when its purpose says so, or Dex read it so', () => {
+  it('a job is a redraw when its purpose says so, or the Director agent read it so', () => {
     expect(frameEditMode({ purpose: 'frame_edit redraw' })).toBe('redraw')
     expect(frameEditMode({ purpose: 'frame_edit', director: { model: 'm', promptVersion: 'director.v9.1', rationale: '', output: { frameEdit: { reading: 'redraw', runAs: 'frame' } } } } as never)).toBe('redraw')
     expect(frameEditMode({ purpose: 'frame_edit' })).toBe('edit')
   })
 })
 
-describe("the mock relay's reading (as the passthrough and Dex)", () => {
+describe("the mock relay's reading (as the passthrough and the Director agent)", () => {
   const input = { text: SWAP, shot: { id: 'shot_x', kind: 'shot', duration_s: 2, camera: { size: 'medium_wide' }, action: '', refs: [] } } as never
   it('asks a recast for words that swap the people, redraw recommended, nothing to type', () => {
     const q = mockFrameEdit(input).question!
@@ -102,7 +101,7 @@ describe("the mock relay's reading (as the passthrough and Dex)", () => {
 })
 
 describe('Redraw frame on the mock relay', () => {
-  it('sends mode redraw with the frame and the shot, keeps it in the purpose, and lands a proposal Dex read as redraw', async () => {
+  it('sends mode redraw with the frame and the shot, keeps it in the purpose, and lands a proposal the Director agent read as redraw', async () => {
     const m = await onMock()
     const v1 = currentFrame(m.doc.get(), m.shotId)!
     const jobId = await changeFrame(m.deps, m.shotId, SWAP, { mode: 'redraw' })
@@ -168,12 +167,6 @@ describe('landFrameEdit keeps the mark', () => {
   })
 })
 
-describe('the price on the mock provider', () => {
-  it('is not shown when the routed model costs nothing, and is Runway\'s when Runway is routed', () => {
-    expect(framePriceUsd({ routing: { frame_edit: ['mock'] } } as never)).toBeUndefined()
-    expect(framePriceUsd({ routing: { frame_edit: ['runway'] } } as never)).toBe(0.2)
-  })
-})
 
 // A redraw keeps a redrawn neighbour's people (features/frame-edit-or-redraw.clan, 2026-11-17: shot 4 of the market).
 describe('the cast frame', () => {

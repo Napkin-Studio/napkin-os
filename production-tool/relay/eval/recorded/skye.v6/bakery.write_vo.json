@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Flour rises in a beam of light as @maya_front pulls a golden loaf from the oven and taps its base."
+     },
+     {
+      "type": "direction",
+      "text": "Close on the tap; hear the hollow sound."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 2,
+      "text": "You can always hear when it's ready."
+     }
+    ],
+    "note": "I added a short VO line that sets up the hollow tap and leaves the sound to speak."
+   }
+  ],
+  "rationale": "The VO is one short line placed ahead of the tap, so it frames the hollow sound without covering it. The shot's words are unchanged."
+ }
+}

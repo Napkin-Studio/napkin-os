@@ -114,13 +114,13 @@ describe('Plan shots and what comes next (ui-behaviour 3.10, 3.5)', () => {
     expect(el.querySelector('.se-next')).toBeNull()
   })
 
-  it('a script with words and no storyboard: Dex says what is next, and Plan shots makes the storyboard and plans on it', async () => {
+  it('a script with words and no storyboard: The Director agent says what is next, and Plan shots makes the storyboard and plans on it', async () => {
     const { el, services, scriptId } = await open(secondScript('EXT. CLIFFS - DAWN. A runner crests the cliff and drinks Lumen water.'))
     await settle()
-    expect(el.querySelector('.se-next')?.textContent).toMatch(/Dex · directs: I'll read your words as they are and plan about 6 shots\. Nothing needs a heading or an element first\./)
-    // Make video sits beside Plan shots in the bar (mock state 'prose'), not on Dex's line.
-    expect(el.querySelector('.se-next')?.textContent).not.toContain('Make video')
-    expect(button(el, 'Make video')!.disabled).toBe(false)
+    expect(el.querySelector('.se-next')?.textContent).toMatch(/Director agent: I'll read your words as they are and plan about 6 shots\. Nothing needs a heading or an element first\./)
+    // Make film sits beside Plan shots in the bar (mock state 'prose'), not on Dex's line.
+    expect(el.querySelector('.se-next')?.textContent).not.toContain('Make film')
+    expect(button(el, 'Make film')!.disabled).toBe(false)
     const plan = button(el, 'Plan shots')!
     expect(plan.disabled).toBe(false)
     expect(el.querySelector('.se-why')).toBeNull()
@@ -142,7 +142,7 @@ describe('the Script editor page', () => {
     expect(el.textContent).toContain('Script · ')
     // A plain page (features/script-freeform.clan, mock state 'empty').
     expect(el.textContent).toContain('Just write.')
-    expect(el.textContent).toContain('←Canvas')
+    expect(el.textContent).toContain('›Canvas›')
     expect(el.textContent).toContain('Plan shots')
     expect(el.textContent).not.toMatch(/\$|free|cost/i)
   })
@@ -196,7 +196,7 @@ describe('the Script editor page', () => {
     expect(el.querySelector('.av-row.open .av-marker')?.textContent).toBe('0:00')
   })
 
-  it("'This script' at the foot of Skye's Booth lists a name with no ref yet, with the shots that use it", async () => {
+  it("References · N in the band lists a name with no ref yet, with the shots that use it", async () => {
     const { services, el, render } = await open()
     const store = services.clan!
     await act(async () => {
@@ -208,7 +208,8 @@ describe('the Script editor page', () => {
     })
     render()
     await settle()
-    const ref = el.querySelector('.booth .bt-facts .bt-ref')
+    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent?.startsWith('References ·'))!.click() })
+    const ref = document.querySelector('.se-refs .bt-ref')
     expect(ref?.textContent).toBe('@jogger · no ref yet')
     expect(ref?.getAttribute('title')).toBe('In shot 1')
   })
@@ -216,7 +217,7 @@ describe('the Script editor page', () => {
   it('← Canvas leaves the route and goes back to the canvas', async () => {
     const { el, router, services } = await open()
     await settle()
-    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === '←Canvas')!.click() })
+    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === 'Canvas')!.click() })
     expect(router.get()).toEqual({ kind: 'none' })
     expect(services.ui.get().stage).toBe('character')
   })
@@ -235,15 +236,18 @@ describe('the Script editor page', () => {
     })
     render()
     await settle()
-    const refs = () => [...el.querySelectorAll('.booth .bt-facts .bt-ref')].map((r) => r.textContent)
+    const refsButton = () => [...el.querySelectorAll('button')].find((b) => b.textContent?.startsWith('References ·'))!
+    expect(refsButton().textContent).toBe('References · 1')
+    await act(async () => { refsButton().click() })
+    const refs = () => [...document.querySelectorAll('.se-refs .bt-ref')].map((r) => r.textContent)
     expect(refs()).toEqual(['@loc_beach'])
-    expect(el.querySelector('.bt-facts [aria-label="References · 1"]')).not.toBeNull()
     await act(async () => {
       await updateDoc(services.doc, (d) => { delete d.links[linkId] }, 'unlink')
       await services.doc.flush()
     })
     await settle()
     expect(refs()).toEqual([])
+    expect(refsButton().textContent).toBe('References · 0')
   })
 
   it('deletes a shot from its Delete control, and Undo brings it back (item 4)', async () => {
@@ -293,7 +297,7 @@ describe('the Script editor page', () => {
   })
 })
 
-describe("Skye's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writing that now')", () => {
+describe("The Script agent's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writing that now')", () => {
   /** Skye's write job waiting on her question, as the runner writes it: the job at needs_input, its open ask,
    *  and this browser's request naming the item it was for. */
   const waitingWrite = async (services: import('../app/context').Services, scriptId: string, target: { kind: 'scene' | 'shot' | 'beat'; id: string }) => {
@@ -313,20 +317,21 @@ describe("Skye's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writ
     return { jobId, askId: q }
   }
 
-  it("a question whose item is gone waits in Skye's Booth (features/script-freeform.clan)", async () => {
+  it("a question whose item is gone waits on the sheet, under its head (features/production-new-ui.clan)", async () => {
     const { services, el, render, scriptId } = await open()
     let askId = ''
     await act(async () => { askId = (await waitingWrite(services, scriptId, { kind: 'scene', id: id('scene') })).askId })
     render()
     await settle()
-    const card = el.querySelector(`.booth [data-ask="${askId}"]`)
+    const card = el.querySelector(`.se-waits [data-ask="${askId}"]`)
     expect(card?.textContent).toContain('Open on the hall or on the samurai?')
     expect([...card!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(expect.arrayContaining(['The hall', 'The samurai']))
-    expect(el.querySelector('.booth .bt-sec')?.textContent).toBe('Waiting for you1')
-    expect(el.querySelector('.booth')!.textContent).not.toContain("I'm writing that now")
+    expect(el.querySelector('.se-waits-hd')?.textContent).toBe('Needs your call · 1')
+    expect(el.querySelector('.se-waits')!.textContent).not.toContain("I'm writing that now")
+    expect(el.querySelector('.booth')).toBeNull()
   })
 
-  it('a question on a scene that is on the page waits in the Booth too, never on the page', async () => {
+  it('a question on a scene that is on the page waits on the sheet too; no Booth comes for it', async () => {
     const { services, el, render, scriptId } = await open()
     let askId = ''
     await act(async () => {
@@ -336,8 +341,8 @@ describe("Skye's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writ
     })
     render()
     await settle()
-    expect(el.querySelector(`.booth [data-ask="${askId}"]`)).not.toBeNull()
-    expect(el.querySelector(`.se-page [data-ask="${askId}"]`)).toBeNull()
+    expect(el.querySelector(`.se-waits [data-ask="${askId}"]`)).not.toBeNull()
+    expect(el.querySelector('.booth')).toBeNull()
   })
 
   it("the tray's Show brings the question into view with the focus on its first answer", async () => {

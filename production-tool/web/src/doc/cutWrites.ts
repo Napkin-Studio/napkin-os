@@ -1,4 +1,4 @@
-// Putting a take into a video's cut (video.timeline V1, features/make-and-edit.clan) the way the Video editor
+// Putting a take into a video's cut (video.timeline V1, features/make-and-edit.clan) the way the Film editor
 // did before the rooms: one clip per shot, in shot order, end to end, each the shot's length of its take
 // (its window of a box made together), held on its last frame when the take is shorter. With the rooms on,
 // nothing calls these: a new take never touches the cut there, and the Edit room places clips itself.
@@ -31,7 +31,7 @@ export function shotSlot(g: Generation, shotId: Id, slotS: number): { in_s: numb
   return { in_s: r3(inS), out_s: r3(Math.max(inS + 0.04, end)), ...(hold > 0.001 ? { hold_s: Math.min(10, hold) } : {}) }
 }
 
-/** V1 laid end to end in shot order, from 0 (the Video editor's cut is the shots in order). */
+/** V1 laid end to end in shot order, from 0 (the Film editor's cut is the shots in order). */
 export function repackByShots(d: ProductionDocument, videoId: Id) {
   const v = d.videos[videoId]
   if (!v) return

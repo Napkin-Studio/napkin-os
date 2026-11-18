@@ -1,4 +1,4 @@
-// The Video editor's Sound view (ui-behaviour 3.21; mock SoundEditor.dc.html) as a shell: the layout
+// The Film editor's Sound view (ui-behaviour 3.21; mock SoundEditor.dc.html) as a shell: the layout
 // of shots with their sound path, the mix card, the sound lanes and the line or cue panel, each with
 // its real empty state. Sound comes with the audio features (audio-*); nothing here pretends to play,
 // mix or measure.
@@ -35,7 +35,7 @@ export function SoundView({ shots }: { shots: Shot[] }) {
         </section>
         <section className="pt-card snd-mix">
           <div className="snd-head"><b>Mix</b></div>
-          <p className="snd-empty">No mix yet. Edie builds the mix from the takes in it, and measures it against the loudness target you pick.</p>
+          <p className="snd-empty">No mix yet. The Edit agent builds the mix from the takes in it, and measures it against the loudness target you pick.</p>
           <div className="pt-label">Loudness target</div>
           <div className="snd-targets">
             {['Online · −14 LUFS', 'TV · −23 LUFS', 'Radio · −18 LUFS'].map((t) => <button key={t} type="button" className="btn snd-later" disabled title="Not in this version yet">{t}</button>)}
@@ -59,7 +59,7 @@ export function SoundView({ shots }: { shots: Shot[] }) {
         </section>
         <aside className="pt-card snd-side">
           <b>Pick a line or a cue</b>
-          <p className="snd-empty">Its takes, Redo this line and Jude's sound checks show here once sound is made.</p>
+          <p className="snd-empty">Its takes, Redo this line and the Review agent's sound checks show here once sound is made.</p>
         </aside>
       </div>
     </div>

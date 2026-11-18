@@ -47,6 +47,12 @@ shot_list checks, each scores brief_pace (shot count and average length as its `
 brief_forbid (no line a don't rules out), brief_insert (a close detail where a mandatory asks for one), no_quote (the
 proposition is never put on screen) and no_flags (nothing flagged that the plan does not break). Together the three
 must differ as named. Recorded 2026-11-18 on the owner's say (director.v13, Sonnet 5.5, three calls): 40/40.
+
+A redraw with no people (features/frame-edit-or-redraw.clan, owner 2026-11-18): fe_redraw_product_insert (`since`
+director.v14) redraws a product insert with no character picture and no cast frame. Besides valid, reading, camera,
+ask, no_continuity and length it scores places (each main object in `expect.objects` named in a sentence that
+PLACE_WORDS reads as a place), who (frameEdit.who names each and where) and no_people (no person brought in); a
+redraw need not start with the words, so it has no words_first.
 """
 
 from __future__ import annotations
@@ -64,8 +70,8 @@ sys.path.insert(0, str(HERE.parent))
 
 import names  # noqa: E402
 from director.base import PassthroughDirector  # noqa: E402
-from director.director import (CONTINUITY_WORDS, Director, DirectorError, _given_words,  # noqa: E402
-                               _starts_with)
+from director.director import (CONTINUITY_WORDS, PLACE_WORDS, Director, DirectorError,  # noqa: E402
+                               _given_words, _starts_with)
 from director.model import ModelError, ModelPort, Reply  # noqa: E402
 from providers import load_sheets  # noqa: E402
 from providers.types import effective_sheet  # noqa: E402
@@ -240,9 +246,37 @@ def _score_frame_edit(case: dict, out: dict) -> dict:
         if want["reading"] == "ask" else question is None
     res["no_continuity"] = not CONTINUITY_WORDS.search(prompt) and not any(
         r["name"] in ("anchor", "previous") for r in job.get("refs") or [])
-    res["words_first"] = not job or _starts_with(prompt, text)
     res["length"] = len(prompt) - _given_words(prompt, case["input"]) <= case.get("budget", 500)
+    if want["reading"] == "redraw":
+        res.update(_score_redraw(want, prompt, edit))  # a redraw need not start with the words
+    else:
+        res["words_first"] = not job or _starts_with(prompt, text)
     return res
+
+
+# A person in a redraw's words: what a shot with no people must not bring in. "No one" and the like are not people.
+PEOPLE = re.compile(r"(?<![-\w])(?:person|people|man|men|woman|women|girl|boy|child|children|kid|someone|somebody|figure|"
+                    r"customer|buyer|seller|shopper|hands?|fingers?|face|he|she|his|her|him)\b", re.I)
+NO_PEOPLE = re.compile(r"\b(?:no|without|nor) (?:one|people|person|figures?|hands?)\b|\bnobody\b|\bno-one\b", re.I)
+
+
+def _sentences(text: str) -> list[str]:
+    return [s for s in re.split(r"(?<=[.!?;])\s+", text or "") if s.strip()]
+
+
+def _score_redraw(want: dict, prompt: str, edit: dict) -> dict:
+    """A redraw of a shot with no people (since director.v14, features/frame-edit-or-redraw.clan): places (each main
+    object, a group of `expect.objects`, is named in a sentence the validator's PLACE_WORDS reads as a place), who
+    (frameEdit.who names each object and says where), no_people (no person in the prompt or who)."""
+    objects = want.get("objects") or []
+    who = edit.get("who") or ""
+
+    def placed(text: str) -> bool:
+        return all(any(any(w in s.lower() for w in group) and PLACE_WORDS.search(s) for s in _sentences(text))
+                   for group in objects)
+    return {"places": placed(prompt),
+            "who": bool(who.strip()) and placed(who),
+            "no_people": not PEOPLE.search(NO_PEOPLE.sub("", f"{prompt} {who}"))}
 
 
 def _score_clip_patch(case: dict, out: dict) -> dict:
@@ -382,7 +416,7 @@ def main(argv=None) -> None:
                 p.write_text(json.dumps({"version": args.version, "model": MODELS[args.model], "reply": wire.last}, indent=1) + "\n")
             print(case["id"], json.dumps(score(case, job)), job.get("error", ""), flush=True)
         return
-    versions = ["passthrough"] + sorted(p.name for p in RECORDED.glob("*") if p.is_dir())
+    versions = ["passthrough"] + sorted(p.name for p in RECORDED.glob("director.*") if p.is_dir())
     t = table(data, versions)
     for v, rows in t.items():
         ok, n = totals(rows)

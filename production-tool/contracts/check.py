@@ -359,7 +359,7 @@ for f in sorted(HERE.glob("examples/config.*.json")):
     # director.v9 (features/runway-video-models.clan) says which pictures each clip model carries; v10 adds
     # the finished-artwork lines for a layout drawing; v11 (features/join-or-cut-shots.clan) ties each line
     # of a take to the frame it follows ("Shot k [a-b s] ..., follows image k"). Rolling back is this one line.
-    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9", "director.v10", "director.v11", "director.v9.1", "director.v12", "director.v13"):
+    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9", "director.v10", "director.v11", "director.v9.1", "director.v12", "director.v13", "director.v14"):
         fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7, v8, v9, v10 or v11")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes

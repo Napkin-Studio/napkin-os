@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front dives off the wooden jetty into a still lake; ripples reach the far shore."
+     },
+     {
+      "type": "direction",
+      "text": "Hold on the ripples after she is gone."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one 15-word beat so the shot plays in 2.5 seconds."
+   }
+  ],
+  "rationale": "Merged the dive and ripples into one shorter action line (15 words, 2.5 s by rule 10), keeping @maya_front and the direction last."
+ }
+}

@@ -11,17 +11,18 @@ import { useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { assetRef } from '../jobs/assets'
 import { isMoving, jobAt } from '../jobs/select'
 import { spokenOf } from '../campaign/film'
-import { currentRender, rendersOf, shotNumber } from '../model/selectors'
+import { currentRender, rendersOf, shotNumber, storyboardOfVideo } from '../model/selectors'
 import { Float } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import type { ChangeOpen } from './ChangeDrawer'
 import { clipEnd, clipLen, fitWords, handleShort, type CutClip } from './cut'
 import { appendTake, assembleFirstCut, editCut } from './editOps'
+import { createPortal } from 'react-dom'
 import { Inspector } from './Inspector'
 import { boxName, sharesBox, type Gen } from './model'
 import { NewTakeSheet } from './NewTakeSheet'
 import { tc } from './media'
-import { isStill, useAssetUrl } from './media'
+import { isStill, loadPreviewMuted, savePreviewMuted, useAssetUrl } from './media'
 import type { RoomData, Selection } from './Rooms'
 import { Timeline, type Picked } from './Timeline'
 import { compileFor, dismissedTakes, newerTake, readCut, renderPlan, whereWords } from './timeline'
@@ -29,7 +30,7 @@ import { Viewer } from './Viewer'
 
 const FRAME = 1 / 24
 
-export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready: readyAsk }: {
+export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready: readyAsk, picked, onPicked: setPicked, booth, viewSlot, toolSlot }: {
   data: RoomData
   sel: Selection
   onSel: (s: Selection) => void
@@ -38,6 +39,14 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
   register: (close: () => void) => () => void
   /** 'Use this take' from Edie's Booth: open the New take sheet on that clip and take. */
   ready?: { clipId: string; takeId: string; n: number } | null
+  /** What is picked (Rooms keeps it: the Booth shows only while something is). */
+  picked: Picked
+  onPicked: (p: Picked) => void
+  /** The Booth's slot for the Inspector (null while a change has the Booth). */
+  booth?: HTMLElement | null
+  /** The band's slots: Preview | Rendered, and the timeline's tools. */
+  viewSlot?: HTMLElement | null
+  toolSlot?: HTMLElement | null
 }) {
   const { doc: docStore } = useServices()
   const doc = useDoc()
@@ -61,13 +70,19 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
   }
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'preview' | 'rendered'>('preview')
+  // The preview plays the clips' own sound (owner 2026-11-18); the band's toggle mutes it, per browser.
+  const [muted, setMuted] = useState(() => loadPreviewMuted())
+  const toggleMute = () => setMuted((m) => { savePreviewMuted(!m); return !m })
   const [, rerender] = useState(0)
   const v1 = cut.v1
   // What is picked: a clip (the selection carries across: Make's take or shot picks its clip here), a text, the card.
-  const [picked, setPicked] = useState<Picked>(() => {
+  useEffect(() => {
+    if (picked) return
     const c = v1.find((x) => (sel.clipId && x.id === sel.clipId)) ?? v1.find((x) => sel.shotId && x.follows?.shotId === sel.shotId)
-    return c ? { kind: 'clip', id: c.id } : null
-  })
+    if (c) setPicked({ kind: 'clip', id: c.id })
+    // On entering the room only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const pickedClip = picked?.kind === 'clip' ? v1.find((c) => c.id === picked.id) : undefined
   const pick = (p: Picked) => {
     setPicked(p)
@@ -177,21 +192,25 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
 
   return (
     <>
+      {viewSlot && createPortal(
+        <span className="pt-seg rm-bandseg" role="group" aria-label="What plays">
+          <button type="button" aria-pressed={view === 'preview'} onClick={() => setView('preview')}>Preview</button>
+          <button type="button" aria-pressed={view === 'rendered'} disabled={!render} onClick={() => setView('rendered')}
+            title={render ? undefined : 'Render ad to see the rendered film'}>{render ? `Rendered v${render.version}` : 'Rendered'}</button>
+        </span>, viewSlot)}
+      {viewSlot && view === 'preview' && createPortal(
+        <button type="button" className={`sp-btn rm-mute ${muted ? 'pressed' : ''}`} aria-pressed={muted} onClick={toggleMute}
+          aria-label="Mute the preview" title={muted ? 'The preview is muted' : 'The preview plays the clips\u2019 own sound, as the render does'}>
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6v4h3l4 3V3L5 6H2z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+            {muted ? <path d="M11 6l4 4M15 6l-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /> : <path d="M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />}</svg>
+          <span className="rm-muteword">{muted ? 'Muted' : 'Sound'}</span>
+        </button>, viewSlot)}
       <section className="rm-program" aria-label="Program">
-        <div className="rm-viewerhead">
-          <div className="rm-seg sm" role="radiogroup" aria-label="What plays">
-            <button type="button" role="radio" aria-checked={view === 'preview'} className={view === 'preview' ? 'on' : ''} onClick={() => setView('preview')}>Preview</button>
-            <button type="button" role="radio" aria-checked={view === 'rendered'} className={view === 'rendered' ? 'on' : ''} disabled={!render} onClick={() => setView('rendered')}
-              title={render ? undefined : 'Render ad to see the rendered film'}>{render ? `Rendered v${render.version}` : 'Rendered'}</button>
-          </div>
-          <span className="pt-grow" />
-          {plan.lengthS > 0 && <span className={`rm-pill ${fit.ok ? 'ok' : 'warn'}`} title={`The film is ${plan.lengthS.toFixed(1)} s; it is meant to be ${data.targetS} s`}>{fit.words}</span>}
-        </div>
         {view === 'rendered' && render ? (
           <RenderedPlayer sha={render.asset} onSound={onSound} />
         ) : (
           <div className="rm-viewer">
-            <Viewer label="Preview" plan={plan} t={t} onTime={setT} ratio={data.ratio} playing={playing} onPlaying={setPlaying} />
+            <Viewer label="Preview" plan={plan} t={t} onTime={setT} ratio={data.ratio} playing={playing} onPlaying={setPlaying} muted={muted} />
           </div>
         )}
         {view === 'preview' && (
@@ -215,19 +234,21 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
         )}
         {error && <div role="alert" className="rm-error">{error} <button type="button" className="btn link" onClick={() => setError(null)}>OK</button></div>}
       </section>
-      <aside className="rm-inspector" aria-label="Inspector">
-        <Inspector data={data} cut={cut} picked={picked} t={t} onPick={setPicked}
-          onChange={(c) => changeFrom(c)} onFeel={(c) => changeFrom(c, 'feel')}
-          onSwap={(c, take) => setSheet({ clip: c, take })}
-          handleShort={(c) => handleShort(cut, c.id, takeS)} />
-      </aside>
+      {booth && picked && createPortal(
+        <div className="rm-inspector" aria-label="Inspector">
+          <Inspector data={data} cut={cut} picked={picked} onPick={setPicked}
+            onChange={(c) => changeFrom(c)} onFeel={(c) => changeFrom(c, 'feel')}
+            onSwap={(c, take) => setSheet({ clip: c, take })}
+            handleShort={(c) => handleShort(cut, c.id, takeS)} />
+        </div>, booth)}
       <div className="rm-tlwrap">
         <Timeline data={data} cut={cut} t={t} marks={marks} picked={picked} ripple={ripple} onRipple={setRipple} snap={snap} onSnap={setSnap}
-          making={making} ready={ready}
+          making={making} ready={ready} tools={toolSlot} fit={plan.lengthS > 0 ? fit : undefined}
           actions={{
             seek: (s) => { setPlaying(false); setT(Math.min(Math.max(0, s), Math.max(plan.lengthS, 0))) },
             pick,
             assemble: () => run(assembleFirstCut(docStore, data)),
+            endCard: () => run(editCut.endCard(docStore, data.videoId, {}).then(() => setPicked({ kind: 'card' }))),
             trimHead: (c, inS) => run(editCut.trimHead(docStore, data.videoId, c, inS, ripple)),
             trimTail: (c, outS) => {
               if (outS > takeS(c.genId) + 1e-3) setError('Not enough footage after this clip. Making it longer comes soon; for now trim it shorter or use another take.')
@@ -278,7 +299,7 @@ function RenderedPlayer({ sha, onSound }: { sha: string; onSound: () => void }) 
         {url && !isStill(doc, sha) ? <video src={url} controls playsInline className="rm-rendered" /> : url ? <img src={url} alt="The rendered ad" className="rm-rendered" /> : <div className="rm-stage-empty">The render is on its way</div>}
         <span className="rm-viewlabel rendered">Rendered</span>
       </div></div>
-      <div className="rm-banner info">This render has no sound yet. <button type="button" className="btn link" onClick={onSound}>Open Sound</button> to add it.</div>
+      <div className="rm-banner info">This render keeps each clip's own sound. <button type="button" className="btn link" onClick={onSound}>Open Sound</button> for music and voice.</div>
     </div>
   )
 }
@@ -309,7 +330,12 @@ export function RenderAd({ data }: { data: RoomData }) {
     else if (c.transition) checks.push({ text: `The ${c.transition.kind === 'dissolve' ? 'dissolve' : 'dip'} into ${n ? `shot ${n}` : 'a clip'} has enough footage`, ok: true })
   }
   if (!cut.endCard) checks.push({ text: 'No end card of your own: the film ends on the studio card', ok: true })
-  checks.push({ text: 'This render has no sound yet. Open Sound to add it.', ok: false })
+  // The cut against the length it is for (live test 2026-11-18: a 9.8 s cut of a 15 s film went unmentioned).
+  const target = storyboardOfVideo(doc, data.videoId)?.target_s ?? doc.videos[data.videoId]?.target_s
+  const off = target && plan.lengthS ? Math.round((plan.lengthS - target) * 10) / 10 : 0
+  if (Math.abs(off) >= 0.5) checks.push({ text: `The cut is ${Math.round(plan.lengthS * 10) / 10} s: ${Math.abs(off)} s ${off < 0 ? 'short of' : 'over'} the ${target} s it is for`, ok: false })
+  // The render keeps each clip's own sound (stitch/timeline.py, owner 2026-11-18) until Sound mixes one.
+  checks.push({ text: 'The render keeps each clip\u2019s own sound; music and voice come with Sound', ok: true })
   const go = () => send(async () => {
     setError(null)
     try {
@@ -326,8 +352,8 @@ export function RenderAd({ data }: { data: RoomData }) {
     <>
       <button ref={ref} type="button" className="btn primary rm-primary" aria-haspopup="dialog" aria-expanded={open} disabled={empty || rendering || sending}
         title={empty ? 'Assemble the cut first' : undefined} onClick={() => setOpen(!open)}>{rendering ? 'Rendering…' : sending ? 'Sending…' : 'Render ad'}</button>
-      <Float anchor={ref} open={open} onClose={close} role="dialog" align="end" label="Jude checked the cut" className="rm-checks">
-        <div className="rm-floathead">Jude checked the cut</div>
+      <Float anchor={ref} open={open} onClose={close} role="dialog" align="end" label="The Review agent checked the cut" className="rm-checks">
+        <div className="rm-floathead">The Review agent checked the cut</div>
         <p className="rm-note">None of these stop the render. {rendersOf(doc, data.videoId).length ? `This makes render v${rendersOf(doc, data.videoId).length + 1}.` : ''}</p>
         <ul className="rm-checklist">
           {checks.map((c) => <li key={c.text} className={c.ok ? 'ok' : 'warn'}><span aria-hidden="true">{c.ok ? '✓' : '!'}</span><span className="rm-clamp2" title={c.text}>{c.text}</span></li>)}

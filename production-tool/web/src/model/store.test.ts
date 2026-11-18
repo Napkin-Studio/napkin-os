@@ -105,6 +105,22 @@ describe('the UI on the CLAN store', () => {
     expect(s.undoLabels()).toEqual({ undo: null, redo: null })
   })
 
+  it('reading the chain or flushing with nothing waiting tells no listener the document changed', async () => {
+    // Live check F1 (2026-11-18): opening the Storyboard read the chain, which flushed, and every flush
+    // emitted, so a project only viewed counted as edited and a newer save elsewhere asked instead of loading.
+    const s = await fresh()
+    await s.flush()
+    let changes = 0
+    const off = s.onChange(() => { changes++ })
+    await s.chain()
+    await s.flush()
+    expect(changes).toBe(0)
+    await updateDoc(s, (d) => { mainScript(d)!.title = 'Viewed, then changed' }, 'rename the script')
+    await s.flush()
+    expect(changes).toBeGreaterThan(0)
+    off()
+  })
+
   it('a job that ended with no result is the crew\'s decision, once, even after a reload', async () => {
     const s = await fresh()
     const j = job(s.get(), 'frame', [], null, { state: 'failed', crew: 'wren' })

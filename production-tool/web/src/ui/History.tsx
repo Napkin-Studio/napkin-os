@@ -1,15 +1,17 @@
-// The History panel: the .clan's decision chain, newest first. Who did it (you,
-// another person, the crew), what, why, which fields it changed, its Kind,
-// narrowed to one item when you ask "why does this look like this?". The
-// items and the narrowing read the decisions' targets and cites
-// (model/lineage.ts), not ids in the words.
+// The Decisions drawer (features/production-new-ui.clan; the shell's .dtree-drawer): the .clan's decision
+// chain, newest first, as Graph (the tree), By part, By time and Lineage. Who did it (you, another person,
+// an agent), what, why, which fields it changed, its Kind, narrowed to one item when you ask "why does this
+// look like this?". What needs you is at its head. It is the one place costs show. The items and the
+// narrowing read the decisions' targets and cites (model/lineage.ts), not ids in the words.
 
 import { useEffect, useMemo, useState } from 'react'
-import { useDoc, useUi } from '../app/context'
+import { useDoc, useServices, useShell, useUi } from '../app/context'
 import type { Kind } from '../model/lineage'
 import type { ModelStore } from '../model/store'
 import { download, exportClanFile } from '../export'
-import { entryKind, historyItems, kindOf, projectEntries, type ChainLike } from './historyItems'
+import { entryKind, historyItems, jobCost, kindOf, projectEntries, spendSoFar, type ChainLike } from './historyItems'
+import { openAsks } from '../model/selectors'
+import { focusAsk, summonAsk } from './askPlaces'
 import { AgentFigure } from './agents/AgentFigure'
 import type { CastKey } from './agents/cast'
 
@@ -24,14 +26,21 @@ const KINDS: { id: Kind; label: string }[] = [
 /** An item to open History on (Why, why?): its words and the addresses its decisions target or cite. */
 export interface HistoryFocus { label: string; addresses: string[] }
 
-export function HistoryPanel({ store, onClose, focus }: { store: ModelStore | null; onClose: () => void; focus?: HistoryFocus }) {
+export type DecisionsTab = 'graph' | 'part' | 'time' | 'lineage'
+const TABS: { id: DecisionsTab; label: string }[] = [{ id: 'graph', label: 'Graph' }, { id: 'part', label: 'By part' }, { id: 'time', label: 'By time' }, { id: 'lineage', label: 'Lineage' }]
+
+export function DecisionsDrawer({ store, onClose, focus }: { store: ModelStore | null; onClose: () => void; focus?: HistoryFocus }) {
   const doc = useDoc()
   const ui = useUi()
+  const shell = useShell()
+  const { project } = useServices()
+  const [tab, setTab] = useState<DecisionsTab>(focus ? 'time' : 'graph')
+  const asks = openAsks(doc)
+  const spend = spendSoFar(doc.jobs as never)
   const [entries, setEntries] = useState<ChainLike[] | null>(null)
   const [itemKey, setItemKey] = useState(focus ? 'focus' : 'all')
   const [kind, setKind] = useState<Kind | 'all'>('all')
-  const [tree, setTree] = useState(true)
-  const [whoOnly, setWhoOnly] = useState<string>('all')
+    const [whoOnly, setWhoOnly] = useState<string>('all')
   const [pinned, setPinned] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const docId = useMemo(() => {
@@ -87,67 +96,100 @@ export function HistoryPanel({ store, onClose, focus }: { store: ModelStore | nu
     }
   }, [store])
 
+  const tree = tab === 'graph'
+  const film = shell.index.get(project.id)?.name ?? 'This film'
+  const open = (askId: string) => {
+    onClose()
+    setTimeout(() => { if (!focusAsk(askId)) summonAsk(askId) }, 0)
+  }
   return (
-    <aside className="history" aria-label="History">
-      <div className="history-top">
-        <b>History</b>
-        <span className="faint">the project's decision chain</span>
-        <span className="spacer" />
-        <span className="pt-seg" role="group" aria-label="Show as">
-          <button type="button" aria-pressed={!tree} onClick={() => setTree(false)}>List</button>
-          <button type="button" aria-pressed={tree} onClick={() => setTree(true)}>Tree</button>
-        </span>
-        <button className="history-x" onClick={onClose} aria-label="Close history">×</button>
-      </div>
-      {!store ? (
-        <div className="history-empty">
-          <b>Saving without history.</b>
-          <span className="faint">The .clan engine did not load in this browser, so your work is kept as plain data and its decisions are not recorded.</span>
+    <>
+      <button type="button" className="dd-scrim" aria-label="Close Decisions" tabIndex={-1} onClick={onClose} />
+      <aside className="dtree-drawer" aria-label="Decisions">
+        <div className="dd-head">
+          <div><div className="eb">DECISIONS</div><h3>{film}</h3></div>
+          <button type="button" className="close" onClick={onClose} aria-label="Close Decisions">Close</button>
         </div>
-      ) : (
-        <>
-          <div className="history-filter">
-            <div className="history-frow">
-              <label className="pt-label" htmlFor="history-item">Item</label>
-              <select id="history-item" className="select" value={itemKey} onChange={(e) => setItemKey(e.target.value)}>
-                <option value="all">Everything</option>
-                {items.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
-              </select>
-              {focus && <span className="faint">opened from "Why does this look like this?"</span>}
-            </div>
-            <div className="history-frow" role="group" aria-label="Who">
-              <span className="pt-label">Who</span>
-              <button type="button" className={`chip ${whoOnly === 'all' ? 'on' : ''}`} onClick={() => setWhoOnly('all')}>Everyone</button>
-              <button type="button" className={`chip ${whoOnly === 'you' ? 'on' : ''}`} onClick={() => setWhoOnly('you')}>You</button>
-              <button type="button" className={`chip ${whoOnly === 'people' ? 'on' : ''}`} onClick={() => setWhoOnly('people')}>People</button>
-              {crewIn.map((c) => (
-                <button key={c} type="button" className={`history-crewchip ${whoOnly === c ? 'on' : ''}`} aria-pressed={whoOnly === c} aria-label={c} title={c} onClick={() => setWhoOnly(whoOnly === c ? 'all' : c)}>
-                  <AgentFigure agent={c} size={20} decorative />
-                </button>
+        <div className="dd-body">
+          {asks.length > 0 && (
+            <div className="callcard" role="region" aria-label="Needs you">
+              <div className="h">{asks.length === 1 ? '1 question needs an answer' : `${asks.length} questions need an answer`}<span>NEEDS YOU</span></div>
+              {asks.map((a) => (
+                <div key={a.id} className="callrow"><span className="t">{a.question.text}</span><button type="button" className="sp-btn" onClick={() => open(a.id)}>Open</button></div>
               ))}
             </div>
-            <div className="history-frow" role="group" aria-label="Kind">
-              <span className="pt-label">Kind</span>
-              {KINDS.map((k) => (
-                <button key={k.id} type="button" className={`chip ${kind === k.id ? 'on' : ''}`} aria-pressed={kind === k.id} onClick={() => setKind(kind === k.id ? 'all' : k.id)}>{k.label} {counts[k.id]}</button>
-              ))}
+          )}
+          <div className="seg-row" role="group" aria-label="Show as">
+            {TABS.map((t) => <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>)}
+          </div>
+          {!store ? (
+            <div className="history-empty">
+              <b>Saving without history.</b>
+              <span className="faint">The .clan engine did not load in this browser, so your work is kept as plain data and its decisions are not recorded.</span>
+            </div>
+          ) : tab === 'lineage' ? (
+            <div className="dd-lineage">
+              <div className="brow" aria-current="page"><span className="t"><b>{film}</b><small>You are here</small></span></div>
+              <p className="dd-hint">A brief linked into this film shows here, with the decks made from it, when the Brief node lands (features/brief-node.clan).</p>
+            </div>
+          ) : (
+            <>
+              <div className="history-filter">
+                <div className="history-frow">
+                  <label className="pt-label" htmlFor="history-item">{tab === 'part' ? 'Part' : 'Item'}</label>
+                  <select id="history-item" className="select" value={itemKey} onChange={(e) => setItemKey(e.target.value)}>
+                    <option value="all">Everything</option>
+                    {items.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
+                  </select>
+                  {focus && <span className="faint">opened from "Why does this look like this?"</span>}
+                </div>
+                {tab === 'part' && itemKey === 'all' && (
+                  <div className="dd-parts">
+                    {items.filter((i) => i.key !== 'focus').map((i) => (
+                      <button key={i.key} type="button" className="brow" onClick={() => setItemKey(i.key)}><span className="t"><b>{i.label}</b></span><span className="go" aria-hidden="true">›</span></button>
+                    ))}
+                  </div>
+                )}
+                <div className="history-frow" role="group" aria-label="Who">
+                  <span className="pt-label">Who</span>
+                  <button type="button" className={`chip ${whoOnly === 'all' ? 'on' : ''}`} onClick={() => setWhoOnly('all')}>Everyone</button>
+                  <button type="button" className={`chip ${whoOnly === 'you' ? 'on' : ''}`} onClick={() => setWhoOnly('you')}>You</button>
+                  <button type="button" className={`chip ${whoOnly === 'people' ? 'on' : ''}`} onClick={() => setWhoOnly('people')}>People</button>
+                  {crewIn.map((c) => (
+                    <button key={c} type="button" className={`history-crewchip ${whoOnly === c ? 'on' : ''}`} aria-pressed={whoOnly === c} aria-label={c} title={c} onClick={() => setWhoOnly(whoOnly === c ? 'all' : c)}>
+                      <AgentFigure agent={c} size={20} decorative />
+                    </button>
+                  ))}
+                </div>
+                <div className="history-frow" role="group" aria-label="Kind">
+                  <span className="pt-label">Kind</span>
+                  {KINDS.map((k) => (
+                    <button key={k.id} type="button" className={`chip ${kind === k.id ? 'on' : ''}`} aria-pressed={kind === k.id} onClick={() => setKind(kind === k.id ? 'all' : k.id)}>{k.label} {counts[k.id]}</button>
+                  ))}
+                  <span className="spacer" />
+                  <button type="button" className={`chip ${pinned ? 'on' : ''}`} aria-pressed={pinned} onClick={() => setPinned(!pinned)}>Pinned only</button>
+                </div>
+              </div>
+              {error && <div role="alert" className="history-error">{error}</div>}
+              {(tab !== 'part' || itemKey !== 'all') && (entries
+                ? <HistoryList entries={shown} doc={doc} me={ui.me?.participantId} myName={ui.me?.name ?? ui.me?.handle} item={item} kind={kind === 'all' ? undefined : kind} tree={tree} />
+                : <div className="history-empty faint">Reading the .clan…</div>)}
+            </>
+          )}
+          <p className="dd-hint">What each job cost is shown here and nowhere else.{spend > 0 ? ` Spend so far: ${jobCost({ confirmed: spend } as never)}.` : ''}</p>
+          {store && (
+            <div className="history-foot">
+              <button className="sp-btn" onClick={async () => {
+                const { blob, name } = await exportClanFile(store)
+                download(blob, name)
+              }}>Download .clan</button>
+              <span className="faint">Open it with <code>clan read chain</code></span>
               <span className="spacer" />
-              <button type="button" className={`chip ${pinned ? 'on' : ''}`} aria-pressed={pinned} onClick={() => setPinned(!pinned)}>Pinned only</button>
+              {entries && <span className="pt-mono">{shown.length} of {entries.length}</span>}
             </div>
-          </div>
-          {error && <div role="alert" className="history-error">{error}</div>}
-          {entries ? <HistoryList entries={shown} doc={doc} me={ui.me?.participantId} myName={ui.me?.name ?? ui.me?.handle} item={item} kind={kind === 'all' ? undefined : kind} tree={tree} /> : <div className="history-empty faint">Reading the .clan…</div>}
-          <div className="history-foot">
-            <button className="btn sm" onClick={async () => {
-              const { blob, name } = await exportClanFile(store)
-              download(blob, name)
-            }}>Download .clan</button>
-            <span className="faint">Open it with <code>clan read chain</code></span>
-            <span className="spacer" />
-            {entries && <span className="pt-mono">{shown.length} of {entries.length}</span>}
-          </div>
-        </>
-      )}
-    </aside>
+          )}
+        </div>
+      </aside>
+    </>
   )
 }

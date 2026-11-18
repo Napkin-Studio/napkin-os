@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front sits in her first car, grips the wheel with both hands, takes a breath, and turns the key."
+     },
+     {
+      "type": "direction",
+      "text": "Interior, low angle up at her."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 3,
+      "text": "The engine catches. A grin breaks across @maya_front's face."
+     }
+    ],
+    "note": "I added a beat at 3 s where the engine starts and she smiles."
+   }
+  ],
+  "rationale": "The shot ends on the key turn, so the added beat gives the payoff: the engine starts and her face shows the feeling. The words are unchanged."
+ }
+}

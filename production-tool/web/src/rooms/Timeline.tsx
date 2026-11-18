@@ -4,6 +4,7 @@
 // fade corner to fade, click a cut for a dissolve or dip, drop a take from the Bin. V2 comes with P3.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useDoc } from '../app/context'
 import { shotNumber } from '../model/selectors'
 import { Float, MenuItem } from '../ui/Float'
@@ -21,6 +22,8 @@ export interface TimelineActions {
   seek: (s: number) => void
   pick: (p: Picked) => void
   assemble: () => void
+  /** Add an end card (the cut line's, when the cut has none). */
+  endCard: () => void
   trimHead: (c: CutClip, inS: number) => void
   trimTail: (c: CutClip, outS: number) => void
   move: (c: CutClip, to: number) => void
@@ -38,7 +41,7 @@ export interface TimelineActions {
 
 const RULER = 32
 
-export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, onSnap, making, ready, actions }: {
+export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, onSnap, making, ready, actions, tools, fit }: {
   data: RoomData
   cut: Cut
   t: number
@@ -53,6 +56,10 @@ export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, 
   /** A newer take ready for a clip, by clip id. */
   ready: Map<string, Gen>
   actions: TimelineActions
+  /** The band's slot for the tools (mock edit: Split, Ripple, Snap, + Text, Captions, Keys). */
+  tools?: HTMLElement | null
+  /** The film's length against its target, for the cut line. */
+  fit?: { ok: boolean; words: string }
 }) {
   const doc = useDoc()
   const scroller = useRef<HTMLDivElement>(null)
@@ -98,21 +105,15 @@ export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, 
 
   return (
     <section className="rm-timeline" aria-label="Timeline">
-      <div className="rm-tltools" role="toolbar" aria-label="Timeline tools">
-        <button type="button" className="btn" onClick={actions.split} title="Split the clip under the playhead (S)">
-          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="3.5" cy="3.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" /><circle cx="3.5" cy="10.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" /><path d="M5.2 4.6 12.5 11M5.2 9.4 12.5 3" stroke="currentColor" strokeWidth="1.2" /></svg>
-          Split <kbd>S</kbd>
-        </button>
-        <button type="button" className={`btn ${ripple ? 'on' : ''}`} aria-pressed={ripple} onClick={() => onRipple(!ripple)} title="Trims and deletes close up the cut">Ripple {ripple ? 'on' : 'off'}</button>
-        <button type="button" className={`btn ${snap ? 'on' : ''}`} aria-pressed={snap} onClick={() => onSnap(!snap)} title="Snap to edges, the playhead and marks">Snap {snap ? 'on' : 'off'}</button>
-        <span className="rm-tlsep" aria-hidden="true" />
-        <button type="button" className="btn" onClick={actions.addText} title="Add text at the playhead (T)">+ Text <kbd>T</kbd></button>
-        <button type="button" className="btn" onClick={actions.captions} title="Captions from the shots' spoken lines">Captions from the script</button>
-        <span className="pt-grow" />
-        <button type="button" className="rm-iconbtn" aria-label="Zoom out" onClick={() => setZoom(Math.max(0.5, zoom / 1.5))}>−</button>
-        <span className="rm-faint pt-mono rm-zoom">{Math.round(zoom * 100)}%</span>
-        <button type="button" className="rm-iconbtn" aria-label="Zoom in" onClick={() => setZoom(Math.min(8, zoom * 1.5))}>+</button>
-      </div>
+      {tools && createPortal(
+        <span className="rm-tltools" role="toolbar" aria-label="Timeline tools">
+          <button type="button" className="sp-btn" onClick={actions.split} title="Split the clip under the playhead (S)">Split <kbd>S</kbd></button>
+          <button type="button" className={`sp-btn ${ripple ? 'pressed' : ''}`} aria-pressed={ripple} onClick={() => onRipple(!ripple)} title="Trims and deletes close up the cut">Ripple {ripple ? 'on' : 'off'}</button>
+          <button type="button" className={`sp-btn ${snap ? 'pressed' : ''}`} aria-pressed={snap} onClick={() => onSnap(!snap)} title="Snap to edges, the playhead and marks">Snap {snap ? 'on' : 'off'}</button>
+          <button type="button" className="sp-btn" onClick={actions.addText} title="Add text at the playhead (T)">+ Text <kbd>T</kbd></button>
+          <button type="button" className="sp-btn" onClick={actions.captions} title="Captions from the shots' spoken lines">Captions from the script</button>
+          <EditKeys />
+        </span>, tools)}
       <div className="rm-tlbody">
         <div className="rm-tlheads" aria-hidden="true">
           <span style={{ height: RULER }} />
@@ -171,6 +172,19 @@ export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, 
           </div>
         </div>
       </div>
+      {/* The cut in a line (mock edit): what it holds, that editing never sends, and what to do next. */}
+      <div className="rm-cutsum">
+        <span>The cut · {v1.length} {v1.length === 1 ? 'clip' : 'clips'}{cut.text.length ? ` · ${cut.text.length} text` : ''}{cut.endCard ? ' · end card' : ''}. Editing never sends anything.</span>
+        {v1.length > 0 && <button type="button" className="rm-linkbtn" onClick={actions.assemble} title="Fill V1 again from the boxes in storyboard order (one undo step)">Assemble first cut again</button>}
+        {v1.length > 0 && !cut.endCard && <><span aria-hidden="true">·</span><button type="button" className="rm-linkbtn" onClick={actions.endCard}>Add an end card</button></>}
+        {fit && <span className={`rm-pill ${fit.ok ? 'ok' : 'warn'}`} title={`The film against its target of ${data.targetS} s`}>{fit.words}</span>}
+        <span className="pt-grow" />
+        <span className="rm-tlzoom" role="group" aria-label="Timeline zoom">
+          <button type="button" className="rm-iconbtn" aria-label="Zoom out" onClick={() => setZoom(Math.max(0.5, zoom / 1.5))}>−</button>
+          <span className="rm-faint pt-mono rm-zoom">{Math.round(zoom * 100)}%</span>
+          <button type="button" className="rm-iconbtn" aria-label="Zoom in" onClick={() => setZoom(Math.min(8, zoom * 1.5))}>+</button>
+        </span>
+      </div>
     </section>
   )
 }
@@ -204,7 +218,8 @@ function ClipBlock({ c, n, x, pps, data, picked, making, ready, takeS, actions, 
   const len = clipLen(c)
   const w = x(len)
   const narrow = w < 64
-  const thumb = w >= 132
+  // The picture fills the clip (mock .timeline .clip), so any clip wide enough to see shows it.
+  const thumb = w >= 16
   const g = data.gens.find((x) => x.id === c.genId)
   const takes = g ? data.gens.filter((x) => sharesBox(g, x) && x.state === 'ready').length : 0
 
@@ -338,5 +353,30 @@ function TextBlock({ tx, x, pps, picked, onPick, onChange, snapTo }: {
       onPointerDown={drag} onKeyDown={(e) => { if (e.key === 'Enter') onPick() }}>
       <span className="rm-clamp1">{tx.words || 'Text'}</span>
     </div>
+  )
+}
+
+/** Keys (owner default 2026-11-18): the Edit room's keys behind a band button, not an always-on list. */
+export function EditKeys() {
+  const ref = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  return (
+    <>
+      <button ref={ref} type="button" className="sp-btn" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)} title="The Edit room's keys">Keys</button>
+      <Float anchor={ref} open={open} onClose={close} role="dialog" align="end" label="Keys" className="rm-keysfloat">
+        <div className="rm-floathead">Keys</div>
+        <dl className="rm-keys">
+          <dt><kbd>Space</kbd></dt><dd>Play or pause</dd>
+          <dt><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></dt><dd>Back a second, stop, play</dd>
+          <dt><kbd>I</kbd> <kbd>O</kbd></dt><dd>Mark a stretch to change</dd>
+          <dt><kbd>S</kbd></dt><dd>Split at the playhead</dd>
+          <dt><kbd>T</kbd></dt><dd>Add text</dd>
+          <dt><kbd>Delete</kbd></dt><dd>Remove and close the gap (Shift leaves it)</dd>
+          <dt><kbd>1</kbd> <kbd>2</kbd></dt><dd>Make room, Edit room</dd>
+          <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>Undo</dd>
+        </dl>
+      </Float>
+    </>
   )
 }

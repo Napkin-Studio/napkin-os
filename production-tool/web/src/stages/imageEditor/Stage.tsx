@@ -14,11 +14,12 @@
 // never redraws the committed masks. A running job never covers the stage: its area shows the pending
 // stripes (a fill) or a progress edge (a whole-frame job), and its status and Cancel sit in its Edits row.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { EditSession, MaskOp, Pt } from './edits'
 import { edges, rasterize, RasterCache } from './mask'
 import { compose, type Plan } from './compose'
 import { cropRect, type ToolId } from './tools'
+import { endsTyping, finishesTyping } from './textTool'
 
 const BLUE = [47, 100, 245]
 const OVERLAY_MAX = 1100
@@ -264,7 +265,16 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
     const raw = rel(e)
     const inside = raw.x >= 0 && raw.x <= 1 && raw.y >= 0 && raw.y <= 1
     if (tool === 'text' && !inside) return
+    // Typing a text: this click finishes it (it saves on blur), and adds nothing.
+    if (tool === 'text' && finishesTyping(document.activeElement)) {
+      e.preventDefault()
+      ;(document.activeElement as HTMLElement).blur()
+      return
+    }
     const p = clamp(raw)
+    // The text tool: the mousedown's own default focus would come after the new text takes the keys, and take
+    // them back (re-test 6c: "hide me" typed at once switched the tool to Hand). The text focuses itself below.
+    if (tool === 'text') e.preventDefault()
     if (tool !== 'text') {
       // No text selection starts here, and one already on the page is let go: pressed inside a selection,
       // the browser drags it instead, cancels this pointer and the stroke is lost.
@@ -328,6 +338,29 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
   const kept = session.edits.find((e) => e.kind === 'crop' && !session.hidden.includes(e.id))
   const crop = cropDrag ? cropRect(cropDrag.a, cropDrag.b) : kept && kept.kind === 'crop' ? kept : undefined
   const texts = session.edits.filter((e) => e.kind === 'text' && !session.hidden.includes(e.id))
+  // A text just placed takes the keys at once, in the same commit as the click that placed it (Playwright live
+  // test 2026-11-18: focus stayed on the page, so typing "Lumo." switched to the Lasso and on; re-test 6c: a
+  // focus on the next task still let keys typed straight away reach the tools). It starts empty, showing
+  // "Your words" only as a placeholder, so the placeholder can never be applied.
+  // Only a text never seen before takes the keys: when an empty text goes on Escape, the one before it becomes
+  // the last again and must stay as it is (re-test N-B: it took the focus back, and the next key, V, replaced
+  // "hash bv" with "v" while its row still said "hash bv").
+  const textEls = useRef(new Map<string, HTMLDivElement>())
+  const lastText = texts.at(-1)?.id
+  const seenTexts = useRef(new Set(texts.map((t) => t.id)))
+  useLayoutEffect(() => {
+    if (!lastText || seenTexts.current.has(lastText)) return
+    seenTexts.current.add(lastText)
+    if (tool !== 'text') return
+    const el = textEls.current.get(lastText)
+    if (!el) return
+    el.focus()
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const sel = window.getSelection()
+    sel?.removeAllRanges()
+    sel?.addRange(range)
+  }, [lastText, tool])
   const pendingMask = pending ? session.edits.find((e) => e.id === pending) : undefined
   const pendingBox = useMemo(() => {
     if (!pendingMask || pendingMask.kind !== 'mask') return null
@@ -352,8 +385,8 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
         <canvas ref={liveCanvas} className="ie-live" aria-hidden="true" />
         {pendingBox && <div className="ie-pending pending" style={pendingBox} aria-hidden="true" />}
         {!before && texts.map((t) => t.kind === 'text' && (
-          <div key={t.id} className="ie-text" style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%`, fontSize: `${t.size * 100}cqh` }}
-            contentEditable={tool === 'text'} suppressContentEditableWarning spellCheck={false} role="textbox" aria-label="Text on the frame"
+          <div key={t.id} ref={(el) => { if (el) textEls.current.set(t.id, el); else textEls.current.delete(t.id) }} className="ie-text" style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%`, fontSize: `${t.size * 100}cqh` }}
+            contentEditable={tool === 'text'} suppressContentEditableWarning spellCheck={false} role="textbox" aria-label="Text on the frame" data-placeholder="Your words"
             onPointerDown={(e) => {
               if (tool === 'text') e.stopPropagation() // typing on it, not a new text
               if (tool !== 'select') return
@@ -361,6 +394,7 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
               ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
               drag.current = { kind: 'text', from: at(e), start: { x: t.x, y: t.y }, id: t.id }
             }}
+            onKeyDown={(e) => { if (endsTyping(e)) { e.preventDefault(); e.currentTarget.blur() } }}
             onBlur={(e) => onText(t.id, { text: e.currentTarget.textContent ?? '' })}>{t.text}</div>
         ))}
         {!before && crop && (
