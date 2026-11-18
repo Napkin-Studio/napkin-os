@@ -76,7 +76,9 @@ async function boot() {
   const spinoff = briefSpinoffOf(window.location.search)
   if (spinoff) {
     holdBriefSpinoff(spinoff)
-    window.history.replaceState(window.history.state, '', window.location.pathname + withoutBriefSpinoff(window.location.search) + window.location.hash)
+    // Signed out: the link stays as it came, so Sign in (Root, signInHref) comes back to it with the brief
+    // (re-test N4: the sign-in link was /?next=%2Fproduction%2F and the person landed on Home with no film).
+    if (access.get() === 'ok') window.history.replaceState(window.history.state, '', window.location.pathname + withoutBriefSpinoff(window.location.search) + window.location.hash)
   }
   const router = new Router()
   if (app.get().me && spinoff) {
