@@ -195,6 +195,15 @@ describe('a project saved in one browser opens in another', () => {
     const e = desktop.index.get(p.id)!
     expect(e.name).toBe('Maya waves')
     expect(e.server).toEqual({ etag: fake.projects.get(p.id)!.row.etag, savedAt: fake.projects.get(p.id)!.row.savedAt })
+    // Never a draft: a blank canvas opened after it, All projects and the tidy at boot leave it, nodes and all
+    // (re-test 2026-11-19).
+    expect(e.draft).toBeUndefined()
+    await desktop.shell.newProject()
+    await desktop.shell.goHome()
+    await desktop.shell.pruneDrafts()
+    expect(desktop.index.all().map((x) => x.id)).toEqual([p.id])
+    await desktop.shell.open(p.id)
+    expect(desktop.shell.get().session!.initialCanvas).toEqual({ elements: [{ id: 'el1', type: 'image', fileId: 'abc' }], files: {} })
   })
 
   it('names the picture it could not download, and keeps nothing half-made', async () => {

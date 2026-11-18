@@ -664,3 +664,56 @@ describe('a blank film is a draft until something is added (owner 2026-11-18)', 
     expect(shell.index.get(c.id)).toBeUndefined()
   })
 })
+
+describe('a film with work is never lost to the blank-canvas entry (re-test 2026-11-19)', () => {
+  const NODES = (scriptId: string) => ({ elements: [{ id: 'node-script', type: 'rectangle', customData: { kind: 'script', id: scriptId } }, { id: 'node-sb', type: 'rectangle', customData: { kind: 'storyboard', id: 'sb' } }], files: {} })
+
+  it('reopens with every node: after switching to blank films, going to All projects, and a reload that tidies at boot', async () => {
+    const { shell, storage, app, relay } = setup()
+    const a = await shell.newProject()
+    await writeScript(open(shell).doc, 'A fox crosses the market.')
+    await settle()
+    const scriptId = mainScript(open(shell).doc.get())!.id
+    await storage.put(canvasKeyFor(a.id), NODES(scriptId))
+    await shell.newProject()
+    await shell.newProject()
+    await shell.goHome()
+    await shell.pruneDrafts()
+    expect(shell.index.get(a.id)?.draft).toBeUndefined()
+    await shell.open(a.id)
+    expect(shell.get().session!.initialCanvas).toEqual(NODES(scriptId))
+    expect(mainScript(open(shell).doc.get())?.id).toBe(scriptId)
+    await shell.goHome()
+
+    // A reload: a new page over the same storage tidies drafts, then opens the film the link names.
+    const index = new ProjectIndex(storage)
+    await index.load()
+    const again = new Shell({ relay, app, index, storage, remoteConfig: null, makeClan, summaryDelayMs: 1 })
+    await again.pruneDrafts()
+    expect(index.all().map((p) => p.id)).toEqual([a.id])
+    await again.open(a.id)
+    expect(again.get().session!.initialCanvas).toEqual(NODES(scriptId))
+    expect(mainScript(again.get().session!.services.doc.get())?.id).toBe(scriptId)
+  })
+
+  it('tidying at boot keeps a draft whose stored document holds anything, whose canvas has a mark, or that cannot be read', async () => {
+    const { shell, storage, index } = setup()
+    // A draft whose document changed but whose flag was never cleared (the tab closed first).
+    const a = await shell.newProject()
+    await nameKey(open(shell).doc, 'fox', 'system')
+    await settle()
+    const withDoc = a.id
+    await shell.goHome()
+    await index.create({ id: withDoc, draft: true }) // flagged again, as a tab that closed before keep() would leave it
+    const inked = await index.create({ draft: true })
+    await storage.put(canvasKeyFor(inked.id), { elements: [{ id: 'ink', type: 'freedraw' }], files: {} })
+    const unreadable = await index.create({ draft: true })
+    await storage.clan(clanDbFor(unreadable.id)).write({ bytes: new Uint8Array([1, 2, 3]), handle: 'maya', savedAt: '2026-11-19T00:00:00Z' })
+    const blank = await index.create({ draft: true })
+    await shell.pruneDrafts()
+    expect(index.get(withDoc)?.draft).toBeUndefined()
+    expect(index.get(inked.id)?.draft).toBeUndefined()
+    expect(index.get(unreadable.id)?.draft).toBeUndefined()
+    expect(index.get(blank.id)).toBeUndefined()
+  })
+})
