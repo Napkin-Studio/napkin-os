@@ -454,10 +454,10 @@ LOOK_V3 = os.environ.get("DECK_LOOK_V3", "").strip() in ("1", "true", "yes")
 RECIPES = os.environ.get("DECK_RECIPES", "").strip() in ("1", "true", "yes")
 #: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
 PITCH_LENGTH_FROM_ENV = {"target": bool(os.environ.get("DECK_PITCH_TARGET")), "cap": bool(os.environ.get("DECK_PITCH_CAP"))}
-#: Layouts deck-look has named but not yet built (features/deck-look.clan step 3). A recipe may name one: it is accepted by the
+#: Layouts deck-look has named but not yet built (features/deck-look.clan step 3; cover_bleed landed in step 7). A recipe may name one: it is accepted by the
 #: profile check, listed as not built, and skipped at plan time (the next preference, then the general rules, take the slide) until
 #: its file lands in layouts/ or layouts/v3/. Never drawn, never invented.
-LAYOUT_IDS_PLANNED = ("cover_bleed", "statement_split", "grid_points")
+LAYOUT_IDS_PLANNED = ("statement_split", "grid_points")
 #: The recipe's closed sets (design.schema.recipe). Sizes are deck-slide-size's canvas names (inert until that merges); title forms
 #: select stage-e guidance and a title check (slice 4); ``generate`` narrows which picture slots are planned (slice 4).
 RECIPE_SIZES = ("16:9", "4:3", "a4")

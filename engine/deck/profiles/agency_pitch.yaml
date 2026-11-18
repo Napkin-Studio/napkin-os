@@ -45,7 +45,7 @@ questions:
 # slide's own blocks and fits as is or shrunk (layouts.plan); a preference never adds, repeats or stretches a word. A layout
 # not built yet, or one that does not take that slide type yet, is listed by profiles.recipe as not built and the general
 # rules take the slide. Numbers and choices are Napkin defaults, not validated (design.recipe_table).
-# Not built yet: title cover_bleed (deck-look step 3); territory picture_column (the layout does not take a territory).
+# Not built yet: territory picture_column (the layout does not take a territory).
 recipe:
   layouts:
     title: [cover_bleed, cover_image]

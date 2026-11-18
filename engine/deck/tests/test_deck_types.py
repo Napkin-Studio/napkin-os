@@ -22,7 +22,7 @@ FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.j
 LENGTHS = {"agency_pitch": (10, 12), "credentials": (10, 14), "investor_seed": (12, 15), "tender_response": (None, None)}
 #: Preferences the catalogue cannot draw yet (a layout not built, or one that does not take that slide type): the general rules stand in.
 #: When deck-look builds one, or a layout learns a slide type, this table changes on purpose.
-NOT_BUILT = {"agency_pitch": {"title": ["cover_bleed"], "territory": ["picture_column"]},
+NOT_BUILT = {"agency_pitch": {"territory": ["picture_column"]},
              "credentials": {"credentials": ["picture_column"], "questions": ["statement_points"]},
              "investor_seed": {"why_now": ["reframe"], "financials": ["chart_full"], "ask": ["close"]},
              "tender_response": {"criterion_answer": ["rows_aside"]}}
