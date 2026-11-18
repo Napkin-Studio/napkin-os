@@ -18,7 +18,8 @@ import { fetchAssets } from './serverAssets'
 import type { ServerCopy } from './serverCopy'
 import { openProjectSession, personOf, ProjectRefused, type ProjectSession, type SessionDeps } from './session'
 import { canvasKeyFor, clanDbFor, docKeyFor, uiKeyFor } from './storage'
-import { autoName, summarise } from './summary'
+import { autoName, summarise, UNTITLED as UNTITLED_TITLE } from './summary'
+import { updateDoc } from '../doc/store'
 
 export interface ShellState {
   view: 'home' | 'project'
@@ -109,8 +110,16 @@ export class Shell {
     return entry
   }
 
-  rename(id: string, name: string): Promise<void> {
-    return this.index.rename(id, name)
+  /** The name in this browser's list and, for the open film, in its .clan (project.title), so an export, an
+   *  import or another browser keeps it (live test 2026-11-18: the .clan kept "Untitled project"). */
+  async rename(id: string, name: string): Promise<void> {
+    await this.index.rename(id, name)
+    const session = this.state.session
+    if (session?.id !== id) return
+    const n = name.trim().replace(/\s+/g, ' ').slice(0, 80)
+    const doc = session.services.doc
+    if (doc.get().project.title === (n || UNTITLED_TITLE)) return
+    await updateDoc(doc, (d) => { d.project.title = n || UNTITLED_TITLE }, n ? `rename the film to ${n}` : 'let the film name itself')
   }
 
   /** A copy with its own document, canvas and UI; the pictures are shared, as all of them are. */

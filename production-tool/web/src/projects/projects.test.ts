@@ -335,6 +335,9 @@ describe('naming', () => {
     await s.doc.flush()
     await shell.get().session!.record()
     expect(index.get(p.id)!.name).toBe('Rainy street, yellow umbrella')
+    // The name is in the .clan too, so an export or an import keeps it (live test 2026-11-18).
+    expect(s.doc.get().project.title).toBe('Rainy street, yellow umbrella')
+    expect(autoName(s.doc.get())).toBe('Rainy street, yellow umbrella')
     // Blank goes back to naming itself.
     await shell.rename(p.id, '  ')
     await shell.get().session!.record()
@@ -352,6 +355,11 @@ describe('naming', () => {
     d.scenes[sid].text = ''
     addShots(d, 1, { scene_id: sid, action: 'The hero runs.' })
     expect(autoName(d)).toBe('The hero runs.')
+    // A linked brief's title comes before the script's first line; the film's own title before both.
+    d.briefs = { brief_01K7A0000000000000000000B1: { title: 'PW Lumo main film brief' } as never }
+    expect(autoName(d)).toBe('PW Lumo main film brief')
+    d.project.title = 'Dusk at the window'
+    expect(autoName(d)).toBe('Dusk at the window')
   })
 })
 
@@ -429,7 +437,8 @@ describe('the first load: a project of before', () => {
     const { id: pid, left } = await migrateSingleProject(storage, index, makeClan)
     expect(left).toBe(false)
     expect(pid).toMatch(/^prj_/)
-    expect(index.get(pid!) as ProjectEntry).toMatchObject({ name: 'Maya opens the shop.', naming: 'auto' })
+    // Named by the document's own title (autoName: the title before the script's first line).
+    expect(index.get(pid!) as ProjectEntry).toMatchObject({ name: 'Shop', naming: 'auto' })
     // Moved: the .clan's bytes as they were, the canvas, the project's UI; the old places cleared.
     expect((await storage.clan(clanDbFor(pid!)).read())!.bytes).toEqual(before)
     expect(await storage.clan(LEGACY.clanDb).read()).toBeNull()

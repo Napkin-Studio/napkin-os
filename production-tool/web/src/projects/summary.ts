@@ -85,6 +85,12 @@ function scriptLines(d: ProductionDocument): string[] {
 
 /** The name a project takes by itself: the first line of its script, once it has one. */
 export function autoName(d: ProductionDocument): string | null {
+  // The film's own title when it has one (a rename writes it into the .clan, so an export or import keeps it),
+  // else its linked brief's title, else the script's first line (live test 2026-11-18).
+  const own = d.project.title?.trim()
+  if (own && !/^untitled/i.test(own)) return clip(own, 80)
+  const brief = Object.values(d.briefs ?? {}).map((b) => b.title?.trim()).find(Boolean)
+  if (brief) return clip(brief, 60)
   const line = scriptLines(d).map((l) => l.trim()).find(Boolean)
   if (!line) return null
   return clip(line.replace(/\s+/g, ' '), 60)
