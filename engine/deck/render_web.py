@@ -130,8 +130,8 @@ class _Slide:
             return f'<div class="b-fromto{hum}">{a}{arrow}{z}</div>'
         if k == "steps":
             cells = "".join(
-                self.rv("step", f'<div class="no">{i + 1:02d}</div><div class="lab">{_e(lab)}</div><p>{_e(val)}</p>', gap=120)
-                for i, (lab, val) in enumerate(b["items"]))
+                self.rv("step", f'<div class="no">{i + 1:02d}</div><div class="lab">{_e(lab)}</div><p>{_e(" ".join(map(str, val)))}</p>', gap=120)
+                for i, (lab, *val) in enumerate(b["items"]))
             return f'<div class="b-steps" style="--n:{len(b["items"])}">{cells}</div>'
         if k == "chart":
             ch = b["chart"]
@@ -294,6 +294,112 @@ V3_WEB = ("statement_points", "reframe", "shift_line", "picture_column", "cover_
 PX_IN = 144   # px per inch on the 1920 x 1080 web slide
 
 
+#: deck-graphics (slices 4-8): the chart and diagram layouts the web draws with their own markup under spec.GRAPHICS.
+GRAPHICS_WEB = ("chart", "chart_full", "process_chevrons", "timeline_strip", "matrix_2x2", "journey_row", "grid_points")
+
+
+def _web_ids() -> tuple:
+    return V3_WEB + (GRAPHICS_WEB if spec.GRAPHICS else ())
+
+
+def _graphics_body(s, b: "_Slide", bl: list, lid: str) -> str:
+    """deck-graphics on the web: the same chart (inline SVG from the same ledger points, its source line, a 'Show data' table) and the same
+    diagrams (boxes with real, selectable text) as the pptx, from the slide's own blocks. '' when the slide does not hold one (the caller
+    then draws the blocks as before)."""
+    from . import graphics, layouts   # noqa: PLC0415
+    from .refs import Resolver   # noqa: PLC0415
+    t = s["title"]
+    title = b.rv("title", _e(t), "h1", 220)
+    notes = "".join(b.rv("g-note", _e(str(x.get("text", "")).strip()), "p", 100) for x in bl
+                    if x["kind"] in ("text", "small", "statement") and str(x.get("text", "")).strip())
+    icon = lambda i, n, sz: b.icon(i, n, sz) if b.icons else ""   # noqa: E731
+    if lid in ("chart", "chart_full"):
+        ch = next((x for x in bl if x["kind"] == "chart"), None)
+        if ch is None:
+            return ""
+        got = graphics.chart_form(ch["chart"], b.inp, Resolver(b.inp))
+        src = graphics.source_line(got["points"], b.inp) if got["form"] in graphics.CHART_FORMS else None
+        if not src:
+            return ""
+        from .theme import DEFAULT as _D, get_theme   # noqa: PLC0415
+        th = get_theme(_D, {})
+        cols = graphics.chart_marks(got["form"], got["points"], ch["chart"].get("hero"), th)
+        b.f += 1
+        svg = b.rv("", graphics.chart_svg(got["form"], got["points"], cols, src, ch["chart"].get("title") or t), "div", 300)
+        side = "".join(b.rv("g-cm", _e(str(x.get("text") or "")), "p", 120) for x in bl if x["kind"] in ("text", "small", "statement", "callout") and str(x.get("text") or "").strip())
+        side += "".join(b.rv("g-cm", _e(layouts._item_text(i)), "p", 100) for x in bl if x["kind"] == "bullets" for i in x["items"] if layouts._item_text(i).strip())
+        return f'<div class="body v3 g-chartsl{" full" if lid == "chart_full" else ""}">{title}<div class="g-cols"><div>{svg}</div><div class="g-side">{side}</div></div></div>'
+    items = graphics.steps_of(bl)
+    if lid == "process_chevrons" and items:
+        b.f += 1
+        cells = "".join(f'<div class="g-step">{icon(i, len(items), graphics.ICON_STEP_IN)}<div class="g-chev{" first" if i == 0 else ""}">{_e(it[0])}</div>'
+                        f'<p>{_e(" ".join(c for c in it[1:] if c))}</p></div>' for i, it in enumerate(items))
+        return f'<div class="body v3 g-diag">{title}<div class="g-proc" style="--n:{len(items)}">{b.rv("g-in", cells, "div", 300)}</div>{notes}</div>'
+    if lid == "timeline_strip" and items and layouts.timed_3_8(s, bl):
+        j = 1 if all(len(it) > 1 and graphics.is_time(it[1]) for it in items) else 0
+        b.f += 1
+        cells = "".join(f'<div class="g-ph"><b>{_e(" ".join(c for k, c in enumerate(it) if k != j and c))}</b><i class="g-node{" first" if i == 0 else ""}"></i>'
+                        f'<span>{_e(it[j])}</span></div>' for i, it in enumerate(items))
+        return f'<div class="body v3 g-diag">{title}<div class="g-tl" style="--n:{len(items)}">{b.rv("g-in", cells, "div", 300)}</div>{notes}</div>'
+    if lid == "journey_row" and items:
+        b.f += 1
+        cells = "".join(f'<div class="g-stage"><div class="g-pill">{_e(it[0])}</div>{icon(i, len(items), graphics.ICON_STEP_IN)}'
+                        f'<div class="kick">{_e(it[2] if len(it) > 2 else "")}</div><p>{_e(" ".join(c for c in [it[1]] + it[3:] if c))}</p></div>'
+                        for i, it in enumerate(items))
+        return f'<div class="body v3 g-diag">{title}<div class="g-jr" style="--n:{len(items)}">{b.rv("g-in", cells, "div", 300)}</div>{notes}</div>'
+    if lid == "matrix_2x2":
+        tb = next((x for x in bl if x["kind"] == "table" and graphics.matrix_ok(x)), None)
+        if tb is None:
+            return ""
+        m = tb["matrix"]
+        q = lambda k: "".join(f"<p>{_e(i)}</p>" for i in m["cells"].get(k) or [])   # noqa: E731
+        b.f += 1
+        grid = (f'<div class="g-q lh">{q("lh")}</div><div class="g-q hh">{q("hh")}</div><div class="g-q ll">{q("ll")}</div><div class="g-q hl">{q("hl")}</div>'
+                f'<span class="g-ax xl">{_e(m["x"]["low"])}</span><span class="g-ax xh">{_e(m["x"]["high"])} · {_e(m["x"]["label"])}</span>'
+                f'<span class="g-ax yh">{_e(m["y"]["high"])} · {_e(m["y"]["label"])}</span><span class="g-ax yl">{_e(m["y"]["low"])}</span>')
+        return f'<div class="body v3 g-diag">{title}<div class="g-mx-wrap">{b.rv("g-mx", grid, "div", 300)}<div class="g-side">{notes}</div></div></div>'
+    if lid == "grid_points":
+        pts = layouts.statement_points(bl) or []
+        if not pts:
+            return ""
+        cells = ""
+        for i, x in enumerate(pts):
+            b.f += 1
+            cells += b.rv("g-gp", icon(i, len(pts), graphics.ICON_POINT_IN) + f'<b>{_e(x["heading"])}</b><p>{_e(x["text"])}</p>', "div", 140)
+        return f'<div class="body v3 g-diag">{title}<div class="g-grid{" two" if len(pts) == 4 else ""}">{cells}</div></div>'
+    return ""
+
+
+#: deck-graphics chart and diagram styles: added ONLY when one is drawn (a deck with none keeps its exact bytes).
+GRAPHICS_CSS = """
+.g-chartsl h1.title,.g-diag h1.title{max-width:1500px;font:700 64px/1.05 var(--head)}
+.g-cols{display:grid;grid-template-columns:7fr 5fr;gap:48px;margin-top:28px}.g-chartsl.full .g-cols{grid-template-columns:8fr 4fr}
+.g-side{border-left:1.5px solid var(--ink);padding-left:36px;display:flex;flex-direction:column;gap:22px}.g-side p{font-size:30px;line-height:1.25}
+.g-chart svg{width:100%;height:auto;display:block}.g-chart .cl{font:400 26px var(--body);fill:var(--ink)}.g-chart .cv{font:700 26px var(--body);fill:var(--ink)}
+.g-chart .base{stroke:var(--ink);stroke-width:1.5}.g-src{font-size:22px;color:var(--muted);margin-top:10px}
+.g-data summary{font-size:20px;color:var(--muted);cursor:pointer}.g-data table{font-size:22px;border-collapse:collapse}.g-data td{padding:4px 18px 4px 0}
+.g-diag{display:flex;flex-direction:column}.g-diag .g-note{font-size:26px;color:var(--muted);margin-top:auto;border-top:1.5px solid var(--ink);padding-top:16px}
+.g-proc>.g-in{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:8px;margin-top:56px}
+.g-chev{background:var(--tint);border:1.5px solid var(--ink);clip-path:polygon(0 0,88% 0,100% 50%,88% 100%,0 100%,12% 50%);padding:30px 18% 30px 16%;font:700 30px/1.05 var(--head);text-align:center;min-height:150px;display:flex;align-items:center;justify-content:center}
+.g-chev.first{background:var(--ink);color:var(--paper);clip-path:polygon(0 0,88% 0,100% 50%,88% 100%,0 100%)}.g-step p{font-size:28px;line-height:1.25;margin-top:22px;padding:0 8px}
+.g-step svg.icon{margin:0 0 14px 12px}
+.g-tl>.g-in{display:grid;grid-template-columns:repeat(var(--n),1fr);margin-top:90px;position:relative}
+.g-tl>.g-in:before{content:"";position:absolute;left:calc(50% / var(--n));right:calc(50% / var(--n));top:calc(1.05em * 2 + 62px);height:1.5px;background:var(--ink)}
+.g-ph{display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px}.g-ph b{font:700 32px/1.05 var(--head);min-height:2.1em;display:flex;align-items:flex-end}
+.g-node{width:30px;height:30px;border-radius:50%;border:3px solid var(--ink);background:var(--paper);position:relative;z-index:1}.g-node.first{background:var(--ink)}
+.g-ph span{font-size:28px}
+.g-jr>.g-in{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:24px;margin-top:64px}.g-pill{border:2px solid var(--ink);border-radius:999px;padding:18px;text-align:center;font:700 30px var(--head)}
+.g-stage p{font-size:28px;line-height:1.25}.g-stage .kick{margin-top:18px}
+.g-mx-wrap{display:grid;grid-template-columns:8fr 4fr;gap:48px;margin-top:40px}
+.g-mx{position:relative;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;min-height:620px;margin:40px 0 40px 0}
+.g-mx:before,.g-mx:after{content:"";position:absolute;background:var(--ink)}.g-mx:before{left:0;right:0;top:50%;height:2px}.g-mx:after{top:0;bottom:0;left:50%;width:2px}
+.g-q{padding:22px}.g-q p{font-size:28px;line-height:1.2;margin-bottom:8px}.g-ax{position:absolute;font:700 20px var(--body);color:var(--muted)}
+.g-ax.xl{left:0;top:calc(50% + 8px)}.g-ax.xh{right:0;top:calc(50% + 8px)}.g-ax.yh{left:calc(50% + 10px);top:-34px}.g-ax.yl{left:calc(50% + 10px);bottom:-34px}
+.g-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:48px;margin-top:48px}.g-grid.two{grid-template-columns:repeat(2,1fr)}
+.g-gp{border-top:1.5px solid var(--ink);padding-top:22px}.g-gp b{display:block;font:700 34px/1.1 var(--head);margin:14px 0 10px}.g-gp p{font-size:28px;line-height:1.25}
+"""
+
+
 def _tz(s) -> dict | None:
     im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
     tz = im.get("text_zone") or {}
@@ -413,6 +519,8 @@ def _v3_body(s, b: "_Slide", bl: list, lid: str, deck: dict) -> str:
                 grid += f'<div class="pc-grid">{cells}</div>'
         out += grid
         return f'<div class="body v3 v3pc{" nopts" if not (pts or grid) else ""}">{out}</div>'
+    if spec.GRAPHICS and lid in GRAPHICS_WEB:
+        return _graphics_body(s, b, bl, lid)
     if lid in ("cover_bleed", "full_bleed_statement"):   # the words on the picture's measured zone, in the recorded colour
         tz = _tz(s) or {"zone": "bottom_left", "text": "FAF7F1"}
         x, y, w, h = images.zone_box(tz["zone"])
@@ -540,7 +648,12 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
             kick = f'<div class="band">{_e(lab)}</div>' if lab else '<div class="band empty"></div>'
         lay = s.get("layout") or {}
         planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
-        v3lid = lay["id"] if (v3 and planned and lay.get("id") in V3_WEB) else None
+        v3lid = lay["id"] if (v3 and planned and lay.get("id") in _web_ids()) else None
+        if v3lid in GRAPHICS_WEB and spec.GRAPHICS:   # a chart or diagram the slide cannot hold here: the blocks as before
+            probe = _Slide(inp)
+            probe.icons = b.icons
+            if not _graphics_body(s, probe, shown_blocks(s, audience), v3lid):
+                v3lid = None
         if v3lid:   # deck-look: the layout places its own title; the band stays in the header (none on the cover and the close)
             if v3lid in ("cover_image", "close"):
                 kick = ""
@@ -952,7 +1065,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{ICON_CSS if ('data-icon="' in slides or 'class="pc-grid"' in slides) else ""}{FRAME_CSS if 'class="mockup"' in slides else ""}</style></head>
+<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{ICON_CSS if ('data-icon="' in slides or 'class="pc-grid"' in slides) else ""}{FRAME_CSS if 'class="mockup"' in slides else ""}{GRAPHICS_CSS if 'g-diag' in slides or 'g-chartsl' in slides else ""}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>

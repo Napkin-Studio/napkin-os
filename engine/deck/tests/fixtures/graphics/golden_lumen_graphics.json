@@ -1,0 +1,100 @@
+{
+ "what": "deck-graphics slice 9: the Lumen Water golden's layouts and icons under DECK_LOOK_V3=1 DECK_GRAPHICS=1 (lean density, no pictures). Recorded once by hand from tests/test_deck_graphics_charts.py's _deck(); re-record only in a commit that changes graphics on purpose.",
+ "plan": {
+  "s01": {
+   "layout": "cover",
+   "icons": []
+  },
+  "s02": {
+   "layout": "statement_points",
+   "icons": []
+  },
+  "s03": {
+   "layout": "reframe",
+   "icons": []
+  },
+  "s04": {
+   "layout": "statement_points",
+   "icons": []
+  },
+  "s05": {
+   "layout": "statement_points",
+   "icons": []
+  },
+  "s06": {
+   "layout": "shift_line",
+   "icons": []
+  },
+  "s07": {
+   "layout": "emphasis_bar",
+   "icons": []
+  },
+  "s08": {
+   "layout": "rows_aside",
+   "icons": [
+    "signpost-big",
+    "radio"
+   ]
+  },
+  "s09": {
+   "layout": "rows_aside",
+   "icons": []
+  },
+  "s10": {
+   "layout": "close",
+   "icons": []
+  },
+  "s11": {
+   "layout": "emphasis_bar",
+   "icons": []
+  },
+  "s12": {
+   "layout": "cards",
+   "icons": []
+  },
+  "s13": {
+   "layout": "territory",
+   "icons": []
+  },
+  "s14": {
+   "layout": "big_statement",
+   "icons": []
+  },
+  "s15": {
+   "layout": "big_statement",
+   "icons": []
+  },
+  "s16": {
+   "layout": "big_statement",
+   "icons": []
+  },
+  "s17": {
+   "layout": "cards",
+   "icons": []
+  },
+  "s18": {
+   "layout": "emphasis_bar",
+   "icons": []
+  },
+  "s19": {
+   "layout": "placeholder_card",
+   "icons": []
+  },
+  "s20": {
+   "layout": "placeholder_card",
+   "icons": []
+  },
+  "s21": {
+   "layout": "placeholder_card",
+   "icons": []
+  },
+  "s22": {
+   "layout": "native_table",
+   "icons": []
+  },
+  "s23": {
+   "layout": "native_table",
+   "icons": []
+  }
+ }
+}

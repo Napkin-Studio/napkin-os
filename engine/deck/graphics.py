@@ -403,3 +403,288 @@ def strip_picks(frames: list) -> tuple:
     k = spec.STRIP_MAX
     idx = sorted({round(i * (n - 1) / (k - 1)) for i in range(k)})
     return [frames[i] for i in idx], f"{k} of {n} shots"
+
+
+# ================================================================================================ charts (slices 4-5)
+# A chart is built ONLY from values the ledger holds: each point is {label, ref} with ref of kind fact or docfig; the value and unit
+# are read from inp.facts / inp.doc_facts, never from stage text. Verified in code (slice 4): a research fact row is {id, version,
+# status, entity, key, value, unit, as_of, sources} (research_facts.py, foundation-spec storage_model) and a document figure is
+# {value, unit, label, as_of, page} (inputs.Inputs.doc_facts). Neither has a 'measure' or 'period' field: the measure is a fact's
+# ``key`` and, for document figures, the document they come from; the period is the label (a year, a quarter, a month).
+
+#: A category label that is a period: then the chart is a column (2 to 6) or a line (more), in the order the stage gave.
+TIME_LABEL = re.compile(r"^(?:(?:19|20)\d\d(?:[/-]\d{2,4})?|(?:Q|H)[1-4](?:\s*(?:19|20)?\d\d)?|FY\s?\d{2,4}|"
+                        r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?(?:\s+(?:19|20)?\d\d)?|"
+                        r"(?:week|month|year|quarter|day|phase|stage)\s+\d{1,2})$", re.I)
+CHART_FORMS = ("bar", "column", "line", "segmented")
+CHART_MAX_CATEGORIES, CHART_MAX_SERIES, CHART_HERO_MAX = 8, 3, 2
+#: The chart is never shrunk under this plot height (inches) or this label size (pt): the fit ladder switches first.
+CHART_MIN_PLOT_IN, CHART_MIN_LABEL_PT = 3.0, 12
+SOURCE_LABEL = "Source:"
+
+
+def _numeric(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _measure(ref: str, row: dict) -> str | None:
+    if ref.startswith("doc:"):
+        return "doc:" + ref[4:].split("#")[0]
+    return str(row.get("key")) if row.get("key") else None
+
+
+def chart_points(chart: dict, inp, resolver) -> tuple:
+    """``(points, why)``: the chart's points read from the ledger, ``[{label, ref, value, unit, measure, shown}]``; ``why`` is '' when
+    every point is a numeric ledger value with a unit, else the reason (the points that resolved are still returned)."""
+    from .refs import fmt   # noqa: PLC0415
+    pts, why = [], ""
+    for s in (chart or {}).get("series") or []:
+        ref, label = s.get("ref"), str(s.get("label") or "").strip()
+        if not ref or resolver.kind(ref) not in ("fact", "docfig"):
+            why = why or f"{label or ref}: not a fact or a document figure"
+            continue
+        row = inp.doc_facts.get(ref) or inp.facts.get(ref) or {}
+        if not _numeric(row.get("value")):
+            why = why or f"{label}: the ledger value is not a number"
+            continue
+        if not row.get("unit"):
+            why = why or f"{label}: no unit in the ledger"
+        pts.append({"label": label, "ref": ref, "value": row["value"], "unit": row.get("unit"), "measure": _measure(ref, row), "shown": fmt(row)})
+    return pts, why
+
+
+def chart_form(chart: dict, inp, resolver) -> dict:
+    """What a chart block becomes (design.charts.types): ``{form, points, why}`` with form one of bar, column, line, segmented (drawn),
+    hero (one value: a hero figure), stat_row (2 to 4 unlike figures), table (more than 8, or unlike beyond 4), or none (nothing sourced).
+    Never a computed value, never an 'Other'."""
+    pts, why = chart_points(chart, inp, resolver)
+    n = len(pts)
+    if n == 0:
+        return {"form": "none", "points": [], "why": why or "no sourced figure"}
+    if n == 1:
+        return {"form": "hero", "points": pts, "why": "one value: a hero figure, not a one-bar chart"}
+    same = len({p["unit"] for p in pts}) == 1 and pts[0]["unit"] and len({p["measure"] for p in pts}) == 1 and pts[0]["measure"]
+    if why or not same:
+        why = why or "unlike figures (more than one unit or measure)"
+        return {"form": "stat_row" if n <= 4 else "table", "points": pts, "why": why}
+    if n > CHART_MAX_CATEGORIES:
+        return {"form": "table", "points": pts, "why": f"{n} categories: a table holds every row (more than {CHART_MAX_CATEGORIES} is never folded)"}
+    if chart.get("type") == "stack" and chart.get("whole"):
+        return {"form": "segmented", "points": pts, "why": ""}
+    if all(TIME_LABEL.match(p["label"]) for p in pts):
+        return {"form": "column" if n <= 6 else "line", "points": pts, "why": ""}
+    return {"form": "bar", "points": pts, "why": ""}
+
+
+def plot_value(p: dict) -> float:
+    """The number a mark is drawn at: a proportion in percent (the way the ledger's display shows it), anything else as it is."""
+    v = float(p["value"])
+    return round(v * 100, 6) if p["unit"] == "proportion" else v
+
+
+def number_format(unit: str) -> str:
+    """The data-label number format for a unit (the ledger's display, never re-rounded beyond it)."""
+    return {"proportion": '0.#"%"', "%": '0.#"%"', "eur": '"€"#,##0', "gbp": '"£"#,##0', "usd": '"$"#,##0'}.get(str(unit or "").lower(), "#,##0.##")
+
+
+def source_line(points: list, inp) -> str | None:
+    """'Source: <document or source label>, <locator>' for each distinct ref (at most two, then '+ n more in the appendix'), built from the
+    refs' own ledger rows; None when any point's source has no label (then no chart is drawn)."""
+    labels = []
+    for p in points:
+        ref = p["ref"]
+        if ref.startswith("doc:"):
+            key = ref[4:].split("#")[0]
+            name = ((inp.docs or {}).get(key) or {}).get("name")
+            page = (inp.doc_facts.get(ref) or {}).get("page")
+            lab = f"{name}, p. {page}" if name and page else name
+        else:
+            row = inp.facts.get(ref) or {}
+            src = next((s for s in row.get("sources") or [] if isinstance(s, dict)), None)
+            if src is None and row.get("sources"):
+                sid = next((s for s in row["sources"] if isinstance(s, str)), None)
+                src = (inp.sources or {}).get(sid) if sid else None
+            lab = (src or {}).get("title") or (src or {}).get("name") or (src or {}).get("uri")
+        if not lab:
+            return None
+        if lab not in labels:
+            labels.append(str(lab))
+    shown = labels[:2]
+    more = len(labels) - len(shown)
+    return f"{SOURCE_LABEL} " + "; ".join(shown) + (f" (+ {more} more in the appendix)" if more else "")
+
+
+def chart_marks(form: str, points: list, hero: list, th) -> list:
+    """The fill of each mark (design.charts.rules, dataviz: form first, colour last): one series = the accent on the hero bars (at most
+    two) and a mute tint on the rest; no hero = ink. Every mark is 3:1 or better on the paper, else ink."""
+    quiet = themes.blend(th.mute, th.paper, 0.35)
+    if not themes.contrast(quiet, th.paper) >= ICON_CONTRAST:
+        quiet = th.mute
+    acc = th.accent if themes.contrast(th.accent, th.paper) >= ICON_CONTRAST else th.ink
+    hero = [h for h in (hero or [])][:CHART_HERO_MAX]
+    if form == "line":
+        return [th.ink] * len(points)
+    if not hero:
+        return [th.ink] * len(points)
+    return [acc if p["label"] in hero else quiet for p in points]
+
+
+def chart_svg(form: str, points: list, colours: list, source: str, title: str = "") -> str:
+    """The web twin of a native chart (no library, no network): inline SVG from the same points, one <title> per mark (label, value), the
+    values in text tokens, the source line as text and the data as a real table under 'Show data'."""
+    import html as _h   # noqa: PLC0415
+    e = lambda t: _h.escape(str(t), quote=True)   # noqa: E731
+    n = len(points)
+    vals = [plot_value(p) for p in points]
+    top = max(vals + [0.0]) or 1.0
+    W_, H_ = 1000, 520
+    marks = []
+    if form == "bar":
+        lab_w, bar_h = 260, min(56, (H_ - 20) / n * 0.62)
+        step = (H_ - 20) / n
+        for i, (p, v, c) in enumerate(zip(points, vals, colours)):
+            y = 10 + i * step + (step - bar_h) / 2
+            w = (W_ - lab_w - 140) * v / top
+            marks.append(f'<text x="{lab_w - 16}" y="{y + bar_h / 2:.1f}" text-anchor="end" dominant-baseline="middle" class="cl">{e(p["label"])}</text>'
+                         f'<rect x="{lab_w}" y="{y:.1f}" width="{w:.1f}" height="{bar_h:.1f}" rx="4" fill="#{c}"><title>{e(p["label"])}: {e(p["shown"])}</title></rect>'
+                         f'<text x="{lab_w + w + 12:.1f}" y="{y + bar_h / 2:.1f}" dominant-baseline="middle" class="cv">{e(p["shown"])}</text>')
+    elif form in ("column", "segmented"):
+        step = (W_ - 40) / n
+        col_w = min(110, step * 0.55)
+        base = H_ - 60
+        for i, (p, v, c) in enumerate(zip(points, vals, colours)):
+            x = 20 + i * step + (step - col_w) / 2
+            h = (base - 50) * v / top
+            marks.append(f'<rect x="{x:.1f}" y="{base - h:.1f}" width="{col_w:.1f}" height="{h:.1f}" rx="4" fill="#{c}"><title>{e(p["label"])}: {e(p["shown"])}</title></rect>'
+                         f'<text x="{x + col_w / 2:.1f}" y="{base - h - 12:.1f}" text-anchor="middle" class="cv">{e(p["shown"])}</text>'
+                         f'<text x="{x + col_w / 2:.1f}" y="{base + 34}" text-anchor="middle" class="cl">{e(p["label"])}</text>')
+        marks.append(f'<line x1="20" x2="{W_ - 20}" y1="{base}" y2="{base}" class="base"/>')
+    else:   # line
+        step = (W_ - 120) / max(1, n - 1)
+        base = H_ - 60
+        xy = [(60 + i * step, base - (base - 50) * v / top) for i, v in enumerate(vals)]
+        marks.append('<polyline fill="none" stroke="#{}" stroke-width="3" points="{}"/>'.format(colours[0] if colours else "1B2430",
+                                                                                         " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)))
+        for (x, y), p in zip(xy, points):
+            marks.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="#{colours[0] if colours else "1B2430"}"><title>{e(p["label"])}: {e(p["shown"])}</title></circle>'
+                         f'<text x="{x:.1f}" y="{base + 34}" text-anchor="middle" class="cl">{e(p["label"])}</text>')
+        x, y = xy[-1]
+        marks.append(f'<text x="{x:.1f}" y="{y - 18:.1f}" text-anchor="middle" class="cv">{e(points[-1]["shown"])}</text>')
+        marks.append(f'<line x1="40" x2="{W_ - 40}" y1="{base}" y2="{base}" class="base"/>')
+    rows = "".join(f"<tr><td>{e(p['label'])}</td><td>{e(p['shown'])}</td></tr>" for p in points)
+    return (f'<figure class="g-chart" data-form="{e(form)}"><svg viewBox="0 0 {W_} {H_}" role="img" aria-label="{e(title or "Chart")}">'
+            f'{"".join(marks)}</svg><figcaption class="g-src">{e(source)}</figcaption>'
+            f'<details class="g-data"><summary>Show data</summary><table><tbody>{rows}</tbody></table></details></figure>')
+
+
+# ================================================================================================ diagrams (slices 6-7)
+# A diagram binds an existing block's items and nothing else: every word in it is a word of the block, the block is drawn once (the
+# diagram replaces its rows), and no step, arrow label, phase name, quadrant name or marker is written by code.
+
+PROCESS_MIN, PROCESS_MAX = 3, 6
+TIMELINE_MIN, TIMELINE_MAX = 3, 8
+JOURNEY_MIN, JOURNEY_MAX = 3, 5
+GRID_MIN, GRID_MAX = 3, 6
+CHEVRON_LABEL_MAX = 22
+#: A step's second cell that is a time: the timeline's strip (equal spacing always: dates are never plotted to scale).
+TIME_CELL = re.compile(r"(?i)^(?:(?:week|wk|month|day|year|quarter|phase|sprint)s?\s*\d|q[1-4]\b|h[12]\b|(?:19|20)\d\d|"
+                       r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|by\s|from\s|before\s|after\s|ongoing|launch|day\s*\d)")
+
+
+def steps_of(bl: list) -> list | None:
+    """The one steps block's items as lists of strings, or None when the slide has none or more than one."""
+    st = [b for b in bl if b.get("kind") == "steps"]
+    if len(st) != 1:
+        return None
+    return [[str(c).strip() for c in (it if isinstance(it, (list, tuple)) else [it])] for it in st[0].get("items") or []]
+
+
+def is_time(cell: str) -> bool:
+    return bool(TIME_CELL.match(str(cell or "").strip()))
+
+
+def diagram_miss(s: dict, bl: list) -> str | None:
+    """A near miss for the report (d_min_items): a steps block just under a diagram's minimum ('2 steps, needs 3'); None otherwise."""
+    items = steps_of(bl)
+    if items is None:
+        return None
+    n = len(items)
+    if n < PROCESS_MIN:
+        return f"{n} step{'s' if n != 1 else ''}, needs {PROCESS_MIN}"
+    return None
+
+
+MATRIX_CELLS = ("hh", "hl", "lh", "ll")
+
+
+def matrix_ok(b: dict) -> bool:
+    """A table block's ``matrix`` is drawable as a 2x2: x and y each {label, low, high, refs} with refs (the basis sourced), every cell
+    named hh / hl / lh / ll holding items, at least one item. Items are listed inside quadrants; nothing is placed at a coordinate."""
+    m = b.get("matrix") if isinstance(b, dict) else None
+    if not isinstance(m, dict):
+        return False
+    for ax in ("x", "y"):
+        a = m.get(ax)
+        if not (isinstance(a, dict) and all(str(a.get(k) or "").strip() for k in ("label", "low", "high")) and a.get("refs")):
+            return False
+    cells = m.get("cells")
+    if not isinstance(cells, dict) or not set(cells) <= set(MATRIX_CELLS):
+        return False
+    return any(isinstance(v, list) and v for v in cells.values()) and all(isinstance(v, list) and all(str(i).strip() for i in v) for v in cells.values())
+
+
+def charts_pass(S: list, inp, resolver) -> list:
+    """Under spec.GRAPHICS, before the slides are arranged: what each chart block becomes (chart_form). A drawn chart keeps its block; a
+    single value becomes a hero figure and 2 to 4 unlike figures a stat row (a stats block, each value as the ledger shows it, with its ref);
+    more becomes a table with every row; a block with nothing sourced is removed. A chart with no source label is not drawn. Nothing is
+    computed and no word is added: labels are the block's own, values the ledger's display. Returns the records for meta.graphics.charts."""
+    recs = []
+    for sl in S:
+        out = []
+        for b in sl.get("blocks") or []:
+            if b.get("kind") != "chart":
+                out.append(b)
+                continue
+            got = chart_form(b.get("chart") or {}, inp, resolver)
+            form, why, pts = got["form"], got["why"], got["points"]
+            src = source_line(pts, inp) if form in CHART_FORMS else None
+            if form in CHART_FORMS and not src:
+                form, why = ("hero" if len(pts) == 1 else "stat_row" if len(pts) <= 4 else "table"), "no source label for a point: no chart"
+            refs = [p["ref"] for p in pts]
+            if form in CHART_FORMS:
+                out.append(b)
+            elif form in ("hero", "stat_row"):
+                out.append({"kind": "stats", "items": [{"value": p["shown"], "label": p["label"], "refs": [p["ref"]]} for p in pts], "refs": refs,
+                            "basis": "sourced"})
+            elif form == "table":
+                out.append({"kind": "table", "rows": [[str((b.get("chart") or {}).get("title") or ""), ""]] + [[p["label"], p["shown"]] for p in pts],
+                            "refs": refs, "basis": "sourced"})
+            recs.append({"slide": sl.get("title"), "form": form, "why": why, "source": src,
+                         "points": [{"label": p["label"], "ref": p["ref"], "value": plot_value(p), "shown": p["shown"], "unit": p["unit"]} for p in pts]})
+        sl["blocks"] = out
+    return recs
+
+
+def report(deck: dict) -> dict:
+    """report.json's ``graphics``: the charts (what each chart block became, and why), the diagrams drawn, the near misses ('2 steps, needs 3')
+    and the icons and frames counts, so a deck with no chart and no diagram says why."""
+    from . import spec as _spec   # noqa: PLC0415
+    from .validate import presented   # noqa: PLC0415
+    charts = ((deck.get("meta") or {}).get("graphics") or {}).get("charts") or []
+    diagrams, misses = [], []
+    fam = {"process_chevrons": "process", "timeline_strip": "timeline", "matrix_2x2": "matrix", "journey_row": "journey"}
+    for sid in deck["order"]:
+        s = deck["slides"][sid]
+        lid = (s.get("layout") or {}).get("id")
+        bl = _spec.shown_blocks(s)
+        from . import layouts as _L   # noqa: PLC0415
+        if lid in fam and (lid != "timeline_strip" or _L.timed_3_8(s, bl)):
+            diagrams.append({"slide": sid, "diagram": fam[lid], "items": len(steps_of(bl) or [])})
+        else:
+            miss = diagram_miss(s, bl)
+            if miss:
+                misses.append({"slide": sid, "type": s["type"], "why": f"no diagram: {miss}"})
+    pres = set(presented(deck))
+    return {"charts": charts or [{"chart": None, "why": "no chart: the stages wrote no chart block (no series of sourced figures)"}],
+            "diagrams": diagrams, "diagram_misses": misses,
+            "presented_with_diagram": sum(1 for d in diagrams if d["slide"] in pres)}

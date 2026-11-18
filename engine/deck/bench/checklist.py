@@ -1062,6 +1062,226 @@ def s_strip_order(r: Run) -> dict:
     return _verdict(bad, r.ids)
 
 
+def _charts(r: Run):
+    """``{slide id: [(chart graphic frame, slide)]}`` for presented slides with a native chart; None when deck.pptx is unreadable."""
+    if "charts" in r._measures:
+        return r._measures["charts"]
+    out = None
+    if r.prs is not None:
+        out = {}
+        slides = list(r.prs.slides)
+        for i in r.presented:
+            if r.number(i) <= len(slides):
+                sl = slides[r.number(i) - 1]
+                got = [(sh, sl) for sh in sl.shapes if getattr(sh, "has_chart", False) and sh.has_chart]
+                if got:
+                    out[i] = got
+    r._measures["charts"] = out
+    return out
+
+
+def _charts_na(r: Run):
+    c = _charts(r)
+    if c is None:
+        return None, na(NA_PPTX)
+    if not c:
+        return None, na("no presented slide carries a chart")
+    return c, None
+
+
+def _chart_record(r: Run, sid: str):
+    title = r.deck["slides"][sid].get("title")
+    recs = ((r.deck.get("meta") or {}).get("graphics") or {}).get("charts") or []
+    return next((x for x in recs if x.get("slide") == title and x.get("points")), None)
+
+
+def _chart_values(gf) -> list:
+    return [float(v) for pl in gf.chart.plots for s in pl.series for v in s.values if v is not None]
+
+
+@check
+def c_chart_sourced(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    bad = []
+    for sid, rows in c.items():
+        sl = rows[0][1]
+        src = [sh.text_frame.text for sh in sl.shapes if sh.name == "ChartSource" and sh.has_text_frame]
+        rec = _chart_record(r, sid)
+        if not src or not src[0].startswith("Source:") or rec is None or not all(str(p.get("ref", "")).startswith(("f_", "doc:")) for p in rec["points"]):
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+@check
+def c_chart_numbers(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    bad = []
+    for sid, rows in c.items():
+        rec = _chart_record(r, sid)
+        if rec is None:
+            bad.append(sid)
+            continue
+        allowed = [float(p["value"]) for p in rec["points"]]
+        labels = {str(p["label"]) for p in rec["points"]}
+        for gf, _ in rows:
+            vals = _chart_values(gf)
+            cats = {str(x) for pl in gf.chart.plots for x in pl.categories if str(x)}
+            if any(min((abs(v - a) for a in allowed), default=1.0) > 1e-6 for v in vals) or not cats <= labels | {""} | {str(rec.get("slide"))}:
+                bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+@check
+def c_chart_form(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    from pptx.enum.chart import XL_CHART_TYPE as X
+    ok_types = {X.BAR_CLUSTERED, X.COLUMN_CLUSTERED, X.LINE_MARKERS, X.LINE, X.BAR_STACKED_100}
+    bad = []
+    for sid, rows in c.items():
+        for gf, _ in rows:
+            ch = gf.chart
+            pl = ch.plots[0]
+            ncat = len(list(pl.categories))
+            nser = sum(len(list(p.series)) for p in ch.plots)
+            zero = ch.chart_type not in (X.BAR_CLUSTERED, X.COLUMN_CLUSTERED) or (ch.value_axis.minimum_scale in (0, 0.0))
+            if ch.chart_type not in ok_types or len(ch.plots) != 1 or ncat > 8 or (nser > 3 and ch.chart_type != X.BAR_STACKED_100) or not zero:
+                bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+def _mark_fills(gf) -> list:
+    A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    C = "{http://schemas.openxmlformats.org/drawingml/2006/chart}"
+    out = []
+    for el in gf.chart._chartSpace.iter(f"{C}spPr"):
+        par = el.getparent()
+        if par.tag in (f"{C}ser", f"{C}dPt"):
+            f = el.find(f"{A}solidFill/{A}srgbClr")
+            if f is not None:
+                out.append(f.get("val").upper())
+            ln = el.find(f"{A}ln/{A}solidFill/{A}srgbClr")
+            if ln is not None and par.tag == f"{C}ser" and f is None:
+                out.append(ln.get("val").upper())
+    return out
+
+
+@check
+def c_chart_contrast(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    from .. import theme
+    bad, worst = [], None
+    for sid, rows in c.items():
+        sl = rows[0][1]
+        try:
+            ground = str(sl.background.fill.fore_color.rgb)
+        except Exception:
+            ground = "FFFFFF"
+        for gf, _ in rows:
+            for col in _mark_fills(gf):
+                ratio = theme.contrast(col, ground)
+                worst = ratio if worst is None else min(worst, ratio)
+                if ratio < 3.0:
+                    bad.append(sid)
+    return _verdict(bad, r.ids, None if worst is None else round(worst, 2), 3.0)
+
+
+@check
+def c_chart_emphasis(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    th = _theme(r)
+    acc = str(((th or {}).get("colors") or {}).get("accent") or "").upper().lstrip("#")
+    if not acc:
+        return na("deck.meta.theme has no accent")
+    bad = [sid for sid, rows in c.items() for gf, _ in rows if len(list(gf.chart.plots[0].series)) == 1 and _mark_fills(gf).count(acc) > 2]
+    return _verdict(bad, r.ids)
+
+
+DIAGRAM_PREFIX = "Diagram: "
+
+
+def _diagrams(r: Run):
+    if "diagrams" in r._measures:
+        return r._measures["diagrams"]
+    out = None
+    if r.prs is not None:
+        out = {}
+        slides = list(r.prs.slides)
+        for i in r.presented:
+            if r.number(i) <= len(slides):
+                shs = list(slides[r.number(i) - 1].shapes)
+                kinds = sorted({sh.name[len(DIAGRAM_PREFIX):] for sh in shs if (sh.name or "").startswith(DIAGRAM_PREFIX)})
+                if kinds:
+                    out[i] = {"kinds": kinds, "texts": [sh.text_frame.text for sh in shs if (sh.name or "").startswith("slot:") and sh.has_text_frame]}
+    r._measures["diagrams"] = out
+    return out
+
+
+def _diagrams_na(r: Run):
+    d = _diagrams(r)
+    if d is None:
+        return None, na(NA_PPTX)
+    if not d:
+        return None, na("no presented slide carries a diagram")
+    return d, None
+
+
+def _slide_words(s: dict) -> set:
+    import re as _re
+    return {w.lower() for w in _re.findall(r"[A-Za-z0-9]+", json.dumps([s.get("title"), s.get("blocks")], ensure_ascii=False))}
+
+
+@check
+def d_own_words(r: Run) -> dict:
+    d, n = _diagrams_na(r)
+    if n:
+        return n
+    import re as _re
+    bad = []
+    for sid, v in d.items():
+        own = _slide_words(r.deck["slides"][sid])
+        drawn = {w.lower() for t in v["texts"] for w in _re.findall(r"[A-Za-z0-9]+", t)}
+        if drawn - own:
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+@check
+def d_matrix_axes(r: Run) -> dict:
+    lay = {i: ((r.deck["slides"][i].get("layout") or {}).get("id")) for i in r.presented}
+    m = [i for i, x in lay.items() if x == "matrix_2x2"]
+    if not m:
+        return na("no presented slide is laid out as matrix_2x2")
+    bad = []
+    for sid in m:
+        tb = next((b for b in r.deck["slides"][sid].get("blocks") or [] if b.get("kind") == "table" and isinstance(b.get("matrix"), dict)), None)
+        if tb is None or not all((tb["matrix"].get(a) or {}).get("refs") for a in ("x", "y")):
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+@check
+def d_min_items(r: Run) -> dict:
+    d, n = _diagrams_na(r)
+    if n:
+        return n
+    bad = []
+    for sid in d:
+        st = [b for b in r.deck["slides"][sid].get("blocks") or [] if b.get("kind") == "steps"]
+        if st and len(st[0].get("items") or []) < 3:
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
 # ---------------------------------------------------------------- run
 
 @check

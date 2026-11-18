@@ -446,12 +446,16 @@ LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "compari
               "close", "big_statement", "quote_full", "cards_split", "text_columns", "placeholder_split", "chart_full",
               "timeline_rows", "execution_stack", "territory_wide", "people_cards")
 #: The tests a layout file's ``when.test`` may name; each is a function of the same name in layouts.py (and has a unit test).
-LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3", "rows_aside", "bleed_ready")
+LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready", "points_2_3", "rows_aside", "bleed_ready",
+                "steps_3_6", "timed_3_8", "matrix_sourced", "journey_3_5", "points_3_6")
 #: deck-look steps 3-5: the layouts that exist only under ``LOOK_V3`` (``layouts/v3``; the same folder may also rework a layout
 #: of LAYOUT_IDS, such as ``close``). With the flag off the library is the 36 above, byte for byte. rows_aside (step 5) holds a
 #: merged slide: the kept slide's table as hairline rows, the absorbed slide's blocks in a column beside them.
 #: cover_bleed (step 7) sets the cover's words on its picture, on the zone images.text_zone measured (full_bleed_statement is reworked the same way).
 LAYOUT_IDS_V3 = ("statement_points", "reframe", "shift_line", "picture_column", "rows_aside", "cover_bleed")
+#: deck-graphics (features/deck-graphics.clan): the diagram layouts and the grid of points, only under ``spec.GRAPHICS`` (``layouts/graphics``;
+#: the same folder reworks timeline_strip as an equally spaced strip). With the flag off the library is unchanged.
+LAYOUT_IDS_GRAPHICS = ("process_chevrons", "matrix_2x2", "journey_row", "grid_points")
 #: deck-look: a statement set in capitals only when it is at most this many characters (and two lines); sentence case beyond (Q10).
 CAPS_MAX_CHARS = 40
 #: deck-look q_no_hole (design.checklist): the largest empty rectangle of a presented content slide, as a share of the slide, on a

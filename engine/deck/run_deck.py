@@ -1158,6 +1158,9 @@ def main(argv=None):
     if a.hyperframes:
         render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
+    if spec.GRAPHICS:   # deck-graphics: what was drawn and, for a deck with no chart or no diagram, why (charts, diagrams, near misses, icons)
+        from . import graphics   # noqa: PLC0415
+        rep["graphics"] = {**graphics.report(deck), "icons": {sid: v["ids"] for sid, v in icons.items()}}
 
     t = time.time()
     to_pdf(pptx, a.out)   # a private profile per call: a shared one made a second LibreOffice exit 0 with no PDF

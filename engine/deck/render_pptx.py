@@ -1121,7 +1121,7 @@ class Renderer:
         text. Five or fewer in a row; more are split over two rails, each row spread over the full width (no
         empty cell). The cards stretch to ``self._minh``. On founders and team slides each step is a role row."""
         S, p = self.th.scale, self.p
-        items = [(str(a), str(b)) for a, b in bl["items"]]
+        items = [(str(it[0]), " ".join(str(c) for c in it[1:])) for it in bl["items"]]   # a third cell (deck-graphics journey: the channel) joins the line
         n = len(items)
         if self._role:
             return self._role_rows(sl, [list(i) for i in items], x, y, w, sc)
@@ -1691,6 +1691,8 @@ class Renderer:
         """Chart: one native bar chart on the left, on a shared 0 to 100 scale, the hero figures picked out in the
         accent (the other bars muted) instead of repeated as big-number panels beside the bars; the commentary as
         cards on the right. The chart runs the height of the content area."""
+        if spec.GRAPHICS and self.th.v3:   # deck-graphics slice 4: the unit-aware chart, its source line, the v3 look
+            return self._lay_chart_g(sl, s, full=False)
         S, p, g = self.th.scale, self.p, self.th.grid
         ch = next((b for b in s["blocks"] if b["kind"] == "chart"), None)
         rest = [b for b in s["blocks"] if b["kind"] != "chart"]
@@ -2097,6 +2099,483 @@ class Renderer:
             self._own_pics.add(k)
             self.placed.add((self._sid, k))
 
+    # -- charts and diagrams (deck-graphics slices 4-7) -----------------------------------------------------------------------------
+    def _g_title(self, s, w, sizes=(36, 32, 30, 28), lines=3) -> tuple:
+        """The title as a v3 layout sets it at the top of the content: ``(paras, height)`` at the largest size that takes at most ``lines``."""
+        p = self.p
+        for tsize in sizes:
+            tp = [self.para(s["title"], tsize, p.fg, self.th.head, bold=True, line=1.05)]
+            if self.nlines(glue(s["title"]), w, tsize, True, self.th.head) <= lines:
+                return tp, self.ph(tp, w)
+        raise NoFit("the title does not fit")
+
+    def _g_notes(self, bl, w, size) -> tuple:
+        """The note lines under a diagram (its text, small and statement blocks, in order): ``(paras, height)``."""
+        ps = [self.para(self._text_of(b), size, self.p.fg if b["kind"] != "small" else self.p.mute, line=1.2, after=4)
+              for b in bl if b["kind"] in ("text", "small", "statement") and self._text_of(b)]
+        return ps, (self.ph(ps, w) if ps else 0.0)
+
+    def _named(self, shape, name):
+        if shape is not None:
+            shape.name = name
+        return shape
+
+    def _lay_process_chevrons(self, sl, s):
+        """process_chevrons (deck-graphics slice 6): the title, then the steps as a row of native chevrons (the first ink-filled, the rest
+        outlined on the panel), each step's label inside its chevron and its line under it, an icon above each when every step's label
+        names a different one, the note at the foot. Every word is the steps block's own; the block is drawn once. NoFit under 3 or over 6
+        steps, or when a label needs more than two lines or the lines do not fit at 12 pt (the ladder then takes timeline_rows)."""
+        from . import graphics   # noqa: PLC0415
+        items = graphics.steps_of(s["blocks"])
+        if items is None or not graphics.PROCESS_MIN <= len(items) <= graphics.PROCESS_MAX:
+            raise NoFit("process chevrons hold 3 to 6 steps")
+        p, g = self.p, self.th.grid
+        top, bottom, W_ = self.V3_TOP, g.body_end, self.x1 - self.x0
+        tp, th_ = self._g_title(s, W_ * 0.8)
+        n = len(items)
+        gap = 0.06
+        cw = (W_ - gap * (n - 1)) / n
+        chev_h = 1.05
+        lw = cw * 0.66
+        icon = self._icon_ids([it[0] for it in items])
+        ih = (graphics.ICON_STEP_IN + 0.2) if icon else 0.0
+        fit = None
+        for lsize in (20, 18, 16, 14):
+            if not all(self.nlines(glue(it[0]), lw, lsize, True, self.th.head) <= 2 and self._units_fit(it[0], lw, lsize) for it in items):
+                continue
+            for bsize in (20, 18, 16, 14, 13, 12):
+                texts = [[self.para(" ".join(c for c in it[1:] if c), bsize, p.fg, line=1.2)] if any(it[1:]) else [] for it in items]
+                hs = [self.ph(t, cw - 0.12) if t else 0.0 for t in texts]
+                notes, nh = self._g_notes(s["blocks"], W_, max(12, bsize - 2))
+                need = th_ + 0.55 + ih + chev_h + 0.25 + max(hs) + (nh + 0.35 if nh else 0)
+                if need <= bottom - top:
+                    fit = (lsize, texts, hs, notes, nh, need)
+                    break
+            if fit:
+                break
+        if not fit:
+            raise NoFit("the steps do not fit their chevrons")
+        lsize, texts, hs, notes, nh, need = fit
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self.ptext(sl, self.x0, top + 0.15, W_ * 0.8, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        y = top + 0.15 + th_ + 0.55 + max(0.0, (bottom - top - need) * 0.5)
+        m = self._mark(sl)
+        for i, it in enumerate(items):
+            x = self.x0 + i * (cw + gap)
+            if icon:
+                self._icon(sl, icon[i], x + 0.1, y, graphics.ICON_STEP_IN)
+            cy = y + ih
+            first = i == 0
+            shp = sl.shapes.add_shape(MSO_SHAPE.PENTAGON if first else MSO_SHAPE.CHEVRON, Inches(x), Inches(cy), Inches(cw + (0.18 if i < n - 1 else 0)), Inches(chev_h))
+            st = shp._element.find(qn("p:style"))
+            if st is not None:
+                shp._element.remove(st)
+            shp.fill.solid()
+            shp.fill.fore_color.rgb = _rgb(self.th.ink if first else self.th.panel)
+            shp.line.color.rgb = _rgb(self.th.ink)
+            shp.line.width = Pt(0.75)
+            shp.name = "Diagram: process"
+            lp = [self.para(it[0], lsize, self.th.on_dark if first else self.th.ink, self.th.head, bold=True, line=1.0, align="c")]
+            lh = self.ph(lp, lw)
+            self.ptext(sl, x + (cw - lw) / 2 + (0.0 if first else 0.12), cy + (chev_h - lh) / 2, lw, lh, lp, name="slot:steps")
+            if texts[i]:
+                self.ptext(sl, x + 0.06, cy + chev_h + 0.25, cw - 0.12, hs[i], texts[i], name="slot:steps")
+        self._build(sl, m)
+        self._rec_slot(sl, "steps")
+        if notes:
+            m = self._mark(sl)
+            self.hairline(sl, self.x0, bottom - nh - 0.2, self.x1, bottom - nh - 0.2)
+            self.ptext(sl, self.x0, bottom - nh - 0.05, W_, nh, notes, name="slot:note")
+            self._build(sl, m)
+            self._rec_slot(sl, "note")
+
+    def _lay_timeline_strip(self, sl, s):
+        """timeline_strip: under spec.GRAPHICS (slice 6) one hairline with a node per phase, EQUALLY spaced (no date is plotted to scale),
+        the phase above its node and its time below; else the standard composition, as before."""
+        from . import layouts as _L   # noqa: PLC0415
+        if not spec.GRAPHICS or not _L.timed_3_8(s, s["blocks"]):
+            return self._lay_stack(sl, s)
+        from . import graphics   # noqa: PLC0415
+        items = graphics.steps_of(s["blocks"])
+        j = 1 if all(len(it) > 1 and graphics.is_time(it[1]) for it in items) else 0
+        p, g = self.p, self.th.grid
+        top, bottom, W_ = self.V3_TOP, g.body_end, self.x1 - self.x0
+        tp, th_ = self._g_title(s, W_ * 0.8)
+        n = len(items)
+        cw = W_ / n
+        fit = None
+        for size in (28, 26, 24, 22, 20, 18, 16, 14, 13, 12):
+            labs = [[self.para(" ".join(c for k, c in enumerate(it) if k != j and c), size, p.fg, self.th.head, bold=True, line=1.05, align="c")] for it in items]
+            times = [[self.para(it[j], max(12, size - 2), p.fg, line=1.1, align="c")] for it in items]
+            if not all(self._units_fit(" ".join(c for k, c in enumerate(it) if k != j), cw - 0.15, size) for it in items):
+                continue
+            ah = max(self.ph(x, cw - 0.15) for x in labs)
+            bh = max(self.ph(x, cw - 0.15) for x in times)
+            notes, nh = self._g_notes(s["blocks"], W_, max(12, size - 2))
+            need = th_ + 0.6 + ah + 0.25 + 0.3 + 0.2 + bh + (nh + 0.35 if nh else 0)
+            if need <= bottom - top:
+                fit = (labs, times, ah, bh, notes, nh, need)
+                break
+        if not fit:
+            raise NoFit("the phases do not fit the strip")
+        labs, times, ah, bh, notes, nh, need = fit
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self.ptext(sl, self.x0, top + 0.15, W_ * 0.8, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        y = top + 0.15 + th_ + 0.6 + max(0.0, (bottom - top - need) * 0.5)
+        ly = y + ah + 0.25 + 0.15
+        m = self._mark(sl)
+        self.hairline(sl, self.x0 + cw / 2, ly, self.x1 - cw / 2, ly, name="Diagram: timeline")
+        for i in range(n):
+            cx = self.x0 + cw * (i + 0.5)
+            self.ptext(sl, cx - (cw - 0.15) / 2, y, cw - 0.15, ah, labs[i], anchor="bottom", name="slot:steps")
+            node = sl.shapes.add_shape(MSO_SHAPE.OVAL, Inches(cx - 0.11), Inches(ly - 0.11), Inches(0.22), Inches(0.22))
+            stl = node._element.find(qn("p:style"))
+            if stl is not None:
+                node._element.remove(stl)
+            node.fill.solid()
+            node.fill.fore_color.rgb = _rgb(self.th.ink if i == 0 else self.th.paper)
+            node.line.color.rgb = _rgb(self.th.ink)
+            node.line.width = Pt(1.5)
+            node.name = "Diagram: timeline"
+            self.ptext(sl, cx - (cw - 0.15) / 2, ly + 0.3, cw - 0.15, bh, times[i], name="slot:steps")
+        self._build(sl, m)
+        self._rec_slot(sl, "steps")
+        if notes:
+            m = self._mark(sl)
+            self.ptext(sl, self.x0, bottom - nh - 0.05, W_, nh, notes, name="slot:note")
+            self._build(sl, m)
+            self._rec_slot(sl, "note")
+
+    def _lay_journey(self, sl, s):
+        """journey_row (slice 7): the stages as outlined pills on one connector line, the channel (the third cell) as a kicker under each
+        with its icon when every channel names a different one, and the stage's line under that. Words: the steps block's own."""
+        from . import graphics   # noqa: PLC0415
+        items = graphics.steps_of(s["blocks"])
+        if items is None or not graphics.JOURNEY_MIN <= len(items) <= graphics.JOURNEY_MAX or not all(len(it) >= 3 for it in items):
+            raise NoFit("a journey holds 3 to 5 stages with a channel each")
+        p, g = self.p, self.th.grid
+        top, bottom, W_ = self.V3_TOP, g.body_end, self.x1 - self.x0
+        tp, th_ = self._g_title(s, W_ * 0.8)
+        n = len(items)
+        cw = W_ / n
+        pw, ph_ = cw * 0.78, 0.62
+        icon = self._icon_ids([it[2] for it in items])
+        ih = (graphics.ICON_STEP_IN + 0.12) if icon else 0.0
+        fit = None
+        for size in (20, 18, 16, 14, 13, 12):
+            if not all(self.nlines(glue(it[0]), pw - 0.2, size, True, self.th.head) <= 1 for it in items):
+                continue
+            body = [[self._kick(it[2]), self.para(" ".join(c for c in [it[1]] + it[3:] if c), size, p.fg, line=1.2)] for it in items]
+            hs = [self.ph(b, cw - 0.2) for b in body]
+            notes, nh = self._g_notes(s["blocks"], W_, max(12, size - 2))
+            need = th_ + 0.6 + ph_ + 0.3 + ih + max(hs) + (nh + 0.35 if nh else 0)
+            if need <= bottom - top:
+                fit = (size, body, hs, notes, nh, need)
+                break
+        if not fit:
+            raise NoFit("the stages do not fit the row")
+        size, body, hs, notes, nh, need = fit
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self.ptext(sl, self.x0, top + 0.15, W_ * 0.8, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        y = top + 0.15 + th_ + 0.6 + max(0.0, (bottom - top - need) * 0.35)
+        m = self._mark(sl)
+        self.hairline(sl, self.x0 + cw / 2, y + ph_ / 2, self.x1 - cw / 2, y + ph_ / 2, name="Diagram: journey")
+        for i, it in enumerate(items):
+            cx = self.x0 + cw * (i + 0.5)
+            pill = sl.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(cx - pw / 2), Inches(y), Inches(pw), Inches(ph_))
+            stl = pill._element.find(qn("p:style"))
+            if stl is not None:
+                pill._element.remove(stl)
+            pill.adjustments[0] = 0.5
+            pill.fill.solid()
+            pill.fill.fore_color.rgb = _rgb(self.th.paper)
+            pill.line.color.rgb = _rgb(self.th.ink)
+            pill.line.width = Pt(1.25)
+            pill.name = "Diagram: journey"
+            lp = [self.para(it[0], size, p.fg, self.th.head, bold=True, align="c")]
+            self.ptext(sl, cx - pw / 2 + 0.1, y, pw - 0.2, ph_, lp, anchor="middle", name="slot:stages")
+            yy = y + ph_ + 0.3
+            if icon:
+                self._icon(sl, icon[i], cx - (cw - 0.2) / 2, yy, graphics.ICON_STEP_IN)
+            self.ptext(sl, cx - (cw - 0.2) / 2, yy + ih, cw - 0.2, hs[i], body[i], name="slot:stages")
+        self._build(sl, m)
+        self._rec_slot(sl, "stages")
+        if notes:
+            m = self._mark(sl)
+            self.ptext(sl, self.x0, bottom - nh - 0.05, W_, nh, notes, name="slot:note")
+            self._build(sl, m)
+            self._rec_slot(sl, "note")
+
+    def _lay_matrix(self, sl, s):
+        """matrix_2x2 (slice 7): two sourced axes crossing (hairlines), each axis's low and high at its ends and its label at the high end,
+        the items LISTED inside their quadrants (nothing at a coordinate: a dot's position is a number nobody sourced)."""
+        from . import graphics   # noqa: PLC0415
+        tb = next((b for b in s["blocks"] if b["kind"] == "table" and graphics.matrix_ok(b)), None)
+        if tb is None:
+            raise NoFit("no sourced two-axis table")
+        mx = tb["matrix"]
+        p, g = self.p, self.th.grid
+        top, bottom, W_ = self.V3_TOP, g.body_end, self.x1 - self.x0
+        tp, th_ = self._g_title(s, W_ * 0.8)
+        notes_w = self._span(4)
+        bx0 = self.x0 + 0.9
+        bw = W_ - notes_w - 1.2
+        y0 = top + 0.15 + th_ + 0.55
+        bh = bottom - y0 - 0.55
+        if bh < 2.6:
+            raise NoFit("no room for the matrix")
+        qw, qh = bw / 2 - 0.25, bh / 2 - 0.25
+        cells = {k: [str(x) for x in mx["cells"].get(k) or []] for k in graphics.MATRIX_CELLS}
+        fit = None
+        for size in (18, 16, 14, 13, 12):
+            qp = {k: [self.para(x, size, p.fg, line=1.15, after=4) for x in v] for k, v in cells.items()}
+            if all(self.ph(v, qw) <= qh for v in qp.values() if v):
+                fit = (size, qp)
+                break
+        if not fit:
+            raise NoFit("the quadrants are too full")
+        size, qp = fit
+        notes, nh = self._g_notes(s["blocks"], notes_w - 0.2, 14)
+        if nh > bh:
+            raise NoFit("the note is too long")
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self.ptext(sl, self.x0, top + 0.15, W_ * 0.8, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        m = self._mark(sl)
+        cx, cy = bx0 + bw / 2, y0 + bh / 2
+        self.hairline(sl, bx0, cy, bx0 + bw, cy, name="Diagram: matrix", pt=1.25)
+        self.hairline(sl, cx, y0, cx, y0 + bh, name="Diagram: matrix", pt=1.25)
+        x, y = mx["x"], mx["y"]
+        cap = lambda t, al="l": [self.para(str(t), 12, p.mute, bold=True, cap=True, align=al)]   # noqa: E731
+        self.ptext(sl, bx0, cy + 0.06, 1.6, 0.3, cap(x["low"]), name="slot:matrix")
+        self.ptext(sl, bx0 + bw - 2.4, cy + 0.06, 2.4, 0.3, cap(f"{x['high']} · {x['label']}", "r"), name="slot:matrix")
+        self.ptext(sl, cx + 0.08, y0 - 0.32, 3.0, 0.3, cap(f"{y['high']} · {y['label']}"), name="slot:matrix")
+        self.ptext(sl, cx + 0.08, y0 + bh + 0.04, 3.0, 0.3, cap(y["low"]), name="slot:matrix")
+        pos = {"lh": (bx0 + 0.1, y0 + 0.1), "hh": (cx + 0.15, y0 + 0.1), "ll": (bx0 + 0.1, cy + 0.4), "hl": (cx + 0.15, cy + 0.4)}
+        for k, (qx, qy) in pos.items():
+            if qp[k]:
+                self.ptext(sl, qx, qy, qw, self.ph(qp[k], qw), qp[k], name="slot:matrix")
+        self._build(sl, m)
+        self._rec_slot(sl, "matrix")
+        if notes:
+            m = self._mark(sl)
+            self.ptext(sl, self.x1 - notes_w + 0.2, y0, notes_w - 0.2, nh, notes, name="slot:note")
+            self._build(sl, m)
+            self._rec_slot(sl, "note")
+
+    def _lay_grid_points(self, sl, s):
+        """grid_points (the deferred deck-look layout, built here so icons can land on it): 3 to 6 headed points in columns (3 across, 4 as
+        2 x 2), a hairline over each, an icon above each heading when every heading names a different one. Words: the blocks' own."""
+        from . import graphics, layouts as _L   # noqa: PLC0415
+        pts = _L.statement_points(s["blocks"])
+        if pts is None or not 3 <= len(pts) <= 6 or not all(x["heading"] for x in pts):
+            raise NoFit("grid points hold 3 to 6 headed points")
+        p, g = self.p, self.th.grid
+        top, bottom, W_ = self.V3_TOP, g.body_end, self.x1 - self.x0
+        tp, th_ = self._g_title(s, W_ * 0.8)
+        n = len(pts)
+        cols = 2 if n == 4 else 3
+        rows = -(-n // cols)
+        G = g.G
+        cw = (W_ - G * (cols - 1)) / cols
+        icon = self._icon_ids([x["heading"] for x in pts])
+        ih = (graphics.ICON_POINT_IN + graphics.ICON_GAP_IN) if icon else 0.0
+        fit = None
+        for bsize in (22, 20, 18, 16, 14, 13, 12):
+            cells = [[self.para(x["heading"], max(16, bsize + 2), p.fg, self.th.head, bold=True, line=1.05, after=6),
+                      self.para(x["text"], bsize, p.fg, italic=x["italic"], line=1.2)] for x in pts]
+            hs = [self.ph(c, cw) + ih for c in cells]
+            rh = [max(hs[r * cols:(r + 1) * cols]) for r in range(rows)]
+            need = th_ + 0.55 + sum(h + 0.45 for h in rh)
+            if need <= bottom - top and all(self._units_fit(x["heading"], cw, max(16, bsize + 2)) for x in pts):
+                fit = (cells, hs, rh, need)
+                break
+        if not fit:
+            raise NoFit("the points do not fit the grid")
+        cells, hs, rh, need = fit
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self.ptext(sl, self.x0, top + 0.15, W_ * 0.8, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        y = top + 0.15 + th_ + 0.55 + max(0.0, (bottom - top - need) * 0.5)
+        for r in range(rows):
+            for c in range(cols):
+                i = r * cols + c
+                if i >= n:
+                    break
+                x = self.x0 + c * (cw + G)
+                m = self._mark(sl)
+                self.hairline(sl, x, y, x + cw, y)
+                if icon:
+                    self._icon(sl, icon[i], x, y + 0.2, graphics.ICON_POINT_IN)
+                self.ptext(sl, x, y + 0.2 + ih, cw, hs[i] - ih, cells[i], name="slot:points")
+                self._build(sl, m)
+            y += rh[r] + 0.45
+        self._rec_slot(sl, "points")
+
+    def _g_chart(self, sl, x, y, w, h, form, points, hero, title):
+        """One native chart part (slices 4-5): bar (horizontal, ranked as given), column (periods), line (4 or more periods) or a 100%
+        stacked bar (a stated whole's parts). Values from the ledger by ref, never computed; the value axis from zero and hidden (every mark
+        is labelled), no gridlines, no legend for one series, labels in text tokens, marks per graphics.chart_marks, alt text naming every
+        label and value. The embedded workbook keeps the data editable."""
+        from . import graphics   # noqa: PLC0415
+        t_ = self.th
+        cd = CategoryChartData()
+        order = list(reversed(points)) if form == "bar" else list(points)
+        if form == "segmented":
+            cd.categories = [title or ""]
+            for pt in points:
+                cd.add_series(pt["label"], [graphics.plot_value(pt)])
+        else:
+            cd.categories = [pt["label"] for pt in order]
+            cd.add_series(title or "", [graphics.plot_value(pt) for pt in order])
+        kind = {"bar": XL_CHART_TYPE.BAR_CLUSTERED, "column": XL_CHART_TYPE.COLUMN_CLUSTERED, "line": XL_CHART_TYPE.LINE_MARKERS,
+                "segmented": XL_CHART_TYPE.BAR_STACKED_100}[form]
+        gf = sl.shapes.add_chart(kind, Inches(x), Inches(y), Inches(w), Inches(h), cd)
+        gf.name = "Chart"
+        gf._element.nvGraphicFramePr.cNvPr.set("descr", (title + ": " if title else "") + "; ".join(f"{pt['label']} {pt['shown']}" for pt in points))
+        ch = gf.chart
+        ch.has_title = False
+        ch.has_legend = form == "segmented"
+        if ch.has_legend:
+            ch.legend.include_in_layout = False
+            ch.legend.font.size, ch.legend.font.name = Pt(self.sz(14)), t_.body
+            ch.legend.font.color.rgb = _rgb(t_.ink)
+        plot = ch.plots[0]
+        cols = graphics.chart_marks(form, order, hero, t_)
+        fmt_ = graphics.number_format(points[0]["unit"])
+        if form != "line":
+            plot.gap_width = 80
+            plot.has_data_labels = True
+            dl = plot.data_labels
+            dl.number_format, dl.number_format_is_linked = fmt_, False
+            if form != "segmented":
+                dl.position = XL_LABEL_POSITION.OUTSIDE_END
+            dl.font.size, dl.font.name, dl.font.bold = Pt(self.sz(14)), t_.body, True
+            dl.font.color.rgb = _rgb(t_.ink if form != "segmented" else "FFFFFF")
+            if form == "segmented":
+                steps = [t_.ink, themes.blend(t_.ink, t_.paper, 0.4), themes.blend(t_.ink, t_.paper, 0.7)]
+                for i, ser in enumerate(plot.series):
+                    ser.format.fill.solid()
+                    ser.format.fill.fore_color.rgb = _rgb(steps[i % 3])
+            else:
+                ser = plot.series[0]
+                for i, c in enumerate(cols):
+                    pt = ser.points[i]
+                    pt.format.fill.solid()
+                    pt.format.fill.fore_color.rgb = _rgb(c)
+        else:
+            ser = plot.series[0]
+            ser.format.line.color.rgb = _rgb(t_.ink)
+            ser.format.line.width = Pt(2)
+            ser.smooth = False
+            last = ser.points[len(order) - 1]
+            last.data_label.has_text_frame = True
+            last.data_label.text_frame.text = order[-1]["shown"]
+            last.data_label.position = XL_LABEL_POSITION.ABOVE
+            last.data_label.font.size, last.data_label.font.bold = Pt(self.sz(14)), True
+            last.data_label.font.color.rgb = _rgb(t_.ink)
+        va = ch.value_axis
+        va.has_major_gridlines = False
+        va.visible = form == "line"
+        if form in ("bar", "column"):
+            va.minimum_scale = 0
+        if form == "line":
+            va.tick_labels.font.size, va.tick_labels.font.name = Pt(self.sz(12)), t_.body
+            va.tick_labels.font.color.rgb = _rgb(t_.mute)
+            va.format.line.fill.background()
+            va.tick_labels.number_format, va.tick_labels.number_format_is_linked = fmt_, False
+        ca = ch.category_axis
+        ca.tick_labels.font.size, ca.tick_labels.font.name = Pt(self.sz(14)), t_.body
+        ca.tick_labels.font.color.rgb = _rgb(t_.ink)
+        ca.format.line.color.rgb = _rgb(t_.ink)
+        if form == "segmented":
+            ca.visible = False
+        return gf
+
+    def _lay_chart_g(self, sl, s, full=False):
+        """chart / chart_full under spec.GRAPHICS (slice 4): the title (the claim) across the top, the plot in 7 (chart) or 8 (chart_full)
+        of 12 columns, its commentary (1 to 3 points) between hairlines in the rest, the source line directly under the plot. The plot is
+        never under graphics.CHART_MIN_PLOT_IN: the commentary shrinks first, then the fit ladder switches layout. No source line: no chart."""
+        from . import graphics   # noqa: PLC0415
+        ch = next((b for b in s["blocks"] if b["kind"] == "chart"), None)
+        if ch is None:
+            raise NoFit("no chart")
+        if self.inp is None:   # the plan measures without the ledger: assemble's chart pass already kept only drawable charts
+            got = {"form": "bar", "points": [{"label": x.get("label", "")} for x in ch["chart"].get("series") or []]}
+            src = graphics.SOURCE_LABEL + " source"
+        else:
+            got = graphics.chart_form(ch["chart"], self.inp, self.R)
+            if got["form"] not in graphics.CHART_FORMS:
+                raise NoFit(f"not a chart: {got['why']}")
+            src = graphics.source_line(got["points"], self.inp)
+            if not src:
+                raise NoFit("no source label for a chart point: no chart")
+        rest = [b for b in s["blocks"] if b["kind"] != "chart" and (self._text_of(b) or b.get("items"))]
+        p, g = self.p, self.th.grid
+        top, bottom, W_ = self.V3_TOP, g.body_end, self.x1 - self.x0
+        tp, th_ = self._g_title(s, W_ * 0.85)
+        pw = self._span(8 if full else 7)
+        rx = self.x0 + pw + g.G
+        rw = self.x1 - rx
+        sp = [self.para(src, self.th.scale.caption, p.mute, cap=True)]
+        sh = self.ph(sp, pw)
+        plot_h = bottom - (top + 0.15 + th_ + 0.4) - sh - 0.1
+        if plot_h < graphics.CHART_MIN_PLOT_IN:
+            raise NoFit("the plot would be under its floor")
+        groups = None
+        for bsize in (22, 20, 18, 16, 14):
+            gs = self._aside_groups(rest, bsize, rw) if rest else []
+            if sum(h for _, h in gs) + 0.5 * max(0, len(gs) - 1) <= plot_h + sh:
+                groups = gs
+                break
+        if groups is None:
+            raise NoFit("the commentary does not fit beside the chart")
+        if sl is None:
+            return
+        self.band(sl, s)
+        m = self._mark(sl)
+        self.ptext(sl, self.x0, top + 0.15, W_ * 0.85, th_, tp, name="Title")
+        self._build(sl, m, title=True)
+        y = top + 0.15 + th_ + 0.4
+        m = self._mark(sl)
+        if self.inp is None:   # the hole probe's scratch slide: the plot's box as ink
+            self.rect(sl, self.x0, y, pw, plot_h, fill=self.th.panel, name="Chart")
+        else:
+            self._g_chart(sl, self.x0, y, pw, plot_h, got["form"], got["points"], ch["chart"].get("hero"), ch["chart"].get("title") or "")
+        self.ptext(sl, self.x0, y + plot_h + 0.1, pw, sh, sp, name="ChartSource")
+        self._build(sl, m, "wipe")
+        self._rec_slot(sl, "chart")
+        if groups:
+            self.hairline(sl, rx - g.G / 2, y, rx - g.G / 2, y + plot_h + sh)
+            gy = y
+            for i, (ps, h) in enumerate(groups):
+                m = self._mark(sl)
+                if i:
+                    self.hairline(sl, rx, gy + 0.25, self.x1, gy + 0.25)
+                    gy += 0.5
+                self.ptext(sl, rx, gy, rw, h, ps, name="slot:commentary")
+                self._build(sl, m)
+                gy += h
+            self._rec_slot(sl, "commentary")
+
     def _with_width(self, x0, x1, fn):
         """Run ``fn`` with the content area narrowed to ``x0..x1`` (the footer is drawn by the caller after, at the full width)."""
         saved = (self.x0, self.x1)
@@ -2376,6 +2855,8 @@ class Renderer:
 
     def _lay_chart_full(self, sl, s):
         """Chart full: the chart across the width, its commentary as cards beneath."""
+        if spec.GRAPHICS and self.th.v3:   # deck-graphics slice 4: plot in 8 columns, commentary in 4, the source line under the plot
+            return self._lay_chart_g(sl, s, full=True)
         g = self.th.grid
         ch = next((b for b in s["blocks"] if b["kind"] == "chart"), None)
         rest = [b for b in s["blocks"] if b["kind"] != "chart"]
@@ -3547,7 +4028,7 @@ class Renderer:
                  "territory": "_lay_territory", "quote_cards": "_lay_quote", "role_grid": "_lay_role", "flow": "_lay_flow",
                  # the standard composition: the blocks stacked with their looks
                  "comparison_grid": "_lay_stack", "placeholder_card": "_lay_stack", "comparison": "_lay_stack", "big_number": "_lay_stack",
-                 "kpi_row": "_lay_kpi_row", "timeline_strip": "_lay_stack", "native_table": "_lay_stack", "cards": "_lay_stack",
+                 "kpi_row": "_lay_kpi_row", "timeline_strip": "_lay_timeline_strip", "native_table": "_lay_stack", "cards": "_lay_stack",
                  "cover_image": "_lay_cover_image", "section": "_lay_section", "image_text": "_lay_image_text", "image_left": "_lay_image_left",
                  "full_bleed_statement": "_lay_full_bleed", "frames_strip": "_lay_territory", "image_grid": "_lay_image_grid", "execution_visual": "_lay_execution",
                  "close": "_lay_close", "big_statement": "_lay_big_statement", "quote_full": "_lay_quote_full", "cards_split": "_lay_cards_split",
@@ -3555,6 +4036,7 @@ class Renderer:
                  "timeline_rows": "_lay_timeline_rows", "execution_stack": "_lay_execution_stack", "territory_wide": "_lay_territory_wide",
                  "people_cards": "_lay_people_cards",
                  # deck-look steps 3-4 (spec.LOOK_V3 only: layouts/v3)
+                 "process_chevrons": "_lay_process_chevrons", "matrix_2x2": "_lay_matrix", "journey_row": "_lay_journey", "grid_points": "_lay_grid_points",
                  "statement_points": "_lay_statement_points", "reframe": "_lay_reframe", "shift_line": "_lay_shift_line",
                  "picture_column": "_lay_picture_column", "rows_aside": "_lay_rows_aside", "cover_bleed": "_lay_cover_bleed"}
 
@@ -4165,6 +4647,13 @@ class Renderer:
 
     def _chart(self, sl, s):
         """Chart left (native), under its hero numbers when it has them; commentary right."""
+        if spec.GRAPHICS and self.inp is not None:   # deck-graphics: a chart that fits no layout becomes a table with every row, never a smaller chart
+            from . import graphics   # noqa: PLC0415
+            ch = next((b for b in s["blocks"] if b["kind"] == "chart"), None)
+            if ch is not None:
+                pts = graphics.chart_form(ch["chart"], self.inp, self.R)["points"]
+                tb = {"kind": "table", "rows": [[str(ch["chart"].get("title") or ""), ""]] + [[p_["label"], p_["shown"]] for p_ in pts]}
+                return self._generic(sl, {**s, "blocks": [tb if b is ch else b for b in s["blocks"]]})
         y = self._title_text(sl, s)
         ch = next((b for b in s["blocks"] if b["kind"] == "chart"), None)
         rest = [b for b in s["blocks"] if b["kind"] != "chart"]

@@ -98,11 +98,12 @@ def with_image(slide="s4", assets=None, **kw):
 # ---------------------------------------------------------------- the list and the functions agree
 
 def test_items_and_functions_agree():
-    assert len(set(IDS)) == len(IDS) == 62 and set(cl.CHECKS) == set(IDS)   # 53 + deck-graphics' 4 icon and 5 frame items
+    assert len(set(IDS)) == len(IDS) == 70 and set(cl.CHECKS) == set(IDS)   # 53 + deck-graphics' 4 icon, 5 frame and 8 chart / diagram items
     assert all(fn.__name__ == i for i, fn in cl.CHECKS.items())
     assert sum(i["kind"] == "metric" for i in ITEMS["items"]) == 9
     assert {i["id"] for i in ITEMS["items"] if i["tier"] == "advisory"} == {"l_variety", "l_repeat_max2", "w_line_length", "t_cover_title", "m_seconds",
-                                                                          "i_icon_groups", "i_icon_share", "m_production_first", "s_strip_order"}
+                                                                          "i_icon_groups", "i_icon_share", "m_production_first", "s_strip_order",
+                                                                          "c_chart_emphasis", "d_min_items"}
     assert all(i["tier"] in ("gate", "advisory") for i in ITEMS["items"])
     for it in ITEMS["items"]:
         assert it["question"] and it["source"] and it["inputs"] and it["na_when"] and it["kind"] in ("yes_no", "metric"), it["id"]

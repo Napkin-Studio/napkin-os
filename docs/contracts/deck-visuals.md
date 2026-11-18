@@ -605,6 +605,32 @@ Slice 2 is **execution frames**, slice 3 the **storyboard strip**:
 - **Checked** by `m_mockup_labelled`, `m_frame_aspect`, `m_frame_rights` (gate) and `m_production_first` (metric) and `s_strip_order`
   (advisory).
 
+Slices 4-9 are **charts**, **diagrams**, the **grid of points**, web parity and the checklist:
+
+- **The ledger, verified in code.** A research fact row is `{id, version, status, entity, key, value, unit, as_of, sources}`; a
+  document figure is `{value, unit, label, as_of, page}`. Neither has a `measure` or `period` field: one measure is one fact `key` (or,
+  for document figures, one document), and a period is a label (`2024`, `Q1 2025`, `FY26`, a month, `Month 3`).
+- **Charts** (`graphics.chart_form`, `assemble` under the flag): every point a fact or docfig ref read from the ledger; at least 2 points
+  of one unit and one measure; bar (categories), column (2 to 6 periods), line (more periods), a 100% segmented bar only when a stated
+  whole is given. One value becomes a hero figure, 2 to 4 unlike ones a stat row, more than 8 a table with every row; nothing sourced,
+  no chart. Never a pie, an 'Other', a total or any computed value. A native python-pptx chart part (the workbook stays editable), value
+  axis from zero and hidden, no gridlines, no legend for one series, labels in text tokens, the hero (at most 2) in the accent and the rest
+  in a mute tint, every mark 3:1 on the paper. Every chart has `Source: <label>, <locator>` under its plot, built from the refs' ledger
+  rows; no label, no chart. `chart` / `chart_full` under the flag: title across, plot in 7 or 8 of 12 columns, commentary beside; the plot
+  never under 3.0 in (the ladder switches layout, and a chart that fits nowhere becomes its table). The web draws the same points as
+  inline SVG with a `<title>` per mark, the source line and a 'Show data' table.
+- **Diagrams** (`layouts/graphics/`, loaded only under the flag): `process_chevrons` (3 to 6 steps, label in the chevron, line under),
+  `timeline_strip` reworked (3 to 8 timed phases on one hairline, equally spaced: no date is plotted to scale), `matrix_2x2` (a table
+  block carrying `matrix` with both axes sourced; items listed in quadrants, never at a coordinate), `journey_row` (3 to 5 stages, each
+  `[stage, line, channel]`), and `grid_points` (3 to 6 headed points, icons above the headings). Each binds the slide's own block and
+  replaces its rows; every word is the block's; under its minimum the slide keeps today's layout.
+- **Report.** `report.json.graphics` lists what each chart block became and why, the diagrams drawn and the near misses
+  ('no diagram: 1 step, needs 3'), and the icons.
+- **Checked** by `c_chart_sourced`, `c_chart_numbers`, `c_chart_form`, `c_chart_contrast`, `d_own_words`, `d_matrix_axes` (gate) and
+  `c_chart_emphasis`, `d_min_items` (advisory).
+- **Recorded.** `tests/fixtures/graphics/golden_lumen_graphics.json` holds Lumen's layouts and icons under LOOK_V3 + GRAPHICS. The
+  default stays off: GRAPHICS needs LOOK_V3, which is not on by default yet, and the design turns graphics on only after RECIPES.
+
 ## 7. Issues
 
 One shape for every finding that code can act on, from any source.

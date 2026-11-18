@@ -885,6 +885,115 @@
    "na_when": "no presented slide carries a storyboard strip; or deck.pptx is missing or cannot be opened",
    "tier": "advisory",
    "today": "n/a"
+  },
+  {
+   "id": "c_chart_sourced",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every chart carry its source line ('Source: ...') and a meta.graphics.charts record whose every point is a fact or document-figure ref?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.graphics.charts)"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_numbers",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every number in every chart part (values and categories) a ledger value or label of that chart's record (no computed or stray value)?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.graphics.charts)"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_form",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every chart a bar, column, line or 100% segmented bar, on one axis, bars from zero, at most 8 categories and 3 series?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_contrast",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every chart mark 3:1 or better on its slide's ground?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_emphasis",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every single-series chart pick out at most 2 marks in the accent?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.theme)"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "d_own_words",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every word in a diagram a word of the slide's own blocks or title (no step, label or marker written by code)?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "no presented slide carries a diagram (shapes named 'Diagram: <kind>'), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "d_matrix_axes",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every 2x2 have both axes with sourced refs?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide is laid out as matrix_2x2",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "d_min_items",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is no diagram drawn under its minimum (3 steps, phases or stages)?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "no presented slide carries a diagram (shapes named 'Diagram: <kind>'), or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
   }
  ]
 }
