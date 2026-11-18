@@ -541,7 +541,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             }}>Keep it as plain text</button>
           </div>
         )}
-        {empty && !phone && (
+        {/* Not under a draft waiting on the page (live test 2026-11-18: the card showed "Just write." through it). */}
+        {empty && !phone && !mine.length && (
           <div className="sp-hint" aria-hidden="true">
             <div className="big">Just write.</div>
             <p>An idea, notes, bullets or a whole screenplay: type or paste it here and it stays as you wrote it. Nothing to pick first.</p>
