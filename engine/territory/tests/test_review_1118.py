@@ -5,10 +5,16 @@ paid or local service; every brand, brief and mark here is invented. Run from ``
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
+import os
 import re
 import shutil
+import subprocess
+import sys
+import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -45,6 +51,8 @@ def test_the_policy_is_one_switch_that_allows_for_testing_and_fails_closed_on_a_
     assert policy.client_to_runway({}) == "allow"
     assert policy.client_to_runway({policy.ENV: "refuse"}) == "refuse"
     assert policy.client_to_runway({policy.ENV: "maybe"}) == "refuse"
+    assert policy.client_to_runway({policy.ENV: ""}) == "refuse"                       # set but empty names no policy: refused, never the default
+    assert policy.client_to_runway({policy.ENV: "  "}) == "refuse"
     assert "allowed (testing policy" in policy.label({}) and "refused (policy)" in policy.label({policy.ENV: "refuse"})
 
 
@@ -129,11 +137,72 @@ def test_a_run_saved_before_the_material_flag_needs_a_named_declaration_bound_to
     assert code == 0 and len(rw.posts) == 8 and rec["by"] == "Sai" and rec["run_sha256_12"] == plan_mod.run_hash(env)
 
 
-def test_the_text_run_carries_the_brief_marks_into_the_run():
-    b = material.block("client", "brief.clan", [MARK], "Acme")
-    assert b["marks"] == [MARK] and b["brief_kind"] == "clan" and b["brand"] == "Acme"
-    assert material.block(None, "brief_object.json", None)["marks"] is None              # unknown, not empty
-    assert material.block("demo", None, None)["marks"] == [] and material.block("x", None, None)["origin"] == "unknown"
+def test_the_text_run_keeps_only_the_count_of_the_brief_marks_and_its_hash():
+    b = material.block("client", "brief.clan", [MARK], "Acme", "ab" * 32)
+    assert b["marks_count"] == 1 and b["brief_sha256"] == "ab" * 32 and b["brief_kind"] == "clan" and b["brand"] == "Acme"
+    assert "marks" not in b and MARK["text"] not in json.dumps(b)
+    assert material.block(None, "brief_object.json", None)["marks_count"] is None        # unknown, not empty
+    assert material.block("demo", None, None)["marks_count"] == 0 and material.block("x", None, None)["origin"] == "unknown"
+
+
+def _brief_clan(path, text=MARK["text"]):
+    """An invented Brief Maker .clan whose insight is marked Confidential."""
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("manifest.yaml", "format: clan\n")
+        z.writestr("shared/data.yaml", json.dumps({"insight": text, "background": "Sales flat", "confidential_fields": ["insight"]}))
+    return path
+
+
+def _count_run(env, brief_path, **kw):
+    run = make_run()
+    run["material"] = {"origin": "client", "brief": True, "brief_kind": "clan", "marks_count": 1,
+                       "brief_sha256": hashlib.sha256(Path(brief_path).read_bytes()).hexdigest(), "brand": None, **kw}
+    env.write_text(json.dumps(run))
+    return env
+
+
+def test_frames_rebuild_the_deny_list_from_the_brief_and_refuse_without_it(env, tmp_path, capsys):
+    clan = _brief_clan(tmp_path / "brief.clan")
+    _count_run(env, clan)
+    bramble = FakeLLM({"frames_plan": plan_output(" near the sparkling bramble range")})
+    code, rw, llm = go(env, *LIVE, llm=bramble)                                       # no brief at frame time: the deny-list would be lost
+    assert code == 2 and rw.posts == [] and llm.calls == [] and "--brief" in capsys.readouterr().out
+    other = _brief_clan(tmp_path / "other.clan", "Another secret entirely")
+    code, rw, _ = go(env, "--brief", str(other), *LIVE, llm=bramble)                  # not the run's brief: refused
+    assert code == 2 and rw.posts == [] and "not the one this run was made from" in capsys.readouterr().out
+    code, rw, _ = go(env, "--brief", str(clan), *LIVE, llm=bramble)
+    assert code == 0 and len(rw.posts) == 6 and all("bramble" not in p["promptText"] for p in rw.posts)
+    assert frames_manifest(env)["frames"]["s1-f1-flash"]["error"].endswith("would draw on a Confidential part")
+
+
+def test_a_brief_run_with_no_recorded_count_is_unknown_never_zero(env, capsys):
+    run = make_run()
+    run["material"] = {"origin": "client", "brief": True, "brief_kind": "clan", "brand": None}
+    env.write_text(json.dumps(run))
+    code, rw, _ = go(env, *LIVE)
+    assert code == 2 and rw.posts == [] and "no mark data" in capsys.readouterr().out
+
+
+def test_no_marked_text_reaches_any_written_json(tmp_path, env):
+    clan = _brief_clan(tmp_path / "brief.clan")
+    out = tmp_path / "textrun" / "run.json"
+    out.parent.mkdir()
+    argv = ["--brief", str(clan), "--category", "condiments", "--market", "IE", "--prompt", "a brief", "--material", "client", "--out", str(out)]
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        run_mod.main(argv)
+    cid = re.search(r"card\s+(c_[0-9a-f]{16})", buf.getvalue()).group(1)
+    assert run_mod.main([*argv, "--live", "--yes-cost", cid], llm_factory=lambda: FakeLLM(outputs())) == 0
+    saved = json.loads(out.read_text())["material"]
+    assert saved["marks_count"] == 1 and saved["brief_sha256"] == hashlib.sha256(clan.read_bytes()).hexdigest() and "marks" not in saved
+    _count_run(env, clan)                                                              # and the frames tool, on a run of the same brief
+    go(env, "--brief", str(clan), *LIVE, llm=FakeLLM({"frames_plan": plan_output(" near the sparkling bramble range")}))
+    written = [f for f in tmp_path.rglob("*") if f.is_file() and f.suffix in (".json", ".jsonl", ".html")]
+    assert written and any(f.name == "run.json" for f in written) and any(f.name == "manifest.json" for f in written)
+    for f in written:
+        text = f.read_text(errors="replace")
+        for needle in (MARK["text"], "Project Quokka"):
+            assert needle not in text, f"{needle!r} in {f}"
 
 
 # ------------------------------------------------------------------------------- the yes is the card's id
@@ -188,7 +257,7 @@ def test_frames_made_before_the_ledger_existed_count_against_the_cap(env, tmp_pa
     assert len(led.lines()) == n                                                       # read once, never twice
 
 
-def test_generate_checks_the_ledger_under_its_lock_and_counts_sends_that_got_no_answer(tmp_path):
+def test_generate_stops_at_the_lifetime_cap_and_another_version_folder_shares_it(tmp_path):
     led = vjobs.Ledger(tmp_path / "l.jsonl", "territory:x")
     jobs = [{"key": f"s{i}-f1-flash", "tid": f"s{i}", "shot": "f1", "kind": "quick", "prompt": "p"} for i in range(5)]
     rw = FakeRunway()
@@ -199,6 +268,112 @@ def test_generate_checks_the_ledger_under_its_lock_and_counts_sends_that_got_no_
     runway.generate(runway.Client(KEY, rw2), jobs, tmp_path / "v2", runway.load_manifest(tmp_path / "v2"), [], sleep=lambda s: None,
                     log=lambda *a: None, ledger=led, cap_usd=0.14)
     assert rw2.posts == []                                                             # another version folder: the same run's cap
+
+
+_RACER = """
+import sys, time
+from pathlib import Path
+from visuals import jobs as vjobs, runway
+from test_visuals import FakeRunway, KEY
+led = vjobs.Ledger(Path(sys.argv[1]), "territory:race")
+go, end = Path(sys.argv[3]), time.time() + 30
+while not go.exists() and time.time() < end:
+    time.sleep(0.002)
+jobs = [{"key": f"s{i}-f1-flash", "tid": f"s{i}", "shot": "f1", "kind": "quick", "prompt": "p"} for i in range(5)]
+rw = FakeRunway()
+runway.generate(runway.Client(KEY, rw), jobs, Path(sys.argv[2]), runway.load_manifest(Path(sys.argv[2])), [], sleep=lambda s: None,
+                log=lambda *a: None, ledger=led, cap_usd=0.14)
+print(len(rw.posts))
+"""
+
+
+def test_two_processes_racing_on_one_ledger_never_pass_the_cap_together(tmp_path):
+    """Two real processes, released at the same moment, share one run's ledger: under its file lock only two $0.07 frames fit in $0.14
+    between them, however the creates interleave."""
+    engine = Path(__file__).resolve().parents[2]
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "PYTHONPATH": os.pathsep.join([str(engine), str(Path(__file__).resolve().parent)])}
+    led, go_file = tmp_path / "ledger.jsonl", tmp_path / "go"
+    procs = [subprocess.Popen([sys.executable, "-c", _RACER, str(led), str(tmp_path / f"v{i}"), str(go_file)], cwd=engine, env=env,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for i in range(2)]
+    go_file.write_text("go")
+    outs = [p.communicate(timeout=120) for p in procs]
+    assert all(p.returncode == 0 for p in procs), [o[1][-800:] for o in outs]
+    posts = [int(o[0].strip().splitlines()[-1]) for o in outs]
+    creates = [r for r in vjobs.Ledger(led, "territory:race").lines() if r.get("state") == "creating"]
+    assert sum(posts) == 2 and len(creates) == 2, (posts, len(creates))
+
+
+# ------------------------------------------------------------------------------- a cap is a finite number in (0, 2.50]
+
+BAD_CAPS = ["nan", "inf", "-inf", "0", "-1", "2.51"]
+
+
+@pytest.mark.parametrize("cap", BAD_CAPS)
+def test_the_frames_tool_refuses_a_cap_that_is_not_a_cap(env, capsys, cap):
+    code, rw, llm = go(env, f"--max-usd={cap}", *LIVE)                                # = keeps argparse from reading -inf as a flag
+    assert code == 2 and rw.posts == [] and llm.calls == [] and "--max-usd" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("cap", BAD_CAPS)
+def test_the_text_run_refuses_a_cap_that_is_not_a_cap(tmp_path, capsys, cap):
+    fake = FakeLLM(outputs())
+    out = tmp_path / "run.json"
+    assert run_mod.main(_text_argv(out, f"--max-usd={cap}")) == 2
+    assert run_mod.main(_text_argv(out, f"--max-usd={cap}", "--live", "--yes-cost", "c_0000000000000000"), llm_factory=lambda: fake) == 2
+    assert fake.calls == [] and not out.exists() and "--max-usd" in capsys.readouterr().out
+    assert run_mod.main(_text_argv(tmp_path / "ok.json", "--max-usd", "2.5")) == 0                   # the edge itself is a cap
+
+
+@pytest.mark.parametrize("cap", [float(c) for c in BAD_CAPS])
+def test_generate_refuses_a_cap_that_is_not_a_cap_before_any_send(tmp_path, cap):
+    led = vjobs.Ledger(tmp_path / "l.jsonl", "territory:x")
+    jobs = [{"key": "s1-f1-flash", "tid": "s1", "shot": "f1", "kind": "quick", "prompt": "p"}]
+    rw = FakeRunway()
+    with pytest.raises(runway.RunwayError, match="not a cap"):
+        runway.generate(runway.Client(KEY, rw), jobs, tmp_path / "v1", runway.load_manifest(tmp_path / "v1"), [], sleep=lambda s: None,
+                        log=lambda *a: None, ledger=led, cap_usd=cap)
+    assert rw.posts == [] and led.lines() == []
+    assert runway.cost_card(jobs, {}, tmp_path / "v1", 0.1, 0, cap)["over_cap"] is True
+    assert not runway.cap_ok(cap) and runway.cap_ok(2.5) and runway.cap_ok(0.01)
+
+
+# ------------------------------------------------------------------------------- the plan call is inside the cap
+
+def test_the_plan_call_is_checked_against_the_cap_under_the_lock(env, capsys):
+    led_path = env.parent / "spend-ledger.jsonl"
+    cid = card_id(env, ["--max-usd", "0.70"], ledger_path=led_path)
+
+    def spend_meanwhile():                                                             # another process spends after the card was read
+        led = vjobs.Ledger(led_path, "territory:" + plan_mod.run_hash(env))
+        with led.locked():
+            led.append({"key": "elsewhere", "kind": "model_call", "usd": 0.69, "state": "creating"})
+        return fake
+    fake = FakeLLM({"frames_plan": plan_output()})
+    rw = FakeRunway()
+    code = main(["--from-run", str(env), "--max-usd", "0.70", "--live", "--yes-cost", cid], llm_factory=spend_meanwhile, transport=rw,
+                guard_post=clean_ollama, sleep=lambda s: None, poll_every=0, ledger_path=led_path)
+    assert code == 2 and fake.calls == [] and rw.posts == [] and "frame plan call" in capsys.readouterr().out
+    assert not plan_mod.plan_path(env).exists()
+    assert not any(r.get("key") == "frames-plan" for r in vjobs.Ledger(led_path, "territory:" + plan_mod.run_hash(env)).lines())
+
+
+# ------------------------------------------------------------------------------- a dry run writes nothing
+
+def test_a_dry_run_writes_no_ledger_even_when_earlier_frames_need_backfilling(env, tmp_path, monkeypatch, capsys):
+    go(env, *LIVE, ledger_path=tmp_path / "before.jsonl")                             # frames made, recorded in another ledger
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    capsys.readouterr()
+    assert main(["--from-run", str(env)], llm_factory=lambda: FakeLLM({}), transport=FakeRunway(), guard_post=clean_ollama, sleep=lambda s: None,
+                poll_every=0) == 0
+    out = capsys.readouterr().out
+    assert not (home / ".napkin").exists() and list(home.iterdir()) == []
+    assert "earlier send(s)" in out and "Dry run" in out
+    now = tmp_path / "now.jsonl"
+    assert card_id(env, [], ledger_path=now) and not now.exists()                     # the card counts them; the file is written only live
+    code, rw, _ = go(env, *LIVE, ledger_path=now)                                      # the dry card's id is the live card's id
+    assert code == 0 and rw.posts == [] and now.exists()
 
 
 def test_a_polling_timeout_is_not_a_crash(tmp_path):
@@ -252,7 +427,7 @@ def test_the_plan_prompt_leaves_lens_and_light_to_the_style_pack_and_the_default
     p = prompt("frames_plan")
     assert "Say nothing about the lens, the light" in p and "lens, angle and light" not in p
     assert style_mod.load(None).hash == "4ba913ca"                                    # saved default frames stay in their folder
-    assert style_mod.load(None).source == "default until Laurence answers"
+    assert style_mod.load(None).source == "default until the creative lead answers"
 
 
 def test_a_plan_saved_before_the_change_keeps_its_words_but_its_camera_phrase_is_not_painted(env):
@@ -299,7 +474,7 @@ def test_the_paid_result_is_saved_before_the_baseline_call_can_fail(tmp_path):
     with pytest.raises(RuntimeError):
         run_mod.main(_text_argv(out, "--live", "--yes-cost", _text_card(out)), llm_factory=lambda: FakeLLM(o))
     saved = json.loads(out.read_text())
-    assert saved["territories"] and saved["material"]["origin"] == "invented" and saved["material"]["marks"] == []
+    assert saved["territories"] and saved["material"]["origin"] == "invented" and saved["material"]["marks_count"] == 0
 
 
 # ------------------------------------------------------------------------------- tags are checked against the intake

@@ -1,6 +1,6 @@
 """The Style Pack reader: the one place the picture style is read, hashed and decided for both tools.
 
-A Style Pack is the only thing Laurence controls about how pictures look. It comes in two forms, and both read
+A Style Pack is the only thing the creative lead controls about how pictures look. It comes in two forms, and both read
 into the same ``Style`` with the same ``hash`` when the content is the same:
 
 * a **folder** holding ``style.yaml`` (the six look keys, and optionally ``references``, ``models`` and ``deck``)
@@ -96,7 +96,7 @@ class Style:
     withheld: list = field(default_factory=list)            # [{name, rights, why}]: held, never sent, never hashed
     models: dict = field(default_factory=lambda: dict(DEFAULT_MODELS))
     deck: dict = field(default_factory=dict)                # the pack's deck colour and type pointers (may be empty)
-    source: str = "default until Laurence answers"      # the built-in default's label on the board and in the manifest (not hashed)
+    source: str = "default until the creative lead answers"      # the built-in default's label on the board and in the manifest (not hashed)
     hash: str = ""
     document_id: str | None = None
     version: int | None = None
@@ -382,7 +382,7 @@ def _clan(path: Path, forbid=()) -> Style:
 
 
 def load(source=None, assets=None, forbid=()) -> Style:
-    """Read a Style Pack. ``None``: the built-in default (no references): the first run, before Laurence's pack arrives.
+    """Read a Style Pack. ``None``: the built-in default (no references): the first run, before the creative lead's pack arrives.
     A folder (style.yaml and images), a ``.clan`` path, or a dict (a document's data, with ``assets``). ``forbid``: names (the deck's
     client, a brand's) that may not appear in the pack's text."""
     if source is None:

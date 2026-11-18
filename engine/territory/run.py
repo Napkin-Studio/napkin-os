@@ -12,11 +12,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
 from pathlib import Path
 
 from . import cards, compare, cost, intake, material, pipeline
 from .llm import LiveLLM
+
+#: The most one text run may cost (the Deck's and the frames tool's rule): --max-usd lowers it, nothing raises it.
+MAX_USD_CAP = 2.5
 
 
 def card_id(card: dict, inputs: dict, max_usd: float, out: str | None) -> str:
@@ -34,8 +38,12 @@ def main(argv=None, *, llm_factory=None) -> int:
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--yes-cost", nargs="?", const="", default=None, metavar="CARD_ID", help="the id printed on the cost card you have read")
     ap.add_argument("--out", help="write the full result JSON here (required for a live run; must not exist yet)")
-    ap.add_argument("--max-usd", type=float, default=2.0, help="hard stop: no call is made once this much (token-based estimate) is spent; default 2.00")
+    ap.add_argument("--max-usd", type=float, default=2.0, help=f"hard stop: no call is made once this much (token-based estimate) is spent; "
+                    f"default 2.00, above 0 and at most {MAX_USD_CAP:.2f}")
     a = ap.parse_args(argv)
+    if not (math.isfinite(a.max_usd) and 0 < a.max_usd <= MAX_USD_CAP):   # nan passes every comparison and inf removes the cap: both refused
+        print(f"--max-usd {a.max_usd} is refused: give a number above 0 and at most {MAX_USD_CAP:.2f}. No flag raises the cap. Nothing was run.")
+        return 2
     fields, marks = {}, []
     brief_sha = None
     if a.brief:
@@ -45,7 +53,7 @@ def main(argv=None, *, llm_factory=None) -> int:
         got = loader(Path(a.brief))
         fields, marks = got[0], got[3].get("marks")         # None from a brief_object.json: it carries no mark data
         brief_sha = hashlib.sha256(Path(a.brief).read_bytes()).hexdigest()
-    mat = material.block(a.material, a.brief, marks, a.brand)
+    mat = material.block(a.material, a.brief, marks, a.brand, brief_sha)   # the marks' count and the brief's hash, never their text
     gate = intake.assess(fields, a.category, a.market, a.prompt, a.brand)
     print(f"Gate: {gate['action']}: {gate['why']}. Thinness {gate['thinness']['score']}.")
     if gate["action"] != "proceed":
@@ -57,7 +65,8 @@ def main(argv=None, *, llm_factory=None) -> int:
     print(f"  hard stop    cap ${a.max_usd:.2f} for this run (--max-usd)")
     print(f"  card         {cid}   yes: --live --yes-cost {cid} --out <a new file>")
     print(f"  material     {mat['origin']}" + ("" if a.material else " (say --material invented|demo|client: the frames tool reads it)")
-          + (f"; brief marks: {'unknown (a brief_object.json has none)' if mat['marks'] is None else len(mat['marks'])} part(s) marked Confidential" if a.brief else ""))
+          + (f"; brief marks: {'unknown (a brief_object.json has none)' if mat['marks_count'] is None else mat['marks_count']} part(s) marked Confidential"
+             + (" (the run keeps only the count: give the frames tool --brief with this same file)" if mat["marks_count"] else "") if a.brief else ""))
     if not a.live:
         print("Dry run: no model call made.")
         return 0
@@ -74,7 +83,7 @@ def main(argv=None, *, llm_factory=None) -> int:
     if a.yes_cost != cid:
         print(f"--yes-cost {a.yes_cost} is not this card's id ({cid}): the inputs, the cap or --out changed, or the id is wrong. Nothing was run.")
         return 2
-    if card["est_usd"] > a.max_usd:
+    if not card["est_usd"] <= a.max_usd:
         print(f"The card (~${card['est_usd']:.2f}) is over the cap (${a.max_usd:.2f}): nothing will run. Raise --max-usd if you mean it.")
         return 2
     llm = llm_factory() if llm_factory else LiveLLM(approved=True, max_usd=a.max_usd)

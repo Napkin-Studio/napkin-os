@@ -2,11 +2,11 @@
 
     python -m territory.visuals --from-run <run.json>                                  # dry run: plan state, style, cost card with its id, no call
     python -m territory.visuals --from-run <run.json> --live --yes-cost <card id>      # paid: the frame plan (once) and the images
-    python -m territory.visuals --from-run <run.json> --style style --live --yes-cost <card id>    # after Laurence's style pack arrives
+    python -m territory.visuals --from-run <run.json> --style style --live --yes-cost <card id>    # after the creative lead's style pack arrives
 
-THE SWAP (Laurence's style pack replaces the default; only pictures change): put his style.yaml and images in a folder and run
-    python -m territory.visuals --from-run <run.json> --style <his folder>                 # read the card, then
-    python -m territory.visuals --from-run <run.json> --style <his folder> --live --yes-cost <card id>
+THE SWAP (the creative lead's style pack replaces the default; only pictures change): put its style.yaml and images in a folder and run
+    python -m territory.visuals --from-run <run.json> --style <its folder>                 # read the card, then
+    python -m territory.visuals --from-run <run.json> --style <its folder> --live --yes-cost <card id>
 The run, the territory text and the frame plan are not touched; the pictures go to a new frames/v<N>-<hash>/ folder.
 
 Pictures go to Runway's Gemini image models. Whether a client-derived prompt may go is one switch, visuals.policy.CLIENT_TO_RUNWAY
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import time
@@ -70,6 +71,8 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--material", choices=material.ORIGINS, help="declare what a run saved before territory.run --material was made from "
                     "(needs --declared-by): writes <run>.material.json bound to the run's hash; client material follows visuals.policy")
     ap.add_argument("--declared-by", default="", metavar="NAME", help="the person who vouches for the material and that no part of it is marked Confidential")
+    ap.add_argument("--brief", help="the brief file this run was made from (territory.run --brief): the run keeps only how many parts are marked "
+                    "Confidential and the brief's hash, so the deny-list is rebuilt from it here. Needed when the run's brief has marked parts")
     ap.add_argument("--forbid", default="", help="comma-separated names (the client, a brand) the style pack's words may not hold")
     ap.add_argument("--max-usd", type=float, default=runway.DEFAULT_MAX_USD,
                     help=f"the cap for this run's frames over its lifetime (plan call plus every picture, every version); default 2.00, at most {runway.LIFETIME_CAP_USD:.2f}")
@@ -114,9 +117,9 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     if set(short) - set(ids):
         print(f"--shortlist names unknown territory id(s) {sorted(set(short) - set(ids))}; this run has {ids}")
         return 2
-    if a.max_usd > runway.LIFETIME_CAP_USD + 1e-9:
-        print(f"--max-usd {a.max_usd:.2f} is over the ${runway.LIFETIME_CAP_USD:.2f} a run's frames may ever cost (Sai, 17 Nov 2026): refused. "
-              "No flag raises it.")
+    if not runway.cap_ok(a.max_usd):   # nan passes every comparison and inf removes the cap: a finite 0 < cap <= 2.50 only
+        print(f"--max-usd {a.max_usd} is refused: give a number above 0 and at most ${runway.LIFETIME_CAP_USD:.2f}, what a run's frames may ever "
+              "cost (Sai, 17 Nov 2026). No flag raises it.")
         return 2
 
     rhash = plan_mod.run_hash(run_path)
@@ -143,7 +146,14 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
         except ValueError as e:
             print(e)
             return 2
-    mat = material.gate(run, material.load_declaration(run_path, rhash))
+    brief = None
+    if a.brief:
+        try:
+            brief = material.brief_marks(Path(a.brief))
+        except Exception as e:   # an unreadable brief or a broken mark: the deny-list cannot be rebuilt, so nothing is drawn
+            print(f"--brief {a.brief} could not be read for its marks: {str(e)[:200]}. Nothing was sent.")
+            return 2
+    mat = material.gate(run, material.load_declaration(run_path, rhash), brief=brief)
 
     forbid = [x.strip() for x in [mat.get("brand") or "", *a.forbid.split(",")] if x and x.strip()]
     try:
@@ -184,9 +194,16 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     vdir = frames_dir / version
     manifest = runway.load_manifest(vdir)
     ledger = vjobs.Ledger(ledger_path or default_ledger(), "territory:" + rhash)
-    n_back = backfill(ledger, frames_dir, plan_mod.load(run_path))
-    if n_back:
-        print(f"Spend ledger: {n_back} earlier send(s) of this run were read from its frames folders into the ledger, so they count against the cap.")
+    if going_live:
+        n_back = backfill(ledger, frames_dir, plan_mod.load(run_path))
+        if n_back:
+            print(f"Spend ledger: {n_back} earlier send(s) of this run were read from its frames folders into the ledger, so they count against the cap.")
+    else:   # a dry run writes nothing (no ~/.napkin): the earlier sends are counted on the card in memory, exactly as the live run will write them
+        rows = backfill_rows(ledger, frames_dir, plan_mod.load(run_path))
+        if rows:
+            ledger = _Preview(ledger, rows)
+            print(f"Spend ledger: {sum(1 for r in rows if r.get('kind') != 'model_call')} earlier send(s) of this run are in its frames folders and "
+                  "count against the cap (a live run records them in the ledger).")
 
     approved = []
     if a.approve:
@@ -297,7 +314,12 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
 
     if not plan:
         llm = llm_factory() if llm_factory else _live_llm(min(a.max_usd, plan_usd * 4 + 0.25))
-        with ledger.locked():                      # the plan call counts inside the run's cap, recorded before it is made
+        with ledger.locked():                      # the plan call counts inside the run's cap: checked and recorded under the lock, before it is made
+            spent_now = vjobs.spent_usd({"jobs": {}}, ledger)
+            if not (spent_now + plan_usd <= a.max_usd + 1e-9):
+                print(f"The frame plan call (~${plan_usd:.2f}) with ${spent_now:.2f} already spent on this run is over the cap (${a.max_usd:.2f}): "
+                      "nothing was sent.")
+                return 2
             ledger.append({"key": "frames-plan", "kind": "model_call", "estimate_usd": plan_usd, "state": "creating"})
         plan = plan_mod.make(run, run_path, llm, banned)
         if isinstance(plan.get("usd"), (int, float)):
@@ -356,34 +378,51 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     return 0
 
 
+def backfill_rows(ledger, frames_dir: Path, plan: dict | None) -> list[dict]:
+    """The ledger lines backfill() would write, written nowhere: none when the ledger already has a line for this run. Reads only."""
+    if ledger.lines():
+        return []
+    rows = []
+    for mpath in sorted(frames_dir.glob("v*/manifest.json")) if frames_dir.is_dir() else []:
+        try:
+            frames = json.loads(mpath.read_text()).get("frames") or {}
+        except (OSError, ValueError):
+            continue
+        for k, e in frames.items():
+            hist = list(e.get("history") or [])
+            # an entry written before histories were kept says only how many attempts it took: each one was a send
+            own = 0 if (e.get("status") in (None, "REFUSED", "RETRY") and not e.get("task")) else max(1, int(e.get("attempts") or 1) - len(hist))
+            for att, times in [*((h, 1) for h in hist), (e, own)]:
+                model = att.get("model") or e.get("model") or runway.MODELS["quick"][0]
+                rows += [{"key": k, "tier": e.get("tier"), "model": model, "table_credits": e.get("credits") or runway.credits_for(model),
+                          "estimated_credits": att.get("estimated_credits"), "cost_credits": att.get("cost_credits"), "state": "creating",
+                          "backfilled_from": mpath.parent.name}] * times
+    if plan is not None and rows:
+        rows.append({"key": "frames-plan", "kind": "model_call", "usd": plan.get("usd"), "estimate_usd": plan_mod.estimate()["est_usd"],
+                     "state": "creating", "backfilled_from": "frames-plan"})
+    return rows
+
+
 def backfill(ledger, frames_dir: Path, plan: dict | None) -> int:
     """Frames made before the ledger existed (the 18 Nov 2026 first run) count too: when the ledger has no line for this run, every send
     its version manifests record (each attempt, and every attempt kept in a frame's history) and the plan call are appended once, under
-    the lock. Returns how many sends were added."""
-    added = 0
+    the lock. Only a live run calls it (a dry run counts backfill_rows in memory). Returns how many sends were added."""
     with ledger.locked():
-        if ledger.lines():
-            return 0
-        for mpath in sorted(frames_dir.glob("v*/manifest.json")) if frames_dir.is_dir() else []:
-            try:
-                frames = json.loads(mpath.read_text()).get("frames") or {}
-            except (OSError, ValueError):
-                continue
-            for k, e in frames.items():
-                hist = list(e.get("history") or [])
-                # an entry written before histories were kept says only how many attempts it took: each one was a send
-                own = 0 if (e.get("status") in (None, "REFUSED", "RETRY") and not e.get("task")) else max(1, int(e.get("attempts") or 1) - len(hist))
-                for att, times in [*((h, 1) for h in hist), (e, own)]:
-                    model = att.get("model") or e.get("model") or runway.MODELS["quick"][0]
-                    for _ in range(times):
-                        ledger.append({"key": k, "tier": e.get("tier"), "model": model, "table_credits": e.get("credits") or runway.credits_for(model),
-                                       "estimated_credits": att.get("estimated_credits"), "cost_credits": att.get("cost_credits"), "state": "creating",
-                                       "backfilled_from": mpath.parent.name})
-                        added += 1
-        if plan is not None and added:
-            ledger.append({"key": "frames-plan", "kind": "model_call", "usd": plan.get("usd"), "estimate_usd": plan_mod.estimate()["est_usd"],
-                           "state": "creating", "backfilled_from": "frames-plan"})
-    return added
+        rows = backfill_rows(ledger, frames_dir, plan)
+        for r in rows:
+            ledger.append(dict(r))
+    return sum(1 for r in rows if r.get("kind") != "model_call")
+
+
+class _Preview:
+    """A read-only view of a ledger plus the lines a live run would backfill: what a dry run's card counts. It has no lock and no append."""
+
+    def __init__(self, ledger, rows: list[dict]):
+        self._ledger, self._rows = ledger, [{"deck": ledger.deck_id, **r} for r in rows]
+        self.path, self.deck_id = ledger.path, ledger.deck_id
+
+    def lines(self) -> list[dict]:
+        return self._ledger.lines() + [dict(r) for r in self._rows]
 
 
 def _write_board(run: dict, run_path: Path, vdir: Path, version: str, manifest: dict, plan: dict | None, sty, safe: dict) -> dict:

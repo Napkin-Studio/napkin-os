@@ -1,6 +1,6 @@
 """Tests added by the 17 Nov review of the Territory tool (features/territory-tool.clan, decision of that date).
 Each one failed before its fix. A fake Runway, a fake Ollama and a FakeLLM stand in for paid and local services; every brand,
-territory and style pack here is invented. The pack in ``demo_pack`` is a DEMO for tests: it is not Laurence's pack.
+territory and style pack here is invented. The pack in ``demo_pack`` is a DEMO for tests: it is not the creative lead's pack.
 Run from ``engine/``: ``PYTHONPATH=. python3 -m pytest -q territory/tests``."""
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def test_swapping_the_style_pack_changes_only_image_prompts_and_hashes_never_tex
     for c1, c2 in zip(f1["cards"], f2["cards"]):                              # the picture slot moves; the words around it do not
         assert c1["visual"]["prompt"] != c2["visual"]["prompt"] and c1["visual"]["image"] != c2["visual"]["image"]
     assert "Invented for tests" in v2.joinpath("manifest.json").read_text()
-    assert style_mod.load(None).source == "default until Laurence answers"
+    assert style_mod.load(None).source == "default until the creative lead answers"
 
 
 def test_a_saved_plan_for_a_changed_run_is_refused_not_reused(env):

@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import math
 import os
 import time
 import urllib.error
@@ -39,6 +40,16 @@ RATIO_SETS = {
 MAX_REFERENCES = 14
 DEFAULT_MAX_USD = 2.0              # the Territory tool's lifetime cap for one run's frames (plan call plus every picture, every version); --max-usd lowers it
 LIFETIME_CAP_USD = 2.5             # Sai, 17 Nov 2026 (the Deck's rule): no flag raises a run's frames above $2.50
+
+
+def cap_ok(cap) -> bool:
+    """A usable spend cap: a finite number above 0 and at most LIFETIME_CAP_USD. NaN passes every ``>`` check (so it would remove the cap)
+    and infinity is no cap at all: both are refused, like 0, a negative and anything over $2.50."""
+    try:
+        c = float(cap)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(c) and 0 < c <= LIFETIME_CAP_USD + 1e-9
 MAX_ATTEMPTS = 3                   # a frame that has failed this often is given up on until a person looks (no endless re-billing)
 STOP_STATUSES = (401, 402, 403, 429)   # bad key, no credit, no access, rate limit: trying every other frame would only repeat it
 
@@ -207,7 +218,7 @@ def cost_card(jobs: list[dict], manifest: dict, vdir: Path, plan_usd: float | No
                                              max_usd, spent, int(sends), list(id_parts)], sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:16]
     return {"id": cid, "rows": rows, "credits": total, "usd": usd, "plan_usd": plan_usd, "reference_images": refs, "max_usd": max_usd,
             "spent_usd": spent, "left_usd": round(max_usd - spent - this, 2),
-            "total_usd": this, "over_cap": spent + this > max_usd + 1e-9,
+            "total_usd": this, "over_cap": not cap_ok(max_usd) or not (spent + this <= max_usd + 1e-9),
             "estimated": True, "note": "Credits at Runway's published 1K price ($0.01 a credit). Reference images are not billed separately on that page; "
                                        "the manifest records each task's estimatedCost from Runway so you can check."}
 
@@ -260,7 +271,10 @@ def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs:
     ``ledger`` (a ``visuals.jobs.Ledger``): every create is appended to it under its file lock BEFORE the POST, and with ``cap_usd`` the
     spend derived from it (every send ever made for this run, at the largest of the table price and Runway's estimate) is checked under
     that same lock, so a retry never hides the credits an earlier attempt cost and two processes cannot both take the last dollar.
-    A frame made again keeps its earlier attempts in ``history``."""
+    A frame made again keeps its earlier attempts in ``history``. A ``cap_usd`` that is not finite, not above 0 or over LIFETIME_CAP_USD
+    is refused before anything is sent (``math.isfinite``: NaN would pass every comparison)."""
+    if cap_usd is not None and not cap_ok(cap_usd):
+        raise RunwayError(f"cap_usd {cap_usd!r} is not a cap: give a finite number above 0 and at most {LIFETIME_CAP_USD:.2f}. Nothing was sent.")
     frames = manifest.setdefault("frames", {})
     made = polled = 0
     unknown: list[str] = []
@@ -285,7 +299,7 @@ def generate(client: Client, jobs: list[dict], vdir: Path, manifest: dict, refs:
         with (ledger.locked() if ledger is not None else contextlib.nullcontext()):
             if ledger is not None and cap_usd is not None:
                 spent = _ledger_spent(ledger)
-                if spent + price * USD_PER_CREDIT > cap_usd + 1e-9:
+                if not (math.isfinite(spent) and spent + price * USD_PER_CREDIT <= cap_usd + 1e-9):
                     stopped = f"lifetime cap reached: ${spent:.2f} spent on this run of ${cap_usd:.2f}, and the next frame costs ${price * USD_PER_CREDIT:.2f}"
                     continue
             if ledger is not None:              # appended and synced BEFORE the POST: a send that never got an answer still counts
