@@ -1,8 +1,7 @@
 // The Film editor as two rooms over one Bin (features/make-and-edit.clan; boards Make room, Edit room and
 // Change a take). Make is the shoot: boxes of shots, takes, Compare and Change. Edit is the cutting room: a
 // timeline of V1, Text and the end card, a preview from the same compiled plan as the render, and Render ad.
-// Make never moves the edit; Edit never spends. The only Film editor (owner 2026-11-18: the legacy
-// stages/Video.tsx and flags.makeAndEdit are gone).
+// Make never moves the edit; Edit never spends. The only Film editor (owner 2026-11-18).
 //
 // One top bar for both rooms: Back to the canvas, the film's name, Make | Edit, the Jobs pill, Open Sound and
 // the room's main action. Esc closes a drawer first, then acts as Back. 1 and 2 switch rooms, and the
