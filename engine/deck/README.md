@@ -68,6 +68,10 @@ python3 -m deck.run_deck --kind investor --brief outputs/deck_inputs/seed/brief.
 | `--animate auto\|click` | Native PowerPoint transitions and builds (not yet checked in real PowerPoint or Keynote) |
 | `--hyperframes` | Also write a HyperFrames slideshow project to `hyperframes/` (`npx hyperframes present`) |
 | `--builds` | HyperFrames: one click per block instead of one per slide |
+| `--pictures creative_cover\|creative\|none` | Place pictures that already exist (`--stages/frames.json` from `deck.from_territory`, and `--image`). `creative_cover`: the creative slides, the cover and the divider. Absent: `frames.json` is ignored and the deck, pptx and html are byte-for-byte what they were |
+| `--image SLIDE.SLOT=FILE`, `--image-rights SLIDE.SLOT=own\|licensed\|client_supplied` | A picture you supply, on a slide of a picture type. Evidence slides, unknown ids and slots, and the slot `logo` are refused before anything is written. No stated right: recorded `reference_only`, not placed |
+| `--review FILE`, `--approver human:<id>` | The person's `review.images` decisions as the app keeps them; only an `approve` by the approver, naming the slot's own asset, is stamped `approved` |
+| `--picture-label TEXT`, `--picture-source existing` | The label of a picture until approved (default Illustrative; no digit, no name). Only existing pictures: `generated` is refused until deck-image-gen |
 
 Every run writes `deck.json`, `validation.json`, `report.json` (time, tokens, cost, coverage),
 `deck.html` (the animated web deck: B builds, O overview, P presenter view, A appendix),
@@ -137,6 +141,8 @@ copy and placeholders, and writes a comparison page plus the rows as JSON.
 | `render_web.py` | Single-file animated web deck |
 | `render_pptx.py` | python-pptx renderer: theme, brand or `.potx`, native charts, notes, optional animations |
 | `render_hyperframes.py` | HyperFrames slideshow (appendix as a branch sequence) |
+| `from_territory.py` | `python3 -m deck.from_territory RUN.json --frames <run>.frames/v<N>-<hash>/manifest.json --stages DIR [--brief F] [--chosen TID] [--style-pack DIR] [--replace]`: a Territory run into `c_territories.json`, `frames.json` and `assets/`. No model, no network |
+| `images.py` | Image slots, `deck.assets`, the crop, the approvals and the one click (`python3 -m deck.images approve ...`); Pillow, imported at module level |
 | `evaluate.py` | Scores runs and writes the comparison page |
 | `run_deck.py` | CLI: the whole pipeline and the report |
 | `tests/` | Offline tests: validators, intake, the hand-off loader, the CLI; invented fixtures and a golden brief-only deck |
@@ -165,6 +171,8 @@ copy and placeholders, and writes a comparison page plus the rows as JSON.
 | `min_font` | a run under its floor: title 28 pt, body 12 pt, caption 10 pt |
 | `placeholder` | `[Agency]`, `lorem`, `TBD`, `XXX` on a presented slide (a slide the validator flags for `[Agency]` is skipped) |
 | `contrast` | WCAG ratio of a run's colour on its fill or the slide background: 4.5:1, or 3:1 for large text |
+| `picture_stretch`, `picture_lowres` | a picture drawn off its crop's aspect by more than 1% (read from the pptx crop); fewer than 96 pixels per inch on the crop that is shown |
+| `text_on_image_contrast` | text over a picture, measured on the rendered page (the `contrast` check skips text over a picture: the picture is not a fill) |
 | `mostly_empty`, `one_corner` | from the render: almost no non-background area; or 80% of it in one third both ways |
 
 The pixel pass renders a separate 30 dpi PPM (about 0.1 s for 29 slides) and reads it with a small pure-Python P6 parser. The slide PNGs stay at 60 dpi: 150 dpi measured about four times slower (4.9 s against 1.2 s for 29 slides) for nothing the checks use. Hidden (appendix) slides are checked for geometry only. A pptx that cannot be opened gives one error under `"deck"`.
@@ -358,3 +366,15 @@ without them it is refused before it starts, and `render: false` stops at the de
 Not yet: the document's brief and research as inputs (the server takes the prompt), the person's intake answers (`--answers`), attached
 documents (`--doc`), `edit` and `retry`, `ask_change`, and a run that survives a restart of the server (a restarted server answers
 404 for a run it did not start; posting the same request again resumes from the cache).
+
+
+## Pictures that already exist (deck-frames-in)
+
+`from_territory` carries a Territory run into a stages folder; `run_deck --pictures` draws the frames on the creative slides:
+each territory's four frames in a strip, the cover with the chosen territory's first frame, the idea with its last (the payoff), all
+labelled Illustrative until the deck's approver approves them. A flagged frame is drawn in a review with a red outline and the word
+Flagged, and never in a client render; a client render draws only pictures approved for their own asset, and only those are copied or
+derived into its folder. One carve in `Renderer.slide` narrows the layout's area to leave the picture's box (no `_lay_*` function
+changed); if the narrowed layout does not fit, the slide is drawn without the picture and an `image_missing` finding says so.
+Contract: `docs/contracts/deck-visuals.md` section 4.5. Pillow (HPND licence) is a python-pptx dependency already; `images.py`
+imports it directly. Offline test count: 806 (`deck/tests` and `territory/tests`).

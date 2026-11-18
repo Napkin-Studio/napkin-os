@@ -17,10 +17,12 @@ the appendix and returns), B build mode, O overview, N notes, P presenter view
 """
 from __future__ import annotations
 
+import base64
 import html
 import json
 from pathlib import Path
 
+from . import images
 from .refs import fmt
 from .render_pptx import DARK_TYPES, THEME, _kicker
 from .spec import frame_for, shown_blocks
@@ -176,7 +178,43 @@ class _Slide:
         return f'<div class="frame copy">{body}{self.rv("answer", _e(ans), "p")}</div>'
 
 
-def _body(s, b: _Slide, blocks: list) -> str:
+def data_uri(aid: str, path: Path) -> str:
+    """A picture inline (deck.html stays one self-contained file): the derived JPEG as a data URI."""
+    return "data:image/jpeg;base64," + base64.b64encode(Path(path).read_bytes()).decode()
+
+
+#: Side picture widths in px on the 1920 by 1080 stage, by aspect (tall pictures are given a height): the web twin of render_pptx.SIDE.
+PIC_SIDE = {"16:9": 560, "4:3": 500, "4:5": 460, "9:16": 360}
+
+
+def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: str) -> tuple:
+    """The picture figures for one slide and the class the slide takes: ``(html, class)``, or ``("", "")`` when nothing is drawn. One
+    markup for deck.html and HyperFrames (``src`` makes the image address). Cover-crop with object-fit, alt text, and the label on every
+    picture not yet approved (a flagged one also named Flagged and outlined)."""
+    got = sorted((slot, im) for (i, slot), im in drawn.items() if i == sid and im["asset"] in pictures)
+    if not got:
+        return "", ""
+
+    def fig(slot, im, style=""):
+        flagged = im.get("status") == "flagged"
+        pos = f' style="object-position:{round(im["focal"]["x"] * 100)}% {round(im["focal"]["y"] * 100)}%"' if im.get("focal") else ""
+        tag = ""
+        if im.get("status") != "approved":
+            tag = f'<figcaption class="plabel{" flagged" if flagged else ""}">{_e(label + (" · Flagged" if flagged else ""))}</figcaption>'
+        return (f'<figure class="pic{" flagged" if flagged else ""}" data-slot="{_e(slot)}" style="{style}">'
+                f'<img src="{_e(src(im["asset"], pictures[im["asset"]]))}" alt="{_e(im.get("alt") or "An illustrative picture")}"{pos}>{tag}</figure>')
+
+    if s["type"] == "territory":
+        return '<div class="pics strip">' + "".join(fig(slot, im) for slot, im in got) + "</div>", "pic-strip"
+    slot, im = got[0]
+    a = im["aspect"]
+    w = PIC_SIDE[a]
+    ar = images.ratio(a)
+    style = f"width:{w}px;aspect-ratio:{a.replace(':', '/')}"
+    return f'<div class="pics side">{fig(slot, im, style)}</div>', f"pic-side pw{w}"
+
+
+def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
     """The slide body for its type (mirrors render_pptx's per-type layouts)."""
     typ = s["type"]
     pick = lambda kind: next((x for x in blocks if x["kind"] == kind), None)
@@ -191,7 +229,7 @@ def _body(s, b: _Slide, blocks: list) -> str:
         left = b.blocks(rest("copy"))
         copy = {**pick("copy"), "frame": frame_for(s["title"])}
         vis = s.get("visual") or {}
-        if vis.get("kind") == "image_prompt":
+        if vis.get("kind") == "image_prompt" and not pictured:   # a drawn picture takes the place of the 'Image prompt' note
             b.f += 1
             left += b.rv("b-prompt", _e(f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"), "p")
         return f'<div class="body split exec{" framed" if copy["frame"] else ""}"><div class="col">{left}</div><div class="col">{b.blocks([copy])}</div></div>'
@@ -213,7 +251,7 @@ def _cover_logo(deck, assets_dir) -> str | None:
     return (deck["meta"].get("brand") or {}).get("logo_dark_svg")
 
 
-def slide_views(deck, inp, findings: list | None = None, assets_dir=None) -> list:
+def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictures: dict | None = None, src=None, placed: set | None = None) -> list:
     """Per slide, in order: id, number, type, dark, inner markup, notes, build-step count and, per
     step, the latest reveal delay (ms) up to and including it."""
     failed = {}
@@ -223,15 +261,20 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None) -> lis
     n_human = sum(1 for s in deck["slides"].values() if s["status"] == "needs_human")
     audience = deck["meta"].get("audience", "review")
     out = []
+    # Pictures (deck-frames-in): the same slots the pptx draws; with pictures None nothing is drawn and the markup is as it was.
+    drawn = {k: v for k, v in images.drawn(deck, audience).items() if placed is None or k in placed} if pictures else {}   # only what the pptx drew: one content in every format
+    plabel = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or "Illustrative"
+    src = src or data_uri
     for n, sid in enumerate(deck["order"], 1):
         s = deck["slides"][sid]
+        pic_html, pic_cls = picture_markup(sid, s, drawn, pictures or {}, src, plabel) if drawn else ("", "")
         b = _Slide(inp)
         dark = s["type"] in DARK_TYPES
         logo = _cover_logo(deck, assets_dir) if s["type"] == "title" else None
         kick = (b.rv("brand-logo", logo, "div", 160) if logo else
                 b.rv("kicker", _e(KICKERS[s["type"]] or _kicker(deck["meta"])), "div", 120) if s["type"] in KICKERS else "")
         title = b.words(s["title"], "title", "h1") if dark else b.rv("title", _e(s["title"]), "h1", 220)
-        body = _body(s, b, shown_blocks(s, audience))
+        body = _body(s, b, shown_blocks(s, audience), bool(pic_html))
         foot = f'<span>{_e(s["section"])}</span>'
         if s.get("footnotes"):
             foot += f'<span class="src">Sources {" ".join(f"[{k}]" for k in s["footnotes"][:14])} (appendix)</span>'
@@ -241,14 +284,29 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None) -> lis
             flags += f'<span class="draft">DRAFT · {"needs a person" if s["status"] == "needs_human" else f"{n_human} slides need a person"}</span>'
         if sid in failed:
             flags += f'<span class="failed">CHECK FAILED: {_e(", ".join(sorted(failed[sid])))}</span>'
-        inner = (f'<div class="flags">{flags}</div><header>{kick}{title}</header>{body}'
+        inner = (f'<div class="flags">{flags}</div><header>{kick}{title}</header>{body}{pic_html}'
                  f'<footer>{foot}</footer>')
         notes = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
-        out.append({"id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark,
+        out.append({"id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
                     "last": [max(v for k, v in b.last.items() if k <= f) for f in range(b.f + 1)]})
     return out
 
+
+#: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.
+PIC_CSS = """
+.pics{position:absolute;z-index:1}
+.pics.side{right:112px;top:230px}
+.pw560 header,.pw560 .body{margin-right:630px}.pw500 header,.pw500 .body{margin-right:570px}.pw460 header,.pw460 .body{margin-right:530px}.pw360 header,.pw360 .body{margin-right:430px}
+.pics.strip{left:112px;right:112px;bottom:90px;display:grid;grid-template-columns:repeat(4,1fr);gap:28px}
+.pic-strip .body{padding-bottom:300px}
+.pic{position:relative;margin:0;overflow:hidden;border-radius:6px;background:var(--tint);aspect-ratio:16/9}
+.pics.side .pic{aspect-ratio:auto}
+.pic img{display:block;width:100%;height:100%;object-fit:cover}
+.pic.flagged{outline:6px solid #c0392b;outline-offset:-6px}
+.plabel{position:absolute;left:14px;bottom:14px;background:#1B2430;color:#fff;font:700 18px/1 var(--body);letter-spacing:.04em;padding:10px 16px;border-radius:4px}
+.plabel.flagged{background:#B03225}
+"""
 
 CSS_LAYOUT = """
 :root{--ink:#INK;--paper:#PAPER;--accent:#ACCENT;--accent-line:#ACCENTL;--accent-ink:#8A5A10;--muted:#MUTED;--tint:#TINT;--line:#LINE;--dark-text:#DARK;
@@ -523,19 +581,19 @@ def _brand_css(meta: dict) -> dict:
     return {k: v for k, v in (("head", b.get("head")), ("body", b.get("body")), ("colors", b.get("colors"))) if v}
 
 
-def render(deck, inp, out: Path, findings: list | None = None) -> Path:
-    """Write the deck as one self-contained HTML file at ``out``."""
-    views = slide_views(deck, inp, findings, Path(out).parent)
+def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None) -> Path:
+    """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs)."""
+    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed)
     m = deck["meta"]
     slides = "\n".join(
-        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}" id="{v["id"]}" data-steps="{v["steps"]}" '
+        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}" id="{v["id"]}" data-steps="{v["steps"]}" '
         f'aria-label="Slide {v["n"]}: {_e(v["title"])}">{v["html"]}</section>' for v in views)
     meta = json.dumps([{"id": v["id"], "section": v["section"], "notes": v["notes"]} for v in views], ensure_ascii=False)
     page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m))}</style></head>
+<style>{theme_css(**_brand_css(m))}{PIC_CSS if any(v["cls"] for v in views) else ""}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>

@@ -1,5 +1,5 @@
 {
- "version": 2,
+ "version": 3,
  "about": "The deck visual checklist: one entry per check. kind yes_no answers yes, no or n/a; kind metric answers a value or n/a. n/a is never a pass. bench/checklist.py holds one function per id. Thresholds read from spec, theme or qa_render are named in the source, not copied. Each item has a tier: gate items count in compare --fail-on-regress; advisory items are reported but never fail it. A metric may carry direction higher, lower or same (any change is worse).",
  "items": [
   {
@@ -572,10 +572,23 @@
    "direction": "higher"
   },
   {
+   "id": "p_client_approved",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "On a client build, is every placed picture approved by the deck's approver, the approval naming the slot's own asset?",
+   "source": "docs/contracts/deck-visuals.md §4.3 (a client render draws only approved pictures); check image_unapproved",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes; or the build is not for the client (deck.meta.audience), where p_all_approved is the number",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
    "id": "p_one_style",
    "group": "pictures",
    "kind": "yes_no",
-   "question": "Do all styled pictures share one Style Pack hash (one picture style per deck)?",
+   "question": "Do all styled pictures share one Style Pack hash (one picture style per deck)? A hash that differs from the current pack's (meta.preferences.style_pack.hash) is stale, counted on its own, not mixed.",
    "source": "Claude outputs/deck-maker-plan.md §6 (Pitch teardown: one image style per deck) and §2.8 v_one_style; reserved check image_style_mixed",
    "inputs": [
     "deck.json (slots.<slot>.image.style.hash)"
@@ -588,8 +601,8 @@
    "id": "p_assets_resolve",
    "group": "pictures",
    "kind": "yes_no",
-   "question": "Does every placed picture's asset exist in deck.assets with its file in the run folder?",
-   "source": "docs/contracts/deck-visuals.md §4.2; reserved check image_missing",
+   "question": "Does every placed picture's asset exist in deck.assets with its file in the run folder? (a client build looks only at the approved pictures it draws)",
+   "source": "docs/contracts/deck-visuals.md §4.2; check image_missing",
    "inputs": [
     "deck.json",
     "run folder assets/"
@@ -629,11 +642,24 @@
    "group": "pictures",
    "kind": "yes_no",
    "question": "Is no picture stretched (picture_stretch)?",
-   "source": "Claude outputs/deck-maker-plan.md §1 step 12; reserved check picture_stretch",
+   "source": "Claude outputs/deck-maker-plan.md §1 step 12; check picture_stretch",
    "inputs": [
     "qa.json"
    ],
-   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes; or while the check name it reads is still in spec.RESERVED_CHECKS (no code raises it yet)",
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "p_no_lowres",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Does every picture show at least spec.PICTURE_MIN_PPI pixels per inch of its box, measured on the crop that is shown (picture_lowres)?",
+   "source": "deck-frames-in design (fix: low-resolution pictures); check picture_lowres",
+   "inputs": [
+    "qa.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
    "today": "n/a",
    "tier": "gate"
   },
@@ -642,11 +668,11 @@
    "group": "pictures",
    "kind": "yes_no",
    "question": "Is every word set over a picture readable (text_on_image_contrast)?",
-   "source": "Claude outputs/deck-maker-plan.md §1 step 12; reserved check text_on_image_contrast",
+   "source": "Claude outputs/deck-maker-plan.md §1 step 12; check text_on_image_contrast",
    "inputs": [
     "qa.json"
    ],
-   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes; or while the check name it reads is still in spec.RESERVED_CHECKS (no code raises it yet)",
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
    "today": "n/a",
    "tier": "gate"
   },

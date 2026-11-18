@@ -1,6 +1,6 @@
 {
  "version": 1,
- "items_version": 2,
+ "items_version": 3,
  "decks": {
   "agency_pitch": {
    "run_dir": "agency_pitch",
@@ -182,6 +182,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
     "p_one_style": {
      "answer": "n/a",
      "reason": "fewer than 2 placed pictures carry a style hash"
@@ -202,6 +206,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_no_lowres": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
     "p_text_on_image": {
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
@@ -212,7 +220,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.5,
+     "value": 6.0,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -224,10 +232,10 @@
       "red_team": null,
       "assemble": 0.0,
       "validate": 0.01,
-      "render_pptx": 0.24,
+      "render_pptx": 0.98,
       "render_web": 0.0,
-      "render_pdf_png": 4.93,
-      "qa_render": 0.34
+      "render_pdf_png": 4.23,
+      "qa_render": 0.74
      }
     },
     "w_words_sha": {
@@ -250,14 +258,14 @@
    "summary": {
     "yes": 22,
     "no": 4,
-    "na": 18,
+    "na": 20,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 14,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.5,
+     "m_seconds": 6.0,
      "w_words_sha": "363d4221c4e6"
     }
    }
@@ -434,6 +442,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
     "p_one_style": {
      "answer": "n/a",
      "reason": "fewer than 2 placed pictures carry a style hash"
@@ -454,6 +466,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_no_lowres": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
     "p_text_on_image": {
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
@@ -464,7 +480,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.7,
+     "value": 5.1,
      "stages": {
       "inputs": 0.0,
       "a0": 0,
@@ -475,10 +491,10 @@
       "red_team": null,
       "assemble": 0.0,
       "validate": 0.01,
-      "render_pptx": 0.18,
+      "render_pptx": 0.27,
       "render_web": 0.0,
-      "render_pdf_png": 5.04,
-      "qa_render": 0.47
+      "render_pdf_png": 4.17,
+      "qa_render": 0.69
      }
     },
     "w_words_sha": {
@@ -501,14 +517,14 @@
    "summary": {
     "yes": 24,
     "no": 2,
-    "na": 18,
+    "na": 20,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
      "m_median_words": 4,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.7,
+     "m_seconds": 5.1,
      "w_words_sha": "2003ece26ded"
     }
    }
@@ -673,6 +689,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
     "p_one_style": {
      "answer": "n/a",
      "reason": "fewer than 2 placed pictures carry a style hash"
@@ -693,6 +713,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_no_lowres": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
     "p_text_on_image": {
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
@@ -703,7 +727,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.2,
+     "value": 3.3,
      "stages": {
       "inputs": 0.0,
       "i": 0,
@@ -711,11 +735,11 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "validate": 0.01,
-      "render_pptx": 0.12,
+      "validate": 0.03,
+      "render_pptx": 0.13,
       "render_web": 0.0,
-      "render_pdf_png": 4.84,
-      "qa_render": 0.23
+      "render_pdf_png": 2.73,
+      "qa_render": 0.36
      }
     },
     "w_words_sha": {
@@ -738,14 +762,14 @@
    "summary": {
     "yes": 24,
     "no": 1,
-    "na": 19,
+    "na": 21,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 10,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.2,
+     "m_seconds": 3.3,
      "w_words_sha": "20fddf54b073"
     }
    }
@@ -931,6 +955,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
     "p_one_style": {
      "answer": "n/a",
      "reason": "fewer than 2 placed pictures carry a style hash"
@@ -951,6 +979,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_no_lowres": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
     "p_text_on_image": {
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
@@ -961,7 +993,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 7.5,
+     "value": 5.5,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -972,11 +1004,11 @@
       "e": null,
       "red_team": null,
       "assemble": 0.0,
-      "validate": 0.02,
-      "render_pptx": 0.29,
+      "validate": 0.01,
+      "render_pptx": 0.2,
       "render_web": 0.0,
-      "render_pdf_png": 6.44,
-      "qa_render": 0.67
+      "render_pdf_png": 4.26,
+      "qa_render": 1.02
      }
     },
     "w_words_sha": {
@@ -999,14 +1031,14 @@
    "summary": {
     "yes": 22,
     "no": 4,
-    "na": 18,
+    "na": 20,
     "metrics": {
      "m_share_le_30": 0.933,
      "m_share_le_60": 1.0,
      "m_median_words": 9,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 7.5,
+     "m_seconds": 5.5,
      "w_words_sha": "d62d948a67a9"
     }
    }
@@ -1191,6 +1223,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
     "p_one_style": {
      "answer": "n/a",
      "reason": "fewer than 2 placed pictures carry a style hash"
@@ -1211,6 +1247,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_no_lowres": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
     "p_text_on_image": {
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
@@ -1221,7 +1261,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.6,
+     "value": 4.8,
      "stages": {
       "inputs": 0.0,
       "a0": 0,
@@ -1232,12 +1272,12 @@
       "fit": null,
       "e": null,
       "red_team": null,
-      "assemble": 0.01,
-      "validate": 0.02,
-      "render_pptx": 0.24,
+      "assemble": 0.0,
+      "validate": 0.01,
+      "render_pptx": 0.47,
       "render_web": 0.0,
-      "render_pdf_png": 4.92,
-      "qa_render": 0.44
+      "render_pdf_png": 3.87,
+      "qa_render": 0.45
      }
     },
     "w_words_sha": {
@@ -1260,14 +1300,14 @@
    "summary": {
     "yes": 22,
     "no": 4,
-    "na": 18,
+    "na": 20,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
      "m_median_words": 14,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.6,
+     "m_seconds": 4.8,
      "w_words_sha": "9e74ee2219de"
     }
    }
@@ -1443,6 +1483,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
     "p_one_style": {
      "answer": "n/a",
      "reason": "fewer than 2 placed pictures carry a style hash"
@@ -1463,6 +1507,10 @@
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
     },
+    "p_no_lowres": {
+     "answer": "n/a",
+     "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
+    },
     "p_text_on_image": {
      "answer": "n/a",
      "reason": "no presented slide has a filled image slot (status made, flagged or approved)"
@@ -1473,7 +1521,7 @@
     },
     "m_seconds": {
      "answer": "value",
-     "value": 5.8,
+     "value": 4.6,
      "stages": {
       "inputs": 0.0,
       "a": 0,
@@ -1485,11 +1533,11 @@
       "e": null,
       "red_team": null,
       "assemble": 0.01,
-      "validate": 0.01,
-      "render_pptx": 0.18,
+      "validate": 0.02,
+      "render_pptx": 0.46,
       "render_web": 0.0,
-      "render_pdf_png": 5.11,
-      "qa_render": 0.44
+      "render_pdf_png": 3.49,
+      "qa_render": 0.6
      }
     },
     "w_words_sha": {
@@ -1512,14 +1560,14 @@
    "summary": {
     "yes": 23,
     "no": 3,
-    "na": 18,
+    "na": 20,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
      "m_median_words": 11,
      "m_creative_pictured": 0.0,
      "m_usd": 0,
-     "m_seconds": 5.8,
+     "m_seconds": 4.6,
      "w_words_sha": "529b08c764da"
     }
    }

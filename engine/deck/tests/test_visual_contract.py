@@ -169,16 +169,16 @@ def test_issue_vocabulary_equals_the_issue_schema_and_policy():
     assert _enum(i["source"]) == spec.ISSUE_SOURCES and _enum(i["level"]) == spec.ISSUE_LEVELS
     assert _enum(i["severity"]) == spec.ISSUE_SEVERITIES and _enum(i["status"]) == spec.ISSUE_STATUSES
     assert _enum(i["fix"]["properties"]["kind"]) == spec.ISSUE_FIXES
-    assert _enum(i["check"]) == spec.ISSUE_CHECKS
+    assert set(_enum(i["check"])) == set(spec.ISSUE_CHECKS) and len(_enum(i["check"])) == len(spec.ISSUE_CHECKS)   # as sets: the order moved when seven names left RESERVED_CHECKS
     assert i["round"]["maximum"] == spec.REPAIR_MAX_ROUNDS
     assert set(spec.CHECKS) <= set(spec.ISSUE_CHECKS) and set(spec.QA_RENDER_CHECKS) <= set(spec.ISSUE_CHECKS)
-    assert len(spec.CHECKS) == 33 and len(set(spec.ISSUE_CHECKS)) == len(spec.ISSUE_CHECKS)
+    assert len(spec.CHECKS) == 38 and len(set(spec.ISSUE_CHECKS)) == len(spec.ISSUE_CHECKS)
     # a reserved name must not shadow an existing one except placeholder, which validate and qa_render both raise
     assert (set(spec.CHECKS) & set(spec.QA_RENDER_CHECKS)) == {"placeholder"}
     assert not set(spec.RESERVED_CHECKS) & (set(spec.CHECKS) | set(spec.QA_RENDER_CHECKS))
     assert all(c.startswith("slot_") for c in spec.RESERVED_CHECKS if c.startswith("slot"))
     p = _schema("repair_policy")["properties"]
-    assert tuple(p["severity"]["propertyNames"]["enum"]) == spec.ISSUE_CHECKS
+    assert set(p["severity"]["propertyNames"]["enum"]) == set(spec.ISSUE_CHECKS)
     assert tuple(p["ladder"]["items"]["enum"]) == spec.REPAIR_LADDER
     assert tuple(p["shorten"]["properties"]["guards"]["items"]["enum"]) == spec.REPAIR_SHORTEN_GUARDS
     assert _enum(p["images"]["properties"]["on_flag"]) == spec.REPAIR_IMAGE_ON_FLAG

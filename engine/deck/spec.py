@@ -295,7 +295,8 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "word_budget", "empty_slot", "placeholder", "requirement_map", "banned_phrase", "watch_word", "message_carried",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
-          "insight_shape", "idea_single", "chain_links", "weight_share")
+          "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
+          "image_rights", "style_pack_held")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.
@@ -368,6 +369,10 @@ IMAGE_SOURCES = ("territory_frame", "upload", "brand", "generated")
 IMAGE_RIGHTS = ("generated", "own", "licensed", "client_supplied", "reference_only")
 IMAGE_MIMES = ("image/png", "image/jpeg", "image/webp", "image/svg+xml")
 IMAGE_DECISIONS = ("approve", "replace", "remove")
+#: Picture QA (qa_render). A picture below this many pixels per inch of the box it fills is soft; one whose drawn aspect differs
+#: from its crop's by more than this fraction is stretched. 96 ppi is the screen floor for a slide shown full size.
+PICTURE_MIN_PPI = 96
+PICTURE_STRETCH_TOL = 0.01
 #: The default label of a picture a person has not approved (ADR 0027): a fixed label, never a fact, no digit.
 PICTURE_LABEL = "Illustrative"
 #: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
@@ -411,11 +416,9 @@ ISSUE_STATUSES = ("open", "fixed", "unfixed", "rolled_back", "left_for_person")
 ISSUE_FIXES = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "add_scrim", "crop_image", "regen_image",
                "drop_image", "needs_human")
 QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min_font", "placeholder", "contrast", "mostly_empty",
-                    "one_corner", "qa_internal", "unreadable")
+                    "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast")
 RESERVED_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown",
-                   "image_missing", "image_unapproved", "image_flagged", "image_rights", "golden_echo",
-                   "picture_stretch", "picture_lowres", "text_on_image_contrast", "layout_repeat", "title_drift",
-                   "line_length", "image_style_mixed", "export_failed")
+                   "golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")
 ISSUE_CHECKS = tuple(dict.fromkeys(CHECKS + QA_RENDER_CHECKS + RESERVED_CHECKS))
 
 #: Repair policy (contract section 8).

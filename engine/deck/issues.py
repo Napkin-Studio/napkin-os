@@ -10,6 +10,8 @@ from . import spec
 #: The contract's default mapping when a policy has no entry for a check (section 7).
 DEFAULT_SEVERITY = {"error": "blocker", "warn": "minor"}
 DECK_KEY = "deck"
+#: Checks whose default severity is not the level's (a policy's severity map still wins): a held Style Pack leaves pictures in an old style.
+CHECK_SEVERITY = {"style_pack_held": "major"}
 
 
 def severity(check: str, level: str, policy: dict | None = None) -> str:
@@ -19,7 +21,7 @@ def severity(check: str, level: str, policy: dict | None = None) -> str:
     for key in (f"{check}:{level}", check):
         if sev.get(key) in spec.ISSUE_SEVERITIES:
             return sev[key]
-    return DEFAULT_SEVERITY.get(level, "minor")
+    return CHECK_SEVERITY.get(check) or DEFAULT_SEVERITY.get(level, "minor")
 
 
 def slide_id_of(qa_key, deck: dict) -> str:

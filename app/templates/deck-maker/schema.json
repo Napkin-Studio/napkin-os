@@ -1164,6 +1164,7 @@
                       "image_unapproved",
                       "image_flagged",
                       "image_rights",
+                      "style_pack_held",
                       "golden_echo",
                       "picture_stretch",
                       "picture_lowres",
@@ -1376,6 +1377,19 @@
                         "person",
                         "default"
                       ]
+                    },
+                    "hash": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}$",
+                      "description": "The 8-hex hash of the Style Pack the deck now uses (the runner's stamp); a picture whose style hash differs is stale, not mixed."
+                    },
+                    "hold": {
+                      "type": "boolean",
+                      "description": "True when the Style Pack could not be read (a StyleError): the build went on and the pictures keep the style they were made in."
+                    },
+                    "hold_reason": {
+                      "type": "string",
+                      "maxLength": 300
                     }
                   }
                 },
@@ -3227,6 +3241,7 @@
                   "image_unapproved",
                   "image_flagged",
                   "image_rights",
+                  "style_pack_held",
                   "golden_echo",
                   "picture_stretch",
                   "picture_lowres",

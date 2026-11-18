@@ -98,7 +98,7 @@ def with_image(slide="s4", assets=None, **kw):
 # ---------------------------------------------------------------- the list and the functions agree
 
 def test_items_and_functions_agree():
-    assert len(set(IDS)) == len(IDS) == 51 and set(cl.CHECKS) == set(IDS)
+    assert len(set(IDS)) == len(IDS) == 53 and set(cl.CHECKS) == set(IDS)
     assert all(fn.__name__ == i for i, fn in cl.CHECKS.items())
     assert sum(i["kind"] == "metric" for i in ITEMS["items"]) == 8
     assert {i["id"] for i in ITEMS["items"] if i["tier"] == "advisory"} == {"l_variety", "l_repeat_max2", "w_line_length", "t_cover_title", "m_seconds"}
@@ -195,10 +195,11 @@ def test_two_families(tmp_path):
     assert r["answer"] == "no" and r["measured"] == ["Arial", "Calibri", "Georgia"]
 
 
-def test_slots_and_reserved_checks_stay_na_while_reserved(tmp_path):
+def test_slots_check_stays_na_while_reserved_and_the_picture_checks_are_live(tmp_path):
     run = make(tmp_path, deck_edit=with_image())
-    for item in ("l_slots_clean", "p_no_stretch", "p_text_on_image"):
-        assert answer(run, item)["answer"] == "n/a" and "RESERVED" in answer(run, item)["reason"]
+    assert answer(run, "l_slots_clean")["answer"] == "n/a" and "RESERVED" in answer(run, "l_slots_clean")["reason"]
+    for item in ("p_no_stretch", "p_text_on_image"):   # picture_stretch and text_on_image_contrast are raised by qa_render now
+        assert "RESERVED" not in (answer(run, item).get("reason") or "")
 
 
 def test_not_yet_built_checks_are_na(tmp_path):
@@ -713,3 +714,89 @@ def test_all_approved_is_a_share_not_a_permanent_no(tmp_path):
     assert r["answer"] == "value" and r["value"] == 0.0
     mismatch = dict(ok, approval={**ok["approval"], "asset": "img_bbbbbbbbbbbb"})
     assert answer(make(tmp_path / "c", deck_edit=with_image(**mismatch)), "p_all_approved")["value"] == 0.0
+
+
+# ---------------------------------------------------------------- the frames demo (deck-frames-in)
+
+DEMO_FX = Path(__file__).resolve().parent / "fixtures" / "frames_demo"
+
+
+def _demo_run(demo_stages, build_demo, out, *args):
+    """The Lumen Water frames demo built (geometry only) and its QA written, as a bench run folder."""
+    from deck import qa_render
+    run = build_demo(demo_stages, out, "--pictures", "creative_cover", *args)
+    findings = json.loads((run / "validation.json").read_text())
+    qa_render.run(run / "deck.pptx", None, run, findings)
+    return run
+
+
+def test_the_frames_demo_answers_every_picture_item_with_a_real_value(demo_stages, build_demo, tmp_path):
+    run = _demo_run(demo_stages, build_demo, tmp_path / "o", "--image", f"s05.picture={DEMO_FX / 'small.png'}", "--image-rights", "s05.picture=own")
+    r = cl.run_checklist(run)["results"]
+    assert r["p_where_asked"]["answer"] == "no" and r["p_where_asked"]["slides"] == ["s12", "s13"]   # the two executions have no frame to show: still asked for, still empty
+    assert r["p_only_creative"]["answer"] == "yes" and r["p_assets_resolve"]["answer"] == "yes"
+    assert r["p_rights_ok"]["answer"] == "yes" and r["p_alt_text"]["answer"] == "yes"
+    assert r["p_no_stretch"]["answer"] == "yes" and r["p_text_on_image"]["answer"] == "yes"
+    assert r["p_no_lowres"]["answer"] == "no" and r["p_no_lowres"]["slides"] == ["s05"]    # the deliberate 320 pixel picture
+    assert r["m_creative_pictured"]["answer"] == "value" and 0 < r["m_creative_pictured"]["value"] <= 1
+    assert r["p_all_approved"]["value"] == 0.0 and r["p_all_approved"]["audience"] == "review" and r["p_all_approved"]["n"] == 14
+    assert r["p_client_approved"]["answer"] == "n/a" and "not for the client" in r["p_client_approved"]["reason"]
+
+
+def test_the_demo_assets_resolve_in_the_run_folder_for_the_drawn_pictures(demo_stages, build_demo, tmp_path):
+    run = _demo_run(demo_stages, build_demo, tmp_path / "o")
+    got = cl.run_checklist(run)["results"]["p_assets_resolve"]
+    # review draws made, flagged and approved pictures: every filled slot's file is in the folder, except none is missing
+    assert got["answer"] == "yes", got
+
+
+def test_p_all_approved_is_a_number_in_review_and_the_client_item_is_yes_or_no(demo_stages, build_demo, tmp_path):
+    rev = _demo_run(demo_stages, build_demo, tmp_path / "a")
+    assert cl.run_checklist(rev)["results"]["p_all_approved"]["value"] == 0.0
+    review = tmp_path / "r.json"
+    from deck import images
+    review_obj = {}
+    images.approve_territory(review_obj, json.loads((rev / "deck.json").read_text()), "t1", "human:demo-approver")
+    review.write_text(json.dumps(review_obj))
+    part = _demo_run(demo_stages, build_demo, tmp_path / "b", "--review", str(review), "--approver", "human:demo-approver")
+    v = cl.run_checklist(part)["results"]["p_all_approved"]
+    assert 0 < v["value"] < 1
+    client = _demo_run(demo_stages, build_demo, tmp_path / "c", "--review", str(review), "--approver", "human:demo-approver", "--audience", "client")
+    res = cl.run_checklist(client)["results"]
+    assert res["p_client_approved"]["answer"] == "no" and "s09" in res["p_client_approved"]["slides"]       # t2 and t3 wait for a person
+    assert res["p_assets_resolve"]["answer"] == "yes"                                                       # a client folder holds the approved ones it draws
+    # approve everything that can be: the one flagged and the one refused stay out, so the answer is still no; remove them to see a yes
+    d = json.loads((client / "deck.json").read_text())
+    for sid, name, im in list(images.image_slots(d)):
+        if im["status"] != "approved":
+            del d["slides"][sid]["slots"][name]
+    (client / "deck.json").write_text(json.dumps(d))
+    assert cl.run_checklist(client)["results"]["p_client_approved"]["answer"] == "yes"
+    assert cl.run_checklist(client)["results"]["p_all_approved"]["value"] == 1.0
+
+
+def test_words_are_equal_with_and_without_pictures_in_the_checklist(demo_stages, build_demo, tmp_path):
+    with_p = _demo_run(demo_stages, build_demo, tmp_path / "a")
+    plain = build_demo(demo_stages, tmp_path / "b")
+    assert answer(with_p, "w_words_sha")["value"] == answer(plain, "w_words_sha")["value"]
+
+
+def _styled(hashes, current=None):
+    def edit(deck):
+        deck["slides"]["s4"]["slots"] = {f"frame_{i}": img(style={"pack": "p", "version": 1, "hash": h}) for i, h in enumerate(hashes, 1)}
+        deck["assets"] = {"img_aaaaaaaaaaaa": {"file": "assets/a.png", "rights": "generated"}}
+        if current:
+            deck["meta"]["preferences"] = {"style_pack": {"use": "territory", "hash": current, "source": "default"}}
+    return edit
+
+
+def test_p_one_style_counts_a_stale_hash_on_its_own_not_as_mixed(tmp_path):
+    h1, h2 = "11111111", "22222222"
+    assert answer(make(tmp_path / "a", deck_edit=_styled([h1, h1, h1, h1])), "p_one_style")["answer"] == "yes"
+    assert answer(make(tmp_path / "b", deck_edit=_styled([h1, h2])), "p_one_style")["answer"] == "no"          # no pack named: two styles are mixed
+    got = answer(make(tmp_path / "c", deck_edit=_styled([h1, h1, h1, h1], current=h2)), "p_one_style")
+    assert got["answer"] == "yes" and got["stale"] == 4                                                         # v1 frames with a v2 pack
+    got = answer(make(tmp_path / "d", deck_edit=_styled([h1, h1, h2, h2], current=h2)), "p_one_style")
+    assert got["answer"] == "yes" and got["stale"] == 2
+    got = answer(make(tmp_path / "e", deck_edit=_styled([h1, "33333333", h2], current=h2)), "p_one_style")
+    assert got["answer"] == "yes" and got["stale"] == 2   # one fresh (h2) and two stale (h1, 3333...): stale is counted, never mixed
