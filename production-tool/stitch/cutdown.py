@@ -12,8 +12,8 @@ take's pixels, scaled to the pixels it really has; cropKeys: a slow pan, the box
 through the window) or, with no crop, filled to the size from its middle (a remade or an outpainted
 clip, already near the shape), then scaled to the size with lanczos: Aleph 2's 612x1088 grows to the
 delivery size here. The clips are joined by cuts, the type layers (transparent PNGs the relay drew at
-the size) laid over them in their times, then the end card at the size (stitch.card_graph). Sound:
-each window's own (silence where a take has none), faded out over fadeOutS before the card; the
+the size) laid over them in their times, then the end card at the size (stitch.card_graph), the dark one
+on every size (SIZE_CARD). Sound: each window's own (silence where a take has none), faded out over fadeOutS before the card; the
 card is silent. The result is written like stitch's: {"ok", "sha256", "bytes", "w", "h", "durationS",
 "endCard"}.
 """
@@ -128,8 +128,13 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
     return cmd
 
 
+# Every size of a film ends on the same, dark studio card (owner 2026-11-18: the 1:1 came out white while the
+# other sizes were dark, as each job's id picked its own; card_version is for the ad's own render).
+SIZE_CARD = "roll-up-ink"
+
+
 def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
-    version = st.card_version(event.get("jobId", ""))
+    version = SIZE_CARD
     try:
         with tempfile.TemporaryDirectory() as tmp:
             clips = []

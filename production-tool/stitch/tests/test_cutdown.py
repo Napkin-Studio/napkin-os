@@ -102,8 +102,9 @@ def test_a_15s_cutdown_is_its_windows_then_the_end_card_with_the_sound_faded(tak
     assert (s["w"], s["h"]) == (320, 180) and s["audio"]
     assert abs(s["duration"] - (body + stitch.CARD_S)) <= 2 / stitch.FPS + 0.03, s  # 15 s within a frame or two
     assert out["durationS"] == pytest.approx(15, abs=0.1)
-    # The last CARD_S seconds are the end card: its ground, not the test pattern.
-    ground = stitch.GROUND[stitch.card_version("job_cut")]
+    # The last CARD_S seconds are the end card: the dark one on every size (owner 2026-11-18), not the test pattern.
+    assert out["endCard"] == "roll-up-ink"
+    ground = stitch.GROUND["roll-up-ink"]
     px = frame_at(takes / "out.mp4", body + 0.05, takes / "card.png").getpixel((4, 4))
     assert all(abs(a - b) < 40 for a, b in zip(px, ground)), px
 
