@@ -426,3 +426,16 @@ a slide that does not fit switches layout before its type drops to the caption f
 
 Calibration (`deck/tests/test_layout_wrap_calibration.py`, local only): `Renderer.wrap` counts 2 to 3 lines more than LibreOffice on frames of 8 to 12 lines
 (a real line holds about 15 to 25 % more characters than the estimate), so a fit never overflows for want of room the estimate did not see.
+
+## Pictures for empty slots (deck-image-gen)
+
+    python3 -m deck.run_deck ... --images plan                       # the subject card (stage g), then the picture card; no network
+    python3 -m deck.run_deck ... --images subjects --yes-cost c_xxxxxxxx   # yes to the subject card: one Claude call, ~$0.05
+    python3 -m deck.run_deck ... --images live --yes-cost c_yyyyyyyy       # yes to the picture card: exactly its jobs, flash drafts
+    python3 -m deck.run_deck ... --images live --hero s01.picture --yes-cost c_zzzzzzzz   # a final (pro) picture of an approved draft
+
+`--marks FILE` (the parts marked Confidential, `[]` when none; without it a deck built from files is refused), `--review FILE --approver
+human:<id>` (decisions per asset), `--images-reviewed --by human:<id>` (a sensitive brief), `--retry-unknown`, `--remake-style`, `--images-only`,
+`--images-cache DIR`, `--ledger FILE`, `--deck-id ID`, `--cap-usd N` (default 2.50, at most 10). The key is `RUNWAYML_API_SECRET` in the
+environment only. Code: `deck/imagegen.py` (plan, cards, ledger use, records), `visuals/{runway,jobs,lint,guard,safety}.py`. Tests never call
+Runway or a model: `deck/tests/test_images_gen.py`, `visuals/tests/`.

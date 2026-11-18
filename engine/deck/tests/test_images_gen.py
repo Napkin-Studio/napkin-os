@@ -497,6 +497,10 @@ def test_a_hero_is_a_candidate_beside_the_draft_and_only_an_approval_promotes_it
     d, _ = go(stages, tmp_path / "o", "--images", "live", "--yes-cost", hid, "--hero", f"{sid}.picture", "--review", str(rv))
     im = d["slides"][sid]["slots"]["picture"]["image"]
     assert im["asset"] == a["asset"] and im["status"] == "approved" and im["candidate"]["asset"] != a["asset"]
+    import jsonschema
+    schema = json.loads((HERE.parent / "deck.schema.json").read_text())
+    for _, _, x in images.image_slots(d):   # every made picture slot, the candidate included, is a valid image slot
+        jsonschema.Draft7Validator({"$ref": "#/definitions/image_slot", "definitions": schema["definitions"]}).validate(x)
     # pending: the client render draws the draft
     dc, _ = go(stages, tmp_path / "oc", "--images", "plan", "--review", str(rv), "--audience", "client", "--pictures", "creative_cover")
     assert images.drawn(dc, "client")[(sid, "picture")]["asset"] == a["asset"]

@@ -242,8 +242,40 @@ One frame per shot: a clean frame beats a flagged or refused one, then the best 
 records `{file, sha256_12, frames_version, same_brief}`. `meta.preferences.style_pack` may carry `hash` (the Style Pack the deck now
 uses: a picture whose style hash differs is stale, not mixed) and `hold` (the Style Pack could not be read; the build went on).
 The picture boxes: the cover and the divider 16:9, the idea and the audience 4:3, the territory's four frames in a strip of 16:9
-boxes, executions by `spec.frame_for` (phone 9:16, poster 4:5, none 16:9; search and audio take no slot). Nothing is generated:
-`inputs.pictures.source.allow: generated` is refused until `deck-image-gen`.
+boxes, executions by `spec.frame_for` (phone 9:16, poster 4:5, none 16:9; search and audio take no slot).
+
+### 4.6 Making pictures for empty slots (deck-image-gen, 18 November 2026)
+
+`inputs.pictures.source.allow: generated` (CLI: `--images`) fills slots nothing else filled. Sai's rules of 17 November, all enforced in
+code (`engine/deck/imagegen.py`, `engine/visuals/`):
+
+- **Cards and a yes.** Two cards, each with an id (`c_` and 8 hex of the SHA-256 of the jobs, models, ratios, cap and spend): the *subject
+  card* (stage g: one Claude call, about $0.05, recorded as `g_image_subjects.json`) and the *picture card* (every prompt in full, the
+  jobs, what is held back and why). A yes is `--yes-cost <card id>`; a missing, different or stale id is refused before any call. Nothing
+  is retried automatically: a failure, a flag or a Style Pack change reaches a card and waits for a person.
+- **Cap.** $2.50 per deck over its life (`min(inputs.pictures.source.cap_usd, NAPKIN_DECK_IMAGES_MAX_USD)`, at most $10), the subject call
+  and failures and unknowns included, Territory spend shown for information only. Spend is derived from jobs, never stored: the sum over
+  the cache manifest and the cross-cache ledger (`$NAPKIN_DECK_LEDGER`, an append-only JSONL written under `flock`), each job at the
+  largest of Runway's estimate, its reported cost and the table price. A cleared cache cannot lower it.
+- **Tiers pinned in code.** Draft is `gemini_image3.1_flash` (1K, 7 credits); pro (`gemini_image3_pro`, 2K, 20 credits) runs only for a
+  *hero*: the cover, the idea or a full-bleed slot whose draft the approver approved and the guard checked clean, asked for by a person
+  (`--hero <slide>.<slot>`), on a card of its own with the draft's exact prompt. At most 3 hero jobs per deck and 1 retry per slot. The
+  result is `slot.image.candidate {asset, job}` beside the approved draft; only an approval of the candidate's own asset promotes it.
+  A Style Pack whose `models` differ from this map is refused at plan time.
+- **Confidential.** The engine gets the document's marks (`[{path, text, kind}]`; the key absent means refuse, an empty list is an answer).
+  Marked text never enters stage g; every subject, Replace note and the assembled style block passes a fail-closed allow-list lint
+  (no capital in mid-sentence, digit, spelled number, quotation mark or "in the style of") and a deny-list of the marked texts (their
+  words, 3-word runs and paraphrases). A hit holds the slot with "would draw on a Confidential part".
+- **Safe messaging.** On a deck a pack with `banned_imagery` applies to, nothing is made until `review.safe_messaging {by, at, packs,
+  words_sha, banned_sha}` matches the deck's current words and banned list; one edited word holds every slot again. An unreachable guard
+  flags the picture, and an unchecked picture there cannot be approved.
+- **Records.** Each made picture is a `deck.assets` entry (`rights: generated`, `made {provider, model, task, at, credits}`, `guard`)
+  and its slot holds `status made|flagged`, `from.kind generated`, `subject`, `prompt`, `style`, `attempts`, an `alt` written by code.
+  The recorded `stages/generated.json` and `stages/assets/` are read by the images pass like `frames.json`. Decisions are per asset:
+  `review.assets.<asset id> {slide, slot, decision, by, at, note}` (new, optional) beside `review.images`; the latest per asset wins.
+- **Territory slides** with no frame get one mood picture slot (`picture`, 4:3); `frame_1` to `frame_4` are never generated. A planned slot
+  counts as a picture source while layouts are chosen (`layouts.picture_source`); a slot still unmade after the image step is planned
+  again without its picture (`layouts.unmade_planned`). No placeholder box is drawn.
 
 ## 5. The layout library
 
