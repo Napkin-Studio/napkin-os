@@ -15,6 +15,18 @@
 # builds the shell and napkin-web first.
 # `desktop` (cargo check of app/src-tauri) runs only when that path changes or is named:
 # the full .deb bundle stays in CI.
+#
+# The engine suite holds the deck to a stricter bar here than CI can (CI has no LibreOffice):
+#   - No silent skips. The deck and visuals runs load engine/pytest_skipguard.py, which prints the skip count per
+#     suite and why. DECK_SKIP_GUARD=1 fails the run on any skip whose reason is not on its ALLOW list, and
+#     DECK_REQUIRE_SOFFICE=1 fails it at once when LibreOffice or pdftoppm is missing (a render test never skips
+#     quietly). Both are set below for local runs; CI sets neither, so its skips are printed, not failed.
+#   - The end-to-end deck gate (engine/deck/tests/test_lumen_gate.py): the Lumen demo fixture rendered once with
+#     LOOK_V3 off and once on, --images plan from the fixture's picture cache (no network, no spend), each render
+#     reused by every assertion: QA 0 errors, every text run at WCAG AA (text on pictures at the 10th percentile,
+#     on a text-free render), a sentence said once, no word lost between the looks, the story within the cap,
+#     the hole gate reported, no shape past the canvas, and no gate item of the bench checklist regressed against
+#     engine/deck/tests/fixtures/lumen_gate/checklist_baseline.json. About 25 s on a laptop.
 set -uo pipefail
 
 root="$(git rev-parse --show-toplevel)"
@@ -129,11 +141,11 @@ echo "suites: ${run_list[*]}"
 CRATES=(-p clan-sdk -p clan-cli -p napkin-host -p napkin-web)
 PY_ENGINE_DEPS=(--with numpy --with requests --with httpx --with pypdf --with pdfplumber
                 --with python-docx --with PyYAML --with python-dotenv --with pytest
-                --with python-pptx --with lxml --with jsonschema)
+                --with python-pptx --with lxml --with jsonschema --with fonttools)
 # Keep identical to the pip line in the ci.yml engine job (two copies on purpose, for now).
 # The deck tests importorskip these, so a missing one would skip tests silently; the
 # pre-step in suite_engine imports them and fails loudly instead.
-PY_DECK_IMPORTS='import pptx, lxml, jsonschema, docx'
+PY_DECK_IMPORTS='import pptx, lxml, jsonschema, docx, fontTools'
 
 suite_rust() {
   cargo fmt "${CRATES[@]}" -- --check &&
@@ -159,12 +171,12 @@ suite_desktop() {
 }
 suite_engine() {
   ( cd engine/rag && BRIEF_TESTS_OFFLINE=1 uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider ) &&
-  ( cd engine && uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" --with jsonschema python -m pytest -q -p no:cacheprovider visuals/tests ) &&
+  ( cd engine && DECK_SKIP_GUARD=1 uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" --with jsonschema python -m pytest -q -p no:cacheprovider -p pytest_skipguard visuals/tests ) &&
   ( cd engine/agent-server && BRIEF_TESTS_OFFLINE=1 uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider ) &&
   ( cd mock-agent && uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider ) &&
   ( cd engine && BRIEF_TESTS_OFFLINE=1 PYTHONPATH=. uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider territory/tests ) &&
   ( cd engine && uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -c "$PY_DECK_IMPORTS" ) &&
-  ( cd engine && PYTHONPATH=. BRIEF_TESTS_OFFLINE=1 uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider deck/tests )
+  ( cd engine && PYTHONPATH=. BRIEF_TESTS_OFFLINE=1 DECK_SKIP_GUARD=1 DECK_REQUIRE_SOFFICE=1 uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider -p pytest_skipguard deck/tests )
 }
 suite_middleware() {
   ( cd server && uv run -q --python 3.12 pytest -q )
