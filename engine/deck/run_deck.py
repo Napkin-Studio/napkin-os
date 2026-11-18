@@ -615,7 +615,7 @@ def main(argv=None):
     ap.add_argument("--no-qa", action="store_true", help="skip stage h, the rendered-slide QA (qa.json): the repair loop reads the QA, so it does not run either")
     ap.add_argument("--no-repair", action="store_true", help="turn the repair loop off: no round, no issues.json, the output is exactly the engine without it")
     ap.add_argument("--text-mode", choices=spec.TEXT_MODES, default=None,
-                    help="condense: the repair loop may move whole points to the speaker notes and shorten wording with the slide's own words; preserve (also when absent): it never does")
+                    help="condense: the repair loop may move whole points to the speaker notes and shorten wording with the slide's own words; preserve: it never does. Absent: no shorten and no loop move (the app's default is condense and the runner passes it)")
     ap.add_argument("--repair-policy", type=Path, help="a repair policy file over policy/repair.yaml (tests and experiments)")
     ap.add_argument("--approve-shorten", metavar="ID", default=None,
                     help="a person's yes to shortening a deck built for --audience client: the approval id for these exact words (apv_..., printed in the repair report's skipped list); "
@@ -908,7 +908,7 @@ def main(argv=None):
         tm = (deck["meta"].get("preferences") or {}).get("text_mode")
         tm = tm.get("mode") if isinstance(tm, dict) else tm
         asked_tm = a.text_mode or (deck_ctx or {}).get("text_mode")
-        if asked_tm in spec.TEXT_MODES:   # the person's choice (or the document's): condense lets the loop move points to the notes and shorten; absent means preserve
+        if asked_tm in spec.TEXT_MODES:   # the person's choice (or the document's): condense lets the loop move points to the notes and shorten; absent: the loop does neither (a paid shorten needs the explicit choice) while the plan's density still moves points to the notes unless preserve
             tm = asked_tm
             deck["meta"].setdefault("preferences", {})["text_mode"] = {"mode": tm, "source": "person" if a.text_mode else "default"}
         pinned_ids = _stamp_pinned(a, deck, deck_ctx)
@@ -924,6 +924,10 @@ def main(argv=None):
         rungs = (deck["meta"].get("layout_plan") or {}).get("rungs", {})
         rep["layout_plan"] = {"secs": round(time.time() - t, 3), "rungs": rungs, "variety_swaps": (deck["meta"].get("layout_plan") or {}).get("variety_swaps", 0), "skipped": ["condense"]}
         rep["stages"]["layout_plan"] = {"secs": round(time.time() - t, 3), "model": None, "usd": 0}
+    else:   # no plan: a slot still planned for a picture nobody paid for goes back to empty here too, so deck.json holds no prompt or subject for it
+        from . import layouts
+        if layouts.unmade_planned(deck):
+            imagegen.unplan(deck, rep.get("images") or {})
     t = time.time()
     findings = validate.run(deck, inp, a.audience) + stale_gen
     for x in plan_issues:   # the six slot and layout names, warn (slot_missing on a required slot: error)
