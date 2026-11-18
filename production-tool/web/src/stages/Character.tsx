@@ -518,18 +518,50 @@ export function Character({ initial, active, onPictureEditor }: {
     if (fresh && canvas && selBrief) canvas.select([])
   }, [assetsAsk, canvas, selBrief])
   // Selecting pans the node into the visible area (production-new-ui design guard; re-test 2b: a selected Brief
-  // sat half under the tool rail, and the Booth's column opening took the right edge). One node or picture,
+  // sat half under the tool rail, and the Booth's column opening took the right edge). One node (never a picture),
   // once per selection, after the Booth has slid in; never mid-drag, and not after the person moved it.
   const oneSel = vs?.selected.length === 1 ? vs.selected[0] : ''
+  const revealOpts = useRef({ own, linkMode, railInset })
+  useEffect(() => { revealOpts.current = { own, linkMode, railInset } }, [own, linkMode, railInset])
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Imperative, never a state change: a re-render between the two presses of a double-click reset the node
+  // layer's press tracking (e2e canvas-picture: a group's picture opened on the first double-click).
+  const scheduleReveal = useCallback(() => {
+    if (revealTimer.current) clearTimeout(revealTimer.current)
+    revealTimer.current = null
+    const o = revealOpts.current
+    const ids = canvas?.view().selectedIds ?? []
+    if (!canvas || !o.own || o.linkMode || ids.length !== 1) return
+    const id = ids[0]
+    const at = canvas.elements().find((e) => e.id === id)
+    if (!at || isBoard(at) || !(cardOf(at) || briefOfElement(at))) return
+    const from = { x: at.x, y: at.y }
+    let tries = 0
+    const reveal = () => {
+      revealTimer.current = null
+      const e = canvas.elements().find((x) => x.id === id && !x.isDeleted)
+      if (!e || canvas.view().selectedIds.join() !== id) return
+      if (canvas.isBusy()) {
+        if (++tries < 20) revealTimer.current = setTimeout(reveal, 150)
+        return
+      }
+      if (e.x !== from.x || e.y !== from.y) return
+      bringIntoView(canvas, { minX: e.x, minY: e.y, maxX: e.x + e.width, maxY: e.y + e.height }, revealOpts.current.railInset, !matchMedia('(prefers-reduced-motion: reduce)').matches)
+    }
+    revealTimer.current = setTimeout(reveal, 480)
+  }, [canvas])
+  useEffect(() => {
+    if (oneSel) scheduleReveal()
+    return () => { if (revealTimer.current) clearTimeout(revealTimer.current) }
+  }, [oneSel, linkMode, scheduleReveal])
   // A click (not a drag) on the canvas or a card asks again: clicking the node already selected brings it back.
-  const [clicked, setClicked] = useState(0)
   useEffect(() => {
     const el = wrap.current
     if (!el) return
     let down: { x: number; y: number } | null = null
     const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY } }
     const onUp = (e: PointerEvent) => {
-      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) setClicked((n) => n + 1)
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) setTimeout(scheduleReveal, 0)
       down = null
     }
     el.addEventListener('pointerdown', onDown, true)
@@ -538,27 +570,7 @@ export function Character({ initial, active, onPictureEditor }: {
       el.removeEventListener('pointerdown', onDown, true)
       el.removeEventListener('pointerup', onUp, true)
     }
-  }, [canvas])
-  useEffect(() => {
-    if (!canvas || !oneSel || !own || linkMode) return
-    const at = canvas.elements().find((e) => e.id === oneSel)
-    if (!at || isBoard(at)) return
-    const from = { x: at.x, y: at.y }
-    let tries = 0
-    let t: ReturnType<typeof setTimeout>
-    const reveal = () => {
-      const e = canvas.elements().find((x) => x.id === oneSel && !x.isDeleted)
-      if (!e || canvas.view().selectedIds.join() !== oneSel) return
-      if (canvas.isBusy()) {
-        if (++tries < 20) t = setTimeout(reveal, 150)
-        return
-      }
-      if (e.x !== from.x || e.y !== from.y) return
-      bringIntoView(canvas, { minX: e.x, minY: e.y, maxX: e.x + e.width, maxY: e.y + e.height }, railInset, !matchMedia('(prefers-reduced-motion: reduce)').matches)
-    }
-    t = setTimeout(reveal, 480)
-    return () => clearTimeout(t)
-  }, [canvas, own, oneSel, railInset, linkMode, clicked])
+  }, [scheduleReveal])
   // A picture named on no board goes to its role's board: "Moved to Characters · Undo" (board-autolayout).
   useEffect(() => ctrl?.onRouted((r) => {
     const e = canvas?.elements().find((x) => x.id === r.ids[0])
