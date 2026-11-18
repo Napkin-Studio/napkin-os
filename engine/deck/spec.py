@@ -514,6 +514,10 @@ MIN_COLUMN_IN = {"cards_split": 3.2, "placeholder_split": 3.2}
 #: The territory frames strip keeps four 16:9 frames in a row while each is this wide (16:9 2.86 in, A4 2.47); at 4:3 (2.07 in) frames_strip
 #: raises NoFit and the plan takes its alternatives (image_text, territory): no new layout code (Fable).
 MIN_STRIP_FRAME_IN = 2.4
+#: The design's row minimums (design.reflow_rule.minimums): a KPI card and a comparison cell under these widths at 4:3 or A4 fail their
+#: layout (render_pptx.Renderer.cells_fit) and the plan takes its alternatives (kpi_row: cards, cards_split; comparison: cards;
+#: comparison_grid: native_table).
+MIN_KPI_CARD_IN, MIN_COMPARE_CELL_IN = 1.8, 2.2
 #: Words in a prompt or brief that say the deck will be printed: the intake asks the size only then, or for a leave-behind (Fable Q4).
 PRINT_WORDS = ("print", "printed", "printing", "a4", "handout", "leave-behind", "leave behind", "4:3")
 #: The most preferred layouts a recipe lists for one slide type.

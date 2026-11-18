@@ -1099,6 +1099,10 @@ TEXT_OVER_TYPES = ("title", "idea", "real_question")
 SCRIM_FLOOR, SCRIM_CAP, SCRIM_STEP = 0.40, 0.60, 0.01
 TEXT_ON_PICTURE_TARGET = 4.8
 BUSY_SD = 0.12
+#: deck-slide-size (review 5): a solid shape or a hard edge under the words. The zone is cut into SHAPE_GRID cells (columns, rows) on the
+#: thumbnail; when their mean luminances differ by more than SHAPE_DELTA, part of the block sits on a shape (a dark mark, a horizon), which no
+#: scrim hides, so the zone is refused. Fine texture (stripes, grain) averages out inside a cell and is still the scrim's to calm.
+SHAPE_GRID, SHAPE_DELTA = (6, 3), 0.15
 #: The picture box of a bleed layout (inches): the full slide width, from the top edge to the footer rule's strip (the footer, the
 #: section and the page number stay on the slide's ground, never on the picture). The margin and the block the finder measures.
 BLEED_W, BLEED_H, BLEED_M = 13.333, 6.85, 0.65
@@ -1206,6 +1210,24 @@ def _zone_pixels(thumb, box: tuple, W: float, H: float) -> list:
     return [px[i, j] for j in range(y0, y1) for i in range(x0, x1)]
 
 
+def _zone_cells(thumb, box: tuple, W: float, H: float, grid: tuple = SHAPE_GRID) -> list:
+    """The mean relative luminance of each of ``grid`` cells of the zone ``box`` on the thumbnail (cells with no pixel left out)."""
+    x, y, w, h = box
+    tw, th = thumb.size
+    x0, x1 = max(0, int(x / W * tw)), min(tw, int(round((x + w) / W * tw)))
+    y0, y1 = max(0, int(y / H * th)), min(th, int(round((y + h) / H * th)))
+    px = thumb.load()
+    out = []
+    for gi in range(grid[0]):
+        for gj in range(grid[1]):
+            a0, a1 = x0 + (x1 - x0) * gi // grid[0], x0 + (x1 - x0) * (gi + 1) // grid[0]
+            b0, b1 = y0 + (y1 - y0) * gj // grid[1], y0 + (y1 - y0) * (gj + 1) // grid[1]
+            cell = [_rel_lum(px[i, j]) for j in range(b0, b1) for i in range(a0, a1)]
+            if cell:
+                out.append(sum(cell) / len(cell))
+    return out
+
+
 def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, block: tuple = ZONE_BLOCK, zones=ZONES,
               ink: str = "1B2430", paper: str = "FAF7F1", target: float = TEXT_ON_PICTURE_TARGET) -> dict:
     """The calm-zone finder and scrim solver (design.pictures.zone_finder), pure Pillow on a 160 px thumbnail, deterministic.
@@ -1231,6 +1253,10 @@ def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, b
         text, scrim = (paper, ink) if on_paper else (ink, paper)
         t_rgb, s_rgb = (paper_rgb, ink_rgb) if on_paper else (ink_rgb, paper_rgb)
         rec = {"zone": z, "text": text, "colour": scrim, "busy_sd": round(sd, 3)}
+        cells = _zone_cells(thumb, zone_box(z, block, W, H), W, H)
+        if cells and max(cells) - min(cells) > SHAPE_DELTA:   # a shape or an edge under the words: no scrim makes that read
+            tried.append({**rec, "alpha": SCRIM_CAP, "p10": round(p10_contrast(pix, t_rgb, s_rgb, SCRIM_CAP), 2), "why": "shapes"})
+            continue
         if (1 - SCRIM_CAP) * sd > BUSY_SD:
             tried.append({**rec, "alpha": SCRIM_CAP, "p10": round(p10_contrast(pix, t_rgb, s_rgb, SCRIM_CAP), 2), "why": "too busy"})
             continue
@@ -1253,6 +1279,7 @@ def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, b
         return best[1]
     top = max(tried, key=lambda r: r["p10"]) if tried else {}
     why = ("every zone is too busy under the words" if tried and all(t["why"] == "too busy" for t in tried)
+           else "every zone has a shape or an edge under the words" if tried and all(t["why"] in ("shapes", "too busy") for t in tried)
            else f"no zone reaches {target:g}:1 at the {SCRIM_CAP:.0%} cap")
     return {"none": True, "reason": why, "best": {k: top[k] for k in ("zone", "text", "p10", "busy_sd") if k in top}, "by": "finder"}
 
@@ -1287,7 +1314,7 @@ def solve_text_zones(deck: dict, paths: dict, ink: str = "1B2430", paper: str = 
         im = (sl or {}).get("image") if isinstance(sl, dict) else None
         if s["type"] not in TEXT_OVER_TYPES or not isinstance(im, dict) or im.get("asset") not in paths:
             continue
-        if not im.get("text_zone"):
+        if not im.get("text_zone") or (kw and (im["text_zone"].get("by") in (None, "finder"))):   # at 4:3 / A4 a zone measured at 16:9 is never kept
             im["text_zone"] = text_zone(paths[im["asset"]], focal=im.get("focal"), ink=ink, paper=paper, **kw)
         out.append((sid, im["text_zone"]))
     return out

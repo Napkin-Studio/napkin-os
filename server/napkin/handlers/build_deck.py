@@ -89,6 +89,24 @@ def deck_type_of(inputs: dict) -> dict | None:
     return out
 
 
+#: deck-slide-size: the slide sizes the engine draws (engine spec.SLIDE_SIZES).
+SIZES = ("16:9", "4:3", "a4")
+
+
+def size_of(data: dict) -> str | None:
+    """The person's slide size: ``look.size.canvas`` (Start, Review), else their answer to the intake's ``q_pref_size`` card
+    (``intake.answers.q_pref_size.option_id``, not a skip); None when neither names one of the three (the engine then uses the recipe's or 16:9)."""
+    look = data.get("look") if isinstance(data.get("look"), dict) else {}
+    sz = look.get("size") if isinstance(look.get("size"), dict) else {}
+    if sz.get("canvas") in SIZES:
+        return sz["canvas"]
+    intake = data.get("intake") if isinstance(data.get("intake"), dict) else {}
+    ans = (intake.get("answers") or {}).get("q_pref_size") if isinstance(intake.get("answers"), dict) else None
+    if isinstance(ans, dict) and not ans.get("skipped") and ans.get("option_id") in SIZES:
+        return ans["option_id"]
+    return None
+
+
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
     data = ctx_data(req.clan)
@@ -113,6 +131,9 @@ def start(req, caps, settings, jid):
     dt = deck_type_of(inputs)
     if dt:   # deck-types: the person's pick on the type picker (and any new writing they confirmed): the engine builds that type, not the kind's default
         body["inputs"]["deck_type"] = dt
+    size = size_of(data)
+    if size:   # deck-slide-size: the person's slide size (Start, Review, or the intake card's answer); the engine forwards it as --size
+        body["look"] = {"size": {"canvas": size}}
     if inputs.get("text_mode") in ("condense", "preserve"):   # the person's choice: condense lets the repair loop move points to the notes and shorten
         body["inputs"]["text_mode"] = inputs["text_mode"]
     if isinstance(data.get("review"), dict) and data["review"]:   # the person's whole review (pictures and pins): the picture step reads it, the engine takes the pins from it

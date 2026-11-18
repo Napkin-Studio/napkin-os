@@ -481,3 +481,133 @@ def test_the_bench_never_compares_two_sizes():
         bench_compare.compare(base, {**base, "size": "4:3"})
     assert bench_compare.compare(base, base)["regressions"] == 0
     assert spec.BENCH_DENSITY == {"16:9": "detailed", "4:3": "standard", "a4": "detailed"}
+
+
+# ================================================================================================ the adversarial review's fixes
+
+def _master(tmp_path, w, h, name="m.pptx"):
+    from pptx import Presentation as P
+    prs = P()
+    prs.slide_width, prs.slide_height = Emu(w), Emu(h)
+    prs.save(str(tmp_path / name))
+    return tmp_path / name
+
+
+def test_a_16x9_master_wins_over_an_a4_recipe_and_an_odd_master_is_refused(tmp_path):
+    m169 = _master(tmp_path, 12191695, 6858000)
+    d = {"meta": {}}
+    assert run_deck._resolve_size(_a(master=m169), d, None, {"size": "a4"}) == "16:9" and "preferences" not in d["meta"]
+    odd = _master(tmp_path, 9906000, 6858000, "odd.pptx")   # PowerPoint's 'A4 Paper' preset, 10.83 x 7.5 in: none of the three
+    with pytest.raises(SystemExit, match="none of the slide sizes"):
+        run_deck._resolve_size(_a(master=odd), {"meta": {}}, None, None)
+
+
+def test_a_master_conflict_is_refused_before_any_paid_stage(tmp_path, monkeypatch):
+    m43 = _master(tmp_path, 9144000, 6858000)
+    monkeypatch.setattr(intake, "chosen_type", lambda *a, **k: (_ for _ in ()).throw(AssertionError("refused too late")))
+    with pytest.raises(SystemExit, match="never converted"):
+        run_deck.main(["--prompt-text", "a launch", "--stages", str(tmp_path / "st"), "--client", "c", "--project", "p", "--out", str(tmp_path / "o"),
+                       "--master", str(m43), "--size", "a4"])
+    assert not (tmp_path / "st").exists() or not list((tmp_path / "st").iterdir())
+    src = Path(run_deck.__file__).read_text()
+    assert "profiles.recipes_on() and not a.master and not _explicit_size(a, deck_ctx, answers)" in src   # no size card when a master fixes it
+
+
+def test_a_slide_only_the_size_overflows_is_never_shortened(monkeypatch):
+    real = R.Renderer.probe
+
+    def probe(self, s, name, relaxed=False, scale_cap=None, title_pt=None, cpl=48):   # nothing fits at 4:3; 16:9 as it is
+        if self.cv.name != "16:9" and name != "flow":
+            return {"ok": False, "scale": 1.0, "relaxed": relaxed}
+        return real(self, s, name, relaxed, scale_cap, title_pt, cpl)
+    monkeypatch.setattr(R.Renderer, "probe", probe)
+    d, issues, pending = layouts.plan(_golden("4:3"), prefs={"density": "detailed", "text_mode": "condense", "repair": True})
+    tagged = [sid for sid in d["order"] if ((d["slides"][sid].get("layout") or {}).get("fit") or {}).get("by_size")]
+    assert tagged and not {x["slide"] for x in pending} & set(tagged)   # a no_fit only the size made gets no pending shorten
+    asked = []
+    d2, _, _ = layouts.plan(_golden("4:3"), prefs={"density": "detailed"}, hooks={"shorten": lambda sid, *a: asked.append(sid)})
+    tagged2 = {sid for sid in d2["order"] if ((d2["slides"][sid].get("layout") or {}).get("fit") or {}).get("by_size")}
+    assert tagged2 and not set(asked) & tagged2
+    assert all(((x.get("fix") or {}).get("kind") != "shorten") for x in issues if x["slide"] in tagged and x["check"] == "slot_limit")
+    sid = tagged[0]
+    env = {"deck": d, "fixes": {}, "policy": {}, "state": {"tried": set()}, "shorten_ok": True, "shorten_why": "", "library": layouts.load(),
+           "text_mode": "condense", "density": "detailed"}
+    for check in ("text_overflow", "min_font", "slot_limit"):
+        ok, why = repair.available("shorten", {"slide": sid, "slot": "lead", "check": check, "evidence": {"measured": 1, "limit": 1, "unit": "chars"}}, env)
+        assert not ok and "16:9" in why, check
+    d16, _, _ = layouts.plan(_golden(), prefs={"density": "detailed"})
+    assert not [s for s in d16["order"] if ((d16["slides"][s].get("layout") or {}).get("fit") or {}).get("by_size")]
+
+
+def _shapes_pic(tmp_path, name, fill, size=(1946, 1000)):
+    from PIL import Image
+    im = Image.new("RGB", size)
+    px = im.load()
+    for y in range(size[1]):
+        for x in range(size[0]):
+            px[x, y] = fill(x / size[0], y / size[1])
+    im.save(tmp_path / name)
+    return tmp_path / name
+
+
+def test_the_finder_refuses_a_shape_under_the_words_and_remeasures_at_a_size(tmp_path):
+    sky, mark = (200, 220, 234), (58, 64, 72)
+    p = _shapes_pic(tmp_path, "mark.png", lambda u, v: mark if (0.2 < u < 0.35 and 0.15 < v < 0.5) else sky)   # a dark mark in the top-left zone
+    rec = images.text_zone(p)
+    assert rec.get("zone") and rec["zone"] != "top_left" and rec["zone"] != "middle_left"
+    horizon = _shapes_pic(tmp_path, "hz.png", lambda u, v: mark if (v > 0.6 or 0.4 < u < 0.6) else sky)
+    none = images.text_zone(horizon)
+    assert none.get("none") and "shape" in none["reason"]
+    d = {"order": ["s01"], "slides": {"s01": {"type": "title", "slots": {"picture": {"kind": "image", "image": {
+        "asset": "img_x", "status": "made", "aspect": "16:9", "text_zone": {"zone": "top_left", "text": "1B2430", "colour": "FAF7F1", "alpha": 0.4,
+                                                                             "p10": 9.0, "busy_sd": 0.02, "by": "finder"}}}}}}}
+    images.solve_text_zones(copy.deepcopy(d), {"img_x": p})   # 16:9 keeps a recorded zone
+    d43 = copy.deepcopy(d)
+    images.solve_text_zones(d43, {"img_x": p}, canvas=T.CANVASES["4:3"])
+    assert d43["slides"]["s01"]["slots"]["picture"]["image"]["text_zone"] != d["slides"]["s01"]["slots"]["picture"]["image"]["text_zone"]
+
+
+def test_web_side_pictures_narrow_with_a_floor():
+    css = render_web.size_css(T.CANVASES["4:3"])
+    assert ".pw560 .pics.side{zoom:0.7230}" in css and ".pw560 header,.pw560 .body{margin-right:475px}" in css
+    assert ".pw360 .pics.side{zoom:1.0000}" in css   # never under 360 px
+
+
+def test_kpi_cards_and_comparison_cells_keep_their_minimums():
+    stats4 = {"blocks": [{"kind": "stats", "items": [{"value": "1", "label": "a"}] * 4}]}
+    table = lambda n: {"blocks": [{"kind": "table", "rows": [["h"] * n, ["c"] * n]}]}   # noqa: E731
+    r16, r43 = R.Renderer(_golden(), None), R.Renderer(_golden("4:3"), None)
+    assert r16.cells_fit(table(6), "comparison") and r43.cells_fit(stats4, "kpi_row")    # 4 cards at 4:3: 2.0 in
+    assert r43.cells_fit(table(3), "comparison_grid") and not r43.cells_fit(table(4), "comparison_grid")   # 2.78 / 2.04 in
+    assert not r43.probe({"type": "competition", "title": "x", "blocks": table(4)["blocks"]}, "comparison_grid")["ok"]
+    assert spec.MIN_KPI_CARD_IN == 1.8 and spec.MIN_COMPARE_CELL_IN == 2.2
+
+
+def test_the_dropped_cover_picture_names_a_persons_swap(monkeypatch):
+    d = _golden("4:3")
+    cover = d["order"][0]
+    monkeypatch.setattr(images, "drawn", lambda deck, aud: {(cover, "picture"): {"asset": "img_x", "aspect": "16:9"}})
+    _, issues, _ = layouts.plan(d, prefs={"density": "detailed"}, swaps={cover: "cover"})
+    msg = [i["message"] for i in issues if i["slide"] == cover and i["check"] == "image_missing"]
+    assert msg and "a person chose cover" in msg[0] and "does not fit beside" not in msg[0]
+
+
+
+def test_the_cover_title_never_breaks_inside_a_word_at_a_size(tmp_path):
+    """At 4:3 the cover's title is measured as drawn (the last two words glued) with 10% slack for a glued pair: 'awareness campaign' at
+    64 pt filled 97% of the 8.7 in line by the estimate and broke inside the word, so the cover steps down a size."""
+    d = _golden("4:3")
+    cover = d["order"][0]
+    d["slides"][cover]["title"] = "Lumen Water: National awareness campaign"
+    d["slides"][cover].pop("layout", None)
+    r = R.Renderer(d, Inputs(brief={}))
+    sl = r.prs.slides.add_slide(r.blank)
+    r._sid, r._lid, r._cur = cover, "cover", sl
+    r._lay_cover(sl, {**d["slides"][cover], "blocks": spec.shown_blocks(d["slides"][cover], "review")})
+    size = next(sh for sh in sl.shapes if sh.name == "Title").text_frame.paragraphs[0].runs[0].font.size.pt
+    assert size < 64
+    r16 = R.Renderer({**_golden(), "slides": {**_golden()["slides"], cover: d["slides"][cover]}}, Inputs(brief={}))
+    sl16 = r16.prs.slides.add_slide(r16.blank)
+    r16._sid, r16._lid, r16._cur = cover, "cover", sl16
+    r16._lay_cover(sl16, {**d["slides"][cover], "blocks": spec.shown_blocks(d["slides"][cover], "review")})
+    assert next(sh for sh in sl16.shapes if sh.name == "Title").text_frame.paragraphs[0].runs[0].font.size.pt == 64   # 16:9 as before

@@ -586,7 +586,9 @@ def available(rung: str, issue: dict, env: dict) -> tuple:
             return False, env["shorten_why"]
         if not slot:
             return False, "the finding names no slot"
-        if " at " in str((issue.get("evidence") or {}).get("unit") or ""):   # deck-slide-size: only the slide size raised it (layouts.BY_SIZE)
+        if " at " in str((issue.get("evidence") or {}).get("unit") or "") or (lay.get("fit") or {}).get("by_size"):
+            # deck-slide-size: only the slide size raised it (layouts.BY_SIZE), or the slide holds its layout at 16:9 (fit.by_size): any finding
+            # on it (slot_limit, text_overflow, min_font) is the free ladder's
             return False, "the words fit at 16:9: a size change is taken by the layout ladder, never by a paid shorten"
         return True, ""
     if rung == "overflow_to_notes":

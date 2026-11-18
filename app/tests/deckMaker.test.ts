@@ -57,7 +57,9 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   DECK_TYPES: { id: string; label: string; one_line: string; kind: string; looks: string; article: string }[]
   DECK_TYPE_CARDS: TypeCard[]
   cardOf(id: string): TypeCard | null
-  typeCaption(card: unknown): string
+  typeCaption(card: unknown, format?: string, on?: boolean): string
+  defaultSize(card: unknown, format?: string, on?: boolean): string
+  recipesOn(data: unknown): boolean
   pickPatch(type: string | null, at: string, confirmed?: string[] | null): unknown
   offeredCards(data: unknown): { id: string; recipe_only: boolean }[]
   builtTypeOf(data: unknown): string | null
@@ -2271,7 +2273,7 @@ test('the format switch sits under the grid with both options, writes through Bu
 })
 
 const sizeOn = (h: string) => [...h.matchAll(/data-size="([^"]+)" aria-pressed="true"/g)].map(x => x[1])
-const sizeStart = (inputs: Record<string, unknown>, look?: unknown) => mount({ inputs: { prompt: { text: 'a line' }, ...inputs }, ...(look ? { look } : {}), upstream: { d1: briefDoc } })
+const sizeStart = (inputs: Record<string, unknown>, look?: unknown, types: unknown = ALL_TYPES) => mount({ inputs: { prompt: { text: 'a line' }, ...inputs }, ...(look ? { look } : {}), run: { state: 'draft', stages: [], gate: null, types }, upstream: { d1: briefDoc } })
 
 test('the slide size group renders three options after the format switch, the default marked', () => {
   const m = sizeStart({ format: 'pitch' })
@@ -2319,6 +2321,20 @@ test('the type card caption shows A4 for a tender, and follows the format', () =
   assert.ok(pickerOf(m.app.innerHTML).includes('about 10 slides · 16:9 · pictures: many'))
   const f = sizeStart({ format: 'full' })
   assert.ok(pickerOf(f.app.innerHTML).includes('about 10 slides · A4 · pictures: many'))
+})
+
+test('with the recipes off (or not yet known) no A4 is offered as the default: the engine would build 16:9', () => {
+  const off = { recipes: false, offered: ['agency_pitch', 'tender_response', 'investor_seed', 'credentials'] }
+  for (const types of [off, null]) {   // null: the engine has not said yet
+    const t = sizeStart({ format: 'full', deck_type: { id: 'tender_response', by: 'person', at: 't' } }, undefined, types)
+    assert.deepEqual(sizeOn(t.app.innerHTML), ['16:9'])
+    const h = pickerOf(t.app.innerHTML)
+    assert.ok(h.includes('Widescreen 16:9</b><span>For presenting on a screen (default)'))
+    assert.equal(h.includes('To print as a leave-behind (default)'), false)
+    assert.equal(h.includes('· A4 ·'), false)
+  }
+  assert.equal(L.defaultSize(L.cardOf('tender_response'), 'pitch', false), '16:9')
+  assert.equal(L.typeCaption(L.cardOf('tender_response'), 'pitch', false), 'up to 18 slides · 16:9 · pictures: none generated')
 })
 
 test('schema: look.size refuses a canvas other than 16:9, 4:3 or a4', () => {

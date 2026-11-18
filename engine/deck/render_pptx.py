@@ -1608,7 +1608,11 @@ class Renderer:
         rest = sum(self.ph([pp], w) + 0.25 for pp, b in paras) - 0.25
         too_long = True
         for size in ((64, 60, 54, 48, 44) if (spec.LOOK_V2 or panel) else (S.display, 40, 36, 32, 28)):   # the largest size at which the title takes three lines and the whole cover fits
-            n = self.nlines(s["title"], w, size, True, self.th.head)
+            if self._cv is None:
+                n = self.nlines(s["title"], w, size, True, self.th.head)
+            else:   # deck-slide-size: measured as drawn (the last two words glued), and no glued pair wider than 90% of the line by the glyph
+                # estimate: at 64 pt 'awareness campaign' was 8.47 of 8.7 in by the estimate and broke inside the word in LibreOffice
+                n = self.nlines(glue(s["title"]), w, size, True, self.th.head) if self._units_fit(s["title"], w * 0.9, size) else 99
             if n > 3:
                 continue
             too_long = False
@@ -2114,7 +2118,10 @@ class Renderer:
         from . import graphics   # noqa: PLC0415
         if ground:
             self.rect(sl, x, y, w, h, fill=ground, name="FrameGround")
-            x, y, w, h = x + 0.45, y + 0.75, w - 0.9, h - 1.5
+            if self._cv is not None and x <= 0.01:   # deck-slide-size: a column bleeding off the left keeps its labels 0.5 in in
+                x, y, w, h = x + 0.55, y + 0.75, w - 1.0, h - 1.5
+            else:
+                x, y, w, h = x + 0.45, y + 0.75, w - 0.9, h - 1.5
         row = self.PILL_H + 0.18
         geo = graphics.frame_geometry(fr["kind"], self._aspect_v(fr["ratio"], x, y, w, h - row), x, y, w, h - row)   # the format's exact aspect at any size
         gutter = None
@@ -4141,7 +4148,7 @@ class Renderer:
         this, so the plan and the drawing cannot disagree about what fits. ``scale`` is the smallest stack scale used (1.0 when none)."""
         fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
         lib = layouts.load()
-        if self.not_here(name, lib):   # deck-slide-size: a layout listed not_at this size never fits it (the switch rung takes its alternatives)
+        if self.not_here(name, lib) or not self.cells_fit(s, name):   # deck-slide-size: not_at this size, or its cells under their minimum
             return {"ok": False, "scale": 1.0, "relaxed": relaxed}
         saved = (self._lid, self._min_sc, self._scale_cap, self._relaxed, self._tpt, self._pics, self.p, self._cpl)
         self._cpl = cpl
@@ -4167,7 +4174,7 @@ class Renderer:
         from . import qa_render
         fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
         lib = layouts.load()
-        if self.not_here(name, lib):
+        if self.not_here(name, lib) or not self.cells_fit(s, name):
             return None
         scratch = Presentation()
         if self._cv is None:
@@ -4201,6 +4208,22 @@ class Renderer:
         if self._cv is None:
             return False
         return self.cv.name in ((lib or layouts.load()).get(name) or {}).get("not_at", [])
+
+    def cells_fit(self, s: dict, name: str) -> bool:
+        """deck-slide-size (review 8): the design's row minimums at 4:3 and A4. A KPI card under spec.MIN_KPI_CARD_IN (1.8 in) or a comparison
+        cell under spec.MIN_COMPARE_CELL_IN (2.2 in) fails the layout, so the plan takes its alternatives (kpi_row: cards, cards_split;
+        comparison: cards; comparison_grid: native_table). Always True at 16:9."""
+        if self._cv is None:
+            return True
+        cw = self.x1 - self.x0
+        if name == "kpi_row":
+            n = max((len(b.get("items") or []) for b in s.get("blocks") or [] if b.get("kind") == "stats"), default=0)
+            return n < 2 or self._kx((cw - 0.3 * (n - 1)) / n) >= spec.MIN_KPI_CARD_IN - 1e-9
+        if name in ("comparison", "comparison_grid"):
+            cols = max([len((b.get("rows") or [[]])[0]) for b in s.get("blocks") or [] if b.get("kind") == "table"]
+                       + [2 for b in s.get("blocks") or [] if b.get("kind") == "fromto"] + [0])
+            return cols < 2 or self._kx((cw - 0.25 * (cols - 1)) / cols) >= spec.MIN_COMPARE_CELL_IN - 1e-9
+        return True
 
     def title_fits(self, title: str, pt: int, lines: int = 3) -> bool:
         """Whether a title takes at most ``lines`` lines at ``pt`` across the content width."""
@@ -4418,7 +4441,7 @@ class Renderer:
         n_sh, n_st = len(sl.shapes), len(self.steps)
         fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
         self._lid = name
-        if self.not_here(name):
+        if self.not_here(name) or not self.cells_fit(s, name):
             return False
         try:
             try:

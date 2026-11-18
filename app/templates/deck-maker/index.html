@@ -704,16 +704,20 @@ var DeckLogic = (function () {
     { id: 'a4', short: 'A4', label: 'A4 landscape', note: 'To print as a leave-behind' }
   ];
   function sizeShort(canvas) { for (var i = 0; i < SIZES.length; i++) if (SIZES[i].id === canvas) return SIZES[i].short; return String(canvas); }
-  /** The recipe's size for a card and format: size_read when the deck is sent to be read (format full), else size. No card: a4 for full, else 16:9. */
-  function defaultSize(card, format) {
+  /** Whether the engine said its deck recipes are on (run.types.recipes, written through the middleware). Unknown is off: the safe side. */
+  function recipesOn(data) { return !!(isObj(data) && isObj(data.run) && isObj(data.run.types) && data.run.types.recipes === true); }
+  /** The recipe's size for a card and format: size_read when the deck is sent to be read (format full), else size. No card: a4 for full, else
+   *  16:9. ``on`` false (the engine's recipes off): 16:9, since that engine applies no recipe size (an A4 'default' would be a promise it breaks). */
+  function defaultSize(card, format, on) {
+    if (on === false) return '16:9';
     if (isObj(card)) { var c = format === 'full' ? card.size_read : card.size; if (c) return c; }
     return format === 'full' ? 'a4' : '16:9';
   }
-  /** The size in force: the person's look.size.canvas if it is one of the three, else the recipe's default. */
+  /** The size in force: the person's look.size.canvas if it is one of the three, else the default (the recipe's only when the recipes are on). */
   function sizeOf(data, card, format) {
+    var d = defaultSize(card, format, recipesOn(data));
     var sz = isObj(data) && isObj(data.look) && isObj(data.look.size) ? data.look.size : null;
-    if (sz && SIZES.some(function (x) { return x.id === sz.canvas; })) return { canvas: sz.canvas, chosen: true, dflt: defaultSize(card, format) };
-    var d = defaultSize(card, format);
+    if (sz && SIZES.some(function (x) { return x.id === sz.canvas; })) return { canvas: sz.canvas, chosen: true, dflt: d };
     return { canvas: d, chosen: false, dflt: d };
   }
   /** The patch for the person's size pick on Start: look.size {canvas, by, at, via}. Null for an unknown canvas. */
@@ -723,10 +727,10 @@ var DeckLogic = (function () {
   }
 
   /** A card's caption: 'about 10 slides · 16:9 · pictures: many'; a type with no target says 'up to <max> slides'. The size is the one for the format. */
-  function typeCaption(card, format) {
+  function typeCaption(card, format, on) {
     if (!isObj(card)) return '';
     var len = card.target != null ? 'about ' + card.target + ' slides' : 'up to ' + card.max + ' slides';
-    return len + ' · ' + sizeShort(defaultSize(card, format)) + ' · pictures: ' + card.pictures;
+    return len + ' · ' + sizeShort(defaultSize(card, format, on)) + ' · pictures: ' + card.pictures;
   }
 
   /**
@@ -1619,7 +1623,7 @@ var DeckLogic = (function () {
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
-    DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
+    DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
     recordedStages: recordedStages, changeSheet: changeSheet,
     researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
@@ -1996,7 +2000,7 @@ var DeckProd = (function () {
       return '<button type="button" class="dtc' + (ask === c.id ? ' asking' : '') + '" role="radio" aria-checked="' + sel + '" tabindex="' + (sel ? 0 : -1) + '" data-dpick="' + esc(c.id) + '">' +
         '<span class="dtc-h"><b>' + esc(c.label) + '</b>' + (sel ? '<span class="tag">' + tagOf[t.source] + '</span>' : '') + '</span>' +
         '<span class="dtc-l">' + esc(c.one_line) + '</span>' + spineThumb(c) +
-        '<span class="dtc-c mono">' + esc(L.typeCaption(c, format)) + '</span></button>';
+        '<span class="dtc-c mono">' + esc(L.typeCaption(c, format, L.recipesOn(s.raw))) + '</span></button>';
     }).join('') +
       '<button type="button" class="dtc unsure" role="radio" aria-checked="' + !on + '" tabindex="' + (on ? -1 : 0) + '" data-dpick="none">' +
         '<span class="dtc-h"><b>Not sure</b></span><span class="dtc-l">Decide from my brief: your prompt and documents choose, and an agency pitch when nothing says otherwise.</span>' +

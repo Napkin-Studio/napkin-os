@@ -1151,6 +1151,9 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             shown = spec.shown_blocks(sl_, aud)
             res = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
         alts_fit: list = []
+        # deck-slide-size (review 4): a slide that holds its layout at 16:9 overflows here only because of the size: every finding on it is
+        # the free ladder's, never a paid shorten (no hook call, no pending entry), and repair reads fit.by_size
+        size_only = size != themes.SIZE_DEFAULT and fits_169({**sl_, "blocks": shown}, lid, sc_cap, pt.get(lid))
         if res is not None and res["ok"] and not res["relaxed"]:
             rung, scale = ("as_is" if res["scale"] >= 1.0 else "shrunk"), res["scale"]
         else:
@@ -1166,7 +1169,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             if switched:
                 lid, res = switched[0], switched[1]
                 rung, scale, chosen_by, why_ = "switched", res["scale"], "fit_ladder", f"fit ladder: {ids[sid]} too full"
-            elif stop and not exempt and not (size != themes.SIZE_DEFAULT and fits_169({**sl_, "blocks": shown}, lid, sc_cap, pt.get(lid))):
+            elif stop and not exempt and not size_only:
                 rung = "no_fit"   # slice 5 shortens first; the rungs not yet run are listed in pending (never for an overflow only the size made)
             else:
                 # notes rung: movable points, last first, until it fits (density detailed, preserve, a pinned slide and notes deny skip it).
@@ -1221,6 +1224,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             fit["cpl"] = cpl_
         if tpt_ is not None and tpt_ != pt.get(lid):
             fit["title_pt"] = tpt_
+        if size_only and (rung != "as_is" or moved):
+            fit["by_size"] = True
         def fits(a, _s={**sl_, "blocks": shown}, _cap=sc_cap):
             r = probe(_s, a, cap=_cap, stamped=pt.get(a))
             if not (r["ok"] and not r["relaxed"]):
@@ -1234,8 +1239,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
                   "fit": fit, "blocks_sha": blocks_sha(base, aud)}
         s["layout"] = layout
         if size != themes.SIZE_DEFAULT and s["type"] == "title" and ready.get(sid) and not (lay and image_slots(lay)):   # Fable: never silent
-            issues.append(_issue(sid, "picture", "image_missing", f"at {size} the cover's title does not fit beside its picture, so the cover is "
-                                 f"drawn as {lid} without it: a shorter title, or 16:9, keeps the picture"))
+            issues.append(_issue(sid, "picture", "image_missing", f"at {size} the cover is drawn as {lid} without its picture: "
+                                 + _why_no_picture(lib, s, sl_, shown, lid, chosen_by, ready.get(sid, frozenset()), aud, probe, pt)))
         fb = text_zone_fallback(s) if spec.LOOK_V3 and s["type"] in images.TEXT_OVER_TYPES and "picture" in ready.get(sid, ()) else None
         if fb:   # deck-look step 7: no zone of the picture reads at AA under the capped scrim: the words sit beside it, and it is said
             best = fb.get("best") or {}
@@ -1269,9 +1274,15 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
                     lim.append(_issue(sid, "title", "slot_limit", f"the title takes {n_} lines at {tpt} pt at {size}, the layout's limit is {tsd['max_lines']}",
                                       n_, tsd["max_lines"], "lines" + BY_SIZE.format(size=size), {"kind": "ladder"}))
                     issues.append(lim[-1])
+            if size_only:   # every finding on a slide only the size overflows is by size (the ladder's, never a paid shorten)
+                for x in lim:
+                    if (x.get("fix") or {}).get("kind") == "shorten":
+                        x["fix"] = {"kind": "ladder"}
+                        if x.get("evidence") and " at " not in str(x["evidence"].get("unit")):
+                            x["evidence"]["unit"] = f"{x['evidence']['unit']}{BY_SIZE.format(size=size)}"
             by_size = [x for x in lim if (x.get("fix") or {}).get("kind") != "shorten"]
             lim = [x for x in lim if (x.get("fix") or {}).get("kind") == "shorten"]   # deck-slide-size: a finding only the size raised is never shortened
-            if stop and rung == "no_fit" and not lim and not by_size and slots:
+            if stop and rung == "no_fit" and not lim and not by_size and not size_only and slots:
                 big = max((n for n in slots if n != "title"), key=lambda n: slots[n]["chars"], default=None)
                 if big:
                     pending.append(_pend(sid, {"slot": big, "evidence": {"measured": slots[big]["chars"], "limit": (lay["slots"][big].get("max_chars") or slots[big]["chars"])}}))
@@ -1291,6 +1302,26 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     deck["meta"]["_plan_secs"] = round(time.time() - t0, 3)
     deck["meta"].pop("_plan_secs", None)
     return deck, issues, pending
+
+
+def _why_no_picture(lib, s, sl_, shown, lid, chosen_by, ready, aud, probe, pt) -> str:
+    """deck-slide-size (review 9): the real reason a cover with a ready picture is drawn without it: a person's swap, a repair fix, no zone
+    of the picture that the words can sit on (the text-zone finder's own reason), or a title that does not fit beside the picture."""
+    if chosen_by == "person":
+        return f"a person chose {lid}, which has no picture"
+    if chosen_by == "repair":
+        return f"a repair fix chose {lid}, which has no picture"
+    why = []
+    im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
+    tz = im.get("text_zone") or {}
+    if tz.get("none"):
+        why.append(f"the words cannot sit on the picture ({tz.get('reason', 'no zone reads')})")
+    pics = [a for a in lib if a != lid and image_slots(lib[a]) and lib[a]["group"] == lib.get(lid, {}).get("group", "functional")
+            and accepts(lib[a], s, spec.shown_blocks(s, aud), ready)]
+    beside = [a for a in pics if not lib[a].get("when", {}).get("test") == "bleed_ready"]
+    if beside and not any(probe({**sl_, "blocks": shown}, a, stamped=pt.get(a))["ok"] for a in beside):
+        why.append("the title does not fit beside the picture")
+    return "; ".join(why) or "no layout with a picture holds this cover at this size"
 
 
 def _pend(sid, x) -> dict:

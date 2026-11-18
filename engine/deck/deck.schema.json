@@ -1819,6 +1819,10 @@
          "minimum": 28,
          "maximum": 36,
          "description": "deck-slide-size: the title size this one slide was fitted at at 4:3 or A4 when the layout's stamped size would not fit (the last rung before no_fit)."
+        },
+        "by_size": {
+         "type": "boolean",
+         "description": "deck-slide-size: the slide holds its layout at 16:9 and needed the ladder only at this size: its findings are never shortened (no paid call for a size change)."
         }
        }
       },

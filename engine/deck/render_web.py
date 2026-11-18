@@ -1084,7 +1084,11 @@ def size_css(cv) -> str:
     bleed = px(cv.y(6.85))
     page = ("@page{size:297mm 210mm;margin:0}" if cv.name == "a4" else f"@page{{size:{W}px {H}px;margin:0}}")
     zoom = f";zoom:{297 / 25.4 * 96 / W:.4f}" if cv.name == "a4" else ""
-    return (f"\n#stage{{width:{W}px;height:{H}px}}#nextbox .slide,.thumb .slide{{width:{W}px;height:{H}px}}"
+    side = ""
+    for w in sorted({*PIC_SIDE.values(), 460, 560}, reverse=True):   # the side pictures and frames (pw<w> classes) narrow by k, never under 360 px
+        z = max(cv.k, 360 / w)
+        side += f".pw{w} .pics.side{{zoom:{z:.4f}}}.pw{w} header,.pw{w} .body{{margin-right:{round(w * z) + 70}px}}"
+    return (f"\n#stage{{width:{W}px;height:{H}px}}#nextbox .slide,.thumb .slide{{width:{W}px;height:{H}px}}{side}"
             f"#nextbox,.thumb{{padding-bottom:{H / W * 100:.3f}%}}"
             f".pics.col{{width:{col}px}}.pic-col-left{{padding-left:{col + 94}px}}.pic-col-right{{padding-right:{col + 94}px}}.pic-col-right .flags{{right:{col + 94}px}}"
             f".pics.bleed{{width:{W}px;height:{bleed}px}}"

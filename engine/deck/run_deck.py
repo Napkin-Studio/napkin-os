@@ -272,32 +272,48 @@ def _protect_boxes(a, deck: dict) -> dict:
     return out
 
 
-def _resolve_size(a, deck: dict, deck_ctx, rec: dict | None, answers: dict | None = None) -> str:
-    """deck-slide-size: the deck's slide size, stamped once (``deck.meta.preferences.size``, the one place every reader takes it from) before the
-    pictures and the plan. Precedence: --size > the Deck document's look.size.canvas > the answer to the intake's size card > a .potx
-    master's own size (one of the three) > the
-    recipe's (deck-types slice 8: a tender and the read format default to A4; only with the recipes on) > 16:9. Nothing is stamped when
-    nobody gave a size, so a 16:9 deck is today's. An explicit size that differs from the master's is refused (a master fixes its own size;
-    it is never converted). Returns the size name."""
+def _explicit_size(a, deck_ctx, answers: dict | None = None) -> str | None:
+    """The size a person asked for: --size > the Deck document's look.size.canvas > their answer to the intake's size card (not a skip)."""
     lk = (deck_ctx.get("look") if isinstance(deck_ctx, dict) else None) or {}
     dsz = lk.get("size")
     dsz = dsz.get("canvas") if isinstance(dsz, dict) else dsz
     dsz = dsz if dsz in spec.SLIDE_SIZES else None
-    ans = (answers or {}).get(intake.SIZE_QUESTION_ID) or {}   # the person's answer to the intake's size card (not a skip)
+    ans = (answers or {}).get(intake.SIZE_QUESTION_ID) or {}
     asz = ans.get("option_id") if isinstance(ans, dict) and not ans.get("skipped") else None
-    explicit = a.size or dsz or (asz if asz in spec.SLIDE_SIZES else None)
-    msz = None
-    if a.master:
-        from pptx import Presentation   # noqa: PLC0415
-        m = Presentation(str(a.master))
-        msz = themes.size_by_emu(int(m.slide_width), int(m.slide_height))
-        if explicit and msz != explicit:
-            w_, h_ = int(m.slide_width) / 914400, int(m.slide_height) / 914400
-            raise SystemExit(f"refused: the master {Path(a.master).name} is {msz or f'{w_:.2f} x {h_:.2f} in'} and the size asked is {explicit}: "
-                             "a master fixes its own slide size and is never converted. Drop --size (the master's size is used) or use a master of that size")
+    return a.size or dsz or (asz if asz in spec.SLIDE_SIZES else None)
+
+
+def _master_size(a, explicit: str | None) -> str | None:
+    """deck-slide-size: a --master's own size (one of spec.SLIDE_SIZES), None without a master. Refused (SystemExit) when the master is none of
+    the three (the renderer never draws a geometry other than the slide's) or when a size was asked that differs from it (a master fixes its
+    own size and is never converted). run_deck calls it right after reading the inputs, before any paid stage."""
+    if not a.master:
+        return None
+    from pptx import Presentation   # noqa: PLC0415
+    m = Presentation(str(a.master))
+    msz = themes.size_by_emu(int(m.slide_width), int(m.slide_height))
+    w_, h_ = int(m.slide_width) / 914400, int(m.slide_height) / 914400
+    if msz is None:
+        raise SystemExit(f"refused: the master {Path(a.master).name} is {w_:.2f} x {h_:.2f} in, none of the slide sizes the deck draws "
+                         f"({', '.join(spec.SLIDE_SIZES)}): use a master of one of those sizes")
+    if explicit and msz != explicit:
+        raise SystemExit(f"refused: the master {Path(a.master).name} is {msz} and the size asked is {explicit}: a master fixes its own slide size "
+                         "and is never converted. Drop the size (the master's is used) or use a master of that size")
+    return msz
+
+
+def _resolve_size(a, deck: dict, deck_ctx, rec: dict | None, answers: dict | None = None) -> str:
+    """deck-slide-size: the deck's slide size, stamped once (``deck.meta.preferences.size``, the one place every reader takes it from) before the
+    pictures and the plan. Precedence: the person's (``_explicit_size``) > a .potx master's own size (always over the recipe, 16:9 too) > the
+    recipe's (deck-types slice 8: a tender and the read format default to A4; only with the recipes on) > 16:9. Nothing is stamped when
+    nobody gave a size and the result is 16:9, so a 16:9 deck is today's. Returns the size name."""
+    explicit = _explicit_size(a, deck_ctx, answers)
+    msz = _master_size(a, explicit)
     if explicit:
         name, source = explicit, "person"
-    elif msz and msz != spec.SIZE_DEFAULT:
+    elif msz:   # a master's own size wins over a recipe's, whatever it is
+        if msz == spec.SIZE_DEFAULT:
+            return spec.SIZE_DEFAULT
         name, source = msz, "master"
     elif rec and rec.get("size") and rec["size"] != spec.SIZE_DEFAULT:
         name, source = rec["size"], "recipe"
@@ -449,7 +465,8 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         else:
             pic_f, pl, ic = [], set(), {}
             render_pptx.render(d, inp, folder / "deck.pptx", a.master, f, animate=a.animate or False, layouts_out=folder / "layouts.json", pictures=pics, picture_findings=pic_f,
-                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan, icons=ic)
+                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan, icons=ic,
+                               protect=_protect_boxes(a, d) if themes.size_of(d) != spec.SIZE_DEFAULT else None)   # deck-slide-size: as the first render
             got = {"pptx": folder / "deck.pptx", "pic_findings": pic_f, "placed": pl, "icons": ic}
         return {**got, "pptx": got["pptx"] if got.get("pptx") and Path(got["pptx"]).exists() else None}
 
@@ -989,6 +1006,7 @@ def main(argv=None):
         except inputs.MarksError as e:
             raise SystemExit(f"refused: {e}")
     _add_marks(a, inp)
+    _master_size(a, _explicit_size(a, deck_ctx, answers))   # deck-slide-size: a master/size conflict is refused here, before any paid stage
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
     pick = a.deck_type or (deck_ctx or {}).get("deck_type")   # deck-types: the person's explicit pick (--type, or the document's inputs.deck_type)
     try:
@@ -1058,7 +1076,7 @@ def main(argv=None):
             card = None if choice["source"] == "pick" else intake.type_card_for(inp)   # deck-types: a picked type is not asked again (its place goes to another question)
             intake.add_type_question(st[k], card, profile if profile["arrange"] == "spine" else None)   # the deck type is the first question; a legacy type adds none of its own, so its deck is unchanged
             intake.add_supply_questions(st[k], supply)   # after the type question and the stage's own, within the five-question cap
-            if profiles.recipes_on() and not (a.size or ((deck_ctx or {}).get("look") or {}).get("size")):   # deck-slide-size: asked only when nobody chose a size
+            if profiles.recipes_on() and not a.master and not _explicit_size(a, deck_ctx, answers):   # deck-slide-size: asked only when nobody chose a size and no master fixes it
                 intake.add_size_question(st[k], intake.size_card_for(inp, a.format))
             inp.intake = st[k]
             rep["intake"] = {"applied": intake.apply_a0(inp, st[k]), "gaps": st[k]["gaps"], "questions": asked,
