@@ -154,7 +154,7 @@ export function Rooms() {
     <div className="editor rooms" data-room={room}>
       {/* The shell bar and the band (mock production-new-ui-v2 make, edit): Make | Edit, the film's length, what
           is being made, Open Sound, undo; Go to Edit or Render ad in the bar. */}
-      <EditorBar back="Canvas" onBack={back} icon="video" title="Film" undo escapeBack={false}
+      <EditorBar back="Canvas" onBack={back} icon="video" title={sound ? 'Sound' : room === 'make' ? 'Make' : 'Edit'} undo escapeBack={false}
         view={{ label: 'Room', value: room, options: [{ id: 'make', label: 'Make' }, { id: 'edit', label: 'Edit' }], onPick: (v) => setRoom(v as RoomName) }}
         afterView={<><span className="rm-meta pt-mono" title="The film's length now, and the length it is aiming for">{filmMeta(data.ratio, data.lengthS, data.targetS)}</span>
           {room === 'edit' && !sound && <span ref={setViewSlot} className="rm-bandview" />}</>}

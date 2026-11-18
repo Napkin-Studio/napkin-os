@@ -4,7 +4,7 @@
 // (Plan shots, Make clips, Render ad, Apply as new version), Undo/Redo. Nothing a page does sits in the bar.
 // History is the Decisions drawer. No spend, cost or limit in any bar (principle 4); costs show only in Decisions.
 
-import { type ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { Band, BandBack, ShellBar, type Crumb } from '../shell/ShellBar'
 import { MenuItem } from '../Float'
 import { JobTray } from '../JobTray'
@@ -13,14 +13,19 @@ import { type NodeKind } from './Bar'
 import { DocMenu } from './DocMenu'
 import { undoInMore, useFitLevel } from './fit'
 import { useEscapeBack } from './escapeBack'
+import { useCurrentCanvasPage } from './canvasPage'
+import { RouterContext, useServices } from '../../app/context'
 
 /** Whose History a bar opens: the app's panel, or the Script editor's own. */
 export interface HistoryToggle { on: boolean; toggle: () => void }
 
 /** The canvas's bar: the slim bar with Canvas as where you are. Assets is on the canvas's + menu. */
 export function CanvasBar({ phone = false }: { /** The phone's cut: watch only, so its status dot has no ask dock and no Show. */ phone?: boolean }) {
+  // A page over the canvas (Sizes) adds itself to the crumb; Canvas then closes it.
+  const over = useCurrentCanvasPage()
+  const crumb: Crumb[] = over ? [{ label: 'Canvas', onClick: over.close }, { label: over.label }] : [{ label: 'Canvas' }]
   return (
-    <ShellBar bar="canvas" className="ptbar" crumb={[{ label: 'Canvas' }]}
+    <ShellBar bar="canvas" className="ptbar" crumb={crumb}
       menu={(close) => <DocMenu close={close} />}
       job={phone ? <JobTray phone /> : <JobTray />} />
   )
@@ -60,7 +65,11 @@ export function EditorBar({ className = '', back, onBack, icon, title, meta, vie
   const { level, coarse } = useFitLevel()
   const tight = level === 'tight'
   const undoMore = undo && undoInMore(level, coarse)
-  const crumb: Crumb[] = [{ label: back, onClick: onBack }, { label: title }]
+  // Always "› Canvas › … › this page" (Shrey 2026-11-19): Canvas is a link even when Back goes elsewhere first.
+  const toCanvas = useToCanvas()
+  const crumb: Crumb[] = back === 'Canvas'
+    ? [{ label: 'Canvas', onClick: onBack }, { label: title }]
+    : [{ label: 'Canvas', onClick: toCanvas }, { label: back, onClick: onBack }, { label: title }]
   useEscapeBack(onBack, escapeBack && !holdEscape)
   const pageRows = (close: () => void) => (view && tight) || more || undoMore ? (
     <>
@@ -87,6 +96,16 @@ export function EditorBar({ className = '', back, onBack, icon, title, meta, vie
       </Band>
     </div>
   )
+}
+
+/** Straight to the canvas from any editor: out of the Script editor's route, and the stage back to the canvas. */
+function useToCanvas() {
+  const { ui } = useServices()
+  const router = useContext(RouterContext)
+  return () => {
+    if (router?.get().kind === 'script') router.leave()
+    ui.update((u) => { u.stage = 'character' }, 'stage')
+  }
 }
 
 function ViewSwitch({ view }: { view: NonNullable<Parameters<typeof EditorBar>[0]['view']> }) {

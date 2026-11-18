@@ -83,7 +83,7 @@ describe('the film\'s ▾ menu holds the film\'s actions; each page\'s actions a
 describe('Escape leaves an editor only when nothing else would take it', () => {
   it('not from text, nor while a menu, popover or dialog is open', async () => {
     const { escapeFree } = await import('./escapeBack')
-    const doc = (html: string) => ({ querySelector: (q: string) => (q.split(',').some((x) => html.includes(x.trim().replace(/^\./, 'class="').replace(/^\[role="(.*)"\]$/, 'role="$1"'))) ? {} : null) }) as unknown as Document
+    const doc = (html: string) => ({ querySelectorAll: (q: string) => (q.split(',').some((x) => html.includes(x.trim().replace(/^\./, 'class="').replace(/^\[role="(.*)"\]$/, 'role="$1"'))) ? [{}] : []) }) as unknown as Document
     const el = (closest: boolean) => ({ closest: () => (closest ? {} : null) }) as unknown as Element
     expect(escapeFree(el(false), doc('<div></div>'))).toBe(true)
     expect(escapeFree(el(true), doc('<div></div>'))).toBe(false)
@@ -107,5 +107,18 @@ describe('the avatar menu and the film menu never repeat each other (Shrey 2026-
     const account = bar.slice(bar.indexOf('export function Account'))
     for (const gone of ['The crew', 'CrewSheet', 'New project', 'All projects', 'newProject', 'goHome']) expect(account).not.toContain(gone)
     for (const kept of ['<ThemeChoices />', 'Reduce motion', 'Sign out', 'look.name']) expect(account).toContain(kept)
+  })
+})
+
+describe('the crumb is always "› Canvas › this page", Canvas a link back (Shrey 2026-11-19, Sizes)', () => {
+  it('editors, the rooms and the Sizes overview', () => {
+    const bars = src('./TopBars.tsx')
+    expect(bars).toContain("[{ label: 'Canvas', onClick: onBack }, { label: title }]")
+    expect(bars).toContain("[{ label: 'Canvas', onClick: toCanvas }, { label: back, onClick: onBack }, { label: title }]")
+    expect(bars).toContain("over ? [{ label: 'Canvas', onClick: over.close }, { label: over.label }] : [{ label: 'Canvas' }]")
+    const sizes = src('../../campaign/SizesOverview.tsx')
+    expect(sizes).toContain("useCanvasPage('Sizes', onClose)")
+    expect(sizes).toContain('<BandBack label="Canvas" onClick={onClose} />')
+    expect(src('../../rooms/Rooms.tsx')).toContain("title={sound ? 'Sound' : room === 'make' ? 'Make' : 'Edit'}")
   })
 })

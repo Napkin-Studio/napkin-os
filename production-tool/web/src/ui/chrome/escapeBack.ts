@@ -3,10 +3,11 @@
 import { useEffect, useRef } from 'react'
 
 /** Nothing else would take this Escape: the focus is not in text, and no menu, popover or dialog is open. */
-export function escapeFree(target: EventTarget | null, doc: Document = document): boolean {
+export function escapeFree(target: EventTarget | null, doc: Document = document, page?: Element | null): boolean {
   const el = target as Element | null
   if (el?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"]')) return false
-  return !doc.querySelector('.float, [role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"], [data-escape-holds]')
+  // `page`: the page asking, when it is itself a dialog (the Sizes overview); it does not count as open.
+  return ![...doc.querySelectorAll('.float, [role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"], [data-escape-holds]')].some((x) => x !== page)
 }
 
 /** Escape returns to the canvas from an editor when nothing else takes it (Shrey 2026-11-19): not while
