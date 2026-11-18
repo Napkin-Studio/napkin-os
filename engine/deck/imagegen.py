@@ -477,6 +477,8 @@ def build_cards(ctx: Ctx, plan: dict, retry_unknown: bool = False, remake_style:
         cards["subjects"] = {"kind": "subjects", "usd": usd, "spent_usd": spent, "cap_usd": cap, "left_usd": round(cap - spent - usd, 2),
                              "over_cap": spent + usd > cap + 1e-9, "rows": [{"what": "stage g: 1 model call writes the picture subjects", "usd": usd}],
                              "id": _card_id(["subjects", plan["stage_g"]["request_sha"], cap, spent, sends]), "plan_file": "plan.json"}
+        if getattr(ctx, "production_note", None):
+            cards["subjects"]["production"] = ctx.production_note
         return cards
     new, held, optional, unknown, over = [], [], [], [], []
     running = spent
@@ -510,6 +512,8 @@ def build_cards(ctx: Ctx, plan: dict, retry_unknown: bool = False, remake_style:
     refused_subjects = [f"{r['slide']}.{r['slot']}: description refused ({r['subject_refused']}), generic used" for r in plan["slots"].values() if r.get("subject_refused")]
     cards["pictures"]["refused_subjects"] = refused_subjects
     cards["pictures"]["remade"] = [f"{r['slide']}.{r['slot']}" for r in new if r.get("remake")]
+    if getattr(ctx, "production_note", None):   # deck-prod-picker: what was pulled, for information (pulling costs nothing; not in the card id)
+        cards["pictures"]["production"] = ctx.production_note
     heroes = [h for h in plan.get("heroes", {}).values() if h.get("job")]
     refused = [f"{h['ask']}: {h['reason']}" for h in plan.get("heroes", {}).values() if h.get("reason")]
     if heroes or refused:
@@ -525,12 +529,15 @@ def render_card(card: dict) -> str:
     """The card as the CLI prints it."""
     if card["kind"] == "subjects":
         return (f"SUBJECT CARD  card {card['id']}\n  stage g: 1 Claude call writes the picture subjects   ~${card['usd']:.2f}   (counts inside this deck's cap)\n"
-                f"  preview prompts (code templates, NOT what will be sent): <cache>/plan.json\n  spent ${card['spent_usd']:.2f} | cap ${card['cap_usd']:.2f} | "
+                + (f"  {card['production']} (no cost)\n" if card.get("production") else "")
+                + f"  preview prompts (code templates, NOT what will be sent): <cache>/plan.json\n  spent ${card['spent_usd']:.2f} | cap ${card['cap_usd']:.2f} | "
                 f"left after this card ${card['left_usd']:.2f}     yes: --images subjects --yes-cost {card['id']}")
     word = {"drafts": "PICTURE COST CARD", "heroes": "FINAL PICTURE COST CARD"}[card["kind"]]
     lines = [f"{word}  card {card['id']}  (estimate; nothing is made until you say yes)"]
     for r in card["rows"]:
         lines.append(f"  {r['model']}  {r['tier']}  {r['n']} new x {r['credits_each']} credits = {r['n'] * r['credits_each']} credits  ${r['usd']:.2f}")
+    if card.get("production"):
+        lines.append(f"  {card['production']} (no cost)")
     for h in card.get("refused_subjects") or []:
         lines.append(f"  {h}")
     if card.get("remade"):

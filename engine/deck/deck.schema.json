@@ -1267,8 +1267,10 @@
       "how": {
        "enum": [
         "bundle",
+        "clan",
         "os"
-       ]
+       ],
+       "description": "bundle: the export zip through deck.from_production; clan: a Production .clan (or the zip) read by deck.prod_picker, which picks from metadata and pulls only the picked pictures; os: from the OS (later)."
       },
       "kept": {
        "type": "string",

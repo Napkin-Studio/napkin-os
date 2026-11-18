@@ -467,6 +467,36 @@ def offer_sha(items: dict) -> str:
     return hashlib.sha256(json.dumps(pairs, separators=(",", ":")).encode()).hexdigest()
 
 
+def make_item(c: dict, info: dict, clan_hex: str) -> dict:
+    """One production.json item from a plan_offer candidate and its checked picture (``info``: images.inspect_file's ext, mime, width, height,
+    bytes). Shared with deck.prod_picker, which builds the same items from a .clan read directly (the metadata ones before any byte is read)."""
+    hx = _hex(c["sha"])
+    it = {"entity": c["entity"], "role": c["role"], "version": c.get("version"), "origin": c.get("origin"), "rights": c["rights"],
+          "status": c["status"], "sha256": hx, "bundle_sha256": clan_hex, "file": f"assets/{hx}.{info['ext']}", "mime": info["mime"],
+          "width": info["width"], "height": info["height"], "bytes": info["bytes"], "focal": c["focal"], "focal_by": c["focal_by"]}
+    if c["rights"] == "reference_only":
+        it["to_supply"] = "rights"
+        it["rights_why"] = c.get("rights_why", "")
+    for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "shot_rank", "shot_kind", "keep"):
+        if c.get(k) not in (None, "", {}):
+            it[k] = c[k]
+    if c["role"] != "size":
+        it["aspect"] = {"w": info["width"], "h": info["height"]}
+    return it
+
+
+def format_set_rows(doc: dict, items: dict) -> dict:
+    """production.json's ``format_sets``: each set's version, its master's item key when offered, and the brief it links to (id and hash only)."""
+    fsets = {}
+    for fid, fs in sorted((doc.get("format_sets") or {}).items()):
+        row = {"v": fs.get("v"), "master": f"{fid}#master" if f"{fid}#master" in items else None}
+        b = _brief_of(doc, fid)
+        if b:
+            row["brief"] = b
+        fsets[fid] = row
+    return fsets
+
+
 def build(bundle: Path, at: str | None = None, work: Path | None = None) -> tuple:
     """Read the bundle and return ``(production, {sha256 hex: path})``. Each picture is read, hashed and checked one at a time and written
     to ``work`` (a folder; write() moves the files into the stages folder) as soon as it passes, so only one picture is ever held in memory;
@@ -514,26 +544,8 @@ def build(bundle: Path, at: str | None = None, work: Path | None = None) -> tupl
             total += info["bytes"]
             infos[hx], files[hx] = info, p
             where.add(how)
-        info = infos[hx]
-        it = {"entity": c["entity"], "role": c["role"], "version": c.get("version"), "origin": c.get("origin"), "rights": c["rights"],
-              "status": c["status"], "sha256": hx, "bundle_sha256": clan_hex, "file": f"assets/{hx}.{info['ext']}", "mime": info["mime"],
-              "width": info["width"], "height": info["height"], "bytes": info["bytes"], "focal": c["focal"], "focal_by": c["focal_by"]}
-        if c["rights"] == "reference_only":
-            it["to_supply"] = "rights"
-            it["rights_why"] = c.get("rights_why", "")
-        for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "shot_rank", "shot_kind", "keep"):
-            if c.get(k) not in (None, "", {}):
-                it[k] = c[k]
-        if c["role"] != "size":
-            it["aspect"] = {"w": info["width"], "h": info["height"]}
-        items[c["key"]] = it
-    fsets = {}
-    for fid, fs in sorted((doc.get("format_sets") or {}).items()):
-        row = {"v": fs.get("v"), "master": f"{fid}#master" if f"{fid}#master" in items else None}
-        b = _brief_of(doc, fid)
-        if b:
-            row["brief"] = b
-        fsets[fid] = row
+        items[c["key"]] = make_item(c, infos[hx], clan_hex)
+    fsets = format_set_rows(doc, items)
     proj = doc["project"]
     prod = {"stage": "production", "produced_by": "deck.from_production (a Production Tool export, no model call, no network)",
             "contract_version": CONTRACT, "app": APP_ID, "project": {"id": proj["id"], "title": str(proj.get("title") or "")[:120]},

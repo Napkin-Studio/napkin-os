@@ -518,6 +518,12 @@ PICTURE_LABEL = "Illustrative"
 PRODUCTION_LABEL = "Production"
 #: deck-prod-assets (Q4, fix 8): what an unplaced Production picture with no stated licence says (image_rights, the held list, the picker).
 RIGHTS_TO_SUPPLY = "Rights to supply"
+#: deck-prod-picker (deck-graphics part 5): what a picked Production picture none of its sources yielded says, in production.json, report.json
+#: and the slot's reason. Never skipped silently and never replaced by a generated picture without the person choosing.
+PRODUCTION_NOT_REACHABLE = "not reachable — re-save or export in Production"
+#: The fetch allow-list of Production's provider output hosts (Q12) lives in this policy file, EMPTY by default: the fetch refuses until
+#: the hosts are named there. A host must also appear in the .clan's own locations.
+PRODUCTION_FETCH_POLICY = "policy/production_fetch.yaml"
 #: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
 PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "audience", "real_question", "close",
                        "solution", "product")
