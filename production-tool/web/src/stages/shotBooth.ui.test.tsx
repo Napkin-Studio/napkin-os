@@ -22,7 +22,7 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { addShots, job, MAYA, seedStages, wasm } from '../test/model'
+import { addFrame, addShots, job, MAYA, seedStages, SHA, wasm } from '../test/model'
 import { Storyboard } from './Storyboard'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -99,6 +99,25 @@ describe('the Storyboard Booth on a selected shot', () => {
     act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
     await settle()
     expect(el.querySelector('[data-shot-booth]')).toBeNull()
+  })
+
+  it('What the Camera agent will send shows all of Your words (re-test N-I)', async () => {
+    const { el, render, services, shots } = await mount()
+    await updateDoc(services.doc, (d) => { addFrame(d, d.shots[shots[0]], SHA('a'), { pick: true }) }, 'a frame')
+    render()
+    await settle()
+    click(cell(el, 1).querySelector('.sb-words')!)
+    await settle()
+    const booth = el.querySelector('[data-shot-booth]') as HTMLElement
+    const field = booth.querySelector('input[aria-label="What to change in this frame"]') as HTMLInputElement
+    const words = 'The blue kettle steams on the yellow stove in the centre, rain on the window behind, no people in the room'
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, words)
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await settle()
+    const row = [...booth.querySelectorAll('.disc-line li')].find((li) => li.textContent?.startsWith('Your words'))
+    expect(row?.textContent).toBe(`Your words · “${words}”`)
   })
 
   it("changes the camera and the length from the shot's Booth, through the real store", async () => {

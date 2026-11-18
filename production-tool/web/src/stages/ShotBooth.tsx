@@ -111,7 +111,8 @@ function ShotBoothBody({ shot, index, storyboardId, store, onClose, onOpen, onSc
   const named = refsList(doc).length
   const sending = sendRows(doc, storyboardId, [
     { key: 'frame', label: current ? `Frame ${n} v${idx + 1}` : `Shot ${n}’s words and camera`, detail: mode === 'edit' ? 'changed only where your words say' : 'drawn again from the shot' },
-    { key: 'words', label: 'Your words', detail: words.trim() ? `“${words.trim().slice(0, 80)}”` : 'what you type above' },
+    // All of them, as they go (re-test N-I: cut at 80 characters, mid-phrase, with no ellipsis).
+    { key: 'words', label: 'Your words', detail: words.trim() ? `“${words.trim()}”` : 'what you type above' },
     ...(named ? [{ key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}` }] : []),
   ], mode === 'edit' ? frameEditCopy.send.edit : frameEditCopy.send.redraw)
 
