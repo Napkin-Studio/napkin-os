@@ -57,8 +57,16 @@ const FORWARD: [&str; 5] = [
     "x-project-id",
     "x-project-name",
 ];
-/// Response headers passed back to the tool.
-const PASS_BACK: [&str; 4] = ["content-type", "cache-control", "etag", "x-saved-at"];
+/// Response headers passed back to the tool. `location`: GET /assets/{sha}
+/// answers 302 to the picture's URL, which the browser follows (the client
+/// below never does; features/prod-assets-route.clan).
+const PASS_BACK: [&str; 5] = [
+    "content-type",
+    "cache-control",
+    "etag",
+    "x-saved-at",
+    "location",
+];
 
 /// The proxy's settings, from the environment (`main.rs`).
 #[derive(Clone, Debug, PartialEq, Eq)]

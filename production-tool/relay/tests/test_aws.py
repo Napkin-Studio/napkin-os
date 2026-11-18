@@ -173,6 +173,7 @@ def test_s3_blobs(aws):
     assert url.startswith("https://napkin-test.s3.eu-west-1.amazonaws.com/in/y?") and "X-Amz-Signature" in url
     # Bound to the bytes' hash (features/tenant-limits.clan): S3 refuses a PUT whose body hashes otherwise.
     assert "x-amz-checksum-sha256" in url.split("X-Amz-SignedHeaders=", 1)[1].split("&", 1)[0]
+    assert b.mime("in/x") == "image/png"  # GET /assets/{sha}?w= reads it (features/prod-assets-route.clan)
     assert b.get_json("ads/none.json") is None
     b.put("ads/j.json", b'{"ok": true}', "application/json")
     assert b.get_json("ads/j.json") == {"ok": True}
@@ -238,6 +239,14 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     assert me["workspace"] == identity.tenant_id("blue")
     status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5})
     assert status == 200 and up["exists"] is False and up["url"].startswith("https://cdn.test/in/")
+    # GET /assets/{sha} (features/prod-assets-route.clan): the agency that uploaded it is sent to its
+    # CloudFront URL; the 302 has no body and keeps no-store.
+    s3.put_object(Bucket="napkin-test", Key="in/sha256:" + "d" * 64, Body=b"bytes", ContentType="image/png")
+    path = "/api/assets/sha256:" + "d" * 64
+    r = handler.handler({"rawPath": path, "requestContext": {"http": {"method": "GET"}},
+                         "headers": {"x-napkin-identity": assertion("GET", path, "", b"")}}, None)
+    assert r["statusCode"] == 302 and r["headers"]["Location"] == "https://cdn.test/in/sha256:" + "d" * 64
+    assert r["headers"]["Cache-Control"] == "no-store" and base64.b64decode(r["body"]) == b""
     # no adapters exist yet in this lane: routing finds no provider
     req = {**envelope("generate", "job_01K6XA7Q3M9V2D4R8T0B5C1E6F"), "input": {"text": "x"}}
     status, out = http("POST", "/api/jobs", req)
