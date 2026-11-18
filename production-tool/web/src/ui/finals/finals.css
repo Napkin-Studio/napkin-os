@@ -1,0 +1,6 @@
+/* Final and Rights? (features/prod-assets-route.clan) */
+.final-toggle.on { background: var(--plan); color: var(--paper); border-color: var(--plan); }
+.rights-chip { position: absolute; transform: translate(6px, 6px); height: 20px; padding: 0 7px; border-radius: 6px; border: 1px dashed var(--line); background: var(--card); color: var(--ink2); font-size: 11px; box-shadow: var(--shadow-pill); cursor: pointer; }
+.rights-chip:hover, .rights-chip[aria-expanded="true"] { border-color: var(--tool); color: var(--tool-ink); }
+.rights-menu .pt-menurow .hint { margin-left: 8px; }
+.ie-finalrow { display: flex; align-items: center; gap: 8px; padding: 0 0 10px; }

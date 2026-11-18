@@ -1,6 +1,6 @@
 """Where artifacts live: S3 behind CloudFront (Lambda) or a local directory
 served by the dev server. Keys: in/sha256:<hex> (uploads), out/sha256:<hex>
-(provider outputs), ads/<jobId>.mp4 and ads/<jobId>.json (stitch), ads/cuts/<jobId>.* (a cutdown),
+(provider outputs), out/w<w>/sha256:<hex> (a picture at most w wide, sized.py), ads/<jobId>.mp4 and ads/<jobId>.json (stitch), ads/cuts/<jobId>.* (a cutdown),
 library/<participantId>/… (the person's library, library.py), clan/<participantId>/… (saved
 projects, projects.py) and cards/<hex>.json (cards.py).
 
@@ -69,6 +69,10 @@ class S3Blobs:
             if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
                 return False
             raise
+
+    def mime(self, key: str) -> str:
+        """The object's Content-Type, as it was put (the upload's, or the output's)."""
+        return self.s3.head_object(Bucket=self.bucket, Key=key).get("ContentType") or "application/octet-stream"
 
     def presign_put(self, key: str, mime: str, sha256: str) -> str:
         """A 15-minute PUT bound to the bytes' hash (features/tenant-limits.clan): the URL signs

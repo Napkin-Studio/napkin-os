@@ -55,6 +55,7 @@ import { ImageEditor, VersionRow } from './ImageEditor'
 import { editablePicture } from '../canvas/nodes/dblclick'
 import { pickPictureVersionStep } from './imageEditor/apply'
 import { Float } from '../ui/Float'
+import { RightsChip } from '../ui/finals/RightsChip'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
 import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList } from '../model/selectors'
@@ -738,6 +739,7 @@ export function Character({ initial, active, onPictureEditor }: {
                 {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} width={e.width * zoom} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
                 {img && img.kind !== 'drawn' && !stacked && <VersionChip nodeId={img.id} at={toView({ x: e.x + e.width, y: e.y })} />}
+                {img?.kind === 'pic' && img.asset && !stacked && <RightsChip sha={img.asset} at={toView({ x: e.x, y: e.y })} />}
               </span>
             )
           })}

@@ -165,15 +165,19 @@ export class LocalPatchBus implements PatchBus {
 
     // One merge patch for the touched entities, and the decision's targets.
     const body: Record<string, unknown> = {}
-    for (const [key, { entity, id }] of touched) {
+    for (const { entity, id } of touched.values()) {
       if (entity === 'project') {
         body.project = diffMergePatch(before.project, next.project)
         continue
       }
       const m = (body[entity] ??= {}) as Record<string, unknown>
-      m[id] = deleted.has(key) ? null : created.has(key) ? table(next, entity)![id] : diffMergePatch(table(before, entity)![id], table(next, entity)![id])
+      // From what was to what is: a delete and a create of the same id in one batch (how a changed asset is
+      // written) is a change, never a delete (features/prod-assets-route.clan: an asset's rights were lost).
+      const was = table(before, entity)?.[id]
+      const now = table(next, entity)?.[id]
+      m[id] = now === undefined ? null : was === undefined ? now : diffMergePatch(was, now)
       if (m[id] === undefined) delete m[id]
-      if (!deleted.has(key) && !created.has(key) && deepEqual(table(before, entity)![id], table(next, entity)![id])) delete m[id]
+      if (was !== undefined && now !== undefined && deepEqual(was, now)) delete m[id]
     }
     const docId = this.store.documentId()
     const leafCount = [...setPaths.values()].reduce((n, s) => n + s.size, 0)

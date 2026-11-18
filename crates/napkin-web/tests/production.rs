@@ -59,6 +59,14 @@ async fn stub_relay() -> (String, Log) {
             if parts.uri.path() == "/api/slow" {
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
+            if parts.uri.path().starts_with("/api/assets/") {
+                return axum::response::Response::builder()
+                    .status(302)
+                    .header(header::LOCATION, "https://cdn.test/out/w2400/sha256:abc")
+                    .header(header::CACHE_CONTROL, "no-store")
+                    .body(Body::empty())
+                    .unwrap();
+            }
             axum::response::Response::builder()
                 .status(201)
                 .header(header::CONTENT_TYPE, "application/vnd.clan+zip")
@@ -342,6 +350,30 @@ async fn signed_in_a_call_reaches_the_relay_with_a_valid_assertion_and_nothing_e
         claims["exp"].as_u64().unwrap() - claims["iat"].as_u64().unwrap(),
         60
     );
+}
+
+#[tokio::test]
+async fn a_picture_is_a_redirect_the_browser_follows() {
+    // GET /assets/{sha} (features/prod-assets-route.clan): the relay answers 302 to the picture's URL; the
+    // proxy never follows it and passes the Location back, so the browser reads the bytes from the CDN.
+    let (url, log) = stub_relay().await;
+    let s = server(Some(url), Duration::from_secs(5));
+    let cookie = sign_in(&s, "visionary@napkin").await;
+    let r = send(
+        &s,
+        get("/production/api/assets/sha256:abc?w=2400", Some(&cookie)),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::FOUND);
+    assert_eq!(
+        r.headers[header::LOCATION],
+        "https://cdn.test/out/w2400/sha256:abc"
+    );
+    assert_eq!(r.headers[header::CACHE_CONTROL], "no-store");
+    let seen = log.lock().unwrap().clone();
+    assert_eq!(seen[0].path_and_query, "/api/assets/sha256:abc?w=2400");
+    let claims = verify(seen[0].headers["x-napkin-identity"].to_str().unwrap());
+    assert_eq!(claims["p"], "/api/assets/sha256:abc?w=2400");
 }
 
 #[tokio::test]

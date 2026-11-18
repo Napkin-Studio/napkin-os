@@ -6,7 +6,7 @@
 // canvas:
 //   - named references (refs: their picture, a typography ref's font file);
 //   - frames, generations (takes), ad renders, read documents, format sizes, a note's still,
-//     exports;
+//     exports, finals;
 //   - jobs' outputs (the record of what was made and paid for).
 // Everything else (drawings re-exported since, pictures dropped and taken off
 // the canvas, a job's inputs) goes. Jobs stay.
@@ -28,6 +28,7 @@ export function roots(d: ProductionDocument, onCanvas: Iterable<Sha256>): Set<Sh
   for (const s of Object.values(d.sizes)) add(s.asset)
   for (const r of Object.values(d.reviews)) add(r.still)
   for (const e of Object.values(d.exports)) add(e.asset)
+  for (const f of Object.values(d.finals ?? {})) add(f.asset) // a final keeps its picture (features/prod-assets-route.clan)
   for (const j of Object.values(d.jobs)) for (const o of j.outputs ?? []) add(o)
   return keep
 }

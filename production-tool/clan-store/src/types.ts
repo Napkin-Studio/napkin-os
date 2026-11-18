@@ -12,7 +12,7 @@ export interface Entity {
 }
 
 export const MAP_NAMES = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'generations', 'renders', 'reviews',
-  'links', 'keys', 'refs', 'documents', 'texts', 'briefs', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports'] as const
+  'links', 'keys', 'refs', 'documents', 'texts', 'briefs', 'finals', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports'] as const
 export type MapName = (typeof MAP_NAMES)[number]
 
 export interface Project {
@@ -49,6 +49,8 @@ export interface DocAsset {
   pages?: number
   job_id?: string
   thumb?: string
+  /** Whether a client may be shown it (features/prod-assets-route.clan); absent: not stated. */
+  rights?: 'generated' | 'own' | 'licensed' | 'unknown'
 }
 
 /** Who is writing: a person signed in to Napkin Studio, in their agency. */

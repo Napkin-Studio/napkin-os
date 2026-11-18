@@ -39,6 +39,7 @@ import { CanvasDocSync } from './sync'
 import { lifeOf, liveGet } from '../model/live'
 import { resizableKind, type Source as ResizeSource } from '../campaign/resizeSelection'
 import { frameText } from './text'
+import { landingRights } from '../doc/finals'
 
 /** The scene as this browser keeps it (engine-owned shape; core/canvasAdapter.ts). */
 export type { CanvasSnapshot } from './core/canvasAdapter'
@@ -282,7 +283,7 @@ export class CanvasController {
   private addAsset(sha: string, blob: Blob, origin: 'uploaded' | 'drawn', size?: { w: number; h: number }) {
     systemUpdate(this.s.doc, (d) => {
       if (!d.assets[sha]) {
-        d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, ...(size ?? {}), origin, locations: [idbLocation(sha)] }
+        d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, ...(size ?? {}), origin, rights: landingRights(origin), locations: [idbLocation(sha)] }
       }
     }, 'add picture')
   }

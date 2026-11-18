@@ -40,6 +40,7 @@ import re
 import time
 import unicodedata
 from datetime import datetime, timezone
+from urllib.parse import parse_qs, unquote
 
 from aspect import crop_png, measure, target_aspect
 import dogfood
@@ -52,6 +53,7 @@ import cutdowns
 import soften
 import projects
 import sameness
+import sized
 import time_rules
 import timeline_layers
 from blobs import checksum_header
@@ -203,6 +205,8 @@ CLAN_REASONS = {"interval", "accept", "manual"}
 # X-Project-Id on POST /clan: a project's id, made by the web app like every id (common.schema.json#/$defs/id).
 PROJECT_ID = re.compile(r"^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$")
 KEY = re.compile(r"^[a-z][a-z0-9]{1,23}$")
+ASSET_SHA = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
+NO_PICTURE = "No such picture."
 # GET /clan/{project} answers with the bytes. A Lambda response is at most 6 MB once base64-encoded,
 # so a larger project is opened from an Export instead (features/personal-workspaces.clan).
 OPEN_MAX_BYTES = 4_300_000
@@ -430,6 +434,8 @@ class Relay:
                 return 200, public(self.cancel(job))
         if path == "/library" or path.startswith("/library/"):
             return 200, self.library_route(who, method, path, body, ctx)
+        if method == "GET" and path.startswith("/assets/"):
+            return self.asset(who, path[len("/assets/"):], query, ctx)
         if method == "POST" and path == "/clan":
             self._not_blocked(who)
             saved = self.mirror_clan(who, headers, body, ctx)
@@ -627,7 +633,7 @@ class Relay:
         if route.startswith("/clan/"):  # a saved project's routes (personal workspaces): one name each
             project = project or route.split("/")[2]
             name = "/clan/{project}/canvas" if route.endswith("/canvas") else "/clan/{project}"
-        for prefix, label in (("/jobs/", "/jobs/{id}"), ("/library/", "/library/{shelf}/{key}")):
+        for prefix, label in (("/jobs/", "/jobs/{id}"), ("/library/", "/library/{shelf}/{key}"), ("/assets/", "/assets/{sha}")):
             if route.startswith(prefix):
                 name = label
         if route.startswith("/jobs/") and route.endswith("/answer"):
@@ -717,6 +723,52 @@ class Relay:
             self.store.hold(tenant, sha)  # the first upload of these bytes: its agency holds them
         return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"], sha),
                 "putHeaders": {"x-amz-checksum-sha256": checksum_header(sha)}, "url": url}
+
+    def asset(self, who: dict, name: str, query: str, ctx: dict) -> tuple[int, Raw]:
+        """GET /assets/{sha256}[?w=480|1200|2400] (features/prod-assets-route.clan): a 302 to the picture's
+        URL for an agency that holds it (has#, the rule POST /uploads uses); 404 NO_PICTURE for an unknown
+        hash, another agency's, or held bytes that are gone, alike, so no agency learns another's file
+        exists. w: a copy at most that wide (sized.py), made once and kept at out/w<w>/<sha>."""
+        m = ASSET_SHA.match(unquote(name))
+        if not m:
+            raise ApiError("invalid_input", NO_PICTURE, status=404)
+        sha = f"sha256:{m.group(1)}"
+        ctx["sha256"] = sha
+        w = None
+        if query:
+            ws = parse_qs(query).get("w")
+            if ws:
+                if not ws[0].isdigit() or int(ws[0]) not in sized.WIDTHS:
+                    raise ApiError("invalid_input", f"w is one of {', '.join(map(str, sized.WIDTHS))}.")
+                w = int(ws[0])
+        if not self.store.holds(who["tenant"]["id"], sha):
+            raise ApiError("invalid_input", NO_PICTURE, status=404)
+        key = next((k for k in (f"in/{sha}", f"out/{sha}") if self.blobs.exists(k)), None)
+        if key is None:
+            raise ApiError("invalid_input", NO_PICTURE, status=404)
+        if w:
+            key = self._asset_sized(key, sha, w)
+        return 302, Raw(b"", "text/plain", {"Location": self._asset_url(key)})
+
+    def _asset_url(self, key: str) -> str:
+        """Where a browser reads a held picture: its CloudFront URL, as providers and the tool read in/ and
+        out/ (CORS for the studio origins). The one place to switch to a presigned URL if they go private."""
+        return self.blobs.public_url(key)
+
+    def _asset_sized(self, key: str, sha: str, w: int) -> str:
+        """The key of the picture at most w wide: kept from an earlier ask, else made now. A file that is
+        not a picture Pillow reads (a film, a broken file) is served as it is."""
+        made = sized.derived_key(sha, w)
+        if self.blobs.exists(made):
+            return made
+        if not self.blobs.mime(key).startswith("image/"):
+            return key
+        out = sized.sized(self.blobs.get(key) or b"", w)
+        if out is None:
+            log.warning("could not size %s to %d px; serving the original", sha, w)
+            return key
+        self.blobs.put(made, out[0], out[1])
+        return made
 
     def _projects(self) -> projects.Projects:
         return projects.Projects(self.blobs, lambda: iso(self.clock()))

@@ -77,6 +77,9 @@ class FakeBlobs:
     def get(self, key):
         return self.objects[key][0] if key in self.objects else None
 
+    def mime(self, key):
+        return self.objects[key][1]
+
     def list_keys(self, prefix):
         return [{"key": k, "bytes": len(v[0]), "modified": "2026-10-07T00:00:00Z"}
                 for k, v in sorted(self.objects.items()) if k.startswith(prefix)]
@@ -206,7 +209,8 @@ class Harness:
     def call(self, method, path, body=None, token=None, expect=None, headers=None):
         headers = {**({"Authorization": f"Bearer {token}"} if token else {}), **(headers or {})}
         raw = json.dumps(body).encode() if body is not None else None
-        status, out, ctx = self.relay.http(method, path, headers, raw)
+        path, _, query = path.partition("?")
+        status, out, ctx = self.relay.http(method, path, headers, raw, query)
         if status == 409 and path.endswith("/answer") and "answeredBy" in out:
             assert not self.contracts.errors(api("AnswerConflict"), out), out
         elif status >= 400:
@@ -220,7 +224,7 @@ class Harness:
                 name = "LibraryIndex" if path.count("/") == 2 else "LibraryEntry"
             if path.startswith("/clan/"):
                 name = "ProjectCanvas" if path.endswith("/canvas") else None  # GET /clan/{project} is the bytes
-            if path in ("/config", "/health"):
+            if path in ("/config", "/health") or "/assets/" in path:  # GET /assets/{sha} is a 302
                 name = None
             if name:
                 assert not self.contracts.errors(api(name), out), (self.contracts.errors(api(name), out), out)
