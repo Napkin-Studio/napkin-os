@@ -295,20 +295,28 @@ def test_the_picture_card_says_the_client_to_runway_policy_plainly(monkeypatch, 
     assert plan["client_to_runway"]["policy"] == "allow" and "testing" in plan["client_to_runway"]["label"]
 
 
-def test_by_default_the_deck_sends_nothing(monkeypatch, stages, tmp_path):
+def _refused_live(monkeypatch, stages, tmp_path):
+    """Under refuse: --images plan builds (the card, plan.json, no call); the live yes to that card is refused and sends nothing."""
     fake = with_subjects(monkeypatch, stages, tmp_path)
+    created = []
+    monkeypatch.setattr(imagegen, "CLIENT_FACTORY", lambda: created.append(1) or runway.Client(KEY, fake))
+    d, text = go(stages, tmp_path / "o", "--images", "plan")                       # planning works offline under refuse
+    plan = json.loads((stages / "images" / "plan.json").read_text())
+    assert d["order"] and plan["client_to_runway"]["policy"] == "refuse" and "refused (policy)" in plan["client_to_runway"]["label"]
+    assert "Client-derived prompts -> Runway: refused" in text and fake.posts == [] and created == []
+    with pytest.raises(SystemExit) as e:
+        go(stages, tmp_path / "o", "--images", "live", "--yes-cost", card_id(text))
+    assert "policy" in str(e.value) and fake.posts == [] and created == []          # no client is even made: no live call
+
+
+def test_by_default_the_deck_plans_and_sends_nothing(monkeypatch, stages, tmp_path):
     monkeypatch.delenv("VISUALS_CLIENT_TO_RUNWAY", raising=False)     # the code's own default: refuse
-    with pytest.raises(SystemExit) as e:
-        go(stages, tmp_path / "o", "--images", "plan")
-    assert "policy" in str(e.value) and fake.posts == []
+    _refused_live(monkeypatch, stages, tmp_path)
 
 
-def test_under_the_refuse_policy_the_deck_sends_nothing(monkeypatch, stages, tmp_path):
-    fake = with_subjects(monkeypatch, stages, tmp_path)
+def test_under_the_refuse_policy_the_deck_plans_and_sends_nothing(monkeypatch, stages, tmp_path):
     monkeypatch.setenv("VISUALS_CLIENT_TO_RUNWAY", "refuse")
-    with pytest.raises(SystemExit) as e:
-        go(stages, tmp_path / "o", "--images", "plan")
-    assert "policy" in str(e.value) and fake.posts == []
+    _refused_live(monkeypatch, stages, tmp_path)
 
 
 def test_marked_text_is_not_in_the_stage_g_request_and_slots_that_would_draw_on_it_are_held(monkeypatch, stages, tmp_path):
