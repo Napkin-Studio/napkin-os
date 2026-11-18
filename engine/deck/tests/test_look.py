@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from deck import look, theme
+from deck import layouts, look, theme
 from visuals import style as vstyle
 
 FIX = Path(__file__).parent / "fixtures"
@@ -220,7 +220,7 @@ def test_every_token_has_a_recorded_winner_and_the_record_matches_the_deck_schem
 # ------------------------------------------------------------------ through run_deck: the golden is the golden, words never move
 
 BRIEF = FIX / "lumen_water"
-BASE_ARGS = ["--brief", str(BRIEF / "brief_object.json"), "--stages", str(BRIEF), "--client", "Lumen Water", "--project", "National awareness campaign"]
+BASE_ARGS = ["--brief", str(BRIEF / "brief_object.json"), "--stages", str(BRIEF), "--client", "Lumen Water", "--project", "National awareness campaign", "--density", "detailed"]
 
 
 def _build(monkeypatch, tmp_path, *extra) -> tuple[dict, dict]:
@@ -231,7 +231,7 @@ def _build(monkeypatch, tmp_path, *extra) -> tuple[dict, dict]:
     monkeypatch.setattr(run_deck, "_soffice", lambda: "soffice")
     out = tmp_path / f"out{len(list(tmp_path.glob('out*')))}"
     run_deck.main([*BASE_ARGS, "--out", str(out), *extra])
-    deck = json.loads((out / "deck.json").read_text())
+    deck = layouts.strip_plan(json.loads((out / "deck.json").read_text()))
     for k in ("built_at", "built_from", "audience", "confirm", "confirm_summary"):
         deck["meta"].pop(k, None)
     return deck, json.loads((out / "report.json").read_text())
@@ -317,7 +317,7 @@ def _build_in(monkeypatch, tmp_path, out, *extra, base=BASE_ARGS, real=False):
     monkeypatch.setattr(run_deck.subprocess, "run", lambda cmd, *a, **k: real_run(cmd, *a, **k) if str(cmd[0]).endswith("rsvg-convert") else None)
     monkeypatch.setattr(run_deck, "_soffice", lambda: "soffice")
     run_deck.main([*base, "--out", str(out), "--no-qa", *extra])
-    return json.loads((out / "deck.json").read_text()), json.loads((out / "report.json").read_text())
+    return layouts.strip_plan(json.loads((out / "deck.json").read_text())), json.loads((out / "report.json").read_text())
 
 
 def test_the_agency_look_is_copied_into_the_run_folder_and_replayed_byte_for_byte(monkeypatch, tmp_path):

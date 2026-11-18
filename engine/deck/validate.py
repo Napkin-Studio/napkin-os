@@ -102,7 +102,10 @@ def _texts(sl, with_notes=False, internal=True, human=True):
     """(text, basis) pairs of everything shown on a slide; ``internal``/``human``: include blocks
     marked internal, and labelled placeholders."""
     out = [(sl.get("title", ""), None)]
-    for bl in sl.get("blocks", []):
+    moved = spec.moved_map(sl) if sl.get("layout") else {}   # points the layout plan moved to the notes are not on the slide
+    for bi, bl in enumerate(sl.get("blocks", [])):
+        if bi in moved and moved[bi] is None:
+            continue
         if (bl.get("internal") and not internal) or (bl.get("human") and not human):
             continue
         basis = bl.get("basis")
@@ -111,7 +114,9 @@ def _texts(sl, with_notes=False, internal=True, human=True):
                 out.append((bl[k], basis))
         for ln in bl.get("lines", []) or []:
             out.append((ln, basis))
-        for it in bl.get("items", []) or []:
+        for ii, it in enumerate(bl.get("items", []) or []):
+            if ii in (moved.get(bi) or ()):
+                continue
             if isinstance(it, dict):
                 if it.get("human") and not human:
                     continue
@@ -124,6 +129,9 @@ def _texts(sl, with_notes=False, internal=True, human=True):
             out.append((s.get("label", ""), basis))
     if with_notes:
         out.append((sl.get("notes", ""), None))
+        if moved:   # the moved points are delivered in the notes: checks that read the notes read them
+            from . import layouts
+            out += [(t, None) for t, _ in layouts.moved_texts(sl)]
     return out
 
 

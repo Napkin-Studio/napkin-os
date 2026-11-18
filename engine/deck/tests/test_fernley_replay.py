@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from deck import run_deck
+from deck import layouts, run_deck
 
 FERNLEY = Path(__file__).parent / "fixtures" / "fernley"
 CLIENT = "Fernley Drinks Ltd (FICTIONAL, Cork sparkling iced tea brand)"
@@ -22,7 +22,7 @@ PROJECT = "Fernley Sparkling Tea 2027 Campaign Pitch"
 
 def args(stages: Path, out: Path, *more: str) -> list[str]:
     return ["--prompt-file", str(FERNLEY / "prompt.txt"), "--stages", str(stages), "--client", CLIENT, "--project", PROJECT,
-            "--out", str(out), "--kind", "agency", "--no-qa", *more]
+            "--out", str(out), "--kind", "agency", "--no-qa", "--density", "detailed", *more]
 
 
 def replay(tmp_path: Path, monkeypatch, *more: str, name: str = "run") -> tuple[dict, Path]:
@@ -42,6 +42,10 @@ def normal(report: dict) -> dict:
     r = json.loads(json.dumps(report))
     r.pop("wall_secs", None)
     r.pop("started", None)
+    if "validation" in r:
+        r["validation"] = layouts.without_plan_summary(r["validation"])
+    r.pop("layout_plan", None)   # the plan's own record (golden_plan.json style): not part of the recorded run
+    r.get("stages", {}).pop("layout_plan", None)
     for s in r.get("stages", {}).values():
         if isinstance(s, dict):
             s.pop("secs", None)
@@ -49,9 +53,9 @@ def normal(report: dict) -> dict:
 
 
 def written(out: Path) -> tuple[dict, list, dict]:
-    deck = json.loads((out / "deck.json").read_text())
+    deck = layouts.strip_plan(json.loads((out / "deck.json").read_text()))
     deck["meta"].pop("built_at", None)   # the second the deck was built
-    return deck, json.loads((out / "validation.json").read_text()), normal(json.loads((out / "report.json").read_text()))
+    return deck, layouts.without_plan_findings(json.loads((out / "validation.json").read_text())), normal(json.loads((out / "report.json").read_text()))
 
 
 def test_the_recording_replays_to_the_golden(tmp_path, monkeypatch):

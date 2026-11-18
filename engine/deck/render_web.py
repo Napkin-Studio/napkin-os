@@ -22,10 +22,10 @@ import html
 import json
 from pathlib import Path
 
-from . import images
+from . import images, spec
 from .refs import fmt
 from .render_pptx import DARK_TYPES, THEME, _kicker
-from .spec import frame_for, shown_blocks
+from .spec import blocks_sha, frame_for, shown_blocks
 
 #: The accent is 2.2:1 on white, so accent-coloured text on light slides uses a darker amber
 #: (--accent-ink, 5.9:1 on white, 5.2:1 on the tint); dark slides keep the accent (7.3:1 on ink).
@@ -287,7 +287,13 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         inner = (f'<div class="flags">{flags}</div><header>{kick}{title}</header>{body}{pic_html}'
                  f'<footer>{foot}</footer>')
         notes = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
-        out.append({"id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
+        lay = s.get("layout") or {}
+        planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
+        if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
+            from . import layouts
+            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s))
+        pt = (deck["meta"].get("layout_title_pt") or {}).get(lay.get("id")) if planned else None
+        out.append({"layout": lay["id"] if planned else None, "tpt": f' style="--tpt:{pt * 2}px"' if (spec.LOOK_V2 and pt) else "", "id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
                     "last": [max(v for k, v in b.last.items() if k <= f) for f in range(b.f + 1)]})
     return out
@@ -559,10 +565,20 @@ addEventListener('beforeprint',()=>S.forEach(s=>s.classList.add('still')));addEv
 """
 
 
-def theme_css(css: str | None = None, head: str = HEAD_FONT, body: str = BODY_FONT, colors: dict | None = None) -> str:
+#: The look of deck-layout-library on the web: a stamped title size per layout (``--tpt``, px = pt x 2 on the 1920 canvas, not scaled with the body),
+#: body, small and lead text held to 48 characters a line, and the new layout ids sharing the column composition until each has its own grid.
+LOOK_CSS = """
+.slide[style*="--tpt"] h1.title{font-size:var(--tpt) !important}
+.slide .body p,.slide .body li,.slide .body blockquote{max-inline-size:48ch}
+.l-close .body,.l-big_statement .body,.l-quote_full .body{max-width:1200px}
+.l-text_columns .col,.l-cards_split .col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:56px}
+"""
+
+
+def theme_css(css: str | None = None, head: str = HEAD_FONT, body: str = BODY_FONT, colors: dict | None = None, look: bool = True) -> str:
     """A stylesheet with the deck theme filled in (default: the whole web deck's); ``colors``: a brand's
     overrides by THEME key (accent_ink too)."""
-    css = (css or CSS_LAYOUT + CSS_UI).replace("HEAD", head).replace("BODY", body)
+    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI).replace("HEAD", head).replace("BODY", body)
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
     if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
         T["tint"] = T["panel"]
@@ -581,19 +597,19 @@ def _brand_css(meta: dict) -> dict:
     return {k: v for k, v in (("head", b.get("head")), ("body", b.get("body")), ("colors", b.get("colors"))) if v}
 
 
-def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None) -> Path:
+def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None, look: bool = True) -> Path:
     """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs)."""
     views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed)
     m = deck["meta"]
     slides = "\n".join(
-        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}" id="{v["id"]}" data-steps="{v["steps"]}" '
+        f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}" id="{v["id"]}" data-steps="{v["steps"]}"{" data-layout=" + chr(34) + v["layout"] + chr(34) if (spec.LOOK_V2 and v["layout"]) else ""}{v["tpt"]} '
         f'aria-label="Slide {v["n"]}: {_e(v["title"])}">{v["html"]}</section>' for v in views)
     meta = json.dumps([{"id": v["id"], "section": v["section"], "notes": v["notes"]} for v in views], ensure_ascii=False)
     page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m))}{PIC_CSS if any(v["cls"] for v in views) else ""}</style></head>
+<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>

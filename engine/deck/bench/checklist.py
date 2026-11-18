@@ -530,10 +530,19 @@ def w_words_sha(r: Run) -> dict:
 
 @check
 def w_notes_kept(r: Run) -> dict:
-    moved = [i for i in r.presented if ((r.deck["slides"][i].get("layout") or {}).get("fit") or {}).get("rung") == "overflow_to_notes"]
+    from .. import layouts
+    moved = [i for i in r.presented if (((r.deck["slides"][i].get("layout") or {}).get("fit") or {}).get("moved"))]
     if not moved:
-        return na("no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library)")
-    bad = [i for i in moved if not (r.deck["slides"][i].get("notes") or "").strip()]
+        return na("no slide records layout.fit.moved (written by deck-layout-library)")
+    if r.prs is None:
+        return na(NA_PPTX)
+    slides = list(r.prs.slides)
+    bad = []
+    for i in moved:   # every moved point is in the speaker notes of the pptx: one line, verbatim, with its refs
+        n = r.number(i)
+        notes = slides[n - 1].notes_slide.notes_text_frame.text if n <= len(slides) and slides[n - 1].has_notes_slide else ""
+        if not all(layouts.moved_line(t, refs) in notes for t, refs in layouts.moved_texts(r.deck["slides"][i])):
+            bad.append(i)
     return _verdict(bad, r.ids, len(moved) - len(bad), len(moved))
 
 

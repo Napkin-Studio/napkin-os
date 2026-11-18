@@ -122,7 +122,7 @@ def test_slot_and_layout_vocabulary_equals_the_layout_schema():
     assert s["properties"]["id"]["pattern"] == spec.LAYOUT_ID_PATTERN
     for lid in spec.LAYOUT_IDS:
         assert re.match(spec.LAYOUT_ID_PATTERN, lid), lid
-    assert len(spec.LAYOUT_IDS) == 25 <= spec.LAYOUT_MAX and spec.LAYOUT_FLOW not in spec.LAYOUT_IDS
+    assert len(spec.LAYOUT_IDS) == 36 <= spec.LAYOUT_MAX and spec.LAYOUT_FLOW not in spec.LAYOUT_IDS
     assert set(spec.TYPE_ROLE_SCALE) == set(spec.TYPE_ROLES)
     assert set(spec.TYPE_ROLE_SCALE.values()) <= set(theme.Scale.__dataclass_fields__)
 

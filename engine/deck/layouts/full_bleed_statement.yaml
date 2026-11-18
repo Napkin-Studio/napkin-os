@@ -1,0 +1,43 @@
+id: full_bleed_statement
+version: 1
+group: content
+purpose: image
+description: The picture fills the slide and one statement is set over a dark scrim.
+slot_summary: statement, picture 16:9
+for_types:
+- idea
+- real_question
+- close
+when:
+  test: image_ready
+priority: 50
+alternatives:
+- big_statement
+- emphasis_bar
+without_image: big_statement
+density: lean
+pick: offer
+family: full_bleed_statement
+renderer: full_bleed_statement
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    min_chars: 3
+    max_lines: 3
+  statement:
+    kind: text
+    role: lead
+    from_blocks:
+    - statement
+    - text
+    max_chars: 163
+  picture:
+    kind: image
+    required: true
+    dominant: true
+    image:
+      aspect: '16:9'
+      text_over: true
+      scrim: dark

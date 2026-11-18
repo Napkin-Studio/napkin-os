@@ -84,6 +84,8 @@ def main(argv=None) -> int:
     f = sub.add_parser("fixtures", help="build the invented fixture decks offline into OUT_DIR")
     f.add_argument("out_dir", type=Path)
     f.add_argument("--geometry-only", action="store_true", help="skip LibreOffice (no pixel checks)")
+    f.add_argument("--density", choices=("lean", "standard", "detailed", "default"), default="detailed",
+                   help="detailed: the tests' and goldens' setting; default: let the engine resolve it by format (the look a person gets)")
     k = sub.add_parser("compare", help="what changed between two checklist files")
     k.add_argument("before", type=Path)
     k.add_argument("after", type=Path)
@@ -131,7 +133,7 @@ def main(argv=None) -> int:
                 print(f"{d}: {s['yes']} yes, {s['no']} no, {s['na']} n/a")
             return 0
         if a.cmd == "fixtures":
-            for n, p in fixtures_mod.build_all(a.out_dir, a.geometry_only).items():
+            for n, p in fixtures_mod.build_all(a.out_dir, a.geometry_only, density=None if a.density == "default" else a.density).items():
                 print(f"{n}: {p}")
             return 0
         if a.cmd == "compare":

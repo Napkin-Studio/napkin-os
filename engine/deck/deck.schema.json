@@ -1186,6 +1186,19 @@
        "type": "string"
       }
      }
+    },
+    "layout_title_pt": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "integer",
+      "minimum": 24,
+      "maximum": 48
+     },
+     "description": "The title size in points stamped for each layout used in this deck (36, 32, 30 or 28), read by the pptx, web and HyperFrames renderers."
+    },
+    "layout_plan": {
+     "type": "object",
+     "description": "What the layout plan did: density and the count of slides per fit rung."
     }
    }
   },
@@ -1624,6 +1637,48 @@
         },
         "relaxed": {
          "type": "boolean"
+        },
+        "moved": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "required": [
+           "block",
+           "item",
+           "sha"
+          ],
+          "additionalProperties": false,
+          "properties": {
+           "block": {
+            "type": "integer",
+            "minimum": 0
+           },
+           "item": {
+            "type": [
+             "integer",
+             "null"
+            ],
+            "minimum": 0
+           },
+           "sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{12}$"
+           },
+           "refs": {
+            "type": "array",
+            "items": {
+             "type": "string"
+            }
+           }
+          }
+         },
+         "description": "Points the layout plan moved to the speaker notes: an overlay, never an edit of the blocks. block is the index in slide.blocks, item the index in its items (null: the whole block), sha the first 12 hex of the verbatim text, refs the point's refs."
+        },
+        "cpl": {
+         "type": "integer",
+         "minimum": 48,
+         "maximum": 75,
+         "description": "Characters per line the slide was fitted at when 48 would not fit (60): the last step before type goes to the caption floor."
         }
        }
       },
