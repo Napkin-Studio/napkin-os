@@ -251,7 +251,9 @@ suite_production-tool() {
         command -v "$b" >/dev/null && { export E2E_CHROMIUM="$(command -v "$b")"; break; }
       done
     fi
-    ( cd production-tool/web && npm run -s e2e ) || return 1
+    # The image editor's perf spec runs in CI only (owner, 2026-11-19): under load it failed pushes that
+    # were fine, one in three. CI's job runs `npm run e2e` without E2E_SKIP_PERF.
+    ( cd production-tool/web && E2E_SKIP_PERF=1 npm run -s e2e ) || return 1
   fi
   # Quarantined perf budget (web vite.config.ts): reported, never failing the check.
   if [[ -f production-tool/web/package.json ]] && ! ( cd production-tool/web && npm run -s test:perf >"$d/perf.log" 2>&1 ); then
