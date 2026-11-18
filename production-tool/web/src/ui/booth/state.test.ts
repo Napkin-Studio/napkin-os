@@ -24,8 +24,8 @@ describe('the Booth', () => {
     expect(shownOpen('script', 1600, false)).toBe(false)
   })
 
-  it('a room below 1280 px starts hidden; elsewhere it starts as the person left it', () => {
-    expect(startsOpen('room', 1279, true)).toBe(false)
+  it('starts as the person left it, a room on a laptop too (live test 2026-11-18: a selected box got only the tab)', () => {
+    expect(startsOpen('room', 1116, true)).toBe(true)
     expect(startsOpen('room', 1280, true)).toBe(true)
     expect(startsOpen('room', 1600, false)).toBe(false)
     expect(startsOpen('script', 1024, true)).toBe(true)

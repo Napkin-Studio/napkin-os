@@ -11,8 +11,6 @@ export type BoothPlace = 'script' | 'storyboard' | 'room' | 'canvas'
 
 /** At or below this width the Booth stays a column: no Hide, no edge tab (booth.clan). */
 export const BOOTH_NARROW = 1100
-/** Below this width a room's Booth starts hidden as its edge tab: the room keeps its inspector (owner, 2026-11-16). */
-export const ROOM_START_HIDDEN = 1280
 /** The open Booth's width at or below BOOTH_NARROW, wherever it is. */
 export const NARROW_WIDTH = 320
 /** In the Storyboard and the rooms the hidden tab keeps this gutter, so it never covers a shot card. */
@@ -50,9 +48,12 @@ export function rememberedOpen(memory: BoothMemory | undefined, key: string): bo
   return memory?.[key] !== 'hidden'
 }
 
-/** What the Booth starts as: a room below 1280 px starts hidden; elsewhere what the person left it as. */
-export function startsOpen(place: BoothPlace, windowWidth: number, remembered: boolean): boolean {
-  if (place === 'room' && windowWidth < ROOM_START_HIDDEN) return false
+/**
+ * What the Booth starts as: what the person left it as, everywhere. A room below 1280 px used to start hidden so
+ * the room kept its own inspector (owner, 2026-11-16); the inspector is the Booth now, shown only on a selection
+ * (the Booth rule), so starting hidden left a selected box with only the edge tab (live test 2026-11-18).
+ */
+export function startsOpen(_place: BoothPlace, _windowWidth: number, remembered: boolean): boolean {
   return remembered
 }
 

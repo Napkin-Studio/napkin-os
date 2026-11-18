@@ -2,7 +2,7 @@
 // The Booth in the Storyboard and the Film rooms (features/script-freeform.clan; mock states storyboard,
 // make, edit): what already needs the person there waits as cards (Dex's questions on shots a re-plan left
 // out, a failed frame or take not cleared), the agent's recent notes from the decision chain, Fin's box goes
-// to the Change tab's Words row, and a room below 1280 px starts with its Booth hidden.
+// to the Change tab's Words row, and a room on a laptop opens its Booth on a selected box (live test 2026-11-18).
 
 import { act, createElement, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -152,14 +152,12 @@ describe('the Booth in the Film rooms', () => {
     expect(el.querySelector('.booth-edge')).toBeNull()
   })
 
-  it('a room below 1280 px starts with its Booth hidden as its edge tab, with a 44 px gutter, on a selected box', async () => {
-    const { shots, el, render } = await project(1200)
+  it('a room on a laptop (1116 px) opens its Booth on a selected box, not only its edge tab (live test 2026-11-18)', async () => {
+    const { shots, el, render } = await project(1116)
     render(createElement(RoomBooth, { room: 'make', data: data(shots), sel: { boxKey: shots[0] }, change: null, onChange: () => {}, onApart: () => {}, onReady: () => {} }))
     await settle()
     const col = el.querySelector('.booth-col') as HTMLElement
-    expect(col.dataset.boothOpen).toBe('false')
-    expect(col.style.getPropertyValue('--bgut')).toBe('44px')
-    const edge = el.querySelector('.booth-edge') as HTMLElement
-    expect(edge.classList.contains('on')).toBe(true)
+    expect(col.dataset.boothOpen).toBe('true')
+    expect(el.querySelector('.booth')).not.toBeNull()
   })
 })
